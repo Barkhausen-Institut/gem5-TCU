@@ -45,7 +45,10 @@ DtuTest::DtuTest(const DtuTestParams *p)
   : MemObject(p),
     tickEvent(this),
     port("port", this)
-{}
+{
+    // kick things into action
+    schedule(tickEvent, curTick());
+}
 
 BaseMasterPort &
 DtuTest::getMasterPort(const std::string& if_name, PortID idx)
