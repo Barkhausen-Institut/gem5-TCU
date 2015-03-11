@@ -43,6 +43,7 @@ DtuTest::CpuPort::recvReqRetry()
 
 DtuTest::DtuTest(const DtuTestParams *p)
   : MemObject(p),
+    tickEvent(this),
     port("port", this)
 {}
 
@@ -53,6 +54,12 @@ DtuTest::getMasterPort(const std::string& if_name, PortID idx)
         return port;
     else
         return MemObject::getMasterPort(if_name, idx);
+}
+
+void
+DtuTest::tick()
+{
+    panic("Don't know what to do!");
 }
 
 DtuTest*

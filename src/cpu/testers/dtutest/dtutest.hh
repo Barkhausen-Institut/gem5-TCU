@@ -32,7 +32,7 @@
 #include "mem/mem_object.hh"
 #include "params/DtuTest.hh"
 
-class DtuTest : MemObject
+class DtuTest : public MemObject
 {
   public:
     DtuTest(const DtuTestParams *p);
@@ -41,6 +41,12 @@ class DtuTest : MemObject
                                   PortID idx = InvalidPortID) override;
 
   protected:
+
+    // main simulation loop
+    void tick();
+
+    EventWrapper<DtuTest, &DtuTest::tick> tickEvent;
+
     class CpuPort : public MasterPort
     {
       public:
