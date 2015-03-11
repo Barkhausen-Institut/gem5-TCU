@@ -34,8 +34,26 @@
 
 class DtuTest : MemObject
 {
-public:
+  public:
     DtuTest(const DtuTestParams *p);
+
+    BaseMasterPort& getMasterPort(const std::string &if_name,
+                                  PortID idx = InvalidPortID) override;
+
+  protected:
+    class CpuPort : public MasterPort
+    {
+      public:
+        CpuPort(const std::string& _name, DtuTest* _dtutest)
+            : MasterPort(_name, _dtutest)
+        { }
+      protected:
+        bool recvTimingResp(PacketPtr pkt) override;
+
+        void recvReqRetry() override;
+    };
+
+    CpuPort port;
 };
 
 #endif // __CPU_DTUTEST_DTUTEST_HH__

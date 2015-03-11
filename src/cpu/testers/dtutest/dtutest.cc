@@ -28,9 +28,32 @@
 
 #include "cpu/testers/dtutest/dtutest.hh"
 
+bool
+DtuTest::CpuPort::recvTimingResp(PacketPtr pkt)
+{
+    panic("Did not expect a TimingResp!");
+    return true;
+}
+
+void
+DtuTest::CpuPort::recvReqRetry()
+{
+    panic("Did not expect a ReqRetry!");
+}
+
 DtuTest::DtuTest(const DtuTestParams *p)
-  : MemObject(p)
+  : MemObject(p),
+    port("port", this)
 {}
+
+BaseMasterPort &
+DtuTest::getMasterPort(const std::string& if_name, PortID idx)
+{
+    if (if_name == "port")
+        return port;
+    else
+        return MemObject::getMasterPort(if_name, idx);
+}
 
 DtuTest*
 DtuTestParams::create()

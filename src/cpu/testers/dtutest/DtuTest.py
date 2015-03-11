@@ -26,7 +26,9 @@
 # either expressed or implied, of the FreeBSD Project.
 
 from MemObject import MemObject
+from m5.params import *
 
 class DtuTest(MemObject):
     type = 'DtuTest'
     cxx_header = "cpu/testers/dtutest/dtutest.hh"
+    port = MasterPort("Port to the DTU and Scratch-Pad-Memory")
