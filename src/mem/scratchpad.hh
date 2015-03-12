@@ -26,64 +26,63 @@
  * either expressed or implied, of the FreeBSD Project.
  */
 
-#include "cpu/testers/dtutest/dtutest.hh"
-#include "debug/DtuTest.hh"
+#ifndef __SCRATCHPAD_HH_
+#define __SCRATCHPAD_HH_
 
-unsigned int TESTER_DTU= 0;
+#include "mem/abstract_mem.hh"
+#include "params/Scratchpad.hh"
 
-bool
-DtuTest::CpuPort::recvTimingResp(PacketPtr pkt)
+class Scratchpad : public AbstractMemory
 {
-    panic("Did not expect a TimingResp!");
-    return true;
-}
+  private:
 
-void
-DtuTest::CpuPort::recvReqRetry()
-{
-    panic("Did not expect a ReqRetry!");
-}
+    class ScratchpadPort : public SlavePort
+    {
 
-DtuTest::DtuTest(const DtuTestParams *p)
-  : MemObject(p),
-    tickEvent(this),
-    port("port", this),
-    masterId(p->system->getMasterId(name()))
-{
-    id = TESTER_DTU++;
+      private:
 
-    // kick things into action
-    schedule(tickEvent, curTick());
-}
+        Scratchpad& scratchpad;
 
-BaseMasterPort &
-DtuTest::getMasterPort(const std::string& if_name, PortID idx)
-{
-    if (if_name == "port")
-        return port;
-    else
-        return MemObject::getMasterPort(if_name, idx);
-}
+      public:
 
-void
-DtuTest::tick()
-{
-    Addr paddr = 0xdead;
-    Request::Flags flags;
+        ScratchpadPort(const std::string& _name, Scratchpad& _scratchpad);
 
-    auto req = new Request(paddr, 1, flags, masterId);
-    req->setThreadContext(id, 0);
+      protected:
 
-    auto pkt = new Packet(req, MemCmd::ReadReq);
-    auto pkt_data = new uint8_t[1];
-    pkt->dataDynamic(pkt_data);
+        Tick recvAtomic(PacketPtr pkt) override;
 
-    DPRINTF(DtuTest, "Send atomic read request at address 0x%x\n", paddr);
-    port.sendAtomic(pkt);
-}
+        void recvFunctional(PacketPtr pkt) override;
 
-DtuTest*
-DtuTestParams::create()
-{
-    return new DtuTest(this);
-}
+        bool recvTimingReq(PacketPtr pkt) override;
+
+        void recvRespRetry() override;
+
+        AddrRangeList getAddrRanges() const override;
+
+    };
+
+    ScratchpadPort port;
+
+    const Cycles latency;
+
+  protected:
+
+    Tick recvAtomic(PacketPtr pkt);
+
+    void recvFunctional(PacketPtr pkt);
+
+    bool recvTimingReq(PacketPtr pkt);
+
+    void recvRespRetry();
+
+  public:
+
+    Scratchpad(const ScratchpadParams* p);
+
+    void init() override;
+
+    BaseSlavePort& getSlavePort(const std::string& if_name,
+                                PortID idx = InvalidPortID) override;
+};
+
+#endif // __SCRATCHPAD_HH_
