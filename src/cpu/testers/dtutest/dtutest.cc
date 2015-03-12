@@ -27,6 +27,9 @@
  */
 
 #include "cpu/testers/dtutest/dtutest.hh"
+#include "debug/DtuTest.hh"
+
+unsigned int TESTER_DTU= 0;
 
 bool
 DtuTest::CpuPort::recvTimingResp(PacketPtr pkt)
@@ -44,8 +47,11 @@ DtuTest::CpuPort::recvReqRetry()
 DtuTest::DtuTest(const DtuTestParams *p)
   : MemObject(p),
     tickEvent(this),
-    port("port", this)
+    port("port", this),
+    masterId(p->system->getMasterId(name()))
 {
+    id = TESTER_DTU++;
+
     // kick things into action
     schedule(tickEvent, curTick());
 }
@@ -62,7 +68,18 @@ DtuTest::getMasterPort(const std::string& if_name, PortID idx)
 void
 DtuTest::tick()
 {
-    panic("Don't know what to do!");
+    Addr paddr = 0xdeadbabe;
+    Request::Flags flags;
+
+    auto req = new Request(paddr, 1, flags, masterId);
+    req->setThreadContext(id, 0);
+
+    auto pkt = new Packet(req, MemCmd::ReadReq);
+    auto pkt_data = new uint8_t[1];
+    pkt->dataDynamic(pkt_data);
+
+    DPRINTF(DtuTest, "Send atomic read request at address 0x%x\n", paddr);
+    port.sendAtomic(pkt);
 }
 
 DtuTest*

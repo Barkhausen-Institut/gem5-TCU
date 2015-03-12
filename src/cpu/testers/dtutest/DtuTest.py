@@ -27,8 +27,10 @@
 
 from MemObject import MemObject
 from m5.params import *
+from m5.proxy import *
 
 class DtuTest(MemObject):
     type = 'DtuTest'
     cxx_header = "cpu/testers/dtutest/dtutest.hh"
     port = MasterPort("Port to the DTU and Scratch-Pad-Memory")
+    system = Param.System(Parent.any, "System this tester is part of")

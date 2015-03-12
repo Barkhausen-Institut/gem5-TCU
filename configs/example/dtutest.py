@@ -68,8 +68,9 @@ system.xbar = NoncoherentXBar(forward_latency  = 0,
 system.cpu = DtuTest()
 system.cpu.port = system.xbar.slave
 
-system.baddevice = BadDevice(devicename="Invalid Address", pio_addr=0)
-system.baddevice.pio = system.xbar.master
+system.badaddr = IsaFake(pio_addr=0, pio_size=0xFFFFFFFFFFFFFFFF)
+system.badaddr.warn_access="warn"
+system.badaddr.pio = system.xbar.master
 
 system.system_port = system.xbar.slave
 

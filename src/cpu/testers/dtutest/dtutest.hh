@@ -31,6 +31,7 @@
 
 #include "mem/mem_object.hh"
 #include "params/DtuTest.hh"
+#include "sim/system.hh"
 
 class DtuTest : public MemObject
 {
@@ -42,7 +43,7 @@ class DtuTest : public MemObject
 
   protected:
 
-    // main simulation loop
+    /// main simulation loop
     void tick();
 
     EventWrapper<DtuTest, &DtuTest::tick> tickEvent;
@@ -60,6 +61,11 @@ class DtuTest : public MemObject
     };
 
     CpuPort port;
+
+    /// Request id for all generated traffic
+    MasterID masterId;
+
+    unsigned int id;
 };
 
 #endif // __CPU_DTUTEST_DTUTEST_HH__
