@@ -27,6 +27,7 @@
  */
 
 #include "dtu.hh"
+#include "debug/Dtu.hh"
 
 Dtu::Dtu(const DtuParams *p)
   : MemObject(p),
@@ -66,6 +67,28 @@ Dtu::getSlavePort(const std::string &if_name, PortID idx)
     }
 }
 
+Tick
+Dtu::recvAtomic(PacketPtr pkt)
+{
+    // for now simply forward all requests to the scratchpad
+
+    DPRINTF(Dtu, "Received %s at address 0x%x\n",
+            pkt->isWrite() ? "write" : "read",
+            pkt->getAddr());
+
+    Addr addr = pkt->getAddr();
+    addr &= 0x0fffffff;
+    pkt->setAddr(addr);
+
+    DPRINTF(Dtu, "Forward to scratchpad at address 0x%x\n",
+            pkt->getAddr());
+
+    cpuSideMaster.sendAtomic(pkt);
+
+    // TODO
+    return 0;
+}
+
 bool
 Dtu::DtuMasterPort::recvTimingResp(PacketPtr pkt)
 {
@@ -91,8 +114,7 @@ Dtu::DtuSlavePort::getAddrRanges() const
 Tick
 Dtu::DtuSlavePort::recvAtomic(PacketPtr pkt)
 {
-    panic("Dtu::recvAtomic() not yet implemented");
-    return 0;
+    return dtu.recvAtomic(pkt);
 }
 
 void

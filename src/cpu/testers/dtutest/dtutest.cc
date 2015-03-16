@@ -104,7 +104,7 @@ void
 DtuTest::tick()
 {
     // at first,write something into the scratchpad
-    if (curCycle() < 8)
+    if (curCycle() < 4)
     {
         Addr paddr = curCycle();
         Request::Flags flags;
@@ -118,6 +118,64 @@ DtuTest::tick()
         pkt_data[0] = static_cast<uint8_t>(curCycle());
 
         DPRINTF(DtuTest, "Send atomic write request at address 0x%x\n", paddr);
+        port.sendAtomic(pkt);
+        completeRequest(pkt);
+
+        schedule(tickEvent, clockEdge(Cycles(1)));
+    }
+    // now read these bytes via the DTU
+    else if (curCycle() < 8)
+    {
+        Addr paddr = curCycle() - 4 + 0x10000000;
+        Request::Flags flags;
+
+        auto req = new Request(paddr, 1, flags, masterId);
+        req->setThreadContext(id, 0);
+
+        auto pkt = new Packet(req, MemCmd::ReadReq);
+        auto pkt_data = new uint8_t[1];
+        pkt->dataDynamic(pkt_data);
+
+        DPRINTF(DtuTest, "Send atomic read request at address 0x%x\n", paddr);
+        port.sendAtomic(pkt);
+        completeRequest(pkt);
+
+        schedule(tickEvent, clockEdge(Cycles(1)));
+    }
+    // now write something via the dtu
+    else if (curCycle() < 12)
+    {
+        Addr paddr = curCycle() + 0x10000000;
+        Request::Flags flags;
+
+        auto req = new Request(paddr, 1, flags, masterId);
+        req->setThreadContext(id, 0);
+
+        auto pkt = new Packet(req, MemCmd::WriteReq);
+        auto pkt_data = new uint8_t[1];
+        pkt->dataDynamic(pkt_data);
+        pkt_data[0] = static_cast<uint8_t>(curCycle());
+
+        DPRINTF(DtuTest, "Send atomic write request at address 0x%x\n", paddr);
+        port.sendAtomic(pkt);
+        completeRequest(pkt);
+
+        schedule(tickEvent, clockEdge(Cycles(1)));
+    }
+    // now read these bytes directly from the scratchpad
+    else if (curCycle() < 16)
+    {
+        Addr paddr = curCycle() - 4;
+        Request::Flags flags;
+
+        auto req = new Request(paddr, 1, flags, masterId);
+        req->setThreadContext(id, 0);
+
+        auto pkt = new Packet(req, MemCmd::ReadReq);
+        auto pkt_data = new uint8_t[1];
+        pkt->dataDynamic(pkt_data);
+
+        DPRINTF(DtuTest, "Send atomic read request at address 0x%x\n", paddr);
         port.sendAtomic(pkt);
         completeRequest(pkt);
 

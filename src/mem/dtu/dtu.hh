@@ -83,6 +83,8 @@ class Dtu : public MemObject
     DtuMasterPort cpuSideMaster;
     DtuSlavePort  cpuSideSlave;
 
+    Tick recvAtomic(PacketPtr pkt);
+
   public:
 
     Dtu(const DtuParams *p);
