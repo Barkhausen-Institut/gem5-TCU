@@ -26,64 +26,76 @@
  * either expressed or implied, of the FreeBSD Project.
  */
 
-#include "cpu/testers/dtutest/dtutest.hh"
-#include "debug/DtuTest.hh"
+#ifndef __MEM_DTU_DTU_HH__
+#define __MEM_DTU_DTU_HH__
 
-unsigned int TESTER_DTU= 0;
+#include "mem/mem_object.hh"
+#include "params/Dtu.hh"
 
-bool
-DtuTest::CpuPort::recvTimingResp(PacketPtr pkt)
+class Dtu : public MemObject
 {
-    panic("Did not expect a TimingResp!");
-    return true;
-}
+  private:
 
-void
-DtuTest::CpuPort::recvReqRetry()
-{
-    panic("Did not expect a ReqRetry!");
-}
+    class DtuMasterPort : public MasterPort
+    {
+      public:
 
-DtuTest::DtuTest(const DtuTestParams *p)
-  : MemObject(p),
-    tickEvent(this),
-    port("port", this),
-    masterId(p->system->getMasterId(name()))
-{
-    id = TESTER_DTU++;
+        DtuMasterPort(const std::string& _name, Dtu& _dtu)
+          : MasterPort(_name, &_dtu)
+        { }
 
-    // kick things into action
-    schedule(tickEvent, curTick());
-}
+      protected:
 
-BaseMasterPort &
-DtuTest::getMasterPort(const std::string& if_name, PortID idx)
-{
-    if (if_name == "port")
-        return port;
-    else
-        return MemObject::getMasterPort(if_name, idx);
-}
+        bool recvTimingResp(PacketPtr pkt) override;
 
-void
-DtuTest::tick()
-{
-    Addr paddr = 0x10000004;
-    Request::Flags flags;
+        void recvReqRetry() override;
+    };
 
-    auto req = new Request(paddr, 1, flags, masterId);
-    req->setThreadContext(id, 0);
+    class DtuSlavePort : public SlavePort
+    {
+      private:
+        Dtu& dtu;
 
-    auto pkt = new Packet(req, MemCmd::ReadReq);
-    auto pkt_data = new uint8_t[1];
-    pkt->dataDynamic(pkt_data);
+      public:
 
-    DPRINTF(DtuTest, "Send atomic read request at address 0x%x\n", paddr);
-    port.sendAtomic(pkt);
-}
+        DtuSlavePort(const std::string& _name, Dtu& _dtu)
+          : SlavePort(_name, &_dtu),
+            dtu(_dtu)
+        { }
 
-DtuTest*
-DtuTestParams::create()
-{
-    return new DtuTest(this);
-}
+      protected:
+
+        Tick recvAtomic(PacketPtr pkt) override;
+
+        void recvFunctional(PacketPtr pkt) override;
+
+        bool recvTimingReq(PacketPtr pkt) override;
+
+        void recvRespRetry() override;
+
+        AddrRangeList getAddrRanges() const override;
+
+    };
+
+    Addr baseAddr;
+    Addr size = 0x1000;
+
+    DtuMasterPort cpuSideMaster;
+    DtuSlavePort  cpuSideSlave;
+
+  public:
+
+    Dtu(const DtuParams *p);
+
+    void init() override;
+
+    BaseMasterPort& getMasterPort(const std::string &if_name,
+                                  PortID idx = InvalidPortID) override;
+
+    BaseSlavePort& getSlavePort(const std::string &if_name,
+                                PortID idx = InvalidPortID) override;
+
+
+};
+
+#endif // __MEM_DTU_DTU_HH__

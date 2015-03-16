@@ -26,64 +26,95 @@
  * either expressed or implied, of the FreeBSD Project.
  */
 
-#include "cpu/testers/dtutest/dtutest.hh"
-#include "debug/DtuTest.hh"
+#include "dtu.hh"
 
-unsigned int TESTER_DTU= 0;
+Dtu::Dtu(const DtuParams *p)
+  : MemObject(p),
+    baseAddr(p->base_addr),
+    cpuSideMaster("cpu_side_master", *this),
+    cpuSideSlave("cpu_side_slave", *this)
+{ }
+
+void
+Dtu::init()
+{
+    MemObject::init();
+
+    assert(cpuSideMaster.isConnected());
+    assert(cpuSideSlave.isConnected());
+
+    cpuSideSlave.sendRangeChange();
+}
+
+BaseMasterPort&
+Dtu::getMasterPort(const std::string &if_name, PortID idx)
+{
+    if (if_name != "cpu_side_master") {
+        return MemObject::getMasterPort(if_name, idx);
+    } else {
+        return cpuSideMaster;
+    }
+}
+
+BaseSlavePort&
+Dtu::getSlavePort(const std::string &if_name, PortID idx)
+{
+    if (if_name != "cpu_side_slave") {
+        return MemObject::getSlavePort(if_name, idx);
+    } else {
+        return cpuSideSlave;
+    }
+}
 
 bool
-DtuTest::CpuPort::recvTimingResp(PacketPtr pkt)
+Dtu::DtuMasterPort::recvTimingResp(PacketPtr pkt)
 {
     panic("Did not expect a TimingResp!");
     return true;
 }
 
 void
-DtuTest::CpuPort::recvReqRetry()
+Dtu::DtuMasterPort::recvReqRetry()
 {
     panic("Did not expect a ReqRetry!");
 }
 
-DtuTest::DtuTest(const DtuTestParams *p)
-  : MemObject(p),
-    tickEvent(this),
-    port("port", this),
-    masterId(p->system->getMasterId(name()))
+AddrRangeList
+Dtu::DtuSlavePort::getAddrRanges() const
 {
-    id = TESTER_DTU++;
-
-    // kick things into action
-    schedule(tickEvent, curTick());
+    AddrRangeList ranges;
+    auto range = AddrRange(dtu.baseAddr, dtu.baseAddr + dtu.size - 1);
+    ranges.push_back(range);
+    return ranges;
 }
 
-BaseMasterPort &
-DtuTest::getMasterPort(const std::string& if_name, PortID idx)
+Tick
+Dtu::DtuSlavePort::recvAtomic(PacketPtr pkt)
 {
-    if (if_name == "port")
-        return port;
-    else
-        return MemObject::getMasterPort(if_name, idx);
+    panic("Dtu::recvAtomic() not yet implemented");
+    return 0;
 }
 
 void
-DtuTest::tick()
+Dtu::DtuSlavePort::recvFunctional(PacketPtr pkt)
 {
-    Addr paddr = 0x10000004;
-    Request::Flags flags;
-
-    auto req = new Request(paddr, 1, flags, masterId);
-    req->setThreadContext(id, 0);
-
-    auto pkt = new Packet(req, MemCmd::ReadReq);
-    auto pkt_data = new uint8_t[1];
-    pkt->dataDynamic(pkt_data);
-
-    DPRINTF(DtuTest, "Send atomic read request at address 0x%x\n", paddr);
-    port.sendAtomic(pkt);
+    panic("Dtu::recvFunctional() not yet implemented");
 }
 
-DtuTest*
-DtuTestParams::create()
+bool
+Dtu::DtuSlavePort::recvTimingReq(PacketPtr pkt)
 {
-    return new DtuTest(this);
+    panic("Dtu::recvTimingReq() not yet implemented");
+}
+
+void
+Dtu::DtuSlavePort::recvRespRetry()
+{
+    panic("Dtu::recvRespRetry() not yet implemented");
+}
+
+Dtu*
+DtuParams::create()
+{
+    return new Dtu(this);
 }

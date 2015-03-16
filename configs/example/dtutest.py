@@ -68,12 +68,20 @@ system.xbar = NoncoherentXBar(forward_latency  = 0,
 system.cpu = DtuTest()
 system.cpu.port = system.xbar.slave
 
-system.badaddr = IsaFake(pio_addr=0x10000, pio_size=0xFFFFFFFFFFFEFFFF)
-system.badaddr.warn_access="warn"
-system.badaddr.pio = system.xbar.master
-
 system.scratchpad = Scratchpad()
 system.scratchpad.port = system.xbar.master
+
+system.dtu = Dtu()
+system.dtu.cpu_side_master = system.xbar.slave
+system.dtu.cpu_side_slave = system.xbar.master
+
+system.badaddr1 = IsaFake(pio_addr=0x10000, pio_size=0x0FFEFFFF)
+system.badaddr1.warn_access="warn"
+system.badaddr1.pio = system.xbar.master
+
+system.badaddr2 = IsaFake(pio_addr=0x10001000, pio_size=0x0FFFFFFFFEFFFEFFF)
+system.badaddr2.warn_access="warn"
+system.badaddr2.pio = system.xbar.master
 
 system.system_port = system.xbar.slave
 
