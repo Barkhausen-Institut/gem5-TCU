@@ -66,20 +66,63 @@ DtuTest::getMasterPort(const std::string& if_name, PortID idx)
 }
 
 void
+DtuTest::completeRequest(PacketPtr pkt)
+{
+    Request* req = pkt->req;
+
+    DPRINTF(DtuTest, "Completing %s at address %x %s\n",
+            pkt->isWrite() ? "write" : "read",
+            req->getPaddr(),
+            pkt->isError() ? "error" : "success");
+
+    const uint8_t *pkt_data = pkt->getConstPtr<uint8_t>();
+
+    if (pkt->isError())
+    {
+        warn("%s access failed at %#x\n",
+             pkt->isWrite() ? "Write" : "Read", req->getPaddr());
+    }
+    else
+    {
+        if (pkt->isRead())
+        {
+            DPRINTF(DtuTest, "%s: read of %x @ cycle %d returns %x\n",
+                             name(),
+                             req->getPaddr(),
+                             curTick(),
+                             pkt_data[0]);
+        }
+    }
+
+    delete pkt->req;
+
+    // the packet will delete the data
+    delete pkt;
+}
+
+void
 DtuTest::tick()
 {
-    Addr paddr = 0x10000004;
-    Request::Flags flags;
+    // at first,write something into the scratchpad
+    if (curCycle() < 8)
+    {
+        Addr paddr = curCycle();
+        Request::Flags flags;
 
-    auto req = new Request(paddr, 1, flags, masterId);
-    req->setThreadContext(id, 0);
+        auto req = new Request(paddr, 1, flags, masterId);
+        req->setThreadContext(id, 0);
 
-    auto pkt = new Packet(req, MemCmd::ReadReq);
-    auto pkt_data = new uint8_t[1];
-    pkt->dataDynamic(pkt_data);
+        auto pkt = new Packet(req, MemCmd::WriteReq);
+        auto pkt_data = new uint8_t[1];
+        pkt->dataDynamic(pkt_data);
+        pkt_data[0] = static_cast<uint8_t>(curCycle());
 
-    DPRINTF(DtuTest, "Send atomic read request at address 0x%x\n", paddr);
-    port.sendAtomic(pkt);
+        DPRINTF(DtuTest, "Send atomic write request at address 0x%x\n", paddr);
+        port.sendAtomic(pkt);
+        completeRequest(pkt);
+
+        schedule(tickEvent, clockEdge(Cycles(1)));
+    }
 }
 
 DtuTest*

@@ -66,6 +66,8 @@ class DtuTest : public MemObject
     MasterID masterId;
 
     unsigned int id;
+
+    void completeRequest(PacketPtr pkt);
 };
 
 #endif // __CPU_DTUTEST_DTUTEST_HH__
