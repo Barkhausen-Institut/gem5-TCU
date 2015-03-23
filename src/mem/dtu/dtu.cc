@@ -26,14 +26,18 @@
  * either expressed or implied, of the FreeBSD Project.
  */
 
-#include "dtu.hh"
+#include "mem/dtu/dtu.hh"
 #include "debug/Dtu.hh"
 
 Dtu::Dtu(const DtuParams *p)
   : MemObject(p),
-    baseAddr(p->base_addr),
+    cpuSideBaseAddr(p->cpu_side_base_addr),
+    dtuAddr(p->dtu_addr),
+    dtuAddrBits(p->dtu_addr_bits),
     cpuSideMaster("cpu_side_master", *this),
-    cpuSideSlave("cpu_side_slave", *this)
+    cpuSideSlave("cpu_side_slave", *this),
+    memSideMaster("mem_side_master", *this),
+    memSideSlave("mem_side_slave", *this)
 { }
 
 void
@@ -43,28 +47,33 @@ Dtu::init()
 
     assert(cpuSideMaster.isConnected());
     assert(cpuSideSlave.isConnected());
+    assert(memSideMaster.isConnected());
+    assert(memSideSlave.isConnected());
 
     cpuSideSlave.sendRangeChange();
+    memSideSlave.sendRangeChange();
 }
 
 BaseMasterPort&
 Dtu::getMasterPort(const std::string &if_name, PortID idx)
 {
-    if (if_name != "cpu_side_master") {
-        return MemObject::getMasterPort(if_name, idx);
-    } else {
+    if (if_name == "cpu_side_master")
         return cpuSideMaster;
-    }
+    else if (if_name == "mem_side_master")
+        return memSideMaster;
+    else
+        return MemObject::getMasterPort(if_name, idx);
 }
 
 BaseSlavePort&
 Dtu::getSlavePort(const std::string &if_name, PortID idx)
 {
-    if (if_name != "cpu_side_slave") {
-        return MemObject::getSlavePort(if_name, idx);
-    } else {
+    if (if_name == "cpu_side_slave")
         return cpuSideSlave;
-    }
+    else if (if_name == "mem_side_slave")
+        return memSideSlave;
+    else
+        return MemObject::getSlavePort(if_name, idx);
 }
 
 Tick
@@ -90,47 +99,100 @@ Dtu::recvAtomic(PacketPtr pkt)
 }
 
 bool
-Dtu::DtuMasterPort::recvTimingResp(PacketPtr pkt)
+Dtu::DtuCpuSideMasterPort::recvTimingResp(PacketPtr pkt)
 {
     panic("Did not expect a TimingResp!");
     return true;
 }
 
 void
-Dtu::DtuMasterPort::recvReqRetry()
+Dtu::DtuCpuSideMasterPort::recvReqRetry()
 {
     panic("Did not expect a ReqRetry!");
 }
 
 AddrRangeList
-Dtu::DtuSlavePort::getAddrRanges() const
+Dtu::DtuCpuSideSlavePort::getAddrRanges() const
 {
     AddrRangeList ranges;
-    auto range = AddrRange(dtu.baseAddr, dtu.baseAddr + dtu.size - 1);
+    auto range = AddrRange(dtu.cpuSideBaseAddr,
+                           dtu.cpuSideBaseAddr + dtu.size - 1);
     ranges.push_back(range);
     return ranges;
 }
 
 Tick
-Dtu::DtuSlavePort::recvAtomic(PacketPtr pkt)
+Dtu::DtuCpuSideSlavePort::recvAtomic(PacketPtr pkt)
 {
     return dtu.recvAtomic(pkt);
 }
 
 void
-Dtu::DtuSlavePort::recvFunctional(PacketPtr pkt)
+Dtu::DtuCpuSideSlavePort::recvFunctional(PacketPtr pkt)
 {
     panic("Dtu::recvFunctional() not yet implemented");
 }
 
 bool
-Dtu::DtuSlavePort::recvTimingReq(PacketPtr pkt)
+Dtu::DtuCpuSideSlavePort::recvTimingReq(PacketPtr pkt)
 {
     panic("Dtu::recvTimingReq() not yet implemented");
 }
 
 void
-Dtu::DtuSlavePort::recvRespRetry()
+Dtu::DtuCpuSideSlavePort::recvRespRetry()
+{
+    panic("Dtu::recvRespRetry() not yet implemented");
+}
+
+bool
+Dtu::DtuMemSideMasterPort::recvTimingResp(PacketPtr pkt)
+{
+    panic("Did not expect a TimingResp!");
+    return true;
+}
+
+void
+Dtu::DtuMemSideMasterPort::recvReqRetry()
+{
+    panic("Did not expect a ReqRetry!");
+}
+
+AddrRangeList
+Dtu::DtuMemSideSlavePort::getAddrRanges() const
+{
+    AddrRangeList ranges;
+
+    // XXX assume 64 bit address width
+    Addr baseAddr = dtu.dtuAddr << (64 - dtu.dtuAddrBits);
+    Addr size = 1UL << (64 - dtu.dtuAddrBits);
+
+    auto range = AddrRange(baseAddr, baseAddr + size - 1);
+    ranges.push_back(range);
+    return ranges;
+}
+
+Tick
+Dtu::DtuMemSideSlavePort::recvAtomic(PacketPtr pkt)
+{
+    panic("Dtu::recvAtomic() not yet implemented");
+    return 0;
+}
+
+void
+Dtu::DtuMemSideSlavePort::recvFunctional(PacketPtr pkt)
+{
+    panic("Dtu::recvFunctional() not yet implemented");
+}
+
+bool
+Dtu::DtuMemSideSlavePort::recvTimingReq(PacketPtr pkt)
+{
+    panic("Dtu::recvTimingReq() not yet implemented");
+}
+
+void
+Dtu::DtuMemSideSlavePort::recvRespRetry()
 {
     panic("Dtu::recvRespRetry() not yet implemented");
 }

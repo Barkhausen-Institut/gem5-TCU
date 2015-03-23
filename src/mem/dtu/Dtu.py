@@ -33,4 +33,8 @@ class Dtu(MemObject):
     cxx_header = "mem/dtu/dtu.hh"
     cpu_side_master = MasterPort("DTU master port on cpu-side")
     cpu_side_slave  = SlavePort("DTU slave port on cpu-side")
-    base_addr = Param.Addr(0x10000000, "DTU address")
+    mem_side_master = MasterPort("DTU master port on mem-side")
+    mem_side_slave  = SlavePort("DTU slave port on mem-side")
+    cpu_side_base_addr = Param.Addr(0x10000000, "DTU address (used by CPU to access the DTU)")
+    dtu_addr_bits = Param.Unsigned(4, "Address bits used to address the DTU")
+    dtu_addr = Param.Addr("DTU address (used to access the DTU from memory bus)")

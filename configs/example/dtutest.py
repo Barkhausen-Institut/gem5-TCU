@@ -72,6 +72,7 @@ system.scratchpad = Scratchpad()
 system.scratchpad.port = system.xbar.master
 
 system.dtu = Dtu()
+system.dtu.dtu_addr = 0
 system.dtu.cpu_side_master = system.xbar.slave
 system.dtu.cpu_side_slave = system.xbar.master
 
@@ -82,6 +83,15 @@ system.badaddr1.pio = system.xbar.master
 system.badaddr2 = IsaFake(pio_addr=0x10001000, pio_size=0x0FFFFFFFFEFFFEFFF)
 system.badaddr2.warn_access="warn"
 system.badaddr2.pio = system.xbar.master
+
+system.noc = NoncoherentXBar(forward_latency  = 0,
+                             frontend_latency = 0,
+                             response_latency = 0,
+                             width = 16, # default 128bit TODO is this a good value??
+                             )
+
+system.dtu.mem_side_master = system.noc.slave
+system.dtu.mem_side_slave  = system.noc.master
 
 system.system_port = system.xbar.slave
 

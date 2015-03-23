@@ -36,11 +36,11 @@ class Dtu : public MemObject
 {
   private:
 
-    class DtuMasterPort : public MasterPort
+    class DtuCpuSideMasterPort : public MasterPort
     {
       public:
 
-        DtuMasterPort(const std::string& _name, Dtu& _dtu)
+        DtuCpuSideMasterPort(const std::string& _name, Dtu& _dtu)
           : MasterPort(_name, &_dtu)
         { }
 
@@ -51,14 +51,14 @@ class Dtu : public MemObject
         void recvReqRetry() override;
     };
 
-    class DtuSlavePort : public SlavePort
+    class DtuCpuSideSlavePort : public SlavePort
     {
       private:
         Dtu& dtu;
 
       public:
 
-        DtuSlavePort(const std::string& _name, Dtu& _dtu)
+        DtuCpuSideSlavePort(const std::string& _name, Dtu& _dtu)
           : SlavePort(_name, &_dtu),
             dtu(_dtu)
         { }
@@ -77,11 +77,57 @@ class Dtu : public MemObject
 
     };
 
-    Addr baseAddr;
+    class DtuMemSideMasterPort : public MasterPort
+    {
+      public:
+
+        DtuMemSideMasterPort(const std::string& _name, Dtu& _dtu)
+          : MasterPort(_name, &_dtu)
+        { }
+
+      protected:
+
+        bool recvTimingResp(PacketPtr pkt) override;
+
+        void recvReqRetry() override;
+    };
+
+    class DtuMemSideSlavePort : public SlavePort
+    {
+      private:
+        Dtu& dtu;
+
+      public:
+
+        DtuMemSideSlavePort(const std::string& _name, Dtu& _dtu)
+          : SlavePort(_name, &_dtu),
+            dtu(_dtu)
+        { }
+
+      protected:
+
+        Tick recvAtomic(PacketPtr pkt) override;
+
+        void recvFunctional(PacketPtr pkt) override;
+
+        bool recvTimingReq(PacketPtr pkt) override;
+
+        void recvRespRetry() override;
+
+        AddrRangeList getAddrRanges() const override;
+
+    };
+
+    Addr cpuSideBaseAddr;
     Addr size = 0x1000;
 
-    DtuMasterPort cpuSideMaster;
-    DtuSlavePort  cpuSideSlave;
+    Addr dtuAddr;
+    unsigned dtuAddrBits;
+
+    DtuCpuSideMasterPort cpuSideMaster;
+    DtuCpuSideSlavePort  cpuSideSlave;
+    DtuMemSideMasterPort memSideMaster;
+    DtuMemSideSlavePort  memSideSlave;
 
     Tick recvAtomic(PacketPtr pkt);
 
