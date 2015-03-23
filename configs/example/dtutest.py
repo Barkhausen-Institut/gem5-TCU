@@ -25,6 +25,7 @@
 # of the authors and should not be interpreted as representing official policies,
 # either expressed or implied, of the FreeBSD Project.
 
+import math
 import optparse
 
 import m5
@@ -39,15 +40,22 @@ parser.add_option("--sys-clock", action="store", type="string",
                   default='1GHz',
                   help = """Top-level clock for blocks running at system
                   speed""")
+parser.add_option("--num-pes", type="int", default=2,
+                  help = "Number of PEs (processing elements) in the system"
+                  "[default:%default]")
 
 (options, args) = parser.parse_args()
 
 if args:
-     print "Error: script doesn't take any positional arguments"
-     sys.exit(1)
+    print "Error: script doesn't take any positional arguments"
+    sys.exit(1)
 
-# Make a prototype for the tester to be used throughout
-proto_tester = DtuTest()
+# Start by parsing the command line options and do some basic sanity
+# checking
+
+if not options.num_pes > 0:
+    print "Error: Must have at least one PE"
+    sys.exit(1)
 
 # Set up the system
 system = System()
@@ -57,43 +65,55 @@ system.voltage_domain = VoltageDomain(voltage = '1V')
 system.clk_domain = SrcClockDomain(clock =  options.sys_clock,
                         voltage_domain = system.voltage_domain)
 
-
-# TODO set latencies
-system.xbar = NoncoherentXBar(forward_latency  = 0,
-                              frontend_latency = 1,
-                              response_latency = 1,
-                              width = 16, # default 128bit TODO is this a good value??
-                              )
-
-system.cpu = DtuTest()
-system.cpu.port = system.xbar.slave
-
-system.scratchpad = Scratchpad()
-system.scratchpad.port = system.xbar.master
-
-system.dtu = Dtu()
-system.dtu.dtu_addr = 0
-system.dtu.cpu_side_master = system.xbar.slave
-system.dtu.cpu_side_slave = system.xbar.master
-
-system.badaddr1 = IsaFake(pio_addr=0x10000, pio_size=0x0FFEFFFF)
-system.badaddr1.warn_access="warn"
-system.badaddr1.pio = system.xbar.master
-
-system.badaddr2 = IsaFake(pio_addr=0x10001000, pio_size=0x0FFFFFFFFEFFFEFFF)
-system.badaddr2.warn_access="warn"
-system.badaddr2.pio = system.xbar.master
-
+# All PEs are connected to a NoC (Network on Chip). In this case it's just
+# a simple XBar.
 system.noc = NoncoherentXBar(forward_latency  = 0,
                              frontend_latency = 0,
                              response_latency = 0,
                              width = 16, # default 128bit TODO is this a good value??
                              )
 
-system.dtu.mem_side_master = system.noc.slave
-system.dtu.mem_side_slave  = system.noc.master
+# A PE (processing element) consists of a CPU, a Scratchpad-Memory, and a DTU.
+# These elements are connected via a simple non-coherent XBar. The DTU ports
+# mem_side_slave and mem_side_master are the PE's interface to the outside
+# world.
+for i in range(0, options.num_pes):
 
-system.system_port = system.xbar.slave
+    # each PE is represented by it's own subsystem
+    pe = SubSystem()
+    setattr(system, 'pe%d' % i, pe)
+
+    # TODO set latencies
+    pe.xbar = NoncoherentXBar(forward_latency  = 0,
+                              frontend_latency = 1,
+                              response_latency = 1,
+                              width = 16, # default 128bit TODO is this a good value??
+                             )
+
+    pe.cpu = DtuTest()
+    pe.cpu.port = pe.xbar.slave
+
+    pe.scratchpad = Scratchpad()
+    pe.scratchpad.port = pe.xbar.master
+
+    pe.dtu = Dtu()
+    pe.dtu.dtu_addr = i
+    pe.dtu.dtu_addr_bits = math.ceil(math.log(options.num_pes,2))
+    pe.dtu.cpu_side_master = pe.xbar.slave
+    pe.dtu.cpu_side_slave = pe.xbar.master
+
+    pe.dtu.mem_side_master = system.noc.slave
+    pe.dtu.mem_side_slave  = system.noc.master
+
+#system.badaddr1 = IsaFake(pio_addr=0x10000, pio_size=0x0FFEFFFF)
+#system.badaddr1.warn_access="warn"
+#system.badaddr1.pio = system.xbar.master
+
+#system.badaddr2 = IsaFake(pio_addr=0x10001000, pio_size=0x0FFFFFFFFEFFFEFFF)
+#system.badaddr2.warn_access="warn"
+#system.badaddr2.pio = system.xbar.master
+
+system.system_port = system.noc.slave
 
 root = Root(full_system = False, system = system)
 
