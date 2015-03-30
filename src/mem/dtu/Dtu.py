@@ -31,10 +31,10 @@ from m5.params import *
 class Dtu(MemObject):
     type = 'Dtu'
     cxx_header = "mem/dtu/dtu.hh"
-    cpu_side_master = MasterPort("DTU master port on cpu-side")
-    cpu_side_slave  = SlavePort("DTU slave port on cpu-side")
-    mem_side_master = MasterPort("DTU master port on mem-side")
-    mem_side_slave  = SlavePort("DTU slave port on mem-side")
-    cpu_side_base_addr = Param.Addr(0x10000000, "DTU address (used by CPU to access the DTU)")
+    cpu        = SlavePort("DTU slave port connectting to the CPU")
+    scratchpad = MasterPort("DTU master port connecting to the Scratchpad Memory")
+    master     = MasterPort("DTU master port")
+    slave      = SlavePort("DTU slave port")
+    cpu_base_addr = Param.Addr(0x10000000, "DTU address (used by CPU to access the DTU)")
     dtu_addr_bits = Param.Unsigned(4, "Address bits used to address the DTU")
     dtu_addr = Param.Addr("DTU address (used to access the DTU from memory bus)")

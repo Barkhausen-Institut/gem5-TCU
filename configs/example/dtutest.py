@@ -99,11 +99,11 @@ for i in range(0, options.num_pes):
     pe.dtu = Dtu()
     pe.dtu.dtu_addr = i
     pe.dtu.dtu_addr_bits = math.ceil(math.log(options.num_pes,2))
-    pe.dtu.cpu_side_master = pe.xbar.slave
-    pe.dtu.cpu_side_slave = pe.xbar.master
+    pe.dtu.scratchpad = pe.xbar.slave
+    pe.dtu.cpu = pe.xbar.master
 
-    pe.dtu.mem_side_master = system.noc.slave
-    pe.dtu.mem_side_slave  = system.noc.master
+    pe.dtu.master = system.noc.slave
+    pe.dtu.slave  = system.noc.master
 
 #system.badaddr1 = IsaFake(pio_addr=0x10000, pio_size=0x0FFEFFFF)
 #system.badaddr1.warn_access="warn"

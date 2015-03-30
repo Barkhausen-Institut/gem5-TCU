@@ -31,13 +31,13 @@
 
 Dtu::Dtu(const DtuParams *p)
   : MemObject(p),
-    cpuSideBaseAddr(p->cpu_side_base_addr),
+    cpuBaseAddr(p->cpu_base_addr),
     dtuAddr(p->dtu_addr),
     dtuAddrBits(p->dtu_addr_bits),
-    cpuSideMaster("cpu_side_master", *this),
-    cpuSideSlave("cpu_side_slave", *this),
-    memSideMaster("mem_side_master", *this),
-    memSideSlave("mem_side_slave", *this)
+    cpu("cpu", *this),
+    scratchpad("scratchpad", *this),
+    master("master", *this),
+    slave("slave", *this)
 { }
 
 void
@@ -45,22 +45,22 @@ Dtu::init()
 {
     MemObject::init();
 
-    assert(cpuSideMaster.isConnected());
-    assert(cpuSideSlave.isConnected());
-    assert(memSideMaster.isConnected());
-    assert(memSideSlave.isConnected());
+    assert(cpu.isConnected());
+    assert(scratchpad.isConnected());
+    assert(master.isConnected());
+    assert(slave.isConnected());
 
-    cpuSideSlave.sendRangeChange();
-    memSideSlave.sendRangeChange();
+    cpu.sendRangeChange();
+    slave.sendRangeChange();
 }
 
 BaseMasterPort&
 Dtu::getMasterPort(const std::string &if_name, PortID idx)
 {
-    if (if_name == "cpu_side_master")
-        return cpuSideMaster;
-    else if (if_name == "mem_side_master")
-        return memSideMaster;
+    if (if_name == "scratchpad")
+        return scratchpad;
+    else if (if_name == "master")
+        return master;
     else
         return MemObject::getMasterPort(if_name, idx);
 }
@@ -68,10 +68,10 @@ Dtu::getMasterPort(const std::string &if_name, PortID idx)
 BaseSlavePort&
 Dtu::getSlavePort(const std::string &if_name, PortID idx)
 {
-    if (if_name == "cpu_side_slave")
-        return cpuSideSlave;
-    else if (if_name == "mem_side_slave")
-        return memSideSlave;
+    if (if_name == "cpu")
+        return cpu;
+    else if (if_name == "slave")
+        return slave;
     else
         return MemObject::getSlavePort(if_name, idx);
 }
@@ -92,74 +92,74 @@ Dtu::recvAtomic(PacketPtr pkt)
     DPRINTF(Dtu, "Forward to scratchpad at address 0x%x\n",
             pkt->getAddr());
 
-    cpuSideMaster.sendAtomic(pkt);
+    scratchpad.sendAtomic(pkt);
 
     // TODO
     return 0;
 }
 
 bool
-Dtu::DtuCpuSideMasterPort::recvTimingResp(PacketPtr pkt)
+Dtu::DtuScratchpadPort::recvTimingResp(PacketPtr pkt)
 {
     panic("Did not expect a TimingResp!");
     return true;
 }
 
 void
-Dtu::DtuCpuSideMasterPort::recvReqRetry()
+Dtu::DtuScratchpadPort::recvReqRetry()
 {
     panic("Did not expect a ReqRetry!");
 }
 
 AddrRangeList
-Dtu::DtuCpuSideSlavePort::getAddrRanges() const
+Dtu::DtuCpuPort::getAddrRanges() const
 {
     AddrRangeList ranges;
-    auto range = AddrRange(dtu.cpuSideBaseAddr,
-                           dtu.cpuSideBaseAddr + dtu.size - 1);
+    auto range = AddrRange(dtu.cpuBaseAddr,
+                           dtu.cpuBaseAddr + dtu.size - 1);
     ranges.push_back(range);
     return ranges;
 }
 
 Tick
-Dtu::DtuCpuSideSlavePort::recvAtomic(PacketPtr pkt)
+Dtu::DtuCpuPort::recvAtomic(PacketPtr pkt)
 {
     return dtu.recvAtomic(pkt);
 }
 
 void
-Dtu::DtuCpuSideSlavePort::recvFunctional(PacketPtr pkt)
+Dtu::DtuCpuPort::recvFunctional(PacketPtr pkt)
 {
     panic("Dtu::recvFunctional() not yet implemented");
 }
 
 bool
-Dtu::DtuCpuSideSlavePort::recvTimingReq(PacketPtr pkt)
+Dtu::DtuCpuPort::recvTimingReq(PacketPtr pkt)
 {
     panic("Dtu::recvTimingReq() not yet implemented");
 }
 
 void
-Dtu::DtuCpuSideSlavePort::recvRespRetry()
+Dtu::DtuCpuPort::recvRespRetry()
 {
     panic("Dtu::recvRespRetry() not yet implemented");
 }
 
 bool
-Dtu::DtuMemSideMasterPort::recvTimingResp(PacketPtr pkt)
+Dtu::DtuMasterPort::recvTimingResp(PacketPtr pkt)
 {
     panic("Did not expect a TimingResp!");
     return true;
 }
 
 void
-Dtu::DtuMemSideMasterPort::recvReqRetry()
+Dtu::DtuMasterPort::recvReqRetry()
 {
     panic("Did not expect a ReqRetry!");
 }
 
 AddrRangeList
-Dtu::DtuMemSideSlavePort::getAddrRanges() const
+Dtu::DtuSlavePort::getAddrRanges() const
 {
     AddrRangeList ranges;
 
@@ -173,26 +173,26 @@ Dtu::DtuMemSideSlavePort::getAddrRanges() const
 }
 
 Tick
-Dtu::DtuMemSideSlavePort::recvAtomic(PacketPtr pkt)
+Dtu::DtuSlavePort::recvAtomic(PacketPtr pkt)
 {
     panic("Dtu::recvAtomic() not yet implemented");
     return 0;
 }
 
 void
-Dtu::DtuMemSideSlavePort::recvFunctional(PacketPtr pkt)
+Dtu::DtuSlavePort::recvFunctional(PacketPtr pkt)
 {
     panic("Dtu::recvFunctional() not yet implemented");
 }
 
 bool
-Dtu::DtuMemSideSlavePort::recvTimingReq(PacketPtr pkt)
+Dtu::DtuSlavePort::recvTimingReq(PacketPtr pkt)
 {
     panic("Dtu::recvTimingReq() not yet implemented");
 }
 
 void
-Dtu::DtuMemSideSlavePort::recvRespRetry()
+Dtu::DtuSlavePort::recvRespRetry()
 {
     panic("Dtu::recvRespRetry() not yet implemented");
 }

@@ -36,11 +36,11 @@ class Dtu : public MemObject
 {
   private:
 
-    class DtuCpuSideMasterPort : public MasterPort
+    class DtuScratchpadPort : public MasterPort
     {
       public:
 
-        DtuCpuSideMasterPort(const std::string& _name, Dtu& _dtu)
+        DtuScratchpadPort(const std::string& _name, Dtu& _dtu)
           : MasterPort(_name, &_dtu)
         { }
 
@@ -51,16 +51,54 @@ class Dtu : public MemObject
         void recvReqRetry() override;
     };
 
-    class DtuCpuSideSlavePort : public SlavePort
+    class DtuCpuPort : public SlavePort
     {
       private:
         Dtu& dtu;
 
       public:
 
-        DtuCpuSideSlavePort(const std::string& _name, Dtu& _dtu)
-          : SlavePort(_name, &_dtu),
-            dtu(_dtu)
+        DtuCpuPort(const std::string& _name, Dtu& _dtu)
+          : SlavePort(_name, &_dtu), dtu(_dtu)
+        { }
+
+      protected:
+
+        Tick recvAtomic(PacketPtr pkt) override;
+
+        void recvFunctional(PacketPtr pkt) override;
+
+        bool recvTimingReq(PacketPtr pkt) override;
+
+        void recvRespRetry() override;
+
+        AddrRangeList getAddrRanges() const override;
+    };
+
+    class DtuMasterPort : public MasterPort
+    {
+      public:
+
+        DtuMasterPort(const std::string& _name, Dtu& _dtu)
+          : MasterPort(_name, &_dtu)
+        { }
+
+      protected:
+
+        bool recvTimingResp(PacketPtr pkt) override;
+
+        void recvReqRetry() override;
+    };
+
+    class DtuSlavePort : public SlavePort
+    {
+      private:
+        Dtu& dtu;
+
+      public:
+
+        DtuSlavePort(const std::string& _name, Dtu& _dtu)
+          : SlavePort(_name, &_dtu), dtu(_dtu)
         { }
 
       protected:
@@ -77,57 +115,16 @@ class Dtu : public MemObject
 
     };
 
-    class DtuMemSideMasterPort : public MasterPort
-    {
-      public:
-
-        DtuMemSideMasterPort(const std::string& _name, Dtu& _dtu)
-          : MasterPort(_name, &_dtu)
-        { }
-
-      protected:
-
-        bool recvTimingResp(PacketPtr pkt) override;
-
-        void recvReqRetry() override;
-    };
-
-    class DtuMemSideSlavePort : public SlavePort
-    {
-      private:
-        Dtu& dtu;
-
-      public:
-
-        DtuMemSideSlavePort(const std::string& _name, Dtu& _dtu)
-          : SlavePort(_name, &_dtu),
-            dtu(_dtu)
-        { }
-
-      protected:
-
-        Tick recvAtomic(PacketPtr pkt) override;
-
-        void recvFunctional(PacketPtr pkt) override;
-
-        bool recvTimingReq(PacketPtr pkt) override;
-
-        void recvRespRetry() override;
-
-        AddrRangeList getAddrRanges() const override;
-
-    };
-
-    Addr cpuSideBaseAddr;
+    Addr cpuBaseAddr;
     Addr size = 0x1000;
 
     Addr dtuAddr;
     unsigned dtuAddrBits;
 
-    DtuCpuSideMasterPort cpuSideMaster;
-    DtuCpuSideSlavePort  cpuSideSlave;
-    DtuMemSideMasterPort memSideMaster;
-    DtuMemSideSlavePort  memSideSlave;
+    DtuCpuPort        cpu;
+    DtuScratchpadPort scratchpad;
+    DtuMasterPort     master;
+    DtuSlavePort      slave;
 
     Tick recvAtomic(PacketPtr pkt);
 
