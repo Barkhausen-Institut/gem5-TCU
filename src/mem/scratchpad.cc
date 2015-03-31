@@ -59,7 +59,35 @@ Tick
 Scratchpad::recvAtomic(PacketPtr pkt)
 {
     access(pkt);
-    return latency;
+
+    /*
+     * TODO
+     * So far the Scratchpad has no busy state -> it accepts all requests!
+     */
+
+    /*
+     * TODO
+     * Latency calculation does not depend on packet size. This works as long
+     * as the Scratchpad is connected via a XBar, as the XBar calculates the
+     * payloadDelay and therefore limits throughput. However, this does not take
+     * into account slower memories or direct connections (without XBar).
+     */
+    pkt->headerDelay += latency * clockPeriod();
+
+    Tick totalDelay = pkt->headerDelay + pkt->payloadDelay;
+
+    /*
+     * The SimpleTimingPort already pays for the delay returned by recvAtomic
+     *  -> reset the packet delay
+     *
+     * XXX I'm not sure if this is the right way to go. However, it seems
+     *     better than simply ignoring the packet's delays as it is doen for 
+     *     instance in SimpleMemory.
+     */
+    pkt->headerDelay  = 0;
+    pkt->payloadDelay = 0;
+
+    return totalDelay;
 }
 
 Scratchpad::ScratchpadPort::ScratchpadPort(const std::string& _name,
