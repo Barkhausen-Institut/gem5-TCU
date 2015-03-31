@@ -62,32 +62,9 @@ Scratchpad::recvAtomic(PacketPtr pkt)
     return latency;
 }
 
-void
-Scratchpad::recvFunctional(PacketPtr pkt)
-{
-    pkt->pushLabel(name());
-
-    functionalAccess(pkt);
-
-    pkt->popLabel();
-}
-
-bool
-Scratchpad::recvTimingReq(PacketPtr pkt)
-{
-    panic("Scratchpad::recvTimingReq() not yet implemented");
-}
-
-void
-Scratchpad::recvRespRetry()
-{
-    panic("Scratchpad::recvRespRetry() not yet implemented");
-}
-
-
 Scratchpad::ScratchpadPort::ScratchpadPort(const std::string& _name,
                                            Scratchpad& _scratchpad)
-    : SlavePort(_name, &_scratchpad), scratchpad(_scratchpad)
+    : SimpleTimingPort(_name, &_scratchpad), scratchpad(_scratchpad)
 { }
 
 AddrRangeList
@@ -102,24 +79,6 @@ Tick
 Scratchpad::ScratchpadPort::recvAtomic(PacketPtr pkt)
 {
     return scratchpad.recvAtomic(pkt);
-}
-
-void
-Scratchpad::ScratchpadPort::recvFunctional(PacketPtr pkt)
-{
-    scratchpad.recvFunctional(pkt);
-}
-
-bool
-Scratchpad::ScratchpadPort::recvTimingReq(PacketPtr pkt)
-{
-    return scratchpad.recvTimingReq(pkt);
-}
-
-void
-Scratchpad::ScratchpadPort::recvRespRetry()
-{
-    scratchpad.recvRespRetry();
 }
 
 Scratchpad*

@@ -30,15 +30,15 @@
 #define __SCRATCHPAD_HH_
 
 #include "mem/abstract_mem.hh"
+#include "mem/tport.hh"
 #include "params/Scratchpad.hh"
 
 class Scratchpad : public AbstractMemory
 {
   private:
 
-    class ScratchpadPort : public SlavePort
+    class ScratchpadPort : public SimpleTimingPort
     {
-
       private:
 
         Scratchpad& scratchpad;
@@ -51,14 +51,7 @@ class Scratchpad : public AbstractMemory
 
         Tick recvAtomic(PacketPtr pkt) override;
 
-        void recvFunctional(PacketPtr pkt) override;
-
-        bool recvTimingReq(PacketPtr pkt) override;
-
-        void recvRespRetry() override;
-
         AddrRangeList getAddrRanges() const override;
-
     };
 
     ScratchpadPort port;
@@ -68,12 +61,6 @@ class Scratchpad : public AbstractMemory
   protected:
 
     Tick recvAtomic(PacketPtr pkt);
-
-    void recvFunctional(PacketPtr pkt);
-
-    bool recvTimingReq(PacketPtr pkt);
-
-    void recvRespRetry();
 
   public:
 

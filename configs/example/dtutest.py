@@ -87,8 +87,8 @@ for i in range(0, options.num_pes):
 
     # TODO set latencies
     pe.xbar = NoncoherentXBar(forward_latency  = 0,
-                              frontend_latency = 1,
-                              response_latency = 1,
+                              frontend_latency = 0,
+                              response_latency = 0,
                               width = 16, # default 128bit TODO is this a good value??
                              )
 
