@@ -67,7 +67,12 @@ class DtuTest : public MemObject
 
     unsigned int id;
 
+    const bool atomic;
+
+    bool sendPkt(PacketPtr pkt);
+
     void completeRequest(PacketPtr pkt);
+
 };
 
 #endif // __CPU_DTUTEST_DTUTEST_HH__

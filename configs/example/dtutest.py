@@ -33,6 +33,8 @@ from m5.objects import *
 
 parser = optparse.OptionParser()
 
+parser.add_option("-a", "--atomic", action="store_true",
+                  help="Use atomic (non-timing) mode")
 parser.add_option("-m", "--maxtick", type="int", default=m5.MaxTick,
                   metavar="T",
                   help="Stop after T ticks")
@@ -116,6 +118,10 @@ for i in range(0, options.num_pes):
 system.system_port = system.noc.slave
 
 root = Root(full_system = False, system = system)
+if options.atomic:
+    root.system.mem_mode = 'atomic'
+else:
+    root.system.mem_mode = 'timing'
 
 # Instantiate configuration
 m5.instantiate()

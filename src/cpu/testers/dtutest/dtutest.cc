@@ -48,7 +48,8 @@ DtuTest::DtuTest(const DtuTestParams *p)
   : MemObject(p),
     tickEvent(this),
     port("port", this),
-    masterId(p->system->getMasterId(name()))
+    masterId(p->system->getMasterId(name())),
+    atomic(p->system->isAtomicMode())
 {
     id = TESTER_DTU++;
 
@@ -63,6 +64,27 @@ DtuTest::getMasterPort(const std::string& if_name, PortID idx)
         return port;
     else
         return MemObject::getMasterPort(if_name, idx);
+}
+
+bool
+DtuTest::sendPkt(PacketPtr pkt)
+{
+    DPRINTF(DtuTest, "Send %s %s request at address 0x%x\n",
+                     atomic ? "atomic" : "timed",
+                     pkt->isWrite() ? "write" : "read",
+                     pkt->getAddr());
+
+    if (atomic)
+    {
+        port.sendAtomic(pkt);
+        completeRequest(pkt);
+    }
+    else
+    {
+        panic("Timing requests are not yet implemented");
+    }
+
+    return true;
 }
 
 void
@@ -117,9 +139,7 @@ DtuTest::tick()
         pkt->dataDynamic(pkt_data);
         pkt_data[0] = static_cast<uint8_t>(curCycle());
 
-        DPRINTF(DtuTest, "Send atomic write request at address 0x%x\n", paddr);
-        port.sendAtomic(pkt);
-        completeRequest(pkt);
+        sendPkt(pkt);
 
         schedule(tickEvent, clockEdge(Cycles(1)));
     }
@@ -136,9 +156,7 @@ DtuTest::tick()
         auto pkt_data = new uint8_t[1];
         pkt->dataDynamic(pkt_data);
 
-        DPRINTF(DtuTest, "Send atomic read request at address 0x%x\n", paddr);
-        port.sendAtomic(pkt);
-        completeRequest(pkt);
+        sendPkt(pkt);
 
         schedule(tickEvent, clockEdge(Cycles(1)));
     }
@@ -156,9 +174,7 @@ DtuTest::tick()
         pkt->dataDynamic(pkt_data);
         pkt_data[0] = static_cast<uint8_t>(curCycle());
 
-        DPRINTF(DtuTest, "Send atomic write request at address 0x%x\n", paddr);
-        port.sendAtomic(pkt);
-        completeRequest(pkt);
+        sendPkt(pkt);
 
         schedule(tickEvent, clockEdge(Cycles(1)));
     }
@@ -175,9 +191,7 @@ DtuTest::tick()
         auto pkt_data = new uint8_t[1];
         pkt->dataDynamic(pkt_data);
 
-        DPRINTF(DtuTest, "Send atomic read request at address 0x%x\n", paddr);
-        port.sendAtomic(pkt);
-        completeRequest(pkt);
+        sendPkt(pkt);
 
         schedule(tickEvent, clockEdge(Cycles(1)));
     }

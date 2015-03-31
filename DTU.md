@@ -18,7 +18,7 @@ Run
 ===
 
 For testing I use this comand:
-`build/ALPHA/gem5.debug --debug-flags=DtuTest,Dtu,MemoryAccess,XBar configs/example/dtutest.py --num-pes=2`
+```build/ALPHA/gem5.debug --debug-flags=DtuTest,Dtu,MemoryAccess,XBar configs/example/dtutest.py --num-pes=2 [--atomic]```
 
 The test script creates a simple system consisting of num_pes (--num-pes)
 processing elements. Each PE consists of a CPU, a Scratchpad-Memory, and a DTU.
