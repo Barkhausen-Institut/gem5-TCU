@@ -121,7 +121,7 @@ class Dtu : public MemObject
     DtuMasterPort     master;
     DtuSlavePort      slave;
 
-    Tick recvAtomic(PacketPtr pkt);
+    Tick handleCpuRequest(PacketPtr pkt);
 
   public:
 

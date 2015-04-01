@@ -77,7 +77,7 @@ Dtu::getSlavePort(const std::string &if_name, PortID idx)
 }
 
 Tick
-Dtu::recvAtomic(PacketPtr pkt)
+Dtu::handleCpuRequest(PacketPtr pkt)
 {
     // for now simply forward all requests to the scratchpad
 
@@ -95,7 +95,22 @@ Dtu::recvAtomic(PacketPtr pkt)
     scratchpad.sendAtomic(pkt);
 
     // TODO
-    return 0;
+    Tick dtuDelay = 0;
+
+    Tick totalDelay = pkt->headerDelay + pkt->payloadDelay + dtuDelay;
+
+    /*
+     * The SimpleTimingPort already pays for the delay returned by recvAtomic
+     *  -> reset the packet delay
+     *
+     * XXX I'm not sure if this is the right way to go. However, it seems
+     *     better than simply ignoring the packet's delays as it is done for
+     *     instance in SimpleMemory.
+     */
+    pkt->headerDelay  = 0;
+    pkt->payloadDelay = 0;
+
+    return totalDelay;
 }
 
 bool
@@ -124,7 +139,7 @@ Dtu::DtuCpuPort::getAddrRanges() const
 Tick
 Dtu::DtuCpuPort::recvAtomic(PacketPtr pkt)
 {
-    return dtu.recvAtomic(pkt);
+    return dtu.handleCpuRequest(pkt);
 }
 
 bool
