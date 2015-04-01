@@ -127,24 +127,6 @@ Dtu::DtuCpuPort::recvAtomic(PacketPtr pkt)
     return dtu.recvAtomic(pkt);
 }
 
-void
-Dtu::DtuCpuPort::recvFunctional(PacketPtr pkt)
-{
-    panic("Dtu::recvFunctional() not yet implemented");
-}
-
-bool
-Dtu::DtuCpuPort::recvTimingReq(PacketPtr pkt)
-{
-    panic("Dtu::recvTimingReq() not yet implemented");
-}
-
-void
-Dtu::DtuCpuPort::recvRespRetry()
-{
-    panic("Dtu::recvRespRetry() not yet implemented");
-}
-
 bool
 Dtu::DtuMasterPort::recvTimingResp(PacketPtr pkt)
 {

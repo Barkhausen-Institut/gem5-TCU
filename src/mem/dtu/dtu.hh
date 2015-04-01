@@ -30,6 +30,7 @@
 #define __MEM_DTU_DTU_HH__
 
 #include "mem/mem_object.hh"
+#include "mem/tport.hh"
 #include "params/Dtu.hh"
 
 class Dtu : public MemObject
@@ -51,7 +52,7 @@ class Dtu : public MemObject
         void recvReqRetry() override;
     };
 
-    class DtuCpuPort : public SlavePort
+    class DtuCpuPort : public SimpleTimingPort
     {
       private:
         Dtu& dtu;
@@ -59,18 +60,12 @@ class Dtu : public MemObject
       public:
 
         DtuCpuPort(const std::string& _name, Dtu& _dtu)
-          : SlavePort(_name, &_dtu), dtu(_dtu)
+          : SimpleTimingPort(_name, &_dtu), dtu(_dtu)
         { }
 
       protected:
 
         Tick recvAtomic(PacketPtr pkt) override;
-
-        void recvFunctional(PacketPtr pkt) override;
-
-        bool recvTimingReq(PacketPtr pkt) override;
-
-        void recvRespRetry() override;
 
         AddrRangeList getAddrRanges() const override;
     };
