@@ -50,9 +50,11 @@ class DtuTest : public MemObject
 
     class CpuPort : public MasterPort
     {
+      private:
+        DtuTest& dtutest;
       public:
         CpuPort(const std::string& _name, DtuTest* _dtutest)
-            : MasterPort(_name, _dtutest)
+            : MasterPort(_name, _dtutest), dtutest(*_dtutest)
         { }
       protected:
         bool recvTimingResp(PacketPtr pkt) override;
@@ -69,9 +71,14 @@ class DtuTest : public MemObject
 
     const bool atomic;
 
+    /// Stores the Packet for later retry
+    PacketPtr retryPkt;
+
     bool sendPkt(PacketPtr pkt);
 
     void completeRequest(PacketPtr pkt);
+
+    void recvRetry();
 
 };
 

@@ -34,14 +34,14 @@ unsigned int TESTER_DTU= 0;
 bool
 DtuTest::CpuPort::recvTimingResp(PacketPtr pkt)
 {
-    panic("Did not expect a TimingResp!");
+    dtutest.completeRequest(pkt);
     return true;
 }
 
 void
 DtuTest::CpuPort::recvReqRetry()
 {
-    panic("Did not expect a ReqRetry!");
+    dtutest.recvRetry();
 }
 
 DtuTest::DtuTest(const DtuTestParams *p)
@@ -49,7 +49,8 @@ DtuTest::DtuTest(const DtuTestParams *p)
     tickEvent(this),
     port("port", this),
     masterId(p->system->getMasterId(name())),
-    atomic(p->system->isAtomicMode())
+    atomic(p->system->isAtomicMode()),
+    retryPkt(nullptr)
 {
     id = TESTER_DTU++;
 
@@ -81,7 +82,13 @@ DtuTest::sendPkt(PacketPtr pkt)
     }
     else
     {
-        panic("Timing requests are not yet implemented");
+        bool retry = !port.sendTimingReq(pkt);
+
+        if (retry)
+        {
+            retryPkt = pkt;
+            return false;
+        }
     }
 
     return true;
@@ -123,78 +130,88 @@ DtuTest::completeRequest(PacketPtr pkt)
 }
 
 void
+DtuTest::recvRetry()
+{
+    assert(retryPkt);
+    if (port.sendTimingReq(retryPkt))
+    {
+        DPRINTF(DtuTest, "Proceeding after successful retry\n");
+
+        retryPkt = nullptr;
+        // kick things into action again
+        schedule(tickEvent, clockEdge(Cycles(1)));
+    }
+}
+
+void
 DtuTest::tick()
 {
+    /// use this to count how often this function was called
+    static int counter = 0;
+
+    PacketPtr pkt = nullptr;
+
     // at first,write something into the scratchpad
-    if (curCycle() < 4)
+    if (counter < 4)
     {
-        Addr paddr = curCycle();
+        Addr paddr = counter;
         Request::Flags flags;
 
         auto req = new Request(paddr, 1, flags, masterId);
         req->setThreadContext(id, 0);
 
-        auto pkt = new Packet(req, MemCmd::WriteReq);
+        pkt = new Packet(req, MemCmd::WriteReq);
         auto pkt_data = new uint8_t[1];
         pkt->dataDynamic(pkt_data);
-        pkt_data[0] = static_cast<uint8_t>(curCycle());
-
-        sendPkt(pkt);
-
-        schedule(tickEvent, clockEdge(Cycles(1)));
+        pkt_data[0] = static_cast<uint8_t>(counter);
     }
     // now read these bytes via the DTU
-    else if (curCycle() < 8)
+    else if (counter < 8)
     {
-        Addr paddr = curCycle() - 4 + 0x10000000;
+        Addr paddr = counter - 4 + 0x10000000;
         Request::Flags flags;
 
         auto req = new Request(paddr, 1, flags, masterId);
         req->setThreadContext(id, 0);
 
-        auto pkt = new Packet(req, MemCmd::ReadReq);
+        pkt = new Packet(req, MemCmd::ReadReq);
         auto pkt_data = new uint8_t[1];
         pkt->dataDynamic(pkt_data);
-
-        sendPkt(pkt);
-
-        schedule(tickEvent, clockEdge(Cycles(1)));
     }
     // now write something via the dtu
-    else if (curCycle() < 12)
+    else if (counter < 12)
     {
-        Addr paddr = curCycle() + 0x10000000;
+        Addr paddr = counter + 0x10000000;
         Request::Flags flags;
 
         auto req = new Request(paddr, 1, flags, masterId);
         req->setThreadContext(id, 0);
 
-        auto pkt = new Packet(req, MemCmd::WriteReq);
+        pkt = new Packet(req, MemCmd::WriteReq);
         auto pkt_data = new uint8_t[1];
         pkt->dataDynamic(pkt_data);
         pkt_data[0] = static_cast<uint8_t>(curCycle());
-
-        sendPkt(pkt);
-
-        schedule(tickEvent, clockEdge(Cycles(1)));
     }
     // now read these bytes directly from the scratchpad
-    else if (curCycle() < 16)
+    else if (counter < 16)
     {
-        Addr paddr = curCycle() - 4;
+        Addr paddr = counter - 4;
         Request::Flags flags;
 
         auto req = new Request(paddr, 1, flags, masterId);
         req->setThreadContext(id, 0);
 
-        auto pkt = new Packet(req, MemCmd::ReadReq);
+        pkt = new Packet(req, MemCmd::ReadReq);
         auto pkt_data = new uint8_t[1];
         pkt->dataDynamic(pkt_data);
-
-        sendPkt(pkt);
-
-        schedule(tickEvent, clockEdge(Cycles(1)));
     }
+
+    // Schedule next tick if the packet was successfully send.
+    // Otherwise block until a retry is received.
+    if(pkt != nullptr && sendPkt(pkt))
+        schedule(tickEvent, clockEdge(Cycles(1)));
+
+    counter++;
 }
 
 DtuTest*
