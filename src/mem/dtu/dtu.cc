@@ -27,13 +27,13 @@
  */
 
 #include "mem/dtu/dtu.hh"
-#include "debug/Dtu.hh"
 
 Dtu::Dtu(const DtuParams *p)
   : MemObject(p),
     cpuBaseAddr(p->cpu_base_addr),
     dtuAddr(p->dtu_addr),
     dtuAddrBits(p->dtu_addr_bits),
+    core(scratchpad, master),
     cpu("cpu", *this),
     scratchpad("scratchpad", *this),
     master("master", *this),
@@ -76,43 +76,6 @@ Dtu::getSlavePort(const std::string &if_name, PortID idx)
         return MemObject::getSlavePort(if_name, idx);
 }
 
-Tick
-Dtu::handleCpuRequest(PacketPtr pkt)
-{
-    // for now simply forward all requests to the scratchpad
-
-    DPRINTF(Dtu, "Received %s at address 0x%x\n",
-            pkt->isWrite() ? "write" : "read",
-            pkt->getAddr());
-
-    Addr addr = pkt->getAddr();
-    addr &= 0x0fffffff;
-    pkt->setAddr(addr);
-
-    DPRINTF(Dtu, "Forward to scratchpad at address 0x%x\n",
-            pkt->getAddr());
-
-    scratchpad.sendAtomic(pkt);
-
-    // TODO
-    Tick dtuDelay = 0;
-
-    Tick totalDelay = pkt->headerDelay + pkt->payloadDelay + dtuDelay;
-
-    /*
-     * The SimpleTimingPort already pays for the delay returned by recvAtomic
-     *  -> reset the packet delay
-     *
-     * XXX I'm not sure if this is the right way to go. However, it seems
-     *     better than simply ignoring the packet's delays as it is done for
-     *     instance in SimpleMemory.
-     */
-    pkt->headerDelay  = 0;
-    pkt->payloadDelay = 0;
-
-    return totalDelay;
-}
-
 bool
 Dtu::DtuScratchpadPort::recvTimingResp(PacketPtr pkt)
 {
@@ -139,7 +102,7 @@ Dtu::DtuCpuPort::getAddrRanges() const
 Tick
 Dtu::DtuCpuPort::recvAtomic(PacketPtr pkt)
 {
-    return dtu.handleCpuRequest(pkt);
+    return dtu.core.handleCpuRequest(pkt);
 }
 
 bool

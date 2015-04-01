@@ -29,6 +29,7 @@
 #ifndef __MEM_DTU_DTU_HH__
 #define __MEM_DTU_DTU_HH__
 
+#include "mem/dtu/dtu_core.hh"
 #include "mem/mem_object.hh"
 #include "mem/tport.hh"
 #include "params/Dtu.hh"
@@ -115,6 +116,8 @@ class Dtu : public MemObject
 
     Addr dtuAddr;
     unsigned dtuAddrBits;
+
+    DtuCore core;
 
     DtuCpuPort        cpu;
     DtuScratchpadPort scratchpad;

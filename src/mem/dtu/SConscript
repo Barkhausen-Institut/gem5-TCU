@@ -30,5 +30,6 @@ Import('*')
 SimObject('Dtu.py')
 
 Source('dtu.cc')
+Source('dtu_core.cc')
 
 DebugFlag('Dtu')
