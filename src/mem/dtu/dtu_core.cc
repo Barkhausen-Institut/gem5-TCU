@@ -30,10 +30,14 @@
 #include "base/trace.hh"
 #include "debug/Dtu.hh"
 #include "mem/dtu/dtu_core.hh"
+#include "sim/system.hh"
 
-DtuCore::DtuCore(MasterPort& _scratchpadPort, MasterPort& _masterPort)
-    : scratchpadPort(_scratchpadPort),
-      masterPort(_masterPort)
+DtuCore::DtuCore(const DtuParams* p,
+                 MasterPort& _spmPort,
+                 MasterPort& _masterPort)
+    : spmPort(_spmPort),
+      masterPort(_masterPort),
+      atomic(p->system->isAtomicMode())
 {}
 
 Tick
@@ -52,7 +56,7 @@ DtuCore::handleCpuRequest(PacketPtr pkt)
     DPRINTF(Dtu, "Forward to scratchpad at address 0x%x\n",
             pkt->getAddr());
 
-    scratchpadPort.sendAtomic(pkt);
+    sendSpmPkt(pkt);
 
     // TODO
     Tick dtuDelay = 0;
@@ -71,4 +75,20 @@ DtuCore::handleCpuRequest(PacketPtr pkt)
     pkt->payloadDelay = 0;
 
     return totalDelay;
+}
+
+bool
+DtuCore::sendSpmPkt(PacketPtr pkt)
+{
+    if (atomic)
+    {
+        spmPort.sendAtomic(pkt);
+        // TODO complete the request
+    }
+    else
+    {
+        panic("Timing requests are not implemented");
+    }
+
+    return true;
 }

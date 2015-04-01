@@ -31,6 +31,7 @@
 #define __MEM_DTU_DTU_CORE_HH__
 
 #include "mem/port.hh"
+#include "params/Dtu.hh"
 
 /**
  * This class implements the actual DTU functionality.
@@ -39,15 +40,19 @@ class DtuCore
 {
   private:
 
-    MasterPort& scratchpadPort;
+    MasterPort& spmPort;
 
     MasterPort& masterPort;
 
+    bool atomic;
+
   public:
 
-    DtuCore(MasterPort& _scratchpadPort, MasterPort& _masterPort);
+    DtuCore(const DtuParams* p, MasterPort& _spmPort, MasterPort& _masterPort);
 
     Tick handleCpuRequest(PacketPtr pkt);
+
+    bool sendSpmPkt(PacketPtr pkt);
 };
 
 #endif // __MEM_DTU_DTU_CORE_HH__

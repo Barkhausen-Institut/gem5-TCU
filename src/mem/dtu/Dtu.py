@@ -27,6 +27,7 @@
 
 from MemObject import MemObject
 from m5.params import *
+from m5.proxy import *
 
 class Dtu(MemObject):
     type = 'Dtu'
@@ -38,3 +39,4 @@ class Dtu(MemObject):
     cpu_base_addr = Param.Addr(0x10000000, "DTU address (used by CPU to access the DTU)")
     dtu_addr_bits = Param.Unsigned(4, "Address bits used to address the DTU")
     dtu_addr = Param.Addr("DTU address (used to access the DTU from memory bus)")
+    system = Param.System(Parent.any, "System this tester is part of")

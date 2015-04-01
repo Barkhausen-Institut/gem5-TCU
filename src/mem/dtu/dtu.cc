@@ -33,7 +33,7 @@ Dtu::Dtu(const DtuParams *p)
     cpuBaseAddr(p->cpu_base_addr),
     dtuAddr(p->dtu_addr),
     dtuAddrBits(p->dtu_addr_bits),
-    core(scratchpad, master),
+    core(p, scratchpad, master),
     cpu("cpu", *this),
     scratchpad("scratchpad", *this),
     master("master", *this),
