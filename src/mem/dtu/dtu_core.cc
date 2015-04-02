@@ -37,31 +37,41 @@ DtuCore::DtuCore(const DtuParams* p,
                  MasterPort& _masterPort)
     : spmPort(_spmPort),
       masterPort(_masterPort),
-      atomic(p->system->isAtomicMode())
+      regFile(p->name + ".core.regFile"),
+      baseAddr(p->cpu_base_addr),
+      atomic(p->system->isAtomicMode()),
+      _name(p->name + ".core")
 {}
 
 Tick
 DtuCore::handleCpuRequest(PacketPtr pkt)
 {
-    // for now simply forward all requests to the scratchpad
-
-    DPRINTF(Dtu, "Received %s at address 0x%x\n",
+    DPRINTF(Dtu, "Received %s request from CPU at address 0x%x\n",
             pkt->isWrite() ? "write" : "read",
             pkt->getAddr());
 
-    Addr addr = pkt->getAddr();
-    addr &= 0x0fffffff;
-    pkt->setAddr(addr);
+    Addr paddr = pkt->getAddr();
+    paddr -= baseAddr; // from now on only work with the address offset
+    pkt->setAddr(paddr);
 
-    DPRINTF(Dtu, "Forward to scratchpad at address 0x%x\n",
-            pkt->getAddr());
+    Tick delay = 0;
 
-    sendSpmPkt(pkt);
+    /*
+     * TODO The request is handled immediatly when arriving. However, we should
+     *      pay for the delay caused by the transport layer (pkt->headerDelay
+     *      and pkt->payloadDelay) first.
+     */
+    if (regFile.isRegisterAddr(paddr))
+        delay = regFile.handleRequest(pkt);
+    else
+        // TODO generate an error response
+        panic("Request at 0x%x failed as it is no valid register address", paddr);
 
-    // TODO
-    Tick dtuDelay = 0;
+    // restore the original address
+    paddr += baseAddr;
+    pkt->setAddr(paddr);
 
-    Tick totalDelay = pkt->headerDelay + pkt->payloadDelay + dtuDelay;
+    Tick totalDelay = pkt->headerDelay + pkt->payloadDelay + delay;
 
     /*
      * The SimpleTimingPort already pays for the delay returned by recvAtomic

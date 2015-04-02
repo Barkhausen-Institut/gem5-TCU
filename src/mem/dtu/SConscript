@@ -31,5 +31,7 @@ SimObject('Dtu.py')
 
 Source('dtu.cc')
 Source('dtu_core.cc')
+Source('regfile.cc')
 
 DebugFlag('Dtu')
+DebugFlag('DtuReg')

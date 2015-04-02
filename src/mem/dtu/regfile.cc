@@ -27,42 +27,74 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
-#ifndef __MEM_DTU_DTU_CORE_HH__
-#define __MEM_DTU_DTU_CORE_HH__
-
+#include "base/trace.hh"
+#include "debug/DtuReg.hh"
 #include "mem/dtu/regfile.hh"
-#include "mem/port.hh"
-#include "params/Dtu.hh"
 
-/**
- * This class implements the actual DTU functionality.
- */
-class DtuCore
+RegFile::RegFile(const std::string name)
+    : regFile(numRegs),
+      _name(name)
+{}
+
+auto
+RegFile::readReg(DtuRegister reg) const -> IntReg
 {
-  private:
+    IntReg value = regFile[static_cast<Addr>(reg)];
 
-    MasterPort& spmPort;
+    DPRINTF(DtuReg, "Read register %u (data 0x%x)\n",
+                    static_cast<Addr>(reg),
+                    value);
 
-    MasterPort& masterPort;
+    return value;
+}
 
-    RegFile regFile;
+void
+RegFile::setReg(DtuRegister reg, IntReg value)
+{
+    DPRINTF(DtuReg, "Set register %u (data 0x%x)\n",
+                    static_cast<Addr>(reg),
+                    value);
 
-    Addr baseAddr;
+    regFile[static_cast<Addr>(reg)] = value;
+}
 
-    bool atomic;
+bool
+RegFile::isRegisterAddr(Addr addr) const
+{
+    // can't write in the middle of a register
+    if (addr % sizeof(IntReg) != 0)
+        return false;
 
-    /// used for debug messages (DPRINTF)
-    const std::string _name;
+    if (addr / sizeof(IntReg) >= numRegs)
+        return false;
 
-  public:
+    return true;
+}
 
-    DtuCore(const DtuParams* p, MasterPort& _spmPort, MasterPort& _masterPort);
+Tick
+RegFile::handleRequest(PacketPtr pkt)
+{
+    Addr paddr = pkt->getAddr();
 
-    Tick handleCpuRequest(PacketPtr pkt);
+    // we rely on the caller to test if this packet can be handled by the RegFile
+    assert(isRegisterAddr(paddr));
 
-    bool sendSpmPkt(PacketPtr pkt);
+    // we can only perform full register accesses
+    assert(pkt->getSize() == sizeof(IntReg));
 
-     const std::string name() const { return _name; }
-};
+    auto reg = static_cast<DtuRegister>(paddr / sizeof(IntReg));
+    IntReg* data = pkt->getPtr<IntReg>();
 
-#endif // __MEM_DTU_DTU_CORE_HH__
+    if (pkt->isRead())
+        *data = readReg(reg);
+    else if (pkt->isWrite())
+        setReg(reg, *data);
+    else
+        panic("unsopported packet type");
+
+    if (pkt->needsResponse())
+        pkt->makeResponse();
+
+    // TODO latency calculation
+    return 0;
+}

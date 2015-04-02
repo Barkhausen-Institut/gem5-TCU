@@ -27,42 +27,51 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
-#ifndef __MEM_DTU_DTU_CORE_HH__
-#define __MEM_DTU_DTU_CORE_HH__
+#ifndef __MEM_DTU_REGFILE_HH__
+#define __MEM_DTU_REGFILE_HH__
 
-#include "mem/dtu/regfile.hh"
-#include "mem/port.hh"
-#include "params/Dtu.hh"
+#include <vector>
 
-/**
- * This class implements the actual DTU functionality.
- */
-class DtuCore
+#include "base/types.hh"
+#include "mem/packet.hh"
+
+enum class DtuRegister : Addr
 {
+    SOURCE_ADDR,
+    SIZE,
+    TARGET_ADDR,
+    TARGET_COREID,
+    STATUS,
+};
+
+class RegFile
+{
+  public:
+
+    static constexpr unsigned numRegs = 5;
+
+    using IntReg = uint32_t;
+
   private:
 
-    MasterPort& spmPort;
+    std::vector<IntReg> regFile;
 
-    MasterPort& masterPort;
-
-    RegFile regFile;
-
-    Addr baseAddr;
-
-    bool atomic;
-
-    /// used for debug messages (DPRINTF)
+    // used for debug messages (DPRINTF)
     const std::string _name;
 
   public:
 
-    DtuCore(const DtuParams* p, MasterPort& _spmPort, MasterPort& _masterPort);
+    RegFile(const std::string name);
 
-    Tick handleCpuRequest(PacketPtr pkt);
+    IntReg readReg(DtuRegister reg) const;
 
-    bool sendSpmPkt(PacketPtr pkt);
+    void setReg(DtuRegister reg, IntReg value);
 
-     const std::string name() const { return _name; }
+    bool isRegisterAddr(Addr addr) const;
+
+    Tick handleRequest(PacketPtr pkt);
+
+    const std::string name() const { return _name; }
 };
 
-#endif // __MEM_DTU_DTU_CORE_HH__
+#endif // __MEM_DTU_REGFILE_HH__
