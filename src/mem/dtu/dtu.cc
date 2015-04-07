@@ -78,7 +78,7 @@ Dtu::getSlavePort(const std::string &if_name, PortID idx)
 }
 
 bool
-Dtu::sendSpmPkt(PacketPtr pkt)
+Dtu::sendSpmRequest(PacketPtr pkt)
 {
     if (atomic)
     {
@@ -94,7 +94,7 @@ Dtu::sendSpmPkt(PacketPtr pkt)
 }
 
 bool
-Dtu::sendNocPkt(PacketPtr pkt)
+Dtu::sendNocRequest(PacketPtr pkt)
 {
     panic("Send to NoC it not yet implemented");
 

@@ -72,9 +72,13 @@ class BaseDtu : public MemObject
 
     void startTransaction(RegFile::IntReg cmd);
 
-    virtual bool sendSpmPkt(PacketPtr pkt) = 0;
+    virtual bool sendSpmRequest(PacketPtr pkt) = 0;
 
-    virtual bool sendNocPkt(PacketPtr pkt) = 0;
+    virtual bool sendNocRequest(PacketPtr pkt) = 0;
+
+    void completeSpmRequest(PacketPtr pkt);
+
+    void comleteNocRequest(PacketPtr pkt);
 
   public:
 

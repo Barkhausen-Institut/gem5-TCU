@@ -124,9 +124,9 @@ class Dtu : public BaseDtu
 
     bool atomic;
 
-    bool sendSpmPkt(PacketPtr pkt) override;
+    bool sendSpmRequest(PacketPtr pkt) override;
 
-    bool sendNocPkt(PacketPtr pkt) override;
+    bool sendNocRequest(PacketPtr pkt) override;
 
   public:
 
