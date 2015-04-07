@@ -42,13 +42,14 @@ enum class DtuRegister : Addr
     TARGET_ADDR,
     TARGET_COREID,
     STATUS,
+    COMMAND,
 };
 
 class RegFile
 {
   public:
 
-    static constexpr unsigned numRegs = 5;
+    static constexpr unsigned numRegs = 6;
 
     using IntReg = uint32_t;
 

@@ -40,3 +40,5 @@ class Dtu(MemObject):
     dtu_addr_bits = Param.Unsigned(4, "Address bits used to address the DTU")
     dtu_addr = Param.Addr("DTU address (used to access the DTU from memory bus)")
     system = Param.System(Parent.any, "System this tester is part of")
+    spm_pkt_size = Param.Unsigned(16, "Packet size in bytes used for communication with the SPM")
+    noc_pkt_size = Param.Unsigned(64, "Packte size in bytes used for the NoC")

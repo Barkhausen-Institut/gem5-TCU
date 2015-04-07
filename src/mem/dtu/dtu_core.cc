@@ -40,7 +40,11 @@ DtuCore::DtuCore(const DtuParams* p,
       regFile(p->name + ".core.regFile"),
       baseAddr(p->cpu_base_addr),
       atomic(p->system->isAtomicMode()),
-      _name(p->name + ".core")
+      spmPktSize(p->spm_pkt_size),
+      nocPktSize(p->noc_pkt_size),
+      state(State::IDLE),
+      _name(p->name + ".core"),
+      tickEvent(this)
 {}
 
 Tick
@@ -56,6 +60,9 @@ DtuCore::handleCpuRequest(PacketPtr pkt)
 
     Tick delay = 0;
 
+    if (pkt->isWrite() && state != State::IDLE)
+        panic("Write requests while busy are forbidden!");
+
     /*
      * TODO The request is handled immediatly when arriving. However, we should
      *      pay for the delay caused by the transport layer (pkt->headerDelay
@@ -66,6 +73,10 @@ DtuCore::handleCpuRequest(PacketPtr pkt)
     else
         // TODO generate an error response
         panic("Request at 0x%x failed as it is no valid register address", paddr);
+
+    RegFile::IntReg cmd = regFile.readReg(DtuRegister::COMMAND);
+    if (state == State::IDLE && cmd != 0)
+        startTransaction(cmd);
 
     // restore the original address
     paddr += baseAddr;
@@ -101,4 +112,34 @@ DtuCore::sendSpmPkt(PacketPtr pkt)
     }
 
     return true;
+}
+
+void
+DtuCore::startTransaction(RegFile::IntReg cmd)
+{
+    if (cmd == RECEIVE_CMD)
+         state = State::RECEIVING;
+    else if (cmd == TRANSMIT_CMD)
+         state = State::TRANSMITTING;
+    else
+        panic("Unknown command");
+
+    regFile.setReg(DtuRegister::STATUS, BUSY_STATUS);
+
+    schedule(tickEvent, clockEdge(Cycles(1)))
+}
+
+void
+DtuCore::tick()
+{
+    assert(state == State::RECEIVING || state == State::TRANSMITTING);
+
+    if (state == State::RECEIVING)
+    {
+        panic("Receiving not yet implemented");
+    }
+    else
+    {
+        panic("Transmitting not yet implemented");
+    }
 }

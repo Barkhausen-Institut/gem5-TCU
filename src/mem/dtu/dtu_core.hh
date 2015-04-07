@@ -41,6 +41,18 @@ class DtuCore
 {
   private:
 
+    static constexpr RegFile::IntReg RECEIVE_CMD = 1;
+    static constexpr RegFile::IntReg TRANSMIT_CMD = 2;
+    static constexpr RegFile::IntReg IDLE_STATUS = 0;
+    static constexpr RegFile::IntReg BUSY_STATUS = 1;
+
+    enum class State
+    {
+        IDLE,
+        RECEIVING,
+        TRANSMITTING,
+    };
+
     MasterPort& spmPort;
 
     MasterPort& masterPort;
@@ -51,8 +63,20 @@ class DtuCore
 
     bool atomic;
 
+    unsigned spmPktSize;
+
+    unsigned nocPktSize;
+
+    State state;
+
     /// used for debug messages (DPRINTF)
     const std::string _name;
+
+    void tick();
+
+    EventWrapper<DtuCore, &DtuCore::tick> tickEvent;
+
+    void startTransaction(RegFile::IntReg cmd);
 
   public:
 
