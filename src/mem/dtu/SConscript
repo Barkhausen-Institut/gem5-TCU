@@ -30,7 +30,7 @@ Import('*')
 SimObject('Dtu.py')
 
 Source('dtu.cc')
-Source('dtu_core.cc')
+Source('base.cc')
 Source('regfile.cc')
 
 DebugFlag('Dtu')

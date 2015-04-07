@@ -29,16 +29,22 @@ from MemObject import MemObject
 from m5.params import *
 from m5.proxy import *
 
-class Dtu(MemObject):
-    type = 'Dtu'
-    cxx_header = "mem/dtu/dtu.hh"
-    cpu        = SlavePort("DTU slave port connectting to the CPU")
-    scratchpad = MasterPort("DTU master port connecting to the Scratchpad Memory")
-    master     = MasterPort("DTU master port")
-    slave      = SlavePort("DTU slave port")
+
+class BaseDtu(MemObject):
+    type = 'BaseDtu'
+    abstract = True
+    cxx_header = "mem/dtu/base.hh"
     cpu_base_addr = Param.Addr(0x10000000, "DTU address (used by CPU to access the DTU)")
     dtu_addr_bits = Param.Unsigned(4, "Address bits used to address the DTU")
     dtu_addr = Param.Addr("DTU address (used to access the DTU from memory bus)")
     system = Param.System(Parent.any, "System this tester is part of")
     spm_pkt_size = Param.Unsigned(16, "Packet size in bytes used for communication with the SPM")
     noc_pkt_size = Param.Unsigned(64, "Packte size in bytes used for the NoC")
+
+class Dtu(BaseDtu):
+    type = 'Dtu'
+    cxx_header = "mem/dtu/dtu.hh"
+    cpu        = SlavePort("DTU slave port connectting to the CPU")
+    scratchpad = MasterPort("DTU master port connecting to the Scratchpad Memory")
+    master     = MasterPort("DTU master port")
+    slave      = SlavePort("DTU slave port")

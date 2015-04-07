@@ -30,10 +30,10 @@
 
 Dtu::Dtu(const DtuParams *p)
   : MemObject(p),
+    BaseDtu(p, scratchpad, master),
     cpuBaseAddr(p->cpu_base_addr),
     dtuAddr(p->dtu_addr),
     dtuAddrBits(p->dtu_addr_bits),
-    core(p, scratchpad, master),
     cpu("cpu", *this),
     scratchpad("scratchpad", *this),
     master("master", *this),
@@ -102,7 +102,7 @@ Dtu::DtuCpuPort::getAddrRanges() const
 Tick
 Dtu::DtuCpuPort::recvAtomic(PacketPtr pkt)
 {
-    return dtu.core.handleCpuRequest(pkt);
+    return dtu.handleCpuRequest(pkt);
 }
 
 bool

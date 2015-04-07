@@ -27,19 +27,20 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
-#ifndef __MEM_DTU_DTU_CORE_HH__
-#define __MEM_DTU_DTU_CORE_HH__
+#ifndef __MEM_DTU_BASE_DTU_HH__
+#define __MEM_DTU_BASE_DTU_HH__
 
 #include "mem/dtu/regfile.hh"
 #include "mem/port.hh"
 #include "params/Dtu.hh"
+#include "sim/clocked_object.hh"
 
 /**
  * This class implements the actual DTU functionality.
  */
-class DtuCore
+class BaseDtu : public ClockedObject
 {
-  private:
+  protected:
 
     static constexpr RegFile::IntReg RECEIVE_CMD = 1;
     static constexpr RegFile::IntReg TRANSMIT_CMD = 2;
@@ -69,24 +70,21 @@ class DtuCore
 
     State state;
 
-    /// used for debug messages (DPRINTF)
-    const std::string _name;
-
     void tick();
 
-    EventWrapper<DtuCore, &DtuCore::tick> tickEvent;
+    EventWrapper<BaseDtu, &BaseDtu::tick> tickEvent;
 
     void startTransaction(RegFile::IntReg cmd);
 
   public:
 
-    DtuCore(const DtuParams* p, MasterPort& _spmPort, MasterPort& _masterPort);
+    BaseDtu(const BaseDtuParams* p,
+            MasterPort& _spmPort,
+            MasterPort& _masterPort);
 
     Tick handleCpuRequest(PacketPtr pkt);
 
     bool sendSpmPkt(PacketPtr pkt);
-
-     const std::string name() const { return _name; }
 };
 
-#endif // __MEM_DTU_DTU_CORE_HH__
+#endif // __MEM_DTU_BASE_DTU_HH__

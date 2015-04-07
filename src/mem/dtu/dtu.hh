@@ -29,12 +29,12 @@
 #ifndef __MEM_DTU_DTU_HH__
 #define __MEM_DTU_DTU_HH__
 
-#include "mem/dtu/dtu_core.hh"
+#include "mem/dtu/base.hh"
 #include "mem/mem_object.hh"
 #include "mem/tport.hh"
 #include "params/Dtu.hh"
 
-class Dtu : public MemObject
+class Dtu : public MemObject, BaseDtu
 {
   private:
 
@@ -117,14 +117,10 @@ class Dtu : public MemObject
     Addr dtuAddr;
     unsigned dtuAddrBits;
 
-    DtuCore core;
-
     DtuCpuPort        cpu;
     DtuScratchpadPort scratchpad;
     DtuMasterPort     master;
     DtuSlavePort      slave;
-
-    Tick handleCpuRequest(PacketPtr pkt);
 
   public:
 

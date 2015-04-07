@@ -29,26 +29,26 @@
 
 #include "base/trace.hh"
 #include "debug/Dtu.hh"
-#include "mem/dtu/dtu_core.hh"
+#include "mem/dtu/base.hh"
 #include "sim/system.hh"
 
-DtuCore::DtuCore(const DtuParams* p,
+BaseDtu::BaseDtu(const BaseDtuParams* p,
                  MasterPort& _spmPort,
                  MasterPort& _masterPort)
-    : spmPort(_spmPort),
+    : ClockedObject(p),
+      spmPort(_spmPort),
       masterPort(_masterPort),
-      regFile(p->name + ".core.regFile"),
+      regFile(p->name + ".regFile"),
       baseAddr(p->cpu_base_addr),
       atomic(p->system->isAtomicMode()),
       spmPktSize(p->spm_pkt_size),
       nocPktSize(p->noc_pkt_size),
       state(State::IDLE),
-      _name(p->name + ".core"),
       tickEvent(this)
 {}
 
 Tick
-DtuCore::handleCpuRequest(PacketPtr pkt)
+BaseDtu::handleCpuRequest(PacketPtr pkt)
 {
     DPRINTF(Dtu, "Received %s request from CPU at address 0x%x\n",
             pkt->isWrite() ? "write" : "read",
@@ -99,7 +99,7 @@ DtuCore::handleCpuRequest(PacketPtr pkt)
 }
 
 bool
-DtuCore::sendSpmPkt(PacketPtr pkt)
+BaseDtu::sendSpmPkt(PacketPtr pkt)
 {
     if (atomic)
     {
@@ -115,7 +115,7 @@ DtuCore::sendSpmPkt(PacketPtr pkt)
 }
 
 void
-DtuCore::startTransaction(RegFile::IntReg cmd)
+BaseDtu::startTransaction(RegFile::IntReg cmd)
 {
     if (cmd == RECEIVE_CMD)
          state = State::RECEIVING;
@@ -126,11 +126,11 @@ DtuCore::startTransaction(RegFile::IntReg cmd)
 
     regFile.setReg(DtuRegister::STATUS, BUSY_STATUS);
 
-    schedule(tickEvent, clockEdge(Cycles(1)))
+    schedule(tickEvent, clockEdge(Cycles(1)));
 }
 
 void
-DtuCore::tick()
+BaseDtu::tick()
 {
     assert(state == State::RECEIVING || state == State::TRANSMITTING);
 
