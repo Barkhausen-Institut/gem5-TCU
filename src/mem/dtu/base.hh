@@ -31,21 +31,23 @@
 #define __MEM_DTU_BASE_HH__
 
 #include "mem/dtu/regfile.hh"
+#include "mem/mem_object.hh"
 #include "mem/port.hh"
 #include "params/Dtu.hh"
-#include "sim/clocked_object.hh"
 
 /**
  * This class implements the actual DTU functionality.
  */
-class BaseDtu : public ClockedObject
+class BaseDtu : public MemObject
 {
-  protected:
+  public:
 
     static constexpr RegFile::IntReg RECEIVE_CMD = 1;
     static constexpr RegFile::IntReg TRANSMIT_CMD = 2;
     static constexpr RegFile::IntReg IDLE_STATUS = 0;
     static constexpr RegFile::IntReg BUSY_STATUS = 1;
+
+  protected:
 
     enum class State
     {

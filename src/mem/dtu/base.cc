@@ -33,7 +33,7 @@
 #include "sim/system.hh"
 
 BaseDtu::BaseDtu(const BaseDtuParams* p)
-    : ClockedObject(p),
+    : MemObject(p),
       regFile(p->name + ".regFile"),
       baseAddr(p->cpu_base_addr),
       spmPktSize(p->spm_pkt_size),

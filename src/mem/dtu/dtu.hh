@@ -34,7 +34,7 @@
 #include "mem/tport.hh"
 #include "params/Dtu.hh"
 
-class Dtu : public MemObject, BaseDtu
+class Dtu : public BaseDtu
 {
   private:
 

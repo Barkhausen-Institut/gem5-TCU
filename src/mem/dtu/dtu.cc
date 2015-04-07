@@ -30,8 +30,7 @@
 #include "sim/system.hh"
 
 Dtu::Dtu(const DtuParams *p)
-  : MemObject(p),
-    BaseDtu(p),
+  : BaseDtu(p),
     cpuBaseAddr(p->cpu_base_addr),
     dtuAddr(p->dtu_addr),
     dtuAddrBits(p->dtu_addr_bits),
