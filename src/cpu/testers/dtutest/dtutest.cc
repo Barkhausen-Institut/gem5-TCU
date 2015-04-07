@@ -143,6 +143,25 @@ DtuTest::recvRetry()
     }
 }
 
+PacketPtr
+DtuTest::createDtuRegisterPkt(DtuRegister reg, uint32_t value, MemCmd cmd = MemCmd::WriteReq)
+{
+    // TODO parameterize
+    Addr paddr = 0x10000000 + static_cast<Addr>(reg) * 4;
+
+    Request::Flags flags;
+
+    auto req = new Request(paddr, 4, flags, masterId);
+    req->setThreadContext(id, 0);
+
+    auto pkt = new Packet(req, cmd);
+    auto pkt_data = new uint32_t;
+    *pkt_data = value;
+    pkt->dataDynamic(pkt_data);
+
+    return pkt;
+}
+
 void
 DtuTest::tick()
 {
@@ -152,7 +171,7 @@ DtuTest::tick()
     PacketPtr pkt = nullptr;
 
     // at first,write something into the scratchpad
-    if (counter < 4)
+    if (counter < 1024)
     {
         Addr paddr = counter;
         Request::Flags flags;
@@ -165,46 +184,16 @@ DtuTest::tick()
         pkt->dataDynamic(pkt_data);
         pkt_data[0] = static_cast<uint8_t>(counter);
     }
-    // now read these bytes via the DTU
-    else if (counter < 8)
-    {
-        Addr paddr = counter - 4 + 0x10000000;
-        Request::Flags flags;
-
-        auto req = new Request(paddr, 1, flags, masterId);
-        req->setThreadContext(id, 0);
-
-        pkt = new Packet(req, MemCmd::ReadReq);
-        auto pkt_data = new uint8_t[1];
-        pkt->dataDynamic(pkt_data);
-    }
-    // now write something via the dtu
-    else if (counter < 12)
-    {
-        Addr paddr = counter + 0x10000000;
-        Request::Flags flags;
-
-        auto req = new Request(paddr, 1, flags, masterId);
-        req->setThreadContext(id, 0);
-
-        pkt = new Packet(req, MemCmd::WriteReq);
-        auto pkt_data = new uint8_t[1];
-        pkt->dataDynamic(pkt_data);
-        pkt_data[0] = static_cast<uint8_t>(curCycle());
-    }
-    // now read these bytes directly from the scratchpad
-    else if (counter < 16)
-    {
-        Addr paddr = counter - 4;
-        Request::Flags flags;
-
-        auto req = new Request(paddr, 1, flags, masterId);
-        req->setThreadContext(id, 0);
-
-        pkt = new Packet(req, MemCmd::ReadReq);
-        auto pkt_data = new uint8_t[1];
-        pkt->dataDynamic(pkt_data);
-    }
+    else if (counter == 1024)
+        pkt = createDtuRegisterPkt(DtuRegister::SOURCE_ADDR, 0);
+    else if (counter == 1025)
+        pkt = createDtuRegisterPkt(DtuRegister::SIZE, 1024);
+    else if (counter == 1026)
+        pkt = createDtuRegisterPkt(DtuRegister::TARGET_ADDR, 1024);
+    else if (counter == 1027)
+        pkt = createDtuRegisterPkt(DtuRegister::TARGET_COREID, id == 0 ? 1 : 0);
+    else if (counter == 1028)
+        pkt = createDtuRegisterPkt(DtuRegister::COMMAND, BaseDtu::TRANSMIT_CMD);
 
     // Schedule next tick if the packet was successfully send.
     // Otherwise block until a retry is received.

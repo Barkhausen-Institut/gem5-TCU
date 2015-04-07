@@ -29,7 +29,7 @@
 #ifndef __CPU_DTUTEST_DTUTEST_HH__
 #define __CPU_DTUTEST_DTUTEST_HH__
 
-#include "mem/mem_object.hh"
+#include "mem/dtu/dtu.hh"
 #include "params/DtuTest.hh"
 #include "sim/system.hh"
 
@@ -73,6 +73,8 @@ class DtuTest : public MemObject
 
     /// Stores the Packet for later retry
     PacketPtr retryPkt;
+
+    PacketPtr createDtuRegisterPkt(DtuRegister reg, uint32_t value, MemCmd cmd);
 
     bool sendPkt(PacketPtr pkt);
 
