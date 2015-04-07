@@ -122,6 +122,12 @@ class Dtu : public MemObject, BaseDtu
     DtuMasterPort     master;
     DtuSlavePort      slave;
 
+    bool atomic;
+
+    bool sendSpmPkt(PacketPtr pkt) override;
+
+    bool sendNocPkt(PacketPtr pkt) override;
+
   public:
 
     Dtu(const DtuParams *p);
@@ -133,8 +139,6 @@ class Dtu : public MemObject, BaseDtu
 
     BaseSlavePort& getSlavePort(const std::string &if_name,
                                 PortID idx = InvalidPortID) override;
-
-
 };
 
 #endif // __MEM_DTU_DTU_HH__

@@ -32,15 +32,10 @@
 #include "mem/dtu/base.hh"
 #include "sim/system.hh"
 
-BaseDtu::BaseDtu(const BaseDtuParams* p,
-                 MasterPort& _spmPort,
-                 MasterPort& _masterPort)
+BaseDtu::BaseDtu(const BaseDtuParams* p)
     : ClockedObject(p),
-      spmPort(_spmPort),
-      masterPort(_masterPort),
       regFile(p->name + ".regFile"),
       baseAddr(p->cpu_base_addr),
-      atomic(p->system->isAtomicMode()),
       spmPktSize(p->spm_pkt_size),
       nocPktSize(p->noc_pkt_size),
       state(State::IDLE),
@@ -96,22 +91,6 @@ BaseDtu::handleCpuRequest(PacketPtr pkt)
     pkt->payloadDelay = 0;
 
     return totalDelay;
-}
-
-bool
-BaseDtu::sendSpmPkt(PacketPtr pkt)
-{
-    if (atomic)
-    {
-        spmPort.sendAtomic(pkt);
-        // TODO complete the request
-    }
-    else
-    {
-        panic("Timing requests are not implemented");
-    }
-
-    return true;
 }
 
 void

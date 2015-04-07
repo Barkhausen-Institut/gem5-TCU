@@ -27,17 +27,19 @@
  */
 
 #include "mem/dtu/dtu.hh"
+#include "sim/system.hh"
 
 Dtu::Dtu(const DtuParams *p)
   : MemObject(p),
-    BaseDtu(p, scratchpad, master),
+    BaseDtu(p),
     cpuBaseAddr(p->cpu_base_addr),
     dtuAddr(p->dtu_addr),
     dtuAddrBits(p->dtu_addr_bits),
     cpu("cpu", *this),
     scratchpad("scratchpad", *this),
     master("master", *this),
-    slave("slave", *this)
+    slave("slave", *this),
+    atomic(p->system->isAtomicMode())
 { }
 
 void
@@ -74,6 +76,30 @@ Dtu::getSlavePort(const std::string &if_name, PortID idx)
         return slave;
     else
         return MemObject::getSlavePort(if_name, idx);
+}
+
+bool
+Dtu::sendSpmPkt(PacketPtr pkt)
+{
+    if (atomic)
+    {
+        scratchpad.sendAtomic(pkt);
+        // TODO complete request
+    }
+    else
+    {
+        panic("Timing request not yet implemented");
+    }
+
+    return true;
+}
+
+bool
+Dtu::sendNocPkt(PacketPtr pkt)
+{
+    panic("Send to NoC it not yet implemented");
+
+    return true;
 }
 
 bool

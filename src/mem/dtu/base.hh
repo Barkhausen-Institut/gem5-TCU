@@ -27,8 +27,8 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
-#ifndef __MEM_DTU_BASE_DTU_HH__
-#define __MEM_DTU_BASE_DTU_HH__
+#ifndef __MEM_DTU_BASE_HH__
+#define __MEM_DTU_BASE_HH__
 
 #include "mem/dtu/regfile.hh"
 #include "mem/port.hh"
@@ -54,15 +54,9 @@ class BaseDtu : public ClockedObject
         TRANSMITTING,
     };
 
-    MasterPort& spmPort;
-
-    MasterPort& masterPort;
-
     RegFile regFile;
 
     Addr baseAddr;
-
-    bool atomic;
 
     unsigned spmPktSize;
 
@@ -76,15 +70,15 @@ class BaseDtu : public ClockedObject
 
     void startTransaction(RegFile::IntReg cmd);
 
+    virtual bool sendSpmPkt(PacketPtr pkt) = 0;
+
+    virtual bool sendNocPkt(PacketPtr pkt) = 0;
+
   public:
 
-    BaseDtu(const BaseDtuParams* p,
-            MasterPort& _spmPort,
-            MasterPort& _masterPort);
+    BaseDtu(const BaseDtuParams* p);
 
     Tick handleCpuRequest(PacketPtr pkt);
-
-    bool sendSpmPkt(PacketPtr pkt);
 };
 
-#endif // __MEM_DTU_BASE_DTU_HH__
+#endif // __MEM_DTU_BASE_HH__
