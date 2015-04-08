@@ -165,9 +165,6 @@ DtuTest::createDtuRegisterPkt(DtuRegister reg, uint32_t value, MemCmd cmd = MemC
 void
 DtuTest::tick()
 {
-    /// use this to count how often this function was called
-    static int counter = 0;
-
     PacketPtr pkt = nullptr;
 
     // at first,write something into the scratchpad

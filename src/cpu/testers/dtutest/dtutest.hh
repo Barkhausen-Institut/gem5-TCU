@@ -71,6 +71,9 @@ class DtuTest : public MemObject
 
     const bool atomic;
 
+    // XXX used to count ticks and do different tasks depending on current value
+    int counter = 0;
+
     /// Stores the Packet for later retry
     PacketPtr retryPkt;
 
