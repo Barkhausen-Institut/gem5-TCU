@@ -83,7 +83,7 @@ Dtu::sendSpmRequest(PacketPtr pkt)
     if (atomic)
     {
         scratchpad.sendAtomic(pkt);
-        // TODO complete request
+        completeSpmRequest(pkt);
     }
     else
     {

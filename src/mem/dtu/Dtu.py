@@ -39,6 +39,7 @@ class BaseDtu(MemObject):
     dtu_addr = Param.Addr("DTU address (used to access the DTU from memory bus)")
     spm_pkt_size = Param.Unsigned(16, "Packet size in bytes used for communication with the SPM")
     noc_pkt_size = Param.Unsigned(64, "Packte size in bytes used for the NoC")
+    system = Param.System(Parent.any, "System this tester is part of")
 
 class Dtu(BaseDtu):
     type = 'Dtu'
@@ -47,4 +48,3 @@ class Dtu(BaseDtu):
     scratchpad = MasterPort("DTU master port connecting to the Scratchpad Memory")
     master     = MasterPort("DTU master port")
     slave      = SlavePort("DTU slave port")
-    system = Param.System(Parent.any, "System this tester is part of")

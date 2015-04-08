@@ -27,67 +27,53 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
-#ifndef __MEM_DTU_BASE_HH__
-#define __MEM_DTU_BASE_HH__
-
-#include "mem/dtu/regfile.hh"
 #include "mem/dtu/transmit_manager.hh"
-#include "mem/mem_object.hh"
-#include "mem/port.hh"
-#include "params/Dtu.hh"
+#include "sim/system.hh"
+#include "debug/Dtu.hh"
 
-/**
- * This class implements the actual DTU functionality.
- */
-class BaseDtu : public MemObject
+TransmitManager::TransmitManager(const BaseDtuParams* p)
+    : spmPktSize(p->spm_pkt_size),
+      nocPktSize(p->noc_pkt_size),
+      masterId(p->system->getMasterId(p->name))
+{}
+
+void
+TransmitManager::init(TransmissionDescriptor _transmission)
 {
-  public:
+    transmission = _transmission;
 
-    static constexpr RegFile::IntReg RECEIVE_CMD = 1;
-    static constexpr RegFile::IntReg TRANSMIT_CMD = 2;
-    static constexpr RegFile::IntReg IDLE_STATUS = 0;
-    static constexpr RegFile::IntReg BUSY_STATUS = 1;
+    currentReadAddr = _transmission.sourceAddr;
+}
 
-  protected:
+PacketPtr
+TransmitManager::generateNewSpmRequest()
+{
+    Addr bytesRead = currentReadAddr - transmission.sourceAddr;
 
-    enum class State
-    {
-        IDLE,
-        RECEIVING,
-        TRANSMITTING,
-    };
+    if (bytesRead >= transmission.size)
+        return nullptr;
 
-    RegFile regFile;
+    Addr pktSize = transmission.size - bytesRead;
 
-    Addr baseAddr;
+    if (pktSize > spmPktSize)
+        pktSize = spmPktSize;
 
-    unsigned spmPktSize;
+    Request::Flags flags;
 
-    unsigned nocPktSize;
+    auto req = new Request(currentReadAddr, pktSize, flags, masterId);
+    //req->setThreadContext(transmission.sourceCoreId, 0);
 
-    State state;
+    auto pkt = new Packet(req, MemCmd::ReadReq);
+    auto pktData = new uint8_t[pktSize];
+    pkt->dataDynamic(pktData);
 
-    TransmitManager transmitManager;
+    currentReadAddr += pktSize;
 
-    void tick();
+    return pkt;
+}
 
-    EventWrapper<BaseDtu, &BaseDtu::tick> tickEvent;
-
-    void startTransaction(RegFile::IntReg cmd);
-
-    virtual bool sendSpmRequest(PacketPtr pkt) = 0;
-
-    virtual bool sendNocRequest(PacketPtr pkt) = 0;
-
-    void completeSpmRequest(PacketPtr pkt);
-
-    void comleteNocRequest(PacketPtr pkt);
-
-  public:
-
-    BaseDtu(const BaseDtuParams* p);
-
-    Tick handleCpuRequest(PacketPtr pkt);
-};
-
-#endif // __MEM_DTU_BASE_HH__
+PacketPtr
+TransmitManager::generateNewNocRequest()
+{
+    panic("TransmitManager::generateNewNocRequest not yet implemented");
+}

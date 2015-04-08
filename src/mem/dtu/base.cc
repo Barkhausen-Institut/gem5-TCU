@@ -39,6 +39,7 @@ BaseDtu::BaseDtu(const BaseDtuParams* p)
       spmPktSize(p->spm_pkt_size),
       nocPktSize(p->noc_pkt_size),
       state(State::IDLE),
+      transmitManager(p),
       tickEvent(this)
 {}
 
@@ -103,10 +104,48 @@ BaseDtu::startTransaction(RegFile::IntReg cmd)
     else
         panic("Unknown command");
 
+    DPRINTF(Dtu, "Start transaction (%s)\n",
+            state == State::RECEIVING ? "receiving" : "transmitting");
+
     regFile.setReg(DtuRegister::STATUS, BUSY_STATUS);
 
-    schedule(tickEvent, clockEdge(Cycles(1)));
+    TransmissionDescriptor transmission;
+    transmission.sourceAddr = regFile.readReg(DtuRegister::SOURCE_ADDR);
+    transmission.sourceCoreId = 0; // TODO
+    transmission.targetAddr = regFile.readReg(DtuRegister::TARGET_ADDR);
+    transmission.tagetCoreId = regFile.readReg(DtuRegister::TARGET_COREID);
+    transmission.size = regFile.readReg(DtuRegister::SIZE);
+
+    transmitManager.init(transmission);
+
+    schedule(tickEvent, nextCycle());
 }
+
+void
+BaseDtu::completeSpmRequest(PacketPtr pkt)
+{
+    assert(state == State::RECEIVING || state == State::TRANSMITTING);
+
+    if (state == State::TRANSMITTING)
+    {
+        Request* req = pkt->req;
+
+        assert(pkt->isRead());
+        assert(!pkt->isError());
+
+        DPRINTF(Dtu, "Completing read from Scratchpad at address 0x%x\n",
+                     req->getPaddr());
+
+        // for now we just drop the packet
+        delete req;
+        delete pkt;
+    }
+    else
+    {
+        panic ("Receiving not yet implemented!");
+    }
+}
+
 
 void
 BaseDtu::tick()
@@ -119,6 +158,12 @@ BaseDtu::tick()
     }
     else
     {
-        panic("Transmitting not yet implemented");
+        PacketPtr pkt = transmitManager.generateNewSpmRequest();
+
+        if (pkt != nullptr)
+        {
+            sendSpmRequest(pkt);
+            schedule(tickEvent, nextCycle());
+        }
     }
 }

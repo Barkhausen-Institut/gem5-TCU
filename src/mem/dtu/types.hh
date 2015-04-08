@@ -27,67 +27,22 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
-#ifndef __MEM_DTU_BASE_HH__
-#define __MEM_DTU_BASE_HH__
+#ifndef __MEM_DTU_TYPES__
+#define __MEM_DTU_TYPES__
 
-#include "mem/dtu/regfile.hh"
-#include "mem/dtu/transmit_manager.hh"
-#include "mem/mem_object.hh"
-#include "mem/port.hh"
-#include "params/Dtu.hh"
+#include "base/types.hh"
 
-/**
- * This class implements the actual DTU functionality.
- */
-class BaseDtu : public MemObject
+struct TransmissionDescriptor
 {
-  public:
+    Addr sourceAddr;
 
-    static constexpr RegFile::IntReg RECEIVE_CMD = 1;
-    static constexpr RegFile::IntReg TRANSMIT_CMD = 2;
-    static constexpr RegFile::IntReg IDLE_STATUS = 0;
-    static constexpr RegFile::IntReg BUSY_STATUS = 1;
+    unsigned sourceCoreId;
 
-  protected:
+    Addr targetAddr;
 
-    enum class State
-    {
-        IDLE,
-        RECEIVING,
-        TRANSMITTING,
-    };
+    unsigned tagetCoreId;
 
-    RegFile regFile;
-
-    Addr baseAddr;
-
-    unsigned spmPktSize;
-
-    unsigned nocPktSize;
-
-    State state;
-
-    TransmitManager transmitManager;
-
-    void tick();
-
-    EventWrapper<BaseDtu, &BaseDtu::tick> tickEvent;
-
-    void startTransaction(RegFile::IntReg cmd);
-
-    virtual bool sendSpmRequest(PacketPtr pkt) = 0;
-
-    virtual bool sendNocRequest(PacketPtr pkt) = 0;
-
-    void completeSpmRequest(PacketPtr pkt);
-
-    void comleteNocRequest(PacketPtr pkt);
-
-  public:
-
-    BaseDtu(const BaseDtuParams* p);
-
-    Tick handleCpuRequest(PacketPtr pkt);
+    Addr size;
 };
 
-#endif // __MEM_DTU_BASE_HH__
+#endif // __MEM_DTU_TYPES__
