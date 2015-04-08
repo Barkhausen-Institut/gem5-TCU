@@ -38,7 +38,8 @@ Dtu::Dtu(const DtuParams *p)
     scratchpad("scratchpad", *this),
     master("master", *this),
     slave("slave", *this),
-    atomic(p->system->isAtomicMode())
+    atomic(p->system->isAtomicMode()),
+    retrySpmPkt(nullptr)
 { }
 
 void
@@ -77,6 +78,18 @@ Dtu::getSlavePort(const std::string &if_name, PortID idx)
         return MemObject::getSlavePort(if_name, idx);
 }
 
+void
+Dtu::recvSpmRetry()
+{
+    assert(retrySpmPkt);
+    if (scratchpad.sendTimingReq(retrySpmPkt))
+    {
+        retrySpmPkt = nullptr;
+        // kick things into action again
+        schedule(tickEvent, clockEdge(Cycles(1)));
+    }
+}
+
 bool
 Dtu::sendSpmRequest(PacketPtr pkt)
 {
@@ -87,7 +100,13 @@ Dtu::sendSpmRequest(PacketPtr pkt)
     }
     else
     {
-        panic("Timing request not yet implemented");
+        bool retry = !scratchpad.sendTimingReq(pkt);
+
+        if (retry)
+        {
+            retrySpmPkt = pkt;
+            return false;
+        }
     }
 
     return true;
@@ -104,14 +123,16 @@ Dtu::sendNocRequest(PacketPtr pkt)
 bool
 Dtu::DtuScratchpadPort::recvTimingResp(PacketPtr pkt)
 {
-    panic("Did not expect a TimingResp!");
+    // TODO We should pay somewhere for the delay caused by the
+    //      transport layer.
+    dtu.completeSpmRequest(pkt);
     return true;
 }
 
 void
 Dtu::DtuScratchpadPort::recvReqRetry()
 {
-    panic("Did not expect a ReqRetry!");
+    dtu.recvSpmRetry();
 }
 
 AddrRangeList

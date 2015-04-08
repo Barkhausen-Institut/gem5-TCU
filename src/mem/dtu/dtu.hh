@@ -40,10 +40,14 @@ class Dtu : public BaseDtu
 
     class DtuScratchpadPort : public MasterPort
     {
+      private:
+
+        Dtu& dtu;
+
       public:
 
         DtuScratchpadPort(const std::string& _name, Dtu& _dtu)
-          : MasterPort(_name, &_dtu)
+          : MasterPort(_name, &_dtu), dtu(_dtu)
         { }
 
       protected:
@@ -123,6 +127,10 @@ class Dtu : public BaseDtu
     DtuSlavePort      slave;
 
     bool atomic;
+
+    PacketPtr retrySpmPkt;
+
+    void recvSpmRetry();
 
     bool sendSpmRequest(PacketPtr pkt) override;
 

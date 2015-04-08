@@ -160,9 +160,8 @@ BaseDtu::tick()
     {
         PacketPtr pkt = transmitManager.generateNewSpmRequest();
 
-        if (pkt != nullptr)
+        if (pkt != nullptr && sendSpmRequest(pkt))
         {
-            sendSpmRequest(pkt);
             schedule(tickEvent, nextCycle());
         }
     }
