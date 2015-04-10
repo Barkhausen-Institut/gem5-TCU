@@ -31,7 +31,6 @@
 #define __MEM_DTU_BASE_HH__
 
 #include "mem/dtu/regfile.hh"
-#include "mem/dtu/transmit_manager.hh"
 #include "mem/mem_object.hh"
 #include "mem/port.hh"
 #include "params/Dtu.hh"
@@ -65,13 +64,17 @@ class BaseDtu : public MemObject
 
     unsigned nocPktSize;
 
-    State state;
+    MasterID masterId;
 
-    TransmitManager transmitManager;
+    State state;
 
     void tick();
 
     EventWrapper<BaseDtu, &BaseDtu::tick> tickEvent;
+
+    Addr bytesRead;
+
+    PacketPtr generateRequest(Addr paddr, Addr size, MemCmd cmd);
 
   protected:
 

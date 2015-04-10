@@ -38,15 +38,30 @@ BaseDtu::BaseDtu(const BaseDtuParams* p)
       baseAddr(p->cpu_base_addr),
       spmPktSize(p->spm_pkt_size),
       nocPktSize(p->noc_pkt_size),
+      masterId(p->system->getMasterId(name())),
       state(State::IDLE),
-      transmitManager(p),
-      tickEvent(this)
+      tickEvent(this),
+      bytesRead(0)
 {}
 
 void
 BaseDtu::wakeUp()
 {
     schedule(tickEvent, nextCycle());
+}
+
+PacketPtr
+BaseDtu::generateRequest(Addr paddr, Addr size, MemCmd cmd)
+{
+    Request::Flags flags;
+
+    auto req = new Request(paddr, size, flags, masterId);
+
+    auto pkt = new Packet(req, MemCmd::ReadReq);
+    auto pktData = new uint8_t[size];
+    pkt->dataDynamic(pktData);
+
+    return pkt;
 }
 
 Tick
@@ -113,17 +128,10 @@ BaseDtu::startTransaction(DtuReg cmd)
     DPRINTF(Dtu, "Start transaction (%s)\n",
             state == State::RECEIVING ? "receiving" : "transmitting");
 
+    bytesRead = 0;
+
     regFile.lock();
     regFile.setReg(DtuRegister::STATUS, BUSY_STATUS);
-
-    TransmissionDescriptor transmission;
-    transmission.sourceAddr = regFile.readReg(DtuRegister::SOURCE_ADDR);
-    transmission.sourceCoreId = 0; // TODO
-    transmission.targetAddr = regFile.readReg(DtuRegister::TARGET_ADDR);
-    transmission.tagetCoreId = regFile.readReg(DtuRegister::TARGET_COREID);
-    transmission.size = regFile.readReg(DtuRegister::SIZE);
-
-    transmitManager.init(transmission);
 
     schedule(tickEvent, nextCycle());
 }
@@ -153,7 +161,6 @@ BaseDtu::completeSpmRequest(PacketPtr pkt)
     }
 }
 
-
 void
 BaseDtu::tick()
 {
@@ -165,9 +172,27 @@ BaseDtu::tick()
     }
     else
     {
-        PacketPtr pkt = transmitManager.generateNewSpmRequest();
+        Addr messageSize =regFile.readReg(DtuRegister::SIZE);
 
-        if (pkt != nullptr && sendSpmRequest(pkt))
-            schedule(tickEvent, nextCycle());
+        if (bytesRead < messageSize)
+        {
+            Addr pktSize = messageSize - bytesRead;
+
+            if (pktSize > spmPktSize)
+                pktSize = spmPktSize;
+
+            Addr paddr = regFile.readReg(DtuRegister::SOURCE_ADDR) + bytesRead;
+
+            bytesRead += pktSize;
+
+            PacketPtr pkt = generateRequest(paddr, spmPktSize, MemCmd::ReadReq);
+
+            // Only continue ticking when the packet was successfully sent.
+            // Otherwise we sleep and wake up when a retry is received and the
+            // packet was successfully resend. This procedure is handled by
+            // sendSpmRequest.
+            if (sendSpmRequest(pkt))
+                schedule(tickEvent, nextCycle());
+        }
     }
 }

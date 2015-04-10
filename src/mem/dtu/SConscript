@@ -32,7 +32,6 @@ SimObject('Dtu.py')
 Source('dtu.cc')
 Source('base.cc')
 Source('regfile.cc')
-Source('transmit_manager.cc')
 
 DebugFlag('Dtu')
 DebugFlag('DtuReg')
