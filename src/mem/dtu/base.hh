@@ -35,6 +35,8 @@
 #include "mem/port.hh"
 #include "params/Dtu.hh"
 
+#include <queue>
+
 /**
  * This class implements the actual DTU functionality.
  */
@@ -72,19 +74,27 @@ class BaseDtu : public MemObject
 
     State state;
 
+    bool waitingForSpmRetry;
+
+    bool waitingForNocRetry;
+
     void tick();
 
     EventWrapper<BaseDtu, &BaseDtu::tick> tickEvent;
 
-    Addr bytesRead;
+    Addr readAddr;
+
+    Addr writeAddr;
+
+    std::queue<uint8_t> buffer;
 
     PacketPtr generateRequest(Addr paddr, Addr size, MemCmd cmd);
 
     Addr getDtuBaseAddr(unsigned coreId) const;
 
-    void wakeUp();
-
     void startTransaction(DtuReg cmd);
+
+    void sendNextSpmReadRequest();
 
     virtual bool sendSpmRequest(PacketPtr pkt) = 0;
 
@@ -92,7 +102,7 @@ class BaseDtu : public MemObject
 
     void completeSpmRequest(PacketPtr pkt);
 
-    void comleteNocRequest(PacketPtr pkt);
+    void completeNocRequest(PacketPtr pkt);
 
   public:
 

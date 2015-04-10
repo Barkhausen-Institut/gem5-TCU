@@ -41,8 +41,9 @@ BaseDtu::BaseDtu(const BaseDtuParams* p)
       nocPktSize(p->noc_pkt_size),
       masterId(p->system->getMasterId(name())),
       state(State::IDLE),
-      tickEvent(this),
-      bytesRead(0)
+      waitingForSpmRetry(false),
+      waitingForNocRetry(false),
+      tickEvent(this)
 {
     nocBaseAddr = getDtuBaseAddr(p->core_id);
 }
@@ -52,12 +53,6 @@ BaseDtu::getDtuBaseAddr(unsigned coreId) const
 {
     // XXX we assume 64 bit address width
     return static_cast<Addr>(coreId) << (64 - nocAddrBits);
-}
-
-void
-BaseDtu::wakeUp()
-{
-    schedule(tickEvent, nextCycle());
 }
 
 PacketPtr
@@ -138,7 +133,8 @@ BaseDtu::startTransaction(DtuReg cmd)
     DPRINTF(Dtu, "Start transaction (%s)\n",
             state == State::RECEIVING ? "receiving" : "transmitting");
 
-    bytesRead = 0;
+    readAddr = regFile.readReg(DtuRegister::SOURCE_ADDR);
+    writeAddr = regFile.readReg(DtuRegister::TARGET_ADDR);
 
     regFile.lock();
     regFile.setReg(DtuRegister::STATUS, BUSY_STATUS);
@@ -161,7 +157,13 @@ BaseDtu::completeSpmRequest(PacketPtr pkt)
         DPRINTF(Dtu, "Completing read from Scratchpad at address 0x%x\n",
                      req->getPaddr());
 
-        // for now we just drop the packet
+        uint8_t* data = pkt->getPtr<uint8_t>();
+
+        // Fill the buffer. We assume that all packets arrive in order.
+        for (int i = 0; i < pkt->getSize(); i++)
+            buffer.push(data[i]);
+
+        // clean up
         delete req;
         delete pkt;
     }
@@ -182,27 +184,47 @@ BaseDtu::tick()
     }
     else
     {
-        Addr messageSize =regFile.readReg(DtuRegister::SIZE);
+        Addr messageSize = regFile.readReg(DtuRegister::SIZE);
 
-        if (bytesRead < messageSize)
+        Addr bytesRead = readAddr - regFile.readReg(DtuRegister::SOURCE_ADDR);
+
+        if (bytesRead < messageSize && !waitingForSpmRetry)
         {
             Addr pktSize = messageSize - bytesRead;
 
             if (pktSize > spmPktSize)
                 pktSize = spmPktSize;
 
-            Addr paddr = regFile.readReg(DtuRegister::SOURCE_ADDR) + bytesRead;
+            PacketPtr pkt = generateRequest(readAddr, spmPktSize, MemCmd::ReadReq);
 
-            bytesRead += pktSize;
+            readAddr += pktSize;
 
-            PacketPtr pkt = generateRequest(paddr, spmPktSize, MemCmd::ReadReq);
+            sendSpmRequest(pkt);
+        }
 
-            // Only continue ticking when the packet was successfully sent.
-            // Otherwise we sleep and wake up when a retry is received and the
-            // packet was successfully resend. This procedure is handled by
-            // sendSpmRequest.
-            if (sendSpmRequest(pkt))
-                schedule(tickEvent, nextCycle());
+        // TODO handle special case when nocPktSize is not a multiple of
+        //      spmPktSize
+        if (buffer.size() >= nocPktSize && !waitingForNocRetry)
+        {
+            Addr paddr = getDtuBaseAddr(regFile.readReg(DtuRegister::TARGET_COREID));
+
+            paddr += writeAddr;
+
+            writeAddr += nocPktSize;
+
+            PacketPtr pkt = generateRequest(paddr, nocPktSize, MemCmd::WriteReq);
+
+            uint8_t* data = pkt->getPtr<uint8_t>();
+
+            for (int i = 0; i < nocPktSize; i++)
+            {
+                data[i] = buffer.front();
+                buffer.pop();
+            }
+
+            sendNocRequest(pkt);
         }
     }
+
+    schedule(tickEvent, nextCycle());
 }

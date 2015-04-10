@@ -80,13 +80,15 @@ void
 Dtu::recvSpmRetry()
 {
     assert(retrySpmPkt);
+    assert(waitingForSpmRetry);
+
     if (scratchpad.sendTimingReq(retrySpmPkt))
     {
         DPRINTF(Dtu, "Wake up after successfull retry on scratchpad port.\n");
 
         retrySpmPkt = nullptr;
 
-        wakeUp();
+        waitingForSpmRetry = false;
     }
 }
 
@@ -110,7 +112,10 @@ Dtu::sendSpmRequest(PacketPtr pkt)
         if (retry)
         {
             DPRINTF(Dtu, "Request failed. Wait for retry\n");
+
+            waitingForSpmRetry = true;
             retrySpmPkt = pkt;
+
             return false;
         }
     }
@@ -179,7 +184,9 @@ Dtu::DtuSlavePort::getAddrRanges() const
     Addr size = 1UL << (64 - dtu.nocAddrBits);
 
     auto range = AddrRange(dtu.nocBaseAddr, dtu.nocBaseAddr + (size - 1));
+
     ranges.push_back(range);
+
     return ranges;
 }
 
