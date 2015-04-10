@@ -43,6 +43,12 @@ BaseDtu::BaseDtu(const BaseDtuParams* p)
       tickEvent(this)
 {}
 
+void
+BaseDtu::wakeUp()
+{
+    schedule(tickEvent, nextCycle());
+}
+
 Tick
 BaseDtu::handleCpuRequest(PacketPtr pkt)
 {
@@ -161,8 +167,6 @@ BaseDtu::tick()
         PacketPtr pkt = transmitManager.generateNewSpmRequest();
 
         if (pkt != nullptr && sendSpmRequest(pkt))
-        {
             schedule(tickEvent, nextCycle());
-        }
     }
 }

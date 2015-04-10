@@ -48,7 +48,7 @@ class BaseDtu : public MemObject
     static constexpr RegFile::IntReg IDLE_STATUS = 0;
     static constexpr RegFile::IntReg BUSY_STATUS = 1;
 
-  protected:
+  private:
 
     enum class State
     {
@@ -72,6 +72,10 @@ class BaseDtu : public MemObject
     void tick();
 
     EventWrapper<BaseDtu, &BaseDtu::tick> tickEvent;
+
+  protected:
+
+    void wakeUp();
 
     void startTransaction(RegFile::IntReg cmd);
 

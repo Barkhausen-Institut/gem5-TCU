@@ -26,6 +26,7 @@
  * either expressed or implied, of the FreeBSD Project.
  */
 
+#include "debug/Dtu.hh"
 #include "mem/dtu/dtu.hh"
 #include "sim/system.hh"
 
@@ -84,15 +85,22 @@ Dtu::recvSpmRetry()
     assert(retrySpmPkt);
     if (scratchpad.sendTimingReq(retrySpmPkt))
     {
+        DPRINTF(Dtu, "Wake up after successfull retry on scratchpad port.\n");
+
         retrySpmPkt = nullptr;
-        // kick things into action again
-        schedule(tickEvent, clockEdge(Cycles(1)));
+
+        wakeUp();
     }
 }
 
 bool
 Dtu::sendSpmRequest(PacketPtr pkt)
 {
+    DPRINTF(Dtu, "Send %s request to Scatchpad at address 0x%x (%u bytes)\n",
+                 pkt->isRead() ? "read" : "write",
+                 pkt->getAddr(),
+                 pkt->getSize());
+
     if (atomic)
     {
         scratchpad.sendAtomic(pkt);
@@ -104,6 +112,7 @@ Dtu::sendSpmRequest(PacketPtr pkt)
 
         if (retry)
         {
+            DPRINTF(Dtu, "Request failed. Wait for retry\n");
             retrySpmPkt = pkt;
             return false;
         }
