@@ -32,9 +32,6 @@
 
 Dtu::Dtu(const DtuParams *p)
   : BaseDtu(p),
-    cpuBaseAddr(p->cpu_base_addr),
-    dtuAddr(p->dtu_addr),
-    dtuAddrBits(p->dtu_addr_bits),
     cpu("cpu", *this),
     scratchpad("scratchpad", *this),
     master("master", *this),
@@ -149,7 +146,7 @@ Dtu::DtuCpuPort::getAddrRanges() const
 {
     AddrRangeList ranges;
     auto range = AddrRange(dtu.cpuBaseAddr,
-                           dtu.cpuBaseAddr + dtu.size - 1);
+                           dtu.cpuBaseAddr + dtu.regFile.getSize() - 1);
     ranges.push_back(range);
     return ranges;
 }
@@ -178,11 +175,10 @@ Dtu::DtuSlavePort::getAddrRanges() const
 {
     AddrRangeList ranges;
 
-    // XXX assume 64 bit address width
-    Addr baseAddr = dtu.dtuAddr << (64 - dtu.dtuAddrBits);
-    Addr size = 1UL << (64 - dtu.dtuAddrBits);
+    // XXX we assume 64 bit addresses
+    Addr size = 1UL << (64 - dtu.nocAddrBits);
 
-    auto range = AddrRange(baseAddr, baseAddr + size - 1);
+    auto range = AddrRange(dtu.nocBaseAddr, dtu.nocBaseAddr + (size - 1));
     ranges.push_back(range);
     return ranges;
 }

@@ -115,12 +115,6 @@ class Dtu : public BaseDtu
 
     };
 
-    Addr cpuBaseAddr;
-    Addr size = 0x1000;
-
-    Addr dtuAddr;
-    unsigned dtuAddrBits;
-
     DtuCpuPort        cpu;
     DtuScratchpadPort scratchpad;
     DtuMasterPort     master;

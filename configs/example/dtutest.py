@@ -99,8 +99,8 @@ for i in range(0, options.num_pes):
     pe.scratchpad.port = pe.xbar.master
 
     pe.dtu = Dtu()
-    pe.dtu.dtu_addr = i
-    pe.dtu.dtu_addr_bits = math.ceil(math.log(options.num_pes,2))
+    pe.dtu.core_id = i
+    pe.dtu.noc_addr_bits = math.ceil(math.log(options.num_pes,2))
     pe.dtu.scratchpad = pe.xbar.slave
     pe.dtu.cpu = pe.xbar.master
 

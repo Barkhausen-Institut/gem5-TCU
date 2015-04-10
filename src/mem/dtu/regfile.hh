@@ -80,6 +80,8 @@ class RegFile
 
     void unlock() { locked = false; }
 
+    Addr getSize() { return sizeof(DtuReg) * numRegs; }
+
 };
 
 #endif // __MEM_DTU_REGFILE_HH__

@@ -35,14 +35,24 @@
 BaseDtu::BaseDtu(const BaseDtuParams* p)
     : MemObject(p),
       regFile(p->name + ".regFile"),
-      baseAddr(p->cpu_base_addr),
+      cpuBaseAddr(p->cpu_base_addr),
+      nocAddrBits(p->noc_addr_bits),
       spmPktSize(p->spm_pkt_size),
       nocPktSize(p->noc_pkt_size),
       masterId(p->system->getMasterId(name())),
       state(State::IDLE),
       tickEvent(this),
       bytesRead(0)
-{}
+{
+    nocBaseAddr = getDtuBaseAddr(p->core_id);
+}
+
+Addr
+BaseDtu::getDtuBaseAddr(unsigned coreId) const
+{
+    // XXX we assume 64 bit address width
+    return static_cast<Addr>(coreId) << (64 - nocAddrBits);
+}
 
 void
 BaseDtu::wakeUp()
@@ -72,7 +82,7 @@ BaseDtu::handleCpuRequest(PacketPtr pkt)
             pkt->getAddr());
 
     Addr paddr = pkt->getAddr();
-    paddr -= baseAddr; // from now on only work with the address offset
+    paddr -= cpuBaseAddr; // from now on only work with the address offset
     pkt->setAddr(paddr);
 
     Tick delay = 0;
@@ -96,7 +106,7 @@ BaseDtu::handleCpuRequest(PacketPtr pkt)
         startTransaction(cmd);
 
     // restore the original address
-    paddr += baseAddr;
+    paddr += cpuBaseAddr;
     pkt->setAddr(paddr);
 
     Tick totalDelay = pkt->headerDelay + pkt->payloadDelay + delay;

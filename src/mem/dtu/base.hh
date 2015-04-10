@@ -47,7 +47,7 @@ class BaseDtu : public MemObject
     static constexpr DtuReg IDLE_STATUS = 0;
     static constexpr DtuReg BUSY_STATUS = 1;
 
-  private:
+  protected:
 
     enum class State
     {
@@ -58,11 +58,15 @@ class BaseDtu : public MemObject
 
     RegFile regFile;
 
-    Addr baseAddr;
+    const Addr cpuBaseAddr;
 
-    unsigned spmPktSize;
+    Addr nocBaseAddr;
 
-    unsigned nocPktSize;
+    const unsigned nocAddrBits;
+
+    const unsigned spmPktSize;
+
+    const unsigned nocPktSize;
 
     MasterID masterId;
 
@@ -76,7 +80,7 @@ class BaseDtu : public MemObject
 
     PacketPtr generateRequest(Addr paddr, Addr size, MemCmd cmd);
 
-  protected:
+    Addr getDtuBaseAddr(unsigned coreId) const;
 
     void wakeUp();
 
