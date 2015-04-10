@@ -77,10 +77,13 @@ class Dtu : public BaseDtu
 
     class DtuMasterPort : public MasterPort
     {
+      private:
+        Dtu& dtu;
+
       public:
 
         DtuMasterPort(const std::string& _name, Dtu& _dtu)
-          : MasterPort(_name, &_dtu)
+          : MasterPort(_name, &_dtu), dtu(_dtu)
         { }
 
       protected:
@@ -124,7 +127,11 @@ class Dtu : public BaseDtu
 
     PacketPtr retrySpmPkt;
 
+    PacketPtr retryNocPkt;
+
     void recvSpmRetry();
+
+    void recvNocRetry();
 
     bool sendSpmRequest(PacketPtr pkt) override;
 

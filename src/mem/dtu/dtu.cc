@@ -37,7 +37,8 @@ Dtu::Dtu(const DtuParams *p)
     master("master", *this),
     slave("slave", *this),
     atomic(p->system->isAtomicMode()),
-    retrySpmPkt(nullptr)
+    retrySpmPkt(nullptr),
+    retryNocPkt(nullptr)
 { }
 
 void
@@ -84,11 +85,27 @@ Dtu::recvSpmRetry()
 
     if (scratchpad.sendTimingReq(retrySpmPkt))
     {
-        DPRINTF(Dtu, "Wake up after successfull retry on scratchpad port.\n");
+        DPRINTF(Dtu, "Successfull retry on scratchpad port.\n");
 
         retrySpmPkt = nullptr;
 
         waitingForSpmRetry = false;
+    }
+}
+
+void
+Dtu::recvNocRetry()
+{
+    assert(retryNocPkt);
+    assert(waitingForNocRetry);
+
+    if (master.sendTimingReq(retryNocPkt))
+    {
+        DPRINTF(Dtu, "Successfull retry on NoC port.\n");
+
+        retryNocPkt = nullptr;
+
+        waitingForNocRetry = false;
     }
 }
 
@@ -126,7 +143,30 @@ Dtu::sendSpmRequest(PacketPtr pkt)
 bool
 Dtu::sendNocRequest(PacketPtr pkt)
 {
-    panic("Send to NoC it not yet implemented");
+    DPRINTF(Dtu, "Send %s request to the NoC at address 0x%x (%u bytes)\n",
+                 pkt->isRead() ? "read" : "write",
+                 pkt->getAddr(),
+                 pkt->getSize());
+
+    if (atomic)
+    {
+        master.sendAtomic(pkt);
+        completeNocRequest(pkt);
+    }
+    else
+    {
+        bool retry = !master.sendTimingReq(pkt);
+
+        if (retry)
+        {
+            DPRINTF(Dtu, "Request failed. Wait for retry\n");
+
+            waitingForNocRetry = true;
+            retryNocPkt = pkt;
+
+            return false;
+        }
+    }
 
     return true;
 }
@@ -165,14 +205,17 @@ Dtu::DtuCpuPort::recvAtomic(PacketPtr pkt)
 bool
 Dtu::DtuMasterPort::recvTimingResp(PacketPtr pkt)
 {
-    panic("Did not expect a TimingResp!");
+    // TODO We should pay somewhere for the delay caused by the
+    //      transport layer.
+    dtu.completeSpmRequest(pkt);
+
     return true;
 }
 
 void
 Dtu::DtuMasterPort::recvReqRetry()
 {
-    panic("Did not expect a ReqRetry!");
+    dtu.recvNocRetry();
 }
 
 AddrRangeList

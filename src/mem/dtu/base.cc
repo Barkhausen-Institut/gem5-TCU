@@ -174,6 +174,31 @@ BaseDtu::completeSpmRequest(PacketPtr pkt)
 }
 
 void
+BaseDtu::completeNocRequest(PacketPtr pkt)
+{
+    assert(state == State::RECEIVING || state == State::TRANSMITTING);
+
+    if (state == State::TRANSMITTING)
+    {
+        Request* req = pkt->req;
+
+        assert(pkt->isWrite());
+        assert(!pkt->isError());
+
+        DPRINTF(Dtu, "Completing write to NoC at address 0x%x\n",
+                     req->getPaddr());
+
+        // clean up
+        delete req;
+        delete pkt;
+    }
+    else
+    {
+        panic ("Receiving not yet implemented!");
+    }
+}
+
+void
 BaseDtu::tick()
 {
     assert(state == State::RECEIVING || state == State::TRANSMITTING);
