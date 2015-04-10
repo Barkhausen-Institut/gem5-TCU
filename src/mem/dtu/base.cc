@@ -113,6 +113,7 @@ BaseDtu::startTransaction(DtuReg cmd)
     DPRINTF(Dtu, "Start transaction (%s)\n",
             state == State::RECEIVING ? "receiving" : "transmitting");
 
+    regFile.lock();
     regFile.setReg(DtuRegister::STATUS, BUSY_STATUS);
 
     TransmissionDescriptor transmission;

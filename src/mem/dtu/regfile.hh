@@ -60,6 +60,8 @@ class RegFile
     // used for debug messages (DPRINTF)
     const std::string _name;
 
+    bool locked;
+
   public:
 
     RegFile(const std::string name);
@@ -73,6 +75,11 @@ class RegFile
     Tick handleRequest(PacketPtr pkt);
 
     const std::string name() const { return _name; }
+
+    void lock() { locked = true; }
+
+    void unlock() { locked = false; }
+
 };
 
 #endif // __MEM_DTU_REGFILE_HH__

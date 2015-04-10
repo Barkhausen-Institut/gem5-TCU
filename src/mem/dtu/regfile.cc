@@ -33,7 +33,8 @@
 
 RegFile::RegFile(const std::string name)
     : regFile(numRegs),
-      _name(name)
+      _name(name),
+      locked(false)
 {}
 
 DtuReg
@@ -88,7 +89,12 @@ RegFile::handleRequest(PacketPtr pkt)
     if (pkt->isRead())
         *data = readReg(reg);
     else if (pkt->isWrite())
-        setReg(reg, *data);
+    {
+        if (!locked)
+            setReg(reg, *data);
+        else
+            DPRINTF(DtuReg, "Ignore write request because the Register File is locked\n");
+    }
     else
         panic("unsopported packet type");
 
