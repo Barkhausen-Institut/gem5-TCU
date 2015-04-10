@@ -76,7 +76,7 @@ BaseDtu::handleCpuRequest(PacketPtr pkt)
         // TODO generate an error response
         panic("Request at 0x%x failed as it is no valid register address", paddr);
 
-    RegFile::IntReg cmd = regFile.readReg(DtuRegister::COMMAND);
+    DtuReg cmd = regFile.readReg(DtuRegister::COMMAND);
     if (state == State::IDLE && cmd != 0)
         startTransaction(cmd);
 
@@ -101,7 +101,7 @@ BaseDtu::handleCpuRequest(PacketPtr pkt)
 }
 
 void
-BaseDtu::startTransaction(RegFile::IntReg cmd)
+BaseDtu::startTransaction(DtuReg cmd)
 {
     if (cmd == RECEIVE_CMD)
          state = State::RECEIVING;

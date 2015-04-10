@@ -45,17 +45,17 @@ enum class DtuRegister : Addr
     COMMAND,
 };
 
+using DtuReg = uint32_t;
+
 class RegFile
 {
   public:
 
     static constexpr unsigned numRegs = 6;
 
-    using IntReg = uint32_t;
-
   private:
 
-    std::vector<IntReg> regFile;
+    std::vector<DtuReg> regFile;
 
     // used for debug messages (DPRINTF)
     const std::string _name;
@@ -64,9 +64,9 @@ class RegFile
 
     RegFile(const std::string name);
 
-    IntReg readReg(DtuRegister reg) const;
+    DtuReg readReg(DtuRegister reg) const;
 
-    void setReg(DtuRegister reg, IntReg value);
+    void setReg(DtuRegister reg, DtuReg value);
 
     bool isRegisterAddr(Addr addr) const;
 

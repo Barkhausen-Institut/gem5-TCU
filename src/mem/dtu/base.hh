@@ -43,10 +43,10 @@ class BaseDtu : public MemObject
 {
   public:
 
-    static constexpr RegFile::IntReg RECEIVE_CMD = 1;
-    static constexpr RegFile::IntReg TRANSMIT_CMD = 2;
-    static constexpr RegFile::IntReg IDLE_STATUS = 0;
-    static constexpr RegFile::IntReg BUSY_STATUS = 1;
+    static constexpr DtuReg RECEIVE_CMD = 1;
+    static constexpr DtuReg TRANSMIT_CMD = 2;
+    static constexpr DtuReg IDLE_STATUS = 0;
+    static constexpr DtuReg BUSY_STATUS = 1;
 
   private:
 
@@ -77,7 +77,7 @@ class BaseDtu : public MemObject
 
     void wakeUp();
 
-    void startTransaction(RegFile::IntReg cmd);
+    void startTransaction(DtuReg cmd);
 
     virtual bool sendSpmRequest(PacketPtr pkt) = 0;
 

@@ -36,10 +36,10 @@ RegFile::RegFile(const std::string name)
       _name(name)
 {}
 
-auto
-RegFile::readReg(DtuRegister reg) const -> IntReg
+DtuReg
+RegFile::readReg(DtuRegister reg) const
 {
-    IntReg value = regFile[static_cast<Addr>(reg)];
+    DtuReg value = regFile[static_cast<Addr>(reg)];
 
     DPRINTF(DtuReg, "Read register %u (data 0x%x)\n",
                     static_cast<Addr>(reg),
@@ -49,7 +49,7 @@ RegFile::readReg(DtuRegister reg) const -> IntReg
 }
 
 void
-RegFile::setReg(DtuRegister reg, IntReg value)
+RegFile::setReg(DtuRegister reg, DtuReg value)
 {
     DPRINTF(DtuReg, "Set register %u (data 0x%x)\n",
                     static_cast<Addr>(reg),
@@ -62,10 +62,10 @@ bool
 RegFile::isRegisterAddr(Addr addr) const
 {
     // can't write in the middle of a register
-    if (addr % sizeof(IntReg) != 0)
+    if (addr % sizeof(DtuReg) != 0)
         return false;
 
-    if (addr / sizeof(IntReg) >= numRegs)
+    if (addr / sizeof(DtuReg) >= numRegs)
         return false;
 
     return true;
@@ -80,10 +80,10 @@ RegFile::handleRequest(PacketPtr pkt)
     assert(isRegisterAddr(paddr));
 
     // we can only perform full register accesses
-    assert(pkt->getSize() == sizeof(IntReg));
+    assert(pkt->getSize() == sizeof(DtuReg));
 
-    auto reg = static_cast<DtuRegister>(paddr / sizeof(IntReg));
-    IntReg* data = pkt->getPtr<IntReg>();
+    auto reg = static_cast<DtuRegister>(paddr / sizeof(DtuReg));
+    DtuReg* data = pkt->getPtr<DtuReg>();
 
     if (pkt->isRead())
         *data = readReg(reg);
