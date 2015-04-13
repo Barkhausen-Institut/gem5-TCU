@@ -81,15 +81,12 @@ void
 Dtu::recvSpmRetry()
 {
     assert(retrySpmPkt);
-    assert(waitingForSpmRetry);
 
     if (scratchpad.sendTimingReq(retrySpmPkt))
     {
         DPRINTF(Dtu, "Successfull retry on scratchpad port.\n");
 
         retrySpmPkt = nullptr;
-
-        waitingForSpmRetry = false;
     }
 }
 
@@ -97,21 +94,20 @@ void
 Dtu::recvNocRetry()
 {
     assert(retryNocPkt);
-    assert(waitingForNocRetry);
 
     if (master.sendTimingReq(retryNocPkt))
     {
         DPRINTF(Dtu, "Successfull retry on NoC port.\n");
 
         retryNocPkt = nullptr;
-
-        waitingForNocRetry = false;
     }
 }
 
 bool
 Dtu::sendSpmRequest(PacketPtr pkt)
 {
+    assert(retrySpmPkt == nullptr);
+
     DPRINTF(Dtu, "Send %s request to Scatchpad at address 0x%x (%u bytes)\n",
                  pkt->isRead() ? "read" : "write",
                  pkt->getAddr(),
@@ -130,7 +126,6 @@ Dtu::sendSpmRequest(PacketPtr pkt)
         {
             DPRINTF(Dtu, "Request failed. Wait for retry\n");
 
-            waitingForSpmRetry = true;
             retrySpmPkt = pkt;
 
             return false;
@@ -143,6 +138,8 @@ Dtu::sendSpmRequest(PacketPtr pkt)
 bool
 Dtu::sendNocRequest(PacketPtr pkt)
 {
+    assert(retryNocPkt == nullptr);
+
     DPRINTF(Dtu, "Send %s request to the NoC at address 0x%x (%u bytes)\n",
                  pkt->isRead() ? "read" : "write",
                  pkt->getAddr(),
@@ -161,7 +158,6 @@ Dtu::sendNocRequest(PacketPtr pkt)
         {
             DPRINTF(Dtu, "Request failed. Wait for retry\n");
 
-            waitingForNocRetry = true;
             retryNocPkt = pkt;
 
             return false;
@@ -169,6 +165,18 @@ Dtu::sendNocRequest(PacketPtr pkt)
     }
 
     return true;
+}
+
+bool
+Dtu::isSpmPortReady()
+{
+    return retrySpmPkt == nullptr;
+}
+
+bool
+Dtu::isNocPortReady()
+{
+    return retryNocPkt == nullptr;
 }
 
 bool

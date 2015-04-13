@@ -40,8 +40,6 @@ BaseDtu::BaseDtu(const BaseDtuParams* p)
       maxPktSize(p->max_pkt_size),
       masterId(p->system->getMasterId(name())),
       state(State::IDLE),
-      waitingForSpmRetry(false),
-      waitingForNocRetry(false),
       tickEvent(this)
 {
     nocBaseAddr = getDtuBaseAddr(p->core_id);
@@ -210,7 +208,7 @@ BaseDtu::tick()
          *      in the packet buffer (pktBuffer)
          */
 
-        if (bytesRead < messageSize && !waitingForSpmRetry)
+        if (bytesRead < messageSize && isSpmPortReady())
         {
             Addr pktSize = messageSize - bytesRead;
 
@@ -224,7 +222,7 @@ BaseDtu::tick()
             sendSpmRequest(pkt);
         }
 
-        if (!pktBuffer.empty() && !waitingForNocRetry)
+        if (!pktBuffer.empty() && isNocPortReady())
         {
             // the buffer contains responses from Scratchpad read requests
             PacketPtr spmPkt = pktBuffer.front();

@@ -137,6 +137,10 @@ class Dtu : public BaseDtu
 
     bool sendNocRequest(PacketPtr pkt) override;
 
+    bool isSpmPortReady() override;
+
+    bool isNocPortReady() override;
+
   public:
 
     Dtu(const DtuParams *p);

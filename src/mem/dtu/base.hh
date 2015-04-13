@@ -72,10 +72,6 @@ class BaseDtu : public MemObject
 
     State state;
 
-    bool waitingForSpmRetry;
-
-    bool waitingForNocRetry;
-
     void tick();
 
     EventWrapper<BaseDtu, &BaseDtu::tick> tickEvent;
@@ -94,13 +90,17 @@ class BaseDtu : public MemObject
 
     void sendNextSpmReadRequest();
 
+    void completeSpmRequest(PacketPtr pkt);
+
+    void completeNocRequest(PacketPtr pkt);
+
     virtual bool sendSpmRequest(PacketPtr pkt) = 0;
 
     virtual bool sendNocRequest(PacketPtr pkt) = 0;
 
-    void completeSpmRequest(PacketPtr pkt);
+    virtual bool isSpmPortReady() = 0;
 
-    void completeNocRequest(PacketPtr pkt);
+    virtual bool isNocPortReady() = 0;
 
   public:
 
