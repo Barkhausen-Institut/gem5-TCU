@@ -159,6 +159,7 @@ void
 BaseDtu::completeSpmRequest(PacketPtr pkt)
 {
     assert(state == State::RECEIVING || state == State::TRANSMITTING);
+    assert(!dynamic_cast<SenderState*>(pkt->popSenderState())->isNocRequest);
 
     if (state == State::TRANSMITTING)
     {
@@ -234,6 +235,9 @@ BaseDtu::tick()
             PacketPtr pkt = generateRequest(readAddr, pktSize, MemCmd::ReadReq);
 
             readAddr += pktSize;
+
+            auto state = new SenderState(false);
+            pkt->pushSenderState(state);
 
             sendSpmRequest(pkt);
         }

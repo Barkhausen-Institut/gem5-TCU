@@ -58,6 +58,13 @@ class BaseDtu : public MemObject
         TRANSMITTING,
     };
 
+    struct SenderState : public Packet::SenderState
+    {
+        bool isNocRequest;
+
+        SenderState(bool _isNocRequest) : isNocRequest(_isNocRequest) {}
+    };
+
     RegFile regFile;
 
     const Addr cpuBaseAddr;
