@@ -156,15 +156,8 @@ BaseDtu::completeSpmRequest(PacketPtr pkt)
         DPRINTF(Dtu, "Completing read from Scratchpad at address 0x%x\n",
                      req->getPaddr());
 
-        uint8_t* data = pkt->getPtr<uint8_t>();
-
         // Fill the buffer. We assume that all packets arrive in order.
-        for (int i = 0; i < pkt->getSize(); i++)
-            buffer.push(data[i]);
-
-        // clean up
-        delete req;
-        delete pkt;
+        pktBuffer.push(pkt);
     }
     else
     {
@@ -212,6 +205,11 @@ BaseDtu::tick()
 
         Addr bytesRead = readAddr - regFile.readReg(DtuRegister::SOURCE_ADDR);
 
+        /*
+         * TODO Limit buffer size. Send packats only when there is a free slot
+         *      in the packet buffer (pktBuffer)
+         */
+
         if (bytesRead < messageSize && !waitingForSpmRetry)
         {
             Addr pktSize = messageSize - bytesRead;
@@ -226,27 +224,28 @@ BaseDtu::tick()
             sendSpmRequest(pkt);
         }
 
-        // TODO handle special case when nocPktSize is not a multiple of
-        //      spmPktSize
-        if (buffer.size() >= maxPktSize && !waitingForNocRetry)
+        if (!pktBuffer.empty() && !waitingForNocRetry)
         {
+            // the buffer contains responses from Scratchpad read requests
+            PacketPtr spmPkt = pktBuffer.front();
+            pktBuffer.pop();
+
             Addr paddr = getDtuBaseAddr(regFile.readReg(DtuRegister::TARGET_COREID));
+
+            Addr pktSize = spmPkt->getSize();
 
             paddr += writeAddr;
 
-            writeAddr += maxPktSize;
+            writeAddr += pktSize;
 
-            PacketPtr pkt = generateRequest(paddr, maxPktSize, MemCmd::WriteReq);
+            PacketPtr pkt = generateRequest(paddr, pktSize, MemCmd::WriteReq);
 
-            uint8_t* data = pkt->getPtr<uint8_t>();
-
-            for (int i = 0; i < maxPktSize; i++)
-            {
-                data[i] = buffer.front();
-                buffer.pop();
-            }
+            memcpy(pkt->getPtr<uint8_t>(), spmPkt->getPtr<uint8_t>(), spmPkt->getSize());
 
             sendNocRequest(pkt);
+
+            delete spmPkt->req;
+            delete spmPkt;
         }
     }
 

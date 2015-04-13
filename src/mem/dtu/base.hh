@@ -84,7 +84,7 @@ class BaseDtu : public MemObject
 
     Addr writeAddr;
 
-    std::queue<uint8_t> buffer;
+    std::queue<PacketPtr> pktBuffer;
 
     PacketPtr generateRequest(Addr paddr, Addr size, MemCmd cmd);
 
