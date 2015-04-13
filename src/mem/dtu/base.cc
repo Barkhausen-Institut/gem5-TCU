@@ -59,7 +59,7 @@ BaseDtu::generateRequest(Addr paddr, Addr size, MemCmd cmd)
 
     auto req = new Request(paddr, size, flags, masterId);
 
-    auto pkt = new Packet(req, MemCmd::ReadReq);
+    auto pkt = new Packet(req, cmd);
     auto pktData = new uint8_t[size];
     pkt->dataDynamic(pktData);
 
