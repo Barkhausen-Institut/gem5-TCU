@@ -93,15 +93,17 @@ class Dtu : public BaseDtu
         void recvReqRetry() override;
     };
 
-    class DtuSlavePort : public SlavePort
+    class DtuSlavePort : public QueuedSlavePort
     {
       private:
         Dtu& dtu;
 
+        RespPacketQueue queueImpl;
+
       public:
 
         DtuSlavePort(const std::string& _name, Dtu& _dtu)
-          : SlavePort(_name, &_dtu), dtu(_dtu)
+          : QueuedSlavePort(_name, &_dtu, queueImpl), dtu(_dtu), queueImpl(_dtu, *this)
         { }
 
       protected:
@@ -111,8 +113,6 @@ class Dtu : public BaseDtu
         void recvFunctional(PacketPtr pkt) override;
 
         bool recvTimingReq(PacketPtr pkt) override;
-
-        void recvRespRetry() override;
 
         AddrRangeList getAddrRanges() const override;
 

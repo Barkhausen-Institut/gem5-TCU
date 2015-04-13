@@ -244,8 +244,7 @@ Dtu::DtuSlavePort::getAddrRanges() const
 Tick
 Dtu::DtuSlavePort::recvAtomic(PacketPtr pkt)
 {
-    panic("Dtu::recvAtomic() not yet implemented");
-    return 0;
+    return dtu.handleNocRequest(pkt);
 }
 
 void
@@ -257,13 +256,16 @@ Dtu::DtuSlavePort::recvFunctional(PacketPtr pkt)
 bool
 Dtu::DtuSlavePort::recvTimingReq(PacketPtr pkt)
 {
-    panic("Dtu::recvTimingReq() not yet implemented");
-}
+    // We don't expect packets that do not need a response. Otherwise we would
+    // need to delete handled packets.
+    assert(pkt->needsResponse());
 
-void
-Dtu::DtuSlavePort::recvRespRetry()
-{
-    panic("Dtu::recvRespRetry() not yet implemented");
+    if (!dtu.canHandleNocRequest(pkt))
+        return false;
+
+    dtu.handleNocRequest(pkt);
+
+    return true;
 }
 
 Dtu*

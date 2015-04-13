@@ -117,6 +117,22 @@ BaseDtu::handleCpuRequest(PacketPtr pkt)
     return totalDelay;
 }
 
+bool
+BaseDtu::canHandleNocRequest(PacketPtr pkt)
+{
+    // TODO
+    return true;
+}
+
+Tick
+BaseDtu::handleNocRequest(PacketPtr pkt)
+{
+    panic("handleNocRequest() not yet implemented!");
+
+    // TODO
+    return 0;
+}
+
 void
 BaseDtu::startTransaction(DtuReg cmd)
 {
