@@ -37,8 +37,7 @@ BaseDtu::BaseDtu(const BaseDtuParams* p)
       regFile(p->name + ".regFile"),
       cpuBaseAddr(p->cpu_base_addr),
       nocAddrBits(p->noc_addr_bits),
-      spmPktSize(p->spm_pkt_size),
-      nocPktSize(p->noc_pkt_size),
+      maxPktSize(p->max_pkt_size),
       masterId(p->system->getMasterId(name())),
       state(State::IDLE),
       waitingForSpmRetry(false),
@@ -217,10 +216,10 @@ BaseDtu::tick()
         {
             Addr pktSize = messageSize - bytesRead;
 
-            if (pktSize > spmPktSize)
-                pktSize = spmPktSize;
+            if (pktSize > maxPktSize)
+                pktSize = maxPktSize;
 
-            PacketPtr pkt = generateRequest(readAddr, spmPktSize, MemCmd::ReadReq);
+            PacketPtr pkt = generateRequest(readAddr, pktSize, MemCmd::ReadReq);
 
             readAddr += pktSize;
 
@@ -229,19 +228,19 @@ BaseDtu::tick()
 
         // TODO handle special case when nocPktSize is not a multiple of
         //      spmPktSize
-        if (buffer.size() >= nocPktSize && !waitingForNocRetry)
+        if (buffer.size() >= maxPktSize && !waitingForNocRetry)
         {
             Addr paddr = getDtuBaseAddr(regFile.readReg(DtuRegister::TARGET_COREID));
 
             paddr += writeAddr;
 
-            writeAddr += nocPktSize;
+            writeAddr += maxPktSize;
 
-            PacketPtr pkt = generateRequest(paddr, nocPktSize, MemCmd::WriteReq);
+            PacketPtr pkt = generateRequest(paddr, maxPktSize, MemCmd::WriteReq);
 
             uint8_t* data = pkt->getPtr<uint8_t>();
 
-            for (int i = 0; i < nocPktSize; i++)
+            for (int i = 0; i < maxPktSize; i++)
             {
                 data[i] = buffer.front();
                 buffer.pop();

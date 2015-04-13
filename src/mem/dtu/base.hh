@@ -66,9 +66,7 @@ class BaseDtu : public MemObject
 
     const unsigned nocAddrBits;
 
-    const unsigned spmPktSize;
-
-    const unsigned nocPktSize;
+    const unsigned maxPktSize;
 
     MasterID masterId;
 

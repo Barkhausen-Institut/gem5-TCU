@@ -37,8 +37,7 @@ class BaseDtu(MemObject):
     cpu_base_addr = Param.Addr(0x10000000, "DTU address (used by CPU to access the DTU)")
     noc_addr_bits = Param.Unsigned(4, "Address bits used to address the DTU")
     core_id = Param.Unsigned("ID of the core this DTU belongs to")
-    spm_pkt_size = Param.Unsigned(16, "Packet size in bytes used for communication with the SPM")
-    noc_pkt_size = Param.Unsigned(64, "Packte size in bytes used for the NoC")
+    max_pkt_size = Param.Unsigned(32, "Maximum packet size in bytes used for all communication")
     system = Param.System(Parent.any, "System this tester is part of")
 
 class Dtu(BaseDtu):
