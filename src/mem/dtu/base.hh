@@ -65,7 +65,7 @@ class BaseDtu : public MemObject
         SenderState(bool _isNocRequest) : isNocRequest(_isNocRequest) {}
     };
 
-	const bool atomic;
+    const bool atomic;
 
     RegFile regFile;
 
@@ -80,10 +80,6 @@ class BaseDtu : public MemObject
     MasterID masterId;
 
     State state;
-
-    void tick();
-
-    EventWrapper<BaseDtu, &BaseDtu::tick> tickEvent;
 
     Addr readAddr;
 
@@ -103,6 +99,8 @@ class BaseDtu : public MemObject
 
     void completeNocRequest(PacketPtr pkt);
 
+    virtual void tick();
+
     virtual void sendSpmRequest(PacketPtr pkt) = 0;
 
     virtual void sendNocRequest(PacketPtr pkt) = 0;
@@ -113,19 +111,13 @@ class BaseDtu : public MemObject
 
     virtual void sendNocResponse(PacketPtr pkt) = 0;
 
-    virtual bool nocWaitsForRetry() = 0;
-
-    virtual void sendNocRetry() = 0;
-
   public:
 
     BaseDtu(const BaseDtuParams* p);
 
-    void init() override;
-
     Tick handleCpuRequest(PacketPtr pkt);
 
-    bool canHandleNocRequest(PacketPtr pkt);
+    bool canHandleNocRequest();
 
     Tick handleNocRequest(PacketPtr pkt);
 };

@@ -37,7 +37,8 @@ Dtu::Dtu(const DtuParams *p)
     slave("slave", *this),
     retrySpmPkt(nullptr),
     retryNocPkt(nullptr),
-    _nocWaitsForRetry(false)
+    nocWaitsForRetry(false),
+    tickEvent(this)
 { }
 
 void
@@ -52,6 +53,9 @@ Dtu::init()
 
     cpu.sendRangeChange();
     slave.sendRangeChange();
+
+    // kick tings into action
+    schedule(tickEvent, nextCycle());
 }
 
 BaseMasterPort&
@@ -176,18 +180,19 @@ Dtu::isNocPortReady()
     return retryNocPkt == nullptr;
 }
 
-bool
-Dtu::nocWaitsForRetry()
-{
-    return _nocWaitsForRetry;
-}
-
 void
-Dtu::sendNocRetry()
+Dtu::tick()
 {
-    _nocWaitsForRetry = false;
-    DPRINTF(Dtu, "Send NoC retry\n");
-    slave.sendRetryReq();
+    BaseDtu::tick();
+
+    if (nocWaitsForRetry && canHandleNocRequest())
+    {
+        nocWaitsForRetry = false;
+        DPRINTF(Dtu, "Send NoC retry\n");
+        slave.sendRetryReq();
+    }
+
+    schedule(tickEvent, nextCycle());
 }
 
 bool
@@ -271,9 +276,9 @@ Dtu::DtuSlavePort::recvTimingReq(PacketPtr pkt)
     // need to delete handled packets.
     assert(pkt->needsResponse());
 
-    if (!dtu.canHandleNocRequest(pkt))
+    if (!dtu.canHandleNocRequest())
     {
-        dtu._nocWaitsForRetry = true;
+        dtu.nocWaitsForRetry = true;
         return false;
     }
 

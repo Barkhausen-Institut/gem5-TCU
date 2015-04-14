@@ -40,19 +40,9 @@ BaseDtu::BaseDtu(const BaseDtuParams* p)
       nocAddrBits(p->noc_addr_bits),
       maxPktSize(p->max_pkt_size),
       masterId(p->system->getMasterId(name())),
-      state(State::IDLE),
-      tickEvent(this)
+      state(State::IDLE)
 {
     nocBaseAddr = getDtuBaseAddr(p->core_id);
-}
-
-void
-BaseDtu::init()
-{
-    MemObject::init();
-
-    // kick tings into action
-    schedule(tickEvent, nextCycle());
 }
 
 Addr
@@ -128,7 +118,7 @@ BaseDtu::handleCpuRequest(PacketPtr pkt)
 }
 
 bool
-BaseDtu::canHandleNocRequest(PacketPtr pkt)
+BaseDtu::canHandleNocRequest()
 {
     return isSpmPortReady();
 }
@@ -258,13 +248,6 @@ BaseDtu::completeNocRequest(PacketPtr pkt)
 void
 BaseDtu::tick()
 {
-
-    // If it is possible to forward requests to the scratchpad we can signal
-    // a retr on the NoC.
-    if (isSpmPortReady() && nocWaitsForRetry())
-        sendNocRetry();
-
-
     if (state == State::RECEIVING)
     {
         panic("Receiving not yet implemented");
@@ -321,6 +304,4 @@ BaseDtu::tick()
             delete spmPkt;
         }
     }
-
-    schedule(tickEvent, nextCycle());
 }

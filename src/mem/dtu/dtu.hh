@@ -127,7 +127,11 @@ class Dtu : public BaseDtu
 
     PacketPtr retryNocPkt;
 
-    bool _nocWaitsForRetry;
+    bool nocWaitsForRetry;
+
+    void tick() override;
+
+    EventWrapper<Dtu, &Dtu::tick> tickEvent;
 
     void recvSpmRetry();
 
@@ -142,10 +146,6 @@ class Dtu : public BaseDtu
     bool isNocPortReady() override;
 
     void sendNocResponse(PacketPtr pkt) override;
-
-    bool nocWaitsForRetry() override;
-
-    void sendNocRetry() override;
 
   public:
 
