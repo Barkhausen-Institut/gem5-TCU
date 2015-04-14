@@ -123,23 +123,29 @@ class Dtu : public BaseDtu
     DtuMasterPort     master;
     DtuSlavePort      slave;
 
-    bool atomic;
-
     PacketPtr retrySpmPkt;
 
     PacketPtr retryNocPkt;
+
+    bool _nocWaitsForRetry;
 
     void recvSpmRetry();
 
     void recvNocRetry();
 
-    bool sendSpmRequest(PacketPtr pkt) override;
+    void sendSpmRequest(PacketPtr pkt) override;
 
-    bool sendNocRequest(PacketPtr pkt) override;
+    void sendNocRequest(PacketPtr pkt) override;
 
     bool isSpmPortReady() override;
 
     bool isNocPortReady() override;
+
+    void sendNocResponse(PacketPtr pkt) override;
+
+    bool nocWaitsForRetry() override;
+
+    void sendNocRetry() override;
 
   public:
 

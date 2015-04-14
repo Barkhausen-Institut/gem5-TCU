@@ -28,7 +28,6 @@
 
 #include "debug/Dtu.hh"
 #include "mem/dtu/dtu.hh"
-#include "sim/system.hh"
 
 Dtu::Dtu(const DtuParams *p)
   : BaseDtu(p),
@@ -36,15 +35,15 @@ Dtu::Dtu(const DtuParams *p)
     scratchpad("scratchpad", *this),
     master("master", *this),
     slave("slave", *this),
-    atomic(p->system->isAtomicMode()),
     retrySpmPkt(nullptr),
-    retryNocPkt(nullptr)
+    retryNocPkt(nullptr),
+    _nocWaitsForRetry(false)
 { }
 
 void
 Dtu::init()
 {
-    MemObject::init();
+    BaseDtu::init();
 
     assert(cpu.isConnected());
     assert(scratchpad.isConnected());
@@ -103,7 +102,7 @@ Dtu::recvNocRetry()
     }
 }
 
-bool
+void
 Dtu::sendSpmRequest(PacketPtr pkt)
 {
     assert(retrySpmPkt == nullptr);
@@ -127,15 +126,11 @@ Dtu::sendSpmRequest(PacketPtr pkt)
             DPRINTF(Dtu, "Request failed. Wait for retry\n");
 
             retrySpmPkt = pkt;
-
-            return false;
         }
     }
-
-    return true;
 }
 
-bool
+void
 Dtu::sendNocRequest(PacketPtr pkt)
 {
     assert(retryNocPkt == nullptr);
@@ -159,12 +154,14 @@ Dtu::sendNocRequest(PacketPtr pkt)
             DPRINTF(Dtu, "Request failed. Wait for retry\n");
 
             retryNocPkt = pkt;
-
-            return false;
         }
     }
+}
 
-    return true;
+void
+Dtu::sendNocResponse(PacketPtr pkt)
+{
+    slave.schedTimingResp(pkt, curTick());
 }
 
 bool
@@ -177,6 +174,20 @@ bool
 Dtu::isNocPortReady()
 {
     return retryNocPkt == nullptr;
+}
+
+bool
+Dtu::nocWaitsForRetry()
+{
+    return _nocWaitsForRetry;
+}
+
+void
+Dtu::sendNocRetry()
+{
+    _nocWaitsForRetry = false;
+    DPRINTF(Dtu, "Send NoC retry\n");
+    slave.sendRetryReq();
 }
 
 bool
@@ -215,7 +226,7 @@ Dtu::DtuMasterPort::recvTimingResp(PacketPtr pkt)
 {
     // TODO We should pay somewhere for the delay caused by the
     //      transport layer.
-    dtu.completeSpmRequest(pkt);
+    dtu.completeNocRequest(pkt);
 
     return true;
 }
@@ -261,7 +272,10 @@ Dtu::DtuSlavePort::recvTimingReq(PacketPtr pkt)
     assert(pkt->needsResponse());
 
     if (!dtu.canHandleNocRequest(pkt))
+    {
+        dtu._nocWaitsForRetry = true;
         return false;
+    }
 
     dtu.handleNocRequest(pkt);
 

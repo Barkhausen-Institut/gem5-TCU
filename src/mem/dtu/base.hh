@@ -65,6 +65,8 @@ class BaseDtu : public MemObject
         SenderState(bool _isNocRequest) : isNocRequest(_isNocRequest) {}
     };
 
+	const bool atomic;
+
     RegFile regFile;
 
     const Addr cpuBaseAddr;
@@ -101,17 +103,25 @@ class BaseDtu : public MemObject
 
     void completeNocRequest(PacketPtr pkt);
 
-    virtual bool sendSpmRequest(PacketPtr pkt) = 0;
+    virtual void sendSpmRequest(PacketPtr pkt) = 0;
 
-    virtual bool sendNocRequest(PacketPtr pkt) = 0;
+    virtual void sendNocRequest(PacketPtr pkt) = 0;
 
     virtual bool isSpmPortReady() = 0;
 
     virtual bool isNocPortReady() = 0;
 
+    virtual void sendNocResponse(PacketPtr pkt) = 0;
+
+    virtual bool nocWaitsForRetry() = 0;
+
+    virtual void sendNocRetry() = 0;
+
   public:
 
     BaseDtu(const BaseDtuParams* p);
+
+    void init() override;
 
     Tick handleCpuRequest(PacketPtr pkt);
 
