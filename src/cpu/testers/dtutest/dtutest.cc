@@ -165,6 +165,10 @@ DtuTest::createDtuRegisterPkt(DtuRegister reg, uint32_t value, MemCmd cmd = MemC
 void
 DtuTest::tick()
 {
+    // Have only one DTU working
+    if (id != 0)
+        return;
+
     PacketPtr pkt = nullptr;
 
     // at first,write something into the scratchpad
