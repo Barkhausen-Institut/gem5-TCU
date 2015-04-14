@@ -225,9 +225,20 @@ BaseDtu::completeSpmRequest(PacketPtr pkt)
             // Fill the buffer. We assume that all packets arrive in order.
             pktBuffer.push(pkt);
         }
-        else
+        else // state == State::RECEIVING
         {
-            panic ("Receiving not yet implemented!");
+            assert(pkt->isWrite());
+            assert(!pkt->isError());
+
+            if (senderState->isLastRequest)
+            {
+                finishTransaction();
+            }
+
+            // clean up
+            delete senderState;
+            delete pkt->req;
+            delete pkt;
         }
     }
 }
@@ -259,25 +270,78 @@ BaseDtu::completeNocRequest(PacketPtr pkt)
         delete req;
         delete pkt;
     }
-    else
+    else // state == State::RECEIVING
     {
-        panic ("Receiving not yet implemented!");
+        assert(pkt->isRead());
+        assert(!pkt->isError());
+
+        // Fill the buffer. We assume that all packets arrive in order.
+        pktBuffer.push(pkt);
     }
 }
 
 void
 BaseDtu::tick()
 {
+    Addr messageSize = regFile.readReg(DtuRegister::SIZE);
+
+    Addr bytesRead = readAddr - regFile.readReg(DtuRegister::SOURCE_ADDR);
+
+    Addr pktSize = messageSize - bytesRead;
+
+    if (pktSize > maxPktSize)
+        pktSize = maxPktSize;
+
     if (state == State::RECEIVING)
     {
-        panic("Receiving not yet implemented");
+        /*
+         * TODO Limit buffer size. Send packats only when there is a free slot
+         *      in the packet buffer (pktBuffer)
+         */
+        if (bytesRead < messageSize && isNocPortReady())
+        {
+            Addr addr = getDtuBaseAddr(regFile.readReg(DtuRegister::TARGET_COREID));
+
+            addr += readAddr;
+
+            PacketPtr pkt = generateRequest(addr, pktSize, MemCmd::ReadReq);
+
+            readAddr += pktSize;
+
+            auto state = new SenderState(false);
+
+            if (bytesRead + pktSize == messageSize)
+                state->isLastRequest = true;
+
+            pkt->pushSenderState(state);
+
+            sendNocRequest(pkt);
+        }
+
+        if (!pktBuffer.empty() && isSpmPortReady())
+        {
+            // the buffer contains responses from NoC read requests
+            PacketPtr nocPkt = pktBuffer.front();
+            pktBuffer.pop();
+
+            PacketPtr pkt = generateRequest(writeAddr, pktSize, MemCmd::WriteReq);
+
+            writeAddr += pktSize;
+
+            auto senderState = nocPkt->popSenderState();
+
+            pkt->pushSenderState(senderState);
+
+            memcpy(pkt->getPtr<uint8_t>(), nocPkt->getPtr<uint8_t>(), nocPkt->getSize());
+
+            sendSpmRequest(pkt);
+
+            delete nocPkt->req;
+            delete nocPkt;
+        }
     }
     else if (state == State::TRANSMITTING)
     {
-        Addr messageSize = regFile.readReg(DtuRegister::SIZE);
-
-        Addr bytesRead = readAddr - regFile.readReg(DtuRegister::SOURCE_ADDR);
-
         /*
          * TODO Limit buffer size. Send packats only when there is a free slot
          *      in the packet buffer (pktBuffer)
@@ -285,11 +349,6 @@ BaseDtu::tick()
 
         if (bytesRead < messageSize && isSpmPortReady())
         {
-            Addr pktSize = messageSize - bytesRead;
-
-            if (pktSize > maxPktSize)
-                pktSize = maxPktSize;
-
             PacketPtr pkt = generateRequest(readAddr, pktSize, MemCmd::ReadReq);
 
             readAddr += pktSize;
