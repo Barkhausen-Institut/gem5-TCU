@@ -62,7 +62,11 @@ class BaseDtu : public MemObject
     {
         bool isNocRequest;
 
-        SenderState(bool _isNocRequest) : isNocRequest(_isNocRequest) {}
+        bool isLastRequest;
+
+        SenderState(bool _isNocRequest, bool _isLastRequest = false)
+            : isNocRequest(_isNocRequest), isLastRequest(_isLastRequest)
+        {}
     };
 
     const bool atomic;
@@ -92,6 +96,8 @@ class BaseDtu : public MemObject
     Addr getDtuBaseAddr(unsigned coreId) const;
 
     void startTransaction(DtuReg cmd);
+
+    void finishTransaction();
 
     void sendNextSpmReadRequest();
 

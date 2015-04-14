@@ -164,8 +164,20 @@ BaseDtu::startTransaction(DtuReg cmd)
     readAddr = regFile.readReg(DtuRegister::SOURCE_ADDR);
     writeAddr = regFile.readReg(DtuRegister::TARGET_ADDR);
 
-    regFile.lock();
     regFile.setReg(DtuRegister::STATUS, BUSY_STATUS);
+    regFile.lock();
+}
+
+void
+BaseDtu::finishTransaction()
+{
+    assert(state != State::IDLE);
+
+    DPRINTF(Dtu, "Transaction finished\n");
+
+    state = State::IDLE;
+    regFile.unlock();
+    regFile.setReg(DtuRegister::STATUS, IDLE_STATUS);
 }
 
 void
@@ -195,6 +207,9 @@ BaseDtu::completeSpmRequest(PacketPtr pkt)
 
             sendNocResponse(pkt);
         }
+
+        // clean up
+        delete senderState;
     }
     else
     {
@@ -206,7 +221,7 @@ BaseDtu::completeSpmRequest(PacketPtr pkt)
             assert(pkt->isRead());
             assert(!pkt->isError());
 
-
+            pkt->pushSenderState(senderState);
             // Fill the buffer. We assume that all packets arrive in order.
             pktBuffer.push(pkt);
         }
@@ -215,9 +230,6 @@ BaseDtu::completeSpmRequest(PacketPtr pkt)
             panic ("Receiving not yet implemented!");
         }
     }
-
-    // clean up
-    delete senderState;
 }
 
 void
@@ -235,7 +247,15 @@ BaseDtu::completeNocRequest(PacketPtr pkt)
         DPRINTF(Dtu, "Completing write to NoC at address 0x%x\n",
                      req->getPaddr());
 
-        // clean up
+        auto senderState = dynamic_cast<BaseDtu::SenderState*>(pkt->popSenderState());
+
+        if (senderState->isLastRequest)
+        {
+            finishTransaction();
+        }
+
+        // clean upi
+        delete senderState;
         delete req;
         delete pkt;
     }
@@ -275,6 +295,10 @@ BaseDtu::tick()
             readAddr += pktSize;
 
             auto state = new SenderState(false);
+
+            if (bytesRead + pktSize == messageSize)
+                state->isLastRequest = true;
+
             pkt->pushSenderState(state);
 
             sendSpmRequest(pkt);
@@ -294,7 +318,11 @@ BaseDtu::tick()
 
             writeAddr += pktSize;
 
+            auto senderState = spmPkt->popSenderState();
+
             PacketPtr pkt = generateRequest(paddr, pktSize, MemCmd::WriteReq);
+
+            pkt->pushSenderState(senderState);
 
             memcpy(pkt->getPtr<uint8_t>(), spmPkt->getPtr<uint8_t>(), spmPkt->getSize());
 
