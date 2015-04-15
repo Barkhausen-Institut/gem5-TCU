@@ -176,8 +176,11 @@ BaseDtu::finishTransaction()
     DPRINTF(Dtu, "Transaction finished\n");
 
     state = State::IDLE;
+
     regFile.unlock();
+
     regFile.setReg(DtuRegister::STATUS, IDLE_STATUS);
+    regFile.setReg(DtuRegister::COMMAND, 0);
 }
 
 void
