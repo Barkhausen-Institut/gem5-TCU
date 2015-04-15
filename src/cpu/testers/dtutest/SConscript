@@ -32,3 +32,4 @@ SimObject('DtuTest.py')
 Source('dtutest.cc')
 
 DebugFlag('DtuTest')
+DebugFlag('DtuTestAccess')

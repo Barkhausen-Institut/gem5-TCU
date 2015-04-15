@@ -64,6 +64,19 @@ class DtuTest : public MemObject
 
     CpuPort port;
 
+    enum class State
+    {
+        IDLE,
+        INIT,
+        SETUP_DTU_TRANSMIT,
+        WAIT_FOR_DTU_TRANSMIT,
+        SETUP_DTU_RECEIVE,
+        WAIT_FOR_DTU_RECEIVE,
+        VALIDATE,
+    };
+
+    State state;
+
     /// Request id for all generated traffic
     MasterID masterId;
 

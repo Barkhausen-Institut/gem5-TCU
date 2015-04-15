@@ -28,8 +28,9 @@
 
 #include "cpu/testers/dtutest/dtutest.hh"
 #include "debug/DtuTest.hh"
+#include "debug/DtuTestAccess.hh"
 
-unsigned int TESTER_DTU= 0;
+unsigned int TESTER_DTU = 0;
 
 bool
 DtuTest::CpuPort::recvTimingResp(PacketPtr pkt)
@@ -54,6 +55,12 @@ DtuTest::DtuTest(const DtuTestParams *p)
 {
     id = TESTER_DTU++;
 
+    // Only every second dtu performs transactions
+    if (id % 2)
+        state = State::IDLE;
+    else
+        state = State::INIT;
+
     // kick things into action
     schedule(tickEvent, curTick());
 }
@@ -70,10 +77,10 @@ DtuTest::getMasterPort(const std::string& if_name, PortID idx)
 bool
 DtuTest::sendPkt(PacketPtr pkt)
 {
-    DPRINTF(DtuTest, "Send %s %s request at address 0x%x\n",
-                     atomic ? "atomic" : "timed",
-                     pkt->isWrite() ? "write" : "read",
-                     pkt->getAddr());
+    DPRINTF(DtuTestAccess, "Send %s %s request at address 0x%x\n",
+                           atomic ? "atomic" : "timed",
+                           pkt->isWrite() ? "write" : "read",
+                           pkt->getAddr());
 
     if (atomic)
     {
@@ -99,10 +106,10 @@ DtuTest::completeRequest(PacketPtr pkt)
 {
     Request* req = pkt->req;
 
-    DPRINTF(DtuTest, "Completing %s at address %x %s\n",
-            pkt->isWrite() ? "write" : "read",
-            req->getPaddr(),
-            pkt->isError() ? "error" : "success");
+    DPRINTF(DtuTestAccess, "Completing %s at address %x %s\n",
+                           pkt->isWrite() ? "write" : "read",
+                           req->getPaddr(),
+                           pkt->isError() ? "error" : "success");
 
     const uint8_t *pkt_data = pkt->getConstPtr<uint8_t>();
 
@@ -115,11 +122,36 @@ DtuTest::completeRequest(PacketPtr pkt)
     {
         if (pkt->isRead())
         {
-            DPRINTF(DtuTest, "%s: read of %x @ cycle %d returns %x\n",
-                             name(),
-                             req->getPaddr(),
-                             curTick(),
-                             pkt_data[0]);
+            DPRINTF(DtuTestAccess, "%s: read of %x @ cycle %d returns %x\n",
+                                   name(),
+                                   req->getPaddr(),
+                                   curTick(),
+                                   pkt_data[0]);
+
+            if (state == State::WAIT_FOR_DTU_TRANSMIT)
+            {
+                if (pkt_data[0] == 0)
+                {
+                    state = State::SETUP_DTU_RECEIVE;
+                    counter = 0;
+                }
+            }
+            else if (state == State::WAIT_FOR_DTU_RECEIVE)
+            {
+                if (pkt_data[0] == 0)
+                {
+                    state = State::VALIDATE;
+                    counter = 0;
+                }
+            }
+            else if (state == State::VALIDATE)
+            {
+                Addr addr = pkt->getAddr();
+                uint8_t* data = pkt->getPtr<uint8_t>();
+
+                if (*data != static_cast<uint8_t>(addr))
+                    panic("Found a Memory error!");
+            }
         }
     }
 
@@ -127,6 +159,9 @@ DtuTest::completeRequest(PacketPtr pkt)
 
     // the packet will delete the data
     delete pkt;
+
+    // kick things into action again
+    schedule(tickEvent, clockEdge(Cycles(1)));
 }
 
 void
@@ -135,11 +170,9 @@ DtuTest::recvRetry()
     assert(retryPkt);
     if (port.sendTimingReq(retryPkt))
     {
-        DPRINTF(DtuTest, "Proceeding after successful retry\n");
+        DPRINTF(DtuTestAccess, "Proceeding after successful retry\n");
 
         retryPkt = nullptr;
-        // kick things into action again
-        schedule(tickEvent, clockEdge(Cycles(1)));
     }
 }
 
@@ -165,15 +198,17 @@ DtuTest::createDtuRegisterPkt(DtuRegister reg, uint32_t value, MemCmd cmd = MemC
 void
 DtuTest::tick()
 {
-    // Have only one DTU working
-    if (id != 0)
-        return;
-
     PacketPtr pkt = nullptr;
 
-    // at first,write something into the scratchpad
-    if (counter < 1024)
+    switch (state)
     {
+    case State::IDLE:
+        break;
+    case State::INIT:
+    {
+        if (counter == 0)
+            DPRINTF(DtuTest, "Initialize the first 1024 byts of Scratchpad-Memory\n");
+
         Addr paddr = counter;
         Request::Flags flags;
 
@@ -184,24 +219,128 @@ DtuTest::tick()
         auto pkt_data = new uint8_t[1];
         pkt->dataDynamic(pkt_data);
         pkt_data[0] = static_cast<uint8_t>(counter);
+
+        counter++;
+
+        if (counter == 1024)
+        {
+            DPRINTF(DtuTest, "Done initializing the Scratchpad\n");
+            counter = 0;
+            state = State::SETUP_DTU_TRANSMIT;
+        }
+
+        break;
     }
-    else if (counter == 1024)
-        pkt = createDtuRegisterPkt(DtuRegister::SOURCE_ADDR, 0);
-    else if (counter == 1025)
-        pkt = createDtuRegisterPkt(DtuRegister::SIZE, 1024);
-    else if (counter == 1026)
-        pkt = createDtuRegisterPkt(DtuRegister::TARGET_ADDR, 1024);
-    else if (counter == 1027)
-        pkt = createDtuRegisterPkt(DtuRegister::TARGET_COREID, id == 0 ? 1 : 0);
-    else if (counter == 1028)
-        pkt = createDtuRegisterPkt(DtuRegister::COMMAND, BaseDtu::TRANSMIT_CMD);
+    case State::SETUP_DTU_TRANSMIT:
+    {
+        switch (counter)
+        {
+        case 0:
+            DPRINTF(DtuTest, "Setup the DTU to transmit 1024 Bytes form local "
+                             "Scratchpad at address 0x0 to core %u's Scratchpad "
+                             "at address 0x400\n", id + 1);
+            pkt = createDtuRegisterPkt(DtuRegister::SOURCE_ADDR, 0);
+            break;
+        case 1:
+            pkt = createDtuRegisterPkt(DtuRegister::SIZE, 1024);
+            break;
+        case 2:
+            pkt = createDtuRegisterPkt(DtuRegister::TARGET_ADDR, 1024);
+            break;
+        case 3:
+            pkt = createDtuRegisterPkt(DtuRegister::TARGET_COREID, id + 1);
+            break;
+        case 4:
+            pkt = createDtuRegisterPkt(DtuRegister::COMMAND, BaseDtu::TRANSMIT_CMD);
+            break;
+        default:
+            counter = 0;
+            DPRINTF(DtuTest, "DTU setup done. Wait until DTU finishes the transaction\n");
+            state = State::WAIT_FOR_DTU_TRANSMIT;
+            break;
+        }
+
+        counter++;
+
+        break;
+    }
+    case State::WAIT_FOR_DTU_TRANSMIT:
+    case State::WAIT_FOR_DTU_RECEIVE:
+
+        pkt = createDtuRegisterPkt(DtuRegister::STATUS, 0, MemCmd::ReadReq);
+
+        break;
+
+    case State::SETUP_DTU_RECEIVE:
+    {
+        switch (counter)
+        {
+        case 0:
+            DPRINTF(DtuTest, "DTU finished the transaction. Setup the DTU to "
+                             "read 1024 bytes from core %u's scratchpad at "
+                             "address 0x400 to local scratchpad at address "
+                             "0x400\n", id+1);
+            pkt = createDtuRegisterPkt(DtuRegister::SOURCE_ADDR, 1024);
+            break;
+        case 1:
+            pkt = createDtuRegisterPkt(DtuRegister::SIZE, 1024);
+            break;
+        case 2:
+            pkt = createDtuRegisterPkt(DtuRegister::TARGET_ADDR, 1024);
+            break;
+        case 3:
+            pkt = createDtuRegisterPkt(DtuRegister::TARGET_COREID, id + 1);
+            break;
+        case 4:
+            pkt = createDtuRegisterPkt(DtuRegister::COMMAND, BaseDtu::RECEIVE_CMD);
+            break;
+        default:
+            counter = 0;
+            DPRINTF(DtuTest, "DTU setup done. Wait until DTU finishes the transaction\n");
+            state = State::WAIT_FOR_DTU_RECEIVE;
+            break;
+        }
+
+        counter++;
+
+        break;
+    }
+    case State::VALIDATE:
+    {
+        if (counter == 0)
+            DPRINTF(DtuTest, "DTU finished the transaction. Validate the "
+                             "Scratchpad content.\n");
+
+        Addr paddr = counter;
+        Request::Flags flags;
+
+        auto req = new Request(paddr, 1, flags, masterId);
+        req->setThreadContext(id, 0);
+
+        pkt = new Packet(req, MemCmd::ReadReq);
+        auto pkt_data = new uint8_t[1];
+        pkt->dataDynamic(pkt_data);
+
+        counter++;
+
+        if (counter == 2024)
+        {
+            DPRINTF(DtuTest, "Successfully verified Scratchpad data.\n");
+            counter = 0;
+            state = State::IDLE;
+        }
+
+        break;
+    }
+    }
 
     // Schedule next tick if the packet was successfully send.
     // Otherwise block until a retry is received.
-    if(pkt != nullptr && sendPkt(pkt))
-        schedule(tickEvent, clockEdge(Cycles(1)));
 
-    counter++;
+    if (pkt == nullptr)
+        schedule(tickEvent, clockEdge(Cycles(1)));
+    else
+        sendPkt(pkt);
 }
 
 DtuTest*
