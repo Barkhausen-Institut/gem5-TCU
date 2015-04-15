@@ -253,13 +253,11 @@ BaseDtu::completeNocRequest(PacketPtr pkt)
 
     if (state == State::TRANSMITTING)
     {
-        Request* req = pkt->req;
-
         assert(pkt->isWrite());
         assert(!pkt->isError());
 
         DPRINTF(Dtu, "Completing write to NoC at address 0x%x\n",
-                     req->getPaddr());
+                     pkt->getAddr());
 
         auto senderState = dynamic_cast<BaseDtu::SenderState*>(pkt->popSenderState());
 
@@ -270,11 +268,14 @@ BaseDtu::completeNocRequest(PacketPtr pkt)
 
         // clean upi
         delete senderState;
-        delete req;
+        delete pkt->req;
         delete pkt;
     }
     else // state == State::RECEIVING
     {
+        DPRINTF(Dtu, "Completing read from NoC at address 0x%x\n",
+                     pkt->getAddr());
+
         assert(pkt->isRead());
         assert(!pkt->isError());
 
@@ -290,11 +291,6 @@ BaseDtu::tick()
 
     Addr bytesRead = readAddr - regFile.readReg(DtuRegister::SOURCE_ADDR);
 
-    Addr pktSize = messageSize - bytesRead;
-
-    if (pktSize > maxPktSize)
-        pktSize = maxPktSize;
-
     if (state == State::RECEIVING)
     {
         /*
@@ -306,6 +302,11 @@ BaseDtu::tick()
             Addr addr = getDtuBaseAddr(regFile.readReg(DtuRegister::TARGET_COREID));
 
             addr += readAddr;
+
+            Addr pktSize = messageSize - bytesRead;
+
+            if (pktSize > maxPktSize)
+                pktSize = maxPktSize;
 
             PacketPtr pkt = generateRequest(addr, pktSize, MemCmd::ReadReq);
 
@@ -326,6 +327,8 @@ BaseDtu::tick()
             // the buffer contains responses from NoC read requests
             PacketPtr nocPkt = pktBuffer.front();
             pktBuffer.pop();
+
+            Addr pktSize = nocPkt->getSize();
 
             PacketPtr pkt = generateRequest(writeAddr, pktSize, MemCmd::WriteReq);
 
@@ -352,6 +355,11 @@ BaseDtu::tick()
 
         if (bytesRead < messageSize && isSpmPortReady())
         {
+            Addr pktSize = messageSize - bytesRead;
+
+            if (pktSize > maxPktSize)
+                pktSize = maxPktSize;
+
             PacketPtr pkt = generateRequest(readAddr, pktSize, MemCmd::ReadReq);
 
             readAddr += pktSize;
