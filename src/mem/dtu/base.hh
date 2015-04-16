@@ -117,6 +117,8 @@ class BaseDtu : public MemObject
 
     virtual void sendNocResponse(PacketPtr pkt) = 0;
 
+    virtual void sendCpuResponse(PacketPtr pkt) = 0;
+
   public:
 
     BaseDtu(const BaseDtuParams* p);

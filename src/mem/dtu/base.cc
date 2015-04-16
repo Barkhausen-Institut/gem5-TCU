@@ -73,48 +73,32 @@ BaseDtu::handleCpuRequest(PacketPtr pkt)
             pkt->isWrite() ? "write" : "read",
             pkt->getAddr());
 
-    Addr paddr = pkt->getAddr();
-    paddr -= cpuBaseAddr; // from now on only work with the address offset
-    pkt->setAddr(paddr);
-
-    Tick delay = 0;
+    Addr addr = pkt->getAddr();
+    addr -= cpuBaseAddr; // from now on only work with the address offset
+    pkt->setAddr(addr);
 
     if (pkt->isWrite() && state != State::IDLE)
         panic("Write requests while busy are forbidden!");
 
-    /*
-     * TODO The request is handled immediatly when arriving. However, we should
-     *      pay for the delay caused by the transport layer (pkt->headerDelay
-     *      and pkt->payloadDelay) first.
-     */
-    if (regFile.isRegisterAddr(paddr))
-        delay = regFile.handleRequest(pkt);
+    if (regFile.isRegisterAddr(addr))
+        regFile.handleRequest(pkt);
     else
         // TODO generate an error response
-        panic("Request at 0x%x failed as it is no valid register address", paddr);
+        panic("Request at 0x%x failed as it is no valid register address", addr);
 
     DtuReg cmd = regFile.readReg(DtuRegister::COMMAND);
     if (state == State::IDLE && cmd != 0)
         startTransaction(cmd);
 
     // restore the original address
-    paddr += cpuBaseAddr;
-    pkt->setAddr(paddr);
+    addr += cpuBaseAddr;
+    pkt->setAddr(addr);
 
-    Tick totalDelay = pkt->headerDelay + pkt->payloadDelay + delay;
+    if (!atomic)
+        sendCpuResponse(pkt);
 
-    /*
-     * The SimpleTimingPort already pays for the delay returned by recvAtomic
-     *  -> reset the packet delay
-     *
-     * XXX I'm not sure if this is the right way to go. However, it seems
-     *     better than simply ignoring the packet's delays as it is done for
-     *     instance in SimpleMemory.
-     */
-    pkt->headerDelay  = 0;
-    pkt->payloadDelay = 0;
-
-    return totalDelay;
+    // TODO
+    return 0;
 }
 
 bool

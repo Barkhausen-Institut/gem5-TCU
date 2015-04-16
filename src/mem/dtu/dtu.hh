@@ -127,38 +127,33 @@ class Dtu : public BaseDtu
         SpmTickEvent tickEvent;
     };
 
-    class DtuCpuPort : public SimpleTimingPort
+    class DtuSlavePort : public SlavePort
     {
-      private:
+      protected:
+
         Dtu& dtu;
+
+        bool busy;
+
+        bool sendRetry;
+
+        PacketPtr retryRespPkt;
 
       public:
 
-        DtuCpuPort(const std::string& _name, Dtu& _dtu)
-          : SimpleTimingPort(_name, &_dtu), dtu(_dtu)
+        DtuSlavePort(const std::string _name, Dtu& _dtu)
+            : SlavePort(_name, &_dtu),
+              dtu(_dtu),
+              busy(false),
+              sendRetry(false),
+              retryRespPkt(nullptr)
         { }
 
-      protected:
+        bool isBusy() { return busy; }
 
-        Tick recvAtomic(PacketPtr pkt) override;
+        virtual void handleRequest(PacketPtr pkt, bool atomic) = 0;
 
-        AddrRangeList getAddrRanges() const override;
-    };
-
-    class DtuSlavePort : public QueuedSlavePort
-    {
-      private:
-        Dtu& dtu;
-
-        RespPacketQueue queueImpl;
-
-      public:
-
-        DtuSlavePort(const std::string& _name, Dtu& _dtu)
-          : QueuedSlavePort(_name, &_dtu, queueImpl), dtu(_dtu), queueImpl(_dtu, *this)
-        { }
-
-      protected:
+        void sendTimingResp(PacketPtr pkt);
 
         Tick recvAtomic(PacketPtr pkt) override;
 
@@ -166,14 +161,74 @@ class Dtu : public BaseDtu
 
         bool recvTimingReq(PacketPtr pkt) override;
 
-        AddrRangeList getAddrRanges() const override;
+        void recvRespRetry() override;
 
+        struct TickEvent : public Event
+        {
+            PacketPtr pkt;
+            Dtu& dtu;
+
+            TickEvent(Dtu& _dtu) : pkt(nullptr), dtu(_dtu) {}
+            const char *description() const { return "DTU tick"; }
+            void schedule(PacketPtr _pkt, Tick t);
+        };
     };
 
-    DtuCpuPort     cpu;
+    class CpuPort : public DtuSlavePort
+    {
+      public:
+
+        CpuPort(Dtu& _dtu)
+          : DtuSlavePort(_dtu.name() + ".cpu_port", _dtu), tickEvent(_dtu)
+        { }
+
+      protected:
+
+        AddrRangeList getAddrRanges() const override;
+
+        void handleRequest(PacketPtr pkt, bool atomic) override;
+
+        struct CpuTickEvent : public TickEvent
+        {
+            CpuTickEvent(Dtu& _dtu)
+                : TickEvent(_dtu) {}
+            void process();
+            const char *description() const { return "DTU Cpu tick"; }
+        };
+
+        CpuTickEvent tickEvent;
+    };
+
+    class NocSlavePort : public DtuSlavePort
+    {
+      public:
+
+        NocSlavePort(Dtu& _dtu)
+          : DtuSlavePort(_dtu.name() + ".noc_slave_port", _dtu),
+            tickEvent(_dtu)
+        { }
+
+      protected:
+
+        AddrRangeList getAddrRanges() const override;
+
+        void handleRequest(PacketPtr pkt, bool atomic) override;
+
+        struct NocTickEvent : public TickEvent
+        {
+            NocTickEvent(Dtu& _dtu)
+                : TickEvent(_dtu) {}
+            void process();
+            const char *description() const { return "DTU Noc tick"; }
+        };
+
+        NocTickEvent tickEvent;
+    };
+
+    CpuPort        cpu;
     ScratchpadPort scratchpad;
     NocMasterPort  master;
-    DtuSlavePort   slave;
+    NocSlavePort   slave;
 
     PacketPtr retrySpmPkt;
 
@@ -198,6 +253,8 @@ class Dtu : public BaseDtu
     bool isNocPortReady() override;
 
     void sendNocResponse(PacketPtr pkt) override;
+
+    void sendCpuResponse(PacketPtr pkt) override;
 
   public:
 

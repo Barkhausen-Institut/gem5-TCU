@@ -31,10 +31,10 @@
 
 Dtu::Dtu(const DtuParams *p)
   : BaseDtu(p),
-    cpu("cpu", *this),
+    cpu(*this),
     scratchpad(*this),
     master(*this),
-    slave("slave", *this),
+    slave(*this),
     retrySpmPkt(nullptr),
     retryNocPkt(nullptr),
     nocWaitsForRetry(false),
@@ -165,7 +165,13 @@ Dtu::sendNocRequest(PacketPtr pkt)
 void
 Dtu::sendNocResponse(PacketPtr pkt)
 {
-    slave.schedTimingResp(pkt, curTick());
+    slave.sendTimingResp(pkt);
+}
+
+void
+Dtu::sendCpuResponse(PacketPtr pkt)
+{
+    cpu.sendTimingResp(pkt);
 }
 
 bool
@@ -193,67 +199,6 @@ Dtu::tick()
     }
 
     schedule(tickEvent, nextCycle());
-}
-
-AddrRangeList
-Dtu::DtuCpuPort::getAddrRanges() const
-{
-    AddrRangeList ranges;
-    auto range = AddrRange(dtu.cpuBaseAddr,
-                           dtu.cpuBaseAddr + dtu.regFile.getSize() - 1);
-    ranges.push_back(range);
-    return ranges;
-}
-
-Tick
-Dtu::DtuCpuPort::recvAtomic(PacketPtr pkt)
-{
-    return dtu.handleCpuRequest(pkt);
-}
-
-AddrRangeList
-Dtu::DtuSlavePort::getAddrRanges() const
-{
-    AddrRangeList ranges;
-
-    // XXX we assume 64 bit addresses
-    Addr size = 1UL << (64 - dtu.nocAddrBits);
-
-    auto range = AddrRange(dtu.nocBaseAddr, dtu.nocBaseAddr + (size - 1));
-
-    ranges.push_back(range);
-
-    return ranges;
-}
-
-Tick
-Dtu::DtuSlavePort::recvAtomic(PacketPtr pkt)
-{
-    return dtu.handleNocRequest(pkt);
-}
-
-void
-Dtu::DtuSlavePort::recvFunctional(PacketPtr pkt)
-{
-    panic("Dtu::recvFunctional() not yet implemented");
-}
-
-bool
-Dtu::DtuSlavePort::recvTimingReq(PacketPtr pkt)
-{
-    // We don't expect packets that do not need a response. Otherwise we would
-    // need to delete handled packets.
-    assert(pkt->needsResponse());
-
-    if (!dtu.canHandleNocRequest())
-    {
-        dtu.nocWaitsForRetry = true;
-        return false;
-    }
-
-    dtu.handleNocRequest(pkt);
-
-    return true;
 }
 
 void
@@ -329,6 +274,163 @@ void
 Dtu::ScratchpadPort::recvReqRetry()
 {
     dtu.recvSpmRetry();
+}
+
+void
+Dtu::DtuSlavePort::sendTimingResp(PacketPtr pkt)
+{
+    assert(busy);
+    assert(retryRespPkt == nullptr);
+
+    if (SlavePort::sendTimingResp(pkt))
+    {
+        busy = false;
+
+        if (sendRetry)
+        {
+            sendRetry = false;
+            sendRetryReq();
+        }
+    }
+    else
+    {
+        retryRespPkt = pkt;
+    }
+}
+
+Tick
+Dtu::DtuSlavePort::recvAtomic(PacketPtr pkt)
+{
+    handleRequest(pkt, true);
+
+    return 0;
+}
+
+void
+Dtu::DtuSlavePort::recvFunctional(PacketPtr pkt)
+{
+    panic("%S does not implement recvFunctional!\n", name());
+}
+
+bool
+Dtu::DtuSlavePort::recvTimingReq(PacketPtr pkt)
+{
+    DPRINTF(Dtu, "Recieve timing request %#x\n", pkt->getAddr());
+
+    if (busy)
+    {
+        sendRetry = true;
+        return false;
+    }
+
+    assert(!sendRetry);
+
+    busy = true;
+
+    handleRequest(pkt, false);
+
+    return true;
+}
+
+void
+Dtu::DtuSlavePort::recvRespRetry()
+{
+    assert(retryRespPkt != nullptr);
+
+    if (SlavePort::sendTimingResp(retryRespPkt))
+    {
+        busy = false;
+        retryRespPkt = nullptr;
+
+        if (sendRetry)
+        {
+            sendRetry = false;
+            sendRetryReq();
+        }
+    }
+}
+
+void
+Dtu::DtuSlavePort::TickEvent::schedule(PacketPtr _pkt, Tick t)
+{
+    assert(!scheduled());
+
+    pkt = _pkt;
+
+    dtu.schedule(this, t);
+}
+
+void
+Dtu::CpuPort::CpuTickEvent::process()
+{
+    dtu.handleCpuRequest(pkt);
+}
+
+AddrRangeList
+Dtu::CpuPort::getAddrRanges() const
+{
+    AddrRangeList ranges;
+    auto range = AddrRange(dtu.cpuBaseAddr,
+                           dtu.cpuBaseAddr + dtu.regFile.getSize() - 1);
+    ranges.push_back(range);
+    return ranges;
+}
+
+void
+Dtu::CpuPort::handleRequest(PacketPtr pkt, bool atomic)
+{
+    if (atomic)
+    {
+        dtu.handleCpuRequest(pkt);
+    }
+    else
+    {
+        Tick delay = pkt->headerDelay + pkt->payloadDelay;
+
+        pkt->headerDelay = 0;
+        pkt->payloadDelay = 0;
+
+        tickEvent.schedule(pkt, dtu.clockEdge(dtu.ticksToCycles(delay)));
+    }
+}
+
+AddrRangeList
+Dtu::NocSlavePort::getAddrRanges() const
+{
+    AddrRangeList ranges;
+
+    // XXX we assume 64 bit addresses
+    Addr size = 1UL << (64 - dtu.nocAddrBits);
+
+    auto range = AddrRange(dtu.nocBaseAddr, dtu.nocBaseAddr + (size - 1));
+
+    ranges.push_back(range);
+
+    return ranges;
+}
+
+void
+Dtu::NocSlavePort::handleRequest(PacketPtr pkt, bool atomic)
+{
+    if (atomic)
+    {
+        dtu.handleNocRequest(pkt);
+    }
+    else
+    {
+        Tick delay = pkt->headerDelay + pkt->payloadDelay;
+
+        pkt->headerDelay = 0;
+        pkt->payloadDelay = 0;
+
+        tickEvent.schedule(pkt, dtu.clockEdge(dtu.ticksToCycles(delay)));
+    }
+}
+
+void
+Dtu::NocSlavePort::NocTickEvent::process()
+{
+    dtu.handleNocRequest(pkt);
 }
 
 Dtu*
