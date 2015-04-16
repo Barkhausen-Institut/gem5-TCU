@@ -32,8 +32,8 @@
 Dtu::Dtu(const DtuParams *p)
   : BaseDtu(p),
     cpu("cpu", *this),
-    scratchpad("scratchpad", *this),
-    master("master", *this),
+    scratchpad(*this),
+    master(*this),
     slave("slave", *this),
     retrySpmPkt(nullptr),
     retryNocPkt(nullptr),
@@ -195,21 +195,6 @@ Dtu::tick()
     schedule(tickEvent, nextCycle());
 }
 
-bool
-Dtu::DtuScratchpadPort::recvTimingResp(PacketPtr pkt)
-{
-    // TODO We should pay somewhere for the delay caused by the
-    //      transport layer.
-    dtu.completeSpmRequest(pkt);
-    return true;
-}
-
-void
-Dtu::DtuScratchpadPort::recvReqRetry()
-{
-    dtu.recvSpmRetry();
-}
-
 AddrRangeList
 Dtu::DtuCpuPort::getAddrRanges() const
 {
@@ -224,22 +209,6 @@ Tick
 Dtu::DtuCpuPort::recvAtomic(PacketPtr pkt)
 {
     return dtu.handleCpuRequest(pkt);
-}
-
-bool
-Dtu::DtuMasterPort::recvTimingResp(PacketPtr pkt)
-{
-    // TODO We should pay somewhere for the delay caused by the
-    //      transport layer.
-    dtu.completeNocRequest(pkt);
-
-    return true;
-}
-
-void
-Dtu::DtuMasterPort::recvReqRetry()
-{
-    dtu.recvNocRetry();
 }
 
 AddrRangeList
@@ -285,6 +254,81 @@ Dtu::DtuSlavePort::recvTimingReq(PacketPtr pkt)
     dtu.handleNocRequest(pkt);
 
     return true;
+}
+
+void
+Dtu::DtuMasterPort::TickEvent::schedule(PacketPtr pkt, Tick t)
+{
+    pktQueue.push(DeferredPacket(t, pkt));
+
+    if (!scheduled())
+        dtu.schedule(this, t);
+}
+
+void
+Dtu::NocMasterPort::NocTickEvent::process()
+{
+    dtu.completeNocRequest(pktQueue.front().pkt);
+    pktQueue.pop();
+
+    if (!pktQueue.empty())
+        dtu.schedule(this, pktQueue.front().tick);
+}
+
+bool
+Dtu::NocMasterPort::recvTimingResp(PacketPtr pkt)
+{
+    DPRINTF(Dtu, "Received NoC response %#x\n", pkt->getAddr());
+
+    // Pay for the transport delay and schedule event on clock edge
+    Tick delay = pkt->headerDelay + pkt->payloadDelay;
+
+    pkt->headerDelay = 0;
+    pkt->payloadDelay = 0;
+
+    // TODO maybe we should add additional latency caused by the DTU here?
+    tickEvent.schedule(pkt, dtu.clockEdge(dtu.ticksToCycles(delay)));
+
+    return true;
+}
+
+void
+Dtu::NocMasterPort::recvReqRetry()
+{
+    dtu.recvNocRetry();
+}
+
+void
+Dtu::ScratchpadPort::SpmTickEvent::process()
+{
+    dtu.completeSpmRequest(pktQueue.front().pkt);
+    pktQueue.pop();
+
+    if (!pktQueue.empty())
+        dtu.schedule(this, pktQueue.front().tick);
+}
+
+bool
+Dtu::ScratchpadPort::recvTimingResp(PacketPtr pkt)
+{
+    DPRINTF(Dtu, "Received Scratchpad response %#x\n", pkt->getAddr());
+
+    // Pay for the transport delay and schedule event on clock edge
+    Tick delay = pkt->headerDelay + pkt->payloadDelay;
+
+    pkt->headerDelay = 0;
+    pkt->payloadDelay = 0;
+
+    // TODO maybe we should add additional latency caused by the DTU here?
+    tickEvent.schedule(pkt, dtu.clockEdge(dtu.ticksToCycles(delay)));
+
+    return true;
+}
+
+void
+Dtu::ScratchpadPort::recvReqRetry()
+{
+    dtu.recvSpmRetry();
 }
 
 Dtu*
