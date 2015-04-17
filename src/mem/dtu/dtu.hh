@@ -57,11 +57,6 @@ class Dtu : public BaseDtu
 
       protected:
 
-        /**
-         * Snooping a coherence request, do nothing.
-         */
-        virtual void recvTimingSnoopReq(PacketPtr pkt) {}
-
         Dtu& dtu;
 
         struct TickEvent : public Event
