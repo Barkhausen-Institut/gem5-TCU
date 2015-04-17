@@ -132,6 +132,8 @@ class Dtu : public BaseDtu
 
         bool sendRetry;
 
+        PacketPtr reqPkt;
+
         PacketPtr retryRespPkt;
 
       public:
@@ -141,12 +143,14 @@ class Dtu : public BaseDtu
               dtu(_dtu),
               busy(false),
               sendRetry(false),
-              retryRespPkt(nullptr)
+              reqPkt(nullptr),
+              retryRespPkt(nullptr),
+              handleRequestEvent(*this)
         { }
 
         bool isBusy() { return busy; }
 
-        virtual void handleRequest(PacketPtr pkt, bool atomic) = 0;
+        virtual void handleRequest(PacketPtr pkt) = 0;
 
         void sendTimingResp(PacketPtr pkt);
 
@@ -158,15 +162,21 @@ class Dtu : public BaseDtu
 
         void recvRespRetry() override;
 
-        struct TickEvent : public Event
+        struct HandleRequestEvent : public Event
         {
-            PacketPtr pkt;
-            Dtu& dtu;
+            DtuSlavePort& port;
 
-            TickEvent(Dtu& _dtu) : pkt(nullptr), dtu(_dtu) {}
-            const char *description() const { return "DTU tick"; }
-            void schedule(PacketPtr _pkt, Tick t);
+            HandleRequestEvent(DtuSlavePort& _port) : port(_port) {}
+
+            void process() override;
+
+            const char* description() const override
+            {
+                return "DTU HandleRequestEvent";
+            }
         };
+
+        HandleRequestEvent handleRequestEvent;
     };
 
     class CpuPort : public DtuSlavePort
@@ -174,24 +184,14 @@ class Dtu : public BaseDtu
       public:
 
         CpuPort(Dtu& _dtu)
-          : DtuSlavePort(_dtu.name() + ".cpu_port", _dtu), tickEvent(_dtu)
+          : DtuSlavePort(_dtu.name() + ".cpu_port", _dtu)
         { }
 
       protected:
 
         AddrRangeList getAddrRanges() const override;
 
-        void handleRequest(PacketPtr pkt, bool atomic) override;
-
-        struct CpuTickEvent : public TickEvent
-        {
-            CpuTickEvent(Dtu& _dtu)
-                : TickEvent(_dtu) {}
-            void process();
-            const char *description() const { return "DTU Cpu tick"; }
-        };
-
-        CpuTickEvent tickEvent;
+        void handleRequest(PacketPtr pkt) override;
     };
 
     class NocSlavePort : public DtuSlavePort
@@ -199,25 +199,14 @@ class Dtu : public BaseDtu
       public:
 
         NocSlavePort(Dtu& _dtu)
-          : DtuSlavePort(_dtu.name() + ".noc_slave_port", _dtu),
-            tickEvent(_dtu)
+          : DtuSlavePort(_dtu.name() + ".noc_slave_port", _dtu)
         { }
 
       protected:
 
         AddrRangeList getAddrRanges() const override;
 
-        void handleRequest(PacketPtr pkt, bool atomic) override;
-
-        struct NocTickEvent : public TickEvent
-        {
-            NocTickEvent(Dtu& _dtu)
-                : TickEvent(_dtu) {}
-            void process();
-            const char *description() const { return "DTU Noc tick"; }
-        };
-
-        NocTickEvent tickEvent;
+        void handleRequest(PacketPtr pkt) override;
     };
 
     CpuPort        cpu;

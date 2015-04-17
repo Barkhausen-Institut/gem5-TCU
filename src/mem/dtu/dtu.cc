@@ -301,7 +301,7 @@ Dtu::DtuSlavePort::sendTimingResp(PacketPtr pkt)
 Tick
 Dtu::DtuSlavePort::recvAtomic(PacketPtr pkt)
 {
-    handleRequest(pkt, true);
+    handleRequest(pkt);
 
     return 0;
 }
@@ -324,10 +324,18 @@ Dtu::DtuSlavePort::recvTimingReq(PacketPtr pkt)
     }
 
     assert(!sendRetry);
+    assert(reqPkt == nullptr);
 
     busy = true;
 
-    handleRequest(pkt, false);
+    reqPkt = pkt;
+
+    Tick delay = pkt->headerDelay + pkt->payloadDelay;
+
+    pkt->headerDelay = 0;
+    pkt->payloadDelay = 0;
+
+    dtu.schedule(handleRequestEvent, dtu.clockEdge(dtu.ticksToCycles(delay)));
 
     return true;
 }
@@ -351,19 +359,13 @@ Dtu::DtuSlavePort::recvRespRetry()
 }
 
 void
-Dtu::DtuSlavePort::TickEvent::schedule(PacketPtr _pkt, Tick t)
+Dtu::DtuSlavePort::HandleRequestEvent::process()
 {
-    assert(!scheduled());
+    assert(port.reqPkt != nullptr);
 
-    pkt = _pkt;
+    port.handleRequest(port.reqPkt);
 
-    dtu.schedule(this, t);
-}
-
-void
-Dtu::CpuPort::CpuTickEvent::process()
-{
-    dtu.handleCpuRequest(pkt);
+    port.reqPkt = nullptr;
 }
 
 AddrRangeList
@@ -377,21 +379,9 @@ Dtu::CpuPort::getAddrRanges() const
 }
 
 void
-Dtu::CpuPort::handleRequest(PacketPtr pkt, bool atomic)
+Dtu::CpuPort::handleRequest(PacketPtr pkt)
 {
-    if (atomic)
-    {
-        dtu.handleCpuRequest(pkt);
-    }
-    else
-    {
-        Tick delay = pkt->headerDelay + pkt->payloadDelay;
-
-        pkt->headerDelay = 0;
-        pkt->payloadDelay = 0;
-
-        tickEvent.schedule(pkt, dtu.clockEdge(dtu.ticksToCycles(delay)));
-    }
+    dtu.handleCpuRequest(pkt);
 }
 
 AddrRangeList
@@ -410,25 +400,7 @@ Dtu::NocSlavePort::getAddrRanges() const
 }
 
 void
-Dtu::NocSlavePort::handleRequest(PacketPtr pkt, bool atomic)
-{
-    if (atomic)
-    {
-        dtu.handleNocRequest(pkt);
-    }
-    else
-    {
-        Tick delay = pkt->headerDelay + pkt->payloadDelay;
-
-        pkt->headerDelay = 0;
-        pkt->payloadDelay = 0;
-
-        tickEvent.schedule(pkt, dtu.clockEdge(dtu.ticksToCycles(delay)));
-    }
-}
-
-void
-Dtu::NocSlavePort::NocTickEvent::process()
+Dtu::NocSlavePort::handleRequest(PacketPtr pkt)
 {
     dtu.handleNocRequest(pkt);
 }
