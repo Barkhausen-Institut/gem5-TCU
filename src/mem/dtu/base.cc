@@ -40,6 +40,7 @@ BaseDtu::BaseDtu(const BaseDtuParams* p)
       nocAddrBits(p->noc_addr_bits),
       maxPktSize(p->max_pkt_size),
       masterId(p->system->getMasterId(name())),
+      latency(p->latency),
       state(State::IDLE)
 {
     nocBaseAddr = getDtuBaseAddr(p->core_id);
@@ -66,7 +67,7 @@ BaseDtu::generateRequest(Addr paddr, Addr size, MemCmd cmd)
     return pkt;
 }
 
-Tick
+void
 BaseDtu::handleCpuRequest(PacketPtr pkt)
 {
     DPRINTF(Dtu, "Received %s request from CPU at address 0x%x\n",
@@ -95,10 +96,8 @@ BaseDtu::handleCpuRequest(PacketPtr pkt)
     pkt->setAddr(addr);
 
     if (!atomic)
-        sendCpuResponse(pkt);
+        sendCpuResponse(pkt, latency);
 
-    // TODO
-    return 0;
 }
 
 bool
@@ -107,7 +106,7 @@ BaseDtu::canHandleNocRequest()
     return isSpmPortReady();
 }
 
-Tick
+void
 BaseDtu::handleNocRequest(PacketPtr pkt)
 {
     Addr addr = pkt->getAddr();
@@ -127,9 +126,6 @@ BaseDtu::handleNocRequest(PacketPtr pkt)
                  addr);
 
     sendSpmRequest(pkt);
-
-    // TODO
-    return 0;
 }
 
 void
@@ -192,7 +188,7 @@ BaseDtu::completeSpmRequest(PacketPtr pkt)
         {
             DPRINTF(Dtu, "Send response back to the NoC\n");
 
-            sendNocResponse(pkt);
+            sendNocResponse(pkt, latency);
         }
 
         // clean up

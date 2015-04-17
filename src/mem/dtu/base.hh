@@ -83,6 +83,8 @@ class BaseDtu : public MemObject
 
     MasterID masterId;
 
+    Cycles latency;
+
     State state;
 
     Addr readAddr;
@@ -115,19 +117,19 @@ class BaseDtu : public MemObject
 
     virtual bool isNocPortReady() = 0;
 
-    virtual void sendNocResponse(PacketPtr pkt) = 0;
+    virtual void sendNocResponse(PacketPtr pkt, Cycles latency) = 0;
 
-    virtual void sendCpuResponse(PacketPtr pkt) = 0;
+    virtual void sendCpuResponse(PacketPtr pkt, Cycles latency) = 0;
 
   public:
 
     BaseDtu(const BaseDtuParams* p);
 
-    Tick handleCpuRequest(PacketPtr pkt);
+    void handleCpuRequest(PacketPtr pkt);
 
     bool canHandleNocRequest();
 
-    Tick handleNocRequest(PacketPtr pkt);
+    void handleNocRequest(PacketPtr pkt);
 };
 
 #endif // __MEM_DTU_BASE_HH__

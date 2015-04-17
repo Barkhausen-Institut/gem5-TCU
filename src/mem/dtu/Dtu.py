@@ -39,6 +39,7 @@ class BaseDtu(MemObject):
     core_id = Param.Unsigned("ID of the core this DTU belongs to")
     max_pkt_size = Param.Unsigned(32, "Maximum packet size in bytes used for all communication")
     system = Param.System(Parent.any, "System this tester is part of")
+    latency = Param.Cycles(1, "Time the DTU needs to process a request")
 
 class Dtu(BaseDtu):
     type = 'Dtu'

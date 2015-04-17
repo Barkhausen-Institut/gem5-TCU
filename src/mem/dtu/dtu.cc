@@ -163,15 +163,15 @@ Dtu::sendNocRequest(PacketPtr pkt)
 }
 
 void
-Dtu::sendNocResponse(PacketPtr pkt)
+Dtu::sendNocResponse(PacketPtr pkt, Cycles latency)
 {
-    slave.sendTimingResp(pkt);
+    slave.schedTimingResp(pkt, latency);
 }
 
 void
-Dtu::sendCpuResponse(PacketPtr pkt)
+Dtu::sendCpuResponse(PacketPtr pkt, Cycles latency)
 {
-    cpu.sendTimingResp(pkt);
+    cpu.schedTimingResp(pkt, latency);
 }
 
 bool
@@ -277,25 +277,15 @@ Dtu::ScratchpadPort::recvReqRetry()
 }
 
 void
-Dtu::DtuSlavePort::sendTimingResp(PacketPtr pkt)
+Dtu::DtuSlavePort::schedTimingResp(PacketPtr pkt, Cycles latency)
 {
     assert(busy);
-    assert(retryRespPkt == nullptr);
+    assert(respPkt == nullptr);
+    assert(!waitForRetry);
 
-    if (SlavePort::sendTimingResp(pkt))
-    {
-        busy = false;
+    respPkt = pkt;
 
-        if (sendRetry)
-        {
-            sendRetry = false;
-            sendRetryReq();
-        }
-    }
-    else
-    {
-        retryRespPkt = pkt;
-    }
+    dtu.schedule(responseEvent, dtu.clockEdge(latency));
 }
 
 Tick
@@ -335,7 +325,7 @@ Dtu::DtuSlavePort::recvTimingReq(PacketPtr pkt)
     pkt->headerDelay = 0;
     pkt->payloadDelay = 0;
 
-    dtu.schedule(handleRequestEvent, dtu.clockEdge(dtu.ticksToCycles(delay)));
+    dtu.schedule(requestEvent, dtu.clockEdge(dtu.ticksToCycles(delay)));
 
     return true;
 }
@@ -343,12 +333,14 @@ Dtu::DtuSlavePort::recvTimingReq(PacketPtr pkt)
 void
 Dtu::DtuSlavePort::recvRespRetry()
 {
-    assert(retryRespPkt != nullptr);
+    assert(respPkt != nullptr);
+    assert(waitForRetry);
 
-    if (SlavePort::sendTimingResp(retryRespPkt))
+    if (SlavePort::sendTimingResp(respPkt))
     {
         busy = false;
-        retryRespPkt = nullptr;
+        waitForRetry = false;
+        respPkt = nullptr;
 
         if (sendRetry)
         {
@@ -359,13 +351,36 @@ Dtu::DtuSlavePort::recvRespRetry()
 }
 
 void
-Dtu::DtuSlavePort::HandleRequestEvent::process()
+Dtu::DtuSlavePort::RequestEvent::process()
 {
     assert(port.reqPkt != nullptr);
 
     port.handleRequest(port.reqPkt);
 
     port.reqPkt = nullptr;
+}
+
+void
+Dtu::DtuSlavePort::ResponseEvent::process()
+{
+    assert(port.respPkt != nullptr);
+    assert(!port.waitForRetry);
+
+    if (port.sendTimingResp(port.respPkt))
+    {
+        port.busy = false;
+        port.respPkt = nullptr;
+
+        if (port.sendRetry)
+        {
+            port.sendRetry = false;
+            port.sendRetryReq();
+        }
+    }
+    else
+    {
+        port.waitForRetry = true;
+    }
 }
 
 AddrRangeList

@@ -134,7 +134,9 @@ class Dtu : public BaseDtu
 
         PacketPtr reqPkt;
 
-        PacketPtr retryRespPkt;
+        PacketPtr respPkt;
+
+        bool waitForRetry;
 
       public:
 
@@ -144,15 +146,17 @@ class Dtu : public BaseDtu
               busy(false),
               sendRetry(false),
               reqPkt(nullptr),
-              retryRespPkt(nullptr),
-              handleRequestEvent(*this)
+              respPkt(nullptr),
+              waitForRetry(false),
+              requestEvent(*this),
+              responseEvent(*this)
         { }
 
         bool isBusy() { return busy; }
 
         virtual void handleRequest(PacketPtr pkt) = 0;
 
-        void sendTimingResp(PacketPtr pkt);
+        void schedTimingResp(PacketPtr pkt, Cycles latency);
 
         Tick recvAtomic(PacketPtr pkt) override;
 
@@ -162,21 +166,37 @@ class Dtu : public BaseDtu
 
         void recvRespRetry() override;
 
-        struct HandleRequestEvent : public Event
+        struct RequestEvent : public Event
         {
             DtuSlavePort& port;
 
-            HandleRequestEvent(DtuSlavePort& _port) : port(_port) {}
+            RequestEvent(DtuSlavePort& _port) : port(_port) {}
 
             void process() override;
 
             const char* description() const override
             {
-                return "DTU HandleRequestEvent";
+                return "DTU RequestEvent";
             }
         };
 
-        HandleRequestEvent handleRequestEvent;
+        RequestEvent requestEvent;
+
+        struct ResponseEvent : public Event
+        {
+            DtuSlavePort& port;
+
+            ResponseEvent(DtuSlavePort& _port) : port(_port) {}
+
+            void process() override;
+
+            const char* description() const override
+            {
+                return "DTU ResponseEvent";
+            }
+        };
+
+        ResponseEvent responseEvent;
     };
 
     class CpuPort : public DtuSlavePort
@@ -236,9 +256,9 @@ class Dtu : public BaseDtu
 
     bool isNocPortReady() override;
 
-    void sendNocResponse(PacketPtr pkt) override;
+    void sendNocResponse(PacketPtr pkt, Cycles latency) override;
 
-    void sendCpuResponse(PacketPtr pkt) override;
+    void sendCpuResponse(PacketPtr pkt, Cycles latency) override;
 
   public:
 
