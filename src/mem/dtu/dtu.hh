@@ -154,7 +154,7 @@ class Dtu : public BaseDtu
 
         bool isBusy() { return busy; }
 
-        virtual void handleRequest(PacketPtr pkt) = 0;
+        virtual bool handleRequest(PacketPtr pkt) = 0;
 
         void schedTimingResp(PacketPtr pkt, Cycles latency);
 
@@ -211,7 +211,7 @@ class Dtu : public BaseDtu
 
         AddrRangeList getAddrRanges() const override;
 
-        void handleRequest(PacketPtr pkt) override;
+        bool handleRequest(PacketPtr pkt) override;
     };
 
     class NocSlavePort : public DtuSlavePort
@@ -226,7 +226,7 @@ class Dtu : public BaseDtu
 
         AddrRangeList getAddrRanges() const override;
 
-        void handleRequest(PacketPtr pkt) override;
+        bool handleRequest(PacketPtr pkt) override;
     };
 
     CpuPort        cpu;

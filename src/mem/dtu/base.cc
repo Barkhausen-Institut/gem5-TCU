@@ -68,7 +68,7 @@ BaseDtu::generateRequest(Addr paddr, Addr size, MemCmd cmd)
     return pkt;
 }
 
-void
+bool
 BaseDtu::handleCpuRequest(PacketPtr pkt)
 {
     DPRINTF(Dtu, "Received %s request from CPU at address 0x%x\n",
@@ -99,17 +99,15 @@ BaseDtu::handleCpuRequest(PacketPtr pkt)
     if (!atomic)
         sendCpuResponse(pkt, latency);
 
+    return true;
 }
 
 bool
-BaseDtu::canHandleNocRequest()
-{
-    return isSpmPortReady();
-}
-
-void
 BaseDtu::handleNocRequest(PacketPtr pkt)
 {
+    if (atomic && !isSpmPortReady())
+        return false;
+
     Addr addr = pkt->getAddr();
 
     DPRINTF(Dtu, "Received %s request from NoC at address 0x%x\n",
@@ -127,6 +125,8 @@ BaseDtu::handleNocRequest(PacketPtr pkt)
                  addr);
 
     sendSpmRequest(pkt);
+
+    return true;
 }
 
 void

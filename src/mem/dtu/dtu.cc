@@ -337,9 +337,10 @@ Dtu::DtuSlavePort::RequestEvent::process()
 {
     assert(port.reqPkt != nullptr);
 
-    port.handleRequest(port.reqPkt);
-
-    port.reqPkt = nullptr;
+    if (port.handleRequest(port.reqPkt))
+        port.reqPkt = nullptr;
+    else
+        port.dtu.schedule(this, port.dtu.nextCycle());
 }
 
 void
@@ -375,10 +376,10 @@ Dtu::CpuPort::getAddrRanges() const
     return ranges;
 }
 
-void
+bool
 Dtu::CpuPort::handleRequest(PacketPtr pkt)
 {
-    dtu.handleCpuRequest(pkt);
+    return dtu.handleCpuRequest(pkt);
 }
 
 AddrRangeList
@@ -396,10 +397,10 @@ Dtu::NocSlavePort::getAddrRanges() const
     return ranges;
 }
 
-void
+bool
 Dtu::NocSlavePort::handleRequest(PacketPtr pkt)
 {
-    dtu.handleNocRequest(pkt);
+    return dtu.handleNocRequest(pkt);
 }
 
 Dtu*

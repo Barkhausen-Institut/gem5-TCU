@@ -127,11 +127,9 @@ class BaseDtu : public MemObject
 
     BaseDtu(const BaseDtuParams* p);
 
-    void handleCpuRequest(PacketPtr pkt);
+    bool handleCpuRequest(PacketPtr pkt);
 
-    bool canHandleNocRequest();
-
-    void handleNocRequest(PacketPtr pkt);
+    bool handleNocRequest(PacketPtr pkt);
 };
 
 #endif // __MEM_DTU_BASE_HH__
