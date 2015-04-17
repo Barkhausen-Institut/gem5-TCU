@@ -36,9 +36,7 @@ Dtu::Dtu(const DtuParams *p)
     master(*this),
     slave(*this),
     retrySpmPkt(nullptr),
-    retryNocPkt(nullptr),
-    nocWaitsForRetry(false),
-    tickEvent(this)
+    retryNocPkt(nullptr)
 { }
 
 void
@@ -187,21 +185,6 @@ Dtu::isNocPortReady()
 }
 
 void
-Dtu::tick()
-{
-    BaseDtu::tick();
-
-    if (nocWaitsForRetry && canHandleNocRequest())
-    {
-        nocWaitsForRetry = false;
-        DPRINTF(Dtu, "Send NoC retry\n");
-        slave.sendRetryReq();
-    }
-
-    schedule(tickEvent, nextCycle());
-}
-
-void
 Dtu::DtuMasterPort::TickEvent::schedule(PacketPtr pkt, Tick t)
 {
     pktQueue.push(DeferredPacket(t, pkt));
@@ -231,7 +214,6 @@ Dtu::NocMasterPort::recvTimingResp(PacketPtr pkt)
     pkt->headerDelay = 0;
     pkt->payloadDelay = 0;
 
-    // TODO maybe we should add additional latency caused by the DTU here?
     tickEvent.schedule(pkt, dtu.clockEdge(dtu.ticksToCycles(delay)));
 
     return true;

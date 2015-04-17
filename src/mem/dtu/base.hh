@@ -109,6 +109,8 @@ class BaseDtu : public MemObject
 
     virtual void tick();
 
+    EventWrapper<BaseDtu, &BaseDtu::tick> tickEvent;
+
     virtual void sendSpmRequest(PacketPtr pkt) = 0;
 
     virtual void sendNocRequest(PacketPtr pkt) = 0;

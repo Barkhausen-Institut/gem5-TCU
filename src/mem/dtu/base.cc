@@ -41,7 +41,8 @@ BaseDtu::BaseDtu(const BaseDtuParams* p)
       maxPktSize(p->max_pkt_size),
       masterId(p->system->getMasterId(name())),
       latency(p->latency),
-      state(State::IDLE)
+      state(State::IDLE),
+      tickEvent(*this)
 {
     nocBaseAddr = getDtuBaseAddr(p->core_id);
 }
@@ -382,4 +383,6 @@ BaseDtu::tick()
             delete spmPkt;
         }
     }
+
+    schedule(tickEvent, nextCycle());
 }

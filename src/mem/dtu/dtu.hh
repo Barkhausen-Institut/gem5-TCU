@@ -238,12 +238,6 @@ class Dtu : public BaseDtu
 
     PacketPtr retryNocPkt;
 
-    bool nocWaitsForRetry;
-
-    void tick() override;
-
-    EventWrapper<Dtu, &Dtu::tick> tickEvent;
-
     void recvSpmRetry();
 
     void recvNocRetry();
