@@ -27,6 +27,8 @@
  */
 
 #include "debug/Dtu.hh"
+#include "debug/DtuMasterPort.hh"
+#include "debug/DtuSlavePort.hh"
 #include "mem/dtu/dtu.hh"
 
 Dtu::Dtu(const DtuParams *p)
@@ -118,10 +120,10 @@ Dtu::DtuMasterPort::sendRequest(PacketPtr pkt)
     assert(reqPkt == nullptr);
     assert(waitForRetry == false);
 
-    DPRINTF(Dtu, "Send %s request at address 0x%x (%u bytes)\n",
-                 pkt->isRead() ? "read" : "write",
-                 pkt->getAddr(),
-                 pkt->getSize());
+    DPRINTF(DtuMasterPort, "Send %s request at %#x (%u bytes)\n",
+                           pkt->isRead() ? "read" : "write",
+                           pkt->getAddr(),
+                           pkt->getSize());
 
     if (dtu.atomic)
     {
@@ -136,7 +138,7 @@ Dtu::DtuMasterPort::sendRequest(PacketPtr pkt)
         {
             reqPkt = pkt;
 
-            DPRINTF(Dtu, "Request failed. Wait for retry.\n");
+            DPRINTF(DtuMasterPort, "Request failed. Wait for retry.\n");
         }
     }
 }
@@ -149,7 +151,7 @@ Dtu::DtuMasterPort::recvReqRetry()
 
     if (sendTimingReq(reqPkt))
     {
-        DPRINTF(Dtu, "Successful retry\n");
+        DPRINTF(DtuMasterPort, "Successful retry %#x\n", reqPkt->getAddr());
 
         waitForRetry = false;
 
@@ -160,7 +162,7 @@ Dtu::DtuMasterPort::recvReqRetry()
 bool
 Dtu::DtuMasterPort::recvTimingResp(PacketPtr pkt)
 {
-    DPRINTF(Dtu, "Received response %#x\n", pkt->getAddr());
+    DPRINTF(DtuMasterPort, "Received response %#x\n", pkt->getAddr());
 
     // Pay for the transport delay and schedule event on clock edge
     Tick delay = pkt->headerDelay + pkt->payloadDelay;
@@ -212,6 +214,8 @@ Dtu::DtuSlavePort::schedTimingResp(PacketPtr pkt, Cycles latency)
 
     respPkt = pkt;
 
+    DPRINTF(DtuSlavePort, "Send response %#x\n", pkt->getAddr());
+
     dtu.schedule(responseEvent, dtu.clockEdge(latency));
 }
 
@@ -232,7 +236,10 @@ Dtu::DtuSlavePort::recvFunctional(PacketPtr pkt)
 bool
 Dtu::DtuSlavePort::recvTimingReq(PacketPtr pkt)
 {
-    DPRINTF(Dtu, "Recieve timing request %#x\n", pkt->getAddr());
+    DPRINTF(DtuSlavePort, "Recieve %s request at %#x (%u bytes)\n",
+                          pkt->isRead() ? "read" : "write",
+                          pkt->getAddr(),
+                          pkt->getSize());
 
     if (busy)
     {
