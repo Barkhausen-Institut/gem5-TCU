@@ -34,9 +34,7 @@ Dtu::Dtu(const DtuParams *p)
     cpu(*this),
     scratchpad(*this),
     master(*this),
-    slave(*this),
-    retrySpmPkt(nullptr),
-    retryNocPkt(nullptr)
+    slave(*this)
 { }
 
 void
@@ -79,85 +77,15 @@ Dtu::getSlavePort(const std::string &if_name, PortID idx)
 }
 
 void
-Dtu::recvSpmRetry()
-{
-    assert(retrySpmPkt);
-
-    if (scratchpad.sendTimingReq(retrySpmPkt))
-    {
-        DPRINTF(Dtu, "Successfull retry on scratchpad port.\n");
-
-        retrySpmPkt = nullptr;
-    }
-}
-
-void
-Dtu::recvNocRetry()
-{
-    assert(retryNocPkt);
-
-    if (master.sendTimingReq(retryNocPkt))
-    {
-        DPRINTF(Dtu, "Successfull retry on NoC port.\n");
-
-        retryNocPkt = nullptr;
-    }
-}
-
-void
 Dtu::sendSpmRequest(PacketPtr pkt)
 {
-    assert(retrySpmPkt == nullptr);
-
-    DPRINTF(Dtu, "Send %s request to Scatchpad at address 0x%x (%u bytes)\n",
-                 pkt->isRead() ? "read" : "write",
-                 pkt->getAddr(),
-                 pkt->getSize());
-
-    if (atomic)
-    {
-        scratchpad.sendAtomic(pkt);
-        completeSpmRequest(pkt);
-    }
-    else
-    {
-        bool retry = !scratchpad.sendTimingReq(pkt);
-
-        if (retry)
-        {
-            DPRINTF(Dtu, "Request failed. Wait for retry\n");
-
-            retrySpmPkt = pkt;
-        }
-    }
+    scratchpad.sendRequest(pkt);
 }
 
 void
 Dtu::sendNocRequest(PacketPtr pkt)
 {
-    assert(retryNocPkt == nullptr);
-
-    DPRINTF(Dtu, "Send %s request to the NoC at address 0x%x (%u bytes)\n",
-                 pkt->isRead() ? "read" : "write",
-                 pkt->getAddr(),
-                 pkt->getSize());
-
-    if (atomic)
-    {
-        master.sendAtomic(pkt);
-        completeNocRequest(pkt);
-    }
-    else
-    {
-        bool retry = !master.sendTimingReq(pkt);
-
-        if (retry)
-        {
-            DPRINTF(Dtu, "Request failed. Wait for retry\n");
-
-            retryNocPkt = pkt;
-        }
-    }
+    master.sendRequest(pkt);
 }
 
 void
@@ -175,38 +103,64 @@ Dtu::sendCpuResponse(PacketPtr pkt, Cycles latency)
 bool
 Dtu::isSpmPortReady()
 {
-    return retrySpmPkt == nullptr;
+    return scratchpad.isReady();
 }
 
 bool
 Dtu::isNocPortReady()
 {
-    return retryNocPkt == nullptr;
+    return master.isReady();
 }
 
 void
-Dtu::DtuMasterPort::TickEvent::schedule(PacketPtr pkt, Tick t)
+Dtu::DtuMasterPort::sendRequest(PacketPtr pkt)
 {
-    pktQueue.push(DeferredPacket(t, pkt));
+    assert(reqPkt == nullptr);
+    assert(waitForRetry == false);
 
-    if (!scheduled())
-        dtu.schedule(this, t);
+    DPRINTF(Dtu, "Send %s request at address 0x%x (%u bytes)\n",
+                 pkt->isRead() ? "read" : "write",
+                 pkt->getAddr(),
+                 pkt->getSize());
+
+    if (dtu.atomic)
+    {
+        sendAtomic(pkt);
+        completeRequest(pkt);
+    }
+    else
+    {
+        waitForRetry = !sendTimingReq(pkt);
+
+        if (waitForRetry)
+        {
+            reqPkt = pkt;
+
+            DPRINTF(Dtu, "Request failed. Wait for retry.\n");
+        }
+    }
 }
 
 void
-Dtu::NocMasterPort::NocTickEvent::process()
+Dtu::DtuMasterPort::recvReqRetry()
 {
-    dtu.completeNocRequest(pktQueue.front().pkt);
-    pktQueue.pop();
+    assert(waitForRetry == true);
+    assert(reqPkt != nullptr);
 
-    if (!pktQueue.empty())
-        dtu.schedule(this, pktQueue.front().tick);
+    if (sendTimingReq(reqPkt))
+    {
+        DPRINTF(Dtu, "Successful retry\n");
+
+        waitForRetry = false;
+
+        reqPkt = nullptr;
+    }
 }
 
 bool
-Dtu::NocMasterPort::recvTimingResp(PacketPtr pkt)
+Dtu::DtuMasterPort::recvTimingResp(PacketPtr pkt)
 {
-    DPRINTF(Dtu, "Received NoC response %#x\n", pkt->getAddr());
+    DPRINTF(Dtu, "Received response %#x\n", pkt->getAddr());
 
     // Pay for the transport delay and schedule event on clock edge
     Tick delay = pkt->headerDelay + pkt->payloadDelay;
@@ -214,48 +168,39 @@ Dtu::NocMasterPort::recvTimingResp(PacketPtr pkt)
     pkt->headerDelay = 0;
     pkt->payloadDelay = 0;
 
-    tickEvent.schedule(pkt, dtu.clockEdge(dtu.ticksToCycles(delay)));
+    Tick tick = dtu.clockEdge(dtu.ticksToCycles(delay));
+
+    auto dpkt = DeferredPacket(tick, pkt);
+
+    respQueue.push(dpkt);
+
+    dtu.schedule(responseEvent, tick);
 
     return true;
 }
 
 void
-Dtu::NocMasterPort::recvReqRetry()
+Dtu::DtuMasterPort::ResponseEvent::process()
 {
-    dtu.recvNocRetry();
+    assert(!port.respQueue.empty());
+
+    DeferredPacket dpkt = port.respQueue.front();
+
+    port.respQueue.pop();
+
+    port.completeRequest(dpkt.pkt);
 }
 
 void
-Dtu::ScratchpadPort::SpmTickEvent::process()
+Dtu::NocMasterPort::completeRequest(PacketPtr pkt)
 {
-    dtu.completeSpmRequest(pktQueue.front().pkt);
-    pktQueue.pop();
-
-    if (!pktQueue.empty())
-        dtu.schedule(this, pktQueue.front().tick);
-}
-
-bool
-Dtu::ScratchpadPort::recvTimingResp(PacketPtr pkt)
-{
-    DPRINTF(Dtu, "Received Scratchpad response %#x\n", pkt->getAddr());
-
-    // Pay for the transport delay and schedule event on clock edge
-    Tick delay = pkt->headerDelay + pkt->payloadDelay;
-
-    pkt->headerDelay = 0;
-    pkt->payloadDelay = 0;
-
-    // TODO maybe we should add additional latency caused by the DTU here?
-    tickEvent.schedule(pkt, dtu.clockEdge(dtu.ticksToCycles(delay)));
-
-    return true;
+    dtu.completeNocRequest(pkt);
 }
 
 void
-Dtu::ScratchpadPort::recvReqRetry()
+Dtu::ScratchpadPort::completeRequest(PacketPtr pkt)
 {
-    dtu.recvSpmRetry();
+    dtu.completeSpmRequest(pkt);
 }
 
 void

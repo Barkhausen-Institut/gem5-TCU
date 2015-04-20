@@ -51,23 +51,54 @@ class Dtu : public BaseDtu
     {
       public:
 
-        DtuMasterPort(const std::string& _name, Dtu& _dtu)
-            : MasterPort(_name, &_dtu), dtu(_dtu)
+        DtuMasterPort( const std::string& _name, Dtu& _dtu)
+            : MasterPort(_name, &_dtu),
+              dtu(_dtu),
+              reqPkt(nullptr),
+              waitForRetry(false),
+              respQueue(),
+              responseEvent(*this)
         { }
 
       protected:
 
         Dtu& dtu;
 
-        struct TickEvent : public Event
-        {
-            std::queue<DeferredPacket> pktQueue;
-            Dtu& dtu;
+        PacketPtr reqPkt;
 
-            TickEvent(Dtu& _dtu) : pktQueue(), dtu(_dtu) {}
-            const char *description() const { return "DTU tick"; }
-            void schedule(PacketPtr _pkt, Tick t);
+        bool waitForRetry;
+
+        std::queue<DeferredPacket> respQueue;
+
+        struct ResponseEvent : public Event
+        {
+            DtuMasterPort& port;
+
+            ResponseEvent(DtuMasterPort& _port)
+                : port(_port)
+            { }
+
+            const char *description() const override
+            {
+                return "DTU ResponseEvent";
+            }
+
+            void process() override;
         };
+
+        ResponseEvent responseEvent;
+
+      public:
+
+        void sendRequest(PacketPtr pkt);
+
+        virtual void completeRequest(PacketPtr pkt) = 0;
+
+        bool recvTimingResp(PacketPtr pkt) override;
+
+        void recvReqRetry() override;
+
+        bool isReady() { return !waitForRetry; }
     };
 
     class NocMasterPort : public DtuMasterPort
@@ -75,25 +106,11 @@ class Dtu : public BaseDtu
       public:
 
         NocMasterPort(Dtu& _dtu)
-            : DtuMasterPort(_dtu.name() + ".noc_master_port", _dtu),
-              tickEvent(_dtu)
+            : DtuMasterPort(_dtu.name() + ".noc_master_port", _dtu)
         { }
 
-      protected:
+        void completeRequest(PacketPtr pkt) override;
 
-        bool recvTimingResp(PacketPtr pkt) override;
-
-        void recvReqRetry() override;
-
-        struct NocTickEvent : public TickEvent
-        {
-            NocTickEvent(Dtu& _dtu)
-                : TickEvent(_dtu) {}
-            void process();
-            const char *description() const { return "DTU NoC tick"; }
-        };
-
-        NocTickEvent tickEvent;
     };
 
     class ScratchpadPort : public DtuMasterPort
@@ -101,25 +118,10 @@ class Dtu : public BaseDtu
       public:
 
         ScratchpadPort(Dtu& _dtu)
-          : DtuMasterPort(_dtu.name() + ".scratchpad_port", _dtu),
-            tickEvent(_dtu)
+          : DtuMasterPort(_dtu.name() + ".scratchpad_port", _dtu)
         { }
 
-      protected:
-
-        bool recvTimingResp(PacketPtr pkt) override;
-
-        void recvReqRetry() override;
-
-        struct SpmTickEvent : public TickEvent
-        {
-            SpmTickEvent(Dtu& _dtu)
-                : TickEvent(_dtu) {}
-            void process();
-            const char *description() const { return "DTU Scratchpad tick"; }
-        };
-
-        SpmTickEvent tickEvent;
+        void completeRequest(PacketPtr pkt) override;
     };
 
     class DtuSlavePort : public SlavePort
@@ -233,14 +235,6 @@ class Dtu : public BaseDtu
     ScratchpadPort scratchpad;
     NocMasterPort  master;
     NocSlavePort   slave;
-
-    PacketPtr retrySpmPkt;
-
-    PacketPtr retryNocPkt;
-
-    void recvSpmRetry();
-
-    void recvNocRetry();
 
     void sendSpmRequest(PacketPtr pkt) override;
 
