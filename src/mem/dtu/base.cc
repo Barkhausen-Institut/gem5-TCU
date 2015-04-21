@@ -35,7 +35,7 @@
 BaseDtu::BaseDtu(const BaseDtuParams* p)
     : MemObject(p),
       atomic(p->system->isAtomicMode()),
-      regFile(p->name + ".regFile"),
+      regFile(p->name + ".regFile", 1),
       cpuBaseAddr(p->cpu_base_addr),
       nocAddrBits(p->noc_addr_bits),
       maxPktSize(p->max_pkt_size),
@@ -82,13 +82,9 @@ BaseDtu::handleCpuRequest(PacketPtr pkt)
     if (pkt->isWrite() && state != State::IDLE)
         panic("Write requests while busy are forbidden!");
 
-    if (regFile.isRegisterAddr(addr))
-        regFile.handleRequest(pkt);
-    else
-        // TODO generate an error response
-        panic("Request at 0x%x failed as it is no valid register address", addr);
+    regFile.handleRequest(pkt);
 
-    DtuReg cmd = regFile.readReg(DtuRegister::COMMAND);
+    DtuReg cmd = regFile.readEpReg(0, EndpointRegister::COMMAND);
     if (state == State::IDLE && cmd != 0)
         startTransaction(cmd);
 
@@ -142,11 +138,10 @@ BaseDtu::startTransaction(DtuReg cmd)
     DPRINTF(Dtu, "Start transaction (%s)\n",
             state == State::RECEIVING ? "receiving" : "transmitting");
 
-    readAddr = regFile.readReg(DtuRegister::SOURCE_ADDR);
-    writeAddr = regFile.readReg(DtuRegister::TARGET_ADDR);
+    readAddr = regFile.readEpReg(0, EndpointRegister::SOURCE_ADDR);
+    writeAddr = regFile.readEpReg(0, EndpointRegister::TARGET_ADDR);
 
-    regFile.setReg(DtuRegister::STATUS, BUSY_STATUS);
-    regFile.lock();
+    regFile.setEpReg(0, EndpointRegister::STATUS, BUSY_STATUS);
 }
 
 void
@@ -158,10 +153,8 @@ BaseDtu::finishTransaction()
 
     state = State::IDLE;
 
-    regFile.unlock();
-
-    regFile.setReg(DtuRegister::STATUS, IDLE_STATUS);
-    regFile.setReg(DtuRegister::COMMAND, 0);
+    regFile.setEpReg(0, EndpointRegister::STATUS, IDLE_STATUS);
+    regFile.setEpReg(0, EndpointRegister::COMMAND, 0);
 }
 
 void
@@ -268,9 +261,9 @@ BaseDtu::completeNocRequest(PacketPtr pkt)
 void
 BaseDtu::tick()
 {
-    Addr messageSize = regFile.readReg(DtuRegister::SIZE);
+    Addr messageSize = regFile.readEpReg(0, EndpointRegister::SIZE);
 
-    Addr bytesRead = readAddr - regFile.readReg(DtuRegister::SOURCE_ADDR);
+    Addr bytesRead = readAddr - regFile.readEpReg(0, EndpointRegister::SOURCE_ADDR);
 
     if (state == State::RECEIVING)
     {
@@ -280,7 +273,7 @@ BaseDtu::tick()
          */
         if (bytesRead < messageSize && isNocPortReady())
         {
-            Addr addr = getDtuBaseAddr(regFile.readReg(DtuRegister::TARGET_COREID));
+            Addr addr = getDtuBaseAddr(regFile.readEpReg(0, EndpointRegister::TARGET_COREID));
 
             addr += readAddr;
 
@@ -361,7 +354,7 @@ BaseDtu::tick()
             PacketPtr spmPkt = pktBuffer.front();
             pktBuffer.pop();
 
-            Addr paddr = getDtuBaseAddr(regFile.readReg(DtuRegister::TARGET_COREID));
+            Addr paddr = getDtuBaseAddr(regFile.readEpReg(0, EndpointRegister::TARGET_COREID));
 
             Addr pktSize = spmPkt->getSize();
 

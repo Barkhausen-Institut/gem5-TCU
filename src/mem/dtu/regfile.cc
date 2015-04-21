@@ -31,18 +31,26 @@
 #include "debug/DtuReg.hh"
 #include "mem/dtu/regfile.hh"
 
-RegFile::RegFile(const std::string name)
-    : regFile(numRegs),
-      _name(name),
-      locked(false)
-{}
+RegFile::RegFile(const std::string name, unsigned _numEndpoints)
+    : dtuRegs(numDtuRegs, 0),
+      epRegs(_numEndpoints),
+      numEndpoints(_numEndpoints),
+      _name(name)
+{
+    for (int epid = 0; epid < numEndpoints; epid++)
+    {
+        for (int i = 0; i < numEpRegs; i++)
+            epRegs[epid].push_back(0);
+    }
+}
+
 
 DtuReg
-RegFile::readReg(DtuRegister reg) const
+RegFile::readDtuReg(DtuRegister reg) const
 {
-    DtuReg value = regFile[static_cast<Addr>(reg)];
+    DtuReg value = dtuRegs[static_cast<Addr>(reg)];
 
-    DPRINTF(DtuReg, "Read register %u (data 0x%x)\n",
+    DPRINTF(DtuReg, "Read DTU register %u (data 0x%x)\n",
                     static_cast<Addr>(reg),
                     value);
 
@@ -50,54 +58,90 @@ RegFile::readReg(DtuRegister reg) const
 }
 
 void
-RegFile::setReg(DtuRegister reg, DtuReg value)
+RegFile::setDtuReg(DtuRegister reg, DtuReg value)
 {
-    DPRINTF(DtuReg, "Set register %u (data 0x%x)\n",
+    DPRINTF(DtuReg, "Set DTU register %u (data 0x%x)\n",
                     static_cast<Addr>(reg),
                     value);
 
-    regFile[static_cast<Addr>(reg)] = value;
+    dtuRegs[static_cast<Addr>(reg)] = value;
 }
 
-bool
-RegFile::isRegisterAddr(Addr addr) const
+DtuReg
+RegFile::readEpReg(unsigned epid, EndpointRegister reg) const
 {
-    // can't write in the middle of a register
-    if (addr % sizeof(DtuReg) != 0)
-        return false;
+    DtuReg value = epRegs[epid][static_cast<Addr>(reg)];
 
-    if (addr / sizeof(DtuReg) >= numRegs)
-        return false;
+    DPRINTF(DtuReg, "Read endpoint register %u [epid %u] (data 0x%x)\n",
+                    static_cast<Addr>(reg),
+                    epid,
+                    value);
 
-    return true;
+    return value;
+}
+
+void
+RegFile::setEpReg(unsigned epid, EndpointRegister reg, DtuReg value)
+{
+    DPRINTF(DtuReg, "Set endpoint register %u [epid %u] (data 0x%x)\n",
+                    static_cast<Addr>(reg),
+                    epid,
+                    value);
+
+    epRegs[epid][static_cast<Addr>(reg)] = value;
 }
 
 void
 RegFile::handleRequest(PacketPtr pkt)
 {
-    Addr paddr = pkt->getAddr();
+    assert(pkt->isRead() || pkt->isWrite());
 
-    // we rely on the caller to test if this packet can be handled by the RegFile
-    assert(isRegisterAddr(paddr));
+    Addr addr = pkt->getAddr();
 
     // we can only perform full register accesses
+    // TODO send error response instead of aborting
     assert(pkt->getSize() == sizeof(DtuReg));
+    assert(addr % sizeof(DtuReg) == 0);
+    assert(addr < getSize());
 
-    auto reg = static_cast<DtuRegister>(paddr / sizeof(DtuReg));
     DtuReg* data = pkt->getPtr<DtuReg>();
 
-    if (pkt->isRead())
-        *data = readReg(reg);
-    else if (pkt->isWrite())
+    bool isEndpointAccess = addr >= sizeof(DtuReg) * numDtuRegs;
+
+    if (isEndpointAccess)
     {
-        if (!locked)
-            setReg(reg, *data);
+        unsigned epid = (addr - sizeof(DtuReg) * numDtuRegs) /
+                        (sizeof(DtuReg) * numEpRegs);
+
+        unsigned regNumber = (addr / sizeof(DtuReg) - numDtuRegs) % numEpRegs;
+
+        auto reg = static_cast<EndpointRegister>(regNumber);
+
+        if (pkt->isRead())
+            *data = readEpReg(epid, reg);
         else
-            DPRINTF(DtuReg, "Ignore write request because the Register File is locked\n");
+            setEpReg(epid, reg, *data);
     }
     else
-        panic("unsopported packet type");
+    {
+        auto reg = static_cast<DtuRegister>(addr / sizeof(DtuReg));
+
+        if (pkt->isRead())
+            *data = readDtuReg(reg);
+        else if (pkt->isWrite())
+            setDtuReg(reg, *data);
+    }
 
     if (pkt->needsResponse())
         pkt->makeResponse();
+}
+
+Addr
+RegFile::getSize() const
+{
+    Addr size = sizeof(DtuReg) * numDtuRegs;
+
+    size += sizeof(DtuReg) * (numEndpoints * numEpRegs);
+
+    return size;
 }

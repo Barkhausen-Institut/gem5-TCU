@@ -90,7 +90,7 @@ class DtuTest : public MemObject
     /// Stores the Packet for later retry
     PacketPtr retryPkt;
 
-    PacketPtr createDtuRegisterPkt(DtuRegister reg, uint32_t value, MemCmd cmd);
+    PacketPtr createDtuRegisterPkt(EndpointRegister reg, uint32_t value, MemCmd cmd);
 
     bool sendPkt(PacketPtr pkt);
 

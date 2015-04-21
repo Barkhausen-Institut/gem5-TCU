@@ -35,53 +35,59 @@
 #include "base/types.hh"
 #include "mem/packet.hh"
 
+// TODO do we need this?
 enum class DtuRegister : Addr
 {
-    SOURCE_ADDR,
-    SIZE,
-    TARGET_ADDR,
-    TARGET_COREID,
-    STATUS,
-    COMMAND,
 };
 
 using DtuReg = uint32_t;
+
+enum class EndpointRegister : Addr
+{
+    SOURCE_ADDR,
+    SIZE,
+    TARGET_COREID,
+    TARGET_ADDR,
+    STATUS,
+    COMMAND,
+};
 
 class RegFile
 {
   public:
 
-    static constexpr unsigned numRegs = 6;
+    static constexpr unsigned numDtuRegs = 0;
+
+    static constexpr unsigned numEpRegs = 6;
 
   private:
 
-    std::vector<DtuReg> regFile;
+    std::vector<DtuReg> dtuRegs;
+
+    std::vector<std::vector<DtuReg>> epRegs;
+
+    const unsigned numEndpoints;
 
     // used for debug messages (DPRINTF)
     const std::string _name;
 
-    bool locked;
-
   public:
 
-    RegFile(const std::string name);
+    RegFile(const std::string name, unsigned numEndpoints);
 
-    DtuReg readReg(DtuRegister reg) const;
+    DtuReg readDtuReg(DtuRegister reg) const;
 
-    void setReg(DtuRegister reg, DtuReg value);
+    void setDtuReg(DtuRegister reg, DtuReg value);
 
-    bool isRegisterAddr(Addr addr) const;
+    DtuReg readEpReg(unsigned epid, EndpointRegister reg) const;
+
+    void setEpReg(unsigned epid, EndpointRegister reg, DtuReg value);
 
     void handleRequest(PacketPtr pkt);
 
     const std::string name() const { return _name; }
 
-    void lock() { locked = true; }
-
-    void unlock() { locked = false; }
-
-    Addr getSize() { return sizeof(DtuReg) * numRegs; }
-
+    Addr getSize() const;
 };
 
 #endif // __MEM_DTU_REGFILE_HH__

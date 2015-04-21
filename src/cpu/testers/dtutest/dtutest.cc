@@ -177,7 +177,9 @@ DtuTest::recvRetry()
 }
 
 PacketPtr
-DtuTest::createDtuRegisterPkt(DtuRegister reg, uint32_t value, MemCmd cmd = MemCmd::WriteReq)
+DtuTest::createDtuRegisterPkt(EndpointRegister reg,
+                              uint32_t value,
+                              MemCmd cmd = MemCmd::WriteReq)
 {
     // TODO parameterize
     Addr paddr = 0x10000000 + static_cast<Addr>(reg) * 4;
@@ -239,19 +241,19 @@ DtuTest::tick()
             DPRINTF(DtuTest, "Setup the DTU to transmit 1024 Bytes form local "
                              "Scratchpad at address 0x0 to core %u's Scratchpad "
                              "at address 0x400\n", id + 1);
-            pkt = createDtuRegisterPkt(DtuRegister::SOURCE_ADDR, 0);
+            pkt = createDtuRegisterPkt(EndpointRegister::SOURCE_ADDR, 0);
             break;
         case 1:
-            pkt = createDtuRegisterPkt(DtuRegister::SIZE, 1024);
+            pkt = createDtuRegisterPkt(EndpointRegister::SIZE, 1024);
             break;
         case 2:
-            pkt = createDtuRegisterPkt(DtuRegister::TARGET_ADDR, 1024);
+            pkt = createDtuRegisterPkt(EndpointRegister::TARGET_ADDR, 1024);
             break;
         case 3:
-            pkt = createDtuRegisterPkt(DtuRegister::TARGET_COREID, id + 1);
+            pkt = createDtuRegisterPkt(EndpointRegister::TARGET_COREID, id + 1);
             break;
         case 4:
-            pkt = createDtuRegisterPkt(DtuRegister::COMMAND, BaseDtu::TRANSMIT_CMD);
+            pkt = createDtuRegisterPkt(EndpointRegister::COMMAND, BaseDtu::TRANSMIT_CMD);
             break;
         default:
             counter = 0;
@@ -267,7 +269,7 @@ DtuTest::tick()
     case State::WAIT_FOR_DTU_TRANSMIT:
     case State::WAIT_FOR_DTU_RECEIVE:
 
-        pkt = createDtuRegisterPkt(DtuRegister::STATUS, 0, MemCmd::ReadReq);
+        pkt = createDtuRegisterPkt(EndpointRegister::STATUS, 0, MemCmd::ReadReq);
 
         break;
 
@@ -280,19 +282,19 @@ DtuTest::tick()
                              "read 1024 bytes from core %u's scratchpad at "
                              "address 0x400 to local scratchpad at address "
                              "0x400\n", id+1);
-            pkt = createDtuRegisterPkt(DtuRegister::SOURCE_ADDR, 1024);
+            pkt = createDtuRegisterPkt(EndpointRegister::SOURCE_ADDR, 1024);
             break;
         case 1:
-            pkt = createDtuRegisterPkt(DtuRegister::SIZE, 1024);
+            pkt = createDtuRegisterPkt(EndpointRegister::SIZE, 1024);
             break;
         case 2:
-            pkt = createDtuRegisterPkt(DtuRegister::TARGET_ADDR, 1024);
+            pkt = createDtuRegisterPkt(EndpointRegister::TARGET_ADDR, 1024);
             break;
         case 3:
-            pkt = createDtuRegisterPkt(DtuRegister::TARGET_COREID, id + 1);
+            pkt = createDtuRegisterPkt(EndpointRegister::TARGET_COREID, id + 1);
             break;
         case 4:
-            pkt = createDtuRegisterPkt(DtuRegister::COMMAND, BaseDtu::RECEIVE_CMD);
+            pkt = createDtuRegisterPkt(EndpointRegister::COMMAND, BaseDtu::RECEIVE_CMD);
             break;
         default:
             counter = 0;
