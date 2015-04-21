@@ -72,7 +72,7 @@ class RegFile
 
     bool isRegisterAddr(Addr addr) const;
 
-    Tick handleRequest(PacketPtr pkt);
+    void handleRequest(PacketPtr pkt);
 
     const std::string name() const { return _name; }
 

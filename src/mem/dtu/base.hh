@@ -101,8 +101,6 @@ class BaseDtu : public MemObject
 
     void finishTransaction();
 
-    void sendNextSpmReadRequest();
-
     void completeSpmRequest(PacketPtr pkt);
 
     void completeNocRequest(PacketPtr pkt);

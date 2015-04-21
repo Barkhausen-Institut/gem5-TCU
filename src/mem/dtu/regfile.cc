@@ -72,7 +72,7 @@ RegFile::isRegisterAddr(Addr addr) const
     return true;
 }
 
-Tick
+void
 RegFile::handleRequest(PacketPtr pkt)
 {
     Addr paddr = pkt->getAddr();
@@ -100,7 +100,4 @@ RegFile::handleRequest(PacketPtr pkt)
 
     if (pkt->needsResponse())
         pkt->makeResponse();
-
-    // TODO latency calculation
-    return 0;
 }
