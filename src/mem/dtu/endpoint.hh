@@ -27,71 +27,74 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
-#ifndef __MEM_DTU_REGFILE_HH__
-#define __MEM_DTU_REGFILE_HH__
+#ifndef __MEM_DTU_BASE_HH__
+#define __MEM_DTU_BASE_HH__
 
-#include <vector>
+#include "mem/dtu/regfile.hh"
 
-#include "base/types.hh"
-#include "mem/packet.hh"
-
-enum class DtuRegister : Addr
+class Endpoint
 {
-    COMMAND,
-    STATUS,
-};
-
-using DtuReg = uint32_t;
-
-enum class EndpointRegister : Addr
-{
-    CONFIG, // 1 -> Sender, 0 -> Receiver
-    // for receiving
-    BUFFER_ADDR,
-    BUFFER_SIZE,
-    // for sending
-    TARGET_COREID,
-    TARGET_EPID,
-    MESSAGE_ADDR,
-    MESSAGE_SIZE,
-};
-
-class RegFile
-{
-  public:
-
-    static constexpr unsigned numDtuRegs = 0;
-
-    static constexpr unsigned numEpRegs = 6;
-
   private:
 
-    std::vector<DtuReg> dtuRegs;
+    unsigned epid;
 
-    std::vector<std::vector<DtuReg>> epRegs;
+    RegFile& regFile;
 
-    const unsigned numEndpoints;
+    DtuReg readReg(EndpointRegister reg)
+    {
+        return regFile.readEpReg(epid, reg);
+    }
 
-    // used for debug messages (DPRINTF)
-    const std::string _name;
+    void writeReg(EndpointRegister reg, DtuReg value)
+    {
+        regFile.setEpReg(epid, reg, value);
+    }
 
   public:
 
-    RegFile(const std::string name, unsigned numEndpoints);
+    bool isSender()
+    {
+        return readReg(EndpointRegister::CONFIG);
+    }
 
-    DtuReg readDtuReg(DtuRegister reg) const;
+    bool isReceiver()
+    {
+        return !isSender();
+    }
 
-    void setDtuReg(DtuRegister reg, DtuReg value);
+    unsigned getEpid() { return epid; }
 
-    DtuReg readEpReg(unsigned epid, EndpointRegister reg) const;
+    unsigned getTargetEpid()
+    {
+        return readReg(EndpointRegister::TARGET_EPID);
+    }
 
-    void setEpReg(unsigned epid, EndpointRegister reg, DtuReg value);
+    unsigned getTargetCoreid()
+    {
+        return readReg(EndpointRegister::TARGET_COREID);
+    }
 
-    void handleRequest(PacketPtr pkt);
+    Addr getMessageAddr()
+    {
+        return readReg(EndpointRegister::MESSAGE_ADDR);
+    }
 
-    const std::string name() const { return _name; }
+    Addr getMessageSize()
+    {
+        return readReg(EndpointRegister::MESSAGE_SIZE);
+    }
 
-    Addr getSize() const;
+    Addr getBufferAddr()
+    {
+        return readReg(EndpointRegister::BUFFER_ADDR);
+    }
+
+    Addr getBufferSize()
+    {
+        return readReg(EndpointRegister::BUFFER_SIZE);
+    }
+
+    Endpoint(unsigned _epid, RegFile& regFile);
 };
 
-#endif // __MEM_DTU_REGFILE_HH__
+#endif // __MEM_DTU_ENDPOINT_HH__
