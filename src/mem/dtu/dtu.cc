@@ -32,8 +32,9 @@
 
 Dtu::Dtu(DtuParams* p)
   : BaseDtu(p),
-    atomic(p->system->isAtomicMode()),
-    regFile(name() + ".regFile", p->num_endpoints)
+    atomicMode(p->system->isAtomicMode()),
+    regFile(name() + ".regFile", p->num_endpoints),
+    registerAccessLatency(p->register_access_latency)
 {}
 
 void
@@ -57,7 +58,35 @@ Dtu::handleNocRequest(PacketPtr pkt)
 void
 Dtu::handleCpuRequest(PacketPtr pkt)
 {
-    panic("Dtu::handleCpuRequest() not yet implemented!\n");
+    if (atomicMode)
+    {
+        if (regFile.handleRequest(pkt))
+            ; // TODO check command reg and start a new transaction
+    }
+    else
+    {
+        Cycles transportDelay = ticksToCycles(pkt->headerDelay +
+                                              pkt->payloadDelay);
+
+        pkt->headerDelay = 0;
+        pkt->payloadDelay = 0;
+
+        /*
+         * We handle the request immediatly although we should pay for
+         * the transport delay and DTU latency. However, this is only needed
+         * when the command register is written and therefore a new Transaction
+         * needs to be started. Then the delay is payed by scheduling a future
+         * event. If another register is accessed the delay is payed by
+         * scheduling the response at some point in the future.
+         */
+        bool checkCommand = regFile.handleRequest(pkt);
+
+        schedCpuResponse(pkt, clockEdge(transportDelay + registerAccessLatency));
+
+        if (checkCommand)
+            ; // TODO schedule a new event to check the command reg and start a
+              //      new transaction
+    }
 }
 
 Dtu*

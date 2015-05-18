@@ -48,3 +48,5 @@ class Dtu(BaseDtu):
     cxx_header = "mem/dtu/dtu.hh"
     system = Param.System(Parent.any, "System we belong to")
     num_endpoints = Param.Unsigned(8, "Number of enpoints per DTU")
+
+    register_access_latency = Param.Cycles(1, "Latency for CPU register accesses")

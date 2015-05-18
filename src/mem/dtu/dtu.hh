@@ -38,9 +38,11 @@ class Dtu : public BaseDtu
 {
   private:
 
-    bool atomic;
+    bool atomicMode;
 
     RegFile regFile;
+
+    Cycles registerAccessLatency;
 
   public:
 
