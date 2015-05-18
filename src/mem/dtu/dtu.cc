@@ -28,9 +28,12 @@
  */
 
 #include "mem/dtu/dtu.hh"
+#include "sim/system.hh"
 
 Dtu::Dtu(DtuParams* p)
-  : BaseDtu(p)
+  : BaseDtu(p),
+    atomic(p->system->isAtomicMode()),
+    regFile(name() + ".regFile", p->num_endpoints)
 {}
 
 void

@@ -45,10 +45,10 @@ RegFile::RegFile(const std::string name, unsigned _numEndpoints)
 }
 
 
-DtuReg
-RegFile::readDtuReg(DtuRegister reg) const
+RegFile::reg_t
+RegFile::readDtuReg(DtuReg reg) const
 {
-    DtuReg value = dtuRegs[static_cast<Addr>(reg)];
+    reg_t value = dtuRegs[static_cast<Addr>(reg)];
 
     DPRINTF(DtuReg, "Read DTU register %u (data 0x%x)\n",
                     static_cast<Addr>(reg),
@@ -58,7 +58,7 @@ RegFile::readDtuReg(DtuRegister reg) const
 }
 
 void
-RegFile::setDtuReg(DtuRegister reg, DtuReg value)
+RegFile::setDtuReg(DtuReg reg, reg_t value)
 {
     DPRINTF(DtuReg, "Set DTU register %u (data 0x%x)\n",
                     static_cast<Addr>(reg),
@@ -67,10 +67,10 @@ RegFile::setDtuReg(DtuRegister reg, DtuReg value)
     dtuRegs[static_cast<Addr>(reg)] = value;
 }
 
-DtuReg
-RegFile::readEpReg(unsigned epid, EndpointRegister reg) const
+RegFile::reg_t
+RegFile::readEpReg(unsigned epid, EpReg reg) const
 {
-    DtuReg value = epRegs[epid][static_cast<Addr>(reg)];
+    reg_t value = epRegs[epid][static_cast<Addr>(reg)];
 
     DPRINTF(DtuReg, "Read endpoint register %u [epid %u] (data 0x%x)\n",
                     static_cast<Addr>(reg),
@@ -81,7 +81,7 @@ RegFile::readEpReg(unsigned epid, EndpointRegister reg) const
 }
 
 void
-RegFile::setEpReg(unsigned epid, EndpointRegister reg, DtuReg value)
+RegFile::setEpReg(unsigned epid, EpReg reg, reg_t value)
 {
     DPRINTF(DtuReg, "Set endpoint register %u [epid %u] (data 0x%x)\n",
                     static_cast<Addr>(reg),
@@ -91,7 +91,7 @@ RegFile::setEpReg(unsigned epid, EndpointRegister reg, DtuReg value)
     epRegs[epid][static_cast<Addr>(reg)] = value;
 }
 
-void
+bool
 RegFile::handleRequest(PacketPtr pkt)
 {
     assert(pkt->isRead() || pkt->isWrite());
@@ -100,11 +100,11 @@ RegFile::handleRequest(PacketPtr pkt)
 
     // we can only perform full register accesses
     // TODO send error response instead of aborting
-    assert(pkt->getSize() == sizeof(DtuReg));
-    assert(addr % sizeof(DtuReg) == 0);
+    assert(pkt->getSize() == sizeof(reg_t));
+    assert(addr % sizeof(reg_t) == 0);
     assert(addr < getSize());
 
-    DtuReg* data = pkt->getPtr<DtuReg>();
+    reg_t* data = pkt->getPtr<reg_t>();
 
     bool isEndpointAccess = addr >= sizeof(DtuReg) * numDtuRegs;
 
@@ -115,7 +115,7 @@ RegFile::handleRequest(PacketPtr pkt)
 
         unsigned regNumber = (addr / sizeof(DtuReg) - numDtuRegs) % numEpRegs;
 
-        auto reg = static_cast<EndpointRegister>(regNumber);
+        auto reg = static_cast<EpReg>(regNumber);
 
         if (pkt->isRead())
             *data = readEpReg(epid, reg);
@@ -124,7 +124,7 @@ RegFile::handleRequest(PacketPtr pkt)
     }
     else
     {
-        auto reg = static_cast<DtuRegister>(addr / sizeof(DtuReg));
+        auto reg = static_cast<DtuReg>(addr / sizeof(DtuReg));
 
         if (pkt->isRead())
             *data = readDtuReg(reg);
@@ -134,6 +134,11 @@ RegFile::handleRequest(PacketPtr pkt)
 
     if (pkt->needsResponse())
         pkt->makeResponse();
+
+    if (pkt->isWrite() && pkt->getAddr() == static_cast<Addr>(DtuReg::COMMAND))
+        return true;
+    else
+        return false;
 }
 
 Addr

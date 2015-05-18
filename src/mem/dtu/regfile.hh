@@ -35,15 +35,13 @@
 #include "base/types.hh"
 #include "mem/packet.hh"
 
-enum class DtuRegister : Addr
+enum class DtuReg : Addr
 {
     COMMAND,
     STATUS,
 };
 
-using DtuReg = uint32_t;
-
-enum class EndpointRegister : Addr
+enum class EpReg : Addr
 {
     CONFIG, // 1 -> Sender, 0 -> Receiver
     // for receiving
@@ -60,15 +58,17 @@ class RegFile
 {
   public:
 
-    static constexpr unsigned numDtuRegs = 0;
+    using reg_t = uint32_t;
 
-    static constexpr unsigned numEpRegs = 6;
+    static constexpr unsigned numDtuRegs = 2;
+
+    static constexpr unsigned numEpRegs = 7;
 
   private:
 
-    std::vector<DtuReg> dtuRegs;
+    std::vector<reg_t> dtuRegs;
 
-    std::vector<std::vector<DtuReg>> epRegs;
+    std::vector<std::vector<reg_t>> epRegs;
 
     const unsigned numEndpoints;
 
@@ -79,15 +79,16 @@ class RegFile
 
     RegFile(const std::string name, unsigned numEndpoints);
 
-    DtuReg readDtuReg(DtuRegister reg) const;
+    reg_t readDtuReg(DtuReg reg) const;
 
-    void setDtuReg(DtuRegister reg, DtuReg value);
+    void setDtuReg(DtuReg reg, reg_t value);
 
-    DtuReg readEpReg(unsigned epid, EndpointRegister reg) const;
+    reg_t readEpReg(unsigned epid, EpReg reg) const;
 
-    void setEpReg(unsigned epid, EndpointRegister reg, DtuReg value);
+    void setEpReg(unsigned epid, EpReg reg, reg_t value);
 
-    void handleRequest(PacketPtr pkt);
+    /// returns true if the command register was written
+    bool handleRequest(PacketPtr pkt);
 
     const std::string name() const { return _name; }
 

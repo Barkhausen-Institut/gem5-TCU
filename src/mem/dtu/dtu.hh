@@ -31,13 +31,16 @@
 #define __MEM_DTU_DTU_HH__
 
 #include "mem/dtu/base.hh"
+#include "mem/dtu/regfile.hh"
 #include "params/Dtu.hh"
 
 class Dtu : public BaseDtu
 {
-  protected:
+  private:
 
     bool atomic;
+
+    RegFile regFile;
 
   public:
 

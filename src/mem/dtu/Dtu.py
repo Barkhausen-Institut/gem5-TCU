@@ -47,3 +47,4 @@ class Dtu(BaseDtu):
     type = 'Dtu'
     cxx_header = "mem/dtu/dtu.hh"
     system = Param.System(Parent.any, "System we belong to")
+    num_endpoints = Param.Unsigned(8, "Number of enpoints per DTU")
