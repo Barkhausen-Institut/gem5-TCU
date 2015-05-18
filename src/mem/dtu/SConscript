@@ -31,10 +31,7 @@ SimObject('Dtu.py')
 
 Source('dtu.cc')
 Source('base.cc')
-Source('regfile.cc')
+#Source('regfile.cc')
 
 DebugFlag('Dtu')
-DebugFlag('DtuMasterPort')
-DebugFlag('DtuSlavePort')
 DebugFlag('DtuReg')
-CompoundFlag('DtuAll', [ 'Dtu', 'DtuMasterPort', 'DtuSlavePort', 'DtuReg'])

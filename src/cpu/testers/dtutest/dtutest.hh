@@ -28,8 +28,7 @@
 
 #ifndef __CPU_DTUTEST_DTUTEST_HH__
 #define __CPU_DTUTEST_DTUTEST_HH__
-
-#include "mem/dtu/dtu.hh"
+/*
 #include "params/DtuTest.hh"
 #include "sim/system.hh"
 
@@ -99,5 +98,5 @@ class DtuTest : public MemObject
     void recvRetry();
 
 };
-
+*/
 #endif // __CPU_DTUTEST_DTUTEST_HH__

@@ -25,7 +25,7 @@
  * of the authors and should not be interpreted as representing official policies,
  * either expressed or implied, of the FreeBSD Project.
  */
-
+/*
 #include "cpu/testers/dtutest/dtutest.hh"
 #include "debug/DtuTest.hh"
 #include "debug/DtuTestAccess.hh"
@@ -344,9 +344,12 @@ DtuTest::tick()
     else
         sendPkt(pkt);
 }
+*/
 
+#include "params/DtuTest.hh"
 DtuTest*
 DtuTestParams::create()
 {
-    return new DtuTest(this);
+//    return new DtuTest(this);
+    return nullptr;
 }

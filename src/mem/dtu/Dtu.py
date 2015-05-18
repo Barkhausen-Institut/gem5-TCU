@@ -34,17 +34,16 @@ class BaseDtu(MemObject):
     type = 'BaseDtu'
     abstract = True
     cxx_header = "mem/dtu/base.hh"
+    cpu        = SlavePort("DTU slave port connectting to the CPU")
+    scratchpad = MasterPort("DTU master port connecting to the Scratchpad Memory")
+    noc_master = MasterPort("DTU master port")
+    noc_slave  = SlavePort("DTU slave port")
+
     cpu_base_addr = Param.Addr(0x10000000, "DTU address (used by CPU to access the DTU)")
-    noc_addr_bits = Param.Unsigned(4, "Address bits used to address the DTU")
+    noc_addr_bits = Param.Unsigned(8, "Address bits used to address the DTU")
     core_id = Param.Unsigned("ID of the core this DTU belongs to")
-    max_pkt_size = Param.Unsigned(32, "Maximum packet size in bytes used for all communication")
-    system = Param.System(Parent.any, "System this tester is part of")
-    latency = Param.Cycles(1, "Time the DTU needs to process a request")
 
 class Dtu(BaseDtu):
     type = 'Dtu'
     cxx_header = "mem/dtu/dtu.hh"
-    cpu        = SlavePort("DTU slave port connectting to the CPU")
-    scratchpad = MasterPort("DTU master port connecting to the Scratchpad Memory")
-    master     = MasterPort("DTU master port")
-    slave      = SlavePort("DTU slave port")
+    system = Param.System(Parent.any, "System we belong to")

@@ -30,104 +30,170 @@
 #ifndef __MEM_DTU_BASE_HH__
 #define __MEM_DTU_BASE_HH__
 
-#include "mem/dtu/regfile.hh"
 #include "mem/mem_object.hh"
-#include "mem/port.hh"
-#include "params/Dtu.hh"
+#include "mem/qport.hh"
+#include "params/BaseDtu.hh"
 
-#include <queue>
-
-/**
- * This class implements the actual DTU functionality.
- */
 class BaseDtu : public MemObject
 {
-  public:
+  private:
 
-    static constexpr DtuReg RECEIVE_CMD = 1;
-    static constexpr DtuReg TRANSMIT_CMD = 2;
-    static constexpr DtuReg IDLE_STATUS = 0;
-    static constexpr DtuReg BUSY_STATUS = 1;
+    class DtuMasterPort : public QueuedMasterPort
+    {
+      protected:
+
+        BaseDtu& dtu;
+
+        ReqPacketQueue reqQueue;
+
+        SnoopRespPacketQueue snoopRespQueue;
+
+      public:
+
+        DtuMasterPort( const std::string& _name, BaseDtu& _dtu);
+
+        virtual void completeRequest(PacketPtr pkt) = 0;
+
+        bool recvTimingResp(PacketPtr pkt) override;
+    };
+
+    class NocMasterPort : public DtuMasterPort
+    {
+      public:
+
+        NocMasterPort(BaseDtu& _dtu)
+            : DtuMasterPort(_dtu.name() + ".noc_master_port", _dtu)
+        { }
+
+        void completeRequest(PacketPtr pkt) override;
+    };
+
+    class ScratchpadPort : public DtuMasterPort
+    {
+      public:
+
+        ScratchpadPort(BaseDtu& _dtu)
+          : DtuMasterPort(_dtu.name() + ".scratchpad_port", _dtu)
+        { }
+
+        void completeRequest(PacketPtr pkt) override;
+    };
+
+    class DtuSlavePort : public QueuedSlavePort
+    {
+      protected:
+
+        BaseDtu& dtu;
+
+        RespPacketQueue respQueue;
+
+        AddrRange range;
+
+        bool busy;
+
+        bool retry;
+
+      public:
+
+        DtuSlavePort(const std::string _name, BaseDtu& _dtu);
+
+        virtual void handleRequest(PacketPtr pkt) = 0;
+
+        Tick recvAtomic(PacketPtr pkt) override;
+
+        void recvFunctional(PacketPtr pkt) override;
+
+        bool recvTimingReq(PacketPtr pkt) override;
+
+        void setBusy();
+
+        void setIdle();
+    };
+
+    class CpuPort : public DtuSlavePort
+    {
+      public:
+
+        CpuPort(BaseDtu& _dtu)
+          : DtuSlavePort(_dtu.name() + ".cpu_port", _dtu)
+        { }
+
+      protected:
+
+        AddrRangeList getAddrRanges() const override;
+
+        void handleRequest(PacketPtr pkt) override;
+    };
+
+    class NocSlavePort : public DtuSlavePort
+    {
+      public:
+
+        NocSlavePort(BaseDtu& _dtu)
+          : DtuSlavePort(_dtu.name() + ".noc_slave_port", _dtu)
+        { }
+
+      protected:
+
+        AddrRangeList getAddrRanges() const override;
+
+        void handleRequest(PacketPtr pkt) override;
+    };
+
+    CpuPort        cpuPort;
+
+    ScratchpadPort scratchpadPort;
+
+    NocMasterPort  nocMasterPort;
+
+    NocSlavePort   nocSlavePort;
 
   protected:
 
-    enum class State
-    {
-        IDLE,
-        RECEIVING,
-        TRANSMITTING,
-    };
+    unsigned coreId;
 
-    struct SenderState : public Packet::SenderState
-    {
-        bool isNocRequest;
+    Addr cpuBaseAddr;
 
-        bool isLastRequest;
-
-        SenderState(bool _isNocRequest, bool _isLastRequest = false)
-            : isNocRequest(_isNocRequest), isLastRequest(_isLastRequest)
-        {}
-    };
-
-    const bool atomic;
-
-    RegFile regFile;
-
-    const Addr cpuBaseAddr;
-
-    Addr nocBaseAddr;
-
-    const unsigned nocAddrBits;
-
-    const unsigned maxPktSize;
-
-    MasterID masterId;
-
-    Cycles latency;
-
-    State state;
-
-    Addr readAddr;
-
-    Addr writeAddr;
-
-    std::queue<PacketPtr> pktBuffer;
-
-    PacketPtr generateRequest(Addr paddr, Addr size, MemCmd cmd);
-
-    Addr getDtuBaseAddr(unsigned coreId) const;
-
-    void startTransaction(DtuReg cmd);
-
-    void finishTransaction();
-
-    void completeSpmRequest(PacketPtr pkt);
-
-    void completeNocRequest(PacketPtr pkt);
-
-    virtual void tick();
-
-    EventWrapper<BaseDtu, &BaseDtu::tick> tickEvent;
-
-    virtual void sendSpmRequest(PacketPtr pkt) = 0;
-
-    virtual void sendNocRequest(PacketPtr pkt) = 0;
-
-    virtual bool isSpmPortReady() = 0;
-
-    virtual bool isNocPortReady() = 0;
-
-    virtual void sendNocResponse(PacketPtr pkt, Cycles latency) = 0;
-
-    virtual void sendCpuResponse(PacketPtr pkt, Cycles latency) = 0;
+    unsigned nocAddrBits;
 
   public:
 
-    BaseDtu(const BaseDtuParams* p);
+    BaseDtu(BaseDtuParams* p);
 
-    bool handleCpuRequest(PacketPtr pkt);
+    BaseSlavePort& getSlavePort(const std::string &if_name, PortID idx) override;
 
-    bool handleNocRequest(PacketPtr pkt);
+    BaseMasterPort& getMasterPort(const std::string &if_name, PortID idx) override;
+
+    Addr getNocAddr(unsigned coreId) const;
+
+    void schedNocResponse(PacketPtr pkt, Tick when);
+
+    void schedCpuResponse(PacketPtr pkt, Tick when);
+
+    void schedNocRequest(PacketPtr pkt, Tick when);
+
+    void schedSpmRequest(PacketPtr pkt, Tick when);
+
+    void sendAtomicNocRequest(PacketPtr pkt);
+
+    void sendAtomicSpmRequest(PacketPtr pkt);
+
+    void setCpuPortBusy();
+
+    void setCpuPortIdle();
+
+    void setNocPortBusy();
+
+    void setNocPortIdle();
+
+    virtual void completeNocRequest(PacketPtr pkt) = 0;
+
+    virtual void completeSpmRequest(PacketPtr pkt) = 0;
+
+    virtual void handleNocRequest(PacketPtr pkt) = 0;
+
+    virtual void handleCpuRequest(PacketPtr pkt) = 0;
+
 };
 
 #endif // __MEM_DTU_BASE_HH__
