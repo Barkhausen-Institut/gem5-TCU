@@ -34,4 +34,6 @@ Source('base.cc')
 Source('regfile.cc')
 
 DebugFlag('Dtu')
+DebugFlag('DtuMasterPort')
 DebugFlag('DtuReg')
+DebugFlag('DtuSlavePort')

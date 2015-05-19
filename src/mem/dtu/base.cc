@@ -27,6 +27,8 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
+#include "debug/DtuSlavePort.hh"
+#include "debug/DtuMasterPort.hh"
 #include "mem/dtu/base.hh"
 
 BaseDtu::DtuMasterPort::DtuMasterPort( const std::string& _name, BaseDtu& _dtu)
@@ -58,16 +60,39 @@ BaseDtu::ScratchpadPort::completeRequest(PacketPtr pkt)
 }
 
 BaseDtu::DtuSlavePort::DtuSlavePort(const std::string _name, BaseDtu& _dtu)
-  : QueuedSlavePort(_name, &_dtu, respQueue),
+  : SlavePort(_name, &_dtu),
     dtu(_dtu),
-    respQueue(_dtu, *this),
     busy(false),
-    retry(false)
+    sendReqRetry(false),
+    respPkt(nullptr),
+    waitForRespRetry(false),
+    responseEvent(*this)
 { }
+
+void
+BaseDtu::DtuSlavePort::schedTimingResp(PacketPtr pkt, Tick when)
+{
+    assert(busy);
+    assert(respPkt == nullptr);
+    assert(!waitForRespRetry);
+
+    respPkt = pkt;
+
+    DPRINTF(DtuSlavePort, "Schedule response %#x at Tick %u\n",
+                          pkt->getAddr(),
+                          when);
+
+    dtu.schedule(responseEvent, when);
+}
 
 Tick
 BaseDtu::DtuSlavePort::recvAtomic(PacketPtr pkt)
 {
+    DPRINTF(DtuSlavePort, "Recieve %s request at %#x (%u bytes)\n",
+                          pkt->isRead() ? "read" : "write",
+                          pkt->getAddr(),
+                          pkt->getSize());
+
     handleRequest(pkt);
 
     return 0;
@@ -76,7 +101,7 @@ BaseDtu::DtuSlavePort::recvAtomic(PacketPtr pkt)
 void
 BaseDtu::DtuSlavePort::recvFunctional(PacketPtr pkt)
 {
-    panic("%s did not expect a funtional request!\n");
+    panic("%S does not implement recvFunctional!\n", name());
 }
 
 bool
@@ -84,9 +109,23 @@ BaseDtu::DtuSlavePort::recvTimingReq(PacketPtr pkt)
 {
     if (busy)
     {
-        retry = true;
+        DPRINTF(DtuSlavePort, "Reject %s request at %#x (%u bytes)\n",
+                          pkt->isRead() ? "read" : "write",
+                          pkt->getAddr(),
+                          pkt->getSize());
+
+        sendReqRetry = true;
         return false;
     }
+
+    DPRINTF(DtuSlavePort, "Recieve %s request at %#x (%u bytes)\n",
+                          pkt->isRead() ? "read" : "write",
+                          pkt->getAddr(),
+                          pkt->getSize());
+
+    assert(!sendReqRetry);
+
+    busy = true;
 
     handleRequest(pkt);
 
@@ -94,25 +133,55 @@ BaseDtu::DtuSlavePort::recvTimingReq(PacketPtr pkt)
 }
 
 void
-BaseDtu::DtuSlavePort::setBusy()
+BaseDtu::DtuSlavePort::handleSuccessfulResponse()
 {
-    assert(!busy);
+    busy = false;
+    waitForRespRetry = false;
+    respPkt = nullptr;
 
-    busy = true;
+    if (sendReqRetry)
+    {
+        DPRINTF(DtuSlavePort, "Send request retry\n");
+
+        sendReqRetry = false;
+        sendRetryReq();
+    }
 }
 
 void
-BaseDtu::DtuSlavePort::setIdle()
+BaseDtu::DtuSlavePort::recvRespRetry()
 {
+    assert(respPkt != nullptr);
     assert(busy);
+    assert(waitForRespRetry);
 
-    busy = false;
+    DPRINTF(DtuSlavePort, "Recieve response retry at %#x\n", respPkt->getAddr());
 
-    if (retry)
+    if (sendTimingResp(respPkt))
     {
-        retry = false;
-        sendRetryReq();
+        DPRINTF(DtuSlavePort, "Resume after successful retry at %#x\n",
+                              respPkt->getAddr());
+
+        handleSuccessfulResponse();
     }
+}
+
+void
+BaseDtu::DtuSlavePort::ResponseEvent::process()
+{
+    assert(port.busy);
+    assert(port.respPkt != nullptr);
+    assert(!port.waitForRespRetry);
+
+    DPRINTF(DtuSlavePort, "Send %s response at %#x (%u bytes)\n",
+                          port.respPkt->isRead() ? "read" : "write",
+                          port.respPkt->getAddr(),
+                          port.respPkt->getSize());
+
+    if (port.sendTimingResp(port.respPkt))
+        port.handleSuccessfulResponse();
+    else
+        port.waitForRespRetry = true;
 }
 
 AddrRangeList
@@ -228,28 +297,4 @@ void
 BaseDtu::sendAtomicSpmRequest(PacketPtr pkt)
 {
     scratchpadPort.sendAtomic(pkt);
-}
-
-void
-BaseDtu::setCpuPortBusy()
-{
-    cpuPort.setBusy();
-}
-
-void
-BaseDtu::setCpuPortIdle()
-{
-    cpuPort.setIdle();
-}
-
-void
-BaseDtu::setNocPortBusy()
-{
-    nocSlavePort.setBusy();
-}
-
-void
-BaseDtu::setNocPortIdle()
-{
-    nocSlavePort.setIdle();
 }

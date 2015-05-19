@@ -79,19 +79,37 @@ class BaseDtu : public MemObject
         void completeRequest(PacketPtr pkt) override;
     };
 
-    class DtuSlavePort : public QueuedSlavePort
+    class DtuSlavePort : public SlavePort
     {
       protected:
 
         BaseDtu& dtu;
 
-        RespPacketQueue respQueue;
-
-        AddrRange range;
-
         bool busy;
 
-        bool retry;
+        bool sendReqRetry;
+
+        PacketPtr respPkt;
+
+        bool waitForRespRetry;
+
+        struct ResponseEvent : public Event
+        {
+            DtuSlavePort& port;
+
+            ResponseEvent(DtuSlavePort& _port) : port(_port) {}
+
+            void process() override;
+
+            const char* description() const override
+            {
+                return "DTU ResponseEvent";
+            }
+        };
+
+        ResponseEvent responseEvent;
+
+        void handleSuccessfulResponse();
 
       public:
 
@@ -99,15 +117,15 @@ class BaseDtu : public MemObject
 
         virtual void handleRequest(PacketPtr pkt) = 0;
 
+        void schedTimingResp(PacketPtr pkt, Tick when);
+
         Tick recvAtomic(PacketPtr pkt) override;
 
         void recvFunctional(PacketPtr pkt) override;
 
         bool recvTimingReq(PacketPtr pkt) override;
 
-        void setBusy();
-
-        void setIdle();
+        void recvRespRetry() override;
     };
 
     class CpuPort : public DtuSlavePort
@@ -177,14 +195,6 @@ class BaseDtu : public MemObject
     void sendAtomicNocRequest(PacketPtr pkt);
 
     void sendAtomicSpmRequest(PacketPtr pkt);
-
-    void setCpuPortBusy();
-
-    void setCpuPortIdle();
-
-    void setNocPortBusy();
-
-    void setNocPortIdle();
 
     virtual void completeNocRequest(PacketPtr pkt) = 0;
 
