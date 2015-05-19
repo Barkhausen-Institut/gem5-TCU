@@ -105,6 +105,8 @@ class BaseDtu : public MemObject
             {
                 return "DTU ResponseEvent";
             }
+
+            const std::string name() const override { return port.name(); }
         };
 
         ResponseEvent responseEvent;
@@ -177,6 +179,8 @@ class BaseDtu : public MemObject
   public:
 
     BaseDtu(BaseDtuParams* p);
+
+    void init() override;
 
     BaseSlavePort& getSlavePort(const std::string &if_name, PortID idx) override;
 

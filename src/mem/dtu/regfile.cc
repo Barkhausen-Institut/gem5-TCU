@@ -31,6 +31,24 @@
 #include "debug/DtuReg.hh"
 #include "mem/dtu/regfile.hh"
 
+Addr
+RegFile::getRegAddr(DtuReg reg)
+{
+    return static_cast<Addr>(reg) * sizeof(reg_t);
+}
+
+Addr
+RegFile::getRegAddr(EpReg reg, unsigned epid)
+{
+    Addr result = sizeof(reg_t) * numDtuRegs;
+
+    result += epid * numEpRegs * sizeof(reg_t);
+
+    result += static_cast<Addr>(reg) * sizeof(reg_t);
+
+    return result;
+}
+
 RegFile::RegFile(const std::string name, unsigned _numEndpoints)
     : dtuRegs(numDtuRegs, 0),
       epRegs(_numEndpoints),
@@ -43,7 +61,6 @@ RegFile::RegFile(const std::string name, unsigned _numEndpoints)
             epRegs[epid].push_back(0);
     }
 }
-
 
 RegFile::reg_t
 RegFile::readDtuReg(DtuReg reg) const
@@ -98,6 +115,8 @@ RegFile::handleRequest(PacketPtr pkt)
 
     Addr addr = pkt->getAddr();
 
+    DPRINTF(DtuReg, "access @%#x, size=%u\n", addr, getSize());
+
     // we can only perform full register accesses
     // TODO send error response instead of aborting
     assert(pkt->getSize() == sizeof(reg_t));
@@ -106,14 +125,14 @@ RegFile::handleRequest(PacketPtr pkt)
 
     reg_t* data = pkt->getPtr<reg_t>();
 
-    bool isEndpointAccess = addr >= sizeof(DtuReg) * numDtuRegs;
+    bool isEndpointAccess = addr >= sizeof(reg_t) * numDtuRegs;
 
     if (isEndpointAccess)
     {
-        unsigned epid = (addr - sizeof(DtuReg) * numDtuRegs) /
-                        (sizeof(DtuReg) * numEpRegs);
+        unsigned epid = (addr - sizeof(reg_t) * numDtuRegs) /
+                        (sizeof(reg_t) * numEpRegs);
 
-        unsigned regNumber = (addr / sizeof(DtuReg) - numDtuRegs) % numEpRegs;
+        unsigned regNumber = (addr / sizeof(reg_t) - numDtuRegs) % numEpRegs;
 
         auto reg = static_cast<EpReg>(regNumber);
 
@@ -144,9 +163,9 @@ RegFile::handleRequest(PacketPtr pkt)
 Addr
 RegFile::getSize() const
 {
-    Addr size = sizeof(DtuReg) * numDtuRegs;
+    Addr size = sizeof(reg_t) * numDtuRegs;
 
-    size += sizeof(DtuReg) * (numEndpoints * numEpRegs);
+    size += sizeof(reg_t) * (numEndpoints * numEpRegs);
 
     return size;
 }

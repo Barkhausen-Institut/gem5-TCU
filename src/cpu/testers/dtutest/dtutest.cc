@@ -4,31 +4,33 @@
  *
  * Redistribution and use in source and binary forms, with or without
  *
- * 1. Redistributions of source code must retain the above copyright notice, this
- * list of conditions and the following disclaimer.
+ * 1. Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
- * this list of conditions and the following disclaimer in the documentation
- * and/or other materials provided with the distribution.
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
- * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
- * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
  *
- * The views and conclusions contained in the software and documentation are those
- * of the authors and should not be interpreted as representing official policies,
- * either expressed or implied, of the FreeBSD Project.
+ * The views and conclusions contained in the software and documentation are
+ * those of the authors and should not be interpreted as representing official
+ * policies, either expressed or implied, of the FreeBSD Project.
  */
-/*
+
 #include "cpu/testers/dtutest/dtutest.hh"
 #include "debug/DtuTest.hh"
 #include "debug/DtuTestAccess.hh"
+#include "mem/dtu/regfile.hh"
 
 unsigned int TESTER_DTU = 0;
 
@@ -128,15 +130,7 @@ DtuTest::completeRequest(PacketPtr pkt)
                                    curTick(),
                                    pkt_data[0]);
 
-            if (state == State::WAIT_FOR_DTU_TRANSMIT)
-            {
-                if (pkt_data[0] == 0)
-                {
-                    state = State::SETUP_DTU_RECEIVE;
-                    counter = 0;
-                }
-            }
-            else if (state == State::WAIT_FOR_DTU_RECEIVE)
+            if (state == State::WAIT)
             {
                 if (pkt_data[0] == 0)
                 {
@@ -177,12 +171,12 @@ DtuTest::recvRetry()
 }
 
 PacketPtr
-DtuTest::createDtuRegisterPkt(EndpointRegister reg,
+DtuTest::createDtuRegisterPkt(Addr reg,
                               uint32_t value,
                               MemCmd cmd = MemCmd::WriteReq)
 {
     // TODO parameterize
-    Addr paddr = 0x10000000 + static_cast<Addr>(reg) * 4;
+    Addr paddr = 0x10000000 + reg;
 
     Request::Flags flags;
 
@@ -201,6 +195,8 @@ void
 DtuTest::tick()
 {
     PacketPtr pkt = nullptr;
+
+    Addr regAddr;
 
     switch (state)
     {
@@ -224,41 +220,46 @@ DtuTest::tick()
 
         counter++;
 
-        if (counter == 1024)
+        if (counter == 128)
         {
             DPRINTF(DtuTest, "Done initializing the Scratchpad\n");
             counter = 0;
-            state = State::SETUP_DTU_TRANSMIT;
+            state = State::SETUP_TRANSMIT_EP;
         }
 
         break;
     }
-    case State::SETUP_DTU_TRANSMIT:
+    case State::SETUP_TRANSMIT_EP:
     {
         switch (counter)
         {
         case 0:
-            DPRINTF(DtuTest, "Setup the DTU to transmit 1024 Bytes form local "
-                             "Scratchpad at address 0x0 to core %u's Scratchpad "
-                             "at address 0x400\n", id + 1);
-            pkt = createDtuRegisterPkt(EndpointRegister::SOURCE_ADDR, 0);
+            DPRINTF(DtuTest, "Setup Ep 0 to transmit 128 Bytes from local "
+                             "Scratchpad at address 0x0 to Ep 1 at core %u\n",
+                             id + 1);
+            regAddr = RegFile::getRegAddr(EpReg::MESSAGE_ADDR, 0);
+            pkt = createDtuRegisterPkt(regAddr, 0);
             break;
         case 1:
-            pkt = createDtuRegisterPkt(EndpointRegister::SIZE, 1024);
+            regAddr = RegFile::getRegAddr(EpReg::MESSAGE_SIZE, 0);
+            pkt = createDtuRegisterPkt(regAddr, 0);
             break;
         case 2:
-            pkt = createDtuRegisterPkt(EndpointRegister::TARGET_ADDR, 1024);
+            regAddr = RegFile::getRegAddr(EpReg::TARGET_EPID, 0);
+            pkt = createDtuRegisterPkt(regAddr, 1);
             break;
         case 3:
-            pkt = createDtuRegisterPkt(EndpointRegister::TARGET_COREID, id + 1);
+            regAddr = RegFile::getRegAddr(EpReg::TARGET_COREID, 0);
+            pkt = createDtuRegisterPkt(regAddr, id + 1);
             break;
         case 4:
-            pkt = createDtuRegisterPkt(EndpointRegister::COMMAND, BaseDtu::TRANSMIT_CMD);
+            regAddr = RegFile::getRegAddr(EpReg::CONFIG, 0);
+            pkt = createDtuRegisterPkt(regAddr, 1);
             break;
         default:
-            counter = 0;
-            DPRINTF(DtuTest, "DTU setup done. Wait until DTU finishes the transaction\n");
-            state = State::WAIT_FOR_DTU_TRANSMIT;
+            counter = -1;
+            DPRINTF(DtuTest, "EP 0 setup done.\n");
+            state = State::SETUP_RECEIVE_EP;
             break;
         }
 
@@ -266,44 +267,49 @@ DtuTest::tick()
 
         break;
     }
-    case State::WAIT_FOR_DTU_TRANSMIT:
-    case State::WAIT_FOR_DTU_RECEIVE:
-
-        pkt = createDtuRegisterPkt(EndpointRegister::STATUS, 0, MemCmd::ReadReq);
-
-        break;
-
-    case State::SETUP_DTU_RECEIVE:
+    case State::SETUP_RECEIVE_EP:
     {
         switch (counter)
         {
         case 0:
-            DPRINTF(DtuTest, "DTU finished the transaction. Setup the DTU to "
-                             "read 1024 bytes from core %u's scratchpad at "
-                             "address 0x400 to local scratchpad at address "
-                             "0x400\n", id+1);
-            pkt = createDtuRegisterPkt(EndpointRegister::SOURCE_ADDR, 1024);
+            DPRINTF(DtuTest, "Setup EP 1 to receive messages\n");
+            regAddr = RegFile::getRegAddr(EpReg::CONFIG, 1);
+            pkt = createDtuRegisterPkt(regAddr, 0);
             break;
         case 1:
-            pkt = createDtuRegisterPkt(EndpointRegister::SIZE, 1024);
+            regAddr = RegFile::getRegAddr(EpReg::BUFFER_ADDR, 1);
+            pkt = createDtuRegisterPkt(regAddr, 0x128);
             break;
         case 2:
-            pkt = createDtuRegisterPkt(EndpointRegister::TARGET_ADDR, 1024);
-            break;
-        case 3:
-            pkt = createDtuRegisterPkt(EndpointRegister::TARGET_COREID, id + 1);
-            break;
-        case 4:
-            pkt = createDtuRegisterPkt(EndpointRegister::COMMAND, BaseDtu::RECEIVE_CMD);
+            regAddr = RegFile::getRegAddr(EpReg::BUFFER_SIZE, 1);
+            pkt = createDtuRegisterPkt(regAddr, 256);
             break;
         default:
-            counter = 0;
-            DPRINTF(DtuTest, "DTU setup done. Wait until DTU finishes the transaction\n");
-            state = State::WAIT_FOR_DTU_RECEIVE;
+            counter = -1;
+            DPRINTF(DtuTest, "EP 1 setup done.\n");
+            state = State::START_TRANSMISSION;
             break;
         }
 
         counter++;
+
+        break;
+    }
+    case State::START_TRANSMISSION:
+    {
+        DPRINTF(DtuTest, "Start Transmission\n");
+        regAddr = RegFile::getRegAddr(DtuReg::COMMAND);
+        pkt = createDtuRegisterPkt(regAddr, 0x100);
+
+        state = State::WAIT;
+        counter = 0;
+
+        break;
+    }
+    case State::WAIT:
+    {
+        regAddr = RegFile::getRegAddr(DtuReg::STATUS);
+        pkt = createDtuRegisterPkt(regAddr, 0x100);
 
         break;
     }
@@ -313,7 +319,7 @@ DtuTest::tick()
             DPRINTF(DtuTest, "DTU finished the transaction. Validate the "
                              "Scratchpad content.\n");
 
-        Addr paddr = counter;
+        Addr paddr = counter + 512;
         Request::Flags flags;
 
         auto req = new Request(paddr, 1, flags, masterId);
@@ -325,7 +331,7 @@ DtuTest::tick()
 
         counter++;
 
-        if (counter == 2024)
+        if (counter == 128)
         {
             DPRINTF(DtuTest, "Successfully verified Scratchpad data.\n");
             counter = 0;
@@ -344,12 +350,9 @@ DtuTest::tick()
     else
         sendPkt(pkt);
 }
-*/
 
-#include "params/DtuTest.hh"
 DtuTest*
 DtuTestParams::create()
 {
-//    return new DtuTest(this);
-    return nullptr;
+    return new DtuTest(this);
 }

@@ -187,6 +187,8 @@ BaseDtu::DtuSlavePort::ResponseEvent::process()
 AddrRangeList
 BaseDtu::CpuPort::getAddrRanges() const
 {
+    assert(dtu.cpuBaseAddr != 0);
+
     AddrRangeList ranges;
 
     auto range = AddrRange(dtu.cpuBaseAddr,
@@ -208,9 +210,10 @@ BaseDtu::NocSlavePort::getAddrRanges() const
 {
     AddrRangeList ranges;
 
-    Addr nocAddr = dtu.getNocAddr(dtu.coreId);
+    Addr baseNocAddr = dtu.getNocAddr(dtu.coreId);
+    Addr topNocAddr  = dtu.getNocAddr(dtu.coreId + 1) - 1;
 
-    auto range = AddrRange(nocAddr, nocAddr + (nocAddr - 1));
+    auto range = AddrRange(baseNocAddr, topNocAddr);
 
     ranges.push_back(range);
 
@@ -227,6 +230,20 @@ BaseDtu::BaseDtu(BaseDtuParams* p)
     cpuBaseAddr(p->cpu_base_addr),
     nocAddrBits(p->noc_addr_bits)
 {}
+
+void
+BaseDtu::init()
+{
+    MemObject::init();
+
+    assert(cpuPort.isConnected());
+    assert(scratchpadPort.isConnected());
+    assert(nocMasterPort.isConnected());
+    assert(nocSlavePort.isConnected());
+
+    cpuPort.sendRangeChange();
+    nocSlavePort.sendRangeChange();
+}
 
 void
 BaseDtu::NocSlavePort::handleRequest(PacketPtr pkt)

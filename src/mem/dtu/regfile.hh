@@ -64,6 +64,10 @@ class RegFile
 
     static constexpr unsigned numEpRegs = 7;
 
+    static Addr getRegAddr(DtuReg reg);
+
+    static Addr getRegAddr(EpReg reg, unsigned epid);
+
   private:
 
     std::vector<reg_t> dtuRegs;

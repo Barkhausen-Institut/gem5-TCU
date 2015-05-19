@@ -58,6 +58,12 @@ Dtu::handleNocRequest(PacketPtr pkt)
 void
 Dtu::handleCpuRequest(PacketPtr pkt)
 {
+    Addr origAddr = pkt->getAddr();
+
+    // Strip the base address to handle requests based on the register address
+    // only. The original address is restored before responding.
+    pkt->setAddr(origAddr - cpuBaseAddr);
+
     if (atomicMode)
     {
         if (regFile.handleRequest(pkt))
@@ -87,6 +93,8 @@ Dtu::handleCpuRequest(PacketPtr pkt)
             ; // TODO schedule a new event to check the command reg and start a
               //      new transaction
     }
+
+    pkt->setAddr(origAddr);
 }
 
 Dtu*

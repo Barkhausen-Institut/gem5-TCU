@@ -104,8 +104,8 @@ for i in range(0, options.num_pes):
     pe.dtu.scratchpad = pe.xbar.slave
     pe.dtu.cpu = pe.xbar.master
 
-    pe.dtu.master = system.noc.slave
-    pe.dtu.slave  = system.noc.master
+    pe.dtu.noc_master = system.noc.slave
+    pe.dtu.noc_slave  = system.noc.master
 
 #system.badaddr1 = IsaFake(pio_addr=0x10000, pio_size=0x0FFEFFFF)
 #system.badaddr1.warn_access="warn"
