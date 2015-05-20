@@ -42,11 +42,25 @@ class Dtu : public BaseDtu
 
     RegFile regFile;
 
+    unsigned numEndpoints;
+
+    MasterID masterId;
+
+    Addr maxMessageSize;
+
     Cycles registerAccessLatency;
 
-  public:
+    Cycles commandToSpmRequestLatency;
 
-    Dtu(DtuParams* p);
+    Cycles spmResponseToNocRequestLatency;
+
+    void checkCommandAndExecute();
+    EventWrapper<Dtu, &Dtu::checkCommandAndExecute> checkCommandAndExecuteEvent;
+
+    void startTransaction();
+    EventWrapper<Dtu, &Dtu::startTransaction> startTransactionEvent;
+
+    PacketPtr generateRequest(Addr addr, Addr size, MemCmd cmd);
 
     void completeNocRequest(PacketPtr pkt) override;
 
@@ -55,6 +69,10 @@ class Dtu : public BaseDtu
     void handleNocRequest(PacketPtr pkt) override;
 
     void handleCpuRequest(PacketPtr pkt) override;
+
+  public:
+
+    Dtu(DtuParams* p);
 };
 
 #endif // __MEM_DTU_DTU_HH__

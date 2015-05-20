@@ -27,6 +27,7 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
+#include "debug/Dtu.hh"
 #include "mem/dtu/dtu.hh"
 #include "sim/system.hh"
 
@@ -34,8 +35,81 @@ Dtu::Dtu(DtuParams* p)
   : BaseDtu(p),
     atomicMode(p->system->isAtomicMode()),
     regFile(name() + ".regFile", p->num_endpoints),
-    registerAccessLatency(p->register_access_latency)
+    numEndpoints(p->num_endpoints),
+    masterId(p->system->getMasterId(name())),
+    maxMessageSize(p->max_message_size),
+    registerAccessLatency(p->register_access_latency),
+    commandToSpmRequestLatency(p->command_to_spm_request_latency),
+    spmResponseToNocRequestLatency(p->spm_response_to_noc_request_latency),
+    checkCommandAndExecuteEvent(*this),
+    startTransactionEvent(*this)
 {}
+
+PacketPtr
+Dtu::generateRequest(Addr paddr, Addr size, MemCmd cmd)
+{
+    Request::Flags flags;
+
+    auto req = new Request(paddr, size, flags, masterId);
+
+    auto pkt = new Packet(req, cmd);
+    auto pktData = new uint8_t[size];
+    pkt->dataDynamic(pktData);
+
+    return pkt;
+}
+
+void
+Dtu::checkCommandAndExecute()
+{
+    RegFile::reg_t command = regFile.readDtuReg(DtuReg::COMMAND);
+
+    // TODO paramterize commands?
+    if (!(command & 0x100) || (command & 0xff) > numEndpoints)
+        // TODO erro handling
+        panic("Invalid command: %#x\n", command);
+
+    startTransaction();
+}
+
+void
+Dtu::startTransaction()
+{
+    // TODO paramterize commands?
+    unsigned epid = regFile.readDtuReg(DtuReg::COMMAND) & 0xff;
+
+    assert(epid < numEndpoints);
+
+    if (regFile.readEpReg(epid, EpReg::CONFIG) != 1)
+        panic("Issued transaction from EP %u but it is not configured for sending\n", epid);
+
+    Addr messageAddr = regFile.readEpReg(epid, EpReg::MESSAGE_ADDR);
+    Addr messageSize = regFile.readEpReg(epid, EpReg::MESSAGE_SIZE);
+
+    // TODO error handling
+    assert(messageSize > 0);
+    assert(messageSize < maxMessageSize);
+
+    DPRINTF(Dtu, "Start transmission.\n");
+    DPRINTF(Dtu, "Read message of %u Bytes at address %#x from local scratchpad.\n",
+                 messageSize,
+                 messageAddr);
+
+    // Reset command and set busy flag
+
+    regFile.setDtuReg(DtuReg::COMMAND, 0);
+    regFile.setDtuReg(DtuReg::STATUS, 1);
+
+    auto pkt = generateRequest(messageAddr, messageSize, MemCmd::ReadReq);
+
+    if (atomicMode)
+    {
+        sendAtomicSpmRequest(pkt);
+        completeSpmRequest(pkt);
+    }
+    else
+        schedSpmRequest(pkt, clockEdge(commandToSpmRequestLatency));
+}
 
 void
 Dtu::completeNocRequest(PacketPtr pkt)
@@ -64,37 +138,36 @@ Dtu::handleCpuRequest(PacketPtr pkt)
     // only. The original address is restored before responding.
     pkt->setAddr(origAddr - cpuBaseAddr);
 
-    if (atomicMode)
+    bool commandWritten = regFile.handleRequest(pkt);
+
+    pkt->setAddr(origAddr);
+
+    if (!atomicMode)
     {
-        if (regFile.handleRequest(pkt))
-            ; // TODO check command reg and start a new transaction
-    }
-    else
-    {
-        Cycles transportDelay = ticksToCycles(pkt->headerDelay +
-                                              pkt->payloadDelay);
+        /*
+         * We handle the request immediatly and do not care about timing. The
+         * delay is payed by scheduling the response at some point in the
+         * future. Additionaly a write operation on the command register needs
+         * to schedule an event that executes this command at a future tick.
+         */
+
+        Cycles transportDelay =
+            ticksToCycles(pkt->headerDelay + pkt->payloadDelay);
+
+        Tick when = clockEdge(transportDelay + registerAccessLatency);
 
         pkt->headerDelay = 0;
         pkt->payloadDelay = 0;
 
-        /*
-         * We handle the request immediatly although we should pay for
-         * the transport delay and DTU latency. However, this is only needed
-         * when the command register is written and therefore a new Transaction
-         * needs to be started. Then the delay is payed by scheduling a future
-         * event. If another register is accessed the delay is payed by
-         * scheduling the response at some point in the future.
-         */
-        bool checkCommand = regFile.handleRequest(pkt);
+        schedCpuResponse(pkt, when);
 
-        schedCpuResponse(pkt, clockEdge(transportDelay + registerAccessLatency));
-
-        if (checkCommand)
-            ; // TODO schedule a new event to check the command reg and start a
-              //      new transaction
+        if (commandWritten)
+            schedule(checkCommandAndExecuteEvent, when);
     }
-
-    pkt->setAddr(origAddr);
+    else if (commandWritten)
+    {
+        checkCommandAndExecute();
+    }
 }
 
 Dtu*

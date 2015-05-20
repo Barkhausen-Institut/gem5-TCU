@@ -301,7 +301,6 @@ void
 BaseDtu::schedSpmRequest(PacketPtr pkt, Tick when)
 {
     scratchpadPort.schedTimingReq(pkt, when);
-
 }
 
 void

@@ -242,7 +242,7 @@ DtuTest::tick()
             break;
         case 1:
             regAddr = RegFile::getRegAddr(EpReg::MESSAGE_SIZE, 0);
-            pkt = createDtuRegisterPkt(regAddr, 0);
+            pkt = createDtuRegisterPkt(regAddr, 128);
             break;
         case 2:
             regAddr = RegFile::getRegAddr(EpReg::TARGET_EPID, 0);
@@ -309,7 +309,7 @@ DtuTest::tick()
     case State::WAIT:
     {
         regAddr = RegFile::getRegAddr(DtuReg::STATUS);
-        pkt = createDtuRegisterPkt(regAddr, 0x100);
+        pkt = createDtuRegisterPkt(regAddr, 0, MemCmd::ReadReq);
 
         break;
     }

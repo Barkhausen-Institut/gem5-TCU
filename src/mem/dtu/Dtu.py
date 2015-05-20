@@ -49,4 +49,8 @@ class Dtu(BaseDtu):
     system = Param.System(Parent.any, "System we belong to")
     num_endpoints = Param.Unsigned(8, "Number of enpoints per DTU")
 
+    max_message_size = Param.MemorySize("512B", "Maximum message size")
+
     register_access_latency = Param.Cycles(1, "Latency for CPU register accesses")
+    command_to_spm_request_latency = Param.Cycles(5, "Number of cycles passed from writing a command to the register to issuing a read request on the scratchpad port")
+    spm_response_to_noc_request_latency = Param.Cycles(1, "Number of cycles passed from receiving data on the scratchpad port to sending it on the NoC port")

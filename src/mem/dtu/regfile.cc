@@ -115,7 +115,7 @@ RegFile::handleRequest(PacketPtr pkt)
 
     Addr addr = pkt->getAddr();
 
-    DPRINTF(DtuReg, "access @%#x, size=%u\n", addr, getSize());
+    DPRINTF(DtuReg, "access @%#x, size=%u\n", addr, pkt->getSize());
 
     // we can only perform full register accesses
     // TODO send error response instead of aborting
@@ -143,7 +143,7 @@ RegFile::handleRequest(PacketPtr pkt)
     }
     else
     {
-        auto reg = static_cast<DtuReg>(addr / sizeof(DtuReg));
+        auto reg = static_cast<DtuReg>(addr / sizeof(reg_t));
 
         if (pkt->isRead())
             *data = readDtuReg(reg);
