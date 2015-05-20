@@ -54,13 +54,19 @@ class Dtu : public BaseDtu
 
     Cycles spmResponseToNocRequestLatency;
 
-    void checkCommandAndExecute();
-    EventWrapper<Dtu, &Dtu::checkCommandAndExecute> checkCommandAndExecuteEvent;
+    Cycles nocRequestToSpmRequestLatency;
 
     void startTransaction();
     EventWrapper<Dtu, &Dtu::startTransaction> startTransactionEvent;
 
+    void finishTransaction();
+    EventWrapper<Dtu, &Dtu::finishTransaction> finishTransactionEvent;
+
     PacketPtr generateRequest(Addr addr, Addr size, MemCmd cmd);
+
+    void completeSpmReadRequest(PacketPtr pkt);
+
+    void completeSpmWriteRequest(PacketPtr pkt);
 
     void completeNocRequest(PacketPtr pkt) override;
 
@@ -69,6 +75,13 @@ class Dtu : public BaseDtu
     void handleNocRequest(PacketPtr pkt) override;
 
     void handleCpuRequest(PacketPtr pkt) override;
+
+    struct MessageHeader
+    {
+        uint8_t coreId;
+        uint8_t epId;
+        uint16_t length;
+    };
 
   public:
 

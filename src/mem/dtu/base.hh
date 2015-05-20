@@ -174,7 +174,9 @@ class BaseDtu : public MemObject
 
     Addr cpuBaseAddr;
 
-    unsigned nocAddrBits;
+    unsigned nocCoreAddrBits;
+
+    unsigned nocEpAddrBits;
 
   public:
 
@@ -186,7 +188,7 @@ class BaseDtu : public MemObject
 
     BaseMasterPort& getMasterPort(const std::string &if_name, PortID idx) override;
 
-    Addr getNocAddr(unsigned coreId) const;
+    Addr getNocAddr(unsigned coreId, unsigned epId = 0) const;
 
     void schedNocResponse(PacketPtr pkt, Tick when);
 

@@ -70,9 +70,9 @@ system.clk_domain = SrcClockDomain(clock =  options.sys_clock,
 # All PEs are connected to a NoC (Network on Chip). In this case it's just
 # a simple XBar.
 system.noc = NoncoherentXBar(forward_latency  = 0,
-                             frontend_latency = 0,
-                             response_latency = 0,
-                             width = 16, # default 128bit TODO is this a good value??
+                             frontend_latency = 1,
+                             response_latency = 1,
+                             width = 8,
                              )
 
 # A PE (processing element) consists of a CPU, a Scratchpad-Memory, and a DTU.
@@ -88,8 +88,8 @@ for i in range(0, options.num_pes):
     # TODO set latencies
     pe.xbar = NoncoherentXBar(forward_latency  = 0,
                               frontend_latency = 0,
-                              response_latency = 0,
-                              width = 16, # default 128bit TODO is this a good value??
+                              response_latency = 1,
+                              width = 8,
                              )
 
     pe.cpu = DtuTest()
@@ -100,7 +100,7 @@ for i in range(0, options.num_pes):
 
     pe.dtu = Dtu()
     pe.dtu.core_id = i
-    pe.dtu.noc_addr_bits = math.ceil(math.log(options.num_pes,2))
+    pe.dtu.noc_core_addr_bits = math.ceil(math.log(options.num_pes,2))
     pe.dtu.scratchpad = pe.xbar.slave
     pe.dtu.cpu = pe.xbar.master
 

@@ -40,7 +40,8 @@ class BaseDtu(MemObject):
     noc_slave  = SlavePort("DTU slave port")
 
     cpu_base_addr = Param.Addr(0x10000000, "DTU address (used by CPU to access the DTU)")
-    noc_addr_bits = Param.Unsigned(8, "Address bits used to address the DTU")
+    noc_core_addr_bits = Param.Unsigned(8, "Number of bits used to address a core")
+    noc_ep_addr_bits = Param.Unsigned(8, "Number of bits used address an endpoint within a core")
     core_id = Param.Unsigned("ID of the core this DTU belongs to")
 
 class Dtu(BaseDtu):
@@ -54,3 +55,4 @@ class Dtu(BaseDtu):
     register_access_latency = Param.Cycles(1, "Latency for CPU register accesses")
     command_to_spm_request_latency = Param.Cycles(5, "Number of cycles passed from writing a command to the register to issuing a read request on the scratchpad port")
     spm_response_to_noc_request_latency = Param.Cycles(1, "Number of cycles passed from receiving data on the scratchpad port to sending it on the NoC port")
+    noc_request_to_spm_request_latency = Param.Cycles(3, "Number of cycles passsed from receiving a request on the noc port until forwarding it to the spm port");

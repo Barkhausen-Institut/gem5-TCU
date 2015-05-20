@@ -57,11 +57,7 @@ DtuTest::DtuTest(const DtuTestParams *p)
 {
     id = TESTER_DTU++;
 
-    // Only every second dtu performs transactions
-    if (id % 2)
-        state = State::IDLE;
-    else
-        state = State::INIT;
+    state = State::INIT;
 
     // kick things into action
     schedule(tickEvent, curTick());
@@ -143,8 +139,36 @@ DtuTest::completeRequest(PacketPtr pkt)
                 Addr addr = pkt->getAddr();
                 uint8_t* data = pkt->getPtr<uint8_t>();
 
-                if (*data != static_cast<uint8_t>(addr))
-                    panic("Found a Memory error!");
+                if (addr < 128)
+                {
+                    if (*data != static_cast<uint8_t>(addr))
+                        panic("Found a Memory error at %#x!\n", addr);
+                }
+                else if (addr == 128)
+                {
+                    if (*data != (((int) id) - 1) % TESTER_DTU)
+                        panic("Found a Memory error at %#x!\n", addr);
+                }
+                else if (addr == 129)
+                {
+                    if (*data != 0)
+                        panic("Found a Memory error at %#x!\n", addr);
+                }
+                else if (addr == 130)
+                {
+                    if (*data != 128)
+                        panic("Found a Memory error at %#x!\n", addr);
+                }
+                else if (addr == 131)
+                {
+                    if (*data != 0)
+                        panic("Found a Memory error at %#x!\n", addr);
+                }
+                else
+                {
+                    if (*data != static_cast<uint8_t>(addr - 128 - 4))
+                        panic("Found a Memory error at %#x!\n", addr);
+                }
             }
         }
     }
@@ -250,7 +274,7 @@ DtuTest::tick()
             break;
         case 3:
             regAddr = RegFile::getRegAddr(EpReg::TARGET_COREID, 0);
-            pkt = createDtuRegisterPkt(regAddr, id + 1);
+            pkt = createDtuRegisterPkt(regAddr, (id + 1) % TESTER_DTU);
             break;
         case 4:
             regAddr = RegFile::getRegAddr(EpReg::CONFIG, 0);
@@ -278,7 +302,7 @@ DtuTest::tick()
             break;
         case 1:
             regAddr = RegFile::getRegAddr(EpReg::BUFFER_ADDR, 1);
-            pkt = createDtuRegisterPkt(regAddr, 0x128);
+            pkt = createDtuRegisterPkt(regAddr, 128);
             break;
         case 2:
             regAddr = RegFile::getRegAddr(EpReg::BUFFER_SIZE, 1);
@@ -319,7 +343,7 @@ DtuTest::tick()
             DPRINTF(DtuTest, "DTU finished the transaction. Validate the "
                              "Scratchpad content.\n");
 
-        Addr paddr = counter + 512;
+        Addr paddr = counter;
         Request::Flags flags;
 
         auto req = new Request(paddr, 1, flags, masterId);
@@ -331,7 +355,7 @@ DtuTest::tick()
 
         counter++;
 
-        if (counter == 128)
+        if (counter == 256+4)
         {
             DPRINTF(DtuTest, "Successfully verified Scratchpad data.\n");
             counter = 0;

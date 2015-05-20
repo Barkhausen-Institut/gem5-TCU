@@ -228,7 +228,8 @@ BaseDtu::BaseDtu(BaseDtuParams* p)
     nocSlavePort(*this),
     coreId(p->core_id),
     cpuBaseAddr(p->cpu_base_addr),
-    nocAddrBits(p->noc_addr_bits)
+    nocCoreAddrBits(p->noc_core_addr_bits),
+    nocEpAddrBits(p->noc_ep_addr_bits)
 {}
 
 void
@@ -274,9 +275,15 @@ BaseDtu::getSlavePort(const std::string &if_name, PortID idx)
 }
 
 Addr
-BaseDtu::getNocAddr(unsigned coreId) const
+BaseDtu::getNocAddr(unsigned coreId, unsigned epId) const
 {
-    return (static_cast<Addr>(coreId) << (sizeof(Addr) * 8 - nocAddrBits));
+    assert(nocCoreAddrBits + nocEpAddrBits <= sizeof(Addr) * 8);
+
+    Addr res = static_cast<Addr>(epId);
+
+    res |= static_cast<Addr>(coreId) << nocEpAddrBits;
+
+    return res;
 }
 
 void
