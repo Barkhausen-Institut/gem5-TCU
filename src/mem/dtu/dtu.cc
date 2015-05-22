@@ -42,8 +42,10 @@ Dtu::Dtu(DtuParams* p)
     commandToSpmRequestLatency(p->command_to_spm_request_latency),
     spmResponseToNocRequestLatency(p->spm_response_to_noc_request_latency),
     nocRequestToSpmRequestLatency(p->noc_request_to_spm_request_latency),
+    spmResponseToNocResponseLatency(p->spm_response_to_noc_response_latency),
     startTransactionEvent(*this),
-    finishTransactionEvent(*this)
+    finishTransactionEvent(*this),
+    incrementWritePtrEvent(*this)
 {}
 
 PacketPtr
@@ -110,6 +112,30 @@ Dtu::finishTransaction()
     // reset command register and unset busy flag
     regFile.setDtuReg(DtuReg::COMMAND, 0);
     regFile.setDtuReg(DtuReg::STATUS, 0);
+}
+
+void
+Dtu::incrementWritePtr(unsigned epId)
+{
+    /*
+     * XXX We don't check for buffer overflow. We assume that the credit system
+     *     woks correctly and avoids overflows.
+     */
+
+    Addr writePtr   = regFile.readEpReg(epId, EpReg::BUFFER_WRITE_PTR);
+    Addr bufferAddr = regFile.readEpReg(epId, EpReg::BUFFER_ADDR);
+    Addr bufferSize = regFile.readEpReg(epId, EpReg::BUFFER_SIZE);
+
+    writePtr += maxMessageSize;
+
+    if (writePtr >= bufferAddr + bufferSize)
+        writePtr = bufferSize;
+
+    DPRINTF(Dtu, "Ep %u: Increment the write pointer. New address: %#x\n",
+                 epId,
+                 writePtr);
+
+    regFile.setEpReg(epId, EpReg::BUFFER_WRITE_PTR, writePtr);
 }
 
 void
@@ -196,21 +222,33 @@ Dtu::completeSpmReadRequest(PacketPtr pkt)
 void
 Dtu::completeSpmWriteRequest(PacketPtr pkt)
 {
-    if (atomicMode)
-        return;
-
     MessageHeader* header = pkt->getPtr<MessageHeader>();
 
-    DPRINTF(Dtu, "Send response back to EP %u at core %u\n",
-                 header->epId,
-                 header->coreId);
+    auto senderState = dynamic_cast<DtuSenderState*>(pkt->popSenderState());
 
-    Cycles delay = ticksToCycles(pkt->headerDelay + pkt->payloadDelay);
+    if (atomicMode)
+    {
+        incrementWritePtr(senderState->epId);
+    }
+    else
+    {
+        DPRINTF(Dtu, "Send response back to EP %u at core %u\n",
+                     header->epId,
+                     header->coreId);
 
-    pkt->headerDelay = 0;
-    pkt->payloadDelay = 0;
+        Cycles delay = ticksToCycles(pkt->headerDelay + pkt->payloadDelay);
+        delay += spmResponseToNocResponseLatency;
 
-    schedNocResponse(pkt, clockEdge(delay));
+        pkt->headerDelay = 0;
+        pkt->payloadDelay = 0;
+
+        incrementWritePtrEvent.epId = senderState->epId;
+        schedule(incrementWritePtrEvent, clockEdge(delay));
+
+        schedNocResponse(pkt, clockEdge(delay));
+    }
+
+    delete senderState;
 }
 
 void
@@ -230,12 +268,16 @@ Dtu::handleNocRequest(PacketPtr pkt)
                  header->epId,
                  header->coreId);
 
-    // TODO FIFO handling
-    Addr spmAddr = regFile.readEpReg(epId, EpReg::BUFFER_ADDR);
+    Addr spmAddr = regFile.readEpReg(epId, EpReg::BUFFER_WRITE_PTR);
 
     DPRINTF(Dtu, "Write message to local scratchpad at address %#x\n", spmAddr);
 
     pkt->setAddr(spmAddr);
+
+    auto senderState = new DtuSenderState();
+    senderState->epId = epId;
+
+    pkt->pushSenderState(senderState);
 
     if (atomicMode)
     {

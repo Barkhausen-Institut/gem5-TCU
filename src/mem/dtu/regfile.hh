@@ -41,12 +41,16 @@ enum class DtuReg : Addr
     STATUS,
 };
 
+constexpr unsigned numDtuRegs = 2;
+
 enum class EpReg : Addr
 {
     CONFIG, // 1 -> Sender, 0 -> Receiver
     // for receiving
     BUFFER_ADDR,
     BUFFER_SIZE,
+    BUFFER_READ_PTR,
+    BUFFER_WRITE_PTR,
     // for sending
     TARGET_COREID,
     TARGET_EPID,
@@ -54,15 +58,13 @@ enum class EpReg : Addr
     MESSAGE_SIZE,
 };
 
+constexpr unsigned numEpRegs = 9;
+
 class RegFile
 {
   public:
 
     using reg_t = uint32_t;
-
-    static constexpr unsigned numDtuRegs = 2;
-
-    static constexpr unsigned numEpRegs = 7;
 
     static Addr getRegAddr(DtuReg reg);
 

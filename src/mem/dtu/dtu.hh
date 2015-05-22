@@ -56,11 +56,32 @@ class Dtu : public BaseDtu
 
     Cycles nocRequestToSpmRequestLatency;
 
+    Cycles spmResponseToNocResponseLatency;
+
     void startTransaction();
     EventWrapper<Dtu, &Dtu::startTransaction> startTransactionEvent;
 
     void finishTransaction();
     EventWrapper<Dtu, &Dtu::finishTransaction> finishTransactionEvent;
+
+    void incrementWritePtr(unsigned epId);
+
+    struct IncrementWritePtrEvent : public Event
+    {
+        unsigned epId = 0;
+
+        Dtu& dtu;
+
+        IncrementWritePtrEvent(Dtu& _dtu) : dtu(_dtu) {}
+
+        void process() override { dtu.incrementWritePtr(epId); }
+
+        const char* description() const override { return "IncrementWritePtrEvent"; }
+
+        const std::string name() const override { return dtu.name(); }
+    };
+
+    IncrementWritePtrEvent incrementWritePtrEvent;
 
     PacketPtr generateRequest(Addr addr, Addr size, MemCmd cmd);
 
@@ -81,6 +102,11 @@ class Dtu : public BaseDtu
         uint8_t coreId;
         uint8_t epId;
         uint16_t length;
+    };
+
+    struct DtuSenderState : public Packet::SenderState
+    {
+        unsigned epId;
     };
 
   public:

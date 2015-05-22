@@ -56,3 +56,4 @@ class Dtu(BaseDtu):
     command_to_spm_request_latency = Param.Cycles(5, "Number of cycles passed from writing a command to the register to issuing a read request on the scratchpad port")
     spm_response_to_noc_request_latency = Param.Cycles(1, "Number of cycles passed from receiving data on the scratchpad port to sending it on the NoC port")
     noc_request_to_spm_request_latency = Param.Cycles(3, "Number of cycles passsed from receiving a request on the noc port until forwarding it to the spm port");
+    spm_response_to_noc_response_latency = Param.Cycles(1, "Number of cycles passed from receiving a response from the schratchpad to forwarding it to the NoC");
