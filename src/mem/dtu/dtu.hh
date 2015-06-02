@@ -70,6 +70,8 @@ class Dtu : public BaseDtu
     void finishTransaction();
     EventWrapper<Dtu, &Dtu::finishTransaction> finishTransactionEvent;
 
+    void incrementReadPtr(unsigned epId);
+
     void incrementWritePtr(unsigned epId);
 
     struct IncrementWritePtrEvent : public Event
@@ -119,6 +121,7 @@ class Dtu : public BaseDtu
     {
         IDLE = 0,
         SEND_MESSAGE = 1,
+        INC_READ_PTR = 2,
     };
 
   public:

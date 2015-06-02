@@ -81,6 +81,9 @@ Dtu::executeCommand()
     case Command::SEND_MESSAGE:
         startTransaction(epId);
         break;
+    case Command::INC_READ_PTR:
+        incrementReadPtr(epId);
+        break;
     default:
         // TODO error handling
         panic("Invalid command %#x\n", static_cast<RegFile::reg_t>(cmd));
@@ -125,6 +128,31 @@ Dtu::finishTransaction()
     // reset command register and unset busy flag
     regFile.setDtuReg(DtuReg::COMMAND, 0);
     regFile.setDtuReg(DtuReg::STATUS, 0);
+}
+
+void
+Dtu::incrementReadPtr(unsigned epId)
+{
+    Addr readPtr    = regFile.readEpReg(epId, EpReg::BUFFER_READ_PTR);
+    Addr bufferAddr = regFile.readEpReg(epId, EpReg::BUFFER_ADDR);
+    Addr bufferSize = regFile.readEpReg(epId, EpReg::BUFFER_SIZE);
+
+    readPtr += maxMessageSize;
+
+    if (readPtr >= bufferAddr + bufferSize)
+        readPtr = bufferSize;
+
+    DPRINTF(Dtu, "Ep %u: Increment the read pointer. New address: %#x\n",
+                 epId,
+                 readPtr);
+
+    /*
+     * XXX Actually an additianally cycle is needed to update the register.
+     *     We ignore this delay as it should have no or a very small influence
+     *     on the performance of the simulated system.
+     */
+
+    regFile.setEpReg(epId, EpReg::BUFFER_READ_PTR, readPtr);
 }
 
 void
