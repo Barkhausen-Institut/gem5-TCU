@@ -94,6 +94,7 @@ for i in range(0, options.num_pes):
 
     pe.cpu = DtuTest()
     pe.cpu.port = pe.xbar.slave
+    pe.cpu.id = i;
 
     pe.scratchpad = Scratchpad()
     pe.scratchpad.port = pe.xbar.master

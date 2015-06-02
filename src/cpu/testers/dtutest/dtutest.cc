@@ -55,7 +55,8 @@ DtuTest::DtuTest(const DtuTestParams *p)
     atomic(p->system->isAtomicMode()),
     retryPkt(nullptr)
 {
-    id = TESTER_DTU++;
+    id = p->id;
+    TESTER_DTU++;
 
     state = State::INIT;
 
@@ -146,7 +147,7 @@ DtuTest::completeRequest(PacketPtr pkt)
                 }
                 else if (addr == 128)
                 {
-                    if (*data != (((int) id) - 1) % TESTER_DTU)
+                    if (*data != (id + TESTER_DTU - 1) % TESTER_DTU)
                         panic("Found a Memory error at %#x!\n", addr);
                 }
                 else if (addr == 129)
@@ -260,7 +261,7 @@ DtuTest::tick()
         case 0:
             DPRINTF(DtuTest, "Setup Ep 0 to transmit 128 Bytes from local "
                              "Scratchpad at address 0x0 to Ep 1 at core %u\n",
-                             id + 1);
+                             TESTER_DTU, (id + 1) % TESTER_DTU);
             regAddr = RegFile::getRegAddr(EpReg::MESSAGE_ADDR, 0);
             pkt = createDtuRegisterPkt(regAddr, 0);
             break;

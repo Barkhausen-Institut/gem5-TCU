@@ -34,3 +34,4 @@ class DtuTest(MemObject):
     cxx_header = "cpu/testers/dtutest/dtutest.hh"
     port = MasterPort("Port to the DTU and Scratch-Pad-Memory")
     system = Param.System(Parent.any, "System this tester is part of")
+    id = Param.Unsigned("Core ID")
