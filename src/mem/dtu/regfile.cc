@@ -113,42 +113,47 @@ RegFile::handleRequest(PacketPtr pkt)
 {
     assert(pkt->isRead() || pkt->isWrite());
 
-    Addr addr = pkt->getAddr();
+    Addr pktAddr = pkt->getAddr();
 
-    DPRINTF(DtuReg, "access @%#x, size=%u\n", addr, pkt->getSize());
+    DPRINTF(DtuReg, "access @%#x, size=%u\n", pktAddr, pkt->getSize());
 
     // we can only perform full register accesses
     // TODO send error response instead of aborting
-    assert(pkt->getSize() == sizeof(reg_t));
-    assert(addr % sizeof(reg_t) == 0);
-    assert(addr < getSize());
+    assert(pkt->getSize() % sizeof(reg_t) == 0);
+    assert(pktAddr % sizeof(reg_t) == 0);
+    assert(pktAddr + pkt->getSize() <= getSize());
 
     reg_t* data = pkt->getPtr<reg_t>();
 
-    bool isEndpointAccess = addr >= sizeof(reg_t) * numDtuRegs;
-
-    if (isEndpointAccess)
+    // perform a single register access for each requested register
+    for (unsigned offset = 0; offset < pkt->getSize(); offset += sizeof(reg_t))
     {
-        unsigned epid = (addr - sizeof(reg_t) * numDtuRegs) /
-                        (sizeof(reg_t) * numEpRegs);
+        Addr regAddr = pktAddr + offset;
+        bool isEndpointAccess = regAddr >= sizeof(reg_t) * numDtuRegs;
 
-        unsigned regNumber = (addr / sizeof(reg_t) - numDtuRegs) % numEpRegs;
+        if (isEndpointAccess)
+        {
+            unsigned epid = (regAddr - sizeof(reg_t) * numDtuRegs) /
+                            (sizeof(reg_t) * numEpRegs);
 
-        auto reg = static_cast<EpReg>(regNumber);
+            unsigned regNumber = (regAddr / sizeof(reg_t) - numDtuRegs) % numEpRegs;
 
-        if (pkt->isRead())
-            *data = readEpReg(epid, reg);
+            auto reg = static_cast<EpReg>(regNumber);
+
+            if (pkt->isRead())
+                data[offset % sizeof(reg_t)] = readEpReg(epid, reg);
+            else
+                setEpReg(epid, reg, data[offset % sizeof(reg_t)]);
+        }
         else
-            setEpReg(epid, reg, *data);
-    }
-    else
-    {
-        auto reg = static_cast<DtuReg>(addr / sizeof(reg_t));
+        {
+            auto reg = static_cast<DtuReg>(pktAddr / sizeof(reg_t));
 
-        if (pkt->isRead())
-            *data = readDtuReg(reg);
-        else if (pkt->isWrite())
-            setDtuReg(reg, *data);
+            if (pkt->isRead())
+                data[offset % sizeof(reg_t)] = readDtuReg(reg);
+            else if (pkt->isWrite())
+                setDtuReg(reg, data[offset % sizeof(reg_t)]);
+        }
     }
 
     if (pkt->needsResponse())
