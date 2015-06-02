@@ -47,6 +47,7 @@ enum class EpReg : Addr
 {
     CONFIG, // 1 -> Sender, 0 -> Receiver
     // for receiving
+    BUFFER_MESSAGE_COUNT,
     BUFFER_ADDR,
     BUFFER_SIZE,
     BUFFER_READ_PTR,
@@ -58,7 +59,7 @@ enum class EpReg : Addr
     MESSAGE_SIZE,
 };
 
-constexpr unsigned numEpRegs = 9;
+constexpr unsigned numEpRegs = 10;
 
 class RegFile
 {

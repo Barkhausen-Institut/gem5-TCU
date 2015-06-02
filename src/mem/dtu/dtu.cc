@@ -136,6 +136,10 @@ Dtu::incrementReadPtr(unsigned epId)
     Addr readPtr    = regFile.readEpReg(epId, EpReg::BUFFER_READ_PTR);
     Addr bufferAddr = regFile.readEpReg(epId, EpReg::BUFFER_ADDR);
     Addr bufferSize = regFile.readEpReg(epId, EpReg::BUFFER_SIZE);
+    Addr messageCount = regFile.readEpReg(epId, EpReg::BUFFER_MESSAGE_COUNT);
+
+    // TODO error handling
+    assert(messageCount != 0);
 
     readPtr += maxMessageSize;
 
@@ -153,19 +157,18 @@ Dtu::incrementReadPtr(unsigned epId)
      */
 
     regFile.setEpReg(epId, EpReg::BUFFER_READ_PTR, readPtr);
+    regFile.setEpReg(epId, EpReg::BUFFER_MESSAGE_COUNT, messageCount - 1);
 }
 
 void
 Dtu::incrementWritePtr(unsigned epId)
 {
-    /*
-     * XXX We don't check for buffer overflow. We assume that the credit system
-     *     woks correctly and avoids overflows.
-     */
+    Addr writePtr     = regFile.readEpReg(epId, EpReg::BUFFER_WRITE_PTR);
+    Addr bufferAddr   = regFile.readEpReg(epId, EpReg::BUFFER_ADDR);
+    Addr bufferSize   = regFile.readEpReg(epId, EpReg::BUFFER_SIZE);
+    Addr messageCount = regFile.readEpReg(epId, EpReg::BUFFER_MESSAGE_COUNT);
 
-    Addr writePtr   = regFile.readEpReg(epId, EpReg::BUFFER_WRITE_PTR);
-    Addr bufferAddr = regFile.readEpReg(epId, EpReg::BUFFER_ADDR);
-    Addr bufferSize = regFile.readEpReg(epId, EpReg::BUFFER_SIZE);
+    assert(messageCount < bufferSize);
 
     writePtr += maxMessageSize;
 
@@ -177,6 +180,7 @@ Dtu::incrementWritePtr(unsigned epId)
                  writePtr);
 
     regFile.setEpReg(epId, EpReg::BUFFER_WRITE_PTR, writePtr);
+    regFile.setEpReg(epId, EpReg::BUFFER_MESSAGE_COUNT, messageCount + 1);
 }
 
 void
@@ -308,6 +312,13 @@ Dtu::handleNocRequest(PacketPtr pkt)
                  header->length,
                  header->epId,
                  header->coreId);
+
+    unsigned messageCount = regFile.readEpReg(epId, EpReg::BUFFER_MESSAGE_COUNT);
+    unsigned bufferSize   = regFile.readEpReg(epId, EpReg::BUFFER_SIZE);
+
+    if (messageCount == bufferSize)
+        // TODO error handling!
+        panic("Ep %u: Buffer full!\n", epId);
 
     Addr spmAddr = regFile.readEpReg(epId, EpReg::BUFFER_WRITE_PTR);
 
