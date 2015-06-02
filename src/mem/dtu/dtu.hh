@@ -48,6 +48,10 @@ class Dtu : public BaseDtu
 
     Addr maxMessageSize;
 
+    unsigned numCmdEpidBits;
+
+    RegFile::reg_t cmdEpidMask;
+
     Cycles registerAccessLatency;
 
     Cycles commandToSpmRequestLatency;
@@ -58,8 +62,10 @@ class Dtu : public BaseDtu
 
     Cycles spmResponseToNocResponseLatency;
 
-    void startTransaction();
-    EventWrapper<Dtu, &Dtu::startTransaction> startTransactionEvent;
+    void executeCommand();
+    EventWrapper<Dtu, &Dtu::executeCommand> executeCommandEvent;
+
+    void startTransaction(unsigned epId);
 
     void finishTransaction();
     EventWrapper<Dtu, &Dtu::finishTransaction> finishTransactionEvent;
@@ -107,6 +113,12 @@ class Dtu : public BaseDtu
     struct DtuSenderState : public Packet::SenderState
     {
         unsigned epId;
+    };
+
+    enum class Command
+    {
+        IDLE = 0,
+        SEND_MESSAGE = 1,
     };
 
   public:

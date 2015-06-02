@@ -38,12 +38,14 @@ Dtu::Dtu(DtuParams* p)
     numEndpoints(p->num_endpoints),
     masterId(p->system->getMasterId(name())),
     maxMessageSize(p->max_message_size),
+    numCmdEpidBits(p->num_cmd_epid_bits),
+    cmdEpidMask((1 << p->num_cmd_epid_bits) - 1),
     registerAccessLatency(p->register_access_latency),
     commandToSpmRequestLatency(p->command_to_spm_request_latency),
     spmResponseToNocRequestLatency(p->spm_response_to_noc_request_latency),
     nocRequestToSpmRequestLatency(p->noc_request_to_spm_request_latency),
     spmResponseToNocResponseLatency(p->spm_response_to_noc_response_latency),
-    startTransactionEvent(*this),
+    executeCommandEvent(*this),
     finishTransactionEvent(*this),
     incrementWritePtrEvent(*this)
 {}
@@ -63,31 +65,42 @@ Dtu::generateRequest(Addr paddr, Addr size, MemCmd cmd)
 }
 
 void
-Dtu::startTransaction()
+Dtu::executeCommand()
 {
-    RegFile::reg_t command = regFile.readDtuReg(DtuReg::COMMAND);
+    RegFile::reg_t cmdWord = regFile.readDtuReg(DtuReg::COMMAND);
 
-    // TODO paramterize commands?
-    if (!(command & 0x100) || (command & 0xff) > numEndpoints)
-        // TODO erro handling
-        panic("Invalid command: %#x\n", command);
+    RegFile::reg_t epId = cmdWord & cmdEpidMask;
+    Command cmd = static_cast<Command>(cmdWord >> numCmdEpidBits);
 
-    // TODO paramterize commands?
-    unsigned epid = command & 0xff;
+    assert(epId < numEndpoints);
 
-    assert(epid < numEndpoints);
+    switch (cmd)
+    {
+    case Command::IDLE:
+        break;
+    case Command::SEND_MESSAGE:
+        startTransaction(epId);
+        break;
+    default:
+        // TODO error handling
+        panic("Invalid command %#x\n", static_cast<RegFile::reg_t>(cmd));
+    }
+}
 
-    if (regFile.readEpReg(epid, EpReg::CONFIG) != 1)
-        panic("Issued transaction from EP %u but it is not configured for sending\n", epid);
+void
+Dtu::startTransaction(unsigned epId)
+{
+    if (regFile.readEpReg(epId, EpReg::CONFIG) != 1)
+        panic("Issued transaction from EP %u but it is not configured for sending\n", epId);
 
-    Addr messageAddr = regFile.readEpReg(epid, EpReg::MESSAGE_ADDR);
-    Addr messageSize = regFile.readEpReg(epid, EpReg::MESSAGE_SIZE);
+    Addr messageAddr = regFile.readEpReg(epId, EpReg::MESSAGE_ADDR);
+    Addr messageSize = regFile.readEpReg(epId, EpReg::MESSAGE_SIZE);
 
     // TODO error handling
     assert(messageSize > 0);
     assert(messageSize + sizeof(MessageHeader) < maxMessageSize);
 
-    DPRINTF(Dtu, "Endpoint %u starts transmission.\n", epid);
+    DPRINTF(Dtu, "Endpoint %u starts transmission.\n", epId);
     DPRINTF(Dtu, "Read message of %u Bytes at address %#x from local scratchpad.\n",
                  messageSize,
                  messageAddr);
@@ -328,11 +341,11 @@ Dtu::handleCpuRequest(PacketPtr pkt)
         schedCpuResponse(pkt, when);
 
         if (commandWritten)
-            schedule(startTransactionEvent, when);
+            schedule(executeCommandEvent, when);
     }
     else if (commandWritten)
     {
-        startTransaction();
+        executeCommand();
     }
 }
 
