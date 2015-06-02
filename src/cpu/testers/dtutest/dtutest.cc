@@ -307,7 +307,7 @@ DtuTest::tick()
             break;
         case 2:
             regAddr = RegFile::getRegAddr(EpReg::BUFFER_SIZE, 1);
-            pkt = createDtuRegisterPkt(regAddr, 2048);
+            pkt = createDtuRegisterPkt(regAddr, 8);
             break;
         case 3:
             regAddr = RegFile::getRegAddr(EpReg::BUFFER_READ_PTR, 1);

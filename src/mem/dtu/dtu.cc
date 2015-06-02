@@ -139,7 +139,7 @@ Dtu::incrementReadPtr(unsigned epId)
 
     readPtr += maxMessageSize;
 
-    if (readPtr >= bufferAddr + bufferSize)
+    if (readPtr >= bufferAddr + bufferSize * maxMessageSize)
         readPtr = bufferAddr;
 
     DPRINTF(Dtu, "Ep %u: Increment the read pointer. New address: %#x\n",
@@ -169,7 +169,7 @@ Dtu::incrementWritePtr(unsigned epId)
 
     writePtr += maxMessageSize;
 
-    if (writePtr >= bufferAddr + bufferSize)
+    if (writePtr >= bufferAddr + bufferSize * maxMessageSize)
         writePtr = bufferAddr;
 
     DPRINTF(Dtu, "Ep %u: Increment the write pointer. New address: %#x\n",
