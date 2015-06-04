@@ -65,10 +65,10 @@ class Dtu : public BaseDtu
     void executeCommand();
     EventWrapper<Dtu, &Dtu::executeCommand> executeCommandEvent;
 
-    void startTransaction(unsigned epId);
+    void startMessageTransmission(unsigned epId);
 
-    void finishTransaction();
-    EventWrapper<Dtu, &Dtu::finishTransaction> finishTransactionEvent;
+    void finishMessageTransmission();
+    EventWrapper<Dtu, &Dtu::finishMessageTransmission> finishMessageTransmissionEvent;
 
     void incrementReadPtr(unsigned epId);
 
@@ -93,9 +93,9 @@ class Dtu : public BaseDtu
 
     PacketPtr generateRequest(Addr addr, Addr size, MemCmd cmd);
 
-    void completeSpmReadRequest(PacketPtr pkt);
+    void completeLocalSpmRequest(PacketPtr pkt);
 
-    void completeSpmWriteRequest(PacketPtr pkt);
+    void completeForwardedSpmRequest(PacketPtr pkt, unsigned epId);
 
     void completeNocRequest(PacketPtr pkt) override;
 
@@ -118,6 +118,8 @@ class Dtu : public BaseDtu
 
     struct SpmSenderState : public Packet::SenderState
     {
+        bool isForwardedRequest;
+        bool isLocalRequest;
         unsigned epId;
     };
 
@@ -129,9 +131,15 @@ class Dtu : public BaseDtu
 
     enum class Command
     {
-        IDLE = 0,
-        SEND_MESSAGE = 1,
-        INC_READ_PTR = 2,
+        IDLE,
+        START_OPERATION,
+        INC_READ_PTR,
+    };
+
+    enum class EpMode
+    {
+        MESSAGE_RECEIVER,
+        MESSAGE_TRANSMITTER,
     };
 
   public:

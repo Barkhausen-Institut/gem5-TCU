@@ -45,7 +45,7 @@ constexpr unsigned numDtuRegs = 2;
 
 enum class EpReg : Addr
 {
-    CONFIG, // 1 -> Sender, 0 -> Receiver
+    MODE,
     // for receiving
     BUFFER_MESSAGE_COUNT,
     BUFFER_ADDR,

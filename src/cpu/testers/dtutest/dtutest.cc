@@ -278,7 +278,7 @@ DtuTest::tick()
             pkt = createDtuRegisterPkt(regAddr, (id + 1) % TESTER_DTU);
             break;
         case 4:
-            regAddr = RegFile::getRegAddr(EpReg::CONFIG, 0);
+            regAddr = RegFile::getRegAddr(EpReg::MODE, 0);
             pkt = createDtuRegisterPkt(regAddr, 1);
             break;
         default:
@@ -298,7 +298,7 @@ DtuTest::tick()
         {
         case 0:
             DPRINTF(DtuTest, "Setup EP 1 to receive messages\n");
-            regAddr = RegFile::getRegAddr(EpReg::CONFIG, 1);
+            regAddr = RegFile::getRegAddr(EpReg::MODE, 1);
             pkt = createDtuRegisterPkt(regAddr, 0);
             break;
         case 1:

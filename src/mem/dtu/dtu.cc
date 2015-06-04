@@ -46,7 +46,7 @@ Dtu::Dtu(DtuParams* p)
     nocRequestToSpmRequestLatency(p->noc_request_to_spm_request_latency),
     spmResponseToNocResponseLatency(p->spm_response_to_noc_response_latency),
     executeCommandEvent(*this),
-    finishTransactionEvent(*this),
+    finishMessageTransmissionEvent(*this),
     incrementWritePtrEvent(*this)
 {}
 
@@ -78,8 +78,8 @@ Dtu::executeCommand()
     {
     case Command::IDLE:
         break;
-    case Command::SEND_MESSAGE:
-        startTransaction(epId);
+    case Command::START_OPERATION:
+        startMessageTransmission(epId);
         break;
     case Command::INC_READ_PTR:
         incrementReadPtr(epId);
@@ -91,9 +91,9 @@ Dtu::executeCommand()
 }
 
 void
-Dtu::startTransaction(unsigned epId)
+Dtu::startMessageTransmission(unsigned epId)
 {
-    if (regFile.readEpReg(epId, EpReg::CONFIG) != 1)
+    if (regFile.readEpReg(epId, EpReg::MODE) != 1)
         panic("Issued transaction from EP %u but it is not configured for sending\n", epId);
 
     Addr messageAddr = regFile.readEpReg(epId, EpReg::MESSAGE_ADDR);
@@ -113,6 +113,13 @@ Dtu::startTransaction(unsigned epId)
 
     auto pkt = generateRequest(messageAddr, messageSize, MemCmd::ReadReq);
 
+    auto senderState = new SpmSenderState();
+    senderState->epId = epId;
+    senderState->isLocalRequest = true;
+    senderState->isForwardedRequest = false;
+
+    pkt->pushSenderState(senderState);
+
     if (atomicMode)
     {
         sendAtomicSpmRequest(pkt);
@@ -123,7 +130,7 @@ Dtu::startTransaction(unsigned epId)
 }
 
 void
-Dtu::finishTransaction()
+Dtu::finishMessageTransmission()
 {
     // reset command register and unset busy flag
     regFile.setDtuReg(DtuReg::COMMAND, 0);
@@ -194,7 +201,7 @@ Dtu::completeNocRequest(PacketPtr pkt)
     delete pkt->req;
     delete pkt;
 
-    schedule(finishTransactionEvent, clockEdge(delay));
+    schedule(finishMessageTransmissionEvent, clockEdge(delay));
 }
 
 void
@@ -205,17 +212,24 @@ Dtu::completeSpmRequest(PacketPtr pkt)
 
     DPRINTF(Dtu, "Received response from scratchpad.\n");
 
-    if (pkt->isRead())
-        completeSpmReadRequest(pkt);
-    else if (pkt->isWrite())
-        completeSpmWriteRequest(pkt);
+    auto senderState = dynamic_cast<SpmSenderState*>(pkt->popSenderState());
+
+    assert(senderState->isLocalRequest || senderState->isForwardedRequest);
+    assert(!(senderState->isLocalRequest && senderState->isForwardedRequest));
+
+    if (senderState->isLocalRequest)
+        completeLocalSpmRequest(pkt);
     else
-        panic("Unexpected packet type\n");
+        completeForwardedSpmRequest(pkt, senderState->epId);
+
+    delete senderState;
 }
 
 void
-Dtu::completeSpmReadRequest(PacketPtr pkt)
+Dtu::completeLocalSpmRequest(PacketPtr pkt)
 {
+    assert(pkt->isRead());
+
     // TODO paramterize commands?
     unsigned epid = regFile.readDtuReg(DtuReg::COMMAND) & 0xff;
 
@@ -271,15 +285,15 @@ Dtu::completeSpmReadRequest(PacketPtr pkt)
 }
 
 void
-Dtu::completeSpmWriteRequest(PacketPtr pkt)
+Dtu::completeForwardedSpmRequest(PacketPtr pkt, unsigned epId)
 {
-    MessageHeader* header = pkt->getPtr<MessageHeader>();
+    assert(pkt->isWrite());
 
-    auto senderState = dynamic_cast<SpmSenderState*>(pkt->popSenderState());
+    MessageHeader* header = pkt->getPtr<MessageHeader>();
 
     if (atomicMode)
     {
-        incrementWritePtr(senderState->epId);
+        incrementWritePtr(epId);
     }
     else
     {
@@ -293,13 +307,11 @@ Dtu::completeSpmWriteRequest(PacketPtr pkt)
         pkt->headerDelay = 0;
         pkt->payloadDelay = 0;
 
-        incrementWritePtrEvent.epId = senderState->epId;
+        incrementWritePtrEvent.epId = epId;
         schedule(incrementWritePtrEvent, clockEdge(delay));
 
         schedNocResponse(pkt, clockEdge(delay));
     }
-
-    delete senderState;
 }
 
 void
@@ -349,6 +361,8 @@ Dtu::recvNocMessage(PacketPtr pkt)
     pkt->setAddr(spmAddr);
 
     auto senderState = new SpmSenderState();
+    senderState->isLocalRequest = false;
+    senderState->isForwardedRequest = true;
     senderState->epId = epId;
 
     pkt->pushSenderState(senderState);
