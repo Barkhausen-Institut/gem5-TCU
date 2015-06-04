@@ -39,7 +39,7 @@ Dtu::Dtu(DtuParams* p)
     masterId(p->system->getMasterId(name())),
     maxMessageSize(p->max_message_size),
     numCmdEpidBits(p->num_cmd_epid_bits),
-    cmdEpidMask((1 << p->num_cmd_epid_bits) - 1),
+    numCmdOffsetBits(p->num_cmd_offset_bits),
     registerAccessLatency(p->register_access_latency),
     commandToSpmRequestLatency(p->command_to_spm_request_latency),
     spmResponseToNocRequestLatency(p->spm_response_to_noc_request_latency),
@@ -53,6 +53,9 @@ Dtu::Dtu(DtuParams* p)
 PacketPtr
 Dtu::generateRequest(Addr paddr, Addr size, MemCmd cmd)
 {
+    assert(numCmdEpidBits + numCmdOffsetBits + numCmdOpcodeBits <=
+            sizeof(RegFile::reg_t) * 8);
+
     Request::Flags flags;
 
     auto req = new Request(paddr, size, flags, masterId);
@@ -64,29 +67,54 @@ Dtu::generateRequest(Addr paddr, Addr size, MemCmd cmd)
     return pkt;
 }
 
+Dtu::Command
+Dtu::getCommand()
+{
+    using reg_t = RegFile::reg_t;
+
+    /*
+     *   COMMAND                        0
+     * |--------------------------------|
+     * |  offset  |   epid   |  opcode  |
+     * |--------------------------------|
+     */
+    reg_t opcodeMask = (1 << numCmdOpcodeBits) - 1;
+    reg_t epidMask   = ((1 << numCmdEpidBits) - 1) << numCmdOpcodeBits;
+    reg_t offsetMask = ((1 << numCmdOffsetBits) - 1) << (numCmdOpcodeBits + numCmdEpidBits);
+
+    auto reg = regFile.readDtuReg(DtuReg::COMMAND);
+
+    Command cmd;
+
+    cmd.opcode = static_cast<CommandOpcode>(reg & opcodeMask);
+
+    cmd.epId = (reg & epidMask) >> numCmdEpidBits;
+
+    cmd.offset = (reg & offsetMask) >> (numCmdEpidBits + numCmdOpcodeBits);
+
+    return cmd;
+}
+
 void
 Dtu::executeCommand()
 {
-    RegFile::reg_t cmdWord = regFile.readDtuReg(DtuReg::COMMAND);
+    Command cmd = getCommand();
 
-    RegFile::reg_t epId = cmdWord & cmdEpidMask;
-    Command cmd = static_cast<Command>(cmdWord >> numCmdEpidBits);
+    assert(cmd.epId < numEndpoints);
 
-    assert(epId < numEndpoints);
-
-    switch (cmd)
+    switch (cmd.opcode)
     {
-    case Command::IDLE:
+    case CommandOpcode::IDLE:
         break;
-    case Command::START_OPERATION:
-        startMessageTransmission(epId);
+    case CommandOpcode::START_OPERATION:
+        startMessageTransmission(cmd.epId);
         break;
-    case Command::INC_READ_PTR:
-        incrementReadPtr(epId);
+    case CommandOpcode::INC_READ_PTR:
+        incrementReadPtr(cmd.epId);
         break;
     default:
         // TODO error handling
-        panic("Invalid command %#x\n", static_cast<RegFile::reg_t>(cmd));
+        panic("Invalid opcode %#x\n", static_cast<RegFile::reg_t>(cmd.opcode));
     }
 }
 
@@ -230,8 +258,7 @@ Dtu::completeLocalSpmRequest(PacketPtr pkt)
 {
     assert(pkt->isRead());
 
-    // TODO paramterize commands?
-    unsigned epid = regFile.readDtuReg(DtuReg::COMMAND) & 0xff;
+    unsigned epid = getCommand().epId;
 
     unsigned targetCoreId = regFile.readEpReg(epid, EpReg::TARGET_COREID);
     unsigned targetEpId   = regFile.readEpReg(epid, EpReg::TARGET_EPID);

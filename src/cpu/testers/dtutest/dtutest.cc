@@ -332,7 +332,7 @@ DtuTest::tick()
     {
         DPRINTF(DtuTest, "Start Transmission\n");
         regAddr = RegFile::getRegAddr(DtuReg::COMMAND);
-        pkt = createDtuRegisterPkt(regAddr, 0x100);
+        pkt = createDtuRegisterPkt(regAddr, 1);
 
         state = State::WAIT;
         counter = 0;

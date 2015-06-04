@@ -49,7 +49,9 @@ class Dtu(BaseDtu):
     cxx_header = "mem/dtu/dtu.hh"
     system = Param.System(Parent.any, "System we belong to")
     num_endpoints = Param.Unsigned(8, "Number of enpoints per DTU")
+
     num_cmd_epid_bits = Param.Unsigned(8, "Number of bits used to identify the endpoint in a command")
+    num_cmd_offset_bits = Param.Unsigned(16, "Number of bits used for address offset on memory access")
 
     max_message_size = Param.MemorySize("512B", "Maximum message size")
 

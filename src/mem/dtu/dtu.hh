@@ -38,6 +38,48 @@ class Dtu : public BaseDtu
 {
   private:
 
+    struct MessageHeader
+    {
+        uint8_t coreId;
+        uint8_t epId;
+        uint16_t length;
+    };
+
+    struct SpmSenderState : public Packet::SenderState
+    {
+        bool isForwardedRequest;
+        bool isLocalRequest;
+        unsigned epId;
+    };
+
+    struct NocSenderState : public Packet::SenderState
+    {
+        bool isMessage;
+        bool isMemoryRequest;
+    };
+
+    enum class CommandOpcode
+    {
+        IDLE = 0,
+        START_OPERATION = 1,
+        INC_READ_PTR = 2,
+    };
+
+    static constexpr unsigned numCmdOpcodeBits = 2;
+
+    struct Command
+    {
+        CommandOpcode opcode;
+        unsigned epId;
+        Addr offset;
+    };
+
+    enum class EpMode
+    {
+        MESSAGE_RECEIVER,
+        MESSAGE_TRANSMITTER,
+    };
+
     bool atomicMode;
 
     RegFile regFile;
@@ -49,18 +91,17 @@ class Dtu : public BaseDtu
     Addr maxMessageSize;
 
     unsigned numCmdEpidBits;
-
-    RegFile::reg_t cmdEpidMask;
+    unsigned numCmdOffsetBits;
 
     Cycles registerAccessLatency;
-
     Cycles commandToSpmRequestLatency;
-
     Cycles spmResponseToNocRequestLatency;
-
     Cycles nocRequestToSpmRequestLatency;
-
     Cycles spmResponseToNocResponseLatency;
+
+    PacketPtr generateRequest(Addr addr, Addr size, MemCmd cmd);
+
+    Command getCommand();
 
     void executeCommand();
     EventWrapper<Dtu, &Dtu::executeCommand> executeCommandEvent;
@@ -91,8 +132,6 @@ class Dtu : public BaseDtu
 
     IncrementWritePtrEvent incrementWritePtrEvent;
 
-    PacketPtr generateRequest(Addr addr, Addr size, MemCmd cmd);
-
     void completeLocalSpmRequest(PacketPtr pkt);
 
     void completeForwardedSpmRequest(PacketPtr pkt, unsigned epId);
@@ -109,38 +148,6 @@ class Dtu : public BaseDtu
 
     void recvNocMemoryRequest(PacketPtr pkt);
 
-    struct MessageHeader
-    {
-        uint8_t coreId;
-        uint8_t epId;
-        uint16_t length;
-    };
-
-    struct SpmSenderState : public Packet::SenderState
-    {
-        bool isForwardedRequest;
-        bool isLocalRequest;
-        unsigned epId;
-    };
-
-    struct NocSenderState : public Packet::SenderState
-    {
-        bool isMessage;
-        bool isMemoryRequest;
-    };
-
-    enum class Command
-    {
-        IDLE,
-        START_OPERATION,
-        INC_READ_PTR,
-    };
-
-    enum class EpMode
-    {
-        MESSAGE_RECEIVER,
-        MESSAGE_TRANSMITTER,
-    };
 
   public:
 
