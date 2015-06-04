@@ -107,7 +107,7 @@ Dtu::executeCommand()
     case CommandOpcode::IDLE:
         break;
     case CommandOpcode::START_OPERATION:
-        startMessageTransmission(cmd.epId);
+        startOperation(cmd);
         break;
     case CommandOpcode::INC_READ_PTR:
         incrementReadPtr(cmd.epId);
@@ -119,11 +119,29 @@ Dtu::executeCommand()
 }
 
 void
+Dtu::startOperation(Command& cmd)
+{
+    EpMode mode = static_cast<EpMode>(regFile.readEpReg(cmd.epId, EpReg::MODE));
+
+    switch (mode)
+    {
+    case EpMode::RECEIVE_MESSAGE:
+        // TODO Error handling
+        panic("Ep %u: Cannot start operation on an endpoint"
+              "that is configured to receive messages\n", cmd.epId);
+        break;
+    case EpMode::TRANSMIT_MESSAGE:
+        startMessageTransmission(cmd.epId);
+        break;
+    default:
+        // TODO Error handling
+        panic("Ep %u: Invalid mode\n", cmd.epId);
+    }
+}
+
+void
 Dtu::startMessageTransmission(unsigned epId)
 {
-    if (regFile.readEpReg(epId, EpReg::MODE) != 1)
-        panic("Issued transaction from EP %u but it is not configured for sending\n", epId);
-
     Addr messageAddr = regFile.readEpReg(epId, EpReg::MESSAGE_ADDR);
     Addr messageSize = regFile.readEpReg(epId, EpReg::MESSAGE_SIZE);
 

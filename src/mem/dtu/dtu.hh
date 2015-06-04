@@ -76,8 +76,8 @@ class Dtu : public BaseDtu
 
     enum class EpMode
     {
-        MESSAGE_RECEIVER,
-        MESSAGE_TRANSMITTER,
+        RECEIVE_MESSAGE,
+        TRANSMIT_MESSAGE,
     };
 
     bool atomicMode;
@@ -105,6 +105,8 @@ class Dtu : public BaseDtu
 
     void executeCommand();
     EventWrapper<Dtu, &Dtu::executeCommand> executeCommandEvent;
+
+    void startOperation(Command& cmd);
 
     void startMessageTransmission(unsigned epId);
 
