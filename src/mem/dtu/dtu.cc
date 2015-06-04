@@ -251,6 +251,12 @@ Dtu::completeSpmReadRequest(PacketPtr pkt)
     delete pkt->req;
     delete pkt;
 
+    auto senderState = new NocSenderState();
+    senderState->isMessage = true;
+    senderState->isMemoryRequest = false;
+
+    nocPkt->pushSenderState(senderState);
+
     if (atomicMode)
     {
         sendAtomicNocRequest(nocPkt);
@@ -269,7 +275,7 @@ Dtu::completeSpmWriteRequest(PacketPtr pkt)
 {
     MessageHeader* header = pkt->getPtr<MessageHeader>();
 
-    auto senderState = dynamic_cast<DtuSenderState*>(pkt->popSenderState());
+    auto senderState = dynamic_cast<SpmSenderState*>(pkt->popSenderState());
 
     if (atomicMode)
     {
@@ -303,6 +309,22 @@ Dtu::handleNocRequest(PacketPtr pkt)
     assert(pkt->isWrite());
     assert(pkt->hasData());
 
+    auto senderState = dynamic_cast<NocSenderState*>(pkt->popSenderState());
+
+    assert(senderState->isMessage || senderState->isMemoryRequest);
+    assert(!(senderState->isMessage && senderState->isMemoryRequest));
+
+    if (senderState->isMessage)
+        recvNocMessage(pkt);
+    else
+        recvNocMemoryRequest(pkt);
+
+    delete senderState;
+}
+
+void
+Dtu::recvNocMessage(PacketPtr pkt)
+{
     unsigned epId = pkt->getAddr() & ((1UL << nocEpAddrBits) - 1);
 
     MessageHeader* header = pkt->getPtr<MessageHeader>();
@@ -326,7 +348,7 @@ Dtu::handleNocRequest(PacketPtr pkt)
 
     pkt->setAddr(spmAddr);
 
-    auto senderState = new DtuSenderState();
+    auto senderState = new SpmSenderState();
     senderState->epId = epId;
 
     pkt->pushSenderState(senderState);
@@ -345,6 +367,12 @@ Dtu::handleNocRequest(PacketPtr pkt)
 
         schedSpmRequest(pkt, clockEdge(delay));
     }
+}
+
+void
+Dtu::recvNocMemoryRequest(PacketPtr pkt)
+{
+    panic("recvNocMemoryRequest not yet implemented\n");
 }
 
 void

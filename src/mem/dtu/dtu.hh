@@ -105,6 +105,10 @@ class Dtu : public BaseDtu
 
     void handleCpuRequest(PacketPtr pkt) override;
 
+    void recvNocMessage(PacketPtr pkt);
+
+    void recvNocMemoryRequest(PacketPtr pkt);
+
     struct MessageHeader
     {
         uint8_t coreId;
@@ -112,9 +116,15 @@ class Dtu : public BaseDtu
         uint16_t length;
     };
 
-    struct DtuSenderState : public Packet::SenderState
+    struct SpmSenderState : public Packet::SenderState
     {
         unsigned epId;
+    };
+
+    struct NocSenderState : public Packet::SenderState
+    {
+        bool isMessage;
+        bool isMemoryRequest;
     };
 
     enum class Command
