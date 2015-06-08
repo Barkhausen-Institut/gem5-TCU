@@ -113,7 +113,14 @@ class Dtu : public BaseDtu
     void finishOperation();
     EventWrapper<Dtu, &Dtu::finishOperation> finishOperationEvent;
 
-    void startMessageTransmission(unsigned epId);
+    void sendSpmRequest(PacketPtr pkt,
+                        unsigned epId,
+                        Cycles delay,
+                        bool isForwarded);
+
+    void startMessageTransmission(const Command& cmd);
+
+    void startMemoryWrite(const Command& cmd);
 
     void incrementReadPtr(unsigned epId);
 

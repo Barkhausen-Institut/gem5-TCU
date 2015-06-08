@@ -63,7 +63,7 @@ enum class EpReg : Addr
     REQUEST_SIZE,
 };
 
-constexpr unsigned numEpRegs = 10;
+constexpr unsigned numEpRegs = 13;
 
 class RegFile
 {

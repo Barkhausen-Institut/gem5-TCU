@@ -134,7 +134,10 @@ Dtu::startOperation(Command& cmd)
               "that is configured to receive messages\n", cmd.epId);
         break;
     case EpMode::TRANSMIT_MESSAGE:
-        startMessageTransmission(cmd.epId);
+        startMessageTransmission(cmd);
+        break;
+    case EpMode::WRITE_MEMORY:
+        startMemoryWrite(cmd);
         break;
     default:
         // TODO Error handling
@@ -151,26 +154,12 @@ Dtu::finishOperation()
 }
 
 void
-Dtu::startMessageTransmission(unsigned epId)
+Dtu::sendSpmRequest(PacketPtr pkt, unsigned epId, Cycles delay, bool isForwarded)
 {
-    Addr messageAddr = regFile.readEpReg(epId, EpReg::MESSAGE_ADDR);
-    Addr messageSize = regFile.readEpReg(epId, EpReg::MESSAGE_SIZE);
-
-    // TODO error handling
-    assert(messageSize > 0);
-    assert(messageSize + sizeof(MessageHeader) < maxMessageSize);
-
-    DPRINTF(Dtu, "Endpoint %u starts transmission.\n", epId);
-    DPRINTF(Dtu, "Read message of %u Bytes at address %#x from local scratchpad.\n",
-                 messageSize,
-                 messageAddr);
-
-    auto pkt = generateRequest(messageAddr, messageSize, MemCmd::ReadReq);
-
     auto senderState = new SpmSenderState();
     senderState->epId = epId;
-    senderState->isLocalRequest = true;
-    senderState->isForwardedRequest = false;
+    senderState->isLocalRequest = !isForwarded;
+    senderState->isForwardedRequest = isForwarded;
 
     pkt->pushSenderState(senderState);
 
@@ -180,7 +169,51 @@ Dtu::startMessageTransmission(unsigned epId)
         completeSpmRequest(pkt);
     }
     else
-        schedSpmRequest(pkt, clockEdge(commandToSpmRequestLatency));
+    {
+        schedSpmRequest(pkt, clockEdge(delay));
+    }
+}
+void
+Dtu::startMessageTransmission(const Command& cmd)
+{
+    Addr messageAddr = regFile.readEpReg(cmd.epId, EpReg::MESSAGE_ADDR);
+    Addr messageSize = regFile.readEpReg(cmd.epId, EpReg::MESSAGE_SIZE);
+
+    // TODO error handling
+    assert(messageSize > 0);
+    assert(messageSize + sizeof(MessageHeader) < maxMessageSize);
+
+    DPRINTF(Dtu, "Endpoint %u starts message transmission.\n", cmd.epId);
+    DPRINTF(Dtu, "Read message of %u Bytes at address %#x from local scratchpad.\n",
+                 messageSize,
+                 messageAddr);
+
+    auto pkt = generateRequest(messageAddr, messageSize, MemCmd::ReadReq);
+
+    sendSpmRequest(pkt, cmd.epId, commandToSpmRequestLatency, false);
+}
+
+void
+Dtu::startMemoryWrite(const Command& cmd)
+{
+    Addr localAddr = regFile.readEpReg(cmd.epId, EpReg::REQUEST_LOCAL_ADDR);
+    Addr requestSize = regFile.readEpReg(cmd.epId, EpReg::REQUEST_SIZE);
+
+    // TODO error handling
+    assert(requestSize > 0);
+    assert(requestSize < maxMessageSize);
+
+    Addr remoteAddr = regFile.readEpReg(cmd.epId, EpReg::REQUEST_SIZE);
+    remoteAddr += cmd.offset;
+
+    DPRINTF(Dtu, "Endpoint %u starts memory write.\n", cmd.epId);
+    DPRINTF(Dtu, "Read %u bytes at address %#x from local scratchpad.\n",
+                 requestSize,
+                 localAddr);
+
+    auto pkt = generateRequest(localAddr, requestSize, MemCmd::ReadReq);
+
+    sendSpmRequest(pkt, cmd.epId, commandToSpmRequestLatency, false);
 }
 
 void
@@ -429,27 +462,10 @@ Dtu::recvNocMessage(PacketPtr pkt)
 
     pkt->setAddr(spmAddr);
 
-    auto senderState = new SpmSenderState();
-    senderState->isLocalRequest = false;
-    senderState->isForwardedRequest = true;
-    senderState->epId = epId;
+    Cycles delay = ticksToCycles(pkt->headerDelay);
+    delay += nocRequestToSpmRequestLatency;
 
-    pkt->pushSenderState(senderState);
-
-    if (atomicMode)
-    {
-        sendAtomicSpmRequest(pkt);
-        completeSpmRequest(pkt);
-    }
-    else
-    {
-        Cycles delay = ticksToCycles(pkt->headerDelay);
-        delay += nocRequestToSpmRequestLatency;
-
-        pkt->headerDelay = 0;
-
-        schedSpmRequest(pkt, clockEdge(delay));
-    }
+    sendSpmRequest(pkt, epId, delay, true);
 }
 
 void
