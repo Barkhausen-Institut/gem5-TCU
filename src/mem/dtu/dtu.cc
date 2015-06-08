@@ -380,7 +380,7 @@ Dtu::sendNocMemoryWriteRequest(const uint8_t* data,
     Command cmd = getCommand();
     unsigned epId = cmd.epId;
 
-    Addr targetAddr = regFile.readEpReg(epId, EpReg::BUFFER_READ_PTR);
+    Addr targetAddr = regFile.readEpReg(epId, EpReg::REQUEST_REMOTE_ADDR);
     targetAddr += cmd.offset;
 
     assert(requestSize == regFile.readEpReg(epId, EpReg::REQUEST_SIZE));
@@ -403,7 +403,7 @@ Dtu::sendNocMemoryWriteRequest(const uint8_t* data,
     Cycles delay = spmResponseToNocRequestLatency;
     delay += ticksToCycles(spmPktHeaderDelay);
     pkt->payloadDelay = spmPktPayloadDelay;
-    sendNocRequest(pkt, delay, true);
+    sendNocRequest(pkt, delay, false);
 }
 
 void
