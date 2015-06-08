@@ -46,7 +46,7 @@ Dtu::Dtu(DtuParams* p)
     nocRequestToSpmRequestLatency(p->noc_request_to_spm_request_latency),
     spmResponseToNocResponseLatency(p->spm_response_to_noc_response_latency),
     executeCommandEvent(*this),
-    finishMessageTransmissionEvent(*this),
+    finishOperationEvent(*this),
     incrementWritePtrEvent(*this)
 {}
 
@@ -121,6 +121,9 @@ Dtu::executeCommand()
 void
 Dtu::startOperation(Command& cmd)
 {
+    // set busy flag
+    regFile.setDtuReg(DtuReg::STATUS, 1);
+
     EpMode mode = static_cast<EpMode>(regFile.readEpReg(cmd.epId, EpReg::MODE));
 
     switch (mode)
@@ -140,6 +143,14 @@ Dtu::startOperation(Command& cmd)
 }
 
 void
+Dtu::finishOperation()
+{
+    // reset command register and unset busy flag
+    regFile.setDtuReg(DtuReg::COMMAND, 0);
+    regFile.setDtuReg(DtuReg::STATUS, 0);
+}
+
+void
 Dtu::startMessageTransmission(unsigned epId)
 {
     Addr messageAddr = regFile.readEpReg(epId, EpReg::MESSAGE_ADDR);
@@ -153,9 +164,6 @@ Dtu::startMessageTransmission(unsigned epId)
     DPRINTF(Dtu, "Read message of %u Bytes at address %#x from local scratchpad.\n",
                  messageSize,
                  messageAddr);
-
-    // set busy flag
-    regFile.setDtuReg(DtuReg::STATUS, 1);
 
     auto pkt = generateRequest(messageAddr, messageSize, MemCmd::ReadReq);
 
@@ -173,14 +181,6 @@ Dtu::startMessageTransmission(unsigned epId)
     }
     else
         schedSpmRequest(pkt, clockEdge(commandToSpmRequestLatency));
-}
-
-void
-Dtu::finishMessageTransmission()
-{
-    // reset command register and unset busy flag
-    regFile.setDtuReg(DtuReg::COMMAND, 0);
-    regFile.setDtuReg(DtuReg::STATUS, 0);
 }
 
 void
@@ -247,7 +247,7 @@ Dtu::completeNocRequest(PacketPtr pkt)
     delete pkt->req;
     delete pkt;
 
-    schedule(finishMessageTransmissionEvent, clockEdge(delay));
+    schedule(finishOperationEvent, clockEdge(delay));
 }
 
 void
@@ -272,17 +272,18 @@ Dtu::completeSpmRequest(PacketPtr pkt)
 }
 
 void
-Dtu::completeLocalSpmRequest(PacketPtr pkt)
+Dtu::sendNocMessage(const uint8_t* data,
+                    Addr messageSize,
+                    Tick spmPktHeaderDelay,
+                    Tick spmPktPayloadDelay)
 {
-    assert(pkt->isRead());
-
     unsigned epid = getCommand().epId;
 
     unsigned targetCoreId = regFile.readEpReg(epid, EpReg::TARGET_COREID);
     unsigned targetEpId   = regFile.readEpReg(epid, EpReg::TARGET_EPID);
-    unsigned messageSize  = regFile.readEpReg(epid, EpReg::MESSAGE_SIZE);
 
-    assert(pkt->getSize() == messageSize);
+    assert(regFile.readEpReg(epid, EpReg::MESSAGE_SIZE) == messageSize);
+    assert(messageSize + sizeof(MessageHeader) <= maxMessageSize);
 
     DPRINTF(Dtu, "Send message of %u bytes to endpoint %u at core %u.\n",
                  messageSize,
@@ -293,40 +294,63 @@ Dtu::completeLocalSpmRequest(PacketPtr pkt)
                              static_cast<uint8_t>(epid),
                              static_cast<uint16_t>(messageSize) };
 
-    auto nocPkt = generateRequest(getNocAddr(targetCoreId, targetEpId),
-                                  messageSize + sizeof(MessageHeader),
-                                  MemCmd::WriteReq);
+    auto pkt = generateRequest(getNocAddr(targetCoreId, targetEpId),
+                               messageSize + sizeof(MessageHeader),
+                               MemCmd::WriteReq);
 
-    memcpy(nocPkt->getPtr<uint8_t>(), &header, sizeof(MessageHeader));
-    memcpy(nocPkt->getPtr<uint8_t>() + sizeof(MessageHeader),
-           pkt->getPtr<uint8_t>(),
+    memcpy(pkt->getPtr<uint8_t>(), &header, sizeof(MessageHeader));
+    memcpy(pkt->getPtr<uint8_t>() + sizeof(MessageHeader),
+           data,
            messageSize);
-
-    Tick pktHeaderDelay = pkt->headerDelay;
-    // XXX is this the right way to go?
-    nocPkt->payloadDelay = pkt->payloadDelay;
-
-    // clean up
-    delete pkt->req;
-    delete pkt;
 
     auto senderState = new NocSenderState();
     senderState->isMessage = true;
     senderState->isMemoryRequest = false;
 
-    nocPkt->pushSenderState(senderState);
+    pkt->pushSenderState(senderState);
 
     if (atomicMode)
     {
-        sendAtomicNocRequest(nocPkt);
-        completeNocRequest(nocPkt);
+        sendAtomicNocRequest(pkt);
+        completeNocRequest(pkt);
     }
     else
     {
+        /*
+         * The message data is derived from a scratchpad response. Therefore
+         * we need to pay for the header delay of this reponse in addition
+         * to the delay caused by the DTU. We don't need to pay for the
+         * payload delay as data is forwarded word by word. Therefore the
+         * payload delay is assigned to the new NoC packet, so that the overall
+         * payload delay is defined by the slowest component (scratchpad or NoC)
+         */
         Cycles delay = spmResponseToNocRequestLatency;
-        delay += ticksToCycles(pktHeaderDelay);
-        schedNocRequest(nocPkt, clockEdge(delay));
+        delay += ticksToCycles(spmPktHeaderDelay);
+        pkt->payloadDelay = spmPktPayloadDelay;
+        schedNocRequest(pkt, clockEdge(delay));
     }
+}
+
+void
+Dtu::completeLocalSpmRequest(PacketPtr pkt)
+{
+    assert(pkt->isRead());
+
+    unsigned epid = getCommand().epId;
+
+    EpMode mode = static_cast<EpMode>(regFile.readEpReg(epid, EpReg::MODE));
+
+    if (mode == EpMode::TRANSMIT_MESSAGE)
+        sendNocMessage(pkt->getConstPtr<uint8_t>(),
+                       pkt->getSize(),
+                       pkt->headerDelay,
+                       pkt->payloadDelay);
+    else
+        panic("Unexpected mode!\n");
+
+    // clean up
+    delete pkt->req;
+    delete pkt;
 }
 
 void

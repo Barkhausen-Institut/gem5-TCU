@@ -108,10 +108,10 @@ class Dtu : public BaseDtu
 
     void startOperation(Command& cmd);
 
-    void startMessageTransmission(unsigned epId);
+    void finishOperation();
+    EventWrapper<Dtu, &Dtu::finishOperation> finishOperationEvent;
 
-    void finishMessageTransmission();
-    EventWrapper<Dtu, &Dtu::finishMessageTransmission> finishMessageTransmissionEvent;
+    void startMessageTransmission(unsigned epId);
 
     void incrementReadPtr(unsigned epId);
 
@@ -133,6 +133,11 @@ class Dtu : public BaseDtu
     };
 
     IncrementWritePtrEvent incrementWritePtrEvent;
+
+    void sendNocMessage(const uint8_t* data,
+                        Addr messageSize,
+                        Tick spmPktHeaderDelay,
+                        Tick spmPktPayloadDelay);
 
     void completeLocalSpmRequest(PacketPtr pkt);
 
