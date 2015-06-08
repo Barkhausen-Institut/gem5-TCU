@@ -143,10 +143,19 @@ class Dtu : public BaseDtu
 
     IncrementWritePtrEvent incrementWritePtrEvent;
 
+    void sendNocRequest(PacketPtr pkt,
+                        Cycles delay,
+                        bool isMessage);
+
     void sendNocMessage(const uint8_t* data,
                         Addr messageSize,
                         Tick spmPktHeaderDelay,
                         Tick spmPktPayloadDelay);
+
+    void sendNocMemoryWriteRequest(const uint8_t* data,
+                                   Addr requestSize,
+                                   Tick spmPktHeaderDelay,
+                                   Tick spmPktPayloadDelay);
 
     void completeLocalSpmRequest(PacketPtr pkt);
 

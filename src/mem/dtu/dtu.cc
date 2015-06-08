@@ -173,6 +173,7 @@ Dtu::sendSpmRequest(PacketPtr pkt, unsigned epId, Cycles delay, bool isForwarded
         schedSpmRequest(pkt, clockEdge(delay));
     }
 }
+
 void
 Dtu::startMessageTransmission(const Command& cmd)
 {
@@ -305,6 +306,26 @@ Dtu::completeSpmRequest(PacketPtr pkt)
 }
 
 void
+Dtu::sendNocRequest(PacketPtr pkt, Cycles delay, bool isMessage)
+{
+    auto senderState = new NocSenderState();
+    senderState->isMessage = isMessage;
+    senderState->isMemoryRequest = !isMessage;
+
+    pkt->pushSenderState(senderState);
+
+    if (atomicMode)
+    {
+        sendAtomicNocRequest(pkt);
+        completeNocRequest(pkt);
+    }
+    else
+    {
+        schedNocRequest(pkt, clockEdge(delay));
+    }
+}
+
+void
 Dtu::sendNocMessage(const uint8_t* data,
                     Addr messageSize,
                     Tick spmPktHeaderDelay,
@@ -336,32 +357,53 @@ Dtu::sendNocMessage(const uint8_t* data,
            data,
            messageSize);
 
-    auto senderState = new NocSenderState();
-    senderState->isMessage = true;
-    senderState->isMemoryRequest = false;
+    /*
+     * The message data is derived from a scratchpad response. Therefore
+     * we need to pay for the header delay of this reponse in addition
+     * to the delay caused by the DTU. We don't need to pay for the
+     * payload delay as data is forwarded word by word. Therefore the
+     * payload delay is assigned to the new NoC packet, so that the overall
+     * payload delay is defined by the slowest component (scratchpad or NoC)
+     */
+    Cycles delay = spmResponseToNocRequestLatency;
+    delay += ticksToCycles(spmPktHeaderDelay);
+    pkt->payloadDelay = spmPktPayloadDelay;
+    sendNocRequest(pkt, delay, true);
+}
 
-    pkt->pushSenderState(senderState);
+void
+Dtu::sendNocMemoryWriteRequest(const uint8_t* data,
+                               Addr requestSize,
+                               Tick spmPktHeaderDelay,
+                               Tick spmPktPayloadDelay)
+{
+    Command cmd = getCommand();
+    unsigned epId = cmd.epId;
 
-    if (atomicMode)
-    {
-        sendAtomicNocRequest(pkt);
-        completeNocRequest(pkt);
-    }
-    else
-    {
-        /*
-         * The message data is derived from a scratchpad response. Therefore
-         * we need to pay for the header delay of this reponse in addition
-         * to the delay caused by the DTU. We don't need to pay for the
-         * payload delay as data is forwarded word by word. Therefore the
-         * payload delay is assigned to the new NoC packet, so that the overall
-         * payload delay is defined by the slowest component (scratchpad or NoC)
-         */
-        Cycles delay = spmResponseToNocRequestLatency;
-        delay += ticksToCycles(spmPktHeaderDelay);
-        pkt->payloadDelay = spmPktPayloadDelay;
-        schedNocRequest(pkt, clockEdge(delay));
-    }
+    Addr targetAddr = regFile.readEpReg(epId, EpReg::BUFFER_READ_PTR);
+    targetAddr += cmd.offset;
+
+    assert(requestSize == regFile.readEpReg(epId, EpReg::REQUEST_SIZE));
+    assert(requestSize <= maxMessageSize);
+
+    DPRINTF(Dtu, "Send %u bytes to address %#x.\n",
+                 requestSize,
+                 targetAddr);
+
+    auto pkt = generateRequest(targetAddr,
+                               requestSize,
+                               MemCmd::WriteReq);
+    memcpy(pkt->getPtr<uint8_t>() + sizeof(MessageHeader),
+           data,
+           requestSize);
+
+    /*
+     * See sendNocMessage() for an explanation of delay handling.
+     */
+    Cycles delay = spmResponseToNocRequestLatency;
+    delay += ticksToCycles(spmPktHeaderDelay);
+    pkt->payloadDelay = spmPktPayloadDelay;
+    sendNocRequest(pkt, delay, true);
 }
 
 void
@@ -378,7 +420,13 @@ Dtu::completeLocalSpmRequest(PacketPtr pkt)
                        pkt->getSize(),
                        pkt->headerDelay,
                        pkt->payloadDelay);
+    else if (mode == EpMode::WRITE_MEMORY)
+        sendNocMemoryWriteRequest(pkt->getConstPtr<uint8_t>(),
+                                  pkt->getSize(),
+                                  pkt->headerDelay,
+                                  pkt->payloadDelay);
     else
+        // TODO error handling
         panic("Unexpected mode!\n");
 
     // clean up
