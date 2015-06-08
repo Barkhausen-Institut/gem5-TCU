@@ -78,6 +78,8 @@ class Dtu : public BaseDtu
     {
         RECEIVE_MESSAGE,
         TRANSMIT_MESSAGE,
+        READ_MEMORY,
+        WRITE_MEMORY,
     };
 
     bool atomicMode;
@@ -154,7 +156,6 @@ class Dtu : public BaseDtu
     void recvNocMessage(PacketPtr pkt);
 
     void recvNocMemoryRequest(PacketPtr pkt);
-
 
   public:
 
