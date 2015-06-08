@@ -213,6 +213,8 @@ BaseDtu::NocSlavePort::getAddrRanges() const
     Addr baseNocAddr = dtu.getNocAddr(dtu.coreId);
     Addr topNocAddr  = dtu.getNocAddr(dtu.coreId + 1) - 1;
 
+    DPRINTF(DtuSlavePort, "Dtu %u covers %#x to %#x\n", dtu.coreId, baseNocAddr, topNocAddr);
+
     auto range = AddrRange(baseNocAddr, topNocAddr);
 
     ranges.push_back(range);
@@ -228,6 +230,7 @@ BaseDtu::BaseDtu(BaseDtuParams* p)
     nocSlavePort(*this),
     coreId(p->core_id),
     cpuBaseAddr(p->cpu_base_addr),
+    nocAddrWidth(p->noc_addr_width),
     nocCoreAddrBits(p->noc_core_addr_bits),
     nocEpAddrBits(p->noc_ep_addr_bits)
 {}
@@ -277,11 +280,20 @@ BaseDtu::getSlavePort(const std::string &if_name, PortID idx)
 Addr
 BaseDtu::getNocAddr(unsigned coreId, unsigned epId) const
 {
-    assert(nocCoreAddrBits + nocEpAddrBits <= sizeof(Addr) * 8);
+    /*
+     * nocAddrWidth - 1                     0
+     *        -------------------------------
+     *        | 1 |  coreId  | ... |  epId  |
+     *        -------------------------------
+     */
+    assert(nocCoreAddrBits + nocEpAddrBits + 1 <= nocAddrWidth);
 
-    Addr res = static_cast<Addr>(epId);
+    // MSB is always 1
+    Addr res = 1UL << (nocAddrWidth - 1);
 
-    res |= static_cast<Addr>(coreId) << nocEpAddrBits;
+    res |= static_cast<Addr>(coreId) << (nocAddrWidth  - nocCoreAddrBits - 1);
+
+    res |= epId & ((1 << nocEpAddrBits) - 1);
 
     return res;
 }

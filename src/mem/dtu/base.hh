@@ -174,6 +174,8 @@ class BaseDtu : public MemObject
 
     Addr cpuBaseAddr;
 
+    unsigned nocAddrWidth;
+
     unsigned nocCoreAddrBits;
 
     unsigned nocEpAddrBits;

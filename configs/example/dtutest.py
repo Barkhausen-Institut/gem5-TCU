@@ -101,7 +101,6 @@ for i in range(0, options.num_pes):
 
     pe.dtu = Dtu()
     pe.dtu.core_id = i
-    pe.dtu.noc_core_addr_bits = math.ceil(math.log(options.num_pes,2))
     pe.dtu.scratchpad = pe.xbar.slave
     pe.dtu.cpu = pe.xbar.master
 

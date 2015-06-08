@@ -40,6 +40,7 @@ class BaseDtu(MemObject):
     noc_slave  = SlavePort("DTU slave port")
 
     cpu_base_addr = Param.Addr(0x10000000, "DTU address (used by CPU to access the DTU)")
+    noc_addr_width = Param.Unsigned(32, "NoC address width")
     noc_core_addr_bits = Param.Unsigned(8, "Number of bits used to address a core")
     noc_ep_addr_bits = Param.Unsigned(8, "Number of bits used address an endpoint within a core")
     core_id = Param.Unsigned("ID of the core this DTU belongs to")
