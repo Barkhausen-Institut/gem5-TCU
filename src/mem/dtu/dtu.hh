@@ -143,6 +143,8 @@ class Dtu : public BaseDtu
 
     IncrementWritePtrEvent incrementWritePtrEvent;
 
+    void forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest);
+
     void sendNocRequest(PacketPtr pkt,
                         Cycles delay,
                         bool isMessage);

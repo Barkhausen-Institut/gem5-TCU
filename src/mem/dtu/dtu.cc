@@ -468,8 +468,6 @@ void
 Dtu::handleNocRequest(PacketPtr pkt)
 {
     assert(!pkt->isError());
-    assert(pkt->isWrite());
-    assert(pkt->hasData());
 
     auto senderState = dynamic_cast<NocSenderState*>(pkt->popSenderState());
 
@@ -487,6 +485,9 @@ Dtu::handleNocRequest(PacketPtr pkt)
 void
 Dtu::recvNocMessage(PacketPtr pkt)
 {
+    assert(pkt->isWrite());
+    assert(pkt->hasData());
+
     unsigned epId = pkt->getAddr() & ((1UL << nocEpAddrBits) - 1);
 
     MessageHeader* header = pkt->getPtr<MessageHeader>();
@@ -519,11 +520,21 @@ Dtu::recvNocMessage(PacketPtr pkt)
 void
 Dtu::recvNocMemoryRequest(PacketPtr pkt)
 {
-    panic("recvNocMemoryRequest not yet implemented\n");
+    // get local Address
+    pkt->setAddr( pkt->getAddr() & ~getNocAddr(coreId, 0));
+
+    // TODO Rename cpuBaseAddr to regFileBaseAddr
+    if (pkt->getAddr() & cpuBaseAddr)
+        forwardRequestToRegFile(pkt, false);
+    else
+        panic("Spm request cannot be handled yet\n");
+
+    // restore global address for response
+    pkt->setAddr(pkt->getAddr() | getNocAddr(coreId, 0));
 }
 
 void
-Dtu::handleCpuRequest(PacketPtr pkt)
+Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
 {
     Addr origAddr = pkt->getAddr();
 
@@ -552,7 +563,10 @@ Dtu::handleCpuRequest(PacketPtr pkt)
         pkt->headerDelay = 0;
         pkt->payloadDelay = 0;
 
-        schedCpuResponse(pkt, when);
+        if (isCpuRequest)
+            schedCpuResponse(pkt, when);
+        else
+            schedNocResponse(pkt, when);
 
         if (commandWritten)
             schedule(executeCommandEvent, when);
@@ -561,6 +575,12 @@ Dtu::handleCpuRequest(PacketPtr pkt)
     {
         executeCommand();
     }
+}
+
+void
+Dtu::handleCpuRequest(PacketPtr pkt)
+{
+    forwardRequestToRegFile(pkt, true);
 }
 
 Dtu*
