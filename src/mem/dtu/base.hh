@@ -172,7 +172,7 @@ class BaseDtu : public MemObject
 
     unsigned coreId;
 
-    Addr cpuBaseAddr;
+    Addr regFileBaseAddr;
 
     unsigned nocAddrWidth;
 

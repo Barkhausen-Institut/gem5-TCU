@@ -523,8 +523,7 @@ Dtu::recvNocMemoryRequest(PacketPtr pkt)
     // get local Address
     pkt->setAddr( pkt->getAddr() & ~getNocAddr(coreId, 0));
 
-    // TODO Rename cpuBaseAddr to regFileBaseAddr
-    if (pkt->getAddr() & cpuBaseAddr)
+    if (pkt->getAddr() & regFileBaseAddr)
         forwardRequestToRegFile(pkt, false);
     else
         panic("Spm request cannot be handled yet\n");
@@ -540,7 +539,7 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
 
     // Strip the base address to handle requests based on the register address
     // only. The original address is restored before responding.
-    pkt->setAddr(origAddr - cpuBaseAddr);
+    pkt->setAddr(origAddr - regFileBaseAddr);
 
     bool commandWritten = regFile.handleRequest(pkt);
 

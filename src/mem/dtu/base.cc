@@ -187,12 +187,12 @@ BaseDtu::DtuSlavePort::ResponseEvent::process()
 AddrRangeList
 BaseDtu::CpuPort::getAddrRanges() const
 {
-    assert(dtu.cpuBaseAddr != 0);
+    assert(dtu.regFileBaseAddr != 0);
 
     AddrRangeList ranges;
 
-    auto range = AddrRange(dtu.cpuBaseAddr,
-                           dtu.cpuBaseAddr + (dtu.cpuBaseAddr - 1));
+    auto range = AddrRange(dtu.regFileBaseAddr,
+                           dtu.regFileBaseAddr + (dtu.regFileBaseAddr - 1));
 
     ranges.push_back(range);
 
@@ -229,7 +229,7 @@ BaseDtu::BaseDtu(BaseDtuParams* p)
     nocMasterPort(*this),
     nocSlavePort(*this),
     coreId(p->core_id),
-    cpuBaseAddr(p->cpu_base_addr),
+    regFileBaseAddr(p->regfile_base_addr),
     nocAddrWidth(p->noc_addr_width),
     nocCoreAddrBits(p->noc_core_addr_bits),
     nocEpAddrBits(p->noc_ep_addr_bits)
