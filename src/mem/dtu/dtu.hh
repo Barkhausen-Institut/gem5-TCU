@@ -45,17 +45,28 @@ class Dtu : public BaseDtu
         uint16_t length;
     };
 
+    enum class NocPacketType
+    {
+        MESSAGE,
+        REQUEST,
+    };
+
+    enum class SpmPacketType
+    {
+        FORWARDED_MESSAGE,
+        FORWARDED_REQUEST,
+        LOCAL_REQUEST,
+    };
+
     struct SpmSenderState : public Packet::SenderState
     {
-        bool isForwardedRequest;
-        bool isLocalRequest;
-        unsigned epId;
+        SpmPacketType packetType;
+        unsigned epId; // only valid if packetType != SpmPacketType::FORWARDER_REUEST
     };
 
     struct NocSenderState : public Packet::SenderState
     {
-        bool isMessage;
-        bool isMemoryRequest;
+        NocPacketType packetType;
     };
 
     enum class CommandOpcode
@@ -98,6 +109,7 @@ class Dtu : public BaseDtu
     Cycles registerAccessLatency;
     Cycles commandToSpmRequestLatency;
     Cycles spmResponseToNocRequestLatency;
+    Cycles nocMessageToSpmRequestLatency;
     Cycles nocRequestToSpmRequestLatency;
     Cycles spmResponseToNocResponseLatency;
 
@@ -116,7 +128,7 @@ class Dtu : public BaseDtu
     void sendSpmRequest(PacketPtr pkt,
                         unsigned epId,
                         Cycles delay,
-                        bool isForwarded);
+                        SpmPacketType packetType);
 
     void startMessageTransmission(const Command& cmd);
 
@@ -161,7 +173,9 @@ class Dtu : public BaseDtu
 
     void completeLocalSpmRequest(PacketPtr pkt);
 
-    void completeForwardedSpmRequest(PacketPtr pkt, unsigned epId);
+    void completeForwardedMessage(PacketPtr pkt, unsigned epId);
+
+    void completeForwardedRequest(PacketPtr pkt);
 
     void completeNocRequest(PacketPtr pkt) override;
 

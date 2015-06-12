@@ -43,6 +43,7 @@ Dtu::Dtu(DtuParams* p)
     registerAccessLatency(p->register_access_latency),
     commandToSpmRequestLatency(p->command_to_spm_request_latency),
     spmResponseToNocRequestLatency(p->spm_response_to_noc_request_latency),
+    nocMessageToSpmRequestLatency(p->noc_message_to_spm_request_latency),
     nocRequestToSpmRequestLatency(p->noc_request_to_spm_request_latency),
     spmResponseToNocResponseLatency(p->spm_response_to_noc_response_latency),
     executeCommandEvent(*this),
@@ -154,12 +155,14 @@ Dtu::finishOperation()
 }
 
 void
-Dtu::sendSpmRequest(PacketPtr pkt, unsigned epId, Cycles delay, bool isForwarded)
+Dtu::sendSpmRequest(PacketPtr pkt,
+                    unsigned epId,
+                    Cycles delay,
+                    SpmPacketType packetType)
 {
     auto senderState = new SpmSenderState();
     senderState->epId = epId;
-    senderState->isLocalRequest = !isForwarded;
-    senderState->isForwardedRequest = isForwarded;
+    senderState->packetType = packetType;
 
     pkt->pushSenderState(senderState);
 
@@ -191,7 +194,10 @@ Dtu::startMessageTransmission(const Command& cmd)
 
     auto pkt = generateRequest(messageAddr, messageSize, MemCmd::ReadReq);
 
-    sendSpmRequest(pkt, cmd.epId, commandToSpmRequestLatency, false);
+    sendSpmRequest(pkt,
+                   cmd.epId,
+                   commandToSpmRequestLatency,
+                   SpmPacketType::LOCAL_REQUEST);
 }
 
 void
@@ -214,7 +220,10 @@ Dtu::startMemoryWrite(const Command& cmd)
 
     auto pkt = generateRequest(localAddr, requestSize, MemCmd::ReadReq);
 
-    sendSpmRequest(pkt, cmd.epId, commandToSpmRequestLatency, false);
+    sendSpmRequest(pkt,
+                   cmd.epId,
+                   commandToSpmRequestLatency,
+                   SpmPacketType::LOCAL_REQUEST);
 }
 
 void
@@ -294,13 +303,20 @@ Dtu::completeSpmRequest(PacketPtr pkt)
 
     auto senderState = dynamic_cast<SpmSenderState*>(pkt->popSenderState());
 
-    assert(senderState->isLocalRequest || senderState->isForwardedRequest);
-    assert(!(senderState->isLocalRequest && senderState->isForwardedRequest));
-
-    if (senderState->isLocalRequest)
+    switch (senderState->packetType)
+    {
+    case SpmPacketType::LOCAL_REQUEST:
         completeLocalSpmRequest(pkt);
-    else
-        completeForwardedSpmRequest(pkt, senderState->epId);
+        break;
+    case SpmPacketType::FORWARDED_MESSAGE:
+        completeForwardedMessage(pkt, senderState->epId);
+        break;
+    case SpmPacketType::FORWARDED_REQUEST:
+        completeForwardedRequest(pkt);
+        break;
+    default:
+        panic("Unexpected SpmPacketType\n");
+    }
 
     delete senderState;
 }
@@ -309,8 +325,8 @@ void
 Dtu::sendNocRequest(PacketPtr pkt, Cycles delay, bool isMessage)
 {
     auto senderState = new NocSenderState();
-    senderState->isMessage = isMessage;
-    senderState->isMemoryRequest = !isMessage;
+    senderState->packetType = isMessage ? NocPacketType::MESSAGE :
+                                          NocPacketType::REQUEST;
 
     pkt->pushSenderState(senderState);
 
@@ -435,7 +451,7 @@ Dtu::completeLocalSpmRequest(PacketPtr pkt)
 }
 
 void
-Dtu::completeForwardedSpmRequest(PacketPtr pkt, unsigned epId)
+Dtu::completeForwardedMessage(PacketPtr pkt, unsigned epId)
 {
     assert(pkt->isWrite());
 
@@ -447,7 +463,7 @@ Dtu::completeForwardedSpmRequest(PacketPtr pkt, unsigned epId)
     }
     else
     {
-        DPRINTF(Dtu, "Send response back to EP %u at core %u\n",
+        DPRINTF(Dtu, "Wrote message to Scratchpad. Send response back to EP %u at core %u\n",
                      header->epId,
                      header->coreId);
 
@@ -465,19 +481,40 @@ Dtu::completeForwardedSpmRequest(PacketPtr pkt, unsigned epId)
 }
 
 void
+Dtu::completeForwardedRequest(PacketPtr pkt)
+{
+    if (!atomicMode)
+    {
+        DPRINTF(Dtu, "Forwarded request to Scratchpad. Send response back via NoC\n");
+
+        Cycles delay = ticksToCycles(pkt->headerDelay + pkt->payloadDelay);
+        delay += spmResponseToNocResponseLatency;
+
+        pkt->headerDelay = 0;
+        pkt->payloadDelay = 0;
+
+        schedNocResponse(pkt, clockEdge(delay));
+    }
+}
+
+void
 Dtu::handleNocRequest(PacketPtr pkt)
 {
     assert(!pkt->isError());
 
     auto senderState = dynamic_cast<NocSenderState*>(pkt->popSenderState());
 
-    assert(senderState->isMessage || senderState->isMemoryRequest);
-    assert(!(senderState->isMessage && senderState->isMemoryRequest));
-
-    if (senderState->isMessage)
+    switch (senderState->packetType)
+    {
+    case NocPacketType::MESSAGE:
         recvNocMessage(pkt);
-    else
+        break;
+    case NocPacketType::REQUEST:
         recvNocMemoryRequest(pkt);
+        break;
+    default:
+        panic("Unexpected NocPacketType\n");
+    }
 
     delete senderState;
 }
@@ -512,9 +549,10 @@ Dtu::recvNocMessage(PacketPtr pkt)
     pkt->setAddr(spmAddr);
 
     Cycles delay = ticksToCycles(pkt->headerDelay);
-    delay += nocRequestToSpmRequestLatency;
+    pkt->headerDelay = 0;
+    delay += nocMessageToSpmRequestLatency;
 
-    sendSpmRequest(pkt, epId, delay, true);
+    sendSpmRequest(pkt, epId, delay, SpmPacketType::FORWARDED_MESSAGE);
 }
 
 void
@@ -523,27 +561,33 @@ Dtu::recvNocMemoryRequest(PacketPtr pkt)
     // get local Address
     pkt->setAddr( pkt->getAddr() & ~getNocAddr(coreId, 0));
 
-    if (pkt->getAddr() & regFileBaseAddr)
-        forwardRequestToRegFile(pkt, false);
-    else
-        panic("Spm request cannot be handled yet\n");
+    DPRINTF(Dtu, "Received %s request of %u bytes at %#x\n",
+                 pkt->isWrite() ? "write" : "read",
+                 pkt->getSize(),
+                 pkt->getAddr());
 
-    // restore global address for response
-    pkt->setAddr(pkt->getAddr() | getNocAddr(coreId, 0));
+    if (pkt->getAddr() & regFileBaseAddr)
+    {
+        forwardRequestToRegFile(pkt, false);
+    }
+    else
+    {
+        Cycles delay = ticksToCycles(pkt->headerDelay);
+        pkt->headerDelay = 0;
+        delay += nocRequestToSpmRequestLatency;
+
+        sendSpmRequest(pkt, -1, delay, SpmPacketType::FORWARDED_REQUEST);
+    }
 }
 
 void
 Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
 {
-    Addr origAddr = pkt->getAddr();
-
     // Strip the base address to handle requests based on the register address
-    // only. The original address is restored before responding.
-    pkt->setAddr(origAddr - regFileBaseAddr);
+    // only.
+    pkt->setAddr(pkt->getAddr() - regFileBaseAddr);
 
     bool commandWritten = regFile.handleRequest(pkt);
-
-    pkt->setAddr(origAddr);
 
     if (!atomicMode)
     {
