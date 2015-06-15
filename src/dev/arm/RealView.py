@@ -1,4 +1,4 @@
-# Copyright (c) 2009-2014 ARM Limited
+# Copyright (c) 2009-2015 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -136,9 +136,20 @@ class GenericTimer(SimObject):
     cxx_header = "dev/arm/generic_timer.hh"
     system = Param.System(Parent.any, "system")
     gic = Param.BaseGic(Parent.any, "GIC to use for interrupting")
-    int_num = Param.UInt32("Interrupt number used per-cpu to GIC")
-    # @todo: for now only one timer per CPU is supported, which is the
-    # normal behaviour when Security and Virt. extensions are disabled.
+    # @todo: for now only two timers per CPU is supported, which is the
+    # normal behaviour when security extensions are disabled.
+    int_phys = Param.UInt32("Physical timer interrupt number")
+    int_virt = Param.UInt32("Virtual timer interrupt number")
+
+class GenericTimerMem(PioDevice):
+    type = 'GenericTimerMem'
+    cxx_header = "dev/arm/generic_timer.hh"
+    gic = Param.BaseGic(Parent.any, "GIC to use for interrupting")
+
+    base = Param.Addr(0, "Base address")
+
+    int_phys = Param.UInt32("Interrupt number")
+    int_virt = Param.UInt32("Interrupt number")
 
 class PL031(AmbaIntDevice):
     type = 'PL031'
@@ -175,6 +186,8 @@ class HDLcd(AmbaDmaDevice):
     vnc = Param.VncInput(Parent.any, "Vnc server for remote frame buffer "
                                      "display")
     amba_id = 0x00141000
+    workaround_swap_rb = Param.Bool(True, "Workaround incorrect color "
+                                    "selector order in some kernels")
     enable_capture = Param.Bool(True, "capture frame to system.framebuffer.bmp")
 
 class RealView(Platform):
@@ -455,7 +468,7 @@ class VExpress_EMM(RealView):
                                idreg=0x02250000, pio_addr=0x1C010000)
     gic = Pl390(dist_addr=0x2C001000, cpu_addr=0x2C002000)
     local_cpu_timer = CpuLocalTimer(int_num_timer=29, int_num_watchdog=30, pio_addr=0x2C080000)
-    generic_timer = GenericTimer(int_num=29)
+    generic_timer = GenericTimer(int_phys=29, int_virt=27)
     timer0 = Sp804(int_num0=34, int_num1=34, pio_addr=0x1C110000, clock0='1MHz', clock1='1MHz')
     timer1 = Sp804(int_num0=35, int_num1=35, pio_addr=0x1C120000, clock0='1MHz', clock1='1MHz')
     clcd   = Pl111(pio_addr=0x1c1f0000, int_num=46)
@@ -509,21 +522,22 @@ class VExpress_EMM(RealView):
 
     # Attach I/O devices that are on chip and also set the appropriate
     # ranges for the bridge
-    def attachOnChipIO(self, bus, bridge):
-       self.gic.pio = bus.master
-       self.local_cpu_timer.pio = bus.master
-       if hasattr(self, "gicv2m"):
-           self.gicv2m.pio      = bus.master
-       self.hdlcd.dma           = bus.slave
-       # Bridge ranges based on excluding what is part of on-chip I/O
-       # (gic, a9scu)
-       bridge.ranges = [AddrRange(0x2F000000, size='16MB'),
-                        AddrRange(0x2B000000, size='4MB'),
-                        AddrRange(0x30000000, size='256MB'),
-                        AddrRange(0x40000000, size='512MB'),
-                        AddrRange(0x18000000, size='64MB'),
-                        AddrRange(0x1C000000, size='64MB')]
-       self.vgic.pio = bus.master
+    def attachOnChipIO(self, bus, bridge=None):
+        self.gic.pio             = bus.master
+        self.vgic.pio            = bus.master
+        self.local_cpu_timer.pio = bus.master
+        if hasattr(self, "gicv2m"):
+            self.gicv2m.pio      = bus.master
+        self.hdlcd.dma           = bus.slave
+        if bridge:
+            # Bridge ranges based on excluding what is part of on-chip I/O
+            # (gic, a9scu)
+            bridge.ranges = [AddrRange(0x2F000000, size='16MB'),
+                             AddrRange(0x2B000000, size='4MB'),
+                             AddrRange(0x30000000, size='256MB'),
+                             AddrRange(0x40000000, size='512MB'),
+                             AddrRange(0x18000000, size='64MB'),
+                             AddrRange(0x1C000000, size='64MB')]
 
 
     # Set the clock domain for IO objects that are considered

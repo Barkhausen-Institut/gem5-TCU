@@ -92,8 +92,9 @@ bool
 FullO3CPU<Impl>::IcachePort::recvTimingResp(PacketPtr pkt)
 {
     DPRINTF(O3CPU, "Fetch unit received timing\n");
-    // We shouldn't ever get a block in ownership state
-    assert(!(pkt->memInhibitAsserted() && !pkt->sharedAsserted()));
+    // We shouldn't ever get a cacheable block in ownership state
+    assert(pkt->req->isUncacheable() ||
+           !(pkt->memInhibitAsserted() && !pkt->sharedAsserted()));
     fetch->processCacheCompletion(pkt);
 
     return true;
@@ -1440,15 +1441,15 @@ FullO3CPU<Impl>::instDone(ThreadID tid, DynInstPtr &inst)
         thread[tid]->numInst++;
         thread[tid]->numInsts++;
         committedInsts[tid]++;
+        system->totalNumInsts++;
+
+        // Check for instruction-count-based events.
+        comInstEventQueue[tid]->serviceEvents(thread[tid]->numInst);
+        system->instEventQueue.serviceEvents(system->totalNumInsts);
     }
     thread[tid]->numOp++;
     thread[tid]->numOps++;
     committedOps[tid]++;
-
-    system->totalNumInsts++;
-    // Check for instruction-count-based events.
-    comInstEventQueue[tid]->serviceEvents(thread[tid]->numInst);
-    system->instEventQueue.serviceEvents(system->totalNumInsts);
 
     probeInstCommit(inst->staticInst);
 }

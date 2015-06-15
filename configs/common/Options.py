@@ -46,6 +46,8 @@ from Benchmarks import *
 import CpuConfig
 import MemConfig
 
+from FSConfig import os_types
+
 def _listCpuTypes(option, opt, value, parser):
     CpuConfig.print_cpu_list()
     sys.exit(0)
@@ -85,7 +87,7 @@ def addCommonOptions(parser):
     parser.add_option("--list-mem-types",
                       action="callback", callback=_listMemTypes,
                       help="List available memory types")
-    parser.add_option("--mem-type", type="choice", default="ddr3_1600_x64",
+    parser.add_option("--mem-type", type="choice", default="DDR3_1600_x64",
                       choices=MemConfig.mem_names(),
                       help = "type of memory to use")
     parser.add_option("--mem-channels", type="int", default=1,
@@ -102,6 +104,8 @@ def addCommonOptions(parser):
     parser.add_option("--memchecker", action="store_true")
 
     # Cache Options
+    parser.add_option("--external-memory-system", type="string",
+                      help="use external ports of this port_type for caches")
     parser.add_option("--caches", action="store_true")
     parser.add_option("--l2cache", action="store_true")
     parser.add_option("--fastmem", action="store_true")
@@ -148,6 +152,9 @@ def addCommonOptions(parser):
     parser.add_option("--init-param", action="store", type="int", default=0,
                       help="""Parameter available in simulation with m5
                               initparam""")
+    parser.add_option("--initialize-only", action="store_true", default=False,
+                      help="""Exit after initialization. Do not simulate time.
+                              Useful when gem5 is run as a library.""")
 
     # Simpoint options
     parser.add_option("--simpoint-profile", action="store_true",
@@ -227,6 +234,8 @@ def addSEOptions(parser):
     parser.add_option("-o", "--options", default="",
                       help="""The options to pass to the binary, use " "
                               around the entire string""")
+    parser.add_option("-e", "--env", default="",
+                      help="Initialize workload environment from text file.")
     parser.add_option("-i", "--input", default="",
                       help="Read stdin from a file.")
     parser.add_option("--output", default="",
@@ -241,6 +250,9 @@ def addFSOptions(parser):
 
     # System options
     parser.add_option("--kernel", action="store", type="string")
+    parser.add_option("--os-type", action="store", type="choice",
+            choices=os_types[buildEnv['TARGET_ISA']], default="linux",
+            help="Specifies type of OS to boot")
     parser.add_option("--script", action="store", type="string")
     parser.add_option("--frame-capture", action="store_true",
             help="Stores changed frame buffers from the VNC server to compressed "\

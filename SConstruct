@@ -1,6 +1,6 @@
 # -*- mode:python -*-
 
-# Copyright (c) 2013 ARM Limited
+# Copyright (c) 2013, 2015 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -599,10 +599,16 @@ if main['GCC']:
     # assemblers detect this as an error, "Error: expecting string
     # instruction after `rep'"
     if compareVersions(gcc_version, "4.8") > 0:
-        as_version = readCommand([main['AS'], '-v', '/dev/null'],
-                                 exception=False).split()
+        as_version_raw = readCommand([main['AS'], '-v', '/dev/null'],
+                                     exception=False).split()
 
-        if not as_version or compareVersions(as_version[-1], "2.23") < 0:
+        # version strings may contain extra distro-specific
+        # qualifiers, so play it safe and keep only what comes before
+        # the first hyphen
+        as_version = as_version_raw[-1].split('-')[0] if as_version_raw \
+            else None
+
+        if not as_version or compareVersions(as_version, "2.23") < 0:
             print termcap.Yellow + termcap.Bold + \
                 'Warning: This combination of gcc and binutils have' + \
                 ' known incompatibilities.\n' + \
@@ -1022,18 +1028,19 @@ if not have_fenv:
 # we rely on exists since version 2.6.36 of the kernel, but somehow
 # the KVM_API_VERSION does not reflect the change. We test for one of
 # the types as a fall back.
-have_kvm = conf.CheckHeader('linux/kvm.h', '<>') and \
-    conf.CheckTypeSize('struct kvm_xsave', '#include <linux/kvm.h>') != 0
+have_kvm = conf.CheckHeader('linux/kvm.h', '<>')
 if not have_kvm:
     print "Info: Compatible header file <linux/kvm.h> not found, " \
         "disabling KVM support."
 
+# x86 needs support for xsave. We test for the structure here since we
+# won't be able to run new tests by the time we know which ISA we're
+# targeting.
+have_kvm_xsave = conf.CheckTypeSize('struct kvm_xsave',
+                                    '#include <linux/kvm.h>') != 0
+
 # Check if the requested target ISA is compatible with the host
 def is_isa_kvm_compatible(isa):
-    isa_comp_table = {
-        "arm" : ( "armv7l" ),
-        "x86" : ( "x86_64" ),
-        }
     try:
         import platform
         host_isa = platform.machine()
@@ -1041,7 +1048,24 @@ def is_isa_kvm_compatible(isa):
         print "Warning: Failed to determine host ISA."
         return False
 
-    return host_isa in isa_comp_table.get(isa, [])
+    if not have_posix_timers:
+        print "Warning: Can not enable KVM, host seems to lack support " \
+            "for POSIX timers"
+        return False
+
+    if isa == "arm":
+        return host_isa in ( "armv7l", "aarch64" )
+    elif isa == "x86":
+        if host_isa != "x86_64":
+            return False
+
+        if not have_kvm_xsave:
+            print "KVM on x86 requires xsave support in kernel headers."
+            return False
+
+        return True
+    else:
+        return False
 
 
 # Check if the exclude_host attribute is available. We want this to
@@ -1356,10 +1380,6 @@ for variant_path in variant_paths:
     if env['USE_KVM']:
         if not have_kvm:
             print "Warning: Can not enable KVM, host seems to lack KVM support"
-            env['USE_KVM'] = False
-        elif not have_posix_timers:
-            print "Warning: Can not enable KVM, host seems to lack support " \
-                "for POSIX timers"
             env['USE_KVM'] = False
         elif not is_isa_kvm_compatible(env['TARGET_ISA']):
             print "Info: KVM support disabled due to unsupported host and " \

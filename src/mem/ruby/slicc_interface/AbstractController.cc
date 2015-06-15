@@ -217,6 +217,13 @@ AbstractController::queueMemoryRead(const MachineID &id, Address addr,
     SenderState *s = new SenderState(id);
     pkt->pushSenderState(s);
 
+    // Use functional rather than timing accesses during warmup
+    if (RubySystem::getWarmupEnabled()) {
+        memoryPort.sendFunctional(pkt);
+        recvTimingResp(pkt);
+        return;
+    }
+
     memoryPort.schedTimingReq(pkt, clockEdge(latency));
 }
 
@@ -236,6 +243,13 @@ AbstractController::queueMemoryWrite(const MachineID &id, Address addr,
 
     SenderState *s = new SenderState(id);
     pkt->pushSenderState(s);
+
+    // Use functional rather than timing accesses during warmup
+    if (RubySystem::getWarmupEnabled()) {
+        memoryPort.sendFunctional(pkt);
+        recvTimingResp(pkt);
+        return;
+    }
 
     // Create a block and copy data from the block.
     memoryPort.schedTimingReq(pkt, clockEdge(latency));

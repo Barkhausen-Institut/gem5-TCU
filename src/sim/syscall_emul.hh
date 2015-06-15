@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2012-2013 ARM Limited
+ * Copyright (c) 2012-2013, 2015 ARM Limited
+ * Copyright (c) 2015 Advanced Micro Devices, Inc.
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -96,6 +97,7 @@ class SyscallDesc {
     const char *name;   //!< Syscall name (e.g., "open").
     FuncPtr funcPtr;    //!< Pointer to emulation function.
     int flags;          //!< Flags (see Flags enum).
+    bool warned;        //!< Have we warned about unimplemented syscall?
 
     /// Flag values for controlling syscall behavior.
     enum Flags {
@@ -103,17 +105,21 @@ class SyscallDesc {
         /// Used for syscalls with non-standard return conventions
         /// that explicitly set the ThreadContext regs (e.g.,
         /// sigreturn).
-        SuppressReturnValue = 1
+        SuppressReturnValue = 1,
+        WarnOnce = 2
     };
 
     /// Constructor.
     SyscallDesc(const char *_name, FuncPtr _funcPtr, int _flags = 0)
-        : name(_name), funcPtr(_funcPtr), flags(_flags)
+        : name(_name), funcPtr(_funcPtr), flags(_flags), warned(false)
     {
     }
 
     /// Emulate the syscall.  Public interface for calling through funcPtr.
     void doSyscall(int callnum, LiveProcess *proc, ThreadContext *tc);
+
+    /// Is the WarnOnce flag set?
+    bool warnOnce() const {  return (flags & WarnOnce); }
 };
 
 
@@ -135,8 +141,6 @@ SyscallReturn unimplementedFunc(SyscallDesc *desc, int num,
 /// behavior of the program.  Print a warning only if the appropriate
 /// trace flag is enabled.  Return success to the target program.
 SyscallReturn ignoreFunc(SyscallDesc *desc, int num,
-                         LiveProcess *p, ThreadContext *tc);
-SyscallReturn ignoreWarnOnceFunc(SyscallDesc *desc, int num,
                          LiveProcess *p, ThreadContext *tc);
 
 /// Target exit() handler: terminate current context.
@@ -397,6 +401,8 @@ SyscallReturn getgidPseudoFunc(SyscallDesc *desc, int num,
 
 /// A readable name for 1,000,000, for converting microseconds to seconds.
 const int one_million = 1000000;
+/// A readable name for 1,000,000,000, for converting nanoseconds to seconds.
+const int one_billion = 1000000000;
 
 /// Approximate seconds since the epoch (1/1/1970).  About a billion,
 /// by my reckoning.  We want to keep this a constant (not use the
@@ -407,11 +413,22 @@ const unsigned seconds_since_epoch = 1000000000;
 /// microseconds.
 template <class T1, class T2>
 void
-getElapsedTime(T1 &sec, T2 &usec)
+getElapsedTimeMicro(T1 &sec, T2 &usec)
 {
-    int elapsed_usecs = curTick() / SimClock::Int::us;
+    uint64_t elapsed_usecs = curTick() / SimClock::Int::us;
     sec = elapsed_usecs / one_million;
     usec = elapsed_usecs % one_million;
+}
+
+/// Helper function to convert current elapsed time to seconds and
+/// nanoseconds.
+template <class T1, class T2>
+void
+getElapsedTimeNano(T1 &sec, T2 &nsec)
+{
+    uint64_t elapsed_nsecs = curTick() / SimClock::Int::ns;
+    sec = elapsed_nsecs / one_billion;
+    nsec = elapsed_nsecs % one_billion;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -698,6 +715,42 @@ readlinkatFunc(SyscallDesc *desc, int callnum, LiveProcess *process,
     return readlinkFunc(desc, callnum, process, tc, 1);
 }
 
+/// Target renameat() handler.
+template <class OS>
+SyscallReturn
+renameatFunc(SyscallDesc *desc, int callnum, LiveProcess *process,
+             ThreadContext *tc)
+{
+    int index = 0;
+
+    int olddirfd = process->getSyscallArg(tc, index);
+    if (olddirfd != OS::TGT_AT_FDCWD)
+        warn("renameat: first argument not AT_FDCWD; unlikely to work");
+
+    std::string old_name;
+
+    if (!tc->getMemProxy().tryReadString(old_name,
+                                         process->getSyscallArg(tc, index)))
+        return -EFAULT;
+
+    int newdirfd = process->getSyscallArg(tc, index);
+    if (newdirfd != OS::TGT_AT_FDCWD)
+        warn("renameat: third argument not AT_FDCWD; unlikely to work");
+
+    std::string new_name;
+
+    if (!tc->getMemProxy().tryReadString(new_name,
+                                         process->getSyscallArg(tc, index)))
+        return -EFAULT;
+
+    // Adjust path for current working directory
+    old_name = process->fullPath(old_name);
+    new_name = process->fullPath(new_name);
+
+    int result = rename(old_name.c_str(), new_name.c_str());
+    return (result == -1) ? -errno : result;
+}
+
 /// Target sysinfo() handler.
 template <class OS>
 SyscallReturn
@@ -707,7 +760,7 @@ sysinfoFunc(SyscallDesc *desc, int callnum, LiveProcess *process,
 
     int index = 0;
     TypedBufferArg<typename OS::tgt_sysinfo>
-        sysinfo(process->getSyscallArg(tc, index));   
+        sysinfo(process->getSyscallArg(tc, index));
 
     sysinfo->uptime=seconds_since_epoch;
     sysinfo->totalram=process->system->memSize();
@@ -915,7 +968,7 @@ fstatat64Func(SyscallDesc *desc, int callnum, LiveProcess *process,
     int index = 0;
     int dirfd = process->getSyscallArg(tc, index);
     if (dirfd != OS::TGT_AT_FDCWD)
-        warn("openat: first argument not AT_FDCWD; unlikely to work");
+        warn("fstatat64: first argument not AT_FDCWD; unlikely to work");
 
     std::string path;
     if (!tc->getMemProxy().tryReadString(path,
@@ -1274,13 +1327,31 @@ getrlimitFunc(SyscallDesc *desc, int callnum, LiveProcess *process,
             break;
 
         default:
-            std::cerr << "getrlimitFunc: unimplemented resource " << resource
-                << std::endl;
-            abort();
+            warn("getrlimit: unimplemented resource %d", resource);
+            return -EINVAL;
             break;
     }
 
     rlp.copyOut(tc->getMemProxy());
+    return 0;
+}
+
+/// Target clock_gettime() function.
+template <class OS>
+SyscallReturn
+clock_gettimeFunc(SyscallDesc *desc, int num, LiveProcess *p, ThreadContext *tc)
+{
+    int index = 1;
+    //int clk_id = p->getSyscallArg(tc, index);
+    TypedBufferArg<typename OS::timespec> tp(p->getSyscallArg(tc, index));
+
+    getElapsedTimeNano(tp->tv_sec, tp->tv_nsec);
+    tp->tv_sec += seconds_since_epoch;
+    tp->tv_sec = TheISA::htog(tp->tv_sec);
+    tp->tv_nsec = TheISA::htog(tp->tv_nsec);
+
+    tp.copyOut(tc->getMemProxy());
+
     return 0;
 }
 
@@ -1293,7 +1364,7 @@ gettimeofdayFunc(SyscallDesc *desc, int callnum, LiveProcess *process,
     int index = 0;
     TypedBufferArg<typename OS::timeval> tp(process->getSyscallArg(tc, index));
 
-    getElapsedTime(tp->tv_sec, tp->tv_usec);
+    getElapsedTimeMicro(tp->tv_sec, tp->tv_usec);
     tp->tv_sec += seconds_since_epoch;
     tp->tv_sec = TheISA::htog(tp->tv_sec);
     tp->tv_usec = TheISA::htog(tp->tv_usec);
@@ -1370,7 +1441,7 @@ getrusageFunc(SyscallDesc *desc, int callnum, LiveProcess *process,
 
     switch (who) {
       case OS::TGT_RUSAGE_SELF:
-        getElapsedTime(rup->ru_utime.tv_sec, rup->ru_utime.tv_usec);
+        getElapsedTimeMicro(rup->ru_utime.tv_sec, rup->ru_utime.tv_usec);
         rup->ru_utime.tv_sec = TheISA::htog(rup->ru_utime.tv_sec);
         rup->ru_utime.tv_usec = TheISA::htog(rup->ru_utime.tv_usec);
         break;
@@ -1424,7 +1495,7 @@ timeFunc(SyscallDesc *desc, int callnum, LiveProcess *process,
            ThreadContext *tc)
 {
     typename OS::time_t sec, usec;
-    getElapsedTime(sec, usec);
+    getElapsedTimeMicro(sec, usec);
     sec += seconds_since_epoch;
 
     int index = 0;

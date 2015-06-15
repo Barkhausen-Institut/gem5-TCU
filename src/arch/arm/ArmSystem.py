@@ -58,8 +58,6 @@ class ArmSystem(System):
     have_virtualization = Param.Bool(False,
         "True if Virtualization Extensions are implemented")
     have_lpae = Param.Bool(False, "True if LPAE is implemented")
-    have_generic_timer = Param.Bool(False,
-        "True if the Generic Timer extension is implemented")
     highest_el_is_64 = Param.Bool(False,
         "True if the register width of the highest implemented exception level "
         "is 64 bits (ARMv8)")
@@ -71,16 +69,14 @@ class ArmSystem(System):
     have_large_asid_64 = Param.Bool(False,
         "True if ASID is 16 bits in AArch64 (ARMv8)")
 
-class LinuxArmSystem(ArmSystem):
-    type = 'LinuxArmSystem'
-    cxx_header = "arch/arm/linux/system.hh"
+class GenericArmSystem(ArmSystem):
+    type = 'GenericArmSystem'
+    cxx_header = "arch/arm/system.hh"
     load_addr_mask = 0x0fffffff
     machine_type = Param.ArmMachineType('VExpress_EMM',
         "Machine id from http://www.arm.linux.org.uk/developer/machines/")
     atags_addr = Param.Addr("Address where default atags structure should " \
                                 "be written")
-    boot_release_addr = Param.Addr(0xfff8, "Address where secondary CPUs " \
-                                       "spin waiting boot in the loader")
     dtb_filename = Param.String("",
         "File that contains the Device Tree Blob. Don't use DTB if empty.")
     early_kernel_symbols = Param.Bool(False,
@@ -91,3 +87,11 @@ class LinuxArmSystem(ArmSystem):
                                     "guest kernel panics")
     panic_on_oops = Param.Bool(False, "Trigger a gem5 panic if the " \
                                    "guest kernel oopses")
+
+class LinuxArmSystem(GenericArmSystem):
+    type = 'LinuxArmSystem'
+    cxx_header = "arch/arm/linux/system.hh"
+
+class FreebsdArmSystem(GenericArmSystem):
+    type = 'FreebsdArmSystem'
+    cxx_header = "arch/arm/freebsd/system.hh"

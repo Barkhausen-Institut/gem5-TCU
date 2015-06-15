@@ -825,7 +825,7 @@ InstructionQueue<Impl>::scheduleReadyInsts()
                 if (idx >= 0)
                     fuPool->freeUnitNextCycle(idx);
             } else {
-                Cycles issue_latency = fuPool->getIssueLatency(op_class);
+                bool pipelined = fuPool->isPipelined(op_class);
                 // Generate completion event for the FU
                 ++wbOutstanding;
                 FUCompletion *execution = new FUCompletion(issuing_inst,
@@ -834,8 +834,7 @@ InstructionQueue<Impl>::scheduleReadyInsts()
                 cpu->schedule(execution,
                               cpu->clockEdge(Cycles(op_latency - 1)));
 
-                // @todo: Enforce that issue_latency == 1 or op_latency
-                if (issue_latency > Cycles(1)) {
+                if (!pipelined) {
                     // If FU isn't pipelined, then it must be freed
                     // upon the execution completing.
                     execution->setFreeFU();
@@ -1164,10 +1163,7 @@ InstructionQueue<Impl>::squash(ThreadID tid)
     // time buffer.
     squashedSeqNum[tid] = fromCommit->commitInfo[tid].doneSeqNum;
 
-    // Call doSquash if there are insts in the IQ
-    if (count[tid] > 0) {
-        doSquash(tid);
-    }
+    doSquash(tid);
 
     // Also tell the memory dependence unit to squash.
     memDepUnit[tid].squash(squashedSeqNum[tid], tid);

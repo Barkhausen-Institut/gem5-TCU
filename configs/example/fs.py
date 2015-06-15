@@ -98,7 +98,8 @@ def build_test_system(np):
         test_sys = makeArmSystem(test_mem_mode, options.machine_type,
                                  options.num_cpus, bm[0], options.dtb_filename,
                                  bare_metal=options.bare_metal,
-                                 cmdline=cmdline)
+                                 cmdline=cmdline,
+                                 external_memory=options.external_memory_system)
         if options.enable_context_switch_stats_dump:
             test_sys.enable_context_switch_stats_dump = True
     else:
@@ -185,7 +186,7 @@ def build_test_system(np):
             test_sys.iocache = IOCache(addr_ranges = test_sys.mem_ranges)
             test_sys.iocache.cpu_side = test_sys.iobus.master
             test_sys.iocache.mem_side = test_sys.membus.slave
-        else:
+        elif not options.external_memory_system:
             test_sys.iobridge = Bridge(delay='50ns', ranges = test_sys.mem_ranges)
             test_sys.iobridge.slave = test_sys.iobus.master
             test_sys.iobridge.master = test_sys.membus.slave
@@ -314,12 +315,12 @@ if options.benchmark:
 else:
     if options.dual:
         bm = [SysConfig(disk=options.disk_image, rootdev=options.root_device,
-                        mem=options.mem_size),
+                        mem=options.mem_size, os_type=options.os_type),
               SysConfig(disk=options.disk_image, rootdev=options.root_device,
-                        mem=options.mem_size)]
+                        mem=options.mem_size, os_type=options.os_type)]
     else:
         bm = [SysConfig(disk=options.disk_image, rootdev=options.root_device,
-                        mem=options.mem_size)]
+                        mem=options.mem_size, os_type=options.os_type)]
 
 np = options.num_cpus
 

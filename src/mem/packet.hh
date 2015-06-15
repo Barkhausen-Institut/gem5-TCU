@@ -261,8 +261,9 @@ class Packet : public Printable
     /// suppress the error if this packet encounters a functional
     /// access failure.
     static const FlagsType SUPPRESS_FUNC_ERROR    = 0x00008000;
-    // Signal prefetch squash through express snoop flag
-    static const FlagsType PREFETCH_SNOOP_SQUASH  = 0x00010000;
+    // Signal block present to squash prefetch and cache evict packets
+    // through express snoop flag
+    static const FlagsType BLOCK_CACHED          = 0x00010000;
 
     Flags flags;
 
@@ -505,8 +506,8 @@ class Packet : public Printable
     bool isSupplyExclusive() const  { return flags.isSet(SUPPLY_EXCLUSIVE); }
     void setSuppressFuncError()     { flags.set(SUPPRESS_FUNC_ERROR); }
     bool suppressFuncError() const  { return flags.isSet(SUPPRESS_FUNC_ERROR); }
-    void setPrefetchSquashed()      { flags.set(PREFETCH_SNOOP_SQUASH); }
-    bool prefetchSquashed() const   { return flags.isSet(PREFETCH_SNOOP_SQUASH); }
+    void setBlockCached()          { flags.set(BLOCK_CACHED); }
+    bool isBlockCached() const     { return flags.isSet(BLOCK_CACHED); }
 
     // Network error conditions... encapsulate them as methods since
     // their encoding keeps changing (from result field to command
@@ -643,45 +644,47 @@ class Packet : public Printable
     }
 
     /**
-     * Change the packet type based on request type.
+     * Generate the appropriate read MemCmd based on the Request flags.
      */
-    void
-    refineCommand()
+    static MemCmd
+    makeReadCmd(const RequestPtr req)
     {
-        if (cmd == MemCmd::ReadReq) {
-            if (req->isLLSC()) {
-                cmd = MemCmd::LoadLockedReq;
-            } else if (req->isPrefetch()) {
-                cmd = MemCmd::SoftPFReq;
-            }
-        } else if (cmd == MemCmd::WriteReq) {
-            if (req->isLLSC()) {
-                cmd = MemCmd::StoreCondReq;
-            } else if (req->isSwap()) {
-                cmd = MemCmd::SwapReq;
-            }
-        }
+        if (req->isLLSC())
+            return MemCmd::LoadLockedReq;
+        else if (req->isPrefetch())
+            return MemCmd::SoftPFReq;
+        else
+            return MemCmd::ReadReq;
+    }
+
+    /**
+     * Generate the appropriate write MemCmd based on the Request flags.
+     */
+    static MemCmd
+    makeWriteCmd(const RequestPtr req)
+    {
+        if (req->isLLSC())
+            return MemCmd::StoreCondReq;
+        else if (req->isSwap())
+            return MemCmd::SwapReq;
+        else
+            return MemCmd::WriteReq;
     }
 
     /**
      * Constructor-like methods that return Packets based on Request objects.
-     * Will call refineCommand() to fine-tune the Packet type if it's not a
-     * vanilla read or write.
+     * Fine-tune the MemCmd type if it's not a vanilla read or write.
      */
     static PacketPtr
     createRead(const RequestPtr req)
     {
-        PacketPtr pkt = new Packet(req, MemCmd::ReadReq);
-        pkt->refineCommand();
-        return pkt;
+        return new Packet(req, makeReadCmd(req));
     }
 
     static PacketPtr
     createWrite(const RequestPtr req)
     {
-        PacketPtr pkt = new Packet(req, MemCmd::WriteReq);
-        pkt->refineCommand();
-        return pkt;
+        return new Packet(req, makeWriteCmd(req));
     }
 
     /**
@@ -689,11 +692,18 @@ class Packet : public Printable
      */
     ~Packet()
     {
-        // If this is a request packet for which there's no response,
-        // delete the request object here, since the requester will
-        // never get the chance.
-        if (req && isRequest() && !needsResponse())
+        // Delete the request object if this is a request packet which
+        // does not need a response, because the requester will not get
+        // a chance. If the request packet needs a response then the
+        // request will be deleted on receipt of the response
+        // packet. We also make sure to never delete the request for
+        // express snoops, even for cases when responses are not
+        // needed (CleanEvict and Writeback), since the snoop packet
+        // re-uses the same request.
+        if (req && isRequest() && !needsResponse() &&
+            !isExpressSnoop()) {
             delete req;
+        }
         deleteData();
     }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2013 ARM Limited
+ * Copyright (c) 2010-2013, 2015 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -43,6 +43,7 @@
 #include "arch/arm/miscregs.hh"
 #include "base/misc.hh"
 #include "cpu/thread_context.hh"
+#include "sim/full_system.hh"
 
 namespace ArmISA
 {
@@ -714,9 +715,9 @@ bitset<NUM_MISCREG_INFOS> miscRegInfo[NUM_MISCREGS] = {
     // MISCREG_CNTP_CTL_S
     bitset<NUM_MISCREG_INFOS>(string("00110011001111100000")),
     // MISCREG_CNTV_TVAL
-    bitset<NUM_MISCREG_INFOS>(string("01111000000000000000")),
+    bitset<NUM_MISCREG_INFOS>(string("11111111111111000001")),
     // MISCREG_CNTV_CTL
-    bitset<NUM_MISCREG_INFOS>(string("01111000000000000000")),
+    bitset<NUM_MISCREG_INFOS>(string("11111111111111000001")),
     // MISCREG_CNTHCTL
     bitset<NUM_MISCREG_INFOS>(string("01001000000000000000")),
     // MISCREG_CNTHP_TVAL
@@ -762,7 +763,7 @@ bitset<NUM_MISCREG_INFOS> miscRegInfo[NUM_MISCREGS] = {
     // MISCREG_CNTP_CVAL_S
     bitset<NUM_MISCREG_INFOS>(string("00110011001111100000")),
     // MISCREG_CNTV_CVAL
-    bitset<NUM_MISCREG_INFOS>(string("01111000000000000000")),
+    bitset<NUM_MISCREG_INFOS>(string("11111111111111000001")),
     // MISCREG_CNTVOFF
     bitset<NUM_MISCREG_INFOS>(string("11001100000000000001")),
     // MISCREG_CNTHP_CVAL
@@ -1258,11 +1259,11 @@ bitset<NUM_MISCREG_INFOS> miscRegInfo[NUM_MISCREGS] = {
     // MISCREG_CNTP_CVAL_EL0
     bitset<NUM_MISCREG_INFOS>(string("11111111111111000001")),
     // MISCREG_CNTV_TVAL_EL0
-    bitset<NUM_MISCREG_INFOS>(string("01111000000000000000")),
+    bitset<NUM_MISCREG_INFOS>(string("11111111111111000001")),
     // MISCREG_CNTV_CTL_EL0
-    bitset<NUM_MISCREG_INFOS>(string("01111000000000000000")),
+    bitset<NUM_MISCREG_INFOS>(string("11111111111111000001")),
     // MISCREG_CNTV_CVAL_EL0
-    bitset<NUM_MISCREG_INFOS>(string("01111000000000000000")),
+    bitset<NUM_MISCREG_INFOS>(string("11111111111111000001")),
     // MISCREG_PMEVCNTR0_EL0
     bitset<NUM_MISCREG_INFOS>(string("11111111111111000001")),
     // MISCREG_PMEVCNTR1_EL0
@@ -1333,6 +1334,8 @@ bitset<NUM_MISCREG_INFOS> miscRegInfo[NUM_MISCREGS] = {
     bitset<NUM_MISCREG_INFOS>(string("11111111110000000100")),
     // MISCREG_CBAR_EL1
     bitset<NUM_MISCREG_INFOS>(string("01010101010000000001")),
+    // MISCREG_CONTEXTIDR_EL2
+    bitset<NUM_MISCREG_INFOS>(string("11111100000000000001")),
 
     // Dummy registers
     // MISCREG_NOP
@@ -2138,7 +2141,9 @@ canWriteAArch64SysReg(MiscRegIndex reg, SCR scr, CPSR cpsr, ThreadContext *tc)
         if (el == EL0 && !sctlr.uma)
             return false;
     }
-    if (reg == MISCREG_DC_ZVA_Xt) {
+    if (FullSystem && reg == MISCREG_DC_ZVA_Xt) {
+        // In syscall-emulation mode, this test is skipped and DCZVA is always
+        // allowed at EL0
         SCTLR sctlr = tc->readMiscReg(MISCREG_SCTLR_EL1);
         if (el == EL0 && !sctlr.dze)
             return false;
@@ -3340,6 +3345,8 @@ decodeAArch64SysReg(unsigned op0, unsigned op1,
                 switch (crm) {
                   case 0:
                     switch (op2) {
+                      case 1:
+                        return MISCREG_CONTEXTIDR_EL2;
                       case 2:
                         return MISCREG_TPIDR_EL2;
                     }

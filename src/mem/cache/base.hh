@@ -210,13 +210,16 @@ class BaseCache : public MemObject
      *
      * allocateBufferInternal() function is called in:
      * - MSHR allocateWriteBuffer (unchached write forwarded to WriteBuffer);
-     * - MSHR allocateMissBuffer (cacheable miss in MSHR queue);
-     * - MSHR allocateUncachedReadBuffer (unchached read allocated in MSHR
-     *   queue)
+     * - MSHR allocateMissBuffer (miss in MSHR queue);
      */
     MSHR *allocateBufferInternal(MSHRQueue *mq, Addr addr, int size,
                                  PacketPtr pkt, Tick time, bool requestBus)
     {
+        // check that the address is block aligned since we rely on
+        // this in a number of places when checking for matches and
+        // overlap
+        assert(addr == blockAlign(addr));
+
         MSHR *mshr = mq->allocate(addr, size, pkt, time, order++);
 
         if (mq->isFull()) {
@@ -258,6 +261,16 @@ class BaseCache : public MemObject
      * \return true if at least one block is dirty, false otherwise.
      */
     virtual bool isDirty() const = 0;
+
+    /**
+     * Determine if an address is in the ranges covered by this
+     * cache. This is useful to filter snoops.
+     *
+     * @param addr Address to check against
+     *
+     * @return If the address in question is in range
+     */
+    bool inRange(Addr addr) const;
 
     /** Block size of this cache */
     const unsigned blkSize;
@@ -496,7 +509,6 @@ class BaseCache : public MemObject
 
     MSHR *allocateMissBuffer(PacketPtr pkt, Tick time, bool requestBus)
     {
-        assert(!pkt->req->isUncacheable());
         return allocateBufferInternal(&mshrQueue,
                                       blockAlign(pkt->getAddr()), blkSize,
                                       pkt, time, requestBus);
@@ -506,16 +518,7 @@ class BaseCache : public MemObject
     {
         assert(pkt->isWrite() && !pkt->isRead());
         return allocateBufferInternal(&writeBuffer,
-                                      pkt->getAddr(), pkt->getSize(),
-                                      pkt, time, requestBus);
-    }
-
-    MSHR *allocateUncachedReadBuffer(PacketPtr pkt, Tick time, bool requestBus)
-    {
-        assert(pkt->req->isUncacheable());
-        assert(pkt->isRead());
-        return allocateBufferInternal(&mshrQueue,
-                                      pkt->getAddr(), pkt->getSize(),
+                                      blockAlign(pkt->getAddr()), blkSize,
                                       pkt, time, requestBus);
     }
 

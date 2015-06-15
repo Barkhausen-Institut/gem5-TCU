@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2012-2014 ARM Limited
+ * Copyright (c) 2010, 2012-2015 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -49,7 +49,6 @@
 #include "arch/arm/tlb.hh"
 #include "arch/arm/types.hh"
 #include "debug/Checkpoint.hh"
-#include "dev/arm/generic_timer.hh"
 #include "sim/sim_object.hh"
 
 struct ArmISAParams;
@@ -139,6 +138,9 @@ namespace ArmISA
         // PMU belonging to this ISA
         BaseISADevice *pmu;
 
+        // Generic timer interface belonging to this ISA
+        std::unique_ptr<BaseISADevice> timer;
+
         // Cached copies of system-level properties
         bool haveSecurity;
         bool haveLPAE;
@@ -205,9 +207,7 @@ namespace ArmISA
             }
         }
 
-        ::GenericTimer::SystemCounter * getSystemCounter(ThreadContext *tc);
-        ::GenericTimer::ArchTimer * getArchTimer(ThreadContext *tc,
-                                                 int cpu_id);
+        BaseISADevice &getGenericTimer(ThreadContext *tc);
 
 
       private:
@@ -428,14 +428,6 @@ namespace ArmISA
         }
 
         void startup(ThreadContext *tc) {}
-
-        /** Check if all CPUs have their caches enabled and if they do
-         * disable the bootAddrUncacheability flag because it's no longer
-         * needed.
-         * @s_idx the register number of the SCTLR that we are checking
-         * @tc Threadcontext to use to get access to the system and other cpus
-         */
-        void updateBootUncacheable(int sctlr_idx, ThreadContext *tc);
 
         /// Explicitly import the otherwise hidden startup
         using SimObject::startup;

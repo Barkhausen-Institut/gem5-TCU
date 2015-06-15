@@ -150,7 +150,7 @@ Execute::Execute(const std::string &name_,
     }
 
     /** Check that there is a functional unit for all operation classes */
-    for (int op_class = No_OpClass + 1; op_class < Num_OpClass; op_class++) {
+    for (int op_class = No_OpClass + 1; op_class < Num_OpClasses; op_class++) {
         bool found_fu = false;
         unsigned int fu_index = 0;
 
@@ -770,7 +770,7 @@ Execute::issue(bool only_issue_microops)
 
             if (discarded) {
                 num_insts_discarded++;
-            } else {
+            } else if (!inst->isBubble()) {
                 num_insts_issued++;
 
                 if (num_insts_issued == issueLimit)
@@ -840,15 +840,15 @@ Execute::doInstCommitAccounting(MinorDynInstPtr inst)
         thread->numInst++;
         thread->numInsts++;
         cpu.stats.numInsts++;
+        cpu.system->totalNumInsts++;
+
+        /* Act on events related to instruction counts */
+        cpu.comInstEventQueue[inst->id.threadId]->serviceEvents(thread->numInst);
+        cpu.system->instEventQueue.serviceEvents(cpu.system->totalNumInsts);
     }
     thread->numOp++;
     thread->numOps++;
     cpu.stats.numOps++;
-    cpu.system->totalNumInsts++;
-
-    /* Act on events related to instruction counts */
-    cpu.comInstEventQueue[inst->id.threadId]->serviceEvents(thread->numInst);
-    cpu.system->instEventQueue.serviceEvents(cpu.system->totalNumInsts);
 
     /* Set the CP SeqNum to the numOps commit number */
     if (inst->traceData)

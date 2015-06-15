@@ -71,6 +71,8 @@ thread_loop(EventQueue *queue)
     }
 }
 
+GlobalSimLoopExitEvent *simulate_limit_event = nullptr;
+
 /** Simulate for num_cycles additional cycles.  If num_cycles is -1
  * (the default), do not limit simulation; some other event must
  * terminate the loop.  Exported to Python via SWIG.
@@ -96,6 +98,9 @@ simulate(Tick num_cycles)
         }
 
         threads_initialized = true;
+        simulate_limit_event =
+            new GlobalSimLoopExitEvent(mainEventQueue[0]->getCurTick(),
+                                       "simulate() limit reached", 0);
     }
 
     inform("Entering event queue @ %d.  Starting simulation...\n", curTick());
@@ -105,8 +110,7 @@ simulate(Tick num_cycles)
     else // counter would roll over or be set to MaxTick anyhow
         num_cycles = MaxTick;
 
-    GlobalEvent *limit_event = new GlobalSimLoopExitEvent(num_cycles,
-                                "simulate() limit reached", 0, 0);
+    simulate_limit_event->reschedule(num_cycles);
 
     GlobalSyncEvent *quantum_event = NULL;
     if (numMainEventQueues > 1) {
@@ -136,13 +140,6 @@ simulate(Tick num_cycles)
     GlobalSimLoopExitEvent *global_exit_event =
         dynamic_cast<GlobalSimLoopExitEvent *>(global_event);
     assert(global_exit_event != NULL);
-
-    // if we didn't hit limit_event, delete it.
-    if (global_exit_event != limit_event) {
-        assert(limit_event->scheduled());
-        limit_event->deschedule();
-        delete limit_event;
-    }
 
     //! Delete the simulation quantum event.
     if (quantum_event != NULL) {

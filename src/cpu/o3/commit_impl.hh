@@ -96,7 +96,6 @@ DefaultCommit<Impl>::TrapEvent::description() const
 template <class Impl>
 DefaultCommit<Impl>::DefaultCommit(O3CPU *_cpu, DerivO3CPUParams *params)
     : cpu(_cpu),
-      squashCounter(0),
       iewToCommitDelay(params->iewToCommitDelay),
       commitToIEWDelay(params->commitToIEWDelay),
       renameToROBDelay(params->renameToROBDelay),
@@ -185,19 +184,18 @@ DefaultCommit<Impl>::regStats()
         .name(name() + ".commitSquashedInsts")
         .desc("The number of squashed insts skipped by commit")
         .prereq(commitSquashedInsts);
-    commitSquashEvents
-        .name(name() + ".commitSquashEvents")
-        .desc("The number of times commit is told to squash")
-        .prereq(commitSquashEvents);
+
     commitNonSpecStalls
         .name(name() + ".commitNonSpecStalls")
         .desc("The number of times commit has been forced to stall to "
               "communicate backwards")
         .prereq(commitNonSpecStalls);
+
     branchMispredicts
         .name(name() + ".branchMispredicts")
         .desc("The number of times a branch was mispredicted")
         .prereq(branchMispredicts);
+
     numCommittedDist
         .init(0,commitWidth,1)
         .name(name() + ".committed_per_cycle")
@@ -282,13 +280,6 @@ DefaultCommit<Impl>::regStats()
         .flags(total | pdf | dist)
         ;
     statCommittedInstType.ysubnames(Enums::OpClassStrings);
-
-    commitEligible
-        .init(cpu->numThreads)
-        .name(name() + ".bw_limited")
-        .desc("number of insts not committed due to BW limits")
-        .flags(total)
-        ;
 
     commitEligibleSamples
         .name(name() + ".bw_lim_events")
@@ -460,7 +451,6 @@ DefaultCommit<Impl>::takeOverFrom()
         tcSquash[tid] = false;
         squashAfterInst[tid] = NULL;
     }
-    squashCounter = 0;
     rob->takeOverFrom();
 }
 
@@ -506,32 +496,6 @@ DefaultCommit<Impl>::updateStatus()
     }
 
     _status = _nextStatus;
-}
-
-template <class Impl>
-void
-DefaultCommit<Impl>::setNextStatus()
-{
-    int squashes = 0;
-
-    list<ThreadID>::iterator threads = activeThreads->begin();
-    list<ThreadID>::iterator end = activeThreads->end();
-
-    while (threads != end) {
-        ThreadID tid = *threads++;
-
-        if (commitStatus[tid] == ROBSquashing) {
-            squashes++;
-        }
-    }
-
-    squashCounter = squashes;
-
-    // If commit is currently squashing, then it will have activity for the
-    // next cycle. Set its next status as active.
-    if (squashCounter) {
-        _nextStatus = Active;
-    }
 }
 
 template <class Impl>
@@ -856,6 +820,8 @@ DefaultCommit<Impl>::commit()
     list<ThreadID>::iterator threads = activeThreads->begin();
     list<ThreadID>::iterator end = activeThreads->end();
 
+    int num_squashing_threads = 0;
+
     while (threads != end) {
         ThreadID tid = *threads++;
 
@@ -932,20 +898,24 @@ DefaultCommit<Impl>::commit()
                 if (toIEW->commitInfo[tid].mispredictInst->isUncondCtrl()) {
                      toIEW->commitInfo[tid].branchTaken = true;
                 }
+                ++branchMispredicts;
             }
 
             toIEW->commitInfo[tid].pc = fromIEW->pc[tid];
-
-            if (toIEW->commitInfo[tid].mispredictInst) {
-                ++branchMispredicts;
-            }
         }
 
+        if (commitStatus[tid] == ROBSquashing) {
+            num_squashing_threads++;
+        }
     }
 
-    setNextStatus();
+    // If commit is currently squashing, then it will have activity for the
+    // next cycle. Set its next status as active.
+    if (num_squashing_threads) {
+        _nextStatus = Active;
+    }
 
-    if (squashCounter != numThreads) {
+    if (num_squashing_threads != numThreads) {
         // If we're not currently squashing, then get instructions.
         getInsts();
 
@@ -1016,7 +986,7 @@ DefaultCommit<Impl>::commitInsts()
         if (interrupt != NoFault)
             handleInterrupt();
 
-        int commit_thread = getCommittingThread();
+        ThreadID commit_thread = getCommittingThread();
 
         if (commit_thread == -1 || !rob->isHeadReady(commit_thread))
             break;
@@ -1175,7 +1145,7 @@ DefaultCommit<Impl>::commitHead(DynInstPtr &head_inst, unsigned inst_num)
         // think are possible.
         assert(head_inst->isNonSpeculative() || head_inst->isStoreConditional()
                || head_inst->isMemBarrier() || head_inst->isWriteBarrier() ||
-               (head_inst->isLoad() && head_inst->uncacheable()));
+               (head_inst->isLoad() && head_inst->strictlyOrdered()));
 
         DPRINTF(Commit, "Encountered a barrier or non-speculative "
                 "instruction [sn:%lli] at the head of the ROB, PC %s.\n",
@@ -1192,11 +1162,11 @@ DefaultCommit<Impl>::commitHead(DynInstPtr &head_inst, unsigned inst_num)
         // it is executed.
         head_inst->clearCanCommit();
 
-        if (head_inst->isLoad() && head_inst->uncacheable()) {
-            DPRINTF(Commit, "[sn:%lli]: Uncached load, PC %s.\n",
+        if (head_inst->isLoad() && head_inst->strictlyOrdered()) {
+            DPRINTF(Commit, "[sn:%lli]: Strictly ordered load, PC %s.\n",
                     head_inst->seqNum, head_inst->pcState());
-            toIEW->commitInfo[tid].uncached = true;
-            toIEW->commitInfo[tid].uncachedLoad = head_inst;
+            toIEW->commitInfo[tid].strictlyOrdered = true;
+            toIEW->commitInfo[tid].strictlyOrderedLoad = head_inst;
         } else {
             ++commitNonSpecStalls;
         }
@@ -1368,10 +1338,8 @@ DefaultCommit<Impl>::markCompletedInsts()
 {
     // Grab completed insts out of the IEW instruction queue, and mark
     // instructions completed within the ROB.
-    for (int inst_num = 0;
-         inst_num < fromIEW->size && fromIEW->insts[inst_num];
-         ++inst_num)
-    {
+    for (int inst_num = 0; inst_num < fromIEW->size; ++inst_num) {
+        assert(fromIEW->insts[inst_num]);
         if (!fromIEW->insts[inst_num]->isSquashed()) {
             DPRINTF(Commit, "[tid:%i]: Marking PC %s, [sn:%lli] ready "
                     "within ROB.\n",

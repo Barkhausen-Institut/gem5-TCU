@@ -1,6 +1,6 @@
 /*
  * Copyright 2014 Google, Inc.
- * Copyright (c) 2012 ARM Limited
+ * Copyright (c) 2012, 2015 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -191,10 +191,11 @@ Kvm::capXSave() const
 #endif
 }
 
+
+#if defined(__i386__) || defined(__x86_64__)
 bool
 Kvm::getSupportedCPUID(struct kvm_cpuid2 &cpuid) const
 {
-#if defined(__i386__) || defined(__x86_64__)
     if (ioctl(KVM_GET_SUPPORTED_CPUID, (void *)&cpuid) == -1) {
         if (errno == E2BIG)
             return false;
@@ -202,9 +203,6 @@ Kvm::getSupportedCPUID(struct kvm_cpuid2 &cpuid) const
             panic("KVM: Failed to get supported CPUID (errno: %i)\n", errno);
     } else
         return true;
-#else
-    panic("KVM: getSupportedCPUID is unsupported on this platform.\n");
-#endif
 }
 
 const Kvm::CPUIDVector &
@@ -230,7 +228,6 @@ Kvm::getSupportedCPUID() const
 bool
 Kvm::getSupportedMSRs(struct kvm_msr_list &msrs) const
 {
-#if defined(__i386__) || defined(__x86_64__)
     if (ioctl(KVM_GET_MSR_INDEX_LIST, (void *)&msrs) == -1) {
         if (errno == E2BIG)
             return false;
@@ -238,9 +235,6 @@ Kvm::getSupportedMSRs(struct kvm_msr_list &msrs) const
             panic("KVM: Failed to get supported CPUID (errno: %i)\n", errno);
     } else
         return true;
-#else
-    panic("KVM: getSupportedCPUID is unsupported on this platform.\n");
-#endif
 }
 
 const Kvm::MSRIndexVector &
@@ -261,6 +255,9 @@ Kvm::getSupportedMSRs() const
 
     return supportedMSRCache;
 }
+
+#endif // x86-specific
+
 
 int
 Kvm::checkExtension(int extension) const
@@ -489,6 +486,23 @@ KvmVM::setIRQLine(uint32_t irq, bool high)
 }
 
 int
+KvmVM::createDevice(uint32_t type, uint32_t flags)
+{
+#if defined(KVM_CREATE_DEVICE)
+    struct kvm_create_device dev = { type, 0, flags };
+
+    if (ioctl(KVM_CREATE_DEVICE, &dev) == -1) {
+        panic("KVM: Failed to create device (errno: %i)\n",
+              errno);
+    }
+
+    return dev.fd;
+#else
+    panic("Kernel headers don't support KVM_CREATE_DEVICE\n");
+#endif
+}
+
+int
 KvmVM::createVCPU(long vcpuID)
 {
     int fd;
@@ -505,6 +519,17 @@ KvmVM::allocVCPUID()
 {
     return nextVCPUID++;
 }
+
+#if defined(__aarch64__)
+void
+KvmVM::kvmArmPreferredTarget(struct kvm_vcpu_init &target) const
+{
+    if (ioctl(KVM_ARM_PREFERRED_TARGET, &target) == -1) {
+        panic("KVM: Failed to get ARM preferred CPU target (errno: %i)\n",
+              errno);
+    }
+}
+#endif
 
 int
 KvmVM::ioctl(int request, long p1) const

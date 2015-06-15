@@ -122,7 +122,7 @@ class RemoteGDB : public BaseRemoteGDB
     bool checkBpLen(size_t len) { return len == 1; }
 };
 
-const int GDB_REG_BYTES =
+const int GDB_REG_BYTES M5_VAR_USED =
     std::max(RemoteGDB::GDB32_NUMREGS * sizeof(uint32_t),
              RemoteGDB::GDB64_NUMREGS * sizeof(uint64_t));
 

@@ -462,6 +462,7 @@ def run(options, root, testsys, cpu_class):
             switch_cpus[i].system =  testsys
             switch_cpus[i].workload = testsys.cpu[i].workload
             switch_cpus[i].clk_domain = testsys.cpu[i].clk_domain
+            switch_cpus[i].progress_interval = testsys.cpu[i].progress_interval
             # simulation period
             if options.maxinsts:
                 switch_cpus[i].max_insts_any_thread = options.maxinsts
@@ -580,6 +581,13 @@ def run(options, root, testsys, cpu_class):
     if options.checkpoint_restore:
         cpt_starttick, checkpoint_dir = findCptDir(options, cptdir, testsys)
     m5.instantiate(checkpoint_dir)
+
+    # Initialization is complete.  If we're not in control of simulation
+    # (that is, if we're a slave simulator acting as a component in another
+    #  'master' simulator) then we're done here.  The other simulator will
+    # call simulate() directly. --initialize-only is used to indicate this.
+    if options.initialize_only:
+        return
 
     # Handle the max tick settings now that tick frequency was resolved
     # during system instantiation

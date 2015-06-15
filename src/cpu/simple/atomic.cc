@@ -168,8 +168,6 @@ AtomicSimpleCPU::drainResume()
         _status = BaseSimpleCPU::Idle;
         notIdleFraction = 0;
     }
-
-    system->totalNumInsts = 0;
 }
 
 bool
@@ -341,8 +339,7 @@ AtomicSimpleCPU::readMem(Addr addr, uint8_t * data,
 
         // Now do the access.
         if (fault == NoFault && !req->getFlags().isSet(Request::NO_ACCESS)) {
-            Packet pkt(req, MemCmd::ReadReq);
-            pkt.refineCommand();
+            Packet pkt(req, Packet::makeReadCmd(req));
             pkt.dataStatic(data);
 
             if (req->isMmappedIpr())
@@ -374,7 +371,7 @@ AtomicSimpleCPU::readMem(Addr addr, uint8_t * data,
         //If we don't need to access a second cache line, stop now.
         if (secondAddr <= addr)
         {
-            if (req->isLocked() && fault == NoFault) {
+            if (req->isLockedRMW() && fault == NoFault) {
                 assert(!locked);
                 locked = true;
             }
@@ -481,7 +478,7 @@ AtomicSimpleCPU::writeMem(uint8_t *data, unsigned size,
         //stop now.
         if (fault != NoFault || secondAddr <= addr)
         {
-            if (req->isLocked() && fault == NoFault) {
+            if (req->isLockedRMW() && fault == NoFault) {
                 assert(locked);
                 locked = false;
             }

@@ -1,4 +1,4 @@
-# Copyright (c) 2014 ARM Limited
+# Copyright (c) 2014-2015 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -54,11 +54,11 @@ import MemConfig
 parser = optparse.OptionParser()
 
 # Use a single-channel DDR3-1600 x64 by default
-parser.add_option("--mem-type", type="choice", default="ddr3_1600_x64",
+parser.add_option("--mem-type", type="choice", default="DDR3_1600_x64",
                   choices=MemConfig.mem_names(),
                   help = "type of memory to use")
 
-parser.add_option("--ranks", "-r", type="int", default=1,
+parser.add_option("--mem-ranks", "-r", type="int", default=1,
                   help = "Number of ranks to iterate across")
 
 parser.add_option("--rd_perc", type="int", default=100,
@@ -93,9 +93,13 @@ system.clk_domain = SrcClockDomain(clock = '1.5GHz',
 mem_range = AddrRange('256MB')
 system.mem_ranges = [mem_range]
 
+# do not worry about reserving space for the backing store
+mmap_using_noreserve = True
+
 # force a single channel to match the assumptions in the DRAM traffic
 # generator
 options.mem_channels = 1
+options.external_memory_system = 0
 MemConfig.config_mem(options, system)
 
 # the following assumes that we are using the native DRAM
@@ -103,8 +107,8 @@ MemConfig.config_mem(options, system)
 if not isinstance(system.mem_ctrls[0], m5.objects.DRAMCtrl):
     fatal("This script assumes the memory is a DRAMCtrl subclass")
 
-# Set number of ranks based on input argument; default is 1 rank
-system.mem_ctrls[0].ranks_per_channel = options.ranks
+# there is no point slowing things down by saving any data
+system.mem_ctrls[0].null = True
 
 # Set the address mapping based on input argument
 # Default to RoRaBaCoCh
@@ -162,7 +166,7 @@ for bank in range(1, nbr_banks + 1):
                        (nxt_state, period, options.mode, options.rd_perc,
                         max_addr, burst_size, itt, itt, 0, stride_size,
                         page_size, nbr_banks, bank, options.addr_map,
-                        options.ranks))
+                        options.mem_ranks))
         nxt_state = nxt_state + 1
 
 cfg_file.write("INIT 0\n")

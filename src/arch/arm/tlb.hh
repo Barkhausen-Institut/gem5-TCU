@@ -136,8 +136,6 @@ class TLB : public BaseTLB
 
     int rangeMRU; //On lookup, only move entries ahead when outside rangeMRU
 
-    bool bootUncacheability;
-
   public:
     TLB(const ArmTLBParams *p);
     TLB(const Params *p, int _size, TableWalker *_walker);
@@ -233,7 +231,6 @@ class TLB : public BaseTLB
 
     void printTlb() const;
 
-    void allCpusCaching() { bootUncacheability = true; }
     void demapPage(Addr vaddr, uint64_t asn)
     {
         // needed for x86 only
@@ -315,6 +312,7 @@ class TLB : public BaseTLB
     // translateFunctional/translateSe/translateFs checks if they are
     // invalid and call updateMiscReg if necessary.
 protected:
+    CPSR cpsr;
     bool aarch64;
     ExceptionLevel aarch64EL;
     SCTLR sctlr;
