@@ -32,7 +32,7 @@ class Scratchpad(AbstractMemory):
     type = 'Scratchpad'
     cxx_header = 'mem/scratchpad.hh'
 
-    range = 0x10000 # default size 16kB
+    range = 0x1000000 # default size 16MiB
 
     port = SlavePort("Slave ports")
     latency = Param.Cycles(1, "Request to response latency")
