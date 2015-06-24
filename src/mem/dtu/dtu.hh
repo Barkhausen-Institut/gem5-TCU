@@ -111,6 +111,7 @@ class Dtu : public BaseDtu
     Cycles commandToNocRequestLatency;
     Cycles spmResponseToNocRequestLatency;
     Cycles nocMessageToSpmRequestLatency;
+    Cycles nocResponseToSpmRequestLatency;
     Cycles nocRequestToSpmRequestLatency;
     Cycles spmResponseToNocResponseLatency;
 
@@ -181,6 +182,10 @@ class Dtu : public BaseDtu
     void completeForwardedRequest(PacketPtr pkt);
 
     void completeNocRequest(PacketPtr pkt) override;
+
+    void completeNocReadRequest(PacketPtr pkt);
+
+    void completeNocWriteRequest(PacketPtr pkt);
 
     void completeSpmRequest(PacketPtr pkt) override;
 

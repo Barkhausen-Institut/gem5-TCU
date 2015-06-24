@@ -45,6 +45,7 @@ Dtu::Dtu(DtuParams* p)
     commandToNocRequestLatency(p->command_to_noc_request_latency),
     spmResponseToNocRequestLatency(p->spm_response_to_noc_request_latency),
     nocMessageToSpmRequestLatency(p->noc_message_to_spm_request_latency),
+    nocResponseToSpmRequestLatency(p->noc_message_to_spm_request_latency),
     nocRequestToSpmRequestLatency(p->noc_request_to_spm_request_latency),
     spmResponseToNocResponseLatency(p->spm_response_to_noc_response_latency),
     executeCommandEvent(*this),
@@ -153,6 +154,7 @@ Dtu::startOperation(Command& cmd)
 void
 Dtu::finishOperation()
 {
+    DPRINTF(Dtu, "Operation finished\n");
     // reset command register and unset busy flag
     regFile.setDtuReg(DtuReg::COMMAND, 0);
     regFile.setDtuReg(DtuReg::STATUS, 0);
@@ -309,15 +311,53 @@ Dtu::incrementWritePtr(unsigned epId)
 void
 Dtu::completeNocRequest(PacketPtr pkt)
 {
-    DPRINTF(Dtu, "Received response from remote DTU -> Transaction finished\n");
+    DPRINTF(Dtu, "Received %s response from remote DTU.\n",
+                 pkt->isRead() ? "read" : "write");
 
-    Cycles delay = ticksToCycles(pkt->headerDelay + pkt->payloadDelay);
+    if (pkt->isWrite())
+        completeNocWriteRequest(pkt);
+    else if (pkt->isRead())
+        completeNocReadRequest(pkt);
+    else
+        panic("unexpected packet type\n");
 
     // clean up
     delete pkt->req;
     delete pkt;
+}
+
+void
+Dtu::completeNocWriteRequest(PacketPtr pkt)
+{
+    Cycles delay = ticksToCycles(pkt->headerDelay + pkt->payloadDelay);
 
     schedule(finishOperationEvent, clockEdge(delay));
+}
+
+void
+Dtu::completeNocReadRequest(PacketPtr pkt)
+{
+
+    auto cmd = getCommand();
+
+    Addr localAddr = regFile.readEpReg(cmd.epId, EpReg::REQUEST_LOCAL_ADDR);
+    Addr requestSize = regFile.readEpReg(cmd.epId, EpReg::REQUEST_SIZE);
+
+    DPRINTF(Dtu, "Write %u bytes to local scratchpad at address %#x.\n",
+                 requestSize,
+                 localAddr);
+
+    Cycles delay = ticksToCycles(pkt->headerDelay);
+
+    auto spmPkt = generateRequest(localAddr, requestSize, MemCmd::ReadReq);
+    spmPkt->payloadDelay = pkt->payloadDelay;
+
+    memcpy(spmPkt->getPtr<uint8_t>(), pkt->getPtr<uint8_t>(), requestSize);
+
+    sendSpmRequest(spmPkt,
+                   cmd.epId,
+                   delay + nocResponseToSpmRequestLatency,
+                   SpmPacketType::LOCAL_REQUEST);
 }
 
 void
@@ -468,6 +508,11 @@ Dtu::completeLocalSpmRequest(PacketPtr pkt)
                                   pkt->getSize(),
                                   pkt->headerDelay,
                                   pkt->payloadDelay);
+    else if (mode == EpMode::READ_MEMORY)
+    {
+        Cycles delay = ticksToCycles(pkt->headerDelay + pkt->payloadDelay);
+        schedule(finishOperationEvent, clockEdge(delay));
+    }
     else
         // TODO error handling
         panic("Unexpected mode!\n");
