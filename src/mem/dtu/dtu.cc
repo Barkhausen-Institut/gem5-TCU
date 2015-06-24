@@ -42,6 +42,7 @@ Dtu::Dtu(DtuParams* p)
     numCmdOffsetBits(p->num_cmd_offset_bits),
     registerAccessLatency(p->register_access_latency),
     commandToSpmRequestLatency(p->command_to_spm_request_latency),
+    commandToNocRequestLatency(p->command_to_noc_request_latency),
     spmResponseToNocRequestLatency(p->spm_response_to_noc_request_latency),
     nocMessageToSpmRequestLatency(p->noc_message_to_spm_request_latency),
     nocRequestToSpmRequestLatency(p->noc_request_to_spm_request_latency),
@@ -137,6 +138,9 @@ Dtu::startOperation(Command& cmd)
     case EpMode::TRANSMIT_MESSAGE:
         startMessageTransmission(cmd);
         break;
+    case EpMode::READ_MEMORY:
+        startMemoryRead(cmd);
+        break;
     case EpMode::WRITE_MEMORY:
         startMemoryWrite(cmd);
         break;
@@ -198,6 +202,29 @@ Dtu::startMessageTransmission(const Command& cmd)
                    cmd.epId,
                    commandToSpmRequestLatency,
                    SpmPacketType::LOCAL_REQUEST);
+}
+
+void
+Dtu::startMemoryRead(const Command& cmd)
+{
+    Addr requestSize = regFile.readEpReg(cmd.epId, EpReg::REQUEST_SIZE);
+    Addr remoteAddr = regFile.readEpReg(cmd.epId, EpReg::REQUEST_REMOTE_ADDR);
+    remoteAddr += cmd.offset;
+
+    // TODO error handling
+    assert(requestSize > 0);
+    assert(requestSize < maxMessageSize);
+
+    DPRINTF(Dtu, "Endpoint %u starts memory read.\n", cmd.epId);
+    DPRINTF(Dtu, "Read %u bytes from global address %#x\n",
+                 requestSize,
+                 remoteAddr);
+
+    auto pkt = generateRequest(remoteAddr, requestSize, MemCmd::ReadReq);
+
+    sendNocRequest(pkt,
+                   commandToNocRequestLatency,
+                   false);
 }
 
 void

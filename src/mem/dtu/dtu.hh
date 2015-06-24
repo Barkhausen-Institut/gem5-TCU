@@ -108,6 +108,7 @@ class Dtu : public BaseDtu
 
     Cycles registerAccessLatency;
     Cycles commandToSpmRequestLatency;
+    Cycles commandToNocRequestLatency;
     Cycles spmResponseToNocRequestLatency;
     Cycles nocMessageToSpmRequestLatency;
     Cycles nocRequestToSpmRequestLatency;
@@ -131,6 +132,8 @@ class Dtu : public BaseDtu
                         SpmPacketType packetType);
 
     void startMessageTransmission(const Command& cmd);
+
+    void startMemoryRead(const Command& cmd);
 
     void startMemoryWrite(const Command& cmd);
 
