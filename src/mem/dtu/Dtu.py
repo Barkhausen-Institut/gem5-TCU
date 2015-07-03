@@ -54,7 +54,7 @@ class Dtu(BaseDtu):
     num_cmd_epid_bits = Param.Unsigned(8, "Number of bits used to identify the endpoint in a command")
     num_cmd_offset_bits = Param.Unsigned(16, "Number of bits used for address offset on memory access")
 
-    max_message_size = Param.MemorySize("512B", "Maximum message size")
+    max_noc_packet_size = Param.MemorySize("512B", "Maximum size of a NoC packet")
 
     register_access_latency = Param.Cycles(1, "Latency for CPU register accesses")
     command_to_spm_request_latency = Param.Cycles(5, "Number of cycles passed from writing a command to the register to issuing a read request on the scratchpad port")

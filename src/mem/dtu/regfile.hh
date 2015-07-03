@@ -46,6 +46,7 @@ constexpr unsigned numDtuRegs = 2;
 enum class EpReg : Addr
 {
     MODE,
+    MAX_MESSAGE_SIZE,
     // for receiving messages
     BUFFER_MESSAGE_COUNT,
     BUFFER_ADDR,
@@ -63,7 +64,7 @@ enum class EpReg : Addr
     REQUEST_SIZE,
 };
 
-constexpr unsigned numEpRegs = 13;
+constexpr unsigned numEpRegs = 14;
 
 class RegFile
 {

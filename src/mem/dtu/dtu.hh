@@ -101,7 +101,7 @@ class Dtu : public BaseDtu
 
     MasterID masterId;
 
-    Addr maxMessageSize;
+    Addr maxNocPacketSize;
 
     unsigned numCmdEpidBits;
     unsigned numCmdOffsetBits;
