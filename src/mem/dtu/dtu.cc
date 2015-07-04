@@ -91,7 +91,7 @@ Dtu::getCommand()
 
     cmd.opcode = static_cast<CommandOpcode>(reg & opcodeMask);
 
-    cmd.epId = (reg & epidMask) >> numCmdEpidBits;
+    cmd.epId = (reg & epidMask) >> numCmdOpcodeBits;
 
     cmd.offset = (reg & offsetMask) >> (numCmdEpidBits + numCmdOpcodeBits);
 
