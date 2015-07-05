@@ -29,11 +29,14 @@
 
 #include "debug/Dtu.hh"
 #include "mem/dtu/dtu.hh"
+#include "mem/page_table.hh"
 #include "sim/system.hh"
+#include "sim/process.hh"
 
 Dtu::Dtu(DtuParams* p)
   : BaseDtu(p),
     atomicMode(p->system->isAtomicMode()),
+    system(p->system),
     regFile(name() + ".regFile", p->num_endpoints),
     numEndpoints(p->num_endpoints),
     masterId(p->system->getMasterId(name())),
@@ -48,6 +51,7 @@ Dtu::Dtu(DtuParams* p)
     nocResponseToSpmRequestLatency(p->noc_message_to_spm_request_latency),
     nocRequestToSpmRequestLatency(p->noc_request_to_spm_request_latency),
     spmResponseToNocResponseLatency(p->spm_response_to_noc_response_latency),
+    usePTable(p->use_ptable),
     executeCommandEvent(*this),
     finishOperationEvent(*this),
     incrementWritePtrEvent(*this)
@@ -166,6 +170,15 @@ Dtu::sendSpmRequest(PacketPtr pkt,
                     Cycles delay,
                     SpmPacketType packetType)
 {
+    if (usePTable)
+    {
+        auto pTable = system->threadContexts[coreId]->getProcessPtr()->pTable;
+        assert(pTable != nullptr);
+        Addr paddr;
+        assert(pTable->translate(pkt->getAddr(), paddr));
+        pkt->setAddr(paddr);
+    }
+
     auto senderState = new SpmSenderState();
     senderState->epId = epId;
     senderState->packetType = packetType;

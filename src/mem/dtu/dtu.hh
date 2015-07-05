@@ -95,6 +95,8 @@ class Dtu : public BaseDtu
 
     bool atomicMode;
 
+    System *system;
+
     RegFile regFile;
 
     unsigned numEndpoints;
@@ -114,6 +116,8 @@ class Dtu : public BaseDtu
     Cycles nocResponseToSpmRequestLatency;
     Cycles nocRequestToSpmRequestLatency;
     Cycles spmResponseToNocResponseLatency;
+
+    bool usePTable;
 
     PacketPtr generateRequest(Addr addr, Addr size, MemCmd cmd);
 

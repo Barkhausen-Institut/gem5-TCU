@@ -49,6 +49,7 @@ class Dtu(BaseDtu):
     type = 'Dtu'
     cxx_header = "mem/dtu/dtu.hh"
     system = Param.System(Parent.any, "System we belong to")
+    use_ptable = Param.Bool('false', "If true all address are translated into physical addresses")
     num_endpoints = Param.Unsigned(8, "Number of enpoints per DTU")
 
     num_cmd_epid_bits = Param.Unsigned(8, "Number of bits used to identify the endpoint in a command")

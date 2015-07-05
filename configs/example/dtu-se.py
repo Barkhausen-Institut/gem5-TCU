@@ -209,6 +209,8 @@ for i in range(0, options.num_pes):
 
         workload_list.append(pe.cpu.workload)
 
+        pe.dtu.use_ptable = 'true'
+
 # Instantiate configuration
 m5.instantiate()
 
