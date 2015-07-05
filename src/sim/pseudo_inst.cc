@@ -194,6 +194,8 @@ pseudoInst(ThreadContext *tc, uint8_t func, uint8_t subfunc)
 
       case 0x55: // annotate_func
       case 0x56: // reserved2_func
+        return translate(tc, args[0]);
+
       case 0x57: // reserved3_func
       case 0x58: // reserved4_func
       case 0x59: // reserved5_func
@@ -715,6 +717,14 @@ workend(ThreadContext *tc, uint64_t workid, uint64_t threadid)
             exitSimLoop("work items exit count reached");
         }
     }
+}
+
+uint64_t
+translate(ThreadContext *tc, uint64_t vaddr)
+{
+    Addr paddr;
+    tc->getProcessPtr()->pTable->translate(vaddr, paddr);
+    return paddr;
 }
 
 } // namespace PseudoInst
