@@ -42,6 +42,7 @@ class Dtu : public BaseDtu
     {
         uint8_t coreId;
         uint8_t epId;
+        uint8_t replyEpId;
         uint16_t length;
     };
 

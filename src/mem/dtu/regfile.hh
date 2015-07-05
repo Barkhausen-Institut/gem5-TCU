@@ -58,13 +58,14 @@ enum class EpReg : Addr
     TARGET_EPID,
     MESSAGE_ADDR,
     MESSAGE_SIZE,
+    REPLY_EPID,
     // for memory requests
     REQUEST_LOCAL_ADDR,
     REQUEST_REMOTE_ADDR,
     REQUEST_SIZE,
 };
 
-constexpr unsigned numEpRegs = 14;
+constexpr unsigned numEpRegs = 15;
 
 class RegFile
 {

@@ -435,6 +435,7 @@ Dtu::sendNocMessage(const uint8_t* data,
 
     unsigned targetCoreId = regFile.readEpReg(epid, EpReg::TARGET_COREID);
     unsigned targetEpId   = regFile.readEpReg(epid, EpReg::TARGET_EPID);
+    unsigned replyEpId    = regFile.readEpReg(epid, EpReg::REPLY_EPID);
     unsigned maxMessageSize = regFile.readEpReg(epid, EpReg::MAX_MESSAGE_SIZE);
 
     assert(regFile.readEpReg(epid, EpReg::MESSAGE_SIZE) == messageSize);
@@ -447,6 +448,7 @@ Dtu::sendNocMessage(const uint8_t* data,
 
     MessageHeader header = { static_cast<uint8_t>(coreId),
                              static_cast<uint8_t>(epid),
+                             static_cast<uint8_t>(replyEpId),
                              static_cast<uint16_t>(messageSize) };
 
     auto pkt = generateRequest(getNocAddr(targetCoreId, targetEpId),
