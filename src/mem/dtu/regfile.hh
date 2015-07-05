@@ -63,9 +63,11 @@ enum class EpReg : Addr
     REQUEST_LOCAL_ADDR,
     REQUEST_REMOTE_ADDR,
     REQUEST_SIZE,
+
+    CREDITS,
 };
 
-constexpr unsigned numEpRegs = 15;
+constexpr unsigned numEpRegs = 16;
 
 class RegFile
 {

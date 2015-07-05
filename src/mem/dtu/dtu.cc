@@ -202,6 +202,20 @@ Dtu::startMessageTransmission(const Command& cmd)
     Addr messageAddr = regFile.readEpReg(cmd.epId, EpReg::MESSAGE_ADDR);
     Addr messageSize = regFile.readEpReg(cmd.epId, EpReg::MESSAGE_SIZE);
     unsigned maxMessageSize = regFile.readEpReg(cmd.epId, EpReg::MAX_MESSAGE_SIZE);
+    unsigned credits = regFile.readEpReg(cmd.epId, EpReg::CREDITS);
+
+    if (credits < maxMessageSize)
+    {
+        warn("pe%u.ep%u: Ignore send messgae commad because there are not enough credits",
+             coreId,
+             cmd.epId);
+        schedule(finishOperationEvent, clockEdge(Cycles(1)));
+        return;
+    }
+
+    // Pay some credits
+    credits -= maxMessageSize;
+    regFile.setEpReg(cmd.epId, EpReg::CREDITS, credits);
 
     // TODO error handling
     assert(messageSize > 0);
