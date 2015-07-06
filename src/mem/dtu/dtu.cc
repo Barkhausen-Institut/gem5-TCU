@@ -460,10 +460,12 @@ Dtu::sendNocMessage(const uint8_t* data,
                  targetEpId,
                  targetCoreId);
 
-    MessageHeader header = { static_cast<uint8_t>(coreId),
-                             static_cast<uint8_t>(epid),
-                             static_cast<uint8_t>(replyEpId),
-                             static_cast<uint16_t>(messageSize) };
+    MessageHeader header;
+    header.flags        = 0; // normal message
+    header.senderCoreId = static_cast<uint8_t>(coreId);
+    header.senderEpId   = static_cast<uint8_t>(epid);
+    header.replyEpId    = static_cast<uint8_t>(replyEpId);
+    header.length       = static_cast<uint16_t>(messageSize);
 
     auto pkt = generateRequest(getNocAddr(targetCoreId, targetEpId),
                                messageSize + sizeof(MessageHeader),
@@ -570,8 +572,8 @@ Dtu::completeForwardedMessage(PacketPtr pkt, unsigned epId)
     else
     {
         DPRINTF(Dtu, "Wrote message to Scratchpad. Send response back to EP %u at core %u\n",
-                     header->epId,
-                     header->coreId);
+                     header->senderEpId,
+                     header->senderCoreId);
 
         Cycles delay = ticksToCycles(pkt->headerDelay + pkt->payloadDelay);
         delay += spmResponseToNocResponseLatency;
@@ -638,8 +640,8 @@ Dtu::recvNocMessage(PacketPtr pkt)
     DPRINTF(Dtu, "EP %u received message of %u bytes from EP %u at core %u\n",
                  epId,
                  header->length,
-                 header->epId,
-                 header->coreId);
+                 header->senderEpId,
+                 header->senderCoreId);
 
     unsigned messageCount = regFile.readEpReg(epId, EpReg::BUFFER_MESSAGE_COUNT);
     unsigned bufferSize   = regFile.readEpReg(epId, EpReg::BUFFER_SIZE);
