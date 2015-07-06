@@ -160,6 +160,8 @@ class BaseDtu : public MemObject
         void handleRequest(PacketPtr pkt) override;
     };
 
+  protected:
+
     CpuPort        cpuPort;
 
     ScratchpadPort scratchpadPort;
@@ -167,8 +169,6 @@ class BaseDtu : public MemObject
     NocMasterPort  nocMasterPort;
 
     NocSlavePort   nocSlavePort;
-
-  protected:
 
     unsigned coreId;
 

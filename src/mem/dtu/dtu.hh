@@ -128,6 +128,8 @@ class Dtu : public BaseDtu
 
     bool usePTable;
 
+    Addr translate(Addr vaddr);
+
     PacketPtr generateRequest(Addr addr, Addr size, MemCmd cmd);
 
     Command getCommand();
@@ -180,6 +182,7 @@ class Dtu : public BaseDtu
 
     void sendNocMessage(const uint8_t* data,
                         Addr messageSize,
+                        bool isReply,
                         Tick spmPktHeaderDelay,
                         Tick spmPktPayloadDelay);
 

@@ -57,6 +57,20 @@ Dtu::Dtu(DtuParams* p)
     incrementWritePtrEvent(*this)
 {}
 
+Addr
+Dtu::translate(Addr vaddr)
+{
+    Addr paddr = vaddr;
+    if (usePTable)
+    {
+        auto pTable = system->threadContexts[coreId]->getProcessPtr()->pTable;
+        assert(pTable != nullptr);
+        assert(pTable->translate(vaddr, paddr));
+    }
+
+    return paddr;
+}
+
 PacketPtr
 Dtu::generateRequest(Addr paddr, Addr size, MemCmd cmd)
 {
@@ -135,11 +149,7 @@ Dtu::startOperation(Command& cmd)
 
     switch (mode)
     {
-    case EpMode::RECEIVE_MESSAGE:
-        // TODO Error handling
-        panic("Ep %u: Cannot start operation on an endpoint"
-              "that is configured to receive messages\n", cmd.epId);
-        break;
+    case EpMode::RECEIVE_MESSAGE: // do a reply
     case EpMode::TRANSMIT_MESSAGE:
         startMessageTransmission(cmd);
         break;
@@ -170,14 +180,7 @@ Dtu::sendSpmRequest(PacketPtr pkt,
                     Cycles delay,
                     SpmPacketType packetType)
 {
-    if (usePTable)
-    {
-        auto pTable = system->threadContexts[coreId]->getProcessPtr()->pTable;
-        assert(pTable != nullptr);
-        Addr paddr;
-        assert(pTable->translate(pkt->getAddr(), paddr));
-        pkt->setAddr(paddr);
-    }
+    pkt->setAddr(translate(pkt->getAddr()));
 
     auto senderState = new SpmSenderState();
     senderState->epId = epId;
@@ -204,18 +207,29 @@ Dtu::startMessageTransmission(const Command& cmd)
     unsigned maxMessageSize = regFile.readEpReg(cmd.epId, EpReg::MAX_MESSAGE_SIZE);
     unsigned credits = regFile.readEpReg(cmd.epId, EpReg::CREDITS);
 
-    if (credits < maxMessageSize)
-    {
-        warn("pe%u.ep%u: Ignore send messgae commad because there are not enough credits",
-             coreId,
-             cmd.epId);
-        schedule(finishOperationEvent, clockEdge(Cycles(1)));
-        return;
-    }
+    EpMode mode = static_cast<EpMode>(regFile.readEpReg(cmd.epId, EpReg::MODE));
 
-    // Pay some credits
-    credits -= maxMessageSize;
-    regFile.setEpReg(cmd.epId, EpReg::CREDITS, credits);
+    /*
+     * If this endpoint is configured to send messages, we need to check
+     * credits. If it is configured to receive messages we do a reply and don't
+     * need to check credits.
+     */
+    if (mode == EpMode::TRANSMIT_MESSAGE)
+    {
+        if (credits < maxMessageSize)
+        {
+            warn("pe%u.ep%u: Ignore send message commad because there are not "
+                 "enough credits", coreId, cmd.epId);
+            schedule(finishOperationEvent, clockEdge(Cycles(1)));
+            return;
+        }
+
+        DPRINTF(Dtu, "EP%u pays %u credits\n", cmd.epId, maxMessageSize);
+
+        // Pay some credits
+        credits -= maxMessageSize;
+        regFile.setEpReg(cmd.epId, EpReg::CREDITS, credits);
+    }
 
     // TODO error handling
     assert(messageSize > 0);
@@ -442,26 +456,64 @@ Dtu::sendNocRequest(PacketPtr pkt, Cycles delay, bool isMessage)
 void
 Dtu::sendNocMessage(const uint8_t* data,
                     Addr messageSize,
+                    bool isReply,
                     Tick spmPktHeaderDelay,
                     Tick spmPktPayloadDelay)
 {
     unsigned epid = getCommand().epId;
 
-    unsigned targetCoreId = regFile.readEpReg(epid, EpReg::TARGET_COREID);
-    unsigned targetEpId   = regFile.readEpReg(epid, EpReg::TARGET_EPID);
-    unsigned replyEpId    = regFile.readEpReg(epid, EpReg::REPLY_EPID);
+    unsigned targetCoreId;
+    unsigned targetEpId;
+    unsigned replyEpId;
+
     unsigned maxMessageSize = regFile.readEpReg(epid, EpReg::MAX_MESSAGE_SIZE);
+
+    if (isReply)
+    {
+        /*
+         * We need to read the header of the received message from scratchpad
+         * to determine target core and enspoint ID. This would introduce a
+         * second scratchpad request and would make the control flow more
+         * complicated. To simplify things a functional request is used and an
+         * additional delay is payed.
+         */
+
+        auto pkt = generateRequest(
+                translate(regFile.readEpReg(epid, EpReg::BUFFER_READ_PTR)),
+                sizeof(MessageHeader),
+                MemCmd::ReadReq);
+
+        scratchpadPort.sendFunctional(pkt);
+
+        auto h = pkt->getPtr<MessageHeader>();
+
+        targetCoreId = h->senderCoreId;
+        targetEpId   = h->replyEpId;  // send messgae to the reply EP
+        replyEpId    = h->senderEpId; // and grand credits to the sender
+    }
+    else
+    {
+        targetCoreId = regFile.readEpReg(epid, EpReg::TARGET_COREID);
+        targetEpId   = regFile.readEpReg(epid, EpReg::TARGET_EPID);
+        replyEpId    = regFile.readEpReg(epid, EpReg::REPLY_EPID);
+    }
 
     assert(regFile.readEpReg(epid, EpReg::MESSAGE_SIZE) == messageSize);
     assert(messageSize + sizeof(MessageHeader) <= maxMessageSize);
 
-    DPRINTF(Dtu, "Send message of %u bytes to endpoint %u at core %u.\n",
+    DPRINTF(Dtu, "Send %s of %u bytes to endpoint %u at core %u.\n",
+                 isReply ? "reply" : "message",
                  messageSize,
                  targetEpId,
                  targetCoreId);
 
     MessageHeader header;
-    header.flags        = 0; // normal message
+
+    if (isReply)
+        header.flags = REPLY_FLAG | GRAND_CREDITS_FLAG;
+    else
+        header.flags = 0; // normal message
+
     header.senderCoreId = static_cast<uint8_t>(coreId);
     header.senderEpId   = static_cast<uint8_t>(epid);
     header.replyEpId    = static_cast<uint8_t>(replyEpId);
@@ -486,6 +538,11 @@ Dtu::sendNocMessage(const uint8_t* data,
      */
     Cycles delay = spmResponseToNocRequestLatency;
     delay += ticksToCycles(spmPktHeaderDelay);
+
+    if (isReply)
+        delay += Cycles(2); // pay for the functional request
+                            // TODO check value
+
     pkt->payloadDelay = spmPktPayloadDelay;
     sendNocRequest(pkt, delay, true);
 }
@@ -534,9 +591,10 @@ Dtu::completeLocalSpmRequest(PacketPtr pkt)
 
     EpMode mode = static_cast<EpMode>(regFile.readEpReg(epid, EpReg::MODE));
 
-    if (mode == EpMode::TRANSMIT_MESSAGE)
+    if (mode == EpMode::TRANSMIT_MESSAGE || mode == EpMode::RECEIVE_MESSAGE)
         sendNocMessage(pkt->getConstPtr<uint8_t>(),
                        pkt->getSize(),
+                       mode == EpMode::RECEIVE_MESSAGE,
                        pkt->headerDelay,
                        pkt->payloadDelay);
     else if (mode == EpMode::WRITE_MEMORY)
@@ -637,11 +695,24 @@ Dtu::recvNocMessage(PacketPtr pkt)
 
     MessageHeader* header = pkt->getPtr<MessageHeader>();
 
-    DPRINTF(Dtu, "EP %u received message of %u bytes from EP %u at core %u\n",
+    DPRINTF(Dtu, "EP %u received %s of %u bytes from EP %u at core %u\n",
                  epId,
+                 header->flags & REPLY_FLAG ? "reply" : "message",
                  header->length,
                  header->senderEpId,
                  header->senderCoreId);
+
+    if (header->flags & REPLY_FLAG &&
+        header->flags & GRAND_CREDITS_FLAG &&
+        header->replyEpId < numEndpoints)
+    {
+        unsigned maxMessageSize = regFile.readEpReg(epId, EpReg::MAX_MESSAGE_SIZE);
+        DPRINTF(Dtu, "Grand EP%u %u credits\n", header->replyEpId, maxMessageSize);
+
+        unsigned credits = regFile.readEpReg(header->replyEpId, EpReg::CREDITS);
+        credits += maxMessageSize;
+        regFile.setEpReg(header->replyEpId, EpReg::CREDITS, credits);
+    }
 
     unsigned messageCount = regFile.readEpReg(epId, EpReg::BUFFER_MESSAGE_COUNT);
     unsigned bufferSize   = regFile.readEpReg(epId, EpReg::BUFFER_SIZE);
