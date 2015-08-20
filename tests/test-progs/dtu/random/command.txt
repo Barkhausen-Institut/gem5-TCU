@@ -1,0 +1,1 @@
+build/X86/gem5.debug configs/example/dtu-se.py --cpu-type TimingSimpleCPU --num-pes=8 --cmd "./tests/test-progs/dtu/random/pe0,./tests/test-progs/dtu/random/pe1,./tests/test-progs/dtu/random/pe2,./tests/test-progs/dtu/random/pe3,./tests/test-progs/dtu/random/pe4,./tests/test-progs/dtu/random/pe5,./tests/test-progs/dtu/random/pe6,./tests/test-progs/dtu/random/pe7"
