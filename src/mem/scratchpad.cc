@@ -30,7 +30,8 @@
 
 Scratchpad::Scratchpad(const ScratchpadParams* p)
   : AbstractMemory(p),
-    port(name() + ".port", *this),
+    cpuPort(name() + ".cpu_port", *this),
+    dtuPort(name() + ".dtu_port", *this),
     latency(p->latency),
     throughput(p->throughput)
 {
@@ -41,18 +42,24 @@ Scratchpad::init()
 {
     AbstractMemory::init();
 
-    assert(port.isConnected());
+    assert(cpuPort.isConnected());
+    assert(dtuPort.isConnected());
 
-    port.sendRangeChange();
+    cpuPort.sendRangeChange();
+    dtuPort.sendRangeChange();
 }
 
 BaseSlavePort &
 Scratchpad::getSlavePort(const std::string &if_name, PortID idx)
 {
-    if (if_name != "port") {
+    if (if_name == "cpu_port") {
+        return cpuPort;
+    }
+    else if(if_name == "dtu_port") {
+        return dtuPort;
+    }
+    else {
         return MemObject::getSlavePort(if_name, idx);
-    } else {
-        return port;
     }
 }
 

@@ -54,7 +54,9 @@ class Scratchpad : public AbstractMemory
         AddrRangeList getAddrRanges() const override;
     };
 
-    ScratchpadPort port;
+    ScratchpadPort cpuPort;
+
+    ScratchpadPort dtuPort;
 
     const Cycles latency;
 

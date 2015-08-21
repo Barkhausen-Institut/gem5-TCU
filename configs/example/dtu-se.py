@@ -122,7 +122,7 @@ if CPUClass.require_caches():
 # |          |      |    |          |      |    |          |      |           #
 # |        xbar     |    |        xbar     |    |        xbar     |           #
 # |       /    \    |    |       /    \    |    |       /    \    |           #
-# | scratchpad  dtu |    | scratchpad  dtu |    | scratchpad  dtu |           #
+# | scratchpad--dtu |    | scratchpad--dtu |    | scratchpad--dtu |           #
 # |              |  |    |              |  |    |              |  |           #
 # |--------------+--|    |--------------+--|    |--------------+--|           #
 #                |                      |                      |              #
@@ -177,11 +177,11 @@ for i in range(0, options.num_pes):
                              )
 
     pe.scratchpad = Scratchpad(in_addr_map = "true")
-    pe.scratchpad.port = pe.xbar.master
+    pe.scratchpad.cpu_port = pe.xbar.master
 
     pe.dtu = Dtu()
     pe.dtu.core_id = i
-    pe.dtu.scratchpad = pe.xbar.slave
+    pe.dtu.scratchpad = pe.scratchpad.dtu_port
     pe.dtu.cpu = pe.xbar.master
 
     pe.dtu.noc_master = root.noc.slave
