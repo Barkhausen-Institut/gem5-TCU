@@ -31,7 +31,8 @@
 Scratchpad::Scratchpad(const ScratchpadParams* p)
   : AbstractMemory(p),
     port(name() + ".port", *this),
-    latency(p->latency)
+    latency(p->latency),
+    throughput(p->throughput)
 {
 }
 
@@ -58,33 +59,24 @@ Scratchpad::getSlavePort(const std::string &if_name, PortID idx)
 Tick
 Scratchpad::recvAtomic(PacketPtr pkt)
 {
-    access(pkt);
-
     /*
      * TODO
      * So far the Scratchpad has no busy state -> it accepts all requests!
      */
 
-    /*
-     * TODO
-     * Latency calculation does not depend on packet size. This works as long
-     * as the Scratchpad is connected via a XBar, as the XBar calculates the
-     * payloadDelay and therefore limits throughput. However, this does not take
-     * into account slower memories or direct connections (without XBar).
-     */
-    pkt->headerDelay += latency * clockPeriod();
+    // let subclass handle the request
+    access(pkt);
 
-    Tick totalDelay = pkt->headerDelay + pkt->payloadDelay;
+    unsigned cyclesNeeded = round(((float) pkt->getSize()) / ((float)throughput));
+    unsigned payloadDelay = clockPeriod() * cyclesNeeded;
 
-    /*
-     * The SimpleTimingPort already pays for the delay returned by recvAtomic
-     *  -> reset the packet delay
-     *
-     * XXX I'm not sure if this is the right way to go. However, it seems
-     *     better than simply ignoring the packet's delays as it is doen for 
-     *     instance in SimpleMemory.
-     */
-    pkt->headerDelay  = 0;
+    // pay the header delay caused by interconnect and add the scratchpad latency
+    unsigned totalDelay = pkt->headerDelay + latency * clockPeriod();
+    pkt->headerDelay = 0;
+
+    // Pay the payload dalay. The paylaod delay does not accumulate,
+    // instead the highest value is taken.
+    totalDelay += std::max(payloadDelay, pkt->payloadDelay);
     pkt->payloadDelay = 0;
 
     return totalDelay;

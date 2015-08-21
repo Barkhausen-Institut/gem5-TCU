@@ -58,6 +58,8 @@ class Scratchpad : public AbstractMemory
 
     const Cycles latency;
 
+    const unsigned throughput;
+
   protected:
 
     Tick recvAtomic(PacketPtr pkt);

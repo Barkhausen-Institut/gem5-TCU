@@ -37,6 +37,8 @@ class Scratchpad(AbstractMemory):
     port = SlavePort("Slave ports")
     latency = Param.Cycles(1, "Request to response latency")
 
+    throughput = Param.Unsigned(64, "Number of bytes that can be read per cycle")
+
     # TODO check what these options actually mean, switch them off for now
     in_addr_map = False
     conf_table_reported = False
