@@ -3,7 +3,7 @@
 #include <string.h>
 #include <inttypes.h>
 
-#include "dtu.h"
+#include "../dtu.h"
 
 int main()
 {
