@@ -5,7 +5,7 @@
 #include <inttypes.h>
 #include <unistd.h>
 
-#include "dtu.h"
+#include "../dtu.h"
 
 #ifndef PE_ID
 #define PE_ID (-1)

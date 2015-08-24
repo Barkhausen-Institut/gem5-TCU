@@ -4,7 +4,7 @@
 
 #include <inttypes.h>
 
-#include "dtu.h"
+#include "../dtu.h"
 #include "m5op.h"
 
 int main()
