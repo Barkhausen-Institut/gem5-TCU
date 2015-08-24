@@ -7,6 +7,13 @@
 #include "../dtu.h"
 #include "m5op.h"
 
+enum {
+    MAX_MSG_SIZE    = 64,
+    MSG_SIZE        = 32,
+    BUF_SLOTS       = 4,
+    BUF_SIZE        = MAX_MSG_SIZE * BUF_SLOTS,
+};
+
 int main()
 {
     printf("Master: Hello World!\n");
@@ -17,22 +24,22 @@ int main()
     printf("Master: Setup Endpoint 1 to send messages to PE2 endpoint 3\n");
 
     dtuEndpoints[1].mode = 1; // send messages
-    dtuEndpoints[1].maxMessageSize = 64;
+    dtuEndpoints[1].maxMessageSize = MAX_MSG_SIZE;
     dtuEndpoints[1].targetCoreId = 2;
     dtuEndpoints[1].targetEpId = 3;
-    dtuEndpoints[1].messageSize = 32;
+    dtuEndpoints[1].messageSize = MSG_SIZE;
     dtuEndpoints[1].replyEpId = 5;
-    dtuEndpoints[1].credits = 128;
+    dtuEndpoints[1].credits = MAX_MSG_SIZE * 2;
     dtuEndpoints[1].label = 0x1234;
     dtuEndpoints[1].replyLabel = 0x4567;
 
     printf("Master: Setup Endpoint 5 to receive messages\n");
 
     dtuEndpoints[5].mode = 0; // receive messages
-    dtuEndpoints[5].maxMessageSize = 64;
-    dtuEndpoints[5].bufferSize = 4;
+    dtuEndpoints[5].maxMessageSize = MAX_MSG_SIZE;
+    dtuEndpoints[5].bufferSize = BUF_SLOTS;
 
-    char* data = (char*) memalign(4096, 256);
+    char* data = (char*) memalign(4096, BUF_SIZE);
 
     uint64_t addr = reinterpret_cast<uint64_t>(data);
 
@@ -42,11 +49,11 @@ int main()
 
     printf("Master: send Message\n");
 
-    char* message = (char*) memalign(4096, 32);
+    char* message = (char*) memalign(4096, MSG_SIZE);
 
     dtuEndpoints[1].messageAddr = reinterpret_cast<uint64_t>(data);
 
-    for (int i = 0; i < 32; i++)
+    for (int i = 0; i < MSG_SIZE; i++)
         data[i] = i + 1;
 
     *dtuCommandPtr = 0x5;

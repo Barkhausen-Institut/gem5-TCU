@@ -8,6 +8,13 @@
 #include "../dtu.h"
 #include "m5op.h"
 
+enum {
+    MAX_MSG_SIZE    = 64,
+    MSG_SIZE        = 32,
+    BUF_SLOTS       = 4,
+    BUF_SIZE        = MAX_MSG_SIZE * BUF_SLOTS,
+};
+
 int main()
 {
     printf("Slave: Hello World!\n");
@@ -15,10 +22,10 @@ int main()
     printf("Slave: Setup Endpoint 3 to receive messages\n");
 
     dtuEndpoints[3].mode = 0; // receive messages
-    dtuEndpoints[3].maxMessageSize = 64;
-    dtuEndpoints[3].bufferSize = 4;
+    dtuEndpoints[3].maxMessageSize = MAX_MSG_SIZE;
+    dtuEndpoints[3].bufferSize = BUF_SLOTS;
 
-    char* data = (char*) memalign(4096, 256);
+    char* data = (char*) memalign(4096, BUF_SIZE);
 
     uint64_t addr = reinterpret_cast<uint64_t>(data);
 
@@ -53,13 +60,13 @@ int main()
 
     printf("Slave: send reply\n");
 
-    char* reply = (char*) memalign(4096, 32);
+    char* reply = (char*) memalign(4096, MSG_SIZE);
 
-    for (int i = 0; i < 32; i++)
+    for (int i = 0; i < MSG_SIZE; i++)
         reply[i] = (i + 1) << 4;
 
     dtuEndpoints[3].messageAddr = reinterpret_cast<uint64_t>(reply);
-    dtuEndpoints[3].messageSize = 32;
+    dtuEndpoints[3].messageSize = MSG_SIZE;
     *dtuCommandPtr = 0x0d;
 
     // wait until operation finished
