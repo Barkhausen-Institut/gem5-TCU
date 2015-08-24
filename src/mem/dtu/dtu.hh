@@ -52,7 +52,7 @@ class Dtu : public BaseDtu
         uint8_t replyEpId; // for a normal message this is the reply epId
                            // for a reply this is the enpoint that receives credits
         uint16_t length;
-    };
+    } M5_ATTR_PACKED;
 
     enum class NocPacketType
     {
