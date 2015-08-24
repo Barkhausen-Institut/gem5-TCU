@@ -21,7 +21,9 @@ struct Endpoint
     reg_t targetEpId;
     reg_t messageAddr;
     reg_t messageSize;
+    reg_t label;
     reg_t replyEpId;
+    reg_t replyLabel;
 
     reg_t requestLocalAddr;
     reg_t requestRemoteAddr;
@@ -32,13 +34,17 @@ struct Endpoint
 
 struct MessageHeader
 {
-    uint8_t flags;
+    uint8_t flags; // if bit 0 is set its a reply, if bit 1 is set we grand credits
     uint8_t senderCoreId;
     uint8_t senderEpId;
-    uint8_t replyEpId;
+    uint8_t replyEpId; // for a normal message this is the reply epId
+                       // for a reply this is the enpoint that receives credits
     uint16_t length;
-};
 
+    // both should be large enough for pointers.
+    uint64_t label;
+    uint64_t replyLabel;
+} __attribute__((packed));
 
 volatile reg_t* dtuCommandPtr   = (reg_t*) dtuBaseAddr;
 volatile reg_t* dtuStatusPtr    = (reg_t*) (dtuBaseAddr + sizeof(reg_t));

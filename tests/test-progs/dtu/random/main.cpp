@@ -77,10 +77,14 @@ int main()
 	dtuEndpoints[0].maxMessageSize = 64;
 	dtuEndpoints[0].messageAddr = reinterpret_cast<uint64_t>(messageBuffer);
 	dtuEndpoints[0].credits = 64;
+	dtuEndpoints[0].label = 0xDEADBEEFC0DEFEED;
+	dtuEndpoints[0].replyLabel = 0xFEDCBA0987654321;
 	dtuEndpoints[1].mode = 1;
 	dtuEndpoints[1].maxMessageSize = 64;
 	dtuEndpoints[1].messageAddr = reinterpret_cast<uint64_t>(messageBuffer);
 	dtuEndpoints[1].credits = 64;
+	dtuEndpoints[1].label = 0xDEADBEEFC0DEFEED;
+	dtuEndpoints[1].replyLabel = 0xFEDCBA0987654321;
 
 	// endpoints 2 and 3 receive messages
 	dtuEndpoints[2].mode = 0;
@@ -126,7 +130,7 @@ int main()
 				if (ep < 4) // send reply only if we received a message
 				{
 					// choose parameters randomly
-					dtuEndpoints[ep].messageSize = rand() % 58 + 1; // 1 to 58 (+6 for header)
+					dtuEndpoints[ep].messageSize = rand() % 42 + 1; // 1 to 42 (+22 for header)
 					// fill message buffer with data
 					uint8_t start = rand();
 					for (unsigned i = 0; i < dtuEndpoints[ep].messageSize; i++)
@@ -154,7 +158,7 @@ int main()
 			if (dtuEndpoints[ep].credits >= 64)
 			{
 				// choose parameters randomly
-				dtuEndpoints[ep].messageSize = rand() % 58 + 1; // 1 to 58 (+6 for header)
+				dtuEndpoints[ep].messageSize = rand() % 42 + 1; // 1 to 42 (+22 for header)
 				dtuEndpoints[ep].targetCoreId = rand() % 8; // 0 to 7
 				dtuEndpoints[ep].targetEpId = rand() % 2 + 2; // 2 or 3
 				dtuEndpoints[ep].replyEpId = rand() % 2 + 4; // 4 or 5

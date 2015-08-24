@@ -22,6 +22,8 @@ int main()
     dtuEndpoints[1].messageSize = 32;
     dtuEndpoints[1].replyEpId = 5;
     dtuEndpoints[1].credits = 128;
+    dtuEndpoints[1].label = 0x1234;
+    dtuEndpoints[1].replyLabel = 0x4567;
 
     printf("Master: Setup Endpoint 5 to receive messages\n");
 
@@ -54,20 +56,26 @@ int main()
     while (dtuEndpoints[5].bufferMessageCount == 0)
         ;
 
-    volatile unsigned char* reply = (unsigned char*) dtuEndpoints[5].bufferReadPtr;
+    MessageHeader *header = reinterpret_cast<MessageHeader*>(
+      dtuEndpoints[5].bufferReadPtr);
+    unsigned char *payload = reinterpret_cast<unsigned char*>(
+      dtuEndpoints[5].bufferReadPtr + sizeof(*header));
 
-    printf("Master: Received a reply! Its located at %#x\n", reply);
+    printf("Master: Received a reply! Its located at %#x\n", header);
+    printf("Master: flags      = %#llx\n", header->flags);
+    printf("Master: length     = %#llx\n", header->length);
+    printf("Master: label      = %#016llx\n", header->label);
 
-    for (int i = 0; i < 8; i++)
+    for (int i = 0; i < (header->length + 7) / 8; i++)
         printf("Master: Message: %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x\n",
-               reply[i*8+0],
-               reply[i*8+1],
-               reply[i*8+2],
-               reply[i*8+3],
-               reply[i*8+4],
-               reply[i*8+5],
-               reply[i*8+6],
-               reply[i*8+7]);
+               payload[i*8+0],
+               payload[i*8+1],
+               payload[i*8+2],
+               payload[i*8+3],
+               payload[i*8+4],
+               payload[i*8+5],
+               payload[i*8+6],
+               payload[i*8+7]);
 
     free(message);
     free(data);

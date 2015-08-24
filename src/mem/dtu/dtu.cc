@@ -465,6 +465,8 @@ Dtu::sendNocMessage(const uint8_t* data,
     unsigned targetCoreId;
     unsigned targetEpId;
     unsigned replyEpId;
+    uint64_t label;
+    uint64_t replyLabel;
 
     M5_VAR_USED unsigned maxMessageSize = regFile.readEpReg(epid, EpReg::MAX_MESSAGE_SIZE);
 
@@ -490,12 +492,19 @@ Dtu::sendNocMessage(const uint8_t* data,
         targetCoreId = h->senderCoreId;
         targetEpId   = h->replyEpId;  // send messgae to the reply EP
         replyEpId    = h->senderEpId; // and grand credits to the sender
+
+        // the receiver of the reply should get the label that he has set
+        label        = h->replyLabel;
+        // replies don't have replies. so, we don't need that
+        replyLabel   = 0;
     }
     else
     {
         targetCoreId = regFile.readEpReg(epid, EpReg::TARGET_COREID);
         targetEpId   = regFile.readEpReg(epid, EpReg::TARGET_EPID);
         replyEpId    = regFile.readEpReg(epid, EpReg::REPLY_EPID);
+        label        = regFile.readEpReg(epid, EpReg::LABEL);
+        replyLabel   = regFile.readEpReg(epid, EpReg::REPLY_LABEL);
     }
 
     assert(regFile.readEpReg(epid, EpReg::MESSAGE_SIZE) == messageSize);
@@ -518,6 +527,8 @@ Dtu::sendNocMessage(const uint8_t* data,
     header.senderEpId   = static_cast<uint8_t>(epid);
     header.replyEpId    = static_cast<uint8_t>(replyEpId);
     header.length       = static_cast<uint16_t>(messageSize);
+    header.label        = static_cast<uint64_t>(label);
+    header.replyLabel   = static_cast<uint64_t>(replyLabel);
 
     auto pkt = generateRequest(getNocAddr(targetCoreId, targetEpId),
                                messageSize + sizeof(MessageHeader),

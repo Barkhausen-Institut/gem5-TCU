@@ -28,20 +28,27 @@ int main()
     while (dtuEndpoints[3].bufferMessageCount == 0)
         ;
 
-    volatile unsigned char* message = (unsigned char*) dtuEndpoints[3].bufferReadPtr;
+    MessageHeader *header = reinterpret_cast<MessageHeader*>(
+      dtuEndpoints[3].bufferReadPtr);
+    unsigned char *payload = reinterpret_cast<unsigned char*>(
+      dtuEndpoints[3].bufferReadPtr + sizeof(*header));
 
-    printf("Slave: Received a message! Its located at %#x\n", message);
+    printf("Slave: Received a message! Its located at %#x\n", header);
+    printf("Slave: flags      = %#llx\n", header->flags);
+    printf("Slave: length     = %#llx\n", header->length);
+    printf("Slave: label      = %#016llx\n", header->label);
+    printf("Slave: replyLabel = %#016llx\n", header->replyLabel);
 
-    for (int i = 0; i < 8; i++)
+    for (int i = 0; i < (header->length + 7) / 8; i++)
         printf("Slave: Message: %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x\n",
-               message[i*8+0],
-               message[i*8+1],
-               message[i*8+2],
-               message[i*8+3],
-               message[i*8+4],
-               message[i*8+5],
-               message[i*8+6],
-               message[i*8+7]);
+               payload[i*8+0],
+               payload[i*8+1],
+               payload[i*8+2],
+               payload[i*8+3],
+               payload[i*8+4],
+               payload[i*8+5],
+               payload[i*8+6],
+               payload[i*8+7]);
 
     printf("Slave: send reply\n");
 
