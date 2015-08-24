@@ -63,7 +63,7 @@ Dtu::translate(Addr vaddr)
     Addr paddr = vaddr;
     if (usePTable)
     {
-        auto pTable = system->threadContexts[coreId]->getProcessPtr()->pTable;
+        M5_VAR_USED auto pTable = system->threadContexts[coreId]->getProcessPtr()->pTable;
         assert(pTable != nullptr);
         assert(pTable->translate(vaddr, paddr));
     }
@@ -466,7 +466,7 @@ Dtu::sendNocMessage(const uint8_t* data,
     unsigned targetEpId;
     unsigned replyEpId;
 
-    unsigned maxMessageSize = regFile.readEpReg(epid, EpReg::MAX_MESSAGE_SIZE);
+    M5_VAR_USED unsigned maxMessageSize = regFile.readEpReg(epid, EpReg::MAX_MESSAGE_SIZE);
 
     if (isReply)
     {
@@ -621,7 +621,7 @@ Dtu::completeForwardedMessage(PacketPtr pkt, unsigned epId)
 {
     assert(pkt->isWrite());
 
-    MessageHeader* header = pkt->getPtr<MessageHeader>();
+    M5_VAR_USED MessageHeader* header = pkt->getPtr<MessageHeader>();
 
     if (atomicMode)
     {
