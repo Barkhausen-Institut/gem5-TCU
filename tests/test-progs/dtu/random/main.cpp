@@ -40,10 +40,11 @@ void printMessage(uint8_t* message, unsigned ep)
 		}
 	}
 
-	pe_printf("ep%u, Received %s of %d bytes from PE%d (ep %d): %s",
+	pe_printf("ep%u, Received %s of %d bytes @ %p from PE%d (ep %d): %s",
 	       ep,
 	       header->flags & 1 ? "reply" : "message",
 	       header->length,
+	       header,
 	       header->senderCoreId,
 	       header->senderEpId,
 	       valid ? "valid" : "invalid");
