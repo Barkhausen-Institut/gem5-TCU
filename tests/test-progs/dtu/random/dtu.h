@@ -5,28 +5,29 @@
 
 constexpr uint64_t dtuBaseAddr = 0x1000000;
 constexpr unsigned numPes = 8;
+typedef uint64_t reg_t;
 
 struct Endpoint
 {
-    uint32_t mode;
-    uint32_t maxMessageSize;
-    uint32_t bufferMessageCount;
-    uint32_t bufferAddr;
-    uint32_t bufferSize;
-    uint32_t bufferReadPtr;
-    uint32_t bufferWritePtr;
+    reg_t mode;
+    reg_t maxMessageSize;
+    reg_t bufferMessageCount;
+    reg_t bufferAddr;
+    reg_t bufferSize;
+    reg_t bufferReadPtr;
+    reg_t bufferWritePtr;
 
-    uint32_t targetCoreId;
-    uint32_t targetEpId;
-    uint32_t messageAddr;
-    uint32_t messageSize;
-    uint32_t replyEpId;
+    reg_t targetCoreId;
+    reg_t targetEpId;
+    reg_t messageAddr;
+    reg_t messageSize;
+    reg_t replyEpId;
 
-    uint32_t requestLocalAddr;
-    uint32_t requestRemoteAddr;
-    uint32_t requestSize;
+    reg_t requestLocalAddr;
+    reg_t requestRemoteAddr;
+    reg_t requestSize;
 
-    uint32_t credits;
+    reg_t credits;
 };
 
 struct MessageHeader
@@ -39,8 +40,8 @@ struct MessageHeader
 };
 
 
-volatile uint32_t* dtuCommandPtr = (uint32_t*) dtuBaseAddr;
-volatile uint32_t* dtuStatusPtr  = (uint32_t*) (dtuBaseAddr + 4);
-volatile Endpoint* dtuEndpoints  = (Endpoint*) (dtuBaseAddr + 8);
+volatile reg_t* dtuCommandPtr   = (reg_t*) dtuBaseAddr;
+volatile reg_t* dtuStatusPtr    = (reg_t*) (dtuBaseAddr + sizeof(reg_t));
+volatile Endpoint* dtuEndpoints = (Endpoint*) (dtuBaseAddr + sizeof(reg_t) * 2);
 
 #endif

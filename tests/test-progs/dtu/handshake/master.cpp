@@ -18,7 +18,7 @@ int main()
     dtuEndpoints[1].mode = 1; // send messages
     dtuEndpoints[1].maxMessageSize = 64;
     dtuEndpoints[1].targetCoreId = 2;
-    dtuEndpoints[1].targetEpid = 3;
+    dtuEndpoints[1].targetEpId = 3;
     dtuEndpoints[1].messageSize = 32;
     dtuEndpoints[1].replyEpId = 5;
     dtuEndpoints[1].credits = 128;

@@ -73,7 +73,7 @@ class RegFile
 {
   public:
 
-    using reg_t = uint32_t;
+    using reg_t = uint64_t;
 
     static Addr getRegAddr(DtuReg reg);
 
