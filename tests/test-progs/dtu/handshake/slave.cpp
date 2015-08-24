@@ -1,3 +1,4 @@
+#include <malloc.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,7 +18,7 @@ int main()
     dtuEndpoints[3].maxMessageSize = 64;
     dtuEndpoints[3].bufferSize = 4;
 
-    char* data = (char*) malloc(256);
+    char* data = (char*) memalign(4096, 256);
 
     uint64_t addr = reinterpret_cast<uint64_t>(data);
 
@@ -52,7 +53,7 @@ int main()
 
     printf("Slave: send reply\n");
 
-    char* reply = (char*) malloc(32);
+    char* reply = (char*) memalign(4096, 32);
 
     for (int i = 0; i < 32; i++)
         reply[i] = (i + 1) << 4;

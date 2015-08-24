@@ -1,3 +1,4 @@
+#include <malloc.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -31,7 +32,7 @@ int main()
     dtuEndpoints[5].maxMessageSize = 64;
     dtuEndpoints[5].bufferSize = 4;
 
-    char* data = (char*) malloc(256);
+    char* data = (char*) memalign(4096, 256);
 
     uint64_t addr = reinterpret_cast<uint64_t>(data);
 
@@ -41,7 +42,7 @@ int main()
 
     printf("Master: send Message\n");
 
-    char* message = (char*) malloc(32);
+    char* message = (char*) memalign(4096, 32);
 
     dtuEndpoints[1].messageAddr = reinterpret_cast<uint64_t>(data);
 

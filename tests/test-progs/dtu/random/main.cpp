@@ -1,3 +1,4 @@
+#include <malloc.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -66,12 +67,12 @@ int main()
 
 	pe_printf("setup endpoints");
 
-	uint8_t* messageBuffer = (uint8_t*) malloc(58);
+	uint8_t* messageBuffer = (uint8_t*) memalign(4096, 42);
 	// ringbuffers
-	uint8_t* ep2_buffer = (uint8_t*) malloc(1024);
-	uint8_t* ep3_buffer = (uint8_t*) malloc(1024);
-	uint8_t* ep4_buffer = (uint8_t*) malloc(1024);
-	uint8_t* ep5_buffer = (uint8_t*) malloc(1024);
+	uint8_t* ep2_buffer = (uint8_t*) memalign(4096, 1024);
+	uint8_t* ep3_buffer = (uint8_t*) memalign(4096, 1024);
+	uint8_t* ep4_buffer = (uint8_t*) memalign(4096, 1024);
+	uint8_t* ep5_buffer = (uint8_t*) memalign(4096, 1024);
 
 	// endpoints 0 and 1 send messages
 	dtuEndpoints[0].mode = 1;

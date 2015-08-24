@@ -3,6 +3,11 @@
 
 #include <inttypes.h>
 
+// TODO caution: receive buffer and messages are currently NOT allowed to cross page-boundaries
+// this is because of the workaround for SE, that translates it from virtual to physical, but
+// assumes that it is physically contiguous.
+// for now, please use e.g. memalign to allocate them and make them at most 4096 bytes large!
+
 constexpr uint64_t dtuBaseAddr = 0x1000000;
 constexpr unsigned numPes = 8;
 typedef uint64_t reg_t;
