@@ -1,0 +1,13 @@
+/build
+/m5out
+/src/doxygen
+/ext/dramsim2/DRAMSim2
+/ext/mcpat/regression/*/*.out
+parser.out
+parsetab.py
+cscope.files
+cscope.out
+*.pyc
+*~
+.*.swp
+*.sublime-workspace
