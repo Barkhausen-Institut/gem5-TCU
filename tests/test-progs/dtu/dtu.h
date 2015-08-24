@@ -51,6 +51,17 @@ struct MessageHeader
     uint64_t replyLabel;
 } __attribute__((packed));
 
+enum Command : uint8_t
+{
+    IDLE = 0,
+    START_OPERATION = 1,
+    INC_READ_PTR = 2,
+};
+
+enum {
+    COMMAND_OPCODE_BITS    = 2,
+};
+
 volatile reg_t* dtuCommandPtr   = (reg_t*) dtuBaseAddr;
 volatile reg_t* dtuStatusPtr    = (reg_t*) (dtuBaseAddr + sizeof(reg_t));
 volatile Endpoint* dtuEndpoints = (Endpoint*) (dtuBaseAddr + sizeof(reg_t) * 2);

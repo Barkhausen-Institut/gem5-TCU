@@ -148,14 +148,14 @@ int main()
 					          ep,
 					          dtuEndpoints[ep].messageSize);
 
-					*dtuCommandPtr = 0x1 | (ep << 2);
+					*dtuCommandPtr = Command::START_OPERATION | (ep << COMMAND_OPCODE_BITS);
 
 					// wait until operation finished
 					while (*dtuStatusPtr);
 				}
 
 				// increment read pointer
-				*dtuCommandPtr = 0x2 | (ep << 2);
+				*dtuCommandPtr = Command::INC_READ_PTR | (ep << COMMAND_OPCODE_BITS);
 			}
 		}
 
@@ -183,7 +183,7 @@ int main()
 						  dtuEndpoints[ep].targetEpId,
 						  dtuEndpoints[ep].replyEpId);
 
-				*dtuCommandPtr = 0x1 | (ep << 2);
+				*dtuCommandPtr = Command::START_OPERATION | (ep << COMMAND_OPCODE_BITS);
 
 				// wait until operation finished
 				while (*dtuStatusPtr);

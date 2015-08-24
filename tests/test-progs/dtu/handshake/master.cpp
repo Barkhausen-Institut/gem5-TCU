@@ -56,7 +56,7 @@ int main()
     for (int i = 0; i < MSG_SIZE; i++)
         data[i] = i + 1;
 
-    *dtuCommandPtr = 0x5;
+    *dtuCommandPtr = Command::START_OPERATION | (1 << COMMAND_OPCODE_BITS);
 
     // wait until operation finished
     while (*dtuStatusPtr);

@@ -67,7 +67,8 @@ int main()
 
     dtuEndpoints[3].messageAddr = reinterpret_cast<uint64_t>(reply);
     dtuEndpoints[3].messageSize = MSG_SIZE;
-    *dtuCommandPtr = 0x0d;
+
+    *dtuCommandPtr = Command::START_OPERATION | (3 << COMMAND_OPCODE_BITS);
 
     // wait until operation finished
     while (*dtuStatusPtr);
