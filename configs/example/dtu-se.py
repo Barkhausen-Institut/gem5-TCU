@@ -199,9 +199,10 @@ for i in range(0, options.num_pes):
         process = LiveProcess()
         process.cwd = os.getcwd()
 
-        process.executable = cmd_list[i]
+        process.cmd = cmd_list[i].split(' ')
+        process.executable = process.cmd[0]
+        print "PE" + str(i) + ":", process.cmd
 
-        process.cmd = process.executable
         #process.use_init_port = 'true'
         #process.init_port = pe.xbar.slave
 
