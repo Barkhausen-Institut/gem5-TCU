@@ -88,7 +88,7 @@ BaseDtu::DtuSlavePort::schedTimingResp(PacketPtr pkt, Tick when)
 Tick
 BaseDtu::DtuSlavePort::recvAtomic(PacketPtr pkt)
 {
-    DPRINTF(DtuSlavePort, "Recieve %s request at %#x (%u bytes)\n",
+    DPRINTF(DtuSlavePort, "Receive %s request at %#x (%u bytes)\n",
                           pkt->isRead() ? "read" : "write",
                           pkt->getAddr(),
                           pkt->getSize());
@@ -118,7 +118,7 @@ BaseDtu::DtuSlavePort::recvTimingReq(PacketPtr pkt)
         return false;
     }
 
-    DPRINTF(DtuSlavePort, "Recieve %s request at %#x (%u bytes)\n",
+    DPRINTF(DtuSlavePort, "Receive %s request at %#x (%u bytes)\n",
                           pkt->isRead() ? "read" : "write",
                           pkt->getAddr(),
                           pkt->getSize());
@@ -155,7 +155,7 @@ BaseDtu::DtuSlavePort::recvRespRetry()
     assert(busy);
     assert(waitForRespRetry);
 
-    DPRINTF(DtuSlavePort, "Recieve response retry at %#x\n", respPkt->getAddr());
+    DPRINTF(DtuSlavePort, "Receive response retry at %#x\n", respPkt->getAddr());
 
     if (sendTimingResp(respPkt))
     {
