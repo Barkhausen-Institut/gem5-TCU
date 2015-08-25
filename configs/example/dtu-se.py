@@ -156,7 +156,10 @@ root.noc = NoncoherentXBar(forward_latency  = 0,
                            width = 8,
                           )
 
-cmd_list = options.cmd.split("," )
+cmd_list = options.cmd.split(",")
+# allow an ',' at the end
+if cmd_list[len(cmd_list) - 1] == '':
+  cmd_list.pop()
 workload_list = []
 
 # A PE (processing element) consists of a CPU, a Scratchpad-Memory, and a DTU.
