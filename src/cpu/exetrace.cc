@@ -32,6 +32,7 @@
  */
 
 #include <iomanip>
+#include <cxxabi.h>
 
 #include "arch/isa_traits.hh"
 #include "arch/utility.hh"
@@ -83,6 +84,13 @@ Trace::ExeTracerRecord::traceInst(const StaticInstPtr &inst, bool ran)
     if (thread->getSymTab() && Debug::ExecSymbol &&
             (!FullSystem || !inUserMode(thread)) &&
             thread->getSymTab()->findNearestSymbol(cur_pc, sym_str, sym_addr)) {
+        // demangle the symbol
+        int status;
+        char *realname = abi::__cxa_demangle(sym_str.c_str(), 0, 0, &status);
+        if(status == 0)
+            sym_str = realname;
+        free(realname);
+
         if (cur_pc != sym_addr)
             sym_str += csprintf("+%d",cur_pc - sym_addr);
         outs << "@" << sym_str;
