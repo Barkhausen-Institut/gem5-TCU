@@ -68,6 +68,7 @@ class FSTranslatingPortProxy;
 class PortProxy;
 class Process;
 class System;
+class SymbolTable;
 namespace TheISA {
     namespace Kernel {
         class Statistics;
@@ -132,6 +133,8 @@ class ThreadContext
     virtual int contextId() const = 0;
 
     virtual void setContextId(int id) = 0;
+
+    virtual SymbolTable *getSymTab() = 0;
 
     virtual TheISA::TLB *getITBPtr() = 0;
 
@@ -330,6 +333,8 @@ class ProxyThreadContext : public ThreadContext
     int contextId() const { return actualTC->contextId(); }
 
     void setContextId(int id) { actualTC->setContextId(id); }
+
+    SymbolTable *getSymTab() { return actualTC->getSymTab(); }
 
     TheISA::TLB *getITBPtr() { return actualTC->getITBPtr(); }
 

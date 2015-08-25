@@ -103,8 +103,6 @@ System::System(Params *p)
 
     if (FullSystem) {
         kernelSymtab = new SymbolTable;
-        if (!debugSymbolTable)
-            debugSymbolTable = new SymbolTable;
     }
 
     // check if the cache line size is a value known to work
@@ -143,12 +141,6 @@ System::System(Params *p)
                 fatal("could not load kernel symbols\n");
 
             if (!kernel->loadLocalSymbols(kernelSymtab))
-                fatal("could not load kernel local symbols\n");
-
-            if (!kernel->loadGlobalSymbols(debugSymbolTable))
-                fatal("could not load kernel symbols\n");
-
-            if (!kernel->loadLocalSymbols(debugSymbolTable))
                 fatal("could not load kernel local symbols\n");
 
             // Loading only needs to happen once and after memory system is

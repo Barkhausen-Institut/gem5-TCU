@@ -528,7 +528,7 @@ BaseSimpleCPU::postExecute()
     statExecutedInstType[curStaticInst->opClass()]++;
 
     if (FullSystem)
-        traceFunctions(instAddr);
+        traceFunctions(thread->getSymTab(), instAddr);
 
     if (traceData) {
         traceData->dump();

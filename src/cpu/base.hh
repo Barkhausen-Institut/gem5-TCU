@@ -513,16 +513,16 @@ class BaseCPU : public MemObject
     Addr currentFunctionEnd;
     Tick functionEntryTick;
     void enableFunctionTrace();
-    void traceFunctionsInternal(Addr pc);
+    void traceFunctionsInternal(SymbolTable *symtab, Addr pc);
 
   private:
     static std::vector<BaseCPU *> cpuList;   //!< Static global cpu list
 
   public:
-    void traceFunctions(Addr pc)
+    void traceFunctions(SymbolTable *symtab, Addr pc)
     {
         if (functionTracingEnabled)
-            traceFunctionsInternal(pc);
+            traceFunctionsInternal(symtab, pc);
     }
 
     static int numSimulatedCPUs() { return cpuList.size(); }

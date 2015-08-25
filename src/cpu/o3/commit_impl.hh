@@ -1051,7 +1051,7 @@ DefaultCommit<Impl>::commitInsts()
                     cpu->checker->verify(head_inst);
                 }
 
-                cpu->traceFunctions(pc[tid].instAddr());
+                cpu->traceFunctions(thread[tid]->getSymTab(), pc[tid].instAddr());
 
                 TheISA::advancePC(pc[tid], head_inst->staticInst);
 

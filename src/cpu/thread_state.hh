@@ -107,6 +107,8 @@ struct ThreadState {
 
     Process *getProcessPtr() { return process; }
 
+    SymbolTable *getSymTab() { return process->symtab; }
+
     SETranslatingPortProxy &getMemProxy();
 
     /** Reads the number of instructions functionally executed and

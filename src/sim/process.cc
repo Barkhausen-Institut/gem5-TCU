@@ -580,18 +580,15 @@ LiveProcess::LiveProcess(LiveProcessParams *params, ObjectFile *_objFile)
       __pid(params->pid), __ppid(params->ppid),
       drivers(params->drivers)
 {
-
     // load up symbols, if any... these may be used for debugging or
     // profiling.
-    if (!debugSymbolTable) {
-        debugSymbolTable = new SymbolTable();
-        if (!objFile->loadGlobalSymbols(debugSymbolTable) ||
-            !objFile->loadLocalSymbols(debugSymbolTable) ||
-            !objFile->loadWeakSymbols(debugSymbolTable)) {
-            // didn't load any symbols
-            delete debugSymbolTable;
-            debugSymbolTable = NULL;
-        }
+    symtab = new SymbolTable();
+    if (!objFile->loadGlobalSymbols(symtab) ||
+        !objFile->loadLocalSymbols(symtab) ||
+        !objFile->loadWeakSymbols(symtab)) {
+        // didn't load any symbols
+        delete symtab;
+        symtab = NULL;
     }
 }
 

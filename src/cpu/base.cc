@@ -715,16 +715,16 @@ BaseCPU::scheduleLoadStop(ThreadID tid, Counter loads, const char *cause)
 
 
 void
-BaseCPU::traceFunctionsInternal(Addr pc)
+BaseCPU::traceFunctionsInternal(SymbolTable *symtab, Addr pc)
 {
-    if (!debugSymbolTable)
+    if (!symtab)
         return;
 
     // if pc enters different function, print new function symbol and
     // update saved range.  Otherwise do nothing.
     if (pc < currentFunctionStart || pc >= currentFunctionEnd) {
         string sym_str;
-        bool found = debugSymbolTable->findNearestSymbol(pc, sym_str,
+        bool found = symtab->findNearestSymbol(pc, sym_str,
                                                          currentFunctionStart,
                                                          currentFunctionEnd);
 

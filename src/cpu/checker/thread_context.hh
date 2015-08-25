@@ -104,6 +104,8 @@ class CheckerThreadContext : public ThreadContext
        checkerTC->setContextId(id);
     }
 
+    SymbolTable *getSymTab() { return actualTC->getSymTab(); }
+
     /** Returns this thread's ID number. */
     int threadId() const { return actualTC->threadId(); }
     void setThreadId(int id)

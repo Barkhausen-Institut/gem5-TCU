@@ -437,8 +437,7 @@ addsymbol(ThreadContext *tc, Addr addr, Addr symbolAddr)
 
     DPRINTF(Loader, "Loaded symbol: %s @ %#llx\n", symbol, addr);
 
-    tc->getSystemPtr()->kernelSymtab->insert(addr,symbol);
-    debugSymbolTable->insert(addr,symbol);
+    tc->getSymTab()->insert(addr,symbol);
 }
 
 uint64_t

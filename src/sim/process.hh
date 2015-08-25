@@ -114,6 +114,8 @@ class Process : public SimObject
 
     Stats::Scalar num_syscalls;       // number of syscalls executed
 
+    SymbolTable *symtab;
+
   protected:
     // constructor
     Process(ProcessParams *params);

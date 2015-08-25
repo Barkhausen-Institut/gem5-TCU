@@ -118,6 +118,8 @@ class SimpleThread : public ThreadState
 
     TheISA::PCState _pcState;
 
+    SymbolTable *symtab;
+
     /** Did this instruction execute or is it predicated false */
     bool predicate;
 
@@ -206,6 +208,12 @@ class SimpleThread : public ThreadState
     TheISA::Decoder *getDecoderPtr() { return &decoder; }
 
     System *getSystemPtr() { return system; }
+
+    SymbolTable *getSymTab() {
+        if(FullSystem)
+            return getSystemPtr()->kernelSymtab;
+        return getProcessPtr()->symtab;
+    }
 
     Status status() const { return _status; }
 

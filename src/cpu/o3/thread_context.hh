@@ -105,6 +105,8 @@ class O3ThreadContext : public ThreadContext
 
     virtual void setContextId(int id) { thread->setContextId(id); }
 
+    virtual SymbolTable *getSymTab() { return thread->getSymTab(); }
+
     /** Returns this thread's ID number. */
     virtual int threadId() const { return thread->threadId(); }
     virtual void setThreadId(int id) { return thread->setThreadId(id); }
