@@ -68,12 +68,12 @@ class BaseDtu : public MemObject
         void completeRequest(PacketPtr pkt) override;
     };
 
-    class ScratchpadPort : public DtuMasterPort
+    class SpmMasterPort : public DtuMasterPort
     {
       public:
 
-        ScratchpadPort(BaseDtu& _dtu)
-          : DtuMasterPort(_dtu.name() + ".scratchpad_port", _dtu)
+        SpmMasterPort(BaseDtu& _dtu)
+          : DtuMasterPort(_dtu.name() + ".spm_master_port", _dtu)
         { }
 
         void completeRequest(PacketPtr pkt) override;
@@ -130,12 +130,12 @@ class BaseDtu : public MemObject
         void recvRespRetry() override;
     };
 
-    class CpuPort : public DtuSlavePort
+    class CpuSlavePort : public DtuSlavePort
     {
       public:
 
-        CpuPort(BaseDtu& _dtu)
-          : DtuSlavePort(_dtu.name() + ".cpu_port", _dtu)
+        CpuSlavePort(BaseDtu& _dtu)
+          : DtuSlavePort(_dtu.name() + ".cpu_master_port", _dtu)
         { }
 
       protected:
@@ -162,9 +162,9 @@ class BaseDtu : public MemObject
 
   protected:
 
-    CpuPort        cpuPort;
+    CpuSlavePort   cpuSlavePort;
 
-    ScratchpadPort scratchpadPort;
+    SpmMasterPort  spmMasterPort;
 
     NocMasterPort  nocMasterPort;
 

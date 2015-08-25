@@ -54,7 +54,7 @@ BaseDtu::NocMasterPort::completeRequest(PacketPtr pkt)
 }
 
 void
-BaseDtu::ScratchpadPort::completeRequest(PacketPtr pkt)
+BaseDtu::SpmMasterPort::completeRequest(PacketPtr pkt)
 {
     dtu.completeSpmRequest(pkt);
 }
@@ -185,7 +185,7 @@ BaseDtu::DtuSlavePort::ResponseEvent::process()
 }
 
 AddrRangeList
-BaseDtu::CpuPort::getAddrRanges() const
+BaseDtu::CpuSlavePort::getAddrRanges() const
 {
     assert(dtu.regFileBaseAddr != 0);
 
@@ -200,7 +200,7 @@ BaseDtu::CpuPort::getAddrRanges() const
 }
 
 void
-BaseDtu::CpuPort::handleRequest(PacketPtr pkt)
+BaseDtu::CpuSlavePort::handleRequest(PacketPtr pkt)
 {
     dtu.handleCpuRequest(pkt);
 }
@@ -224,8 +224,8 @@ BaseDtu::NocSlavePort::getAddrRanges() const
 
 BaseDtu::BaseDtu(BaseDtuParams* p)
   : MemObject(p),
-    cpuPort(*this),
-    scratchpadPort(*this),
+    cpuSlavePort(*this),
+    spmMasterPort(*this),
     nocMasterPort(*this),
     nocSlavePort(*this),
     coreId(p->core_id),
@@ -240,12 +240,12 @@ BaseDtu::init()
 {
     MemObject::init();
 
-    assert(cpuPort.isConnected());
-    assert(scratchpadPort.isConnected());
+    assert(cpuSlavePort.isConnected());
+    assert(spmMasterPort.isConnected());
     assert(nocMasterPort.isConnected());
     assert(nocSlavePort.isConnected());
 
-    cpuPort.sendRangeChange();
+    cpuSlavePort.sendRangeChange();
     nocSlavePort.sendRangeChange();
 }
 
@@ -258,9 +258,9 @@ BaseDtu::NocSlavePort::handleRequest(PacketPtr pkt)
 BaseMasterPort&
 BaseDtu::getMasterPort(const std::string &if_name, PortID idx)
 {
-    if (if_name == "scratchpad")
-        return scratchpadPort;
-    else if (if_name == "noc_master")
+    if (if_name == "spm_master_port")
+        return spmMasterPort;
+    else if (if_name == "noc_master_port")
         return nocMasterPort;
     else
         return MemObject::getMasterPort(if_name, idx);
@@ -269,9 +269,9 @@ BaseDtu::getMasterPort(const std::string &if_name, PortID idx)
 BaseSlavePort&
 BaseDtu::getSlavePort(const std::string &if_name, PortID idx)
 {
-    if (if_name == "cpu")
-        return cpuPort;
-    else if (if_name == "noc_slave")
+    if (if_name == "cpu_slave_port")
+        return cpuSlavePort;
+    else if (if_name == "noc_slave_port")
         return nocSlavePort;
     else
         return MemObject::getSlavePort(if_name, idx);
@@ -307,7 +307,7 @@ BaseDtu::schedNocResponse(PacketPtr pkt, Tick when)
 void
 BaseDtu::schedCpuResponse(PacketPtr pkt, Tick when)
 {
-    cpuPort.schedTimingResp(pkt, when);
+    cpuSlavePort.schedTimingResp(pkt, when);
 }
 
 void
@@ -319,7 +319,7 @@ BaseDtu::schedNocRequest(PacketPtr pkt, Tick when)
 void
 BaseDtu::schedSpmRequest(PacketPtr pkt, Tick when)
 {
-    scratchpadPort.schedTimingReq(pkt, when);
+    spmMasterPort.schedTimingReq(pkt, when);
 }
 
 void
@@ -331,5 +331,5 @@ BaseDtu::sendAtomicNocRequest(PacketPtr pkt)
 void
 BaseDtu::sendAtomicSpmRequest(PacketPtr pkt)
 {
-    scratchpadPort.sendAtomic(pkt);
+    spmMasterPort.sendAtomic(pkt);
 }

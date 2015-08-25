@@ -485,7 +485,7 @@ Dtu::sendNocMessage(const uint8_t* data,
                 sizeof(MessageHeader),
                 MemCmd::ReadReq);
 
-        scratchpadPort.sendFunctional(pkt);
+        spmMasterPort.sendFunctional(pkt);
 
         auto h = pkt->getPtr<MessageHeader>();
 

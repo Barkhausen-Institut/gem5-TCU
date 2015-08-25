@@ -181,11 +181,11 @@ for i in range(0, options.num_pes):
 
     pe.dtu = Dtu()
     pe.dtu.core_id = i
-    pe.dtu.scratchpad = pe.scratchpad.dtu_port
-    pe.dtu.cpu = pe.xbar.master
+    pe.dtu.spm_master_port = pe.scratchpad.dtu_port
+    pe.dtu.cpu_slave_port = pe.xbar.master
 
-    pe.dtu.noc_master = root.noc.slave
-    pe.dtu.noc_slave  = root.noc.master
+    pe.dtu.noc_master_port = root.noc.slave
+    pe.dtu.noc_slave_port  = root.noc.master
 
     pe.system_port = pe.xbar.slave
 
