@@ -27,7 +27,11 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
+#include <iomanip>
+#include <sstream>
+
 #include "debug/Dtu.hh"
+#include "debug/DtuPackets.hh"
 #include "mem/dtu/dtu.hh"
 #include "mem/page_table.hh"
 #include "sim/system.hh"
@@ -555,6 +559,7 @@ Dtu::sendNocMessage(const uint8_t* data,
                             // TODO check value
 
     pkt->payloadDelay = spmPktPayloadDelay;
+    printPacket(pkt);
     sendNocRequest(pkt, delay, true);
 }
 
@@ -592,6 +597,7 @@ Dtu::sendNocMemoryWriteRequest(const uint8_t* data,
     Cycles delay = spmResponseToNocRequestLatency;
     delay += ticksToCycles(spmPktHeaderDelay);
     pkt->payloadDelay = spmPktPayloadDelay;
+    printPacket(pkt);
     sendNocRequest(pkt, delay, false);
 }
 
@@ -714,6 +720,7 @@ Dtu::recvNocMessage(PacketPtr pkt)
                  header->length,
                  header->senderEpId,
                  header->senderCoreId);
+    printPacket(pkt);
 
     if (header->flags & REPLY_FLAG &&
         header->flags & GRAND_CREDITS_FLAG &&
@@ -757,6 +764,7 @@ Dtu::recvNocMemoryRequest(PacketPtr pkt)
                  pkt->isWrite() ? "write" : "read",
                  pkt->getSize(),
                  pkt->getAddr());
+    printPacket(pkt);
 
     if (pkt->getAddr() & regFileBaseAddr)
     {
@@ -822,4 +830,30 @@ Dtu*
 DtuParams::create()
 {
     return new Dtu(this);
+}
+
+void Dtu::printPacket(PacketPtr pkt) const
+{
+    if(!Debug::DtuPackets)
+    {
+        return;
+    }
+
+    std::ostringstream os;
+    os << std::setfill('0') << std::hex;
+    os << std::setw(4) << 0 << ": ";
+    for(size_t i = 0; i < pkt->getSize(); ++i)
+    {
+        if(i > 0 && (i % 16) == 0)
+        {
+            DPRINTF(DtuPackets, "%s\n", os.str().c_str());
+            os.str("");
+            os << std::setw(4) << i << ": ";
+        }
+        os << std::setw(2) << (unsigned)(pkt->getPtr<uint8_t>()[i]) << " ";
+    }
+    if(!os.str().empty())
+    {
+        DPRINTF(DtuPackets, "%s\n", os.str().c_str());
+    }
 }

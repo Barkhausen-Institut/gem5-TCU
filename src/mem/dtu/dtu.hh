@@ -220,6 +220,8 @@ class Dtu : public BaseDtu
   public:
 
     Dtu(DtuParams* p);
+
+    void printPacket(PacketPtr pkt) const;
 };
 
 #endif // __MEM_DTU_DTU_HH__
