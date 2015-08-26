@@ -168,18 +168,18 @@ RegFile::handleRequest(PacketPtr pkt)
             auto reg = static_cast<EpReg>(regNumber);
 
             if (pkt->isRead())
-                data[offset % sizeof(reg_t)] = readEpReg(epid, reg);
+                data[offset / sizeof(reg_t)] = readEpReg(epid, reg);
             else
-                setEpReg(epid, reg, data[offset % sizeof(reg_t)]);
+                setEpReg(epid, reg, data[offset / sizeof(reg_t)]);
         }
         else
         {
             auto reg = static_cast<DtuReg>(pktAddr / sizeof(reg_t));
 
             if (pkt->isRead())
-                data[offset % sizeof(reg_t)] = readDtuReg(reg);
+                data[offset / sizeof(reg_t)] = readDtuReg(reg);
             else if (pkt->isWrite())
-                setDtuReg(reg, data[offset % sizeof(reg_t)]);
+                setDtuReg(reg, data[offset / sizeof(reg_t)]);
         }
     }
 
