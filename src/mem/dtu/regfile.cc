@@ -29,6 +29,7 @@
 
 #include "base/trace.hh"
 #include "debug/DtuReg.hh"
+#include "debug/DtuRegRange.hh"
 #include "mem/dtu/regfile.hh"
 
 const char *RegFile::dtuRegNames[] = {
@@ -141,7 +142,7 @@ RegFile::handleRequest(PacketPtr pkt)
 
     Addr pktAddr = pkt->getAddr();
 
-    DPRINTF(DtuReg, "access @%#x, size=%u\n", pktAddr, pkt->getSize());
+    DPRINTF(DtuRegRange, "access @%#x, size=%u\n", pktAddr, pkt->getSize());
 
     // we can only perform full register accesses
     // TODO send error response instead of aborting
