@@ -262,19 +262,19 @@ DtuTest::tick()
             DPRINTF(DtuTest, "Setup Ep 0 to transmit 128 Bytes from local "
                              "Scratchpad at address 0x0 to Ep 1 at core %u\n",
                              TESTER_DTU, (id + 1) % TESTER_DTU);
-            regAddr = RegFile::getRegAddr(EpReg::MESSAGE_ADDR, 0);
+            regAddr = RegFile::getRegAddr(EpReg::MSG_ADDR, 0);
             pkt = createDtuRegisterPkt(regAddr, 0);
             break;
         case 1:
-            regAddr = RegFile::getRegAddr(EpReg::MESSAGE_SIZE, 0);
+            regAddr = RegFile::getRegAddr(EpReg::MSG_SIZE, 0);
             pkt = createDtuRegisterPkt(regAddr, 128);
             break;
         case 2:
-            regAddr = RegFile::getRegAddr(EpReg::TARGET_EPID, 0);
+            regAddr = RegFile::getRegAddr(EpReg::TGT_EPID, 0);
             pkt = createDtuRegisterPkt(regAddr, 1);
             break;
         case 3:
-            regAddr = RegFile::getRegAddr(EpReg::TARGET_COREID, 0);
+            regAddr = RegFile::getRegAddr(EpReg::TGT_COREID, 0);
             pkt = createDtuRegisterPkt(regAddr, (id + 1) % TESTER_DTU);
             break;
         case 4:
@@ -302,19 +302,19 @@ DtuTest::tick()
             pkt = createDtuRegisterPkt(regAddr, 0);
             break;
         case 1:
-            regAddr = RegFile::getRegAddr(EpReg::BUFFER_ADDR, 1);
+            regAddr = RegFile::getRegAddr(EpReg::BUF_ADDR, 1);
             pkt = createDtuRegisterPkt(regAddr, 128);
             break;
         case 2:
-            regAddr = RegFile::getRegAddr(EpReg::BUFFER_SIZE, 1);
+            regAddr = RegFile::getRegAddr(EpReg::BUF_SIZE, 1);
             pkt = createDtuRegisterPkt(regAddr, 8);
             break;
         case 3:
-            regAddr = RegFile::getRegAddr(EpReg::BUFFER_READ_PTR, 1);
+            regAddr = RegFile::getRegAddr(EpReg::BUF_RD_PTR, 1);
             pkt = createDtuRegisterPkt(regAddr, 128);
             break;
         case 4:
-            regAddr = RegFile::getRegAddr(EpReg::BUFFER_WRITE_PTR, 1);
+            regAddr = RegFile::getRegAddr(EpReg::BUF_WR_PTR, 1);
             pkt = createDtuRegisterPkt(regAddr, 128);
             break;
         default:

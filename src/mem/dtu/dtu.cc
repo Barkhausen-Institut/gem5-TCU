@@ -202,9 +202,9 @@ Dtu::sendSpmRequest(PacketPtr pkt,
 void
 Dtu::startMessageTransmission(const Command& cmd)
 {
-    Addr messageAddr = regFile.readEpReg(cmd.epId, EpReg::MESSAGE_ADDR);
-    Addr messageSize = regFile.readEpReg(cmd.epId, EpReg::MESSAGE_SIZE);
-    unsigned maxMessageSize = regFile.readEpReg(cmd.epId, EpReg::MAX_MESSAGE_SIZE);
+    Addr messageAddr = regFile.readEpReg(cmd.epId, EpReg::MSG_ADDR);
+    Addr messageSize = regFile.readEpReg(cmd.epId, EpReg::MSG_SIZE);
+    unsigned maxMessageSize = regFile.readEpReg(cmd.epId, EpReg::MAX_MSG_SIZE);
     unsigned credits = regFile.readEpReg(cmd.epId, EpReg::CREDITS);
 
     EpMode mode = static_cast<EpMode>(regFile.readEpReg(cmd.epId, EpReg::MODE));
@@ -252,8 +252,8 @@ Dtu::startMessageTransmission(const Command& cmd)
 void
 Dtu::startMemoryRead(const Command& cmd)
 {
-    Addr requestSize = regFile.readEpReg(cmd.epId, EpReg::REQUEST_SIZE);
-    Addr remoteAddr = regFile.readEpReg(cmd.epId, EpReg::REQUEST_REMOTE_ADDR);
+    Addr requestSize = regFile.readEpReg(cmd.epId, EpReg::REQ_SIZE);
+    Addr remoteAddr = regFile.readEpReg(cmd.epId, EpReg::REQ_REM_ADDR);
     remoteAddr += cmd.offset;
 
     // TODO error handling
@@ -275,14 +275,14 @@ Dtu::startMemoryRead(const Command& cmd)
 void
 Dtu::startMemoryWrite(const Command& cmd)
 {
-    Addr localAddr = regFile.readEpReg(cmd.epId, EpReg::REQUEST_LOCAL_ADDR);
-    Addr requestSize = regFile.readEpReg(cmd.epId, EpReg::REQUEST_SIZE);
+    Addr localAddr = regFile.readEpReg(cmd.epId, EpReg::REQ_LOC_ADDR);
+    Addr requestSize = regFile.readEpReg(cmd.epId, EpReg::REQ_SIZE);
 
     // TODO error handling
     assert(requestSize > 0);
     assert(requestSize <= maxNocPacketSize);
 
-    Addr remoteAddr = regFile.readEpReg(cmd.epId, EpReg::REQUEST_SIZE);
+    Addr remoteAddr = regFile.readEpReg(cmd.epId, EpReg::REQ_SIZE);
     remoteAddr += cmd.offset;
 
     DPRINTF(Dtu, "Endpoint %u starts memory write.\n", cmd.epId);
@@ -301,11 +301,11 @@ Dtu::startMemoryWrite(const Command& cmd)
 void
 Dtu::incrementReadPtr(unsigned epId)
 {
-    Addr readPtr    = regFile.readEpReg(epId, EpReg::BUFFER_READ_PTR);
-    Addr bufferAddr = regFile.readEpReg(epId, EpReg::BUFFER_ADDR);
-    Addr bufferSize = regFile.readEpReg(epId, EpReg::BUFFER_SIZE);
-    Addr messageCount = regFile.readEpReg(epId, EpReg::BUFFER_MESSAGE_COUNT);
-    unsigned maxMessageSize = regFile.readEpReg(epId, EpReg::MAX_MESSAGE_SIZE);
+    Addr readPtr    = regFile.readEpReg(epId, EpReg::BUF_RD_PTR);
+    Addr bufferAddr = regFile.readEpReg(epId, EpReg::BUF_ADDR);
+    Addr bufferSize = regFile.readEpReg(epId, EpReg::BUF_SIZE);
+    Addr messageCount = regFile.readEpReg(epId, EpReg::BUF_MSG_CNT);
+    unsigned maxMessageSize = regFile.readEpReg(epId, EpReg::MAX_MSG_SIZE);
 
     // TODO error handling
     assert(messageCount != 0);
@@ -325,18 +325,18 @@ Dtu::incrementReadPtr(unsigned epId)
      *     on the performance of the simulated system.
      */
 
-    regFile.setEpReg(epId, EpReg::BUFFER_READ_PTR, readPtr);
-    regFile.setEpReg(epId, EpReg::BUFFER_MESSAGE_COUNT, messageCount - 1);
+    regFile.setEpReg(epId, EpReg::BUF_RD_PTR, readPtr);
+    regFile.setEpReg(epId, EpReg::BUF_MSG_CNT, messageCount - 1);
 }
 
 void
 Dtu::incrementWritePtr(unsigned epId)
 {
-    Addr writePtr     = regFile.readEpReg(epId, EpReg::BUFFER_WRITE_PTR);
-    Addr bufferAddr   = regFile.readEpReg(epId, EpReg::BUFFER_ADDR);
-    Addr bufferSize   = regFile.readEpReg(epId, EpReg::BUFFER_SIZE);
-    Addr messageCount = regFile.readEpReg(epId, EpReg::BUFFER_MESSAGE_COUNT);
-    unsigned maxMessageSize = regFile.readEpReg(epId, EpReg::MAX_MESSAGE_SIZE);
+    Addr writePtr     = regFile.readEpReg(epId, EpReg::BUF_WR_PTR);
+    Addr bufferAddr   = regFile.readEpReg(epId, EpReg::BUF_ADDR);
+    Addr bufferSize   = regFile.readEpReg(epId, EpReg::BUF_SIZE);
+    Addr messageCount = regFile.readEpReg(epId, EpReg::BUF_MSG_CNT);
+    unsigned maxMessageSize = regFile.readEpReg(epId, EpReg::MAX_MSG_SIZE);
 
     assert(messageCount < bufferSize);
 
@@ -349,8 +349,8 @@ Dtu::incrementWritePtr(unsigned epId)
                  epId,
                  writePtr);
 
-    regFile.setEpReg(epId, EpReg::BUFFER_WRITE_PTR, writePtr);
-    regFile.setEpReg(epId, EpReg::BUFFER_MESSAGE_COUNT, messageCount + 1);
+    regFile.setEpReg(epId, EpReg::BUF_WR_PTR, writePtr);
+    regFile.setEpReg(epId, EpReg::BUF_MSG_CNT, messageCount + 1);
 }
 
 void
@@ -385,8 +385,8 @@ Dtu::completeNocReadRequest(PacketPtr pkt)
 
     auto cmd = getCommand();
 
-    Addr localAddr = regFile.readEpReg(cmd.epId, EpReg::REQUEST_LOCAL_ADDR);
-    Addr requestSize = regFile.readEpReg(cmd.epId, EpReg::REQUEST_SIZE);
+    Addr localAddr = regFile.readEpReg(cmd.epId, EpReg::REQ_LOC_ADDR);
+    Addr requestSize = regFile.readEpReg(cmd.epId, EpReg::REQ_SIZE);
 
     DPRINTF(Dtu, "Write %u bytes to local scratchpad at address %#x.\n",
                  requestSize,
@@ -468,7 +468,7 @@ Dtu::sendNocMessage(const uint8_t* data,
     uint64_t label;
     uint64_t replyLabel;
 
-    M5_VAR_USED unsigned maxMessageSize = regFile.readEpReg(epid, EpReg::MAX_MESSAGE_SIZE);
+    M5_VAR_USED unsigned maxMessageSize = regFile.readEpReg(epid, EpReg::MAX_MSG_SIZE);
 
     if (isReply)
     {
@@ -481,7 +481,7 @@ Dtu::sendNocMessage(const uint8_t* data,
          */
 
         auto pkt = generateRequest(
-                translate(regFile.readEpReg(epid, EpReg::BUFFER_READ_PTR)),
+                translate(regFile.readEpReg(epid, EpReg::BUF_RD_PTR)),
                 sizeof(MessageHeader),
                 MemCmd::ReadReq);
 
@@ -500,14 +500,14 @@ Dtu::sendNocMessage(const uint8_t* data,
     }
     else
     {
-        targetCoreId = regFile.readEpReg(epid, EpReg::TARGET_COREID);
-        targetEpId   = regFile.readEpReg(epid, EpReg::TARGET_EPID);
+        targetCoreId = regFile.readEpReg(epid, EpReg::TGT_COREID);
+        targetEpId   = regFile.readEpReg(epid, EpReg::TGT_EPID);
         replyEpId    = regFile.readEpReg(epid, EpReg::REPLY_EPID);
         label        = regFile.readEpReg(epid, EpReg::LABEL);
         replyLabel   = regFile.readEpReg(epid, EpReg::REPLY_LABEL);
     }
 
-    assert(regFile.readEpReg(epid, EpReg::MESSAGE_SIZE) == messageSize);
+    assert(regFile.readEpReg(epid, EpReg::MSG_SIZE) == messageSize);
     assert(messageSize + sizeof(MessageHeader) <= maxMessageSize);
 
     DPRINTF(Dtu, "Send %s of %u bytes to endpoint %u at core %u.\n",
@@ -567,11 +567,11 @@ Dtu::sendNocMemoryWriteRequest(const uint8_t* data,
     Command cmd = getCommand();
     unsigned epId = cmd.epId;
 
-    unsigned targetCoreId = regFile.readEpReg(epId, EpReg::TARGET_COREID);
-    Addr targetAddr = regFile.readEpReg(epId, EpReg::REQUEST_REMOTE_ADDR);
+    unsigned targetCoreId = regFile.readEpReg(epId, EpReg::TGT_COREID);
+    Addr targetAddr = regFile.readEpReg(epId, EpReg::REQ_REM_ADDR);
     targetAddr += cmd.offset;
 
-    assert(requestSize == regFile.readEpReg(epId, EpReg::REQUEST_SIZE));
+    assert(requestSize == regFile.readEpReg(epId, EpReg::REQ_SIZE));
     assert(requestSize <= maxNocPacketSize);
 
     DPRINTF(Dtu, "Send %u bytes to address %#x in PE%u.\n",
@@ -719,7 +719,7 @@ Dtu::recvNocMessage(PacketPtr pkt)
         header->flags & GRAND_CREDITS_FLAG &&
         header->replyEpId < numEndpoints)
     {
-        unsigned maxMessageSize = regFile.readEpReg(epId, EpReg::MAX_MESSAGE_SIZE);
+        unsigned maxMessageSize = regFile.readEpReg(epId, EpReg::MAX_MSG_SIZE);
         DPRINTF(Dtu, "Grand EP%u %u credits\n", header->replyEpId, maxMessageSize);
 
         unsigned credits = regFile.readEpReg(header->replyEpId, EpReg::CREDITS);
@@ -727,14 +727,14 @@ Dtu::recvNocMessage(PacketPtr pkt)
         regFile.setEpReg(header->replyEpId, EpReg::CREDITS, credits);
     }
 
-    unsigned messageCount = regFile.readEpReg(epId, EpReg::BUFFER_MESSAGE_COUNT);
-    unsigned bufferSize   = regFile.readEpReg(epId, EpReg::BUFFER_SIZE);
+    unsigned messageCount = regFile.readEpReg(epId, EpReg::BUF_MSG_CNT);
+    unsigned bufferSize   = regFile.readEpReg(epId, EpReg::BUF_SIZE);
 
     if (messageCount == bufferSize)
         // TODO error handling!
         panic("Ep %u: Buffer full!\n", epId);
 
-    Addr spmAddr = regFile.readEpReg(epId, EpReg::BUFFER_WRITE_PTR);
+    Addr spmAddr = regFile.readEpReg(epId, EpReg::BUF_WR_PTR);
 
     DPRINTF(Dtu, "Write message to local scratchpad at address %#x\n", spmAddr);
 

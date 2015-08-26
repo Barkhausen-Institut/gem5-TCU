@@ -46,25 +46,25 @@ constexpr unsigned numDtuRegs = 2;
 enum class EpReg : Addr
 {
     MODE,
-    MAX_MESSAGE_SIZE,
+    MAX_MSG_SIZE,
     // for receiving messages
-    BUFFER_MESSAGE_COUNT,
-    BUFFER_ADDR,
-    BUFFER_SIZE,
-    BUFFER_READ_PTR,
-    BUFFER_WRITE_PTR,
+    BUF_MSG_CNT,
+    BUF_ADDR,
+    BUF_SIZE,
+    BUF_RD_PTR,
+    BUF_WR_PTR,
     // for sending messages
-    TARGET_COREID,
-    TARGET_EPID,
-    MESSAGE_ADDR,
-    MESSAGE_SIZE,
+    TGT_COREID,
+    TGT_EPID,
+    MSG_ADDR,
+    MSG_SIZE,
     LABEL,
     REPLY_EPID,
     REPLY_LABEL,
     // for memory requests
-    REQUEST_LOCAL_ADDR,
-    REQUEST_REMOTE_ADDR,
-    REQUEST_SIZE,
+    REQ_LOC_ADDR,
+    REQ_REM_ADDR,
+    REQ_SIZE,
 
     CREDITS,
 };
