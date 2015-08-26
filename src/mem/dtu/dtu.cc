@@ -567,20 +567,22 @@ Dtu::sendNocMemoryWriteRequest(const uint8_t* data,
     Command cmd = getCommand();
     unsigned epId = cmd.epId;
 
+    unsigned targetCoreId = regFile.readEpReg(epId, EpReg::TARGET_COREID);
     Addr targetAddr = regFile.readEpReg(epId, EpReg::REQUEST_REMOTE_ADDR);
     targetAddr += cmd.offset;
 
     assert(requestSize == regFile.readEpReg(epId, EpReg::REQUEST_SIZE));
     assert(requestSize <= maxNocPacketSize);
 
-    DPRINTF(Dtu, "Send %u bytes to address %#x.\n",
+    DPRINTF(Dtu, "Send %u bytes to address %#x in PE%u.\n",
                  requestSize,
-                 targetAddr);
+                 targetAddr,
+                 targetCoreId);
 
-    auto pkt = generateRequest(targetAddr,
+    auto pkt = generateRequest(getNocAddr(targetCoreId) | targetAddr,
                                requestSize,
                                MemCmd::WriteReq);
-    memcpy(pkt->getPtr<uint8_t>() + sizeof(MessageHeader),
+    memcpy(pkt->getPtr<uint8_t>(),
            data,
            requestSize);
 
