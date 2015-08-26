@@ -73,6 +73,10 @@ constexpr unsigned numEpRegs = 18;
 
 class RegFile
 {
+  private:
+    static const char *dtuRegNames[];
+    static const char *epRegNames[];
+
   public:
 
     using reg_t = uint64_t;

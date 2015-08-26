@@ -31,6 +31,32 @@
 #include "debug/DtuReg.hh"
 #include "mem/dtu/regfile.hh"
 
+const char *RegFile::dtuRegNames[] = {
+    "COMMAND",
+    "STATUS",
+};
+
+const char *RegFile::epRegNames[] = {
+    "MODE",
+    "MAX_MSG_SIZE",
+    "BUF_MSG_CNT",
+    "BUF_ADDR",
+    "BUF_SIZE",
+    "BUF_RD_PTR",
+    "BUF_WR_PTR",
+    "TGT_COREID",
+    "TGT_EPID",
+    "MSG_ADDR",
+    "MSG_SIZE",
+    "LABEL",
+    "REPLY_EPID",
+    "REPLY_LABEL",
+    "REQ_LOC_ADDR",
+    "REQ_REM_ADDR",
+    "REQ_SIZE",
+    "CREDITS",
+};
+
 Addr
 RegFile::getRegAddr(DtuReg reg)
 {
@@ -67,8 +93,8 @@ RegFile::readDtuReg(DtuReg reg) const
 {
     reg_t value = dtuRegs[static_cast<Addr>(reg)];
 
-    DPRINTF(DtuReg, "Read DTU register %u (data 0x%x)\n",
-                    static_cast<Addr>(reg),
+    DPRINTF(DtuReg, "DTU[%-12s] -> %#018x\n",
+                    dtuRegNames[static_cast<Addr>(reg)],
                     value);
 
     return value;
@@ -77,8 +103,8 @@ RegFile::readDtuReg(DtuReg reg) const
 void
 RegFile::setDtuReg(DtuReg reg, reg_t value)
 {
-    DPRINTF(DtuReg, "Set DTU register %u (data 0x%x)\n",
-                    static_cast<Addr>(reg),
+    DPRINTF(DtuReg, "DTU[%-12s] <- %#018x\n",
+                    dtuRegNames[static_cast<Addr>(reg)],
                     value);
 
     dtuRegs[static_cast<Addr>(reg)] = value;
@@ -89,9 +115,9 @@ RegFile::readEpReg(unsigned epid, EpReg reg) const
 {
     reg_t value = epRegs[epid][static_cast<Addr>(reg)];
 
-    DPRINTF(DtuReg, "Read endpoint register %u [epid %u] (data 0x%x)\n",
-                    static_cast<Addr>(reg),
+    DPRINTF(DtuReg, "EP%u[%-12s] -> %#018x\n",
                     epid,
+                    epRegNames[static_cast<Addr>(reg)],
                     value);
 
     return value;
@@ -100,9 +126,9 @@ RegFile::readEpReg(unsigned epid, EpReg reg) const
 void
 RegFile::setEpReg(unsigned epid, EpReg reg, reg_t value)
 {
-    DPRINTF(DtuReg, "Set endpoint register %u [epid %u] (data 0x%x)\n",
-                    static_cast<Addr>(reg),
+    DPRINTF(DtuReg, "EP%u[%-12s] <- %#018x\n",
                     epid,
+                    epRegNames[static_cast<Addr>(reg)],
                     value);
 
     epRegs[epid][static_cast<Addr>(reg)] = value;
