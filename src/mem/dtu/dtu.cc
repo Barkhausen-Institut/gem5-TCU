@@ -494,8 +494,8 @@ Dtu::sendNocMessage(const uint8_t* data,
         auto h = pkt->getPtr<MessageHeader>();
 
         targetCoreId = h->senderCoreId;
-        targetEpId   = h->replyEpId;  // send messgae to the reply EP
-        replyEpId    = h->senderEpId; // and grand credits to the sender
+        targetEpId   = h->replyEpId;  // send message to the reply EP
+        replyEpId    = h->senderEpId; // and grant credits to the sender
 
         // the receiver of the reply should get the label that he has set
         label        = h->replyLabel;
@@ -523,7 +523,7 @@ Dtu::sendNocMessage(const uint8_t* data,
     MessageHeader header;
 
     if (isReply)
-        header.flags = REPLY_FLAG | GRAND_CREDITS_FLAG;
+        header.flags = REPLY_FLAG | GRANT_CREDITS_FLAG;
     else
         header.flags = 0; // normal message
 
@@ -723,11 +723,11 @@ Dtu::recvNocMessage(PacketPtr pkt)
     printPacket(pkt);
 
     if (header->flags & REPLY_FLAG &&
-        header->flags & GRAND_CREDITS_FLAG &&
+        header->flags & GRANT_CREDITS_FLAG &&
         header->replyEpId < numEndpoints)
     {
         unsigned maxMessageSize = regFile.readEpReg(header->replyEpId, EpReg::MAX_MSG_SIZE);
-        DPRINTF(Dtu, "Grand EP%u %u credits\n", header->replyEpId, maxMessageSize);
+        DPRINTF(Dtu, "Grant EP%u %u credits\n", header->replyEpId, maxMessageSize);
 
         unsigned credits = regFile.readEpReg(header->replyEpId, EpReg::CREDITS);
         credits += maxMessageSize;

@@ -41,12 +41,12 @@ class Dtu : public BaseDtu
     enum MessageFlags : uint8_t
     {
         REPLY_FLAG = (1 << 0),
-        GRAND_CREDITS_FLAG = (1 << 1),
+        GRANT_CREDITS_FLAG = (1 << 1),
     };
 
     struct MessageHeader
     {
-        uint8_t flags; // if bit 0 is set its a reply, if bit 1 is set we grand credits
+        uint8_t flags; // if bit 0 is set its a reply, if bit 1 is set we grant credits
         uint8_t senderCoreId;
         uint8_t senderEpId;
         uint8_t replyEpId; // for a normal message this is the reply epId
