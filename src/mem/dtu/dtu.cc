@@ -726,7 +726,7 @@ Dtu::recvNocMessage(PacketPtr pkt)
         header->flags & GRAND_CREDITS_FLAG &&
         header->replyEpId < numEndpoints)
     {
-        unsigned maxMessageSize = regFile.readEpReg(epId, EpReg::MAX_MSG_SIZE);
+        unsigned maxMessageSize = regFile.readEpReg(header->replyEpId, EpReg::MAX_MSG_SIZE);
         DPRINTF(Dtu, "Grand EP%u %u credits\n", header->replyEpId, maxMessageSize);
 
         unsigned credits = regFile.readEpReg(header->replyEpId, EpReg::CREDITS);
