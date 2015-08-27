@@ -57,6 +57,8 @@ parser.add_option("--cpu-type", type="choice", default="atomic",
 
 parser.add_option("-c", "--cmd", default="", type="string",
                   help="comma separated list of binaries")
+parser.add_option("--memcmd", default="", type="string",
+                  help="binary for memory-PEs")
 
 parser.add_option("--list-mem-types",
                   action="callback", callback=_listMemTypes,
@@ -166,7 +168,9 @@ workload_list = []
 # These elements are connected via a simple non-coherent XBar. The DTU ports
 # mem_side_slave and mem_side_master are the PE's interface to the outside
 # world.
-for i in range(0, options.num_pes):
+
+# currently, there is just one memory-PE
+for i in range(0, options.num_pes + 1):
 
     # each PE is represented by it's own subsystem
     pe = System(mem_mode = CPUClass.memory_mode())
@@ -192,28 +196,29 @@ for i in range(0, options.num_pes):
 
     pe.system_port = pe.xbar.slave
 
+    pe.cpu = CPUClass()
+    pe.cpu.clk_domain = root.cpu_clk_domain
+
+    process = LiveProcess()
+    process.cwd = os.getcwd()
+
     if i < len(cmd_list):
-        pe.cpu = CPUClass()
-        pe.cpu.clk_domain = root.cpu_clk_domain
-
-        process = LiveProcess()
-        process.cwd = os.getcwd()
-
         process.cmd = cmd_list[i].split(' ')
-        process.executable = process.cmd[0]
-        print "PE" + str(i) + ":", process.cmd
-
-        #process.use_init_port = 'true'
-        #process.init_port = pe.xbar.slave
-
-        pe.cpu.workload = process;
-
-        pe.cpu.createInterruptController()
-        pe.cpu.connectAllPorts(pe.xbar)
-
-        workload_list.append(pe.cpu.workload)
-
         pe.dtu.use_ptable = 'true'
+    else:
+        process.cmd = options.memcmd
+    process.executable = process.cmd[0]
+    print "PE" + str(i) + ":", process.cmd
+
+    #process.use_init_port = 'true'
+    #process.init_port = pe.xbar.slave
+
+    pe.cpu.workload = process;
+
+    pe.cpu.createInterruptController()
+    pe.cpu.connectAllPorts(pe.xbar)
+
+    workload_list.append(pe.cpu.workload)
 
 # Instantiate configuration
 m5.instantiate()
