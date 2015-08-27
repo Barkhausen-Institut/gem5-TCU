@@ -207,7 +207,6 @@ Dtu::sendSpmRequest(PacketPtr pkt,
 void
 Dtu::startMessageTransmission(const Command& cmd)
 {
-    unsigned targetCoreId = regFile.readEpReg(cmd.epId, EpReg::TGT_COREID);
     Addr messageAddr = regFile.readEpReg(cmd.epId, EpReg::MSG_ADDR);
     Addr messageSize = regFile.readEpReg(cmd.epId, EpReg::MSG_SIZE);
     unsigned maxMessageSize = regFile.readEpReg(cmd.epId, EpReg::MAX_MSG_SIZE);
@@ -236,10 +235,6 @@ Dtu::startMessageTransmission(const Command& cmd)
         credits -= maxMessageSize;
         regFile.setEpReg(cmd.epId, EpReg::CREDITS, credits);
     }
-
-    DPRINTF(Dtu, "\e[1m[%s -> %u]\e[0m with EP%u of %#018lx:%lu\n",
-        mode == EpMode::TRANSMIT_MESSAGE ? "sd" : "rp",
-        targetCoreId, cmd.epId, messageAddr, messageSize);
 
     DPRINTF(DtuDetail, "Read message of %lu Bytes at address %#018lx from local scratchpad.\n",
                  messageSize,
@@ -513,6 +508,9 @@ Dtu::sendNocMessage(const uint8_t* data,
         replyLabel   = regFile.readEpReg(epid, EpReg::REPLY_LABEL);
     }
 
+    DPRINTF(Dtu, "\e[1m[%s -> %u]\e[0m with EP%u of %#018lx:%lu\n",
+        isReply ? "rp" : "sd",
+        targetCoreId, epid, regFile.readEpReg(epid, EpReg::MSG_ADDR), messageSize);
     DPRINTF(Dtu, "  header: tgtEP=%u, lbl=%#018lx, rpLbl=%#018lx, rpEP=%u\n",
         targetEpId, label, replyLabel, replyEpId);
 
