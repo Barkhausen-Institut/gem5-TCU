@@ -367,8 +367,10 @@ Dtu::completeNocRequest(PacketPtr pkt)
 
     if (pkt->isWrite())
         completeNocWriteRequest(pkt);
-    else if (pkt->isRead())
+    else if (pkt->isRead()) {
+        printPacket(pkt);
         completeNocReadRequest(pkt);
+    }
     else
         panic("unexpected packet type\n");
 
@@ -679,6 +681,8 @@ Dtu::completeForwardedRequest(PacketPtr pkt)
 
         pkt->headerDelay = 0;
         pkt->payloadDelay = 0;
+        if(pkt->isRead())
+            printPacket(pkt);
 
         schedNocResponse(pkt, clockEdge(delay));
     }
@@ -766,7 +770,8 @@ Dtu::recvNocMemoryRequest(PacketPtr pkt)
                  pkt->isWrite() ? "write" : "read",
                  pkt->getSize(),
                  pkt->getAddr());
-    printPacket(pkt);
+    if(pkt->isWrite())
+        printPacket(pkt);
 
     if (pkt->getAddr() & regFileBaseAddr)
     {
