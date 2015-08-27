@@ -267,7 +267,7 @@ Dtu::startMemoryRead(const Command& cmd)
 
     // TODO error handling
     assert(requestSize > 0);
-    assert(requestSize < maxNocPacketSize);
+    //assert(requestSize < maxNocPacketSize);
 
     auto pkt = generateRequest(getNocAddr(targetCoreId) | remoteAddr, requestSize, MemCmd::ReadReq);
 
@@ -288,7 +288,7 @@ Dtu::startMemoryWrite(const Command& cmd)
 
     // TODO error handling
     assert(requestSize > 0);
-    assert(requestSize <= maxNocPacketSize);
+    //assert(requestSize <= maxNocPacketSize);
 
     auto pkt = generateRequest(localAddr, requestSize, MemCmd::ReadReq);
 
@@ -585,7 +585,7 @@ Dtu::sendNocMemoryWriteRequest(const uint8_t* data,
                  targetCoreId);
 
     assert(requestSize == regFile.readEpReg(epId, EpReg::REQ_SIZE));
-    assert(requestSize <= maxNocPacketSize);
+    //assert(requestSize <= maxNocPacketSize);
 
     auto pkt = generateRequest(getNocAddr(targetCoreId) | targetAddr,
                                requestSize,
