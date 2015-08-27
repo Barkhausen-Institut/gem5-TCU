@@ -223,7 +223,7 @@ Dtu::startMessageTransmission(const Command& cmd)
     {
         if (credits < maxMessageSize)
         {
-            warn("pe%u.ep%u: Ignore send message commad because there are not "
+            warn("pe%u.ep%u: Ignore send message command because there are not "
                  "enough credits", coreId, cmd.epId);
             schedule(finishOperationEvent, clockEdge(Cycles(1)));
             return;
