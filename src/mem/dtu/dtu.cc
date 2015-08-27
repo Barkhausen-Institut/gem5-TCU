@@ -835,26 +835,5 @@ DtuParams::create()
 
 void Dtu::printPacket(PacketPtr pkt) const
 {
-    if(!Debug::DtuPackets)
-    {
-        return;
-    }
-
-    std::ostringstream os;
-    os << std::setfill('0') << std::hex;
-    os << std::setw(4) << 0 << ": ";
-    for(size_t i = 0; i < pkt->getSize(); ++i)
-    {
-        if(i > 0 && (i % 16) == 0)
-        {
-            DPRINTF(DtuPackets, "%s\n", os.str().c_str());
-            os.str("");
-            os << std::setw(4) << i << ": ";
-        }
-        os << std::setw(2) << (unsigned)(pkt->getPtr<uint8_t>()[i]) << " ";
-    }
-    if(!os.str().empty())
-    {
-        DPRINTF(DtuPackets, "%s\n", os.str().c_str());
-    }
+    DDUMP(DtuPackets, pkt->getPtr<uint8_t>(), pkt->getSize());
 }
