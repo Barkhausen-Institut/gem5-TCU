@@ -62,6 +62,8 @@ class Scratchpad : public AbstractMemory
 
     const unsigned throughput;
 
+    const std::string initFile;
+
   protected:
 
     Tick recvAtomic(PacketPtr pkt);

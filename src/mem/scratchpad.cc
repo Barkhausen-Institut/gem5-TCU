@@ -33,7 +33,8 @@ Scratchpad::Scratchpad(const ScratchpadParams* p)
     cpuPort(name() + ".cpu_port", *this),
     dtuPort(name() + ".dtu_port", *this),
     latency(p->latency),
-    throughput(p->throughput)
+    throughput(p->throughput),
+    initFile(p->init_file)
 {
 }
 
@@ -47,6 +48,29 @@ Scratchpad::init()
 
     cpuPort.sendRangeChange();
     dtuPort.sendRangeChange();
+
+    if(!initFile.empty()) {
+        FILE *f = fopen(initFile.c_str(), "r");
+        if(!f)
+            panic("Unable to open '%s' for reading", initFile.c_str());
+
+        fseek(f, 0L, SEEK_END);
+        size_t sz = ftell(f);
+        fseek(f, 0L, SEEK_SET);
+
+        Request::Flags flags;
+        auto req = new Request(0, sz, flags, 0);
+        auto pkt = new Packet(req, MemCmd::WriteReq);
+        auto pktData = new uint8_t[sz];
+        fread(pktData, 1, sz, f);
+        pkt->dataDynamic(pktData);
+        fclose(f);
+
+        this->functionalAccess(pkt);
+
+        delete pkt->req;
+        delete pkt;
+    }
 }
 
 BaseSlavePort &

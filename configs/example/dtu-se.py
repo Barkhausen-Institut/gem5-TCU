@@ -58,7 +58,9 @@ parser.add_option("--cpu-type", type="choice", default="atomic",
 parser.add_option("-c", "--cmd", default="", type="string",
                   help="comma separated list of binaries")
 parser.add_option("--memcmd", default="", type="string",
-                  help="binary for memory-PEs")
+                  help="binary for the memory-PE")
+parser.add_option("--init_mem", default="", type="string",
+                  help="file to load into the memory-PE")
 
 parser.add_option("--list-mem-types",
                   action="callback", callback=_listMemTypes,
@@ -186,6 +188,10 @@ for i in range(0, options.num_pes + 1):
     pe.scratchpad = Scratchpad(in_addr_map = "true")
     pe.scratchpad.cpu_port = pe.xbar.master
 
+    if i == options.num_pes:
+        pe.scratchpad.init_file = options.init_mem
+        print 'PE%d: %s' % (i, options.init_mem)
+
     pe.dtu = Dtu()
     pe.dtu.core_id = i
     pe.dtu.spm_master_port = pe.scratchpad.dtu_port
@@ -208,7 +214,7 @@ for i in range(0, options.num_pes + 1):
     else:
         process.cmd = options.memcmd
     process.executable = process.cmd[0]
-    print "PE" + str(i) + ":", process.cmd
+    print "PE%d: %s" % (i, process.cmd)
 
     #process.use_init_port = 'true'
     #process.init_port = pe.xbar.slave

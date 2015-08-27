@@ -41,6 +41,8 @@ class Scratchpad(AbstractMemory):
 
     throughput = Param.Unsigned(64, "Number of bytes that can be read per cycle")
 
+    init_file = Param.String("", "File that should be loaded into the scratchpad")
+
     # TODO check what these options actually mean, switch them off for now
     in_addr_map = False
     conf_table_reported = False
