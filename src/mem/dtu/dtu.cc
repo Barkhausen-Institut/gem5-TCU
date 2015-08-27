@@ -31,6 +31,7 @@
 #include <sstream>
 
 #include "debug/Dtu.hh"
+#include "debug/DtuDetail.hh"
 #include "debug/DtuPackets.hh"
 #include "mem/dtu/dtu.hh"
 #include "mem/page_table.hh"
@@ -165,14 +166,14 @@ Dtu::startOperation(Command& cmd)
         break;
     default:
         // TODO Error handling
-        panic("Ep %u: Invalid mode\n", cmd.epId);
+        panic("EP%u: Invalid mode\n", cmd.epId);
     }
 }
 
 void
 Dtu::finishOperation()
 {
-    DPRINTF(Dtu, "Operation finished\n");
+    DPRINTF(DtuDetail, "Operation finished\n");
     // reset command register and unset busy flag
     regFile.setDtuReg(DtuReg::COMMAND, 0);
     regFile.setDtuReg(DtuReg::STATUS, 0);
@@ -206,6 +207,7 @@ Dtu::sendSpmRequest(PacketPtr pkt,
 void
 Dtu::startMessageTransmission(const Command& cmd)
 {
+    unsigned targetCoreId = regFile.readEpReg(cmd.epId, EpReg::TGT_COREID);
     Addr messageAddr = regFile.readEpReg(cmd.epId, EpReg::MSG_ADDR);
     Addr messageSize = regFile.readEpReg(cmd.epId, EpReg::MSG_SIZE);
     unsigned maxMessageSize = regFile.readEpReg(cmd.epId, EpReg::MAX_MSG_SIZE);
@@ -228,7 +230,7 @@ Dtu::startMessageTransmission(const Command& cmd)
             return;
         }
 
-        DPRINTF(Dtu, "EP%u pays %u credits\n", cmd.epId, maxMessageSize);
+        DPRINTF(DtuDetail, "EP%u pays %u credits\n", cmd.epId, maxMessageSize);
 
         // Pay some credits
         credits -= maxMessageSize;
@@ -240,8 +242,11 @@ Dtu::startMessageTransmission(const Command& cmd)
     assert(messageSize + sizeof(MessageHeader) <= maxMessageSize);
     assert(messageSize + sizeof(MessageHeader) <= maxNocPacketSize);
 
-    DPRINTF(Dtu, "Endpoint %u starts message transmission.\n", cmd.epId);
-    DPRINTF(Dtu, "Read message of %u Bytes at address %#x from local scratchpad.\n",
+    DPRINTF(Dtu, "\e[1m[%s -> %u]\e[0m with EP%u of %#018lx:%lu\n",
+        mode == EpMode::TRANSMIT_MESSAGE ? "sd" : "rp",
+        targetCoreId, cmd.epId, messageAddr, messageSize);
+
+    DPRINTF(DtuDetail, "Read message of %lu Bytes at address %#018lx from local scratchpad.\n",
                  messageSize,
                  messageAddr);
 
@@ -257,6 +262,7 @@ void
 Dtu::startMemoryRead(const Command& cmd)
 {
     unsigned targetCoreId = regFile.readEpReg(cmd.epId, EpReg::TGT_COREID);
+    Addr localAddr = regFile.readEpReg(cmd.epId, EpReg::REQ_LOC_ADDR);
     Addr requestSize = regFile.readEpReg(cmd.epId, EpReg::REQ_SIZE);
     Addr remoteAddr = regFile.readEpReg(cmd.epId, EpReg::REQ_REM_ADDR);
     remoteAddr += cmd.offset;
@@ -265,11 +271,8 @@ Dtu::startMemoryRead(const Command& cmd)
     assert(requestSize > 0);
     assert(requestSize < maxNocPacketSize);
 
-    DPRINTF(Dtu, "Endpoint %u starts memory read.\n", cmd.epId);
-    DPRINTF(Dtu, "Read %u bytes at %#x of PE%u\n",
-                 requestSize,
-                 remoteAddr,
-                 targetCoreId);
+    DPRINTF(Dtu, "\e[1m[rd -> %u]\e[0m with EP%u into %#018lx:%lu\n",
+        targetCoreId, cmd.epId, localAddr, requestSize);
 
     auto pkt = generateRequest(getNocAddr(targetCoreId) | remoteAddr, requestSize, MemCmd::ReadReq);
 
@@ -281,6 +284,7 @@ Dtu::startMemoryRead(const Command& cmd)
 void
 Dtu::startMemoryWrite(const Command& cmd)
 {
+    unsigned targetCoreId = regFile.readEpReg(cmd.epId, EpReg::TGT_COREID);
     Addr localAddr = regFile.readEpReg(cmd.epId, EpReg::REQ_LOC_ADDR);
     Addr requestSize = regFile.readEpReg(cmd.epId, EpReg::REQ_SIZE);
 
@@ -291,10 +295,8 @@ Dtu::startMemoryWrite(const Command& cmd)
     Addr remoteAddr = regFile.readEpReg(cmd.epId, EpReg::REQ_SIZE);
     remoteAddr += cmd.offset;
 
-    DPRINTF(Dtu, "Endpoint %u starts memory write.\n", cmd.epId);
-    DPRINTF(Dtu, "Read %u bytes at address %#x from local scratchpad.\n",
-                 requestSize,
-                 localAddr);
+    DPRINTF(Dtu, "\e[1m[wr -> %u]\e[0m with EP%u from %#018lx:%lu\n",
+        targetCoreId, cmd.epId, localAddr, requestSize);
 
     auto pkt = generateRequest(localAddr, requestSize, MemCmd::ReadReq);
 
@@ -321,7 +323,7 @@ Dtu::incrementReadPtr(unsigned epId)
     if (readPtr >= bufferAddr + bufferSize * maxMessageSize)
         readPtr = bufferAddr;
 
-    DPRINTF(Dtu, "Ep %u: Increment the read pointer. New address: %#x\n",
+    DPRINTF(DtuDetail, "EP%u: Increment the read pointer to %#018lx\n",
                  epId,
                  readPtr);
 
@@ -351,7 +353,7 @@ Dtu::incrementWritePtr(unsigned epId)
     if (writePtr >= bufferAddr + bufferSize * maxMessageSize)
         writePtr = bufferAddr;
 
-    DPRINTF(Dtu, "Ep %u: Increment the write pointer. New address: %#x\n",
+    DPRINTF(DtuDetail, "EP%u: Increment the write pointer to %#018lx\n",
                  epId,
                  writePtr);
 
@@ -362,7 +364,7 @@ Dtu::incrementWritePtr(unsigned epId)
 void
 Dtu::completeNocRequest(PacketPtr pkt)
 {
-    DPRINTF(Dtu, "Received %s response from remote DTU.\n",
+    DPRINTF(DtuDetail, "Received %s response from remote DTU.\n",
                  pkt->isRead() ? "read" : "write");
 
     if (pkt->isWrite())
@@ -390,13 +392,12 @@ Dtu::completeNocWriteRequest(PacketPtr pkt)
 void
 Dtu::completeNocReadRequest(PacketPtr pkt)
 {
-
     auto cmd = getCommand();
 
     Addr localAddr = regFile.readEpReg(cmd.epId, EpReg::REQ_LOC_ADDR);
     Addr requestSize = regFile.readEpReg(cmd.epId, EpReg::REQ_SIZE);
 
-    DPRINTF(Dtu, "Write %u bytes to local scratchpad at address %#x.\n",
+    DPRINTF(DtuDetail, "Write %lu bytes to local scratchpad at address %#018lx.\n",
                  requestSize,
                  localAddr);
 
@@ -419,7 +420,7 @@ Dtu::completeSpmRequest(PacketPtr pkt)
     assert(!pkt->isError());
     assert(pkt->isResponse());
 
-    DPRINTF(Dtu, "Received response from scratchpad.\n");
+    DPRINTF(DtuDetail, "Received response from scratchpad.\n");
 
     auto senderState = dynamic_cast<SpmSenderState*>(pkt->popSenderState());
 
@@ -518,7 +519,10 @@ Dtu::sendNocMessage(const uint8_t* data,
     assert(regFile.readEpReg(epid, EpReg::MSG_SIZE) == messageSize);
     assert(messageSize + sizeof(MessageHeader) <= maxMessageSize);
 
-    DPRINTF(Dtu, "Send %s of %u bytes to endpoint %u at core %u.\n",
+    DPRINTF(Dtu, "  header: tgtEP=%u, lbl=%#018lx, rpLbl=%#018lx, rpEP=%u\n",
+        targetEpId, label, replyLabel, replyEpId);
+
+    DPRINTF(DtuDetail, "Send %s of %lu bytes to EP%u at PE%u.\n",
                  isReply ? "reply" : "message",
                  messageSize,
                  targetEpId,
@@ -583,7 +587,7 @@ Dtu::sendNocMemoryWriteRequest(const uint8_t* data,
     assert(requestSize == regFile.readEpReg(epId, EpReg::REQ_SIZE));
     assert(requestSize <= maxNocPacketSize);
 
-    DPRINTF(Dtu, "Send %u bytes to address %#x in PE%u.\n",
+    DPRINTF(DtuDetail, "Send %lu bytes to address %#018lx in PE%u.\n",
                  requestSize,
                  targetAddr,
                  targetCoreId);
@@ -652,7 +656,7 @@ Dtu::completeForwardedMessage(PacketPtr pkt, unsigned epId)
     }
     else
     {
-        DPRINTF(Dtu, "Wrote message to Scratchpad. Send response back to EP %u at core %u\n",
+        DPRINTF(DtuDetail, "Wrote message to Scratchpad. Send response back to EP%u at PE%u\n",
                      header->senderEpId,
                      header->senderCoreId);
 
@@ -674,7 +678,7 @@ Dtu::completeForwardedRequest(PacketPtr pkt)
 {
     if (!atomicMode)
     {
-        DPRINTF(Dtu, "Forwarded request to Scratchpad. Send response back via NoC\n");
+        DPRINTF(DtuDetail, "Forwarded request to Scratchpad. Send response back via NoC\n");
 
         Cycles delay = ticksToCycles(pkt->headerDelay + pkt->payloadDelay);
         delay += spmResponseToNocResponseLatency;
@@ -720,12 +724,10 @@ Dtu::recvNocMessage(PacketPtr pkt)
 
     MessageHeader* header = pkt->getPtr<MessageHeader>();
 
-    DPRINTF(Dtu, "EP %u received %s of %u bytes from EP %u at core %u\n",
-                 epId,
-                 header->flags & REPLY_FLAG ? "reply" : "message",
-                 header->length,
-                 header->senderEpId,
-                 header->senderCoreId);
+    Addr spmAddr = regFile.readEpReg(epId, EpReg::BUF_WR_PTR);
+
+    DPRINTF(Dtu, "\e[1m[rv <- %u]\e[0m %lu bytes on EP%u to %#018lx\n",
+        header->senderCoreId, header->length, header->senderEpId, spmAddr);
     printPacket(pkt);
 
     if (header->flags & REPLY_FLAG &&
@@ -733,7 +735,7 @@ Dtu::recvNocMessage(PacketPtr pkt)
         header->replyEpId < numEndpoints)
     {
         unsigned maxMessageSize = regFile.readEpReg(header->replyEpId, EpReg::MAX_MSG_SIZE);
-        DPRINTF(Dtu, "Grant EP%u %u credits\n", header->replyEpId, maxMessageSize);
+        DPRINTF(DtuDetail, "Grant EP%u %u credits\n", header->replyEpId, maxMessageSize);
 
         unsigned credits = regFile.readEpReg(header->replyEpId, EpReg::CREDITS);
         credits += maxMessageSize;
@@ -745,11 +747,9 @@ Dtu::recvNocMessage(PacketPtr pkt)
 
     if (messageCount == bufferSize)
         // TODO error handling!
-        panic("Ep %u: Buffer full!\n", epId);
+        panic("EP%u: Buffer full!\n", epId);
 
-    Addr spmAddr = regFile.readEpReg(epId, EpReg::BUF_WR_PTR);
-
-    DPRINTF(Dtu, "Write message to local scratchpad at address %#x\n", spmAddr);
+    DPRINTF(DtuDetail, "Write message to local scratchpad at address %#018lx\n", spmAddr);
 
     pkt->setAddr(spmAddr);
 
@@ -766,10 +766,11 @@ Dtu::recvNocMemoryRequest(PacketPtr pkt)
     // get local Address
     pkt->setAddr( pkt->getAddr() & ~getNocAddr(coreId, 0));
 
-    DPRINTF(Dtu, "Received %s request of %u bytes at %#x\n",
-                 pkt->isWrite() ? "write" : "read",
-                 pkt->getSize(),
-                 pkt->getAddr());
+    DPRINTF(Dtu, "\e[1m[%s <- ?]\e[0m %#018lx:%lu\n",
+        pkt->isWrite() ? "wr" : "rd",
+        pkt->getAddr(),
+        pkt->getSize());
+    
     if(pkt->isWrite())
         printPacket(pkt);
 
