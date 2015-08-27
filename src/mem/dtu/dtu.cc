@@ -403,7 +403,7 @@ Dtu::completeNocReadRequest(PacketPtr pkt)
 
     Cycles delay = ticksToCycles(pkt->headerDelay);
 
-    auto spmPkt = generateRequest(localAddr, requestSize, MemCmd::ReadReq);
+    auto spmPkt = generateRequest(localAddr, requestSize, MemCmd::WriteReq);
     spmPkt->payloadDelay = pkt->payloadDelay;
 
     memcpy(spmPkt->getPtr<uint8_t>(), pkt->getPtr<uint8_t>(), requestSize);
@@ -612,8 +612,6 @@ Dtu::sendNocMemoryWriteRequest(const uint8_t* data,
 void
 Dtu::completeLocalSpmRequest(PacketPtr pkt)
 {
-    assert(pkt->isRead());
-
     unsigned epid = getCommand().epId;
 
     EpMode mode = static_cast<EpMode>(regFile.readEpReg(epid, EpReg::MODE));
