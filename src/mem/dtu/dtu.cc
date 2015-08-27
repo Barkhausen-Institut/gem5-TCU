@@ -237,11 +237,6 @@ Dtu::startMessageTransmission(const Command& cmd)
         regFile.setEpReg(cmd.epId, EpReg::CREDITS, credits);
     }
 
-    // TODO error handling
-    assert(messageSize > 0);
-    assert(messageSize + sizeof(MessageHeader) <= maxMessageSize);
-    assert(messageSize + sizeof(MessageHeader) <= maxNocPacketSize);
-
     DPRINTF(Dtu, "\e[1m[%s -> %u]\e[0m with EP%u of %#018lx:%lu\n",
         mode == EpMode::TRANSMIT_MESSAGE ? "sd" : "rp",
         targetCoreId, cmd.epId, messageAddr, messageSize);
@@ -249,6 +244,11 @@ Dtu::startMessageTransmission(const Command& cmd)
     DPRINTF(DtuDetail, "Read message of %lu Bytes at address %#018lx from local scratchpad.\n",
                  messageSize,
                  messageAddr);
+
+    // TODO error handling
+    assert(messageSize > 0);
+    assert(messageSize + sizeof(MessageHeader) <= maxMessageSize);
+    assert(messageSize + sizeof(MessageHeader) <= maxNocPacketSize);
 
     auto pkt = generateRequest(messageAddr, messageSize, MemCmd::ReadReq);
 
@@ -267,12 +267,12 @@ Dtu::startMemoryRead(const Command& cmd)
     Addr remoteAddr = regFile.readEpReg(cmd.epId, EpReg::REQ_REM_ADDR);
     remoteAddr += cmd.offset;
 
+    DPRINTF(Dtu, "\e[1m[rd -> %u]\e[0m with EP%u into %#018lx:%lu\n",
+        targetCoreId, cmd.epId, localAddr, requestSize);
+
     // TODO error handling
     assert(requestSize > 0);
     assert(requestSize < maxNocPacketSize);
-
-    DPRINTF(Dtu, "\e[1m[rd -> %u]\e[0m with EP%u into %#018lx:%lu\n",
-        targetCoreId, cmd.epId, localAddr, requestSize);
 
     auto pkt = generateRequest(getNocAddr(targetCoreId) | remoteAddr, requestSize, MemCmd::ReadReq);
 
@@ -288,15 +288,12 @@ Dtu::startMemoryWrite(const Command& cmd)
     Addr localAddr = regFile.readEpReg(cmd.epId, EpReg::REQ_LOC_ADDR);
     Addr requestSize = regFile.readEpReg(cmd.epId, EpReg::REQ_SIZE);
 
+    DPRINTF(Dtu, "\e[1m[wr -> %u]\e[0m with EP%u from %#018lx:%lu\n",
+        targetCoreId, cmd.epId, localAddr, requestSize);
+
     // TODO error handling
     assert(requestSize > 0);
     assert(requestSize <= maxNocPacketSize);
-
-    Addr remoteAddr = regFile.readEpReg(cmd.epId, EpReg::REQ_SIZE);
-    remoteAddr += cmd.offset;
-
-    DPRINTF(Dtu, "\e[1m[wr -> %u]\e[0m with EP%u from %#018lx:%lu\n",
-        targetCoreId, cmd.epId, localAddr, requestSize);
 
     auto pkt = generateRequest(localAddr, requestSize, MemCmd::ReadReq);
 
@@ -315,9 +312,6 @@ Dtu::incrementReadPtr(unsigned epId)
     Addr messageCount = regFile.readEpReg(epId, EpReg::BUF_MSG_CNT);
     unsigned maxMessageSize = regFile.readEpReg(epId, EpReg::MAX_MSG_SIZE);
 
-    // TODO error handling
-    assert(messageCount != 0);
-
     readPtr += maxMessageSize;
 
     if (readPtr >= bufferAddr + bufferSize * maxMessageSize)
@@ -326,6 +320,9 @@ Dtu::incrementReadPtr(unsigned epId)
     DPRINTF(DtuDetail, "EP%u: Increment the read pointer to %#018lx\n",
                  epId,
                  readPtr);
+
+    // TODO error handling
+    assert(messageCount != 0);
 
     /*
      * XXX Actually an additianally cycle is needed to update the register.
@@ -346,8 +343,6 @@ Dtu::incrementWritePtr(unsigned epId)
     Addr messageCount = regFile.readEpReg(epId, EpReg::BUF_MSG_CNT);
     unsigned maxMessageSize = regFile.readEpReg(epId, EpReg::MAX_MSG_SIZE);
 
-    assert(messageCount < bufferSize);
-
     writePtr += maxMessageSize;
 
     if (writePtr >= bufferAddr + bufferSize * maxMessageSize)
@@ -356,6 +351,8 @@ Dtu::incrementWritePtr(unsigned epId)
     DPRINTF(DtuDetail, "EP%u: Increment the write pointer to %#018lx\n",
                  epId,
                  writePtr);
+
+    assert(messageCount < bufferSize);
 
     regFile.setEpReg(epId, EpReg::BUF_WR_PTR, writePtr);
     regFile.setEpReg(epId, EpReg::BUF_MSG_CNT, messageCount + 1);
@@ -516,9 +513,6 @@ Dtu::sendNocMessage(const uint8_t* data,
         replyLabel   = regFile.readEpReg(epid, EpReg::REPLY_LABEL);
     }
 
-    assert(regFile.readEpReg(epid, EpReg::MSG_SIZE) == messageSize);
-    assert(messageSize + sizeof(MessageHeader) <= maxMessageSize);
-
     DPRINTF(Dtu, "  header: tgtEP=%u, lbl=%#018lx, rpLbl=%#018lx, rpEP=%u\n",
         targetEpId, label, replyLabel, replyEpId);
 
@@ -527,6 +521,9 @@ Dtu::sendNocMessage(const uint8_t* data,
                  messageSize,
                  targetEpId,
                  targetCoreId);
+
+    assert(regFile.readEpReg(epid, EpReg::MSG_SIZE) == messageSize);
+    assert(messageSize + sizeof(MessageHeader) <= maxMessageSize);
 
     MessageHeader header;
 
@@ -584,13 +581,13 @@ Dtu::sendNocMemoryWriteRequest(const uint8_t* data,
     Addr targetAddr = regFile.readEpReg(epId, EpReg::REQ_REM_ADDR);
     targetAddr += cmd.offset;
 
-    assert(requestSize == regFile.readEpReg(epId, EpReg::REQ_SIZE));
-    assert(requestSize <= maxNocPacketSize);
-
     DPRINTF(DtuDetail, "Send %lu bytes to address %#018lx in PE%u.\n",
                  requestSize,
                  targetAddr,
                  targetCoreId);
+
+    assert(requestSize == regFile.readEpReg(epId, EpReg::REQ_SIZE));
+    assert(requestSize <= maxNocPacketSize);
 
     auto pkt = generateRequest(getNocAddr(targetCoreId) | targetAddr,
                                requestSize,
