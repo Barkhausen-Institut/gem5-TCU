@@ -256,6 +256,7 @@ Dtu::startMessageTransmission(const Command& cmd)
 void
 Dtu::startMemoryRead(const Command& cmd)
 {
+    unsigned targetCoreId = regFile.readEpReg(cmd.epId, EpReg::TGT_COREID);
     Addr requestSize = regFile.readEpReg(cmd.epId, EpReg::REQ_SIZE);
     Addr remoteAddr = regFile.readEpReg(cmd.epId, EpReg::REQ_REM_ADDR);
     remoteAddr += cmd.offset;
@@ -265,11 +266,12 @@ Dtu::startMemoryRead(const Command& cmd)
     assert(requestSize < maxNocPacketSize);
 
     DPRINTF(Dtu, "Endpoint %u starts memory read.\n", cmd.epId);
-    DPRINTF(Dtu, "Read %u bytes from global address %#x\n",
+    DPRINTF(Dtu, "Read %u bytes at %#x of PE%u\n",
                  requestSize,
-                 remoteAddr);
+                 remoteAddr,
+                 targetCoreId);
 
-    auto pkt = generateRequest(remoteAddr, requestSize, MemCmd::ReadReq);
+    auto pkt = generateRequest(getNocAddr(targetCoreId) | remoteAddr, requestSize, MemCmd::ReadReq);
 
     sendNocRequest(pkt,
                    commandToNocRequestLatency,
