@@ -198,6 +198,7 @@ for i in range(0, options.num_pes + 1):
 
     if i < options.num_pes and i < len(cmd_list):
         pe.cpu = CPUClass()
+        pe.cpu.cpu_id = 0
         pe.cpu.clk_domain = root.cpu_clk_domain
 
         process = LiveProcess()

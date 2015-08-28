@@ -68,7 +68,7 @@ Dtu::translate(Addr vaddr)
     Addr paddr = vaddr;
     if (usePTable)
     {
-        M5_VAR_USED auto pTable = system->threadContexts[coreId]->getProcessPtr()->pTable;
+        M5_VAR_USED auto pTable = system->threadContexts[0]->getProcessPtr()->pTable;
         assert(pTable != nullptr);
         assert(pTable->translate(vaddr, paddr));
     }
