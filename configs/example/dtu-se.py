@@ -57,8 +57,6 @@ parser.add_option("--cpu-type", type="choice", default="atomic",
 
 parser.add_option("-c", "--cmd", default="", type="string",
                   help="comma separated list of binaries")
-parser.add_option("--memcmd", default="", type="string",
-                  help="binary for the memory-PE")
 parser.add_option("--init_mem", default="", type="string",
                   help="file to load into the memory-PE")
 
@@ -188,10 +186,6 @@ for i in range(0, options.num_pes + 1):
     pe.scratchpad = Scratchpad(in_addr_map = "true")
     pe.scratchpad.cpu_port = pe.xbar.master
 
-    if i == options.num_pes:
-        pe.scratchpad.init_file = options.init_mem
-        print 'PE%d: %s' % (i, options.init_mem)
-
     pe.dtu = Dtu()
     pe.dtu.core_id = i
     pe.dtu.spm_master_port = pe.scratchpad.dtu_port
@@ -202,29 +196,30 @@ for i in range(0, options.num_pes + 1):
 
     pe.system_port = pe.xbar.slave
 
-    pe.cpu = CPUClass()
-    pe.cpu.clk_domain = root.cpu_clk_domain
+    if i < options.num_pes and i < len(cmd_list):
+        pe.cpu = CPUClass()
+        pe.cpu.clk_domain = root.cpu_clk_domain
 
-    process = LiveProcess()
-    process.cwd = os.getcwd()
+        process = LiveProcess()
+        process.cwd = os.getcwd()
 
-    if i < len(cmd_list):
         process.cmd = cmd_list[i].split(' ')
         pe.dtu.use_ptable = 'true'
-    else:
-        process.cmd = options.memcmd
-    process.executable = process.cmd[0]
-    print "PE%d: %s" % (i, process.cmd)
+        process.executable = process.cmd[0]
+        print "PE%d: %s" % (i, process.cmd)
 
-    #process.use_init_port = 'true'
-    #process.init_port = pe.xbar.slave
+        #process.use_init_port = 'true'
+        #process.init_port = pe.xbar.slave
 
-    pe.cpu.workload = process;
+        pe.cpu.workload = process;
 
-    pe.cpu.createInterruptController()
-    pe.cpu.connectAllPorts(pe.xbar)
+        pe.cpu.createInterruptController()
+        pe.cpu.connectAllPorts(pe.xbar)
 
-    workload_list.append(pe.cpu.workload)
+        workload_list.append(pe.cpu.workload)
+    elif i >= options.num_pes:
+        pe.scratchpad.init_file = options.init_mem
+        print 'PE%d: %s' % (i, options.init_mem)
 
 # Instantiate configuration
 m5.instantiate()

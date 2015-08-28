@@ -190,6 +190,10 @@ Dtu::sendSpmRequest(PacketPtr pkt,
     auto senderState = new SpmSenderState();
     senderState->epId = epId;
     senderState->packetType = packetType;
+    senderState->mid = pkt->req->masterId();
+
+    // ensure that this packet has our master id (not the id of a master in a different PE)
+    pkt->req->setMasterId(masterId);
 
     pkt->pushSenderState(senderState);
 
@@ -415,6 +419,9 @@ Dtu::completeSpmRequest(PacketPtr pkt)
     DPRINTF(DtuDetail, "Received response from scratchpad.\n");
 
     auto senderState = dynamic_cast<SpmSenderState*>(pkt->popSenderState());
+
+    // set the old master id again
+    pkt->req->setMasterId(senderState->mid);
 
     switch (senderState->packetType)
     {

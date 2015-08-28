@@ -75,6 +75,7 @@ class Dtu : public BaseDtu
     {
         SpmPacketType packetType;
         unsigned epId; // only valid if packetType != SpmPacketType::FORWARDER_REUEST
+        MasterID mid;
     };
 
     struct NocSenderState : public Packet::SenderState

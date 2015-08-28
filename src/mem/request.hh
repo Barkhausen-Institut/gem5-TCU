@@ -510,6 +510,9 @@ class Request
     {
         return _masterId;
     }
+    void setMasterId(MasterID mid) {
+        _masterId = mid;
+    }
 
     uint32_t
     taskId() const
