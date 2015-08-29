@@ -60,6 +60,7 @@ if env['TARGET_ISA'] == 'x86':
     Source('linux/linux.cc')
     Source('linux/process.cc')
     Source('linux/system.cc')
+    Source('m3/system.cc')
     Source('nativetrace.cc')
     Source('pagetable.cc')
     Source('pagetable_walker.cc')
@@ -73,6 +74,7 @@ if env['TARGET_ISA'] == 'x86':
     Source('utility.cc')
     Source('vtophys.cc')
 
+    SimObject('M3X86System.py')
     SimObject('X86ISA.py')
     SimObject('X86LocalApic.py')
     SimObject('X86NativeTrace.py')

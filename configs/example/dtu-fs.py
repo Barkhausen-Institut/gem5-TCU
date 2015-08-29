@@ -192,7 +192,7 @@ if cmd_list[len(cmd_list) - 1] == '':
 for i in range(0, len(cmd_list)):
 
     # each PE is represented by it's own subsystem
-    pe = X86System(mem_mode = CPUClass.memory_mode())
+    pe = M3X86System(mem_mode = CPUClass.memory_mode())
     setattr(root, 'pe%d' % i, pe)
 
     # TODO set latencies
@@ -222,6 +222,7 @@ for i in range(0, len(cmd_list)):
 
         # Command line
         pe.kernel = cmd_list[i].split(' ')[0]
+        pe.boot_osflags = cmd_list[i]
         pe.dtu.use_ptable = 'false'
         print "PE%d: %s" % (i, cmd_list[i])
 
