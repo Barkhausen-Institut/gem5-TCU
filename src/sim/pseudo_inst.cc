@@ -573,12 +573,12 @@ writefile(ThreadContext *tc, Addr vaddr, uint64_t len, uint64_t offset,
         //  intact, otherwise existing data will be zeroed out.)
         os = simout.openFile(simout.directory() + filename,
                             ios::in | ios::out | ios::binary);
+
+        // seek to offset
+        os->seekp(offset);
     }
     if (!os)
         panic("could not open file %s\n", filename);
-
-    // seek to offset
-    os->seekp(offset);
 
     // copy out data and write to file
     char *buf = new char[len];
