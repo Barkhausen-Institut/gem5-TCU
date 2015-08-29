@@ -138,6 +138,37 @@ if CPUClass.require_caches():
 #                                                                             #
 ###############################################################################
 
+def createPE(no, mem=False):
+    # each PE is represented by it's own subsystem
+    if mem:
+        pe = System(mem_mode = CPUClass.memory_mode())
+    else:
+        pe = M3X86System(mem_mode = CPUClass.memory_mode())
+    setattr(root, 'pe%d' % no, pe)
+
+    # TODO set latencies
+    pe.xbar = NoncoherentXBar(forward_latency  = 0,
+                              frontend_latency = 0,
+                              response_latency = 1,
+                              width = 8,
+                             )
+
+    pe.scratchpad = Scratchpad(in_addr_map = "true")
+    pe.scratchpad.cpu_port = pe.xbar.master
+
+    pe.dtu = Dtu()
+    pe.dtu.core_id = no
+    pe.dtu.spm_master_port = pe.scratchpad.dtu_port
+    pe.dtu.cpu_slave_port = pe.xbar.master
+
+    pe.dtu.noc_master_port = root.noc.slave
+    pe.dtu.noc_slave_port  = root.noc.master
+
+    pe.system_port = pe.xbar.slave
+
+    return pe
+
+
 # Set up the system
 root = Root(full_system = True)
 
@@ -191,58 +222,34 @@ if cmd_list[len(cmd_list) - 1] == '':
 
 # currently, there is just one memory-PE
 for i in range(0, len(cmd_list)):
+    pe = createPE(i)
 
-    # each PE is represented by it's own subsystem
-    pe = M3X86System(mem_mode = CPUClass.memory_mode())
-    setattr(root, 'pe%d' % i, pe)
+    pe.cpu = CPUClass()
+    pe.cpu.cpu_id = 0
+    pe.cpu.clk_domain = root.cpu_clk_domain
 
-    # TODO set latencies
-    pe.xbar = NoncoherentXBar(forward_latency  = 0,
-                              frontend_latency = 0,
-                              response_latency = 1,
-                              width = 8,
-                             )
+    # Command line
+    pe.kernel = cmd_list[i].split(' ')[0]
+    pe.boot_osflags = cmd_list[i]
+    pe.dtu.use_ptable = 'false'
+    print "PE%d: %s" % (i, cmd_list[i])
 
-    pe.scratchpad = Scratchpad(in_addr_map = "true")
-    pe.scratchpad.cpu_port = pe.xbar.master
+    # connect the IO space via bridge to the root NoC
+    pe.bridge = Bridge(delay='50ns')
+    pe.bridge.master = root.noc.slave
+    pe.bridge.slave = pe.xbar.master
+    pe.bridge.ranges = \
+        [
+        AddrRange(IO_address_space_base,
+                  interrupts_address_space_base - 1)
+        ]
 
-    pe.dtu = Dtu()
-    pe.dtu.core_id = i
-    pe.dtu.spm_master_port = pe.scratchpad.dtu_port
-    pe.dtu.cpu_slave_port = pe.xbar.master
+    pe.cpu.createInterruptController()
+    pe.cpu.connectAllPorts(pe.xbar)
 
-    pe.dtu.noc_master_port = root.noc.slave
-    pe.dtu.noc_slave_port  = root.noc.master
-
-    pe.system_port = pe.xbar.slave
-
-    if i < options.num_pes and i < len(cmd_list):
-        pe.cpu = CPUClass()
-        pe.cpu.cpu_id = 0
-        pe.cpu.clk_domain = root.cpu_clk_domain
-
-        # Command line
-        pe.kernel = cmd_list[i].split(' ')[0]
-        pe.boot_osflags = cmd_list[i]
-        pe.dtu.use_ptable = 'false'
-        print "PE%d: %s" % (i, cmd_list[i])
-
-        # connect the IO space via bridge to the root NoC
-        pe.bridge = Bridge(delay='50ns')
-        pe.bridge.master = root.noc.slave
-        pe.bridge.slave = pe.xbar.master
-        pe.bridge.ranges = \
-            [
-            AddrRange(IO_address_space_base,
-                      interrupts_address_space_base - 1)
-            ]
-
-        pe.cpu.createInterruptController()
-        pe.cpu.connectAllPorts(pe.xbar)
-
-    # elif i >= options.num_pes:
-    #     pe.scratchpad.init_file = options.init_mem
-    #     print 'PE%d: %s' % (i, options.init_mem)
+pe = createPE(options.num_pes, mem=True)
+pe.scratchpad.init_file = options.init_mem
+print 'PE%d: %s' % (options.num_pes, options.init_mem)
 
 # Instantiate configuration
 m5.instantiate()
