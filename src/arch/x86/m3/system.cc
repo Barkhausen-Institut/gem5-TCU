@@ -92,7 +92,7 @@ M3X86System::initState()
     X86System::initState();
 
     const Addr stateSize = 0x1000;
-    const Addr stateEnd = 0x1000000;
+    const Addr stateEnd = 0x1000000 - 0x2000;
     const Addr stateArea = stateEnd - stateSize;
 
     // write argc and argv
