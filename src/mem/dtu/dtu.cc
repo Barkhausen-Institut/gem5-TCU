@@ -94,6 +94,13 @@ Dtu::generateRequest(Addr paddr, Addr size, MemCmd cmd)
     return pkt;
 }
 
+void
+Dtu::freeRequest(PacketPtr pkt)
+{
+    delete pkt->req;
+    delete pkt;
+}
+
 Dtu::Command
 Dtu::getCommand()
 {
@@ -387,9 +394,7 @@ Dtu::completeNocRequest(PacketPtr pkt)
     else
         panic("unexpected packet type\n");
 
-    // clean up
-    delete pkt->req;
-    delete pkt;
+    freeRequest(pkt);
 }
 
 void
@@ -520,6 +525,7 @@ Dtu::sendNocMessage(const uint8_t* data,
         label        = h->replyLabel;
         // replies don't have replies. so, we don't need that
         replyLabel   = 0;
+        freeRequest(pkt);
     }
     else
     {
@@ -657,9 +663,7 @@ Dtu::completeLocalSpmRequest(PacketPtr pkt)
         // TODO error handling
         panic("Unexpected mode!\n");
 
-    // clean up
-    delete pkt->req;
-    delete pkt;
+    freeRequest(pkt);
 }
 
 void

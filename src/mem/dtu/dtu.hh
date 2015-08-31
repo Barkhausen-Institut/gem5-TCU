@@ -138,6 +138,7 @@ class Dtu : public BaseDtu
     Addr translate(Addr vaddr);
 
     PacketPtr generateRequest(Addr addr, Addr size, MemCmd cmd);
+    void freeRequest(PacketPtr pkt);
 
     Command getCommand();
 
