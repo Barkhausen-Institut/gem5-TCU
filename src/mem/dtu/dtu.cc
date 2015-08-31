@@ -105,9 +105,9 @@ Dtu::getCommand()
      * |  offset  |   epid   |  opcode  |
      * |--------------------------------|
      */
-    reg_t opcodeMask = (1 << numCmdOpcodeBits) - 1;
-    reg_t epidMask   = ((1 << numCmdEpidBits) - 1) << numCmdOpcodeBits;
-    reg_t offsetMask = ((1 << numCmdOffsetBits) - 1) << (numCmdOpcodeBits + numCmdEpidBits);
+    reg_t opcodeMask = ((reg_t)1 << numCmdOpcodeBits) - 1;
+    reg_t epidMask   = (((reg_t)1 << numCmdEpidBits) - 1) << numCmdOpcodeBits;
+    reg_t offsetMask = (((reg_t)1 << numCmdOffsetBits) - 1) << (numCmdOpcodeBits + numCmdEpidBits);
 
     auto reg = regFile.readDtuReg(DtuReg::COMMAND);
 
