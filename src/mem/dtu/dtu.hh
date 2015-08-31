@@ -43,6 +43,7 @@ class Dtu : public BaseDtu
     {
         REPLY_FLAG = (1 << 0),
         GRANT_CREDITS_FLAG = (1 << 1),
+        REPLY_ENABLED = (1 << 2),
     };
 
     struct MessageHeader

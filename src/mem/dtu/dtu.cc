@@ -518,6 +518,7 @@ Dtu::sendNocMessage(const uint8_t* data,
         spmMasterPort.sendFunctional(pkt);
 
         auto h = pkt->getPtr<MessageHeader>();
+        assert(h->flags & REPLY_ENABLED);
 
         targetCoreId = h->senderCoreId;
         targetEpId   = h->replyEpId;  // send message to the reply EP
@@ -527,6 +528,17 @@ Dtu::sendNocMessage(const uint8_t* data,
         label        = h->replyLabel;
         // replies don't have replies. so, we don't need that
         replyLabel   = 0;
+
+        // disable replies for this message
+        auto hpkt = generateRequest(
+                translate(regFile.readEpReg(epid, EpReg::BUF_RD_PTR)),
+                sizeof(h->flags), MemCmd::WriteReq);
+        h->flags &= ~REPLY_ENABLED;
+        memcpy(hpkt->getPtr<uint8_t>(), &h->flags, sizeof(h->flags));
+
+        spmMasterPort.sendFunctional(hpkt);
+
+        freeRequest(hpkt);
         freeRequest(pkt);
     }
     else
@@ -558,7 +570,7 @@ Dtu::sendNocMessage(const uint8_t* data,
     if (isReply)
         header.flags = REPLY_FLAG | GRANT_CREDITS_FLAG;
     else
-        header.flags = 0; // normal message
+        header.flags = REPLY_ENABLED; // normal message
 
     header.senderCoreId = static_cast<uint8_t>(coreId);
     header.senderEpId   = static_cast<uint8_t>(epid);
@@ -588,7 +600,7 @@ Dtu::sendNocMessage(const uint8_t* data,
     delay += ticksToCycles(spmPktHeaderDelay);
 
     if (isReply)
-        delay += Cycles(2); // pay for the functional request
+        delay += Cycles(3); // pay for the functional request
                             // TODO check value
 
     pkt->payloadDelay = spmPktPayloadDelay;
