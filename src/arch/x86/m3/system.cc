@@ -49,7 +49,8 @@ M3X86System::~M3X86System()
 {
 }
 
-size_t M3X86System::getArgc() const
+size_t
+M3X86System::getArgc() const
 {
     const char *cmd = commandLine.c_str();
     size_t argc = 0;
@@ -72,7 +73,8 @@ size_t M3X86System::getArgc() const
     return argc;
 }
 
-void M3X86System::writeArg(Addr &args, size_t &i, Addr argv, const char *cmd, const char *begin) const
+void
+M3X86System::writeArg(Addr &args, size_t &i, Addr argv, const char *cmd, const char *begin) const
 {
     const char zero[] = {0};
     // write argument pointer

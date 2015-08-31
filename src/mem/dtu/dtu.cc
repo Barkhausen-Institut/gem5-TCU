@@ -841,7 +841,8 @@ DtuParams::create()
     return new Dtu(this);
 }
 
-void Dtu::printPacket(PacketPtr pkt) const
+void
+Dtu::printPacket(PacketPtr pkt) const
 {
     DDUMP(DtuPackets, pkt->getPtr<uint8_t>(), pkt->getSize());
 }
