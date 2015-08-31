@@ -78,7 +78,7 @@ RegFile::getRegAddr(EpReg reg, unsigned epid)
     return result;
 }
 
-RegFile::RegFile(const std::string name, unsigned _numEndpoints)
+RegFile::RegFile(const std::string& name, unsigned _numEndpoints)
     : dtuRegs(numDtuRegs, 0),
       epRegs(_numEndpoints),
       numEndpoints(_numEndpoints),

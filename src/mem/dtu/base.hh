@@ -116,7 +116,7 @@ class BaseDtu : public MemObject
 
       public:
 
-        DtuSlavePort(const std::string _name, BaseDtu& _dtu);
+        DtuSlavePort(const std::string& _name, BaseDtu& _dtu);
 
         virtual void handleRequest(PacketPtr pkt) = 0;
 

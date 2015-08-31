@@ -60,7 +60,7 @@ BaseDtu::SpmMasterPort::completeRequest(PacketPtr pkt)
     dtu.completeSpmRequest(pkt);
 }
 
-BaseDtu::DtuSlavePort::DtuSlavePort(const std::string _name, BaseDtu& _dtu)
+BaseDtu::DtuSlavePort::DtuSlavePort(const std::string& _name, BaseDtu& _dtu)
   : SlavePort(_name, &_dtu),
     dtu(_dtu),
     busy(false),

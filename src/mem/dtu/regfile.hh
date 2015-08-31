@@ -100,7 +100,7 @@ class RegFile
 
   public:
 
-    RegFile(const std::string name, unsigned numEndpoints);
+    RegFile(const std::string& name, unsigned numEndpoints);
 
     reg_t readDtuReg(DtuReg reg) const;
 
