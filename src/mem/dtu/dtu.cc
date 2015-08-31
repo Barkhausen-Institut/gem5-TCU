@@ -755,6 +755,7 @@ Dtu::recvNocMessage(PacketPtr pkt)
         header->senderCoreId, header->length, epId, spmAddr);
     printPacket(pkt);
 
+    // Note that replyEpId is the Id of *our* sending EP
     if (header->flags & REPLY_FLAG &&
         header->flags & GRANT_CREDITS_FLAG &&
         header->replyEpId < numEndpoints)
