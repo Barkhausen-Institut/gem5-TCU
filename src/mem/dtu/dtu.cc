@@ -139,6 +139,9 @@ Dtu::executeCommand()
     case CommandOpcode::INC_READ_PTR:
         incrementReadPtr(cmd.epId);
         break;
+    case CommandOpcode::WAKEUP_CORE:
+        wakeupCore();
+        break;
     default:
         // TODO error handling
         panic("Invalid opcode %#x\n", static_cast<RegFile::reg_t>(cmd.opcode));
@@ -356,6 +359,13 @@ Dtu::incrementWritePtr(unsigned epId)
 
     regFile.setEpReg(epId, EpReg::BUF_WR_PTR, writePtr);
     regFile.setEpReg(epId, EpReg::BUF_MSG_CNT, messageCount + 1);
+}
+
+void
+Dtu::wakeupCore() {
+    DPRINTF(Dtu, "Waking up core\n");
+
+    system->threadContexts[0]->activate();
 }
 
 void

@@ -89,6 +89,7 @@ class Dtu : public BaseDtu
         IDLE = 0,
         START_OPERATION = 1,
         INC_READ_PTR = 2,
+        WAKEUP_CORE = 3,
     };
 
     static constexpr unsigned numCmdOpcodeBits = 2;
@@ -162,6 +163,8 @@ class Dtu : public BaseDtu
     void incrementReadPtr(unsigned epId);
 
     void incrementWritePtr(unsigned epId);
+
+    void wakeupCore();
 
     struct IncrementWritePtrEvent : public Event
     {
