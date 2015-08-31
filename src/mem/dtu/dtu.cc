@@ -752,7 +752,7 @@ Dtu::recvNocMessage(PacketPtr pkt)
     Addr spmAddr = regFile.readEpReg(epId, EpReg::BUF_WR_PTR);
 
     DPRINTF(Dtu, "\e[1m[rv <- %u]\e[0m %lu bytes on EP%u to %#018lx\n",
-        header->senderCoreId, header->length, header->senderEpId, spmAddr);
+        header->senderCoreId, header->length, epId, spmAddr);
     printPacket(pkt);
 
     if (header->flags & REPLY_FLAG &&
