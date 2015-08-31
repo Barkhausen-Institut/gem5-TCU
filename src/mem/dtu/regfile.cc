@@ -55,6 +55,7 @@ const char *RegFile::epRegNames[] = {
     "REPLY_LABEL",
     "REQ_LOC_ADDR",
     "REQ_REM_ADDR",
+    "REQ_REM_SIZE",
     "REQ_SIZE",
     "CREDITS",
 };

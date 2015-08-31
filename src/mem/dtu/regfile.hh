@@ -65,12 +65,13 @@ enum class EpReg : Addr
     // for memory requests
     REQ_LOC_ADDR,
     REQ_REM_ADDR,
+    REQ_REM_SIZE,
     REQ_SIZE,
 
     CREDITS,
 };
 
-constexpr unsigned numEpRegs = 18;
+constexpr unsigned numEpRegs = 19;
 
 class RegFile
 {

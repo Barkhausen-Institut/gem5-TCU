@@ -268,14 +268,18 @@ Dtu::startMemoryRead(const Command& cmd)
     Addr localAddr = regFile.readEpReg(cmd.epId, EpReg::REQ_LOC_ADDR);
     Addr requestSize = regFile.readEpReg(cmd.epId, EpReg::REQ_SIZE);
     Addr remoteAddr = regFile.readEpReg(cmd.epId, EpReg::REQ_REM_ADDR);
-    remoteAddr += cmd.offset;
+    Addr remoteSize = regFile.readEpReg(cmd.epId, EpReg::REQ_REM_SIZE);
 
-    DPRINTF(Dtu, "\e[1m[rd -> %u]\e[0m with EP%u into %#018lx:%lu\n",
-        targetCoreId, cmd.epId, localAddr, requestSize);
+    DPRINTF(Dtu, "\e[1m[rd -> %u]\e[0m at offset %#018lx with EP%u into %#018lx:%lu\n",
+        targetCoreId, cmd.offset, cmd.epId, localAddr, requestSize);
 
     // TODO error handling
     assert(requestSize > 0);
+    assert(requestSize + cmd.offset >= requestSize);
+    assert(requestSize + cmd.offset <= remoteSize);
     //assert(requestSize < maxNocPacketSize);
+
+    remoteAddr += cmd.offset;
 
     auto pkt = generateRequest(getNocAddr(targetCoreId) | remoteAddr, requestSize, MemCmd::ReadReq);
 
@@ -291,8 +295,8 @@ Dtu::startMemoryWrite(const Command& cmd)
     Addr localAddr = regFile.readEpReg(cmd.epId, EpReg::REQ_LOC_ADDR);
     Addr requestSize = regFile.readEpReg(cmd.epId, EpReg::REQ_SIZE);
 
-    DPRINTF(Dtu, "\e[1m[wr -> %u]\e[0m with EP%u from %#018lx:%lu\n",
-        targetCoreId, cmd.epId, localAddr, requestSize);
+    DPRINTF(Dtu, "\e[1m[wr -> %u]\e[0m at offset %#018lx with EP%u from %#018lx:%lu\n",
+        targetCoreId, cmd.offset, cmd.epId, localAddr, requestSize);
 
     // TODO error handling
     assert(requestSize > 0);
@@ -595,17 +599,21 @@ Dtu::sendNocMemoryWriteRequest(const uint8_t* data,
 
     unsigned targetCoreId = regFile.readEpReg(epId, EpReg::TGT_COREID);
     Addr targetAddr = regFile.readEpReg(epId, EpReg::REQ_REM_ADDR);
-    targetAddr += cmd.offset;
+    Addr remoteSize = regFile.readEpReg(epId, EpReg::REQ_REM_SIZE);
 
     DPRINTF(DtuDetail, "Send %lu bytes to address %#018lx in PE%u.\n",
                  requestSize,
-                 targetAddr,
+                 targetAddr + cmd.offset,
                  targetCoreId);
 
+    // TODO error handling
+    assert(requestSize > 0);
     assert(requestSize == regFile.readEpReg(epId, EpReg::REQ_SIZE));
+    assert(requestSize + cmd.offset >= requestSize);
+    assert(requestSize + cmd.offset <= remoteSize);
     //assert(requestSize <= maxNocPacketSize);
 
-    auto pkt = generateRequest(getNocAddr(targetCoreId) | targetAddr,
+    auto pkt = generateRequest(getNocAddr(targetCoreId) | (targetAddr + cmd.offset),
                                requestSize,
                                MemCmd::WriteReq);
     memcpy(pkt->getPtr<uint8_t>(),
