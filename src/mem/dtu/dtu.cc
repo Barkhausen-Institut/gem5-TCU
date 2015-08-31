@@ -331,9 +331,10 @@ Dtu::incrementReadPtr(unsigned epId)
     if (readPtr >= bufferAddr + bufferSize * maxMessageSize)
         readPtr = bufferAddr;
 
-    DPRINTF(DtuDetail, "EP%u: Increment the read pointer to %#018lx\n",
+    DPRINTF(DtuDetail, "EP%u: Increment the read pointer to %#018lx [msgCount=%u]\n",
                  epId,
-                 readPtr);
+                 readPtr,
+                 messageCount - 1);
 
     // TODO error handling
     assert(messageCount != 0);
@@ -362,9 +363,10 @@ Dtu::incrementWritePtr(unsigned epId)
     if (writePtr >= bufferAddr + bufferSize * maxMessageSize)
         writePtr = bufferAddr;
 
-    DPRINTF(DtuDetail, "EP%u: Increment the write pointer to %#018lx\n",
+    DPRINTF(DtuDetail, "EP%u: Increment the write pointer to %#018lx [msgCount=%u]\n",
                  epId,
-                 writePtr);
+                 writePtr,
+                 messageCount + 1);
 
     assert(messageCount < bufferSize);
 
