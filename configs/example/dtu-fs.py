@@ -77,6 +77,13 @@ parser.add_option("--mem-channels", type="int", default=1,
 parser.add_option("--mem-ranks", type="int", default=None,
                   help = "number of memory ranks per channel")
 
+parser.add_option("--watch-pe", type="int", default=-1,
+                  help = "the PE number for memory watching")
+parser.add_option("--watch-start", type="int", default=0,
+                  help = "The start address of the address range to watch")
+parser.add_option("--watch-end", type="int", default=0,
+                  help = "The end address of the address range to watch (exclusive")
+
 parser.add_option("--sys-voltage", action="store", type="string",
                   default='1.0V',
                   help = """Top-level voltage for blocks running at system
@@ -155,6 +162,11 @@ def createPE(no, mem=False):
 
     pe.scratchpad = Scratchpad(in_addr_map = "true")
     pe.scratchpad.cpu_port = pe.xbar.master
+
+    if options.watch_pe == no:
+      print "PE%u: watching memory %#x..%#x" % (no, options.watch_start, options.watch_end)
+      pe.scratchpad.watch_range_start = options.watch_start
+      pe.scratchpad.watch_range_end = options.watch_end
 
     pe.dtu = Dtu()
     pe.dtu.core_id = no

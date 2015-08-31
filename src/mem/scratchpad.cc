@@ -27,6 +27,7 @@
  * either expressed or implied, of the FreeBSD Project.
  */
 
+#include "debug/MemoryWatch.hh"
 #include "mem/scratchpad.hh"
 
 Scratchpad::Scratchpad(const ScratchpadParams* p)
@@ -35,8 +36,11 @@ Scratchpad::Scratchpad(const ScratchpadParams* p)
     dtuPort(name() + ".dtu_port", *this),
     latency(p->latency),
     throughput(p->throughput),
-    initFile(p->init_file)
+    initFile(p->init_file),
+    watchRange(1, 0)
 {
+    if(p->watch_range_start != p->watch_range_end)
+        watchRange = AddrRange(p->watch_range_start, p->watch_range_end - 1);
 }
 
 void
@@ -98,6 +102,18 @@ Scratchpad::recvAtomic(PacketPtr pkt)
 
     // let subclass handle the request
     access(pkt);
+
+    if(watchRange.valid())
+    {
+        AddrRange range(pkt->getAddr(), pkt->getAddr() + pkt->getSize() - 1);
+        if(watchRange.intersects(range))
+        {
+            DPRINTF(MemoryWatch, "%s access to address range %p..%p (watching %p..%p)\n",
+                pkt->isRead() ? "read" : "write", range.start(), range.end(),
+                watchRange.start(), watchRange.end());
+            DDUMP(MemoryWatch, pkt->getPtr<uint8_t>(), pkt->getSize());
+        }
+    }
 
     unsigned cyclesNeeded = round(((float) pkt->getSize()) / ((float)throughput));
     unsigned payloadDelay = clockPeriod() * cyclesNeeded;

@@ -110,3 +110,5 @@ DebugFlag("DRAMSim2")
 
 DebugFlag("MemChecker")
 DebugFlag("MemCheckerMonitor")
+
+DebugFlag("MemoryWatch")

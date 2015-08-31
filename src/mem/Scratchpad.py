@@ -44,6 +44,9 @@ class Scratchpad(AbstractMemory):
 
     init_file = Param.String("", "File that should be loaded into the scratchpad")
 
+    watch_range_start = Param.Addr(0x0, "The start address of the address range to watch")
+    watch_range_end = Param.Addr(0x0, "The end address of the address range to watch (exclusive)")
+
     # TODO check what these options actually mean, switch them off for now
     in_addr_map = False
     conf_table_reported = False

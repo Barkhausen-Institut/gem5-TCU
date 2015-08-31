@@ -65,6 +65,8 @@ class Scratchpad : public AbstractMemory
 
     const std::string initFile;
 
+    AddrRange watchRange;
+
   protected:
 
     Tick recvAtomic(PacketPtr pkt);
