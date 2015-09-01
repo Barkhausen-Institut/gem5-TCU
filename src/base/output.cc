@@ -99,7 +99,10 @@ OutputDirectory::openFile(const string &filename,
 void
 OutputDirectory::close(ostream *openStream) {
     if (openStream == &std::cout || openStream == &std::cerr)
+    {
+        openStream->flush();
         return;
+    }
 
     map_t::iterator i;
     for (i = files.begin(); i != files.end(); i++) {
