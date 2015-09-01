@@ -40,8 +40,8 @@ class BaseDtu(MemObject):
     noc_master_port = MasterPort("DTU master port")
     noc_slave_port  = SlavePort("DTU slave port")
 
-    regfile_base_addr = Param.Addr(0x1000000, "Register file address")
-    noc_addr_width = Param.Unsigned(32, "NoC address width")
+    regfile_base_addr = Param.Addr(0xF0000000, "Register file address")
+    noc_addr_width = Param.Unsigned(63, "NoC address width")
     noc_core_addr_bits = Param.Unsigned(5, "Number of bits used to address a core")
     noc_ep_addr_bits = Param.Unsigned(5, "Number of bits used address an endpoint within a core")
     core_id = Param.Unsigned("ID of the core this DTU belongs to")

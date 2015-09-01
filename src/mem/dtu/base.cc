@@ -290,7 +290,7 @@ BaseDtu::getNocAddr(unsigned coreId, unsigned epId) const
     assert(nocCoreAddrBits + nocEpAddrBits + 1 <= nocAddrWidth);
 
     // MSB is always 1
-    Addr res = 1UL << (nocAddrWidth - 1);
+    Addr res = static_cast<Addr>(1) << (nocAddrWidth - 1);
 
     res |= static_cast<Addr>(coreId) << (nocAddrWidth  - nocCoreAddrBits - 1);
 

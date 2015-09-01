@@ -236,6 +236,9 @@ if cmd_list[len(cmd_list) - 1] == '':
 for i in range(0, len(cmd_list)):
     pe = createPE(i)
 
+    # for now, a bit more to be able to put every application at a different address
+    pe.scratchpad.range = 4 * 1024 * 1024
+
     pe.cpu = CPUClass()
     pe.cpu.cpu_id = 0
     pe.cpu.clk_domain = root.cpu_clk_domain
@@ -244,7 +247,8 @@ for i in range(0, len(cmd_list)):
     pe.kernel = cmd_list[i].split(' ')[0]
     pe.boot_osflags = cmd_list[i]
     pe.dtu.use_ptable = 'false'
-    print "PE%d: %s" % (i, cmd_list[i])
+    print 'PE%d: memsize=%d KiB' % (i, int(pe.scratchpad.range.end) / 1024)
+    print "PE%d: cmdline=%s" % (i, cmd_list[i])
 
     # connect the IO space via bridge to the root NoC
     pe.bridge = Bridge(delay='50ns')
@@ -260,8 +264,10 @@ for i in range(0, len(cmd_list)):
     pe.cpu.connectAllPorts(pe.xbar)
 
 pe = createPE(options.num_pes, mem=True)
+pe.scratchpad.range = MemorySize(options.mem_size).value
 pe.scratchpad.init_file = options.init_mem
-print 'PE%d: %s' % (options.num_pes, options.init_mem)
+print 'PE%d: memsize=%d KiB' % (options.num_pes, int(pe.scratchpad.range.end) / 1024)
+print 'PE%d: content=%s' % (options.num_pes, options.init_mem)
 
 # Instantiate configuration
 m5.instantiate()

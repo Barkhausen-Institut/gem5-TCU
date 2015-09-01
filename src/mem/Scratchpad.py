@@ -33,7 +33,7 @@ class Scratchpad(AbstractMemory):
     type = 'Scratchpad'
     cxx_header = 'mem/scratchpad.hh'
 
-    range = 0x1000000 # default size 16MiB
+    range = 128 * 1024 # default size 128K
 
     cpu_port = SlavePort("Slave port CPU side")
     dtu_port = SlavePort("Slave port DTU side")
