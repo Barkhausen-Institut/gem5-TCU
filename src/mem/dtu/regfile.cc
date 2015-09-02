@@ -36,6 +36,7 @@
 const char *RegFile::dtuRegNames[] = {
     "COMMAND",
     "STATUS",
+    "MSG_CNT",
 };
 
 const char *RegFile::epRegNames[] = {
@@ -133,6 +134,14 @@ RegFile::setEpReg(unsigned epid, EpReg reg, reg_t value)
                     epid,
                     epRegNames[static_cast<Addr>(reg)],
                     value);
+
+    // update global message count
+    if(reg == EpReg::BUF_MSG_CNT)
+    {
+        reg_t diff = value - epRegs[epid][static_cast<Addr>(reg)];
+        reg_t old = dtuRegs[static_cast<Addr>(DtuReg::MSG_CNT)];
+        setDtuReg(DtuReg::MSG_CNT, old + diff);
+    }
 
     epRegs[epid][static_cast<Addr>(reg)] = value;
 }

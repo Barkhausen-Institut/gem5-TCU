@@ -40,9 +40,10 @@ enum class DtuReg : Addr
 {
     COMMAND,
     STATUS,
+    MSG_CNT,
 };
 
-constexpr unsigned numDtuRegs = 2;
+constexpr unsigned numDtuRegs = 3;
 
 enum class EpReg : Addr
 {

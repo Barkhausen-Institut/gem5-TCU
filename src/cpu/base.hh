@@ -256,6 +256,12 @@ class BaseCPU : public MemObject
     };
     ProfileEvent *profileEvent;
 
+  public:
+    // this is a pin on the CPU that is set/unset by the DTU in order to tell the
+    // CPU whether it is allowed to sleep currently. if set, the DTU still has messages
+    // to process, in which case the CPU will deny a suspend request.
+    bool _denySuspend;
+
   protected:
     std::vector<ThreadContext *> threadContexts;
 

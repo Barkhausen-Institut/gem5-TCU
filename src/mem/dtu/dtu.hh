@@ -167,6 +167,8 @@ class Dtu : public BaseDtu
     void incrementWritePtr(unsigned epId);
 
     void wakeupCore();
+    
+    void updateSuspendablePin();
 
     void forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest);
 

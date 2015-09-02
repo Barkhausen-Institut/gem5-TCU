@@ -35,6 +35,8 @@
 #include "debug/DtuBuf.hh"
 #include "debug/DtuDetail.hh"
 #include "debug/DtuPackets.hh"
+#include "debug/DtuPower.hh"
+#include "cpu/simple/base.hh"
 #include "mem/dtu/dtu.hh"
 #include "mem/page_table.hh"
 #include "sim/system.hh"
@@ -347,6 +349,8 @@ Dtu::incrementReadPtr(unsigned epId)
 
     regFile.setEpReg(epId, EpReg::BUF_RD_PTR, readPtr);
     regFile.setEpReg(epId, EpReg::BUF_MSG_CNT, messageCount - 1);
+
+    updateSuspendablePin();
 }
 
 void
@@ -373,13 +377,31 @@ Dtu::incrementWritePtr(unsigned epId)
 
     regFile.setEpReg(epId, EpReg::BUF_WR_PTR, writePtr);
     regFile.setEpReg(epId, EpReg::BUF_MSG_CNT, messageCount + 1);
+
+    // set deny-suspend pin at CPU
+    system->threadContexts[0]->getCpuPtr()->_denySuspend = true;
+
+    wakeupCore();
 }
 
 void
-Dtu::wakeupCore() {
-    DPRINTF(Dtu, "Waking up core\n");
+Dtu::wakeupCore()
+{
+    if(system->threadContexts[0]->status() == ThreadContext::Suspended)
+    {
+        DPRINTF(DtuPower, "Waking up core\n");
+        system->threadContexts[0]->activate();
+    }
+}
 
-    system->threadContexts[0]->activate();
+void
+Dtu::updateSuspendablePin()
+{
+    bool pendingMsgs = regFile.readDtuReg(DtuReg::MSG_CNT) > 0;
+    bool hadPending = system->threadContexts[0]->getCpuPtr()->_denySuspend;
+    system->threadContexts[0]->getCpuPtr()->_denySuspend = pendingMsgs;
+    if(hadPending && !pendingMsgs)
+        DPRINTF(DtuPower, "Core can be suspended\n");
 }
 
 void
@@ -823,6 +845,8 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
     pkt->setAddr(pkt->getAddr() - regFileBaseAddr);
 
     bool commandWritten = regFile.handleRequest(pkt);
+
+    updateSuspendablePin();
 
     if (!atomicMode)
     {

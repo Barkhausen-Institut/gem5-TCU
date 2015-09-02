@@ -129,7 +129,7 @@ BaseCPU::BaseCPU(Params *p, bool is_checker)
       _dataMasterId(p->system->getMasterId(name() + ".data")),
       _taskId(ContextSwitchTaskId::Unknown), _pid(Request::invldPid),
       _switchedOut(p->switched_out), _cacheLineSize(p->system->cacheLineSize()),
-      interrupts(p->interrupts), profileEvent(NULL),
+      interrupts(p->interrupts), profileEvent(NULL), _denySuspend(false),
       numThreads(p->numThreads), system(p->system),
       functionTraceStream(nullptr), currentFunctionStart(0),
       currentFunctionEnd(0), functionEntryTick(0),
