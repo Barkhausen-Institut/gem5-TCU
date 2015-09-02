@@ -31,6 +31,7 @@
 #define __CPU_DTUTEST_DTUTEST_HH__
 
 #include "params/DtuTest.hh"
+#include "mem/dtu/regfile.hh"
 #include "sim/system.hh"
 
 class DtuTest : public MemObject
@@ -90,13 +91,19 @@ class DtuTest : public MemObject
     /// Stores the Packet for later retry
     PacketPtr retryPkt;
 
-    PacketPtr createDtuRegisterPkt(Addr reg, uint32_t value, MemCmd cmd);
+    PacketPtr createDtuRegisterPkt(Addr reg, RegFile::reg_t value, MemCmd cmd);
 
     bool sendPkt(PacketPtr pkt);
 
     void completeRequest(PacketPtr pkt);
 
     void recvRetry();
+
+    static Addr getRegAddr(DtuReg reg);
+
+    static Addr getRegAddr(CmdReg reg);
+
+    static Addr getRegAddr(EpReg reg, unsigned epid);
 };
 
 #endif // __CPU_DTUTEST_DTUTEST_HH__

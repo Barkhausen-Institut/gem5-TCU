@@ -54,7 +54,6 @@ class Dtu(BaseDtu):
     num_endpoints = Param.Unsigned(8, "Number of enpoints per DTU")
 
     num_cmd_epid_bits = Param.Unsigned(8, "Number of bits used to identify the endpoint in a command")
-    num_cmd_offset_bits = Param.Unsigned(32, "Number of bits used for address offset on memory access")
 
     max_noc_packet_size = Param.MemorySize("512B", "Maximum size of a NoC packet")
 

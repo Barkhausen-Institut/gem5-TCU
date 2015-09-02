@@ -99,7 +99,6 @@ class Dtu : public BaseDtu
     {
         CommandOpcode opcode;
         unsigned epId;
-        Addr offset;
     };
 
     enum class EpMode
@@ -123,7 +122,6 @@ class Dtu : public BaseDtu
     Addr maxNocPacketSize;
 
     unsigned numCmdEpidBits;
-    unsigned numCmdOffsetBits;
 
     Cycles registerAccessLatency;
     Cycles commandToSpmRequestLatency;

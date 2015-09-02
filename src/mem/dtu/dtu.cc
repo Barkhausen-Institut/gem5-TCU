@@ -51,7 +51,6 @@ Dtu::Dtu(DtuParams* p)
     masterId(p->system->getMasterId(name())),
     maxNocPacketSize(p->max_noc_packet_size),
     numCmdEpidBits(p->num_cmd_epid_bits),
-    numCmdOffsetBits(p->num_cmd_offset_bits),
     registerAccessLatency(p->register_access_latency),
     commandToSpmRequestLatency(p->command_to_spm_request_latency),
     commandToNocRequestLatency(p->command_to_noc_request_latency),
@@ -82,9 +81,6 @@ Dtu::translate(Addr vaddr)
 PacketPtr
 Dtu::generateRequest(Addr paddr, Addr size, MemCmd cmd)
 {
-    assert(numCmdEpidBits + numCmdOffsetBits + numCmdOpcodeBits <=
-            sizeof(RegFile::reg_t) * 8);
-
     Request::Flags flags;
 
     auto req = new Request(paddr, size, flags, masterId);
@@ -106,27 +102,26 @@ Dtu::freeRequest(PacketPtr pkt)
 Dtu::Command
 Dtu::getCommand()
 {
+    assert(numCmdEpidBits + numCmdOpcodeBits <= sizeof(RegFile::reg_t) * 8);
+
     using reg_t = RegFile::reg_t;
 
     /*
-     *   COMMAND                        0
-     * |--------------------------------|
-     * |  offset  |   epid   |  opcode  |
-     * |--------------------------------|
+     *   COMMAND            0
+     * |--------------------|
+     * |  epid   |  opcode  |
+     * |--------------------|
      */
     reg_t opcodeMask = ((reg_t)1 << numCmdOpcodeBits) - 1;
     reg_t epidMask   = (((reg_t)1 << numCmdEpidBits) - 1) << numCmdOpcodeBits;
-    reg_t offsetMask = (((reg_t)1 << numCmdOffsetBits) - 1) << (numCmdOpcodeBits + numCmdEpidBits);
 
-    auto reg = regFile.readDtuReg(DtuReg::COMMAND);
+    auto reg = regFile.get(CmdReg::COMMAND);
 
     Command cmd;
 
     cmd.opcode = static_cast<CommandOpcode>(reg & opcodeMask);
 
     cmd.epId = (reg & epidMask) >> numCmdOpcodeBits;
-
-    cmd.offset = (reg & offsetMask) >> (numCmdEpidBits + numCmdOpcodeBits);
 
     return cmd;
 }
@@ -161,9 +156,9 @@ void
 Dtu::startOperation(Command& cmd)
 {
     // set busy flag
-    regFile.setDtuReg(DtuReg::STATUS, 1);
+    regFile.set(DtuReg::STATUS, 1);
 
-    EpMode mode = static_cast<EpMode>(regFile.readEpReg(cmd.epId, EpReg::MODE));
+    EpMode mode = static_cast<EpMode>(regFile.get(cmd.epId, EpReg::MODE));
 
     switch (mode)
     {
@@ -188,8 +183,8 @@ Dtu::finishOperation()
 {
     DPRINTF(DtuDetail, "Operation finished\n");
     // reset command register and unset busy flag
-    regFile.setDtuReg(DtuReg::COMMAND, 0);
-    regFile.setDtuReg(DtuReg::STATUS, 0);
+    regFile.set(CmdReg::COMMAND, 0);
+    regFile.set(DtuReg::STATUS, 0);
 }
 
 void
@@ -224,12 +219,11 @@ Dtu::sendSpmRequest(PacketPtr pkt,
 void
 Dtu::startMessageTransmission(const Command& cmd)
 {
-    Addr messageAddr = regFile.readEpReg(cmd.epId, EpReg::MSG_ADDR);
-    Addr messageSize = regFile.readEpReg(cmd.epId, EpReg::MSG_SIZE);
-    unsigned maxMessageSize = regFile.readEpReg(cmd.epId, EpReg::MAX_MSG_SIZE);
-    unsigned credits = regFile.readEpReg(cmd.epId, EpReg::CREDITS);
+    Addr messageAddr = regFile.get(CmdReg::DATA_ADDR);
+    Addr messageSize = regFile.get(CmdReg::DATA_SIZE);
+    unsigned credits = regFile.get(cmd.epId, EpReg::CREDITS);
 
-    EpMode mode = static_cast<EpMode>(regFile.readEpReg(cmd.epId, EpReg::MODE));
+    EpMode mode = static_cast<EpMode>(regFile.get(cmd.epId, EpReg::MODE));
 
     /*
      * If this endpoint is configured to send messages, we need to check
@@ -238,6 +232,12 @@ Dtu::startMessageTransmission(const Command& cmd)
      */
     if (mode == EpMode::TRANSMIT_MESSAGE)
     {
+        unsigned maxMessageSize = regFile.get(cmd.epId, EpReg::MAX_MSG_SIZE);
+
+        // TODO error handling
+        // TODO atm, we can send (nearly) arbitrary large replies
+        assert(messageSize + sizeof(MessageHeader) <= maxMessageSize);
+
         if (credits < maxMessageSize)
         {
             warn("pe%u.ep%u: Ignore send message command because there are not "
@@ -250,7 +250,7 @@ Dtu::startMessageTransmission(const Command& cmd)
 
         // Pay some credits
         credits -= maxMessageSize;
-        regFile.setEpReg(cmd.epId, EpReg::CREDITS, credits);
+        regFile.set(cmd.epId, EpReg::CREDITS, credits);
     }
 
     DPRINTF(DtuDetail, "Read message of %lu Bytes at address %#018lx from local scratchpad.\n",
@@ -259,7 +259,6 @@ Dtu::startMessageTransmission(const Command& cmd)
 
     // TODO error handling
     assert(messageSize > 0);
-    assert(messageSize + sizeof(MessageHeader) <= maxMessageSize);
     assert(messageSize + sizeof(MessageHeader) <= maxNocPacketSize);
 
     auto pkt = generateRequest(messageAddr, messageSize, MemCmd::ReadReq);
@@ -273,22 +272,23 @@ Dtu::startMessageTransmission(const Command& cmd)
 void
 Dtu::startMemoryRead(const Command& cmd)
 {
-    unsigned targetCoreId = regFile.readEpReg(cmd.epId, EpReg::TGT_COREID);
-    Addr localAddr = regFile.readEpReg(cmd.epId, EpReg::REQ_LOC_ADDR);
-    Addr requestSize = regFile.readEpReg(cmd.epId, EpReg::REQ_SIZE);
-    Addr remoteAddr = regFile.readEpReg(cmd.epId, EpReg::REQ_REM_ADDR);
-    Addr remoteSize = regFile.readEpReg(cmd.epId, EpReg::REQ_REM_SIZE);
+    unsigned targetCoreId = regFile.get(cmd.epId, EpReg::TGT_COREID);
+    Addr localAddr = regFile.get(CmdReg::DATA_ADDR);
+    Addr requestSize = regFile.get(CmdReg::DATA_SIZE);
+    Addr offset = regFile.get(CmdReg::OFFSET);
+    Addr remoteAddr = regFile.get(cmd.epId, EpReg::REQ_REM_ADDR);
+    Addr remoteSize = regFile.get(cmd.epId, EpReg::REQ_REM_SIZE);
 
     DPRINTF(Dtu, "\e[1m[rd -> %u]\e[0m at offset %#018lx with EP%u into %#018lx:%lu\n",
-        targetCoreId, cmd.offset, cmd.epId, localAddr, requestSize);
+        targetCoreId, offset, cmd.epId, localAddr, requestSize);
 
     // TODO error handling
     assert(requestSize > 0);
-    assert(requestSize + cmd.offset >= requestSize);
-    assert(requestSize + cmd.offset <= remoteSize);
+    assert(requestSize + offset >= requestSize);
+    assert(requestSize + offset <= remoteSize);
     //assert(requestSize < maxNocPacketSize);
 
-    remoteAddr += cmd.offset;
+    remoteAddr += offset;
 
     auto pkt = generateRequest(getNocAddr(targetCoreId) | remoteAddr, requestSize, MemCmd::ReadReq);
 
@@ -300,12 +300,13 @@ Dtu::startMemoryRead(const Command& cmd)
 void
 Dtu::startMemoryWrite(const Command& cmd)
 {
-    unsigned targetCoreId = regFile.readEpReg(cmd.epId, EpReg::TGT_COREID);
-    Addr localAddr = regFile.readEpReg(cmd.epId, EpReg::REQ_LOC_ADDR);
-    Addr requestSize = regFile.readEpReg(cmd.epId, EpReg::REQ_SIZE);
+    unsigned targetCoreId = regFile.get(cmd.epId, EpReg::TGT_COREID);
+    Addr localAddr = regFile.get(CmdReg::DATA_ADDR);
+    Addr requestSize = regFile.get(CmdReg::DATA_SIZE);
+    Addr offset = regFile.get(CmdReg::OFFSET);
 
     DPRINTF(Dtu, "\e[1m[wr -> %u]\e[0m at offset %#018lx with EP%u from %#018lx:%lu\n",
-        targetCoreId, cmd.offset, cmd.epId, localAddr, requestSize);
+        targetCoreId, offset, cmd.epId, localAddr, requestSize);
 
     // TODO error handling
     assert(requestSize > 0);
@@ -322,11 +323,11 @@ Dtu::startMemoryWrite(const Command& cmd)
 void
 Dtu::incrementReadPtr(unsigned epId)
 {
-    Addr readPtr    = regFile.readEpReg(epId, EpReg::BUF_RD_PTR);
-    Addr bufferAddr = regFile.readEpReg(epId, EpReg::BUF_ADDR);
-    Addr bufferSize = regFile.readEpReg(epId, EpReg::BUF_SIZE);
-    Addr messageCount = regFile.readEpReg(epId, EpReg::BUF_MSG_CNT);
-    unsigned maxMessageSize = regFile.readEpReg(epId, EpReg::MAX_MSG_SIZE);
+    Addr readPtr    = regFile.get(epId, EpReg::BUF_RD_PTR);
+    Addr bufferAddr = regFile.get(epId, EpReg::BUF_ADDR);
+    Addr bufferSize = regFile.get(epId, EpReg::BUF_SIZE);
+    Addr messageCount = regFile.get(epId, EpReg::BUF_MSG_CNT);
+    unsigned maxMessageSize = regFile.get(epId, EpReg::BUF_MSG_SIZE);
 
     readPtr += maxMessageSize;
 
@@ -347,8 +348,8 @@ Dtu::incrementReadPtr(unsigned epId)
      *     on the performance of the simulated system.
      */
 
-    regFile.setEpReg(epId, EpReg::BUF_RD_PTR, readPtr);
-    regFile.setEpReg(epId, EpReg::BUF_MSG_CNT, messageCount - 1);
+    regFile.set(epId, EpReg::BUF_RD_PTR, readPtr);
+    regFile.set(epId, EpReg::BUF_MSG_CNT, messageCount - 1);
 
     updateSuspendablePin();
 }
@@ -356,11 +357,11 @@ Dtu::incrementReadPtr(unsigned epId)
 void
 Dtu::incrementWritePtr(unsigned epId)
 {
-    Addr writePtr     = regFile.readEpReg(epId, EpReg::BUF_WR_PTR);
-    Addr bufferAddr   = regFile.readEpReg(epId, EpReg::BUF_ADDR);
-    Addr bufferSize   = regFile.readEpReg(epId, EpReg::BUF_SIZE);
-    Addr messageCount = regFile.readEpReg(epId, EpReg::BUF_MSG_CNT);
-    unsigned maxMessageSize = regFile.readEpReg(epId, EpReg::MAX_MSG_SIZE);
+    Addr writePtr     = regFile.get(epId, EpReg::BUF_WR_PTR);
+    Addr bufferAddr   = regFile.get(epId, EpReg::BUF_ADDR);
+    Addr bufferSize   = regFile.get(epId, EpReg::BUF_SIZE);
+    Addr messageCount = regFile.get(epId, EpReg::BUF_MSG_CNT);
+    unsigned maxMessageSize = regFile.get(epId, EpReg::BUF_MSG_SIZE);
 
     writePtr += maxMessageSize;
 
@@ -375,8 +376,8 @@ Dtu::incrementWritePtr(unsigned epId)
     if(messageCount == bufferSize)
         panic("EP%u: Buffer full!\n", epId);
 
-    regFile.setEpReg(epId, EpReg::BUF_WR_PTR, writePtr);
-    regFile.setEpReg(epId, EpReg::BUF_MSG_CNT, messageCount + 1);
+    regFile.set(epId, EpReg::BUF_WR_PTR, writePtr);
+    regFile.set(epId, EpReg::BUF_MSG_CNT, messageCount + 1);
 
     // set deny-suspend pin at CPU
     system->threadContexts[0]->getCpuPtr()->_denySuspend = true;
@@ -397,7 +398,7 @@ Dtu::wakeupCore()
 void
 Dtu::updateSuspendablePin()
 {
-    bool pendingMsgs = regFile.readDtuReg(DtuReg::MSG_CNT) > 0;
+    bool pendingMsgs = regFile.get(DtuReg::MSG_CNT) > 0;
     bool hadPending = system->threadContexts[0]->getCpuPtr()->_denySuspend;
     system->threadContexts[0]->getCpuPtr()->_denySuspend = pendingMsgs;
     if(hadPending && !pendingMsgs)
@@ -435,8 +436,8 @@ Dtu::completeNocReadRequest(PacketPtr pkt)
 {
     auto cmd = getCommand();
 
-    Addr localAddr = regFile.readEpReg(cmd.epId, EpReg::REQ_LOC_ADDR);
-    Addr requestSize = regFile.readEpReg(cmd.epId, EpReg::REQ_SIZE);
+    Addr localAddr = regFile.get(CmdReg::DATA_ADDR);
+    Addr requestSize = regFile.get(CmdReg::DATA_SIZE);
 
     DPRINTF(DtuDetail, "Write %lu bytes to local scratchpad at address %#018lx.\n",
                  requestSize,
@@ -521,8 +522,6 @@ Dtu::sendNocMessage(const uint8_t* data,
     uint64_t label;
     uint64_t replyLabel;
 
-    M5_VAR_USED unsigned maxMessageSize = regFile.readEpReg(epid, EpReg::MAX_MSG_SIZE);
-
     if (isReply)
     {
         /*
@@ -534,7 +533,7 @@ Dtu::sendNocMessage(const uint8_t* data,
          */
 
         auto pkt = generateRequest(
-                translate(regFile.readEpReg(epid, EpReg::BUF_RD_PTR)),
+                translate(regFile.get(epid, EpReg::BUF_RD_PTR)),
                 sizeof(MessageHeader),
                 MemCmd::ReadReq);
 
@@ -554,7 +553,7 @@ Dtu::sendNocMessage(const uint8_t* data,
 
         // disable replies for this message
         auto hpkt = generateRequest(
-                translate(regFile.readEpReg(epid, EpReg::BUF_RD_PTR)),
+                translate(regFile.get(epid, EpReg::BUF_RD_PTR)),
                 sizeof(h->flags), MemCmd::WriteReq);
         h->flags &= ~REPLY_ENABLED;
         memcpy(hpkt->getPtr<uint8_t>(), &h->flags, sizeof(h->flags));
@@ -566,16 +565,19 @@ Dtu::sendNocMessage(const uint8_t* data,
     }
     else
     {
-        targetCoreId = regFile.readEpReg(epid, EpReg::TGT_COREID);
-        targetEpId   = regFile.readEpReg(epid, EpReg::TGT_EPID);
-        replyEpId    = regFile.readEpReg(epid, EpReg::REPLY_EPID);
-        label        = regFile.readEpReg(epid, EpReg::LABEL);
-        replyLabel   = regFile.readEpReg(epid, EpReg::REPLY_LABEL);
+        targetCoreId = regFile.get(epid, EpReg::TGT_COREID);
+        targetEpId   = regFile.get(epid, EpReg::TGT_EPID);
+        label        = regFile.get(epid, EpReg::LABEL);
+        replyLabel   = regFile.get(CmdReg::REPLY_LABEL);
+        replyEpId    = regFile.get(CmdReg::REPLY_EPID);
+        
+        M5_VAR_USED unsigned maxMessageSize = regFile.get(epid, EpReg::MAX_MSG_SIZE);
+        assert(messageSize + sizeof(MessageHeader) <= maxMessageSize);
     }
 
     DPRINTF(Dtu, "\e[1m[%s -> %u]\e[0m with EP%u of %#018lx:%lu\n",
         isReply ? "rp" : "sd",
-        targetCoreId, epid, regFile.readEpReg(epid, EpReg::MSG_ADDR), messageSize);
+        targetCoreId, epid, regFile.get(CmdReg::DATA_ADDR), messageSize);
     DPRINTF(Dtu, "  header: tgtEP=%u, lbl=%#018lx, rpLbl=%#018lx, rpEP=%u\n",
         targetEpId, label, replyLabel, replyEpId);
 
@@ -585,8 +587,7 @@ Dtu::sendNocMessage(const uint8_t* data,
                  targetEpId,
                  targetCoreId);
 
-    assert(regFile.readEpReg(epid, EpReg::MSG_SIZE) == messageSize);
-    assert(messageSize + sizeof(MessageHeader) <= maxMessageSize);
+    assert(regFile.get(CmdReg::DATA_SIZE) == messageSize);
 
     MessageHeader header;
 
@@ -640,23 +641,24 @@ Dtu::sendNocMemoryWriteRequest(const uint8_t* data,
     Command cmd = getCommand();
     unsigned epId = cmd.epId;
 
-    unsigned targetCoreId = regFile.readEpReg(epId, EpReg::TGT_COREID);
-    Addr targetAddr = regFile.readEpReg(epId, EpReg::REQ_REM_ADDR);
-    Addr remoteSize = regFile.readEpReg(epId, EpReg::REQ_REM_SIZE);
+    unsigned targetCoreId = regFile.get(epId, EpReg::TGT_COREID);
+    Addr offset = regFile.get(CmdReg::OFFSET);
+    Addr targetAddr = regFile.get(epId, EpReg::REQ_REM_ADDR);
+    Addr remoteSize = regFile.get(epId, EpReg::REQ_REM_SIZE);
 
     DPRINTF(DtuDetail, "Send %lu bytes to address %#018lx in PE%u.\n",
                  requestSize,
-                 targetAddr + cmd.offset,
+                 targetAddr + offset,
                  targetCoreId);
 
     // TODO error handling
     assert(requestSize > 0);
-    assert(requestSize == regFile.readEpReg(epId, EpReg::REQ_SIZE));
-    assert(requestSize + cmd.offset >= requestSize);
-    assert(requestSize + cmd.offset <= remoteSize);
+    assert(requestSize == regFile.get(CmdReg::DATA_SIZE));
+    assert(requestSize + offset >= requestSize);
+    assert(requestSize + offset <= remoteSize);
     //assert(requestSize <= maxNocPacketSize);
 
-    auto pkt = generateRequest(getNocAddr(targetCoreId) | (targetAddr + cmd.offset),
+    auto pkt = generateRequest(getNocAddr(targetCoreId) | (targetAddr + offset),
                                requestSize,
                                MemCmd::WriteReq);
     memcpy(pkt->getPtr<uint8_t>(),
@@ -678,7 +680,7 @@ Dtu::completeLocalSpmRequest(PacketPtr pkt)
 {
     unsigned epid = getCommand().epId;
 
-    EpMode mode = static_cast<EpMode>(regFile.readEpReg(epid, EpReg::MODE));
+    EpMode mode = static_cast<EpMode>(regFile.get(epid, EpReg::MODE));
 
     if (mode == EpMode::TRANSMIT_MESSAGE || mode == EpMode::RECEIVE_MESSAGE)
         sendNocMessage(pkt->getConstPtr<uint8_t>(),
@@ -777,7 +779,7 @@ Dtu::recvNocMessage(PacketPtr pkt)
 
     MessageHeader* header = pkt->getPtr<MessageHeader>();
 
-    Addr spmAddr = regFile.readEpReg(epId, EpReg::BUF_WR_PTR);
+    Addr spmAddr = regFile.get(epId, EpReg::BUF_WR_PTR);
 
     DPRINTF(Dtu, "\e[1m[rv <- %u]\e[0m %lu bytes on EP%u to %#018lx\n",
         header->senderCoreId, header->length, epId, spmAddr);
@@ -788,12 +790,12 @@ Dtu::recvNocMessage(PacketPtr pkt)
         header->flags & GRANT_CREDITS_FLAG &&
         header->replyEpId < numEndpoints)
     {
-        unsigned maxMessageSize = regFile.readEpReg(header->replyEpId, EpReg::MAX_MSG_SIZE);
+        unsigned maxMessageSize = regFile.get(header->replyEpId, EpReg::MAX_MSG_SIZE);
         DPRINTF(DtuDetail, "Grant EP%u %u credits\n", header->replyEpId, maxMessageSize);
 
-        unsigned credits = regFile.readEpReg(header->replyEpId, EpReg::CREDITS);
+        unsigned credits = regFile.get(header->replyEpId, EpReg::CREDITS);
         credits += maxMessageSize;
-        regFile.setEpReg(header->replyEpId, EpReg::CREDITS, credits);
+        regFile.set(header->replyEpId, EpReg::CREDITS, credits);
     }
 
     incrementWritePtr(epId);

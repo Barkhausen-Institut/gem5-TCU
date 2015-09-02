@@ -34,6 +34,30 @@
 
 unsigned int TESTER_DTU = 0;
 
+Addr
+DtuTest::getRegAddr(DtuReg reg)
+{
+    return static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
+}
+
+Addr
+DtuTest::getRegAddr(CmdReg reg)
+{
+    return sizeof(RegFile::reg_t) * numDtuRegs + static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
+}
+
+Addr
+DtuTest::getRegAddr(EpReg reg, unsigned epid)
+{
+    Addr result = sizeof(RegFile::reg_t) * (numDtuRegs + numCmdRegs);
+
+    result += epid * numEpRegs * sizeof(RegFile::reg_t);
+
+    result += static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
+
+    return result;
+}
+
 bool
 DtuTest::CpuPort::recvTimingResp(PacketPtr pkt)
 {
@@ -197,19 +221,19 @@ DtuTest::recvRetry()
 
 PacketPtr
 DtuTest::createDtuRegisterPkt(Addr reg,
-                              uint32_t value,
+                              RegFile::reg_t value,
                               MemCmd cmd = MemCmd::WriteReq)
 {
     // TODO parameterize
-    Addr paddr = 0x10000000 + reg;
+    Addr paddr = 0xF0000000 + reg;
 
     Request::Flags flags;
 
-    auto req = new Request(paddr, 4, flags, masterId);
+    auto req = new Request(paddr, sizeof(RegFile::reg_t), flags, masterId);
     req->setThreadContext(id, 0);
 
     auto pkt = new Packet(req, cmd);
-    auto pkt_data = new uint32_t;
+    auto pkt_data = new RegFile::reg_t;
     *pkt_data = value;
     pkt->dataDynamic(pkt_data);
 
@@ -262,23 +286,23 @@ DtuTest::tick()
             DPRINTF(DtuTest, "Setup Ep 0 to transmit 128 Bytes from local "
                              "Scratchpad at address 0x0 to Ep 1 at core %u\n",
                              TESTER_DTU, (id + 1) % TESTER_DTU);
-            regAddr = RegFile::getRegAddr(EpReg::MSG_ADDR, 0);
+            regAddr = getRegAddr(CmdReg::DATA_ADDR);
             pkt = createDtuRegisterPkt(regAddr, 0);
             break;
         case 1:
-            regAddr = RegFile::getRegAddr(EpReg::MSG_SIZE, 0);
+            regAddr = getRegAddr(CmdReg::DATA_SIZE);
             pkt = createDtuRegisterPkt(regAddr, 128);
             break;
         case 2:
-            regAddr = RegFile::getRegAddr(EpReg::TGT_EPID, 0);
+            regAddr = getRegAddr(EpReg::TGT_EPID, 0);
             pkt = createDtuRegisterPkt(regAddr, 1);
             break;
         case 3:
-            regAddr = RegFile::getRegAddr(EpReg::TGT_COREID, 0);
+            regAddr = getRegAddr(EpReg::TGT_COREID, 0);
             pkt = createDtuRegisterPkt(regAddr, (id + 1) % TESTER_DTU);
             break;
         case 4:
-            regAddr = RegFile::getRegAddr(EpReg::MODE, 0);
+            regAddr = getRegAddr(EpReg::MODE, 0);
             pkt = createDtuRegisterPkt(regAddr, 1);
             break;
         default:
@@ -298,23 +322,23 @@ DtuTest::tick()
         {
         case 0:
             DPRINTF(DtuTest, "Setup EP 1 to receive messages\n");
-            regAddr = RegFile::getRegAddr(EpReg::MODE, 1);
+            regAddr = getRegAddr(EpReg::MODE, 1);
             pkt = createDtuRegisterPkt(regAddr, 0);
             break;
         case 1:
-            regAddr = RegFile::getRegAddr(EpReg::BUF_ADDR, 1);
+            regAddr = getRegAddr(EpReg::BUF_ADDR, 1);
             pkt = createDtuRegisterPkt(regAddr, 128);
             break;
         case 2:
-            regAddr = RegFile::getRegAddr(EpReg::BUF_SIZE, 1);
+            regAddr = getRegAddr(EpReg::BUF_SIZE, 1);
             pkt = createDtuRegisterPkt(regAddr, 8);
             break;
         case 3:
-            regAddr = RegFile::getRegAddr(EpReg::BUF_RD_PTR, 1);
+            regAddr = getRegAddr(EpReg::BUF_RD_PTR, 1);
             pkt = createDtuRegisterPkt(regAddr, 128);
             break;
         case 4:
-            regAddr = RegFile::getRegAddr(EpReg::BUF_WR_PTR, 1);
+            regAddr = getRegAddr(EpReg::BUF_WR_PTR, 1);
             pkt = createDtuRegisterPkt(regAddr, 128);
             break;
         default:
@@ -331,7 +355,7 @@ DtuTest::tick()
     case State::START_TRANSMISSION:
     {
         DPRINTF(DtuTest, "Start Transmission\n");
-        regAddr = RegFile::getRegAddr(DtuReg::COMMAND);
+        regAddr = getRegAddr(CmdReg::COMMAND);
         pkt = createDtuRegisterPkt(regAddr, 1);
 
         state = State::WAIT;
@@ -341,7 +365,7 @@ DtuTest::tick()
     }
     case State::WAIT:
     {
-        regAddr = RegFile::getRegAddr(DtuReg::STATUS);
+        regAddr = getRegAddr(DtuReg::STATUS);
         pkt = createDtuRegisterPkt(regAddr, 0, MemCmd::ReadReq);
 
         break;

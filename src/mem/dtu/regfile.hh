@@ -36,61 +36,80 @@
 #include "base/types.hh"
 #include "mem/packet.hh"
 
+// global and readonly for SW
 enum class DtuReg : Addr
 {
-    COMMAND,
     STATUS,
     MSG_CNT,
 };
 
-constexpr unsigned numDtuRegs = 3;
+constexpr unsigned numDtuRegs = 2;
 
+// registers to issue a command
+enum class CmdReg : Addr
+{
+    COMMAND,
+    DATA_ADDR,
+    DATA_SIZE,
+    OFFSET,
+    REPLY_EPID,
+    REPLY_LABEL,
+};
+
+constexpr unsigned numCmdRegs = 6;
+
+// actually we could shrink the number of EP registers down to 4:
+// 1. MODE
+// 2. BUF_ADDR
+//    TGT_COREID | TGT_EPID | CREDITS
+//    REQ_MEM_ADDR
+// 3. BUF_MSG_SIZE | BUF_SIZE | BUF_MSG_CNT
+//    MAX_MSG_SIZE
+//    REQ_MEM_SIZE
+// 4. BUF_RD_PTR | BUF_WR_PTR (by using offsets instead of pointers
+//    LABEL
+// but for debuggability, we keep the separation at the moment.
+
+// endpoints are only writable for privileged PEs
 enum class EpReg : Addr
 {
     MODE,
-    MAX_MSG_SIZE,
     // for receiving messages
-    BUF_MSG_CNT,
     BUF_ADDR,
+    BUF_MSG_SIZE,
     BUF_SIZE,
+    BUF_MSG_CNT,
     BUF_RD_PTR,
     BUF_WR_PTR,
     // for sending messages
     TGT_COREID,
     TGT_EPID,
-    MSG_ADDR,
-    MSG_SIZE,
+    MAX_MSG_SIZE,
     LABEL,
-    REPLY_EPID,
-    REPLY_LABEL,
+    CREDITS,
     // for memory requests
-    REQ_LOC_ADDR,
     REQ_REM_ADDR,
     REQ_REM_SIZE,
-    REQ_SIZE,
-
-    CREDITS,
 };
 
-constexpr unsigned numEpRegs = 19;
+constexpr unsigned numEpRegs = 14;
 
 class RegFile
 {
   private:
     static const char *dtuRegNames[];
+    static const char *cmdRegNames[];
     static const char *epRegNames[];
 
   public:
 
     using reg_t = uint64_t;
 
-    static Addr getRegAddr(DtuReg reg);
-
-    static Addr getRegAddr(EpReg reg, unsigned epid);
-
   private:
 
     std::vector<reg_t> dtuRegs;
+
+    std::vector<reg_t> cmdRegs;
 
     std::vector<std::vector<reg_t>> epRegs;
 
@@ -103,13 +122,17 @@ class RegFile
 
     RegFile(const std::string& name, unsigned numEndpoints);
 
-    reg_t readDtuReg(DtuReg reg) const;
+    reg_t get(DtuReg reg) const;
 
-    void setDtuReg(DtuReg reg, reg_t value);
+    reg_t get(CmdReg reg) const;
 
-    reg_t readEpReg(unsigned epid, EpReg reg) const;
+    reg_t get(unsigned epid, EpReg reg) const;
 
-    void setEpReg(unsigned epid, EpReg reg, reg_t value);
+    void set(DtuReg reg, reg_t value);
+
+    void set(CmdReg reg, reg_t value);
+
+    void set(unsigned epid, EpReg reg, reg_t value);
 
     /// returns true if the command register was written
     bool handleRequest(PacketPtr pkt);

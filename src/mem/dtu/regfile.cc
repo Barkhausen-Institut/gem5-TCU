@@ -34,53 +34,39 @@
 #include "mem/dtu/regfile.hh"
 
 const char *RegFile::dtuRegNames[] = {
-    "COMMAND",
     "STATUS",
     "MSG_CNT",
 };
 
+const char *RegFile::cmdRegNames[] = {
+    "COMMAND",
+    "DATA_ADDR",
+    "DATA_SIZE",
+    "OFFSET",
+    "REPLY_EPID",
+    "REPLY_LABEL",
+};
+
 const char *RegFile::epRegNames[] = {
     "MODE",
-    "MAX_MSG_SIZE",
-    "BUF_MSG_CNT",
     "BUF_ADDR",
+    "BUF_MSG_SIZE",
     "BUF_SIZE",
+    "BUF_MSG_CNT",
     "BUF_RD_PTR",
     "BUF_WR_PTR",
     "TGT_COREID",
     "TGT_EPID",
-    "MSG_ADDR",
-    "MSG_SIZE",
+    "MAX_MSG_SIZE",
     "LABEL",
-    "REPLY_EPID",
-    "REPLY_LABEL",
-    "REQ_LOC_ADDR",
+    "CREDITS",
     "REQ_REM_ADDR",
     "REQ_REM_SIZE",
-    "REQ_SIZE",
-    "CREDITS",
 };
-
-Addr
-RegFile::getRegAddr(DtuReg reg)
-{
-    return static_cast<Addr>(reg) * sizeof(reg_t);
-}
-
-Addr
-RegFile::getRegAddr(EpReg reg, unsigned epid)
-{
-    Addr result = sizeof(reg_t) * numDtuRegs;
-
-    result += epid * numEpRegs * sizeof(reg_t);
-
-    result += static_cast<Addr>(reg) * sizeof(reg_t);
-
-    return result;
-}
 
 RegFile::RegFile(const std::string& name, unsigned _numEndpoints)
     : dtuRegs(numDtuRegs, 0),
+      cmdRegs(numCmdRegs, 0),
       epRegs(_numEndpoints),
       numEndpoints(_numEndpoints),
       _name(name)
@@ -93,7 +79,7 @@ RegFile::RegFile(const std::string& name, unsigned _numEndpoints)
 }
 
 RegFile::reg_t
-RegFile::readDtuReg(DtuReg reg) const
+RegFile::get(DtuReg reg) const
 {
     reg_t value = dtuRegs[static_cast<Addr>(reg)];
 
@@ -104,18 +90,20 @@ RegFile::readDtuReg(DtuReg reg) const
     return value;
 }
 
-void
-RegFile::setDtuReg(DtuReg reg, reg_t value)
+RegFile::reg_t
+RegFile::get(CmdReg reg) const
 {
-    DPRINTF(DtuReg, "DTU[%-12s] <- %#018x\n",
-                    dtuRegNames[static_cast<Addr>(reg)],
+    reg_t value = cmdRegs[static_cast<Addr>(reg)];
+
+    DPRINTF(DtuReg, "CMD[%-12s] -> %#018x\n",
+                    cmdRegNames[static_cast<Addr>(reg)],
                     value);
 
-    dtuRegs[static_cast<Addr>(reg)] = value;
+    return value;
 }
 
 RegFile::reg_t
-RegFile::readEpReg(unsigned epid, EpReg reg) const
+RegFile::get(unsigned epid, EpReg reg) const
 {
     reg_t value = epRegs[epid][static_cast<Addr>(reg)];
 
@@ -128,7 +116,27 @@ RegFile::readEpReg(unsigned epid, EpReg reg) const
 }
 
 void
-RegFile::setEpReg(unsigned epid, EpReg reg, reg_t value)
+RegFile::set(DtuReg reg, reg_t value)
+{
+    DPRINTF(DtuReg, "DTU[%-12s] <- %#018x\n",
+                    dtuRegNames[static_cast<Addr>(reg)],
+                    value);
+
+    dtuRegs[static_cast<Addr>(reg)] = value;
+}
+
+void
+RegFile::set(CmdReg reg, reg_t value)
+{
+    DPRINTF(DtuReg, "CMD[%-12s] <- %#018x\n",
+                    cmdRegNames[static_cast<Addr>(reg)],
+                    value);
+
+    cmdRegs[static_cast<Addr>(reg)] = value;
+}
+
+void
+RegFile::set(unsigned epid, EpReg reg, reg_t value)
 {
     DPRINTF(DtuReg, "EP%u[%-12s] <- %#018x\n",
                     epid,
@@ -140,7 +148,7 @@ RegFile::setEpReg(unsigned epid, EpReg reg, reg_t value)
     {
         reg_t diff = value - epRegs[epid][static_cast<Addr>(reg)];
         reg_t old = dtuRegs[static_cast<Addr>(DtuReg::MSG_CNT)];
-        setDtuReg(DtuReg::MSG_CNT, old + diff);
+        set(DtuReg::MSG_CNT, old + diff);
     }
 
     epRegs[epid][static_cast<Addr>(reg)] = value;
@@ -162,51 +170,64 @@ RegFile::handleRequest(PacketPtr pkt)
     assert(pktAddr + pkt->getSize() <= getSize());
 
     reg_t* data = pkt->getPtr<reg_t>();
+    bool cmdChanged = false;
 
     // perform a single register access for each requested register
     for (unsigned offset = 0; offset < pkt->getSize(); offset += sizeof(reg_t))
     {
         Addr regAddr = pktAddr + offset;
-        bool isEndpointAccess = regAddr >= sizeof(reg_t) * numDtuRegs;
 
-        if (isEndpointAccess)
+        // dtu register
+        if(regAddr < sizeof(reg_t) * numDtuRegs)
         {
-            unsigned epid = (regAddr - sizeof(reg_t) * numDtuRegs) /
+            auto reg = static_cast<DtuReg>(regAddr / sizeof(reg_t));
+
+            if (pkt->isRead())
+                data[offset / sizeof(reg_t)] = get(reg);
+            else if (pkt->isWrite())
+                set(reg, data[offset / sizeof(reg_t)]);
+        }
+        // cmd register
+        else if(regAddr < sizeof(reg_t) * (numDtuRegs + numCmdRegs))
+        {
+            auto reg = static_cast<CmdReg>(regAddr / sizeof(reg_t) - numDtuRegs);
+
+            if (pkt->isRead())
+                data[offset / sizeof(reg_t)] = get(reg);
+            else if (pkt->isWrite())
+            {
+                if (reg == CmdReg::COMMAND)
+                    cmdChanged = true;
+                set(reg, data[offset / sizeof(reg_t)]);
+            }
+        }
+        // endpoint address
+        else
+        {
+            unsigned epid = (regAddr - sizeof(reg_t) * (numDtuRegs + numCmdRegs)) /
                             (sizeof(reg_t) * numEpRegs);
 
-            unsigned regNumber = (regAddr / sizeof(reg_t) - numDtuRegs) % numEpRegs;
+            unsigned regNumber = (regAddr / sizeof(reg_t) - (numDtuRegs + numCmdRegs)) % numEpRegs;
 
             auto reg = static_cast<EpReg>(regNumber);
 
             if (pkt->isRead())
-                data[offset / sizeof(reg_t)] = readEpReg(epid, reg);
+                data[offset / sizeof(reg_t)] = get(epid, reg);
             else
-                setEpReg(epid, reg, data[offset / sizeof(reg_t)]);
-        }
-        else
-        {
-            auto reg = static_cast<DtuReg>(pktAddr / sizeof(reg_t));
-
-            if (pkt->isRead())
-                data[offset / sizeof(reg_t)] = readDtuReg(reg);
-            else if (pkt->isWrite())
-                setDtuReg(reg, data[offset / sizeof(reg_t)]);
+                set(epid, reg, data[offset / sizeof(reg_t)]);
         }
     }
 
     if (pkt->needsResponse())
         pkt->makeResponse();
 
-    if (pkt->isWrite() && pkt->getAddr() == static_cast<Addr>(DtuReg::COMMAND))
-        return true;
-    else
-        return false;
+    return cmdChanged;
 }
 
 Addr
 RegFile::getSize() const
 {
-    Addr size = sizeof(reg_t) * numDtuRegs;
+    Addr size = sizeof(reg_t) * (numDtuRegs + numCmdRegs);
 
     size += sizeof(reg_t) * (numEndpoints * numEpRegs);
 

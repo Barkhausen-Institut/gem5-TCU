@@ -97,15 +97,15 @@ for i in range(0, options.num_pes):
     pe.cpu.id = i;
 
     pe.scratchpad = Scratchpad()
-    pe.scratchpad.port = pe.xbar.master
+    pe.scratchpad.cpu_port = pe.xbar.master
 
     pe.dtu = Dtu()
     pe.dtu.core_id = i
-    pe.dtu.scratchpad = pe.xbar.slave
-    pe.dtu.cpu = pe.xbar.master
+    pe.dtu.spm_master_port = pe.scratchpad.dtu_port
+    pe.dtu.cpu_slave_port = pe.xbar.master
 
-    pe.dtu.noc_master = system.noc.slave
-    pe.dtu.noc_slave  = system.noc.master
+    pe.dtu.noc_master_port = system.noc.slave
+    pe.dtu.noc_slave_port  = system.noc.master
 
 #system.badaddr1 = IsaFake(pio_addr=0x10000, pio_size=0x0FFEFFFF)
 #system.badaddr1.warn_access="warn"
