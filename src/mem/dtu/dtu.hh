@@ -168,23 +168,6 @@ class Dtu : public BaseDtu
 
     void wakeupCore();
 
-    struct IncrementWritePtrEvent : public Event
-    {
-        unsigned epId = 0;
-
-        Dtu& dtu;
-
-        IncrementWritePtrEvent(Dtu& _dtu) : dtu(_dtu) {}
-
-        void process() override { dtu.incrementWritePtr(epId); }
-
-        const char* description() const override { return "IncrementWritePtrEvent"; }
-
-        const std::string name() const override { return dtu.name(); }
-    };
-
-    IncrementWritePtrEvent incrementWritePtrEvent;
-
     void forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest);
 
     void sendNocRequest(PacketPtr pkt,

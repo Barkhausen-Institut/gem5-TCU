@@ -60,8 +60,7 @@ Dtu::Dtu(DtuParams* p)
     spmResponseToNocResponseLatency(p->spm_response_to_noc_response_latency),
     usePTable(p->use_ptable),
     executeCommandEvent(*this),
-    finishOperationEvent(*this),
-    incrementWritePtrEvent(*this)
+    finishOperationEvent(*this)
 {}
 
 Addr
@@ -369,7 +368,8 @@ Dtu::incrementWritePtr(unsigned epId)
                  writePtr,
                  messageCount + 1);
 
-    assert(messageCount < bufferSize);
+    if(messageCount == bufferSize)
+        panic("EP%u: Buffer full!\n", epId);
 
     regFile.setEpReg(epId, EpReg::BUF_WR_PTR, writePtr);
     regFile.setEpReg(epId, EpReg::BUF_MSG_CNT, messageCount + 1);
@@ -688,11 +688,7 @@ Dtu::completeForwardedMessage(PacketPtr pkt, unsigned epId)
 
     M5_VAR_USED MessageHeader* header = pkt->getPtr<MessageHeader>();
 
-    if (atomicMode)
-    {
-        incrementWritePtr(epId);
-    }
-    else
+    if (!atomicMode)
     {
         DPRINTF(DtuDetail, "Wrote message to Scratchpad. Send response back to EP%u at PE%u\n",
                      header->senderEpId,
@@ -703,9 +699,6 @@ Dtu::completeForwardedMessage(PacketPtr pkt, unsigned epId)
 
         pkt->headerDelay = 0;
         pkt->payloadDelay = 0;
-
-        incrementWritePtrEvent.epId = epId;
-        schedule(incrementWritePtrEvent, clockEdge(delay));
 
         schedNocResponse(pkt, clockEdge(delay));
     }
@@ -781,12 +774,7 @@ Dtu::recvNocMessage(PacketPtr pkt)
         regFile.setEpReg(header->replyEpId, EpReg::CREDITS, credits);
     }
 
-    unsigned messageCount = regFile.readEpReg(epId, EpReg::BUF_MSG_CNT);
-    unsigned bufferSize   = regFile.readEpReg(epId, EpReg::BUF_SIZE);
-
-    if (messageCount == bufferSize)
-        // TODO error handling!
-        panic("EP%u: Buffer full!\n", epId);
+    incrementWritePtr(epId);
 
     DPRINTF(DtuBuf, "EP%u: writing message to %#018lx\n", epId, spmAddr);
 
