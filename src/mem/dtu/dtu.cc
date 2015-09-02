@@ -32,6 +32,7 @@
 #include <sstream>
 
 #include "debug/Dtu.hh"
+#include "debug/DtuBuf.hh"
 #include "debug/DtuDetail.hh"
 #include "debug/DtuPackets.hh"
 #include "mem/dtu/dtu.hh"
@@ -331,7 +332,7 @@ Dtu::incrementReadPtr(unsigned epId)
     if (readPtr >= bufferAddr + bufferSize * maxMessageSize)
         readPtr = bufferAddr;
 
-    DPRINTF(DtuDetail, "EP%u: Increment the read pointer to %#018lx [msgCount=%u]\n",
+    DPRINTF(DtuBuf, "EP%u: increment read pointer to %#018lx (msgCount=%u)\n",
                  epId,
                  readPtr,
                  messageCount - 1);
@@ -363,7 +364,7 @@ Dtu::incrementWritePtr(unsigned epId)
     if (writePtr >= bufferAddr + bufferSize * maxMessageSize)
         writePtr = bufferAddr;
 
-    DPRINTF(DtuDetail, "EP%u: Increment the write pointer to %#018lx [msgCount=%u]\n",
+    DPRINTF(DtuBuf, "EP%u: increment write pointer to %#018lx (msgCount=%u)\n",
                  epId,
                  writePtr,
                  messageCount + 1);
@@ -787,7 +788,7 @@ Dtu::recvNocMessage(PacketPtr pkt)
         // TODO error handling!
         panic("EP%u: Buffer full!\n", epId);
 
-    DPRINTF(DtuDetail, "Write message to local scratchpad at address %#018lx\n", spmAddr);
+    DPRINTF(DtuBuf, "EP%u: writing message to %#018lx\n", epId, spmAddr);
 
     pkt->setAddr(spmAddr);
 
