@@ -43,6 +43,12 @@ enum class DtuReg : Addr
     MSG_CNT,
 };
 
+enum class Status
+{
+    BUSY    = 1 << 0,
+    PRIV    = 1 << 1,
+};
+
 constexpr unsigned numDtuRegs = 2;
 
 // registers to issue a command
@@ -135,7 +141,7 @@ class RegFile
     void set(unsigned epid, EpReg reg, reg_t value);
 
     /// returns true if the command register was written
-    bool handleRequest(PacketPtr pkt);
+    bool handleRequest(PacketPtr pkt, bool isCpuRequest);
 
     const std::string name() const { return _name; }
 

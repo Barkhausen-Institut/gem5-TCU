@@ -71,6 +71,9 @@ RegFile::RegFile(const std::string& name, unsigned _numEndpoints)
       numEndpoints(_numEndpoints),
       _name(name)
 {
+    // at boot, all PEs are privileged
+    set(DtuReg::STATUS, static_cast<reg_t>(Status::PRIV));
+
     for (int epid = 0; epid < numEndpoints; epid++)
     {
         for (int i = 0; i < numEpRegs; i++)
@@ -155,7 +158,7 @@ RegFile::set(unsigned epid, EpReg reg, reg_t value)
 }
 
 bool
-RegFile::handleRequest(PacketPtr pkt)
+RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
 {
     assert(pkt->isRead() || pkt->isWrite());
 
@@ -171,6 +174,8 @@ RegFile::handleRequest(PacketPtr pkt)
 
     reg_t* data = pkt->getPtr<reg_t>();
     bool cmdChanged = false;
+    reg_t privFlag = static_cast<reg_t>(Status::PRIV);
+    bool isPrivileged = get(DtuReg::STATUS) & privFlag;
 
     // perform a single register access for each requested register
     for (unsigned offset = 0; offset < pkt->getSize(); offset += sizeof(reg_t))
@@ -184,8 +189,14 @@ RegFile::handleRequest(PacketPtr pkt)
 
             if (pkt->isRead())
                 data[offset / sizeof(reg_t)] = get(reg);
-            else if (pkt->isWrite())
-                set(reg, data[offset / sizeof(reg_t)]);
+            // writes are ignored, except that the privileged flag can be changed from the outside
+            else if(!isCpuRequest && reg == DtuReg::STATUS)
+            {
+                reg_t old = dtuRegs[static_cast<Addr>(reg)];
+                set(reg, (old & ~privFlag) | (data[offset / sizeof(reg_t)] & privFlag));
+            }
+            else
+                assert(false);
         }
         // cmd register
         else if(regAddr < sizeof(reg_t) * (numDtuRegs + numCmdRegs))
@@ -213,8 +224,11 @@ RegFile::handleRequest(PacketPtr pkt)
 
             if (pkt->isRead())
                 data[offset / sizeof(reg_t)] = get(epid, reg);
-            else
+            // writable only from remote and on privileged PEs
+            else if(!isCpuRequest || isPrivileged)
                 set(epid, reg, data[offset / sizeof(reg_t)]);
+            else
+                assert(false);
         }
     }
 

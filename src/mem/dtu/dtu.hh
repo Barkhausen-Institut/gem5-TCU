@@ -142,6 +142,10 @@ class Dtu : public BaseDtu
 
     Command getCommand();
 
+    void setStatusFlag(Status st);
+    
+    void clearStatusFlag(Status st);
+
     void executeCommand();
     EventWrapper<Dtu, &Dtu::executeCommand> executeCommandEvent;
 

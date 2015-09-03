@@ -137,7 +137,7 @@ Dtu::executeCommand()
         cmd.opcode == CommandOpcode::READ || cmd.opcode == CommandOpcode::WRITE)
     {
         // set busy flag
-        regFile.set(DtuReg::STATUS, 1);
+        setStatusFlag(Status::BUSY);
     }
 
     switch (cmd.opcode)
@@ -167,12 +167,26 @@ Dtu::executeCommand()
 }
 
 void
+Dtu::setStatusFlag(Status st)
+{
+    RegFile::reg_t flag = static_cast<RegFile::reg_t>(st);
+    regFile.set(DtuReg::STATUS, (regFile.get(DtuReg::STATUS) & ~flag) | flag);
+}
+
+void
+Dtu::clearStatusFlag(Status st)
+{
+    RegFile::reg_t flag = static_cast<RegFile::reg_t>(st);
+    regFile.set(DtuReg::STATUS, regFile.get(DtuReg::STATUS) & ~flag);
+}
+
+void
 Dtu::finishOperation()
 {
     DPRINTF(DtuDetail, "Operation finished\n");
     // reset command register and unset busy flag
     regFile.set(CmdReg::COMMAND, 0);
-    regFile.set(DtuReg::STATUS, 0);
+    clearStatusFlag(Status::BUSY);
 }
 
 void
@@ -834,7 +848,7 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
     // only.
     pkt->setAddr(pkt->getAddr() - regFileBaseAddr);
 
-    bool commandWritten = regFile.handleRequest(pkt);
+    bool commandWritten = regFile.handleRequest(pkt, isCpuRequest);
 
     updateSuspendablePin();
 
