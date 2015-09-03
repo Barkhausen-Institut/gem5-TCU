@@ -264,11 +264,13 @@ Dtu::startMemoryRead(const Command& cmd)
     Addr offset = regFile.get(CmdReg::OFFSET);
     Addr remoteAddr = regFile.get(cmd.epId, EpReg::REQ_REM_ADDR);
     Addr remoteSize = regFile.get(cmd.epId, EpReg::REQ_REM_SIZE);
+    unsigned flags = regFile.get(cmd.epId, EpReg::REQ_FLAGS);
 
     DPRINTF(Dtu, "\e[1m[rd -> %u]\e[0m at offset %#018lx with EP%u into %#018lx:%lu\n",
         targetCoreId, offset, cmd.epId, localAddr, requestSize);
 
     // TODO error handling
+    assert(flags & MemoryFlags::READ);
     assert(requestSize > 0);
     assert(requestSize + offset >= requestSize);
     assert(requestSize + offset <= remoteSize);
@@ -290,12 +292,14 @@ Dtu::startMemoryWrite(const Command& cmd)
     Addr localAddr = regFile.get(CmdReg::DATA_ADDR);
     Addr requestSize = regFile.get(CmdReg::DATA_SIZE);
     Addr offset = regFile.get(CmdReg::OFFSET);
+    unsigned flags = regFile.get(cmd.epId, EpReg::REQ_FLAGS);
 
     DPRINTF(Dtu, "\e[1m[wr -> %u]\e[0m at offset %#018lx with EP%u from %#018lx:%lu\n",
         targetCoreId, offset, cmd.epId, localAddr, requestSize);
 
     // TODO error handling
     assert(requestSize > 0);
+    assert(flags & MemoryFlags::WRITE);
     //assert(requestSize <= maxNocPacketSize);
 
     auto pkt = generateRequest(localAddr, requestSize, MemCmd::ReadReq);

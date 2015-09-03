@@ -39,6 +39,12 @@ class Dtu : public BaseDtu
 {
   private:
 
+    enum MemoryFlags : uint8_t
+    {
+        READ = (1 << 0),
+        WRITE = (1 << 1),
+    };
+
     enum MessageFlags : uint8_t
     {
         REPLY_FLAG = (1 << 0),

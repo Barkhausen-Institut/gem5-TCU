@@ -61,6 +61,7 @@ const char *RegFile::epRegNames[] = {
     "CREDITS",
     "REQ_REM_ADDR",
     "REQ_REM_SIZE",
+    "REQ_FLAGS",
 };
 
 RegFile::RegFile(const std::string& name, unsigned _numEndpoints)

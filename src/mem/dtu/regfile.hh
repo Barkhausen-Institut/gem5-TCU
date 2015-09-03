@@ -67,6 +67,7 @@ constexpr unsigned numCmdRegs = 6;
 //    REQ_MEM_SIZE
 // 3. BUF_RD_PTR | BUF_WR_PTR (by using offsets instead of pointers
 //    LABEL
+//    FLAGS
 // but for debuggability, we keep the separation at the moment.
 
 // endpoints are only writable for privileged PEs
@@ -88,9 +89,10 @@ enum class EpReg : Addr
     // for memory requests
     REQ_REM_ADDR,
     REQ_REM_SIZE,
+    REQ_FLAGS
 };
 
-constexpr unsigned numEpRegs = 13;
+constexpr unsigned numEpRegs = 14;
 
 class RegFile
 {
