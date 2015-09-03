@@ -48,7 +48,6 @@ const char *RegFile::cmdRegNames[] = {
 };
 
 const char *RegFile::epRegNames[] = {
-    "MODE",
     "BUF_ADDR",
     "BUF_MSG_SIZE",
     "BUF_SIZE",

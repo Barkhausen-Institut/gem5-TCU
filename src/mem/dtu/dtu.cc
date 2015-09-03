@@ -133,12 +133,26 @@ Dtu::executeCommand()
 
     assert(cmd.epId < numEndpoints);
 
+    if(cmd.opcode == CommandOpcode::SEND || cmd.opcode == CommandOpcode::REPLY ||
+        cmd.opcode == CommandOpcode::READ || cmd.opcode == CommandOpcode::WRITE)
+    {
+        // set busy flag
+        regFile.set(DtuReg::STATUS, 1);
+    }
+
     switch (cmd.opcode)
     {
     case CommandOpcode::IDLE:
         break;
-    case CommandOpcode::START_OPERATION:
-        startOperation(cmd);
+    case CommandOpcode::SEND:
+    case CommandOpcode::REPLY:
+        startMessageTransmission(cmd);
+        break;
+    case CommandOpcode::READ:
+        startMemoryRead(cmd);
+        break;
+    case CommandOpcode::WRITE:
+        startMemoryWrite(cmd);
         break;
     case CommandOpcode::INC_READ_PTR:
         incrementReadPtr(cmd.epId);
@@ -149,32 +163,6 @@ Dtu::executeCommand()
     default:
         // TODO error handling
         panic("Invalid opcode %#x\n", static_cast<RegFile::reg_t>(cmd.opcode));
-    }
-}
-
-void
-Dtu::startOperation(Command& cmd)
-{
-    // set busy flag
-    regFile.set(DtuReg::STATUS, 1);
-
-    EpMode mode = static_cast<EpMode>(regFile.get(cmd.epId, EpReg::MODE));
-
-    switch (mode)
-    {
-    case EpMode::RECEIVE_MESSAGE: // do a reply
-    case EpMode::TRANSMIT_MESSAGE:
-        startMessageTransmission(cmd);
-        break;
-    case EpMode::READ_MEMORY:
-        startMemoryRead(cmd);
-        break;
-    case EpMode::WRITE_MEMORY:
-        startMemoryWrite(cmd);
-        break;
-    default:
-        // TODO Error handling
-        panic("EP%u: Invalid mode\n", cmd.epId);
     }
 }
 
@@ -223,14 +211,12 @@ Dtu::startMessageTransmission(const Command& cmd)
     Addr messageSize = regFile.get(CmdReg::DATA_SIZE);
     unsigned credits = regFile.get(cmd.epId, EpReg::CREDITS);
 
-    EpMode mode = static_cast<EpMode>(regFile.get(cmd.epId, EpReg::MODE));
-
     /*
      * If this endpoint is configured to send messages, we need to check
      * credits. If it is configured to receive messages we do a reply and don't
      * need to check credits.
      */
-    if (mode == EpMode::TRANSMIT_MESSAGE)
+    if (cmd.opcode == CommandOpcode::SEND)
     {
         unsigned maxMessageSize = regFile.get(cmd.epId, EpReg::MAX_MSG_SIZE);
 
@@ -570,7 +556,7 @@ Dtu::sendNocMessage(const uint8_t* data,
         label        = regFile.get(epid, EpReg::LABEL);
         replyLabel   = regFile.get(CmdReg::REPLY_LABEL);
         replyEpId    = regFile.get(CmdReg::REPLY_EPID);
-        
+
         M5_VAR_USED unsigned maxMessageSize = regFile.get(epid, EpReg::MAX_MSG_SIZE);
         assert(messageSize + sizeof(MessageHeader) <= maxMessageSize);
     }
@@ -678,22 +664,20 @@ Dtu::sendNocMemoryWriteRequest(const uint8_t* data,
 void
 Dtu::completeLocalSpmRequest(PacketPtr pkt)
 {
-    unsigned epid = getCommand().epId;
+    Command cmd = getCommand();
 
-    EpMode mode = static_cast<EpMode>(regFile.get(epid, EpReg::MODE));
-
-    if (mode == EpMode::TRANSMIT_MESSAGE || mode == EpMode::RECEIVE_MESSAGE)
+    if (cmd.opcode == CommandOpcode::SEND || cmd.opcode == CommandOpcode::REPLY)
         sendNocMessage(pkt->getConstPtr<uint8_t>(),
                        pkt->getSize(),
-                       mode == EpMode::RECEIVE_MESSAGE,
+                       cmd.opcode == CommandOpcode::REPLY,
                        pkt->headerDelay,
                        pkt->payloadDelay);
-    else if (mode == EpMode::WRITE_MEMORY)
+    else if (cmd.opcode == CommandOpcode::WRITE)
         sendNocMemoryWriteRequest(pkt->getConstPtr<uint8_t>(),
                                   pkt->getSize(),
                                   pkt->headerDelay,
                                   pkt->payloadDelay);
-    else if (mode == EpMode::READ_MEMORY)
+    else if (cmd.opcode == CommandOpcode::READ)
     {
         Cycles delay = ticksToCycles(pkt->headerDelay + pkt->payloadDelay);
         schedule(finishOperationEvent, clockEdge(delay));

@@ -58,22 +58,20 @@ enum class CmdReg : Addr
 
 constexpr unsigned numCmdRegs = 6;
 
-// actually we could shrink the number of EP registers down to 4:
-// 1. MODE
-// 2. BUF_ADDR
+// actually we could shrink the number of EP registers down to 3:
+// 1. BUF_ADDR
 //    TGT_COREID | TGT_EPID | CREDITS
 //    REQ_MEM_ADDR
-// 3. BUF_MSG_SIZE | BUF_SIZE | BUF_MSG_CNT
+// 2. BUF_MSG_SIZE | BUF_SIZE | BUF_MSG_CNT
 //    MAX_MSG_SIZE
 //    REQ_MEM_SIZE
-// 4. BUF_RD_PTR | BUF_WR_PTR (by using offsets instead of pointers
+// 3. BUF_RD_PTR | BUF_WR_PTR (by using offsets instead of pointers
 //    LABEL
 // but for debuggability, we keep the separation at the moment.
 
 // endpoints are only writable for privileged PEs
 enum class EpReg : Addr
 {
-    MODE,
     // for receiving messages
     BUF_ADDR,
     BUF_MSG_SIZE,
@@ -92,7 +90,7 @@ enum class EpReg : Addr
     REQ_REM_SIZE,
 };
 
-constexpr unsigned numEpRegs = 14;
+constexpr unsigned numEpRegs = 13;
 
 class RegFile
 {

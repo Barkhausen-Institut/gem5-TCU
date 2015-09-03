@@ -88,25 +88,20 @@ class Dtu : public BaseDtu
     enum class CommandOpcode
     {
         IDLE = 0,
-        START_OPERATION = 1,
-        INC_READ_PTR = 2,
-        WAKEUP_CORE = 3,
+        SEND = 1,
+        REPLY = 2,
+        READ = 3,
+        WRITE = 4,
+        INC_READ_PTR = 5,
+        WAKEUP_CORE = 6,
     };
 
-    static constexpr unsigned numCmdOpcodeBits = 2;
+    static constexpr unsigned numCmdOpcodeBits = 3;
 
     struct Command
     {
         CommandOpcode opcode;
         unsigned epId;
-    };
-
-    enum class EpMode
-    {
-        RECEIVE_MESSAGE,
-        TRANSMIT_MESSAGE,
-        READ_MEMORY,
-        WRITE_MEMORY,
     };
 
     bool atomicMode;
@@ -143,8 +138,6 @@ class Dtu : public BaseDtu
 
     void executeCommand();
     EventWrapper<Dtu, &Dtu::executeCommand> executeCommandEvent;
-
-    void startOperation(Command& cmd);
 
     void finishOperation();
     EventWrapper<Dtu, &Dtu::finishOperation> finishOperationEvent;

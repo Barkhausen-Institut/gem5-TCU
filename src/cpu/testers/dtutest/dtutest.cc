@@ -301,10 +301,10 @@ DtuTest::tick()
             regAddr = getRegAddr(EpReg::TGT_COREID, 0);
             pkt = createDtuRegisterPkt(regAddr, (id + 1) % TESTER_DTU);
             break;
-        case 4:
-            regAddr = getRegAddr(EpReg::MODE, 0);
-            pkt = createDtuRegisterPkt(regAddr, 1);
-            break;
+        // case 4:
+        //     regAddr = getRegAddr(EpReg::MODE, 0);
+        //     pkt = createDtuRegisterPkt(regAddr, 1);
+        //     break;
         default:
             counter = -1;
             DPRINTF(DtuTest, "EP 0 setup done.\n");
@@ -320,11 +320,11 @@ DtuTest::tick()
     {
         switch (counter)
         {
-        case 0:
-            DPRINTF(DtuTest, "Setup EP 1 to receive messages\n");
-            regAddr = getRegAddr(EpReg::MODE, 1);
-            pkt = createDtuRegisterPkt(regAddr, 0);
-            break;
+        // case 0:
+        //     DPRINTF(DtuTest, "Setup EP 1 to receive messages\n");
+        //     regAddr = getRegAddr(EpReg::MODE, 1);
+        //     pkt = createDtuRegisterPkt(regAddr, 0);
+        //     break;
         case 1:
             regAddr = getRegAddr(EpReg::BUF_ADDR, 1);
             pkt = createDtuRegisterPkt(regAddr, 128);
