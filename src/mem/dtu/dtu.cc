@@ -35,12 +35,32 @@
 #include "debug/DtuBuf.hh"
 #include "debug/DtuDetail.hh"
 #include "debug/DtuPackets.hh"
+#include "debug/DtuSysCalls.hh"
 #include "debug/DtuPower.hh"
 #include "cpu/simple/base.hh"
 #include "mem/dtu/dtu.hh"
 #include "mem/page_table.hh"
 #include "sim/system.hh"
 #include "sim/process.hh"
+
+static const char *syscallNames[] = {
+    "CREATESRV",
+    "CREATESESS",
+    "CREATEGATE",
+    "CREATEVPE",
+    "ATTACHRB",
+    "DETACHRB",
+    "EXCHANGE",
+    "VPECTRL",
+    "DELEGATE",
+    "OBTAIN",
+    "ACTIVATE",
+    "REQMEM",
+    "DERIVEMEM",
+    "REVOKE",
+    "EXIT",
+    "NOOP",
+};
 
 Dtu::Dtu(DtuParams* p)
   : BaseDtu(p),
@@ -588,6 +608,13 @@ Dtu::sendNocMessage(const uint8_t* data,
         targetCoreId, epid, regFile.get(CmdReg::DATA_ADDR), messageSize);
     DPRINTF(Dtu, "  header: tgtEP=%u, lbl=%#018lx, rpLbl=%#018lx, rpEP=%u\n",
         targetEpId, label, replyLabel, replyEpId);
+
+    if (targetCoreId == 0 && !isReply)
+    {
+        size_t sysNo = data[0];
+        DPRINTF(DtuSysCalls, "  syscall: %s\n",
+            sysNo < (sizeof(syscallNames) / sizeof(syscallNames[0])) ? syscallNames[sysNo] : "Unknown");
+    }
 
     DPRINTF(DtuDetail, "Send %s of %lu bytes to EP%u at PE%u.\n",
                  isReply ? "reply" : "message",
