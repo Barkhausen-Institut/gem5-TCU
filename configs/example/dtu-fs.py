@@ -235,6 +235,7 @@ if cmd_list[len(cmd_list) - 1] == '':
 # currently, there is just one memory-PE
 for i in range(0, len(cmd_list)):
     pe = createPE(i)
+    pe.readfile = "/dev/stdin"
 
     # for now, a bit more to be able to put every application at a different address
     pe.scratchpad.range = 4 * 1024 * 1024

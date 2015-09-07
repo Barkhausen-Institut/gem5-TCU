@@ -529,15 +529,20 @@ readfile(ThreadContext *tc, Addr vaddr, uint64_t len, uint64_t offset)
     if (fd < 0)
         panic("could not open file %s\n", file);
 
-    if (::lseek(fd, offset, SEEK_SET) < 0)
+    if (offset != 0 && ::lseek(fd, offset, SEEK_SET) < 0)
         panic("could not seek: %s", strerror(errno));
 
     char *buf = new char[len];
     char *p = buf;
+    bool isStdin = file == "/dev/stdin";
     while (len > 0) {
         int bytes = ::read(fd, p, len);
         if (bytes <= 0)
             break;
+        if(isStdin) {
+            result += bytes;
+            break;
+        }
 
         p += bytes;
         result += bytes;
