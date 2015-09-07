@@ -358,7 +358,7 @@ Dtu::incrementReadPtr(unsigned epId)
     updateSuspendablePin();
 }
 
-void
+bool
 Dtu::incrementWritePtr(unsigned epId)
 {
     Addr writePtr     = regFile.get(epId, EpReg::BUF_WR_PTR);
@@ -378,7 +378,10 @@ Dtu::incrementWritePtr(unsigned epId)
                  messageCount + 1);
 
     if(messageCount == bufferSize)
-        panic("EP%u: Buffer full!\n", epId);
+    {
+        warn("EP%u: Buffer full!\n", epId);
+        return false;
+    }
 
     regFile.set(epId, EpReg::BUF_WR_PTR, writePtr);
     regFile.set(epId, EpReg::BUF_MSG_CNT, messageCount + 1);
@@ -387,6 +390,7 @@ Dtu::incrementWritePtr(unsigned epId)
     system->threadContexts[0]->getCpuPtr()->_denySuspend = true;
 
     wakeupCore();
+    return true;
 }
 
 void
@@ -800,17 +804,23 @@ Dtu::recvNocMessage(PacketPtr pkt)
         regFile.set(header->replyEpId, EpReg::CREDITS, credits);
     }
 
-    incrementWritePtr(epId);
+    if(incrementWritePtr(epId))
+    {
+        DPRINTF(DtuBuf, "EP%u: writing message to %#018lx\n", epId, spmAddr);
 
-    DPRINTF(DtuBuf, "EP%u: writing message to %#018lx\n", epId, spmAddr);
+        pkt->setAddr(spmAddr);
 
-    pkt->setAddr(spmAddr);
+        Cycles delay = ticksToCycles(pkt->headerDelay);
+        pkt->headerDelay = 0;
+        delay += nocMessageToSpmRequestLatency;
 
-    Cycles delay = ticksToCycles(pkt->headerDelay);
-    pkt->headerDelay = 0;
-    delay += nocMessageToSpmRequestLatency;
-
-    sendSpmRequest(pkt, epId, delay, SpmPacketType::FORWARDED_MESSAGE);
+        sendSpmRequest(pkt, epId, delay, SpmPacketType::FORWARDED_MESSAGE);
+    }
+    else
+    {
+        pkt->makeResponse();
+        completeForwardedRequest(pkt);
+    }
 }
 
 void

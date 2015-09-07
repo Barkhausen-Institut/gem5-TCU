@@ -165,7 +165,7 @@ class Dtu : public BaseDtu
 
     void incrementReadPtr(unsigned epId);
 
-    void incrementWritePtr(unsigned epId);
+    bool incrementWritePtr(unsigned epId);
 
     void wakeupCore();
     
