@@ -563,7 +563,8 @@ BaseRemoteGDB::scheduleInstCommitEvent(Event *ev, int delta)
     EventQueue *eq = getComInstEventQueue();
     // Here "ticks" aren't simulator ticks which measure time, they're
     // instructions committed by the CPU.
-    eq->schedule(ev, eq->getCurTick() + delta);
+    if (!ev->scheduled())
+        eq->schedule(ev, eq->getCurTick() + delta);
 }
 
 void
