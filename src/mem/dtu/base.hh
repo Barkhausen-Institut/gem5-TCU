@@ -136,7 +136,7 @@ class BaseDtu : public MemObject
       public:
 
         CpuSlavePort(BaseDtu& _dtu)
-          : DtuSlavePort(_dtu.name() + ".cpu_master_port", _dtu)
+          : DtuSlavePort(_dtu.name() + ".cpu_slave_port", _dtu)
         { }
 
       protected:
