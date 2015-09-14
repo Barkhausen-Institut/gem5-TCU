@@ -157,16 +157,15 @@ def createPE(no, mem=False):
     pe.xbar = NoncoherentXBar(forward_latency  = 0,
                               frontend_latency = 0,
                               response_latency = 1,
-                              width = 8,
-                             )
+                              width = 8)
 
     pe.scratchpad = Scratchpad(in_addr_map = "true")
     pe.scratchpad.cpu_port = pe.xbar.master
 
     if options.watch_pe == no:
-      print "PE%u: watching memory %#x..%#x" % (no, options.watch_start, options.watch_end)
-      pe.scratchpad.watch_range_start = options.watch_start
-      pe.scratchpad.watch_range_end = options.watch_end
+        print "PE%u: watching memory %#x..%#x" % (no, options.watch_start, options.watch_end)
+        pe.scratchpad.watch_range_start = options.watch_start
+        pe.scratchpad.watch_range_end = options.watch_end
 
     pe.dtu = Dtu()
     pe.dtu.core_id = no
