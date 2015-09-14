@@ -45,8 +45,7 @@ enum class DtuReg : Addr
 
 enum class Status
 {
-    BUSY    = 1 << 0,
-    PRIV    = 1 << 1,
+    PRIV    = 1 << 0,
 };
 
 constexpr unsigned numDtuRegs = 2;

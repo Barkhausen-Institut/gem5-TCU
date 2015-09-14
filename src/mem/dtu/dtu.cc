@@ -153,13 +153,6 @@ Dtu::executeCommand()
 
     assert(cmd.epId < numEndpoints);
 
-    if(cmd.opcode == CommandOpcode::SEND || cmd.opcode == CommandOpcode::REPLY ||
-        cmd.opcode == CommandOpcode::READ || cmd.opcode == CommandOpcode::WRITE)
-    {
-        // set busy flag
-        setStatusFlag(Status::BUSY);
-    }
-
     switch (cmd.opcode)
     {
     case CommandOpcode::IDLE:
@@ -176,9 +169,11 @@ Dtu::executeCommand()
         break;
     case CommandOpcode::INC_READ_PTR:
         incrementReadPtr(cmd.epId);
+        finishOperation();
         break;
     case CommandOpcode::WAKEUP_CORE:
         wakeupCore();
+        finishOperation();
         break;
     default:
         // TODO error handling
@@ -187,26 +182,11 @@ Dtu::executeCommand()
 }
 
 void
-Dtu::setStatusFlag(Status st)
-{
-    RegFile::reg_t flag = static_cast<RegFile::reg_t>(st);
-    regFile.set(DtuReg::STATUS, (regFile.get(DtuReg::STATUS) & ~flag) | flag);
-}
-
-void
-Dtu::clearStatusFlag(Status st)
-{
-    RegFile::reg_t flag = static_cast<RegFile::reg_t>(st);
-    regFile.set(DtuReg::STATUS, regFile.get(DtuReg::STATUS) & ~flag);
-}
-
-void
 Dtu::finishOperation()
 {
     DPRINTF(DtuDetail, "Operation finished\n");
-    // reset command register and unset busy flag
+    // reset command register
     regFile.set(CmdReg::COMMAND, 0);
-    clearStatusFlag(Status::BUSY);
 }
 
 void
