@@ -105,7 +105,11 @@ class O3ThreadContext : public ThreadContext
 
     virtual void setContextId(int id) { thread->setContextId(id); }
 
-    virtual SymbolTable *getSymTab() { return thread->getSymTab(); }
+    virtual SymbolTable *getSymTab() {
+        if(FullSystem)
+            return getSystemPtr()->kernelSymtab;
+        return getProcessPtr()->symtab;
+    }
 
     /** Returns this thread's ID number. */
     virtual int threadId() const { return thread->threadId(); }
