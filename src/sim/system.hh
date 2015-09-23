@@ -197,7 +197,7 @@ class System : public MemObject
     std::vector<ThreadContext *> threadContexts;
     int _numContexts;
 
-    ThreadContext *getThreadContext(ThreadID tid)
+    ThreadContext *getThreadContext(ContextID tid)
     {
         return threadContexts[tid];
     }
@@ -514,14 +514,14 @@ class System : public MemObject
     /// @return Starting address of first page
     Addr allocPhysPages(int npages);
 
-    int registerThreadContext(ThreadContext *tc, int assigned=-1);
-    void replaceThreadContext(ThreadContext *tc, int context_id);
+    ContextID registerThreadContext(ThreadContext *tc,
+                                    ContextID assigned = InvalidContextID);
+    void replaceThreadContext(ThreadContext *tc, ContextID context_id);
 
-    void serialize(std::ostream &os);
-    void unserialize(Checkpoint *cp, const std::string &section);
+    void serialize(CheckpointOut &cp) const M5_ATTR_OVERRIDE;
+    void unserialize(CheckpointIn &cp) M5_ATTR_OVERRIDE;
 
-    unsigned int drain(DrainManager *dm);
-    void drainResume();
+    void drainResume() M5_ATTR_OVERRIDE;
 
   public:
     Counter totalNumInsts;
@@ -552,7 +552,7 @@ class System : public MemObject
      *
      * @param os stream to serialize to
      */
-    virtual void serializeSymtab(std::ostream &os) {}
+    virtual void serializeSymtab(CheckpointOut &os) const {}
 
     /**
      * If needed, unserialize additional symbol table entries for a
@@ -561,8 +561,7 @@ class System : public MemObject
      * @param cp checkpoint to unserialize from
      * @param section relevant section in the checkpoint
      */
-    virtual void unserializeSymtab(Checkpoint *cp,
-                                   const std::string &section) {}
+    virtual void unserializeSymtab(CheckpointIn &cp) {}
 
 };
 

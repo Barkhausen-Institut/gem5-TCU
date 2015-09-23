@@ -127,7 +127,7 @@ BaseCPU::BaseCPU(Params *p, bool is_checker)
     : MemObject(p), instCnt(0), _cpuId(p->cpu_id), _socketId(p->socket_id),
       _instMasterId(p->system->getMasterId(name() + ".inst")),
       _dataMasterId(p->system->getMasterId(name() + ".data")),
-      _taskId(ContextSwitchTaskId::Unknown), _pid(Request::invldPid),
+      _taskId(ContextSwitchTaskId::Unknown), _pid(invldPid),
       _switchedOut(p->switched_out), _cacheLineSize(p->system->cacheLineSize()),
       interrupts(p->interrupts), profileEvent(NULL), _denySuspend(false),
       numThreads(p->numThreads), system(p->system),
@@ -640,7 +640,7 @@ BaseCPU::ProfileEvent::process()
 }
 
 void
-BaseCPU::serialize(std::ostream &os)
+BaseCPU::serialize(CheckpointOut &cp) const
 {
     SERIALIZE_SCALAR(instCnt);
 
@@ -651,28 +651,30 @@ BaseCPU::serialize(std::ostream &os)
          * system. */
         SERIALIZE_SCALAR(_pid);
 
-        interrupts->serialize(os);
+        interrupts->serialize(cp);
 
         // Serialize the threads, this is done by the CPU implementation.
         for (ThreadID i = 0; i < numThreads; ++i) {
-            nameOut(os, csprintf("%s.xc.%i", name(), i));
-            serializeThread(os, i);
+            ScopedCheckpointSection sec(cp, csprintf("xc.%i", i));
+            serializeThread(cp, i);
         }
     }
 }
 
 void
-BaseCPU::unserialize(Checkpoint *cp, const std::string &section)
+BaseCPU::unserialize(CheckpointIn &cp)
 {
     UNSERIALIZE_SCALAR(instCnt);
 
     if (!_switchedOut) {
         UNSERIALIZE_SCALAR(_pid);
-        interrupts->unserialize(cp, section);
+        interrupts->unserialize(cp);
 
         // Unserialize the threads, this is done by the CPU implementation.
-        for (ThreadID i = 0; i < numThreads; ++i)
-            unserializeThread(cp, csprintf("%s.xc.%i", section, i), i);
+        for (ThreadID i = 0; i < numThreads; ++i) {
+            ScopedCheckpointSection sec(cp, csprintf("xc.%i", i));
+            unserializeThread(cp, i);
+        }
     }
 }
 

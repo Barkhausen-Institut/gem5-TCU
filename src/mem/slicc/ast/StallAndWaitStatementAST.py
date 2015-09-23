@@ -39,11 +39,11 @@ class StallAndWaitStatementAST(StatementAST):
 
     def generate(self, code, return_type):
         self.in_port.assertType("InPort")
-        self.address.assertType("Address")
+        self.address.assertType("Addr")
 
         in_port_code = self.in_port.var.code
         address_code = self.address.var.code
         code('''
         stallBuffer(&($in_port_code), $address_code);
-        $in_port_code.stallMessage($address_code);
+        $in_port_code.stallMessage($address_code, clockEdge());
         ''')

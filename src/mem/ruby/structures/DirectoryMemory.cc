@@ -31,13 +31,12 @@
 #include "debug/RubyStats.hh"
 #include "mem/ruby/slicc_interface/RubySlicc_Util.hh"
 #include "mem/ruby/structures/DirectoryMemory.hh"
-#include "mem/ruby/system/System.hh"
+#include "mem/ruby/system/RubySystem.hh"
 
 using namespace std;
 
 int DirectoryMemory::m_num_directories = 0;
 int DirectoryMemory::m_num_directories_bits = 0;
-uint64_t DirectoryMemory::m_total_size_bytes = 0;
 int DirectoryMemory::m_numa_high_bit = 0;
 
 DirectoryMemory::DirectoryMemory(const Params *p)
@@ -60,7 +59,6 @@ DirectoryMemory::init()
 
     m_num_directories++;
     m_num_directories_bits = ceilLog2(m_num_directories);
-    m_total_size_bytes += m_size_bytes;
 
     if (m_numa_high_bit == 0) {
         m_numa_high_bit = RubySystem::getMemorySizeBits() - 1;
@@ -71,7 +69,7 @@ DirectoryMemory::init()
 DirectoryMemory::~DirectoryMemory()
 {
     // free up all the directory entries
-    for (uint64 i = 0; i < m_num_entries; i++) {
+    for (uint64_t i = 0; i < m_num_entries; i++) {
         if (m_entries[i] != NULL) {
             delete m_entries[i];
         }
@@ -79,43 +77,44 @@ DirectoryMemory::~DirectoryMemory()
     delete [] m_entries;
 }
 
-uint64
-DirectoryMemory::mapAddressToDirectoryVersion(PhysAddress address)
+uint64_t
+DirectoryMemory::mapAddressToDirectoryVersion(Addr address)
 {
     if (m_num_directories_bits == 0)
         return 0;
 
-    uint64 ret = address.bitSelect(m_numa_high_bit - m_num_directories_bits + 1,
-                                   m_numa_high_bit);
+    uint64_t ret = bitSelect(address,
+                           m_numa_high_bit - m_num_directories_bits + 1,
+                           m_numa_high_bit);
     return ret;
 }
 
 bool
-DirectoryMemory::isPresent(PhysAddress address)
+DirectoryMemory::isPresent(Addr address)
 {
     bool ret = (mapAddressToDirectoryVersion(address) == m_version);
     return ret;
 }
 
-uint64
-DirectoryMemory::mapAddressToLocalIdx(PhysAddress address)
+uint64_t
+DirectoryMemory::mapAddressToLocalIdx(Addr address)
 {
-    uint64 ret;
+    uint64_t ret;
     if (m_num_directories_bits > 0) {
-        ret = address.bitRemove(m_numa_high_bit - m_num_directories_bits + 1,
-                                m_numa_high_bit);
+        ret = bitRemove(address, m_numa_high_bit - m_num_directories_bits + 1,
+                        m_numa_high_bit);
     } else {
-        ret = address.getAddress();
+        ret = address;
     }
 
     return ret >> (RubySystem::getBlockSizeBits());
 }
 
 AbstractEntry*
-DirectoryMemory::lookup(PhysAddress address)
+DirectoryMemory::lookup(Addr address)
 {
     assert(isPresent(address));
-    DPRINTF(RubyCache, "Looking up address: %s\n", address);
+    DPRINTF(RubyCache, "Looking up address: %#x\n", address);
 
     uint64_t idx = mapAddressToLocalIdx(address);
     assert(idx < m_num_entries);
@@ -123,11 +122,11 @@ DirectoryMemory::lookup(PhysAddress address)
 }
 
 AbstractEntry*
-DirectoryMemory::allocate(const PhysAddress& address, AbstractEntry* entry)
+DirectoryMemory::allocate(Addr address, AbstractEntry *entry)
 {
     assert(isPresent(address));
-    uint64 idx;
-    DPRINTF(RubyCache, "Looking up address: %s\n", address);
+    uint64_t idx;
+    DPRINTF(RubyCache, "Looking up address: %#x\n", address);
 
     idx = mapAddressToLocalIdx(address);
     assert(idx < m_num_entries);

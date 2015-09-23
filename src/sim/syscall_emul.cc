@@ -210,13 +210,17 @@ SyscallReturn
 closeFunc(SyscallDesc *desc, int num, LiveProcess *p, ThreadContext *tc)
 {
     int index = 0;
-    int target_fd = p->getSyscallArg(tc, index);
-    int sim_fd = p->sim_fd(target_fd);
+    int tgt_fd = p->getSyscallArg(tc, index);
+
+    int sim_fd = p->getSimFD(tgt_fd);
+    if (sim_fd < 0)
+        return -EBADF;
+
     int status = 0;
     if (sim_fd > 2)
         status = close(sim_fd);
     if (status >= 0)
-        p->free_fd(target_fd);
+        p->resetFDEntry(tgt_fd);
     return status;
 }
 
@@ -225,13 +229,16 @@ SyscallReturn
 readFunc(SyscallDesc *desc, int num, LiveProcess *p, ThreadContext *tc)
 {
     int index = 0;
-    int fd = p->sim_fd(p->getSyscallArg(tc, index));
-    assert(fd >= 0);
+    int tgt_fd = p->getSyscallArg(tc, index);
     Addr bufPtr = p->getSyscallArg(tc, index);
     int nbytes = p->getSyscallArg(tc, index);
     BufferArg bufArg(bufPtr, nbytes);
 
-    int bytes_read = read(fd, bufArg.bufferPtr(), nbytes);
+    int sim_fd = p->getSimFD(tgt_fd);
+    if (sim_fd < 0)
+        return -EBADF;
+
+    int bytes_read = read(sim_fd, bufArg.bufferPtr(), nbytes);
 
     if (bytes_read != -1)
         bufArg.copyOut(tc->getMemProxy());
@@ -243,16 +250,20 @@ SyscallReturn
 writeFunc(SyscallDesc *desc, int num, LiveProcess *p, ThreadContext *tc)
 {
     int index = 0;
-    int fd = p->sim_fd(p->getSyscallArg(tc, index));
+    int tgt_fd = p->getSyscallArg(tc, index);
     Addr bufPtr = p->getSyscallArg(tc, index);
     int nbytes = p->getSyscallArg(tc, index);
     BufferArg bufArg(bufPtr, nbytes);
 
+    int sim_fd = p->getSimFD(tgt_fd);
+    if (sim_fd < 0)
+        return -EBADF;
+
     bufArg.copyIn(tc->getMemProxy());
 
-    int bytes_written = write(fd, bufArg.bufferPtr(), nbytes);
+    int bytes_written = write(sim_fd, bufArg.bufferPtr(), nbytes);
 
-    fsync(fd);
+    fsync(sim_fd);
 
     return bytes_written;
 }
@@ -262,12 +273,15 @@ SyscallReturn
 lseekFunc(SyscallDesc *desc, int num, LiveProcess *p, ThreadContext *tc)
 {
     int index = 0;
-    int fd = p->sim_fd(p->getSyscallArg(tc, index));
-    assert(fd >= 0);
+    int tgt_fd = p->getSyscallArg(tc, index);
     uint64_t offs = p->getSyscallArg(tc, index);
     int whence = p->getSyscallArg(tc, index);
 
-    off_t result = lseek(fd, offs, whence);
+    int sim_fd = p->getSimFD(tgt_fd);
+    if (sim_fd < 0)
+        return -EBADF;
+
+    off_t result = lseek(sim_fd, offs, whence);
 
     return (result == (off_t)-1) ? -errno : result;
 }
@@ -277,16 +291,19 @@ SyscallReturn
 _llseekFunc(SyscallDesc *desc, int num, LiveProcess *p, ThreadContext *tc)
 {
     int index = 0;
-    int fd = p->sim_fd(p->getSyscallArg(tc, index));
-    assert(fd >= 0);
+    int tgt_fd = p->getSyscallArg(tc, index);
     uint64_t offset_high = p->getSyscallArg(tc, index);
     uint32_t offset_low = p->getSyscallArg(tc, index);
     Addr result_ptr = p->getSyscallArg(tc, index);
     int whence = p->getSyscallArg(tc, index);
 
+    int sim_fd = p->getSimFD(tgt_fd);
+    if (sim_fd < 0)
+        return -EBADF;
+
     uint64_t offset = (offset_high << 32) | offset_low;
 
-    uint64_t result = lseek(fd, offset, whence);
+    uint64_t result = lseek(sim_fd, offset, whence);
     result = TheISA::htog(result);
 
     if (result == (off_t)-1) {
@@ -348,12 +365,10 @@ getcwdFunc(SyscallDesc *desc, int num, LiveProcess *p, ThreadContext *tc)
         }
         strncpy((char *)buf.bufferPtr(), cwd.c_str(), size);
         result = cwd.length();
-    }
-    else {
+    } else {
         if (getcwd((char *)buf.bufferPtr(), size) != NULL) {
             result = strlen((char *)buf.bufferPtr());
-        }
-        else {
+        } else {
             result = -1;
         }
     }
@@ -388,7 +403,30 @@ readlinkFunc(SyscallDesc *desc, int num, LiveProcess *p, ThreadContext *tc,
 
     BufferArg buf(bufPtr, bufsiz);
 
-    int result = readlink(path.c_str(), (char *)buf.bufferPtr(), bufsiz);
+    int result = -1;
+    if (path != "/proc/self/exe") {
+        result = readlink(path.c_str(), (char *)buf.bufferPtr(), bufsiz);
+    } else {
+        // readlink() will return the path of the binary given
+        // with the -c option, however it is possible that this
+        // will still result in incorrect behavior if one binary
+        // runs another, e.g., -c time -o "my_binary" where
+        // my_binary calls readlink(). this is a very unlikely case,
+        // so we issue a warning.
+        warn_once("readlink may yield unexpected results if multiple "
+                  "binaries are used\n");
+        if (strlen(p->progName()) > bufsiz) {
+            // readlink will truncate the contents of the
+            // path to ensure it is no more than bufsiz
+            strncpy((char*)buf.bufferPtr(), p->progName(), bufsiz);
+            result = bufsiz;
+        } else {
+            // return the program's working path rather
+            // than the one for the gem5 binary itself.
+            strcpy((char*)buf.bufferPtr(), p->progName());
+            result = strlen((char*)buf.bufferPtr());
+        }
+    }
 
     buf.copyOut(tc->getMemProxy());
 
@@ -481,14 +519,14 @@ ftruncateFunc(SyscallDesc *desc, int num,
               LiveProcess *process, ThreadContext *tc)
 {
     int index = 0;
-    int fd = process->sim_fd(process->getSyscallArg(tc, index));
-
-    if (fd < 0)
-        return -EBADF;
-
+    int tgt_fd = process->getSyscallArg(tc, index);
     off_t length = process->getSyscallArg(tc, index);
 
-    int result = ftruncate(fd, length);
+    int sim_fd = process->getSimFD(tgt_fd);
+    if (sim_fd < 0)
+        return -EBADF;
+
+    int result = ftruncate(sim_fd, length);
     return (result == -1) ? -errno : result;
 }
 
@@ -520,17 +558,17 @@ ftruncate64Func(SyscallDesc *desc, int num,
                 LiveProcess *process, ThreadContext *tc)
 {
     int index = 0;
-    int fd = process->sim_fd(process->getSyscallArg(tc, index));
-
-    if (fd < 0)
-        return -EBADF;
-
+    int tgt_fd = process->getSyscallArg(tc, index);
     int64_t length = process->getSyscallArg(tc, index, 64);
 
+    int sim_fd = process->getSimFD(tgt_fd);
+    if (sim_fd < 0)
+        return -EBADF;
+
 #if NO_STAT64
-    int result = ftruncate(fd, length);
+    int result = ftruncate(sim_fd, length);
 #else
-    int result = ftruncate64(fd, length);
+    int result = ftruncate64(sim_fd, length);
 #endif
     return (result == -1) ? -errno : result;
 }
@@ -572,9 +610,10 @@ SyscallReturn
 fchownFunc(SyscallDesc *desc, int num, LiveProcess *process, ThreadContext *tc)
 {
     int index = 0;
-    int fd = process->sim_fd(process->getSyscallArg(tc, index));
+    int tgt_fd = process->getSyscallArg(tc, index);
 
-    if (fd < 0)
+    int sim_fd = process->getSimFD(tgt_fd);
+    if (sim_fd < 0)
         return -EBADF;
 
     /* XXX endianess */
@@ -583,7 +622,7 @@ fchownFunc(SyscallDesc *desc, int num, LiveProcess *process, ThreadContext *tc)
     uint32_t group = process->getSyscallArg(tc, index);
     gid_t hostGroup = group;
 
-    int result = fchown(fd, hostOwner, hostGroup);
+    int result = fchown(sim_fd, hostOwner, hostGroup);
     return (result == -1) ? -errno : result;
 }
 
@@ -593,15 +632,16 @@ dupFunc(SyscallDesc *desc, int num, LiveProcess *process, ThreadContext *tc)
 {
     int index = 0;
     int tgt_fd = process->getSyscallArg(tc, index);
-    int sim_fd = process->sim_fd(tgt_fd);
+
+    int sim_fd = process->getSimFD(tgt_fd);
     if (sim_fd < 0)
         return -EBADF;
 
-    Process::FdMap *fdo = process->sim_fd_obj(tgt_fd);
+    FDEntry *fde = process->getFDEntry(tgt_fd);
 
     int result = dup(sim_fd);
     return (result == -1) ? -errno :
-        process->alloc_fd(result, fdo->filename, fdo->flags, fdo->mode, false);
+        process->allocFD(result, fde->filename, fde->flags, fde->mode, false);
 }
 
 
@@ -610,9 +650,10 @@ fcntlFunc(SyscallDesc *desc, int num, LiveProcess *process,
           ThreadContext *tc)
 {
     int index = 0;
-    int fd = process->getSyscallArg(tc, index);
+    int tgt_fd = process->getSyscallArg(tc, index);
 
-    if (fd < 0 || process->sim_fd(fd) < 0)
+    int sim_fd = process->getSimFD(tgt_fd);
+    if (sim_fd < 0)
         return -EBADF;
 
     int cmd = process->getSyscallArg(tc, index);
@@ -620,7 +661,7 @@ fcntlFunc(SyscallDesc *desc, int num, LiveProcess *process,
       case 0: // F_DUPFD
         // if we really wanted to support this, we'd need to do it
         // in the target fd space.
-        warn("fcntl(%d, F_DUPFD) not supported, error returned\n", fd);
+        warn("fcntl(%d, F_DUPFD) not supported, error returned\n", tgt_fd);
         return -EMFILE;
 
       case 1: // F_GETFD (get close-on-exec flag)
@@ -631,15 +672,15 @@ fcntlFunc(SyscallDesc *desc, int num, LiveProcess *process,
       case 4: // F_SETFL (set file flags)
         // not sure if this is totally valid, but we'll pass it through
         // to the underlying OS
-        warn("fcntl(%d, %d) passed through to host\n", fd, cmd);
-        return fcntl(process->sim_fd(fd), cmd);
+        warn("fcntl(%d, %d) passed through to host\n", tgt_fd, cmd);
+        return fcntl(sim_fd, cmd);
         // return 0;
 
       case 7: // F_GETLK  (get lock)
       case 8: // F_SETLK  (set lock)
       case 9: // F_SETLKW (set lock and wait)
         // don't mess with file locking... just act like it's OK
-        warn("File lock call (fcntl(%d, %d)) ignored.\n", fd, cmd);
+        warn("File lock call (fcntl(%d, %d)) ignored.\n", tgt_fd, cmd);
         return 0;
 
       default:
@@ -653,27 +694,29 @@ fcntl64Func(SyscallDesc *desc, int num, LiveProcess *process,
             ThreadContext *tc)
 {
     int index = 0;
-    int fd = process->getSyscallArg(tc, index);
+    int tgt_fd = process->getSyscallArg(tc, index);
 
-    if (fd < 0 || process->sim_fd(fd) < 0)
+    int sim_fd = process->getSimFD(tgt_fd);
+    if (sim_fd < 0)
         return -EBADF;
 
     int cmd = process->getSyscallArg(tc, index);
     switch (cmd) {
       case 33: //F_GETLK64
-        warn("fcntl64(%d, F_GETLK64) not supported, error returned\n", fd);
+        warn("fcntl64(%d, F_GETLK64) not supported, error returned\n", tgt_fd);
         return -EMFILE;
 
       case 34: // F_SETLK64
       case 35: // F_SETLKW64
-        warn("fcntl64(%d, F_SETLK(W)64) not supported, error returned\n", fd);
+        warn("fcntl64(%d, F_SETLK(W)64) not supported, error returned\n",
+             tgt_fd);
         return -EMFILE;
 
       default:
         // not sure if this is totally valid, but we'll pass it through
         // to the underlying OS
-        warn("fcntl64(%d, %d) passed through to host\n", fd, cmd);
-        return fcntl(process->sim_fd(fd), cmd);
+        warn("fcntl64(%d, %d) passed through to host\n", tgt_fd, cmd);
+        return fcntl(sim_fd, cmd);
         // return 0;
     }
 }
@@ -690,8 +733,8 @@ pipePseudoFunc(SyscallDesc *desc, int callnum, LiveProcess *process,
         return pipe_retval;
     }
 
-    sim_fds[0] = process->alloc_fd(fds[0], "PIPE-READ", O_WRONLY, -1, true);
-    sim_fds[1] = process->alloc_fd(fds[1], "PIPE-WRITE", O_RDONLY, -1, true);
+    sim_fds[0] = process->allocFD(fds[0], "PIPE-READ", O_WRONLY, -1, true);
+    sim_fds[1] = process->allocFD(fds[1], "PIPE-WRITE", O_RDONLY, -1, true);
 
     process->setReadPipeSource(sim_fds[0], sim_fds[1]);
     // Alpha Linux convention for pipe() is that fd[0] is returned as

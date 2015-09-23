@@ -12,7 +12,7 @@
  * modified or unmodified, in source code or in binary form.
  *
  * Copyright (c) 2006 The Regents of The University of Michigan
- * Copyright (c) 2010 Advanced Micro Devices, Inc.
+ * Copyright (c) 2010,2015 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -71,7 +71,8 @@ MemCmd::commandInfo[] =
 {
     /* InvalidCmd */
     { 0, InvalidCmd, "InvalidCmd" },
-    /* ReadReq */
+    /* ReadReq - Read issued by a non-caching agent such as a CPU or
+     * device, with no restrictions on alignment. */
     { SET3(IsRead, IsRequest, NeedsResponse), ReadResp, "ReadReq" },
     /* ReadResp */
     { SET3(IsRead, IsResponse, HasData), InvalidCmd, "ReadResp" },
@@ -86,6 +87,8 @@ MemCmd::commandInfo[] =
     /* Writeback */
     { SET4(IsWrite, NeedsExclusive, IsRequest, HasData),
             InvalidCmd, "Writeback" },
+    /* CleanEvict */
+    { SET2(IsWrite, IsRequest), InvalidCmd, "CleanEvict" },
     /* SoftPFReq */
     { SET4(IsRead, IsRequest, IsSWPrefetch, NeedsResponse),
             SoftPFResp, "SoftPFReq" },
@@ -98,13 +101,9 @@ MemCmd::commandInfo[] =
     /* HardPFResp */
     { SET4(IsRead, IsResponse, IsHWPrefetch, HasData),
             InvalidCmd, "HardPFResp" },
-    /* WriteInvalidateReq */
-    { SET6(IsWrite, NeedsExclusive, IsInvalidate,
-           IsRequest, HasData, NeedsResponse),
-            WriteInvalidateResp, "WriteInvalidateReq" },
-    /* WriteInvalidateResp */
-    { SET3(IsWrite, NeedsExclusive, IsResponse),
-            InvalidCmd, "WriteInvalidateResp" },
+    /* WriteLineReq */
+    { SET5(IsWrite, NeedsExclusive, IsRequest, NeedsResponse, HasData),
+            WriteResp, "WriteLineReq" },
     /* UpgradeReq */
     { SET5(IsInvalidate, NeedsExclusive, IsUpgrade, IsRequest, NeedsResponse),
             UpgradeResp, "UpgradeReq" },
@@ -123,12 +122,23 @@ MemCmd::commandInfo[] =
      * that it has failed, acquires line as Dirty*/
     { SET4(IsRead, NeedsExclusive, IsResponse, HasData),
             InvalidCmd, "UpgradeFailResp" },
-    /* ReadExReq */
+    /* ReadExReq - Read issues by a cache, always cache-line aligned,
+     * and the response is guaranteed to be writeable (exclusive or
+     * even modified) */
     { SET5(IsRead, NeedsExclusive, IsInvalidate, IsRequest, NeedsResponse),
             ReadExResp, "ReadExReq" },
-    /* ReadExResp */
+    /* ReadExResp - Response matching a read exclusive, as we check
+     * the need for exclusive also on responses */
     { SET4(IsRead, NeedsExclusive, IsResponse, HasData),
             InvalidCmd, "ReadExResp" },
+    /* ReadCleanReq - Read issued by a cache, always cache-line
+     * aligned, and the response is guaranteed to not contain dirty data
+     * (exclusive or shared).*/
+    { SET3(IsRead, IsRequest, NeedsResponse), ReadResp, "ReadCleanReq" },
+    /* ReadSharedReq - Read issued by a cache, always cache-line
+     * aligned, response is shared, possibly exclusive, owned or even
+     * modified. */
+    { SET3(IsRead, IsRequest, NeedsResponse), ReadResp, "ReadSharedReq" },
     /* LoadLockedReq: note that we use plain ReadResp as response, so that
      *                we can also use ReadRespWithInvalidate when needed */
     { SET4(IsRead, IsLlsc, IsRequest, NeedsResponse),
@@ -155,6 +165,14 @@ MemCmd::commandInfo[] =
         MessageResp, "MessageReq" },
     /* IntResp -- for interrupts */
     { SET2(IsWrite, IsResponse), InvalidCmd, "MessageResp" },
+    /* ReleaseReq -- for release synchronization */
+    { SET2(IsRequest, NeedsResponse), ReleaseResp, "ReleaseReq" },
+    /* ReleaseResp -- for release synchronization */
+    { SET1(IsResponse), InvalidCmd, "ReleaseResp" },
+    /* AcquireReq -- for release synchronization */
+    { SET2(IsRequest, NeedsResponse), AcquireResp, "AcquireReq" },
+    /* AcquireResp -- for release synchronization */
+    { SET2(IsResponse, NeedsResponse), InvalidCmd, "AcquireResp" },
     /* InvalidDestError  -- packet dest field invalid */
     { SET2(IsResponse, IsError), InvalidCmd, "InvalidDestError" },
     /* BadAddressError   -- memory address invalid */
@@ -168,8 +186,11 @@ MemCmd::commandInfo[] =
     /* Flush Request */
     { SET3(IsRequest, IsFlush, NeedsExclusive), InvalidCmd, "FlushReq" },
     /* Invalidation Request */
-    { SET3(NeedsExclusive, IsInvalidate, IsRequest),
-      InvalidCmd, "InvalidationReq" },
+    { SET4(IsInvalidate, IsRequest, NeedsExclusive, NeedsResponse),
+      InvalidateResp, "InvalidateReq" },
+    /* Invalidation Response */
+    { SET3(IsInvalidate, IsResponse, NeedsExclusive),
+      InvalidCmd, "InvalidateResp" }
 };
 
 bool

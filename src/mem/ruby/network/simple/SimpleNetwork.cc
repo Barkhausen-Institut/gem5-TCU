@@ -38,7 +38,7 @@
 #include "mem/ruby/network/simple/Switch.hh"
 #include "mem/ruby/network/simple/Throttle.hh"
 #include "mem/ruby/profiler/Profiler.hh"
-#include "mem/ruby/system/System.hh"
+#include "mem/ruby/system/RubySystem.hh"
 
 using namespace std;
 using m5::stl_helpers::deletePointers;
@@ -62,6 +62,9 @@ SimpleNetwork::SimpleNetwork(const Params *p)
         m_switches.push_back(s);
         s->init_net_ptr(this);
     }
+
+    m_int_link_buffers = p->int_link_buffers;
+    m_num_connected_buffers = 0;
 }
 
 void
@@ -78,13 +81,13 @@ SimpleNetwork::init()
 SimpleNetwork::~SimpleNetwork()
 {
     deletePointers(m_switches);
-    deletePointers(m_buffers_to_free);
+    deletePointers(m_int_link_buffers);
 }
 
 // From a switch to an endpoint node
 void
-SimpleNetwork::makeOutLink(SwitchID src, NodeID dest, BasicLink* link, 
-                           LinkDirection direction, 
+SimpleNetwork::makeOutLink(SwitchID src, NodeID dest, BasicLink* link,
+                           LinkDirection direction,
                            const NetDest& routing_table_entry)
 {
     assert(dest < m_nodes);
@@ -102,8 +105,8 @@ SimpleNetwork::makeOutLink(SwitchID src, NodeID dest, BasicLink* link,
 
 // From an endpoint node to a switch
 void
-SimpleNetwork::makeInLink(NodeID src, SwitchID dest, BasicLink* link, 
-                          LinkDirection direction, 
+SimpleNetwork::makeInLink(NodeID src, SwitchID dest, BasicLink* link,
+                          LinkDirection direction,
                           const NetDest& routing_table_entry)
 {
     assert(src < m_nodes);
@@ -112,8 +115,8 @@ SimpleNetwork::makeInLink(NodeID src, SwitchID dest, BasicLink* link,
 
 // From a switch to a switch
 void
-SimpleNetwork::makeInternalLink(SwitchID src, SwitchID dest, BasicLink* link, 
-                                LinkDirection direction, 
+SimpleNetwork::makeInternalLink(SwitchID src, SwitchID dest, BasicLink* link,
+                                LinkDirection direction,
                                 const NetDest& routing_table_entry)
 {
     // Create a set of new MessageBuffers
@@ -121,16 +124,10 @@ SimpleNetwork::makeInternalLink(SwitchID src, SwitchID dest, BasicLink* link,
 
     for (int i = 0; i < m_virtual_networks; i++) {
         // allocate a buffer
-        MessageBuffer* buffer_ptr = new MessageBuffer;
-        buffer_ptr->setOrdering(true);
-
-        if (m_buffer_size > 0) {
-            buffer_ptr->resize(m_buffer_size);
-        }
-
+        assert(m_num_connected_buffers < m_int_link_buffers.size());
+        MessageBuffer* buffer_ptr = m_int_link_buffers[m_num_connected_buffers];
+        m_num_connected_buffers++;
         queues[i] = buffer_ptr;
-        // remember to deallocate it
-        m_buffers_to_free.push_back(buffer_ptr);
     }
 
     // Connect it to the two switches
@@ -140,40 +137,6 @@ SimpleNetwork::makeInternalLink(SwitchID src, SwitchID dest, BasicLink* link,
     m_switches[src]->addOutPort(queues, routing_table_entry,
                                 simple_link->m_latency,
                                 simple_link->m_bw_multiplier);
-}
-
-void
-SimpleNetwork::checkNetworkAllocation(NodeID id, bool ordered, int network_num)
-{
-    assert(id < m_nodes);
-    assert(network_num < m_virtual_networks);
-
-    if (ordered) {
-        m_ordered[network_num] = true;
-    }
-    m_in_use[network_num] = true;
-}
-
-void
-SimpleNetwork::setToNetQueue(NodeID id, bool ordered, int network_num,
-                             std::string vnet_type, MessageBuffer *b)
-{
-    checkNetworkAllocation(id, ordered, network_num);
-    while (m_toNetQueues[id].size() <= network_num) {
-        m_toNetQueues[id].push_back(nullptr);
-    }
-    m_toNetQueues[id][network_num] = b;
-}
-
-void
-SimpleNetwork::setFromNetQueue(NodeID id, bool ordered, int network_num,
-                               std::string vnet_type, MessageBuffer *b)
-{
-    checkNetworkAllocation(id, ordered, network_num);
-    while (m_fromNetQueues[id].size() <= network_num) {
-        m_fromNetQueues[id].push_back(nullptr);
-    }
-    m_fromNetQueues[id][network_num] = b;
 }
 
 void
@@ -236,8 +199,8 @@ SimpleNetwork::functionalRead(Packet *pkt)
         }
     }
 
-    for (unsigned int i = 0; i < m_buffers_to_free.size(); ++i) {
-        if (m_buffers_to_free[i]->functionalRead(pkt)) {
+    for (unsigned int i = 0; i < m_int_link_buffers.size(); ++i) {
+        if (m_int_link_buffers[i]->functionalRead(pkt)) {
             return true;
         }
     }
@@ -254,8 +217,8 @@ SimpleNetwork::functionalWrite(Packet *pkt)
         num_functional_writes += m_switches[i]->functionalWrite(pkt);
     }
 
-    for (unsigned int i = 0; i < m_buffers_to_free.size(); ++i) {
-        num_functional_writes += m_buffers_to_free[i]->functionalWrite(pkt);
+    for (unsigned int i = 0; i < m_int_link_buffers.size(); ++i) {
+        num_functional_writes += m_int_link_buffers[i]->functionalWrite(pkt);
     }
     return num_functional_writes;
 }

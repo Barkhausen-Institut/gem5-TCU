@@ -173,10 +173,10 @@ class UFSHostDevice : public DmaDevice
 
     UFSHostDevice(const UFSHostDeviceParams* p);
 
-    unsigned int drain(DrainManager *dm);
+    DrainState drain() M5_ATTR_OVERRIDE;
     void checkDrain();
-    void serialize(std::ostream &os);
-    void unserialize(Checkpoint *cp, const std::string &section);
+    void serialize(CheckpointOut &cp) const M5_ATTR_OVERRIDE;
+    void unserialize(CheckpointIn &cp) M5_ATTR_OVERRIDE;
 
   private:
     /**
@@ -1051,13 +1051,6 @@ class UFSHostDevice : public DmaDevice
      */
     Tick transactionStart[32];
     Tick idlePhaseStart;
-
-    /**
-     * drain manager
-     * Needed to be able to implement checkpoint functionality
-     */
-
-    DrainManager *drainManager;
 
     /**
      * logic units connected to the UFS Host device

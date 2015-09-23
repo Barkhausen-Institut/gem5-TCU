@@ -35,6 +35,7 @@
 #include <vector>
 
 #include "mem/ruby/common/TypeDefines.hh"
+#include "mem/ruby/system/RubySystem.hh"
 #include "sim/core.hh"
 
 class BankedArray
@@ -44,12 +45,13 @@ class BankedArray
     Cycles accessLatency;
     unsigned int bankBits;
     unsigned int startIndexBit;
+    RubySystem *m_ruby_system;
 
     class AccessRecord
     {
       public:
         AccessRecord() : idx(0), startAccess(0), endAccess(0) {}
-        int64 idx;
+        int64_t idx;
         Tick startAccess;
         Tick endAccess;
     };
@@ -58,15 +60,19 @@ class BankedArray
     // otherwise, schedule the event and wait for it to complete
     std::vector<AccessRecord> busyBanks;
 
-    unsigned int mapIndexToBank(int64 idx);
+    unsigned int mapIndexToBank(int64_t idx);
 
   public:
-    BankedArray(unsigned int banks, Cycles accessLatency, unsigned int startIndexBit);
+    BankedArray(unsigned int banks, Cycles accessLatency,
+                unsigned int startIndexBit, RubySystem *rs);
 
     // Note: We try the access based on the cache index, not the address
     // This is so we don't get aliasing on blocks being replaced
-    bool tryAccess(int64 idx);
+    bool tryAccess(int64_t idx);
 
+    void reserve(int64_t idx);
+
+    Cycles getLatency() const { return accessLatency; }
 };
 
 #endif

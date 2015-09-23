@@ -42,6 +42,8 @@
  *          Steve Reinhardt
  */
 
+#include "arch/arm/tlb.hh"
+
 #include <memory>
 #include <string>
 #include <vector>
@@ -52,7 +54,6 @@
 #include "arch/arm/table_walker.hh"
 #include "arch/arm/stage2_lookup.hh"
 #include "arch/arm/stage2_mmu.hh"
-#include "arch/arm/tlb.hh"
 #include "arch/arm/utility.hh"
 #include "base/inifile.hh"
 #include "base/str.hh"
@@ -382,7 +383,7 @@ TLB::takeOverFrom(BaseTLB *_otlb)
 }
 
 void
-TLB::serialize(ostream &os)
+TLB::serialize(CheckpointOut &cp) const
 {
     DPRINTF(Checkpoint, "Serializing Arm TLB\n");
 
@@ -393,14 +394,12 @@ TLB::serialize(ostream &os)
 
     int num_entries = size;
     SERIALIZE_SCALAR(num_entries);
-    for(int i = 0; i < size; i++){
-        nameOut(os, csprintf("%s.TlbEntry%d", name(), i));
-        table[i].serialize(os);
-    }
+    for(int i = 0; i < size; i++)
+        table[i].serializeSection(cp, csprintf("TlbEntry%d", i));
 }
 
 void
-TLB::unserialize(Checkpoint *cp, const string &section)
+TLB::unserialize(CheckpointIn &cp)
 {
     DPRINTF(Checkpoint, "Unserializing Arm TLB\n");
 
@@ -411,9 +410,8 @@ TLB::unserialize(Checkpoint *cp, const string &section)
 
     int num_entries;
     UNSERIALIZE_SCALAR(num_entries);
-    for(int i = 0; i < min(size, num_entries); i++){
-        table[i].unserialize(cp, csprintf("%s.TlbEntry%d", section, i));
-    }
+    for(int i = 0; i < min(size, num_entries); i++)
+        table[i].unserializeSection(cp, csprintf("TlbEntry%d", i));
 }
 
 void
@@ -979,16 +977,6 @@ TLB::translateFs(RequestPtr req, ThreadContext *tc, Mode mode,
                  "flags %#x tranType 0x%x\n", vaddr_tainted, mode, isStage2,
                  scr, sctlr, flags, tranType);
 
-    // If this is a clrex instruction, provide a PA of 0 with no fault
-    // This will force the monitor to set the tracked address to 0
-    // a bit of a hack but this effectively clrears this processors monitor
-    if (flags & Request::CLEAR_LL){
-        // @todo: check implications of security extensions
-       req->setPaddr(0);
-       req->setFlags(Request::UNCACHEABLE | Request::STRICT_ORDER);
-       req->setFlags(Request::CLEAR_LL);
-       return NoFault;
-    }
     if ((req->isInstFetch() && (!sctlr.i)) ||
         ((!req->isInstFetch()) && (!sctlr.c))){
        req->setFlags(Request::UNCACHEABLE | Request::STRICT_ORDER);

@@ -50,7 +50,6 @@
 #include "arch/arm/vtophys.hh"
 #include "arch/generic/tlb.hh"
 #include "base/statistics.hh"
-#include "dev/dma_device.hh"
 #include "mem/request.hh"
 #include "params/ArmTLB.hh"
 #include "sim/probe/pmu.hh"
@@ -285,11 +284,11 @@ class TLB : public BaseTLB
             bool callFromS2);
     Fault finalizePhysical(RequestPtr req, ThreadContext *tc, Mode mode) const;
 
-    void drainResume();
+    void drainResume() M5_ATTR_OVERRIDE;
 
     // Checkpointing
-    void serialize(std::ostream &os);
-    void unserialize(Checkpoint *cp, const std::string &section);
+    void serialize(CheckpointOut &cp) const M5_ATTR_OVERRIDE;
+    void unserialize(CheckpointIn &cp) M5_ATTR_OVERRIDE;
 
     void regStats();
 

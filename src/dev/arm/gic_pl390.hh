@@ -210,7 +210,7 @@ class Pl390 : public BaseGic
     /** software generated interrupt
      * @param data data to decode that indicates which cpus to interrupt
      */
-    void softInt(int ctx_id, SWI swi);
+    void softInt(ContextID ctx_id, SWI swi);
 
     /** See if some processor interrupt flags need to be enabled/disabled
      * @param hint which set of interrupts needs to be checked
@@ -300,8 +300,8 @@ class Pl390 : public BaseGic
     void driveIrqEn(bool state);
     /** @} */
 
-    virtual void serialize(std::ostream &os);
-    virtual void unserialize(Checkpoint *cp, const std::string &section);
+    void serialize(CheckpointOut &cp) const M5_ATTR_OVERRIDE;
+    void unserialize(CheckpointIn &cp) M5_ATTR_OVERRIDE;
 
   protected:
     /** Handle a read to the distributor poriton of the GIC

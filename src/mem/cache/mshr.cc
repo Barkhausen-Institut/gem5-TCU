@@ -101,10 +101,13 @@ MSHR::TargetList::add(PacketPtr pkt, Tick readyTime,
         if (mshr != NULL) {
             assert(!mshr->downstreamPending);
             mshr->downstreamPending = true;
+        } else {
+            // No need to clear downstreamPending later
+            markPending = false;
         }
     }
 
-    emplace_back(Target(pkt, readyTime, order, source, markPending));
+    emplace_back(pkt, readyTime, order, source, markPending);
 }
 
 

@@ -110,12 +110,11 @@
 #include "base/random.hh"
 #include "debug/RubyMemory.hh"
 #include "mem/ruby/common/Address.hh"
-#include "mem/ruby/common/Global.hh"
 #include "mem/ruby/profiler/Profiler.hh"
-#include "mem/ruby/slicc_interface/NetworkMessage.hh"
+#include "mem/ruby/slicc_interface/Message.hh"
 #include "mem/ruby/slicc_interface/RubySlicc_ComponentMapping.hh"
 #include "mem/ruby/structures/RubyMemoryControl.hh"
-#include "mem/ruby/system/System.hh"
+#include "mem/ruby/system/RubySystem.hh"
 
 using namespace std;
 
@@ -177,7 +176,7 @@ void
 RubyMemoryControl::init()
 {
     m_msg_counter = 0;
-    assert(m_tFaw <= 62); // must fit in a uint64 shift register
+    assert(m_tFaw <= 62); // must fit in a uint64_t shift register
 
     m_total_banks = m_banks_per_rank * m_ranks_per_dimm * m_dimms_per_channel;
     m_total_ranks = m_ranks_per_dimm * m_dimms_per_channel;
@@ -214,7 +213,7 @@ RubyMemoryControl::init()
     // m_tfaw_count keeps track of how many 1 bits are set
     // in each shift register.  When m_tfaw_count is >= 4,
     // new activates are not allowed.
-    m_tfaw_shift = new uint64[m_total_ranks];
+    m_tfaw_shift = new uint64_t[m_total_ranks];
     m_tfaw_count = new int[m_total_ranks];
     for (int i = 0; i < m_total_ranks; i++) {
         m_tfaw_shift[i] = 0;
@@ -237,7 +236,7 @@ RubyMemoryControl::reset()
 {
     m_msg_counter = 0;
 
-    assert(m_tFaw <= 62); // must fit in a uint64 shift register
+    assert(m_tFaw <= 62); // must fit in a uint64_t shift register
 
     m_total_banks = m_banks_per_rank * m_ranks_per_dimm * m_dimms_per_channel;
     m_total_ranks = m_ranks_per_dimm * m_dimms_per_channel;
@@ -290,7 +289,7 @@ bool
 RubyMemoryControl::recvTimingReq(PacketPtr pkt)
 {
     Cycles arrival_time = curCycle();
-    physical_address_t addr = pkt->getAddr();
+    Addr addr = pkt->getAddr();
     bool is_mem_read = pkt->isRead();
 
     access(pkt);
@@ -307,14 +306,8 @@ RubyMemoryControl::enqueueMemRef(MemoryNode *memRef)
 {
     m_msg_counter++;
     memRef->m_msg_counter = m_msg_counter;
-    physical_address_t addr = memRef->m_addr;
+    Addr addr = memRef->m_addr;
     int bank = getBank(addr);
-
-    DPRINTF(RubyMemory,
-            "New memory request%7d: %#08x %c arrived at %10d bank = %3x sched %c\n",
-            m_msg_counter, addr, memRef->m_is_mem_read ? 'R':'W',
-            memRef->m_time * g_system_ptr->clockPeriod(),
-            bank, m_event.scheduled() ? 'Y':'N');
 
     m_profiler_ptr->profileMemReq(bank);
     m_input_queue.push_back(memRef);
@@ -350,7 +343,7 @@ RubyMemoryControl::enqueueToDirectory(MemoryNode *req, Cycles latency)
 // getBank returns an integer that is unique for each
 // bank across this memory controller.
 const int
-RubyMemoryControl::getBank(const physical_address_t addr) const
+RubyMemoryControl::getBank(const Addr addr) const
 {
     int dimm = (addr >> m_dimm_bit_0) & (m_dimms_per_channel - 1);
     int rank = (addr >> m_rank_bit_0) & (m_ranks_per_dimm - 1);
@@ -361,7 +354,7 @@ RubyMemoryControl::getBank(const physical_address_t addr) const
 }
 
 const int
-RubyMemoryControl::getRank(const physical_address_t addr) const
+RubyMemoryControl::getRank(const Addr addr) const
 {
     int bank = getBank(addr);
     int rank = (bank / m_banks_per_rank);
@@ -381,7 +374,7 @@ RubyMemoryControl::getRank(int bank) const
 
 // Not used!
 const int
-RubyMemoryControl::getChannel(const physical_address_t addr) const
+RubyMemoryControl::getChannel(const Addr addr) const
 {
     assert(false);
     return -1;
@@ -389,7 +382,7 @@ RubyMemoryControl::getChannel(const physical_address_t addr) const
 
 // Not used!
 const int
-RubyMemoryControl::getRow(const physical_address_t addr) const
+RubyMemoryControl::getRow(const Addr addr) const
 {
     assert(false);
     return -1;
@@ -640,14 +633,14 @@ RubyMemoryControl::executeCycle()
     }
 }
 
-unsigned int
-RubyMemoryControl::drain(DrainManager *dm)
+DrainState
+RubyMemoryControl::drain()
 {
     DPRINTF(RubyMemory, "MemoryController drain\n");
     if(m_event.scheduled()) {
         deschedule(m_event);
     }
-    return 0;
+    return DrainState::Drained;
 }
 
 // wakeup:  This function is called once per memory controller clock cycle.

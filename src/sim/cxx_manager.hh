@@ -61,7 +61,7 @@
 #include "base/cprintf.hh"
 #include "sim/cxx_config.hh"
 
-class Checkpoint;
+class CheckpointIn;
 
 /** This class allows a config file to be read into gem5 (generating the
  *  appropriate SimObjects) from C++ */
@@ -283,7 +283,7 @@ class CxxConfigManager
     void startup();
 
     /** Drain all objects */
-    unsigned int drain(DrainManager *drain_manager);
+    unsigned int drain();
 
     /** Resume from drain */
     void drainResume();
@@ -292,7 +292,7 @@ class CxxConfigManager
     void serialize(std::ostream &os);
 
     /** Load all objects' state from the given Checkpoint */
-    void loadState(Checkpoint *checkpoint);
+    void loadState(CheckpointIn &checkpoint);
 
     /** Delete all objects and clear objectsByName and objectsByOrder */
     void deleteObjects();

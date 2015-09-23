@@ -215,7 +215,12 @@ class BaseDynInst : public ExecContext, public RefCounted
     Addr effAddr;
 
     /** The effective physical address. */
-    Addr physEffAddr;
+    Addr physEffAddrLow;
+
+    /** The effective physical address
+     *  of the second request for a split request
+     */
+    Addr physEffAddrHigh;
 
     /** The memory request flags (from translation). */
     unsigned memReqFlags;
@@ -460,7 +465,7 @@ class BaseDynInst : public ExecContext, public RefCounted
     MasterID masterId() const { return cpu->dataMasterId(); }
 
     /** Read this context's system-wide ID **/
-    int contextId() const { return thread->contextId(); }
+    ContextID contextId() const { return thread->contextId(); }
 
     /** Returns the fault type. */
     Fault getFault() const { return fault; }
@@ -1056,7 +1061,15 @@ BaseDynInst<Impl>::finishTranslation(WholeTranslationState *state)
     instFlags[IsStrictlyOrdered] = state->isStrictlyOrdered();
 
     if (fault == NoFault) {
-        physEffAddr = state->getPaddr();
+        // save Paddr for a single req
+        physEffAddrLow = state->getPaddr();
+
+        // case for the request that has been split
+        if (state->isSplit) {
+          physEffAddrLow = state->sreqLow->getPaddr();
+          physEffAddrHigh = state->sreqHigh->getPaddr();
+        }
+
         memReqFlags = state->getFlags();
 
         if (state->mainReq->isCondSwap()) {

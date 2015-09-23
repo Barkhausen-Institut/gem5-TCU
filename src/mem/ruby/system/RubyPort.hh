@@ -47,7 +47,7 @@
 
 #include "mem/protocol/RequestStatus.hh"
 #include "mem/ruby/network/MessageBuffer.hh"
-#include "mem/ruby/system/System.hh"
+#include "mem/ruby/system/RubySystem.hh"
 #include "mem/mem_object.hh"
 #include "mem/tport.hh"
 #include "params/RubyPort.hh"
@@ -75,14 +75,13 @@ class RubyPort : public MemObject
     {
       private:
         RespPacketQueue queue;
-        RubySystem* ruby_system;
         bool access_backing_store;
 
       public:
         MemSlavePort(const std::string &_name, RubyPort *_port,
-               RubySystem*_system, bool _access_backing_store, PortID id);
+                     bool _access_backing_store, PortID id);
         void hitCallback(PacketPtr pkt);
-        void evictionCallback(const Address& address);
+        void evictionCallback(Addr address);
 
       protected:
         bool recvTimingReq(PacketPtr pkt);
@@ -162,12 +161,12 @@ class RubyPort : public MemObject
     //
     void setController(AbstractController* _cntrl) { m_controller = _cntrl; }
     uint32_t getId() { return m_version; }
-    unsigned int drain(DrainManager *dm);
+    DrainState drain() M5_ATTR_OVERRIDE;
 
   protected:
     void ruby_hit_callback(PacketPtr pkt);
     void testDrainComplete();
-    void ruby_eviction_callback(const Address& address);
+    void ruby_eviction_callback(Addr address);
 
     /**
      * Called by the PIO port when receiving a timing response.
@@ -179,6 +178,7 @@ class RubyPort : public MemObject
      */
     bool recvTimingResp(PacketPtr pkt, PortID master_port_id);
 
+    RubySystem *m_ruby_system;
     uint32_t m_version;
     AbstractController* m_controller;
     MessageBuffer* m_mandatory_q_ptr;
@@ -188,12 +188,10 @@ class RubyPort : public MemObject
   private:
     void addToRetryList(MemSlavePort * port)
     {
-        assert(std::find(retryList.begin(), retryList.end(), port) ==
-               retryList.end());
+        if (std::find(retryList.begin(), retryList.end(), port) !=
+               retryList.end()) return;
         retryList.push_back(port);
     }
-
-    unsigned int getChildDrainCount(DrainManager *dm);
 
     PioMasterPort pioMasterPort;
     PioSlavePort pioSlavePort;
@@ -205,8 +203,6 @@ class RubyPort : public MemObject
     typedef std::vector<MemSlavePort *>::iterator CpuPortIter;
     std::vector<MemSlavePort *> slave_ports;
     std::vector<PioMasterPort *> master_ports;
-
-    DrainManager *drainManager;
 
     //
     // Based on similar code in the M5 bus.  Stores pointers to those ports

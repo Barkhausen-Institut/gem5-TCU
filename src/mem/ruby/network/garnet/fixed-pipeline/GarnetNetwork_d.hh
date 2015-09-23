@@ -54,8 +54,8 @@ class GarnetNetwork_d : public BaseGarnetNetwork
     ~GarnetNetwork_d();
     void init();
 
-    int getBuffersPerDataVC() {return m_buffers_per_data_vc; }
-    int getBuffersPerCtrlVC() {return m_buffers_per_ctrl_vc; }
+    int getBuffersPerDataVC() { return m_buffers_per_data_vc; }
+    int getBuffersPerCtrlVC() { return m_buffers_per_ctrl_vc; }
 
     void collateStats();
     void regStats();
@@ -69,7 +69,7 @@ class GarnetNetwork_d : public BaseGarnetNetwork
     }
 
     // Methods used by Topology to setup the network
-    void makeOutLink(SwitchID src, NodeID dest, BasicLink* link, 
+    void makeOutLink(SwitchID src, NodeID dest, BasicLink* link,
                      LinkDirection direction,
                      const NetDest& routing_table_entry);
     void makeInLink(NodeID src, SwitchID dest, BasicLink* link,
@@ -84,9 +84,6 @@ class GarnetNetwork_d : public BaseGarnetNetwork
     uint32_t functionalWrite(Packet *pkt);
 
   private:
-    void checkNetworkAllocation(NodeID id, bool ordered, int network_num,
-                                std::string vnet_type);
-
     GarnetNetwork_d(const GarnetNetwork_d& obj);
     GarnetNetwork_d& operator=(const GarnetNetwork_d& obj);
 

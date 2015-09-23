@@ -35,21 +35,20 @@ from Ruby import create_topology
 from Ruby import send_evicts
 
 #
-# Note: the cache latency is only used by the sequencer on fast path hits
+# Declare caches used by the protocol
 #
-class Cache(RubyCache):
-    latency = 3
+class L1Cache(RubyCache): pass
 
 def define_options(parser):
     return
 
 def create_system(options, full_system, system, dma_ports, ruby_system):
-    
+
     if buildEnv['PROTOCOL'] != 'MI_example':
         panic("This script requires the MI_example protocol to be built.")
 
     cpu_sequencers = []
-    
+
     #
     # The ruby network creation expects the list of nodes in the system to be
     # consistent with the NetDest list.  Therefore the l1 controller nodes must be
@@ -71,9 +70,9 @@ def create_system(options, full_system, system, dma_ports, ruby_system):
         # Only one cache exists for this protocol, so by default use the L1D
         # config parameters.
         #
-        cache = Cache(size = options.l1d_size,
-                      assoc = options.l1d_assoc,
-                      start_index_bit = block_size_bits)
+        cache = L1Cache(size = options.l1d_size,
+                        assoc = options.l1d_assoc,
+                        start_index_bit = block_size_bits)
 
         #
         # Only one unified L1 cache exists.  Can cache instructions and data.
@@ -99,11 +98,15 @@ def create_system(options, full_system, system, dma_ports, ruby_system):
         l1_cntrl_nodes.append(l1_cntrl)
 
         # Connect the L1 controllers and the network
-        l1_cntrl.requestFromCache =  ruby_system.network.slave
-        l1_cntrl.responseFromCache =  ruby_system.network.slave
-        l1_cntrl.forwardToCache =  ruby_system.network.master
-        l1_cntrl.responseToCache =  ruby_system.network.master
-
+        l1_cntrl.mandatoryQueue = MessageBuffer()
+        l1_cntrl.requestFromCache = MessageBuffer(ordered = True)
+        l1_cntrl.requestFromCache.master = ruby_system.network.slave
+        l1_cntrl.responseFromCache = MessageBuffer(ordered = True)
+        l1_cntrl.responseFromCache.master = ruby_system.network.slave
+        l1_cntrl.forwardToCache = MessageBuffer(ordered = True)
+        l1_cntrl.forwardToCache.slave = ruby_system.network.master
+        l1_cntrl.responseToCache = MessageBuffer(ordered = True)
+        l1_cntrl.responseToCache.slave = ruby_system.network.master
 
     phys_mem_size = sum(map(lambda r: r.size(), system.mem_ranges))
     assert(phys_mem_size % options.num_dirs == 0)
@@ -129,12 +132,18 @@ def create_system(options, full_system, system, dma_ports, ruby_system):
         dir_cntrl_nodes.append(dir_cntrl)
 
         # Connect the directory controllers and the network
-        dir_cntrl.requestToDir = ruby_system.network.master
-        dir_cntrl.dmaRequestToDir = ruby_system.network.master
+        dir_cntrl.requestToDir = MessageBuffer(ordered = True)
+        dir_cntrl.requestToDir.slave = ruby_system.network.master
+        dir_cntrl.dmaRequestToDir = MessageBuffer(ordered = True)
+        dir_cntrl.dmaRequestToDir.slave = ruby_system.network.master
 
-        dir_cntrl.responseFromDir = ruby_system.network.slave
-        dir_cntrl.dmaResponseFromDir = ruby_system.network.slave
-        dir_cntrl.forwardFromDir = ruby_system.network.slave
+        dir_cntrl.responseFromDir = MessageBuffer()
+        dir_cntrl.responseFromDir.master = ruby_system.network.slave
+        dir_cntrl.dmaResponseFromDir = MessageBuffer(ordered = True)
+        dir_cntrl.dmaResponseFromDir.master = ruby_system.network.slave
+        dir_cntrl.forwardFromDir = MessageBuffer()
+        dir_cntrl.forwardFromDir.master = ruby_system.network.slave
+        dir_cntrl.responseFromMemory = MessageBuffer()
 
 
     for i, dma_port in enumerate(dma_ports):
@@ -143,7 +152,7 @@ def create_system(options, full_system, system, dma_ports, ruby_system):
         #
         dma_seq = DMASequencer(version = i,
                                ruby_system = ruby_system)
-        
+
         dma_cntrl = DMA_Controller(version = i,
                                    dma_sequencer = dma_seq,
                                    transitions_per_cycle = options.ports,
@@ -154,8 +163,11 @@ def create_system(options, full_system, system, dma_ports, ruby_system):
         dma_cntrl_nodes.append(dma_cntrl)
 
         # Connect the directory controllers and the network
-        dma_cntrl.requestToDir = ruby_system.network.slave
-        dma_cntrl.responseFromDir = ruby_system.network.master
+        dma_cntrl.mandatoryQueue = MessageBuffer()
+        dma_cntrl.requestToDir = MessageBuffer()
+        dma_cntrl.requestToDir.master = ruby_system.network.slave
+        dma_cntrl.responseFromDir = MessageBuffer(ordered = True)
+        dma_cntrl.responseFromDir.slave = ruby_system.network.master
 
     all_cntrls = l1_cntrl_nodes + dir_cntrl_nodes + dma_cntrl_nodes
 
@@ -169,10 +181,14 @@ def create_system(options, full_system, system, dma_ports, ruby_system):
         ruby_system.io_controller = io_controller
 
         # Connect the dma controller to the network
-        io_controller.responseFromDir = ruby_system.network.master
-        io_controller.requestToDir = ruby_system.network.slave
+        io_controller.mandatoryQueue = MessageBuffer()
+        io_controller.requestToDir = MessageBuffer()
+        io_controller.requestToDir.master = ruby_system.network.slave
+        io_controller.responseFromDir = MessageBuffer(ordered = True)
+        io_controller.responseFromDir.slave = ruby_system.network.master
 
         all_cntrls = all_cntrls + [io_controller]
 
+    ruby_system.network.number_of_virtual_networks = 5
     topology = create_topology(all_cntrls, options)
     return (cpu_sequencers, dir_cntrl_nodes, topology)

@@ -31,11 +31,12 @@
 #include "base/cast.hh"
 #include "base/cprintf.hh"
 #include "debug/RubyNetwork.hh"
+#include "mem/ruby/network/simple/Switch.hh"
 #include "mem/ruby/network/simple/Throttle.hh"
 #include "mem/ruby/network/MessageBuffer.hh"
 #include "mem/ruby/network/Network.hh"
-#include "mem/ruby/slicc_interface/NetworkMessage.hh"
-#include "mem/ruby/system/System.hh"
+#include "mem/ruby/slicc_interface/Message.hh"
+#include "mem/ruby/system/RubySystem.hh"
 
 using namespace std;
 
@@ -44,31 +45,14 @@ const int MESSAGE_SIZE_MULTIPLIER = 1000;
 const int BROADCAST_SCALING = 1;
 const int PRIORITY_SWITCH_LIMIT = 128;
 
-static int network_message_to_size(NetworkMessage* net_msg_ptr);
+static int network_message_to_size(Message* net_msg_ptr);
 
-Throttle::Throttle(int sID, NodeID node, Cycles link_latency,
+Throttle::Throttle(int sID, RubySystem *rs, NodeID node, Cycles link_latency,
                    int link_bandwidth_multiplier, int endpoint_bandwidth,
-                   ClockedObject *em)
-    : Consumer(em)
+                   Switch *em)
+    : Consumer(em), m_switch_id(sID), m_switch(em), m_node(node),
+      m_ruby_system(rs)
 {
-    init(node, link_latency, link_bandwidth_multiplier, endpoint_bandwidth);
-    m_sID = sID;
-}
-
-Throttle::Throttle(NodeID node, Cycles link_latency,
-                   int link_bandwidth_multiplier, int endpoint_bandwidth,
-                   ClockedObject *em)
-    : Consumer(em)
-{
-    init(node, link_latency, link_bandwidth_multiplier, endpoint_bandwidth);
-    m_sID = 0;
-}
-
-void
-Throttle::init(NodeID node, Cycles link_latency,
-               int link_bandwidth_multiplier, int endpoint_bandwidth)
-{
-    m_node = node;
     m_vnets = 0;
 
     assert(link_bandwidth_multiplier > 0);
@@ -98,9 +82,8 @@ Throttle::addLinks(const vector<MessageBuffer*>& in_vec,
 
         // Set consumer and description
         in_ptr->setConsumer(this);
-        string desc = "[Queue to Throttle " + to_string(m_sID) + " " +
+        string desc = "[Queue to Throttle " + to_string(m_switch_id) + " " +
             to_string(m_node) + "]";
-        in_ptr->setDescription(desc);
     }
 }
 
@@ -111,29 +94,31 @@ Throttle::operateVnet(int vnet, int &bw_remaining, bool &schedule_wakeup,
     if (out == nullptr || in == nullptr) {
         return;
     }
+
     assert(m_units_remaining[vnet] >= 0);
+    Tick current_time = m_switch->clockEdge();
 
-    while (bw_remaining > 0 && (in->isReady() || m_units_remaining[vnet] > 0) &&
-                                out->areNSlotsAvailable(1)) {
-
+    while (bw_remaining > 0 && (in->isReady(current_time) ||
+                                m_units_remaining[vnet] > 0) &&
+           out->areNSlotsAvailable(1, current_time)) {
         // See if we are done transferring the previous message on
         // this virtual network
-        if (m_units_remaining[vnet] == 0 && in->isReady()) {
+        if (m_units_remaining[vnet] == 0 && in->isReady(current_time)) {
             // Find the size of the message we are moving
             MsgPtr msg_ptr = in->peekMsgPtr();
-            NetworkMessage* net_msg_ptr =
-                safe_cast<NetworkMessage*>(msg_ptr.get());
+            Message *net_msg_ptr = msg_ptr.get();
             m_units_remaining[vnet] +=
                 network_message_to_size(net_msg_ptr);
 
             DPRINTF(RubyNetwork, "throttle: %d my bw %d bw spent "
                     "enqueueing net msg %d time: %lld.\n",
                     m_node, getLinkBandwidth(), m_units_remaining[vnet],
-                    g_system_ptr->curCycle());
+                    m_ruby_system->curCycle());
 
             // Move the message
-            in->dequeue();
-            out->enqueue(msg_ptr, m_link_latency);
+            in->dequeue(current_time);
+            out->enqueue(msg_ptr, current_time,
+                         m_switch->cyclesToTicks(m_link_latency));
 
             // Count the message
             m_msg_counts[net_msg_ptr->getMessageSize()][vnet]++;
@@ -146,8 +131,9 @@ Throttle::operateVnet(int vnet, int &bw_remaining, bool &schedule_wakeup,
         bw_remaining = max(0, -diff);
     }
 
-    if (bw_remaining > 0 && (in->isReady() || m_units_remaining[vnet] > 0) &&
-                             !out->areNSlotsAvailable(1)) {
+    if (bw_remaining > 0 && (in->isReady(current_time) ||
+                             m_units_remaining[vnet] > 0) &&
+        !out->areNSlotsAvailable(1, current_time)) {
         DPRINTF(RubyNetwork, "vnet: %d", vnet);
 
         // schedule me to wakeup again because I'm waiting for my
@@ -246,8 +232,10 @@ Throttle::clearStats()
 void
 Throttle::collateStats()
 {
-    m_link_utilization = 100.0 * m_link_utilization_proxy
-        / (double(g_system_ptr->curCycle() - g_ruby_start));
+    double time_delta = double(m_ruby_system->curCycle() -
+                               m_ruby_system->getStartCycle());
+
+    m_link_utilization = 100.0 * m_link_utilization_proxy / time_delta;
 }
 
 void
@@ -257,7 +245,7 @@ Throttle::print(ostream& out) const
 }
 
 int
-network_message_to_size(NetworkMessage* net_msg_ptr)
+network_message_to_size(Message *net_msg_ptr)
 {
     assert(net_msg_ptr != NULL);
 

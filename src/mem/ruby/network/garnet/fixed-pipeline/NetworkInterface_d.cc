@@ -37,19 +37,16 @@
 #include "mem/ruby/network/MessageBuffer.hh"
 #include "mem/ruby/network/garnet/fixed-pipeline/NetworkInterface_d.hh"
 #include "mem/ruby/network/garnet/fixed-pipeline/flitBuffer_d.hh"
-#include "mem/ruby/slicc_interface/NetworkMessage.hh"
+#include "mem/ruby/slicc_interface/Message.hh"
 
 using namespace std;
 using m5::stl_helpers::deletePointers;
 
 NetworkInterface_d::NetworkInterface_d(const Params *p)
-    : ClockedObject(p), Consumer(this)
+    : ClockedObject(p), Consumer(this), m_id(p->id),
+      m_virtual_networks(p->virt_nets), m_vc_per_vnet(p->vcs_per_vnet),
+      m_num_vcs(m_vc_per_vnet * m_virtual_networks)
 {
-    m_id = p->id;
-    m_virtual_networks  = p->virt_nets;
-    m_vc_per_vnet = p->vcs_per_vnet;
-    m_num_vcs = m_vc_per_vnet*m_virtual_networks;
-
     m_vc_round_robin = 0;
     m_ni_buffers.resize(m_num_vcs);
     m_ni_enqueue_time.resize(m_num_vcs);
@@ -115,13 +112,6 @@ NetworkInterface_d::addNode(vector<MessageBuffer *>& in,
     for (auto& it : in) {
         if (it != nullptr) {
             it->setConsumer(this);
-            it->setReceiver(this);
-        }
-    }
-
-    for (auto& it : out) {
-        if (it != nullptr) {
-            it->setSender(this);
         }
     }
 }
@@ -129,8 +119,8 @@ NetworkInterface_d::addNode(vector<MessageBuffer *>& in,
 bool
 NetworkInterface_d::flitisizeMessage(MsgPtr msg_ptr, int vnet)
 {
-    NetworkMessage *net_msg_ptr = safe_cast<NetworkMessage *>(msg_ptr.get());
-    NetDest net_msg_dest = net_msg_ptr->getInternalDestination();
+    Message *net_msg_ptr = msg_ptr.get();
+    NetDest net_msg_dest = net_msg_ptr->getDestination();
 
     // gets all the destinations associated with this message.
     vector<NodeID> dest_nodes = net_msg_dest.getAllDest();
@@ -152,8 +142,7 @@ NetworkInterface_d::flitisizeMessage(MsgPtr msg_ptr, int vnet)
         MsgPtr new_msg_ptr = msg_ptr->clone();
         NodeID destID = dest_nodes[ctr];
 
-        NetworkMessage *new_net_msg_ptr =
-            safe_cast<NetworkMessage *>(new_msg_ptr.get());
+        Message *new_net_msg_ptr = new_msg_ptr.get();
         if (dest_nodes.size() > 1) {
             NetDest personal_dest;
             for (int m = 0; m < (int) MachineType_NUM; m++) {
@@ -163,7 +152,7 @@ NetworkInterface_d::flitisizeMessage(MsgPtr msg_ptr, int vnet)
                     personal_dest.clear();
                     personal_dest.add((MachineID) {(MachineType) m, (destID -
                         MachineType_base_number((MachineType) m))});
-                    new_net_msg_ptr->getInternalDestination() = personal_dest;
+                    new_net_msg_ptr->getDestination() = personal_dest;
                     break;
                 }
             }
@@ -171,7 +160,7 @@ NetworkInterface_d::flitisizeMessage(MsgPtr msg_ptr, int vnet)
             // removing the destination from the original message to reflect
             // that a message with this particular destination has been
             // flitisized and an output vc is acquired
-            net_msg_ptr->getInternalDestination().removeNetDest(personal_dest);
+            net_msg_ptr->getDestination().removeNetDest(personal_dest);
         }
 
         for (int i = 0; i < num_flits; i++) {
@@ -223,6 +212,7 @@ NetworkInterface_d::wakeup()
     DPRINTF(RubyNetwork, "m_id: %d woke up at time: %lld", m_id, curCycle());
 
     MsgPtr msg_ptr;
+    Tick curTime = clockEdge();
 
     // Checking for messages coming from the protocol
     // can pick up a message/cycle for each virtual net
@@ -232,10 +222,10 @@ NetworkInterface_d::wakeup()
             continue;
         }
 
-        while (b->isReady()) { // Is there a message waiting
+        while (b->isReady(curTime)) { // Is there a message waiting
             msg_ptr = b->peekMsgPtr();
             if (flitisizeMessage(msg_ptr, vnet)) {
-                b->dequeue();
+                b->dequeue(curTime);
             } else {
                 break;
             }
@@ -254,7 +244,7 @@ NetworkInterface_d::wakeup()
             free_signal = true;
 
             outNode_ptr[t_flit->get_vnet()]->enqueue(
-                t_flit->get_msg_ptr(), Cycles(1));
+                t_flit->get_msg_ptr(), curTime, cyclesToTicks(Cycles(1)));
         }
         // Simply send a credit back since we are not buffering
         // this flit in the NI
@@ -364,7 +354,7 @@ NetworkInterface_d::checkReschedule()
             continue;
         }
 
-        while (it->isReady()) { // Is there a message waiting
+        while (it->isReady(clockEdge())) { // Is there a message waiting
             scheduleEvent(Cycles(1));
             return;
         }

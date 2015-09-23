@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2014 ARM Limited
+ * Copyright (c) 2012-2015 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -53,6 +53,7 @@
 
 #include <deque>
 #include <string>
+#include <unordered_set>
 
 #include "base/statistics.hh"
 #include "enums/AddrMap.hh"
@@ -573,24 +574,22 @@ class DRAMCtrl : public AbstractMemory
      * controller is switching command type.
      *
      * @param queue Queued requests to consider
-     * @param switched_cmd_type Command type is changing
+     * @param extra_col_delay Any extra delay due to a read/write switch
      * @return true if a packet is scheduled to a rank which is available else
      * false
      */
-    bool chooseNext(std::deque<DRAMPacket*>& queue, bool switched_cmd_type);
+    bool chooseNext(std::deque<DRAMPacket*>& queue, Tick extra_col_delay);
 
     /**
      * For FR-FCFS policy reorder the read/write queue depending on row buffer
-     * hits and earliest banks available in DRAM
-     * Prioritizes accesses to the same rank as previous burst unless
-     * controller is switching command type.
+     * hits and earliest bursts available in DRAM
      *
      * @param queue Queued requests to consider
-     * @param switched_cmd_type Command type is changing
+     * @param extra_col_delay Any extra delay due to a read/write switch
      * @return true if a packet is scheduled to a rank which is available else
      * false
      */
-    bool reorderQueue(std::deque<DRAMPacket*>& queue, bool switched_cmd_type);
+    bool reorderQueue(std::deque<DRAMPacket*>& queue, Tick extra_col_delay);
 
     /**
      * Find which are the earliest banks ready to issue an activate
@@ -598,11 +597,12 @@ class DRAMCtrl : public AbstractMemory
      * Also checks if the bank is already prepped.
      *
      * @param queue Queued requests to consider
-     * @param switched_cmd_type Command type is changing
+     * @param time of seamless burst command
      * @return One-hot encoded mask of bank indices
+     * @return boolean indicating burst can issue seamlessly, with no gaps
      */
-    uint64_t minBankPrep(const std::deque<DRAMPacket*>& queue,
-                         bool switched_cmd_type) const;
+    std::pair<uint64_t, bool> minBankPrep(const std::deque<DRAMPacket*>& queue,
+                                          Tick min_col_at) const;
 
     /**
      * Keep track of when row activations happen, in order to enforce
@@ -637,10 +637,28 @@ class DRAMCtrl : public AbstractMemory
     void printQs() const;
 
     /**
+     * Burst-align an address.
+     *
+     * @param addr The potentially unaligned address
+     *
+     * @return An address aligned to a DRAM burst
+     */
+    Addr burstAlign(Addr addr) const { return (addr & ~(Addr(burstSize - 1))); }
+
+    /**
      * The controller's main read and write queues
      */
     std::deque<DRAMPacket*> readQueue;
     std::deque<DRAMPacket*> writeQueue;
+
+    /**
+     * To avoid iterating over the write queue to check for
+     * overlapping transactions, maintain a set of burst addresses
+     * that are currently queued. Since we merge writes to the same
+     * location we never have more than one address to the same burst
+     * address.
+     */
+    std::unordered_set<Addr> isInWriteQueue;
 
     /**
      * Response queue where read packets wait after we're done working
@@ -651,12 +669,6 @@ class DRAMCtrl : public AbstractMemory
      * be added together.
      */
     std::deque<DRAMPacket*> respQueue;
-
-    /**
-     * If we need to drain, keep the drain manager around until we're
-     * done here.
-     */
-    DrainManager *drainManager;
 
     /**
      * Vector of ranks
@@ -860,7 +872,7 @@ class DRAMCtrl : public AbstractMemory
 
     DRAMCtrl(const DRAMCtrlParams* p);
 
-    unsigned int drain(DrainManager* dm);
+    DrainState drain() M5_ATTR_OVERRIDE;
 
     virtual BaseSlavePort& getSlavePort(const std::string& if_name,
                                         PortID idx = InvalidPortID);

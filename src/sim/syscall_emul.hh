@@ -553,20 +553,20 @@ ioctlFunc(SyscallDesc *desc, int callnum, LiveProcess *process,
           ThreadContext *tc)
 {
     int index = 0;
-    int fd = process->getSyscallArg(tc, index);
+    int tgt_fd = process->getSyscallArg(tc, index);
     unsigned req = process->getSyscallArg(tc, index);
 
-    DPRINTF(SyscallVerbose, "ioctl(%d, 0x%x, ...)\n", fd, req);
+    DPRINTF(SyscallVerbose, "ioctl(%d, 0x%x, ...)\n", tgt_fd, req);
 
-    Process::FdMap *fdObj = process->sim_fd_obj(fd);
+    FDEntry *fde = process->getFDEntry(tgt_fd);
 
-    if (fdObj == NULL) {
+    if (fde == NULL) {
         // doesn't map to any simulator fd: not a valid target fd
         return -EBADF;
     }
 
-    if (fdObj->driver != NULL) {
-        return fdObj->driver->ioctl(process, tc, req);
+    if (fde->driver != NULL) {
+        return fde->driver->ioctl(process, tc, req);
     }
 
     if (OS::isTtyReq(req)) {
@@ -574,7 +574,7 @@ ioctlFunc(SyscallDesc *desc, int callnum, LiveProcess *process,
     }
 
     warn("Unsupported ioctl call: ioctl(%d, 0x%x, ...) @ \n",
-         fd, req, tc->pcState());
+         tgt_fd, req, tc->pcState());
     return -ENOTTY;
 }
 
@@ -650,7 +650,7 @@ openFunc(SyscallDesc *desc, int callnum, LiveProcess *process,
     if (fd == -1)
         return -local_errno;
 
-    return process->alloc_fd(fd, path.c_str(), hostFlags, mode, false);
+    return process->allocFD(fd, path.c_str(), hostFlags, mode, false);
 }
 
 /// Target open() handler.
@@ -809,20 +809,20 @@ fchmodFunc(SyscallDesc *desc, int callnum, LiveProcess *process,
            ThreadContext *tc)
 {
     int index = 0;
-    int fd = process->getSyscallArg(tc, index);
-    if (fd < 0 || process->sim_fd(fd) < 0) {
-        // doesn't map to any simulator fd: not a valid target fd
-        return -EBADF;
-    }
-
+    int tgt_fd = process->getSyscallArg(tc, index);
     uint32_t mode = process->getSyscallArg(tc, index);
+
+    int sim_fd = process->getSimFD(tgt_fd);
+    if (sim_fd < 0)
+        return -EBADF;
+
     mode_t hostMode = 0;
 
     // XXX translate mode flags via OS::someting???
     hostMode = mode;
 
     // do the fchmod
-    int result = fchmod(process->sim_fd(fd), hostMode);
+    int result = fchmod(sim_fd, hostMode);
     if (result < 0)
         return -errno;
 
@@ -1003,25 +1003,25 @@ fstat64Func(SyscallDesc *desc, int callnum, LiveProcess *process,
             ThreadContext *tc)
 {
     int index = 0;
-    int fd = process->getSyscallArg(tc, index);
+    int tgt_fd = process->getSyscallArg(tc, index);
     Addr bufPtr = process->getSyscallArg(tc, index);
-    if (fd < 0 || process->sim_fd(fd) < 0) {
-        // doesn't map to any simulator fd: not a valid target fd
+
+    int sim_fd = process->getSimFD(tgt_fd);
+    if (sim_fd < 0)
         return -EBADF;
-    }
 
 #if NO_STAT64
     struct stat  hostBuf;
-    int result = fstat(process->sim_fd(fd), &hostBuf);
+    int result = fstat(sim_fd, &hostBuf);
 #else
     struct stat64  hostBuf;
-    int result = fstat64(process->sim_fd(fd), &hostBuf);
+    int result = fstat64(sim_fd, &hostBuf);
 #endif
 
     if (result < 0)
         return -errno;
 
-    copyOutStat64Buf<OS>(tc->getMemProxy(), bufPtr, &hostBuf, (fd == 1));
+    copyOutStat64Buf<OS>(tc->getMemProxy(), bufPtr, &hostBuf, (sim_fd == 1));
 
     return 0;
 }
@@ -1097,21 +1097,22 @@ fstatFunc(SyscallDesc *desc, int callnum, LiveProcess *process,
           ThreadContext *tc)
 {
     int index = 0;
-    int fd = process->sim_fd(process->getSyscallArg(tc, index));
+    int tgt_fd = process->getSyscallArg(tc, index);
     Addr bufPtr = process->getSyscallArg(tc, index);
 
-    DPRINTF(SyscallVerbose, "fstat(%d, ...)\n", fd);
+    DPRINTF(SyscallVerbose, "fstat(%d, ...)\n", tgt_fd);
 
-    if (fd < 0)
+    int sim_fd = process->getSimFD(tgt_fd);
+    if (sim_fd < 0)
         return -EBADF;
 
     struct stat hostBuf;
-    int result = fstat(fd, &hostBuf);
+    int result = fstat(sim_fd, &hostBuf);
 
     if (result < 0)
         return -errno;
 
-    copyOutStatBuf<OS>(tc->getMemProxy(), bufPtr, &hostBuf, (fd == 1));
+    copyOutStatBuf<OS>(tc->getMemProxy(), bufPtr, &hostBuf, (sim_fd == 1));
 
     return 0;
 }
@@ -1154,14 +1155,15 @@ fstatfsFunc(SyscallDesc *desc, int callnum, LiveProcess *process,
             ThreadContext *tc)
 {
     int index = 0;
-    int fd = process->sim_fd(process->getSyscallArg(tc, index));
+    int tgt_fd = process->getSyscallArg(tc, index);
     Addr bufPtr = process->getSyscallArg(tc, index);
 
-    if (fd < 0)
+    int sim_fd = process->getSimFD(tgt_fd);
+    if (sim_fd < 0)
         return -EBADF;
 
     struct statfs hostBuf;
-    int result = fstatfs(fd, &hostBuf);
+    int result = fstatfs(sim_fd, &hostBuf);
 
     if (result < 0)
         return -errno;
@@ -1179,11 +1181,11 @@ writevFunc(SyscallDesc *desc, int callnum, LiveProcess *process,
            ThreadContext *tc)
 {
     int index = 0;
-    int fd = process->getSyscallArg(tc, index);
-    if (fd < 0 || process->sim_fd(fd) < 0) {
-        // doesn't map to any simulator fd: not a valid target fd
+    int tgt_fd = process->getSyscallArg(tc, index);
+
+    int sim_fd = process->getSimFD(tgt_fd);
+    if (sim_fd < 0)
         return -EBADF;
-    }
 
     SETranslatingPortProxy &p = tc->getMemProxy();
     uint64_t tiov_base = process->getSyscallArg(tc, index);
@@ -1200,7 +1202,7 @@ writevFunc(SyscallDesc *desc, int callnum, LiveProcess *process,
                    hiov[i].iov_len);
     }
 
-    int result = writev(process->sim_fd(fd), hiov, count);
+    int result = writev(sim_fd, hiov, count);
 
     for (size_t i = 0; i < count; ++i)
         delete [] (char *)hiov[i].iov_base;
@@ -1235,18 +1237,18 @@ mmapFunc(SyscallDesc *desc, int num, LiveProcess *p, ThreadContext *tc)
         warn("mmap length argument %#x is unreasonably large.\n", length);
 
     if (!(flags & OS::TGT_MAP_ANONYMOUS)) {
-        Process::FdMap *fd_map = p->sim_fd_obj(tgt_fd);
-        if (!fd_map || fd_map->fd < 0) {
+        FDEntry *fde = p->getFDEntry(tgt_fd);
+        if (!fde || fde->fd < 0) {
             warn("mmap failing: target fd %d is not valid\n", tgt_fd);
             return -EBADF;
         }
 
-        if (fd_map->filename != "/dev/zero") {
+        if (fde->filename != "/dev/zero") {
             // This is very likely broken, but leave a warning here
             // (rather than panic) in case /dev/zero is known by
             // another name on some platform
             warn("allowing mmap of file %s; mmap not supported on files"
-                 " other than /dev/zero\n", fd_map->filename);
+                 " other than /dev/zero\n", fde->filename);
         }
     }
 

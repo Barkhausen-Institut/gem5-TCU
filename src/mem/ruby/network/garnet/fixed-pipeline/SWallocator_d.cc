@@ -82,6 +82,7 @@ SWallocator_d::wakeup()
 
     clear_request_vector();
     check_for_wakeup();
+    m_router->call_switch();
 
 }
 
@@ -94,24 +95,15 @@ SWallocator_d::arbitrate_inports()
 
         // Select next round robin vc candidate within valid vnet
         int next_round_robin_invc = invc;
-        do {
-            next_round_robin_invc++;
-
-            if (next_round_robin_invc >= m_num_vcs)
-                next_round_robin_invc = 0;
-        } while (!((m_router->get_net_ptr())->validVirtualNetwork(
-                    get_vnet(next_round_robin_invc))));
-
+        next_round_robin_invc++;
+        if (next_round_robin_invc >= m_num_vcs)
+            next_round_robin_invc = 0;
         m_round_robin_inport[inport] = next_round_robin_invc;
 
         for (int invc_iter = 0; invc_iter < m_num_vcs; invc_iter++) {
             invc++;
             if (invc >= m_num_vcs)
                 invc = 0;
-
-            if (!((m_router->get_net_ptr())->validVirtualNetwork(
-                get_vnet(invc))))
-                continue;
 
             if (m_input_unit[inport]->need_stage(invc, ACTIVE_, SA_,
                                                  m_router->curCycle()) &&
@@ -181,7 +173,7 @@ SWallocator_d::arbitrate_outports()
                 t_flit->advance_stage(ST_, m_router->curCycle());
                 t_flit->set_vc(outvc);
                 t_flit->set_outport(outport);
-                t_flit->set_time(m_router->curCycle() + Cycles(1));
+                t_flit->set_time(m_router->curCycle());
 
                 m_output_unit[outport]->decrement_credit(outvc);
                 m_router->update_sw_winner(inport, t_flit);
@@ -223,7 +215,7 @@ SWallocator_d::check_for_wakeup()
     for (int i = 0; i < m_num_inports; i++) {
         for (int j = 0; j < m_num_vcs; j++) {
             if (m_input_unit[i]->need_stage(j, ACTIVE_, SA_, nextCycle)) {
-                scheduleEvent(Cycles(1));
+                m_router->vcarb_req();
                 return;
             }
         }

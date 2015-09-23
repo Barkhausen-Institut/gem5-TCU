@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 1999-2012 Mark D. Hill and David A. Wood
+ * Copyright (c) 2013 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -33,7 +34,7 @@
 #include "debug/RubyStats.hh"
 #include "mem/protocol/AccessPermission.hh"
 #include "mem/ruby/structures/CacheMemory.hh"
-#include "mem/ruby/system/System.hh"
+#include "mem/ruby/system/RubySystem.hh"
 
 using namespace std;
 
@@ -53,13 +54,15 @@ RubyCacheParams::create()
 
 CacheMemory::CacheMemory(const Params *p)
     : SimObject(p),
-    dataArray(p->dataArrayBanks, p->dataAccessLatency, p->start_index_bit),
-    tagArray(p->tagArrayBanks, p->tagAccessLatency, p->start_index_bit)
+    dataArray(p->dataArrayBanks, p->dataAccessLatency,
+              p->start_index_bit, p->ruby_system),
+    tagArray(p->tagArrayBanks, p->tagAccessLatency,
+             p->start_index_bit, p->ruby_system)
 {
     m_cache_size = p->size;
-    m_latency = p->latency;
     m_cache_assoc = p->assoc;
-    m_policy = p->replacement_policy;
+    m_replacementPolicy_ptr = p->replacement_policy;
+    m_replacementPolicy_ptr->setCache(this);
     m_start_index_bit = p->start_index_bit;
     m_is_instruction_only_cache = p->is_icache;
     m_resource_stalls = p->resourceStalls;
@@ -73,15 +76,6 @@ CacheMemory::init()
     assert(m_cache_num_sets > 1);
     m_cache_num_set_bits = floorLog2(m_cache_num_sets);
     assert(m_cache_num_set_bits > 0);
-
-    if (m_policy == "PSEUDO_LRU")
-        m_replacementPolicy_ptr =
-            new PseudoLRUPolicy(m_cache_num_sets, m_cache_assoc);
-    else if (m_policy == "LRU")
-        m_replacementPolicy_ptr =
-            new LRUPolicy(m_cache_num_sets, m_cache_assoc);
-    else
-        assert(false);
 
     m_cache.resize(m_cache_num_sets);
     for (int i = 0; i < m_cache_num_sets; i++) {
@@ -104,22 +98,22 @@ CacheMemory::~CacheMemory()
 }
 
 // convert a Address to its location in the cache
-int64
-CacheMemory::addressToCacheSet(const Address& address) const
+int64_t
+CacheMemory::addressToCacheSet(Addr address) const
 {
-    assert(address == line_address(address));
-    return address.bitSelect(m_start_index_bit,
-                             m_start_index_bit + m_cache_num_set_bits - 1);
+    assert(address == makeLineAddress(address));
+    return bitSelect(address, m_start_index_bit,
+                     m_start_index_bit + m_cache_num_set_bits - 1);
 }
 
 // Given a cache index: returns the index of the tag in a set.
 // returns -1 if the tag is not found.
 int
-CacheMemory::findTagInSet(int64 cacheSet, const Address& tag) const
+CacheMemory::findTagInSet(int64_t cacheSet, Addr tag) const
 {
-    assert(tag == line_address(tag));
+    assert(tag == makeLineAddress(tag));
     // search the set for the tags
-    m5::hash_map<Address, int>::const_iterator it = m_tag_index.find(tag);
+    m5::hash_map<Addr, int>::const_iterator it = m_tag_index.find(tag);
     if (it != m_tag_index.end())
         if (m_cache[cacheSet][it->second]->m_Permission !=
             AccessPermission_NotPresent)
@@ -130,24 +124,47 @@ CacheMemory::findTagInSet(int64 cacheSet, const Address& tag) const
 // Given a cache index: returns the index of the tag in a set.
 // returns -1 if the tag is not found.
 int
-CacheMemory::findTagInSetIgnorePermissions(int64 cacheSet,
-                                           const Address& tag) const
+CacheMemory::findTagInSetIgnorePermissions(int64_t cacheSet,
+                                           Addr tag) const
 {
-    assert(tag == line_address(tag));
+    assert(tag == makeLineAddress(tag));
     // search the set for the tags
-    m5::hash_map<Address, int>::const_iterator it = m_tag_index.find(tag);
+    m5::hash_map<Addr, int>::const_iterator it = m_tag_index.find(tag);
     if (it != m_tag_index.end())
         return it->second;
     return -1; // Not found
 }
 
+// Given an unique cache block identifier (idx): return the valid address
+// stored by the cache block.  If the block is invalid/notpresent, the
+// function returns the 0 address
+Addr
+CacheMemory::getAddressAtIdx(int idx) const
+{
+    Addr tmp(0);
+
+    int set = idx / m_cache_assoc;
+    assert(set < m_cache_num_sets);
+
+    int way = idx - set * m_cache_assoc;
+    assert (way < m_cache_assoc);
+
+    AbstractCacheEntry* entry = m_cache[set][way];
+    if (entry == NULL ||
+        entry->m_Permission == AccessPermission_Invalid ||
+        entry->m_Permission == AccessPermission_NotPresent) {
+        return tmp;
+    }
+    return entry->m_Address;
+}
+
 bool
-CacheMemory::tryCacheAccess(const Address& address, RubyRequestType type,
+CacheMemory::tryCacheAccess(Addr address, RubyRequestType type,
                             DataBlock*& data_ptr)
 {
-    assert(address == line_address(address));
-    DPRINTF(RubyCache, "address: %s\n", address);
-    int64 cacheSet = addressToCacheSet(address);
+    assert(address == makeLineAddress(address));
+    DPRINTF(RubyCache, "address: %#x\n", address);
+    int64_t cacheSet = addressToCacheSet(address);
     int loc = findTagInSet(cacheSet, address);
     if (loc != -1) {
         // Do we even have a tag match?
@@ -169,12 +186,12 @@ CacheMemory::tryCacheAccess(const Address& address, RubyRequestType type,
 }
 
 bool
-CacheMemory::testCacheAccess(const Address& address, RubyRequestType type,
+CacheMemory::testCacheAccess(Addr address, RubyRequestType type,
                              DataBlock*& data_ptr)
 {
-    assert(address == line_address(address));
-    DPRINTF(RubyCache, "address: %s\n", address);
-    int64 cacheSet = addressToCacheSet(address);
+    assert(address == makeLineAddress(address));
+    DPRINTF(RubyCache, "address: %#x\n", address);
+    int64_t cacheSet = addressToCacheSet(address);
     int loc = findTagInSet(cacheSet, address);
 
     if (loc != -1) {
@@ -193,18 +210,18 @@ CacheMemory::testCacheAccess(const Address& address, RubyRequestType type,
 
 // tests to see if an address is present in the cache
 bool
-CacheMemory::isTagPresent(const Address& address) const
+CacheMemory::isTagPresent(Addr address) const
 {
-    assert(address == line_address(address));
-    int64 cacheSet = addressToCacheSet(address);
+    assert(address == makeLineAddress(address));
+    int64_t cacheSet = addressToCacheSet(address);
     int loc = findTagInSet(cacheSet, address);
 
     if (loc == -1) {
         // We didn't find the tag
-        DPRINTF(RubyCache, "No tag match for address: %s\n", address);
+        DPRINTF(RubyCache, "No tag match for address: %#x\n", address);
         return false;
     }
-    DPRINTF(RubyCache, "address: %s found\n", address);
+    DPRINTF(RubyCache, "address: %#x found\n", address);
     return true;
 }
 
@@ -212,11 +229,11 @@ CacheMemory::isTagPresent(const Address& address) const
 //   a) a tag match on this address or there is
 //   b) an unused line in the same cache "way"
 bool
-CacheMemory::cacheAvail(const Address& address) const
+CacheMemory::cacheAvail(Addr address) const
 {
-    assert(address == line_address(address));
+    assert(address == makeLineAddress(address));
 
-    int64 cacheSet = addressToCacheSet(address);
+    int64_t cacheSet = addressToCacheSet(address);
 
     for (int i = 0; i < m_cache_assoc; i++) {
         AbstractCacheEntry* entry = m_cache[cacheSet][i];
@@ -234,15 +251,15 @@ CacheMemory::cacheAvail(const Address& address) const
 }
 
 AbstractCacheEntry*
-CacheMemory::allocate(const Address& address, AbstractCacheEntry* entry)
+CacheMemory::allocate(Addr address, AbstractCacheEntry *entry, bool touch)
 {
-    assert(address == line_address(address));
+    assert(address == makeLineAddress(address));
     assert(!isTagPresent(address));
     assert(cacheAvail(address));
-    DPRINTF(RubyCache, "address: %s\n", address);
+    DPRINTF(RubyCache, "address: %#x\n", address);
 
     // Find the first open slot
-    int64 cacheSet = addressToCacheSet(address);
+    int64_t cacheSet = addressToCacheSet(address);
     std::vector<AbstractCacheEntry*> &set = m_cache[cacheSet];
     for (int i = 0; i < m_cache_assoc; i++) {
         if (!set[i] || set[i]->m_Permission == AccessPermission_NotPresent) {
@@ -253,8 +270,12 @@ CacheMemory::allocate(const Address& address, AbstractCacheEntry* entry)
                     address);
             set[i]->m_locked = -1;
             m_tag_index[address] = i;
+            entry->setSetIndex(cacheSet);
+            entry->setWayIndex(i);
 
-            m_replacementPolicy_ptr->touch(cacheSet, i, curTick());
+            if (touch) {
+                m_replacementPolicy_ptr->touch(cacheSet, i, curTick());
+            }
 
             return entry;
         }
@@ -263,12 +284,12 @@ CacheMemory::allocate(const Address& address, AbstractCacheEntry* entry)
 }
 
 void
-CacheMemory::deallocate(const Address& address)
+CacheMemory::deallocate(Addr address)
 {
-    assert(address == line_address(address));
+    assert(address == makeLineAddress(address));
     assert(isTagPresent(address));
-    DPRINTF(RubyCache, "address: %s\n", address);
-    int64 cacheSet = addressToCacheSet(address);
+    DPRINTF(RubyCache, "address: %#x\n", address);
+    int64_t cacheSet = addressToCacheSet(address);
     int loc = findTagInSet(cacheSet, address);
     if (loc != -1) {
         delete m_cache[cacheSet][loc];
@@ -278,23 +299,23 @@ CacheMemory::deallocate(const Address& address)
 }
 
 // Returns with the physical address of the conflicting cache line
-Address
-CacheMemory::cacheProbe(const Address& address) const
+Addr
+CacheMemory::cacheProbe(Addr address) const
 {
-    assert(address == line_address(address));
+    assert(address == makeLineAddress(address));
     assert(!cacheAvail(address));
 
-    int64 cacheSet = addressToCacheSet(address);
+    int64_t cacheSet = addressToCacheSet(address);
     return m_cache[cacheSet][m_replacementPolicy_ptr->getVictim(cacheSet)]->
         m_Address;
 }
 
 // looks an address up in the cache
 AbstractCacheEntry*
-CacheMemory::lookup(const Address& address)
+CacheMemory::lookup(Addr address)
 {
-    assert(address == line_address(address));
-    int64 cacheSet = addressToCacheSet(address);
+    assert(address == makeLineAddress(address));
+    int64_t cacheSet = addressToCacheSet(address);
     int loc = findTagInSet(cacheSet, address);
     if(loc == -1) return NULL;
     return m_cache[cacheSet][loc];
@@ -302,10 +323,10 @@ CacheMemory::lookup(const Address& address)
 
 // looks an address up in the cache
 const AbstractCacheEntry*
-CacheMemory::lookup(const Address& address) const
+CacheMemory::lookup(Addr address) const
 {
-    assert(address == line_address(address));
-    int64 cacheSet = addressToCacheSet(address);
+    assert(address == makeLineAddress(address));
+    int64_t cacheSet = addressToCacheSet(address);
     int loc = findTagInSet(cacheSet, address);
     if(loc == -1) return NULL;
     return m_cache[cacheSet][loc];
@@ -313,9 +334,9 @@ CacheMemory::lookup(const Address& address) const
 
 // Sets the most recently used bit for a cache block
 void
-CacheMemory::setMRU(const Address& address)
+CacheMemory::setMRU(Addr address)
 {
-    int64 cacheSet = addressToCacheSet(address);
+    int64_t cacheSet = addressToCacheSet(address);
     int loc = findTagInSet(cacheSet, address);
 
     if(loc != -1)
@@ -323,11 +344,19 @@ CacheMemory::setMRU(const Address& address)
 }
 
 void
+CacheMemory::setMRU(const AbstractCacheEntry *e)
+{
+    uint32_t cacheSet = e->getSetIndex();
+    uint32_t loc = e->getWayIndex();
+    m_replacementPolicy_ptr->touch(cacheSet, loc, curTick());
+}
+
+void
 CacheMemory::recordCacheContents(int cntrl, CacheRecorder* tr) const
 {
-    uint64 warmedUpBlocks = 0;
-    uint64 totalBlocks M5_VAR_USED = (uint64)m_cache_num_sets
-                                                  * (uint64)m_cache_assoc;
+    uint64_t warmedUpBlocks = 0;
+    uint64_t totalBlocks M5_VAR_USED = (uint64_t)m_cache_num_sets *
+                                       (uint64_t)m_cache_assoc;
 
     for (int i = 0; i < m_cache_num_sets; i++) {
         for (int j = 0; j < m_cache_assoc; j++) {
@@ -345,7 +374,7 @@ CacheMemory::recordCacheContents(int cntrl, CacheRecorder* tr) const
                 }
 
                 if (request_type != RubyRequestType_NULL) {
-                    tr->addRecord(cntrl, m_cache[i][j]->m_Address.getAddress(),
+                    tr->addRecord(cntrl, m_cache[i][j]->m_Address,
                                   0, request_type,
                                   m_replacementPolicy_ptr->getLastAccess(i, j),
                                   m_cache[i][j]->getDataBlk());
@@ -357,8 +386,7 @@ CacheMemory::recordCacheContents(int cntrl, CacheRecorder* tr) const
 
     DPRINTF(RubyCacheTrace, "%s: %lli blocks of %lli total blocks"
             "recorded %.2f%% \n", name().c_str(), warmedUpBlocks,
-            (uint64)m_cache_num_sets * (uint64)m_cache_assoc,
-            (float(warmedUpBlocks)/float(totalBlocks))*100.0);
+            totalBlocks, (float(warmedUpBlocks) / float(totalBlocks)) * 100.0);
 }
 
 void
@@ -387,37 +415,37 @@ CacheMemory::printData(ostream& out) const
 }
 
 void
-CacheMemory::setLocked(const Address& address, int context)
+CacheMemory::setLocked(Addr address, int context)
 {
-    DPRINTF(RubyCache, "Setting Lock for addr: %x to %d\n", address, context);
-    assert(address == line_address(address));
-    int64 cacheSet = addressToCacheSet(address);
+    DPRINTF(RubyCache, "Setting Lock for addr: %#x to %d\n", address, context);
+    assert(address == makeLineAddress(address));
+    int64_t cacheSet = addressToCacheSet(address);
     int loc = findTagInSet(cacheSet, address);
     assert(loc != -1);
-    m_cache[cacheSet][loc]->m_locked = context;
+    m_cache[cacheSet][loc]->setLocked(context);
 }
 
 void
-CacheMemory::clearLocked(const Address& address)
+CacheMemory::clearLocked(Addr address)
 {
-    DPRINTF(RubyCache, "Clear Lock for addr: %x\n", address);
-    assert(address == line_address(address));
-    int64 cacheSet = addressToCacheSet(address);
+    DPRINTF(RubyCache, "Clear Lock for addr: %#x\n", address);
+    assert(address == makeLineAddress(address));
+    int64_t cacheSet = addressToCacheSet(address);
     int loc = findTagInSet(cacheSet, address);
     assert(loc != -1);
-    m_cache[cacheSet][loc]->m_locked = -1;
+    m_cache[cacheSet][loc]->clearLocked();
 }
 
 bool
-CacheMemory::isLocked(const Address& address, int context)
+CacheMemory::isLocked(Addr address, int context)
 {
-    assert(address == line_address(address));
-    int64 cacheSet = addressToCacheSet(address);
+    assert(address == makeLineAddress(address));
+    int64_t cacheSet = addressToCacheSet(address);
     int loc = findTagInSet(cacheSet, address);
     assert(loc != -1);
-    DPRINTF(RubyCache, "Testing Lock for addr: %llx cur %d con %d\n",
+    DPRINTF(RubyCache, "Testing Lock for addr: %#llx cur %d con %d\n",
             address, m_cache[cacheSet][loc]->m_locked, context);
-    return m_cache[cacheSet][loc]->m_locked == context;
+    return m_cache[cacheSet][loc]->isLocked(context);
 }
 
 void
@@ -509,22 +537,32 @@ CacheMemory::regStats()
         ;
 }
 
+// assumption: SLICC generated files will only call this function
+// once **all** resources are granted
 void
-CacheMemory::recordRequestType(CacheRequestType requestType)
+CacheMemory::recordRequestType(CacheRequestType requestType, Addr addr)
 {
     DPRINTF(RubyStats, "Recorded statistic: %s\n",
             CacheRequestType_to_string(requestType));
     switch(requestType) {
     case CacheRequestType_DataArrayRead:
+        if (m_resource_stalls)
+            dataArray.reserve(addressToCacheSet(addr));
         numDataArrayReads++;
         return;
     case CacheRequestType_DataArrayWrite:
+        if (m_resource_stalls)
+            dataArray.reserve(addressToCacheSet(addr));
         numDataArrayWrites++;
         return;
     case CacheRequestType_TagArrayRead:
+        if (m_resource_stalls)
+            tagArray.reserve(addressToCacheSet(addr));
         numTagArrayReads++;
         return;
     case CacheRequestType_TagArrayWrite:
+        if (m_resource_stalls)
+            tagArray.reserve(addressToCacheSet(addr));
         numTagArrayWrites++;
         return;
     default:
@@ -534,7 +572,7 @@ CacheMemory::recordRequestType(CacheRequestType requestType)
 }
 
 bool
-CacheMemory::checkResourceAvailable(CacheResourceType res, Address addr)
+CacheMemory::checkResourceAvailable(CacheResourceType res, Addr addr)
 {
     if (!m_resource_stalls) {
         return true;
@@ -544,7 +582,7 @@ CacheMemory::checkResourceAvailable(CacheResourceType res, Address addr)
         if (tagArray.tryAccess(addressToCacheSet(addr))) return true;
         else {
             DPRINTF(RubyResourceStalls,
-                    "Tag array stall on addr %s in set %d\n",
+                    "Tag array stall on addr %#x in set %d\n",
                     addr, addressToCacheSet(addr));
             numTagArrayStalls++;
             return false;
@@ -553,7 +591,7 @@ CacheMemory::checkResourceAvailable(CacheResourceType res, Address addr)
         if (dataArray.tryAccess(addressToCacheSet(addr))) return true;
         else {
             DPRINTF(RubyResourceStalls,
-                    "Data array stall on addr %s in set %d\n",
+                    "Data array stall on addr %#x in set %d\n",
                     addr, addressToCacheSet(addr));
             numDataArrayStalls++;
             return false;
@@ -562,4 +600,16 @@ CacheMemory::checkResourceAvailable(CacheResourceType res, Address addr)
         assert(false);
         return true;
     }
+}
+
+bool
+CacheMemory::isBlockInvalid(int64_t cache_set, int64_t loc)
+{
+  return (m_cache[cache_set][loc]->m_Permission == AccessPermission_Invalid);
+}
+
+bool
+CacheMemory::isBlockNotBusy(int64_t cache_set, int64_t loc)
+{
+  return (m_cache[cache_set][loc]->m_Permission != AccessPermission_Busy);
 }

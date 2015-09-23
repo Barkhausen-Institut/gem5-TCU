@@ -37,13 +37,13 @@
  * Authors: Ali Saidi
  *          Giacomo Gabrielli
  */
+#include "arch/arm/table_walker.hh"
 
 #include <memory>
 
 #include "arch/arm/faults.hh"
 #include "arch/arm/stage2_mmu.hh"
 #include "arch/arm/system.hh"
-#include "arch/arm/table_walker.hh"
 #include "arch/arm/tlb.hh"
 #include "cpu/base.hh"
 #include "cpu/thread_context.hh"
@@ -51,12 +51,13 @@
 #include "debug/Drain.hh"
 #include "debug/TLB.hh"
 #include "debug/TLBVerbose.hh"
+#include "dev/dma_device.hh"
 #include "sim/system.hh"
 
 using namespace ArmISA;
 
 TableWalker::TableWalker(const Params *p)
-    : MemObject(p), drainManager(NULL),
+    : MemObject(p),
       stage2Mmu(NULL), port(NULL), masterId(Request::invldMasterId),
       isStage2(p->is_stage2), tlb(NULL),
       currState(NULL), pending(false),
@@ -136,17 +137,17 @@ TableWalker::WalkerState::WalkerState() :
 void
 TableWalker::completeDrain()
 {
-    if (drainManager && stateQueues[L1].empty() && stateQueues[L2].empty() &&
+    if (drainState() == DrainState::Draining &&
+        stateQueues[L1].empty() && stateQueues[L2].empty() &&
         pendingQueue.empty()) {
-        setDrainState(Drainable::Drained);
+
         DPRINTF(Drain, "TableWalker done draining, processing drain event\n");
-        drainManager->signalDrainDone();
-        drainManager = NULL;
+        signalDrainDone();
     }
 }
 
-unsigned int
-TableWalker::drain(DrainManager *dm)
+DrainState
+TableWalker::drain()
 {
     bool state_queues_not_empty = false;
 
@@ -158,25 +159,17 @@ TableWalker::drain(DrainManager *dm)
     }
 
     if (state_queues_not_empty || pendingQueue.size()) {
-        drainManager = dm;
-        setDrainState(Drainable::Draining);
         DPRINTF(Drain, "TableWalker not drained\n");
-
-        // return port drain count plus the table walker itself needs to drain
-        return 1;
+        return DrainState::Draining;
     } else {
-        setDrainState(Drainable::Drained);
         DPRINTF(Drain, "TableWalker free, no need to drain\n");
-
-        // table walker is drained, but its ports may still need to be drained
-        return 0;
+        return DrainState::Drained;
     }
 }
 
 void
 TableWalker::drainResume()
 {
-    Drainable::drainResume();
     if (params()->sys->isTimingMode() && currState) {
         delete currState;
         currState = NULL;

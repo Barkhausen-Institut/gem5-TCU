@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2013 ARM Limited
+ * Copyright (c) 2012-2013, 2015 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -42,12 +42,9 @@
 #define __MEM_COMM_MONITOR_HH__
 
 #include "base/statistics.hh"
-#include "base/time.hh"
 #include "mem/mem_object.hh"
-#include "mem/stack_dist_calc.hh"
 #include "params/CommMonitor.hh"
-#include "proto/protoio.hh"
-#include "sim/system.hh"
+#include "sim/probe/mem.hh"
 
 /**
  * The communication monitor is a MemObject which can monitor statistics of
@@ -63,7 +60,7 @@
 class CommMonitor : public MemObject
 {
 
-  public:
+  public: // Construction & SimObject interfaces
 
     /** Parameters of communication monitor */
     typedef CommMonitorParams Params;
@@ -77,25 +74,17 @@ class CommMonitor : public MemObject
      */
     CommMonitor(Params* params);
 
-    /** Destructor */
-    ~CommMonitor();
+    void init() M5_ATTR_OVERRIDE;
+    void regStats() M5_ATTR_OVERRIDE;
+    void startup() M5_ATTR_OVERRIDE;
+    void regProbePoints() M5_ATTR_OVERRIDE;
 
-    /**
-     * Callback to flush and close all open output streams on exit. If
-     * we were calling the destructor it could be done there.
-     */
-    void closeStreams();
+  public: // MemObject interfaces
+    BaseMasterPort& getMasterPort(const std::string& if_name,
+                                  PortID idx = InvalidPortID) M5_ATTR_OVERRIDE;
 
-    virtual BaseMasterPort& getMasterPort(const std::string& if_name,
-                                          PortID idx = InvalidPortID);
-
-    virtual BaseSlavePort& getSlavePort(const std::string& if_name,
-                                        PortID idx = InvalidPortID);
-
-    virtual void init();
-
-    /** Register statistics */
-    void regStats();
+    BaseSlavePort& getSlavePort(const std::string& if_name,
+                                PortID idx = InvalidPortID) M5_ATTR_OVERRIDE;
 
   private:
 
@@ -397,33 +386,43 @@ class CommMonitor : public MemObject
     /** This function is called periodically at the end of each time bin */
     void samplePeriodic();
 
-    /** Schedule the first periodic event */
-    void startup();
-
     /** Periodic event called at the end of each simulation time bin */
     EventWrapper<CommMonitor, &CommMonitor::samplePeriodic> samplePeriodicEvent;
 
+    /**
+     *@{
+     * @name Configuration
+     */
+
     /** Length of simulation time bin*/
-    Tick samplePeriodTicks;
-    Time samplePeriod;
+    const Tick samplePeriodTicks;
+    /** Sample period in seconds */
+    const double samplePeriod;
 
     /** Address mask for sources of read accesses to be captured */
-    Addr readAddrMask;
+    const Addr readAddrMask;
 
     /** Address mask for sources of write accesses to be captured */
-    Addr writeAddrMask;
+    const Addr writeAddrMask;
+
+    /** @} */
 
     /** Instantiate stats */
     MonitorStats stats;
 
-    /** Optional stack distance calculator */
-    StackDistCalc* stackDistCalc;
+  protected: // Probe points
+    /**
+     * @{
+     * @name Memory system probe points
+     */
 
-    /** Output stream for a potential trace. */
-    ProtoOutputStream* traceStream;
+    /** Successfully forwarded request packet */
+    ProbePoints::PacketUPtr ppPktReq;
 
-    /** The system in which the monitor lives */
-    System *system;
+    /** Successfully forwarded response packet */
+    ProbePoints::PacketUPtr ppPktResp;
+
+    /** @} */
 };
 
 #endif //__MEM_COMM_MONITOR_HH__

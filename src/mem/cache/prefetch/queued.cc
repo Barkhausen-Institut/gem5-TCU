@@ -79,9 +79,6 @@ QueuedPrefetcher::notify(const PacketPtr &pkt)
                     ++itr;
                 }
             }
-
-            if (pfq.empty())
-                cache->deassertMemSideBusRequest(BaseCache::Request_PF);
         }
 
         // Calculate prefetches given this access
@@ -149,7 +146,7 @@ QueuedPrefetcher::notify(const PacketPtr &pkt)
             DPRINTF(HWPrefetch, "Prefetch queued. "
                     "addr:%#x tick:%lld.\n", pf_addr, pf_time);
 
-            pfq.emplace_back(DeferredPacket(pf_time, pf_pkt));
+            pfq.emplace_back(pf_time, pf_pkt);
         }
     }
 

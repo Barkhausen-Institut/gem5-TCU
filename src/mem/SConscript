@@ -30,11 +30,8 @@
 
 Import('*')
 
-# Only build the communication if we have support for protobuf as the
-# tracing relies on it
-if env['HAVE_PROTOBUF']:
-    SimObject('CommMonitor.py')
-    Source('comm_monitor.cc')
+SimObject('CommMonitor.py')
+Source('comm_monitor.cc')
 
 SimObject('AbstractMemory.py')
 SimObject('AddrMapper.py')
@@ -45,7 +42,6 @@ SimObject('ExternalSlave.py')
 SimObject('MemObject.py')
 SimObject('Scratchpad.py')
 SimObject('SimpleMemory.py')
-SimObject('StackDistCalc.py')
 SimObject('XBar.py')
 
 Source('abstract_mem.cc')

@@ -34,16 +34,15 @@ from m5.util import addToPath
 from Ruby import create_topology
 
 #
-# Note: the cache latency is only used by the sequencer on fast path hits
+# Declare caches used by the protocol
 #
-class Cache(RubyCache):
-    latency = 3
+class L1Cache(RubyCache): pass
 
 def define_options(parser):
     return
 
 def create_system(options, full_system, system, dma_ports, ruby_system):
-    
+
     if buildEnv['PROTOCOL'] != 'Network_test':
         panic("This script requires the Network_test protocol to be built.")
 
@@ -53,7 +52,7 @@ def create_system(options, full_system, system, dma_ports, ruby_system):
     # The Garnet tester protocol does not support fs nor dma
     #
     assert(dma_ports == [])
-    
+
     #
     # The ruby network creation expects the list of nodes in the system to be
     # consistent with the NetDest list.  Therefore the l1 controller nodes must be
@@ -73,8 +72,8 @@ def create_system(options, full_system, system, dma_ports, ruby_system):
         # Only one cache exists for this protocol, so by default use the L1D
         # config parameters.
         #
-        cache = Cache(size = options.l1d_size,
-                      assoc = options.l1d_assoc)
+        cache = L1Cache(size = options.l1d_size,
+                        assoc = options.l1d_assoc)
 
         #
         # Only one unified L1 cache exists.  Can cache instructions and data.
@@ -96,9 +95,10 @@ def create_system(options, full_system, system, dma_ports, ruby_system):
         l1_cntrl_nodes.append(l1_cntrl)
 
         # Connect the L1 controllers and the network
-        l1_cntrl.requestFromCache =  ruby_system.network.slave
-        l1_cntrl.responseFromCache =  ruby_system.network.slave
-        l1_cntrl.forwardFromCache =  ruby_system.network.slave
+        l1_cntrl.mandatoryQueue = MessageBuffer()
+        l1_cntrl.requestFromCache = MessageBuffer()
+        l1_cntrl.responseFromCache = MessageBuffer()
+        l1_cntrl.forwardFromCache = MessageBuffer()
 
 
     phys_mem_size = sum(map(lambda r: r.size(), system.mem_ranges))
@@ -119,11 +119,12 @@ def create_system(options, full_system, system, dma_ports, ruby_system):
         dir_cntrl_nodes.append(dir_cntrl)
 
         # Connect the directory controllers and the network
-        dir_cntrl.requestToDir = ruby_system.network.master
-        dir_cntrl.forwardToDir = ruby_system.network.master
-        dir_cntrl.responseToDir = ruby_system.network.master
+        dir_cntrl.requestToDir = MessageBuffer()
+        dir_cntrl.forwardToDir = MessageBuffer()
+        dir_cntrl.responseToDir = MessageBuffer()
 
 
     all_cntrls = l1_cntrl_nodes + dir_cntrl_nodes
+    ruby_system.network.number_of_virtual_networks = 3
     topology = create_topology(all_cntrls, options)
     return (cpu_sequencers, dir_cntrl_nodes, topology)

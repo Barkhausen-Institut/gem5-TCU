@@ -62,10 +62,11 @@ class FlashDevice : public AbstractNVM
     ~FlashDevice();
 
     /** Checkpoint functions*/
-    unsigned int drain(DrainManager *dm);
+    DrainState drain() M5_ATTR_OVERRIDE;
     void checkDrain();
-    void serialize(std::ostream &os);
-    void unserialize(Checkpoint *cp, const std::string &section);
+
+    void serialize(CheckpointOut &cp) const M5_ATTR_OVERRIDE;
+    void unserialize(CheckpointIn &cp) M5_ATTR_OVERRIDE;
 
   private:
     /** Defines the possible actions to the flash*/
@@ -173,13 +174,6 @@ class FlashDevice : public AbstractNVM
     uint32_t blocksPerDisk;
 
     uint32_t planeMask;
-
-    /**
-     * drain manager
-     * Needed to be able to implement checkpoint functionality
-     */
-
-    DrainManager *drainManager;
 
     /**
      * when the disk is first started we are unsure of the number of

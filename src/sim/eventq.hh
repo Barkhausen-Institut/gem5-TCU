@@ -104,7 +104,12 @@ class EventBase
     static const FlagsType Squashed      = 0x0001; // has been squashed
     static const FlagsType Scheduled     = 0x0002; // has been scheduled
     static const FlagsType AutoDelete    = 0x0004; // delete after dispatch
-    static const FlagsType AutoSerialize = 0x0008; // must be serialized
+    /**
+     * This used to be AutoSerialize. This value can't be reused
+     * without changing the checkpoint version since the flag field
+     * gets serialized.
+     */
+    static const FlagsType Reserved0     = 0x0008;
     static const FlagsType IsExitEvent   = 0x0010; // special exit event
     static const FlagsType IsMainQueue   = 0x0020; // on main event queue
     static const FlagsType Initialized   = 0x7a40; // somewhat random bits
@@ -338,6 +343,9 @@ class Event : public EventBase, public Serializable
     /// See if this is a SimExitEvent (without resorting to RTTI)
     bool isExitEvent() const { return flags.isSet(IsExitEvent); }
 
+    /// Check whether this event will auto-delete
+    bool isAutoDelete() const { return flags.isSet(AutoDelete); }
+
     /// Get the time that the event is scheduled
     Tick when() const { return _when; }
 
@@ -350,15 +358,8 @@ class Event : public EventBase, public Serializable
     virtual BaseGlobalEvent *globalEvent() { return NULL; }
 
 #ifndef SWIG
-    virtual void serialize(std::ostream &os);
-    virtual void unserialize(Checkpoint *cp, const std::string &section);
-
-    //! This function is required to support restoring from checkpoints
-    //! when running with multiple queues. Since we still have not thrashed
-    //! out all the details on checkpointing, this function is most likely
-    //! to be revisited in future.
-    virtual void unserialize(Checkpoint *cp, const std::string &section,
-                     EventQueue *eventq);
+    void serialize(CheckpointOut &cp) const M5_ATTR_OVERRIDE;
+    void unserialize(CheckpointIn &cp) M5_ATTR_OVERRIDE;
 #endif
 };
 
@@ -441,7 +442,7 @@ operator!=(const Event &l, const Event &r)
  * otherwise they risk being scheduled in the past by
  * handleAsyncInsertions().
  */
-class EventQueue : public Serializable
+class EventQueue
 {
   private:
     std::string objName;
@@ -570,7 +571,8 @@ class EventQueue : public Serializable
 
     Tick nextTick() const { return head->when(); }
     void setCurTick(Tick newVal) { _curTick = newVal; }
-    Tick getCurTick() { return _curTick; }
+    Tick getCurTick() const { return _curTick; }
+    Event *getHead() const { return head; }
 
     Event *serviceOne();
 
@@ -646,10 +648,18 @@ class EventQueue : public Serializable
     void unlock() { service_mutex.unlock(); }
     /**@}*/
 
-#ifndef SWIG
-    virtual void serialize(std::ostream &os);
-    virtual void unserialize(Checkpoint *cp, const std::string &section);
-#endif
+    /**
+     * Reschedule an event after a checkpoint.
+     *
+     * Since events don't know which event queue they belong to,
+     * parent objects need to reschedule events themselves. This
+     * method conditionally schedules an event that has the Scheduled
+     * flag set. It should be called by parent objects after
+     * unserializing an object.
+     *
+     * @warn Only use this method after unserializing an Event.
+     */
+    void checkpointReschedule(Event *event);
 
     virtual ~EventQueue() { }
 };

@@ -31,10 +31,11 @@
 
 #include "base/intmath.hh"
 #include "mem/ruby/structures/BankedArray.hh"
-#include "mem/ruby/system/System.hh"
+#include "mem/ruby/system/RubySystem.hh"
 
 BankedArray::BankedArray(unsigned int banks, Cycles accessLatency,
-                         unsigned int startIndexBit)
+                         unsigned int startIndexBit, RubySystem *rs)
+    : m_ruby_system(rs)
 {
     this->banks = banks;
     this->accessLatency = accessLatency;
@@ -48,7 +49,7 @@ BankedArray::BankedArray(unsigned int banks, Cycles accessLatency,
 }
 
 bool
-BankedArray::tryAccess(int64 idx)
+BankedArray::tryAccess(int64_t idx)
 {
     if (accessLatency == 0)
         return true;
@@ -57,26 +58,40 @@ BankedArray::tryAccess(int64 idx)
     assert(bank < banks);
 
     if (busyBanks[bank].endAccess >= curTick()) {
-        if (!(busyBanks[bank].startAccess == curTick() &&
-            busyBanks[bank].idx == idx)) {
             return false;
+    }
+
+    return true;
+}
+
+void
+BankedArray::reserve(int64_t idx)
+{
+    if (accessLatency == 0)
+        return;
+
+    unsigned int bank = mapIndexToBank(idx);
+    assert(bank < banks);
+
+    if(busyBanks[bank].endAccess >= curTick()) {
+        if (busyBanks[bank].startAccess == curTick() &&
+             busyBanks[bank].idx == idx) {
+            // this is the same reservation (can happen when
+            // e.g., reserve the same resource for read and write)
+            return; // OK
         } else {
-            // We tried to allocate resources twice
-            // in the same cycle for the same addr
-            return true;
+            panic("BankedArray reservation error");
         }
     }
 
     busyBanks[bank].idx = idx;
     busyBanks[bank].startAccess = curTick();
     busyBanks[bank].endAccess = curTick() +
-        (accessLatency-1) * g_system_ptr->clockPeriod();
-
-    return true;
+        (accessLatency-1) * m_ruby_system->clockPeriod();
 }
 
 unsigned int
-BankedArray::mapIndexToBank(int64 idx)
+BankedArray::mapIndexToBank(int64_t idx)
 {
     if (banks == 1) {
         return 0;

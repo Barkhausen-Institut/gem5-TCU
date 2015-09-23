@@ -46,12 +46,13 @@
 #include "arch/arm/miscregs.hh"
 #include "arch/arm/system.hh"
 #include "arch/arm/tlb.hh"
-#include "dev/dma_device.hh"
 #include "mem/request.hh"
 #include "params/ArmTableWalker.hh"
 #include "sim/eventq.hh"
 
 class ThreadContext;
+
+class DmaPort;
 
 namespace ArmISA {
 class Translation;
@@ -818,9 +819,6 @@ class TableWalker : public MemObject
      * currently busy. */
     std::list<WalkerState *> pendingQueue;
 
-    /** If we're draining keep the drain event around until we're drained */
-    DrainManager *drainManager;
-
     /** The MMU to forward second stage look upts to */
     Stage2MMU *stage2Mmu;
 
@@ -893,8 +891,8 @@ class TableWalker : public MemObject
     bool haveLargeAsid64() const { return _haveLargeAsid64; }
     /** Checks if all state is cleared and if so, completes drain */
     void completeDrain();
-    unsigned int drain(DrainManager *dm);
-    virtual void drainResume();
+    DrainState drain() M5_ATTR_OVERRIDE;
+    virtual void drainResume() M5_ATTR_OVERRIDE;
 
     virtual BaseMasterPort& getMasterPort(const std::string &if_name,
                                           PortID idx = InvalidPortID);

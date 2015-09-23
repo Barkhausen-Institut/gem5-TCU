@@ -33,8 +33,7 @@ from SimpleMemory import *
 
 class RubySystem(ClockedObject):
     type = 'RubySystem'
-    cxx_header = "mem/ruby/system/System.hh"
-    random_seed = Param.Int(1234, "random seed used by the simulation");
+    cxx_header = "mem/ruby/system/RubySystem.hh"
     randomization = Param.Bool(False,
         "insert random delays on message enqueue times");
     block_size_bytes = Param.UInt32(64,

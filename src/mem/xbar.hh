@@ -57,6 +57,7 @@
 #include "base/hashmap.hh"
 #include "base/types.hh"
 #include "mem/mem_object.hh"
+#include "mem/qport.hh"
 #include "params/BaseXBar.hh"
 #include "sim/stats.hh"
 
@@ -113,7 +114,7 @@ class BaseXBar : public MemObject
          *
          * @return 1 if busy or waiting to retry, or 0 if idle
          */
-        unsigned int drain(DrainManager *dm);
+        DrainState drain() M5_ATTR_OVERRIDE;
 
         /**
          * Get the crossbar layer's name
@@ -215,9 +216,6 @@ class BaseXBar : public MemObject
 
         /** track the state of the layer */
         State state;
-
-        /** manager to signal when drained */
-        DrainManager *drainManager;
 
         /**
          * A deque of ports that retry should be called on because
@@ -427,7 +425,7 @@ class BaseXBar : public MemObject
     bool gotAllAddrRanges;
 
     /** The master and slave ports of the crossbar */
-    std::vector<SlavePort*> slavePorts;
+    std::vector<QueuedSlavePort*> slavePorts;
     std::vector<MasterPort*> masterPorts;
 
     /** Port that handles requests that don't match any of the interfaces.*/
@@ -465,8 +463,6 @@ class BaseXBar : public MemObject
                                   PortID idx = InvalidPortID);
     BaseSlavePort& getSlavePort(const std::string& if_name,
                                 PortID idx = InvalidPortID);
-
-    virtual unsigned int drain(DrainManager *dm) = 0;
 
     virtual void regStats();
 

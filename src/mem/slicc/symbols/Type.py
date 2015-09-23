@@ -31,11 +31,11 @@ from slicc.util import PairContainer
 from slicc.symbols.Symbol import Symbol
 from slicc.symbols.Var import Var
 
-class DataMember(PairContainer):
-    def __init__(self, ident, type, pairs, init_code):
-        super(DataMember, self).__init__(pairs)
-        self.ident = ident
-        self.type = type
+class DataMember(Var):
+    def __init__(self, symtab, ident, location, type, code, pairs,
+                 machine, init_code):
+        super(DataMember, self).__init__(symtab, ident, location, type,
+                                         code, pairs, machine)
         self.init_code = init_code
 
 class Enumeration(PairContainer):
@@ -61,10 +61,8 @@ class Type(Symbol):
         # check for interface that this Type implements
         if "interface" in self:
             interface = self["interface"]
-            if interface in ("Message", "NetworkMessage"):
+            if interface in ("Message"):
                 self["message"] = "yes"
-            if interface == "NetworkMessage":
-                self["networkmessage"] = "yes"
 
         # FIXME - all of the following id comparisons are fragile hacks
         if self.ident in ("CacheMemory"):
@@ -97,9 +95,7 @@ class Type(Symbol):
     @property
     def isPrimitive(self):
         return "primitive" in self
-    @property
-    def isNetworkMessage(self):
-        return "networkmessage" in self
+
     @property
     def isMessage(self):
         return "message" in self
@@ -130,12 +126,11 @@ class Type(Symbol):
         if ident in self.data_members:
             return False
 
-        member = DataMember(ident, type, pairs, init_code)
-        self.data_members[ident] = member
+        member = DataMember(self.symtab, ident, self.location, type,
+                            "m_%s" % ident, pairs, None, init_code)
 
-        var = Var(self.symtab, ident, self.location, type,
-                "m_%s" % ident, {}, None)
-        self.symtab.registerSym(ident, var)
+        self.data_members[ident] = member
+        self.symtab.registerSym(ident, member)
         return True
 
     def dataMemberType(self, ident):
@@ -276,8 +271,6 @@ $klass ${{self.c_ident}}$parent
             code.indent()
             for dm in self.data_members.values():
                 code('m_${{dm.ident}} = local_${{dm.ident}};')
-                if "nextLineCallHack" in dm:
-                    code('m_${{dm.ident}}${{dm["nextLineCallHack"]}};')
 
             code.dedent()
             code('}')
@@ -403,8 +396,7 @@ operator<<(std::ostream& out, const ${{self.c_ident}}& obj)
 #include <memory>
 
 #include "mem/protocol/${{self.c_ident}}.hh"
-#include "mem/ruby/common/Global.hh"
-#include "mem/ruby/system/System.hh"
+#include "mem/ruby/system/RubySystem.hh"
 
 using namespace std;
 ''')
@@ -420,10 +412,12 @@ ${{self.c_ident}}::print(ostream& out) const
         # For each field
         code.indent()
         for dm in self.data_members.values():
-            code('out << "${{dm.ident}} = " << m_${{dm.ident}} << " ";''')
+            if dm.type.c_ident == "Addr":
+                code('''
+out << "${{dm.ident}} = " << printAddress(m_${{dm.ident}}) << " ";''')
+            else:
+                code('out << "${{dm.ident}} = " << m_${{dm.ident}} << " ";''')
 
-        if self.isMessage:
-            code('out << "Time = " << g_system_ptr->clockPeriod() * getTime() << " ";')
         code.dedent()
 
         # Trailer
@@ -458,6 +452,7 @@ ${{self.c_ident}}::print(ostream& out) const
         if self.isMachineType:
             code('#include "base/misc.hh"')
             code('#include "mem/ruby/common/Address.hh"')
+            code('#include "mem/ruby/common/TypeDefines.hh"')
             code('struct MachineID;')
 
         code('''
@@ -474,8 +469,8 @@ enum ${{self.c_ident}} {
         # For each field
         for i,(ident,enum) in enumerate(self.enums.iteritems()):
             desc = enum.get("desc", "No description avaliable")
-            if i == 0: 
-                init = ' = %s_FIRST' % self.c_ident 
+            if i == 0:
+                init = ' = %s_FIRST' % self.c_ident
             else:
                 init = ''
             code('${{self.c_ident}}_${{enum.ident}}$init, /**< $desc */')
@@ -506,7 +501,7 @@ int ${{self.c_ident}}_base_count(const ${{self.c_ident}}& obj);
             for enum in self.enums.itervalues():
                 if enum.ident == "DMA":
                     code('''
-MachineID map_Address_to_DMA(const Address &addr);
+MachineID map_Address_to_DMA(const Addr &addr);
 ''')
                 code('''
 
@@ -757,7 +752,7 @@ ${{self.c_ident}}_base_count(const ${{self.c_ident}}& obj)
                 if enum.ident == "DMA":
                     code('''
 MachineID
-map_Address_to_DMA(const Address &addr)
+map_Address_to_DMA(const Addr &addr)
 {
       MachineID dma = {MachineType_DMA, 0};
       return dma;

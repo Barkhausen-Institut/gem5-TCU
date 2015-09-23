@@ -47,8 +47,8 @@
  * Declares a basic cache interface BaseCache.
  */
 
-#ifndef __BASE_CACHE_HH__
-#define __BASE_CACHE_HH__
+#ifndef __MEM_CACHE_BASE_HH__
+#define __MEM_CACHE_BASE_HH__
 
 #include <algorithm>
 #include <list>
@@ -97,16 +97,6 @@ class BaseCache : public MemObject
         NUM_BLOCKED_CAUSES
     };
 
-    /**
-     * Reasons for cache to request a bus.
-     */
-    enum RequestCause {
-        Request_MSHR = MSHRQueue_MSHRs,
-        Request_WB = MSHRQueue_WriteBuffer,
-        Request_PF,
-        NUM_REQUEST_CAUSES
-    };
-
   protected:
 
     /**
@@ -114,7 +104,7 @@ class BaseCache : public MemObject
      * cache, and in addition to the basic timing port that only sends
      * response packets through a transmit list, it also offers the
      * ability to schedule and send request packets (requests &
-     * writebacks). The send event is scheduled through requestBus,
+     * writebacks). The send event is scheduled through schedSendEvent,
      * and the sendDeferredPacket of the timing port is modified to
      * consider both the transmit list and the requests from the MSHR.
      */
@@ -127,10 +117,9 @@ class BaseCache : public MemObject
          * Schedule a send of a request packet (from the MSHR). Note
          * that we could already have a retry outstanding.
          */
-        void requestBus(RequestCause cause, Tick time)
+        void schedSendEvent(Tick time)
         {
-            DPRINTF(CachePort, "Scheduling request at %llu due to %d\n",
-                    time, cause);
+            DPRINTF(CachePort, "Scheduling send event at %llu\n", time);
             reqQueue.schedSendEvent(time);
         }
 
@@ -213,7 +202,8 @@ class BaseCache : public MemObject
      * - MSHR allocateMissBuffer (miss in MSHR queue);
      */
     MSHR *allocateBufferInternal(MSHRQueue *mq, Addr addr, int size,
-                                 PacketPtr pkt, Tick time, bool requestBus)
+                                 PacketPtr pkt, Tick time,
+                                 bool sched_send)
     {
         // check that the address is block aligned since we rely on
         // this in a number of places when checking for matches and
@@ -226,9 +216,9 @@ class BaseCache : public MemObject
             setBlocked((BlockedCause)mq->index);
         }
 
-        if (requestBus) {
-            requestMemSideBus((RequestCause)mq->index, time);
-        }
+        if (sched_send)
+            // schedule the send
+            schedMemSideSendEvent(time);
 
         return mshr;
     }
@@ -304,10 +294,13 @@ class BaseCache : public MemObject
     /** Do we forward snoops from mem side port through to cpu side port? */
     const bool forwardSnoops;
 
-    /** Is this cache a toplevel cache (e.g. L1, I/O cache). If so we should
-     * never try to forward ownership and similar optimizations to the cpu
-     * side */
-    const bool isTopLevel;
+    /**
+     * Is this cache read only, for example the instruction cache, or
+     * table-walker cache. A cache that is read only should never see
+     * any writes, and should never get any dirty data (and hence
+     * never have to do any writebacks).
+     */
+    const bool isReadOnly;
 
     /**
      * Bit vector of the blocking reasons for the access path.
@@ -480,8 +473,7 @@ class BaseCache : public MemObject
     virtual void regStats();
 
   public:
-    typedef BaseCacheParams Params;
-    BaseCache(const Params *p);
+    BaseCache(const BaseCacheParams *p, unsigned blk_size);
     ~BaseCache() {}
 
     virtual void init();
@@ -507,19 +499,21 @@ class BaseCache : public MemObject
 
     const AddrRangeList &getAddrRanges() const { return addrRanges; }
 
-    MSHR *allocateMissBuffer(PacketPtr pkt, Tick time, bool requestBus)
+    MSHR *allocateMissBuffer(PacketPtr pkt, Tick time, bool sched_send = true)
     {
         return allocateBufferInternal(&mshrQueue,
                                       blockAlign(pkt->getAddr()), blkSize,
-                                      pkt, time, requestBus);
+                                      pkt, time, sched_send);
     }
 
-    MSHR *allocateWriteBuffer(PacketPtr pkt, Tick time, bool requestBus)
+    MSHR *allocateWriteBuffer(PacketPtr pkt, Tick time)
     {
+        // should only see clean evictions in a read-only cache
+        assert(!isReadOnly || pkt->cmd == MemCmd::CleanEvict);
         assert(pkt->isWrite() && !pkt->isRead());
         return allocateBufferInternal(&writeBuffer,
                                       blockAlign(pkt->getAddr()), blkSize,
-                                      pkt, time, requestBus);
+                                      pkt, time, true);
     }
 
     /**
@@ -566,29 +560,17 @@ class BaseCache : public MemObject
     }
 
     /**
-     * Request the master bus for the given cause and time.
-     * @param cause The reason for the request.
-     * @param time The time to make the request.
+     * Schedule a send event for the memory-side port. If already
+     * scheduled, this may reschedule the event at an earlier
+     * time. When the specified time is reached, the port is free to
+     * send either a response, a request, or a prefetch request.
+     *
+     * @param time The time when to attempt sending a packet.
      */
-    void requestMemSideBus(RequestCause cause, Tick time)
+    void schedMemSideSendEvent(Tick time)
     {
-        memSidePort->requestBus(cause, time);
+        memSidePort->schedSendEvent(time);
     }
-
-    /**
-     * Clear the master bus request for the given cause.
-     * @param cause The request reason to clear.
-     */
-    void deassertMemSideBusRequest(RequestCause cause)
-    {
-        // Obsolete... we no longer signal bus requests explicitly so
-        // we can't deassert them.  Leaving this in as a no-op since
-        // the prefetcher calls it to indicate that it no longer wants
-        // to request a prefetch, and someday that might be
-        // interesting again.
-    }
-
-    virtual unsigned int drain(DrainManager *dm);
 
     virtual bool inCache(Addr addr, bool is_secure) const = 0;
 
@@ -614,4 +596,4 @@ class BaseCache : public MemObject
 
 };
 
-#endif //__BASE_CACHE_HH__
+#endif //__MEM_CACHE_BASE_HH__

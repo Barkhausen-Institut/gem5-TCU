@@ -84,12 +84,13 @@ class BaseKvmCPU : public BaseCPU
     void startup();
     void regStats();
 
-    void serializeThread(std::ostream &os, ThreadID tid);
-    void unserializeThread(Checkpoint *cp, const std::string &section,
-                           ThreadID tid);
+    void serializeThread(CheckpointOut &cp,
+                         ThreadID tid) const M5_ATTR_OVERRIDE;
+    void unserializeThread(CheckpointIn &cp,
+                           ThreadID tid) M5_ATTR_OVERRIDE;
 
-    unsigned int drain(DrainManager *dm);
-    void drainResume();
+    DrainState drain() M5_ATTR_OVERRIDE;
+    void drainResume() M5_ATTR_OVERRIDE;
 
     void switchOut();
     void takeOverFrom(BaseCPU *cpu);
@@ -111,7 +112,7 @@ class BaseKvmCPU : public BaseCPU
     Counter totalOps() const;
 
     /** Dump the internal state to the terminal. */
-    virtual void dump();
+    virtual void dump() const;
 
     /**
      * Force an exit from KVM.
@@ -747,13 +748,6 @@ class BaseKvmCPU : public BaseCPU
 
     /** Host factor as specified in the configuration */
     float hostFactor;
-
-    /**
-     * Drain manager to use when signaling drain completion
-     *
-     * This pointer is non-NULL when draining and NULL otherwise.
-     */
-    DrainManager *drainManager;
 
   public:
     /* @{ */

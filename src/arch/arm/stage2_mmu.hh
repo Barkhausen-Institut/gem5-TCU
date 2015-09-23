@@ -42,6 +42,7 @@
 
 #include "arch/arm/faults.hh"
 #include "arch/arm/tlb.hh"
+#include "dev/dma_device.hh"
 #include "mem/request.hh"
 #include "params/ArmStage2MMU.hh"
 #include "sim/eventq.hh"
@@ -110,8 +111,6 @@ class Stage2MMU : public SimObject
      * connected through the stage-one table walker.
      */
     DmaPort& getPort() { return port; }
-
-    unsigned int drain(DrainManager *dm);
 
     Fault readDataUntimed(ThreadContext *tc, Addr oVAddr, Addr descAddr,
         uint8_t *data, int numBytes, Request::Flags flags, bool isFunctional);

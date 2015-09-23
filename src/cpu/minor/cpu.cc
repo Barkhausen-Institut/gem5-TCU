@@ -47,8 +47,7 @@
 #include "debug/Quiesce.hh"
 
 MinorCPU::MinorCPU(MinorCPUParams *params) :
-    BaseCPU(params),
-    drainManager(NULL)
+    BaseCPU(params)
 {
     /* This is only written for one thread at the moment */
     Minor::MinorThread *thread;
@@ -130,33 +129,32 @@ MinorCPU::regStats()
 }
 
 void
-MinorCPU::serializeThread(std::ostream &os, ThreadID thread_id)
+MinorCPU::serializeThread(CheckpointOut &cp, ThreadID thread_id) const
 {
-    threads[thread_id]->serialize(os);
+    threads[thread_id]->serialize(cp);
 }
 
 void
-MinorCPU::unserializeThread(Checkpoint *cp, const std::string &section,
-    ThreadID thread_id)
+MinorCPU::unserializeThread(CheckpointIn &cp, ThreadID thread_id)
 {
     if (thread_id != 0)
         fatal("Trying to load more than one thread into a MinorCPU\n");
 
-    threads[thread_id]->unserialize(cp, section);
+    threads[thread_id]->unserialize(cp);
 }
 
 void
-MinorCPU::serialize(std::ostream &os)
+MinorCPU::serialize(CheckpointOut &cp) const
 {
-    pipeline->serialize(os);
-    BaseCPU::serialize(os);
+    pipeline->serialize(cp);
+    BaseCPU::serialize(cp);
 }
 
 void
-MinorCPU::unserialize(Checkpoint *cp, const std::string &section)
+MinorCPU::unserialize(CheckpointIn &cp)
 {
-    pipeline->unserialize(cp, section);
-    BaseCPU::unserialize(cp, section);
+    pipeline->unserialize(cp);
+    BaseCPU::unserialize(cp);
 }
 
 Addr
@@ -191,44 +189,46 @@ MinorCPU::startup()
     for (auto i = threads.begin(); i != threads.end(); i ++)
         (*i)->startup();
 
-    /* CPU state setup, activate initial context */
-    activateContext(0);
+    /* Workaround cases in SE mode where a thread is activated with an
+     * incorrect PC that is updated after the call to activate. This
+     * causes problems for Minor since it instantiates a virtual
+     * branch instruction when activateContext() is called which ends
+     * up pointing to an illegal address.  */
+    if (threads[0]->status() == ThreadContext::Active)
+        activateContext(0);
 }
 
-unsigned int
-MinorCPU::drain(DrainManager *drain_manager)
+DrainState
+MinorCPU::drain()
 {
-    DPRINTF(Drain, "MinorCPU drain\n");
+    if (switchedOut()) {
+        DPRINTF(Drain, "Minor CPU switched out, draining not needed.\n");
+        return DrainState::Drained;
+    }
 
-    drainManager = drain_manager;
+    DPRINTF(Drain, "MinorCPU drain\n");
 
     /* Need to suspend all threads and wait for Execute to idle.
      * Tell Fetch1 not to fetch */
-    unsigned int ret = pipeline->drain(drain_manager);
-
-    if (ret == 0)
+    if (pipeline->drain()) {
         DPRINTF(Drain, "MinorCPU drained\n");
-    else
+        return DrainState::Drained;
+    } else {
         DPRINTF(Drain, "MinorCPU not finished draining\n");
-
-    return ret;
+        return DrainState::Draining;
+    }
 }
 
 void
 MinorCPU::signalDrainDone()
 {
     DPRINTF(Drain, "MinorCPU drain done\n");
-    setDrainState(Drainable::Drained);
-    drainManager->signalDrainDone();
-    drainManager = NULL;
+    Drainable::signalDrainDone();
 }
 
 void
 MinorCPU::drainResume()
 {
-    assert(getDrainState() == Drainable::Drained ||
-        getDrainState() == Drainable::Running);
-
     if (switchedOut()) {
         DPRINTF(Drain, "drainResume while switched out.  Ignoring\n");
         return;
@@ -243,8 +243,6 @@ MinorCPU::drainResume()
 
     wakeup();
     pipeline->drainResume();
-
-    setDrainState(Drainable::Running);
 }
 
 void

@@ -142,18 +142,18 @@ class O3_ARM_v7a_3(DerivO3CPU):
     branchPred = O3_ARM_v7a_BP()
 
 # Instruction Cache
-class O3_ARM_v7a_ICache(BaseCache):
+class O3_ARM_v7a_ICache(Cache):
     hit_latency = 1
     response_latency = 1
     mshrs = 2
     tgts_per_mshr = 8
     size = '32kB'
     assoc = 2
-    is_top_level = True
     forward_snoops = False
+    is_read_only = True
 
 # Data Cache
-class O3_ARM_v7a_DCache(BaseCache):
+class O3_ARM_v7a_DCache(Cache):
     hit_latency = 2
     response_latency = 2
     mshrs = 6
@@ -161,11 +161,10 @@ class O3_ARM_v7a_DCache(BaseCache):
     size = '32kB'
     assoc = 2
     write_buffers = 16
-    is_top_level = True
 
 # TLB Cache
 # Use a cache as a L2 TLB
-class O3_ARM_v7aWalkCache(BaseCache):
+class O3_ARM_v7aWalkCache(Cache):
     hit_latency = 4
     response_latency = 4
     mshrs = 6
@@ -173,11 +172,11 @@ class O3_ARM_v7aWalkCache(BaseCache):
     size = '1kB'
     assoc = 8
     write_buffers = 16
-    is_top_level = True
     forward_snoops = False
+    is_read_only = True
 
 # L2 Cache
-class O3_ARM_v7aL2(BaseCache):
+class O3_ARM_v7aL2(Cache):
     hit_latency = 12
     response_latency = 12
     mshrs = 16

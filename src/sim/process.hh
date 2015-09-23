@@ -33,6 +33,7 @@
 #ifndef __PROCESS_HH__
 #define __PROCESS_HH__
 
+#include <array>
 #include <string>
 #include <vector>
 
@@ -41,6 +42,7 @@
 #include "base/types.hh"
 #include "config/the_isa.hh"
 #include "mem/se_translating_port_proxy.hh"
+#include "sim/fd_entry.hh"
 #include "sim/sim_object.hh"
 #include "sim/syscallreturn.hh"
 
@@ -73,7 +75,7 @@ class Process : public SimObject
     System *system;
 
     // thread contexts associated with this process
-    std::vector<int> contextIds;
+    std::vector<ContextID> contextIds;
 
     // number of CPUs (esxec contexts, really) assigned to this process.
     unsigned int numCpus() { return contextIds.size(); }
@@ -122,6 +124,8 @@ class Process : public SimObject
 
     virtual void initState();
 
+    DrainState drain() M5_ATTR_OVERRIDE;
+
   public:
 
     //This id is assigned by m5 and is used to keep process' tlb entries
@@ -135,48 +139,30 @@ class Process : public SimObject
 
     PageTableBase* pTable;
 
-    class FdMap
-    {
-      public:
-        int fd;
-        std::string filename;
-        int mode;
-        int flags;
-        bool isPipe;
-        int readPipeSource;
-        uint64_t fileOffset;
-        EmulatedDriver *driver;
-
-        FdMap()
-            : fd(-1), filename("NULL"), mode(0), flags(0),
-              isPipe(false), readPipeSource(0), fileOffset(0), driver(NULL)
-        { }
-
-        void serialize(std::ostream &os);
-        void unserialize(Checkpoint *cp, const std::string &section);
-    };
-
   protected:
     /// Memory proxy for initialization (image loading)
     SETranslatingPortProxy initVirtMem;
 
   private:
-    // file descriptor remapping support
-    static const int MAX_FD = 256;    // max legal fd value
-    FdMap fd_map[MAX_FD+1];
+    static const int NUM_FDS = 1024;
 
+    // File descriptor remapping support.
+    std::shared_ptr<std::array<FDEntry, NUM_FDS>> fd_array;
+
+    // Standard file descriptor options for initialization and checkpoints.
+    std::map<std::string, int> imap;
+    std::map<std::string, int> oemap;
 
   public:
-    // static helper functions to generate file descriptors for constructor
-    static int openInputFile(const std::string &filename);
-    static int openOutputFile(const std::string &filename);
+    // inherit file descriptor map from another process (necessary for clone)
+    void inheritFDArray(Process *p);
 
     // override of virtual SimObject method: register statistics
     virtual void regStats();
 
     // After getting registered with system object, tell process which
     // system-wide context id it is assigned.
-    void assignThreadContext(int context_id)
+    void assignThreadContext(ContextID context_id)
     {
         contextIds.push_back(context_id);
     }
@@ -187,27 +173,31 @@ class Process : public SimObject
     // provide program name for debug messages
     virtual const char *progName() const { return "<unknown>"; }
 
-    // map simulator fd sim_fd to target fd tgt_fd
-    void dup_fd(int sim_fd, int tgt_fd);
-
     // generate new target fd for sim_fd
-    int alloc_fd(int sim_fd, const std::string& filename, int flags, int mode,
-                 bool pipe);
+    int allocFD(int sim_fd, const std::string& filename, int flags, int mode,
+                bool pipe);
 
-    // free target fd (e.g., after close)
-    void free_fd(int tgt_fd);
+    // disassociate target fd with simulator fd and cleanup subsidiary fields
+    void resetFDEntry(int tgt_fd);
 
     // look up simulator fd for given target fd
-    int sim_fd(int tgt_fd);
+    int getSimFD(int tgt_fd);
 
-    // look up simulator fd_map object for a given target fd
-    FdMap *sim_fd_obj(int tgt_fd);
+    // look up fd entry for a given target fd
+    FDEntry *getFDEntry(int tgt_fd);
+
+    // look up target fd for given host fd
+    // Assumes a 1:1 mapping between target file descriptor and host file
+    // descriptor. Given the current API, this must be true given that it's
+    // not possible to map multiple target file descriptors to the same host
+    // file descriptor
+    int getTgtFD(int sim_fd);
 
     // fix all offsets for currently open files and save them
-    void fix_file_offsets();
+    void fixFileOffsets();
 
     // find all offsets for currently open files and save them
-    void find_file_offsets();
+    void findFileOffsets();
 
     // set the source of this read pipe for a checkpoint resume
     void setReadPipeSource(int read_pipe_fd, int source_fd);
@@ -235,8 +225,8 @@ class Process : public SimObject
      */
     bool map(Addr vaddr, Addr paddr, int size, bool cacheable = true);
 
-    void serialize(std::ostream &os);
-    void unserialize(Checkpoint *cp, const std::string &section);
+    void serialize(CheckpointOut &cp) const M5_ATTR_OVERRIDE;
+    void unserialize(CheckpointIn &cp) M5_ATTR_OVERRIDE;
 };
 
 //

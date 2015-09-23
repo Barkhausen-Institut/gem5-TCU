@@ -183,7 +183,7 @@ System::getMasterPort(const std::string &if_name, PortID idx)
 void
 System::setMemoryMode(Enums::MemoryMode mode)
 {
-    assert(getDrainState() == Drainable::Drained);
+    assert(drainState() == DrainState::Drained);
     memoryMode = mode;
 }
 
@@ -201,11 +201,11 @@ bool System::breakpoint()
  */
 int rgdb_wait = -1;
 
-int
-System::registerThreadContext(ThreadContext *tc, int assigned)
+ContextID
+System::registerThreadContext(ThreadContext *tc, ContextID assigned)
 {
     int id;
-    if (assigned == -1) {
+    if (assigned == InvalidContextID) {
         for (id = 0; id < threadContexts.size(); id++) {
             if (!threadContexts[id])
                 break;
@@ -297,7 +297,7 @@ System::initState()
 }
 
 void
-System::replaceThreadContext(ThreadContext *tc, int context_id)
+System::replaceThreadContext(ThreadContext *tc, ContextID context_id)
 {
     if (context_id >= threadContexts.size()) {
         panic("replaceThreadContext: bad id, %d >= %d\n",
@@ -347,46 +347,37 @@ System::isMemAddr(Addr addr) const
     return physmem.isMemAddr(addr);
 }
 
-unsigned int
-System::drain(DrainManager *dm)
-{
-    setDrainState(Drainable::Drained);
-    return 0;
-}
-
 void
 System::drainResume()
 {
-    Drainable::drainResume();
     totalNumInsts = 0;
 }
 
 void
-System::serialize(ostream &os)
+System::serialize(CheckpointOut &cp) const
 {
     if (FullSystem)
-        kernelSymtab->serialize("kernel_symtab", os);
+        kernelSymtab->serialize("kernel_symtab", cp);
     SERIALIZE_SCALAR(pagePtr);
     SERIALIZE_SCALAR(nextPID);
-    serializeSymtab(os);
+    serializeSymtab(cp);
 
     // also serialize the memories in the system
-    nameOut(os, csprintf("%s.physmem", name()));
-    physmem.serialize(os);
+    physmem.serializeSection(cp, "physmem");
 }
 
 
 void
-System::unserialize(Checkpoint *cp, const string &section)
+System::unserialize(CheckpointIn &cp)
 {
     if (FullSystem)
-        kernelSymtab->unserialize("kernel_symtab", cp, section);
+        kernelSymtab->unserialize("kernel_symtab", cp);
     UNSERIALIZE_SCALAR(pagePtr);
     UNSERIALIZE_SCALAR(nextPID);
-    unserializeSymtab(cp, section);
+    unserializeSymtab(cp);
 
     // also unserialize the memories in the system
-    physmem.unserialize(cp, csprintf("%s.physmem", name()));
+    physmem.unserializeSection(cp, "physmem");
 }
 
 void

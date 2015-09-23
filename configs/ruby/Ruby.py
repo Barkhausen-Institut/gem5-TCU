@@ -66,7 +66,7 @@ def define_options(parser):
 
     # ruby network options
     parser.add_option("--topology", type="string", default="Crossbar",
-                 help="check src/mem/ruby/network/topologies for complete set")
+                      help="check configs/topologies for complete set")
     parser.add_option("--mesh-rows", type="int", default=1,
                       help="the number of rows in the mesh topology")
     parser.add_option("--garnet-network", type="choice",
@@ -81,9 +81,6 @@ def define_options(parser):
 
     parser.add_option("--recycle-latency", type="int", default=10,
                       help="Recycle latency for ruby controller input buffers")
-
-    parser.add_option("--random_seed", type="int", default=1234,
-                      help="Used for seeding the random number generator")
 
     protocol = buildEnv['PROTOCOL']
     exec "import %s" % protocol
@@ -209,6 +206,11 @@ def create_system(options, full_system, system, piobus = None, dma_ports = []):
     topology.makeTopology(options, network, IntLinkClass, ExtLinkClass,
             RouterClass)
 
+    if options.garnet_network is None:
+        assert(NetworkClass == SimpleNetwork)
+        assert(RouterClass == Switch)
+        network.setup_buffers()
+
     if InterfaceClass != None:
         netifs = [InterfaceClass(id=i) for (i,n) in enumerate(network.ext_links)]
         network.netifs = netifs
@@ -231,7 +233,6 @@ def create_system(options, full_system, system, piobus = None, dma_ports = []):
 
     ruby._cpu_ports = cpu_sequencers
     ruby.num_of_sequencers = len(cpu_sequencers)
-    ruby.random_seed    = options.random_seed
 
     # Create a backing copy of physical memory in case required
     if options.access_backing_store:

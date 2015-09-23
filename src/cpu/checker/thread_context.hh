@@ -96,9 +96,9 @@ class CheckerThreadContext : public ThreadContext
 
     int cpuId() const { return actualTC->cpuId(); }
 
-    int contextId() const { return actualTC->contextId(); }
+    ContextID contextId() const { return actualTC->contextId(); }
 
-    void setContextId(int id)
+    void setContextId(ContextID id)
     {
        actualTC->setContextId(id);
        checkerTC->setContextId(id);
@@ -181,10 +181,6 @@ class CheckerThreadContext : public ThreadContext
         actualTC->regStats(name);
         checkerTC->regStats(name);
     }
-
-    void serialize(std::ostream &os) { actualTC->serialize(os); }
-    void unserialize(Checkpoint *cp, const std::string &section)
-    { actualTC->unserialize(cp, section); }
 
     EndQuiesceEvent *getQuiesceEvent() { return actualTC->getQuiesceEvent(); }
 

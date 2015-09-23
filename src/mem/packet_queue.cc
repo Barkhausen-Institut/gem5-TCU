@@ -49,7 +49,7 @@
 using namespace std;
 
 PacketQueue::PacketQueue(EventManager& _em, const std::string& _label)
-    : em(_em), sendEvent(this), drainManager(NULL), label(_label),
+    : em(_em), sendEvent(this), label(_label),
       waitingOnRetry(false)
 {
 }
@@ -142,7 +142,7 @@ PacketQueue::schedSendTiming(PacketPtr pkt, Tick when, bool force_order)
         // note that currently we ignore a potentially outstanding retry
         // and could in theory put a new packet at the head of the
         // transmit list before retrying the existing packet
-        transmitList.emplace_front(DeferredPacket(when, pkt));
+        transmitList.emplace_front(when, pkt);
         schedSendEvent(when);
         return;
     }
@@ -157,7 +157,7 @@ PacketQueue::schedSendTiming(PacketPtr pkt, Tick when, bool force_order)
 
     // list is non-empty and this belongs at the end
     if (when >= transmitList.back().tick) {
-        transmitList.emplace_back(DeferredPacket(when, pkt));
+        transmitList.emplace_back(when, pkt);
         return;
     }
 
@@ -169,7 +169,7 @@ PacketQueue::schedSendTiming(PacketPtr pkt, Tick when, bool force_order)
     ++i; // already checked for insertion at front
     while (i != transmitList.end() && when >= i->tick)
         ++i;
-    transmitList.emplace(i, DeferredPacket(when, pkt));
+    transmitList.emplace(i, when, pkt);
 }
 
 void
@@ -198,11 +198,12 @@ PacketQueue::schedSendEvent(Tick when)
     } else {
         // we get a MaxTick when there is no more to send, so if we're
         // draining, we may be done at this point
-        if (drainManager && transmitList.empty() && !sendEvent.scheduled()) {
+        if (drainState() == DrainState::Draining &&
+            transmitList.empty() && !sendEvent.scheduled()) {
+
             DPRINTF(Drain, "PacketQueue done draining,"
                     "processing drain event\n");
-            drainManager->signalDrainDone();
-            drainManager = NULL;
+            signalDrainDone();
         }
     }
 }
@@ -244,14 +245,15 @@ PacketQueue::processSendEvent()
     sendDeferredPacket();
 }
 
-unsigned int
-PacketQueue::drain(DrainManager *dm)
+DrainState
+PacketQueue::drain()
 {
-    if (transmitList.empty())
-        return 0;
-    DPRINTF(Drain, "PacketQueue not drained\n");
-    drainManager = dm;
-    return 1;
+    if (transmitList.empty()) {
+        return DrainState::Drained;
+    } else {
+        DPRINTF(Drain, "PacketQueue not drained\n");
+        return DrainState::Draining;
+    }
 }
 
 ReqPacketQueue::ReqPacketQueue(EventManager& _em, MasterPort& _masterPort,

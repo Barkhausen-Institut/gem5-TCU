@@ -32,7 +32,6 @@
 
 #include "base/cast.hh"
 #include "base/stl_helpers.hh"
-#include "mem/ruby/common/Global.hh"
 #include "mem/ruby/common/NetDest.hh"
 #include "mem/ruby/network/garnet/fixed-pipeline/CreditLink_d.hh"
 #include "mem/ruby/network/garnet/fixed-pipeline/GarnetLink_d.hh"
@@ -40,6 +39,7 @@
 #include "mem/ruby/network/garnet/fixed-pipeline/NetworkInterface_d.hh"
 #include "mem/ruby/network/garnet/fixed-pipeline/NetworkLink_d.hh"
 #include "mem/ruby/network/garnet/fixed-pipeline/Router_d.hh"
+#include "mem/ruby/system/RubySystem.hh"
 
 using namespace std;
 using m5::stl_helpers::deletePointers;
@@ -51,8 +51,13 @@ GarnetNetwork_d::GarnetNetwork_d(const Params *p)
     m_buffers_per_ctrl_vc = p->buffers_per_ctrl_vc;
 
     m_vnet_type.resize(m_virtual_networks);
-    for (int i = 0; i < m_vnet_type.size(); i++) {
-        m_vnet_type[i] = NULL_VNET_; // default
+
+    for(int i = 0 ; i < m_virtual_networks ; i++)
+    {
+        if (m_vnet_type_names[i] == "response")
+            m_vnet_type[i] = DATA_VNET_; // carries data (and ctrl) packets
+        else
+            m_vnet_type[i] = CTRL_VNET_; // carries only ctrl packets
     }
 
     // record the routers
@@ -188,25 +193,6 @@ GarnetNetwork_d::makeInternalLink(SwitchID src, SwitchID dest, BasicLink* link,
 }
 
 void
-GarnetNetwork_d::checkNetworkAllocation(NodeID id, bool ordered,
-                                        int network_num,
-                                        string vnet_type)
-{
-    assert(id < m_nodes);
-    assert(network_num < m_virtual_networks);
-
-    if (ordered) {
-        m_ordered[network_num] = true;
-    }
-    m_in_use[network_num] = true;
-
-    if (vnet_type == "response")
-        m_vnet_type[network_num] = DATA_VNET_; // carries data (and ctrl) packets
-    else
-        m_vnet_type[network_num] = CTRL_VNET_; // carries only ctrl packets
-}
-
-void
 GarnetNetwork_d::regStats()
 {
     BaseGarnetNetwork::regStats();
@@ -223,15 +209,16 @@ GarnetNetwork_d::regStats()
 void
 GarnetNetwork_d::collateStats()
 {
+    RubySystem *rs = params()->ruby_system;
+    double time_delta = double(curCycle() - rs->getStartCycle());
+
     for (int i = 0; i < m_links.size(); i++) {
         m_average_link_utilization +=
-            (double(m_links[i]->getLinkUtilization())) /
-            (double(curCycle() - g_ruby_start));
+            (double(m_links[i]->getLinkUtilization())) / time_delta;
 
         vector<unsigned int> vc_load = m_links[i]->getVcLoad();
         for (int j = 0; j < vc_load.size(); j++) {
-            m_average_vc_load[j] +=
-                ((double)vc_load[j] / (double)(curCycle() - g_ruby_start));
+            m_average_vc_load[j] += ((double)vc_load[j] / time_delta);
         }
     }
 

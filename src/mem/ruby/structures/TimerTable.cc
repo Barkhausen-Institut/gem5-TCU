@@ -26,22 +26,20 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "mem/ruby/common/Global.hh"
 #include "mem/ruby/structures/TimerTable.hh"
-#include "mem/ruby/system/System.hh"
+
+#include "mem/ruby/system/RubySystem.hh"
 
 TimerTable::TimerTable()
     : m_next_time(0)
 {
     m_consumer_ptr  = NULL;
-    m_clockobj_ptr = NULL;
-
     m_next_valid = false;
-    m_next_address = Address(0);
+    m_next_address = 0;
 }
 
 bool
-TimerTable::isReady() const
+TimerTable::isReady(Tick curTime) const
 {
     if (m_map.empty())
         return false;
@@ -50,14 +48,12 @@ TimerTable::isReady() const
         updateNext();
     }
     assert(m_next_valid);
-    return (m_clockobj_ptr->curCycle() >= m_next_time);
+    return (curTime >= m_next_time);
 }
 
-const Address&
-TimerTable::readyAddress() const
+Addr
+TimerTable::nextAddress() const
 {
-    assert(isReady());
-
     if (!m_next_valid) {
         updateNext();
     }
@@ -66,17 +62,14 @@ TimerTable::readyAddress() const
 }
 
 void
-TimerTable::set(const Address& address, Cycles relative_latency)
+TimerTable::set(Addr address, Tick ready_time)
 {
-    assert(address == line_address(address));
-    assert(relative_latency > 0);
+    assert(address == makeLineAddress(address));
     assert(!m_map.count(address));
 
-    Cycles ready_time = m_clockobj_ptr->curCycle() + relative_latency;
     m_map[address] = ready_time;
     assert(m_consumer_ptr != NULL);
-    m_consumer_ptr->
-        scheduleEventAbsolute(m_clockobj_ptr->clockPeriod() * ready_time);
+    m_consumer_ptr->scheduleEventAbsolute(ready_time);
     m_next_valid = false;
 
     // Don't always recalculate the next ready address
@@ -86,9 +79,9 @@ TimerTable::set(const Address& address, Cycles relative_latency)
 }
 
 void
-TimerTable::unset(const Address& address)
+TimerTable::unset(Addr address)
 {
-    assert(address == line_address(address));
+    assert(address == makeLineAddress(address));
     assert(m_map.count(address));
     m_map.erase(address);
 

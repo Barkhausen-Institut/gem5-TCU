@@ -38,6 +38,7 @@
  */
 
 #include "arch/arm/stage2_mmu.hh"
+
 #include "arch/arm/faults.hh"
 #include "arch/arm/system.hh"
 #include "arch/arm/table_walker.hh"
@@ -138,12 +139,6 @@ Stage2MMU::Stage2Translation::finish(const Fault &_fault, RequestPtr req,
         // event we're done
         event->process();
     }
-}
-
-unsigned int
-Stage2MMU::drain(DrainManager *dm)
-{
-    return port.drain(dm);
 }
 
 ArmISA::Stage2MMU *

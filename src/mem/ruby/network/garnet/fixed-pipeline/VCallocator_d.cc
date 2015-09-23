@@ -117,6 +117,7 @@ VCallocator_d::wakeup()
 
     clear_request_vector();
     check_for_wakeup();
+    m_router->call_sw_alloc();
 }
 
 bool
@@ -179,10 +180,6 @@ VCallocator_d::arbitrate_invcs()
 {
     for (int inport_iter = 0; inport_iter < m_num_inports; inport_iter++) {
         for (int invc_iter = 0; invc_iter < m_num_vcs; invc_iter++) {
-            if (!((m_router->get_net_ptr())->validVirtualNetwork(
-                get_vnet(invc_iter))))
-                continue;
-
             if (m_input_unit[inport_iter]->need_stage(invc_iter, VC_AB_,
                     VA_, m_router->curCycle())) {
                 if (!is_invc_candidate(inport_iter, invc_iter))
@@ -236,7 +233,6 @@ VCallocator_d::arbitrate_outvcs()
                         m_router->curCycle());
                     m_output_unit[outport_iter]->update_vc(
                         outvc_iter, inport, invc);
-                    m_router->swarb_req();
                     break;
                 }
             }
@@ -261,7 +257,7 @@ VCallocator_d::check_for_wakeup()
     for (int i = 0; i < m_num_inports; i++) {
         for (int j = 0; j < m_num_vcs; j++) {
             if (m_input_unit[i]->need_stage(j, VC_AB_, VA_, nextCycle)) {
-                scheduleEvent(Cycles(1));
+                m_router->vcarb_req();
                 return;
             }
         }

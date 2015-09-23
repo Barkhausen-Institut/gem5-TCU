@@ -32,12 +32,12 @@
 #include <memory>
 #include <ostream>
 
+#include "mem/mem_object.hh"
 #include "mem/protocol/DMASequencerRequestType.hh"
 #include "mem/protocol/RequestStatus.hh"
 #include "mem/ruby/common/DataBlock.hh"
 #include "mem/ruby/network/MessageBuffer.hh"
-#include "mem/ruby/system/System.hh"
-#include "mem/mem_object.hh"
+#include "mem/ruby/system/RubySystem.hh"
 #include "mem/simple_mem.hh"
 #include "mem/tport.hh"
 #include "params/DMASequencer.hh"
@@ -61,13 +61,14 @@ class DMASequencer : public MemObject
     typedef DMASequencerParams Params;
     DMASequencer(const Params *);
     void init();
+    RubySystem *m_ruby_system;
 
   public:
     class MemSlavePort : public QueuedSlavePort
     {
       private:
         RespPacketQueue queue;
-        RubySystem* ruby_system;
+        RubySystem* m_ruby_system;
         bool access_backing_store;
 
       public:
@@ -75,7 +76,7 @@ class DMASequencer : public MemObject
                      PortID id, RubySystem *_ruby_system,
                      bool _access_backing_store);
         void hitCallback(PacketPtr pkt);
-        void evictionCallback(const Address& address);
+        void evictionCallback(Addr address);
 
       protected:
         bool recvTimingReq(PacketPtr pkt);
@@ -107,7 +108,7 @@ class DMASequencer : public MemObject
     // A pointer to the controller is needed for atomic support.
     void setController(AbstractController* _cntrl) { m_controller = _cntrl; }
     uint32_t getId() { return m_version; }
-    unsigned int drain(DrainManager *dm);
+    DrainState drain() M5_ATTR_OVERRIDE;
 
     /* SLICC callback */
     void dataCallback(const DataBlock & dblk);
@@ -129,7 +130,7 @@ class DMASequencer : public MemObject
      * @return Whether successfully sent
      */
     bool recvTimingResp(PacketPtr pkt, PortID master_port_id);
-    unsigned int getChildDrainCount(DrainManager *dm);
+    unsigned int getChildDrainCount();
 
   private:
     uint32_t m_version;
@@ -139,7 +140,6 @@ class DMASequencer : public MemObject
 
     MemSlavePort slave_port;
 
-    DrainManager *drainManager;
     System* system;
 
     bool retry;

@@ -29,8 +29,8 @@
 
 #include "debug/RubyCacheTrace.hh"
 #include "mem/ruby/system/CacheRecorder.hh"
+#include "mem/ruby/system/RubySystem.hh"
 #include "mem/ruby/system/Sequencer.hh"
-#include "mem/ruby/system/System.hh"
 
 using namespace std;
 
@@ -95,6 +95,8 @@ CacheRecorder::enqueueNextFlushRequest()
         m_sequencer_ptr->makeRequest(pkt);
 
         DPRINTF(RubyCacheTrace, "Flushing %s\n", *rec);
+    } else {
+        DPRINTF(RubyCacheTrace, "Flushed all %d records\n", m_records_flushed);
     }
 }
 
@@ -137,12 +139,13 @@ CacheRecorder::enqueueNextFetchRequest()
 
         m_bytes_read += (sizeof(TraceRecord) + m_block_size_bytes);
         m_records_read++;
+    } else {
+        DPRINTF(RubyCacheTrace, "Fetched all %d records\n", m_records_read);
     }
 }
 
 void
-CacheRecorder::addRecord(int cntrl, const physical_address_t data_addr,
-                         const physical_address_t pc_addr,
+CacheRecorder::addRecord(int cntrl, Addr data_addr, Addr pc_addr,
                          RubyRequestType type, Tick time, DataBlock& data)
 {
     TraceRecord* rec = (TraceRecord*)malloc(sizeof(TraceRecord) +
@@ -158,13 +161,13 @@ CacheRecorder::addRecord(int cntrl, const physical_address_t data_addr,
     m_records.push_back(rec);
 }
 
-uint64
-CacheRecorder::aggregateRecords(uint8_t** buf, uint64 total_size)
+uint64_t
+CacheRecorder::aggregateRecords(uint8_t **buf, uint64_t total_size)
 {
     std::sort(m_records.begin(), m_records.end(), compareTraceRecords);
 
     int size = m_records.size();
-    uint64 current_size = 0;
+    uint64_t current_size = 0;
     int record_size = sizeof(TraceRecord) + m_block_size_bytes;
 
     for (int i = 0; i < size; ++i) {

@@ -37,10 +37,9 @@
 #include "mem/abstract_mem.hh"
 #include "mem/protocol/MemoryMsg.hh"
 #include "mem/ruby/common/Address.hh"
-#include "mem/ruby/common/Global.hh"
 #include "mem/ruby/profiler/MemCntrlProfiler.hh"
 #include "mem/ruby/structures/MemoryNode.hh"
-#include "mem/ruby/system/System.hh"
+#include "mem/ruby/system/RubySystem.hh"
 #include "params/RubyMemoryControl.hh"
 
 // This constant is part of the definition of tFAW; see
@@ -61,7 +60,7 @@ class RubyMemoryControl : public AbstractMemory, public Consumer
 
     virtual BaseSlavePort& getSlavePort(const std::string& if_name,
                                         PortID idx = InvalidPortID);
-    unsigned int drain(DrainManager *dm);
+    DrainState drain() M5_ATTR_OVERRIDE;
     void wakeup();
 
     void setDescription(const std::string& name) { m_description = name; };
@@ -76,12 +75,12 @@ class RubyMemoryControl : public AbstractMemory, public Consumer
     void print(std::ostream& out) const;
     void regStats();
 
-    const int getBank(const physical_address_t addr) const;
-    const int getRank(const physical_address_t addr) const;
+    const int getBank(const Addr addr) const;
+    const int getRank(const Addr addr) const;
 
     // not used in Ruby memory controller
-    const int getChannel(const physical_address_t addr) const;
-    const int getRow(const physical_address_t addr) const;
+    const int getChannel(const Addr addr) const;
+    const int getRow(const Addr addr) const;
 
     //added by SS
     int getBanksPerRank() { return m_banks_per_rank; };
@@ -163,11 +162,11 @@ class RubyMemoryControl : public AbstractMemory, public Consumer
 
     // Each entry indicates number of address-bus cycles until bank
     // is reschedulable:
-    int* m_bankBusyCounter;
-    int* m_oldRequest;
+    int *m_bankBusyCounter;
+    int *m_oldRequest;
 
-    uint64* m_tfaw_shift;
-    int* m_tfaw_count;
+    uint64_t *m_tfaw_shift;
+    int *m_tfaw_count;
 
     // Each of these indicates number of address-bus cycles until
     // we can issue a new request of the corresponding type:
@@ -183,12 +182,12 @@ class RubyMemoryControl : public AbstractMemory, public Consumer
     int m_ageCounter;         // age of old requests; to detect starvation
     int m_idleCount;          // watchdog timer for shutting down
 
-    MemCntrlProfiler* m_profiler_ptr;
+    MemCntrlProfiler *m_profiler_ptr;
 
     class MemCntrlEvent : public Event
     {
       public:
-        MemCntrlEvent(RubyMemoryControl* _mem_cntrl)
+        MemCntrlEvent(RubyMemoryControl *_mem_cntrl)
         {
             mem_cntrl = _mem_cntrl;
         }

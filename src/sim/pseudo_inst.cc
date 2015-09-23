@@ -282,7 +282,7 @@ quiesceNs(ThreadContext *tc, uint64_t ns)
 
     BaseCPU *cpu = tc->getCpuPtr();
 
-    if (!cpu->params()->do_quiesce || ns == 0)
+    if (!cpu->params()->do_quiesce)
         return;
 
     EndQuiesceEvent *quiesceEvent = tc->getQuiesceEvent();
@@ -308,7 +308,7 @@ quiesceCycles(ThreadContext *tc, uint64_t cycles)
 
     BaseCPU *cpu = tc->getCpuPtr();
 
-    if (!cpu->params()->do_quiesce || cycles == 0)
+    if (!cpu->params()->do_quiesce)
         return;
 
     EndQuiesceEvent *quiesceEvent = tc->getQuiesceEvent();

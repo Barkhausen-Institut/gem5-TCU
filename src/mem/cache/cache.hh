@@ -49,14 +49,15 @@
  * Describes a cache based on template policies.
  */
 
-#ifndef __CACHE_HH__
-#define __CACHE_HH__
+#ifndef __MEM_CACHE_CACHE_HH__
+#define __MEM_CACHE_CACHE_HH__
 
 #include "base/misc.hh" // fatal, panic, and warn
 #include "mem/cache/base.hh"
 #include "mem/cache/blk.hh"
 #include "mem/cache/mshr.hh"
 #include "mem/cache/tags/base.hh"
+#include "params/Cache.hh"
 #include "sim/eventq.hh"
 
 //Forward decleration
@@ -246,6 +247,11 @@ class Cache : public BaseCache
     bool recvTimingReq(PacketPtr pkt);
 
     /**
+     * Insert writebacks into the write buffer
+     */
+    void doWritebacks(PacketList& writebacks, Tick forward_time);
+
+    /**
      * Handles a response (cache line fill/write ack) from the bus.
      * @param pkt The response packet
      */
@@ -308,6 +314,13 @@ class Cache : public BaseCache
      */
     PacketPtr writebackBlk(CacheBlk *blk);
 
+    /**
+     * Create a CleanEvict request for the given block.
+     * @param blk The block to evict.
+     * @return The CleanEvict request for the block.
+     */
+    PacketPtr cleanEvictBlk(CacheBlk *blk);
+
 
     void memWriteback();
     void memInvalidate();
@@ -330,13 +343,6 @@ class Cache : public BaseCache
     bool invalidateVisitor(CacheBlk &blk);
 
     /**
-     * Squash all requests associated with specified thread.
-     * intended for use by I-cache.
-     * @param threadNum The thread to squash.
-     */
-    void squash(int threadNum);
-
-    /**
      * Generate an appropriate downstream bus request packet for the
      * given parameters.
      * @param cpu_pkt  The upstream request that needs to be satisfied.
@@ -357,6 +363,12 @@ class Cache : public BaseCache
      * prioritizing among those sources on the fly.
      */
     MSHR *getNextMSHR();
+
+    /**
+     * Send up a snoop request and find cached copies. If cached copies are
+     * found, set the BLOCK_CACHED flag in pkt.
+     */
+    bool isCachedAbove(const PacketPtr pkt) const;
 
     /**
      * Selects an outstanding request to service.  Called when the
@@ -401,7 +413,7 @@ class Cache : public BaseCache
 
   public:
     /** Instantiates a basic cache object. */
-    Cache(const Params *p);
+    Cache(const CacheParams *p);
 
     /** Non-default destructor is needed to deallocate memory. */
     virtual ~Cache();
@@ -411,8 +423,8 @@ class Cache : public BaseCache
     /** serialize the state of the caches
      * We currently don't support checkpointing cache state, so this panics.
      */
-    virtual void serialize(std::ostream &os);
-    void unserialize(Checkpoint *cp, const std::string &section);
+    void serialize(CheckpointOut &cp) const M5_ATTR_OVERRIDE;
+    void unserialize(CheckpointIn &cp) M5_ATTR_OVERRIDE;
 };
 
 /**
@@ -473,4 +485,4 @@ class CacheBlkIsDirtyVisitor : public CacheBlkVisitor
     bool _isDirty;
 };
 
-#endif // __CACHE_HH__
+#endif // __MEM_CACHE_CACHE_HH__

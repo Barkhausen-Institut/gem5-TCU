@@ -36,10 +36,10 @@ void
 RubyRequest::print(ostream& out) const
 {
   out << "[RubyRequest: ";
-  out << "LineAddress = " << m_LineAddress << " ";
-  out << "PhysicalAddress = " << m_PhysicalAddress << " ";
+  out << hex << "LineAddress = 0x" << m_LineAddress << dec << " ";
+  out << hex << "PhysicalAddress = 0x" << m_PhysicalAddress << dec << " ";
   out << "Type = " << m_Type << " ";
-  out << "ProgramCounter = " << m_ProgramCounter << " ";
+  out << hex << "ProgramCounter = 0x" << m_ProgramCounter << dec << " ";
   out << "AccessMode = " << m_AccessMode << " ";
   out << "Size = " << m_Size << " ";
   out << "Prefetch = " << m_Prefetch << " ";
@@ -69,7 +69,7 @@ RubyRequest::functionalWrite(Packet *pkt)
 
     Addr wBase = pkt->getAddr();
     Addr wTail = wBase + pkt->getSize();
-    Addr mBase = m_PhysicalAddress.getAddress();
+    Addr mBase = m_PhysicalAddress;
     Addr mTail = mBase + m_Size;
 
     const uint8_t * pktData = pkt->getConstPtr<uint8_t>();

@@ -644,20 +644,15 @@ CxxConfigManager::startup()
 }
 
 unsigned int
-CxxConfigManager::drain(DrainManager *drain_manager)
+CxxConfigManager::drain()
 {
-    unsigned int ret = 0;
-
-    for (auto i = objectsInOrder.begin(); i != objectsInOrder.end(); ++ i)
-        ret += (*i)->drain(drain_manager);
-
-    return ret;
+    return DrainManager::instance().tryDrain() ? 0 : 1;
 }
 
 void
 CxxConfigManager::drainResume()
 {
-    forEachObject(&SimObject::drainResume);
+    DrainManager::instance().resume();
 }
 
 void
@@ -671,7 +666,7 @@ CxxConfigManager::serialize(std::ostream &os)
 }
 
 void
-CxxConfigManager::loadState(Checkpoint *checkpoint)
+CxxConfigManager::loadState(CheckpointIn &checkpoint)
 {
     for (auto i = objectsInOrder.begin(); i != objectsInOrder.end(); ++ i)
         (*i)->loadState(checkpoint);

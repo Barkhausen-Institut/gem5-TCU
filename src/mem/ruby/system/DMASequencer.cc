@@ -34,15 +34,16 @@
 #include "debug/RubyStats.hh"
 #include "mem/protocol/SequencerMsg.hh"
 #include "mem/ruby/system/DMASequencer.hh"
-#include "mem/ruby/system/System.hh"
+#include "mem/ruby/system/RubySystem.hh"
 #include "sim/system.hh"
 
 DMASequencer::DMASequencer(const Params *p)
-    : MemObject(p), m_version(p->version), m_controller(NULL),
-      m_mandatory_q_ptr(NULL), m_usingRubyTester(p->using_ruby_tester),
+    : MemObject(p), m_ruby_system(p->ruby_system), m_version(p->version),
+      m_controller(NULL), m_mandatory_q_ptr(NULL),
+      m_usingRubyTester(p->using_ruby_tester),
       slave_port(csprintf("%s.slave", name()), this, 0, p->ruby_system,
                  p->ruby_system->getAccessBackingStore()),
-      drainManager(NULL), system(p->system), retry(false)
+      system(p->system), retry(false)
 {
     assert(m_version != -1);
 }
@@ -53,7 +54,6 @@ DMASequencer::init()
     MemObject::init();
     assert(m_controller != NULL);
     m_mandatory_q_ptr = m_controller->getMandatoryQueue();
-    m_mandatory_q_ptr->setSender(this);
     m_is_busy = false;
     m_data_block_mask = ~ (~0 << RubySystem::getBlockSizeBits());
 
@@ -77,7 +77,7 @@ DMASequencer::MemSlavePort::MemSlavePort(const std::string &_name,
     DMASequencer *_port, PortID id, RubySystem* _ruby_system,
     bool _access_backing_store)
     : QueuedSlavePort(_name, _port, queue, id), queue(*_port, *this),
-      ruby_system(_ruby_system), access_backing_store(_access_backing_store)
+      m_ruby_system(_ruby_system), access_backing_store(_access_backing_store)
 {
     DPRINTF(RubyDma, "Created slave memport on ruby sequencer %s\n", _name);
 }
@@ -93,7 +93,7 @@ DMASequencer::MemSlavePort::recvTimingReq(PacketPtr pkt)
         panic("DMASequencer should never see an inhibited request\n");
 
     assert(isPhysMemAddress(pkt->getAddr()));
-    assert(Address(pkt->getAddr()).getOffset() + pkt->getSize() <=
+    assert(getOffset(pkt->getAddr()) + pkt->getSize() <=
            RubySystem::getBlockSizeBytes());
 
     // Submit the ruby request
@@ -148,57 +148,34 @@ void
 DMASequencer::testDrainComplete()
 {
     //If we weren't able to drain before, we might be able to now.
-    if (drainManager != NULL) {
+    if (drainState() == DrainState::Draining) {
         unsigned int drainCount = outstandingCount();
         DPRINTF(Drain, "Drain count: %u\n", drainCount);
         if (drainCount == 0) {
             DPRINTF(Drain, "DMASequencer done draining, signaling drain done\n");
-            drainManager->signalDrainDone();
-            // Clear the drain manager once we're done with it.
-            drainManager = NULL;
+            signalDrainDone();
         }
     }
 }
 
-unsigned int
-DMASequencer::getChildDrainCount(DrainManager *dm)
-{
-    int count = 0;
-    count += slave_port.drain(dm);
-    DPRINTF(Config, "count after slave port check %d\n", count);
-    return count;
-}
-
-unsigned int
-DMASequencer::drain(DrainManager *dm)
+DrainState
+DMASequencer::drain()
 {
     if (isDeadlockEventScheduled()) {
         descheduleDeadlockEvent();
     }
 
     // If the DMASequencer is not empty, then it needs to clear all outstanding
-    // requests before it should call drainManager->signalDrainDone()
+    // requests before it should call signalDrainDone()
     DPRINTF(Config, "outstanding count %d\n", outstandingCount());
-    bool need_drain = outstandingCount() > 0;
-
-    //
-    // Also, get the number of child ports that will also need to clear
-    // their buffered requests before they call drainManager->signalDrainDone()
-    //
-    unsigned int child_drain_count = getChildDrainCount(dm);
 
     // Set status
-    if (need_drain) {
-        drainManager = dm;
-
+    if (outstandingCount() > 0) {
         DPRINTF(Drain, "DMASequencer not drained\n");
-        setDrainState(Drainable::Draining);
-        return child_drain_count + 1;
+        return DrainState::Draining;
+    } else {
+        return DrainState::Drained;
     }
-
-    drainManager = NULL;
-    setDrainState(Drainable::Drained);
-    return child_drain_count;
 }
 
 void
@@ -213,7 +190,7 @@ DMASequencer::MemSlavePort::hitCallback(PacketPtr pkt)
     // turn packet around to go back to requester if response expected
 
     if (access_backing_store) {
-        ruby_system->getPhysMem()->access(pkt);
+        m_ruby_system->getPhysMem()->access(pkt);
     } else if (needsResponse) {
         pkt->makeResponse();
     }
@@ -221,7 +198,9 @@ DMASequencer::MemSlavePort::hitCallback(PacketPtr pkt)
     if (needsResponse) {
         DPRINTF(RubyDma, "Sending packet back over port\n");
         // send next cycle
-        schedTimingResp(pkt, curTick() + g_system_ptr->clockPeriod());
+        DMASequencer *seq = static_cast<DMASequencer *>(&owner);
+        RubySystem *rs = seq->m_ruby_system;
+        schedTimingResp(pkt, curTick() + rs->clockPeriod());
     } else {
         delete pkt;
     }
@@ -243,7 +222,7 @@ DMASequencer::makeRequest(PacketPtr pkt)
         return RequestStatus_BufferFull;
     }
 
-    uint64_t paddr = pkt->getAddr();
+    Addr paddr = pkt->getAddr();
     uint8_t* data =  pkt->getPtr<uint8_t>();
     int len = pkt->getSize();
     bool write = pkt->isWrite();
@@ -261,8 +240,8 @@ DMASequencer::makeRequest(PacketPtr pkt)
 
     std::shared_ptr<SequencerMsg> msg =
         std::make_shared<SequencerMsg>(clockEdge());
-    msg->getPhysicalAddress() = Address(paddr);
-    msg->getLineAddress() = line_address(msg->getPhysicalAddress());
+    msg->getPhysicalAddress() = paddr;
+    msg->getLineAddress() = makeLineAddress(msg->getPhysicalAddress());
     msg->getType() = write ? SequencerRequestType_ST : SequencerRequestType_LD;
     int offset = paddr & m_data_block_mask;
 
@@ -276,7 +255,7 @@ DMASequencer::makeRequest(PacketPtr pkt)
     }
 
     assert(m_mandatory_q_ptr != NULL);
-    m_mandatory_q_ptr->enqueue(msg);
+    m_mandatory_q_ptr->enqueue(msg, clockEdge(), cyclesToTicks(Cycles(1)));
     active_request.bytes_issued += msg->getLen();
 
     return RequestStatus_Issued;
@@ -300,11 +279,11 @@ DMASequencer::issueNext()
 
     std::shared_ptr<SequencerMsg> msg =
         std::make_shared<SequencerMsg>(clockEdge());
-    msg->getPhysicalAddress() = Address(active_request.start_paddr +
-                                       active_request.bytes_completed);
+    msg->getPhysicalAddress() = active_request.start_paddr +
+                                active_request.bytes_completed;
 
-    assert((msg->getPhysicalAddress().getAddress() & m_data_block_mask) == 0);
-    msg->getLineAddress() = line_address(msg->getPhysicalAddress());
+    assert((msg->getPhysicalAddress() & m_data_block_mask) == 0);
+    msg->getLineAddress() = makeLineAddress(msg->getPhysicalAddress());
 
     msg->getType() = (active_request.write ? SequencerRequestType_ST :
                      SequencerRequestType_LD);
@@ -319,15 +298,12 @@ DMASequencer::issueNext()
         msg->getDataBlk().
             setData(&active_request.data[active_request.bytes_completed],
                     0, msg->getLen());
-        msg->getType() = SequencerRequestType_ST;
-    } else {
-        msg->getType() = SequencerRequestType_LD;
     }
 
     assert(m_mandatory_q_ptr != NULL);
-    m_mandatory_q_ptr->enqueue(msg);
+    m_mandatory_q_ptr->enqueue(msg, clockEdge(), cyclesToTicks(Cycles(1)));
     active_request.bytes_issued += msg->getLen();
-    DPRINTF(RubyDma, 
+    DPRINTF(RubyDma,
             "DMA request bytes issued %d, bytes completed %d, total len %d\n",
             active_request.bytes_issued, active_request.bytes_completed,
             active_request.len);

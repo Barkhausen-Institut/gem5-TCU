@@ -90,6 +90,8 @@ IdeDisk::IdeDisk(const Params *p)
     } else {
         if (lba_size >= 63)
             sectors = 63;
+        else if (lba_size == 0)
+            panic("Bad IDE image size: 0\n");
         else
             sectors = lba_size;
 
@@ -342,7 +344,7 @@ IdeDisk::doDmaTransfer()
         panic("Inconsistent DMA transfer state: dmaState = %d devState = %d\n",
               dmaState, devState);
 
-    if (ctrl->dmaPending() || ctrl->getDrainState() != Drainable::Running) {
+    if (ctrl->dmaPending() || ctrl->drainState() != DrainState::Running) {
         schedule(dmaTransferEvent, curTick() + DMA_BACKOFF_PERIOD);
         return;
     } else
@@ -436,7 +438,7 @@ IdeDisk::doDmaRead()
                 curPrd.getByteCount(), TheISA::PageBytes);
 
     }
-    if (ctrl->dmaPending() || ctrl->getDrainState() != Drainable::Running) {
+    if (ctrl->dmaPending() || ctrl->drainState() != DrainState::Running) {
         schedule(dmaReadWaitEvent, curTick() + DMA_BACKOFF_PERIOD);
         return;
     } else if (!dmaReadCG->done()) {
@@ -518,7 +520,7 @@ IdeDisk::doDmaWrite()
         dmaWriteCG = new ChunkGenerator(curPrd.getBaseAddr(),
                 curPrd.getByteCount(), TheISA::PageBytes);
     }
-    if (ctrl->dmaPending() || ctrl->getDrainState() != Drainable::Running) {
+    if (ctrl->dmaPending() || ctrl->drainState() != DrainState::Running) {
         schedule(dmaWriteWaitEvent, curTick() + DMA_BACKOFF_PERIOD);
         DPRINTF(IdeDisk, "doDmaWrite: rescheduling\n");
         return;
@@ -1063,7 +1065,7 @@ IdeDisk::updateState(DevAction_t action)
 }
 
 void
-IdeDisk::serialize(ostream &os)
+IdeDisk::serialize(CheckpointOut &cp) const
 {
     // Check all outstanding events to see if they are scheduled
     // these are all mutually exclusive
@@ -1141,7 +1143,7 @@ IdeDisk::serialize(ostream &os)
 }
 
 void
-IdeDisk::unserialize(Checkpoint *cp, const string &section)
+IdeDisk::unserialize(CheckpointIn &cp)
 {
     // Reschedule events that were outstanding
     // these are all mutually exclusive

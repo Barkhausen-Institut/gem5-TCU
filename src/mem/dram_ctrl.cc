@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2014 ARM Limited
+ * Copyright (c) 2010-2015 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -61,7 +61,6 @@ DRAMCtrl::DRAMCtrl(const DRAMCtrlParams* p) :
     retryRdReq(false), retryWrReq(false),
     busState(READ),
     nextReqEvent(this), respondEvent(this),
-    drainManager(NULL),
     deviceSize(p->device_size),
     deviceBusWidth(p->device_bus_width), burstLength(p->burst_length),
     deviceRowBufferSize(p->device_rowbuffer_size),
@@ -96,6 +95,9 @@ DRAMCtrl::DRAMCtrl(const DRAMCtrlParams* p) :
     // address decoding
     fatal_if(!isPowerOf2(ranksPerChannel), "DRAM rank count of %d is not "
              "allowed, must be a power of two\n", ranksPerChannel);
+
+    fatal_if(!isPowerOf2(burstSize), "DRAM burst size %d is not allowed, "
+             "must be a power of two\n", burstSize);
 
     for (int i = 0; i < ranksPerChannel; i++) {
         Rank* rank = new Rank(*this, p);
@@ -438,18 +440,22 @@ DRAMCtrl::addToReadQueue(PacketPtr pkt, unsigned int pktCount)
         // First check write buffer to see if the data is already at
         // the controller
         bool foundInWrQ = false;
-        for (auto i = writeQueue.begin(); i != writeQueue.end(); ++i) {
-            // check if the read is subsumed in the write entry we are
-            // looking at
-            if ((*i)->addr <= addr &&
-                (addr + size) <= ((*i)->addr + (*i)->size)) {
-                foundInWrQ = true;
-                servicedByWrQ++;
-                pktsServicedByWrQ++;
-                DPRINTF(DRAM, "Read to addr %lld with size %d serviced by "
-                        "write queue\n", addr, size);
-                bytesReadWrQ += burstSize;
-                break;
+        Addr burst_addr = burstAlign(addr);
+        // if the burst address is not present then there is no need
+        // looking any further
+        if (isInWriteQueue.find(burst_addr) != isInWriteQueue.end()) {
+            for (const auto& p : writeQueue) {
+                // check if the read is subsumed in the write queue
+                // packet we are looking at
+                if (p->addr <= addr && (addr + size) <= (p->addr + p->size)) {
+                    foundInWrQ = true;
+                    servicedByWrQ++;
+                    pktsServicedByWrQ++;
+                    DPRINTF(DRAM, "Read to addr %lld with size %d serviced by "
+                            "write queue\n", addr, size);
+                    bytesReadWrQ += burstSize;
+                    break;
+                }
             }
         }
 
@@ -517,63 +523,9 @@ DRAMCtrl::addToWriteQueue(PacketPtr pkt, unsigned int pktCount)
         writeBursts++;
 
         // see if we can merge with an existing item in the write
-        // queue and keep track of whether we have merged or not so we
-        // can stop at that point and also avoid enqueueing a new
-        // request
-        bool merged = false;
-        auto w = writeQueue.begin();
-
-        while(!merged && w != writeQueue.end()) {
-            // either of the two could be first, if they are the same
-            // it does not matter which way we go
-            if ((*w)->addr >= addr) {
-                // the existing one starts after the new one, figure
-                // out where the new one ends with respect to the
-                // existing one
-                if ((addr + size) >= ((*w)->addr + (*w)->size)) {
-                    // check if the existing one is completely
-                    // subsumed in the new one
-                    DPRINTF(DRAM, "Merging write covering existing burst\n");
-                    merged = true;
-                    // update both the address and the size
-                    (*w)->addr = addr;
-                    (*w)->size = size;
-                } else if ((addr + size) >= (*w)->addr &&
-                           ((*w)->addr + (*w)->size - addr) <= burstSize) {
-                    // the new one is just before or partially
-                    // overlapping with the existing one, and together
-                    // they fit within a burst
-                    DPRINTF(DRAM, "Merging write before existing burst\n");
-                    merged = true;
-                    // the existing queue item needs to be adjusted with
-                    // respect to both address and size
-                    (*w)->size = (*w)->addr + (*w)->size - addr;
-                    (*w)->addr = addr;
-                }
-            } else {
-                // the new one starts after the current one, figure
-                // out where the existing one ends with respect to the
-                // new one
-                if (((*w)->addr + (*w)->size) >= (addr + size)) {
-                    // check if the new one is completely subsumed in the
-                    // existing one
-                    DPRINTF(DRAM, "Merging write into existing burst\n");
-                    merged = true;
-                    // no adjustments necessary
-                } else if (((*w)->addr + (*w)->size) >= addr &&
-                           (addr + size - (*w)->addr) <= burstSize) {
-                    // the existing one is just before or partially
-                    // overlapping with the new one, and together
-                    // they fit within a burst
-                    DPRINTF(DRAM, "Merging write after existing burst\n");
-                    merged = true;
-                    // the address is right, and only the size has
-                    // to be adjusted
-                    (*w)->size = addr + size - (*w)->addr;
-                }
-            }
-            ++w;
-        }
+        // queue and keep track of whether we have merged or not
+        bool merged = isInWriteQueue.find(burstAlign(addr)) !=
+            isInWriteQueue.end();
 
         // if the item was not merged we need to create a new write
         // and enqueue it
@@ -586,10 +538,14 @@ DRAMCtrl::addToWriteQueue(PacketPtr pkt, unsigned int pktCount)
             DPRINTF(DRAM, "Adding to write queue\n");
 
             writeQueue.push_back(dram_pkt);
+            isInWriteQueue.insert(burstAlign(addr));
+            assert(writeQueue.size() == isInWriteQueue.size());
 
             // Update stats
             avgWrQLen = writeQueue.size();
         } else {
+            DPRINTF(DRAM, "Merging write burst with existing queue entry\n");
+
             // keep track of the fact that this burst effectively
             // disappeared as it was merged with an existing one
             mergedWrBursts++;
@@ -643,9 +599,10 @@ DRAMCtrl::recvTimingReq(PacketPtr pkt)
     DPRINTF(DRAM, "recvTimingReq: request %s addr %lld size %d\n",
             pkt->cmdString(), pkt->getAddr(), pkt->getSize());
 
-    // simply drop inhibited packets for now
-    if (pkt->memInhibitAsserted()) {
-        DPRINTF(DRAM, "Inhibited packet -- Dropping it now\n");
+    // simply drop inhibited packets and clean evictions
+    if (pkt->memInhibitAsserted() ||
+        pkt->cmd == MemCmd::CleanEvict) {
+        DPRINTF(DRAM, "Inhibited packet or clean evict -- Dropping it now\n");
         pendingDelete.push_back(pkt);
         return true;
     }
@@ -736,11 +693,11 @@ DRAMCtrl::processRespondEvent()
         schedule(respondEvent, respQueue.front()->readyTime);
     } else {
         // if there is nothing left in any queue, signal a drain
-        if (writeQueue.empty() && readQueue.empty() &&
-            drainManager) {
+        if (drainState() == DrainState::Draining &&
+            writeQueue.empty() && readQueue.empty()) {
+
             DPRINTF(Drain, "DRAM controller done draining\n");
-            drainManager->signalDrainDone();
-            drainManager = NULL;
+            signalDrainDone();
         }
     }
 
@@ -753,7 +710,7 @@ DRAMCtrl::processRespondEvent()
 }
 
 bool
-DRAMCtrl::chooseNext(std::deque<DRAMPacket*>& queue, bool switched_cmd_type)
+DRAMCtrl::chooseNext(std::deque<DRAMPacket*>& queue, Tick extra_col_delay)
 {
     // This method does the arbitration between requests. The chosen
     // packet is simply moved to the head of the queue. The other
@@ -787,68 +744,93 @@ DRAMCtrl::chooseNext(std::deque<DRAMPacket*>& queue, bool switched_cmd_type)
             }
         }
     } else if (memSchedPolicy == Enums::frfcfs) {
-        found_packet = reorderQueue(queue, switched_cmd_type);
+        found_packet = reorderQueue(queue, extra_col_delay);
     } else
         panic("No scheduling policy chosen\n");
     return found_packet;
 }
 
 bool
-DRAMCtrl::reorderQueue(std::deque<DRAMPacket*>& queue, bool switched_cmd_type)
+DRAMCtrl::reorderQueue(std::deque<DRAMPacket*>& queue, Tick extra_col_delay)
 {
-    // Only determine this when needed
+    // Only determine this if needed
     uint64_t earliest_banks = 0;
+    bool hidden_bank_prep = false;
 
-    // Search for row hits first, if no row hit is found then schedule the
-    // packet to one of the earliest banks available
-    bool found_packet = false;
+    // search for seamless row hits first, if no seamless row hit is
+    // found then determine if there are other packets that can be issued
+    // without incurring additional bus delay due to bank timing
+    // Will select closed rows first to enable more open row possibilies
+    // in future selections
+    bool found_hidden_bank = false;
+
+    // remember if we found a row hit, not seamless, but bank prepped
+    // and ready
+    bool found_prepped_pkt = false;
+
+    // if we have no row hit, prepped or not, and no seamless packet,
+    // just go for the earliest possible
     bool found_earliest_pkt = false;
-    bool found_prepped_diff_rank_pkt = false;
+
     auto selected_pkt_it = queue.end();
+
+    // time we need to issue a column command to be seamless
+    const Tick min_col_at = std::max(busBusyUntil - tCL + extra_col_delay,
+                                     curTick());
 
     for (auto i = queue.begin(); i != queue.end() ; ++i) {
         DRAMPacket* dram_pkt = *i;
         const Bank& bank = dram_pkt->bankRef;
-        // check if rank is busy. If this is the case jump to the next packet
-        // Check if it is a row hit
-        if (dram_pkt->rankRef.isAvailable()) {
-            if (bank.openRow == dram_pkt->row) {
-                if (dram_pkt->rank == activeRank || switched_cmd_type) {
-                    // FCFS within the hits, giving priority to commands
-                    // that access the same rank as the previous burst
-                    // to minimize bus turnaround delays
-                    // Only give rank prioity when command type is
-                    // not changing
-                    DPRINTF(DRAM, "Row buffer hit\n");
-                    selected_pkt_it = i;
-                    break;
-                } else if (!found_prepped_diff_rank_pkt) {
-                    // found row hit for command on different rank
-                    // than prev burst
-                    selected_pkt_it = i;
-                    found_prepped_diff_rank_pkt = true;
-                }
-            } else if (!found_earliest_pkt & !found_prepped_diff_rank_pkt) {
-                // packet going to a rank which is currently not waiting for a
-                // refresh, No row hit and
-                // haven't found an entry with a row hit to a new rank
-                if (earliest_banks == 0)
-                    // Determine entries with earliest bank prep delay
-                    // Function will give priority to commands that access the
-                    // same rank as previous burst and can prep
-                    // the bank seamlessly
-                    earliest_banks = minBankPrep(queue, switched_cmd_type);
 
-                // FCFS - Bank is first available bank
-                if (bits(earliest_banks, dram_pkt->bankId,
-                    dram_pkt->bankId)) {
-                    // Remember the packet to be scheduled to one of
-                    // the earliest banks available, FCFS amongst the
-                    // earliest banks
+        // check if rank is available, if not, jump to the next packet
+        if (dram_pkt->rankRef.isAvailable()) {
+            // check if it is a row hit
+            if (bank.openRow == dram_pkt->row) {
+                // no additional rank-to-rank or same bank-group
+                // delays, or we switched read/write and might as well
+                // go for the row hit
+                if (bank.colAllowedAt <= min_col_at) {
+                    // FCFS within the hits, giving priority to
+                    // commands that can issue seamlessly, without
+                    // additional delay, such as same rank accesses
+                    // and/or different bank-group accesses
+                    DPRINTF(DRAM, "Seamless row buffer hit\n");
                     selected_pkt_it = i;
-                    //if the packet found is going to a rank that is currently
-                    //not busy then update the found_packet to true
+                    // no need to look through the remaining queue entries
+                    break;
+                } else if (!found_hidden_bank && !found_prepped_pkt) {
+                    // if we did not find a packet to a closed row that can
+                    // issue the bank commands without incurring delay, and
+                    // did not yet find a packet to a prepped row, remember
+                    // the current one
+                    selected_pkt_it = i;
+                    found_prepped_pkt = true;
+                    DPRINTF(DRAM, "Prepped row buffer hit\n");
+                }
+            } else if (!found_earliest_pkt) {
+                // if we have not initialised the bank status, do it
+                // now, and only once per scheduling decisions
+                if (earliest_banks == 0) {
+                    // determine entries with earliest bank delay
+                    pair<uint64_t, bool> bankStatus =
+                        minBankPrep(queue, min_col_at);
+                    earliest_banks = bankStatus.first;
+                    hidden_bank_prep = bankStatus.second;
+                }
+
+                // bank is amongst first available banks
+                // minBankPrep will give priority to packets that can
+                // issue seamlessly
+                if (bits(earliest_banks, dram_pkt->bankId, dram_pkt->bankId)) {
                     found_earliest_pkt = true;
+                    found_hidden_bank = hidden_bank_prep;
+
+                    // give priority to packets that can issue
+                    // bank commands 'behind the scenes'
+                    // any additional delay if any will be due to
+                    // col-to-col command requirements
+                    if (hidden_bank_prep || !found_prepped_pkt)
+                        selected_pkt_it = i;
                 }
             }
         }
@@ -858,9 +840,10 @@ DRAMCtrl::reorderQueue(std::deque<DRAMPacket*>& queue, bool switched_cmd_type)
         DRAMPacket* selected_pkt = *selected_pkt_it;
         queue.erase(selected_pkt_it);
         queue.push_front(selected_pkt);
-        found_packet = true;
+        return true;
     }
-    return found_packet;
+
+    return false;
 }
 
 void
@@ -1312,15 +1295,17 @@ DRAMCtrl::processNextReqEvent()
             // trigger writes if we have passed the low threshold (or
             // if we are draining)
             if (!writeQueue.empty() &&
-                (drainManager || writeQueue.size() > writeLowThreshold)) {
+                (drainState() == DrainState::Draining ||
+                 writeQueue.size() > writeLowThreshold)) {
 
                 switch_to_writes = true;
             } else {
                 // check if we are drained
-                if (respQueue.empty () && drainManager) {
+                if (drainState() == DrainState::Draining &&
+                    respQueue.empty()) {
+
                     DPRINTF(Drain, "DRAM controller done draining\n");
-                    drainManager->signalDrainDone();
-                    drainManager = NULL;
+                    signalDrainDone();
                 }
 
                 // nothing to do, not even any point in scheduling an
@@ -1333,7 +1318,10 @@ DRAMCtrl::processNextReqEvent()
 
             // Figure out which read request goes next, and move it to the
             // front of the read queue
-            found_read = chooseNext(readQueue, switched_cmd_type);
+            // If we are changing command type, incorporate the minimum
+            // bus turnaround delay which will be tCS (different rank) case
+            found_read = chooseNext(readQueue,
+                             switched_cmd_type ? tCS : 0);
 
             // if no read to an available rank is found then return
             // at this point. There could be writes to the available ranks
@@ -1392,7 +1380,10 @@ DRAMCtrl::processNextReqEvent()
         // bool to check if write to free rank is found
         bool found_write = false;
 
-        found_write = chooseNext(writeQueue, switched_cmd_type);
+        // If we are changing command type, incorporate the minimum
+        // bus turnaround delay
+        found_write = chooseNext(writeQueue,
+                                 switched_cmd_type ? std::min(tRTW, tCS) : 0);
 
         // if no writes to an available rank are found then return.
         // There could be reads to the available ranks. However, to avoid
@@ -1417,6 +1408,7 @@ DRAMCtrl::processNextReqEvent()
         doDRAMAccess(dram_pkt);
 
         writeQueue.pop_front();
+        isInWriteQueue.erase(burstAlign(dram_pkt->addr));
         delete dram_pkt;
 
         // If we emptied the write queue, or got sufficiently below the
@@ -1425,7 +1417,7 @@ DRAMCtrl::processNextReqEvent()
         // writes, then switch to reads.
         if (writeQueue.empty() ||
             (writeQueue.size() + minWritesPerSwitch < writeLowThreshold &&
-             !drainManager) ||
+             drainState() != DrainState::Draining) ||
             (!readQueue.empty() && writesThisTime >= minWritesPerSwitch)) {
             // turn the bus back around for reads again
             busState = WRITE_TO_READ;
@@ -1451,18 +1443,23 @@ DRAMCtrl::processNextReqEvent()
     }
 }
 
-uint64_t
+pair<uint64_t, bool>
 DRAMCtrl::minBankPrep(const deque<DRAMPacket*>& queue,
-                      bool switched_cmd_type) const
+                      Tick min_col_at) const
 {
     uint64_t bank_mask = 0;
     Tick min_act_at = MaxTick;
 
-    uint64_t bank_mask_same_rank = 0;
-    Tick min_act_at_same_rank = MaxTick;
+    // latest Tick for which ACT can occur without incurring additoinal
+    // delay on the data bus
+    const Tick hidden_act_max = std::max(min_col_at - tRCD, curTick());
 
-    // Give precedence to commands that access same rank as previous command
-    bool same_rank_match = false;
+    // Flag condition when burst can issue back-to-back with previous burst
+    bool found_seamless_bank = false;
+
+    // Flag condition when bank can be opened without incurring additional
+    // delay on the data bus
+    bool hidden_bank_prep = false;
 
     // determine if we have queued transactions targetting the
     // bank in question
@@ -1472,6 +1469,8 @@ DRAMCtrl::minBankPrep(const deque<DRAMPacket*>& queue,
             got_waiting[p->bankId] = true;
     }
 
+    // Find command with optimal bank timing
+    // Will prioritize commands that can issue seamlessly.
     for (int i = 0; i < ranksPerChannel; i++) {
         for (int j = 0; j < banksPerRank; j++) {
             uint16_t bank_id = i * banksPerRank + j;
@@ -1485,69 +1484,46 @@ DRAMCtrl::minBankPrep(const deque<DRAMPacket*>& queue,
                 // an activate, ignoring any rank-to-rank switching
                 // cost in this calculation
                 Tick act_at = ranks[i]->banks[j].openRow == Bank::NO_ROW ?
-                    ranks[i]->banks[j].actAllowedAt :
+                    std::max(ranks[i]->banks[j].actAllowedAt, curTick()) :
                     std::max(ranks[i]->banks[j].preAllowedAt, curTick()) + tRP;
 
-                // prioritize commands that access the
-                // same rank as previous burst
-                // Calculate bank mask separately for the case and
-                // evaluate after loop iterations complete
-                if (i == activeRank && ranksPerChannel > 1) {
-                    if (act_at <= min_act_at_same_rank) {
-                        // reset same rank bank mask if new minimum is found
-                        // and previous minimum could not immediately send ACT
-                        if (act_at < min_act_at_same_rank &&
-                            min_act_at_same_rank > curTick())
-                            bank_mask_same_rank = 0;
+                // When is the earliest the R/W burst can issue?
+                Tick col_at = std::max(ranks[i]->banks[j].colAllowedAt,
+                                       act_at + tRCD);
 
-                        // Set flag indicating that a same rank
-                        // opportunity was found
-                        same_rank_match = true;
+                // bank can issue burst back-to-back (seamlessly) with
+                // previous burst
+                bool new_seamless_bank = col_at <= min_col_at;
 
-                        // set the bit corresponding to the available bank
-                        replaceBits(bank_mask_same_rank, bank_id, bank_id, 1);
-                        min_act_at_same_rank = act_at;
+                // if we found a new seamless bank or we have no
+                // seamless banks, and got a bank with an earlier
+                // activate time, it should be added to the bit mask
+                if (new_seamless_bank ||
+                    (!found_seamless_bank && act_at <= min_act_at)) {
+                    // if we did not have a seamless bank before, and
+                    // we do now, reset the bank mask, also reset it
+                    // if we have not yet found a seamless bank and
+                    // the activate time is smaller than what we have
+                    // seen so far
+                    if (!found_seamless_bank &&
+                        (new_seamless_bank || act_at < min_act_at)) {
+                        bank_mask = 0;
                     }
-                } else {
-                    if (act_at <= min_act_at) {
-                        // reset bank mask if new minimum is found
-                        // and either previous minimum could not immediately send ACT
-                        if (act_at < min_act_at && min_act_at > curTick())
-                            bank_mask = 0;
-                        // set the bit corresponding to the available bank
-                        replaceBits(bank_mask, bank_id, bank_id, 1);
-                        min_act_at = act_at;
-                    }
+
+                    found_seamless_bank |= new_seamless_bank;
+
+                    // ACT can occur 'behind the scenes'
+                    hidden_bank_prep = act_at <= hidden_act_max;
+
+                    // set the bit corresponding to the available bank
+                    replaceBits(bank_mask, bank_id, bank_id, 1);
+                    min_act_at = act_at;
                 }
             }
         }
     }
 
-    // Determine the earliest time when the next burst can issue based
-    // on the current busBusyUntil delay.
-    // Offset by tRCD to correlate with ACT timing variables
-    Tick min_cmd_at = busBusyUntil - tCL - tRCD;
-
-    // if we have multiple ranks and all
-    // waiting packets are accessing a rank which was previously active
-    // then bank_mask_same_rank will be set to a value while bank_mask will
-    // remain 0. In this case, the function should return the value of
-    // bank_mask_same_rank.
-    // else if waiting packets access a rank which was previously active and
-    // other ranks, prioritize same rank accesses that can issue B2B
-    // Only optimize for same ranks when the command type
-    // does not change; do not want to unnecessarily incur tWTR
-    //
-    // Resulting FCFS prioritization Order is:
-    // 1) Commands that access the same rank as previous burst
-    //    and can prep the bank seamlessly.
-    // 2) Commands (any rank) with earliest bank prep
-    if ((bank_mask == 0) || (!switched_cmd_type && same_rank_match &&
-        min_act_at_same_rank <= min_cmd_at)) {
-        bank_mask = bank_mask_same_rank;
-    }
-
-    return bank_mask;
+    return make_pair(bank_mask, hidden_bank_prep);
 }
 
 DRAMCtrl::Rank::Rank(DRAMCtrl& _memory, const DRAMCtrlParams* _p)
@@ -2191,33 +2167,25 @@ DRAMCtrl::getSlavePort(const string &if_name, PortID idx)
     }
 }
 
-unsigned int
-DRAMCtrl::drain(DrainManager *dm)
+DrainState
+DRAMCtrl::drain()
 {
-    unsigned int count = port.drain(dm);
-
     // if there is anything in any of our internal queues, keep track
     // of that as well
-    if (!(writeQueue.empty() && readQueue.empty() &&
-          respQueue.empty())) {
+    if (!(writeQueue.empty() && readQueue.empty() && respQueue.empty())) {
         DPRINTF(Drain, "DRAM controller not drained, write: %d, read: %d,"
                 " resp: %d\n", writeQueue.size(), readQueue.size(),
                 respQueue.size());
-        ++count;
-        drainManager = dm;
 
         // the only part that is not drained automatically over time
         // is the write queue, thus kick things into action if needed
         if (!writeQueue.empty() && !nextReqEvent.scheduled()) {
             schedule(nextReqEvent, curTick());
         }
+        return DrainState::Draining;
+    } else {
+        return DrainState::Drained;
     }
-
-    if (count)
-        setDrainState(Drainable::Draining);
-    else
-        setDrainState(Drainable::Drained);
-    return count;
 }
 
 void

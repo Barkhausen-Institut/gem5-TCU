@@ -33,14 +33,14 @@ using namespace std;
 
 bool StoreTrace::s_init = false; // Total number of store lifetimes of
                                  // all lines
-int64 StoreTrace::s_total_samples = 0; // Total number of store
+int64_t StoreTrace::s_total_samples = 0; // Total number of store
                                        // lifetimes of all lines
 Histogram* StoreTrace::s_store_count_ptr = NULL;
 Histogram* StoreTrace::s_store_first_to_stolen_ptr = NULL;
 Histogram* StoreTrace::s_store_last_to_stolen_ptr = NULL;
 Histogram* StoreTrace::s_store_first_to_last_ptr = NULL;
 
-StoreTrace::StoreTrace(const Address& addr)
+StoreTrace::StoreTrace(Addr addr)
     : m_store_count(-1), m_store_first_to_stolen(-1),
       m_store_last_to_stolen(-1), m_store_first_to_last(-1)
 {

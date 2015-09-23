@@ -43,7 +43,6 @@
 #include "mem/ruby/slicc_interface/Message.hh"
 #include "params/GarnetNetworkInterface_d.hh"
 
-class NetworkMessage;
 class MessageBuffer;
 class flitBuffer_d;
 
@@ -71,8 +70,8 @@ class NetworkInterface_d : public ClockedObject, public Consumer
 
   private:
     GarnetNetwork_d *m_net_ptr;
-    int m_virtual_networks, m_num_vcs, m_vc_per_vnet;
-    NodeID m_id;
+    const NodeID m_id;
+    const int m_virtual_networks, m_vc_per_vnet, m_num_vcs;
     std::vector<OutVcState_d *> m_out_vc_state;
     std::vector<int> m_vc_allocator;
     int m_vc_round_robin; // For round robin scheduling

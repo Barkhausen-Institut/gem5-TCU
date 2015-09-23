@@ -920,8 +920,10 @@ class SimObject(object):
     def export_methods(cls, code):
         code('''
     void init();
-    void loadState(Checkpoint *cp);
+    void loadState(CheckpointIn &cp);
     void initState();
+    void memInvalidate();
+    void memWriteback();
     void regStats();
     void resetStats();
     void regProbePoints();

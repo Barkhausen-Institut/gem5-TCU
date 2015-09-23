@@ -29,6 +29,7 @@
 #ifndef __MEM_RUBY_SLICC_INTERFACE_ABSTRACTCONTROLLER_HH__
 #define __MEM_RUBY_SLICC_INTERFACE_ABSTRACTCONTROLLER_HH__
 
+#include <exception>
 #include <iostream>
 #include <string>
 
@@ -49,6 +50,13 @@
 
 class Network;
 
+// used to communicate that an in_port peeked the wrong message type
+class RejectException: public std::exception
+{
+    virtual const char* what() const throw()
+    { return "Port rejected message based on type"; }
+};
+
 class AbstractController : public MemObject, public Consumer
 {
   public:
@@ -63,11 +71,12 @@ class AbstractController : public MemObject, public Consumer
     void initNetworkPtr(Network* net_ptr) { m_net_ptr = net_ptr; }
 
     // return instance name
-    void blockOnQueue(Address, MessageBuffer*);
-    void unblock(Address);
+    void blockOnQueue(Addr, MessageBuffer*);
+    void unblock(Addr);
 
     virtual MessageBuffer* getMandatoryQueue() const = 0;
-    virtual AccessPermission getAccessPermission(const Address& addr) = 0;
+    virtual MessageBuffer* getMemoryQueue() const = 0;
+    virtual AccessPermission getAccessPermission(const Addr &addr) = 0;
 
     virtual void print(std::ostream & out) const = 0;
     virtual void wakeup() = 0;
@@ -79,16 +88,16 @@ class AbstractController : public MemObject, public Consumer
 
     //! These functions are used by ruby system to read/write the data blocks
     //! that exist with in the controller.
-    virtual void functionalRead(const Address &addr, PacketPtr) = 0;
+    virtual void functionalRead(const Addr &addr, PacketPtr) = 0;
     void functionalMemoryRead(PacketPtr);
     //! The return value indicates the number of messages written with the
     //! data from the packet.
     virtual int functionalWriteBuffers(PacketPtr&) = 0;
-    virtual int functionalWrite(const Address &addr, PacketPtr) = 0;
+    virtual int functionalWrite(const Addr &addr, PacketPtr) = 0;
     int functionalMemoryWrite(PacketPtr);
 
     //! Function for enqueuing a prefetch request
-    virtual void enqueuePrefetch(const Address&, const RubyRequestType&)
+    virtual void enqueuePrefetch(const Addr &, const RubyRequestType&)
     { fatal("Prefetches not implemented!");}
 
     //! Function for collating statistics from all the controllers of this
@@ -97,17 +106,17 @@ class AbstractController : public MemObject, public Consumer
     virtual void collateStats()
     {fatal("collateStats() should be overridden!");}
 
-    //! Set the message buffer with given name.
-    virtual void setNetQueue(const std::string& name, MessageBuffer *b) = 0;
+    //! Initialize the message buffers.
+    virtual void initNetQueues() = 0;
 
     /** A function used to return the port associated with this bus object. */
     BaseMasterPort& getMasterPort(const std::string& if_name,
                                   PortID idx = InvalidPortID);
 
-    void queueMemoryRead(const MachineID &id, Address addr, Cycles latency);
-    void queueMemoryWrite(const MachineID &id, Address addr, Cycles latency,
+    void queueMemoryRead(const MachineID &id, Addr addr, Cycles latency);
+    void queueMemoryWrite(const MachineID &id, Addr addr, Cycles latency,
                           const DataBlock &block);
-    void queueMemoryWritePartial(const MachineID &id, Address addr, Cycles latency,
+    void queueMemoryWritePartial(const MachineID &id, Addr addr, Cycles latency,
                                  const DataBlock &block, int size);
     void recvTimingResp(PacketPtr pkt);
 
@@ -124,9 +133,9 @@ class AbstractController : public MemObject, public Consumer
     //! Profiles the delay associated with messages.
     void profileMsgDelay(uint32_t virtualNetwork, Cycles delay);
 
-    void stallBuffer(MessageBuffer* buf, Address addr);
-    void wakeUpBuffers(Address addr);
-    void wakeUpAllBuffers(Address addr);
+    void stallBuffer(MessageBuffer* buf, Addr addr);
+    void wakeUpBuffers(Addr addr);
+    void wakeUpAllBuffers(Addr addr);
     void wakeUpAllBuffers();
 
   protected:
@@ -139,10 +148,11 @@ class AbstractController : public MemObject, public Consumer
 
     Network* m_net_ptr;
     bool m_is_blocking;
-    std::map<Address, MessageBuffer*> m_block_map;
+    std::map<Addr, MessageBuffer*> m_block_map;
 
     typedef std::vector<MessageBuffer*> MsgVecType;
-    typedef std::map< Address, MsgVecType* > WaitingBufType;
+    typedef std::set<MessageBuffer*> MsgBufType;
+    typedef std::map<Addr, MsgVecType* > WaitingBufType;
     WaitingBufType m_waiting_buffers;
 
     unsigned int m_in_ports;
@@ -200,10 +210,6 @@ class AbstractController : public MemObject, public Consumer
 
     /* Master port to the memory controller. */
     MemoryPort memoryPort;
-
-    // Message Buffer for storing the response received from the
-    // memory controller.
-    MessageBuffer *m_responseFromMemory_ptr;
 
     // State that is stored in packets sent to the memory controller.
     struct SenderState : public Packet::SenderState

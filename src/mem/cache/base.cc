@@ -65,20 +65,20 @@ BaseCache::CacheSlavePort::CacheSlavePort(const std::string &_name,
 {
 }
 
-BaseCache::BaseCache(const Params *p)
+BaseCache::BaseCache(const BaseCacheParams *p, unsigned blk_size)
     : MemObject(p),
       cpuSidePort(nullptr), memSidePort(nullptr),
       mshrQueue("MSHRs", p->mshrs, 4, p->demand_mshr_reserve, MSHRQueue_MSHRs),
       writeBuffer("write buffer", p->write_buffers, p->mshrs+1000, 0,
                   MSHRQueue_WriteBuffer),
-      blkSize(p->system->cacheLineSize()),
+      blkSize(blk_size),
       lookupLatency(p->hit_latency),
       forwardLatency(p->hit_latency),
       fillLatency(p->response_latency),
       responseLatency(p->response_latency),
       numTarget(p->tgts_per_mshr),
       forwardSnoops(p->forward_snoops),
-      isTopLevel(p->is_top_level),
+      isReadOnly(p->is_read_only),
       blocked(0),
       order(0),
       noTargetMSHR(NULL),
@@ -189,7 +189,8 @@ BaseCache::regStats()
 // to change the subset of commands that are considered "demand" vs
 // "non-demand"
 #define SUM_DEMAND(s) \
-    (s[MemCmd::ReadReq] + s[MemCmd::WriteReq] + s[MemCmd::ReadExReq])
+    (s[MemCmd::ReadReq] + s[MemCmd::WriteReq] + \
+     s[MemCmd::ReadExReq] + s[MemCmd::ReadCleanReq] + s[MemCmd::ReadSharedReq])
 
 // should writebacks be included here?  prior code was inconsistent...
 #define SUM_NON_DEMAND(s) \
@@ -772,29 +773,4 @@ BaseCache::regStats()
         .desc("Number of misses that were no-allocate")
         ;
 
-}
-
-unsigned int
-BaseCache::drain(DrainManager *dm)
-{
-    int count = memSidePort->drain(dm) + cpuSidePort->drain(dm) +
-        mshrQueue.drain(dm) + writeBuffer.drain(dm);
-
-    // Set status
-    if (count != 0) {
-        setDrainState(Drainable::Draining);
-        DPRINTF(Drain, "Cache not drained\n");
-        return count;
-    }
-
-    setDrainState(Drainable::Drained);
-    return 0;
-}
-
-BaseCache *
-BaseCacheParams::create()
-{
-    assert(tags);
-
-    return new Cache(this);
 }
