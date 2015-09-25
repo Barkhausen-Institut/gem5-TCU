@@ -103,7 +103,7 @@ class DefaultFetch
         finish(const Fault &fault, RequestPtr req, ThreadContext *tc,
                BaseTLB::Mode mode)
         {
-            assert(mode == BaseTLB::Execute);
+            // assert(mode == BaseTLB::Execute);
             fetch->finishTranslation(fault, req);
             delete this;
         }
