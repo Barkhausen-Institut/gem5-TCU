@@ -51,6 +51,7 @@
 #include "cpu/o3/thread_context.hh"
 #include "cpu/quiesce_event.hh"
 #include "debug/O3CPU.hh"
+#include "debug/DtuPower.hh"
 
 template <class Impl>
 FSTranslatingPortProxy&
@@ -108,6 +109,14 @@ O3ThreadContext<Impl>::suspend()
 
     if (thread->status() == ThreadContext::Suspended)
         return;
+
+    if (cpu->_denySuspend)
+    {
+        DPRINTFS(DtuPower, cpu, "Ignoring suspend; messages pending\n");
+        return;
+    }
+
+    DPRINTFS(DtuPower, cpu, "Suspending core\n");
 
     thread->lastActivate = curTick();
     thread->lastSuspend = curTick();
