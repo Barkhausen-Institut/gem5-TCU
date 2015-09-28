@@ -68,7 +68,8 @@ Scratchpad::init()
         auto req = new Request(0, sz, flags, 0);
         auto pkt = new Packet(req, MemCmd::WriteReq);
         auto pktData = new uint8_t[sz];
-        fread(pktData, 1, sz, f);
+        if(fread(pktData, 1, sz, f) != sz)
+            panic("Unable to read '%s'", initFile.c_str());
         pkt->dataDynamic(pktData);
         fclose(f);
 
