@@ -35,10 +35,14 @@ class BaseDtu(MemObject):
     type = 'BaseDtu'
     abstract = True
     cxx_header = "mem/dtu/base.hh"
-    cpu_slave_port  = SlavePort("DTU slave port connecting to the CPU")
-    spm_master_port = MasterPort("DTU master port connecting to the Scratchpad Memory")
     noc_master_port = MasterPort("DTU master port")
     noc_slave_port  = SlavePort("DTU slave port")
+
+    icache_slave_port = SlavePort("Port that forwards requests from the CPU to the icache")
+    dcache_slave_port = SlavePort("Port that forwards requests from the CPU to the icache")
+
+    icache_master_port = MasterPort("Port that connects the icache")
+    dcache_master_port = MasterPort("Port that connects the dcache")
 
     regfile_base_addr = Param.Addr(0xF0000000, "Register file address")
     noc_addr_width = Param.Unsigned(63, "NoC address width")

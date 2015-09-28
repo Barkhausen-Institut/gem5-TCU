@@ -54,10 +54,23 @@ BaseDtu::NocMasterPort::completeRequest(PacketPtr pkt)
     dtu.completeNocRequest(pkt);
 }
 
-void
-BaseDtu::SpmMasterPort::completeRequest(PacketPtr pkt)
+bool
+BaseDtu::ICacheMasterPort::recvTimingResp(PacketPtr pkt)
 {
+    // the DTU does never send requests to the icache. so just pass it back to the CPU
+    return dtu.icacheSlavePort.sendTimingResp(pkt);
+}
+
+bool
+BaseDtu::DCacheMasterPort::recvTimingResp(PacketPtr pkt)
+{
+    // if there is a context-id and thread-id, the request came from the CPU
+    if(pkt->req->hasContextId())
+        return dtu.dcacheSlavePort.sendTimingResp(pkt);
+
+    // otherwise from the DTU
     dtu.completeSpmRequest(pkt);
+    return true;
 }
 
 BaseDtu::DtuSlavePort::DtuSlavePort(const std::string& _name, BaseDtu& _dtu)
@@ -94,7 +107,7 @@ BaseDtu::DtuSlavePort::recvAtomic(PacketPtr pkt)
                           pkt->getAddr(),
                           pkt->getSize());
 
-    handleRequest(pkt);
+    handleRequest(pkt, &busy, false);
 
     return 0;
 }
@@ -102,7 +115,12 @@ BaseDtu::DtuSlavePort::recvAtomic(PacketPtr pkt)
 void
 BaseDtu::DtuSlavePort::recvFunctional(PacketPtr pkt)
 {
-    panic("%S does not implement recvFunctional!\n", name());
+    DPRINTF(DtuSlavePort, "Receive %s request at %#x (%u bytes)\n",
+                          pkt->isRead() ? "read" : "write",
+                          pkt->getAddr(),
+                          pkt->getSize());
+
+    handleRequest(pkt, &busy, true);
 }
 
 bool
@@ -126,11 +144,7 @@ BaseDtu::DtuSlavePort::recvTimingReq(PacketPtr pkt)
 
     assert(!sendReqRetry);
 
-    busy = true;
-
-    handleRequest(pkt);
-
-    return true;
+    return handleRequest(pkt, &busy, false);
 }
 
 void
@@ -186,27 +200,6 @@ BaseDtu::DtuSlavePort::ResponseEvent::process()
 }
 
 AddrRangeList
-BaseDtu::CpuSlavePort::getAddrRanges() const
-{
-    assert(dtu.regFileBaseAddr != 0);
-
-    AddrRangeList ranges;
-
-    auto range = AddrRange(dtu.regFileBaseAddr,
-                           dtu.regFileBaseAddr + (dtu.regFileBaseAddr - 1));
-
-    ranges.push_back(range);
-
-    return ranges;
-}
-
-void
-BaseDtu::CpuSlavePort::handleRequest(PacketPtr pkt)
-{
-    dtu.handleCpuRequest(pkt);
-}
-
-AddrRangeList
 BaseDtu::NocSlavePort::getAddrRanges() const
 {
     AddrRangeList ranges;
@@ -225,10 +218,12 @@ BaseDtu::NocSlavePort::getAddrRanges() const
 
 BaseDtu::BaseDtu(BaseDtuParams* p)
   : MemObject(p),
-    cpuSlavePort(*this),
-    spmMasterPort(*this),
     nocMasterPort(*this),
     nocSlavePort(*this),
+    icacheMasterPort(*this),
+    dcacheMasterPort(*this),
+    icacheSlavePort(icacheMasterPort, *this),
+    dcacheSlavePort(dcacheMasterPort, *this),
     coreId(p->core_id),
     regFileBaseAddr(p->regfile_base_addr),
     nocAddrWidth(p->noc_addr_width),
@@ -241,26 +236,36 @@ BaseDtu::init()
 {
     MemObject::init();
 
-    assert(cpuSlavePort.isConnected());
-    assert(spmMasterPort.isConnected());
     assert(nocMasterPort.isConnected());
     assert(nocSlavePort.isConnected());
 
-    cpuSlavePort.sendRangeChange();
     nocSlavePort.sendRangeChange();
+
+    // for memory-PEs, the icache/dcache slaves are not connected
+    if(icacheSlavePort.isConnected())
+        icacheSlavePort.sendRangeChange();
+    if(dcacheSlavePort.isConnected())
+        dcacheSlavePort.sendRangeChange();
 }
 
-void
-BaseDtu::NocSlavePort::handleRequest(PacketPtr pkt)
+bool
+BaseDtu::NocSlavePort::handleRequest(PacketPtr pkt, bool *busy, bool functional)
 {
+    assert(!functional);
+
+    *busy = true;
+
     dtu.handleNocRequest(pkt);
+    return true;
 }
 
 BaseMasterPort&
 BaseDtu::getMasterPort(const std::string &if_name, PortID idx)
 {
-    if (if_name == "spm_master_port")
-        return spmMasterPort;
+    if (if_name == "icache_master_port")
+        return icacheMasterPort;
+    else if (if_name == "dcache_master_port")
+        return dcacheMasterPort;
     else if (if_name == "noc_master_port")
         return nocMasterPort;
     else
@@ -270,8 +275,10 @@ BaseDtu::getMasterPort(const std::string &if_name, PortID idx)
 BaseSlavePort&
 BaseDtu::getSlavePort(const std::string &if_name, PortID idx)
 {
-    if (if_name == "cpu_slave_port")
-        return cpuSlavePort;
+    if (if_name == "icache_slave_port")
+        return icacheSlavePort;
+    else if (if_name == "dcache_slave_port")
+        return dcacheSlavePort;
     else if (if_name == "noc_slave_port")
         return nocSlavePort;
     else
@@ -308,7 +315,7 @@ BaseDtu::schedNocResponse(PacketPtr pkt, Tick when)
 void
 BaseDtu::schedCpuResponse(PacketPtr pkt, Tick when)
 {
-    cpuSlavePort.schedTimingResp(pkt, when);
+    dcacheSlavePort.schedTimingResp(pkt, when);
 }
 
 void
@@ -320,7 +327,7 @@ BaseDtu::schedNocRequest(PacketPtr pkt, Tick when)
 void
 BaseDtu::schedSpmRequest(PacketPtr pkt, Tick when)
 {
-    spmMasterPort.schedTimingReq(pkt, when);
+    dcacheMasterPort.schedTimingReq(pkt, when);
 }
 
 void
@@ -332,5 +339,5 @@ BaseDtu::sendAtomicNocRequest(PacketPtr pkt)
 void
 BaseDtu::sendAtomicSpmRequest(PacketPtr pkt)
 {
-    spmMasterPort.sendAtomic(pkt);
+    dcacheMasterPort.sendAtomic(pkt);
 }

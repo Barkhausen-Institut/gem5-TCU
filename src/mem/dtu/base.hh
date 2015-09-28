@@ -69,15 +69,30 @@ class BaseDtu : public MemObject
         void completeRequest(PacketPtr pkt) override;
     };
 
-    class SpmMasterPort : public DtuMasterPort
+    class ICacheMasterPort : public DtuMasterPort
     {
       public:
 
-        SpmMasterPort(BaseDtu& _dtu)
-          : DtuMasterPort(_dtu.name() + ".spm_master_port", _dtu)
+        ICacheMasterPort(BaseDtu& _dtu)
+          : DtuMasterPort(_dtu.name() + ".icache_master_port", _dtu)
         { }
 
-        void completeRequest(PacketPtr pkt) override;
+        void completeRequest(PacketPtr) override {
+        }
+        bool recvTimingResp(PacketPtr pkt) override;
+    };
+
+    class DCacheMasterPort : public DtuMasterPort
+    {
+      public:
+
+        DCacheMasterPort(BaseDtu& _dtu)
+          : DtuMasterPort(_dtu.name() + ".dcache_master_port", _dtu)
+        { }
+
+        void completeRequest(PacketPtr) override {
+        }
+        bool recvTimingResp(PacketPtr pkt) override;
     };
 
     class DtuSlavePort : public SlavePort
@@ -118,7 +133,7 @@ class BaseDtu : public MemObject
 
         DtuSlavePort(const std::string& _name, BaseDtu& _dtu);
 
-        virtual void handleRequest(PacketPtr pkt) = 0;
+        virtual bool handleRequest(PacketPtr pkt, bool *busy, bool functional) = 0;
 
         void schedTimingResp(PacketPtr pkt, Tick when);
 
@@ -129,21 +144,6 @@ class BaseDtu : public MemObject
         bool recvTimingReq(PacketPtr pkt) override;
 
         void recvRespRetry() override;
-    };
-
-    class CpuSlavePort : public DtuSlavePort
-    {
-      public:
-
-        CpuSlavePort(BaseDtu& _dtu)
-          : DtuSlavePort(_dtu.name() + ".cpu_slave_port", _dtu)
-        { }
-
-      protected:
-
-        AddrRangeList getAddrRanges() const override;
-
-        void handleRequest(PacketPtr pkt) override;
     };
 
     class NocSlavePort : public DtuSlavePort
@@ -158,18 +158,74 @@ class BaseDtu : public MemObject
 
         AddrRangeList getAddrRanges() const override;
 
-        void handleRequest(PacketPtr pkt) override;
+        bool handleRequest(PacketPtr pkt, bool *busy, bool functional) override;
+    };
+
+    template<class T>
+    class CacheSlavePort : public DtuSlavePort
+    {
+      private:
+        
+        T &port;
+
+      public:
+
+        CacheSlavePort(T &_port, BaseDtu& _dtu)
+          : DtuSlavePort(_dtu.name() + ".icache_slave_port", _dtu),
+            port(_port)
+        { }
+
+        AddrRangeList getAddrRanges() const override
+        {
+            AddrRangeList ranges;
+
+            auto range = AddrRange(0, static_cast<Addr>(-1));
+
+            ranges.push_back(range);
+
+            return ranges;
+        }
+
+        bool handleRequest(PacketPtr pkt, bool *busy, bool functional) override
+        {
+            if(pkt->getAddr() >= dtu.regFileBaseAddr)
+            {
+                // not supported here
+                assert(!functional);
+
+                // set that before handling the request, because it will schedule the response
+                *busy = true;
+                dtu.handleCpuRequest(pkt);
+            }
+            else if(AddrRange(pkt->getAddr(),
+                pkt->getAddr() + (pkt->getSize() - 1)).isSubset(AddrRange(0, 8 * 1024 * 1024 - 1)))
+            {
+                if(functional)
+                    port.sendFunctional(pkt);
+                else
+                    port.schedTimingReq(pkt, curTick());
+            }
+            // report an error for other requests (due to speculative execution, there may be invalid
+            // requests that will simply be ignored)
+            else
+                return false;
+            return true;
+        }
     };
 
   protected:
 
-    CpuSlavePort   cpuSlavePort;
-
-    SpmMasterPort  spmMasterPort;
-
     NocMasterPort  nocMasterPort;
 
     NocSlavePort   nocSlavePort;
+
+    ICacheMasterPort icacheMasterPort;
+
+    DCacheMasterPort dcacheMasterPort;
+
+    CacheSlavePort<ICacheMasterPort> icacheSlavePort;
+
+    CacheSlavePort<DCacheMasterPort> dcacheSlavePort;
 
     unsigned coreId;
 

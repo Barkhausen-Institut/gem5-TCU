@@ -545,7 +545,7 @@ Dtu::sendNocMessage(const uint8_t* data,
                 sizeof(MessageHeader),
                 MemCmd::ReadReq);
 
-        spmMasterPort.sendFunctional(pkt);
+        dcacheMasterPort.sendFunctional(pkt);
 
         auto h = pkt->getPtr<MessageHeader>();
         assert(h->flags & REPLY_ENABLED);
@@ -566,7 +566,7 @@ Dtu::sendNocMessage(const uint8_t* data,
         h->flags &= ~REPLY_ENABLED;
         memcpy(hpkt->getPtr<uint8_t>(), &h->flags, sizeof(h->flags));
 
-        spmMasterPort.sendFunctional(hpkt);
+        dcacheMasterPort.sendFunctional(hpkt);
 
         freeRequest(hpkt);
         freeRequest(pkt);

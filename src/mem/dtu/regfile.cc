@@ -166,8 +166,17 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
 
     DPRINTF(DtuRegRange, "access @%#x, size=%u\n", pktAddr, pkt->getSize());
 
+    // ignore invalid accesses (might happen due to speculative execution)
+    // TODO maybe we can allow some of them later
+    if((pkt->getSize() % sizeof(reg_t)) != 0 || (pktAddr % sizeof(reg_t)) != 0 ||
+        pktAddr + pkt->getSize() > getSize()) {
+        if (pkt->needsResponse())
+            pkt->makeResponse();
+
+        return false;
+    }
+
     // we can only perform full register accesses
-    // TODO send error response instead of aborting
     assert(pkt->getSize() % sizeof(reg_t) == 0);
     assert(pktAddr % sizeof(reg_t) == 0);
     assert(pktAddr + pkt->getSize() <= getSize());

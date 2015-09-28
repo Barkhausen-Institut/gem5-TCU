@@ -120,23 +120,23 @@ if not options.num_pes > 0:
 
 CPUClass = CpuConfig.get(options.cpu_type)
 
-if CPUClass.require_caches():
-    fatal("We don't want caches but %s must be used with caches" % options.cpu_type)
-
-# Each PE is represented as an instance of System. Wherea each PE has a CPU,
-# a Scratchpad, and a DTU connected via a crossbar. The PEs are connected via
-# a global crossbar.
+# Each PE is represented as an instance of System. Whereas each PE has a CPU,
+# a Scratchpad, and a DTU. Because it seems that the gem5 crossbar is not able
+# to handle requests from the icache/dcache ports of the CPU if using the O3 model,
+# we're connecting the icache/dcache ports to the DTU. The DTU forwards the request
+# either to its own register file or the scratchpad, depending on the address range.
+# The PEs are connected via a global crossbar.
 
 ###############################################################################
 # root                                                                        #
 #                                                                             #
 # |-----------------|    |-----------------|    |-----------------|           #
 # | pe0             |    | pe1             |    | pe2             |           #
-# |         cpu     |    |         cpu     |    |         cpu     |           #
-# |          |      |    |          |      |    |          |      |           #
-# |        xbar     |    |        xbar     |    |        xbar     |           #
-# |       /    \    |    |       /    \    |    |       /    \    |           #
-# | scratchpad--dtu |    | scratchpad--dtu |    | scratchpad--dtu |           #
+# |            cpu  |    |            cpu  |    |            cpu  |           #
+# |             ||  |    |             ||  |    |             ||  |           #
+# |      regs--dtu  |    |      regs--dtu  |    |      regs--dtu  |           #
+# |           // |  |    |           // |  |    |           // |  |           #
+# |   scratchpad |  |    |   scratchpad |  |    |   scratchpad |  |           #
 # |              |  |    |              |  |    |              |  |           #
 # |--------------+--|    |--------------+--|    |--------------+--|           #
 #                |                      |                      |              #
@@ -157,7 +157,7 @@ def createPE(no, mem=False):
     pe.xbar = NoncoherentXBar(forward_latency  = 0,
                               frontend_latency = 0,
                               response_latency = 1,
-                              width = 8)
+                              width = 16)
 
     pe.scratchpad = Scratchpad(in_addr_map = "true")
     pe.scratchpad.cpu_port = pe.xbar.master
@@ -169,8 +169,9 @@ def createPE(no, mem=False):
 
     pe.dtu = Dtu()
     pe.dtu.core_id = no
-    pe.dtu.spm_master_port = pe.scratchpad.dtu_port
-    pe.dtu.cpu_slave_port = pe.xbar.master
+
+    pe.dtu.icache_master_port = pe.xbar.slave
+    pe.dtu.dcache_master_port = pe.xbar.slave
 
     pe.dtu.noc_master_port = root.noc.slave
     pe.dtu.noc_slave_port  = root.noc.master
@@ -237,11 +238,14 @@ for i in range(0, len(cmd_list)):
     pe.readfile = "/dev/stdin"
 
     # for now, a bit more to be able to put every application at a different address
-    pe.scratchpad.range = 4 * 1024 * 1024
+    pe.scratchpad.range = 8 * 1024 * 1024
 
     pe.cpu = CPUClass()
     pe.cpu.cpu_id = 0
     pe.cpu.clk_domain = root.cpu_clk_domain
+
+    pe.dtu.icache_slave_port = pe.cpu.icache_port
+    pe.dtu.dcache_slave_port = pe.cpu.dcache_port
 
     # Command line
     pe.kernel = cmd_list[i].split(' ')[0]
@@ -261,7 +265,13 @@ for i in range(0, len(cmd_list)):
         ]
 
     pe.cpu.createInterruptController()
-    pe.cpu.connectAllPorts(pe.xbar)
+
+    pe.cpu.interrupts.pio = pe.xbar.master
+    pe.cpu.interrupts.int_slave = pe.xbar.master
+    pe.cpu.interrupts.int_master = pe.xbar.slave
+
+    pe.cpu.itb.walker.port = pe.xbar.slave
+    pe.cpu.dtb.walker.port = pe.xbar.slave
 
 pe = createPE(options.num_pes, mem=True)
 pe.scratchpad.range = MemorySize(options.mem_size).value

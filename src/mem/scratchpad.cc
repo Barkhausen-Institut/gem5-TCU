@@ -49,10 +49,11 @@ Scratchpad::init()
     AbstractMemory::init();
 
     assert(cpuPort.isConnected());
-    assert(dtuPort.isConnected());
+    // assert(dtuPort.isConnected());
 
     cpuPort.sendRangeChange();
-    dtuPort.sendRangeChange();
+    if(dtuPort.isConnected())
+        dtuPort.sendRangeChange();
 
     if(!initFile.empty()) {
         FILE *f = fopen(initFile.c_str(), "r");
