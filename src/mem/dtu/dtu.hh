@@ -35,9 +35,12 @@
 #include "mem/dtu/regfile.hh"
 #include "params/Dtu.hh"
 
+class MessageUnit;
+class MemoryUnit;
+
 class Dtu : public BaseDtu
 {
-  private:
+  public:
 
     enum MemoryFlags : uint8_t
     {
@@ -110,37 +113,19 @@ class Dtu : public BaseDtu
         unsigned epId;
     };
 
-    bool atomicMode;
+  private:
+
+    const MasterID masterId;
+
+    const bool usePTable;
 
     System *system;
 
     RegFile regFile;
 
-    unsigned numEndpoints;
+    MessageUnit *msgUnit;
 
-    MasterID masterId;
-
-    Addr maxNocPacketSize;
-
-    unsigned numCmdEpidBits;
-
-    Cycles registerAccessLatency;
-    Cycles commandToSpmRequestLatency;
-    Cycles commandToNocRequestLatency;
-    Cycles spmResponseToNocRequestLatency;
-    Cycles nocMessageToSpmRequestLatency;
-    Cycles nocResponseToSpmRequestLatency;
-    Cycles nocRequestToSpmRequestLatency;
-    Cycles spmResponseToNocResponseLatency;
-
-    bool usePTable;
-
-    Addr translate(Addr vaddr);
-
-    PacketPtr generateRequest(Addr addr, Addr size, MemCmd cmd);
-    void freeRequest(PacketPtr pkt);
-
-    Command getCommand();
+    MemoryUnit *memUnit;
 
     void executeCommand();
     EventWrapper<Dtu, &Dtu::executeCommand> executeCommandEvent;
@@ -148,53 +133,9 @@ class Dtu : public BaseDtu
     void finishOperation();
     EventWrapper<Dtu, &Dtu::finishOperation> finishOperationEvent;
 
-    void sendSpmRequest(PacketPtr pkt,
-                        unsigned epId,
-                        Cycles delay,
-                        SpmPacketType packetType);
-
-    void startMessageTransmission(const Command& cmd);
-
-    void startMemoryRead(const Command& cmd);
-
-    void startMemoryWrite(const Command& cmd);
-
-    void incrementReadPtr(unsigned epId);
-
-    bool incrementWritePtr(unsigned epId);
-
-    void wakeupCore();
-    
-    void updateSuspendablePin();
-
-    void forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest);
-
-    void sendNocRequest(PacketPtr pkt,
-                        Cycles delay,
-                        bool isMessage);
-
-    void sendNocMessage(const uint8_t* data,
-                        Addr messageSize,
-                        bool isReply,
-                        Tick spmPktHeaderDelay,
-                        Tick spmPktPayloadDelay);
-
-    void sendNocMemoryWriteRequest(const uint8_t* data,
-                                   Addr requestSize,
-                                   Tick spmPktHeaderDelay,
-                                   Tick spmPktPayloadDelay);
-
     void completeLocalSpmRequest(PacketPtr pkt);
 
-    void completeForwardedMessage(PacketPtr pkt, unsigned epId);
-
-    void completeForwardedRequest(PacketPtr pkt);
-
     void completeNocRequest(PacketPtr pkt) override;
-
-    void completeNocReadRequest(PacketPtr pkt);
-
-    void completeNocWriteRequest(PacketPtr pkt);
 
     void completeSpmRequest(PacketPtr pkt) override;
 
@@ -202,13 +143,56 @@ class Dtu : public BaseDtu
 
     void handleCpuRequest(PacketPtr pkt) override;
 
-    void recvNocMessage(PacketPtr pkt);
-
-    void recvNocMemoryRequest(PacketPtr pkt);
-
   public:
 
+    const bool atomicMode;
+
+    const unsigned numEndpoints;
+
+    const Addr maxNocPacketSize;
+
+    const unsigned numCmdEpidBits;
+
+    const Cycles registerAccessLatency;
+    const Cycles commandToSpmRequestLatency;
+    const Cycles commandToNocRequestLatency;
+    const Cycles spmResponseToNocRequestLatency;
+    const Cycles nocMessageToSpmRequestLatency;
+    const Cycles nocResponseToSpmRequestLatency;
+    const Cycles nocRequestToSpmRequestLatency;
+    const Cycles spmResponseToNocResponseLatency;
+
     Dtu(DtuParams* p);
+
+    ~Dtu();
+
+    RegFile &regs() { return regFile; }
+    
+    Addr translate(Addr vaddr);
+    
+    PacketPtr generateRequest(Addr addr, Addr size, MemCmd cmd);
+    void freeRequest(PacketPtr pkt);
+
+    Command getCommand();
+
+    void wakeupCore();
+    
+    void updateSuspendablePin();
+
+    void forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest);
+
+    void sendFunctionalSpmRequest(PacketPtr pkt) { dcacheMasterPort.sendFunctional(pkt); }
+
+    void scheduleFinishOp(Cycles delay) { schedule(finishOperationEvent, clockEdge(delay)); }
+
+    void sendSpmRequest(PacketPtr pkt,
+                        unsigned epId,
+                        Cycles delay,
+                        SpmPacketType packetType);
+
+    void sendNocRequest(PacketPtr pkt,
+                        Cycles delay,
+                        bool isMessage);
 
     void printPacket(PacketPtr pkt) const;
 };

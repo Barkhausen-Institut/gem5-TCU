@@ -227,17 +227,17 @@ class BaseDtu : public MemObject
 
     CacheSlavePort<DCacheMasterPort> dcacheSlavePort;
 
-    unsigned coreId;
-
-    Addr regFileBaseAddr;
-
-    unsigned nocAddrWidth;
-
-    unsigned nocCoreAddrBits;
-
-    unsigned nocEpAddrBits;
-
   public:
+
+    const unsigned coreId;
+
+    const unsigned nocAddrWidth;
+
+    const unsigned nocCoreAddrBits;
+
+    const unsigned nocEpAddrBits;
+
+    const Addr regFileBaseAddr;
 
     BaseDtu(BaseDtuParams* p);
 

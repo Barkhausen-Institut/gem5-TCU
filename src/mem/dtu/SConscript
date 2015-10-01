@@ -33,6 +33,8 @@ SimObject('Dtu.py')
 Source('dtu.cc')
 Source('base.cc')
 Source('regfile.cc')
+Source('msg_unit.cc')
+Source('mem_unit.cc')
 
 DebugFlag('Dtu')
 DebugFlag('DtuBuf')

@@ -225,10 +225,10 @@ BaseDtu::BaseDtu(BaseDtuParams* p)
     icacheSlavePort(icacheMasterPort, *this),
     dcacheSlavePort(dcacheMasterPort, *this),
     coreId(p->core_id),
-    regFileBaseAddr(p->regfile_base_addr),
     nocAddrWidth(p->noc_addr_width),
     nocCoreAddrBits(p->noc_core_addr_bits),
-    nocEpAddrBits(p->noc_ep_addr_bits)
+    nocEpAddrBits(p->noc_ep_addr_bits),
+    regFileBaseAddr(p->regfile_base_addr)
 {}
 
 void
