@@ -213,31 +213,7 @@ class BaseDtu : public MemObject
         }
     };
 
-  protected:
-
-    NocMasterPort  nocMasterPort;
-
-    NocSlavePort   nocSlavePort;
-
-    ICacheMasterPort icacheMasterPort;
-
-    DCacheMasterPort dcacheMasterPort;
-
-    CacheSlavePort<ICacheMasterPort> icacheSlavePort;
-
-    CacheSlavePort<DCacheMasterPort> dcacheSlavePort;
-
   public:
-
-    const unsigned coreId;
-
-    const unsigned nocAddrWidth;
-
-    const unsigned nocCoreAddrBits;
-
-    const unsigned nocEpAddrBits;
-
-    const Addr regFileBaseAddr;
 
     BaseDtu(BaseDtuParams* p);
 
@@ -268,6 +244,32 @@ class BaseDtu : public MemObject
     virtual void handleNocRequest(PacketPtr pkt) = 0;
 
     virtual void handleCpuRequest(PacketPtr pkt) = 0;
+
+  protected:
+
+    NocMasterPort  nocMasterPort;
+
+    NocSlavePort   nocSlavePort;
+
+    ICacheMasterPort icacheMasterPort;
+
+    DCacheMasterPort dcacheMasterPort;
+
+    CacheSlavePort<ICacheMasterPort> icacheSlavePort;
+
+    CacheSlavePort<DCacheMasterPort> dcacheSlavePort;
+
+  public:
+
+    const unsigned coreId;
+
+    const unsigned nocAddrWidth;
+
+    const unsigned nocCoreAddrBits;
+
+    const unsigned nocEpAddrBits;
+
+    const Addr regFileBaseAddr;
 
 };
 

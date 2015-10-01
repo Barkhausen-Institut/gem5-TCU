@@ -105,62 +105,17 @@ class Dtu : public BaseDtu
         WAKEUP_CORE = 6,
     };
 
-    static constexpr unsigned numCmdOpcodeBits = 3;
-
     struct Command
     {
         CommandOpcode opcode;
         unsigned epId;
     };
 
-  private:
-
-    const MasterID masterId;
-
-    const bool usePTable;
-
-    System *system;
-
-    RegFile regFile;
-
-    MessageUnit *msgUnit;
-
-    MemoryUnit *memUnit;
-
-    void executeCommand();
-    EventWrapper<Dtu, &Dtu::executeCommand> executeCommandEvent;
-
-    void finishOperation();
-    EventWrapper<Dtu, &Dtu::finishOperation> finishOperationEvent;
-
-    void completeLocalSpmRequest(PacketPtr pkt);
-
-    void completeNocRequest(PacketPtr pkt) override;
-
-    void completeSpmRequest(PacketPtr pkt) override;
-
-    void handleNocRequest(PacketPtr pkt) override;
-
-    void handleCpuRequest(PacketPtr pkt) override;
-
   public:
 
-    const bool atomicMode;
+    static constexpr unsigned numCmdOpcodeBits = 3;
 
-    const unsigned numEndpoints;
-
-    const Addr maxNocPacketSize;
-
-    const unsigned numCmdEpidBits;
-
-    const Cycles registerAccessLatency;
-    const Cycles commandToSpmRequestLatency;
-    const Cycles commandToNocRequestLatency;
-    const Cycles spmResponseToNocRequestLatency;
-    const Cycles nocMessageToSpmRequestLatency;
-    const Cycles nocResponseToSpmRequestLatency;
-    const Cycles nocRequestToSpmRequestLatency;
-    const Cycles spmResponseToNocResponseLatency;
+  public:
 
     Dtu(DtuParams* p);
 
@@ -183,7 +138,7 @@ class Dtu : public BaseDtu
 
     void sendFunctionalSpmRequest(PacketPtr pkt) { dcacheMasterPort.sendFunctional(pkt); }
 
-    void scheduleFinishOp(Cycles delay) { schedule(finishOperationEvent, clockEdge(delay)); }
+    void scheduleFinishOp(Cycles delay) { schedule(finishCommandEvent, clockEdge(delay)); }
 
     void sendSpmRequest(PacketPtr pkt,
                         unsigned epId,
@@ -195,6 +150,59 @@ class Dtu : public BaseDtu
                         bool isMessage);
 
     void printPacket(PacketPtr pkt) const;
+
+  private:
+
+    void executeCommand();
+
+    void finishCommand();
+
+    void completeLocalSpmRequest(PacketPtr pkt);
+
+    void completeNocRequest(PacketPtr pkt) override;
+
+    void completeSpmRequest(PacketPtr pkt) override;
+
+    void handleNocRequest(PacketPtr pkt) override;
+
+    void handleCpuRequest(PacketPtr pkt) override;
+
+  private:
+
+    const MasterID masterId;
+
+    const bool usePTable;
+
+    System *system;
+
+    RegFile regFile;
+
+    MessageUnit *msgUnit;
+
+    MemoryUnit *memUnit;
+
+    EventWrapper<Dtu, &Dtu::executeCommand> executeCommandEvent;
+    
+    EventWrapper<Dtu, &Dtu::finishCommand> finishCommandEvent;
+
+  public:
+
+    const bool atomicMode;
+
+    const unsigned numEndpoints;
+
+    const Addr maxNocPacketSize;
+
+    const unsigned numCmdEpidBits;
+
+    const Cycles registerAccessLatency;
+    const Cycles commandToSpmRequestLatency;
+    const Cycles commandToNocRequestLatency;
+    const Cycles spmResponseToNocRequestLatency;
+    const Cycles nocMessageToSpmRequestLatency;
+    const Cycles nocResponseToSpmRequestLatency;
+    const Cycles nocRequestToSpmRequestLatency;
+    const Cycles spmResponseToNocResponseLatency;
 };
 
 #endif // __MEM_DTU_DTU_HH__

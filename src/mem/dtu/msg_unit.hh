@@ -35,10 +35,6 @@
 
 class MessageUnit
 {
-  private:
-
-    Dtu &dtu;
-
   public:
 
     MessageUnit(Dtu &_dtu) : dtu(_dtu) {}
@@ -76,6 +72,9 @@ class MessageUnit
 
     bool incrementWritePtr(unsigned epId);
 
+  private:
+
+    Dtu &dtu;
 };
 
 #endif

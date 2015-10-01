@@ -35,10 +35,6 @@
 
 class MemoryUnit
 {
-  private:
-
-    Dtu &dtu;
-
   public:
 
     MemoryUnit(Dtu &_dtu) : dtu(_dtu) {}
@@ -81,6 +77,10 @@ class MemoryUnit
      * Remote read/write: response from SPM -> NoC response
      */
     void recvFromNocComplete(PacketPtr pkt);
+
+  private:
+
+    Dtu &dtu;
 };
 
 #endif

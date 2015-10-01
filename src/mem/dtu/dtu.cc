@@ -54,7 +54,7 @@ Dtu::Dtu(DtuParams* p)
     msgUnit(new MessageUnit(*this)),
     memUnit(new MemoryUnit(*this)),
     executeCommandEvent(*this),
-    finishOperationEvent(*this),
+    finishCommandEvent(*this),
     atomicMode(p->system->isAtomicMode()),
     numEndpoints(p->num_endpoints),
     maxNocPacketSize(p->max_noc_packet_size),
@@ -160,11 +160,11 @@ Dtu::executeCommand()
         break;
     case CommandOpcode::INC_READ_PTR:
         msgUnit->incrementReadPtr(cmd.epId);
-        finishOperation();
+        finishCommand();
         break;
     case CommandOpcode::WAKEUP_CORE:
         wakeupCore();
-        finishOperation();
+        finishCommand();
         break;
     default:
         // TODO error handling
@@ -173,11 +173,31 @@ Dtu::executeCommand()
 }
 
 void
-Dtu::finishOperation()
+Dtu::finishCommand()
 {
-    DPRINTF(DtuDetail, "Operation finished\n");
+    DPRINTF(DtuDetail, "Command finished\n");
     // reset command register
     regFile.set(CmdReg::COMMAND, 0);
+}
+
+void
+Dtu::wakeupCore()
+{
+    if(system->threadContexts[0]->status() == ThreadContext::Suspended)
+    {
+        DPRINTF(DtuPower, "Waking up core\n");
+        system->threadContexts[0]->activate();
+    }
+}
+
+void
+Dtu::updateSuspendablePin()
+{
+    bool pendingMsgs = regFile.get(DtuReg::MSG_CNT) > 0;
+    bool hadPending = system->threadContexts[0]->getCpuPtr()->_denySuspend;
+    system->threadContexts[0]->getCpuPtr()->_denySuspend = pendingMsgs;
+    if(hadPending && !pendingMsgs)
+        DPRINTF(DtuPower, "Core can be suspended\n");
 }
 
 void
@@ -210,23 +230,23 @@ Dtu::sendSpmRequest(PacketPtr pkt,
 }
 
 void
-Dtu::wakeupCore()
+Dtu::sendNocRequest(PacketPtr pkt, Cycles delay, bool isMessage)
 {
-    if(system->threadContexts[0]->status() == ThreadContext::Suspended)
-    {
-        DPRINTF(DtuPower, "Waking up core\n");
-        system->threadContexts[0]->activate();
-    }
-}
+    auto senderState = new NocSenderState();
+    senderState->packetType = isMessage ? NocPacketType::MESSAGE :
+                                          NocPacketType::REQUEST;
 
-void
-Dtu::updateSuspendablePin()
-{
-    bool pendingMsgs = regFile.get(DtuReg::MSG_CNT) > 0;
-    bool hadPending = system->threadContexts[0]->getCpuPtr()->_denySuspend;
-    system->threadContexts[0]->getCpuPtr()->_denySuspend = pendingMsgs;
-    if(hadPending && !pendingMsgs)
-        DPRINTF(DtuPower, "Core can be suspended\n");
+    pkt->pushSenderState(senderState);
+
+    if (atomicMode)
+    {
+        sendAtomicNocRequest(pkt);
+        completeNocRequest(pkt);
+    }
+    else
+    {
+        schedNocRequest(pkt, clockEdge(delay));
+    }
 }
 
 void
@@ -277,26 +297,6 @@ Dtu::completeSpmRequest(PacketPtr pkt)
 }
 
 void
-Dtu::sendNocRequest(PacketPtr pkt, Cycles delay, bool isMessage)
-{
-    auto senderState = new NocSenderState();
-    senderState->packetType = isMessage ? NocPacketType::MESSAGE :
-                                          NocPacketType::REQUEST;
-
-    pkt->pushSenderState(senderState);
-
-    if (atomicMode)
-    {
-        sendAtomicNocRequest(pkt);
-        completeNocRequest(pkt);
-    }
-    else
-    {
-        schedNocRequest(pkt, clockEdge(delay));
-    }
-}
-
-void
 Dtu::completeLocalSpmRequest(PacketPtr pkt)
 {
     Command cmd = getCommand();
@@ -315,7 +315,7 @@ Dtu::completeLocalSpmRequest(PacketPtr pkt)
     else if (cmd.opcode == CommandOpcode::READ)
     {
         Cycles delay = ticksToCycles(pkt->headerDelay + pkt->payloadDelay);
-        schedule(finishOperationEvent, clockEdge(delay));
+        schedule(finishCommandEvent, clockEdge(delay));
     }
     else
         // TODO error handling
@@ -345,6 +345,12 @@ Dtu::handleNocRequest(PacketPtr pkt)
     }
 
     delete senderState;
+}
+
+void
+Dtu::handleCpuRequest(PacketPtr pkt)
+{
+    forwardRequestToRegFile(pkt, true);
 }
 
 void
@@ -387,12 +393,6 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
     {
         executeCommand();
     }
-}
-
-void
-Dtu::handleCpuRequest(PacketPtr pkt)
-{
-    forwardRequestToRegFile(pkt, true);
 }
 
 Dtu*

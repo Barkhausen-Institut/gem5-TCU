@@ -101,27 +101,9 @@ constexpr unsigned numEpRegs = 14;
 
 class RegFile
 {
-  private:
-    static const char *dtuRegNames[];
-    static const char *cmdRegNames[];
-    static const char *epRegNames[];
-
   public:
 
     using reg_t = uint64_t;
-
-  private:
-
-    std::vector<reg_t> dtuRegs;
-
-    std::vector<reg_t> cmdRegs;
-
-    std::vector<std::vector<reg_t>> epRegs;
-
-    const unsigned numEndpoints;
-
-    // used for debug messages (DPRINTF)
-    const std::string _name;
 
   public:
 
@@ -145,6 +127,25 @@ class RegFile
     const std::string name() const { return _name; }
 
     Addr getSize() const;
+
+  private:
+
+    std::vector<reg_t> dtuRegs;
+
+    std::vector<reg_t> cmdRegs;
+
+    std::vector<std::vector<reg_t>> epRegs;
+
+    const unsigned numEndpoints;
+
+    // used for debug messages (DPRINTF)
+    const std::string _name;
+
+  private:
+    
+    static const char *dtuRegNames[];
+    static const char *cmdRegNames[];
+    static const char *epRegNames[];
 };
 
 #endif // __MEM_DTU_REGFILE_HH__
