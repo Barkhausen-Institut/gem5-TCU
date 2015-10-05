@@ -37,6 +37,7 @@ from m5.util import addToPath, fatal
 addToPath('../common')
 
 from FSConfig import *
+from Caches import *
 import CpuConfig
 import MemConfig
 import Options
@@ -159,13 +160,21 @@ def createPE(no, mem=False):
                               response_latency = 1,
                               width = 16)
 
-    pe.scratchpad = Scratchpad(in_addr_map = "true")
-    pe.scratchpad.cpu_port = pe.xbar.master
+    if not mem:
+        pe.cachespm = Scratchpad(in_addr_map = "true")
+        pe.cache = L1Cache(size='64kB', assoc=2)
+        pe.cache.forward_snoops = False
+        pe.cache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
+        pe.cache.cpu_side = pe.xbar.master
+        pe.cache.mem_side = pe.cachespm.cpu_port
+
+        # for now, a bit more to be able to put every application at a different address
+        pe.cachespm.range = 8 * 1024 * 1024
 
     if options.watch_pe == no:
         print "PE%u: watching memory %#x..%#x" % (no, options.watch_start, options.watch_end)
-        pe.scratchpad.watch_range_start = options.watch_start
-        pe.scratchpad.watch_range_end = options.watch_end
+        pe.cachespm.watch_range_start = options.watch_start
+        pe.cachespm.watch_range_end = options.watch_end
 
     pe.dtu = Dtu()
     pe.dtu.core_id = no
@@ -203,8 +212,7 @@ root.cpu_clk_domain = SrcClockDomain(clock = options.cpu_clock,
 root.noc = NoncoherentXBar(forward_latency  = 0,
                            frontend_latency = 1,
                            response_latency = 1,
-                           width = 8,
-                          )
+                           width = 8)
 
 IO_address_space_base = 0x8000000000000000
 interrupts_address_space_base = 0xa000000000000000
@@ -237,9 +245,6 @@ for i in range(0, len(cmd_list)):
     pe = createPE(i)
     pe.readfile = "/dev/stdin"
 
-    # for now, a bit more to be able to put every application at a different address
-    pe.scratchpad.range = 8 * 1024 * 1024
-
     pe.cpu = CPUClass()
     pe.cpu.cpu_id = 0
     pe.cpu.clk_domain = root.cpu_clk_domain
@@ -251,7 +256,7 @@ for i in range(0, len(cmd_list)):
     pe.kernel = cmd_list[i].split(' ')[0]
     pe.boot_osflags = cmd_list[i]
     pe.dtu.use_ptable = 'false'
-    print 'PE%d: memsize=%d KiB' % (i, int(pe.scratchpad.range.end) / 1024)
+    print 'PE%d: memsize=%d KiB' % (i, int(pe.cachespm.range.end) / 1024)
     print "PE%d: cmdline=%s" % (i, cmd_list[i])
 
     # connect the IO space via bridge to the root NoC
@@ -274,6 +279,8 @@ for i in range(0, len(cmd_list)):
     pe.cpu.dtb.walker.port = pe.xbar.slave
 
 pe = createPE(options.num_pes, mem=True)
+pe.scratchpad = Scratchpad(in_addr_map = "true")
+pe.scratchpad.cpu_port = pe.xbar.master
 pe.scratchpad.range = MemorySize(options.mem_size).value
 pe.scratchpad.init_file = options.init_mem
 print 'PE%d: memsize=%d KiB' % (options.num_pes, int(pe.scratchpad.range.end) / 1024)

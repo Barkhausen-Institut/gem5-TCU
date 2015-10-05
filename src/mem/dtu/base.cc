@@ -31,6 +31,7 @@
 #include "debug/DtuSlavePort.hh"
 #include "debug/DtuMasterPort.hh"
 #include "mem/dtu/base.hh"
+#include "mem/dtu/noc_addr.hh"
 
 BaseDtu::DtuMasterPort::DtuMasterPort( const std::string& _name, BaseDtu& _dtu)
   : QueuedMasterPort(_name, &_dtu, reqQueue, snoopRespQueue),
@@ -204,8 +205,8 @@ BaseDtu::NocSlavePort::getAddrRanges() const
 {
     AddrRangeList ranges;
 
-    Addr baseNocAddr = dtu.getNocAddr(dtu.coreId);
-    Addr topNocAddr  = dtu.getNocAddr(dtu.coreId + 1) - 1;
+    Addr baseNocAddr = NocAddr(dtu.coreId, 0).getAddr();
+    Addr topNocAddr  = NocAddr(dtu.coreId + 1, 0).getAddr() - 1;
 
     DPRINTF(DtuSlavePort, "Dtu %u covers %#x to %#x\n", dtu.coreId, baseNocAddr, topNocAddr);
 
@@ -225,9 +226,6 @@ BaseDtu::BaseDtu(BaseDtuParams* p)
     icacheSlavePort(icacheMasterPort, *this),
     dcacheSlavePort(dcacheMasterPort, *this),
     coreId(p->core_id),
-    nocAddrWidth(p->noc_addr_width),
-    nocCoreAddrBits(p->noc_core_addr_bits),
-    nocEpAddrBits(p->noc_ep_addr_bits),
     regFileBaseAddr(p->regfile_base_addr)
 {}
 
@@ -283,27 +281,6 @@ BaseDtu::getSlavePort(const std::string &if_name, PortID idx)
         return nocSlavePort;
     else
         return MemObject::getSlavePort(if_name, idx);
-}
-
-Addr
-BaseDtu::getNocAddr(unsigned coreId, unsigned epId) const
-{
-    /*
-     * nocAddrWidth - 1                     0
-     *        -------------------------------
-     *        | 1 |  coreId  | ... |  epId  |
-     *        -------------------------------
-     */
-    assert(nocCoreAddrBits + nocEpAddrBits + 1 <= nocAddrWidth);
-
-    // MSB is always 1
-    Addr res = static_cast<Addr>(1) << (nocAddrWidth - 1);
-
-    res |= static_cast<Addr>(coreId) << (nocAddrWidth  - nocCoreAddrBits - 1);
-
-    res |= epId & ((1 << nocEpAddrBits) - 1);
-
-    return res;
 }
 
 void

@@ -41,9 +41,29 @@
 #include "mem/dtu/dtu.hh"
 #include "mem/dtu/msg_unit.hh"
 #include "mem/dtu/mem_unit.hh"
+#include "mem/dtu/xfer_unit.hh"
 #include "mem/page_table.hh"
 #include "sim/system.hh"
 #include "sim/process.hh"
+
+/**
+ * The general idea is to have burst transfers that are only used by messages. Bursts mean that a
+ * path through the NoC is reserved for that transfer hop by hop by the first packet. Afterwards,
+ * only packets of that burst transfer or regular transfers can go through that path. Regular
+ * transfers are used for memory requests, because they are always 1 cacheline large and multiple
+ * requests can be treated independently. For messages however, we have to garuantee that each
+ * message arrives contiguously, i.e. messages do not interleave when two are received at one EP
+ * simultaneously. This is garuanteed by bursts.
+ * In order to prevent deadlocks in the NoC, memory transfers can't be done in bursts. Since message
+ * transfers are only initiated by SW, a bursts can never initiate another burst, but only memory
+ * transfers. Thus, we will always make progress.
+ *
+ * This variable indicates whether a burst transfer is running somewhere in the NoC. This does only
+ * roughly simulate bursts of real NoCs, but simulates the worst case. Note that it is not enough
+ * to block sends to a certain receiver, because sends might interfere on their ways through the
+ * NoC. Thus, we assume that they always do by blocking the whole NoC.
+ */
+bool Dtu::nocBurstActive = false;
 
 Dtu::Dtu(DtuParams* p)
   : BaseDtu(p),
@@ -53,6 +73,7 @@ Dtu::Dtu(DtuParams* p)
     regFile(name() + ".regFile", p->num_endpoints),
     msgUnit(new MessageUnit(*this)),
     memUnit(new MemoryUnit(*this)),
+    xferUnit(new XferUnit(*this, sizeof(MessageHeader))),
     executeCommandEvent(*this),
     finishCommandEvent(*this),
     atomicMode(p->system->isAtomicMode()),
@@ -66,13 +87,15 @@ Dtu::Dtu(DtuParams* p)
     nocMessageToSpmRequestLatency(p->noc_message_to_spm_request_latency),
     nocResponseToSpmRequestLatency(p->noc_message_to_spm_request_latency),
     nocRequestToSpmRequestLatency(p->noc_request_to_spm_request_latency),
-    spmResponseToNocResponseLatency(p->spm_response_to_noc_response_latency)
+    spmResponseToNocResponseLatency(p->spm_response_to_noc_response_latency),
+    transferToSpmRequestLatency(0)
 {}
 
 Dtu::~Dtu()
 {
-    delete msgUnit;
+    delete xferUnit;
     delete memUnit;
+    delete msgUnit;
 }
 
 Addr
@@ -150,6 +173,13 @@ Dtu::executeCommand()
         break;
     case CommandOpcode::SEND:
     case CommandOpcode::REPLY:
+        // if there is already someone sending, try again later
+        if(nocBurstActive)
+        {
+            schedule(executeCommandEvent, clockEdge(Cycles(1)));
+            return;
+        }
+
         msgUnit->startTransmission(cmd);
         break;
     case CommandOpcode::READ:
@@ -204,7 +234,8 @@ void
 Dtu::sendSpmRequest(PacketPtr pkt,
                     unsigned epId,
                     Cycles delay,
-                    SpmPacketType packetType)
+                    SpmPacketType packetType,
+                    bool last)
 {
     pkt->setAddr(translate(pkt->getAddr()));
 
@@ -212,6 +243,7 @@ Dtu::sendSpmRequest(PacketPtr pkt,
     senderState->epId = epId;
     senderState->packetType = packetType;
     senderState->mid = pkt->req->masterId();
+    senderState->last = last;
 
     // ensure that this packet has our master id (not the id of a master in a different PE)
     pkt->req->setMasterId(masterId);
@@ -230,11 +262,10 @@ Dtu::sendSpmRequest(PacketPtr pkt,
 }
 
 void
-Dtu::sendNocRequest(PacketPtr pkt, Cycles delay, bool isMessage)
+Dtu::sendNocRequest(NocPacketType type, PacketPtr pkt, Cycles delay)
 {
     auto senderState = new NocSenderState();
-    senderState->packetType = isMessage ? NocPacketType::MESSAGE :
-                                          NocPacketType::REQUEST;
+    senderState->packetType = type;
 
     pkt->pushSenderState(senderState);
 
@@ -247,6 +278,34 @@ Dtu::sendNocRequest(PacketPtr pkt, Cycles delay, bool isMessage)
     {
         schedNocRequest(pkt, clockEdge(delay));
     }
+}
+
+void
+Dtu::startTransfer(NocPacketType type,
+                   NocAddr targetAddr,
+                   Addr sourceAddr,
+                   Addr size)
+{
+    xferUnit->startTransfer(type,
+                            targetAddr,
+                            sourceAddr,
+                            size);
+}
+
+void
+Dtu::transferData(NocPacketType type,
+                  NocAddr targetAddr,
+                  const void* data,
+                  Addr size,
+                  Tick spmPktHeaderDelay,
+                  Tick spmPktPayloadDelay)
+{
+    xferUnit->sendToNoc(type,
+                        targetAddr,
+                        data,
+                        size,
+                        spmPktHeaderDelay,
+                        spmPktPayloadDelay);
 }
 
 void
@@ -281,13 +340,18 @@ Dtu::completeSpmRequest(PacketPtr pkt)
     switch (senderState->packetType)
     {
     case SpmPacketType::LOCAL_REQUEST:
-        completeLocalSpmRequest(pkt);
+        completeLocalSpmRequest(pkt, senderState->last);
         break;
     case SpmPacketType::FORWARDED_MESSAGE:
         msgUnit->recvFromNocComplete(pkt, senderState->epId);
         break;
     case SpmPacketType::FORWARDED_REQUEST:
         memUnit->recvFromNocComplete(pkt);
+        break;
+    case SpmPacketType::TRANSFER_REQUEST:
+        xferUnit->forwardToNoc(pkt->getConstPtr<uint8_t>(),
+                               pkt->headerDelay,
+                               pkt->payloadDelay);
         break;
     default:
         panic("Unexpected SpmPacketType\n");
@@ -297,25 +361,20 @@ Dtu::completeSpmRequest(PacketPtr pkt)
 }
 
 void
-Dtu::completeLocalSpmRequest(PacketPtr pkt)
+Dtu::completeLocalSpmRequest(PacketPtr pkt, bool last)
 {
     Command cmd = getCommand();
 
-    if (cmd.opcode == CommandOpcode::SEND || cmd.opcode == CommandOpcode::REPLY)
-        msgUnit->sendToNoc(pkt->getConstPtr<uint8_t>(),
-                           pkt->getSize(),
-                           cmd.opcode == CommandOpcode::REPLY,
-                           pkt->headerDelay,
-                           pkt->payloadDelay);
-    else if (cmd.opcode == CommandOpcode::WRITE)
+    if (cmd.opcode == CommandOpcode::WRITE)
+    {
         memUnit->sendWriteToNoc(pkt->getConstPtr<uint8_t>(),
                                            pkt->getSize(),
                                            pkt->headerDelay,
                                            pkt->payloadDelay);
+    }
     else if (cmd.opcode == CommandOpcode::READ)
     {
-        Cycles delay = ticksToCycles(pkt->headerDelay + pkt->payloadDelay);
-        schedule(finishCommandEvent, clockEdge(delay));
+        memUnit->sendToSpmComplete(pkt, last);
     }
     else
         // TODO error handling
@@ -337,7 +396,8 @@ Dtu::handleNocRequest(PacketPtr pkt)
         // if that failed, reply directly
         msgUnit->recvFromNoc(pkt);
         break;
-    case NocPacketType::REQUEST:
+    case NocPacketType::READ_REQ:
+    case NocPacketType::WRITE_REQ:
         memUnit->recvFromNoc(pkt);
         break;
     default:
@@ -356,11 +416,15 @@ Dtu::handleCpuRequest(PacketPtr pkt)
 void
 Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
 {
-    // Strip the base address to handle requests based on the register address
-    // only.
-    pkt->setAddr(pkt->getAddr() - regFileBaseAddr);
+    Addr oldAddr = pkt->getAddr();
+
+    // Strip the base address to handle requests based on the register address only.
+    pkt->setAddr(oldAddr - regFileBaseAddr);
 
     bool commandWritten = regFile.handleRequest(pkt, isCpuRequest);
+
+    // restore old address
+    pkt->setAddr(oldAddr);
 
     updateSuspendablePin();
 

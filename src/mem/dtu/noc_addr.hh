@@ -28,64 +28,56 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
-#ifndef __MEM_DTU_MEM_UNIT_HH__
-#define __MEM_DTU_MEM_UNIT_HH__
+#ifndef __MEM_DTU_NOC_ADDR_HH__
+#define __MEM_DTU_NOC_ADDR_HH__
 
-#include "mem/dtu/dtu.hh"
+#include "base/types.hh"
 
-class MemoryUnit
+/**
+ * 
+ *  64        56     48  47          0
+ *   ---------------------------------
+ *   | coreId  | epId | L |  offset  |
+ *   ---------------------------------
+ */
+class NocAddr
 {
   public:
 
-    MemoryUnit(Dtu &_dtu) : dtu(_dtu) {}
+    explicit NocAddr() : coreId(), epId(), last(), offset()
+    {}
 
-    /**
-     * Starts a read -> NoC request
-     */
-    void startRead(const Dtu::Command& cmd);
-    
-    /**
-     * Starts a write -> SPM request
-     */
-    void startWrite(const Dtu::Command& cmd);
+    explicit NocAddr(Addr addr)
+        : coreId((addr >> 56) & ((1 << 8) - 1)),
+          epId((addr >> 48) & ((1 << 8) - 1)),
+          last((addr >> 47) & 1),
+          offset(addr & ((static_cast<Addr>(1) << 47) - 1))
+    {}
 
-    /**
-     * Write: Response from SPM -> NoC request
-     */
-    void sendWriteToNoc(const uint8_t* data,
-                        Addr requestSize,
-                        Tick spmPktHeaderDelay,
-                        Tick spmPktPayloadDelay);
+    explicit NocAddr(unsigned _coreId, unsigned _epId, Addr _offset = 0)
+        : coreId(_coreId), epId(_epId), last(), offset(_offset)
+    {}
 
-    /**
-     * Read: response from SPM -> done
-     */
-    void sendToSpmComplete(PacketPtr pkt, bool last);
+    Addr getAddr() const
+    {
+        assert((coreId & ~((1 << 8) - 1)) == 0);
+        assert((epId & ~((1 << 8) - 1)) == 0);
+        assert((offset & ~((static_cast<Addr>(1) << 47) - 1)) == 0);
 
-    /**
-     * Read: response from remote DTU
-     */
-    void readComplete(PacketPtr pkt);
+        Addr res = static_cast<Addr>(coreId) << 56;
+        res |= static_cast<Addr>(epId) << 48;
+        res |= static_cast<Addr>(last) << 47;
+        res |= offset;
+        return res;
+    }
 
-    /**
-     * Write: response from remote DTU
-     */
-    void writeComplete(PacketPtr pkt);
+    unsigned coreId;
 
+    unsigned epId;
 
-    /**
-     * Received read/write request from NoC -> SPM/regfile request
-     */
-    void recvFromNoc(PacketPtr pkt);
+    bool last;
 
-    /**
-     * Remote read/write: response from SPM -> NoC response
-     */
-    void recvFromNocComplete(PacketPtr pkt);
-
-  private:
-
-    Dtu &dtu;
+    Addr offset;
 };
 
 #endif

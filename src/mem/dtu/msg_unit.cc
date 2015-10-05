@@ -35,41 +35,46 @@
 #include "debug/DtuSysCalls.hh"
 #include "debug/DtuPower.hh"
 #include "mem/dtu/msg_unit.hh"
+#include "mem/dtu/noc_addr.hh"
 
-static const char *syscallNames[] = {
-    "CREATESRV",
-    "CREATESESS",
-    "CREATEGATE",
-    "CREATEVPE",
-    "ATTACHRB",
-    "DETACHRB",
-    "EXCHANGE",
-    "VPECTRL",
-    "DELEGATE",
-    "OBTAIN",
-    "ACTIVATE",
-    "REQMEM",
-    "DERIVEMEM",
-    "REVOKE",
-    "EXIT",
-    "NOOP",
-};
+// static const char *syscallNames[] = {
+//     "CREATESRV",
+//     "CREATESESS",
+//     "CREATEGATE",
+//     "CREATEVPE",
+//     "ATTACHRB",
+//     "DETACHRB",
+//     "EXCHANGE",
+//     "VPECTRL",
+//     "DELEGATE",
+//     "OBTAIN",
+//     "ACTIVATE",
+//     "REQMEM",
+//     "DERIVEMEM",
+//     "REVOKE",
+//     "EXIT",
+//     "NOOP",
+// };
 
 void
 MessageUnit::startTransmission(const Dtu::Command& cmd)
 {
+    unsigned epid = cmd.epId;
+
     Addr messageAddr = dtu.regs().get(CmdReg::DATA_ADDR);
     Addr messageSize = dtu.regs().get(CmdReg::DATA_SIZE);
-    unsigned credits = dtu.regs().get(cmd.epId, EpReg::CREDITS);
+    unsigned credits = dtu.regs().get(epid, EpReg::CREDITS);
+
+    bool isReply = cmd.opcode == Dtu::CommandOpcode::REPLY;
 
     /*
      * If this endpoint is configured to send messages, we need to check
      * credits. If it is configured to receive messages we do a reply and don't
      * need to check credits.
      */
-    if (cmd.opcode == Dtu::CommandOpcode::SEND)
+    if (!isReply)
     {
-        unsigned maxMessageSize = dtu.regs().get(cmd.epId, EpReg::MAX_MSG_SIZE);
+        unsigned maxMessageSize = dtu.regs().get(epid, EpReg::MAX_MSG_SIZE);
 
         // TODO error handling
         // TODO atm, we can send (nearly) arbitrary large replies
@@ -78,42 +83,17 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
         if (credits < maxMessageSize)
         {
             warn("pe%u.ep%u: Ignore send message command because there are not "
-                 "enough credits", dtu.coreId, cmd.epId);
+                 "enough credits", dtu.coreId, epid);
             dtu.scheduleFinishOp(Cycles(1));
             return;
         }
 
-        DPRINTF(DtuDetail, "EP%u pays %u credits\n", cmd.epId, maxMessageSize);
+        DPRINTFS(DtuDetail, (&dtu), "EP%u pays %u credits\n", epid, maxMessageSize);
 
         // Pay some credits
         credits -= maxMessageSize;
-        dtu.regs().set(cmd.epId, EpReg::CREDITS, credits);
+        dtu.regs().set(epid, EpReg::CREDITS, credits);
     }
-
-    DPRINTF(DtuDetail, "Read message of %lu Bytes at address %#018lx from local scratchpad.\n",
-                 messageSize,
-                 messageAddr);
-
-    // TODO error handling
-    assert(messageSize > 0);
-    assert(messageSize + sizeof(Dtu::MessageHeader) <= dtu.maxNocPacketSize);
-
-    auto pkt = dtu.generateRequest(messageAddr, messageSize, MemCmd::ReadReq);
-
-    dtu.sendSpmRequest(pkt,
-                       cmd.epId,
-                       dtu.commandToSpmRequestLatency,
-                       Dtu::SpmPacketType::LOCAL_REQUEST);
-}
-
-void
-MessageUnit::sendToNoc(const uint8_t* data,
-                            Addr messageSize,
-                            bool isReply,
-                            Tick spmPktHeaderDelay,
-                            Tick spmPktPayloadDelay)
-{
-    unsigned epid = dtu.getCommand().epId;
 
     unsigned targetCoreId;
     unsigned targetEpId;
@@ -174,28 +154,20 @@ MessageUnit::sendToNoc(const uint8_t* data,
         assert(messageSize + sizeof(Dtu::MessageHeader) <= maxMessageSize);
     }
 
-    DPRINTF(Dtu, "\e[1m[%s -> %u]\e[0m with EP%u of %#018lx:%lu\n",
+    DPRINTFS(Dtu, (&dtu), "\e[1m[%s -> %u]\e[0m with EP%u of %#018lx:%lu\n",
         isReply ? "rp" : "sd",
         targetCoreId, epid, dtu.regs().get(CmdReg::DATA_ADDR), messageSize);
-    DPRINTF(Dtu, "  header: tgtEP=%u, lbl=%#018lx, rpLbl=%#018lx, rpEP=%u\n",
+    DPRINTFS(Dtu, (&dtu), "  header: tgtEP=%u, lbl=%#018lx, rpLbl=%#018lx, rpEP=%u\n",
         targetEpId, label, replyLabel, replyEpId);
 
-    if (targetCoreId == 0 && !isReply)
-    {
-        size_t sysNo = data[0];
-        DPRINTF(DtuSysCalls, "  syscall: %s\n",
-            sysNo < (sizeof(syscallNames) / sizeof(syscallNames[0])) ? syscallNames[sysNo] : "Unknown");
-    }
+    // TODO if (targetCoreId == 0 && cmd.opcode != Dtu::CommandOpcode::REPLY)
+    // {
+    //     size_t sysNo = data[0];
+    //     DPRINTF(DtuSysCalls, "  syscall: %s\n",
+    //         sysNo < (sizeof(syscallNames) / sizeof(syscallNames[0])) ? syscallNames[sysNo] : "Unknown");
+    // }
 
-    DPRINTF(DtuDetail, "Send %s of %lu bytes to EP%u at PE%u.\n",
-                 isReply ? "reply" : "message",
-                 messageSize,
-                 targetEpId,
-                 targetCoreId);
-
-    assert(dtu.regs().get(CmdReg::DATA_SIZE) == messageSize);
-
-    Dtu::MessageHeader header;
+    alignas(sizeof(Dtu::MessageHeader)) Dtu::MessageHeader header;
 
     if (isReply)
         header.flags = Dtu::REPLY_FLAG | Dtu::GRANT_CREDITS_FLAG;
@@ -209,33 +181,19 @@ MessageUnit::sendToNoc(const uint8_t* data,
     header.label        = static_cast<uint64_t>(label);
     header.replyLabel   = static_cast<uint64_t>(replyLabel);
 
-    auto pkt = dtu.generateRequest(dtu.getNocAddr(targetCoreId, targetEpId),
-                               messageSize + sizeof(Dtu::MessageHeader),
-                               MemCmd::WriteReq);
+    // send the header
+    dtu.transferData(Dtu::NocPacketType::MESSAGE,
+                     NocAddr(targetCoreId, targetEpId),
+                     &header,
+                     sizeof(header),
+                     0,             // TODO
+                     Cycles(3));    // pay for the functional request; TODO
 
-    memcpy(pkt->getPtr<uint8_t>(), &header, sizeof(Dtu::MessageHeader));
-    memcpy(pkt->getPtr<uint8_t>() + sizeof(Dtu::MessageHeader),
-           data,
-           messageSize);
-
-    /*
-     * The message data is derived from a scratchpad response. Therefore
-     * we need to pay for the header delay of this reponse in addition
-     * to the delay caused by the DTU. We don't need to pay for the
-     * payload delay as data is forwarded word by word. Therefore the
-     * payload delay is assigned to the new NoC packet, so that the overall
-     * payload delay is defined by the slowest component (scratchpad or NoC)
-     */
-    Cycles delay = dtu.spmResponseToNocRequestLatency;
-    delay += dtu.ticksToCycles(spmPktHeaderDelay);
-
-    if (isReply)
-        delay += Cycles(3); // pay for the functional request
-                            // TODO check value
-
-    pkt->payloadDelay = spmPktPayloadDelay;
-    dtu.printPacket(pkt);
-    dtu.sendNocRequest(pkt, delay, true);
+    // start the transfer of the payload
+    dtu.startTransfer(Dtu::NocPacketType::MESSAGE,
+                      NocAddr(targetCoreId, targetEpId, sizeof(header)),
+                      messageAddr,
+                      messageSize);
 }
 
 void
@@ -252,7 +210,7 @@ MessageUnit::incrementReadPtr(unsigned epId)
     if (readPtr >= bufferAddr + bufferSize * maxMessageSize)
         readPtr = bufferAddr;
 
-    DPRINTF(DtuBuf, "EP%u: increment read pointer to %#018lx (msgCount=%u)\n",
+    DPRINTFS(DtuBuf, (&dtu), "EP%u: increment read pointer to %#018lx (msgCount=%u)\n",
                  epId,
                  readPtr,
                  messageCount - 1);
@@ -286,7 +244,7 @@ MessageUnit::incrementWritePtr(unsigned epId)
     if (writePtr >= bufferAddr + bufferSize * maxMessageSize)
         writePtr = bufferAddr;
 
-    DPRINTF(DtuBuf, "EP%u: increment write pointer to %#018lx (msgCount=%u)\n",
+    DPRINTFS(DtuBuf, (&dtu), "EP%u: increment write pointer to %#018lx (msgCount=%u)\n",
                  epId,
                  writePtr,
                  messageCount + 1);
@@ -311,41 +269,69 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
     assert(pkt->isWrite());
     assert(pkt->hasData());
 
-    unsigned epId = pkt->getAddr() & ((1UL << dtu.nocEpAddrBits) - 1);
+    NocAddr addr(pkt->getAddr());
 
-    Dtu::MessageHeader* header = pkt->getPtr<Dtu::MessageHeader>();
+    unsigned epId = addr.epId;
 
     Addr spmAddr = dtu.regs().get(epId, EpReg::BUF_WR_PTR);
 
-    DPRINTF(Dtu, "\e[1m[rv <- %u]\e[0m %lu bytes on EP%u to %#018lx\n",
-        header->senderCoreId, header->length, epId, spmAddr);
-    dtu.printPacket(pkt);
-
-    // Note that replyEpId is the Id of *our* sending EP
-    if (header->flags & Dtu::REPLY_FLAG &&
-        header->flags & Dtu::GRANT_CREDITS_FLAG &&
-        header->replyEpId < dtu.numEndpoints)
+    // is it the first packet?
+    if(addr.offset == 0)
     {
-        unsigned maxMessageSize = dtu.regs().get(header->replyEpId, EpReg::MAX_MSG_SIZE);
-        DPRINTF(DtuDetail, "Grant EP%u %u credits\n", header->replyEpId, maxMessageSize);
+        Dtu::MessageHeader* header = pkt->getPtr<Dtu::MessageHeader>();
 
-        unsigned credits = dtu.regs().get(header->replyEpId, EpReg::CREDITS);
-        credits += maxMessageSize;
-        dtu.regs().set(header->replyEpId, EpReg::CREDITS, credits);
+        DPRINTFS(Dtu, (&dtu), "\e[1m[rv <- %u]\e[0m %lu bytes on EP%u to %#018lx\n",
+            header->senderCoreId, header->length, epId, spmAddr);
+        dtu.printPacket(pkt);
     }
 
-    if(incrementWritePtr(epId))
-    {
-        DPRINTF(DtuBuf, "EP%u: writing message to %#018lx\n", epId, spmAddr);
+    Addr bufferSize = dtu.regs().get(epId, EpReg::BUF_SIZE);
+    Addr messageCount = dtu.regs().get(epId, EpReg::BUF_MSG_CNT);
 
-        pkt->setAddr(spmAddr);
+    if(messageCount < bufferSize)
+    {
+        if(addr.offset == 0)
+        {
+            Dtu::MessageHeader* header = pkt->getPtr<Dtu::MessageHeader>();
+
+            // Note that replyEpId is the Id of *our* sending EP
+            if (header->flags & Dtu::REPLY_FLAG &&
+                header->flags & Dtu::GRANT_CREDITS_FLAG &&
+                header->replyEpId < dtu.numEndpoints)
+            {
+                unsigned maxMessageSize = dtu.regs().get(header->replyEpId, EpReg::MAX_MSG_SIZE);
+                DPRINTFS(DtuDetail, (&dtu), "Grant EP%u %u credits\n", header->replyEpId, maxMessageSize);
+
+                unsigned credits = dtu.regs().get(header->replyEpId, EpReg::CREDITS);
+                credits += maxMessageSize;
+                dtu.regs().set(header->replyEpId, EpReg::CREDITS, credits);
+            }
+
+            DPRINTFS(DtuBuf, (&dtu), "EP%u: writing message to %#018lx\n", epId, spmAddr);
+        }
+
+        // remember the old address for later
+        Addr oldAddr = pkt->getAddr();
+        auto state = new Dtu::AddrSenderState;
+        state->addr = oldAddr;
+        pkt->pushSenderState(state);
+
+        pkt->setAddr(spmAddr + addr.offset);
+        pkt->req->setPaddr(spmAddr + addr.offset);
 
         Cycles delay = dtu.ticksToCycles(pkt->headerDelay);
         pkt->headerDelay = 0;
         delay += dtu.nocMessageToSpmRequestLatency;
 
-        dtu.sendSpmRequest(pkt, epId, delay, Dtu::SpmPacketType::FORWARDED_MESSAGE);
+        dtu.sendSpmRequest(pkt, epId, delay, Dtu::SpmPacketType::FORWARDED_MESSAGE, false);
+
+        // if it's the last, increment the writer-pointer etc.
+        // note that we can be sure here that no other message is received in parallel because
+        // messages are sent via burst
+        if(addr.last)
+            incrementWritePtr(epId);
     }
+    // ignore messages if there is not enough space
     else
     {
         pkt->makeResponse();
@@ -368,19 +354,19 @@ MessageUnit::recvFromNocComplete(PacketPtr pkt, unsigned epId)
 {
     assert(pkt->isWrite());
 
-    M5_VAR_USED Dtu::MessageHeader* header = pkt->getPtr<Dtu::MessageHeader>();
-
     if (!dtu.atomicMode)
     {
-        DPRINTF(DtuDetail, "Wrote message to Scratchpad. Send response back to EP%u at PE%u\n",
-                     header->senderEpId,
-                     header->senderCoreId);
-
         Cycles delay = dtu.ticksToCycles(pkt->headerDelay + pkt->payloadDelay);
         delay += dtu.spmResponseToNocResponseLatency;
 
         pkt->headerDelay = 0;
         pkt->payloadDelay = 0;
+
+        // restore old address
+        auto state = dynamic_cast<Dtu::AddrSenderState*>(pkt->popSenderState());
+        pkt->setAddr(state->addr);
+        pkt->req->setPaddr(state->addr);
+        delete state;
 
         dtu.schedNocResponse(pkt, dtu.clockEdge(delay));
     }

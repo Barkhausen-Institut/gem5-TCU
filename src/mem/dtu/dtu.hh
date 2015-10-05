@@ -33,10 +33,12 @@
 
 #include "mem/dtu/base.hh"
 #include "mem/dtu/regfile.hh"
+#include "mem/dtu/noc_addr.hh"
 #include "params/Dtu.hh"
 
 class MessageUnit;
 class MemoryUnit;
+class XferUnit;
 
 class Dtu : public BaseDtu
 {
@@ -67,12 +69,17 @@ class Dtu : public BaseDtu
         // both should be large enough for pointers.
         uint64_t label;
         uint64_t replyLabel;
+
+        // padding to reach 32 bytes
+        uint64_t : 64;
+        uint16_t : 16;
     } M5_ATTR_PACKED;
 
     enum class NocPacketType
     {
         MESSAGE,
-        REQUEST,
+        READ_REQ,
+        WRITE_REQ,
     };
 
     enum class SpmPacketType
@@ -80,6 +87,7 @@ class Dtu : public BaseDtu
         FORWARDED_MESSAGE,
         FORWARDED_REQUEST,
         LOCAL_REQUEST,
+        TRANSFER_REQUEST,
     };
 
     struct SpmSenderState : public Packet::SenderState
@@ -87,11 +95,17 @@ class Dtu : public BaseDtu
         SpmPacketType packetType;
         unsigned epId; // only valid if packetType != SpmPacketType::FORWARDER_REUEST
         MasterID mid;
+        bool last;
     };
 
     struct NocSenderState : public Packet::SenderState
     {
         NocPacketType packetType;
+    };
+
+    struct AddrSenderState : public Packet::SenderState
+    {
+        Addr addr;
     };
 
     enum class CommandOpcode
@@ -143,11 +157,24 @@ class Dtu : public BaseDtu
     void sendSpmRequest(PacketPtr pkt,
                         unsigned epId,
                         Cycles delay,
-                        SpmPacketType packetType);
+                        SpmPacketType packetType,
+                        bool last);
 
-    void sendNocRequest(PacketPtr pkt,
-                        Cycles delay,
-                        bool isMessage);
+    void sendNocRequest(NocPacketType type,
+                        PacketPtr pkt,
+                        Cycles delay);
+
+    void startTransfer(NocPacketType type,
+                       NocAddr targetAddr,
+                       Addr sourceAddr,
+                       Addr size);
+
+    void transferData(NocPacketType type,
+                      NocAddr targetAddr,
+                      const void* data,
+                      Addr size,
+                      Tick spmPktHeaderDelay,
+                      Tick spmPktPayloadDelay);
 
     void printPacket(PacketPtr pkt) const;
 
@@ -157,7 +184,7 @@ class Dtu : public BaseDtu
 
     void finishCommand();
 
-    void completeLocalSpmRequest(PacketPtr pkt);
+    void completeLocalSpmRequest(PacketPtr pkt, bool last);
 
     void completeNocRequest(PacketPtr pkt) override;
 
@@ -168,6 +195,8 @@ class Dtu : public BaseDtu
     void handleCpuRequest(PacketPtr pkt) override;
 
   private:
+    
+    static bool nocBurstActive;
 
     const MasterID masterId;
 
@@ -180,6 +209,8 @@ class Dtu : public BaseDtu
     MessageUnit *msgUnit;
 
     MemoryUnit *memUnit;
+
+    XferUnit *xferUnit;
 
     EventWrapper<Dtu, &Dtu::executeCommand> executeCommandEvent;
     
@@ -203,6 +234,7 @@ class Dtu : public BaseDtu
     const Cycles nocResponseToSpmRequestLatency;
     const Cycles nocRequestToSpmRequestLatency;
     const Cycles spmResponseToNocResponseLatency;
+    const Cycles transferToSpmRequestLatency;
 };
 
 #endif // __MEM_DTU_DTU_HH__

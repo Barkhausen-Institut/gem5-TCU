@@ -45,15 +45,6 @@ class MessageUnit
     void startTransmission(const Dtu::Command& cmd);
 
     /**
-     * SPM response -> NoC request
-     */
-    void sendToNoc(const uint8_t* data,
-                   Addr messageSize,
-                   bool isReply,
-                   Tick spmPktHeaderDelay,
-                   Tick spmPktPayloadDelay);
-
-    /**
      * Received a message from NoC -> SPM request
      */
     void recvFromNoc(PacketPtr pkt);

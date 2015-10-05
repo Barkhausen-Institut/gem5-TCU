@@ -28,64 +28,76 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
-#ifndef __MEM_DTU_MEM_UNIT_HH__
-#define __MEM_DTU_MEM_UNIT_HH__
+#ifndef __MEM_DTU_XFER_UNIT_HH__
+#define __MEM_DTU_XFER_UNIT_HH__
 
 #include "mem/dtu/dtu.hh"
+#include "mem/dtu/noc_addr.hh"
 
-class MemoryUnit
+class XferUnit
 {
+  private:
+
+    struct Transfer
+    {
+        Dtu::NocPacketType type;
+        Addr sourceAddr;
+        NocAddr targetAddr;
+        Addr size;
+    };
+
+    struct TransferEvent : public Event
+    {
+        XferUnit& xfer;
+
+        Addr blockSize;
+
+        Transfer trans;
+
+        TransferEvent(XferUnit& _xfer, Addr _blockSize)
+            : xfer(_xfer),
+              blockSize(_blockSize),
+              trans()
+        {}
+
+        void process() override;
+
+        const char* description() const override { return "TransferEvent"; }
+
+        const std::string name() const override { return xfer.dtu.name(); }
+    };
+
   public:
 
-    MemoryUnit(Dtu &_dtu) : dtu(_dtu) {}
+    XferUnit(Dtu &_dtu, Addr _blockSize)
+        : dtu(_dtu),
+          blockSize(_blockSize),
+          transferEvent(*this, _blockSize)
+    {}
 
-    /**
-     * Starts a read -> NoC request
-     */
-    void startRead(const Dtu::Command& cmd);
-    
-    /**
-     * Starts a write -> SPM request
-     */
-    void startWrite(const Dtu::Command& cmd);
+    void startTransfer(Dtu::NocPacketType type,
+                       NocAddr targetAddr,
+                       Addr sourceAddr,
+                       Addr size);
 
-    /**
-     * Write: Response from SPM -> NoC request
-     */
-    void sendWriteToNoc(const uint8_t* data,
-                        Addr requestSize,
-                        Tick spmPktHeaderDelay,
-                        Tick spmPktPayloadDelay);
+    void sendToNoc(Dtu::NocPacketType type,
+                   NocAddr targetAddr,
+                   const void* data,
+                   Addr size,
+                   Tick spmPktHeaderDelay,
+                   Tick spmPktPayloadDelay);
 
-    /**
-     * Read: response from SPM -> done
-     */
-    void sendToSpmComplete(PacketPtr pkt, bool last);
-
-    /**
-     * Read: response from remote DTU
-     */
-    void readComplete(PacketPtr pkt);
-
-    /**
-     * Write: response from remote DTU
-     */
-    void writeComplete(PacketPtr pkt);
-
-
-    /**
-     * Received read/write request from NoC -> SPM/regfile request
-     */
-    void recvFromNoc(PacketPtr pkt);
-
-    /**
-     * Remote read/write: response from SPM -> NoC response
-     */
-    void recvFromNocComplete(PacketPtr pkt);
+    void forwardToNoc(const void* data,
+                      Tick spmPktHeaderDelay,
+                      Tick spmPktPayloadDelay);
 
   private:
 
     Dtu &dtu;
+
+    Addr blockSize;
+
+    TransferEvent transferEvent;
 };
 
 #endif

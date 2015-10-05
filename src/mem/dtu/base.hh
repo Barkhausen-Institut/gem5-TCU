@@ -223,8 +223,6 @@ class BaseDtu : public MemObject
 
     BaseMasterPort& getMasterPort(const std::string &if_name, PortID idx) override;
 
-    Addr getNocAddr(unsigned coreId, unsigned epId = 0) const;
-
     void schedNocResponse(PacketPtr pkt, Tick when);
 
     void schedCpuResponse(PacketPtr pkt, Tick when);
@@ -262,12 +260,6 @@ class BaseDtu : public MemObject
   public:
 
     const unsigned coreId;
-
-    const unsigned nocAddrWidth;
-
-    const unsigned nocCoreAddrBits;
-
-    const unsigned nocEpAddrBits;
 
     const Addr regFileBaseAddr;
 
