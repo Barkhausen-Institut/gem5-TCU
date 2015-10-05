@@ -53,6 +53,21 @@
 #include "debug/O3CPU.hh"
 #include "debug/DtuPower.hh"
 
+class WakeupEvent : public Event
+{
+  private:
+    BaseCPU *cpu;
+
+  public:
+    WakeupEvent(BaseCPU *_cpu) : Event(), cpu(_cpu) {}
+
+    void process()
+    {
+        cpu->system->threadContexts[0]->activate();
+        setFlags(AutoDelete);
+    }
+};
+
 template <class Impl>
 FSTranslatingPortProxy&
 O3ThreadContext<Impl>::getVirtProxy()
@@ -113,10 +128,12 @@ O3ThreadContext<Impl>::suspend()
     if (cpu->_denySuspend)
     {
         DPRINTFS(DtuPower, cpu, "Ignoring suspend; messages pending\n");
-        return;
+        cpu->schedule(new WakeupEvent(cpu), cpu->clockEdge(Cycles(1)));
     }
-
-    DPRINTFS(DtuPower, cpu, "Suspending core\n");
+    else
+    {
+        DPRINTFS(DtuPower, cpu, "Suspending core\n");
+    }
 
     thread->lastActivate = curTick();
     thread->lastSuspend = curTick();
