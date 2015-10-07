@@ -68,7 +68,7 @@ XferUnit::TransferEvent::process()
     }
     else
     {
-        xfer.forwardToNoc(NULL, blockSize, 0, 0);
+        xfer.forwardToNoc(NULL, size, 0, 0);
     }
 
     /* to next cacheline */
