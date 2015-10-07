@@ -38,6 +38,7 @@ SimObject('VoltageDomain.py')
 SimObject('System.py')
 SimObject('DVFSHandler.py')
 SimObject('SubSystem.py')
+SimObject('MemSystem.py')
 
 Source('arguments.cc')
 Source('async.cc')
@@ -67,6 +68,7 @@ Source('clock_domain.cc')
 Source('voltage_domain.cc')
 Source('system.cc')
 Source('dvfs_handler.cc')
+Source('mem_system.cc')
 
 if env['TARGET_ISA'] != 'null':
     SimObject('InstTracer.py')

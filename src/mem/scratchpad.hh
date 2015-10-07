@@ -63,8 +63,6 @@ class Scratchpad : public AbstractMemory
 
     const unsigned throughput;
 
-    const std::string initFile;
-
     AddrRange watchRange;
 
   protected:

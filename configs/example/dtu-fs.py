@@ -149,7 +149,7 @@ CPUClass = CpuConfig.get(options.cpu_type)
 def createPE(no, mem=False):
     # each PE is represented by it's own subsystem
     if mem:
-        pe = System(mem_mode = CPUClass.memory_mode())
+        pe = MemSystem(mem_mode = CPUClass.memory_mode())
     else:
         pe = M3X86System(mem_mode = CPUClass.memory_mode())
     setattr(root, 'pe%d' % no, pe)
@@ -279,11 +279,12 @@ for i in range(0, len(cmd_list)):
     pe.cpu.dtb.walker.port = pe.xbar.slave
 
 pe = createPE(options.num_pes, mem=True)
-pe.scratchpad = Scratchpad(in_addr_map = "true")
-pe.scratchpad.cpu_port = pe.xbar.master
-pe.scratchpad.range = MemorySize(options.mem_size).value
-pe.scratchpad.init_file = options.init_mem
-print 'PE%d: memsize=%d KiB' % (options.num_pes, int(pe.scratchpad.range.end) / 1024)
+pe.mem_ctrl = DDR3_1600_x64()
+pe.mem_ctrl.device_size = options.mem_size
+pe.mem_ctrl.range = MemorySize(options.mem_size).value
+pe.mem_ctrl.port = pe.xbar.master
+pe.mem_file = options.init_mem
+print 'PE%d: memsize=%d KiB' % (options.num_pes, int(pe.mem_ctrl.range.end) / 1024)
 print 'PE%d: content=%s' % (options.num_pes, options.init_mem)
 
 # Instantiate configuration

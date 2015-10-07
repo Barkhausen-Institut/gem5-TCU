@@ -42,8 +42,6 @@ class Scratchpad(AbstractMemory):
 
     throughput = Param.Unsigned(64, "Number of bytes that can be read per cycle")
 
-    init_file = Param.String("", "File that should be loaded into the scratchpad")
-
     watch_range_start = Param.Addr(0x0, "The start address of the address range to watch")
     watch_range_end = Param.Addr(0x0, "The end address of the address range to watch (exclusive)")
 

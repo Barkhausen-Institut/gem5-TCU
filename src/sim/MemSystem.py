@@ -26,8 +26,10 @@
 # policies, either expressed or implied, of the FreeBSD Project.
 
 from m5.params import *
-from X86System import X86System
+from System import System
 
-class M3X86System(X86System):
-    type = 'M3X86System'
-    cxx_header = 'arch/x86/m3/system.hh'
+class MemSystem(System):
+    type = 'MemSystem'
+    cxx_header = 'sim/mem_system.hh'
+
+    mem_file = Param.String("", "The file to load into memory");
