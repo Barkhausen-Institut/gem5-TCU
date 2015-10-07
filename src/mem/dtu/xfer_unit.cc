@@ -34,6 +34,7 @@
 #include "debug/DtuPackets.hh"
 #include "debug/DtuSysCalls.hh"
 #include "debug/DtuPower.hh"
+#include "debug/DtuXfers.hh"
 #include "mem/dtu/xfer_unit.hh"
 
 void
@@ -55,6 +56,9 @@ XferUnit::TransferEvent::process()
     if(trans.type != Dtu::NocPacketType::READ_REQ)
     {
         auto pkt = xfer.dtu.generateRequest(trans.sourceAddr, size, MemCmd::ReadReq);
+
+        DPRINTFS(DtuXfers, (&xfer.dtu), "Requesting %lu bytes @ %p from local memory\n",
+                 size, trans.sourceAddr);
 
         xfer.dtu.sendSpmRequest(pkt,
                                 -1,
@@ -85,6 +89,12 @@ XferUnit::startTransfer(Dtu::NocPacketType type,
     transferEvent.trans.size = size;
     transferEvent.trans.type = type;
 
+    DPRINTFS(DtuXfers, (&dtu), "Starting %s transfer of %lu bytes @ %p to %p\n",
+             (type == Dtu::NocPacketType::READ_REQ) ? "read" :
+               ((type == Dtu::NocPacketType::WRITE_REQ) ? "write" : "message"),
+             transferEvent.trans.size, transferEvent.trans.sourceAddr,
+             transferEvent.trans.targetAddr.offset);
+
     dtu.schedule(transferEvent, dtu.clockEdge(Cycles(1)));
 }
 
@@ -110,6 +120,9 @@ XferUnit::sendToNoc(Dtu::NocPacketType type,
                data,
                size);
     }
+
+    DPRINTFS(DtuXfers, (&dtu), "Sending request of %lu bytes @ %p (last=%d)\n",
+             size, targetAddr.offset, targetAddr.last);
 
     /*
      * See sendNocMessage() for an explanation of delay handling.
