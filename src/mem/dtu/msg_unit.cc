@@ -37,24 +37,6 @@
 #include "mem/dtu/msg_unit.hh"
 #include "mem/dtu/noc_addr.hh"
 
-// static const char *syscallNames[] = {
-//     "CREATESRV",
-//     "CREATESESS",
-//     "CREATEGATE",
-//     "CREATEVPE",
-//     "ATTACHRB",
-//     "DETACHRB",
-//     "EXCHANGE",
-//     "VPECTRL",
-//     "DELEGATE",
-//     "OBTAIN",
-//     "ACTIVATE",
-//     "REQMEM",
-//     "DERIVEMEM",
-//     "REVOKE",
-//     "EXIT",
-//     "NOOP",
-// };
 /**
  * The general idea is to have burst transfers that are only used by messages. Bursts mean that a
  * path through the NoC is reserved for that transfer hop by hop by the first packet. Afterwards,
@@ -73,6 +55,25 @@
  * NoC. Thus, we assume that they always do by blocking the whole NoC.
  */
 bool MessageUnit::nocBurstActive = false;
+
+static const char *syscallNames[] = {
+    "CREATESRV",
+    "CREATESESS",
+    "CREATEGATE",
+    "CREATEVPE",
+    "ATTACHRB",
+    "DETACHRB",
+    "EXCHANGE",
+    "VPECTRL",
+    "DELEGATE",
+    "OBTAIN",
+    "ACTIVATE",
+    "REQMEM",
+    "DERIVEMEM",
+    "REVOKE",
+    "EXIT",
+    "NOOP",
+};
 
 void
 MessageUnit::startTransmission(const Dtu::Command& cmd)
@@ -187,13 +188,6 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
         targetCoreId, epid, dtu.regs().get(CmdReg::DATA_ADDR), messageSize);
     DPRINTFS(Dtu, (&dtu), "  header: tgtEP=%u, lbl=%#018lx, rpLbl=%#018lx, rpEP=%u\n",
         targetEpId, label, replyLabel, replyEpId);
-
-    // TODO if (targetCoreId == 0 && cmd.opcode != Dtu::CommandOpcode::REPLY)
-    // {
-    //     size_t sysNo = data[0];
-    //     DPRINTF(DtuSysCalls, "  syscall: %s\n",
-    //         sysNo < (sizeof(syscallNames) / sizeof(syscallNames[0])) ? syscallNames[sysNo] : "Unknown");
-    // }
 
     alignas(sizeof(Dtu::MessageHeader)) Dtu::MessageHeader header;
 
@@ -344,6 +338,13 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
             }
 
             DPRINTFS(DtuBuf, (&dtu), "EP%u: writing message to %#018lx\n", epId, spmAddr);
+        }
+        // we assume here that the kernel does run on PE0 and uses EP0 for syscalls
+        else if(addr.offset == sizeof(Dtu::MessageHeader) && dtu.coreId == 0 && epId == 0)
+        {
+            size_t sysNo = pkt->getPtr<uint8_t>()[0];
+            DPRINTFS(DtuSysCalls, (&dtu), "  syscall: %s\n",
+                sysNo < (sizeof(syscallNames) / sizeof(syscallNames[0])) ? syscallNames[sysNo] : "Unknown");
         }
 
         // remember the old address for later
