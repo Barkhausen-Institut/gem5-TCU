@@ -146,7 +146,7 @@ CPUClass = CpuConfig.get(options.cpu_type)
 #                                                                             #
 ###############################################################################
 
-def createPE(no, mem=False):
+def createPE(no, mem=False, cache=True):
     # each PE is represented by it's own subsystem
     if mem:
         pe = MemSystem(mem_mode = CPUClass.memory_mode())
@@ -162,11 +162,14 @@ def createPE(no, mem=False):
 
     if not mem:
         pe.cachespm = Scratchpad(in_addr_map = "true")
-        pe.cache = L1Cache(size='64kB', assoc=2)
-        pe.cache.forward_snoops = False
-        pe.cache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
-        pe.cache.cpu_side = pe.xbar.master
-        pe.cache.mem_side = pe.cachespm.cpu_port
+        if cache:
+            pe.cache = L1Cache(size='64kB', assoc=2)
+            pe.cache.forward_snoops = False
+            pe.cache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
+            pe.cache.cpu_side = pe.xbar.master
+            pe.cache.mem_side = pe.cachespm.cpu_port
+        else:
+            pe.cachespm.cpu_port = pe.xbar.master
 
         # for now, a bit more to be able to put every application at a different address
         pe.cachespm.range = 8 * 1024 * 1024
@@ -242,7 +245,7 @@ if cmd_list[len(cmd_list) - 1] == '':
 
 # currently, there is just one memory-PE
 for i in range(0, len(cmd_list)):
-    pe = createPE(i)
+    pe = createPE(i, cache=False)
     pe.readfile = "/dev/stdin"
 
     pe.cpu = CPUClass()
