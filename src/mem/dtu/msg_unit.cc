@@ -55,10 +55,38 @@
 //     "EXIT",
 //     "NOOP",
 // };
+/**
+ * The general idea is to have burst transfers that are only used by messages. Bursts mean that a
+ * path through the NoC is reserved for that transfer hop by hop by the first packet. Afterwards,
+ * only packets of that burst transfer or regular transfers can go through that path. Regular
+ * transfers are used for memory requests, because they are always 1 cacheline large and multiple
+ * requests can be treated independently. For messages however, we have to garuantee that each
+ * message arrives contiguously, i.e. messages do not interleave when two are received at one EP
+ * simultaneously. This is garuanteed by bursts.
+ * In order to prevent deadlocks in the NoC, memory transfers can't be done in bursts. Since message
+ * transfers are only initiated by SW, a bursts can never initiate another burst, but only memory
+ * transfers. Thus, we will always make progress.
+ *
+ * This variable indicates whether a burst transfer is running somewhere in the NoC. This does only
+ * roughly simulate bursts of real NoCs, but simulates the worst case. Note that it is not enough
+ * to block sends to a certain receiver, because sends might interfere on their ways through the
+ * NoC. Thus, we assume that they always do by blocking the whole NoC.
+ */
+bool MessageUnit::nocBurstActive = false;
 
 void
 MessageUnit::startTransmission(const Dtu::Command& cmd)
 {
+    // if there is already someone sending, try again later
+    if(nocBurstActive)
+    {
+        DPRINTFS(Dtu, (&dtu), "Message transfer running; retrying later\n");
+        dtu.scheduleCommand(Cycles(1));
+        return;
+    }
+
+    nocBurstActive = true;
+
     unsigned epid = cmd.epId;
 
     Addr messageAddr = dtu.regs().get(CmdReg::DATA_ADDR);
@@ -199,6 +227,9 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
 void
 MessageUnit::msgXferComplete()
 {
+    // we might get called although a memory write is finished, not a message write.
+    // but since we know that we only do one command at a time, we can simply stop the burst
+    nocBurstActive = false;
 }
 
 void

@@ -46,25 +46,6 @@
 #include "sim/system.hh"
 #include "sim/process.hh"
 
-/**
- * The general idea is to have burst transfers that are only used by messages. Bursts mean that a
- * path through the NoC is reserved for that transfer hop by hop by the first packet. Afterwards,
- * only packets of that burst transfer or regular transfers can go through that path. Regular
- * transfers are used for memory requests, because they are always 1 cacheline large and multiple
- * requests can be treated independently. For messages however, we have to garuantee that each
- * message arrives contiguously, i.e. messages do not interleave when two are received at one EP
- * simultaneously. This is garuanteed by bursts.
- * In order to prevent deadlocks in the NoC, memory transfers can't be done in bursts. Since message
- * transfers are only initiated by SW, a bursts can never initiate another burst, but only memory
- * transfers. Thus, we will always make progress.
- *
- * This variable indicates whether a burst transfer is running somewhere in the NoC. This does only
- * roughly simulate bursts of real NoCs, but simulates the worst case. Note that it is not enough
- * to block sends to a certain receiver, because sends might interfere on their ways through the
- * NoC. Thus, we assume that they always do by blocking the whole NoC.
- */
-bool Dtu::nocBurstActive = false;
-
 Dtu::Dtu(DtuParams* p)
   : BaseDtu(p),
     masterId(p->system->getMasterId(name())),
@@ -173,13 +154,6 @@ Dtu::executeCommand()
         break;
     case CommandOpcode::SEND:
     case CommandOpcode::REPLY:
-        // if there is already someone sending, try again later
-        if(nocBurstActive)
-        {
-            schedule(executeCommandEvent, clockEdge(Cycles(1)));
-            return;
-        }
-
         msgUnit->startTransmission(cmd);
         break;
     case CommandOpcode::READ:

@@ -70,6 +70,8 @@ class MessageUnit
 
   private:
 
+    static bool nocBurstActive;
+
     Dtu &dtu;
 };
 
