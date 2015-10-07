@@ -80,6 +80,11 @@ class XferUnit
                        Addr sourceAddr,
                        Addr size);
 
+    void continueTransfer()
+    {
+        transferEvent.process();
+    }
+
     void sendToNoc(Dtu::NocPacketType type,
                    NocAddr targetAddr,
                    const void* data,
@@ -88,6 +93,7 @@ class XferUnit
                    Tick spmPktPayloadDelay);
 
     void forwardToNoc(const void* data,
+                      Addr size,
                       Tick spmPktHeaderDelay,
                       Tick spmPktPayloadDelay);
 

@@ -315,11 +315,17 @@ Dtu::completeNocRequest(PacketPtr pkt)
                  pkt->isRead() ? "read" : "write");
 
     if (pkt->isWrite())
+    {
         memUnit->writeComplete(pkt);
+        if(NocAddr(pkt->getAddr()).last)
+            msgUnit->msgXferComplete();
+    }
     else if (pkt->isRead())
         memUnit->readComplete(pkt);
     else
         panic("unexpected packet type\n");
+    
+    xferUnit->continueTransfer();
 
     freeRequest(pkt);
 }
@@ -350,6 +356,7 @@ Dtu::completeSpmRequest(PacketPtr pkt)
         break;
     case SpmPacketType::TRANSFER_REQUEST:
         xferUnit->forwardToNoc(pkt->getConstPtr<uint8_t>(),
+                               pkt->getSize(),
                                pkt->headerDelay,
                                pkt->payloadDelay);
         break;

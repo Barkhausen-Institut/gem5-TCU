@@ -197,6 +197,11 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
 }
 
 void
+MessageUnit::msgXferComplete()
+{
+}
+
+void
 MessageUnit::incrementReadPtr(unsigned epId)
 {
     Addr readPtr    = dtu.regs().get(epId, EpReg::BUF_RD_PTR);
@@ -274,7 +279,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
     unsigned epId = addr.epId;
 
     Addr spmAddr = dtu.regs().get(epId, EpReg::BUF_WR_PTR);
-
+    
     // is it the first packet?
     if(addr.offset == 0)
     {

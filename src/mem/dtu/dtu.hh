@@ -154,6 +154,8 @@ class Dtu : public BaseDtu
 
     void scheduleFinishOp(Cycles delay) { schedule(finishCommandEvent, clockEdge(delay)); }
 
+    void scheduleCommand(Cycles delay) { schedule(executeCommandEvent, clockEdge(delay)); }
+
     void sendSpmRequest(PacketPtr pkt,
                         unsigned epId,
                         Cycles delay,
@@ -196,8 +198,6 @@ class Dtu : public BaseDtu
 
   private:
     
-    static bool nocBurstActive;
-
     const MasterID masterId;
 
     const bool usePTable;

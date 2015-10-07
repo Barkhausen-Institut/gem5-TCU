@@ -45,6 +45,11 @@ class MessageUnit
     void startTransmission(const Dtu::Command& cmd);
 
     /**
+     * NoC response -> message transfer complete
+     */
+    void msgXferComplete();
+
+    /**
      * Received a message from NoC -> SPM request
      */
     void recvFromNoc(PacketPtr pkt);

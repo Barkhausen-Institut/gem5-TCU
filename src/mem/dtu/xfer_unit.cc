@@ -39,11 +39,22 @@
 void
 XferUnit::TransferEvent::process()
 {
-    assert((trans.sourceAddr & (blockSize - 1)) == 0);
+    // since we are sending the first payload packet directly after the header packet, we might
+    // get here and nothing else is to transfer
+    if(trans.size == 0)
+        return;
+
+    assert(!trans.targetAddr.last);
+    
+    Addr sourceOff = trans.sourceAddr & (blockSize - 1);
+    Addr targetOff = trans.targetAddr.offset & (blockSize - 1);
+    Addr size = std::min(trans.size, blockSize - std::max(sourceOff, targetOff));
+
+    trans.targetAddr.last = trans.size == size;
 
     if(trans.type != Dtu::NocPacketType::READ_REQ)
     {
-        auto pkt = xfer.dtu.generateRequest(trans.sourceAddr, blockSize, MemCmd::ReadReq);
+        auto pkt = xfer.dtu.generateRequest(trans.sourceAddr, size, MemCmd::ReadReq);
 
         xfer.dtu.sendSpmRequest(pkt,
                                 -1,
@@ -53,8 +64,12 @@ XferUnit::TransferEvent::process()
     }
     else
     {
-        xfer.forwardToNoc(NULL, 0, 0);
+        xfer.forwardToNoc(NULL, blockSize, 0, 0);
     }
+
+    /* to next cacheline */
+    trans.sourceAddr += size;
+    trans.size -= size;
 }
 
 void
@@ -81,6 +96,10 @@ XferUnit::sendToNoc(Dtu::NocPacketType type,
                     Tick spmPktHeaderDelay,
                     Tick spmPktPayloadDelay)
 {
+    assert(size > 0);
+    assert(size <= blockSize);
+    assert((targetAddr.offset & (blockSize - 1)) + size <= blockSize);
+
     auto cmd = type == Dtu::NocPacketType::READ_REQ ? MemCmd::ReadReq : MemCmd::WriteReq;
     auto pkt = dtu.generateRequest(targetAddr.getAddr(),
                                    size,
@@ -104,29 +123,25 @@ XferUnit::sendToNoc(Dtu::NocPacketType type,
 
 void
 XferUnit::forwardToNoc(const void* data,
+                       Addr size,
                        Tick spmPktHeaderDelay,
                        Tick spmPktPayloadDelay)
 {
     Transfer &trans = transferEvent.trans;
 
-    Addr requestSize = std::min(trans.size, blockSize);
-
-    trans.targetAddr.last = trans.size == requestSize;
+    assert(size > 0);
+    assert(size <= blockSize);
+    assert((trans.targetAddr.offset & (blockSize - 1)) + size <= blockSize);
 
     sendToNoc(trans.type,
               trans.targetAddr,
               reinterpret_cast<const uint8_t*>(data),
-              requestSize,
+              size,
               spmPktHeaderDelay,
               spmPktPayloadDelay);
 
     /*
      * to next cacheline
      */
-    trans.sourceAddr += requestSize;
-    trans.targetAddr.offset += requestSize;
-    trans.size -= requestSize;
-
-    if (trans.size > 0)
-        dtu.schedule(transferEvent, dtu.clockEdge(Cycles(1)));
+    trans.targetAddr.offset += size;
 }
