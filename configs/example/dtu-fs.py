@@ -133,11 +133,11 @@ CPUClass = CpuConfig.get(options.cpu_type)
 #                                                                             #
 # |-----------------|    |-----------------|    |-----------------|           #
 # | pe0             |    | pe1             |    | pe2             |           #
-# |            cpu  |    |            cpu  |    |            cpu  |           #
-# |             ||  |    |             ||  |    |             ||  |           #
-# |      regs--dtu  |    |      regs--dtu  |    |      regs--dtu  |           #
-# |           // |  |    |           // |  |    |           // |  |           #
-# |   scratchpad |  |    |   scratchpad |  |    |   scratchpad |  |           #
+# |         cpu     |    |         cpu     |    |         cpu     |           #
+# |          ||     |    |          ||     |    |          ||     |           #
+# |   regs--dtu--+  |    |   regs--dtu--+  |    |   regs--dtu--+  |           #
+# |          ||  |  |    |          ||  |  |    |          ||  |  |           #
+# |   SPM/cache  |  |    |   SPM/cache  |  |    |   SPM/cache  |  |           #
 # |              |  |    |              |  |    |              |  |           #
 # |--------------+--|    |--------------+--|    |--------------+--|           #
 #                |                      |                      |              #
