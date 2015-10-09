@@ -306,7 +306,7 @@ pe.mem_ctrl.range = MemorySize(options.mem_size).value
 pe.mem_ctrl.port = pe.xbar.master
 pe.mem_file = options.init_mem
 print 'PE%d: %s' % (options.num_pes, options.init_mem)
-print '     memsize=%d KiB' % (int(pe.mem_ctrl.range.end) / 1024)
+print '     memsize=%d KiB' % (int(pe.mem_ctrl.range.end + 1) / 1024)
 print '     bufsize=%d KiB, blocksize=%d B, count=%d' % \
     (pe.dtu.buf_size.value / 1024, pe.dtu.block_size.value, pe.dtu.buf_count)
 print
