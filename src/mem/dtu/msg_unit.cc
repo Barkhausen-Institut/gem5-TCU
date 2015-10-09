@@ -104,6 +104,8 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
 
     if (isReply)
     {
+        // pay for the functional request; TODO
+
         /*
          * We need to read the header of the received message from scratchpad
          * to determine target core and enspoint ID. This would introduce a
@@ -185,7 +187,7 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
                       messageSize,
                       NULL,
                       header,
-                      Cycles(3));    // pay for the functional request; TODO
+                      dtu.startMsgTransferDelay);
 }
 
 void
@@ -300,9 +302,10 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
             dtu.regs().set(header->replyEpId, EpReg::CREDITS, credits);
         }
 
+        // the message is transferred piece by piece; we can start as soon as we have the header
         Cycles delay = dtu.ticksToCycles(pkt->headerDelay);
         pkt->headerDelay = 0;
-        delay += dtu.nocMessageToSpmRequestLatency;
+        delay += dtu.nocToTransferLatency;
 
         dtu.startTransfer(Dtu::TransferType::REMOTE_WRITE,
                           NocAddr(0, 0),
@@ -322,7 +325,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
         if (!dtu.atomicMode)
         {
             Cycles delay = dtu.ticksToCycles(pkt->headerDelay + pkt->payloadDelay);
-            delay += dtu.spmResponseToNocResponseLatency;
+            delay += dtu.nocToTransferLatency;
 
             pkt->headerDelay = 0;
             pkt->payloadDelay = 0;

@@ -118,6 +118,7 @@ MemoryUnit::readComplete(PacketPtr pkt)
 
     requestSize -= pkt->getSize();
 
+    // since the transfer is done in steps, we can start after the header delay here
     Cycles delay = dtu.ticksToCycles(pkt->headerDelay);
 
     dtu.startTransfer(Dtu::TransferType::LOCAL_WRITE,
@@ -148,7 +149,9 @@ MemoryUnit::writeComplete(PacketPtr pkt)
     // write finished or if requestSize < pkt->getSize(), it was a message
     if(requestSize <= pkt->getSize())
     {
-        Cycles delay = dtu.ticksToCycles(pkt->headerDelay + pkt->payloadDelay);
+        // we don't need to pay the payload delay here because the message basically has no payload
+        // since we only receive an ACK back for writing
+        Cycles delay = dtu.ticksToCycles(pkt->headerDelay);
         dtu.scheduleFinishOp(delay);
     }
     // write needs to be continued
@@ -191,9 +194,9 @@ MemoryUnit::recvFromNoc(PacketPtr pkt)
     }
     else
     {
+        // the same as above: the transfer happens piece by piece and we can start after the header
         Cycles delay = dtu.ticksToCycles(pkt->headerDelay);
         pkt->headerDelay = 0;
-        delay += dtu.nocRequestToSpmRequestLatency;
 
         auto type = pkt->isWrite() ? Dtu::TransferType::REMOTE_WRITE : Dtu::TransferType::REMOTE_READ;
         dtu.startTransfer(type,

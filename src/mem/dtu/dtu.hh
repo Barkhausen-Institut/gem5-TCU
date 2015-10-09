@@ -214,14 +214,13 @@ class Dtu : public BaseDtu
     const size_t bufSize;
 
     const Cycles registerAccessLatency;
-    const Cycles commandToSpmRequestLatency;
+
     const Cycles commandToNocRequestLatency;
-    const Cycles spmResponseToNocRequestLatency;
-    const Cycles nocMessageToSpmRequestLatency;
-    const Cycles nocResponseToSpmRequestLatency;
-    const Cycles nocRequestToSpmRequestLatency;
-    const Cycles spmResponseToNocResponseLatency;
-    const Cycles transferToSpmRequestLatency;
+    const Cycles startMsgTransferDelay;
+
+    const Cycles transferToMemRequestLatency;
+    const Cycles transferToNocLatency;
+    const Cycles nocToTransferLatency;
 };
 
 #endif // __MEM_DTU_DTU_HH__

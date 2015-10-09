@@ -85,7 +85,7 @@ XferUnit::TransferEvent::process()
 
     xfer.dtu.sendSpmRequest(pkt,
                             buf->id,
-                            xfer.dtu.transferToSpmRequestLatency);
+                            xfer.dtu.transferToMemRequestLatency);
 
     // to next block
     localAddr += reqSize;
@@ -146,6 +146,8 @@ XferUnit::startTransfer(Dtu::TransferType type,
     }
     else if(pkt)
     {
+        // here is also no additional delay, because we are doing that in parallel and are already
+        // paying for it at other places
         memcpy(buf->bytes, pkt->getPtr<uint8_t>(), pkt->getSize());
         buf->event.pkt = pkt;
     }
@@ -202,7 +204,7 @@ XferUnit::recvSpmResponse(size_t bufId,
             /*
              * See sendNocMessage() for an explanation of delay handling.
              */
-            Cycles delay = dtu.spmResponseToNocRequestLatency;
+            Cycles delay = dtu.transferToNocLatency;
             delay += dtu.ticksToCycles(spmPktHeaderDelay);
             pkt->payloadDelay = spmPktPayloadDelay;
             dtu.printPacket(pkt);
@@ -230,7 +232,8 @@ XferUnit::recvSpmResponse(size_t bufId,
             if(buf->event.type == Dtu::TransferType::REMOTE_READ)
                 memcpy(buf->event.pkt->getPtr<uint8_t>(), buf->bytes, buf->offset);
 
-            dtu.schedNocResponse(buf->event.pkt, dtu.clockEdge(Cycles(1)));
+            Cycles delay = dtu.transferToNocLatency;
+            dtu.schedNocResponse(buf->event.pkt, dtu.clockEdge(delay));
         }
 
         DPRINTFS(DtuXfers, (&dtu), "[buf%d] Transfer done\n",

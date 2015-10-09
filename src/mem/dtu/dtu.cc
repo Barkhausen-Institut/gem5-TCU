@@ -65,14 +65,11 @@ Dtu::Dtu(DtuParams* p)
     bufCount(p->buf_count),
     bufSize(p->buf_size),
     registerAccessLatency(p->register_access_latency),
-    commandToSpmRequestLatency(p->command_to_spm_request_latency),
     commandToNocRequestLatency(p->command_to_noc_request_latency),
-    spmResponseToNocRequestLatency(p->spm_response_to_noc_request_latency),
-    nocMessageToSpmRequestLatency(p->noc_message_to_spm_request_latency),
-    nocResponseToSpmRequestLatency(p->noc_message_to_spm_request_latency),
-    nocRequestToSpmRequestLatency(p->noc_request_to_spm_request_latency),
-    spmResponseToNocResponseLatency(p->spm_response_to_noc_response_latency),
-    transferToSpmRequestLatency(0)
+    startMsgTransferDelay(p->start_msg_transfer_delay),
+    transferToMemRequestLatency(p->transfer_to_mem_request_latency),
+    transferToNocLatency(p->transfer_to_noc_latency),
+    nocToTransferLatency(p->noc_to_transfer_latency)
 {
     assert(p->buf_size >= maxNocPacketSize);
 }

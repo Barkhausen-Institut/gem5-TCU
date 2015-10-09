@@ -64,10 +64,10 @@ class Dtu(BaseDtu):
     buf_size = Param.MemorySize("1kB", "The size of a temporary buffer")
 
     register_access_latency = Param.Cycles(1, "Latency for CPU register accesses")
-    command_to_spm_request_latency = Param.Cycles(5, "Number of cycles passed from writing a command to the register to issuing a read request on the scratchpad port")
-    command_to_noc_request_latency = Param.Cycles(5, "Number of cycles passed from writing a command to the register to issuing a read request on the NoC port")
-    spm_response_to_noc_request_latency = Param.Cycles(1, "Number of cycles passed from receiving data on the scratchpad port to sending it on the NoC port")
-    noc_message_to_spm_request_latency = Param.Cycles(3, "Number of cycles passsed from receiving a message on the noc port until forwarding it to the spm port");
-    noc_response_to_spm_request_latency = Param.Cycles(3, "Number of cycles passsed from receiving a response on the noc port until forwarding it to the spm port");
-    noc_request_to_spm_request_latency = Param.Cycles(2, "Number of cycles passsed from receiving a request on the noc port until forwarding it to the spm port");
-    spm_response_to_noc_response_latency = Param.Cycles(1, "Number of cycles passed from receiving a response from the schratchpad to forwarding it to the NoC");
+    
+    command_to_noc_request_latency = Param.Cycles(1, "Number of cycles passed from writing a command to the register to starting the command")
+    start_msg_transfer_delay = Param.Cycles(2, "Number of cycles passed to build the header and start the message transfer")
+
+    transfer_to_mem_request_latency = Param.Cycles(1, "Number of cycles passed for requesting something from local memory, when transferring")
+    transfer_to_noc_latency = Param.Cycles(3, "Number of cycles passed from collecting the data in the buffer until sending it to the NoC");
+    noc_to_transfer_latency = Param.Cycles(3, "Number of cycles passed from receiving data from the NoC until starting to transfer it to the local memory");
