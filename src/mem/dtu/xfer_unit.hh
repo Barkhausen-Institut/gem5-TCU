@@ -44,8 +44,6 @@ class XferUnit
     {
         XferUnit& xfer;
 
-        size_t blockSize;
-
         Buffer *buf;
 
         Dtu::TransferType type;
@@ -56,9 +54,8 @@ class XferUnit
         bool isMsg;
         bool last;
 
-        TransferEvent(XferUnit& _xfer, size_t _blockSize)
+        TransferEvent(XferUnit& _xfer)
             : xfer(_xfer),
-              blockSize(_blockSize),
               buf(),
               type(),
               localAddr(),
@@ -78,9 +75,9 @@ class XferUnit
 
     struct Buffer
     {
-        Buffer(XferUnit& _xfer, int _id, size_t _blockSize, size_t size)
+        Buffer(XferUnit& _xfer, int _id, size_t size)
             : id(_id),
-              event(_xfer, _blockSize),
+              event(_xfer),
               bytes(new uint8_t[size]),
               offset(),
               free(true)

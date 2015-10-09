@@ -45,7 +45,7 @@ XferUnit::XferUnit(Dtu &_dtu, size_t _blockSize, size_t _bufCount, size_t _bufSi
       bufs(new Buffer*[bufCount])
 {
     for(size_t i = 0; i < bufCount; ++i)
-        bufs[i] = new Buffer(*this, i, _blockSize, bufSize);
+        bufs[i] = new Buffer(*this, i, bufSize);
 }
 
 XferUnit::~XferUnit()
