@@ -50,19 +50,6 @@ class MemoryUnit
     void startWrite(const Dtu::Command& cmd);
 
     /**
-     * Write: Response from SPM -> NoC request
-     */
-    void sendWriteToNoc(const uint8_t* data,
-                        Addr requestSize,
-                        Tick spmPktHeaderDelay,
-                        Tick spmPktPayloadDelay);
-
-    /**
-     * Read: response from SPM -> done
-     */
-    void sendToSpmComplete(PacketPtr pkt, bool last);
-
-    /**
      * Read: response from remote DTU
      */
     void readComplete(PacketPtr pkt);
@@ -77,11 +64,6 @@ class MemoryUnit
      * Received read/write request from NoC -> SPM/regfile request
      */
     void recvFromNoc(PacketPtr pkt);
-
-    /**
-     * Remote read/write: response from SPM -> NoC response
-     */
-    void recvFromNocComplete(PacketPtr pkt);
 
   private:
 

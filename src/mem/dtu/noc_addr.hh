@@ -35,38 +35,36 @@
 
 /**
  * 
- *  64        56     48  47          0
- *   ---------------------------------
- *   | coreId  | epId | L |  offset  |
- *   ---------------------------------
+ *  64        56     48          0
+ *   -----------------------------
+ *   | coreId  | epId |  offset  |
+ *   -----------------------------
  */
 class NocAddr
 {
   public:
 
-    explicit NocAddr() : coreId(), epId(), last(), offset()
+    explicit NocAddr() : coreId(), epId(), offset()
     {}
 
     explicit NocAddr(Addr addr)
         : coreId((addr >> 56) & ((1 << 8) - 1)),
           epId((addr >> 48) & ((1 << 8) - 1)),
-          last((addr >> 47) & 1),
-          offset(addr & ((static_cast<Addr>(1) << 47) - 1))
+          offset(addr & ((static_cast<Addr>(1) << 48) - 1))
     {}
 
     explicit NocAddr(unsigned _coreId, unsigned _epId, Addr _offset = 0)
-        : coreId(_coreId), epId(_epId), last(), offset(_offset)
+        : coreId(_coreId), epId(_epId), offset(_offset)
     {}
 
     Addr getAddr() const
     {
         assert((coreId & ~((1 << 8) - 1)) == 0);
         assert((epId & ~((1 << 8) - 1)) == 0);
-        assert((offset & ~((static_cast<Addr>(1) << 47) - 1)) == 0);
+        assert((offset & ~((static_cast<Addr>(1) << 48) - 1)) == 0);
 
         Addr res = static_cast<Addr>(coreId) << 56;
         res |= static_cast<Addr>(epId) << 48;
-        res |= static_cast<Addr>(last) << 47;
         res |= offset;
         return res;
     }
@@ -74,8 +72,6 @@ class NocAddr
     unsigned coreId;
 
     unsigned epId;
-
-    bool last;
 
     Addr offset;
 };

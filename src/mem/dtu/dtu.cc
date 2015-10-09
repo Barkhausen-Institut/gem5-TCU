@@ -54,7 +54,7 @@ Dtu::Dtu(DtuParams* p)
     regFile(name() + ".regFile", p->num_endpoints),
     msgUnit(new MessageUnit(*this)),
     memUnit(new MemoryUnit(*this)),
-    xferUnit(new XferUnit(*this, sizeof(MessageHeader))),
+    xferUnit(new XferUnit(*this, sizeof(MessageHeader), p->buf_count, p->buf_size)),
     executeCommandEvent(*this),
     finishCommandEvent(*this),
     atomicMode(p->system->isAtomicMode()),
@@ -70,7 +70,9 @@ Dtu::Dtu(DtuParams* p)
     nocRequestToSpmRequestLatency(p->noc_request_to_spm_request_latency),
     spmResponseToNocResponseLatency(p->spm_response_to_noc_response_latency),
     transferToSpmRequestLatency(0)
-{}
+{
+    assert(p->buf_size >= maxNocPacketSize);
+}
 
 Dtu::~Dtu()
 {
@@ -207,17 +209,13 @@ Dtu::updateSuspendablePin()
 void
 Dtu::sendSpmRequest(PacketPtr pkt,
                     unsigned epId,
-                    Cycles delay,
-                    SpmPacketType packetType,
-                    bool last)
+                    Cycles delay)
 {
     pkt->setAddr(translate(pkt->getAddr()));
 
     auto senderState = new SpmSenderState();
     senderState->epId = epId;
-    senderState->packetType = packetType;
     senderState->mid = pkt->req->masterId();
-    senderState->last = last;
 
     // ensure that this packet has our master id (not the id of a master in a different PE)
     pkt->req->setMasterId(masterId);
@@ -255,31 +253,21 @@ Dtu::sendNocRequest(NocPacketType type, PacketPtr pkt, Cycles delay)
 }
 
 void
-Dtu::startTransfer(NocPacketType type,
+Dtu::startTransfer(TransferType type,
                    NocAddr targetAddr,
                    Addr sourceAddr,
-                   Addr size)
+                   Addr size,
+                   PacketPtr pkt,
+                   MessageHeader* header,
+                   Cycles delay)
 {
     xferUnit->startTransfer(type,
                             targetAddr,
                             sourceAddr,
-                            size);
-}
-
-void
-Dtu::transferData(NocPacketType type,
-                  NocAddr targetAddr,
-                  const void* data,
-                  Addr size,
-                  Tick spmPktHeaderDelay,
-                  Tick spmPktPayloadDelay)
-{
-    xferUnit->sendToNoc(type,
-                        targetAddr,
-                        data,
-                        size,
-                        spmPktHeaderDelay,
-                        spmPktPayloadDelay);
+                            size,
+                            pkt,
+                            header,
+                            delay);
 }
 
 void
@@ -289,19 +277,11 @@ Dtu::completeNocRequest(PacketPtr pkt)
                  pkt->isRead() ? "read" : "write");
 
     if (pkt->isWrite())
-    {
         memUnit->writeComplete(pkt);
-        if(NocAddr(pkt->getAddr()).last)
-            msgUnit->msgXferComplete();
-    }
     else if (pkt->isRead())
         memUnit->readComplete(pkt);
     else
         panic("unexpected packet type\n");
-    
-    xferUnit->continueTransfer();
-
-    freeRequest(pkt);
 }
 
 void
@@ -317,50 +297,13 @@ Dtu::completeSpmRequest(PacketPtr pkt)
     // set the old master id again
     pkt->req->setMasterId(senderState->mid);
 
-    switch (senderState->packetType)
-    {
-    case SpmPacketType::LOCAL_REQUEST:
-        completeLocalSpmRequest(pkt, senderState->last);
-        break;
-    case SpmPacketType::FORWARDED_MESSAGE:
-        msgUnit->recvFromNocComplete(pkt, senderState->epId);
-        break;
-    case SpmPacketType::FORWARDED_REQUEST:
-        memUnit->recvFromNocComplete(pkt);
-        break;
-    case SpmPacketType::TRANSFER_REQUEST:
-        xferUnit->forwardToNoc(pkt->getConstPtr<uint8_t>(),
-                               pkt->getSize(),
-                               pkt->headerDelay,
-                               pkt->payloadDelay);
-        break;
-    default:
-        panic("Unexpected SpmPacketType\n");
-    }
+    xferUnit->recvSpmResponse(senderState->epId,
+                              pkt->getConstPtr<uint8_t>(),
+                              pkt->getSize(),
+                              pkt->headerDelay,
+                              pkt->payloadDelay);
 
     delete senderState;
-}
-
-void
-Dtu::completeLocalSpmRequest(PacketPtr pkt, bool last)
-{
-    Command cmd = getCommand();
-
-    if (cmd.opcode == CommandOpcode::WRITE)
-    {
-        memUnit->sendWriteToNoc(pkt->getConstPtr<uint8_t>(),
-                                           pkt->getSize(),
-                                           pkt->headerDelay,
-                                           pkt->payloadDelay);
-    }
-    else if (cmd.opcode == CommandOpcode::READ)
-    {
-        memUnit->sendToSpmComplete(pkt, last);
-    }
-    else
-        // TODO error handling
-        panic("Unexpected mode!\n");
-
     freeRequest(pkt);
 }
 

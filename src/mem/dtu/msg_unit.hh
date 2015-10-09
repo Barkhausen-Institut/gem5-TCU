@@ -45,19 +45,9 @@ class MessageUnit
     void startTransmission(const Dtu::Command& cmd);
 
     /**
-     * NoC response -> message transfer complete
-     */
-    void msgXferComplete();
-
-    /**
      * Received a message from NoC -> SPM request
      */
     void recvFromNoc(PacketPtr pkt);
-
-    /**
-     * Receive message: got response from SPM -> NoC response
-     */
-    void recvFromNocComplete(PacketPtr pkt, unsigned epId);
 
     /**
      * Move read pointer forward
@@ -69,8 +59,6 @@ class MessageUnit
     bool incrementWritePtr(unsigned epId);
 
   private:
-
-    static bool nocBurstActive;
 
     Dtu &dtu;
 };

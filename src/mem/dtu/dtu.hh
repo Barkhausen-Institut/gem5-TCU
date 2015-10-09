@@ -82,30 +82,23 @@ class Dtu : public BaseDtu
         WRITE_REQ,
     };
 
-    enum class SpmPacketType
+    enum class TransferType
     {
-        FORWARDED_MESSAGE,
-        FORWARDED_REQUEST,
-        LOCAL_REQUEST,
-        TRANSFER_REQUEST,
+        LOCAL_READ,     // we are reading stuff out of our local memory and send it
+        LOCAL_WRITE,    // we have received the read response from somebody and write it to local mem
+        REMOTE_WRITE,   // we received something and write it to our local memory
+        REMOTE_READ     // we should send something from our local memory to somebody else
     };
 
     struct SpmSenderState : public Packet::SenderState
     {
-        SpmPacketType packetType;
         unsigned epId; // only valid if packetType != SpmPacketType::FORWARDER_REUEST
         MasterID mid;
-        bool last;
     };
 
     struct NocSenderState : public Packet::SenderState
     {
         NocPacketType packetType;
-    };
-
-    struct AddrSenderState : public Packet::SenderState
-    {
-        Addr addr;
     };
 
     enum class CommandOpcode
@@ -158,25 +151,19 @@ class Dtu : public BaseDtu
 
     void sendSpmRequest(PacketPtr pkt,
                         unsigned epId,
-                        Cycles delay,
-                        SpmPacketType packetType,
-                        bool last);
+                        Cycles delay);
 
     void sendNocRequest(NocPacketType type,
                         PacketPtr pkt,
                         Cycles delay);
 
-    void startTransfer(NocPacketType type,
+    void startTransfer(TransferType type,
                        NocAddr targetAddr,
                        Addr sourceAddr,
-                       Addr size);
-
-    void transferData(NocPacketType type,
-                      NocAddr targetAddr,
-                      const void* data,
-                      Addr size,
-                      Tick spmPktHeaderDelay,
-                      Tick spmPktPayloadDelay);
+                       Addr size,
+                       PacketPtr pkt = NULL,
+                       MessageHeader* header = NULL,
+                       Cycles delay = Cycles(0));
 
     void printPacket(PacketPtr pkt) const;
 
@@ -185,8 +172,6 @@ class Dtu : public BaseDtu
     void executeCommand();
 
     void finishCommand();
-
-    void completeLocalSpmRequest(PacketPtr pkt, bool last);
 
     void completeNocRequest(PacketPtr pkt) override;
 

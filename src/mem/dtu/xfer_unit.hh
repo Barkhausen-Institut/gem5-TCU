@@ -38,26 +38,33 @@ class XferUnit
 {
   private:
 
-    struct Transfer
-    {
-        Dtu::NocPacketType type;
-        Addr sourceAddr;
-        NocAddr targetAddr;
-        Addr size;
-    };
+    struct Buffer;
 
     struct TransferEvent : public Event
     {
         XferUnit& xfer;
 
-        Addr blockSize;
+        size_t blockSize;
 
-        Transfer trans;
+        Buffer *buf;
 
-        TransferEvent(XferUnit& _xfer, Addr _blockSize)
+        Dtu::TransferType type;
+        Addr localAddr;
+        NocAddr remoteAddr;
+        size_t size;
+        PacketPtr pkt;
+        bool isMsg;
+
+        TransferEvent(XferUnit& _xfer, size_t _blockSize)
             : xfer(_xfer),
               blockSize(_blockSize),
-              trans()
+              buf(),
+              type(),
+              localAddr(),
+              remoteAddr(),
+              size(),
+              pkt(),
+              isMsg()
         {}
 
         void process() override;
@@ -67,43 +74,102 @@ class XferUnit
         const std::string name() const override { return xfer.dtu.name(); }
     };
 
+    struct Buffer
+    {
+        Buffer(XferUnit& _xfer, int _id, size_t _blockSize, size_t size)
+            : id(_id),
+              event(_xfer, _blockSize),
+              bytes(new uint8_t[size]),
+              offset(),
+              free(true)
+        {
+            event.buf = this;
+        }
+
+        ~Buffer()
+        {
+            delete[] bytes;
+        }
+
+        int id;
+        TransferEvent event;
+        uint8_t *bytes;
+        size_t offset;
+        bool free;
+    };
+
+    struct StartEvent : public Event
+    {
+        XferUnit& xfer;
+
+        Dtu::TransferType type;
+        NocAddr remoteAddr;
+        Addr localAddr;
+        size_t size;
+        PacketPtr pkt;
+        Dtu::MessageHeader* header;
+
+        StartEvent(XferUnit& _xfer,
+                   Dtu::TransferType _type,
+                   NocAddr _remoteAddr,
+                   Addr _localAddr,
+                   size_t _size,
+                   PacketPtr _pkt,
+                   Dtu::MessageHeader* _header)
+            : xfer(_xfer),
+              type(_type),
+              remoteAddr(_remoteAddr),
+              localAddr(_localAddr),
+              size(_size),
+              pkt(_pkt),
+              header(_header)
+        {}
+
+        void process() override
+        {
+            // the delay was already paid earlier
+            if(xfer.startTransfer(type, remoteAddr, localAddr, size, pkt, header, Cycles(0)))
+                setFlags(AutoDelete);
+        }
+
+        const char* description() const override { return "StartEvent"; }
+
+        const std::string name() const override { return xfer.dtu.name(); }
+    };
+
   public:
 
-    XferUnit(Dtu &_dtu, Addr _blockSize)
-        : dtu(_dtu),
-          blockSize(_blockSize),
-          transferEvent(*this, _blockSize)
-    {}
+    XferUnit(Dtu &_dtu, size_t _blockSize, size_t _bufCount, size_t _bufSize);
 
-    void startTransfer(Dtu::NocPacketType type,
-                       NocAddr targetAddr,
-                       Addr sourceAddr,
-                       Addr size);
+    ~XferUnit();
 
-    void continueTransfer()
-    {
-        transferEvent.process();
-    }
+    bool startTransfer(Dtu::TransferType type,
+                       NocAddr remoteAddr,
+                       Addr localAddr,
+                       size_t size,
+                       PacketPtr pkt,
+                       Dtu::MessageHeader* header,
+                       Cycles delay);
 
-    void sendToNoc(Dtu::NocPacketType type,
-                   NocAddr targetAddr,
-                   const void* data,
-                   Addr size,
-                   Tick spmPktHeaderDelay,
-                   Tick spmPktPayloadDelay);
+    void recvSpmResponse(size_t bufId,
+                         const void* data,
+                         size_t size,
+                         Tick spmPktHeaderDelay,
+                         Tick spmPktPayloadDelay);
 
-    void forwardToNoc(const void* data,
-                      Addr size,
-                      Tick spmPktHeaderDelay,
-                      Tick spmPktPayloadDelay);
+  private:
+
+    Buffer* allocateBuf();
 
   private:
 
     Dtu &dtu;
 
-    Addr blockSize;
+    size_t blockSize;
 
-    TransferEvent transferEvent;
+    size_t bufCount;
+    size_t bufSize;
+    Buffer **bufs;
 };
 
 #endif

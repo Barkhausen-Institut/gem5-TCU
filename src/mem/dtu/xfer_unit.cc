@@ -37,124 +37,221 @@
 #include "debug/DtuXfers.hh"
 #include "mem/dtu/xfer_unit.hh"
 
+XferUnit::XferUnit(Dtu &_dtu, size_t _blockSize, size_t _bufCount, size_t _bufSize)
+    : dtu(_dtu),
+      blockSize(_blockSize),
+      bufCount(_bufCount),
+      bufSize(_bufSize),
+      bufs(new Buffer*[bufCount])
+{
+    for(size_t i = 0; i < bufCount; ++i)
+        bufs[i] = new Buffer(*this, i, _blockSize, bufSize);
+}
+
+XferUnit::~XferUnit()
+{
+    for(size_t i = 0; i < bufCount; ++i)
+        delete bufs[i];
+    delete[] bufs;
+}
+
 void
 XferUnit::TransferEvent::process()
 {
-    // since we are sending the first payload packet directly after the header packet, we might
-    // get here and nothing else is to transfer
-    if(trans.size == 0)
-        return;
+    assert(size > 0);
 
-    assert(!trans.targetAddr.last);
-    
-    Addr sourceOff = trans.sourceAddr & (blockSize - 1);
-    Addr targetOff = trans.targetAddr.offset & (blockSize - 1);
-    Addr size = std::min(trans.size, blockSize - std::max(sourceOff, targetOff));
+    Addr localOff = localAddr & (blockSize - 1);
+    Addr reqSize = std::min(size, blockSize - localOff);
 
-    trans.targetAddr.last = trans.size == size;
+    bool writing = type == Dtu::TransferType::REMOTE_WRITE || type == Dtu::TransferType::LOCAL_WRITE;
 
-    if(trans.type != Dtu::NocPacketType::READ_REQ)
+    auto cmd = writing ? MemCmd::WriteReq : MemCmd::ReadReq;
+    auto pkt = xfer.dtu.generateRequest(localAddr, reqSize, cmd);
+
+    if(writing)
     {
-        auto pkt = xfer.dtu.generateRequest(trans.sourceAddr, size, MemCmd::ReadReq);
+        assert(buf->offset + reqSize <= xfer.bufSize);
 
-        DPRINTFS(DtuXfers, (&xfer.dtu), "Requesting %lu bytes @ %p from local memory\n",
-                 size, trans.sourceAddr);
+        memcpy(pkt->getPtr<uint8_t>(), buf->bytes + buf->offset, reqSize);
 
-        xfer.dtu.sendSpmRequest(pkt,
-                                -1,
-                                xfer.dtu.transferToSpmRequestLatency,
-                                Dtu::SpmPacketType::TRANSFER_REQUEST,
-                                false);
+        buf->offset += reqSize;
+    }
+
+    DPRINTFS(DtuXfers, (&xfer.dtu), "[buf%d] %s %lu bytes @ %p in local memory\n",
+             buf->id,
+             writing ? "Writing" : "Reading",
+             reqSize,
+             localAddr);
+
+    xfer.dtu.sendSpmRequest(pkt,
+                            buf->id,
+                            xfer.dtu.transferToSpmRequestLatency);
+
+    // to next block
+    localAddr += reqSize;
+    size -= reqSize;
+}
+
+bool
+XferUnit::startTransfer(Dtu::TransferType type,
+                        NocAddr remoteAddr,
+                        Addr localAddr,
+                        Addr size,
+                        PacketPtr pkt,
+                        Dtu::MessageHeader* header,
+                        Cycles delay)
+{
+    Buffer *buf = allocateBuf();
+
+    bool writing = type == Dtu::TransferType::REMOTE_WRITE || type == Dtu::TransferType::LOCAL_WRITE;
+
+    // try again later, if there is no free buffer
+    if(!buf)
+    {
+        DPRINTFS(DtuXfers, (&dtu), "Delaying %s transfer of %lu bytes @ %p (all buffers busy)\n",
+                 writing ? "spm-write" : "spm-read",
+                 size,
+                 localAddr);
+
+        auto event = new StartEvent(*this, type, remoteAddr, localAddr, size, pkt, header);
+
+        dtu.schedule(event, dtu.clockEdge(Cycles(delay + 1)));
+
+        return false;
+    }
+
+    // use that buffer and start transferring the data into it
+    assert(buf->event.size == 0);
+
+    buf->event.type = type;
+    buf->event.remoteAddr = remoteAddr;
+    buf->event.localAddr = localAddr;
+    buf->event.size = size;
+    buf->event.pkt = NULL;
+    buf->event.isMsg = false;
+
+    // if there is data to put into the buffer, do that now
+    if(header)
+    {
+        // note that this causes no additional delay because we assume that we create the header
+        // directly in the buffer (and if there is no one free we just wait until there is)
+        memcpy(buf->bytes, header, sizeof(Dtu::MessageHeader));
+        buf->event.isMsg = true;
+
+        // for the header
+        buf->offset += sizeof(Dtu::MessageHeader);
+        delete header;
+    }
+    else if(pkt)
+    {
+        memcpy(buf->bytes, pkt->getPtr<uint8_t>(), pkt->getSize());
+        buf->event.pkt = pkt;
+    }
+
+    DPRINTFS(DtuXfers, (&dtu), "[buf%d] Starting %s transfer of %lu bytes @ %p\n",
+             buf->id,
+             writing ? "spm-write" : "spm-read",
+             size,
+             localAddr);
+
+    dtu.schedule(buf->event, dtu.clockEdge(Cycles(delay + 1)));
+
+    return true;
+}
+
+void
+XferUnit::recvSpmResponse(size_t bufId,
+                          const void* data,
+                          Addr size,
+                          Tick spmPktHeaderDelay,
+                          Tick spmPktPayloadDelay)
+{
+    Buffer *buf = bufs[bufId];
+
+    assert(!buf->free);
+
+    if(buf->event.type == Dtu::TransferType::LOCAL_READ ||
+       buf->event.type == Dtu::TransferType::REMOTE_READ)
+    {
+        assert(buf->offset + size <= bufSize);
+
+        memcpy(buf->bytes + buf->offset, data, size);
+
+        buf->offset += size;
+    }
+
+    // nothing more to copy?
+    if(buf->event.size == 0)
+    {
+        if(buf->event.type == Dtu::TransferType::LOCAL_READ)
+        {
+            DPRINTFS(DtuXfers, (&dtu), "[buf%d] Sending NoC request of %lu bytes @ %p\n",
+                     buf->id,
+                     buf->offset,
+                     buf->event.remoteAddr.offset);
+
+            auto pkt = dtu.generateRequest(buf->event.remoteAddr.getAddr(),
+                                           buf->offset,
+                                           MemCmd::WriteReq);
+            memcpy(pkt->getPtr<uint8_t>(),
+                   buf->bytes,
+                   buf->offset);
+
+            /*
+             * See sendNocMessage() for an explanation of delay handling.
+             */
+            Cycles delay = dtu.spmResponseToNocRequestLatency;
+            delay += dtu.ticksToCycles(spmPktHeaderDelay);
+            pkt->payloadDelay = spmPktPayloadDelay;
+            dtu.printPacket(pkt);
+            auto type = buf->event.isMsg ? Dtu::NocPacketType::MESSAGE : Dtu::NocPacketType::WRITE_REQ; 
+            dtu.sendNocRequest(type, pkt, delay);
+        }
+        else if(buf->event.type == Dtu::TransferType::LOCAL_WRITE)
+        {
+            dtu.scheduleFinishOp(Cycles(1));
+
+            dtu.freeRequest(buf->event.pkt);
+        }
+        else
+        {
+            DPRINTFS(DtuXfers, (&dtu), "[buf%d] Sending NoC response of %lu bytes\n",
+             buf->id,
+             buf->offset);
+
+            // TODO should we respond earlier for remote reads? i.e. as soon as its in the buffer
+            assert(buf->event.pkt != NULL);
+
+            buf->event.pkt->makeResponse();
+
+            if(buf->event.type == Dtu::TransferType::REMOTE_READ)
+                memcpy(buf->event.pkt->getPtr<uint8_t>(), buf->bytes, buf->offset);
+
+            dtu.schedNocResponse(buf->event.pkt, dtu.clockEdge(Cycles(1)));
+        }
+
+        DPRINTFS(DtuXfers, (&dtu), "[buf%d] Transfer done\n",
+                 buf->id);
+
+        // we're done with this buffer now
+        buf->free = true;
     }
     else
+        buf->event.process();
+}
+
+XferUnit::Buffer*
+XferUnit::allocateBuf()
+{
+    for(size_t i = 0; i < bufCount; ++i)
     {
-        xfer.forwardToNoc(NULL, size, 0, 0);
+        if(bufs[i]->free)
+        {
+            bufs[i]->free = false;
+            bufs[i]->offset = 0;
+            return bufs[i];
+        }
     }
 
-    /* to next cacheline */
-    trans.sourceAddr += size;
-    trans.size -= size;
-}
-
-void
-XferUnit::startTransfer(Dtu::NocPacketType type,
-                        NocAddr targetAddr,
-                        Addr sourceAddr,
-                        Addr size)
-{
-    assert(transferEvent.trans.size == 0);
-
-    transferEvent.trans.targetAddr = targetAddr;
-    transferEvent.trans.sourceAddr = sourceAddr;
-    transferEvent.trans.size = size;
-    transferEvent.trans.type = type;
-
-    DPRINTFS(DtuXfers, (&dtu), "Starting %s transfer of %lu bytes @ %p to %p\n",
-             (type == Dtu::NocPacketType::READ_REQ) ? "read" :
-               ((type == Dtu::NocPacketType::WRITE_REQ) ? "write" : "message"),
-             transferEvent.trans.size, transferEvent.trans.sourceAddr,
-             transferEvent.trans.targetAddr.offset);
-
-    dtu.schedule(transferEvent, dtu.clockEdge(Cycles(1)));
-}
-
-void
-XferUnit::sendToNoc(Dtu::NocPacketType type,
-                    NocAddr targetAddr,
-                    const void* data,
-                    Addr size,
-                    Tick spmPktHeaderDelay,
-                    Tick spmPktPayloadDelay)
-{
-    assert(size > 0);
-    assert(size <= blockSize);
-    assert((targetAddr.offset & (blockSize - 1)) + size <= blockSize);
-
-    auto cmd = type == Dtu::NocPacketType::READ_REQ ? MemCmd::ReadReq : MemCmd::WriteReq;
-    auto pkt = dtu.generateRequest(targetAddr.getAddr(),
-                                   size,
-                                   cmd);
-    if(data)
-    {
-        memcpy(pkt->getPtr<uint8_t>(),
-               data,
-               size);
-    }
-
-    DPRINTFS(DtuXfers, (&dtu), "Sending request of %lu bytes @ %p (last=%d)\n",
-             size, targetAddr.offset, targetAddr.last);
-
-    /*
-     * See sendNocMessage() for an explanation of delay handling.
-     */
-    Cycles delay = dtu.spmResponseToNocRequestLatency;
-    delay += dtu.ticksToCycles(spmPktHeaderDelay);
-    pkt->payloadDelay = spmPktPayloadDelay;
-    dtu.printPacket(pkt);
-    dtu.sendNocRequest(type, pkt, delay);
-}
-
-void
-XferUnit::forwardToNoc(const void* data,
-                       Addr size,
-                       Tick spmPktHeaderDelay,
-                       Tick spmPktPayloadDelay)
-{
-    Transfer &trans = transferEvent.trans;
-
-    assert(size > 0);
-    assert(size <= blockSize);
-    assert((trans.targetAddr.offset & (blockSize - 1)) + size <= blockSize);
-
-    sendToNoc(trans.type,
-              trans.targetAddr,
-              reinterpret_cast<const uint8_t*>(data),
-              size,
-              spmPktHeaderDelay,
-              spmPktPayloadDelay);
-
-    /*
-     * to next cacheline
-     */
-    trans.targetAddr.offset += size;
+    return NULL;
 }

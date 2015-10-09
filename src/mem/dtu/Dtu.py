@@ -58,6 +58,9 @@ class Dtu(BaseDtu):
 
     max_noc_packet_size = Param.MemorySize("512B", "Maximum size of a NoC packet")
 
+    buf_count = Param.Unsigned(4, "The number of temporary buffers for transfers")
+    buf_size = Param.MemorySize("1kB", "The size of a temporary buffer")
+
     register_access_latency = Param.Cycles(1, "Latency for CPU register accesses")
     command_to_spm_request_latency = Param.Cycles(5, "Number of cycles passed from writing a command to the register to issuing a read request on the scratchpad port")
     command_to_noc_request_latency = Param.Cycles(5, "Number of cycles passed from writing a command to the register to issuing a read request on the NoC port")
