@@ -56,7 +56,9 @@ class Dtu(BaseDtu):
 
     num_cmd_epid_bits = Param.Unsigned(8, "Number of bits used to identify the endpoint in a command")
 
-    max_noc_packet_size = Param.MemorySize("512B", "Maximum size of a NoC packet")
+    max_noc_packet_size = Param.MemorySize("1kB", "Maximum size of a NoC packet (needs to be the same for all DTUs)")
+
+    block_size = Param.MemorySize("64B", "The block size with which to access the local memory")
 
     buf_count = Param.Unsigned(4, "The number of temporary buffers for transfers")
     buf_size = Param.MemorySize("1kB", "The size of a temporary buffer")

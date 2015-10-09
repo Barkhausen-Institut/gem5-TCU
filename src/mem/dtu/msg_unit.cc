@@ -174,6 +174,8 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
     header->label        = static_cast<uint64_t>(label);
     header->replyLabel   = static_cast<uint64_t>(replyLabel);
 
+    assert(messageSize + sizeof(Dtu::MessageHeader) <= dtu.maxNocPacketSize);
+
     // start the transfer of the payload
     dtu.startTransfer(Dtu::TransferType::LOCAL_READ,
                       NocAddr(targetCoreId, targetEpId),

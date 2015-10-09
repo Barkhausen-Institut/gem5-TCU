@@ -60,8 +60,8 @@ XferUnit::TransferEvent::process()
 {
     assert(size > 0);
 
-    Addr localOff = localAddr & (blockSize - 1);
-    Addr reqSize = std::min(size, blockSize - localOff);
+    Addr localOff = localAddr & (xfer.blockSize - 1);
+    Addr reqSize = std::min(size, xfer.blockSize - localOff);
 
     bool writing = type == Dtu::TransferType::REMOTE_WRITE || type == Dtu::TransferType::LOCAL_WRITE;
 

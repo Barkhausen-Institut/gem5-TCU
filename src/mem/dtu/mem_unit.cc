@@ -52,7 +52,7 @@ MemoryUnit::startRead(const Dtu::Command& cmd)
     continueEvent.cmd = cmd;
     continueEvent.read = true;
 
-    requestSize = std::min(dtu.bufSize, requestSize);
+    requestSize = std::min(dtu.maxNocPacketSize, requestSize);
     if(requestSize == 0)
         return;
 
@@ -89,7 +89,7 @@ MemoryUnit::startWrite(const Dtu::Command& cmd)
     continueEvent.cmd = cmd;
     continueEvent.read = false;
 
-    requestSize = std::min(dtu.bufSize, requestSize);
+    requestSize = std::min(dtu.maxNocPacketSize, requestSize);
     if(requestSize == 0)
         return;
 

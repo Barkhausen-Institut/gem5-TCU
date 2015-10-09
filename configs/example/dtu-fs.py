@@ -188,6 +188,15 @@ def createPE(no, mem=False, cache=True):
     pe.dtu.noc_master_port = root.noc.slave
     pe.dtu.noc_slave_port  = root.noc.master
 
+    # for memory PEs or PEs with SPM, we do not need a buffer. for the sake of an easy implementation
+    # we just make the buffer very large and the block size as well, so that we can read a packet
+    # from SPM/DRAM into the buffer and send it from there. Since that costs no simulated time,
+    # it is the same as having no buffer.
+    if mem or not cache:
+        pe.dtu.block_size = '64kB'
+        pe.dtu.buf_size = pe.dtu.block_size
+        pe.dtu.buf_count = 1
+
     pe.system_port = pe.xbar.slave
 
     return pe
@@ -245,7 +254,7 @@ if cmd_list[len(cmd_list) - 1] == '':
 
 # currently, there is just one memory-PE
 for i in range(0, len(cmd_list)):
-    pe = createPE(i, cache=False)
+    pe = createPE(i, cache=True)
     pe.readfile = "/dev/stdin"
 
     pe.cpu = CPUClass()

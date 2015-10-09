@@ -69,10 +69,6 @@ class Dtu : public BaseDtu
         // both should be large enough for pointers.
         uint64_t label;
         uint64_t replyLabel;
-
-        // padding to reach 32 bytes
-        uint64_t : 64;
-        uint16_t : 16;
     } M5_ATTR_PACKED;
 
     enum class NocPacketType
@@ -211,6 +207,8 @@ class Dtu : public BaseDtu
     const Addr maxNocPacketSize;
 
     const unsigned numCmdEpidBits;
+
+    const size_t blockSize;
 
     const size_t bufCount;
     const size_t bufSize;
