@@ -114,10 +114,11 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
          * additional delay is payed.
          */
 
-        auto pkt = dtu.generateRequest(
-                dtu.translate(dtu.regs().get(epid, EpReg::BUF_RD_PTR)),
-                sizeof(Dtu::MessageHeader),
-                MemCmd::ReadReq);
+        Addr msgAddr = dtu.regs().get(epid, EpReg::BUF_RD_PTR);
+
+        auto pkt = dtu.generateRequest(dtu.translate(msgAddr),
+                                       sizeof(Dtu::MessageHeader),
+                                       MemCmd::ReadReq);
 
         dtu.sendFunctionalMemRequest(pkt);
 
@@ -134,9 +135,9 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
         replyLabel   = 0;
 
         // disable replies for this message
-        auto hpkt = dtu.generateRequest(
-                dtu.translate(dtu.regs().get(epid, EpReg::BUF_RD_PTR)),
-                sizeof(h->flags), MemCmd::WriteReq);
+        auto hpkt = dtu.generateRequest(dtu.translate(msgAddr),
+                                        sizeof(h->flags),
+                                        MemCmd::WriteReq);
         h->flags &= ~Dtu::REPLY_ENABLED;
         memcpy(hpkt->getPtr<uint8_t>(), &h->flags, sizeof(h->flags));
 
