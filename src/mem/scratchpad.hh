@@ -63,8 +63,6 @@ class Scratchpad : public AbstractMemory
 
     const unsigned throughput;
 
-    AddrRange watchRange;
-
   protected:
 
     Tick recvAtomic(PacketPtr pkt);

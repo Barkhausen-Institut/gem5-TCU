@@ -30,6 +30,7 @@
 
 #include "debug/DtuSlavePort.hh"
 #include "debug/DtuMasterPort.hh"
+#include "debug/MemoryWatch.hh"
 #include "mem/dtu/base.hh"
 #include "mem/dtu/noc_addr.hh"
 
@@ -225,9 +226,13 @@ BaseDtu::BaseDtu(BaseDtuParams* p)
     dcacheMasterPort(*this),
     icacheSlavePort(icacheMasterPort, *this),
     dcacheSlavePort(dcacheMasterPort, *this),
+    watchRange(1, 0),
     coreId(p->core_id),
     regFileBaseAddr(p->regfile_base_addr)
-{}
+{
+    if(p->watch_range_start != p->watch_range_end)
+        watchRange = AddrRange(p->watch_range_start, p->watch_range_end - 1);
+}
 
 void
 BaseDtu::init()
@@ -284,6 +289,22 @@ BaseDtu::getSlavePort(const std::string &if_name, PortID idx)
 }
 
 void
+BaseDtu::checkWatchRange(PacketPtr pkt)
+{
+    if(watchRange.valid())
+    {
+        AddrRange range(pkt->getAddr(), pkt->getAddr() + pkt->getSize() - 1);
+        if(watchRange.intersects(range))
+        {
+            DPRINTF(MemoryWatch, "%s access to address range %p..%p (watching %p..%p)\n",
+                pkt->isRead() ? "read" : "write", range.start(), range.end(),
+                watchRange.start(), watchRange.end());
+            DDUMP(MemoryWatch, pkt->getPtr<uint8_t>(), pkt->getSize());
+        }
+    }
+}
+
+void
 BaseDtu::schedNocResponse(PacketPtr pkt, Tick when)
 {
     nocSlavePort.schedTimingResp(pkt, when);
@@ -304,6 +325,8 @@ BaseDtu::schedNocRequest(PacketPtr pkt, Tick when)
 void
 BaseDtu::schedMemRequest(PacketPtr pkt, Tick when)
 {
+    checkWatchRange(pkt);
+
     dcacheMasterPort.schedTimingReq(pkt, when);
 }
 
@@ -316,5 +339,7 @@ BaseDtu::sendAtomicNocRequest(PacketPtr pkt)
 void
 BaseDtu::sendAtomicMemRequest(PacketPtr pkt)
 {
+    checkWatchRange(pkt);
+
     dcacheMasterPort.sendAtomic(pkt);
 }

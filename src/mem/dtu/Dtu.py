@@ -47,6 +47,9 @@ class BaseDtu(MemObject):
     regfile_base_addr = Param.Addr(0xF0000000, "Register file address")
     core_id = Param.Unsigned("ID of the core this DTU belongs to")
 
+    watch_range_start = Param.Addr(0x0, "The start address of the address range to watch")
+    watch_range_end = Param.Addr(0x0, "The end address of the address range to watch (exclusive)")
+
 class Dtu(BaseDtu):
     type = 'Dtu'
     cxx_header = "mem/dtu/dtu.hh"

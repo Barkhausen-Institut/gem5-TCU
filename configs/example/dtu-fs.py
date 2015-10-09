@@ -177,11 +177,6 @@ def createPE(no, mem=False, cache=True):
         # for now, a bit more to be able to put every application at a different address
         pe.cachespm.range = 8 * 1024 * 1024
 
-    if options.watch_pe == no:
-        print "PE%u: watching memory %#x..%#x" % (no, options.watch_start, options.watch_end)
-        pe.cachespm.watch_range_start = options.watch_start
-        pe.cachespm.watch_range_end = options.watch_end
-
     pe.dtu = Dtu()
     pe.dtu.core_id = no
 
@@ -199,6 +194,11 @@ def createPE(no, mem=False, cache=True):
         pe.dtu.block_size = pe.dtu.max_noc_packet_size
         pe.dtu.buf_size = pe.dtu.max_noc_packet_size
         pe.dtu.buf_count = 1
+
+    if options.watch_pe == no:
+        print "PE%u: watching memory %#x..%#x" % (no, options.watch_start, options.watch_end)
+        pe.dtu.watch_range_start = options.watch_start
+        pe.dtu.watch_range_end = options.watch_end
 
     pe.system_port = pe.xbar.slave
 

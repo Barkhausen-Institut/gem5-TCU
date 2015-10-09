@@ -200,6 +200,8 @@ class BaseDtu : public MemObject
             else if(AddrRange(pkt->getAddr(),
                 pkt->getAddr() + (pkt->getSize() - 1)).isSubset(AddrRange(0, 8 * 1024 * 1024 - 1)))
             {
+                dtu.checkWatchRange(pkt);
+
                 if(functional)
                     port.sendFunctional(pkt);
                 else
@@ -245,6 +247,8 @@ class BaseDtu : public MemObject
 
   protected:
 
+    void checkWatchRange(PacketPtr pkt);
+
     NocMasterPort  nocMasterPort;
 
     NocSlavePort   nocSlavePort;
@@ -256,6 +260,8 @@ class BaseDtu : public MemObject
     CacheSlavePort<ICacheMasterPort> icacheSlavePort;
 
     CacheSlavePort<DCacheMasterPort> dcacheSlavePort;
+
+    AddrRange watchRange;
 
   public:
 
