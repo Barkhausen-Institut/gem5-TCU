@@ -219,8 +219,8 @@ XferUnit::recvSpmResponse(size_t bufId,
         else
         {
             DPRINTFS(DtuXfers, (&dtu), "[buf%d] Sending NoC response of %lu bytes\n",
-             buf->id,
-             buf->offset);
+                     buf->id,
+                     buf->offset);
 
             // TODO should we respond earlier for remote reads? i.e. as soon as its in the buffer
             assert(buf->event.pkt != NULL);

@@ -63,7 +63,6 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
 
     Addr messageAddr = dtu.regs().get(CmdReg::DATA_ADDR);
     Addr messageSize = dtu.regs().get(CmdReg::DATA_SIZE);
-    unsigned credits = dtu.regs().get(epid, EpReg::CREDITS);
 
     bool isReply = cmd.opcode == Dtu::CommandOpcode::REPLY;
 
@@ -74,6 +73,7 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
      */
     if (!isReply)
     {
+        unsigned credits = dtu.regs().get(epid, EpReg::CREDITS);
         unsigned maxMessageSize = dtu.regs().get(epid, EpReg::MAX_MSG_SIZE);
 
         // TODO error handling
@@ -88,7 +88,8 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
             return;
         }
 
-        DPRINTFS(DtuDetail, (&dtu), "EP%u pays %u credits\n", epid, maxMessageSize);
+        DPRINTFS(DtuDetail, (&dtu), "EP%u pays %u credits\n",
+                 epid, maxMessageSize);
 
         // Pay some credits
         credits -= maxMessageSize;
@@ -155,10 +156,11 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
     }
 
     DPRINTFS(Dtu, (&dtu), "\e[1m[%s -> %u]\e[0m with EP%u of %#018lx:%lu\n",
-        isReply ? "rp" : "sd",
-        targetCoreId, epid, dtu.regs().get(CmdReg::DATA_ADDR), messageSize);
+             isReply ? "rp" : "sd",
+             targetCoreId, epid, dtu.regs().get(CmdReg::DATA_ADDR), messageSize);
+
     DPRINTFS(Dtu, (&dtu), "  header: tgtEP=%u, lbl=%#018lx, rpLbl=%#018lx, rpEP=%u\n",
-        targetEpId, label, replyLabel, replyEpId);
+             targetEpId, label, replyLabel, replyEpId);
 
     Dtu::MessageHeader* header = new Dtu::MessageHeader;
 
@@ -201,9 +203,9 @@ MessageUnit::incrementReadPtr(unsigned epId)
         readPtr = bufferAddr;
 
     DPRINTFS(DtuBuf, (&dtu), "EP%u: increment read pointer to %#018lx (msgCount=%u)\n",
-                 epId,
-                 readPtr,
-                 messageCount - 1);
+             epId,
+             readPtr,
+             messageCount - 1);
 
     // TODO error handling
     assert(messageCount != 0);
@@ -235,9 +237,9 @@ MessageUnit::incrementWritePtr(unsigned epId)
         writePtr = bufferAddr;
 
     DPRINTFS(DtuBuf, (&dtu), "EP%u: increment write pointer to %#018lx (msgCount=%u)\n",
-                 epId,
-                 writePtr,
-                 messageCount + 1);
+             epId,
+             writePtr,
+             messageCount + 1);
 
     if(messageCount == bufferSize)
     {
