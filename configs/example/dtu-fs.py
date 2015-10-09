@@ -59,6 +59,9 @@ parser.add_option("--cpu-type", type="choice", default="atomic",
                   choices=CpuConfig.cpu_names(),
                   help = "type of cpu to run with")
 
+parser.add_option("--caches", action="store_true",
+                  help = "use caches in the PEs")
+
 parser.add_option("-c", "--cmd", default="", type="string",
                   help="comma separated list of binaries")
 parser.add_option("--init_mem", default="", type="string",
@@ -254,7 +257,7 @@ if cmd_list[len(cmd_list) - 1] == '':
 
 # currently, there is just one memory-PE
 for i in range(0, len(cmd_list)):
-    pe = createPE(i, cache=True)
+    pe = createPE(i, cache=options.caches)
     pe.readfile = "/dev/stdin"
 
     pe.cpu = CPUClass()
