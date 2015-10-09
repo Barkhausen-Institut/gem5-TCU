@@ -49,7 +49,6 @@
 Dtu::Dtu(DtuParams* p)
   : BaseDtu(p),
     masterId(p->system->getMasterId(name())),
-    usePTable(p->use_ptable),
     system(p->system),
     regFile(name() + ".regFile", p->num_endpoints),
     msgUnit(new MessageUnit(*this)),
@@ -79,20 +78,6 @@ Dtu::~Dtu()
     delete xferUnit;
     delete memUnit;
     delete msgUnit;
-}
-
-Addr
-Dtu::translate(Addr vaddr)
-{
-    Addr paddr = vaddr;
-    if (usePTable)
-    {
-        M5_VAR_USED auto pTable = system->threadContexts[0]->getProcessPtr()->pTable;
-        assert(pTable != nullptr);
-        assert(pTable->translate(vaddr, paddr));
-    }
-
-    return paddr;
 }
 
 PacketPtr
@@ -211,7 +196,7 @@ Dtu::sendMemRequest(PacketPtr pkt,
                     unsigned epId,
                     Cycles delay)
 {
-    pkt->setAddr(translate(pkt->getAddr()));
+    pkt->setAddr(pkt->getAddr());
 
     auto senderState = new MemSenderState();
     senderState->epId = epId;

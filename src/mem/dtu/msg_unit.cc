@@ -116,7 +116,7 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
 
         Addr msgAddr = dtu.regs().get(epid, EpReg::BUF_RD_PTR);
 
-        auto pkt = dtu.generateRequest(dtu.translate(msgAddr),
+        auto pkt = dtu.generateRequest(msgAddr,
                                        sizeof(Dtu::MessageHeader),
                                        MemCmd::ReadReq);
 
@@ -135,7 +135,7 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
         replyLabel   = 0;
 
         // disable replies for this message
-        auto hpkt = dtu.generateRequest(dtu.translate(msgAddr),
+        auto hpkt = dtu.generateRequest(msgAddr,
                                         sizeof(h->flags),
                                         MemCmd::WriteReq);
         h->flags &= ~Dtu::REPLY_ENABLED;

@@ -126,8 +126,6 @@ class Dtu : public BaseDtu
 
     RegFile &regs() { return regFile; }
     
-    Addr translate(Addr vaddr);
-    
     PacketPtr generateRequest(Addr addr, Addr size, MemCmd cmd);
     void freeRequest(PacketPtr pkt);
 
@@ -181,8 +179,6 @@ class Dtu : public BaseDtu
   private:
     
     const MasterID masterId;
-
-    const bool usePTable;
 
     System *system;
 
