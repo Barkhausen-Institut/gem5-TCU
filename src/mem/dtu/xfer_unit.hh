@@ -154,11 +154,11 @@ class XferUnit
                        Cycles delay,
                        bool last);
 
-    void recvSpmResponse(size_t bufId,
+    void recvMemResponse(size_t bufId,
                          const void* data,
                          size_t size,
-                         Tick spmPktHeaderDelay,
-                         Tick spmPktPayloadDelay);
+                         Tick headerDelay,
+                         Tick payloadDelay);
 
   private:
 

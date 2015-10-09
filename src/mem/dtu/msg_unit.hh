@@ -40,12 +40,12 @@ class MessageUnit
     MessageUnit(Dtu &_dtu) : dtu(_dtu) {}
 
     /**
-     * Start message transmission -> SPM request
+     * Start message transmission -> Mem request
      */
     void startTransmission(const Dtu::Command& cmd);
 
     /**
-     * Received a message from NoC -> SPM request
+     * Received a message from NoC -> Mem request
      */
     void recvFromNoc(PacketPtr pkt);
 

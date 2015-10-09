@@ -72,7 +72,7 @@ class MemoryUnit
     void startRead(const Dtu::Command& cmd);
     
     /**
-     * Starts a write -> SPM request
+     * Starts a write -> Mem request
      */
     void startWrite(const Dtu::Command& cmd);
 
@@ -88,7 +88,7 @@ class MemoryUnit
 
 
     /**
-     * Received read/write request from NoC -> SPM/regfile request
+     * Received read/write request from NoC -> Mem/regfile request
      */
     void recvFromNoc(PacketPtr pkt);
 

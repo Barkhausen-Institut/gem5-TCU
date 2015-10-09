@@ -107,9 +107,9 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
         // pay for the functional request; TODO
 
         /*
-         * We need to read the header of the received message from scratchpad
+         * We need to read the header of the received message from local memory
          * to determine target core and enspoint ID. This would introduce a
-         * second scratchpad request and would make the control flow more
+         * second local memory request and would make the control flow more
          * complicated. To simplify things a functional request is used and an
          * additional delay is payed.
          */
@@ -119,7 +119,7 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
                 sizeof(Dtu::MessageHeader),
                 MemCmd::ReadReq);
 
-        dtu.sendFunctionalSpmRequest(pkt);
+        dtu.sendFunctionalMemRequest(pkt);
 
         auto h = pkt->getPtr<Dtu::MessageHeader>();
         assert(h->flags & Dtu::REPLY_ENABLED);
@@ -140,7 +140,7 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
         h->flags &= ~Dtu::REPLY_ENABLED;
         memcpy(hpkt->getPtr<uint8_t>(), &h->flags, sizeof(h->flags));
 
-        dtu.sendFunctionalSpmRequest(hpkt);
+        dtu.sendFunctionalMemRequest(hpkt);
 
         dtu.freeRequest(hpkt);
         dtu.freeRequest(pkt);
@@ -267,12 +267,12 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
 
     unsigned epId = addr.epId;
 
-    Addr spmAddr = dtu.regs().get(epId, EpReg::BUF_WR_PTR);
+    Addr localAddr = dtu.regs().get(epId, EpReg::BUF_WR_PTR);
     
     Dtu::MessageHeader* header = pkt->getPtr<Dtu::MessageHeader>();
 
     DPRINTFS(Dtu, (&dtu), "\e[1m[rv <- %u]\e[0m %lu bytes on EP%u to %#018lx\n",
-        header->senderCoreId, header->length, epId, spmAddr);
+        header->senderCoreId, header->length, epId, localAddr);
     dtu.printPacket(pkt);
 
     if(dtu.coreId == 0 && epId == 0)
@@ -309,7 +309,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
 
         dtu.startTransfer(Dtu::TransferType::REMOTE_WRITE,
                           NocAddr(0, 0),
-                          spmAddr,
+                          localAddr,
                           pkt->getSize(),
                           pkt,
                           NULL,

@@ -207,13 +207,13 @@ Dtu::updateSuspendablePin()
 }
 
 void
-Dtu::sendSpmRequest(PacketPtr pkt,
+Dtu::sendMemRequest(PacketPtr pkt,
                     unsigned epId,
                     Cycles delay)
 {
     pkt->setAddr(translate(pkt->getAddr()));
 
-    auto senderState = new SpmSenderState();
+    auto senderState = new MemSenderState();
     senderState->epId = epId;
     senderState->mid = pkt->req->masterId();
 
@@ -224,12 +224,12 @@ Dtu::sendSpmRequest(PacketPtr pkt,
 
     if (atomicMode)
     {
-        sendAtomicSpmRequest(pkt);
-        completeSpmRequest(pkt);
+        sendAtomicMemRequest(pkt);
+        completeMemRequest(pkt);
     }
     else
     {
-        schedSpmRequest(pkt, clockEdge(delay));
+        schedMemRequest(pkt, clockEdge(delay));
     }
 }
 
@@ -287,19 +287,19 @@ Dtu::completeNocRequest(PacketPtr pkt)
 }
 
 void
-Dtu::completeSpmRequest(PacketPtr pkt)
+Dtu::completeMemRequest(PacketPtr pkt)
 {
     assert(!pkt->isError());
     assert(pkt->isResponse());
 
-    DPRINTF(DtuDetail, "Received response from scratchpad.\n");
+    DPRINTF(DtuDetail, "Received response from local memory.\n");
 
-    auto senderState = dynamic_cast<SpmSenderState*>(pkt->popSenderState());
+    auto senderState = dynamic_cast<MemSenderState*>(pkt->popSenderState());
 
     // set the old master id again
     pkt->req->setMasterId(senderState->mid);
 
-    xferUnit->recvSpmResponse(senderState->epId,
+    xferUnit->recvMemResponse(senderState->epId,
                               pkt->getConstPtr<uint8_t>(),
                               pkt->getSize(),
                               pkt->headerDelay,

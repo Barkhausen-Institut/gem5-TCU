@@ -70,7 +70,7 @@ BaseDtu::DCacheMasterPort::recvTimingResp(PacketPtr pkt)
         return dtu.dcacheSlavePort.sendTimingResp(pkt);
 
     // otherwise from the DTU
-    dtu.completeSpmRequest(pkt);
+    dtu.completeMemRequest(pkt);
     return true;
 }
 
@@ -302,7 +302,7 @@ BaseDtu::schedNocRequest(PacketPtr pkt, Tick when)
 }
 
 void
-BaseDtu::schedSpmRequest(PacketPtr pkt, Tick when)
+BaseDtu::schedMemRequest(PacketPtr pkt, Tick when)
 {
     dcacheMasterPort.schedTimingReq(pkt, when);
 }
@@ -314,7 +314,7 @@ BaseDtu::sendAtomicNocRequest(PacketPtr pkt)
 }
 
 void
-BaseDtu::sendAtomicSpmRequest(PacketPtr pkt)
+BaseDtu::sendAtomicMemRequest(PacketPtr pkt)
 {
     dcacheMasterPort.sendAtomic(pkt);
 }

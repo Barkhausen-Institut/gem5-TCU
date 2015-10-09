@@ -229,15 +229,15 @@ class BaseDtu : public MemObject
 
     void schedNocRequest(PacketPtr pkt, Tick when);
 
-    void schedSpmRequest(PacketPtr pkt, Tick when);
+    void schedMemRequest(PacketPtr pkt, Tick when);
 
     void sendAtomicNocRequest(PacketPtr pkt);
 
-    void sendAtomicSpmRequest(PacketPtr pkt);
+    void sendAtomicMemRequest(PacketPtr pkt);
 
     virtual void completeNocRequest(PacketPtr pkt) = 0;
 
-    virtual void completeSpmRequest(PacketPtr pkt) = 0;
+    virtual void completeMemRequest(PacketPtr pkt) = 0;
 
     virtual void handleNocRequest(PacketPtr pkt) = 0;
 

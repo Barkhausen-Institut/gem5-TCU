@@ -83,7 +83,7 @@ XferUnit::TransferEvent::process()
              reqSize,
              localAddr);
 
-    xfer.dtu.sendSpmRequest(pkt,
+    xfer.dtu.sendMemRequest(pkt,
                             buf->id,
                             xfer.dtu.transferToMemRequestLatency);
 
@@ -110,7 +110,7 @@ XferUnit::startTransfer(Dtu::TransferType type,
     if(!buf)
     {
         DPRINTFS(DtuXfers, (&dtu), "Delaying %s transfer of %lu bytes @ %p (all buffers busy)\n",
-                 writing ? "spm-write" : "spm-read",
+                 writing ? "mem-write" : "mem-read",
                  size,
                  localAddr);
 
@@ -154,7 +154,7 @@ XferUnit::startTransfer(Dtu::TransferType type,
 
     DPRINTFS(DtuXfers, (&dtu), "[buf%d] Starting %s transfer of %lu bytes @ %p\n",
              buf->id,
-             writing ? "spm-write" : "spm-read",
+             writing ? "mem-write" : "mem-read",
              size,
              localAddr);
 
@@ -164,11 +164,11 @@ XferUnit::startTransfer(Dtu::TransferType type,
 }
 
 void
-XferUnit::recvSpmResponse(size_t bufId,
+XferUnit::recvMemResponse(size_t bufId,
                           const void* data,
                           Addr size,
-                          Tick spmPktHeaderDelay,
-                          Tick spmPktPayloadDelay)
+                          Tick headerDelay,
+                          Tick payloadDelay)
 {
     Buffer *buf = bufs[bufId];
 
@@ -205,8 +205,8 @@ XferUnit::recvSpmResponse(size_t bufId,
              * See sendNocMessage() for an explanation of delay handling.
              */
             Cycles delay = dtu.transferToNocLatency;
-            delay += dtu.ticksToCycles(spmPktHeaderDelay);
-            pkt->payloadDelay = spmPktPayloadDelay;
+            delay += dtu.ticksToCycles(headerDelay);
+            pkt->payloadDelay = payloadDelay;
             dtu.printPacket(pkt);
             auto type = buf->event.isMsg ? Dtu::NocPacketType::MESSAGE : Dtu::NocPacketType::WRITE_REQ; 
             dtu.sendNocRequest(type, pkt, delay);

@@ -86,9 +86,9 @@ class Dtu : public BaseDtu
         REMOTE_READ     // we should send something from our local memory to somebody else
     };
 
-    struct SpmSenderState : public Packet::SenderState
+    struct MemSenderState : public Packet::SenderState
     {
-        unsigned epId; // only valid if packetType != SpmPacketType::FORWARDER_REUEST
+        unsigned epId;
         MasterID mid;
     };
 
@@ -139,13 +139,13 @@ class Dtu : public BaseDtu
 
     void forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest);
 
-    void sendFunctionalSpmRequest(PacketPtr pkt) { dcacheMasterPort.sendFunctional(pkt); }
+    void sendFunctionalMemRequest(PacketPtr pkt) { dcacheMasterPort.sendFunctional(pkt); }
 
     void scheduleFinishOp(Cycles delay) { schedule(finishCommandEvent, clockEdge(delay)); }
 
     void scheduleCommand(Cycles delay) { schedule(executeCommandEvent, clockEdge(delay)); }
 
-    void sendSpmRequest(PacketPtr pkt,
+    void sendMemRequest(PacketPtr pkt,
                         unsigned epId,
                         Cycles delay);
 
@@ -172,7 +172,7 @@ class Dtu : public BaseDtu
 
     void completeNocRequest(PacketPtr pkt) override;
 
-    void completeSpmRequest(PacketPtr pkt) override;
+    void completeMemRequest(PacketPtr pkt) override;
 
     void handleNocRequest(PacketPtr pkt) override;
 
