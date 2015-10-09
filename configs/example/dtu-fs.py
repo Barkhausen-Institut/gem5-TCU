@@ -196,8 +196,8 @@ def createPE(no, mem=False, cache=True):
     # from SPM/DRAM into the buffer and send it from there. Since that costs no simulated time,
     # it is the same as having no buffer.
     if mem or not cache:
-        pe.dtu.block_size = '64kB'
-        pe.dtu.buf_size = pe.dtu.block_size
+        pe.dtu.block_size = pe.dtu.max_noc_packet_size
+        pe.dtu.buf_size = pe.dtu.max_noc_packet_size
         pe.dtu.buf_count = 1
 
     pe.system_port = pe.xbar.slave
