@@ -48,15 +48,21 @@ MemoryUnit::startRead(const Dtu::Command& cmd)
     Addr remoteSize = dtu.regs().get(cmd.epId, EpReg::REQ_REM_SIZE);
     unsigned flags = dtu.regs().get(cmd.epId, EpReg::REQ_FLAGS);
 
+    // we'll need that in readComplete
+    continueEvent.cmd = cmd;
+    continueEvent.read = true;
+
+    requestSize = std::min(dtu.bufSize, requestSize);
+    if(requestSize == 0)
+        return;
+
     DPRINTFS(Dtu, (&dtu), "\e[1m[rd -> %u]\e[0m at offset %#018lx with EP%u into %#018lx:%lu\n",
         targetCoreId, offset, cmd.epId, localAddr, requestSize);
 
     // TODO error handling
     assert(flags & Dtu::MemoryFlags::READ);
-    assert(requestSize > 0);
     assert(requestSize + offset >= requestSize);
     assert(requestSize + offset <= remoteSize);
-    //assert(requestSize < maxNocPacketSize);
 
     auto pkt = dtu.generateRequest(NocAddr(targetCoreId, 0, remoteAddr + offset).getAddr(),
                                    requestSize,
@@ -79,16 +85,21 @@ MemoryUnit::startWrite(const Dtu::Command& cmd)
     Addr targetAddr = dtu.regs().get(cmd.epId, EpReg::REQ_REM_ADDR);
     Addr remoteSize = dtu.regs().get(cmd.epId, EpReg::REQ_REM_SIZE);
 
+    // we'll need that in writeComplete
+    continueEvent.cmd = cmd;
+    continueEvent.read = false;
+
+    requestSize = std::min(dtu.bufSize, requestSize);
+    if(requestSize == 0)
+        return;
+
     DPRINTFS(Dtu, (&dtu), "\e[1m[wr -> %u]\e[0m at offset %#018lx with EP%u from %#018lx:%lu\n",
         targetCoreId, offset, cmd.epId, localAddr, requestSize);
 
     // TODO error handling
-    assert(requestSize > 0);
     assert(flags & Dtu::MemoryFlags::WRITE);
-    assert(requestSize == dtu.regs().get(CmdReg::DATA_SIZE));
     assert(requestSize + offset >= requestSize);
     assert(requestSize + offset <= remoteSize);
-    //assert(requestSize <= maxNocPacketSize);
 
     dtu.startTransfer(Dtu::TransferType::LOCAL_READ,
                       NocAddr(targetCoreId, 0, targetAddr + offset),
@@ -99,9 +110,13 @@ MemoryUnit::startWrite(const Dtu::Command& cmd)
 void
 MemoryUnit::readComplete(PacketPtr pkt)
 {
-    Addr localAddr = dtu.regs().get(CmdReg::DATA_ADDR);
-
     dtu.printPacket(pkt);
+
+    Addr localAddr = dtu.regs().get(CmdReg::DATA_ADDR);
+    Addr requestSize = dtu.regs().get(CmdReg::DATA_SIZE);
+    Addr offset = dtu.regs().get(CmdReg::OFFSET);
+
+    requestSize -= pkt->getSize();
 
     Cycles delay = dtu.ticksToCycles(pkt->headerDelay);
 
@@ -111,15 +126,44 @@ MemoryUnit::readComplete(PacketPtr pkt)
                       pkt->getSize(),
                       pkt,
                       NULL,
-                      delay);
+                      delay,
+                      requestSize == 0);
+
+    if(requestSize > 0)
+    {
+        dtu.regs().set(CmdReg::DATA_SIZE, requestSize);
+        dtu.regs().set(CmdReg::DATA_ADDR, localAddr + pkt->getSize());
+        dtu.regs().set(CmdReg::OFFSET, offset + pkt->getSize());
+
+        // transfer the next packet
+        dtu.schedule(continueEvent, dtu.clockEdge(Cycles(1)));
+    }
 }
 
 void
 MemoryUnit::writeComplete(PacketPtr pkt)
 {
-    Cycles delay = dtu.ticksToCycles(pkt->headerDelay + pkt->payloadDelay);
+    Addr requestSize = dtu.regs().get(CmdReg::DATA_SIZE);
 
-    dtu.scheduleFinishOp(delay);
+    // write finished or if requestSize < pkt->getSize(), it was a message
+    if(requestSize <= pkt->getSize())
+    {
+        Cycles delay = dtu.ticksToCycles(pkt->headerDelay + pkt->payloadDelay);
+        dtu.scheduleFinishOp(delay);
+    }
+    // write needs to be continued
+    else if(requestSize > pkt->getSize())
+    {
+        Addr localAddr = dtu.regs().get(CmdReg::DATA_ADDR);
+        Addr offset = dtu.regs().get(CmdReg::OFFSET);
+
+        dtu.regs().set(CmdReg::DATA_SIZE, requestSize - pkt->getSize());
+        dtu.regs().set(CmdReg::DATA_ADDR, localAddr + pkt->getSize());
+        dtu.regs().set(CmdReg::OFFSET, offset + pkt->getSize());
+
+        // transfer the next packet
+        dtu.schedule(continueEvent, dtu.clockEdge(Cycles(1)));
+    }
 
     dtu.freeRequest(pkt);
 }

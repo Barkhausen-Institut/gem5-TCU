@@ -54,6 +54,7 @@ class XferUnit
         size_t size;
         PacketPtr pkt;
         bool isMsg;
+        bool last;
 
         TransferEvent(XferUnit& _xfer, size_t _blockSize)
             : xfer(_xfer),
@@ -64,7 +65,8 @@ class XferUnit
               remoteAddr(),
               size(),
               pkt(),
-              isMsg()
+              isMsg(),
+              last()
         {}
 
         void process() override;
@@ -108,6 +110,7 @@ class XferUnit
         size_t size;
         PacketPtr pkt;
         Dtu::MessageHeader* header;
+        bool last;
 
         StartEvent(XferUnit& _xfer,
                    Dtu::TransferType _type,
@@ -115,24 +118,26 @@ class XferUnit
                    Addr _localAddr,
                    size_t _size,
                    PacketPtr _pkt,
-                   Dtu::MessageHeader* _header)
+                   Dtu::MessageHeader* _header,
+                   bool _last)
             : xfer(_xfer),
               type(_type),
               remoteAddr(_remoteAddr),
               localAddr(_localAddr),
               size(_size),
               pkt(_pkt),
-              header(_header)
+              header(_header),
+              last(_last)
         {}
 
         void process() override
         {
             // the delay was already paid earlier
-            if(xfer.startTransfer(type, remoteAddr, localAddr, size, pkt, header, Cycles(0)))
+            if(xfer.startTransfer(type, remoteAddr, localAddr, size, pkt, header, Cycles(0), last))
                 setFlags(AutoDelete);
         }
 
-        const char* description() const override { return "StartEvent"; }
+        const char* description() const override { return "StartXferEvent"; }
 
         const std::string name() const override { return xfer.dtu.name(); }
     };
@@ -149,7 +154,8 @@ class XferUnit
                        size_t size,
                        PacketPtr pkt,
                        Dtu::MessageHeader* header,
-                       Cycles delay);
+                       Cycles delay,
+                       bool last);
 
     void recvSpmResponse(size_t bufId,
                          const void* data,

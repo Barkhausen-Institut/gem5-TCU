@@ -35,9 +35,36 @@
 
 class MemoryUnit
 {
+  private:
+
+    struct ContinueEvent : public Event
+    {
+        MemoryUnit& memUnit;
+
+        Dtu::Command cmd;
+
+        bool read;
+
+        ContinueEvent(MemoryUnit& _memUnit)
+            : memUnit(_memUnit), cmd(), read()
+        {}
+
+        void process() override
+        {
+            if(read)
+                memUnit.startRead(cmd);
+            else
+                memUnit.startWrite(cmd);
+        }
+
+        const char* description() const override { return "ContinueEvent"; }
+
+        const std::string name() const override { return memUnit.dtu.name(); }
+    };
+
   public:
 
-    MemoryUnit(Dtu &_dtu) : dtu(_dtu) {}
+    MemoryUnit(Dtu &_dtu) : dtu(_dtu), continueEvent(*this) {}
 
     /**
      * Starts a read -> NoC request
@@ -68,6 +95,8 @@ class MemoryUnit
   private:
 
     Dtu &dtu;
+
+    ContinueEvent continueEvent;
 };
 
 #endif

@@ -99,7 +99,8 @@ XferUnit::startTransfer(Dtu::TransferType type,
                         Addr size,
                         PacketPtr pkt,
                         Dtu::MessageHeader* header,
-                        Cycles delay)
+                        Cycles delay,
+                        bool last)
 {
     Buffer *buf = allocateBuf();
 
@@ -113,7 +114,7 @@ XferUnit::startTransfer(Dtu::TransferType type,
                  size,
                  localAddr);
 
-        auto event = new StartEvent(*this, type, remoteAddr, localAddr, size, pkt, header);
+        auto event = new StartEvent(*this, type, remoteAddr, localAddr, size, pkt, header, last);
 
         dtu.schedule(event, dtu.clockEdge(Cycles(delay + 1)));
 
@@ -129,6 +130,7 @@ XferUnit::startTransfer(Dtu::TransferType type,
     buf->event.size = size;
     buf->event.pkt = NULL;
     buf->event.isMsg = false;
+    buf->event.last = last;
 
     // if there is data to put into the buffer, do that now
     if(header)
@@ -209,7 +211,8 @@ XferUnit::recvSpmResponse(size_t bufId,
         }
         else if(buf->event.type == Dtu::TransferType::LOCAL_WRITE)
         {
-            dtu.scheduleFinishOp(Cycles(1));
+            if(buf->event.last)
+                dtu.scheduleFinishOp(Cycles(1));
 
             dtu.freeRequest(buf->event.pkt);
         }

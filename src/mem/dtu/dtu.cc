@@ -61,6 +61,8 @@ Dtu::Dtu(DtuParams* p)
     numEndpoints(p->num_endpoints),
     maxNocPacketSize(p->max_noc_packet_size),
     numCmdEpidBits(p->num_cmd_epid_bits),
+    bufCount(p->buf_count),
+    bufSize(p->buf_size),
     registerAccessLatency(p->register_access_latency),
     commandToSpmRequestLatency(p->command_to_spm_request_latency),
     commandToNocRequestLatency(p->command_to_noc_request_latency),
@@ -259,7 +261,8 @@ Dtu::startTransfer(TransferType type,
                    Addr size,
                    PacketPtr pkt,
                    MessageHeader* header,
-                   Cycles delay)
+                   Cycles delay,
+                   bool last)
 {
     xferUnit->startTransfer(type,
                             targetAddr,
@@ -267,7 +270,8 @@ Dtu::startTransfer(TransferType type,
                             size,
                             pkt,
                             header,
-                            delay);
+                            delay,
+                            last);
 }
 
 void

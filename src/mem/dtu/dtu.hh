@@ -163,7 +163,8 @@ class Dtu : public BaseDtu
                        Addr size,
                        PacketPtr pkt = NULL,
                        MessageHeader* header = NULL,
-                       Cycles delay = Cycles(0));
+                       Cycles delay = Cycles(0),
+                       bool last = false);
 
     void printPacket(PacketPtr pkt) const;
 
@@ -210,6 +211,9 @@ class Dtu : public BaseDtu
     const Addr maxNocPacketSize;
 
     const unsigned numCmdEpidBits;
+
+    const size_t bufCount;
+    const size_t bufSize;
 
     const Cycles registerAccessLatency;
     const Cycles commandToSpmRequestLatency;
