@@ -271,8 +271,14 @@ for i in range(0, len(cmd_list)):
     pe.kernel = cmd_list[i].split(' ')[0]
     pe.boot_osflags = cmd_list[i]
     pe.dtu.use_ptable = 'false'
-    print 'PE%d: memsize=%d KiB' % (i, int(pe.cachespm.range.end) / 1024)
-    print "PE%d: cmdline=%s" % (i, cmd_list[i])
+    print "PE%d: %s" % (i, cmd_list[i])
+    print '     core   =%s x86' % (options.cpu_type)
+    print '     memsize=%d KiB' % (int(pe.cachespm.range.end + 1) / 1024)
+    if options.caches:
+        print '     L1cache=%d KiB' % (pe.cache.size.value / 1024)
+    print '     bufsize=%d KiB, blocksize=%d B, count=%d' % \
+        (pe.dtu.buf_size.value / 1024, pe.dtu.block_size.value, pe.dtu.buf_count)
+    print
 
     # connect the IO space via bridge to the root NoC
     pe.bridge = Bridge(delay='50ns')
@@ -299,8 +305,11 @@ pe.mem_ctrl.device_size = options.mem_size
 pe.mem_ctrl.range = MemorySize(options.mem_size).value
 pe.mem_ctrl.port = pe.xbar.master
 pe.mem_file = options.init_mem
-print 'PE%d: memsize=%d KiB' % (options.num_pes, int(pe.mem_ctrl.range.end) / 1024)
-print 'PE%d: content=%s' % (options.num_pes, options.init_mem)
+print 'PE%d: %s' % (options.num_pes, options.init_mem)
+print '     memsize=%d KiB' % (int(pe.mem_ctrl.range.end) / 1024)
+print '     bufsize=%d KiB, blocksize=%d B, count=%d' % \
+    (pe.dtu.buf_size.value / 1024, pe.dtu.block_size.value, pe.dtu.buf_count)
+print
 
 # Instantiate configuration
 m5.instantiate()
