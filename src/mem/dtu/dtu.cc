@@ -56,6 +56,7 @@ Dtu::Dtu(DtuParams* p)
     xferUnit(new XferUnit(*this, p->block_size, p->buf_count, p->buf_size)),
     executeCommandEvent(*this),
     finishCommandEvent(*this),
+    cmdInProgress(false),
     atomicMode(p->system->isAtomicMode()),
     numEndpoints(p->num_endpoints),
     maxNocPacketSize(p->max_noc_packet_size),
@@ -132,13 +133,16 @@ void
 Dtu::executeCommand()
 {
     Command cmd = getCommand();
+    if(cmd.opcode == CommandOpcode::IDLE)
+        return;
 
+    assert(!cmdInProgress);
     assert(cmd.epId < numEndpoints);
+
+    cmdInProgress = true;
 
     switch (cmd.opcode)
     {
-    case CommandOpcode::IDLE:
-        break;
     case CommandOpcode::SEND:
     case CommandOpcode::REPLY:
         msgUnit->startTransmission(cmd);
@@ -167,8 +171,14 @@ void
 Dtu::finishCommand()
 {
     DPRINTF(DtuDetail, "Command finished\n");
-    // reset command register
+    Command cmd = getCommand();
+
+    assert(cmdInProgress);
+
+    // let the SW know that the command is finished
     regFile.set(CmdReg::COMMAND, 0);
+
+    cmdInProgress = false;
 }
 
 void

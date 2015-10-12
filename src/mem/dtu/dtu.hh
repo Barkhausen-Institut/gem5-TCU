@@ -202,6 +202,8 @@ class Dtu : public BaseDtu
     
     EventWrapper<Dtu, &Dtu::finishCommand> finishCommandEvent;
 
+    bool cmdInProgress;
+
   public:
 
     const bool atomicMode;
