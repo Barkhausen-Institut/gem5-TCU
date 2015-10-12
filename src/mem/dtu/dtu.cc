@@ -33,7 +33,7 @@
 
 #include "debug/Dtu.hh"
 #include "debug/DtuBuf.hh"
-#include "debug/DtuDetail.hh"
+#include "debug/DtuCmd.hh"
 #include "debug/DtuPackets.hh"
 #include "debug/DtuSysCalls.hh"
 #include "debug/DtuPower.hh"
@@ -45,6 +45,17 @@
 #include "mem/page_table.hh"
 #include "sim/system.hh"
 #include "sim/process.hh"
+
+static const char *cmdNames[] =
+{
+    "IDLE",
+    "SEND",
+    "REPLY",
+    "READ",
+    "WRITE",
+    "INC_READ_PTR",
+    "WAKEUP_CORE",
+};
 
 Dtu::Dtu(DtuParams* p)
   : BaseDtu(p),
@@ -141,6 +152,9 @@ Dtu::executeCommand()
 
     cmdInProgress = true;
 
+    DPRINTF(DtuCmd, "Starting command %s with EP%d\n",
+            cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epId);
+
     switch (cmd.opcode)
     {
     case CommandOpcode::SEND:
@@ -170,10 +184,12 @@ Dtu::executeCommand()
 void
 Dtu::finishCommand()
 {
-    DPRINTF(DtuDetail, "Command finished\n");
     Command cmd = getCommand();
 
     assert(cmdInProgress);
+
+    DPRINTF(DtuCmd, "Finished command %s with EP%d\n",
+            cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epId);
 
     // let the SW know that the command is finished
     regFile.set(CmdReg::COMMAND, 0);
@@ -272,9 +288,6 @@ Dtu::startTransfer(TransferType type,
 void
 Dtu::completeNocRequest(PacketPtr pkt)
 {
-    DPRINTF(DtuDetail, "Received %s response from remote DTU.\n",
-                 pkt->isRead() ? "read" : "write");
-
     if (pkt->isWrite())
         memUnit->writeComplete(pkt);
     else if (pkt->isRead())
@@ -288,8 +301,6 @@ Dtu::completeMemRequest(PacketPtr pkt)
 {
     assert(!pkt->isError());
     assert(pkt->isResponse());
-
-    DPRINTF(DtuDetail, "Received response from local memory.\n");
 
     auto senderState = dynamic_cast<MemSenderState*>(pkt->popSenderState());
 

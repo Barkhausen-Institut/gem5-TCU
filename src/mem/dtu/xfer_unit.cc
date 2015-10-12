@@ -30,7 +30,6 @@
 
 #include "debug/Dtu.hh"
 #include "debug/DtuBuf.hh"
-#include "debug/DtuDetail.hh"
 #include "debug/DtuPackets.hh"
 #include "debug/DtuSysCalls.hh"
 #include "debug/DtuPower.hh"
@@ -77,7 +76,7 @@ XferUnit::TransferEvent::process()
         buf->offset += reqSize;
     }
 
-    DPRINTFS(DtuXfers, (&xfer.dtu), "[buf%d] %s %lu bytes @ %p in local memory\n",
+    DPRINTFS(DtuXfers, (&xfer.dtu), "buf%d: %s %lu bytes @ %p in local memory\n",
              buf->id,
              writing ? "Writing" : "Reading",
              reqSize,
@@ -153,7 +152,7 @@ XferUnit::startTransfer(Dtu::TransferType type,
         buf->event.pkt = pkt;
     }
 
-    DPRINTFS(DtuXfers, (&dtu), "[buf%d] Starting %s transfer of %lu bytes @ %p\n",
+    DPRINTFS(DtuXfers, (&dtu), "buf%d: Starting %s transfer of %lu bytes @ %p\n",
              buf->id,
              writing ? "mem-write" : "mem-read",
              size,
@@ -190,7 +189,7 @@ XferUnit::recvMemResponse(size_t bufId,
     {
         if(buf->event.type == Dtu::TransferType::LOCAL_READ)
         {
-            DPRINTFS(DtuXfers, (&dtu), "[buf%d] Sending NoC request of %lu bytes @ %p\n",
+            DPRINTFS(DtuXfers, (&dtu), "buf%d: Sending NoC request of %lu bytes @ %p\n",
                      buf->id,
                      buf->offset,
                      buf->event.remoteAddr.offset);
@@ -221,7 +220,7 @@ XferUnit::recvMemResponse(size_t bufId,
         }
         else
         {
-            DPRINTFS(DtuXfers, (&dtu), "[buf%d] Sending NoC response of %lu bytes\n",
+            DPRINTFS(DtuXfers, (&dtu), "buf%d: Sending NoC response of %lu bytes\n",
                      buf->id,
                      buf->offset);
 
@@ -237,7 +236,7 @@ XferUnit::recvMemResponse(size_t bufId,
             dtu.schedNocResponse(buf->event.pkt, dtu.clockEdge(delay));
         }
 
-        DPRINTFS(DtuXfers, (&dtu), "[buf%d] Transfer done\n",
+        DPRINTFS(DtuXfers, (&dtu), "buf%d: Transfer done\n",
                  buf->id);
 
         // we're done with this buffer now

@@ -30,7 +30,6 @@
 
 #include "debug/Dtu.hh"
 #include "debug/DtuBuf.hh"
-#include "debug/DtuDetail.hh"
 #include "debug/DtuPackets.hh"
 #include "debug/DtuSysCalls.hh"
 #include "debug/DtuPower.hh"

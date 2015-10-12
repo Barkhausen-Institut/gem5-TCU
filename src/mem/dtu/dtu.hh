@@ -185,9 +185,9 @@ class Dtu : public BaseDtu
     void handleCpuRequest(PacketPtr pkt) override;
 
   private:
-    
-    const MasterID masterId;
 
+    const MasterID masterId;
+    
     System *system;
 
     RegFile regFile;

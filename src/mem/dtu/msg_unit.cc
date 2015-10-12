@@ -30,7 +30,7 @@
 
 #include "debug/Dtu.hh"
 #include "debug/DtuBuf.hh"
-#include "debug/DtuDetail.hh"
+#include "debug/DtuCredits.hh"
 #include "debug/DtuPackets.hh"
 #include "debug/DtuSysCalls.hh"
 #include "debug/DtuPower.hh"
@@ -85,11 +85,12 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
         return;
     }
 
-    DPRINTFS(DtuDetail, (&dtu), "EP%u pays %u credits\n",
-             epid, maxMessageSize);
+    credits -= maxMessageSize;
+
+    DPRINTFS(DtuCredits, (&dtu), "EP%u pays %u credits (%u left)\n",
+             epid, maxMessageSize, credits);
 
     // pay the credits
-    credits -= maxMessageSize;
     dtu.regs().set(epid, EpReg::CREDITS, credits);
 
     // fill the info struct and start the transfer
@@ -110,7 +111,7 @@ MessageUnit::requestHeader(unsigned epid)
 
     Addr msgAddr = dtu.regs().get(epid, EpReg::BUF_RD_PTR);
 
-    DPRINTFS(DtuDetail, (&dtu), "EP%d: requesting header for reply on message @ %p\n",
+    DPRINTFS(DtuBuf, (&dtu), "EP%d: requesting header for reply on message @ %p\n",
              epid, msgAddr + offset);
 
     // take care that we might need 2 loads to request the header
@@ -317,10 +318,12 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
             header->replyEpId < dtu.numEndpoints)
         {
             unsigned maxMessageSize = dtu.regs().get(header->replyEpId, EpReg::MAX_MSG_SIZE);
-            DPRINTFS(DtuDetail, (&dtu), "Grant EP%u %u credits\n", header->replyEpId, maxMessageSize);
-
             unsigned credits = dtu.regs().get(header->replyEpId, EpReg::CREDITS);
             credits += maxMessageSize;
+
+            DPRINTFS(DtuCredits, (&dtu), "EP%u: received %u credits (%u in total)\n",
+                     header->replyEpId, maxMessageSize, credits);
+
             dtu.regs().set(header->replyEpId, EpReg::CREDITS, credits);
         }
 
