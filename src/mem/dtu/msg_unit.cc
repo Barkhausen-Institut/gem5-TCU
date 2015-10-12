@@ -61,134 +61,155 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
 {
     unsigned epid = cmd.epId;
 
+    // if we want to reply, request the header first
+    if(cmd.opcode == Dtu::CommandOpcode::REPLY)
+    {
+        offset = 0;
+        requestHeader(cmd.epId);
+        return;
+    }
+
+    // check if we have enough credits
+    Addr messageSize = dtu.regs().get(CmdReg::DATA_SIZE);
+    Addr maxMessageSize = dtu.regs().get(epid, EpReg::MAX_MSG_SIZE);
+    unsigned credits = dtu.regs().get(epid, EpReg::CREDITS);
+
+    // TODO error handling
+    assert(messageSize + sizeof(Dtu::MessageHeader) <= maxMessageSize);
+
+    if (credits < maxMessageSize)
+    {
+        warn("pe%u.ep%u: Ignore send message command because there are not "
+             "enough credits", dtu.coreId, epid);
+        dtu.scheduleFinishOp(Cycles(1));
+        return;
+    }
+
+    DPRINTFS(DtuDetail, (&dtu), "EP%u pays %u credits\n",
+             epid, maxMessageSize);
+
+    // pay the credits
+    credits -= maxMessageSize;
+    dtu.regs().set(epid, EpReg::CREDITS, credits);
+
+    // fill the info struct and start the transfer
+    info.targetCoreId = dtu.regs().get(epid, EpReg::TGT_COREID);
+    info.targetEpId   = dtu.regs().get(epid, EpReg::TGT_EPID);
+    info.label        = dtu.regs().get(epid, EpReg::LABEL);
+    info.replyLabel   = dtu.regs().get(CmdReg::REPLY_LABEL);
+    info.replyEpId    = dtu.regs().get(CmdReg::REPLY_EPID);
+    info.ready = true;
+
+    startXfer(cmd);
+}
+
+void
+MessageUnit::requestHeader(unsigned epid)
+{
+    assert(offset < sizeof(Dtu::MessageHeader));
+
+    Addr msgAddr = dtu.regs().get(epid, EpReg::BUF_RD_PTR);
+
+    DPRINTFS(DtuDetail, (&dtu), "EP%d: requesting header for reply on message @ %p\n",
+             epid, msgAddr + offset);
+
+    // take care that we might need 2 loads to request the header
+    Addr blockOff = (msgAddr + offset) & (dtu.blockSize - 1);
+    Addr reqSize = std::min(dtu.blockSize - blockOff, sizeof(Dtu::MessageHeader));
+
+    auto pkt = dtu.generateRequest(msgAddr + offset,
+                                   reqSize,
+                                   MemCmd::ReadReq);
+    dtu.sendMemRequest(pkt,
+                       epid,
+                       Dtu::MemReqType::HEADER,
+                       Cycles(1));
+}
+
+void
+MessageUnit::recvFromMem(const Dtu::Command& cmd, PacketPtr pkt)
+{
+    // simply collect the header in a member for simplicity
+    memcpy(reinterpret_cast<char*>(&header) + offset, pkt->getPtr<char*>(), pkt->getSize());
+
+    offset += pkt->getSize();
+
+    // do we have the complete header yet? if not, request the rest
+    if(offset < sizeof(Dtu::MessageHeader))
+    {
+        requestHeader(cmd.epId);
+        return;
+    }
+
+    // now that we have the header, fill the info struct
+    assert(header.flags & Dtu::REPLY_ENABLED);
+
+    info.targetCoreId = header.senderCoreId;
+    info.targetEpId   = header.replyEpId;  // send message to the reply EP
+    info.replyEpId    = header.senderEpId; // and grant credits to the sender
+
+    // the receiver of the reply should get the label that he has set
+    info.label        = header.replyLabel;
+    // replies don't have replies. so, we don't need that
+    info.replyLabel   = 0;
+    info.ready = true;
+
+    // disable replies for this message
+    // use a functional request here because we don't need to wait for it anyway
+    Addr msgAddr = dtu.regs().get(cmd.epId, EpReg::BUF_RD_PTR);
+    auto hpkt = dtu.generateRequest(msgAddr,
+                                    sizeof(header.flags),
+                                    MemCmd::WriteReq);
+    header.flags &= ~Dtu::REPLY_ENABLED;
+    memcpy(hpkt->getPtr<uint8_t>(), &header.flags, sizeof(header.flags));
+    dtu.sendFunctionalMemRequest(hpkt);
+    dtu.freeRequest(hpkt);
+
+    // now start the transfer
+    startXfer(cmd);
+}
+
+void
+MessageUnit::startXfer(const Dtu::Command& cmd)
+{
+    assert(info.ready);
+
     Addr messageAddr = dtu.regs().get(CmdReg::DATA_ADDR);
     Addr messageSize = dtu.regs().get(CmdReg::DATA_SIZE);
 
-    bool isReply = cmd.opcode == Dtu::CommandOpcode::REPLY;
-
-    /*
-     * If this endpoint is configured to send messages, we need to check
-     * credits. If it is configured to receive messages we do a reply and don't
-     * need to check credits.
-     */
-    if (!isReply)
-    {
-        unsigned credits = dtu.regs().get(epid, EpReg::CREDITS);
-        unsigned maxMessageSize = dtu.regs().get(epid, EpReg::MAX_MSG_SIZE);
-
-        // TODO error handling
-        // TODO atm, we can send (nearly) arbitrary large replies
-        assert(messageSize + sizeof(Dtu::MessageHeader) <= maxMessageSize);
-
-        if (credits < maxMessageSize)
-        {
-            warn("pe%u.ep%u: Ignore send message command because there are not "
-                 "enough credits", dtu.coreId, epid);
-            dtu.scheduleFinishOp(Cycles(1));
-            return;
-        }
-
-        DPRINTFS(DtuDetail, (&dtu), "EP%u pays %u credits\n",
-                 epid, maxMessageSize);
-
-        // Pay some credits
-        credits -= maxMessageSize;
-        dtu.regs().set(epid, EpReg::CREDITS, credits);
-    }
-
-    unsigned targetCoreId;
-    unsigned targetEpId;
-    unsigned replyEpId;
-    uint64_t label;
-    uint64_t replyLabel;
-
-    if (isReply)
-    {
-        // pay for the functional request; TODO
-
-        /*
-         * We need to read the header of the received message from local memory
-         * to determine target core and enspoint ID. This would introduce a
-         * second local memory request and would make the control flow more
-         * complicated. To simplify things a functional request is used and an
-         * additional delay is payed.
-         */
-
-        Addr msgAddr = dtu.regs().get(epid, EpReg::BUF_RD_PTR);
-
-        auto pkt = dtu.generateRequest(msgAddr,
-                                       sizeof(Dtu::MessageHeader),
-                                       MemCmd::ReadReq);
-
-        dtu.sendFunctionalMemRequest(pkt);
-
-        auto h = pkt->getPtr<Dtu::MessageHeader>();
-        assert(h->flags & Dtu::REPLY_ENABLED);
-
-        targetCoreId = h->senderCoreId;
-        targetEpId   = h->replyEpId;  // send message to the reply EP
-        replyEpId    = h->senderEpId; // and grant credits to the sender
-
-        // the receiver of the reply should get the label that he has set
-        label        = h->replyLabel;
-        // replies don't have replies. so, we don't need that
-        replyLabel   = 0;
-
-        // disable replies for this message
-        auto hpkt = dtu.generateRequest(msgAddr,
-                                        sizeof(h->flags),
-                                        MemCmd::WriteReq);
-        h->flags &= ~Dtu::REPLY_ENABLED;
-        memcpy(hpkt->getPtr<uint8_t>(), &h->flags, sizeof(h->flags));
-
-        dtu.sendFunctionalMemRequest(hpkt);
-
-        dtu.freeRequest(hpkt);
-        dtu.freeRequest(pkt);
-    }
-    else
-    {
-        targetCoreId = dtu.regs().get(epid, EpReg::TGT_COREID);
-        targetEpId   = dtu.regs().get(epid, EpReg::TGT_EPID);
-        label        = dtu.regs().get(epid, EpReg::LABEL);
-        replyLabel   = dtu.regs().get(CmdReg::REPLY_LABEL);
-        replyEpId    = dtu.regs().get(CmdReg::REPLY_EPID);
-
-        M5_VAR_USED unsigned maxMessageSize = dtu.regs().get(epid, EpReg::MAX_MSG_SIZE);
-        assert(messageSize + sizeof(Dtu::MessageHeader) <= maxMessageSize);
-    }
-
     DPRINTFS(Dtu, (&dtu), "\e[1m[%s -> %u]\e[0m with EP%u of %#018lx:%lu\n",
-             isReply ? "rp" : "sd",
-             targetCoreId, epid, dtu.regs().get(CmdReg::DATA_ADDR), messageSize);
+             cmd.opcode == Dtu::CommandOpcode::REPLY ? "rp" : "sd",
+             info.targetCoreId, cmd.epId, dtu.regs().get(CmdReg::DATA_ADDR), messageSize);
 
     DPRINTFS(Dtu, (&dtu), "  header: tgtEP=%u, lbl=%#018lx, rpLbl=%#018lx, rpEP=%u\n",
-             targetEpId, label, replyLabel, replyEpId);
+             info.targetEpId, info.label, info.replyLabel, info.replyEpId);
 
     Dtu::MessageHeader* header = new Dtu::MessageHeader;
 
-    if (isReply)
+    if (cmd.opcode == Dtu::CommandOpcode::REPLY)
         header->flags = Dtu::REPLY_FLAG | Dtu::GRANT_CREDITS_FLAG;
     else
         header->flags = Dtu::REPLY_ENABLED; // normal message
 
     header->senderCoreId = static_cast<uint8_t>(dtu.coreId);
-    header->senderEpId   = static_cast<uint8_t>(epid);
-    header->replyEpId    = static_cast<uint8_t>(replyEpId);
+    header->senderEpId   = static_cast<uint8_t>(cmd.epId);
+    header->replyEpId    = static_cast<uint8_t>(info.replyEpId);
     header->length       = static_cast<uint16_t>(messageSize);
-    header->label        = static_cast<uint64_t>(label);
-    header->replyLabel   = static_cast<uint64_t>(replyLabel);
+    header->label        = static_cast<uint64_t>(info.label);
+    header->replyLabel   = static_cast<uint64_t>(info.replyLabel);
 
     assert(messageSize + sizeof(Dtu::MessageHeader) <= dtu.maxNocPacketSize);
 
     // start the transfer of the payload
     dtu.startTransfer(Dtu::TransferType::LOCAL_READ,
-                      NocAddr(targetCoreId, targetEpId),
+                      NocAddr(info.targetCoreId, info.targetEpId),
                       messageAddr,
                       messageSize,
                       NULL,
                       header,
                       dtu.startMsgTransferDelay);
+
+    info.ready = false;
 }
 
 void

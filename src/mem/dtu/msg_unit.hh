@@ -35,14 +35,31 @@
 
 class MessageUnit
 {
+  private:
+
+    struct MsgInfo
+    {
+        bool ready;
+        unsigned targetCoreId;
+        unsigned targetEpId;
+        unsigned replyEpId;
+        uint64_t label;
+        uint64_t replyLabel;
+    };
+
   public:
 
-    MessageUnit(Dtu &_dtu) : dtu(_dtu) {}
+    MessageUnit(Dtu &_dtu) : dtu(_dtu), info(), header(), offset() {}
 
     /**
      * Start message transmission -> Mem request
      */
     void startTransmission(const Dtu::Command& cmd);
+
+    /**
+     * Received response from local memory (header lookup)
+     */
+    void recvFromMem(const Dtu::Command& cmd, PacketPtr pkt);
 
     /**
      * Received a message from NoC -> Mem request
@@ -58,9 +75,18 @@ class MessageUnit
 
     bool incrementWritePtr(unsigned epId);
 
+    void requestHeader(unsigned epid);
+
+    void startXfer(const Dtu::Command& cmd);
+
   private:
 
     Dtu &dtu;
+
+    MsgInfo info;
+
+    Dtu::MessageHeader header;
+    Addr offset;
 };
 
 #endif

@@ -85,6 +85,7 @@ XferUnit::TransferEvent::process()
 
     xfer.dtu.sendMemRequest(pkt,
                             buf->id,
+                            Dtu::MemReqType::TRANSFER,
                             xfer.dtu.transferToMemRequestLatency);
 
     // to next block

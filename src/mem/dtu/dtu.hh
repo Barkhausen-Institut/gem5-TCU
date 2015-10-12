@@ -86,10 +86,17 @@ class Dtu : public BaseDtu
         REMOTE_READ     // we should send something from our local memory to somebody else
     };
 
+    enum class MemReqType
+    {
+        TRANSFER,
+        HEADER
+    };
+
     struct MemSenderState : public Packet::SenderState
     {
         unsigned epId;
         MasterID mid;
+        MemReqType type;
     };
 
     struct NocSenderState : public Packet::SenderState
@@ -129,8 +136,6 @@ class Dtu : public BaseDtu
     PacketPtr generateRequest(Addr addr, Addr size, MemCmd cmd);
     void freeRequest(PacketPtr pkt);
 
-    Command getCommand();
-
     void wakeupCore();
     
     void updateSuspendablePin();
@@ -145,6 +150,7 @@ class Dtu : public BaseDtu
 
     void sendMemRequest(PacketPtr pkt,
                         unsigned epId,
+                        MemReqType type,
                         Cycles delay);
 
     void sendNocRequest(NocPacketType type,
@@ -163,6 +169,8 @@ class Dtu : public BaseDtu
     void printPacket(PacketPtr pkt) const;
 
   private:
+
+    Command getCommand();
 
     void executeCommand();
 

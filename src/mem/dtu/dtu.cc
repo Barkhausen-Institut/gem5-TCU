@@ -194,6 +194,7 @@ Dtu::updateSuspendablePin()
 void
 Dtu::sendMemRequest(PacketPtr pkt,
                     unsigned epId,
+                    MemReqType type,
                     Cycles delay)
 {
     pkt->setAddr(pkt->getAddr());
@@ -201,6 +202,7 @@ Dtu::sendMemRequest(PacketPtr pkt,
     auto senderState = new MemSenderState();
     senderState->epId = epId;
     senderState->mid = pkt->req->masterId();
+    senderState->type = type;
 
     // ensure that this packet has our master id (not the id of a master in a different PE)
     pkt->req->setMasterId(masterId);
@@ -284,11 +286,20 @@ Dtu::completeMemRequest(PacketPtr pkt)
     // set the old master id again
     pkt->req->setMasterId(senderState->mid);
 
-    xferUnit->recvMemResponse(senderState->epId,
-                              pkt->getConstPtr<uint8_t>(),
-                              pkt->getSize(),
-                              pkt->headerDelay,
-                              pkt->payloadDelay);
+    switch(senderState->type)
+    {
+    case MemReqType::TRANSFER:
+        xferUnit->recvMemResponse(senderState->epId,
+                                  pkt->getConstPtr<uint8_t>(),
+                                  pkt->getSize(),
+                                  pkt->headerDelay,
+                                  pkt->payloadDelay);
+        break;
+
+    case MemReqType::HEADER:
+        msgUnit->recvFromMem(getCommand(), pkt);
+        break;
+    }
 
     delete senderState;
     freeRequest(pkt);
