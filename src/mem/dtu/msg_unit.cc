@@ -116,7 +116,7 @@ MessageUnit::requestHeader(unsigned epid)
 
     // take care that we might need 2 loads to request the header
     Addr blockOff = (msgAddr + offset) & (dtu.blockSize - 1);
-    Addr reqSize = std::min(dtu.blockSize - blockOff, sizeof(Dtu::MessageHeader));
+    Addr reqSize = std::min(dtu.blockSize - blockOff, sizeof(Dtu::MessageHeader) - offset);
 
     auto pkt = dtu.generateRequest(msgAddr + offset,
                                    reqSize,
@@ -131,6 +131,7 @@ void
 MessageUnit::recvFromMem(const Dtu::Command& cmd, PacketPtr pkt)
 {
     // simply collect the header in a member for simplicity
+    assert(offset + pkt->getSize() <= sizeof(header));
     memcpy(reinterpret_cast<char*>(&header) + offset, pkt->getPtr<char*>(), pkt->getSize());
 
     offset += pkt->getSize();
