@@ -200,6 +200,9 @@ Dtu::finishCommand()
 void
 Dtu::wakeupCore()
 {
+    if(system->threadContexts.size() == 0)
+        return;
+
     if(system->threadContexts[0]->status() == ThreadContext::Suspended)
     {
         DPRINTF(DtuPower, "Waking up core\n");
@@ -210,6 +213,9 @@ Dtu::wakeupCore()
 void
 Dtu::updateSuspendablePin()
 {
+    if(system->threadContexts.size() == 0)
+        return;
+    
     bool pendingMsgs = regFile.get(DtuReg::MSG_CNT) > 0;
     bool hadPending = system->threadContexts[0]->getCpuPtr()->_denySuspend;
     system->threadContexts[0]->getCpuPtr()->_denySuspend = pendingMsgs;
