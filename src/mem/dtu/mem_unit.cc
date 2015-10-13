@@ -181,7 +181,7 @@ MemoryUnit::recvFromNoc(PacketPtr pkt)
     if(pkt->isWrite())
         dtu.printPacket(pkt);
 
-    if (NocAddr(pkt->getAddr()).offset & dtu.regFileBaseAddr)
+    if (NocAddr(pkt->getAddr()).offset >= dtu.regFileBaseAddr)
     {
         Addr oldAddr = pkt->getAddr();
         pkt->setAddr(NocAddr(oldAddr).offset);
