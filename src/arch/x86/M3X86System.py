@@ -31,3 +31,5 @@ from X86System import X86System
 class M3X86System(X86System):
     type = 'M3X86System'
     cxx_header = 'arch/x86/m3/system.hh'
+
+    accessible_mem_size = Param.MemorySize("8MB", "The amount of accessible memory for this PE")

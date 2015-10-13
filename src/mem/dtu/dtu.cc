@@ -68,6 +68,7 @@ Dtu::Dtu(DtuParams* p)
     executeCommandEvent(*this),
     finishCommandEvent(*this),
     cmdInProgress(false),
+    memEp(p->memory_ep),
     atomicMode(p->system->isAtomicMode()),
     numEndpoints(p->num_endpoints),
     maxNocPacketSize(p->max_noc_packet_size),
@@ -83,6 +84,11 @@ Dtu::Dtu(DtuParams* p)
     nocToTransferLatency(p->noc_to_transfer_latency)
 {
     assert(p->buf_size >= maxNocPacketSize);
+
+    regFile.set(memEp, EpReg::TGT_COREID, p->memory_pe);
+    regFile.set(memEp, EpReg::REQ_REM_ADDR, p->memory_offset);
+    regFile.set(memEp, EpReg::REQ_REM_SIZE, p->memory_size);
+    regFile.set(memEp, EpReg::REQ_FLAGS, READ | WRITE);
 }
 
 Dtu::~Dtu()
@@ -215,7 +221,7 @@ Dtu::updateSuspendablePin()
 {
     if(system->threadContexts.size() == 0)
         return;
-    
+
     bool pendingMsgs = regFile.get(DtuReg::MSG_CNT) > 0;
     bool hadPending = system->threadContexts[0]->getCpuPtr()->_denySuspend;
     system->threadContexts[0]->getCpuPtr()->_denySuspend = pendingMsgs;
@@ -253,14 +259,19 @@ Dtu::sendMemRequest(PacketPtr pkt,
 }
 
 void
-Dtu::sendNocRequest(NocPacketType type, PacketPtr pkt, Cycles delay)
+Dtu::sendNocRequest(NocPacketType type, PacketPtr pkt, Cycles delay, bool functional)
 {
     auto senderState = new NocSenderState();
     senderState->packetType = type;
 
     pkt->pushSenderState(senderState);
 
-    if (atomicMode)
+    if (functional)
+    {
+        sendFunctionalNocRequest(pkt);
+        completeNocRequest(pkt);
+    }
+    else if (atomicMode)
     {
         sendAtomicNocRequest(pkt);
         completeNocRequest(pkt);
@@ -294,12 +305,27 @@ Dtu::startTransfer(TransferType type,
 void
 Dtu::completeNocRequest(PacketPtr pkt)
 {
-    if (pkt->isWrite())
-        memUnit->writeComplete(pkt);
-    else if (pkt->isRead())
-        memUnit->readComplete(pkt);
-    else
-        panic("unexpected packet type\n");
+    auto senderState = dynamic_cast<NocSenderState*>(pkt->popSenderState());
+
+    if(senderState->packetType == NocPacketType::CACHE_MEM_REQ)
+    {
+        Addr targetAddr = regs().get(numEndpoints - 1, EpReg::REQ_REM_ADDR);
+        Addr reqAddr = NocAddr(pkt->getAddr()).offset - targetAddr;
+        pkt->setAddr(reqAddr);
+        pkt->req->setPaddr(reqAddr);
+        sendCacheMemResponse(pkt);
+    }
+    else if(senderState->packetType != NocPacketType::CACHE_MEM_REQ_FUNC)
+    {
+        if (pkt->isWrite())
+            memUnit->writeComplete(pkt);
+        else if (pkt->isRead())
+            memUnit->readComplete(pkt);
+        else
+            panic("unexpected packet type\n");
+    }
+
+    delete senderState;
 }
 
 void
@@ -337,29 +363,72 @@ Dtu::handleNocRequest(PacketPtr pkt)
 {
     assert(!pkt->isError());
 
-    auto senderState = dynamic_cast<NocSenderState*>(pkt->popSenderState());
+    auto senderState = dynamic_cast<NocSenderState*>(pkt->senderState);
 
     switch (senderState->packetType)
     {
     case NocPacketType::MESSAGE:
-        // if that failed, reply directly
         msgUnit->recvFromNoc(pkt);
         break;
     case NocPacketType::READ_REQ:
     case NocPacketType::WRITE_REQ:
+    case NocPacketType::CACHE_MEM_REQ:
         memUnit->recvFromNoc(pkt);
+        break;
+    case NocPacketType::CACHE_MEM_REQ_FUNC:
+        memUnit->recvFunctionalFromNoc(pkt);
         break;
     default:
         panic("Unexpected NocPacketType\n");
     }
-
-    delete senderState;
 }
 
 void
 Dtu::handleCpuRequest(PacketPtr pkt)
 {
     forwardRequestToRegFile(pkt, true);
+}
+
+bool
+Dtu::handleCacheMemRequest(PacketPtr pkt, bool functional)
+{
+    if(pkt->cmd == MemCmd::CleanEvict)
+    {
+        assert(!pkt->needsResponse());
+        DPRINTF(DtuPackets, "Dropping CleanEvict packet\n");
+        return true;
+    }
+
+    unsigned targetCoreId = regs().get(memEp, EpReg::TGT_COREID);
+    Addr targetAddr = regs().get(memEp, EpReg::REQ_REM_ADDR);
+    Addr remoteSize = regs().get(memEp, EpReg::REQ_REM_SIZE);
+    unsigned flags = regs().get(memEp, EpReg::REQ_FLAGS);
+
+    if((pkt->isWrite() && !(flags & WRITE)) ||
+      ((pkt->isRead() && !(flags & READ))))
+    {
+        DPRINTF(Dtu, "Denying %s request @ %p:%lu because of insufficient permissions\n",
+                pkt->isRead() ? "read" : "write",
+                pkt->getAddr(), pkt->getSize());
+        return false;
+    }
+
+    if((pkt->getAddr() + pkt->getSize() <= pkt->getAddr()) ||
+       (pkt->getAddr() + pkt->getSize() > remoteSize))
+    {
+        DPRINTF(Dtu, "Denying %s request @ %p:%lu because it's out of bounds (%p..%p)\n",
+                pkt->isRead() ? "read" : "write",
+                pkt->getAddr(), pkt->getSize(),
+                0, remoteSize);
+        return false;
+    }
+
+    pkt->setAddr(NocAddr(targetCoreId, 0, targetAddr + pkt->getAddr()).getAddr());
+
+    auto type = functional ? Dtu::NocPacketType::CACHE_MEM_REQ_FUNC : Dtu::NocPacketType::CACHE_MEM_REQ;
+    sendNocRequest(type, pkt, Cycles(1), functional);
+
+    return true;
 }
 
 void

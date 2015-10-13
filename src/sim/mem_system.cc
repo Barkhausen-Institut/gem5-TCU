@@ -55,6 +55,9 @@ MemSystem::initState()
         size_t sz = ftell(f);
         fseek(f, 0L, SEEK_SET);
 
+        // TODO for now, it should not be larger because the PEs use the space from 32MiB
+        assert(sz <= 32 * 1024 * 1024);
+
         auto data = new uint8_t[sz];
         if(fread(data, 1, sz, f) != sz)
             panic("Unable to read '%s'", memFile.c_str());

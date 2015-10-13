@@ -344,7 +344,10 @@ System::freeMemSize() const
 bool
 System::isMemAddr(Addr addr) const
 {
-    return physmem.isMemAddr(addr);
+    // TODO how to do that properly?
+    // below IO space is fine
+    return addr < 0x2000000000000000;
+    // return physmem.isMemAddr(addr);
 }
 
 void

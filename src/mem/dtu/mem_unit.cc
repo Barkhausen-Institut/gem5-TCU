@@ -171,6 +171,15 @@ MemoryUnit::writeComplete(PacketPtr pkt)
 }
 
 void
+MemoryUnit::recvFunctionalFromNoc(PacketPtr pkt)
+{
+    // set the local address
+    pkt->setAddr(NocAddr(pkt->getAddr()).offset);
+
+    dtu.sendFunctionalMemRequest(pkt);
+}
+
+void
 MemoryUnit::recvFromNoc(PacketPtr pkt)
 {
     DPRINTFS(Dtu, (&dtu), "\e[1m[%s <- ?]\e[0m %#018lx:%lu\n",

@@ -41,7 +41,7 @@ using namespace LittleEndianGuest;
 using namespace X86ISA;
 
 M3X86System::M3X86System(Params *p)
-    : X86System(p), commandLine(p->boot_osflags)
+    : X86System(p), commandLine(p->boot_osflags), accessibleMemSize(p->accessible_mem_size)
 {
 }
 
@@ -94,7 +94,8 @@ M3X86System::initState()
     X86System::initState();
 
     const Addr stateSize = 0x1000;
-    const Addr stateEnd = memSize() - 0x2000;
+    // TODO
+    const Addr stateEnd = accessibleMemSize - 0x2000;
     const Addr stateArea = stateEnd - stateSize;
 
     // write argc and argv

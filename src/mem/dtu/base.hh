@@ -127,8 +127,6 @@ class BaseDtu : public MemObject
 
         ResponseEvent responseEvent;
 
-        void handleSuccessfulResponse();
-
       public:
 
         DtuSlavePort(const std::string& _name, BaseDtu& _dtu);
@@ -144,6 +142,8 @@ class BaseDtu : public MemObject
         bool recvTimingReq(PacketPtr pkt) override;
 
         void recvRespRetry() override;
+
+        void handleSuccessfulResponse();
     };
 
     class NocSlavePort : public DtuSlavePort
@@ -197,8 +197,7 @@ class BaseDtu : public MemObject
                 *busy = true;
                 dtu.handleCpuRequest(pkt);
             }
-            else if(AddrRange(pkt->getAddr(),
-                pkt->getAddr() + (pkt->getSize() - 1)).isSubset(AddrRange(0, 8 * 1024 * 1024 - 1)))
+            else
             {
                 dtu.checkWatchRange(pkt);
 
@@ -207,12 +206,23 @@ class BaseDtu : public MemObject
                 else
                     port.schedTimingReq(pkt, curTick());
             }
-            // report an error for other requests (due to speculative execution, there may be invalid
-            // requests that will simply be ignored)
-            else
-                return false;
             return true;
         }
+    };
+
+    class CacheMemSlavePort : public DtuSlavePort
+    {
+      public:
+
+        CacheMemSlavePort(BaseDtu& _dtu)
+          : DtuSlavePort(_dtu.name() + ".cache_mem_slave_port", _dtu)
+        { }
+
+      protected:
+
+        AddrRangeList getAddrRanges() const override;
+
+        bool handleRequest(PacketPtr pkt, bool *busy, bool functional) override;
     };
 
   public:
@@ -233,9 +243,15 @@ class BaseDtu : public MemObject
 
     void schedMemRequest(PacketPtr pkt, Tick when);
 
+    void sendFunctionalNocRequest(PacketPtr pkt);
+
     void sendAtomicNocRequest(PacketPtr pkt);
 
     void sendAtomicMemRequest(PacketPtr pkt);
+
+    void sendCacheMemResponse(PacketPtr pkt);
+
+    void endNocRequest();
 
     virtual void completeNocRequest(PacketPtr pkt) = 0;
 
@@ -244,6 +260,8 @@ class BaseDtu : public MemObject
     virtual void handleNocRequest(PacketPtr pkt) = 0;
 
     virtual void handleCpuRequest(PacketPtr pkt) = 0;
+
+    virtual bool handleCacheMemRequest(PacketPtr pkt, bool functional) = 0;
 
   protected:
 
@@ -260,6 +278,8 @@ class BaseDtu : public MemObject
     CacheSlavePort<ICacheMasterPort> icacheSlavePort;
 
     CacheSlavePort<DCacheMasterPort> dcacheSlavePort;
+
+    CacheMemSlavePort cacheMemSlavePort;
 
     AddrRange watchRange;
 

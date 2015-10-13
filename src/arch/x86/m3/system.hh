@@ -42,6 +42,9 @@ class M3X86System : public X86System
     std::string commandLine;
 
   public:
+    const Addr accessibleMemSize;
+
+  public:
     typedef M3X86SystemParams Params;
     M3X86System(Params *p);
     ~M3X86System();

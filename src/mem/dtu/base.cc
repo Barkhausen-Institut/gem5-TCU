@@ -122,7 +122,9 @@ BaseDtu::DtuSlavePort::recvFunctional(PacketPtr pkt)
                           pkt->getAddr(),
                           pkt->getSize());
 
-    handleRequest(pkt, &busy, true);
+    // don't actually make us busy/unbusy here, because we might interfere with the timing requests
+    bool dummy = false;
+    handleRequest(pkt, &dummy, true);
 }
 
 bool
@@ -152,6 +154,8 @@ BaseDtu::DtuSlavePort::recvTimingReq(PacketPtr pkt)
 void
 BaseDtu::DtuSlavePort::handleSuccessfulResponse()
 {
+    assert(busy);
+
     busy = false;
     waitForRespRetry = false;
     respPkt = nullptr;
@@ -218,6 +222,18 @@ BaseDtu::NocSlavePort::getAddrRanges() const
     return ranges;
 }
 
+AddrRangeList
+BaseDtu::CacheMemSlavePort::getAddrRanges() const
+{
+    AddrRangeList ranges;
+
+    auto range = AddrRange(0, -1);
+
+    ranges.push_back(range);
+
+    return ranges;
+}
+
 BaseDtu::BaseDtu(BaseDtuParams* p)
   : MemObject(p),
     nocMasterPort(*this),
@@ -226,6 +242,7 @@ BaseDtu::BaseDtu(BaseDtuParams* p)
     dcacheMasterPort(*this),
     icacheSlavePort(icacheMasterPort, *this),
     dcacheSlavePort(dcacheMasterPort, *this),
+    cacheMemSlavePort(*this),
     watchRange(1, 0),
     coreId(p->core_id),
     regFileBaseAddr(p->regfile_base_addr)
@@ -249,16 +266,45 @@ BaseDtu::init()
         icacheSlavePort.sendRangeChange();
     if(dcacheSlavePort.isConnected())
         dcacheSlavePort.sendRangeChange();
+
+    // the cache-mem slave port is only used if we have a cache
+    if(cacheMemSlavePort.isConnected())
+        cacheMemSlavePort.sendRangeChange();
 }
 
 bool
 BaseDtu::NocSlavePort::handleRequest(PacketPtr pkt, bool *busy, bool functional)
 {
-    assert(!functional);
-
     *busy = true;
 
     dtu.handleNocRequest(pkt);
+
+    return true;
+}
+
+bool
+BaseDtu::CacheMemSlavePort::handleRequest(PacketPtr pkt, bool *busy, bool functional)
+{
+    // if that failed, it was an invalid request (probably due to speculative execution)
+    if(!dtu.handleCacheMemRequest(pkt, functional))
+    {
+        // invalid reads just get zeros
+        if(pkt->isRead())
+            memset(pkt->getPtr<uint8_t>(), 0, pkt->getSize());
+
+        // if a response is necessary, send one
+        if(pkt->needsResponse())
+        {
+            pkt->makeResponse();
+
+            // somehow we need to send that later to make the cache happy.
+            // use the existing function for that (which requires busy=true)
+            *busy = true;
+            schedTimingResp(pkt, dtu.clockEdge(Cycles(1)));
+        }
+
+        // in general, pretend that everything is fine
+    }
     return true;
 }
 
@@ -284,6 +330,8 @@ BaseDtu::getSlavePort(const std::string &if_name, PortID idx)
         return dcacheSlavePort;
     else if (if_name == "noc_slave_port")
         return nocSlavePort;
+    else if (if_name == "cache_mem_slave_port")
+        return cacheMemSlavePort;
     else
         return MemObject::getSlavePort(if_name, idx);
 }
@@ -317,6 +365,25 @@ BaseDtu::schedCpuResponse(PacketPtr pkt, Tick when)
 }
 
 void
+BaseDtu::sendCacheMemResponse(PacketPtr pkt)
+{
+    DPRINTF(DtuSlavePort, "Send %s response at %#x (%u bytes)\n",
+            pkt->isRead() ? "read" : "write",
+            pkt->getAddr(),
+            pkt->getSize());
+
+    cacheMemSlavePort.sendTimingResp(pkt);
+}
+
+void
+BaseDtu::endNocRequest()
+{
+    DPRINTF(DtuSlavePort, "Ending NoC request (without response)\n");
+
+    nocSlavePort.handleSuccessfulResponse();
+}
+
+void
 BaseDtu::schedNocRequest(PacketPtr pkt, Tick when)
 {
     nocMasterPort.schedTimingReq(pkt, when);
@@ -328,6 +395,12 @@ BaseDtu::schedMemRequest(PacketPtr pkt, Tick when)
     checkWatchRange(pkt);
 
     dcacheMasterPort.schedTimingReq(pkt, when);
+}
+
+void
+BaseDtu::sendFunctionalNocRequest(PacketPtr pkt)
+{
+    nocMasterPort.sendFunctional(pkt);
 }
 
 void

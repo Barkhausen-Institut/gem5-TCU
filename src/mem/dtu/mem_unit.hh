@@ -88,6 +88,11 @@ class MemoryUnit
 
 
     /**
+     * Functional access from NoC
+     */
+    void recvFunctionalFromNoc(PacketPtr pkt);
+
+    /**
      * Received read/write request from NoC -> Mem/regfile request
      */
     void recvFromNoc(PacketPtr pkt);

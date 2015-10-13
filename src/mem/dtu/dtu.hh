@@ -76,6 +76,8 @@ class Dtu : public BaseDtu
         MESSAGE,
         READ_REQ,
         WRITE_REQ,
+        CACHE_MEM_REQ_FUNC,
+        CACHE_MEM_REQ,
     };
 
     enum class TransferType
@@ -155,7 +157,8 @@ class Dtu : public BaseDtu
 
     void sendNocRequest(NocPacketType type,
                         PacketPtr pkt,
-                        Cycles delay);
+                        Cycles delay,
+                        bool functional = false);
 
     void startTransfer(TransferType type,
                        NocAddr targetAddr,
@@ -184,6 +187,8 @@ class Dtu : public BaseDtu
 
     void handleCpuRequest(PacketPtr pkt) override;
 
+    bool handleCacheMemRequest(PacketPtr pkt, bool functional) override;
+
   private:
 
     const MasterID masterId;
@@ -203,6 +208,8 @@ class Dtu : public BaseDtu
     EventWrapper<Dtu, &Dtu::finishCommand> finishCommandEvent;
 
     bool cmdInProgress;
+
+    const unsigned memEp;
 
   public:
 

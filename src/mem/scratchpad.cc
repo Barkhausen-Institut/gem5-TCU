@@ -44,7 +44,6 @@ Scratchpad::init()
     AbstractMemory::init();
 
     assert(cpuPort.isConnected());
-    // assert(dtuPort.isConnected());
 
     cpuPort.sendRangeChange();
     if(dtuPort.isConnected())
@@ -68,6 +67,16 @@ Scratchpad::getSlavePort(const std::string &if_name, PortID idx)
 Tick
 Scratchpad::recvAtomic(PacketPtr pkt)
 {
+    // ignore invalid requests
+    if(!AddrRange(pkt->getAddr(), pkt->getAddr() + pkt->getSize() - 1).isSubset(getAddrRange()))
+    {
+        if(pkt->needsResponse())
+            pkt->makeResponse();
+        if(pkt->isRead())
+            memset(pkt->getPtr<uint8_t>(), 0, pkt->getSize());
+        return 0;
+    }
+
     /*
      * TODO
      * So far the Scratchpad has no busy state -> it accepts all requests!
@@ -100,7 +109,8 @@ AddrRangeList
 Scratchpad::ScratchpadPort::getAddrRanges() const
 {
     AddrRangeList ranges;
-    ranges.push_back(scratchpad.getAddrRange());
+    // everything until IO space
+    ranges.push_back(AddrRange(0, 0x2000000000000000 - 1));
     return ranges;
 }
 

@@ -44,6 +44,8 @@ class BaseDtu(MemObject):
     icache_master_port = MasterPort("Port that connects the icache")
     dcache_master_port = MasterPort("Port that connects the dcache")
 
+    cache_mem_slave_port = SlavePort("Port that performs memory requests on behalf of the cache")
+
     regfile_base_addr = Param.Addr(0xF0000000, "Register file address")
     core_id = Param.Unsigned("ID of the core this DTU belongs to")
 
@@ -59,6 +61,11 @@ class Dtu(BaseDtu):
     num_cmd_epid_bits = Param.Unsigned(8, "Number of bits used to identify the endpoint in a command")
 
     max_noc_packet_size = Param.MemorySize("1kB", "Maximum size of a NoC packet (needs to be the same for all DTUs)")
+
+    memory_ep = Param.Unsigned(7, "The memory endpoint")
+    memory_pe = Param.Unsigned(0, "The memory PE to use")
+    memory_offset = Param.Addr(0, "The offset in the memory PE")
+    memory_size = Param.MemorySize("0kB", "The size of the memory range in the memory PE")
 
     block_size = Param.MemorySize("64B", "The block size with which to access the local memory")
 

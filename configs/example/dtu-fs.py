@@ -149,6 +149,12 @@ CPUClass = CpuConfig.get(options.cpu_type)
 #                                                                             #
 ###############################################################################
 
+IO_address_space_base = 0x8000000000000000
+interrupts_address_space_base = 0xa000000000000000
+APIC_range_size = 1 << 12;
+
+base_offset = 32 * 1024 * 1024
+
 def createPE(no, mem=False, cache=True):
     # each PE is represented by it's own subsystem
     if mem:
@@ -163,20 +169,6 @@ def createPE(no, mem=False, cache=True):
                               response_latency = 1,
                               width = 16)
 
-    if not mem:
-        pe.cachespm = Scratchpad(in_addr_map = "true")
-        if cache:
-            pe.cache = L1Cache(size='64kB', assoc=2)
-            pe.cache.forward_snoops = False
-            pe.cache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
-            pe.cache.cpu_side = pe.xbar.master
-            pe.cache.mem_side = pe.cachespm.cpu_port
-        else:
-            pe.cachespm.cpu_port = pe.xbar.master
-
-        # for now, a bit more to be able to put every application at a different address
-        pe.cachespm.range = 8 * 1024 * 1024
-
     pe.dtu = Dtu()
     pe.dtu.core_id = no
 
@@ -186,6 +178,27 @@ def createPE(no, mem=False, cache=True):
     pe.dtu.noc_master_port = root.noc.slave
     pe.dtu.noc_slave_port  = root.noc.master
 
+    if not mem:
+        if cache:
+            pe.cache = L1Cache(size='64kB', assoc=2)
+            pe.cache.forward_snoops = False
+            pe.cache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
+            pe.cache.cpu_side = pe.xbar.master
+            pe.cache.mem_side = pe.dtu.cache_mem_slave_port
+
+            # connect memory endpoint to the DRAM PE
+            pe.dtu.memory_pe = options.num_pes
+            pe.dtu.memory_offset = base_offset + pe.accessible_mem_size.value * no
+            pe.dtu.memory_size = pe.accessible_mem_size
+
+            # don't check whether the kernel is in memory because a PE does not have memory in this
+            # case, but just a cache that is connected to a different PE
+            pe.kernel_addr_check = False
+        else:
+            pe.cachespm = Scratchpad(in_addr_map = "true")
+            pe.cachespm.cpu_port = pe.xbar.master
+            pe.cachespm.range = pe.accessible_mem_size
+
     # for memory PEs or PEs with SPM, we do not need a buffer. for the sake of an easy implementation
     # we just make the buffer very large and the block size as well, so that we can read a packet
     # from SPM/DRAM into the buffer and send it from there. Since that costs no simulated time,
@@ -193,7 +206,6 @@ def createPE(no, mem=False, cache=True):
     if mem or not cache:
         pe.dtu.block_size = pe.dtu.max_noc_packet_size
         pe.dtu.buf_size = pe.dtu.max_noc_packet_size
-        pe.dtu.buf_count = 1
 
     if options.watch_pe == no:
         print "PE%u: watching memory %#x..%#x" % (no, options.watch_start, options.watch_end)
@@ -228,10 +240,6 @@ root.noc = NoncoherentXBar(forward_latency  = 0,
                            frontend_latency = 1,
                            response_latency = 1,
                            width = 8)
-
-IO_address_space_base = 0x8000000000000000
-interrupts_address_space_base = 0xa000000000000000
-APIC_range_size = 1 << 12;
 
 # create a dummy platform and system for the UART
 root.platform = IOPlatform()
@@ -272,9 +280,12 @@ for i in range(0, len(cmd_list)):
     pe.boot_osflags = cmd_list[i]
     print "PE%d: %s" % (i, cmd_list[i])
     print '     core   =%s x86' % (options.cpu_type)
-    print '     memsize=%d KiB' % (int(pe.cachespm.range.end + 1) / 1024)
     if options.caches:
         print '     L1cache=%d KiB' % (pe.cache.size.value / 1024)
+        print '     ExtMem =PE%d : %#010x .. %#010x' % \
+          (pe.dtu.memory_pe, pe.dtu.memory_offset, pe.dtu.memory_offset + pe.dtu.memory_size.value)
+    else:
+        print '     memsize=%d KiB' % (int(pe.cachespm.range.end + 1) / 1024)
     print '     bufsize=%d KiB, blocksize=%d B, count=%d' % \
         (pe.dtu.buf_size.value / 1024, pe.dtu.block_size.value, pe.dtu.buf_count)
     print

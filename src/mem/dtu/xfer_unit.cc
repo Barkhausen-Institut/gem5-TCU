@@ -220,20 +220,26 @@ XferUnit::recvMemResponse(size_t bufId,
         }
         else
         {
-            DPRINTFS(DtuXfers, (&dtu), "buf%d: Sending NoC response of %lu bytes\n",
-                     buf->id,
-                     buf->offset);
-
             // TODO should we respond earlier for remote reads? i.e. as soon as its in the buffer
             assert(buf->event.pkt != NULL);
 
-            buf->event.pkt->makeResponse();
+            // some requests from the cache (e.g. cleanEvict) do not need a response
+            if(buf->event.pkt->needsResponse())
+            {
+                DPRINTFS(DtuXfers, (&dtu), "buf%d: Sending NoC response of %lu bytes\n",
+                         buf->id,
+                         buf->offset);
 
-            if(buf->event.type == Dtu::TransferType::REMOTE_READ)
-                memcpy(buf->event.pkt->getPtr<uint8_t>(), buf->bytes, buf->offset);
+                buf->event.pkt->makeResponse();
 
-            Cycles delay = dtu.transferToNocLatency;
-            dtu.schedNocResponse(buf->event.pkt, dtu.clockEdge(delay));
+                if(buf->event.type == Dtu::TransferType::REMOTE_READ)
+                    memcpy(buf->event.pkt->getPtr<uint8_t>(), buf->bytes, buf->offset);
+
+                Cycles delay = dtu.transferToNocLatency;
+                dtu.schedNocResponse(buf->event.pkt, dtu.clockEdge(delay));
+            }
+            else
+                dtu.endNocRequest();
         }
 
         DPRINTFS(DtuXfers, (&dtu), "buf%d: Transfer done\n",
