@@ -94,7 +94,7 @@ BaseDtu::DtuSlavePort::schedTimingResp(PacketPtr pkt, Tick when)
 
     respPkt = pkt;
 
-    DPRINTF(DtuSlavePort, "Schedule response %#x at Tick %u\n",
+    DPRINTF(DtuSlavePort, "Schedule timing response %#x at Tick %u\n",
                           pkt->getAddr(),
                           when);
 
@@ -104,7 +104,7 @@ BaseDtu::DtuSlavePort::schedTimingResp(PacketPtr pkt, Tick when)
 Tick
 BaseDtu::DtuSlavePort::recvAtomic(PacketPtr pkt)
 {
-    DPRINTF(DtuSlavePort, "Receive %s request at %#x (%u bytes)\n",
+    DPRINTF(DtuSlavePort, "Receive atomic %s request at %#x (%u bytes)\n",
                           pkt->isRead() ? "read" : "write",
                           pkt->getAddr(),
                           pkt->getSize());
@@ -117,7 +117,7 @@ BaseDtu::DtuSlavePort::recvAtomic(PacketPtr pkt)
 void
 BaseDtu::DtuSlavePort::recvFunctional(PacketPtr pkt)
 {
-    DPRINTF(DtuSlavePort, "Receive %s request at %#x (%u bytes)\n",
+    DPRINTF(DtuSlavePort, "Receive functional %s request at %#x (%u bytes)\n",
                           pkt->isRead() ? "read" : "write",
                           pkt->getAddr(),
                           pkt->getSize());
@@ -130,7 +130,7 @@ BaseDtu::DtuSlavePort::recvTimingReq(PacketPtr pkt)
 {
     if (busy)
     {
-        DPRINTF(DtuSlavePort, "Reject %s request at %#x (%u bytes)\n",
+        DPRINTF(DtuSlavePort, "Reject timing %s request at %#x (%u bytes)\n",
                           pkt->isRead() ? "read" : "write",
                           pkt->getAddr(),
                           pkt->getSize());
@@ -139,7 +139,7 @@ BaseDtu::DtuSlavePort::recvTimingReq(PacketPtr pkt)
         return false;
     }
 
-    DPRINTF(DtuSlavePort, "Receive %s request at %#x (%u bytes)\n",
+    DPRINTF(DtuSlavePort, "Receive timing %s request at %#x (%u bytes)\n",
                           pkt->isRead() ? "read" : "write",
                           pkt->getAddr(),
                           pkt->getSize());
