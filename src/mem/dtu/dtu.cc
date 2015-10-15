@@ -399,6 +399,10 @@ Dtu::handleCacheMemRequest(PacketPtr pkt, bool functional)
         return true;
     }
 
+    // we don't have cache coherence. so we don't care about invalidate requests
+    if(pkt->cmd == MemCmd::InvalidateReq)
+        return false;
+
     unsigned targetCoreId = regs().get(memEp, EpReg::TGT_COREID);
     Addr targetAddr = regs().get(memEp, EpReg::REQ_REM_ADDR);
     Addr remoteSize = regs().get(memEp, EpReg::REQ_REM_SIZE);
