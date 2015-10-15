@@ -160,6 +160,10 @@ XferUnit::startTransfer(Dtu::TransferType type,
 
     dtu.schedule(buf->event, dtu.clockEdge(Cycles(delay + 1)));
 
+    // finish the noc request now to make the port unbusy
+    if(type == Dtu::TransferType::REMOTE_READ || type == Dtu::TransferType::REMOTE_WRITE)
+        dtu.schedNocRequestFinished(dtu.clockEdge(Cycles(1)));
+
     return true;
 }
 
@@ -238,8 +242,6 @@ XferUnit::recvMemResponse(size_t bufId,
                 Cycles delay = dtu.transferToNocLatency;
                 dtu.schedNocResponse(buf->event.pkt, dtu.clockEdge(delay));
             }
-            else
-                dtu.endNocRequest();
         }
 
         DPRINTFS(DtuXfers, (&dtu), "buf%d: Transfer done\n",

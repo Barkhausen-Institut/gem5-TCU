@@ -31,6 +31,8 @@
 #ifndef __MEM_DTU_BASE_HH__
 #define __MEM_DTU_BASE_HH__
 
+#include <queue>
+
 #include "mem/mem_object.hh"
 #include "mem/qport.hh"
 #include "params/BaseDtu.hh"
@@ -105,15 +107,13 @@ class BaseDtu : public MemObject
 
         bool sendReqRetry;
 
-        PacketPtr respPkt;
-
-        bool waitForRespRetry;
-
         struct ResponseEvent : public Event
         {
             DtuSlavePort& port;
 
-            ResponseEvent(DtuSlavePort& _port) : port(_port) {}
+            PacketPtr pkt;
+
+            ResponseEvent(DtuSlavePort& _port, PacketPtr _pkt) : port(_port), pkt(_pkt) {}
 
             void process() override;
 
@@ -125,7 +125,7 @@ class BaseDtu : public MemObject
             const std::string name() const override { return port.name(); }
         };
 
-        ResponseEvent responseEvent;
+        std::queue<ResponseEvent*> pendingResponses;
 
       public:
 
@@ -143,7 +143,7 @@ class BaseDtu : public MemObject
 
         void recvRespRetry() override;
 
-        void handleSuccessfulResponse();
+        void requestFinished();
     };
 
     class NocSlavePort : public DtuSlavePort
@@ -193,8 +193,6 @@ class BaseDtu : public MemObject
                 // not supported here
                 assert(!functional);
 
-                // set that before handling the request, because it will schedule the response
-                *busy = true;
                 dtu.handleCpuRequest(pkt);
             }
             else
@@ -243,6 +241,8 @@ class BaseDtu : public MemObject
 
     void schedMemRequest(PacketPtr pkt, Tick when);
 
+    void schedNocRequestFinished(Tick when);
+
     void sendFunctionalNocRequest(PacketPtr pkt);
 
     void sendAtomicNocRequest(PacketPtr pkt);
@@ -250,8 +250,6 @@ class BaseDtu : public MemObject
     void sendAtomicMemRequest(PacketPtr pkt);
 
     void sendCacheMemResponse(PacketPtr pkt);
-
-    void endNocRequest();
 
     virtual void completeNocRequest(PacketPtr pkt) = 0;
 
@@ -264,6 +262,8 @@ class BaseDtu : public MemObject
     virtual bool handleCacheMemRequest(PacketPtr pkt, bool functional) = 0;
 
   protected:
+
+    void nocRequestFinished();
 
     void checkWatchRange(PacketPtr pkt);
 
@@ -282,6 +282,8 @@ class BaseDtu : public MemObject
     CacheMemSlavePort cacheMemSlavePort;
 
     AddrRange watchRange;
+
+    EventWrapper<BaseDtu, &BaseDtu::nocRequestFinished> nocRequestFinishedEvent;
 
   public:
 

@@ -466,7 +466,10 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
         if (isCpuRequest)
             schedCpuResponse(pkt, when);
         else
+        {
+            schedNocRequestFinished(clockEdge(Cycles(1)));
             schedNocResponse(pkt, when);
+        }
 
         if (commandWritten)
             schedule(executeCommandEvent, when);

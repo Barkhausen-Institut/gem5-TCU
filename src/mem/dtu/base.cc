@@ -80,32 +80,42 @@ BaseDtu::DtuSlavePort::DtuSlavePort(const std::string& _name, BaseDtu& _dtu)
     dtu(_dtu),
     busy(false),
     sendReqRetry(false),
-    respPkt(nullptr),
-    waitForRespRetry(false),
-    responseEvent(*this)
+    pendingResponses()
 { }
+
+void
+BaseDtu::DtuSlavePort::requestFinished()
+{
+    assert(busy);
+    busy = false;
+
+    DPRINTF(DtuSlavePort, "Timing request finished\n");
+
+    if (sendReqRetry)
+    {
+        DPRINTF(DtuSlavePort, "Send request retry\n");
+
+        sendReqRetry = false;
+        sendRetryReq();
+    }
+}
 
 void
 BaseDtu::DtuSlavePort::schedTimingResp(PacketPtr pkt, Tick when)
 {
-    assert(busy);
-    assert(respPkt == nullptr);
-    assert(!waitForRespRetry);
-
-    respPkt = pkt;
-
     DPRINTF(DtuSlavePort, "Schedule timing response %#x at Tick %u\n",
                           pkt->getAddr(),
                           when);
 
-    dtu.schedule(responseEvent, when);
+    auto respEvent = new ResponseEvent(*this, pkt);
+    dtu.schedule(respEvent, when);
 }
 
 Tick
 BaseDtu::DtuSlavePort::recvAtomic(PacketPtr pkt)
 {
     DPRINTF(DtuSlavePort, "Receive atomic %s request at %#x (%u bytes)\n",
-                          pkt->isRead() ? "read" : "write",
+                          pkt->cmd.toString(),
                           pkt->getAddr(),
                           pkt->getSize());
 
@@ -118,7 +128,7 @@ void
 BaseDtu::DtuSlavePort::recvFunctional(PacketPtr pkt)
 {
     DPRINTF(DtuSlavePort, "Receive functional %s request at %#x (%u bytes)\n",
-                          pkt->isRead() ? "read" : "write",
+                          pkt->cmd.toString(),
                           pkt->getAddr(),
                           pkt->getSize());
 
@@ -133,7 +143,7 @@ BaseDtu::DtuSlavePort::recvTimingReq(PacketPtr pkt)
     if (busy)
     {
         DPRINTF(DtuSlavePort, "Reject timing %s request at %#x (%u bytes)\n",
-                          pkt->isRead() ? "read" : "write",
+                          pkt->cmd.toString(),
                           pkt->getAddr(),
                           pkt->getSize());
 
@@ -142,7 +152,7 @@ BaseDtu::DtuSlavePort::recvTimingReq(PacketPtr pkt)
     }
 
     DPRINTF(DtuSlavePort, "Receive timing %s request at %#x (%u bytes)\n",
-                          pkt->isRead() ? "read" : "write",
+                          pkt->cmd.toString(),
                           pkt->getAddr(),
                           pkt->getSize());
 
@@ -152,57 +162,58 @@ BaseDtu::DtuSlavePort::recvTimingReq(PacketPtr pkt)
 }
 
 void
-BaseDtu::DtuSlavePort::handleSuccessfulResponse()
-{
-    assert(busy);
-
-    busy = false;
-    waitForRespRetry = false;
-    respPkt = nullptr;
-
-    if (sendReqRetry)
-    {
-        DPRINTF(DtuSlavePort, "Send request retry\n");
-
-        sendReqRetry = false;
-        sendRetryReq();
-    }
-}
-
-void
 BaseDtu::DtuSlavePort::recvRespRetry()
 {
-    assert(respPkt != nullptr);
-    assert(busy);
-    assert(waitForRespRetry);
-
-    DPRINTF(DtuSlavePort, "Receive response retry at %#x\n", respPkt->getAddr());
-
-    if (sendTimingResp(respPkt))
+    // try to send all queued responses. the first one should always succeed because the XBar called
+    // us because it is free. the second should always fail since it is busy then. in this case,
+    // we stop here.
+    while(!pendingResponses.empty())
     {
-        DPRINTF(DtuSlavePort, "Resume after successful retry at %#x\n",
-                              respPkt->getAddr());
+        ResponseEvent *ev = pendingResponses.front();
 
-        handleSuccessfulResponse();
+        DPRINTF(DtuSlavePort, "Receive response retry at %#x\n", ev->pkt->getAddr());
+
+        if (sendTimingResp(ev->pkt))
+        {
+            DPRINTF(DtuSlavePort, "Resume after successful retry at %#x\n",
+                                  ev->pkt->getAddr());
+
+            DPRINTF(DtuSlavePort, "Poping %p from queue\n", ev);
+            pendingResponses.pop();
+            delete ev;
+        }
+        else
+            break;
     }
 }
 
 void
 BaseDtu::DtuSlavePort::ResponseEvent::process()
 {
-    assert(port.busy);
-    assert(port.respPkt != nullptr);
-    assert(!port.waitForRespRetry);
+    // if the XBar is busy, we can only send a response to a port once. this is queued there and
+    // calls our recvRespRetry() if the XBar is idle again. but we can't try another time. so, for
+    // the second time, don't even try but directly queue it here
+    if (port.pendingResponses.empty())
+    {
+        DPRINTF(DtuSlavePort, "Try to send %s response at %#x (%u bytes)\n",
+                              pkt->cmd.toString(),
+                              pkt->getAddr(),
+                              pkt->getSize());
 
-    DPRINTF(DtuSlavePort, "Send %s response at %#x (%u bytes)\n",
-                          port.respPkt->isRead() ? "read" : "write",
-                          port.respPkt->getAddr(),
-                          port.respPkt->getSize());
-
-    if (port.sendTimingResp(port.respPkt))
-        port.handleSuccessfulResponse();
+        if (!port.sendTimingResp(pkt))
+        {
+            DPRINTFS(DtuSlavePort, (&port), "Pushing %p to queue\n", this);
+            port.pendingResponses.push(this);
+        }
+        // if it succeeded, let the event system delete the event
+        else
+            setFlags(AutoDelete);
+    }
     else
-        port.waitForRespRetry = true;
+    {
+        DPRINTFS(DtuSlavePort, (&port), "Pushing %p to queue\n", this);
+        port.pendingResponses.push(this);
+    }
 }
 
 AddrRangeList
@@ -244,6 +255,7 @@ BaseDtu::BaseDtu(BaseDtuParams* p)
     dcacheSlavePort(dcacheMasterPort, *this),
     cacheMemSlavePort(*this),
     watchRange(1, 0),
+    nocRequestFinishedEvent(*this),
     coreId(p->core_id),
     regFileBaseAddr(p->regfile_base_addr)
 {
@@ -298,8 +310,6 @@ BaseDtu::CacheMemSlavePort::handleRequest(PacketPtr pkt, bool *busy, bool functi
             pkt->makeResponse();
 
             // somehow we need to send that later to make the cache happy.
-            // use the existing function for that (which requires busy=true)
-            *busy = true;
             schedTimingResp(pkt, dtu.clockEdge(Cycles(1)));
         }
 
@@ -359,6 +369,18 @@ BaseDtu::schedNocResponse(PacketPtr pkt, Tick when)
 }
 
 void
+BaseDtu::schedNocRequestFinished(Tick when)
+{
+    schedule(nocRequestFinishedEvent, when);
+}
+
+void
+BaseDtu::nocRequestFinished()
+{
+    nocSlavePort.requestFinished();
+}
+
+void
 BaseDtu::schedCpuResponse(PacketPtr pkt, Tick when)
 {
     dcacheSlavePort.schedTimingResp(pkt, when);
@@ -368,19 +390,11 @@ void
 BaseDtu::sendCacheMemResponse(PacketPtr pkt)
 {
     DPRINTF(DtuSlavePort, "Send %s response at %#x (%u bytes)\n",
-            pkt->isRead() ? "read" : "write",
+            pkt->cmd.toString(),
             pkt->getAddr(),
             pkt->getSize());
 
     cacheMemSlavePort.sendTimingResp(pkt);
-}
-
-void
-BaseDtu::endNocRequest()
-{
-    DPRINTF(DtuSlavePort, "Ending NoC request (without response)\n");
-
-    nocSlavePort.handleSuccessfulResponse();
 }
 
 void

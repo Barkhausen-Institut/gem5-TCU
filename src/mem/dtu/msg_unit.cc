@@ -356,6 +356,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
             pkt->headerDelay = 0;
             pkt->payloadDelay = 0;
 
+            dtu.schedNocRequestFinished(dtu.clockEdge(Cycles(1)));
             dtu.schedNocResponse(pkt, dtu.clockEdge(delay));
         }
     }
