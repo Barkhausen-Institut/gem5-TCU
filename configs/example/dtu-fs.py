@@ -155,7 +155,7 @@ APIC_range_size = 1 << 12;
 
 base_offset = 32 * 1024 * 1024
 
-def createPE(no, mem=False, cache=True):
+def createPE(no, mem=False, cache=True, memPE=0):
     # each PE is represented by it's own subsystem
     if mem:
         pe = MemSystem(mem_mode = CPUClass.memory_mode())
@@ -187,7 +187,7 @@ def createPE(no, mem=False, cache=True):
             pe.cache.mem_side = pe.dtu.cache_mem_slave_port
 
             # connect memory endpoint to the DRAM PE
-            pe.dtu.memory_pe = options.num_pes
+            pe.dtu.memory_pe = memPE
             pe.dtu.memory_offset = base_offset + pe.accessible_mem_size.value * no
             pe.dtu.memory_size = pe.accessible_mem_size
 
@@ -215,6 +215,65 @@ def createPE(no, mem=False, cache=True):
     pe.system_port = pe.xbar.slave
 
     return pe
+
+def createCorePE(no, cache, memPE):
+    pe = createPE(no, mem=False, cache=cache, memPE=memPE)
+    pe.readfile = "/dev/stdin"
+
+    pe.cpu = CPUClass()
+    pe.cpu.cpu_id = 0
+    pe.cpu.clk_domain = root.cpu_clk_domain
+
+    pe.dtu.icache_slave_port = pe.cpu.icache_port
+    pe.dtu.dcache_slave_port = pe.cpu.dcache_port
+
+    # Command line
+    pe.kernel = cmd_list[i].split(' ')[0]
+    pe.boot_osflags = cmd_list[i]
+    print "PE%d: %s" % (i, cmd_list[i])
+    print '     core   =%s x86' % (options.cpu_type)
+    try:
+        print '     L1cache=%d KiB' % (pe.cache.size.value / 1024)
+        print '     ExtMem =PE%d : %#010x .. %#010x' % \
+          (pe.dtu.memory_pe, pe.dtu.memory_offset, pe.dtu.memory_offset + pe.dtu.memory_size.value)
+    except:
+        print '     memsize=%d KiB' % (int(pe.cachespm.range.end + 1) / 1024)
+    print '     bufsize=%d KiB, blocksize=%d B, count=%d' % \
+        (pe.dtu.buf_size.value / 1024, pe.dtu.block_size.value, pe.dtu.buf_count)
+    print
+
+    # connect the IO space via bridge to the root NoC
+    pe.bridge = Bridge(delay='50ns')
+    pe.bridge.master = root.noc.slave
+    pe.bridge.slave = pe.xbar.master
+    pe.bridge.ranges = \
+        [
+        AddrRange(IO_address_space_base,
+                  interrupts_address_space_base - 1)
+        ]
+
+    pe.cpu.createInterruptController()
+
+    pe.cpu.interrupts.pio = pe.xbar.master
+    pe.cpu.interrupts.int_slave = pe.xbar.master
+    pe.cpu.interrupts.int_master = pe.xbar.slave
+
+    pe.cpu.itb.walker.port = pe.xbar.slave
+    pe.cpu.dtb.walker.port = pe.xbar.slave
+
+def createMemPE(no, size, content=None):
+    pe = createPE(no, mem=True)
+    pe.mem_ctrl = DDR3_1600_x64()
+    pe.mem_ctrl.device_size = size
+    pe.mem_ctrl.range = MemorySize(size).value
+    pe.mem_ctrl.port = pe.xbar.master
+    if not content is None:
+        pe.mem_file = content
+    print 'PE%d: %s' % (no, content)
+    print '     memsize=%d KiB' % (int(pe.mem_ctrl.range.end + 1) / 1024)
+    print '     bufsize=%d KiB, blocksize=%d B, count=%d' % \
+        (pe.dtu.buf_size.value / 1024, pe.dtu.block_size.value, pe.dtu.buf_count)
+    print
 
 
 # Set up the system
@@ -256,70 +315,18 @@ root.platform.com_1.pio = root.noc.master
 cmd_list = options.cmd.split(",")
 # allow an ',' at the end
 if cmd_list[len(cmd_list) - 1] == '':
-  cmd_list.pop()
+    cmd_list.pop()
 
-# A PE (processing element) consists of a CPU, a Scratchpad-Memory, and a DTU.
-# These elements are connected via a simple non-coherent XBar. The DTU ports
-# mem_side_slave and mem_side_master are the PE's interface to the outside
-# world.
-
-# currently, there is just one memory-PE
+# create the core PEs
 for i in range(0, len(cmd_list)):
-    pe = createPE(i, cache=options.caches)
-    pe.readfile = "/dev/stdin"
+    createCorePE(no=i,
+                 cache=options.caches,
+                 memPE=options.num_pes)
 
-    pe.cpu = CPUClass()
-    pe.cpu.cpu_id = 0
-    pe.cpu.clk_domain = root.cpu_clk_domain
-
-    pe.dtu.icache_slave_port = pe.cpu.icache_port
-    pe.dtu.dcache_slave_port = pe.cpu.dcache_port
-
-    # Command line
-    pe.kernel = cmd_list[i].split(' ')[0]
-    pe.boot_osflags = cmd_list[i]
-    print "PE%d: %s" % (i, cmd_list[i])
-    print '     core   =%s x86' % (options.cpu_type)
-    if options.caches:
-        print '     L1cache=%d KiB' % (pe.cache.size.value / 1024)
-        print '     ExtMem =PE%d : %#010x .. %#010x' % \
-          (pe.dtu.memory_pe, pe.dtu.memory_offset, pe.dtu.memory_offset + pe.dtu.memory_size.value)
-    else:
-        print '     memsize=%d KiB' % (int(pe.cachespm.range.end + 1) / 1024)
-    print '     bufsize=%d KiB, blocksize=%d B, count=%d' % \
-        (pe.dtu.buf_size.value / 1024, pe.dtu.block_size.value, pe.dtu.buf_count)
-    print
-
-    # connect the IO space via bridge to the root NoC
-    pe.bridge = Bridge(delay='50ns')
-    pe.bridge.master = root.noc.slave
-    pe.bridge.slave = pe.xbar.master
-    pe.bridge.ranges = \
-        [
-        AddrRange(IO_address_space_base,
-                  interrupts_address_space_base - 1)
-        ]
-
-    pe.cpu.createInterruptController()
-
-    pe.cpu.interrupts.pio = pe.xbar.master
-    pe.cpu.interrupts.int_slave = pe.xbar.master
-    pe.cpu.interrupts.int_master = pe.xbar.slave
-
-    pe.cpu.itb.walker.port = pe.xbar.slave
-    pe.cpu.dtb.walker.port = pe.xbar.slave
-
-pe = createPE(options.num_pes, mem=True)
-pe.mem_ctrl = DDR3_1600_x64()
-pe.mem_ctrl.device_size = options.mem_size
-pe.mem_ctrl.range = MemorySize(options.mem_size).value
-pe.mem_ctrl.port = pe.xbar.master
-pe.mem_file = options.init_mem
-print 'PE%d: %s' % (options.num_pes, options.init_mem)
-print '     memsize=%d KiB' % (int(pe.mem_ctrl.range.end + 1) / 1024)
-print '     bufsize=%d KiB, blocksize=%d B, count=%d' % \
-    (pe.dtu.buf_size.value / 1024, pe.dtu.block_size.value, pe.dtu.buf_count)
-print
+# create the memory PEs
+createMemPE(options.num_pes,
+            size=options.mem_size,
+            content=options.init_mem)
 
 # Instantiate configuration
 m5.instantiate()
