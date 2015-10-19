@@ -301,7 +301,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
 
     if(dtu.coreId == 0 && epId == 0)
     {
-        size_t sysNo = pkt->getPtr<uint8_t>()[0];
+        size_t sysNo = pkt->getPtr<uint8_t>()[sizeof(*header) + 0];
         DPRINTFS(DtuSysCalls, (&dtu), "  syscall: %s\n",
             sysNo < (sizeof(syscallNames) / sizeof(syscallNames[0])) ? syscallNames[sysNo] : "Unknown");
     }
