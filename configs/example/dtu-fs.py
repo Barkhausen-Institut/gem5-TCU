@@ -325,7 +325,7 @@ if cmd_list[len(cmd_list) - 1] == '':
     cmd_list.pop()
 
 # create the core PEs
-for i in range(0, len(cmd_list)):
+for i in range(0, min(options.num_pes, len(cmd_list))):
     createCorePE(no=i,
                  cache=options.caches,
                  memPE=options.num_pes)
