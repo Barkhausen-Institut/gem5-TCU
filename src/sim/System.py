@@ -102,3 +102,7 @@ class System(MemObject):
     # Dynamic voltage and frequency handler for the system, disabled by default
     # Provide list of domains that need to be controlled by the handler
     dvfs_handler = DVFSHandler()
+
+    # Setting rgdb_wait to a positive integer waits for a remote debugger to
+    # connect to that context ID before continuing.
+    rgdb_wait = Param.Int(-1, "The context-id that should on remote gdb")

@@ -94,6 +94,7 @@ System::System(Params *p)
       workItemsBegin(0),
       workItemsEnd(0),
       numWorkIds(p->num_work_ids),
+      rgdb_wait(p->rgdb_wait),
       _params(p),
       totalNumInsts(0),
       instEventQueue("system instruction-based event queue")
@@ -193,13 +194,6 @@ bool System::breakpoint()
         return remoteGDB[0]->breakpoint();
     return false;
 }
-
-/**
- * Setting rgdb_wait to a positive integer waits for a remote debugger to
- * connect to that context ID before continuing.  This should really
-   be a parameter on the CPU object or something...
- */
-int rgdb_wait = -1;
 
 ContextID
 System::registerThreadContext(ThreadContext *tc, ContextID assigned)

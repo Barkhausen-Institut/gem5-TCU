@@ -474,6 +474,7 @@ class System : public MemObject
   public:
     std::vector<BaseRemoteGDB *> remoteGDB;
     std::vector<GDBListener *> gdbListen;
+    int rgdb_wait;
     bool breakpoint();
 
   public:
