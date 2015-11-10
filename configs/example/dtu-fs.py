@@ -61,6 +61,8 @@ parser.add_option("--cpu-type", type="choice", default="atomic",
 
 parser.add_option("--caches", action="store_true",
                   help = "use caches in the PEs")
+parser.add_option("--l2caches", action="store_true",
+                  help = "use L2 caches in the PEs")
 
 parser.add_option("-c", "--cmd", default="", type="string",
                   help="comma separated list of binaries")
@@ -157,7 +159,7 @@ APIC_range_size = 1 << 12;
 
 base_offset = 32 * 1024 * 1024
 
-def createPE(no, mem=False, cache=True, memPE=0):
+def createPE(no, mem=False, cache=True, l2cache=True, memPE=0):
     # each PE is represented by it's own subsystem
     if mem:
         pe = MemSystem(mem_mode = CPUClass.memory_mode())
@@ -182,11 +184,19 @@ def createPE(no, mem=False, cache=True, memPE=0):
 
     if not mem:
         if cache:
-            pe.cache = L1Cache(size='64kB', assoc=2)
-            pe.cache.forward_snoops = False
-            pe.cache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
-            pe.cache.cpu_side = pe.xbar.master
-            pe.cache.mem_side = pe.dtu.cache_mem_slave_port
+            pe.l1cache = L1Cache(size='64kB')
+            pe.l1cache.forward_snoops = False
+            pe.l1cache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
+            pe.l1cache.cpu_side = pe.xbar.master
+
+            if l2cache:
+                pe.l2cache = L2Cache(size='256kB')
+                pe.l2cache.forward_snoops = False
+                pe.l2cache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
+                pe.l2cache.cpu_side = pe.l1cache.mem_side
+                pe.l2cache.mem_side = pe.dtu.cache_mem_slave_port
+            else:
+                pe.l1cache.mem_side = pe.dtu.cache_mem_slave_port
 
             # connect memory endpoint to the DRAM PE
             pe.dtu.memory_pe = memPE
@@ -223,8 +233,8 @@ def createPE(no, mem=False, cache=True, memPE=0):
 
     return pe
 
-def createCorePE(no, cache, memPE):
-    pe = createPE(no, mem=False, cache=cache, memPE=memPE)
+def createCorePE(no, cache, l2cache, memPE):
+    pe = createPE(no, mem=False, cache=cache, l2cache=l2cache, memPE=memPE)
     pe.readfile = "/dev/stdin"
 
     pe.cpu = CPUClass()
@@ -240,7 +250,9 @@ def createCorePE(no, cache, memPE):
     print "PE%d: %s" % (i, cmd_list[i])
     print '     core   =%s x86' % (options.cpu_type)
     try:
-        print '     L1cache=%d KiB' % (pe.cache.size.value / 1024)
+        print '     L1cache=%d KiB' % (pe.l1cache.size.value / 1024)
+        if l2cache:
+            print '     L2cache=%d KiB' % (pe.l2cache.size.value / 1024)
         print '     ExtMem =PE%d : %#010x .. %#010x' % \
           (pe.dtu.memory_pe, pe.dtu.memory_offset, pe.dtu.memory_offset + pe.dtu.memory_size.value)
     except:
@@ -333,6 +345,7 @@ if cmd_list[len(cmd_list) - 1] == '':
 for i in range(0, min(options.num_pes, len(cmd_list))):
     createCorePE(no=i,
                  cache=options.caches,
+                 l2cache=options.l2caches,
                  memPE=options.num_pes)
 
 # create the memory PEs
