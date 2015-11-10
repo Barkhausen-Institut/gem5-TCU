@@ -57,48 +57,48 @@ parser.add_option("--list-cpu-types",
                   help="List available CPU types")
 parser.add_option("--cpu-type", type="choice", default="atomic",
                   choices=CpuConfig.cpu_names(),
-                  help = "type of cpu to run with")
+                  help="type of cpu to run with")
 
 parser.add_option("--caches", action="store_true",
-                  help = "use caches in the PEs")
+                  help="use caches in the PEs")
 parser.add_option("--l2caches", action="store_true",
-                  help = "use L2 caches in the PEs")
+                  help="use L2 caches in the PEs")
 
 parser.add_option("-c", "--cmd", default="", type="string",
                   help="comma separated list of binaries")
 parser.add_option("--init_mem", default="", type="string",
                   help="file to load into the memory-PE")
 parser.add_option("--debug", default="",
-                  help = "the binary to debug")
+                  help="the binary to debug")
 
 parser.add_option("--list-mem-types",
                   action="callback", callback=_listMemTypes,
                  help="List available memory types")
 parser.add_option("--mem-type", type="choice", default="DDR3_1600_x64",
                   choices=MemConfig.mem_names(),
-                  help = "type of memory to use")
+                  help="type of memory to use")
 parser.add_option("--mem-size", action="store", type="string",
                   default="512MB",
                   help="Specify the physical memory size (single memory)")
 parser.add_option("--mem-channels", type="int", default=1,
-                  help = "number of memory channels")
+                  help="number of memory channels")
 parser.add_option("--mem-ranks", type="int", default=None,
-                  help = "number of memory ranks per channel")
+                  help="number of memory ranks per channel")
 
 parser.add_option("--watch-pe", type="int", default=-1,
-                  help = "the PE number for memory watching")
+                  help="the PE number for memory watching")
 parser.add_option("--watch-start", type="int", default=0,
-                  help = "The start address of the address range to watch")
+                  help="The start address of the address range to watch")
 parser.add_option("--watch-end", type="int", default=0,
-                  help = "The end address of the address range to watch (exclusive")
+                  help="The end address of the address range to watch (exclusive")
 
 parser.add_option("--sys-voltage", action="store", type="string",
                   default='1.0V',
-                  help = """Top-level voltage for blocks running at system
+                  help="""Top-level voltage for blocks running at system
                   power supply""")
 parser.add_option("--sys-clock", action="store", type="string",
                   default='1GHz',
-                  help = """Top-level clock for blocks running at system
+                  help="""Top-level clock for blocks running at system
                   speed""")
 parser.add_option("--cpu-clock", action="store", type="string",
                   default='2GHz',
@@ -108,7 +108,7 @@ parser.add_option("-m", "--maxtick", type="int", default=m5.MaxTick,
                   metavar="T",
                   help="Stop after T ticks")
 parser.add_option("-n", "--num-pes", type="int", default=2,
-                  help = "Number of PEs (processing elements) in the system"
+                  help="Number of PEs (processing elements) in the system"
                   "[default:%default]")
 
 Options.addFSOptions(parser)
@@ -162,16 +162,16 @@ base_offset = 32 * 1024 * 1024
 def createPE(no, mem=False, cache=True, l2cache=True, memPE=0):
     # each PE is represented by it's own subsystem
     if mem:
-        pe = MemSystem(mem_mode = CPUClass.memory_mode())
+        pe = MemSystem(mem_mode=CPUClass.memory_mode())
     else:
-        pe = M3X86System(mem_mode = CPUClass.memory_mode())
+        pe = M3X86System(mem_mode=CPUClass.memory_mode())
     setattr(root, 'pe%d' % no, pe)
 
     # TODO set latencies
-    pe.xbar = NoncoherentXBar(forward_latency  = 0,
-                              frontend_latency = 0,
-                              response_latency = 1,
-                              width = 16)
+    pe.xbar = NoncoherentXBar(forward_latency=0,
+                              frontend_latency=0,
+                              response_latency=1,
+                              width=16)
 
     pe.dtu = Dtu()
     pe.dtu.core_id = no
@@ -210,7 +210,7 @@ def createPE(no, mem=False, cache=True, l2cache=True, memPE=0):
             # case, but just a cache that is connected to a different PE
             pe.kernel_addr_check = False
         else:
-            pe.cachespm = Scratchpad(in_addr_map = "true")
+            pe.cachespm = Scratchpad(in_addr_map="true")
             pe.cachespm.cpu_port = pe.xbar.master
             pe.cachespm.range = pe.accessible_mem_size
 
@@ -234,7 +234,7 @@ def createPE(no, mem=False, cache=True, l2cache=True, memPE=0):
     return pe
 
 def createCorePE(no, cache, l2cache, memPE):
-    pe = createPE(no, mem=False, cache=cache, l2cache=l2cache, memPE=memPE)
+    pe = createPE(no=no, mem=False, cache=cache, l2cache=l2cache, memPE=memPE)
     pe.readfile = "/dev/stdin"
 
     pe.cpu = CPUClass()
@@ -301,28 +301,28 @@ def createMemPE(no, size, content=None):
 
 
 # Set up the system
-root = Root(full_system = True)
+root = Root(full_system=True)
 
 # Create a top-level voltage domain
-root.voltage_domain = VoltageDomain(voltage = options.sys_voltage)
+root.voltage_domain = VoltageDomain(voltage=options.sys_voltage)
 
 # Create a source clock for the system and set the clock period
-root.clk_domain = SrcClockDomain(clock =  options.sys_clock,
-                                 voltage_domain = root.voltage_domain)
+root.clk_domain = SrcClockDomain(clock= options.sys_clock,
+                                 voltage_domain=root.voltage_domain)
 
 # Create a CPU voltage domain
 root.cpu_voltage_domain = VoltageDomain()
 
 # Create a separate clock domain for the CPUs
-root.cpu_clk_domain = SrcClockDomain(clock = options.cpu_clock,
-                                     voltage_domain = root.cpu_voltage_domain)
+root.cpu_clk_domain = SrcClockDomain(clock=options.cpu_clock,
+                                     voltage_domain=root.cpu_voltage_domain)
 
 # All PEs are connected to a NoC (Network on Chip). In this case it's just
 # a simple XBar.
-root.noc = NoncoherentXBar(forward_latency  = 0,
-                           frontend_latency = 1,
-                           response_latency = 1,
-                           width = 8)
+root.noc = NoncoherentXBar(forward_latency=0,
+                           frontend_latency=1,
+                           response_latency=1,
+                           width=8)
 
 # create a dummy platform and system for the UART
 root.platform = IOPlatform()
@@ -349,7 +349,7 @@ for i in range(0, min(options.num_pes, len(cmd_list))):
                  memPE=options.num_pes)
 
 # create the memory PEs
-createMemPE(options.num_pes,
+createMemPE(no=options.num_pes,
             size=options.mem_size,
             content=options.init_mem)
 
