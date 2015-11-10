@@ -34,7 +34,7 @@
 #include "mem/dtu/base.hh"
 #include "mem/dtu/noc_addr.hh"
 
-BaseDtu::DtuMasterPort::DtuMasterPort( const std::string& _name, BaseDtu& _dtu)
+BaseDtu::DtuMasterPort::DtuMasterPort(const std::string& _name, BaseDtu& _dtu)
   : QueuedMasterPort(_name, &_dtu, reqQueue, snoopRespQueue),
     dtu(_dtu),
     reqQueue(_dtu, *this),
@@ -106,6 +106,8 @@ BaseDtu::DtuSlavePort::schedTimingResp(PacketPtr pkt, Tick when)
     DPRINTF(DtuSlavePort, "Schedule timing response %#x at Tick %u\n",
                           pkt->getAddr(),
                           when);
+
+    assert(pkt->isResponse());
 
     auto respEvent = new ResponseEvent(*this, pkt);
     dtu.schedule(respEvent, when);
@@ -365,6 +367,8 @@ BaseDtu::checkWatchRange(PacketPtr pkt)
 void
 BaseDtu::schedNocResponse(PacketPtr pkt, Tick when)
 {
+    assert(pkt->isResponse());
+
     nocSlavePort.schedTimingResp(pkt, when);
 }
 
@@ -383,6 +387,8 @@ BaseDtu::nocRequestFinished()
 void
 BaseDtu::schedCpuResponse(PacketPtr pkt, Tick when)
 {
+    assert(pkt->isResponse());
+
     dcacheSlavePort.schedTimingResp(pkt, when);
 }
 

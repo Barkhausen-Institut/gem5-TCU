@@ -235,8 +235,6 @@ Dtu::sendMemRequest(PacketPtr pkt,
                     MemReqType type,
                     Cycles delay)
 {
-    pkt->setAddr(pkt->getAddr());
-
     auto senderState = new MemSenderState();
     senderState->epId = epId;
     senderState->mid = pkt->req->masterId();
