@@ -1,5 +1,4 @@
 /*
- * Copyright (c) 2015, Christian Menard
  * Copyright (c) 2015, Nils Asmussen
  * All rights reserved.
  *
@@ -28,86 +27,64 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
-#ifndef __MEM_DTU_MSG_UNIT_HH__
-#define __MEM_DTU_MSG_UNIT_HH__
+#ifndef __MEM_DTU_PT_WALKER_HH__
+#define __MEM_DTU_PT_WALKER_HH__
 
-#include "mem/dtu/dtu.hh"
+#include "base/types.hh"
+#include "sim/eventq.hh"
+#include "mem/dtu/noc_addr.hh"
+#include "mem/dtu/tlb.hh"
 
-class MessageUnit
+class Dtu;
+
+class PtUnit
 {
-  private:
+  public:
 
-    struct MsgInfo
+    struct Translation
     {
-        bool ready;
-        unsigned targetCoreId;
-        unsigned targetEpId;
-        unsigned replyEpId;
-        uint64_t label;
-        uint64_t replyLabel;
-    };
-
-    struct Translation : PtUnit::Translation
-    {
-        MessageUnit& unit;
-
-        unsigned epId;
-
-        Translation(MessageUnit& _unit, unsigned _epId)
-            : unit(_unit), epId(_epId)
+        Translation()
+        {}
+        virtual ~Translation()
         {}
 
-        void finished(bool success, const NocAddr &phys) override
-        {
-            unit.requestHeaderWithPhys(epId, success, phys);
+        virtual void finished(bool success, const NocAddr &phys) = 0;
+    };
 
-            delete this;
-        }
+  private:
+
+    struct TranslateEvent : public Event
+    {
+        PtUnit& unit;
+
+        Addr virt;
+        DtuTlb::Flag access;
+        Translation *trans;
+
+        TranslateEvent(PtUnit& _unit)
+            : unit(_unit), virt(), access(), trans()
+        {}
+
+        void process() override;
+
+        const char* description() const override { return "TranslateEvent"; }
+
+        const std::string name() const override;
     };
 
   public:
+    
+    PtUnit(Dtu& _dtu) : dtu(_dtu)
+    {}
 
-    MessageUnit(Dtu &_dtu) : dtu(_dtu), info(), header(), flagsPhys(), offset() {}
+    bool translate(Addr virt, DtuTlb::Flag access, NocAddr *phys);
 
-    /**
-     * Start message transmission -> Mem request
-     */
-    void startTransmission(const Dtu::Command& cmd);
-
-    /**
-     * Received response from local memory (header lookup)
-     */
-    void recvFromMem(const Dtu::Command& cmd, PacketPtr pkt);
-
-    /**
-     * Received a message from NoC -> Mem request
-     */
-    void recvFromNoc(PacketPtr pkt);
-
-    /**
-     * Move read pointer forward
-     */
-    void incrementReadPtr(unsigned epId);
+    void startTranslate(Addr virt, DtuTlb::Flag access, Translation *trans);
 
   private:
 
-    bool incrementWritePtr(unsigned epId);
+    Dtu& dtu;
 
-    void requestHeader(unsigned epid);
-
-    void requestHeaderWithPhys(unsigned epid, bool success, const NocAddr &phys);
-
-    void startXfer(const Dtu::Command& cmd);
-
-  private:
-
-    Dtu &dtu;
-
-    MsgInfo info;
-
-    Dtu::MessageHeader header;
-    Addr flagsPhys;
-    Addr offset;
 };
 
 #endif

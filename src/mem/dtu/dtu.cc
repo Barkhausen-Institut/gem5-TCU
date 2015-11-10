@@ -38,11 +38,13 @@
 #include "debug/DtuSysCalls.hh"
 #include "debug/DtuPower.hh"
 #include "debug/DtuMem.hh"
+#include "debug/DtuTlb.hh"
 #include "cpu/simple/base.hh"
 #include "mem/dtu/dtu.hh"
 #include "mem/dtu/msg_unit.hh"
 #include "mem/dtu/mem_unit.hh"
 #include "mem/dtu/xfer_unit.hh"
+#include "mem/dtu/pt_unit.hh"
 #include "mem/page_table.hh"
 #include "sim/system.hh"
 #include "sim/process.hh"
@@ -66,12 +68,15 @@ Dtu::Dtu(DtuParams* p)
     msgUnit(new MessageUnit(*this)),
     memUnit(new MemoryUnit(*this)),
     xferUnit(new XferUnit(*this, p->block_size, p->buf_count, p->buf_size)),
+    ptUnit(p->tlb_entries > 0 ? new PtUnit(*this) : NULL),
     executeCommandEvent(*this),
     finishCommandEvent(*this),
     cmdInProgress(false),
+    tlb(p->tlb_entries > 0 ? new DtuTlb(p->tlb_entries, p->page_bits) : NULL),
     memEp(p->memory_ep),
     memPe(p->memory_pe),
     memOffset(p->memory_offset),
+    memSize(p->memory_size),
     atomicMode(p->system->isAtomicMode()),
     numEndpoints(p->num_endpoints),
     maxNocPacketSize(p->max_noc_packet_size),
@@ -88,18 +93,18 @@ Dtu::Dtu(DtuParams* p)
 {
     assert(p->buf_size >= maxNocPacketSize);
 
-    if(tlb)
-    {
-        size_t offset = 0;
-        size_t pageSize = 1UL << p->page_bits;
-        size_t count = std::min<size_t>(p->tlb_entries, divCeil(p->memory_size, pageSize));
-        for(size_t i = 0; i < count; ++i)
-        {
-            tlb->insert(offset, NocAddr(memPe, 0, memOffset + offset),
-                DtuTlb::READ | DtuTlb::WRITE | DtuTlb::EXEC);
-            offset += 1UL << p->page_bits;
-        }
-    }
+    // if(tlb)
+    // {
+    //     size_t offset = 0;
+    //     size_t pageSize = 1UL << p->page_bits;
+    //     size_t count = std::min<size_t>(p->tlb_entries, divCeil(p->memory_size, pageSize));
+    //     for(size_t i = 0; i < count; ++i)
+    //     {
+    //         tlb->insert(offset, NocAddr(memPe, 0, memOffset + offset),
+    //             DtuTlb::READ | DtuTlb::WRITE | DtuTlb::EXEC);
+    //         offset += 1UL << p->page_bits;
+    //     }
+    // }
 }
 
 Dtu::~Dtu()
@@ -312,6 +317,14 @@ Dtu::startTransfer(TransferType type,
 }
 
 void
+Dtu::startTranslate(Addr virt,
+                    DtuTlb::Flag access,
+                    PtUnit::Translation *trans)
+{
+    ptUnit->startTranslate(virt, access, trans);
+}
+
+void
 Dtu::completeNocRequest(PacketPtr pkt)
 {
     auto senderState = dynamic_cast<NocSenderState*>(pkt->popSenderState());
@@ -447,6 +460,68 @@ Dtu::handleCacheMemRequest(PacketPtr pkt, bool functional)
 
     if(functional)
         pkt->setAddr(old);
+
+    return true;
+}
+
+bool
+Dtu::translate(PtUnit::Translation *trans, PacketPtr pkt, bool icache, bool functional)
+{
+    if(!tlb)
+        return true;
+
+    DtuTlb::Flag access;
+    if(icache)
+    {
+        assert(pkt->isRead());
+        access = DtuTlb::EXEC;
+    }
+    else if(pkt->isRead())
+        access = DtuTlb::READ;
+    else
+        access = DtuTlb::WRITE;
+
+    NocAddr phys;
+    DtuTlb::Result res = tlb->lookup(pkt->getAddr(), access, &phys);
+    switch(res)
+    {
+        case DtuTlb::HIT:
+            DPRINTF(DtuTlb, "Translated %s access for %p -> %p\n",
+                    icache ? "exec" : (pkt->isRead() ? "read" : "write"),
+                    pkt->getAddr(), phys.getAddr());
+
+            pkt->setAddr(phys.getAddr());
+            pkt->req->setPaddr(phys.getAddr());
+            break;
+
+        case DtuTlb::MISS:
+            DPRINTF(Dtu, "TLB-miss for %s access to %p\n",
+                    icache ? "exec" : (pkt->isRead() ? "read" : "write"),
+                    pkt->getAddr());
+
+            if(functional)
+            {
+                NocAddr phys;
+                // TODO handle errors here
+                assert(ptUnit->translate(pkt->getAddr(), access, &phys));
+                pkt->setAddr(phys.getAddr());
+                pkt->req->setPaddr(phys.getAddr());
+                return true;
+            }
+            
+            ptUnit->startTranslate(pkt->getAddr(), access, trans);
+            return false;
+
+        case DtuTlb::PAGEFAULT:
+            DPRINTF(Dtu, "Pagefault for %s access to %p\n",
+                    icache ? "exec" : (pkt->isRead() ? "read" : "write"),
+                    pkt->getAddr());
+
+            // TODO send message to resolve pagefault
+            //sendDummyResponse(port, pkt, functional);
+            panic("Stopping here");
+            return false;
+    }
 
     return true;
 }

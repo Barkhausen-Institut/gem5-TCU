@@ -34,6 +34,7 @@
 #include "debug/DtuPackets.hh"
 #include "debug/DtuSysCalls.hh"
 #include "debug/DtuPower.hh"
+#include "debug/DtuTlb.hh"
 #include "mem/dtu/msg_unit.hh"
 #include "mem/dtu/noc_addr.hh"
 
@@ -65,6 +66,7 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
     if(cmd.opcode == Dtu::CommandOpcode::REPLY)
     {
         offset = 0;
+        flagsPhys = 0;
         requestHeader(cmd.epId);
         return;
     }
@@ -110,26 +112,41 @@ MessageUnit::requestHeader(unsigned epid)
     assert(offset < sizeof(Dtu::MessageHeader));
 
     Addr msgAddr = dtu.regs().get(epid, EpReg::BUF_RD_PTR);
+    msgAddr += offset;
 
     DPRINTFS(DtuBuf, (&dtu), "EP%d: requesting header for reply on message @ %p\n",
-             epid, msgAddr + offset);
+             epid, msgAddr);
 
-    // take care that we might need 2 loads to request the header
-    Addr blockOff = (msgAddr + offset) & (dtu.blockSize - 1);
-    Addr reqSize = std::min(dtu.blockSize - blockOff, sizeof(Dtu::MessageHeader) - offset);
-
-    NocAddr phys(msgAddr + offset);
+    NocAddr phys(msgAddr);
     if(dtu.tlb)
     {
-        DtuTlb::Result res = dtu.tlb->lookup(msgAddr + offset, DtuTlb::READ, &phys);
+        DtuTlb::Result res = dtu.tlb->lookup(msgAddr, DtuTlb::READ, &phys);
         if(res != DtuTlb::HIT)
         {
-            // TODO handle that case
-            DPRINTF(Dtu, "TLB-miss/Pagefault for read access to %p\n",
-                    msgAddr + offset);
-            panic("Stopping here");
+            // TODO handle pagefaults
+            assert(res == DtuTlb::MISS);
+
+            DPRINTFS(DtuTlb, (&dtu), "TLB-miss/Pagefault for read access to %p\n",
+                     msgAddr);
+
+            Translation *trans = new Translation(*this, epid);
+            dtu.startTranslate(msgAddr, DtuTlb::READ, trans);
+            return;
         }
     }
+
+    requestHeaderWithPhys(epid, true, phys);
+}
+
+void
+MessageUnit::requestHeaderWithPhys(unsigned epid, bool success, const NocAddr &phys)
+{
+    // TODO handle error
+    assert(success);
+
+    // take care that we might need 2 loads to request the header
+    Addr blockOff = (phys.getAddr() + offset) & (dtu.blockSize - 1);
+    Addr reqSize = std::min(dtu.blockSize - blockOff, sizeof(Dtu::MessageHeader) - offset);
 
     auto pkt = dtu.generateRequest(phys.getAddr(),
                                    reqSize,
@@ -146,6 +163,12 @@ MessageUnit::recvFromMem(const Dtu::Command& cmd, PacketPtr pkt)
     // simply collect the header in a member for simplicity
     assert(offset + pkt->getSize() <= sizeof(header));
     memcpy(reinterpret_cast<char*>(&header) + offset, pkt->getPtr<char*>(), pkt->getSize());
+
+    // store the physical address of the flags field in the header for the write later
+    static_assert(offsetof(Dtu::MessageHeader, flags) == 0, "Header changed");
+    static_assert(sizeof(header.flags) == 1, "Header changed");
+    if(offset == 0)
+        flagsPhys = pkt->getAddr();
 
     offset += pkt->getSize();
 
@@ -170,22 +193,8 @@ MessageUnit::recvFromMem(const Dtu::Command& cmd, PacketPtr pkt)
     info.ready = true;
 
     // disable replies for this message
-    Addr msgAddr = dtu.regs().get(cmd.epId, EpReg::BUF_RD_PTR);
-    NocAddr phys(msgAddr);
-    if(dtu.tlb)
-    {
-        DtuTlb::Result res = dtu.tlb->lookup(msgAddr, DtuTlb::WRITE, &phys);
-        if(res != DtuTlb::HIT)
-        {
-            // TODO handle that case
-            DPRINTF(Dtu, "TLB-miss/Pagefault for write access to %p\n",
-                    msgAddr);
-            panic("Stopping here");
-        }
-    }
-
     // use a functional request here because we don't need to wait for it anyway
-    auto hpkt = dtu.generateRequest(phys.getAddr(),
+    auto hpkt = dtu.generateRequest(flagsPhys,
                                     sizeof(header.flags),
                                     MemCmd::WriteReq);
     header.flags &= ~Dtu::REPLY_ENABLED;

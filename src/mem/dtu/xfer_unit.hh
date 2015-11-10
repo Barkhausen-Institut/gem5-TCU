@@ -68,9 +68,27 @@ class XferUnit
 
         void process() override;
 
+        void translateDone(bool success, const NocAddr &phys);
+
         const char* description() const override { return "TransferEvent"; }
 
         const std::string name() const override { return xfer.dtu.name(); }
+    };
+
+    struct Translation : PtUnit::Translation
+    {
+        TransferEvent& event;
+
+        Translation(TransferEvent& _event)
+            : event(_event)
+        {}
+
+        void finished(bool success, const NocAddr &phys) override
+        {
+            event.translateDone(success, phys);
+
+            delete this;
+        }
     };
 
     struct Buffer

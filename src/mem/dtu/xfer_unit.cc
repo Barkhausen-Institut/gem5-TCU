@@ -34,6 +34,7 @@
 #include "debug/DtuSysCalls.hh"
 #include "debug/DtuPower.hh"
 #include "debug/DtuXfers.hh"
+#include "debug/DtuTlb.hh"
 #include "mem/dtu/xfer_unit.hh"
 
 XferUnit::XferUnit(Dtu &_dtu, size_t _blockSize, size_t _bufCount, size_t _bufSize)
@@ -57,11 +58,6 @@ XferUnit::~XferUnit()
 void
 XferUnit::TransferEvent::process()
 {
-    assert(size > 0);
-
-    Addr localOff = localAddr & (xfer.blockSize - 1);
-    Addr reqSize = std::min(size, xfer.blockSize - localOff);
-
     bool writing = type == Dtu::TransferType::REMOTE_WRITE || type == Dtu::TransferType::LOCAL_WRITE;
 
     NocAddr phys(localAddr);
@@ -71,13 +67,34 @@ XferUnit::TransferEvent::process()
         DtuTlb::Result res = xfer.dtu.tlb->lookup(localAddr, access, &phys);
         if(res != DtuTlb::HIT)
         {
-            // TODO handle that case
-            DPRINTF(Dtu, "TLB-miss/Pagefault for %s access to %p\n",
-                    access == DtuTlb::READ ? "read" : "write",
-                    localAddr);
-            panic("Stopping here");
+            // TODO handle pagefaults
+            assert(res == DtuTlb::MISS);
+
+            DPRINTFS(DtuTlb, (&xfer.dtu), "TLB-miss/Pagefault for %s access to %p\n",
+                     access == DtuTlb::READ ? "read" : "write",
+                     localAddr);
+
+            Translation *trans = new Translation(*this);
+            xfer.dtu.startTranslate(localAddr, access, trans);
+            return;
         }
     }
+
+    translateDone(true, phys);
+}
+
+void
+XferUnit::TransferEvent::translateDone(bool success, const NocAddr &phys)
+{
+    // TODO handle error
+    assert(success);
+
+    assert(size > 0);
+
+    Addr localOff = localAddr & (xfer.blockSize - 1);
+    Addr reqSize = std::min(size, xfer.blockSize - localOff);
+
+    bool writing = type == Dtu::TransferType::REMOTE_WRITE || type == Dtu::TransferType::LOCAL_WRITE;
 
     auto cmd = writing ? MemCmd::WriteReq : MemCmd::ReadReq;
     auto pkt = xfer.dtu.generateRequest(phys.getAddr(), reqSize, cmd);

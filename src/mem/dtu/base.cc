@@ -260,7 +260,6 @@ BaseDtu::BaseDtu(BaseDtuParams* p)
     cacheMemSlavePort(*this),
     watchRange(1, 0),
     nocRequestFinishedEvent(*this),
-    tlb(p->tlb_entries > 0 ? new DtuTlb(p->tlb_entries, p->page_bits) : NULL),
     coreId(p->core_id),
     regFileBaseAddr(p->regfile_base_addr)
 {
@@ -295,58 +294,6 @@ BaseDtu::NocSlavePort::handleRequest(PacketPtr pkt, bool *busy, bool functional)
     *busy = true;
 
     dtu.handleNocRequest(pkt);
-
-    return true;
-}
-
-bool
-BaseDtu::translate(DtuSlavePort &port, PacketPtr pkt, bool icache, bool functional)
-{
-    if(!tlb)
-        return true;
-
-    DtuTlb::Flag access;
-    if(icache)
-    {
-        assert(pkt->isRead());
-        access = DtuTlb::EXEC;
-    }
-    else if(pkt->isRead())
-        access = DtuTlb::READ;
-    else
-        access = DtuTlb::WRITE;
-
-    NocAddr phys;
-    DtuTlb::Result res = tlb->lookup(pkt->getAddr(), access, &phys);
-    switch(res)
-    {
-        case DtuTlb::HIT:
-            DPRINTF(DtuTlb, "Translated %s access for %p -> %p\n",
-                    icache ? "exec" : (pkt->isRead() ? "read" : "write"),
-                    pkt->getAddr(), phys.getAddr());
-
-            pkt->setAddr(phys.getAddr());
-            pkt->req->setPaddr(phys.getAddr());
-            break;
-
-        case DtuTlb::MISS:
-            DPRINTF(Dtu, "TLB-miss for %s access to %p\n",
-                    icache ? "exec" : (pkt->isRead() ? "read" : "write"),
-                    pkt->getAddr());
-
-            // TODO resolve the miss via pagetable walk
-            sendDummyResponse(port, pkt, functional);
-            return false;
-
-        case DtuTlb::PAGEFAULT:
-            DPRINTF(Dtu, "Pagefault for %s access to %p\n",
-                    icache ? "exec" : (pkt->isRead() ? "read" : "write"),
-                    pkt->getAddr());
-
-            // TODO send message to resolve pagefault
-            sendDummyResponse(port, pkt, functional);
-            return false;
-    }
 
     return true;
 }

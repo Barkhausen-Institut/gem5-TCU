@@ -34,6 +34,7 @@
 #include "mem/dtu/base.hh"
 #include "mem/dtu/regfile.hh"
 #include "mem/dtu/noc_addr.hh"
+#include "mem/dtu/pt_unit.hh"
 #include "params/Dtu.hh"
 
 class MessageUnit;
@@ -173,6 +174,10 @@ class Dtu : public BaseDtu
                        Cycles delay = Cycles(0),
                        bool last = false);
 
+    void startTranslate(Addr virt,
+                        DtuTlb::Flag access,
+                        PtUnit::Translation *trans);
+
     void printPacket(PacketPtr pkt) const;
 
   private:
@@ -193,6 +198,8 @@ class Dtu : public BaseDtu
 
     bool handleCacheMemRequest(PacketPtr pkt, bool functional) override;
 
+    bool translate(PtUnit::Translation *trans, PacketPtr pkt, bool icache, bool functional) override;
+
   private:
 
     const MasterID masterId;
@@ -207,17 +214,22 @@ class Dtu : public BaseDtu
 
     XferUnit *xferUnit;
 
+    PtUnit *ptUnit;
+
     EventWrapper<Dtu, &Dtu::executeCommand> executeCommandEvent;
     
     EventWrapper<Dtu, &Dtu::finishCommand> finishCommandEvent;
 
     bool cmdInProgress;
 
+  public:
+
+    DtuTlb *tlb;
+
     const unsigned memEp;
     const unsigned memPe;
     const Addr memOffset;
-
-  public:
+    const Addr memSize;
 
     const bool atomicMode;
 

@@ -37,6 +37,7 @@
 #include "mem/qport.hh"
 #include "params/BaseDtu.hh"
 #include "mem/dtu/tlb.hh"
+#include "mem/dtu/pt_unit.hh"
 
 class BaseDtu : public MemObject
 {
@@ -166,6 +167,32 @@ class BaseDtu : public MemObject
     class CacheSlavePort : public DtuSlavePort
     {
       private:
+
+        struct Translation : PtUnit::Translation
+        {
+            CacheSlavePort& base;
+
+            PacketPtr pkt;
+
+            Translation(CacheSlavePort& _base, PacketPtr _pkt)
+                : base(_base), pkt(_pkt)
+            {}
+
+            void finished(bool success, const NocAddr &phys) override
+            {
+                if(!success)
+                    base.dtu.sendDummyResponse(base, pkt, false);
+                else
+                {
+                    pkt->setAddr(phys.getAddr());
+                    pkt->req->setPaddr(phys.getAddr());
+                
+                    base.port.schedTimingReq(pkt, curTick());
+                }
+
+                delete this;
+            }
+        };
         
         T &port;
 
@@ -202,12 +229,14 @@ class BaseDtu : public MemObject
             {
                 dtu.checkWatchRange(pkt);
 
-                if(dtu.translate(*this, pkt, icache, functional))
+                Translation *trans = new Translation(*this, pkt);
+                if(dtu.translate(trans, pkt, icache, functional))
                 {
                     if(functional)
                         port.sendFunctional(pkt);
                     else
                         port.schedTimingReq(pkt, curTick());
+                    delete trans;
                 }
             }
             return true;
@@ -267,7 +296,7 @@ class BaseDtu : public MemObject
 
     virtual bool handleCacheMemRequest(PacketPtr pkt, bool functional) = 0;
 
-    bool translate(DtuSlavePort &port, PacketPtr pkt, bool icache, bool functional);
+    virtual bool translate(PtUnit::Translation *trans, PacketPtr pkt, bool icache, bool functional) = 0;
 
   protected:
 
@@ -296,8 +325,6 @@ class BaseDtu : public MemObject
     EventWrapper<BaseDtu, &BaseDtu::nocRequestFinished> nocRequestFinishedEvent;
 
   public:
-
-    DtuTlb *tlb;
 
     const unsigned coreId;
 
