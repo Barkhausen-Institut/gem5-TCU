@@ -43,6 +43,7 @@
 #include "cpu/static_inst.hh"
 #include "cpu/thread_context.hh"
 #include "debug/ExecAll.hh"
+#include "debug/ExecPC.hh"
 #include "enums/OpClass.hh"
 
 using namespace std;
@@ -93,7 +94,11 @@ Trace::ExeTracerRecord::traceInst(const StaticInstPtr &inst, bool ran)
 
         if (cur_pc != sym_addr)
             sym_str += csprintf("+%d",cur_pc - sym_addr);
-        outs << "@" << sym_str;
+        if(Debug::ExecPC)
+            outs << "0x" << hex << cur_pc << " @ ";
+        else
+            outs << "@";
+        outs << sym_str;
     } else {
         outs << "0x" << hex << cur_pc;
     }
