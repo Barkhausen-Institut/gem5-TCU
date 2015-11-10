@@ -423,15 +423,19 @@ Dtu::handleCacheMemRequest(PacketPtr pkt, bool functional)
     if(pkt->cmd == MemCmd::BadAddressError)
         return false;
 
+    Addr old = pkt->getAddr();
     NocAddr phys(pkt->getAddr());
     // special case: we check whether this is actually a NocAddr. this does only happen when
-    // loading a program at startup and for TLB misses in the core
+    // loading a program at startup, TLB misses in the core and pseudoInst
     if(!phys.valid)
     {
         phys = NocAddr(memPe, 0, memOffset + phys.offset);
         pkt->setAddr(phys.getAddr());
-        // remember that we did this change
-        pkt->pushSenderState(new InitSenderState);
+        if(!functional)
+        {
+            // remember that we did this change
+            pkt->pushSenderState(new InitSenderState);
+        }
     }
 
     DPRINTF(DtuMem, "Handling %s request of LLC for %u bytes @ %d:%#x\n",
@@ -440,6 +444,9 @@ Dtu::handleCacheMemRequest(PacketPtr pkt, bool functional)
 
     auto type = functional ? Dtu::NocPacketType::CACHE_MEM_REQ_FUNC : Dtu::NocPacketType::CACHE_MEM_REQ;
     sendNocRequest(type, pkt, Cycles(1), functional);
+
+    if(functional)
+        pkt->setAddr(old);
 
     return true;
 }
