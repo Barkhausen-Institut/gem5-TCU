@@ -37,6 +37,7 @@
 #include "debug/DtuPackets.hh"
 #include "debug/DtuSysCalls.hh"
 #include "debug/DtuPower.hh"
+#include "debug/DtuMem.hh"
 #include "cpu/simple/base.hh"
 #include "mem/dtu/dtu.hh"
 #include "mem/dtu/msg_unit.hh"
@@ -69,6 +70,8 @@ Dtu::Dtu(DtuParams* p)
     finishCommandEvent(*this),
     cmdInProgress(false),
     memEp(p->memory_ep),
+    memPe(p->memory_pe),
+    memOffset(p->memory_offset),
     atomicMode(p->system->isAtomicMode()),
     numEndpoints(p->num_endpoints),
     maxNocPacketSize(p->max_noc_packet_size),
@@ -85,10 +88,18 @@ Dtu::Dtu(DtuParams* p)
 {
     assert(p->buf_size >= maxNocPacketSize);
 
-    regFile.set(memEp, EpReg::TGT_COREID, p->memory_pe);
-    regFile.set(memEp, EpReg::REQ_REM_ADDR, p->memory_offset);
-    regFile.set(memEp, EpReg::REQ_REM_SIZE, p->memory_size);
-    regFile.set(memEp, EpReg::REQ_FLAGS, READ | WRITE);
+    if(tlb)
+    {
+        size_t offset = 0;
+        size_t pageSize = 1UL << p->page_bits;
+        size_t count = std::min<size_t>(p->tlb_entries, divCeil(p->memory_size, pageSize));
+        for(size_t i = 0; i < count; ++i)
+        {
+            tlb->insert(offset, NocAddr(memPe, 0, memOffset + offset),
+                DtuTlb::READ | DtuTlb::WRITE | DtuTlb::EXEC);
+            offset += 1UL << p->page_bits;
+        }
+    }
 }
 
 Dtu::~Dtu()
@@ -307,10 +318,19 @@ Dtu::completeNocRequest(PacketPtr pkt)
 
     if(senderState->packetType == NocPacketType::CACHE_MEM_REQ)
     {
-        Addr targetAddr = regs().get(numEndpoints - 1, EpReg::REQ_REM_ADDR);
-        Addr reqAddr = NocAddr(pkt->getAddr()).offset - targetAddr;
-        pkt->setAddr(reqAddr);
-        pkt->req->setPaddr(reqAddr);
+        NocAddr phys(pkt->getAddr());
+        DPRINTF(DtuMem, "Finished %s request of LLC for %u bytes @ %d:%#x\n",
+                        pkt->isRead() ? "read" : "write",
+                        pkt->getSize(), phys.coreId, phys.offset);
+
+        if(dynamic_cast<InitSenderState*>(pkt->senderState))
+        {
+            // undo the change from handleCacheMemRequest
+            pkt->setAddr(phys.offset - memOffset);
+            pkt->req->setPaddr(phys.offset - memOffset);
+            pkt->popSenderState();
+        }
+
         sendCacheMemResponse(pkt);
     }
     else if(senderState->packetType != NocPacketType::CACHE_MEM_REQ_FUNC)
@@ -400,32 +420,23 @@ Dtu::handleCacheMemRequest(PacketPtr pkt, bool functional)
     // we don't have cache coherence. so we don't care about invalidate requests
     if(pkt->cmd == MemCmd::InvalidateReq)
         return false;
-
-    unsigned targetCoreId = regs().get(memEp, EpReg::TGT_COREID);
-    Addr targetAddr = regs().get(memEp, EpReg::REQ_REM_ADDR);
-    Addr remoteSize = regs().get(memEp, EpReg::REQ_REM_SIZE);
-    unsigned flags = regs().get(memEp, EpReg::REQ_FLAGS);
-
-    if((pkt->isWrite() && !(flags & WRITE)) ||
-      ((pkt->isRead() && !(flags & READ))))
-    {
-        DPRINTF(Dtu, "Denying %s request @ %p:%lu because of insufficient permissions\n",
-                pkt->isRead() ? "read" : "write",
-                pkt->getAddr(), pkt->getSize());
+    if(pkt->cmd == MemCmd::BadAddressError)
         return false;
+
+    NocAddr phys(pkt->getAddr());
+    // special case: we check whether this is actually a NocAddr. this does only happen when
+    // loading a program at startup and for TLB misses in the core
+    if(!phys.valid)
+    {
+        phys = NocAddr(memPe, 0, memOffset + phys.offset);
+        pkt->setAddr(phys.getAddr());
+        // remember that we did this change
+        pkt->pushSenderState(new InitSenderState);
     }
 
-    if((pkt->getAddr() + pkt->getSize() <= pkt->getAddr()) ||
-       (pkt->getAddr() + pkt->getSize() > remoteSize))
-    {
-        DPRINTF(Dtu, "Denying %s request @ %p:%lu because it's out of bounds (%p..%p)\n",
-                pkt->isRead() ? "read" : "write",
-                pkt->getAddr(), pkt->getSize(),
-                0, remoteSize);
-        return false;
-    }
-
-    pkt->setAddr(NocAddr(targetCoreId, 0, targetAddr + pkt->getAddr()).getAddr());
+    DPRINTF(DtuMem, "Handling %s request of LLC for %u bytes @ %d:%#x\n",
+                    pkt->isRead() ? "read" : "write",
+                    pkt->getSize(), phys.coreId, phys.offset);
 
     auto type = functional ? Dtu::NocPacketType::CACHE_MEM_REQ_FUNC : Dtu::NocPacketType::CACHE_MEM_REQ;
     sendNocRequest(type, pkt, Cycles(1), functional);

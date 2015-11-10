@@ -151,8 +151,8 @@ CPUClass = CpuConfig.get(options.cpu_type)
 #                                                                             #
 ###############################################################################
 
-IO_address_space_base = 0x8000000000000000
-interrupts_address_space_base = 0xa000000000000000
+IO_address_space_base         = 0xff20000000000000
+interrupts_address_space_base = 0xff40000000000000
 APIC_range_size = 1 << 12;
 
 base_offset = 32 * 1024 * 1024
@@ -193,6 +193,9 @@ def createPE(no, mem=False, cache=True, memPE=0):
             pe.dtu.memory_offset = base_offset + pe.accessible_mem_size.value * no
             pe.dtu.memory_size = pe.accessible_mem_size
 
+            # TODO for now, just create enough TLB entries to cover everything
+            pe.dtu.tlb_entries = (pe.accessible_mem_size.value + 4096 - 1) / 4096
+
             # don't check whether the kernel is in memory because a PE does not have memory in this
             # case, but just a cache that is connected to a different PE
             pe.kernel_addr_check = False
@@ -208,6 +211,8 @@ def createPE(no, mem=False, cache=True, memPE=0):
     if mem or not cache:
         pe.dtu.block_size = pe.dtu.max_noc_packet_size
         pe.dtu.buf_size = pe.dtu.max_noc_packet_size
+        # disable the TLB
+        pe.dtu.tlb_entries = 0
 
     if options.watch_pe == no:
         print "PE%u: watching memory %#x..%#x" % (no, options.watch_start, options.watch_end)

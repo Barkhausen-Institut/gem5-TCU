@@ -31,6 +31,8 @@
 #include "debug/DtuSlavePort.hh"
 #include "debug/DtuMasterPort.hh"
 #include "debug/MemoryWatch.hh"
+#include "debug/Dtu.hh"
+#include "debug/DtuTlb.hh"
 #include "mem/dtu/base.hh"
 #include "mem/dtu/noc_addr.hh"
 
@@ -253,11 +255,12 @@ BaseDtu::BaseDtu(BaseDtuParams* p)
     nocSlavePort(*this),
     icacheMasterPort(*this),
     dcacheMasterPort(*this),
-    icacheSlavePort(icacheMasterPort, *this),
-    dcacheSlavePort(dcacheMasterPort, *this),
+    icacheSlavePort(icacheMasterPort, *this, true),
+    dcacheSlavePort(dcacheMasterPort, *this, false),
     cacheMemSlavePort(*this),
     watchRange(1, 0),
     nocRequestFinishedEvent(*this),
+    tlb(p->tlb_entries > 0 ? new DtuTlb(p->tlb_entries, p->page_bits) : NULL),
     coreId(p->core_id),
     regFileBaseAddr(p->regfile_base_addr)
 {
@@ -297,27 +300,86 @@ BaseDtu::NocSlavePort::handleRequest(PacketPtr pkt, bool *busy, bool functional)
 }
 
 bool
+BaseDtu::translate(DtuSlavePort &port, PacketPtr pkt, bool icache, bool functional)
+{
+    if(!tlb)
+        return true;
+
+    DtuTlb::Flag access;
+    if(icache)
+    {
+        assert(pkt->isRead());
+        access = DtuTlb::EXEC;
+    }
+    else if(pkt->isRead())
+        access = DtuTlb::READ;
+    else
+        access = DtuTlb::WRITE;
+
+    NocAddr phys;
+    DtuTlb::Result res = tlb->lookup(pkt->getAddr(), access, &phys);
+    switch(res)
+    {
+        case DtuTlb::HIT:
+            DPRINTF(DtuTlb, "Translated %s access for %p -> %p\n",
+                    icache ? "exec" : (pkt->isRead() ? "read" : "write"),
+                    pkt->getAddr(), phys.getAddr());
+
+            pkt->setAddr(phys.getAddr());
+            pkt->req->setPaddr(phys.getAddr());
+            break;
+
+        case DtuTlb::MISS:
+            DPRINTF(Dtu, "TLB-miss for %s access to %p\n",
+                    icache ? "exec" : (pkt->isRead() ? "read" : "write"),
+                    pkt->getAddr());
+
+            // TODO resolve the miss via pagetable walk
+            sendDummyResponse(port, pkt, functional);
+            return false;
+
+        case DtuTlb::PAGEFAULT:
+            DPRINTF(Dtu, "Pagefault for %s access to %p\n",
+                    icache ? "exec" : (pkt->isRead() ? "read" : "write"),
+                    pkt->getAddr());
+
+            // TODO send message to resolve pagefault
+            sendDummyResponse(port, pkt, functional);
+            return false;
+    }
+
+    return true;
+}
+
+bool
 BaseDtu::CacheMemSlavePort::handleRequest(PacketPtr pkt, bool *busy, bool functional)
 {
     // if that failed, it was an invalid request (probably due to speculative execution)
     if(!dtu.handleCacheMemRequest(pkt, functional))
-    {
-        // invalid reads just get zeros
-        if(pkt->isRead())
-            memset(pkt->getPtr<uint8_t>(), 0, pkt->getSize());
+        dtu.sendDummyResponse(*this, pkt, functional);
 
-        // if a response is necessary, send one
-        if(pkt->needsResponse())
-        {
-            pkt->makeResponse();
-
-            // somehow we need to send that later to make the cache happy.
-            schedTimingResp(pkt, dtu.clockEdge(Cycles(1)));
-        }
-
-        // in general, pretend that everything is fine
-    }
+    // in general, pretend that everything is fine
     return true;
+}
+
+void
+BaseDtu::sendDummyResponse(DtuSlavePort &port, PacketPtr pkt, bool functional)
+{
+    // invalid reads just get zeros
+    if(pkt->isRead())
+        memset(pkt->getPtr<uint8_t>(), 0, pkt->getSize());
+
+    // if a response is necessary, send one
+    if(pkt->needsResponse())
+    {
+        pkt->makeResponse();
+
+        if(!functional)
+        {
+            // somehow we need to send that later to make the cache happy.
+            port.schedTimingResp(pkt, clockEdge(Cycles(1)));
+        }
+    }
 }
 
 BaseMasterPort&

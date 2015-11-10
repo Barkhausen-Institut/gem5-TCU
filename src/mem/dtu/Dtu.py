@@ -52,6 +52,9 @@ class BaseDtu(MemObject):
     watch_range_start = Param.Addr(0x0, "The start address of the address range to watch")
     watch_range_end = Param.Addr(0x0, "The end address of the address range to watch (exclusive)")
 
+    tlb_entries = Param.Unsigned(512, "The number of TLB entries");
+    page_bits = Param.Unsigned(12, "The page size (1 << page_bits)");
+
 class Dtu(BaseDtu):
     type = 'Dtu'
     cxx_header = "mem/dtu/dtu.hh"

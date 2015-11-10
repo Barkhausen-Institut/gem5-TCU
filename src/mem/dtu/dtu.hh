@@ -106,6 +106,10 @@ class Dtu : public BaseDtu
         NocPacketType packetType;
     };
 
+    struct InitSenderState : public Packet::SenderState
+    {
+    };
+
     enum class CommandOpcode
     {
         IDLE = 0,
@@ -210,6 +214,8 @@ class Dtu : public BaseDtu
     bool cmdInProgress;
 
     const unsigned memEp;
+    const unsigned memPe;
+    const Addr memOffset;
 
   public:
 

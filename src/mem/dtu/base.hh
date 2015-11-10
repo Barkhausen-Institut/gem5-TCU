@@ -36,6 +36,7 @@
 #include "mem/mem_object.hh"
 #include "mem/qport.hh"
 #include "params/BaseDtu.hh"
+#include "mem/dtu/tlb.hh"
 
 class BaseDtu : public MemObject
 {
@@ -168,11 +169,13 @@ class BaseDtu : public MemObject
         
         T &port;
 
+        bool icache;
+
       public:
 
-        CacheSlavePort(T &_port, BaseDtu& _dtu)
+        CacheSlavePort(T &_port, BaseDtu& _dtu, bool _icache)
           : DtuSlavePort(_dtu.name() + ".icache_slave_port", _dtu),
-            port(_port)
+            port(_port), icache(_icache)
         { }
 
         AddrRangeList getAddrRanges() const override
@@ -199,10 +202,13 @@ class BaseDtu : public MemObject
             {
                 dtu.checkWatchRange(pkt);
 
-                if(functional)
-                    port.sendFunctional(pkt);
-                else
-                    port.schedTimingReq(pkt, curTick());
+                if(dtu.translate(*this, pkt, icache, functional))
+                {
+                    if(functional)
+                        port.sendFunctional(pkt);
+                    else
+                        port.schedTimingReq(pkt, curTick());
+                }
             }
             return true;
         }
@@ -261,11 +267,15 @@ class BaseDtu : public MemObject
 
     virtual bool handleCacheMemRequest(PacketPtr pkt, bool functional) = 0;
 
+    bool translate(DtuSlavePort &port, PacketPtr pkt, bool icache, bool functional);
+
   protected:
 
     void nocRequestFinished();
 
     void checkWatchRange(PacketPtr pkt);
+    
+    void sendDummyResponse(DtuSlavePort &port, PacketPtr pkt, bool functional);
 
     NocMasterPort  nocMasterPort;
 
@@ -286,6 +296,8 @@ class BaseDtu : public MemObject
     EventWrapper<BaseDtu, &BaseDtu::nocRequestFinished> nocRequestFinishedEvent;
 
   public:
+
+    DtuTlb *tlb;
 
     const unsigned coreId;
 

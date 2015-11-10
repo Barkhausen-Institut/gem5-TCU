@@ -1,5 +1,4 @@
 /*
- * Copyright (c) 2015, Christian Menard
  * Copyright (c) 2015, Nils Asmussen
  * All rights reserved.
  *
@@ -28,56 +27,83 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
-#ifndef __MEM_DTU_NOC_ADDR_HH__
-#define __MEM_DTU_NOC_ADDR_HH__
+#ifndef __MEM_DTU_TLB_HH__
+#define __MEM_DTU_TLB_HH__
 
 #include "base/types.hh"
+#include "base/trie.hh"
+#include "mem/dtu/noc_addr.hh"
+#include <vector>
 
-/**
- * 
- *  64    59        52     46          0
- *   -----------------------------------
- *   |res|V| coreId  | epId |  offset  |
- *   -----------------------------------
- */
-class NocAddr
+class DtuTlb
 {
+  private:
+
+    struct Entry
+    {
+        Addr virt;
+        NocAddr phys;
+        uint flags;
+
+        uint lru_seq;
+        Trie<Addr, Entry>::Handle handle;
+    };
+    
+    typedef Trie<Addr, Entry> TlbEntryTrie;
+
   public:
 
-    explicit NocAddr() : valid(), coreId(), epId(), offset()
-    {}
-
-    explicit NocAddr(Addr addr)
-        : valid(addr >> 59),
-          coreId((addr >> 52) & ((1 << 7) - 1)),
-          epId((addr >> 46) & ((1 << 5) - 1)),
-          offset(addr & ((static_cast<Addr>(1) << 46) - 1))
-    {}
-
-    explicit NocAddr(unsigned _coreId, unsigned _epId, Addr _offset = 0)
-        : valid(1), coreId(_coreId), epId(_epId), offset(_offset)
-    {}
-
-    Addr getAddr() const
+    enum Result
     {
-        assert((coreId & ~((1 << 7) - 1)) == 0);
-        assert((epId & ~((1 << 5) - 1)) == 0);
-        assert((offset & ~((static_cast<Addr>(1) << 46) - 1)) == 0);
+        HIT,
+        MISS,
+        PAGEFAULT,
+    };
 
-        Addr res = static_cast<Addr>(valid) << 59;
-        res |= static_cast<Addr>(coreId) << 52;
-        res |= static_cast<Addr>(epId) << 46;
-        res |= offset;
-        return res;
-    }
+    enum Flag
+    {
+        READ    = 1,
+        WRITE   = 2,
+        EXEC    = 4,
+    };
 
-    bool valid;
+    struct MissHandler
+    {
+        MissHandler(Addr _virt, Flag _access)
+            : virt(_virt), access(_access)
+        {}
 
-    unsigned coreId;
+        virtual ~MissHandler()
+        {}
 
-    unsigned epId;
+        void start();
 
-    Addr offset;
+        virtual void finish(NocAddr phys) = 0;
+
+        Addr virt;
+        Flag access;
+    };
+
+    DtuTlb(size_t _num, Addr _pageBits);
+
+    Result lookup(Addr virt, Flag access, NocAddr *phys);
+
+    void insert(Addr virt, NocAddr phys, uint flags);
+
+    void remove(Addr virt);
+
+    void clear();
+
+  private:
+
+    void evict();
+
+    TlbEntryTrie trie;
+    std::vector<Entry> entries;
+    std::vector<Entry*> free;
+    size_t num;
+    Addr pageBits;
+    uint lru_seq;
 };
 
 #endif

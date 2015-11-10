@@ -118,7 +118,20 @@ MessageUnit::requestHeader(unsigned epid)
     Addr blockOff = (msgAddr + offset) & (dtu.blockSize - 1);
     Addr reqSize = std::min(dtu.blockSize - blockOff, sizeof(Dtu::MessageHeader) - offset);
 
-    auto pkt = dtu.generateRequest(msgAddr + offset,
+    NocAddr phys(msgAddr + offset);
+    if(dtu.tlb)
+    {
+        DtuTlb::Result res = dtu.tlb->lookup(msgAddr + offset, DtuTlb::READ, &phys);
+        if(res != DtuTlb::HIT)
+        {
+            // TODO handle that case
+            DPRINTF(Dtu, "TLB-miss/Pagefault for read access to %p\n",
+                    msgAddr + offset);
+            panic("Stopping here");
+        }
+    }
+
+    auto pkt = dtu.generateRequest(phys.getAddr(),
                                    reqSize,
                                    MemCmd::ReadReq);
     dtu.sendMemRequest(pkt,
@@ -157,9 +170,22 @@ MessageUnit::recvFromMem(const Dtu::Command& cmd, PacketPtr pkt)
     info.ready = true;
 
     // disable replies for this message
-    // use a functional request here because we don't need to wait for it anyway
     Addr msgAddr = dtu.regs().get(cmd.epId, EpReg::BUF_RD_PTR);
-    auto hpkt = dtu.generateRequest(msgAddr,
+    NocAddr phys(msgAddr);
+    if(dtu.tlb)
+    {
+        DtuTlb::Result res = dtu.tlb->lookup(msgAddr, DtuTlb::WRITE, &phys);
+        if(res != DtuTlb::HIT)
+        {
+            // TODO handle that case
+            DPRINTF(Dtu, "TLB-miss/Pagefault for write access to %p\n",
+                    msgAddr);
+            panic("Stopping here");
+        }
+    }
+
+    // use a functional request here because we don't need to wait for it anyway
+    auto hpkt = dtu.generateRequest(phys.getAddr(),
                                     sizeof(header.flags),
                                     MemCmd::WriteReq);
     header.flags &= ~Dtu::REPLY_ENABLED;

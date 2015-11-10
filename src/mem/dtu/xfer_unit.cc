@@ -64,8 +64,23 @@ XferUnit::TransferEvent::process()
 
     bool writing = type == Dtu::TransferType::REMOTE_WRITE || type == Dtu::TransferType::LOCAL_WRITE;
 
+    NocAddr phys(localAddr);
+    if(xfer.dtu.tlb)
+    {
+        auto access = writing ? DtuTlb::WRITE : DtuTlb::READ;
+        DtuTlb::Result res = xfer.dtu.tlb->lookup(localAddr, access, &phys);
+        if(res != DtuTlb::HIT)
+        {
+            // TODO handle that case
+            DPRINTF(Dtu, "TLB-miss/Pagefault for %s access to %p\n",
+                    access == DtuTlb::READ ? "read" : "write",
+                    localAddr);
+            panic("Stopping here");
+        }
+    }
+
     auto cmd = writing ? MemCmd::WriteReq : MemCmd::ReadReq;
-    auto pkt = xfer.dtu.generateRequest(localAddr, reqSize, cmd);
+    auto pkt = xfer.dtu.generateRequest(phys.getAddr(), reqSize, cmd);
 
     if(writing)
     {
@@ -76,11 +91,12 @@ XferUnit::TransferEvent::process()
         buf->offset += reqSize;
     }
 
-    DPRINTFS(DtuXfers, (&xfer.dtu), "buf%d: %s %lu bytes @ %p in local memory\n",
+    DPRINTFS(DtuXfers, (&xfer.dtu), "buf%d: %s %lu bytes @ %p->%p in local memory\n",
              buf->id,
              writing ? "Writing" : "Reading",
              reqSize,
-             localAddr);
+             localAddr,
+             phys.getAddr());
 
     xfer.dtu.sendMemRequest(pkt,
                             buf->id,
