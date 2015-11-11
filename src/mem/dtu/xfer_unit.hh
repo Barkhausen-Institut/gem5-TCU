@@ -36,6 +36,15 @@
 
 class XferUnit
 {
+  public:
+
+    enum XferFlags
+    {
+        MESSAGE   = 1,
+        LAST      = 2,
+        CACHEMISS = 4,
+    };
+
   private:
 
     struct Buffer;
@@ -51,8 +60,7 @@ class XferUnit
         NocAddr remoteAddr;
         size_t size;
         PacketPtr pkt;
-        bool isMsg;
-        bool last;
+        uint flags;
 
         TransferEvent(XferUnit& _xfer)
             : xfer(_xfer),
@@ -62,8 +70,7 @@ class XferUnit
               remoteAddr(),
               size(),
               pkt(),
-              isMsg(),
-              last()
+              flags()
         {}
 
         void process() override;
@@ -125,7 +132,7 @@ class XferUnit
         size_t size;
         PacketPtr pkt;
         Dtu::MessageHeader* header;
-        bool last;
+        uint flags;
 
         StartEvent(XferUnit& _xfer,
                    Dtu::TransferType _type,
@@ -134,7 +141,7 @@ class XferUnit
                    size_t _size,
                    PacketPtr _pkt,
                    Dtu::MessageHeader* _header,
-                   bool _last)
+                   uint _flags)
             : xfer(_xfer),
               type(_type),
               remoteAddr(_remoteAddr),
@@ -142,14 +149,23 @@ class XferUnit
               size(_size),
               pkt(_pkt),
               header(_header),
-              last(_last)
+              flags(_flags)
         {}
 
         void process() override
         {
             // the delay was already paid earlier
-            if(xfer.startTransfer(type, remoteAddr, localAddr, size, pkt, header, Cycles(0), last))
+            if(xfer.startTransfer(type,
+                                  remoteAddr,
+                                  localAddr,
+                                  size,
+                                  pkt,
+                                  header,
+                                  Cycles(0),
+                                  flags))
+            {
                 setFlags(AutoDelete);
+            }
         }
 
         const char* description() const override { return "StartXferEvent"; }
@@ -170,7 +186,7 @@ class XferUnit
                        PacketPtr pkt,
                        Dtu::MessageHeader* header,
                        Cycles delay,
-                       bool last);
+                       uint flags);
 
     void recvMemResponse(size_t bufId,
                          const void* data,
@@ -180,7 +196,7 @@ class XferUnit
 
   private:
 
-    Buffer* allocateBuf();
+    Buffer* allocateBuf(bool cacheMiss);
 
   private:
 

@@ -95,7 +95,7 @@ class MemoryUnit
     /**
      * Received read/write request from NoC -> Mem/regfile request
      */
-    void recvFromNoc(PacketPtr pkt);
+    void recvFromNoc(PacketPtr pkt, bool cacheMiss);
 
   private:
 

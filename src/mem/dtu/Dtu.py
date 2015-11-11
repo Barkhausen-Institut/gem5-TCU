@@ -66,7 +66,7 @@ class Dtu(BaseDtu):
 
     block_size = Param.MemorySize("64B", "The block size with which to access the local memory")
 
-    buf_count = Param.Unsigned(4, "The number of temporary buffers for transfers")
+    buf_count = Param.Unsigned(4, "The number of temporary buffers for transfers (at least 2)")
     buf_size = Param.MemorySize("1kB", "The size of a temporary buffer")
 
     register_access_latency = Param.Cycles(1, "Latency for CPU register accesses")

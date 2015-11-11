@@ -44,6 +44,9 @@ XferUnit::XferUnit(Dtu &_dtu, size_t _blockSize, size_t _bufCount, size_t _bufSi
       bufSize(_bufSize),
       bufs(new Buffer*[bufCount])
 {
+    if(_bufCount < 2)
+        panic("We need at least 2 buffers");
+
     for(size_t i = 0; i < bufCount; ++i)
         bufs[i] = new Buffer(*this, i, bufSize);
 }
@@ -133,9 +136,9 @@ XferUnit::startTransfer(Dtu::TransferType type,
                         PacketPtr pkt,
                         Dtu::MessageHeader* header,
                         Cycles delay,
-                        bool last)
+                        uint flags)
 {
-    Buffer *buf = allocateBuf();
+    Buffer *buf = allocateBuf(flags & CACHEMISS);
 
     bool writing = type == Dtu::TransferType::REMOTE_WRITE || type == Dtu::TransferType::LOCAL_WRITE;
 
@@ -147,7 +150,7 @@ XferUnit::startTransfer(Dtu::TransferType type,
                  size,
                  localAddr);
 
-        auto event = new StartEvent(*this, type, remoteAddr, localAddr, size, pkt, header, last);
+        auto event = new StartEvent(*this, type, remoteAddr, localAddr, size, pkt, header, flags);
 
         dtu.schedule(event, dtu.clockEdge(Cycles(delay + 1)));
 
@@ -162,8 +165,7 @@ XferUnit::startTransfer(Dtu::TransferType type,
     buf->event.localAddr = localAddr;
     buf->event.size = size;
     buf->event.pkt = NULL;
-    buf->event.isMsg = false;
-    buf->event.last = last;
+    buf->event.flags = flags;
 
     // if there is data to put into the buffer, do that now
     if(header)
@@ -171,7 +173,7 @@ XferUnit::startTransfer(Dtu::TransferType type,
         // note that this causes no additional delay because we assume that we create the header
         // directly in the buffer (and if there is no one free we just wait until there is)
         memcpy(buf->bytes, header, sizeof(Dtu::MessageHeader));
-        buf->event.isMsg = true;
+        buf->event.flags |= XferFlags::MESSAGE;
 
         // for the header
         buf->offset += sizeof(Dtu::MessageHeader);
@@ -245,12 +247,13 @@ XferUnit::recvMemResponse(size_t bufId,
             delay += dtu.ticksToCycles(headerDelay);
             pkt->payloadDelay = payloadDelay;
             dtu.printPacket(pkt);
-            auto type = buf->event.isMsg ? Dtu::NocPacketType::MESSAGE : Dtu::NocPacketType::WRITE_REQ; 
+            auto type = (buf->event.flags & MESSAGE) ? Dtu::NocPacketType::MESSAGE
+                                                     : Dtu::NocPacketType::WRITE_REQ; 
             dtu.sendNocRequest(type, pkt, delay);
         }
         else if(buf->event.type == Dtu::TransferType::LOCAL_WRITE)
         {
-            if(buf->event.last)
+            if(buf->event.flags & LAST)
                 dtu.scheduleFinishOp(Cycles(1));
 
             dtu.freeRequest(buf->event.pkt);
@@ -288,9 +291,13 @@ XferUnit::recvMemResponse(size_t bufId,
 }
 
 XferUnit::Buffer*
-XferUnit::allocateBuf()
+XferUnit::allocateBuf(bool cacheMiss)
 {
-    for(size_t i = 0; i < bufCount; ++i)
+    // the first one is reserved for cache misses. since all transfers except cache misses can
+    // cause cache miss transfers, we need to make sure not to cause deadlocks. thus, we dedicate
+    // the first buffer to cache misses only. because they will always be handled in finite time,
+    // without requiring additional transfers, so that everything can continue in all cases.
+    for(size_t i = cacheMiss ? 0 : 1; i < bufCount; ++i)
     {
         if(bufs[i]->free)
         {

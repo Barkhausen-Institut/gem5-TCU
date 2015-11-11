@@ -173,7 +173,7 @@ class Dtu : public BaseDtu
                        PacketPtr pkt = NULL,
                        MessageHeader* header = NULL,
                        Cycles delay = Cycles(0),
-                       bool last = false);
+                       uint flags = 0);
 
     void startTranslate(Addr virt,
                         DtuTlb::Flag access,

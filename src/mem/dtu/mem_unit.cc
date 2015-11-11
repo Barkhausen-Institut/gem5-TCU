@@ -34,6 +34,7 @@
 #include "debug/DtuSysCalls.hh"
 #include "debug/DtuPower.hh"
 #include "mem/dtu/mem_unit.hh"
+#include "mem/dtu/xfer_unit.hh"
 #include "mem/dtu/noc_addr.hh"
 
 void
@@ -127,7 +128,7 @@ MemoryUnit::readComplete(PacketPtr pkt)
                       pkt,
                       NULL,
                       delay,
-                      requestSize == 0);
+                      requestSize == 0 ? XferUnit::LAST : 0);
 
     if(requestSize > 0)
     {
@@ -180,7 +181,7 @@ MemoryUnit::recvFunctionalFromNoc(PacketPtr pkt)
 }
 
 void
-MemoryUnit::recvFromNoc(PacketPtr pkt)
+MemoryUnit::recvFromNoc(PacketPtr pkt, bool cacheMiss)
 {
     DPRINTFS(Dtu, (&dtu), "\e[1m[%s <- ?]\e[0m %#018lx:%lu\n",
         pkt->isWrite() ? "wr" : "rd",
@@ -206,6 +207,7 @@ MemoryUnit::recvFromNoc(PacketPtr pkt)
         Cycles delay = dtu.ticksToCycles(pkt->headerDelay);
         pkt->headerDelay = 0;
 
+        uint flags = cacheMiss ? XferUnit::CACHEMISS : 0;
         auto type = pkt->isWrite() ? Dtu::TransferType::REMOTE_WRITE : Dtu::TransferType::REMOTE_READ;
         dtu.startTransfer(type,
                           NocAddr(0, 0),                    // remote address is irrelevant
@@ -213,6 +215,7 @@ MemoryUnit::recvFromNoc(PacketPtr pkt)
                           pkt->getSize(),
                           pkt,
                           NULL,
-                          delay);
+                          delay,
+                          flags);
     }
 }

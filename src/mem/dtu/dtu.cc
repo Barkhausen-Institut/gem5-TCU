@@ -301,7 +301,7 @@ Dtu::startTransfer(TransferType type,
                    PacketPtr pkt,
                    MessageHeader* header,
                    Cycles delay,
-                   bool last)
+                   uint flags)
 {
     xferUnit->startTransfer(type,
                             targetAddr,
@@ -310,7 +310,7 @@ Dtu::startTransfer(TransferType type,
                             pkt,
                             header,
                             delay,
-                            last);
+                            flags);
 }
 
 void
@@ -405,7 +405,7 @@ Dtu::handleNocRequest(PacketPtr pkt)
     case NocPacketType::READ_REQ:
     case NocPacketType::WRITE_REQ:
     case NocPacketType::CACHE_MEM_REQ:
-        memUnit->recvFromNoc(pkt);
+        memUnit->recvFromNoc(pkt, senderState->packetType == NocPacketType::CACHE_MEM_REQ);
         break;
     case NocPacketType::CACHE_MEM_REQ_FUNC:
         memUnit->recvFunctionalFromNoc(pkt);
