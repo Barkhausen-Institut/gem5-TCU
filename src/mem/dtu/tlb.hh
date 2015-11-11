@@ -53,6 +53,12 @@ class DtuTlb
 
   public:
 
+    enum
+    {
+        PAGE_BITS    = 12,
+        PAGE_SIZE    = 1 << PAGE_BITS,
+    };
+
     enum Result
     {
         HIT,
@@ -84,7 +90,7 @@ class DtuTlb
         Flag access;
     };
 
-    DtuTlb(size_t _num, Addr _pageBits);
+    DtuTlb(size_t _num);
 
     Result lookup(Addr virt, Flag access, NocAddr *phys);
 
@@ -102,7 +108,6 @@ class DtuTlb
     std::vector<Entry> entries;
     std::vector<Entry*> free;
     size_t num;
-    Addr pageBits;
     uint lru_seq;
 };
 

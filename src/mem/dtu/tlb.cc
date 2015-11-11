@@ -31,8 +31,8 @@
 
 #include <limits>
 
-DtuTlb::DtuTlb(size_t _num, Addr _pageBits)
-    : trie(), entries(), free(), num(_num), pageBits(_pageBits), lru_seq()
+DtuTlb::DtuTlb(size_t _num)
+    : trie(), entries(), free(), num(_num), lru_seq()
 {
     entries.reserve(num);
     for(size_t i = 0; i < num; ++i)
@@ -51,7 +51,7 @@ DtuTlb::lookup(Addr virt, Flag access, NocAddr *phys)
 
     e->lru_seq = ++lru_seq;
     *phys = e->phys;
-    phys->offset += virt & ((1 << pageBits) - 1);
+    phys->offset += virt & ((1 << PAGE_BITS) - 1);
     return HIT;
 }
 
@@ -86,7 +86,7 @@ DtuTlb::insert(Addr virt, NocAddr phys, uint flags)
     e->virt = virt;
     e->phys = phys;
     e->flags = flags;
-    e->handle = trie.insert(virt, 64 - pageBits, e);
+    e->handle = trie.insert(virt, 64 - PAGE_BITS, e);
     free.pop_back();
 }
 

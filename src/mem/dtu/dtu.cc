@@ -72,7 +72,7 @@ Dtu::Dtu(DtuParams* p)
     executeCommandEvent(*this),
     finishCommandEvent(*this),
     cmdInProgress(false),
-    tlb(p->tlb_entries > 0 ? new DtuTlb(p->tlb_entries, p->page_bits) : NULL),
+    tlb(p->tlb_entries > 0 ? new DtuTlb(p->tlb_entries) : NULL),
     memEp(p->memory_ep),
     memPe(p->memory_pe),
     memOffset(p->memory_offset),
