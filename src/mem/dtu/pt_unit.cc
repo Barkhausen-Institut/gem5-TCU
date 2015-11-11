@@ -57,7 +57,26 @@ void
 PtUnit::TranslateEvent::recvFromMem(PacketPtr pkt)
 {
     NocAddr phys;
-    bool success = unit.finishTranslate(pkt, virt, access, &phys);
+    DtuTlb::Flag flags = access;
+    bool success = unit.finishTranslate(pkt, virt, &flags, &phys);
+
+    if(success)
+    {
+        Addr tlbVirt = virt & ~DtuTlb::PAGE_MASK;
+        Addr tlbPhys = phys.getAddr() & ~DtuTlb::PAGE_MASK;
+
+        // we can't insert an entry twice
+        NocAddr newPhys;
+        if(unit.dtu.tlb->lookup(tlbVirt, access, &newPhys) != DtuTlb::HIT)
+        {
+            DPRINTFS(DtuTlb, (&unit.dtu), "Inserting into TLB: virt=%p phys=%p flags=%u\n",
+                     tlbVirt, tlbPhys, flags);
+
+            unit.dtu.tlb->insert(tlbVirt, NocAddr(tlbPhys), flags);
+        }
+        else
+            assert(newPhys.getAddr() == tlbPhys);
+    }
 
     trans->finished(success, phys);
 
@@ -73,7 +92,7 @@ PtUnit::translateFunctional(Addr virt, DtuTlb::Flag access, NocAddr *phys)
 
     dtu.sendFunctionalMemRequest(pkt);
 
-    return finishTranslate(pkt, virt, access, phys);
+    return finishTranslate(pkt, virt, &access, phys);
 }
 
 PacketPtr
@@ -96,17 +115,18 @@ PtUnit::createPacket(Addr virt)
 }
 
 bool
-PtUnit::finishTranslate(PacketPtr pkt, Addr virt, DtuTlb::Flag access, NocAddr *phys)
+PtUnit::finishTranslate(PacketPtr pkt, Addr virt, DtuTlb::Flag *access, NocAddr *phys)
 {
     PtUnit::PageTableEntry *e = pkt->getPtr<PtUnit::PageTableEntry>();
 
     DPRINTFS(DtuTlb, (&dtu), "Received PTE for %p: %#x\n",
              virt, (uint64_t)*e);
 
-    if(!(e->xwr & access))
+    if(!(e->xwr & *access))
         return false;
 
-    *phys = NocAddr((e->base << DtuTlb::PAGE_BITS) + (virt & ((1 << DtuTlb::PAGE_BITS) - 1)));
+    *access = static_cast<DtuTlb::Flag>((uint64_t)e->xwr);
+    *phys = NocAddr((e->base << DtuTlb::PAGE_BITS) + (virt & DtuTlb::PAGE_MASK));
     return true;
 }
 

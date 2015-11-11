@@ -53,10 +53,11 @@ class DtuTlb
 
   public:
 
-    enum
+    enum : Addr
     {
         PAGE_BITS    = 12,
         PAGE_SIZE    = 1 << PAGE_BITS,
+        PAGE_MASK    = PAGE_SIZE - 1,
     };
 
     enum Result

@@ -103,7 +103,7 @@ class PtUnit
 
     PacketPtr createPacket(Addr virt);
     
-    bool finishTranslate(PacketPtr pkt, Addr virt, DtuTlb::Flag access, NocAddr *phys);
+    bool finishTranslate(PacketPtr pkt, Addr virt, DtuTlb::Flag *access, NocAddr *phys);
 
     Dtu& dtu;
 

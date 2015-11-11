@@ -51,7 +51,7 @@ DtuTlb::lookup(Addr virt, Flag access, NocAddr *phys)
 
     e->lru_seq = ++lru_seq;
     *phys = e->phys;
-    phys->offset += virt & ((1 << PAGE_BITS) - 1);
+    phys->offset += virt & PAGE_MASK;
     return HIT;
 }
 
