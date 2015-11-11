@@ -31,6 +31,7 @@
 #include <iomanip>
 #include <sstream>
 
+#include "arch/x86/m3/system.hh"
 #include "debug/Dtu.hh"
 #include "debug/DtuBuf.hh"
 #include "debug/DtuCmd.hh"
@@ -73,10 +74,10 @@ Dtu::Dtu(DtuParams* p)
     finishCommandEvent(*this),
     cmdInProgress(false),
     tlb(p->tlb_entries > 0 ? new DtuTlb(p->tlb_entries) : NULL),
-    memEp(p->memory_ep),
-    memPe(p->memory_pe),
-    memOffset(p->memory_offset),
-    memSize(p->memory_size),
+    memEp(),
+    memPe(),
+    memOffset(),
+    memSize(),
     atomicMode(p->system->isAtomicMode()),
     numEndpoints(p->num_endpoints),
     maxNocPacketSize(p->max_noc_packet_size),
@@ -93,18 +94,14 @@ Dtu::Dtu(DtuParams* p)
 {
     assert(p->buf_size >= maxNocPacketSize);
 
-    // if(tlb)
-    // {
-    //     size_t offset = 0;
-    //     size_t pageSize = 1UL << p->page_bits;
-    //     size_t count = std::min<size_t>(p->tlb_entries, divCeil(p->memory_size, pageSize));
-    //     for(size_t i = 0; i < count; ++i)
-    //     {
-    //         tlb->insert(offset, NocAddr(memPe, 0, memOffset + offset),
-    //             DtuTlb::READ | DtuTlb::WRITE | DtuTlb::EXEC);
-    //         offset += 1UL << p->page_bits;
-    //     }
-    // }
+    M3X86System *sys = dynamic_cast<M3X86System*>(system);
+    if(sys)
+    {
+        memEp = sys->memEp;
+        memPe = sys->memPe;
+        memOffset = sys->memOffset;
+        memSize = sys->memSize;
+    }
 }
 
 Dtu::~Dtu()
@@ -247,12 +244,12 @@ Dtu::updateSuspendablePin()
 
 void
 Dtu::sendMemRequest(PacketPtr pkt,
-                    unsigned epId,
+                    Addr data,
                     MemReqType type,
                     Cycles delay)
 {
     auto senderState = new MemSenderState();
-    senderState->epId = epId;
+    senderState->data = data;
     senderState->mid = pkt->req->masterId();
     senderState->type = type;
 
@@ -373,7 +370,7 @@ Dtu::completeMemRequest(PacketPtr pkt)
     switch(senderState->type)
     {
     case MemReqType::TRANSFER:
-        xferUnit->recvMemResponse(senderState->epId,
+        xferUnit->recvMemResponse(senderState->data,
                                   pkt->getConstPtr<uint8_t>(),
                                   pkt->getSize(),
                                   pkt->headerDelay,
@@ -382,6 +379,10 @@ Dtu::completeMemRequest(PacketPtr pkt)
 
     case MemReqType::HEADER:
         msgUnit->recvFromMem(getCommand(), pkt);
+        break;
+
+    case MemReqType::TRANSLATION:
+        ptUnit->recvFromMem(senderState->data, pkt);
         break;
     }
 
@@ -503,7 +504,7 @@ Dtu::translate(PtUnit::Translation *trans, PacketPtr pkt, bool icache, bool func
             {
                 NocAddr phys;
                 // TODO handle errors here
-                assert(ptUnit->translate(pkt->getAddr(), access, &phys));
+                assert(ptUnit->translateFunctional(pkt->getAddr(), access, &phys));
                 pkt->setAddr(phys.getAddr());
                 pkt->req->setPaddr(phys.getAddr());
                 return true;

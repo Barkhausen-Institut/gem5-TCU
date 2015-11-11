@@ -40,8 +40,24 @@ PtUnit::TranslateEvent::name() const
 void
 PtUnit::TranslateEvent::process()
 {
+    auto pkt = unit.createPacket(virt);
+    if(!pkt)
+    {
+        trans->finished(false, NocAddr(0));
+        return;
+    }
+    
+    unit.dtu.sendMemRequest(pkt,
+                            reinterpret_cast<Addr>(this),
+                            Dtu::MemReqType::TRANSLATION,
+                            Cycles(0));
+}
+
+void
+PtUnit::TranslateEvent::recvFromMem(PacketPtr pkt)
+{
     NocAddr phys;
-    bool success = unit.translate(virt, access, &phys);
+    bool success = unit.finishTranslate(pkt, virt, access, &phys);
 
     trans->finished(success, phys);
 
@@ -49,16 +65,48 @@ PtUnit::TranslateEvent::process()
 }
 
 bool
-PtUnit::translate(Addr virt, DtuTlb::Flag access, NocAddr *phys)
+PtUnit::translateFunctional(Addr virt, DtuTlb::Flag access, NocAddr *phys)
 {
-    if(virt > dtu.memSize)
+    auto pkt = createPacket(virt);
+    if(!pkt)
         return false;
 
-    *phys = NocAddr(dtu.memPe, 0, dtu.memOffset + virt);
+    dtu.sendFunctionalMemRequest(pkt);
 
-    DPRINTFS(DtuTlb, (&dtu), "Translated %p -> %p\n",
-             virt, phys->getAddr());
+    return finishTranslate(pkt, virt, access, phys);
+}
 
+PacketPtr
+PtUnit::createPacket(Addr virt)
+{
+    if(virt > dtu.memSize)
+        return NULL;
+
+    Addr pageNo = virt / dtu.tlb->PAGE_SIZE;
+    Addr pteOff = pageNo * sizeof(PtUnit::PageTableEntry);
+    Addr pteAddr = NocAddr(dtu.memPe, 0, dtu.memOffset + pteOff).getAddr();
+    auto pkt = dtu.generateRequest(pteAddr,
+                                   sizeof(PtUnit::PageTableEntry),
+                                   MemCmd::ReadReq);
+
+    DPRINTFS(DtuTlb, (&dtu), "Loading PTE for %p from %p\n",
+             virt, pteAddr);
+
+    return pkt;
+}
+
+bool
+PtUnit::finishTranslate(PacketPtr pkt, Addr virt, DtuTlb::Flag access, NocAddr *phys)
+{
+    PtUnit::PageTableEntry *e = pkt->getPtr<PtUnit::PageTableEntry>();
+
+    DPRINTFS(DtuTlb, (&dtu), "Received PTE for %p: %#x\n",
+             virt, (uint64_t)*e);
+
+    if(!(e->xwr & access))
+        return false;
+
+    *phys = NocAddr((e->base << DtuTlb::PAGE_BITS) + (virt & ((1 << DtuTlb::PAGE_BITS) - 1)));
     return true;
 }
 

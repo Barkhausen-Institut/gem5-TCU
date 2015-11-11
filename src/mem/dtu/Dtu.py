@@ -64,11 +64,6 @@ class Dtu(BaseDtu):
 
     max_noc_packet_size = Param.MemorySize("1kB", "Maximum size of a NoC packet (needs to be the same for all DTUs)")
 
-    memory_ep = Param.Unsigned(7, "The memory endpoint")
-    memory_pe = Param.Unsigned(0, "The memory PE to use")
-    memory_offset = Param.Addr(0, "The offset in the memory PE")
-    memory_size = Param.MemorySize("0kB", "The size of the memory range in the memory PE")
-
     block_size = Param.MemorySize("64B", "The block size with which to access the local memory")
 
     buf_count = Param.Unsigned(4, "The number of temporary buffers for transfers")

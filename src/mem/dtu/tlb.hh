@@ -66,6 +66,7 @@ class DtuTlb
         PAGEFAULT,
     };
 
+    // note that these have to match with the bits in PTEs
     enum Flag
     {
         READ    = 1,

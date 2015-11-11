@@ -92,12 +92,13 @@ class Dtu : public BaseDtu
     enum class MemReqType
     {
         TRANSFER,
-        HEADER
+        HEADER,
+        TRANSLATION
     };
 
     struct MemSenderState : public Packet::SenderState
     {
-        unsigned epId;
+        Addr data;
         MasterID mid;
         MemReqType type;
     };
@@ -156,7 +157,7 @@ class Dtu : public BaseDtu
     void scheduleCommand(Cycles delay) { schedule(executeCommandEvent, clockEdge(delay)); }
 
     void sendMemRequest(PacketPtr pkt,
-                        unsigned epId,
+                        Addr data,
                         MemReqType type,
                         Cycles delay);
 
@@ -226,10 +227,10 @@ class Dtu : public BaseDtu
 
     DtuTlb *tlb;
 
-    const unsigned memEp;
-    const unsigned memPe;
-    const Addr memOffset;
-    const Addr memSize;
+    unsigned memEp;
+    unsigned memPe;
+    Addr memOffset;
+    Addr memSize;
 
     const bool atomicMode;
 

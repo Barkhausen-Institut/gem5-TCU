@@ -42,7 +42,10 @@ class M3X86System : public X86System
     std::string commandLine;
 
   public:
-    const Addr accessibleMemSize;
+    const unsigned memEp;
+    const unsigned memPe;
+    const Addr memOffset;
+    const Addr memSize;
 
   public:
     typedef M3X86SystemParams Params;
@@ -52,6 +55,7 @@ class M3X86System : public X86System
     void initState();
 
   private:
+    void createPTEs() const;
     size_t getArgc() const;
     void writeArg(Addr &args, size_t &i, Addr argv, const char *cmd, const char *begin) const;
 };

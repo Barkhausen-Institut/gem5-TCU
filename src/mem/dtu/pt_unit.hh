@@ -31,7 +31,9 @@
 #define __MEM_DTU_PT_WALKER_HH__
 
 #include "base/types.hh"
+#include "base/bitunion.hh"
 #include "sim/eventq.hh"
+#include "mem/packet.hh"
 #include "mem/dtu/noc_addr.hh"
 #include "mem/dtu/tlb.hh"
 
@@ -51,6 +53,14 @@ class PtUnit
         virtual void finished(bool success, const NocAddr &phys) = 0;
     };
 
+    BitUnion64(PageTableEntry)
+        Bitfield<63, DtuTlb::PAGE_BITS> base;
+        Bitfield<2,0> xwr;
+        Bitfield<2> x;
+        Bitfield<1> w;
+        Bitfield<0> r;
+    EndBitUnion(PageTableEntry)
+
   private:
 
     struct TranslateEvent : public Event
@@ -67,6 +77,8 @@ class PtUnit
 
         void process() override;
 
+        void recvFromMem(PacketPtr pkt);
+
         const char* description() const override { return "TranslateEvent"; }
 
         const std::string name() const override;
@@ -77,11 +89,21 @@ class PtUnit
     PtUnit(Dtu& _dtu) : dtu(_dtu)
     {}
 
-    bool translate(Addr virt, DtuTlb::Flag access, NocAddr *phys);
+    bool translateFunctional(Addr virt, DtuTlb::Flag access, NocAddr *phys);
 
     void startTranslate(Addr virt, DtuTlb::Flag access, Translation *trans);
 
+    void recvFromMem(Addr event, PacketPtr pkt)
+    {
+        TranslateEvent *ev = reinterpret_cast<TranslateEvent*>(event);
+        ev->recvFromMem(pkt);
+    }
+
   private:
+
+    PacketPtr createPacket(Addr virt);
+    
+    bool finishTranslate(PacketPtr pkt, Addr virt, DtuTlb::Flag access, NocAddr *phys);
 
     Dtu& dtu;
 

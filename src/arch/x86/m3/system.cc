@@ -34,6 +34,9 @@
 #include "base/trace.hh"
 #include "cpu/thread_context.hh"
 #include "mem/port_proxy.hh"
+#include "mem/dtu/noc_addr.hh"
+#include "mem/dtu/pt_unit.hh"
+#include "mem/dtu/tlb.hh"
 #include "params/M3X86System.hh"
 #include "sim/byteswap.hh"
 
@@ -41,7 +44,12 @@ using namespace LittleEndianGuest;
 using namespace X86ISA;
 
 M3X86System::M3X86System(Params *p)
-    : X86System(p), commandLine(p->boot_osflags), accessibleMemSize(p->accessible_mem_size)
+    : X86System(p),
+      commandLine(p->boot_osflags),
+      memEp(p->memory_ep),
+      memPe(p->memory_pe),
+      memOffset(p->memory_offset),
+      memSize(p->memory_size)
 {
 }
 
@@ -89,13 +97,36 @@ M3X86System::writeArg(Addr &args, size_t &i, Addr argv, const char *cmd, const c
 }
 
 void
+M3X86System::createPTEs() const
+{
+    // create page-table entries (atm, we have a single large pt, sitting at address 0)
+    Addr phys = NocAddr(memPe, 0, memOffset).getAddr();
+    size_t offset = 0;
+    size_t count = divCeil(memSize, DtuTlb::PAGE_SIZE);
+    for(size_t i = 0; i < count; ++i)
+    {
+        PtUnit::PageTableEntry e(0);
+        e.base = NocAddr(memPe, 0, memOffset + offset).getAddr() >> DtuTlb::PAGE_BITS;
+        e.r = 1;
+        e.w = 1;
+        e.x = 1;
+        physProxy.write(phys, e);
+
+        offset += DtuTlb::PAGE_SIZE;
+        phys += sizeof(e);
+    }
+}
+
+void
 M3X86System::initState()
 {
     X86System::initState();
 
+    createPTEs();
+
     const Addr stateSize = 0x1000;
     // TODO
-    const Addr stateEnd = accessibleMemSize - 0x2000;
+    const Addr stateEnd = memSize - 0x2000;
     const Addr stateArea = stateEnd - stateSize;
 
     // write argc and argv

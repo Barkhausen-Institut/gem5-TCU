@@ -199,12 +199,12 @@ def createPE(no, mem=False, cache=True, l2cache=True, memPE=0):
                 pe.l1cache.mem_side = pe.dtu.cache_mem_slave_port
 
             # connect memory endpoint to the DRAM PE
-            pe.dtu.memory_pe = memPE
-            pe.dtu.memory_offset = base_offset + pe.accessible_mem_size.value * no
-            pe.dtu.memory_size = pe.accessible_mem_size
+            pe.memory_pe = memPE
+            pe.memory_size = "8MB"
+            pe.memory_offset = base_offset + pe.memory_size.value * no
 
             # TODO for now, just create enough TLB entries to cover everything
-            pe.dtu.tlb_entries = (pe.accessible_mem_size.value + 4096 - 1) / 4096
+            pe.dtu.tlb_entries = (pe.memory_size.value + 4096 - 1) / 4096
 
             # don't check whether the kernel is in memory because a PE does not have memory in this
             # case, but just a cache that is connected to a different PE
@@ -212,7 +212,7 @@ def createPE(no, mem=False, cache=True, l2cache=True, memPE=0):
         else:
             pe.cachespm = Scratchpad(in_addr_map="true")
             pe.cachespm.cpu_port = pe.xbar.master
-            pe.cachespm.range = pe.accessible_mem_size
+            pe.cachespm.range = pe.memory_size
 
     # for memory PEs or PEs with SPM, we do not need a buffer. for the sake of an easy implementation
     # we just make the buffer very large and the block size as well, so that we can read a packet
@@ -254,7 +254,7 @@ def createCorePE(no, cache, l2cache, memPE):
         if l2cache:
             print '     L2cache=%d KiB' % (pe.l2cache.size.value / 1024)
         print '     ExtMem =PE%d : %#010x .. %#010x' % \
-          (pe.dtu.memory_pe, pe.dtu.memory_offset, pe.dtu.memory_offset + pe.dtu.memory_size.value)
+          (pe.memory_pe, pe.memory_offset, pe.memory_offset + pe.memory_size.value)
     except:
         print '     memsize=%d KiB' % (int(pe.cachespm.range.end + 1) / 1024)
     print '     bufsize=%d KiB, blocksize=%d B, count=%d' % \
