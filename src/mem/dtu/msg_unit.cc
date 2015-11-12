@@ -381,6 +381,8 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
     // ignore messages if there is not enough space
     else
     {
+        DPRINTFS(Dtu, (&dtu), "EP%u: ignoring message: no space left\n", epId);
+
         pkt->makeResponse();
 
         if (!dtu.atomicMode)
