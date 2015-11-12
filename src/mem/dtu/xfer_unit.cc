@@ -44,9 +44,6 @@ XferUnit::XferUnit(Dtu &_dtu, size_t _blockSize, size_t _bufCount, size_t _bufSi
       bufSize(_bufSize),
       bufs(new Buffer*[bufCount])
 {
-    if(_bufCount < 2)
-        panic("We need at least 2 buffers");
-
     for(size_t i = 0; i < bufCount; ++i)
         bufs[i] = new Buffer(*this, i, bufSize);
 }
@@ -138,7 +135,7 @@ XferUnit::startTransfer(Dtu::TransferType type,
                         Cycles delay,
                         uint flags)
 {
-    Buffer *buf = allocateBuf(flags & CACHEMISS);
+    Buffer *buf = allocateBuf();
 
     bool writing = type == Dtu::TransferType::REMOTE_WRITE || type == Dtu::TransferType::LOCAL_WRITE;
 
@@ -291,13 +288,9 @@ XferUnit::recvMemResponse(size_t bufId,
 }
 
 XferUnit::Buffer*
-XferUnit::allocateBuf(bool cacheMiss)
+XferUnit::allocateBuf()
 {
-    // the first one is reserved for cache misses. since all transfers except cache misses can
-    // cause cache miss transfers, we need to make sure not to cause deadlocks. thus, we dedicate
-    // the first buffer to cache misses only. because they will always be handled in finite time,
-    // without requiring additional transfers, so that everything can continue in all cases.
-    for(size_t i = cacheMiss ? 0 : 1; i < bufCount; ++i)
+    for(size_t i = 0; i < bufCount; ++i)
     {
         if(bufs[i]->free)
         {

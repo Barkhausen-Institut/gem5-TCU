@@ -405,7 +405,7 @@ Dtu::handleNocRequest(PacketPtr pkt)
     case NocPacketType::READ_REQ:
     case NocPacketType::WRITE_REQ:
     case NocPacketType::CACHE_MEM_REQ:
-        memUnit->recvFromNoc(pkt, senderState->packetType == NocPacketType::CACHE_MEM_REQ);
+        memUnit->recvFromNoc(pkt);
         break;
     case NocPacketType::CACHE_MEM_REQ_FUNC:
         memUnit->recvFunctionalFromNoc(pkt);

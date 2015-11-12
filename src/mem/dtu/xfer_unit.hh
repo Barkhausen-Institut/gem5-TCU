@@ -42,7 +42,6 @@ class XferUnit
     {
         MESSAGE   = 1,
         LAST      = 2,
-        CACHEMISS = 4,
     };
 
   private:
@@ -196,7 +195,7 @@ class XferUnit
 
   private:
 
-    Buffer* allocateBuf(bool cacheMiss);
+    Buffer* allocateBuf();
 
   private:
 
