@@ -93,8 +93,8 @@ MemoryUnit::startWrite(const Dtu::Command& cmd)
     if(requestSize == 0)
         return;
 
-    DPRINTFS(Dtu, (&dtu), "\e[1m[wr -> %u]\e[0m at offset %#018lx with EP%u from %#018lx:%lu\n",
-        targetCoreId, offset, cmd.epId, localAddr, requestSize);
+    DPRINTFS(Dtu, (&dtu), "\e[1m[wr -> %u]\e[0m at %#018lx+%#lx with EP%u from %#018lx:%lu\n",
+        targetCoreId, targetAddr, offset, cmd.epId, localAddr, requestSize);
 
     // TODO error handling
     assert(flags & Dtu::MemoryFlags::WRITE);
