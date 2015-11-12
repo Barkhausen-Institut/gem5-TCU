@@ -496,7 +496,7 @@ Dtu::translate(PtUnit::Translation *trans, PacketPtr pkt, bool icache, bool func
             break;
 
         case DtuTlb::MISS:
-            DPRINTF(Dtu, "TLB-miss for %s access to %p\n",
+            DPRINTF(DtuTlb, "TLB-miss for %s access to %p\n",
                     icache ? "exec" : (pkt->isRead() ? "read" : "write"),
                     pkt->getAddr());
 
