@@ -79,10 +79,10 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
     // TODO error handling
     assert(messageSize + sizeof(Dtu::MessageHeader) <= maxMessageSize);
 
-    if (credits < maxMessageSize)
+    if(credits < maxMessageSize)
     {
-        warn("pe%u.ep%u: Ignore send message command because there are not "
-             "enough credits", dtu.coreId, epid);
+        DPRINTFS(Dtu, (&dtu), "EP%u: not enough credits (%lu) to send message (%lu)\n",
+                 epid, credits, maxMessageSize);
         dtu.scheduleFinishOp(Cycles(1));
         return;
     }
