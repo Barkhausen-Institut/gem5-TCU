@@ -5,26 +5,27 @@
  *
  * Redistribution and use in source and binary forms, with or without
  *
- * 1. Redistributions of source code must retain the above copyright notice, this
- * list of conditions and the following disclaimer.
+ * 1. Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
- * this list of conditions and the following disclaimer in the documentation
- * and/or other materials provided with the distribution.
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
- * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
- * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
  *
- * The views and conclusions contained in the software and documentation are those
- * of the authors and should not be interpreted as representing official policies,
- * either expressed or implied, of the FreeBSD Project.
+ * The views and conclusions contained in the software and documentation are
+ * those of the authors and should not be interpreted as representing official
+ * policies, either expressed or implied, of the FreeBSD Project.
  */
 
 #include "mem/scratchpad.hh"
@@ -46,7 +47,7 @@ Scratchpad::init()
     assert(cpuPort.isConnected());
 
     cpuPort.sendRangeChange();
-    if(dtuPort.isConnected())
+    if (dtuPort.isConnected())
         dtuPort.sendRangeChange();
 }
 
@@ -56,7 +57,7 @@ Scratchpad::getSlavePort(const std::string &if_name, PortID idx)
     if (if_name == "cpu_port") {
         return cpuPort;
     }
-    else if(if_name == "dtu_port") {
+    else if (if_name == "dtu_port") {
         return dtuPort;
     }
     else {
@@ -68,11 +69,12 @@ Tick
 Scratchpad::recvAtomic(PacketPtr pkt)
 {
     // ignore invalid requests
-    if(!AddrRange(pkt->getAddr(), pkt->getAddr() + pkt->getSize() - 1).isSubset(getAddrRange()))
+    AddrRange pktRange(pkt->getAddr(), pkt->getAddr() + pkt->getSize() - 1);
+    if (!pktRange.isSubset(getAddrRange()))
     {
-        if(pkt->needsResponse())
+        if (pkt->needsResponse())
             pkt->makeResponse();
-        if(pkt->isRead())
+        if (pkt->isRead())
             memset(pkt->getPtr<uint8_t>(), 0, pkt->getSize());
         return 0;
     }
@@ -85,10 +87,10 @@ Scratchpad::recvAtomic(PacketPtr pkt)
     // let subclass handle the request
     access(pkt);
 
-    unsigned cyclesNeeded = round(((float) pkt->getSize()) / ((float)throughput));
-    unsigned payloadDelay = clockPeriod() * cyclesNeeded;
+    unsigned cycles = round(((float)pkt->getSize()) / ((float)throughput));
+    unsigned payloadDelay = clockPeriod() * cycles;
 
-    // pay the header delay caused by interconnect and add the scratchpad latency
+    // pay the header delay caused by interconnect and add the SPM latency
     unsigned totalDelay = pkt->headerDelay + latency * clockPeriod();
     pkt->headerDelay = 0;
 
