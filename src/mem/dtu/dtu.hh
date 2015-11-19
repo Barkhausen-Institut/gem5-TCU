@@ -60,11 +60,13 @@ class Dtu : public BaseDtu
 
     struct MessageHeader
     {
-        uint8_t flags; // if bit 0 is set its a reply, if bit 1 is set we grant credits
+         // if bit 0 is set its a reply, if bit 1 is set we grant credits
+        uint8_t flags;
         uint8_t senderCoreId;
         uint8_t senderEpId;
-        uint8_t replyEpId; // for a normal message this is the reply epId
-                           // for a reply this is the enpoint that receives credits
+         // for a normal message this is the reply epId
+        // for a reply this is the enpoint that receives credits
+        uint8_t replyEpId;
         uint16_t length;
 
         // both should be large enough for pointers.
@@ -83,10 +85,14 @@ class Dtu : public BaseDtu
 
     enum class TransferType
     {
-        LOCAL_READ,     // we are reading stuff out of our local memory and send it
-        LOCAL_WRITE,    // we have received the read response from somebody and write it to local mem
-        REMOTE_WRITE,   // we received something and write it to our local memory
-        REMOTE_READ     // we should send something from our local memory to somebody else
+        // we are reading stuff out of our local memory and send it
+        LOCAL_READ,
+        // we received the read resp. from somebody and write it to local mem
+        LOCAL_WRITE,
+        // we received something and write it to our local memory
+        REMOTE_WRITE,
+        // we should send something from our local memory to somebody else
+        REMOTE_READ
     };
 
     enum class MemReqType
@@ -140,21 +146,30 @@ class Dtu : public BaseDtu
     ~Dtu();
 
     RegFile &regs() { return regFile; }
-    
+
     PacketPtr generateRequest(Addr addr, Addr size, MemCmd cmd);
     void freeRequest(PacketPtr pkt);
 
     void wakeupCore();
-    
+
     void updateSuspendablePin();
 
     void forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest);
 
-    void sendFunctionalMemRequest(PacketPtr pkt) { dcacheMasterPort.sendFunctional(pkt); }
+    void sendFunctionalMemRequest(PacketPtr pkt)
+    {
+        dcacheMasterPort.sendFunctional(pkt);
+    }
 
-    void scheduleFinishOp(Cycles delay) { schedule(finishCommandEvent, clockEdge(delay)); }
+    void scheduleFinishOp(Cycles delay)
+    {
+        schedule(finishCommandEvent, clockEdge(delay));
+    }
 
-    void scheduleCommand(Cycles delay) { schedule(executeCommandEvent, clockEdge(delay)); }
+    void scheduleCommand(Cycles delay)
+    {
+        schedule(executeCommandEvent, clockEdge(delay));
+    }
 
     void sendMemRequest(PacketPtr pkt,
                         Addr data,
@@ -199,12 +214,15 @@ class Dtu : public BaseDtu
 
     bool handleCacheMemRequest(PacketPtr pkt, bool functional) override;
 
-    bool translate(PtUnit::Translation *trans, PacketPtr pkt, bool icache, bool functional) override;
+    bool translate(PtUnit::Translation *trans,
+                   PacketPtr pkt,
+                   bool icache,
+                   bool functional) override;
 
   private:
 
     const MasterID masterId;
-    
+
     System *system;
 
     RegFile regFile;
@@ -218,7 +236,7 @@ class Dtu : public BaseDtu
     PtUnit *ptUnit;
 
     EventWrapper<Dtu, &Dtu::executeCommand> executeCommandEvent;
-    
+
     EventWrapper<Dtu, &Dtu::finishCommand> finishCommandEvent;
 
     bool cmdInProgress;

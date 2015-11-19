@@ -61,7 +61,8 @@ BaseDtu::NocMasterPort::completeRequest(PacketPtr pkt)
 bool
 BaseDtu::ICacheMasterPort::recvTimingResp(PacketPtr pkt)
 {
-    // the DTU does never send requests to the icache. so just pass it back to the CPU
+    // the DTU does never send requests to the icache. so just pass it back to
+    // the CPU
     return dtu.icacheSlavePort.sendTimingResp(pkt);
 }
 
@@ -69,7 +70,7 @@ bool
 BaseDtu::DCacheMasterPort::recvTimingResp(PacketPtr pkt)
 {
     // if there is a context-id and thread-id, the request came from the CPU
-    if(pkt->req->hasContextId())
+    if (pkt->req->hasContextId())
         return dtu.dcacheSlavePort.sendTimingResp(pkt);
 
     // otherwise from the DTU
@@ -136,7 +137,8 @@ BaseDtu::DtuSlavePort::recvFunctional(PacketPtr pkt)
                           pkt->getAddr(),
                           pkt->getSize());
 
-    // don't actually make us busy/unbusy here, because we might interfere with the timing requests
+    // don't actually make us busy/unbusy here, because we might interfere
+    // with the timing requests
     bool dummy = false;
     handleRequest(pkt, &dummy, true);
 }
@@ -168,14 +170,15 @@ BaseDtu::DtuSlavePort::recvTimingReq(PacketPtr pkt)
 void
 BaseDtu::DtuSlavePort::recvRespRetry()
 {
-    // try to send all queued responses. the first one should always succeed because the XBar called
-    // us because it is free. the second should always fail since it is busy then. in this case,
-    // we stop here.
-    while(!pendingResponses.empty())
+    // try to send all queued responses. the first one should always succeed
+    // because the XBar called us because it is free. the second should always
+    // fail since it is busy then. in this case, we stop here.
+    while (!pendingResponses.empty())
     {
         ResponseEvent *ev = pendingResponses.front();
 
-        DPRINTF(DtuSlavePort, "Receive response retry at %#x\n", ev->pkt->getAddr());
+        DPRINTF(DtuSlavePort, "Receive response retry at %#x\n",
+                              ev->pkt->getAddr());
 
         if (sendTimingResp(ev->pkt))
         {
@@ -194,9 +197,10 @@ BaseDtu::DtuSlavePort::recvRespRetry()
 void
 BaseDtu::DtuSlavePort::ResponseEvent::process()
 {
-    // if the XBar is busy, we can only send a response to a port once. this is queued there and
-    // calls our recvRespRetry() if the XBar is idle again. but we can't try another time. so, for
-    // the second time, don't even try but directly queue it here
+    // if the XBar is busy, we can only send a response to a port once. this
+    // is queued there and calls our recvRespRetry() if the XBar is idle again.
+    // but we can't try another time. so, for the second time, don't even try
+    // but directly queue it here
     if (port.pendingResponses.empty())
     {
         DPRINTF(DtuSlavePort, "Try to send %s response at %#x (%u bytes)\n",
@@ -228,7 +232,10 @@ BaseDtu::NocSlavePort::getAddrRanges() const
     Addr baseNocAddr = NocAddr(dtu.coreId, 0).getAddr();
     Addr topNocAddr  = NocAddr(dtu.coreId + 1, 0).getAddr() - 1;
 
-    DPRINTF(DtuSlavePort, "Dtu %u covers %#x to %#x\n", dtu.coreId, baseNocAddr, topNocAddr);
+    DPRINTF(DtuSlavePort, "Dtu %u covers %#x to %#x\n",
+                          dtu.coreId,
+                          baseNocAddr,
+                          topNocAddr);
 
     auto range = AddrRange(baseNocAddr, topNocAddr);
 
@@ -259,11 +266,11 @@ BaseDtu::BaseDtu(BaseDtuParams* p)
     dcacheSlavePort(dcacheMasterPort, *this, false),
     cacheMemSlavePort(*this),
     watchRange(1, 0),
-    nocRequestFinishedEvent(*this),
+    nocReqFinishedEvent(*this),
     coreId(p->core_id),
     regFileBaseAddr(p->regfile_base_addr)
 {
-    if(p->watch_range_start != p->watch_range_end)
+    if (p->watch_range_start != p->watch_range_end)
         watchRange = AddrRange(p->watch_range_start, p->watch_range_end - 1);
 }
 
@@ -278,18 +285,20 @@ BaseDtu::init()
     nocSlavePort.sendRangeChange();
 
     // for memory-PEs, the icache/dcache slaves are not connected
-    if(icacheSlavePort.isConnected())
+    if (icacheSlavePort.isConnected())
         icacheSlavePort.sendRangeChange();
-    if(dcacheSlavePort.isConnected())
+    if (dcacheSlavePort.isConnected())
         dcacheSlavePort.sendRangeChange();
 
     // the cache-mem slave port is only used if we have a cache
-    if(cacheMemSlavePort.isConnected())
+    if (cacheMemSlavePort.isConnected())
         cacheMemSlavePort.sendRangeChange();
 }
 
 bool
-BaseDtu::NocSlavePort::handleRequest(PacketPtr pkt, bool *busy, bool functional)
+BaseDtu::NocSlavePort::handleRequest(PacketPtr pkt,
+                                     bool *busy,
+                                     bool functional)
 {
     *busy = true;
 
@@ -299,10 +308,13 @@ BaseDtu::NocSlavePort::handleRequest(PacketPtr pkt, bool *busy, bool functional)
 }
 
 bool
-BaseDtu::CacheMemSlavePort::handleRequest(PacketPtr pkt, bool *busy, bool functional)
+BaseDtu::CacheMemSlavePort::handleRequest(PacketPtr pkt,
+                                          bool *busy,
+                                          bool functional)
 {
-    // if that failed, it was an invalid request (probably due to speculative execution)
-    if(!dtu.handleCacheMemRequest(pkt, functional))
+    // if that failed, it was an invalid request (probably due to speculative
+    // execution)
+    if (!dtu.handleCacheMemRequest(pkt, functional))
         dtu.sendDummyResponse(*this, pkt, functional);
 
     // in general, pretend that everything is fine
@@ -313,15 +325,15 @@ void
 BaseDtu::sendDummyResponse(DtuSlavePort &port, PacketPtr pkt, bool functional)
 {
     // invalid reads just get zeros
-    if(pkt->isRead())
+    if (pkt->isRead())
         memset(pkt->getPtr<uint8_t>(), 0, pkt->getSize());
 
     // if a response is necessary, send one
-    if(pkt->needsResponse())
+    if (pkt->needsResponse())
     {
         pkt->makeResponse();
 
-        if(!functional)
+        if (!functional)
         {
             // somehow we need to send that later to make the cache happy.
             port.schedTimingResp(pkt, clockEdge(Cycles(1)));
@@ -360,13 +372,15 @@ BaseDtu::getSlavePort(const std::string &if_name, PortID idx)
 void
 BaseDtu::checkWatchRange(PacketPtr pkt)
 {
-    if(watchRange.valid())
+    if (watchRange.valid())
     {
         AddrRange range(pkt->getAddr(), pkt->getAddr() + pkt->getSize() - 1);
-        if(watchRange.intersects(range))
+        if (watchRange.intersects(range))
         {
-            DPRINTF(MemoryWatch, "%s access to address range %p..%p (watching %p..%p)\n",
-                pkt->isRead() ? "read" : "write", range.start(), range.end(),
+            DPRINTF(MemoryWatch,
+                "%s access to address range %p..%p (watching %p..%p)\n",
+                pkt->isRead() ? "read" : "write",
+                range.start(), range.end(),
                 watchRange.start(), watchRange.end());
             DDUMP(MemoryWatch, pkt->getPtr<uint8_t>(), pkt->getSize());
         }
@@ -384,7 +398,7 @@ BaseDtu::schedNocResponse(PacketPtr pkt, Tick when)
 void
 BaseDtu::schedNocRequestFinished(Tick when)
 {
-    schedule(nocRequestFinishedEvent, when);
+    schedule(nocReqFinishedEvent, when);
 }
 
 void

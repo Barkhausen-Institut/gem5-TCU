@@ -95,7 +95,7 @@ Dtu::Dtu(DtuParams* p)
     assert(p->buf_size >= maxNocPacketSize);
 
     M3X86System *sys = dynamic_cast<M3X86System*>(system);
-    if(sys)
+    if (sys)
     {
         memEp = sys->memEp;
         memPe = sys->memPe;
@@ -163,7 +163,7 @@ void
 Dtu::executeCommand()
 {
     Command cmd = getCommand();
-    if(cmd.opcode == CommandOpcode::IDLE)
+    if (cmd.opcode == CommandOpcode::IDLE)
         return;
 
     assert(!cmdInProgress);
@@ -219,10 +219,10 @@ Dtu::finishCommand()
 void
 Dtu::wakeupCore()
 {
-    if(system->threadContexts.size() == 0)
+    if (system->threadContexts.size() == 0)
         return;
 
-    if(system->threadContexts[0]->status() == ThreadContext::Suspended)
+    if (system->threadContexts[0]->status() == ThreadContext::Suspended)
     {
         DPRINTF(DtuPower, "Waking up core\n");
         system->threadContexts[0]->activate();
@@ -232,13 +232,13 @@ Dtu::wakeupCore()
 void
 Dtu::updateSuspendablePin()
 {
-    if(system->threadContexts.size() == 0)
+    if (system->threadContexts.size() == 0)
         return;
 
     bool pendingMsgs = regFile.get(DtuReg::MSG_CNT) > 0;
     bool hadPending = system->threadContexts[0]->getCpuPtr()->_denySuspend;
     system->threadContexts[0]->getCpuPtr()->_denySuspend = pendingMsgs;
-    if(hadPending && !pendingMsgs)
+    if (hadPending && !pendingMsgs)
         DPRINTF(DtuPower, "Core can be suspended\n");
 }
 
@@ -253,7 +253,8 @@ Dtu::sendMemRequest(PacketPtr pkt,
     senderState->mid = pkt->req->masterId();
     senderState->type = type;
 
-    // ensure that this packet has our master id (not the id of a master in a different PE)
+    // ensure that this packet has our master id (not the id of a master in
+    // a different PE)
     pkt->req->setMasterId(masterId);
 
     pkt->pushSenderState(senderState);
@@ -270,7 +271,10 @@ Dtu::sendMemRequest(PacketPtr pkt,
 }
 
 void
-Dtu::sendNocRequest(NocPacketType type, PacketPtr pkt, Cycles delay, bool functional)
+Dtu::sendNocRequest(NocPacketType type,
+                    PacketPtr pkt,
+                    Cycles delay,
+                    bool functional)
 {
     auto senderState = new NocSenderState();
     senderState->packetType = type;
@@ -326,14 +330,14 @@ Dtu::completeNocRequest(PacketPtr pkt)
 {
     auto senderState = dynamic_cast<NocSenderState*>(pkt->popSenderState());
 
-    if(senderState->packetType == NocPacketType::CACHE_MEM_REQ)
+    if (senderState->packetType == NocPacketType::CACHE_MEM_REQ)
     {
         NocAddr phys(pkt->getAddr());
         DPRINTF(DtuMem, "Finished %s request of LLC for %u bytes @ %d:%#x\n",
                         pkt->isRead() ? "read" : "write",
                         pkt->getSize(), phys.coreId, phys.offset);
 
-        if(dynamic_cast<InitSenderState*>(pkt->senderState))
+        if (dynamic_cast<InitSenderState*>(pkt->senderState))
         {
             // undo the change from handleCacheMemRequest
             pkt->setAddr(phys.offset - memOffset);
@@ -343,7 +347,7 @@ Dtu::completeNocRequest(PacketPtr pkt)
 
         sendCacheMemResponse(pkt);
     }
-    else if(senderState->packetType != NocPacketType::CACHE_MEM_REQ_FUNC)
+    else if (senderState->packetType != NocPacketType::CACHE_MEM_REQ_FUNC)
     {
         if (pkt->isWrite())
             memUnit->writeComplete(pkt);
@@ -424,28 +428,29 @@ Dtu::handleCpuRequest(PacketPtr pkt)
 bool
 Dtu::handleCacheMemRequest(PacketPtr pkt, bool functional)
 {
-    if(pkt->cmd == MemCmd::CleanEvict)
+    if (pkt->cmd == MemCmd::CleanEvict)
     {
         assert(!pkt->needsResponse());
         DPRINTF(DtuPackets, "Dropping CleanEvict packet\n");
         return true;
     }
 
-    // we don't have cache coherence. so we don't care about invalidate requests
-    if(pkt->cmd == MemCmd::InvalidateReq)
+    // we don't have cache coherence. so we don't care about invalidate req.
+    if (pkt->cmd == MemCmd::InvalidateReq)
         return false;
-    if(pkt->cmd == MemCmd::BadAddressError)
+    if (pkt->cmd == MemCmd::BadAddressError)
         return false;
 
     Addr old = pkt->getAddr();
     NocAddr phys(pkt->getAddr());
-    // special case: we check whether this is actually a NocAddr. this does only happen when
-    // loading a program at startup, TLB misses in the core and pseudoInst
-    if(!phys.valid)
+    // special case: we check whether this is actually a NocAddr. this does
+    // only happen when loading a program at startup, TLB misses in the core
+    // and pseudoInst
+    if (!phys.valid)
     {
         phys = NocAddr(memPe, 0, memOffset + phys.offset);
         pkt->setAddr(phys.getAddr());
-        if(!functional)
+        if (!functional)
         {
             // remember that we did this change
             pkt->pushSenderState(new InitSenderState);
@@ -456,28 +461,32 @@ Dtu::handleCacheMemRequest(PacketPtr pkt, bool functional)
                     pkt->isRead() ? "read" : "write",
                     pkt->getSize(), phys.coreId, phys.offset);
 
-    auto type = functional ? Dtu::NocPacketType::CACHE_MEM_REQ_FUNC : Dtu::NocPacketType::CACHE_MEM_REQ;
+    auto type = functional ? Dtu::NocPacketType::CACHE_MEM_REQ_FUNC
+                           : Dtu::NocPacketType::CACHE_MEM_REQ;
     sendNocRequest(type, pkt, Cycles(1), functional);
 
-    if(functional)
+    if (functional)
         pkt->setAddr(old);
 
     return true;
 }
 
 bool
-Dtu::translate(PtUnit::Translation *trans, PacketPtr pkt, bool icache, bool functional)
+Dtu::translate(PtUnit::Translation *trans,
+               PacketPtr pkt,
+               bool icache,
+               bool functional)
 {
-    if(!tlb)
+    if (!tlb)
         return true;
 
     DtuTlb::Flag access;
-    if(icache)
+    if (icache)
     {
         assert(pkt->isRead());
         access = DtuTlb::EXEC;
     }
-    else if(pkt->isRead())
+    else if (pkt->isRead())
         access = DtuTlb::READ;
     else
         access = DtuTlb::WRITE;
@@ -500,16 +509,19 @@ Dtu::translate(PtUnit::Translation *trans, PacketPtr pkt, bool icache, bool func
                     icache ? "exec" : (pkt->isRead() ? "read" : "write"),
                     pkt->getAddr());
 
-            if(functional)
+            if (functional)
             {
                 NocAddr phys;
+                bool res = ptUnit->translateFunctional(pkt->getAddr(),
+                                                       access,
+                                                       &phys);
                 // TODO handle errors here
-                assert(ptUnit->translateFunctional(pkt->getAddr(), access, &phys));
+                assert(res);
                 pkt->setAddr(phys.getAddr());
                 pkt->req->setPaddr(phys.getAddr());
                 return true;
             }
-            
+
             ptUnit->startTranslate(pkt->getAddr(), access, trans);
             return false;
 
@@ -532,7 +544,7 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
 {
     Addr oldAddr = pkt->getAddr();
 
-    // Strip the base address to handle requests based on the register address only.
+    // Strip the base address to handle requests based on the reg. addr. only.
     pkt->setAddr(oldAddr - regFileBaseAddr);
 
     bool commandWritten = regFile.handleRequest(pkt, isCpuRequest);

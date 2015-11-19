@@ -142,7 +142,7 @@ class RegFile
     const std::string _name;
 
   private:
-    
+
     static const char *dtuRegNames[];
     static const char *cmdRegNames[];
     static const char *epRegNames[];

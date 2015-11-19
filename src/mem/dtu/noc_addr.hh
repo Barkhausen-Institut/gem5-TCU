@@ -34,7 +34,7 @@
 #include "base/types.hh"
 
 /**
- * 
+ *
  *  64    59        52     46          0
  *   -----------------------------------
  *   |res|V| coreId  | epId |  offset  |

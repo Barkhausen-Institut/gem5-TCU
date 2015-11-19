@@ -67,7 +67,8 @@ class MessageUnit
 
   public:
 
-    MessageUnit(Dtu &_dtu) : dtu(_dtu), info(), header(), flagsPhys(), offset() {}
+    MessageUnit(Dtu &_dtu)
+      : dtu(_dtu), info(), header(), flagsPhys(), offset() {}
 
     /**
      * Start message transmission -> Mem request
@@ -95,7 +96,9 @@ class MessageUnit
 
     void requestHeader(unsigned epid);
 
-    void requestHeaderWithPhys(unsigned epid, bool success, const NocAddr &phys);
+    void requestHeaderWithPhys(unsigned epid,
+                               bool success,
+                               const NocAddr &phys);
 
     void startXfer(const Dtu::Command& cmd);
 

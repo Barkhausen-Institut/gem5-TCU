@@ -63,7 +63,7 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
     unsigned epid = cmd.epId;
 
     // if we want to reply, request the header first
-    if(cmd.opcode == Dtu::CommandOpcode::REPLY)
+    if (cmd.opcode == Dtu::CommandOpcode::REPLY)
     {
         offset = 0;
         flagsPhys = 0;
@@ -79,10 +79,11 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
     // TODO error handling
     assert(messageSize + sizeof(Dtu::MessageHeader) <= maxMessageSize);
 
-    if(credits < maxMessageSize)
+    if (credits < maxMessageSize)
     {
-        DPRINTFS(Dtu, (&dtu), "EP%u: not enough credits (%lu) to send message (%lu)\n",
-                 epid, credits, maxMessageSize);
+        DPRINTFS(Dtu, (&dtu),
+            "EP%u: not enough credits (%lu) to send message (%lu)\n",
+            epid, credits, maxMessageSize);
         dtu.scheduleFinishOp(Cycles(1));
         return;
     }
@@ -114,20 +115,22 @@ MessageUnit::requestHeader(unsigned epid)
     Addr msgAddr = dtu.regs().get(epid, EpReg::BUF_RD_PTR);
     msgAddr += offset;
 
-    DPRINTFS(DtuBuf, (&dtu), "EP%d: requesting header for reply on message @ %p\n",
-             epid, msgAddr);
+    DPRINTFS(DtuBuf, (&dtu),
+        "EP%d: requesting header for reply on message @ %p\n",
+        epid, msgAddr);
 
     NocAddr phys(msgAddr);
-    if(dtu.tlb)
+    if (dtu.tlb)
     {
         DtuTlb::Result res = dtu.tlb->lookup(msgAddr, DtuTlb::READ, &phys);
-        if(res != DtuTlb::HIT)
+        if (res != DtuTlb::HIT)
         {
             // TODO handle pagefaults
             assert(res == DtuTlb::MISS);
 
-            DPRINTFS(DtuTlb, (&dtu), "TLB-miss/Pagefault for read access to %p\n",
-                     msgAddr);
+            DPRINTFS(DtuTlb, (&dtu),
+                "TLB-miss/Pagefault for read access to %p\n",
+                msgAddr);
 
             Translation *trans = new Translation(*this, epid);
             dtu.startTranslate(msgAddr, DtuTlb::READ, trans);
@@ -139,14 +142,17 @@ MessageUnit::requestHeader(unsigned epid)
 }
 
 void
-MessageUnit::requestHeaderWithPhys(unsigned epid, bool success, const NocAddr &phys)
+MessageUnit::requestHeaderWithPhys(unsigned epid,
+                                   bool success,
+                                   const NocAddr &phys)
 {
     // TODO handle error
     assert(success);
 
     // take care that we might need 2 loads to request the header
     Addr blockOff = (phys.getAddr() + offset) & (dtu.blockSize - 1);
-    Addr reqSize = std::min(dtu.blockSize - blockOff, sizeof(Dtu::MessageHeader) - offset);
+    Addr reqSize = std::min(dtu.blockSize - blockOff,
+                            sizeof(Dtu::MessageHeader) - offset);
 
     auto pkt = dtu.generateRequest(phys.getAddr(),
                                    reqSize,
@@ -162,18 +168,20 @@ MessageUnit::recvFromMem(const Dtu::Command& cmd, PacketPtr pkt)
 {
     // simply collect the header in a member for simplicity
     assert(offset + pkt->getSize() <= sizeof(header));
-    memcpy(reinterpret_cast<char*>(&header) + offset, pkt->getPtr<char*>(), pkt->getSize());
+    memcpy(reinterpret_cast<char*>(&header) + offset,
+           pkt->getPtr<char*>(),
+           pkt->getSize());
 
-    // store the physical address of the flags field in the header for the write later
+    // we need the physical address of the flags field later
     static_assert(offsetof(Dtu::MessageHeader, flags) == 0, "Header changed");
     static_assert(sizeof(header.flags) == 1, "Header changed");
-    if(offset == 0)
+    if (offset == 0)
         flagsPhys = pkt->getAddr();
 
     offset += pkt->getSize();
 
     // do we have the complete header yet? if not, request the rest
-    if(offset < sizeof(Dtu::MessageHeader))
+    if (offset < sizeof(Dtu::MessageHeader))
     {
         requestHeader(cmd.epId);
         return;
@@ -193,7 +201,7 @@ MessageUnit::recvFromMem(const Dtu::Command& cmd, PacketPtr pkt)
     info.ready = true;
 
     // disable replies for this message
-    // use a functional request here because we don't need to wait for it anyway
+    // use a functional request here; we don't need to wait for it anyway
     auto hpkt = dtu.generateRequest(flagsPhys,
                                     sizeof(header.flags),
                                     MemCmd::WriteReq);
@@ -216,10 +224,14 @@ MessageUnit::startXfer(const Dtu::Command& cmd)
 
     DPRINTFS(Dtu, (&dtu), "\e[1m[%s -> %u]\e[0m with EP%u of %#018lx:%lu\n",
              cmd.opcode == Dtu::CommandOpcode::REPLY ? "rp" : "sd",
-             info.targetCoreId, cmd.epId, dtu.regs().get(CmdReg::DATA_ADDR), messageSize);
+             info.targetCoreId,
+             cmd.epId,
+             dtu.regs().get(CmdReg::DATA_ADDR),
+             messageSize);
 
-    DPRINTFS(Dtu, (&dtu), "  header: tgtEP=%u, lbl=%#018lx, rpLbl=%#018lx, rpEP=%u\n",
-             info.targetEpId, info.label, info.replyLabel, info.replyEpId);
+    DPRINTFS(Dtu, (&dtu),
+        "  header: tgtEP=%u, lbl=%#018lx, rpLbl=%#018lx, rpEP=%u\n",
+        info.targetEpId, info.label, info.replyLabel, info.replyEpId);
 
     Dtu::MessageHeader* header = new Dtu::MessageHeader;
 
@@ -263,10 +275,9 @@ MessageUnit::incrementReadPtr(unsigned epId)
     if (readPtr >= bufferAddr + bufferSize * maxMessageSize)
         readPtr = bufferAddr;
 
-    DPRINTFS(DtuBuf, (&dtu), "EP%u: increment read pointer to %#018lx (msgCount=%u)\n",
-             epId,
-             readPtr,
-             messageCount - 1);
+    DPRINTFS(DtuBuf, (&dtu),
+        "EP%u: increment read pointer to %#018lx (msgCount=%u)\n",
+        epId, readPtr, messageCount - 1);
 
     // TODO error handling
     assert(messageCount != 0);
@@ -297,12 +308,11 @@ MessageUnit::incrementWritePtr(unsigned epId)
     if (writePtr >= bufferAddr + bufferSize * maxMessageSize)
         writePtr = bufferAddr;
 
-    DPRINTFS(DtuBuf, (&dtu), "EP%u: increment write pointer to %#018lx (msgCount=%u)\n",
-             epId,
-             writePtr,
-             messageCount + 1);
+    DPRINTFS(DtuBuf, (&dtu),
+        "EP%u: increment write pointer to %#018lx (msgCount=%u)\n",
+        epId, writePtr, messageCount + 1);
 
-    if(messageCount == bufferSize)
+    if (messageCount == bufferSize)
     {
         warn("EP%u: Buffer full!\n", epId);
         return false;
@@ -327,24 +337,26 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
     unsigned epId = addr.epId;
 
     Addr localAddr = dtu.regs().get(epId, EpReg::BUF_WR_PTR);
-    
+
     Dtu::MessageHeader* header = pkt->getPtr<Dtu::MessageHeader>();
 
-    DPRINTFS(Dtu, (&dtu), "\e[1m[rv <- %u]\e[0m %lu bytes on EP%u to %#018lx\n",
+    DPRINTFS(Dtu, (&dtu),
+        "\e[1m[rv <- %u]\e[0m %lu bytes on EP%u to %#018lx\n",
         header->senderCoreId, header->length, epId, localAddr);
     dtu.printPacket(pkt);
 
-    if(dtu.coreId == 0 && epId == 0)
+    if (dtu.coreId == 0 && epId == 0)
     {
+        const size_t total = (sizeof(syscallNames) / sizeof(syscallNames[0]));
         size_t sysNo = pkt->getPtr<uint8_t>()[sizeof(*header) + 0];
         DPRINTFS(DtuSysCalls, (&dtu), "  syscall: %s\n",
-            sysNo < (sizeof(syscallNames) / sizeof(syscallNames[0])) ? syscallNames[sysNo] : "Unknown");
+            sysNo < total ? syscallNames[sysNo] : "Unknown");
     }
 
     Addr bufferSize = dtu.regs().get(epId, EpReg::BUF_SIZE);
     Addr messageCount = dtu.regs().get(epId, EpReg::BUF_MSG_CNT);
 
-    if(messageCount < bufferSize)
+    if (messageCount < bufferSize)
     {
         Dtu::MessageHeader* header = pkt->getPtr<Dtu::MessageHeader>();
 
@@ -353,17 +365,21 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
             header->flags & Dtu::GRANT_CREDITS_FLAG &&
             header->replyEpId < dtu.numEndpoints)
         {
-            unsigned maxMessageSize = dtu.regs().get(header->replyEpId, EpReg::MAX_MSG_SIZE);
-            unsigned credits = dtu.regs().get(header->replyEpId, EpReg::CREDITS);
+            unsigned maxMessageSize = dtu.regs().get(header->replyEpId,
+                                                     EpReg::MAX_MSG_SIZE);
+            unsigned credits        = dtu.regs().get(header->replyEpId,
+                                                     EpReg::CREDITS);
             credits += maxMessageSize;
 
-            DPRINTFS(DtuCredits, (&dtu), "EP%u: received %u credits (%u in total)\n",
-                     header->replyEpId, maxMessageSize, credits);
+            DPRINTFS(DtuCredits, (&dtu),
+                "EP%u: received %u credits (%u in total)\n",
+                header->replyEpId, maxMessageSize, credits);
 
             dtu.regs().set(header->replyEpId, EpReg::CREDITS, credits);
         }
 
-        // the message is transferred piece by piece; we can start as soon as we have the header
+        // the message is transferred piece by piece; we can start as soon as
+        // we have the header
         Cycles delay = dtu.ticksToCycles(pkt->headerDelay);
         pkt->headerDelay = 0;
         delay += dtu.nocToTransferLatency;
@@ -387,7 +403,8 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
 
         if (!dtu.atomicMode)
         {
-            Cycles delay = dtu.ticksToCycles(pkt->headerDelay + pkt->payloadDelay);
+            Cycles delay = dtu.ticksToCycles(
+                pkt->headerDelay + pkt->payloadDelay);
             delay += dtu.nocToTransferLatency;
 
             pkt->headerDelay = 0;

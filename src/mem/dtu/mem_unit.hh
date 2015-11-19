@@ -51,7 +51,7 @@ class MemoryUnit
 
         void process() override
         {
-            if(read)
+            if (read)
                 memUnit.startRead(cmd);
             else
                 memUnit.startWrite(cmd);
@@ -70,7 +70,7 @@ class MemoryUnit
      * Starts a read -> NoC request
      */
     void startRead(const Dtu::Command& cmd);
-    
+
     /**
      * Starts a write -> Mem request
      */

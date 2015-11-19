@@ -41,12 +41,12 @@ void
 PtUnit::TranslateEvent::process()
 {
     auto pkt = unit.createPacket(virt);
-    if(!pkt)
+    if (!pkt)
     {
         trans->finished(false, NocAddr(0));
         return;
     }
-    
+
     unit.dtu.sendMemRequest(pkt,
                             reinterpret_cast<Addr>(this),
                             Dtu::MemReqType::TRANSLATION,
@@ -60,17 +60,18 @@ PtUnit::TranslateEvent::recvFromMem(PacketPtr pkt)
     DtuTlb::Flag flags = access;
     bool success = unit.finishTranslate(pkt, virt, &flags, &phys);
 
-    if(success)
+    if (success)
     {
         Addr tlbVirt = virt & ~DtuTlb::PAGE_MASK;
         Addr tlbPhys = phys.getAddr() & ~DtuTlb::PAGE_MASK;
 
         // we can't insert an entry twice
         NocAddr newPhys;
-        if(unit.dtu.tlb->lookup(tlbVirt, access, &newPhys) != DtuTlb::HIT)
+        if (unit.dtu.tlb->lookup(tlbVirt, access, &newPhys) != DtuTlb::HIT)
         {
-            DPRINTFS(DtuTlb, (&unit.dtu), "Inserting into TLB: virt=%p phys=%p flags=%u\n",
-                     tlbVirt, tlbPhys, flags);
+            DPRINTFS(DtuTlb, (&unit.dtu),
+                "Inserting into TLB: virt=%p phys=%p flags=%u\n",
+                tlbVirt, tlbPhys, flags);
 
             unit.dtu.tlb->insert(tlbVirt, NocAddr(tlbPhys), flags);
         }
@@ -87,7 +88,7 @@ bool
 PtUnit::translateFunctional(Addr virt, DtuTlb::Flag access, NocAddr *phys)
 {
     auto pkt = createPacket(virt);
-    if(!pkt)
+    if (!pkt)
         return false;
 
     dtu.sendFunctionalMemRequest(pkt);
@@ -98,7 +99,7 @@ PtUnit::translateFunctional(Addr virt, DtuTlb::Flag access, NocAddr *phys)
 PacketPtr
 PtUnit::createPacket(Addr virt)
 {
-    if(virt > dtu.memSize)
+    if (virt > dtu.memSize)
         return NULL;
 
     Addr pageNo = virt / dtu.tlb->PAGE_SIZE;
@@ -115,18 +116,22 @@ PtUnit::createPacket(Addr virt)
 }
 
 bool
-PtUnit::finishTranslate(PacketPtr pkt, Addr virt, DtuTlb::Flag *access, NocAddr *phys)
+PtUnit::finishTranslate(PacketPtr pkt,
+                        Addr virt,
+                        DtuTlb::Flag *access,
+                        NocAddr *phys)
 {
     PtUnit::PageTableEntry *e = pkt->getPtr<PtUnit::PageTableEntry>();
 
     DPRINTFS(DtuTlb, (&dtu), "Received PTE for %p: %#x\n",
              virt, (uint64_t)*e);
 
-    if(!(e->xwr & *access))
+    if (!(e->xwr & *access))
         return false;
 
     *access = static_cast<DtuTlb::Flag>((uint64_t)e->xwr);
-    *phys = NocAddr((e->base << DtuTlb::PAGE_BITS) + (virt & DtuTlb::PAGE_MASK));
+    Addr pageAddr = e->base << DtuTlb::PAGE_BITS;
+    *phys = NocAddr(pageAddr + (virt & DtuTlb::PAGE_MASK));
     return true;
 }
 

@@ -53,10 +53,11 @@ MemoryUnit::startRead(const Dtu::Command& cmd)
     continueEvent.read = true;
 
     requestSize = std::min(dtu.maxNocPacketSize, requestSize);
-    if(requestSize == 0)
+    if (requestSize == 0)
         return;
 
-    DPRINTFS(Dtu, (&dtu), "\e[1m[rd -> %u]\e[0m at %#018lx+%#lx with EP%u into %#018lx:%lu\n",
+    DPRINTFS(Dtu, (&dtu),
+        "\e[1m[rd -> %u]\e[0m at %#018lx+%#lx with EP%u into %#018lx:%lu\n",
         targetCoreId, remoteAddr, offset, cmd.epId, localAddr, requestSize);
 
     // TODO error handling
@@ -64,7 +65,8 @@ MemoryUnit::startRead(const Dtu::Command& cmd)
     assert(requestSize + offset >= requestSize);
     assert(requestSize + offset <= remoteSize);
 
-    auto pkt = dtu.generateRequest(NocAddr(targetCoreId, 0, remoteAddr + offset).getAddr(),
+    Addr nocAddr = NocAddr(targetCoreId, 0, remoteAddr + offset).getAddr();
+    auto pkt = dtu.generateRequest(nocAddr,
                                    requestSize,
                                    MemCmd::ReadReq);
 
@@ -90,10 +92,11 @@ MemoryUnit::startWrite(const Dtu::Command& cmd)
     continueEvent.read = false;
 
     requestSize = std::min(dtu.maxNocPacketSize, requestSize);
-    if(requestSize == 0)
+    if (requestSize == 0)
         return;
 
-    DPRINTFS(Dtu, (&dtu), "\e[1m[wr -> %u]\e[0m at %#018lx+%#lx with EP%u from %#018lx:%lu\n",
+    DPRINTFS(Dtu, (&dtu),
+        "\e[1m[wr -> %u]\e[0m at %#018lx+%#lx with EP%u from %#018lx:%lu\n",
         targetCoreId, targetAddr, offset, cmd.epId, localAddr, requestSize);
 
     // TODO error handling
@@ -118,7 +121,8 @@ MemoryUnit::readComplete(PacketPtr pkt)
 
     requestSize -= pkt->getSize();
 
-    // since the transfer is done in steps, we can start after the header delay here
+    // since the transfer is done in steps, we can start after the header
+    // delay here
     Cycles delay = dtu.ticksToCycles(pkt->headerDelay);
 
     dtu.startTransfer(Dtu::TransferType::LOCAL_WRITE,
@@ -130,7 +134,7 @@ MemoryUnit::readComplete(PacketPtr pkt)
                       delay,
                       requestSize == 0 ? XferUnit::LAST : 0);
 
-    if(requestSize > 0)
+    if (requestSize > 0)
     {
         dtu.regs().set(CmdReg::DATA_SIZE, requestSize);
         dtu.regs().set(CmdReg::DATA_ADDR, localAddr + pkt->getSize());
@@ -147,15 +151,16 @@ MemoryUnit::writeComplete(PacketPtr pkt)
     Addr requestSize = dtu.regs().get(CmdReg::DATA_SIZE);
 
     // write finished or if requestSize < pkt->getSize(), it was a message
-    if(requestSize <= pkt->getSize())
+    if (requestSize <= pkt->getSize())
     {
-        // we don't need to pay the payload delay here because the message basically has no payload
-        // since we only receive an ACK back for writing
+        // we don't need to pay the payload delay here because the message
+        // basically has no payload since we only receive an ACK back for
+        // writing
         Cycles delay = dtu.ticksToCycles(pkt->headerDelay);
         dtu.scheduleFinishOp(delay);
     }
     // write needs to be continued
-    else if(requestSize > pkt->getSize())
+    else if (requestSize > pkt->getSize())
     {
         Addr localAddr = dtu.regs().get(CmdReg::DATA_ADDR);
         Addr offset = dtu.regs().get(CmdReg::OFFSET);
@@ -187,8 +192,8 @@ MemoryUnit::recvFromNoc(PacketPtr pkt)
         pkt->isWrite() ? "wr" : "rd",
         NocAddr(pkt->getAddr()).offset,
         pkt->getSize());
-    
-    if(pkt->isWrite())
+
+    if (pkt->isWrite())
         dtu.printPacket(pkt);
 
     if (NocAddr(pkt->getAddr()).offset >= dtu.regFileBaseAddr)
@@ -203,14 +208,18 @@ MemoryUnit::recvFromNoc(PacketPtr pkt)
     }
     else
     {
-        // the same as above: the transfer happens piece by piece and we can start after the header
+        // the same as above: the transfer happens piece by piece and we can
+        // start after the header
         Cycles delay = dtu.ticksToCycles(pkt->headerDelay);
         pkt->headerDelay = 0;
 
-        auto type = pkt->isWrite() ? Dtu::TransferType::REMOTE_WRITE : Dtu::TransferType::REMOTE_READ;
+        auto type = pkt->isWrite() ? Dtu::TransferType::REMOTE_WRITE
+                                   : Dtu::TransferType::REMOTE_READ;
         dtu.startTransfer(type,
-                          NocAddr(0, 0),                    // remote address is irrelevant
-                          NocAddr(pkt->getAddr()).offset,   // other remote is our local
+                          // remote address is irrelevant
+                          NocAddr(0, 0),
+                          // other remote is our local
+                          NocAddr(pkt->getAddr()).offset,
                           pkt->getSize(),
                           pkt,
                           NULL,

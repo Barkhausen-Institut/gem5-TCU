@@ -147,7 +147,7 @@ RegFile::set(unsigned epid, EpReg reg, reg_t value)
                     value);
 
     // update global message count
-    if(reg == EpReg::BUF_MSG_CNT)
+    if (reg == EpReg::BUF_MSG_CNT)
     {
         reg_t diff = value - epRegs[epid][static_cast<Addr>(reg)];
         reg_t old = dtuRegs[static_cast<Addr>(DtuReg::MSG_CNT)];
@@ -168,8 +168,10 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
 
     // ignore invalid accesses (might happen due to speculative execution)
     // TODO maybe we can allow some of them later
-    if((pkt->getSize() % sizeof(reg_t)) != 0 || (pktAddr % sizeof(reg_t)) != 0 ||
-        pktAddr + pkt->getSize() > getSize()) {
+    if ((pkt->getSize() % sizeof(reg_t)) != 0 ||
+        (pktAddr % sizeof(reg_t)) != 0 ||
+         pktAddr + pkt->getSize() > getSize())
+    {
         if (pkt->needsResponse())
             pkt->makeResponse();
 
@@ -192,25 +194,28 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
         Addr regAddr = pktAddr + offset;
 
         // dtu register
-        if(regAddr < sizeof(reg_t) * numDtuRegs)
+        if (regAddr < sizeof(reg_t) * numDtuRegs)
         {
             auto reg = static_cast<DtuReg>(regAddr / sizeof(reg_t));
 
             if (pkt->isRead())
                 data[offset / sizeof(reg_t)] = get(reg);
-            // writes are ignored, except that the privileged flag can be changed from the outside
-            else if(!isCpuRequest && reg == DtuReg::STATUS)
+            // writes are ignored, except that the privileged flag can be
+            // changed from the outside
+            else if (!isCpuRequest && reg == DtuReg::STATUS)
             {
                 reg_t old = dtuRegs[static_cast<Addr>(reg)];
-                set(reg, (old & ~privFlag) | (data[offset / sizeof(reg_t)] & privFlag));
+                reg_t changeBits = data[offset / sizeof(reg_t)] & privFlag;
+                set(reg, (old & ~privFlag) | changeBits);
             }
             else
                 assert(false);
         }
         // cmd register
-        else if(regAddr < sizeof(reg_t) * (numDtuRegs + numCmdRegs))
+        else if (regAddr < sizeof(reg_t) * (numDtuRegs + numCmdRegs))
         {
-            auto reg = static_cast<CmdReg>(regAddr / sizeof(reg_t) - numDtuRegs);
+            size_t idx = regAddr / sizeof(reg_t) - numDtuRegs;
+            auto reg = static_cast<CmdReg>(idx);
 
             if (pkt->isRead())
                 data[offset / sizeof(reg_t)] = get(reg);
@@ -224,17 +229,19 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
         // endpoint address
         else
         {
-            unsigned epid = (regAddr - sizeof(reg_t) * (numDtuRegs + numCmdRegs)) /
+            size_t nonEpRegs = numDtuRegs + numCmdRegs;
+            unsigned epid = (regAddr - sizeof(reg_t) * nonEpRegs) /
                             (sizeof(reg_t) * numEpRegs);
 
-            unsigned regNumber = (regAddr / sizeof(reg_t) - (numDtuRegs + numCmdRegs)) % numEpRegs;
+            unsigned regNumber = (regAddr / sizeof(reg_t) -
+                                 nonEpRegs) % numEpRegs;
 
             auto reg = static_cast<EpReg>(regNumber);
 
             if (pkt->isRead())
                 data[offset / sizeof(reg_t)] = get(epid, reg);
             // writable only from remote and on privileged PEs
-            else if(!isCpuRequest || isPrivileged)
+            else if (!isCpuRequest || isPrivileged)
                 set(epid, reg, data[offset / sizeof(reg_t)]);
             else
                 assert(false);

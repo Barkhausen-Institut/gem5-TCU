@@ -154,14 +154,14 @@ class XferUnit
         void process() override
         {
             // the delay was already paid earlier
-            if(xfer.startTransfer(type,
-                                  remoteAddr,
-                                  localAddr,
-                                  size,
-                                  pkt,
-                                  header,
-                                  Cycles(0),
-                                  flags))
+            if (xfer.startTransfer(type,
+                                   remoteAddr,
+                                   localAddr,
+                                   size,
+                                   pkt,
+                                   header,
+                                   Cycles(0),
+                                   flags))
             {
                 setFlags(AutoDelete);
             }

@@ -35,7 +35,7 @@ DtuTlb::DtuTlb(size_t _num)
     : trie(), entries(), free(), num(_num), lru_seq()
 {
     entries.reserve(num);
-    for(size_t i = 0; i < num; ++i)
+    for (size_t i = 0; i < num; ++i)
         free.push_back(&entries[i]);
 }
 
@@ -43,10 +43,10 @@ DtuTlb::Result
 DtuTlb::lookup(Addr virt, Flag access, NocAddr *phys)
 {
     Entry *e = trie.lookup(virt);
-    if(!e)
+    if (!e)
         return MISS;
 
-    if(~e->flags & access)
+    if (~e->flags & access)
         return PAGEFAULT;
 
     e->lru_seq = ++lru_seq;
@@ -60,9 +60,9 @@ DtuTlb::evict()
 {
     uint min = std::numeric_limits<uint>::max();
     Entry *minEntry = NULL;
-    for(Entry &e : entries)
+    for (Entry &e : entries)
     {
-        if(e.lru_seq < min)
+        if (e.lru_seq < min)
         {
             min = e.lru_seq;
             minEntry = &e;
@@ -78,7 +78,7 @@ DtuTlb::evict()
 void
 DtuTlb::insert(Addr virt, NocAddr phys, uint flags)
 {
-    if(free.empty())
+    if (free.empty())
         evict();
 
     assert(!free.empty());
@@ -94,7 +94,7 @@ void
 DtuTlb::remove(Addr virt)
 {
     Entry *e = trie.lookup(virt);
-    if(e)
+    if (e)
     {
         trie.remove(e->handle);
         e->handle = NULL;
@@ -105,9 +105,9 @@ DtuTlb::remove(Addr virt)
 void
 DtuTlb::clear()
 {
-    for(size_t i = 0; i < num; ++i)
+    for (size_t i = 0; i < num; ++i)
     {
-        if(entries[i].handle)
+        if (entries[i].handle)
         {
             trie.remove(entries[i].handle);
             entries[i].handle = NULL;

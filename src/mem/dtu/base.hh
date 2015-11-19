@@ -115,7 +115,8 @@ class BaseDtu : public MemObject
 
             PacketPtr pkt;
 
-            ResponseEvent(DtuSlavePort& _port, PacketPtr _pkt) : port(_port), pkt(_pkt) {}
+            ResponseEvent(DtuSlavePort& _port, PacketPtr _pkt)
+                : port(_port), pkt(_pkt) {}
 
             void process() override;
 
@@ -133,7 +134,9 @@ class BaseDtu : public MemObject
 
         DtuSlavePort(const std::string& _name, BaseDtu& _dtu);
 
-        virtual bool handleRequest(PacketPtr pkt, bool *busy, bool functional) = 0;
+        virtual bool handleRequest(PacketPtr pkt,
+                                   bool *busy,
+                                   bool functional) = 0;
 
         void schedTimingResp(PacketPtr pkt, Tick when);
 
@@ -160,7 +163,9 @@ class BaseDtu : public MemObject
 
         AddrRangeList getAddrRanges() const override;
 
-        bool handleRequest(PacketPtr pkt, bool *busy, bool functional) override;
+        bool handleRequest(PacketPtr pkt,
+                           bool *busy,
+                           bool functional) override;
     };
 
     template<class T>
@@ -180,20 +185,20 @@ class BaseDtu : public MemObject
 
             void finished(bool success, const NocAddr &phys) override
             {
-                if(!success)
+                if (!success)
                     base.dtu.sendDummyResponse(base, pkt, false);
                 else
                 {
                     pkt->setAddr(phys.getAddr());
                     pkt->req->setPaddr(phys.getAddr());
-                
+
                     base.port.schedTimingReq(pkt, curTick());
                 }
 
                 delete this;
             }
         };
-        
+
         T &port;
 
         bool icache;
@@ -218,7 +223,7 @@ class BaseDtu : public MemObject
 
         bool handleRequest(PacketPtr pkt, bool *busy, bool functional) override
         {
-            if(pkt->getAddr() >= dtu.regFileBaseAddr)
+            if (pkt->getAddr() >= dtu.regFileBaseAddr)
             {
                 // not supported here
                 assert(!functional);
@@ -230,9 +235,9 @@ class BaseDtu : public MemObject
                 dtu.checkWatchRange(pkt);
 
                 Translation *trans = new Translation(*this, pkt);
-                if(dtu.translate(trans, pkt, icache, functional))
+                if (dtu.translate(trans, pkt, icache, functional))
                 {
-                    if(functional)
+                    if (functional)
                         port.sendFunctional(pkt);
                     else
                         port.schedTimingReq(pkt, curTick());
@@ -255,7 +260,9 @@ class BaseDtu : public MemObject
 
         AddrRangeList getAddrRanges() const override;
 
-        bool handleRequest(PacketPtr pkt, bool *busy, bool functional) override;
+        bool handleRequest(PacketPtr pkt,
+                           bool *busy,
+                           bool functional) override;
     };
 
   public:
@@ -264,9 +271,9 @@ class BaseDtu : public MemObject
 
     void init() override;
 
-    BaseSlavePort& getSlavePort(const std::string &if_name, PortID idx) override;
+    BaseSlavePort& getSlavePort(const std::string &n, PortID idx) override;
 
-    BaseMasterPort& getMasterPort(const std::string &if_name, PortID idx) override;
+    BaseMasterPort& getMasterPort(const std::string &n, PortID idx) override;
 
     void schedNocResponse(PacketPtr pkt, Tick when);
 
@@ -296,14 +303,17 @@ class BaseDtu : public MemObject
 
     virtual bool handleCacheMemRequest(PacketPtr pkt, bool functional) = 0;
 
-    virtual bool translate(PtUnit::Translation *trans, PacketPtr pkt, bool icache, bool functional) = 0;
+    virtual bool translate(PtUnit::Translation *trans,
+                           PacketPtr pkt,
+                           bool icache,
+                           bool functional) = 0;
 
   protected:
 
     void nocRequestFinished();
 
     void checkWatchRange(PacketPtr pkt);
-    
+
     void sendDummyResponse(DtuSlavePort &port, PacketPtr pkt, bool functional);
 
     NocMasterPort  nocMasterPort;
@@ -322,7 +332,7 @@ class BaseDtu : public MemObject
 
     AddrRange watchRange;
 
-    EventWrapper<BaseDtu, &BaseDtu::nocRequestFinished> nocRequestFinishedEvent;
+    EventWrapper<BaseDtu, &BaseDtu::nocRequestFinished> nocReqFinishedEvent;
 
   public:
 

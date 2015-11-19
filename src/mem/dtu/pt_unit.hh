@@ -85,7 +85,7 @@ class PtUnit
     };
 
   public:
-    
+
     PtUnit(Dtu& _dtu) : dtu(_dtu)
     {}
 
@@ -102,8 +102,11 @@ class PtUnit
   private:
 
     PacketPtr createPacket(Addr virt);
-    
-    bool finishTranslate(PacketPtr pkt, Addr virt, DtuTlb::Flag *access, NocAddr *phys);
+
+    bool finishTranslate(PacketPtr pkt,
+                         Addr virt,
+                         DtuTlb::Flag *access,
+                         NocAddr *phys);
 
     Dtu& dtu;
 

@@ -48,7 +48,7 @@ class DtuTlb
         uint lru_seq;
         Trie<Addr, Entry>::Handle handle;
     };
-    
+
     typedef Trie<Addr, Entry> TlbEntryTrie;
 
   public:
