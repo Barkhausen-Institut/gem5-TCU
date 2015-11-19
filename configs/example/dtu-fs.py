@@ -212,6 +212,7 @@ def createPE(no, mem=False, cache=True, l2cache=True, memPE=0):
         else:
             pe.cachespm = Scratchpad(in_addr_map="true")
             pe.cachespm.cpu_port = pe.xbar.master
+            pe.memory_size = "8MB"
             pe.cachespm.range = pe.memory_size
 
     # for memory PEs or PEs with SPM, we do not need a buffer. for the sake of an easy implementation
