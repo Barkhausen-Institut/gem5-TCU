@@ -40,13 +40,11 @@
 void
 MemoryUnit::startRead(const Dtu::Command& cmd)
 {
-    unsigned targetCoreId = dtu.regs().get(cmd.epId, EpReg::TGT_COREID);
+    MemEp ep = dtu.regs().getMemEp(cmd.epId);
+
     Addr localAddr = dtu.regs().get(CmdReg::DATA_ADDR);
     Addr requestSize = dtu.regs().get(CmdReg::DATA_SIZE);
     Addr offset = dtu.regs().get(CmdReg::OFFSET);
-    Addr remoteAddr = dtu.regs().get(cmd.epId, EpReg::REQ_REM_ADDR);
-    Addr remoteSize = dtu.regs().get(cmd.epId, EpReg::REQ_REM_SIZE);
-    unsigned flags = dtu.regs().get(cmd.epId, EpReg::REQ_FLAGS);
 
     // we'll need that in readComplete
     continueEvent.cmd = cmd;
@@ -58,14 +56,15 @@ MemoryUnit::startRead(const Dtu::Command& cmd)
 
     DPRINTFS(Dtu, (&dtu),
         "\e[1m[rd -> %u]\e[0m at %#018lx+%#lx with EP%u into %#018lx:%lu\n",
-        targetCoreId, remoteAddr, offset, cmd.epId, localAddr, requestSize);
+        ep.targetCore, ep.remoteAddr, offset,
+        cmd.epId, localAddr, requestSize);
 
     // TODO error handling
-    assert(flags & Dtu::MemoryFlags::READ);
+    assert(ep.flags & Dtu::MemoryFlags::READ);
     assert(requestSize + offset >= requestSize);
-    assert(requestSize + offset <= remoteSize);
+    assert(requestSize + offset <= ep.remoteSize);
 
-    Addr nocAddr = NocAddr(targetCoreId, 0, remoteAddr + offset).getAddr();
+    Addr nocAddr = NocAddr(ep.targetCore, 0, ep.remoteAddr + offset).getAddr();
     auto pkt = dtu.generateRequest(nocAddr,
                                    requestSize,
                                    MemCmd::ReadReq);
@@ -78,14 +77,11 @@ MemoryUnit::startRead(const Dtu::Command& cmd)
 void
 MemoryUnit::startWrite(const Dtu::Command& cmd)
 {
-    unsigned targetCoreId = dtu.regs().get(cmd.epId, EpReg::TGT_COREID);
+    MemEp ep = dtu.regs().getMemEp(cmd.epId);
+
     Addr localAddr = dtu.regs().get(CmdReg::DATA_ADDR);
     Addr requestSize = dtu.regs().get(CmdReg::DATA_SIZE);
     Addr offset = dtu.regs().get(CmdReg::OFFSET);
-    unsigned flags = dtu.regs().get(cmd.epId, EpReg::REQ_FLAGS);
-
-    Addr targetAddr = dtu.regs().get(cmd.epId, EpReg::REQ_REM_ADDR);
-    Addr remoteSize = dtu.regs().get(cmd.epId, EpReg::REQ_REM_SIZE);
 
     // we'll need that in writeComplete
     continueEvent.cmd = cmd;
@@ -97,15 +93,16 @@ MemoryUnit::startWrite(const Dtu::Command& cmd)
 
     DPRINTFS(Dtu, (&dtu),
         "\e[1m[wr -> %u]\e[0m at %#018lx+%#lx with EP%u from %#018lx:%lu\n",
-        targetCoreId, targetAddr, offset, cmd.epId, localAddr, requestSize);
+        ep.targetCore, ep.remoteAddr, offset,
+        cmd.epId, localAddr, requestSize);
 
     // TODO error handling
-    assert(flags & Dtu::MemoryFlags::WRITE);
+    assert(ep.flags & Dtu::MemoryFlags::WRITE);
     assert(requestSize + offset >= requestSize);
-    assert(requestSize + offset <= remoteSize);
+    assert(requestSize + offset <= ep.remoteSize);
 
     dtu.startTransfer(Dtu::TransferType::LOCAL_READ,
-                      NocAddr(targetCoreId, 0, targetAddr + offset),
+                      NocAddr(ep.targetCore, 0, ep.remoteAddr + offset),
                       localAddr,
                       requestSize);
 }

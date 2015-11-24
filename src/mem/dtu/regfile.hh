@@ -63,41 +63,88 @@ enum class CmdReg : Addr
 
 constexpr unsigned numCmdRegs = 6;
 
-// actually we could shrink the number of EP registers down to 3:
-// 1. BUF_ADDR
-//    TGT_COREID | TGT_EPID | CREDITS
-//    REQ_MEM_ADDR
-// 2. BUF_MSG_SIZE | BUF_SIZE | BUF_MSG_CNT
-//    MAX_MSG_SIZE
-//    REQ_MEM_SIZE
-// 3. BUF_RD_PTR | BUF_WR_PTR (by using offsets instead of pointers
-//    LABEL
-//    FLAGS
-// but for debuggability, we keep the separation at the moment.
+// Ep Registers:
+//
+// 0. TYPE[3] (for all)
+//    BUF_MSG_SIZE[16] | BUF_SIZE[16] | BUF_MSG_CNT[16]
+//    MAX_MSG_SIZE[16]
+//    REQ_MEM_SIZE[61]
+// 1. BUF_ADDR[64]
+//    TGT_COREID[8] | TGT_EPID[8] | CREDITS[16]
+//    REQ_MEM_ADDR[64]
+// 2. BUF_RD_PTR[16] | BUF_WR_PTR[16]
+//    LABEL[64]
+//    REQ_COREID[8] | FLAGS[4]
+//
+constexpr unsigned numEpRegs = 3;
 
-// endpoints are only writable for privileged PEs
-enum class EpReg : Addr
+enum class EpType
 {
-    // for receiving messages
-    BUF_ADDR,
-    BUF_MSG_SIZE,
-    BUF_SIZE,
-    BUF_MSG_CNT,
-    BUF_RD_PTR,
-    BUF_WR_PTR,
-    // for sending messages
-    TGT_COREID,
-    TGT_EPID,
-    MAX_MSG_SIZE,
-    LABEL,
-    CREDITS,
-    // for memory requests
-    REQ_REM_ADDR,
-    REQ_REM_SIZE,
-    REQ_FLAGS
+    INVALID,
+    SEND,
+    RECEIVE,
+    MEMORY
 };
 
-constexpr unsigned numEpRegs = 14;
+enum class RegAccess
+{
+    CPU,
+    DTU,
+    NOC
+};
+
+class RegFile;
+
+struct SendEp
+{
+    SendEp() : targetCore(), targetEp(), maxMsgSize(), credits(), label()
+    {}
+
+    void print(const RegFile &rf,
+               unsigned epId,
+               bool read,
+               RegAccess access) const;
+
+    uint8_t targetCore;
+    uint8_t targetEp;
+    uint16_t maxMsgSize;
+    uint16_t credits;
+    uint64_t label;
+};
+
+struct RecvEp
+{
+    RecvEp() : bufAddr(), msgSize(), size(), msgCount(), rdOff(), wrOff()
+    {}
+
+    void print(const RegFile &rf,
+               unsigned epId,
+               bool read,
+               RegAccess access) const;
+
+    uint64_t bufAddr;
+    uint16_t msgSize;
+    uint16_t size;
+    uint16_t msgCount;
+    uint16_t rdOff;
+    uint16_t wrOff;
+};
+
+struct MemEp
+{
+    MemEp() : remoteAddr(), remoteSize(), targetCore(), flags()
+    {}
+
+    void print(const RegFile &rf,
+               unsigned epId,
+               bool read,
+               RegAccess access) const;
+
+    uint64_t remoteAddr;
+    uint64_t remoteSize;
+    uint8_t targetCore;
+    uint8_t flags;
+};
 
 class RegFile
 {
@@ -109,17 +156,23 @@ class RegFile
 
     RegFile(const std::string& name, unsigned numEndpoints);
 
-    reg_t get(DtuReg reg) const;
+    reg_t get(DtuReg reg, RegAccess access = RegAccess::DTU) const;
 
-    reg_t get(CmdReg reg) const;
+    void set(DtuReg reg, reg_t value, RegAccess access = RegAccess::DTU);
 
-    reg_t get(unsigned epid, EpReg reg) const;
+    reg_t get(CmdReg reg, RegAccess access = RegAccess::DTU) const;
 
-    void set(DtuReg reg, reg_t value);
+    void set(CmdReg reg, reg_t value, RegAccess access = RegAccess::DTU);
 
-    void set(CmdReg reg, reg_t value);
+    SendEp getSendEp(unsigned epId, bool print = true) const;
 
-    void set(unsigned epid, EpReg reg, reg_t value);
+    void setSendEp(unsigned epId, const SendEp &ep);
+
+    RecvEp getRecvEp(unsigned epId, bool print = true) const;
+
+    void setRecvEp(unsigned epId, const RecvEp &ep);
+
+    MemEp getMemEp(unsigned epId, bool print = true) const;
 
     /// returns true if the command register was written
     bool handleRequest(PacketPtr pkt, bool isCpuRequest);
@@ -127,6 +180,16 @@ class RegFile
     const std::string name() const { return _name; }
 
     Addr getSize() const;
+
+  private:
+
+    reg_t get(unsigned epId, size_t idx) const;
+
+    void set(unsigned epId, size_t idx, reg_t value);
+
+    EpType getEpType(unsigned epId) const;
+
+    void printEpAccess(unsigned epId, bool read, bool cpu) const;
 
   private:
 
@@ -145,7 +208,7 @@ class RegFile
 
     static const char *dtuRegNames[];
     static const char *cmdRegNames[];
-    static const char *epRegNames[];
+    static const char *epTypeNames[];
 };
 
 #endif // __MEM_DTU_REGFILE_HH__

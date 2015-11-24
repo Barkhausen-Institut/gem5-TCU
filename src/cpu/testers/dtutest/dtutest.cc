@@ -46,17 +46,17 @@ DtuTest::getRegAddr(CmdReg reg)
     return sizeof(RegFile::reg_t) * numDtuRegs + static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
 }
 
-Addr
-DtuTest::getRegAddr(EpReg reg, unsigned epid)
-{
-    Addr result = sizeof(RegFile::reg_t) * (numDtuRegs + numCmdRegs);
+// Addr
+// DtuTest::getRegAddr(EpReg reg, unsigned epid)
+// {
+//     Addr result = sizeof(RegFile::reg_t) * (numDtuRegs + numCmdRegs);
 
-    result += epid * numEpRegs * sizeof(RegFile::reg_t);
+//     result += epid * numEpRegs * sizeof(RegFile::reg_t);
 
-    result += static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
+//     result += static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
 
-    return result;
-}
+//     return result;
+// }
 
 bool
 DtuTest::CpuPort::recvTimingResp(PacketPtr pkt)
@@ -293,14 +293,14 @@ DtuTest::tick()
             regAddr = getRegAddr(CmdReg::DATA_SIZE);
             pkt = createDtuRegisterPkt(regAddr, 128);
             break;
-        case 2:
-            regAddr = getRegAddr(EpReg::TGT_EPID, 0);
-            pkt = createDtuRegisterPkt(regAddr, 1);
-            break;
-        case 3:
-            regAddr = getRegAddr(EpReg::TGT_COREID, 0);
-            pkt = createDtuRegisterPkt(regAddr, (id + 1) % TESTER_DTU);
-            break;
+        // case 2:
+        //     regAddr = getRegAddr(EpReg::TGT_EPID, 0);
+        //     pkt = createDtuRegisterPkt(regAddr, 1);
+        //     break;
+        // case 3:
+        //     regAddr = getRegAddr(EpReg::TGT_COREID, 0);
+        //     pkt = createDtuRegisterPkt(regAddr, (id + 1) % TESTER_DTU);
+        //     break;
         // case 4:
         //     regAddr = getRegAddr(EpReg::MODE, 0);
         //     pkt = createDtuRegisterPkt(regAddr, 1);
@@ -325,22 +325,22 @@ DtuTest::tick()
         //     regAddr = getRegAddr(EpReg::MODE, 1);
         //     pkt = createDtuRegisterPkt(regAddr, 0);
         //     break;
-        case 1:
-            regAddr = getRegAddr(EpReg::BUF_ADDR, 1);
-            pkt = createDtuRegisterPkt(regAddr, 128);
-            break;
-        case 2:
-            regAddr = getRegAddr(EpReg::BUF_SIZE, 1);
-            pkt = createDtuRegisterPkt(regAddr, 8);
-            break;
-        case 3:
-            regAddr = getRegAddr(EpReg::BUF_RD_PTR, 1);
-            pkt = createDtuRegisterPkt(regAddr, 128);
-            break;
-        case 4:
-            regAddr = getRegAddr(EpReg::BUF_WR_PTR, 1);
-            pkt = createDtuRegisterPkt(regAddr, 128);
-            break;
+        // case 1:
+        //     regAddr = getRegAddr(EpReg::BUF_ADDR, 1);
+        //     pkt = createDtuRegisterPkt(regAddr, 128);
+        //     break;
+        // case 2:
+        //     regAddr = getRegAddr(EpReg::BUF_SIZE, 1);
+        //     pkt = createDtuRegisterPkt(regAddr, 8);
+        //     break;
+        // case 3:
+        //     regAddr = getRegAddr(EpReg::BUF_RD_PTR, 1);
+        //     pkt = createDtuRegisterPkt(regAddr, 128);
+        //     break;
+        // case 4:
+        //     regAddr = getRegAddr(EpReg::BUF_WR_PTR, 1);
+        //     pkt = createDtuRegisterPkt(regAddr, 128);
+        //     break;
         default:
             counter = -1;
             DPRINTF(DtuTest, "EP 1 setup done.\n");

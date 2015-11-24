@@ -103,7 +103,7 @@ class DtuTest : public MemObject
 
     static Addr getRegAddr(CmdReg reg);
 
-    static Addr getRegAddr(EpReg reg, unsigned epid);
+    // static Addr getRegAddr(EpReg reg, unsigned epid);
 };
 
 #endif // __CPU_DTUTEST_DTUTEST_HH__

@@ -29,6 +29,7 @@
  */
 
 #include "base/trace.hh"
+#include "debug/Dtu.hh"
 #include "debug/DtuReg.hh"
 #include "debug/DtuRegRange.hh"
 #include "mem/dtu/regfile.hh"
@@ -47,22 +48,26 @@ const char *RegFile::cmdRegNames[] = {
     "REPLY_LABEL",
 };
 
-const char *RegFile::epRegNames[] = {
-    "BUF_ADDR",
-    "BUF_MSG_SIZE",
-    "BUF_SIZE",
-    "BUF_MSG_CNT",
-    "BUF_RD_PTR",
-    "BUF_WR_PTR",
-    "TGT_COREID",
-    "TGT_EPID",
-    "MAX_MSG_SIZE",
-    "LABEL",
-    "CREDITS",
-    "REQ_REM_ADDR",
-    "REQ_REM_SIZE",
-    "REQ_FLAGS",
+const char *RegFile::epTypeNames[] = {
+    "INVALID",
+    "SEND",
+    "RECEIVE",
+    "MEMORY",
+    // for invalid values (the epType is 3 bits)
+    "??",
+    "??",
+    "??",
+    "??",
 };
+
+static const char *regAccessName(RegAccess access)
+{
+    if (access == RegAccess::CPU)
+        return "CPU";
+    if (access == RegAccess::NOC)
+        return "NOC";
+    return "DTU";
+}
 
 RegFile::RegFile(const std::string& name, unsigned _numEndpoints)
     : dtuRegs(numDtuRegs, 0),
@@ -82,79 +87,265 @@ RegFile::RegFile(const std::string& name, unsigned _numEndpoints)
 }
 
 RegFile::reg_t
-RegFile::get(DtuReg reg) const
+RegFile::get(DtuReg reg, RegAccess access) const
 {
     reg_t value = dtuRegs[static_cast<Addr>(reg)];
 
-    DPRINTF(DtuReg, "DTU[%-12s] -> %#018x\n",
+    DPRINTF(DtuReg, "%s<- DTU[%-12s]: %#018x\n",
+                    regAccessName(access),
                     dtuRegNames[static_cast<Addr>(reg)],
                     value);
 
     return value;
 }
 
-RegFile::reg_t
-RegFile::get(CmdReg reg) const
-{
-    reg_t value = cmdRegs[static_cast<Addr>(reg)];
-
-    DPRINTF(DtuReg, "CMD[%-12s] -> %#018x\n",
-                    cmdRegNames[static_cast<Addr>(reg)],
-                    value);
-
-    return value;
-}
-
-RegFile::reg_t
-RegFile::get(unsigned epid, EpReg reg) const
-{
-    reg_t value = epRegs[epid][static_cast<Addr>(reg)];
-
-    DPRINTF(DtuReg, "EP%u[%-12s] -> %#018x\n",
-                    epid,
-                    epRegNames[static_cast<Addr>(reg)],
-                    value);
-
-    return value;
-}
-
 void
-RegFile::set(DtuReg reg, reg_t value)
+RegFile::set(DtuReg reg, reg_t value, RegAccess access)
 {
-    DPRINTF(DtuReg, "DTU[%-12s] <- %#018x\n",
+    DPRINTF(DtuReg, "%s-> DTU[%-12s]: %#018x\n",
+                    regAccessName(access),
                     dtuRegNames[static_cast<Addr>(reg)],
                     value);
 
     dtuRegs[static_cast<Addr>(reg)] = value;
 }
 
-void
-RegFile::set(CmdReg reg, reg_t value)
+RegFile::reg_t
+RegFile::get(CmdReg reg, RegAccess access) const
 {
-    DPRINTF(DtuReg, "CMD[%-12s] <- %#018x\n",
+    reg_t value = cmdRegs[static_cast<Addr>(reg)];
+
+    DPRINTF(DtuReg, "%s<- CMD[%-12s]: %#018x\n",
+                    regAccessName(access),
+                    cmdRegNames[static_cast<Addr>(reg)],
+                    value);
+
+    return value;
+}
+
+void
+RegFile::set(CmdReg reg, reg_t value, RegAccess access)
+{
+    DPRINTF(DtuReg, "%s-> CMD[%-12s]: %#018x\n",
+                    regAccessName(access),
                     cmdRegNames[static_cast<Addr>(reg)],
                     value);
 
     cmdRegs[static_cast<Addr>(reg)] = value;
 }
 
-void
-RegFile::set(unsigned epid, EpReg reg, reg_t value)
+EpType RegFile::getEpType(unsigned epId) const
 {
-    DPRINTF(DtuReg, "EP%u[%-12s] <- %#018x\n",
-                    epid,
-                    epRegNames[static_cast<Addr>(reg)],
-                    value);
+    const std::vector<reg_t> &regs = epRegs[epId];
+    return static_cast<EpType>(regs[0] >> 61);
+}
 
-    // update global message count
-    if (reg == EpReg::BUF_MSG_CNT)
+SendEp RegFile::getSendEp(unsigned epId, bool print) const
+{
+    SendEp ep;
+    if (getEpType(epId) != EpType::SEND)
     {
-        reg_t diff = value - epRegs[epid][static_cast<Addr>(reg)];
+        DPRINTF(Dtu, "EP%u: expected SEND EP, got %s\n",
+                     epId, epTypeNames[static_cast<size_t>(getEpType(epId))]);
+        return ep;
+    }
+
+    const std::vector<reg_t> &regs = epRegs[epId];
+    const reg_t r0  = regs[0];
+    const reg_t r1  = regs[1];
+    const reg_t r2  = regs[2];
+
+    ep.maxMsgSize   = r0 & 0xFFFF;
+
+    ep.targetCore   = (r1 >> 24) & 0xFF;
+    ep.targetEp     = (r1 >> 16) & 0xFF;
+    ep.credits      = (r1 >>  0) & 0xFFFF;
+
+    ep.label        = r2;
+
+    if (print)
+        ep.print(*this, epId, true, RegAccess::DTU);
+
+    return ep;
+}
+
+void RegFile::setSendEp(unsigned epId, const SendEp &ep)
+{
+    assert(getEpType(epId) == EpType::SEND);
+
+    set(epId, 0, (static_cast<reg_t>(EpType::SEND) << 61) |
+                 ep.maxMsgSize);
+
+    set(epId, 1, (ep.targetCore << 24) | (ep.targetEp << 16) |
+                 (ep.credits << 0));
+
+    set(epId, 2, ep.label);
+
+    ep.print(*this, epId, false, RegAccess::DTU);
+}
+
+RecvEp RegFile::getRecvEp(unsigned epId, bool print) const
+{
+    RecvEp ep;
+    if (getEpType(epId) != EpType::RECEIVE)
+    {
+        DPRINTF(Dtu, "EP%u: expected RECEIVE EP, got %s\n",
+                     epId, epTypeNames[static_cast<size_t>(getEpType(epId))]);
+        return ep;
+    }
+
+    const std::vector<reg_t> &regs = epRegs[epId];
+    const reg_t r0  = regs[0];
+    const reg_t r1  = regs[1];
+    const reg_t r2  = regs[2];
+
+    ep.msgSize      = (r0 >> 32) & 0xFFFF;
+    ep.size         = (r0 >> 16) & 0xFFFF;
+    ep.msgCount     = (r0 >>  0) & 0xFFFF;
+
+    ep.bufAddr      = r1;
+
+    ep.rdOff        = (r2 >> 16) & 0xFFFF;
+    ep.wrOff        = (r2 >>  0) & 0xFFFF;
+
+    if (print)
+        ep.print(*this, epId, true, RegAccess::DTU);
+
+    return ep;
+}
+
+void RegFile::setRecvEp(unsigned epId, const RecvEp &ep)
+{
+    assert(getEpType(epId) == EpType::RECEIVE);
+
+    set(epId, 0, (static_cast<reg_t>(EpType::RECEIVE) << 61) |
+                 (static_cast<reg_t>(ep.msgSize) << 32) |
+                 (ep.size << 16) | (ep.msgCount << 0));
+
+    set(epId, 1, ep.bufAddr);
+
+    set(epId, 2, (ep.rdOff << 16) | (ep.wrOff << 0));
+
+    ep.print(*this, epId, false, RegAccess::DTU);
+}
+
+MemEp RegFile::getMemEp(unsigned epId, bool print) const
+{
+    MemEp ep;
+    if (getEpType(epId) != EpType::MEMORY)
+    {
+        DPRINTF(Dtu, "EP%u: expected MEMORY EP, got %s\n",
+                     epId, epTypeNames[static_cast<size_t>(getEpType(epId))]);
+        return ep;
+    }
+
+    const std::vector<reg_t> &regs = epRegs[epId];
+    const reg_t r0  = regs[0];
+    const reg_t r1  = regs[1];
+    const reg_t r2  = regs[2];
+
+    ep.remoteSize   = r0 & 0x1FFFFFFFFFFFFFFF;
+
+    ep.remoteAddr   = r1;
+
+    ep.targetCore   = (r2 >> 4) & 0xFF;
+    ep.flags        = (r2 >> 0) & 0x7;
+
+    if (print)
+        ep.print(*this, epId, true, RegAccess::DTU);
+
+    return ep;
+}
+
+void SendEp::print(const RegFile &rf,
+                   unsigned epId,
+                   bool read,
+                   RegAccess access) const
+{
+    DPRINTFS(DtuReg, (&rf),
+        "%s%s EP%u%14s: Send[core=%u ep=%u crd=%#x max=%#x lbl=%#llx]\n",
+        regAccessName(access), read ? "<-" : "->",
+        epId, "",
+        targetCore, targetEp,
+        credits, maxMsgSize,
+        label);
+}
+
+void RecvEp::print(const RegFile &rf,
+                   unsigned epId,
+                   bool read,
+                   RegAccess access) const
+{
+    DPRINTFS(DtuReg, (&rf),
+        "%s%s EP%u%14s: Recv[buf=%p msz=%#x bsz=%#x msgs=%u rd=%#x wr=%#x]\n",
+        regAccessName(access), read ? "<-" : "->",
+        epId, "",
+        bufAddr, msgSize, size, msgCount,
+        rdOff, wrOff);
+}
+
+void MemEp::print(const RegFile &rf,
+                  unsigned epId,
+                  bool read,
+                  RegAccess access) const
+{
+    DPRINTFS(DtuReg, (&rf),
+        "%s%s EP%u%14s: Mem[core=%u addr=%#llx size=%#llx flags=%u]\n",
+        regAccessName(access), read ? "<-" : "->",
+        epId, "",
+        targetCore,
+        remoteAddr, remoteSize,
+        flags);
+}
+
+void RegFile::printEpAccess(unsigned epId, bool read, bool cpu) const
+{
+    if (DTRACE(DtuReg))
+    {
+        RegAccess access = cpu ? RegAccess::CPU : RegAccess::NOC;
+        switch(getEpType(epId))
+        {
+            case EpType::SEND:
+                getSendEp(epId, false).print(*this, epId, read, access);
+                break;
+
+            case EpType::RECEIVE:
+                getRecvEp(epId, false).print(*this, epId, read, access);
+                break;
+
+            case EpType::MEMORY:
+                getMemEp(epId, false).print(*this, epId, read, access);
+                break;
+
+            default:
+            case EpType::INVALID:
+                DPRINTF(DtuReg, "%s%s EP%u%14s: INVALID (%#x)\n",
+                        regAccessName(access), read ? "<-" : "->",
+                        epId, "",
+                        static_cast<unsigned>(getEpType(epId)));
+                break;
+        }
+    }
+}
+
+RegFile::reg_t
+RegFile::get(unsigned epId, size_t idx) const
+{
+    return epRegs[epId][idx];
+}
+
+void
+RegFile::set(unsigned epId, size_t idx, reg_t value)
+{
+    // update global message count
+    if (getEpType(epId) == EpType::RECEIVE && idx == 0)
+    {
+        reg_t diff = (value & 0xFFFF) - (epRegs[epId][idx] & 0xFFFF);
         reg_t old = dtuRegs[static_cast<Addr>(DtuReg::MSG_CNT)];
         set(DtuReg::MSG_CNT, old + diff);
     }
 
-    epRegs[epid][static_cast<Addr>(reg)] = value;
+    epRegs[epId][idx] = value;
 }
 
 bool
@@ -183,10 +374,12 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
     assert(pktAddr % sizeof(reg_t) == 0);
     assert(pktAddr + pkt->getSize() <= getSize());
 
+    RegAccess access = isCpuRequest ? RegAccess::CPU : RegAccess::NOC;
     reg_t* data = pkt->getPtr<reg_t>();
     bool cmdChanged = false;
     reg_t privFlag = static_cast<reg_t>(Status::PRIV);
-    bool isPrivileged = get(DtuReg::STATUS) & privFlag;
+    bool isPrivileged = get(DtuReg::STATUS, RegAccess::DTU) & privFlag;
+    int lastEp = -1;
 
     // perform a single register access for each requested register
     for (unsigned offset = 0; offset < pkt->getSize(); offset += sizeof(reg_t))
@@ -199,14 +392,14 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
             auto reg = static_cast<DtuReg>(regAddr / sizeof(reg_t));
 
             if (pkt->isRead())
-                data[offset / sizeof(reg_t)] = get(reg);
+                data[offset / sizeof(reg_t)] = get(reg, access);
             // writes are ignored, except that the privileged flag can be
             // changed from the outside
             else if (!isCpuRequest && reg == DtuReg::STATUS)
             {
                 reg_t old = dtuRegs[static_cast<Addr>(reg)];
                 reg_t changeBits = data[offset / sizeof(reg_t)] & privFlag;
-                set(reg, (old & ~privFlag) | changeBits);
+                set(reg, (old & ~privFlag) | changeBits, access);
             }
             else
                 assert(false);
@@ -218,35 +411,43 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
             auto reg = static_cast<CmdReg>(idx);
 
             if (pkt->isRead())
-                data[offset / sizeof(reg_t)] = get(reg);
+                data[offset / sizeof(reg_t)] = get(reg, access);
             else if (pkt->isWrite())
             {
                 if (reg == CmdReg::COMMAND)
                     cmdChanged = true;
-                set(reg, data[offset / sizeof(reg_t)]);
+                set(reg, data[offset / sizeof(reg_t)], access);
             }
         }
         // endpoint address
         else
         {
             size_t nonEpRegs = numDtuRegs + numCmdRegs;
-            unsigned epid = (regAddr - sizeof(reg_t) * nonEpRegs) /
+            unsigned epId = (regAddr - sizeof(reg_t) * nonEpRegs) /
                             (sizeof(reg_t) * numEpRegs);
 
             unsigned regNumber = (regAddr / sizeof(reg_t) -
                                  nonEpRegs) % numEpRegs;
 
-            auto reg = static_cast<EpReg>(regNumber);
+            if (lastEp != epId)
+            {
+                if (lastEp != -1)
+                    printEpAccess(lastEp, pkt->isRead(), isCpuRequest);
+                lastEp = epId;
+            }
 
             if (pkt->isRead())
-                data[offset / sizeof(reg_t)] = get(epid, reg);
+                data[offset / sizeof(reg_t)] = get(epId, regNumber);
             // writable only from remote and on privileged PEs
             else if (!isCpuRequest || isPrivileged)
-                set(epid, reg, data[offset / sizeof(reg_t)]);
+                set(epId, regNumber, data[offset / sizeof(reg_t)]);
             else
                 assert(false);
         }
     }
+
+    if (lastEp != -1)
+        printEpAccess(lastEp, pkt->isRead(), isCpuRequest);
 
     if (pkt->needsResponse())
         pkt->makeResponse();

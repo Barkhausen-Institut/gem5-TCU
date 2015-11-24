@@ -73,33 +73,32 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
 
     // check if we have enough credits
     Addr messageSize = dtu.regs().get(CmdReg::DATA_SIZE);
-    Addr maxMessageSize = dtu.regs().get(epid, EpReg::MAX_MSG_SIZE);
-    unsigned credits = dtu.regs().get(epid, EpReg::CREDITS);
+    SendEp ep = dtu.regs().getSendEp(epid);
 
     // TODO error handling
-    assert(messageSize + sizeof(Dtu::MessageHeader) <= maxMessageSize);
+    assert(messageSize + sizeof(Dtu::MessageHeader) <= ep.maxMsgSize);
 
-    if (credits < maxMessageSize)
+    if (ep.credits < ep.maxMsgSize)
     {
         DPRINTFS(Dtu, (&dtu),
             "EP%u: not enough credits (%lu) to send message (%lu)\n",
-            epid, credits, maxMessageSize);
+            epid, ep.credits, ep.maxMsgSize);
         dtu.scheduleFinishOp(Cycles(1));
         return;
     }
 
-    credits -= maxMessageSize;
+    ep.credits -= ep.maxMsgSize;
 
     DPRINTFS(DtuCredits, (&dtu), "EP%u pays %u credits (%u left)\n",
-             epid, maxMessageSize, credits);
+             epid, ep.maxMsgSize, ep.credits);
 
     // pay the credits
-    dtu.regs().set(epid, EpReg::CREDITS, credits);
+    dtu.regs().setSendEp(epid, ep);
 
     // fill the info struct and start the transfer
-    info.targetCoreId = dtu.regs().get(epid, EpReg::TGT_COREID);
-    info.targetEpId   = dtu.regs().get(epid, EpReg::TGT_EPID);
-    info.label        = dtu.regs().get(epid, EpReg::LABEL);
+    info.targetCoreId = ep.targetCore;
+    info.targetEpId   = ep.targetEp;
+    info.label        = ep.label;
     info.replyLabel   = dtu.regs().get(CmdReg::REPLY_LABEL);
     info.replyEpId    = dtu.regs().get(CmdReg::REPLY_EPID);
     info.ready = true;
@@ -112,7 +111,8 @@ MessageUnit::requestHeader(unsigned epid)
 {
     assert(offset < sizeof(Dtu::MessageHeader));
 
-    Addr msgAddr = dtu.regs().get(epid, EpReg::BUF_RD_PTR);
+    RecvEp ep = dtu.regs().getRecvEp(epid);
+    Addr msgAddr = ep.bufAddr + ep.rdOff;
     msgAddr += offset;
 
     DPRINTFS(DtuBuf, (&dtu),
@@ -264,32 +264,22 @@ MessageUnit::startXfer(const Dtu::Command& cmd)
 void
 MessageUnit::incrementReadPtr(unsigned epId)
 {
-    Addr readPtr    = dtu.regs().get(epId, EpReg::BUF_RD_PTR);
-    Addr bufferAddr = dtu.regs().get(epId, EpReg::BUF_ADDR);
-    Addr bufferSize = dtu.regs().get(epId, EpReg::BUF_SIZE);
-    Addr messageCount = dtu.regs().get(epId, EpReg::BUF_MSG_CNT);
-    unsigned maxMessageSize = dtu.regs().get(epId, EpReg::BUF_MSG_SIZE);
+    RecvEp ep = dtu.regs().getRecvEp(epId);
 
-    readPtr += maxMessageSize;
+    ep.rdOff += ep.msgSize;
 
-    if (readPtr >= bufferAddr + bufferSize * maxMessageSize)
-        readPtr = bufferAddr;
+    if (ep.rdOff >= ep.size * ep.msgSize)
+        ep.rdOff = 0;
 
     DPRINTFS(DtuBuf, (&dtu),
         "EP%u: increment read pointer to %#018lx (msgCount=%u)\n",
-        epId, readPtr, messageCount - 1);
+        epId, ep.rdOff, ep.msgCount - 1);
 
     // TODO error handling
-    assert(messageCount != 0);
+    assert(ep.msgCount != 0);
+    ep.msgCount--;
 
-    /*
-     * XXX Actually an additianally cycle is needed to update the register.
-     *     We ignore this delay as it should have no or a very small influence
-     *     on the performance of the simulated system.
-     */
-
-    dtu.regs().set(epId, EpReg::BUF_RD_PTR, readPtr);
-    dtu.regs().set(epId, EpReg::BUF_MSG_CNT, messageCount - 1);
+    dtu.regs().setRecvEp(epId, ep);
 
     dtu.updateSuspendablePin();
 }
@@ -297,29 +287,25 @@ MessageUnit::incrementReadPtr(unsigned epId)
 bool
 MessageUnit::incrementWritePtr(unsigned epId)
 {
-    Addr writePtr     = dtu.regs().get(epId, EpReg::BUF_WR_PTR);
-    Addr bufferAddr   = dtu.regs().get(epId, EpReg::BUF_ADDR);
-    Addr bufferSize   = dtu.regs().get(epId, EpReg::BUF_SIZE);
-    Addr messageCount = dtu.regs().get(epId, EpReg::BUF_MSG_CNT);
-    unsigned maxMessageSize = dtu.regs().get(epId, EpReg::BUF_MSG_SIZE);
+    RecvEp ep = dtu.regs().getRecvEp(epId);
 
-    writePtr += maxMessageSize;
+    ep.wrOff += ep.msgSize;
 
-    if (writePtr >= bufferAddr + bufferSize * maxMessageSize)
-        writePtr = bufferAddr;
+    if (ep.wrOff >= ep.size * ep.msgSize)
+        ep.wrOff = 0;
 
     DPRINTFS(DtuBuf, (&dtu),
         "EP%u: increment write pointer to %#018lx (msgCount=%u)\n",
-        epId, writePtr, messageCount + 1);
+        epId, ep.wrOff, ep.msgCount + 1);
 
-    if (messageCount == bufferSize)
+    if (ep.msgCount == ep.size)
     {
         warn("EP%u: Buffer full!\n", epId);
         return false;
     }
+    ep.msgCount++;
 
-    dtu.regs().set(epId, EpReg::BUF_WR_PTR, writePtr);
-    dtu.regs().set(epId, EpReg::BUF_MSG_CNT, messageCount + 1);
+    dtu.regs().setRecvEp(epId, ep);
 
     dtu.updateSuspendablePin();
     dtu.wakeupCore();
@@ -335,8 +321,8 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
     NocAddr addr(pkt->getAddr());
 
     unsigned epId = addr.epId;
-
-    Addr localAddr = dtu.regs().get(epId, EpReg::BUF_WR_PTR);
+    RecvEp ep = dtu.regs().getRecvEp(epId);
+    Addr localAddr = ep.bufAddr + ep.wrOff;
 
     Dtu::MessageHeader* header = pkt->getPtr<Dtu::MessageHeader>();
 
@@ -353,10 +339,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
             sysNo < total ? syscallNames[sysNo] : "Unknown");
     }
 
-    Addr bufferSize = dtu.regs().get(epId, EpReg::BUF_SIZE);
-    Addr messageCount = dtu.regs().get(epId, EpReg::BUF_MSG_CNT);
-
-    if (messageCount < bufferSize)
+    if (ep.msgCount < ep.size)
     {
         Dtu::MessageHeader* header = pkt->getPtr<Dtu::MessageHeader>();
 
@@ -365,17 +348,15 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
             header->flags & Dtu::GRANT_CREDITS_FLAG &&
             header->replyEpId < dtu.numEndpoints)
         {
-            unsigned maxMessageSize = dtu.regs().get(header->replyEpId,
-                                                     EpReg::MAX_MSG_SIZE);
-            unsigned credits        = dtu.regs().get(header->replyEpId,
-                                                     EpReg::CREDITS);
-            credits += maxMessageSize;
+            SendEp sep = dtu.regs().getSendEp(header->replyEpId);
+
+            sep.credits += sep.maxMsgSize;
 
             DPRINTFS(DtuCredits, (&dtu),
                 "EP%u: received %u credits (%u in total)\n",
-                header->replyEpId, maxMessageSize, credits);
+                header->replyEpId, sep.maxMsgSize, sep.credits);
 
-            dtu.regs().set(header->replyEpId, EpReg::CREDITS, credits);
+            dtu.regs().setSendEp(header->replyEpId, sep);
         }
 
         // the message is transferred piece by piece; we can start as soon as
