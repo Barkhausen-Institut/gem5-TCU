@@ -47,15 +47,15 @@ class Dtu : public BaseDtu
 
     enum MemoryFlags : uint8_t
     {
-        READ = (1 << 0),
-        WRITE = (1 << 1),
+        READ                = (1 << 0),
+        WRITE               = (1 << 1),
     };
 
     enum MessageFlags : uint8_t
     {
-        REPLY_FLAG = (1 << 0),
-        GRANT_CREDITS_FLAG = (1 << 1),
-        REPLY_ENABLED = (1 << 2),
+        REPLY_FLAG          = (1 << 0),
+        GRANT_CREDITS_FLAG  = (1 << 1),
+        REPLY_ENABLED       = (1 << 2),
     };
 
     struct MessageHeader

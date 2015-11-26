@@ -101,7 +101,7 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
     info.label        = ep.label;
     info.replyLabel   = dtu.regs().get(CmdReg::REPLY_LABEL);
     info.replyEpId    = dtu.regs().get(CmdReg::REPLY_EPID);
-    info.ready = true;
+    info.ready        = true;
 
     startXfer(cmd);
 }
@@ -198,7 +198,7 @@ MessageUnit::recvFromMem(const Dtu::Command& cmd, PacketPtr pkt)
     info.label        = header.replyLabel;
     // replies don't have replies. so, we don't need that
     info.replyLabel   = 0;
-    info.ready = true;
+    info.ready        = true;
 
     // disable replies for this message
     // use a functional request here; we don't need to wait for it anyway

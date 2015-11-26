@@ -121,7 +121,7 @@ PtUnit::finishTranslate(PacketPtr pkt,
                         DtuTlb::Flag *access,
                         NocAddr *phys)
 {
-    PtUnit::PageTableEntry *e = pkt->getPtr<PtUnit::PageTableEntry>();
+    PageTableEntry *e = pkt->getPtr<PageTableEntry>();
 
     DPRINTFS(DtuTlb, (&dtu), "Received PTE for %p: %#x\n",
              virt, (uint64_t)*e);

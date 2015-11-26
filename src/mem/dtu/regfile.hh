@@ -83,7 +83,7 @@ enum class EpType
     INVALID,
     SEND,
     RECEIVE,
-    MEMORY
+    MEMORY,
 };
 
 enum class RegAccess

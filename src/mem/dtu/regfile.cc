@@ -134,13 +134,15 @@ RegFile::set(CmdReg reg, reg_t value, RegAccess access)
     cmdRegs[static_cast<Addr>(reg)] = value;
 }
 
-EpType RegFile::getEpType(unsigned epId) const
+EpType
+RegFile::getEpType(unsigned epId) const
 {
     const std::vector<reg_t> &regs = epRegs[epId];
     return static_cast<EpType>(regs[0] >> 61);
 }
 
-SendEp RegFile::getSendEp(unsigned epId, bool print) const
+SendEp
+RegFile::getSendEp(unsigned epId, bool print) const
 {
     SendEp ep;
     if (getEpType(epId) != EpType::SEND)
@@ -169,7 +171,8 @@ SendEp RegFile::getSendEp(unsigned epId, bool print) const
     return ep;
 }
 
-void RegFile::setSendEp(unsigned epId, const SendEp &ep)
+void
+RegFile::setSendEp(unsigned epId, const SendEp &ep)
 {
     assert(getEpType(epId) == EpType::SEND);
 
@@ -184,7 +187,8 @@ void RegFile::setSendEp(unsigned epId, const SendEp &ep)
     ep.print(*this, epId, false, RegAccess::DTU);
 }
 
-RecvEp RegFile::getRecvEp(unsigned epId, bool print) const
+RecvEp
+RegFile::getRecvEp(unsigned epId, bool print) const
 {
     RecvEp ep;
     if (getEpType(epId) != EpType::RECEIVE)
@@ -214,7 +218,8 @@ RecvEp RegFile::getRecvEp(unsigned epId, bool print) const
     return ep;
 }
 
-void RegFile::setRecvEp(unsigned epId, const RecvEp &ep)
+void
+RegFile::setRecvEp(unsigned epId, const RecvEp &ep)
 {
     assert(getEpType(epId) == EpType::RECEIVE);
 
@@ -229,7 +234,8 @@ void RegFile::setRecvEp(unsigned epId, const RecvEp &ep)
     ep.print(*this, epId, false, RegAccess::DTU);
 }
 
-MemEp RegFile::getMemEp(unsigned epId, bool print) const
+MemEp
+RegFile::getMemEp(unsigned epId, bool print) const
 {
     MemEp ep;
     if (getEpType(epId) != EpType::MEMORY)
@@ -257,10 +263,11 @@ MemEp RegFile::getMemEp(unsigned epId, bool print) const
     return ep;
 }
 
-void SendEp::print(const RegFile &rf,
-                   unsigned epId,
-                   bool read,
-                   RegAccess access) const
+void
+SendEp::print(const RegFile &rf,
+              unsigned epId,
+              bool read,
+              RegAccess access) const
 {
     DPRINTFS(DtuReg, (&rf),
         "%s%s EP%u%14s: Send[core=%u ep=%u crd=%#x max=%#x lbl=%#llx]\n",
@@ -271,10 +278,11 @@ void SendEp::print(const RegFile &rf,
         label);
 }
 
-void RecvEp::print(const RegFile &rf,
-                   unsigned epId,
-                   bool read,
-                   RegAccess access) const
+void
+RecvEp::print(const RegFile &rf,
+              unsigned epId,
+              bool read,
+              RegAccess access) const
 {
     DPRINTFS(DtuReg, (&rf),
         "%s%s EP%u%14s: Recv[buf=%p msz=%#x bsz=%#x msgs=%u rd=%#x wr=%#x]\n",
@@ -284,10 +292,11 @@ void RecvEp::print(const RegFile &rf,
         rdOff, wrOff);
 }
 
-void MemEp::print(const RegFile &rf,
-                  unsigned epId,
-                  bool read,
-                  RegAccess access) const
+void
+MemEp::print(const RegFile &rf,
+             unsigned epId,
+             bool read,
+             RegAccess access) const
 {
     DPRINTFS(DtuReg, (&rf),
         "%s%s EP%u%14s: Mem[core=%u addr=%#llx size=%#llx flags=%u]\n",
@@ -298,7 +307,8 @@ void MemEp::print(const RegFile &rf,
         flags);
 }
 
-void RegFile::printEpAccess(unsigned epId, bool read, bool cpu) const
+void
+RegFile::printEpAccess(unsigned epId, bool read, bool cpu) const
 {
     if (DTRACE(DtuReg))
     {
