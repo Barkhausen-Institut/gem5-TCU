@@ -246,9 +246,9 @@ def createCorePE(no, cache, l2cache, memPE):
     pe.dtu.dcache_slave_port = pe.cpu.dcache_port
 
     # Command line
-    pe.kernel = cmd_list[i].split(' ')[0]
-    pe.boot_osflags = cmd_list[i]
-    print "PE%d: %s" % (i, cmd_list[i])
+    pe.kernel = cmd_list[no].split(' ')[0]
+    pe.boot_osflags = cmd_list[no]
+    print "PE%d: %s" % (no, cmd_list[no])
     print '     core   =%s x86' % (options.cpu_type)
     try:
         print '     L1cache=%d KiB' % (pe.l1cache.size.value / 1024)
