@@ -264,7 +264,7 @@ def createCorePE(no, cache, l2cache, memPE):
 
     # if specified, let this PE wait for GDB
     if options.debug != "" and options.debug in pe.kernel:
-        # for us, it's always the first context
+        # = 0, because for us, it's always the first context
         pe.rgdb_wait = 0
 
     # connect the IO space via bridge to the root NoC
