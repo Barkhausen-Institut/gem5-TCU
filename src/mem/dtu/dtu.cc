@@ -74,7 +74,6 @@ Dtu::Dtu(DtuParams* p)
     finishCommandEvent(*this),
     cmdInProgress(false),
     tlb(p->tlb_entries > 0 ? new DtuTlb(p->tlb_entries) : NULL),
-    memEp(),
     memPe(),
     memOffset(),
     memSize(),
@@ -97,7 +96,6 @@ Dtu::Dtu(DtuParams* p)
     M3X86System *sys = dynamic_cast<M3X86System*>(system);
     if (sys)
     {
-        memEp = sys->memEp;
         memPe = sys->memPe;
         memOffset = sys->memOffset;
         memSize = sys->memSize;
@@ -323,6 +321,12 @@ Dtu::startTranslate(Addr virt,
                     PtUnit::Translation *trans)
 {
     ptUnit->startTranslate(virt, access, trans);
+}
+
+void
+Dtu::handlePFResp(PacketPtr pkt)
+{
+    ptUnit->finishPagefault(pkt);
 }
 
 void

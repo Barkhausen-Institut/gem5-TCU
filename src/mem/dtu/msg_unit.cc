@@ -101,6 +101,7 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
     info.label        = ep.label;
     info.replyLabel   = dtu.regs().get(CmdReg::REPLY_LABEL);
     info.replyEpId    = dtu.regs().get(CmdReg::REPLY_EPID);
+    info.flags        = 0;
     info.ready        = true;
 
     startXfer(cmd);
@@ -198,6 +199,8 @@ MessageUnit::recvFromMem(const Dtu::Command& cmd, PacketPtr pkt)
     info.label        = header.replyLabel;
     // replies don't have replies. so, we don't need that
     info.replyLabel   = 0;
+    // the pagefault flag is moved to the reply header
+    info.flags        = header.flags & Dtu::PAGEFAULT;
     info.ready        = true;
 
     // disable replies for this message
@@ -230,8 +233,9 @@ MessageUnit::startXfer(const Dtu::Command& cmd)
              messageSize);
 
     DPRINTFS(Dtu, (&dtu),
-        "  header: tgtEP=%u, lbl=%#018lx, rpLbl=%#018lx, rpEP=%u\n",
-        info.targetEpId, info.label, info.replyLabel, info.replyEpId);
+        "  header: flags=%#x tgtEP=%u lbl=%#018lx rpLbl=%#018lx rpEP=%u\n",
+        info.flags, info.targetEpId, info.label,
+        info.replyLabel, info.replyEpId);
 
     Dtu::MessageHeader* header = new Dtu::MessageHeader;
 
@@ -239,6 +243,7 @@ MessageUnit::startXfer(const Dtu::Command& cmd)
         header->flags = Dtu::REPLY_FLAG | Dtu::GRANT_CREDITS_FLAG;
     else
         header->flags = Dtu::REPLY_ENABLED; // normal message
+    header->flags |= info.flags;
 
     header->senderCoreId = static_cast<uint8_t>(dtu.coreId);
     header->senderEpId   = static_cast<uint8_t>(cmd.epId);
@@ -318,13 +323,19 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
     assert(pkt->isWrite());
     assert(pkt->hasData());
 
-    NocAddr addr(pkt->getAddr());
+    Dtu::MessageHeader* header = pkt->getPtr<Dtu::MessageHeader>();
 
+    uint8_t pfResp = Dtu::REPLY_FLAG | Dtu::PAGEFAULT;
+    if ((header->flags & pfResp) == pfResp)
+    {
+        dtu.handlePFResp(pkt);
+        return;
+    }
+
+    NocAddr addr(pkt->getAddr());
     unsigned epId = addr.epId;
     RecvEp ep = dtu.regs().getRecvEp(epId);
     Addr localAddr = ep.bufAddr + ep.wrOff;
-
-    Dtu::MessageHeader* header = pkt->getPtr<Dtu::MessageHeader>();
 
     DPRINTFS(Dtu, (&dtu),
         "\e[1m[rv <- %u]\e[0m %lu bytes on EP%u to %#018lx\n",

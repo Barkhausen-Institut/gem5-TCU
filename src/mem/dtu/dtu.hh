@@ -56,6 +56,7 @@ class Dtu : public BaseDtu
         REPLY_FLAG          = (1 << 0),
         GRANT_CREDITS_FLAG  = (1 << 1),
         REPLY_ENABLED       = (1 << 2),
+        PAGEFAULT           = (1 << 3),
     };
 
     struct MessageHeader
@@ -194,6 +195,8 @@ class Dtu : public BaseDtu
                         DtuTlb::Flag access,
                         PtUnit::Translation *trans);
 
+    void handlePFResp(PacketPtr pkt);
+
     void printPacket(PacketPtr pkt) const;
 
   private:
@@ -245,7 +248,6 @@ class Dtu : public BaseDtu
 
     DtuTlb *tlb;
 
-    unsigned memEp;
     unsigned memPe;
     Addr memOffset;
     Addr memSize;

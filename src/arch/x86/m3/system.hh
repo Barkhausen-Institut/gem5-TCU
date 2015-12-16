@@ -42,7 +42,6 @@ class M3X86System : public X86System
     std::string commandLine;
 
   public:
-    const unsigned memEp;
     const unsigned memPe;
     const Addr memOffset;
     const Addr memSize;

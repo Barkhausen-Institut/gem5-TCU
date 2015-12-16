@@ -61,6 +61,19 @@ class PtUnit
         Bitfield<0> r;
     EndBitUnion(PageTableEntry)
 
+    struct PagefaultMessage
+    {
+        enum
+        {
+            OPCODE_PF = 0,
+        };
+
+        // have to be words
+        uint64_t opcode;
+        uint64_t virt;
+        uint64_t access;
+    } M5_ATTR_PACKED;
+
   private:
 
     struct TranslateEvent : public Event
@@ -99,9 +112,13 @@ class PtUnit
         ev->recvFromMem(pkt);
     }
 
+    void finishPagefault(PacketPtr pkt);
+
   private:
 
     PacketPtr createPacket(Addr virt);
+
+    void sendPagefaultMsg(TranslateEvent *ev, Addr virt, DtuTlb::Flag access);
 
     bool finishTranslate(PacketPtr pkt,
                          Addr virt,

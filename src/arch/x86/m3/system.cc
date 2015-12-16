@@ -46,7 +46,6 @@ using namespace X86ISA;
 M3X86System::M3X86System(Params *p)
     : X86System(p),
       commandLine(p->boot_osflags),
-      memEp(p->memory_ep),
       memPe(p->memory_pe),
       memOffset(p->memory_offset),
       memSize(p->memory_size)

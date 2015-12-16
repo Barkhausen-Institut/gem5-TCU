@@ -27,6 +27,7 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
+#include "debug/Dtu.hh"
 #include "debug/DtuTlb.hh"
 #include "mem/dtu/dtu.hh"
 #include "mem/dtu/pt_unit.hh"
@@ -77,11 +78,13 @@ PtUnit::TranslateEvent::recvFromMem(PacketPtr pkt)
         }
         else
             assert(newPhys.getAddr() == tlbPhys);
+
+        trans->finished(success, phys);
+
+        setFlags(AutoDelete);
     }
-
-    trans->finished(success, phys);
-
-    setFlags(AutoDelete);
+    else
+        unit.sendPagefaultMsg(this, virt, access);
 }
 
 bool
@@ -94,6 +97,99 @@ PtUnit::translateFunctional(Addr virt, DtuTlb::Flag access, NocAddr *phys)
     dtu.sendFunctionalMemRequest(pkt);
 
     return finishTranslate(pkt, virt, &access, phys);
+}
+
+void
+PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, DtuTlb::Flag access)
+{
+    if (~dtu.regs().get(DtuReg::STATUS) & static_cast<int>(Status::PAGEFAULTS))
+    {
+        DPRINTFS(DtuTlb, (&dtu),
+            "Caused pagefault for %p,"
+            " but pagefault sending is disabled to %u:%u\n",
+            virt);
+        panic("Pagefault not resolvable; stopping");
+    }
+
+    int pfep = dtu.regs().get(DtuReg::PF_EP);
+    assert(pfep < dtu.numEndpoints);
+    SendEp ep = dtu.regs().getSendEp(pfep);
+
+    // create packet
+    NocAddr nocAddr = NocAddr(ep.targetCore, ep.targetEp);
+    size_t size = sizeof(Dtu::MessageHeader) + sizeof(PagefaultMessage);
+    auto pkt = dtu.generateRequest(nocAddr.getAddr(),
+                                   size,
+                                   MemCmd::WriteReq);
+
+    // build the message and put it in the packet
+    Dtu::MessageHeader header;
+    header.length = sizeof(PagefaultMessage);
+    header.flags = Dtu::PAGEFAULT | Dtu::REPLY_ENABLED;
+    header.label = ep.label;
+    header.senderEpId = pfep;
+    header.senderCoreId = dtu.coreId;
+    header.replyLabel = reinterpret_cast<uint64_t>(ev);
+    // not used
+    header.replyEpId = 0;
+
+    memcpy(pkt->getPtr<uint8_t>(),
+           &header,
+           sizeof(header));
+
+    PagefaultMessage msg;
+    msg.opcode = PagefaultMessage::OPCODE_PF;
+    msg.virt = virt;
+    msg.access = access;
+
+    memcpy(pkt->getPtr<uint8_t>() + sizeof(header),
+           &msg,
+           sizeof(msg));
+
+    DPRINTFS(Dtu, (&dtu), "\e[1m[sd -> %u]\e[0m with EP%u for #PF @ %p\n",
+             ep.targetCore, pfep, virt);
+
+    DPRINTFS(Dtu, (&dtu),
+        "  header: flags=%#x tgtEP=%u lbl=%#018lx rpLbl=%#018lx rpEP=%u\n",
+        header.flags, ep.targetEp, header.label,
+        header.replyLabel, header.replyEpId);
+
+    // send the packet
+    Cycles delay = dtu.transferToNocLatency;
+    // delay += dtu.ticksToCycles(headerDelay);
+    // pkt->payloadDelay = payloadDelay;
+    dtu.printPacket(pkt);
+    dtu.sendNocRequest(Dtu::NocPacketType::MESSAGE, pkt, delay);
+}
+
+void
+PtUnit::finishPagefault(PacketPtr pkt)
+{
+    Dtu::MessageHeader* header = pkt->getPtr<Dtu::MessageHeader>();
+
+    // retry the translation
+    TranslateEvent *ev = reinterpret_cast<TranslateEvent*>(header->label);
+    dtu.schedule(ev, dtu.clockEdge(Cycles(1)));
+
+    DPRINTFS(Dtu, (&dtu),
+        "\e[1m[rv <- %u]\e[0m %lu bytes for #PF @ %p; retrying\n",
+        header->senderCoreId, header->length, ev->virt);
+    dtu.printPacket(pkt);
+
+    pkt->makeResponse();
+
+    if (!dtu.atomicMode)
+    {
+        Cycles delay = dtu.ticksToCycles(
+            pkt->headerDelay + pkt->payloadDelay);
+        delay += dtu.nocToTransferLatency;
+
+        pkt->headerDelay = 0;
+        pkt->payloadDelay = 0;
+
+        dtu.schedNocRequestFinished(dtu.clockEdge(Cycles(1)));
+        dtu.schedNocResponse(pkt, dtu.clockEdge(delay));
+    }
 }
 
 PacketPtr

@@ -36,6 +36,8 @@
 
 const char *RegFile::dtuRegNames[] = {
     "STATUS",
+    "ROOT_PT",
+    "PF_EP",
     "MSG_CNT",
 };
 
@@ -174,8 +176,6 @@ RegFile::getSendEp(unsigned epId, bool print) const
 void
 RegFile::setSendEp(unsigned epId, const SendEp &ep)
 {
-    assert(getEpType(epId) == EpType::SEND);
-
     set(epId, 0, (static_cast<reg_t>(EpType::SEND) << 61) |
                  ep.maxMsgSize);
 
@@ -221,8 +221,6 @@ RegFile::getRecvEp(unsigned epId, bool print) const
 void
 RegFile::setRecvEp(unsigned epId, const RecvEp &ep)
 {
-    assert(getEpType(epId) == EpType::RECEIVE);
-
     set(epId, 0, (static_cast<reg_t>(EpType::RECEIVE) << 61) |
                  (static_cast<reg_t>(ep.msgSize) << 32) |
                  (ep.size << 16) | (ep.msgCount << 0));
@@ -403,14 +401,9 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
 
             if (pkt->isRead())
                 data[offset / sizeof(reg_t)] = get(reg, access);
-            // writes are ignored, except that the privileged flag can be
-            // changed from the outside
-            else if (!isCpuRequest && reg == DtuReg::STATUS)
-            {
-                reg_t old = dtuRegs[static_cast<Addr>(reg)];
-                reg_t changeBits = data[offset / sizeof(reg_t)] & privFlag;
-                set(reg, (old & ~privFlag) | changeBits, access);
-            }
+            // MSG_CNT can't be set in general; all can't be set by the CPU
+            else if (pkt->isWrite() && !isCpuRequest && reg != DtuReg::MSG_CNT)
+                set(reg, data[offset / sizeof(reg_t)], access);
             else
                 assert(false);
         }

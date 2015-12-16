@@ -40,15 +40,18 @@
 enum class DtuReg : Addr
 {
     STATUS,
+    ROOT_PT,
+    PF_EP,
     MSG_CNT,
 };
 
 enum class Status
 {
-    PRIV    = 1 << 0,
+    PRIV        = 1 << 0,
+    PAGEFAULTS  = 1 << 1,
 };
 
-constexpr unsigned numDtuRegs = 2;
+constexpr unsigned numDtuRegs = 4;
 
 // registers to issue a command
 enum class CmdReg : Addr
