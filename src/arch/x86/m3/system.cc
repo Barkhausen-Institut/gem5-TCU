@@ -33,8 +33,8 @@
 #include "arch/vtophys.hh"
 #include "base/trace.hh"
 #include "cpu/thread_context.hh"
+#include "debug/DtuTlb.hh"
 #include "mem/port_proxy.hh"
-#include "mem/dtu/noc_addr.hh"
 #include "mem/dtu/pt_unit.hh"
 #include "mem/dtu/tlb.hh"
 #include "params/M3X86System.hh"
@@ -48,7 +48,9 @@ M3X86System::M3X86System(Params *p)
       commandLine(p->boot_osflags),
       memPe(p->memory_pe),
       memOffset(p->memory_offset),
-      memSize(p->memory_size)
+      memSize(p->memory_size),
+      // don't reuse root pt
+      nextFrame(1)
 {
 }
 
@@ -96,26 +98,61 @@ M3X86System::writeArg(Addr &args, size_t &i, Addr argv, const char *cmd, const c
 }
 
 void
-M3X86System::createPTEs() const
+M3X86System::mapPage(Addr virt, Addr phys, uint access)
 {
-    // create page-table entries (atm, we have a single large pt, sitting at address 0)
-    Addr phys = NocAddr(memPe, 0, memOffset).getAddr();
-    size_t offset = 0;
+    typedef PtUnit::PageTableEntry pte_t;
+    Addr ptAddr = getRootPt().getAddr();
+    for (int i = DtuTlb::LEVEL_CNT - 1; i >= 0; --i)
+    {
+        Addr idx = virt >> (DtuTlb::PAGE_BITS + i * DtuTlb::LEVEL_BITS);
+        idx &= DtuTlb::LEVEL_MASK;
+
+        Addr pteAddr = ptAddr + (idx << DtuTlb::PTE_BITS);
+        pte_t entry = physProxy.read<pte_t>(pteAddr);
+        assert(i > 0 || entry.xwr == 0);
+        if(!entry.xwr)
+        {
+            // determine phys address
+            Addr offset;
+            if (i == 0)
+                offset = memOffset + phys;
+            else
+                offset = memOffset + (nextFrame++ << DtuTlb::PAGE_BITS);
+            NocAddr addr(memPe, 0, offset);
+
+            // clear pagetables
+            if (i > 0)
+                physProxy.memsetBlob(addr.getAddr(), 0, DtuTlb::PAGE_SIZE);
+
+            // insert entry
+            entry.base = addr.getAddr() >> DtuTlb::PAGE_BITS;
+            entry.xwr = i == 0 ? access : 0x7;
+            DPRINTF(DtuTlb,
+                "Creating level %d PTE for virt=%#018x @ %#018x: %#018x\n",
+                i, virt, pteAddr, entry);
+            physProxy.write(pteAddr, entry);
+        }
+
+        ptAddr = entry.base << DtuTlb::PAGE_BITS;
+    }
+}
+
+void
+M3X86System::mapMemory()
+{
+    // clear root pt
+    physProxy.memsetBlob(getRootPt().getAddr(), 0, DtuTlb::PAGE_SIZE);
+
+    Addr virt = 0;
     size_t count = divCeil(memSize, DtuTlb::PAGE_SIZE);
     for(size_t i = 0; i < count; ++i)
     {
-        PtUnit::PageTableEntry e(0);
-        e.base = NocAddr(memPe, 0, memOffset + offset).getAddr() >> DtuTlb::PAGE_BITS;
-        if(!(offset >= 0x100000 && offset < 0x200000))
-        {
-            e.r = 1;
-            e.w = 1;
-            e.x = 1;
-        }
-        physProxy.write(phys, e);
+        uint access = 0;
+        if(!(virt >= 0x100000 && virt < 0x200000))
+            access = 0x7;
+        mapPage(virt, virt, access);
 
-        offset += DtuTlb::PAGE_SIZE;
-        phys += sizeof(e);
+        virt += DtuTlb::PAGE_SIZE;
     }
 }
 
@@ -124,7 +161,7 @@ M3X86System::initState()
 {
     X86System::initState();
 
-    createPTEs();
+    mapMemory();
 
     const Addr stateSize = 0x1000;
     // TODO

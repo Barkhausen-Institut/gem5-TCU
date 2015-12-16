@@ -99,6 +99,7 @@ Dtu::Dtu(DtuParams* p)
         memPe = sys->memPe;
         memOffset = sys->memOffset;
         memSize = sys->memSize;
+        regs().set(DtuReg::ROOT_PT, sys->getRootPt().getAddr());
     }
 }
 

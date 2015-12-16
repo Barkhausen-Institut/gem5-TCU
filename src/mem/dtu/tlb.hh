@@ -58,6 +58,11 @@ class DtuTlb
         PAGE_BITS    = 12,
         PAGE_SIZE    = 1 << PAGE_BITS,
         PAGE_MASK    = PAGE_SIZE - 1,
+        PTE_BITS     = 3,
+        PTE_SIZE     = 1 << PTE_BITS,
+        LEVEL_CNT    = 2,
+        LEVEL_BITS   = PAGE_BITS - PTE_BITS,
+        LEVEL_MASK   = (1 << LEVEL_BITS) - 1,
     };
 
     enum Result

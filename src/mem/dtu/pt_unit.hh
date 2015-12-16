@@ -80,17 +80,20 @@ class PtUnit
     {
         PtUnit& unit;
 
+        int level;
         Addr virt;
         DtuTlb::Flag access;
         Translation *trans;
 
         TranslateEvent(PtUnit& _unit)
-            : unit(_unit), virt(), access(), trans()
+            : unit(_unit), level(), virt(), access(), trans()
         {}
 
         void process() override;
 
         void recvFromMem(PacketPtr pkt);
+
+        void requestPTE(Addr ptAddr);
 
         const char* description() const override { return "TranslateEvent"; }
 
@@ -116,14 +119,15 @@ class PtUnit
 
   private:
 
-    PacketPtr createPacket(Addr virt);
+    PacketPtr createPacket(Addr virt, Addr ptAddr, int level);
 
     void sendPagefaultMsg(TranslateEvent *ev, Addr virt, DtuTlb::Flag access);
 
     bool finishTranslate(PacketPtr pkt,
                          Addr virt,
+                         int  level,
                          DtuTlb::Flag *access,
-                         NocAddr *phys);
+                         Addr *phys);
 
     Dtu& dtu;
 

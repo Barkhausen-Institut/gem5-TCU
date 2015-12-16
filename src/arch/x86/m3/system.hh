@@ -35,6 +35,7 @@
 
 #include "arch/x86/system.hh"
 #include "params/M3X86System.hh"
+#include "mem/dtu/noc_addr.hh"
 
 class M3X86System : public X86System
 {
@@ -45,16 +46,23 @@ class M3X86System : public X86System
     const unsigned memPe;
     const Addr memOffset;
     const Addr memSize;
+    Addr nextFrame;
 
   public:
     typedef M3X86SystemParams Params;
     M3X86System(Params *p);
     ~M3X86System();
 
+    NocAddr getRootPt() const
+    {
+        return NocAddr(memPe, 0, memOffset);
+    }
+
     void initState();
 
   private:
-    void createPTEs() const;
+    void mapPage(Addr virt, Addr phys, uint access);
+    void mapMemory();
     size_t getArgc() const;
     void writeArg(Addr &args, size_t &i, Addr argv, const char *cmd, const char *begin) const;
 };
