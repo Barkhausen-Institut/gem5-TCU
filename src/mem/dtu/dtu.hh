@@ -164,7 +164,8 @@ class Dtu : public BaseDtu
 
     void scheduleFinishOp(Cycles delay)
     {
-        schedule(finishCommandEvent, clockEdge(delay));
+        if (cmdInProgress)
+            schedule(finishCommandEvent, clockEdge(delay));
     }
 
     void scheduleCommand(Cycles delay)
