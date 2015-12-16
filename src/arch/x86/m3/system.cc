@@ -106,9 +106,12 @@ M3X86System::createPTEs() const
     {
         PtUnit::PageTableEntry e(0);
         e.base = NocAddr(memPe, 0, memOffset + offset).getAddr() >> DtuTlb::PAGE_BITS;
-        e.r = 1;
-        e.w = 1;
-        e.x = 1;
+        if(!(offset >= 0x100000 && offset < 0x200000))
+        {
+            e.r = 1;
+            e.w = 1;
+            e.x = 1;
+        }
         physProxy.write(phys, e);
 
         offset += DtuTlb::PAGE_SIZE;
