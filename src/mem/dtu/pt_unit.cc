@@ -28,7 +28,7 @@
  */
 
 #include "debug/Dtu.hh"
-#include "debug/DtuTlb.hh"
+#include "debug/DtuPf.hh"
 #include "mem/dtu/dtu.hh"
 #include "mem/dtu/pt_unit.hh"
 
@@ -83,7 +83,7 @@ PtUnit::TranslateEvent::recvFromMem(PacketPtr pkt)
         NocAddr newPhys;
         if (unit.dtu.tlb->lookup(tlbVirt, access, &newPhys) != DtuTlb::HIT)
         {
-            DPRINTFS(DtuTlb, (&unit.dtu),
+            DPRINTFS(DtuPf, (&unit.dtu),
                 "Inserting into TLB: virt=%p phys=%p flags=%u\n",
                 tlbVirt, phys, flags);
 
@@ -127,7 +127,7 @@ PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, DtuTlb::Flag access)
 {
     if (~dtu.regs().get(DtuReg::STATUS) & static_cast<int>(Status::PAGEFAULTS))
     {
-        DPRINTFS(DtuTlb, (&dtu),
+        DPRINTFS(DtuPf, (&dtu),
             "Caused pagefault for %p,"
             " but pagefault sending is disabled to %u:%u\n",
             virt);
@@ -229,7 +229,7 @@ PtUnit::createPacket(Addr virt, Addr ptAddr, int level)
                                    sizeof(PtUnit::PageTableEntry),
                                    MemCmd::ReadReq);
 
-    DPRINTFS(DtuTlb, (&dtu), "Loading level %d PTE for %p from %p\n",
+    DPRINTFS(DtuPf, (&dtu), "Loading level %d PTE for %p from %p\n",
              level, virt, pteAddr.getAddr());
 
     return pkt;
@@ -244,7 +244,7 @@ PtUnit::finishTranslate(PacketPtr pkt,
 {
     PageTableEntry *e = pkt->getPtr<PageTableEntry>();
 
-    DPRINTFS(DtuTlb, (&dtu), "Received level %d PTE for %p: %#x\n",
+    DPRINTFS(DtuPf, (&dtu), "Received level %d PTE for %p: %#x\n",
              level, virt, (uint64_t)*e);
 
     if (!(e->xwr & *access))
