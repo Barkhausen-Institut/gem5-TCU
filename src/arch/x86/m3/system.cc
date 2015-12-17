@@ -143,6 +143,16 @@ M3X86System::mapMemory()
     // clear root pt
     physProxy.memsetBlob(getRootPt().getAddr(), 0, DtuTlb::PAGE_SIZE);
 
+    // let the last entry in the root pt point to the root pt itself
+    PtUnit::PageTableEntry entry = 0;
+    entry.base = getRootPt().getAddr() >> DtuTlb::PAGE_BITS;
+    entry.xwr = 0x7;
+    size_t off = DtuTlb::PAGE_SIZE - sizeof(entry);
+    DPRINTF(DtuTlb,
+        "Creating recursive level %d PTE @ %#018x: %#018x\n",
+        DtuTlb::LEVEL_CNT - 1, getRootPt().getAddr() + off, entry);
+    physProxy.write(getRootPt().getAddr() + off, entry);
+
     Addr virt = 0;
     size_t count = divCeil(memSize, DtuTlb::PAGE_SIZE);
     for(size_t i = 0; i < count; ++i)

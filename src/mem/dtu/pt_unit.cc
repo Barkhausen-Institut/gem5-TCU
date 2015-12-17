@@ -233,9 +233,6 @@ PtUnit::finishPagefault(PacketPtr pkt)
 PacketPtr
 PtUnit::createPacket(Addr virt, Addr ptAddr, int level)
 {
-    if (virt > dtu.memSize)
-        return NULL;
-
     Addr idx = virt >> (DtuTlb::PAGE_BITS + level * DtuTlb::LEVEL_BITS);
     idx &= DtuTlb::LEVEL_MASK;
 
