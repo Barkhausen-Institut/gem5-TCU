@@ -82,18 +82,19 @@ class PtUnit
 
         int level;
         Addr virt;
+        Addr ptAddr;
         DtuTlb::Flag access;
         Translation *trans;
 
         TranslateEvent(PtUnit& _unit)
-            : unit(_unit), level(), virt(), access(), trans()
+            : unit(_unit), level(), virt(), ptAddr(), access(), trans()
         {}
 
         void process() override;
 
         void recvFromMem(PacketPtr pkt);
 
-        void requestPTE(Addr ptAddr);
+        void requestPTE();
 
         const char* description() const override { return "TranslateEvent"; }
 

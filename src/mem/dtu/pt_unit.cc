@@ -39,7 +39,7 @@ PtUnit::TranslateEvent::name() const
 }
 
 void
-PtUnit::TranslateEvent::requestPTE(Addr ptAddr)
+PtUnit::TranslateEvent::requestPTE()
 {
     auto pkt = unit.createPacket(virt, ptAddr, level);
     if (!pkt)
@@ -57,8 +57,7 @@ PtUnit::TranslateEvent::requestPTE(Addr ptAddr)
 void
 PtUnit::TranslateEvent::process()
 {
-    Addr rootPt = unit.dtu.regs().get(DtuReg::ROOT_PT);
-    requestPTE(rootPt);
+    requestPTE();
 }
 
 void
@@ -73,7 +72,8 @@ PtUnit::TranslateEvent::recvFromMem(PacketPtr pkt)
         if (level > 0)
         {
             level--;
-            requestPTE(phys);
+            ptAddr = phys;
+            requestPTE();
             return;
         }
 
@@ -263,6 +263,7 @@ PtUnit::startTranslate(Addr virt, DtuTlb::Flag access, Translation *trans)
     event->virt = virt;
     event->access = access;
     event->trans = trans;
+    event->ptAddr = dtu.regs().get(DtuReg::ROOT_PT);
 
     dtu.schedule(event, dtu.clockEdge(Cycles(1)));
 }
