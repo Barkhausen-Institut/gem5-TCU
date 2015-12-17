@@ -128,8 +128,7 @@ PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, DtuTlb::Flag access)
     if (~dtu.regs().get(DtuReg::STATUS) & static_cast<int>(Status::PAGEFAULTS))
     {
         DPRINTFS(DtuPf, (&dtu),
-            "Caused pagefault for %p,"
-            " but pagefault sending is disabled to %u:%u\n",
+            "Caused pagefault for %p, but pagefault sending is disabled\n",
             virt);
         panic("Pagefault not resolvable; stopping");
     }
