@@ -44,7 +44,7 @@ PtUnit::TranslateEvent::requestPTE()
     auto pkt = unit.createPacket(virt, ptAddr, level);
     if (!pkt)
     {
-        trans->finished(false, NocAddr(0));
+        finish(false, NocAddr(0));
         return;
     }
 
@@ -92,12 +92,13 @@ PtUnit::TranslateEvent::recvFromMem(PacketPtr pkt)
         else
             assert(newPhys.getAddr() == phys);
 
-        trans->finished(success, NocAddr(phys + (virt & DtuTlb::PAGE_MASK)));
-
-        setFlags(AutoDelete);
+        finish(success, NocAddr(phys + (virt & DtuTlb::PAGE_MASK)));
     }
     else
-        unit.sendPagefaultMsg(this, virt, access);
+    {
+        if (!unit.sendPagefaultMsg(this, virt, access))
+            finish(false, NocAddr(0));
+    }
 }
 
 bool
@@ -122,7 +123,7 @@ PtUnit::translateFunctional(Addr virt, DtuTlb::Flag access, NocAddr *phys)
     return true;
 }
 
-void
+bool
 PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, DtuTlb::Flag access)
 {
     if (~dtu.regs().get(DtuReg::STATUS) & static_cast<int>(Status::PAGEFAULTS))
@@ -130,7 +131,7 @@ PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, DtuTlb::Flag access)
         DPRINTFS(DtuPf, (&dtu),
             "Caused pagefault for %p, but pagefault sending is disabled\n",
             virt);
-        panic("Pagefault not resolvable; stopping");
+        return false;
     }
 
     int pfep = dtu.regs().get(DtuReg::PF_EP);
@@ -182,32 +183,18 @@ PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, DtuTlb::Flag access)
     // pkt->payloadDelay = payloadDelay;
     dtu.printPacket(pkt);
     dtu.sendNocRequest(Dtu::NocPacketType::MESSAGE, pkt, delay);
+    return true;
 }
 
 void
 PtUnit::finishPagefault(PacketPtr pkt)
 {
     Dtu::MessageHeader* header = pkt->getPtr<Dtu::MessageHeader>();
-    int64_t *error = reinterpret_cast<int64_t*>(header + 1);
+    uint64_t *errorPtr = reinterpret_cast<uint64_t*>(header + 1);
+    size_t expSize = sizeof(Dtu::MessageHeader) + sizeof(uint64_t);
+    int error = pkt->getSize() == expSize ? *errorPtr : -1;
 
     TranslateEvent *ev = reinterpret_cast<TranslateEvent*>(header->label);
-
-    size_t expSize = sizeof(Dtu::MessageHeader) + sizeof(int64_t);
-    if (pkt->getSize() != expSize || *error != 0)
-    {
-        if (pkt->getSize() != expSize)
-            DPRINTFS(DtuPf, (&dtu), "Invalid response for pagefault\n");
-        else
-        {
-            DPRINTFS(DtuPf, (&dtu),
-                "Pagefault for %p could not been resolved: %d\n",
-                ev->virt, *(int*)error);
-        }
-        panic("Pagefault not resolvable; stopping");
-    }
-
-    // retry the translation
-    dtu.schedule(ev, dtu.clockEdge(Cycles(1)));
 
     DPRINTFS(Dtu, (&dtu),
         "\e[1m[rv <- %u]\e[0m %lu bytes for #PF @ %p; retrying\n",
@@ -228,6 +215,24 @@ PtUnit::finishPagefault(PacketPtr pkt)
         dtu.schedNocRequestFinished(dtu.clockEdge(Cycles(1)));
         dtu.schedNocResponse(pkt, dtu.clockEdge(delay));
     }
+
+    if (error != 0)
+    {
+        if (pkt->getSize() != expSize)
+            DPRINTFS(DtuPf, (&dtu), "Invalid response for pagefault\n");
+        else
+        {
+            DPRINTFS(DtuPf, (&dtu),
+                "Pagefault for %p could not been resolved: %d\n",
+                ev->virt, error);
+        }
+
+        ev->finish(false, NocAddr(0));
+        return;
+    }
+
+    // retry the translation
+    dtu.schedule(ev, dtu.clockEdge(Cycles(1)));
 }
 
 PacketPtr

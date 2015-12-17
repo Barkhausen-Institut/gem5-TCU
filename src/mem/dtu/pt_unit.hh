@@ -96,6 +96,12 @@ class PtUnit
 
         void requestPTE();
 
+        void finish(bool success, const NocAddr &addr)
+        {
+            trans->finished(success, addr);
+            setFlags(AutoDelete);
+        }
+
         const char* description() const override { return "TranslateEvent"; }
 
         const std::string name() const override;
@@ -122,7 +128,7 @@ class PtUnit
 
     PacketPtr createPacket(Addr virt, Addr ptAddr, int level);
 
-    void sendPagefaultMsg(TranslateEvent *ev, Addr virt, DtuTlb::Flag access);
+    bool sendPagefaultMsg(TranslateEvent *ev, Addr virt, DtuTlb::Flag access);
 
     bool finishTranslate(PacketPtr pkt,
                          Addr virt,
