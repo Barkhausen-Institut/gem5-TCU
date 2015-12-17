@@ -189,9 +189,25 @@ void
 PtUnit::finishPagefault(PacketPtr pkt)
 {
     Dtu::MessageHeader* header = pkt->getPtr<Dtu::MessageHeader>();
+    int64_t *error = reinterpret_cast<int64_t*>(header + 1);
+
+    TranslateEvent *ev = reinterpret_cast<TranslateEvent*>(header->label);
+
+    size_t expSize = sizeof(Dtu::MessageHeader) + sizeof(int64_t);
+    if (pkt->getSize() != expSize || *error != 0)
+    {
+        if (pkt->getSize() != expSize)
+            DPRINTFS(DtuPf, (&dtu), "Invalid response for pagefault\n");
+        else
+        {
+            DPRINTFS(DtuPf, (&dtu),
+                "Pagefault for %p could not been resolved: %d\n",
+                ev->virt, *(int*)error);
+        }
+        panic("Pagefault not resolvable; stopping");
+    }
 
     // retry the translation
-    TranslateEvent *ev = reinterpret_cast<TranslateEvent*>(header->label);
     dtu.schedule(ev, dtu.clockEdge(Cycles(1)));
 
     DPRINTFS(Dtu, (&dtu),
