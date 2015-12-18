@@ -43,6 +43,7 @@ enum class DtuReg : Addr
     ROOT_PT,
     PF_EP,
     MSG_CNT,
+    EXT_CMD,
 };
 
 enum class Status
@@ -51,7 +52,7 @@ enum class Status
     PAGEFAULTS  = 1 << 1,
 };
 
-constexpr unsigned numDtuRegs = 4;
+constexpr unsigned numDtuRegs = 5;
 
 // registers to issue a command
 enum class CmdReg : Addr
@@ -157,6 +158,13 @@ class RegFile
 
   public:
 
+    enum Result
+    {
+        WROTE_NONE      = 0,
+        WROTE_CMD       = 1,
+        WROTE_EXT_CMD   = 2,
+    };
+
     RegFile(const std::string& name, unsigned numEndpoints);
 
     reg_t get(DtuReg reg, RegAccess access = RegAccess::DTU) const;
@@ -177,8 +185,8 @@ class RegFile
 
     MemEp getMemEp(unsigned epId, bool print = true) const;
 
-    /// returns true if the command register was written
-    bool handleRequest(PacketPtr pkt, bool isCpuRequest);
+    /// returns which command registers have been written
+    Result handleRequest(PacketPtr pkt, bool isCpuRequest);
 
     const std::string name() const { return _name; }
 

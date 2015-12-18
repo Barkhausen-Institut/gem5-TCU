@@ -39,6 +39,7 @@ const char *RegFile::dtuRegNames[] = {
     "ROOT_PT",
     "PF_EP",
     "MSG_CNT",
+    "EXT_CMD",
 };
 
 const char *RegFile::cmdRegNames[] = {
@@ -356,7 +357,7 @@ RegFile::set(unsigned epId, size_t idx, reg_t value)
     epRegs[epId][idx] = value;
 }
 
-bool
+RegFile::Result
 RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
 {
     assert(pkt->isRead() || pkt->isWrite());
@@ -374,7 +375,7 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
         if (pkt->needsResponse())
             pkt->makeResponse();
 
-        return false;
+        return WROTE_NONE;
     }
 
     // we can only perform full register accesses
@@ -384,7 +385,7 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
 
     RegAccess access = isCpuRequest ? RegAccess::CPU : RegAccess::NOC;
     reg_t* data = pkt->getPtr<reg_t>();
-    bool cmdChanged = false;
+    uint res = WROTE_NONE;
     reg_t privFlag = static_cast<reg_t>(Status::PRIV);
     bool isPrivileged = get(DtuReg::STATUS, RegAccess::DTU) & privFlag;
     int lastEp = -1;
@@ -403,7 +404,11 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
                 data[offset / sizeof(reg_t)] = get(reg, access);
             // MSG_CNT can't be set in general; all can't be set by the CPU
             else if (pkt->isWrite() && !isCpuRequest && reg != DtuReg::MSG_CNT)
+            {
+                if (reg == DtuReg::EXT_CMD)
+                    res |= WROTE_EXT_CMD;
                 set(reg, data[offset / sizeof(reg_t)], access);
+            }
             else
                 assert(false);
         }
@@ -418,7 +423,7 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
             else if (pkt->isWrite())
             {
                 if (reg == CmdReg::COMMAND)
-                    cmdChanged = true;
+                    res |= WROTE_CMD;
                 set(reg, data[offset / sizeof(reg_t)], access);
             }
         }
@@ -455,7 +460,7 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
     if (pkt->needsResponse())
         pkt->makeResponse();
 
-    return cmdChanged;
+    return static_cast<Result>(res);
 }
 
 Addr

@@ -119,21 +119,32 @@ class Dtu : public BaseDtu
     {
     };
 
-    enum class CommandOpcode
-    {
-        IDLE = 0,
-        SEND = 1,
-        REPLY = 2,
-        READ = 3,
-        WRITE = 4,
-        INC_READ_PTR = 5,
-        WAKEUP_CORE = 6,
-    };
-
     struct Command
     {
-        CommandOpcode opcode;
+        enum Opcode
+        {
+            IDLE = 0,
+            SEND = 1,
+            REPLY = 2,
+            READ = 3,
+            WRITE = 4,
+            INC_READ_PTR = 5,
+        };
+
+        Opcode opcode;
         unsigned epId;
+    };
+
+    struct ExternCommand
+    {
+        enum Opcode
+        {
+            WAKEUP_CORE = 0,
+            INV_PAGE = 1,
+        };
+
+        Opcode opcode;
+        uint64_t arg;
     };
 
   public:
@@ -207,6 +218,10 @@ class Dtu : public BaseDtu
 
     void executeCommand();
 
+    ExternCommand getExternCommand();
+
+    void executeExternCommand();
+
     void finishCommand();
 
     void completeNocRequest(PacketPtr pkt) override;
@@ -241,6 +256,8 @@ class Dtu : public BaseDtu
     PtUnit *ptUnit;
 
     EventWrapper<Dtu, &Dtu::executeCommand> executeCommandEvent;
+
+    EventWrapper<Dtu, &Dtu::executeExternCommand> executeExternCommandEvent;
 
     EventWrapper<Dtu, &Dtu::finishCommand> finishCommandEvent;
 

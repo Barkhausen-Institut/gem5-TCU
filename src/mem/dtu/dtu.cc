@@ -58,7 +58,12 @@ static const char *cmdNames[] =
     "READ",
     "WRITE",
     "INC_READ_PTR",
+};
+
+static const char *extCmdNames[] =
+{
     "WAKEUP_CORE",
+    "INV_PAGE",
 };
 
 Dtu::Dtu(DtuParams* p)
@@ -71,6 +76,7 @@ Dtu::Dtu(DtuParams* p)
     xferUnit(new XferUnit(*this, p->block_size, p->buf_count, p->buf_size)),
     ptUnit(p->tlb_entries > 0 ? new PtUnit(*this) : NULL),
     executeCommandEvent(*this),
+    executeExternCommandEvent(*this),
     finishCommandEvent(*this),
     cmdInProgress(false),
     tlb(p->tlb_entries > 0 ? new DtuTlb(p->tlb_entries) : NULL),
@@ -151,7 +157,7 @@ Dtu::getCommand()
 
     Command cmd;
 
-    cmd.opcode = static_cast<CommandOpcode>(reg & opcodeMask);
+    cmd.opcode = static_cast<Command::Opcode>(reg & opcodeMask);
 
     cmd.epId = (reg & epidMask) >> numCmdOpcodeBits;
 
@@ -162,7 +168,7 @@ void
 Dtu::executeCommand()
 {
     Command cmd = getCommand();
-    if (cmd.opcode == CommandOpcode::IDLE)
+    if (cmd.opcode == Command::IDLE)
         return;
 
     assert(!cmdInProgress);
@@ -175,22 +181,18 @@ Dtu::executeCommand()
 
     switch (cmd.opcode)
     {
-    case CommandOpcode::SEND:
-    case CommandOpcode::REPLY:
+    case Command::SEND:
+    case Command::REPLY:
         msgUnit->startTransmission(cmd);
         break;
-    case CommandOpcode::READ:
+    case Command::READ:
         memUnit->startRead(cmd);
         break;
-    case CommandOpcode::WRITE:
+    case Command::WRITE:
         memUnit->startWrite(cmd);
         break;
-    case CommandOpcode::INC_READ_PTR:
+    case Command::INC_READ_PTR:
         msgUnit->incrementReadPtr(cmd.epId);
-        finishCommand();
-        break;
-    case CommandOpcode::WAKEUP_CORE:
-        wakeupCore();
         finishCommand();
         break;
     default:
@@ -213,6 +215,40 @@ Dtu::finishCommand()
     regFile.set(CmdReg::COMMAND, 0);
 
     cmdInProgress = false;
+}
+
+Dtu::ExternCommand
+Dtu::getExternCommand()
+{
+    auto reg = regFile.get(DtuReg::EXT_CMD);
+
+    ExternCommand cmd;
+    cmd.opcode = static_cast<ExternCommand::Opcode>(reg & 0x3);
+    cmd.arg = reg >> 2;
+    return cmd;
+}
+
+void
+Dtu::executeExternCommand()
+{
+    ExternCommand cmd = getExternCommand();
+
+    DPRINTF(DtuCmd, "Executing extern command %s with arg=%p\n",
+            extCmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg);
+
+    switch (cmd.opcode)
+    {
+    case ExternCommand::WAKEUP_CORE:
+        wakeupCore();
+        break;
+    case ExternCommand::INV_PAGE:
+        if (tlb)
+            tlb->remove(cmd.arg);
+        break;
+    default:
+        // TODO error handling
+        panic("Invalid opcode %#x\n", static_cast<RegFile::reg_t>(cmd.opcode));
+    }
 }
 
 void
@@ -549,7 +585,7 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
     // Strip the base address to handle requests based on the reg. addr. only.
     pkt->setAddr(oldAddr - regFileBaseAddr);
 
-    bool commandWritten = regFile.handleRequest(pkt, isCpuRequest);
+    RegFile::Result result = regFile.handleRequest(pkt, isCpuRequest);
 
     // restore old address
     pkt->setAddr(oldAddr);
@@ -581,12 +617,17 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
             schedNocResponse(pkt, when);
         }
 
-        if (commandWritten)
+        if (result & RegFile::WROTE_CMD)
             schedule(executeCommandEvent, when);
+        if (result & RegFile::WROTE_EXT_CMD)
+            schedule(executeExternCommandEvent, when);
     }
-    else if (commandWritten)
+    else
     {
-        executeCommand();
+        if (result & RegFile::WROTE_CMD)
+            executeCommand();
+        if (result & RegFile::WROTE_EXT_CMD)
+            executeExternCommand();
     }
 }
 

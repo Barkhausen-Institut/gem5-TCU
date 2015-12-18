@@ -63,7 +63,7 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
     unsigned epid = cmd.epId;
 
     // if we want to reply, request the header first
-    if (cmd.opcode == Dtu::CommandOpcode::REPLY)
+    if (cmd.opcode == Dtu::Command::REPLY)
     {
         offset = 0;
         flagsPhys = 0;
@@ -226,7 +226,7 @@ MessageUnit::startXfer(const Dtu::Command& cmd)
     Addr messageSize = dtu.regs().get(CmdReg::DATA_SIZE);
 
     DPRINTFS(Dtu, (&dtu), "\e[1m[%s -> %u]\e[0m with EP%u of %#018lx:%lu\n",
-             cmd.opcode == Dtu::CommandOpcode::REPLY ? "rp" : "sd",
+             cmd.opcode == Dtu::Command::REPLY ? "rp" : "sd",
              info.targetCoreId,
              cmd.epId,
              dtu.regs().get(CmdReg::DATA_ADDR),
@@ -239,7 +239,7 @@ MessageUnit::startXfer(const Dtu::Command& cmd)
 
     Dtu::MessageHeader* header = new Dtu::MessageHeader;
 
-    if (cmd.opcode == Dtu::CommandOpcode::REPLY)
+    if (cmd.opcode == Dtu::Command::REPLY)
         header->flags = Dtu::REPLY_FLAG | Dtu::GRANT_CREDITS_FLAG;
     else
         header->flags = Dtu::REPLY_ENABLED; // normal message
