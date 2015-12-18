@@ -78,11 +78,15 @@ class DtuTlb
         READ    = 1,
         WRITE   = 2,
         EXEC    = 4,
+        INTERN  = 8,
+        RW      = READ | WRITE,
+        RWX     = RW | EXEC,
+        IRWX    = INTERN | RWX
     };
 
     struct MissHandler
     {
-        MissHandler(Addr _virt, Flag _access)
+        MissHandler(Addr _virt, uint _access)
             : virt(_virt), access(_access)
         {}
 
@@ -94,12 +98,12 @@ class DtuTlb
         virtual void finish(NocAddr phys) = 0;
 
         Addr virt;
-        Flag access;
+        uint access;
     };
 
     DtuTlb(size_t _num);
 
-    Result lookup(Addr virt, Flag access, NocAddr *phys);
+    Result lookup(Addr virt, uint access, NocAddr *phys);
 
     void insert(Addr virt, NocAddr phys, uint flags);
 

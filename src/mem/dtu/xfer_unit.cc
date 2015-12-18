@@ -61,26 +61,29 @@ XferUnit::~XferUnit()
 void
 XferUnit::TransferEvent::process()
 {
-    bool writing = type == Dtu::TransferType::REMOTE_WRITE ||
-                   type == Dtu::TransferType::LOCAL_WRITE;
-
     NocAddr phys(localAddr);
     if (xfer.dtu.tlb)
     {
-        auto access = writing ? DtuTlb::WRITE : DtuTlb::READ;
+        bool writing = type == Dtu::TransferType::REMOTE_WRITE ||
+                       type == Dtu::TransferType::LOCAL_WRITE;
+        bool remote  = type == Dtu::TransferType::REMOTE_WRITE ||
+                       type == Dtu::TransferType::REMOTE_READ;
+
+        uint access = writing ? DtuTlb::WRITE : DtuTlb::READ;
+        access |= remote ? 0 : DtuTlb::INTERN;
+
         DtuTlb::Result res = xfer.dtu.tlb->lookup(localAddr, access, &phys);
         if (res != DtuTlb::HIT)
         {
-            // TODO handle pagefaults
-            assert(res == DtuTlb::MISS);
-
+            bool pf = res == DtuTlb::PAGEFAULT;
             DPRINTFS(DtuTlb, (&xfer.dtu),
-                "TLB-miss/Pagefault for %s access to %p\n",
+                "%s for %s access to %p\n",
+                pf ? "Pagefault" : "TLB-miss",
                 access == DtuTlb::READ ? "read" : "write",
                 localAddr);
 
             Translation *trans = new Translation(*this);
-            xfer.dtu.startTranslate(localAddr, access, trans);
+            xfer.dtu.startTranslate(localAddr, access, trans, pf);
             return;
         }
     }

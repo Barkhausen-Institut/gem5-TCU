@@ -57,14 +57,20 @@ PtUnit::TranslateEvent::requestPTE()
 void
 PtUnit::TranslateEvent::process()
 {
-    requestPTE();
+    if (pf)
+    {
+        if (!unit.sendPagefaultMsg(this, virt, access))
+            finish(false, NocAddr(0));
+    }
+    else
+        requestPTE();
 }
 
 void
 PtUnit::TranslateEvent::recvFromMem(PacketPtr pkt)
 {
     Addr phys;
-    DtuTlb::Flag flags = access;
+    uint flags = access;
     bool success = unit.finishTranslate(pkt, virt, level, &flags, &phys);
 
     if (success)
@@ -102,7 +108,7 @@ PtUnit::TranslateEvent::recvFromMem(PacketPtr pkt)
 }
 
 bool
-PtUnit::translateFunctional(Addr virt, DtuTlb::Flag access, NocAddr *phys)
+PtUnit::translateFunctional(Addr virt, uint access, NocAddr *phys)
 {
     Addr ptePhys;
     Addr ptAddr = dtu.regs().get(DtuReg::ROOT_PT);
@@ -124,7 +130,7 @@ PtUnit::translateFunctional(Addr virt, DtuTlb::Flag access, NocAddr *phys)
 }
 
 bool
-PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, DtuTlb::Flag access)
+PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, uint access)
 {
     if (~dtu.regs().get(DtuReg::STATUS) & static_cast<int>(Status::PAGEFAULTS))
     {
@@ -256,7 +262,7 @@ bool
 PtUnit::finishTranslate(PacketPtr pkt,
                         Addr virt,
                         int level,
-                        DtuTlb::Flag *access,
+                        uint *access,
                         Addr *phys)
 {
     PageTableEntry *e = pkt->getPtr<PageTableEntry>();
@@ -264,16 +270,27 @@ PtUnit::finishTranslate(PacketPtr pkt,
     DPRINTFS(DtuPf, (&dtu), "Received level %d PTE for %p: %#x\n",
              level, virt, (uint64_t)*e);
 
-    if (!(e->xwr & *access))
-        return false;
+    // for last-level PTEs, we need the desired access permissions
+    if (level == 0)
+    {
+        if ((e->ixwr & *access) != *access)
+            return false;
+    }
+    // for others, we don't need the INTERN bit
+    else
+    {
+        uint pteAccess = *access & ~DtuTlb::INTERN;
+        if ((e->ixwr & pteAccess) != pteAccess)
+            return false;
+    }
 
-    *access = static_cast<DtuTlb::Flag>((uint64_t)e->xwr);
+    *access = static_cast<uint>((uint64_t)e->ixwr);
     *phys = e->base << DtuTlb::PAGE_BITS;
     return true;
 }
 
 void
-PtUnit::startTranslate(Addr virt, DtuTlb::Flag access, Translation *trans)
+PtUnit::startTranslate(Addr virt, uint access, Translation *trans, bool pf)
 {
     TranslateEvent *event = new TranslateEvent(*this);
     event->level = DtuTlb::LEVEL_CNT - 1;
@@ -281,6 +298,7 @@ PtUnit::startTranslate(Addr virt, DtuTlb::Flag access, Translation *trans)
     event->access = access;
     event->trans = trans;
     event->ptAddr = dtu.regs().get(DtuReg::ROOT_PT);
+    event->pf = pf;
 
     dtu.schedule(event, dtu.clockEdge(Cycles(1)));
 }

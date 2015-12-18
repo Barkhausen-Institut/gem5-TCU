@@ -123,18 +123,18 @@ MessageUnit::requestHeader(unsigned epid)
     NocAddr phys(msgAddr);
     if (dtu.tlb)
     {
-        DtuTlb::Result res = dtu.tlb->lookup(msgAddr, DtuTlb::READ, &phys);
+        uint access = DtuTlb::READ | DtuTlb::INTERN;
+        DtuTlb::Result res = dtu.tlb->lookup(msgAddr, access, &phys);
         if (res != DtuTlb::HIT)
         {
-            // TODO handle pagefaults
-            assert(res == DtuTlb::MISS);
-
+            bool pf = res == DtuTlb::PAGEFAULT;
             DPRINTFS(DtuTlb, (&dtu),
-                "TLB-miss/Pagefault for read access to %p\n",
+                "%s for read access to %p\n",
+                pf ? "Pagefault" : "TLB-miss",
                 msgAddr);
 
             Translation *trans = new Translation(*this, epid);
-            dtu.startTranslate(msgAddr, DtuTlb::READ, trans);
+            dtu.startTranslate(msgAddr, DtuTlb::READ, trans, pf);
             return;
         }
     }

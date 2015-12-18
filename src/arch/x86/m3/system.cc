@@ -109,8 +109,8 @@ M3X86System::mapPage(Addr virt, Addr phys, uint access)
 
         Addr pteAddr = ptAddr + (idx << DtuTlb::PTE_BITS);
         pte_t entry = physProxy.read<pte_t>(pteAddr);
-        assert(i > 0 || entry.xwr == 0);
-        if(!entry.xwr)
+        assert(i > 0 || entry.ixwr == 0);
+        if(!entry.ixwr)
         {
             // determine phys address
             Addr offset;
@@ -126,7 +126,7 @@ M3X86System::mapPage(Addr virt, Addr phys, uint access)
 
             // insert entry
             entry.base = addr.getAddr() >> DtuTlb::PAGE_BITS;
-            entry.xwr = i == 0 ? access : 0x7;
+            entry.ixwr = i == 0 ? access : DtuTlb::RWX;
             DPRINTF(DtuTlb,
                 "Creating level %d PTE for virt=%#018x @ %#018x: %#018x\n",
                 i, virt, pteAddr, entry);
@@ -146,7 +146,8 @@ M3X86System::mapMemory()
     // let the last entry in the root pt point to the root pt itself
     PtUnit::PageTableEntry entry = 0;
     entry.base = getRootPt().getAddr() >> DtuTlb::PAGE_BITS;
-    entry.xwr = 0x7;
+    // not internally accessible
+    entry.ixwr = DtuTlb::RWX;
     size_t off = DtuTlb::PAGE_SIZE - sizeof(entry);
     DPRINTF(DtuTlb,
         "Creating recursive level %d PTE @ %#018x: %#018x\n",
@@ -159,7 +160,7 @@ M3X86System::mapMemory()
     {
         uint access = 0;
         if(!(virt >= 0x100000 && virt < 0x200000))
-            access = 0x7;
+            access = DtuTlb::IRWX;
         mapPage(virt, virt, access);
 
         virt += DtuTlb::PAGE_SIZE;

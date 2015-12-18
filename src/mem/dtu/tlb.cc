@@ -40,13 +40,13 @@ DtuTlb::DtuTlb(size_t _num)
 }
 
 DtuTlb::Result
-DtuTlb::lookup(Addr virt, Flag access, NocAddr *phys)
+DtuTlb::lookup(Addr virt, uint access, NocAddr *phys)
 {
     Entry *e = trie.lookup(virt);
     if (!e)
         return MISS;
 
-    if (~e->flags & access)
+    if ((e->flags & access) != access)
         return PAGEFAULT;
 
     e->lru_seq = ++lru_seq;

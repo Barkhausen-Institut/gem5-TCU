@@ -318,10 +318,11 @@ Dtu::startTransfer(TransferType type,
 
 void
 Dtu::startTranslate(Addr virt,
-                    DtuTlb::Flag access,
-                    PtUnit::Translation *trans)
+                    uint access,
+                    PtUnit::Translation *trans,
+                    bool pf)
 {
-    ptUnit->startTranslate(virt, access, trans);
+    ptUnit->startTranslate(virt, access, trans, pf);
 }
 
 void
@@ -485,16 +486,16 @@ Dtu::translate(PtUnit::Translation *trans,
     if (!tlb)
         return true;
 
-    DtuTlb::Flag access;
+    uint access = DtuTlb::INTERN;
     if (icache)
     {
         assert(pkt->isRead());
-        access = DtuTlb::EXEC;
+        access |= DtuTlb::EXEC;
     }
     else if (pkt->isRead())
-        access = DtuTlb::READ;
+        access |= DtuTlb::READ;
     else
-        access = DtuTlb::WRITE;
+        access |= DtuTlb::WRITE;
 
     NocAddr phys;
     DtuTlb::Result res = tlb->lookup(pkt->getAddr(), access, &phys);
@@ -510,12 +511,17 @@ Dtu::translate(PtUnit::Translation *trans,
             break;
 
         case DtuTlb::MISS:
-            DPRINTF(DtuTlb, "TLB-miss for %s access to %p\n",
+        case DtuTlb::PAGEFAULT:
+        {
+            bool pf = res == DtuTlb::PAGEFAULT;
+            DPRINTF(DtuTlb, "%s for %s access to %p\n",
+                    pf ? "Pagefault" : "TLB-miss",
                     icache ? "exec" : (pkt->isRead() ? "read" : "write"),
                     pkt->getAddr());
 
             if (functional)
             {
+                assert(!pf);
                 NocAddr phys;
                 bool res = ptUnit->translateFunctional(pkt->getAddr(),
                                                        access,
@@ -527,18 +533,9 @@ Dtu::translate(PtUnit::Translation *trans,
                 return true;
             }
 
-            ptUnit->startTranslate(pkt->getAddr(), access, trans);
-            return false;
-
-        case DtuTlb::PAGEFAULT:
-            DPRINTF(Dtu, "Pagefault for %s access to %p\n",
-                    icache ? "exec" : (pkt->isRead() ? "read" : "write"),
-                    pkt->getAddr());
-
-            // TODO send message to resolve pagefault
-            //sendDummyResponse(port, pkt, functional);
-            panic("Stopping here");
-            return false;
+            ptUnit->startTranslate(pkt->getAddr(), access, trans, pf);
+        }
+        return false;
     }
 
     return true;

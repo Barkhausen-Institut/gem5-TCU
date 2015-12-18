@@ -55,7 +55,8 @@ class PtUnit
 
     BitUnion64(PageTableEntry)
         Bitfield<63, DtuTlb::PAGE_BITS> base;
-        Bitfield<2,0> xwr;
+        Bitfield<3,0> ixwr;
+        Bitfield<3> i;
         Bitfield<2> x;
         Bitfield<1> w;
         Bitfield<0> r;
@@ -83,11 +84,12 @@ class PtUnit
         int level;
         Addr virt;
         Addr ptAddr;
-        DtuTlb::Flag access;
+        uint access;
         Translation *trans;
+        bool pf;
 
         TranslateEvent(PtUnit& _unit)
-            : unit(_unit), level(), virt(), ptAddr(), access(), trans()
+            : unit(_unit), level(), virt(), ptAddr(), access(), trans(), pf()
         {}
 
         void process() override;
@@ -112,9 +114,9 @@ class PtUnit
     PtUnit(Dtu& _dtu) : dtu(_dtu)
     {}
 
-    bool translateFunctional(Addr virt, DtuTlb::Flag access, NocAddr *phys);
+    bool translateFunctional(Addr virt, uint access, NocAddr *phys);
 
-    void startTranslate(Addr virt, DtuTlb::Flag access, Translation *trans);
+    void startTranslate(Addr virt, uint access, Translation *trans, bool pf);
 
     void recvFromMem(Addr event, PacketPtr pkt)
     {
@@ -128,12 +130,12 @@ class PtUnit
 
     PacketPtr createPacket(Addr virt, Addr ptAddr, int level);
 
-    bool sendPagefaultMsg(TranslateEvent *ev, Addr virt, DtuTlb::Flag access);
+    bool sendPagefaultMsg(TranslateEvent *ev, Addr virt, uint access);
 
     bool finishTranslate(PacketPtr pkt,
                          Addr virt,
                          int  level,
-                         DtuTlb::Flag *access,
+                         uint *access,
                          Addr *phys);
 
     Dtu& dtu;

@@ -193,8 +193,9 @@ class Dtu : public BaseDtu
                        uint flags = 0);
 
     void startTranslate(Addr virt,
-                        DtuTlb::Flag access,
-                        PtUnit::Translation *trans);
+                        uint access,
+                        PtUnit::Translation *trans,
+                        bool pf);
 
     void handlePFResp(PacketPtr pkt);
 
