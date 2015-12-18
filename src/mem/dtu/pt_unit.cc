@@ -175,7 +175,8 @@ PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, uint access)
            &msg,
            sizeof(msg));
 
-    DPRINTFS(Dtu, (&dtu), "\e[1m[sd -> %u]\e[0m with EP%u for Pagefault @ %p\n",
+    DPRINTFS(Dtu, (&dtu),
+             "\e[1m[sd -> %u]\e[0m with EP%u for Pagefault @ %p\n",
              ep.targetCore, pfep, virt);
 
     DPRINTFS(Dtu, (&dtu),
