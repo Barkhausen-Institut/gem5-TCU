@@ -135,7 +135,7 @@ PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, uint access)
     if (~dtu.regs().get(DtuReg::STATUS) & static_cast<int>(Status::PAGEFAULTS))
     {
         DPRINTFS(DtuPf, (&dtu),
-            "Caused pagefault for %p, but pagefault sending is disabled\n",
+            "Pagefault for %p, but pagefault sending is disabled\n",
             virt);
         return false;
     }
@@ -175,7 +175,7 @@ PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, uint access)
            &msg,
            sizeof(msg));
 
-    DPRINTFS(Dtu, (&dtu), "\e[1m[sd -> %u]\e[0m with EP%u for #PF @ %p\n",
+    DPRINTFS(Dtu, (&dtu), "\e[1m[sd -> %u]\e[0m with EP%u for Pagefault @ %p\n",
              ep.targetCore, pfep, virt);
 
     DPRINTFS(Dtu, (&dtu),
@@ -203,7 +203,7 @@ PtUnit::finishPagefault(PacketPtr pkt)
     TranslateEvent *ev = reinterpret_cast<TranslateEvent*>(header->label);
 
     DPRINTFS(Dtu, (&dtu),
-        "\e[1m[rv <- %u]\e[0m %lu bytes for #PF @ %p; retrying\n",
+        "\e[1m[rv <- %u]\e[0m %lu bytes for Pagefault @ %p\n",
         header->senderCoreId, header->length, ev->virt);
     dtu.printPacket(pkt);
 
@@ -236,6 +236,10 @@ PtUnit::finishPagefault(PacketPtr pkt)
         ev->finish(false, NocAddr(0));
         return;
     }
+
+    DPRINTFS(DtuPf, (&dtu),
+        "Retrying pagetable walk for %p\n",
+        ev->virt);
 
     // retry the translation
     dtu.schedule(ev, dtu.clockEdge(Cycles(1)));
