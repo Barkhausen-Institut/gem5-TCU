@@ -79,12 +79,12 @@ class MemoryUnit
     /**
      * Read: response from remote DTU
      */
-    void readComplete(PacketPtr pkt);
+    void readComplete(PacketPtr pkt, Dtu::Error error);
 
     /**
      * Write: response from remote DTU
      */
-    void writeComplete(PacketPtr pkt);
+    void writeComplete(PacketPtr pkt, Dtu::Error error);
 
 
     /**
@@ -95,7 +95,7 @@ class MemoryUnit
     /**
      * Received read/write request from NoC -> Mem/regfile request
      */
-    void recvFromNoc(PacketPtr pkt);
+    Dtu::Error recvFromNoc(PacketPtr pkt);
 
   private:
 

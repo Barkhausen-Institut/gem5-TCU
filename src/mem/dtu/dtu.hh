@@ -59,6 +59,14 @@ class Dtu : public BaseDtu
         PAGEFAULT           = (1 << 3),
     };
 
+    enum Error
+    {
+        NONE                = 0,
+        MISS_CREDITS        = 1,
+        NO_RING_SPACE       = 2,
+        VPE_GONE            = 3,
+    };
+
     struct MessageHeader
     {
          // if bit 0 is set its a reply, if bit 1 is set we grant credits
@@ -112,6 +120,7 @@ class Dtu : public BaseDtu
 
     struct NocSenderState : public Packet::SenderState
     {
+        Error result;
         NocPacketType packetType;
     };
 
@@ -131,6 +140,7 @@ class Dtu : public BaseDtu
             INC_READ_PTR = 5,
         };
 
+        Error error;
         Opcode opcode;
         unsigned epId;
     };
@@ -173,10 +183,10 @@ class Dtu : public BaseDtu
         dcacheMasterPort.sendFunctional(pkt);
     }
 
-    void scheduleFinishOp(Cycles delay)
+    void scheduleFinishOp(Cycles delay, Error error = NONE)
     {
         if (cmdInProgress)
-            schedule(finishCommandEvent, clockEdge(delay));
+            schedule(new FinishCommandEvent(*this, error), clockEdge(delay));
     }
 
     void scheduleCommand(Cycles delay)
@@ -193,6 +203,8 @@ class Dtu : public BaseDtu
                         PacketPtr pkt,
                         Cycles delay,
                         bool functional = false);
+
+    void sendNocResponse(PacketPtr pkt);
 
     void startTransfer(TransferType type,
                        NocAddr targetAddr,
@@ -222,7 +234,7 @@ class Dtu : public BaseDtu
 
     void executeExternCommand();
 
-    void finishCommand();
+    void finishCommand(Error error);
 
     void completeNocRequest(PacketPtr pkt) override;
 
@@ -259,7 +271,26 @@ class Dtu : public BaseDtu
 
     EventWrapper<Dtu, &Dtu::executeExternCommand> executeExternCommandEvent;
 
-    EventWrapper<Dtu, &Dtu::finishCommand> finishCommandEvent;
+    struct FinishCommandEvent : public Event
+    {
+        Dtu& dtu;
+
+        Error error;
+
+        FinishCommandEvent(Dtu& _dtu, Error _error = NONE)
+            : dtu(_dtu), error(_error)
+        {}
+
+        void process() override
+        {
+            dtu.finishCommand(error);
+            setFlags(AutoDelete);
+        }
+
+        const char* description() const override { return "FinishCommandEvent"; }
+
+        const std::string name() const override { return dtu.name(); }
+    };
 
     bool cmdInProgress;
 

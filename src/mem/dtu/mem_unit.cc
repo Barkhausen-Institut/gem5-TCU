@@ -108,7 +108,7 @@ MemoryUnit::startWrite(const Dtu::Command& cmd)
 }
 
 void
-MemoryUnit::readComplete(PacketPtr pkt)
+MemoryUnit::readComplete(PacketPtr pkt, Dtu::Error error)
 {
     dtu.printPacket(pkt);
 
@@ -121,6 +121,12 @@ MemoryUnit::readComplete(PacketPtr pkt)
     // since the transfer is done in steps, we can start after the header
     // delay here
     Cycles delay = dtu.ticksToCycles(pkt->headerDelay);
+
+    if (error != Dtu::NONE)
+    {
+        dtu.scheduleFinishOp(delay, error);
+        return;
+    }
 
     dtu.startTransfer(Dtu::TransferType::LOCAL_WRITE,
                       NocAddr(0, 0),        // remote address is irrelevant
@@ -143,18 +149,18 @@ MemoryUnit::readComplete(PacketPtr pkt)
 }
 
 void
-MemoryUnit::writeComplete(PacketPtr pkt)
+MemoryUnit::writeComplete(PacketPtr pkt, Dtu::Error error)
 {
     Addr requestSize = dtu.regs().get(CmdReg::DATA_SIZE);
 
-    // write finished or if requestSize < pkt->getSize(), it was a message
-    if (requestSize <= pkt->getSize())
+    // error, write finished or if requestSize < pkt->getSize(), it was a msg
+    if (error != Dtu::NONE || requestSize <= pkt->getSize())
     {
         // we don't need to pay the payload delay here because the message
         // basically has no payload since we only receive an ACK back for
         // writing
         Cycles delay = dtu.ticksToCycles(pkt->headerDelay);
-        dtu.scheduleFinishOp(delay);
+        dtu.scheduleFinishOp(delay, error);
     }
     // write needs to be continued
     else if (requestSize > pkt->getSize())
@@ -182,26 +188,27 @@ MemoryUnit::recvFunctionalFromNoc(PacketPtr pkt)
     dtu.sendFunctionalMemRequest(pkt);
 }
 
-void
+Dtu::Error
 MemoryUnit::recvFromNoc(PacketPtr pkt)
 {
+    NocAddr addr(pkt->getAddr());
+
     DPRINTFS(Dtu, (&dtu), "\e[1m[%s <- ?]\e[0m %#018lx:%lu\n",
         pkt->isWrite() ? "wr" : "rd",
-        NocAddr(pkt->getAddr()).offset,
+        addr.offset,
         pkt->getSize());
 
     if (pkt->isWrite())
         dtu.printPacket(pkt);
 
-    if (NocAddr(pkt->getAddr()).offset >= dtu.regFileBaseAddr)
+    if (addr.offset >= dtu.regFileBaseAddr)
     {
-        Addr oldAddr = pkt->getAddr();
-        pkt->setAddr(NocAddr(oldAddr).offset);
+        pkt->setAddr(addr.offset);
 
         dtu.forwardRequestToRegFile(pkt, false);
 
         // as this is synchronous, we can restore the address right away
-        pkt->setAddr(oldAddr);
+        pkt->setAddr(addr.getAddr());
     }
     else
     {
@@ -216,10 +223,12 @@ MemoryUnit::recvFromNoc(PacketPtr pkt)
                           // remote address is irrelevant
                           NocAddr(0, 0),
                           // other remote is our local
-                          NocAddr(pkt->getAddr()).offset,
+                          addr.offset,
                           pkt->getSize(),
                           pkt,
                           NULL,
                           delay);
     }
+
+    return Dtu::NONE;
 }

@@ -77,7 +77,6 @@ Dtu::Dtu(DtuParams* p)
     ptUnit(p->tlb_entries > 0 ? new PtUnit(*this) : NULL),
     executeCommandEvent(*this),
     executeExternCommandEvent(*this),
-    finishCommandEvent(*this),
     cmdInProgress(false),
     tlb(p->tlb_entries > 0 ? new DtuTlb(p->tlb_entries) : NULL),
     memPe(),
@@ -145,10 +144,10 @@ Dtu::getCommand()
     using reg_t = RegFile::reg_t;
 
     /*
-     *   COMMAND            0
-     * |--------------------|
-     * |  epid   |  opcode  |
-     * |--------------------|
+     *   COMMAND                     0
+     * |-----------------------------|
+     * |  error  |  epid  |  opcode  |
+     * |-----------------------------|
      */
     reg_t opcodeMask = ((reg_t)1 << numCmdOpcodeBits) - 1;
     reg_t epidMask   = (((reg_t)1 << numCmdEpidBits) - 1) << numCmdOpcodeBits;
@@ -156,6 +155,9 @@ Dtu::getCommand()
     auto reg = regFile.get(CmdReg::COMMAND);
 
     Command cmd;
+
+    unsigned bits = numCmdOpcodeBits + numCmdEpidBits;
+    cmd.error = static_cast<Error>(reg >> bits);
 
     cmd.opcode = static_cast<Command::Opcode>(reg & opcodeMask);
 
@@ -193,7 +195,7 @@ Dtu::executeCommand()
         break;
     case Command::INC_READ_PTR:
         msgUnit->incrementReadPtr(cmd.epId);
-        finishCommand();
+        finishCommand(NONE);
         break;
     default:
         // TODO error handling
@@ -202,17 +204,18 @@ Dtu::executeCommand()
 }
 
 void
-Dtu::finishCommand()
+Dtu::finishCommand(Error error)
 {
     Command cmd = getCommand();
 
     assert(cmdInProgress);
 
-    DPRINTF(DtuCmd, "Finished command %s with EP%d\n",
-            cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epId);
+    DPRINTF(DtuCmd, "Finished command %s with EP%d -> %u\n",
+            cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epId, error);
 
     // let the SW know that the command is finished
-    regFile.set(CmdReg::COMMAND, 0);
+    unsigned bits = numCmdOpcodeBits + numCmdEpidBits;
+    regFile.set(CmdReg::COMMAND, error << bits);
 
     cmdInProgress = false;
 }
@@ -313,6 +316,7 @@ Dtu::sendNocRequest(NocPacketType type,
 {
     auto senderState = new NocSenderState();
     senderState->packetType = type;
+    senderState->result = NONE;
 
     pkt->pushSenderState(senderState);
 
@@ -329,6 +333,25 @@ Dtu::sendNocRequest(NocPacketType type,
     else
     {
         schedNocRequest(pkt, clockEdge(delay));
+    }
+}
+
+void
+Dtu::sendNocResponse(PacketPtr pkt)
+{
+    pkt->makeResponse();
+
+    if (!atomicMode)
+    {
+        Cycles delay = ticksToCycles(
+            pkt->headerDelay + pkt->payloadDelay);
+        delay += nocToTransferLatency;
+
+        pkt->headerDelay = 0;
+        pkt->payloadDelay = 0;
+
+        schedNocRequestFinished(clockEdge(Cycles(1)));
+        schedNocResponse(pkt, clockEdge(delay));
     }
 }
 
@@ -375,9 +398,11 @@ Dtu::completeNocRequest(PacketPtr pkt)
     if (senderState->packetType == NocPacketType::CACHE_MEM_REQ)
     {
         NocAddr phys(pkt->getAddr());
-        DPRINTF(DtuMem, "Finished %s request of LLC for %u bytes @ %d:%#x\n",
-                        pkt->isRead() ? "read" : "write",
-                        pkt->getSize(), phys.coreId, phys.offset);
+        DPRINTF(DtuMem,
+            "Finished %s request of LLC for %u bytes @ %d:%#x -> %u\n",
+            pkt->isRead() ? "read" : "write",
+            pkt->getSize(), phys.coreId, phys.offset,
+            senderState->result);
 
         if (dynamic_cast<InitSenderState*>(pkt->senderState))
         {
@@ -392,9 +417,9 @@ Dtu::completeNocRequest(PacketPtr pkt)
     else if (senderState->packetType != NocPacketType::CACHE_MEM_REQ_FUNC)
     {
         if (pkt->isWrite())
-            memUnit->writeComplete(pkt);
+            memUnit->writeComplete(pkt, senderState->result);
         else if (pkt->isRead())
-            memUnit->readComplete(pkt);
+            memUnit->readComplete(pkt, senderState->result);
         else
             panic("unexpected packet type\n");
     }
@@ -443,15 +468,17 @@ Dtu::handleNocRequest(PacketPtr pkt)
 
     auto senderState = dynamic_cast<NocSenderState*>(pkt->senderState);
 
+    Error res = NONE;
+
     switch (senderState->packetType)
     {
     case NocPacketType::MESSAGE:
-        msgUnit->recvFromNoc(pkt);
+        res = msgUnit->recvFromNoc(pkt);
         break;
     case NocPacketType::READ_REQ:
     case NocPacketType::WRITE_REQ:
     case NocPacketType::CACHE_MEM_REQ:
-        memUnit->recvFromNoc(pkt);
+        res = memUnit->recvFromNoc(pkt);
         break;
     case NocPacketType::CACHE_MEM_REQ_FUNC:
         memUnit->recvFunctionalFromNoc(pkt);
@@ -459,6 +486,8 @@ Dtu::handleNocRequest(PacketPtr pkt)
     default:
         panic("Unexpected NocPacketType\n");
     }
+
+    senderState->result = res;
 }
 
 void

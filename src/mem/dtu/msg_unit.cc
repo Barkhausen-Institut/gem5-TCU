@@ -83,7 +83,7 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
         DPRINTFS(Dtu, (&dtu),
             "EP%u: not enough credits (%lu) to send message (%lu)\n",
             epid, ep.credits, ep.maxMsgSize);
-        dtu.scheduleFinishOp(Cycles(1));
+        dtu.scheduleFinishOp(Cycles(1), Dtu::MISS_CREDITS);
         return;
     }
 
@@ -317,7 +317,7 @@ MessageUnit::incrementWritePtr(unsigned epId)
     return true;
 }
 
-void
+Dtu::Error
 MessageUnit::recvFromNoc(PacketPtr pkt)
 {
     assert(pkt->isWrite());
@@ -329,7 +329,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
     if ((header->flags & pfResp) == pfResp)
     {
         dtu.handlePFResp(pkt);
-        return;
+        return Dtu::NONE;
     }
 
     NocAddr addr(pkt->getAddr());
@@ -350,6 +350,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
             sysNo < total ? syscallNames[sysNo] : "Unknown");
     }
 
+    Dtu::Error res = Dtu::NONE;
     if (ep.msgCount < ep.size)
     {
         Dtu::MessageHeader* header = pkt->getPtr<Dtu::MessageHeader>();
@@ -389,21 +390,13 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
     // ignore messages if there is not enough space
     else
     {
-        DPRINTFS(Dtu, (&dtu), "EP%u: ignoring message: no space left\n", epId);
+        DPRINTFS(Dtu, (&dtu),
+            "EP%u: ignoring message: no space left\n",
+            epId);
+        res = Dtu::NO_RING_SPACE;
 
-        pkt->makeResponse();
-
-        if (!dtu.atomicMode)
-        {
-            Cycles delay = dtu.ticksToCycles(
-                pkt->headerDelay + pkt->payloadDelay);
-            delay += dtu.nocToTransferLatency;
-
-            pkt->headerDelay = 0;
-            pkt->payloadDelay = 0;
-
-            dtu.schedNocRequestFinished(dtu.clockEdge(Cycles(1)));
-            dtu.schedNocResponse(pkt, dtu.clockEdge(delay));
-        }
+        dtu.sendNocResponse(pkt);
     }
+
+    return res;
 }
