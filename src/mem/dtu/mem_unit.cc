@@ -64,7 +64,9 @@ MemoryUnit::startRead(const Dtu::Command& cmd)
     assert(requestSize + offset >= requestSize);
     assert(requestSize + offset <= ep.remoteSize);
 
-    Addr nocAddr = NocAddr(ep.targetCore, 0, ep.remoteAddr + offset).getAddr();
+    Addr nocAddr = NocAddr(ep.targetCore,
+                           ep.vpeId,
+                           ep.remoteAddr + offset).getAddr();
     auto pkt = dtu.generateRequest(nocAddr,
                                    requestSize,
                                    MemCmd::ReadReq);
@@ -102,7 +104,7 @@ MemoryUnit::startWrite(const Dtu::Command& cmd)
     assert(requestSize + offset <= ep.remoteSize);
 
     dtu.startTransfer(Dtu::TransferType::LOCAL_READ,
-                      NocAddr(ep.targetCore, 0, ep.remoteAddr + offset),
+                      NocAddr(ep.targetCore, ep.vpeId, ep.remoteAddr + offset),
                       localAddr,
                       requestSize);
 }
@@ -129,7 +131,8 @@ MemoryUnit::readComplete(PacketPtr pkt, Dtu::Error error)
     }
 
     dtu.startTransfer(Dtu::TransferType::LOCAL_WRITE,
-                      NocAddr(0, 0),        // remote address is irrelevant
+                      // remote address is irrelevant
+                      NocAddr(0, 0, 0),
                       localAddr,
                       pkt->getSize(),
                       pkt,
@@ -201,6 +204,17 @@ MemoryUnit::recvFromNoc(PacketPtr pkt)
     if (pkt->isWrite())
         dtu.printPacket(pkt);
 
+    uint16_t vpeId = dtu.regs().get(DtuReg::VPE_ID);
+    if (addr.vpeId != vpeId)
+    {
+        DPRINTFS(Dtu, (&dtu),
+            "Received memory request for VPE %u, but VPE %u is running\n",
+            addr.vpeId, vpeId);
+
+        dtu.sendNocResponse(pkt);
+        return Dtu::VPE_GONE;
+    }
+
     if (addr.offset >= dtu.regFileBaseAddr)
     {
         pkt->setAddr(addr.offset);
@@ -221,7 +235,7 @@ MemoryUnit::recvFromNoc(PacketPtr pkt)
                                    : Dtu::TransferType::REMOTE_READ;
         dtu.startTransfer(type,
                           // remote address is irrelevant
-                          NocAddr(0, 0),
+                          NocAddr(0, 0, 0),
                           // other remote is our local
                           addr.offset,
                           pkt->getSize(),

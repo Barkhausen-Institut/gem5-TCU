@@ -140,12 +140,12 @@ PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, uint access)
         return false;
     }
 
-    int pfep = dtu.regs().get(DtuReg::PF_EP);
+    int pfep = ev->toKernel ? Dtu::SYSCALL_EP : dtu.regs().get(DtuReg::PF_EP);
     assert(pfep < dtu.numEndpoints);
     SendEp ep = dtu.regs().getSendEp(pfep);
 
     // create packet
-    NocAddr nocAddr = NocAddr(ep.targetCore, ep.targetEp);
+    NocAddr nocAddr = NocAddr(ep.targetCore, ep.vpeId, ep.targetEp);
     size_t size = sizeof(Dtu::MessageHeader) + sizeof(PagefaultMessage);
     auto pkt = dtu.generateRequest(nocAddr.getAddr(),
                                    size,
@@ -189,8 +189,28 @@ PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, uint access)
     // delay += dtu.ticksToCycles(headerDelay);
     // pkt->payloadDelay = payloadDelay;
     dtu.printPacket(pkt);
-    dtu.sendNocRequest(Dtu::NocPacketType::MESSAGE, pkt, delay);
+    dtu.sendNocRequest(Dtu::NocPacketType::PAGEFAULT, pkt, delay);
     return true;
+}
+
+void
+PtUnit::sendingPfFailed(PacketPtr pkt, int error)
+{
+    Dtu::MessageHeader* header = pkt->getPtr<Dtu::MessageHeader>();
+    TranslateEvent *ev = reinterpret_cast<TranslateEvent*>(header->replyLabel);
+
+    DPRINTFS(DtuPf, (&dtu),
+        "Sending Pagefault @ %p to PF handler failed (%d); notifying kernel\n",
+        ev->virt, error);
+
+    if (error == Dtu::VPE_GONE)
+    {
+        ev->pf = true;
+        ev->toKernel = true;
+        dtu.schedule(ev, dtu.clockEdge(Cycles(1)));
+    }
+    else
+        panic("Unable to resolve pagefault @ %p", ev->virt);
 }
 
 void
@@ -243,6 +263,8 @@ PtUnit::finishPagefault(PacketPtr pkt)
         ev->virt);
 
     // retry the translation
+    ev->pf = false;
+    ev->toKernel = false;
     dtu.schedule(ev, dtu.clockEdge(Cycles(1)));
 }
 
@@ -304,6 +326,7 @@ PtUnit::startTranslate(Addr virt, uint access, Translation *trans, bool pf)
     event->trans = trans;
     event->ptAddr = dtu.regs().get(DtuReg::ROOT_PT);
     event->pf = pf;
+    event->toKernel = false;
 
     dtu.schedule(event, dtu.clockEdge(Cycles(1)));
 }

@@ -38,6 +38,7 @@ const char *RegFile::dtuRegNames[] = {
     "STATUS",
     "ROOT_PT",
     "PF_EP",
+    "VPE_ID",
     "MSG_CNT",
     "EXT_CMD",
 };
@@ -160,6 +161,7 @@ RegFile::getSendEp(unsigned epId, bool print) const
     const reg_t r1  = regs[1];
     const reg_t r2  = regs[2];
 
+    ep.vpeId        = (r0 >> 16) & 0xFFFFFFFF;
     ep.maxMsgSize   = r0 & 0xFFFF;
 
     ep.targetCore   = (r1 >> 24) & 0xFF;
@@ -178,6 +180,7 @@ void
 RegFile::setSendEp(unsigned epId, const SendEp &ep)
 {
     set(epId, 0, (static_cast<reg_t>(EpType::SEND) << 61) |
+                 (ep.vpeId << 16) |
                  ep.maxMsgSize);
 
     set(epId, 1, (ep.targetCore << 24) | (ep.targetEp << 16) |
@@ -253,6 +256,7 @@ RegFile::getMemEp(unsigned epId, bool print) const
 
     ep.remoteAddr   = r1;
 
+    ep.vpeId        = (r2 >> 12) & 0xFFFFFFFF;
     ep.targetCore   = (r2 >> 4) & 0xFF;
     ep.flags        = (r2 >> 0) & 0x7;
 
@@ -269,10 +273,10 @@ SendEp::print(const RegFile &rf,
               RegAccess access) const
 {
     DPRINTFS(DtuReg, (&rf),
-        "%s%s EP%u%14s: Send[core=%u ep=%u crd=%#x max=%#x lbl=%#llx]\n",
+        "%s%s EP%u%14s: Send[vpe=%u pe=%u ep=%u crd=%#x max=%#x lbl=%#llx]\n",
         regAccessName(access), read ? "<-" : "->",
         epId, "",
-        targetCore, targetEp,
+        vpeId, targetCore, targetEp,
         credits, maxMsgSize,
         label);
 }
@@ -298,10 +302,10 @@ MemEp::print(const RegFile &rf,
              RegAccess access) const
 {
     DPRINTFS(DtuReg, (&rf),
-        "%s%s EP%u%14s: Mem[core=%u addr=%#llx size=%#llx flags=%u]\n",
+        "%s%s EP%u%14s: Mem[vpe=%u pe=%u addr=%#llx size=%#llx flags=%u]\n",
         regAccessName(access), read ? "<-" : "->",
         epId, "",
-        targetCore,
+        vpeId, targetCore,
         remoteAddr, remoteSize,
         flags);
 }

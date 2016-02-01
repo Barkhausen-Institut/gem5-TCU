@@ -291,7 +291,7 @@ class BaseDtu : public MemObject
 
     void sendAtomicMemRequest(PacketPtr pkt);
 
-    void sendCacheMemResponse(PacketPtr pkt);
+    void sendCacheMemResponse(PacketPtr pkt, bool success);
 
     virtual void completeNocRequest(PacketPtr pkt) = 0;
 

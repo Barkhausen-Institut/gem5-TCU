@@ -42,6 +42,7 @@ enum class DtuReg : Addr
     STATUS,
     ROOT_PT,
     PF_EP,
+    VPE_ID,
     MSG_CNT,
     EXT_CMD,
 };
@@ -52,7 +53,7 @@ enum class Status
     PAGEFAULTS  = 1 << 1,
 };
 
-constexpr unsigned numDtuRegs = 5;
+constexpr unsigned numDtuRegs = 6;
 
 // registers to issue a command
 enum class CmdReg : Addr
@@ -70,15 +71,15 @@ constexpr unsigned numCmdRegs = 6;
 // Ep Registers:
 //
 // 0. TYPE[3] (for all)
-//    BUF_MSG_SIZE[16] | BUF_SIZE[16] | BUF_MSG_CNT[16]
-//    MAX_MSG_SIZE[16]
-//    REQ_MEM_SIZE[61]
-// 1. BUF_ADDR[64]
-//    TGT_COREID[8] | TGT_EPID[8] | CREDITS[16]
-//    REQ_MEM_ADDR[64]
-// 2. BUF_RD_PTR[16] | BUF_WR_PTR[16]
-//    LABEL[64]
-//    REQ_COREID[8] | FLAGS[4]
+//    receive: BUF_MSG_SIZE[16] | BUF_SIZE[16] | BUF_MSG_CNT[16]
+//    send:    VPE_ID[32] | MAX_MSG_SIZE[16]
+//    mem:     REQ_MEM_SIZE[61]
+// 1. receive: BUF_ADDR[64]
+//    send:    TGT_COREID[8] | TGT_EPID[8] | CREDITS[16]
+//    mem:     REQ_MEM_ADDR[64]
+// 2. receive: BUF_RD_PTR[16] | BUF_WR_PTR[16]
+//    send:    LABEL[64]
+//    mem:     VPE_ID[32] | REQ_COREID[8] | FLAGS[4]
 //
 constexpr unsigned numEpRegs = 3;
 
@@ -101,7 +102,7 @@ class RegFile;
 
 struct SendEp
 {
-    SendEp() : targetCore(), targetEp(), maxMsgSize(), credits(), label()
+    SendEp() : vpeId(), targetCore(), targetEp(), maxMsgSize(), credits(), label()
     {}
 
     void print(const RegFile &rf,
@@ -109,6 +110,7 @@ struct SendEp
                bool read,
                RegAccess access) const;
 
+    uint32_t vpeId;
     uint8_t targetCore;
     uint8_t targetEp;
     uint16_t maxMsgSize;
@@ -136,7 +138,7 @@ struct RecvEp
 
 struct MemEp
 {
-    MemEp() : remoteAddr(), remoteSize(), targetCore(), flags()
+    MemEp() : vpeId(), remoteAddr(), remoteSize(), targetCore(), flags()
     {}
 
     void print(const RegFile &rf,
@@ -144,6 +146,7 @@ struct MemEp
                bool read,
                RegAccess access) const;
 
+    uint32_t vpeId;
     uint64_t remoteAddr;
     uint64_t remoteSize;
     uint8_t targetCore;

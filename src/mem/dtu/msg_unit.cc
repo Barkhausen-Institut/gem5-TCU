@@ -97,6 +97,7 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
 
     // fill the info struct and start the transfer
     info.targetCoreId = ep.targetCore;
+    info.targetVpeId  = ep.vpeId;
     info.targetEpId   = ep.targetEp;
     info.label        = ep.label;
     info.replyLabel   = dtu.regs().get(CmdReg::REPLY_LABEL);
@@ -192,6 +193,7 @@ MessageUnit::recvFromMem(const Dtu::Command& cmd, PacketPtr pkt)
     assert(header.flags & Dtu::REPLY_ENABLED);
 
     info.targetCoreId = header.senderCoreId;
+    info.targetVpeId  = header.senderVpeId;
     info.targetEpId   = header.replyEpId;  // send message to the reply EP
     info.replyEpId    = header.senderEpId; // and grant credits to the sender
 
@@ -233,8 +235,9 @@ MessageUnit::startXfer(const Dtu::Command& cmd)
              messageSize);
 
     DPRINTFS(Dtu, (&dtu),
-        "  header: flags=%#x tgtEP=%u lbl=%#018lx rpLbl=%#018lx rpEP=%u\n",
-        info.flags, info.targetEpId, info.label,
+        "  header: flags=%#x tgtVPE=%u tgtEP=%u lbl=%#018lx"
+        " rpLbl=%#018lx rpEP=%u\n",
+        info.flags, info.targetVpeId, info.targetEpId, info.label,
         info.replyLabel, info.replyEpId);
 
     Dtu::MessageHeader* header = new Dtu::MessageHeader;
@@ -245,18 +248,20 @@ MessageUnit::startXfer(const Dtu::Command& cmd)
         header->flags = Dtu::REPLY_ENABLED; // normal message
     header->flags |= info.flags;
 
-    header->senderCoreId = static_cast<uint8_t>(dtu.coreId);
-    header->senderEpId   = static_cast<uint8_t>(cmd.epId);
-    header->replyEpId    = static_cast<uint8_t>(info.replyEpId);
-    header->length       = static_cast<uint16_t>(messageSize);
-    header->label        = static_cast<uint64_t>(info.label);
-    header->replyLabel   = static_cast<uint64_t>(info.replyLabel);
+    header->senderCoreId = dtu.coreId;
+    header->senderVpeId  = dtu.regs().get(DtuReg::VPE_ID);
+    header->senderEpId   = cmd.epId;
+    header->replyEpId    = info.replyEpId;
+    header->length       = messageSize;
+    header->label        = info.label;
+    header->replyLabel   = info.replyLabel;
 
     assert(messageSize + sizeof(Dtu::MessageHeader) <= dtu.maxNocPacketSize);
 
     // start the transfer of the payload
+    NocAddr nocAddr(info.targetCoreId, info.targetVpeId, info.targetEpId);
     dtu.startTransfer(Dtu::TransferType::LOCAL_READ,
-                      NocAddr(info.targetCoreId, info.targetEpId),
+                      nocAddr,
                       messageAddr,
                       messageSize,
                       NULL,
@@ -333,7 +338,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
     }
 
     NocAddr addr(pkt->getAddr());
-    unsigned epId = addr.epId;
+    unsigned epId = addr.offset;
     RecvEp ep = dtu.regs().getRecvEp(epId);
     Addr localAddr = ep.bufAddr + ep.wrOff;
 
@@ -351,7 +356,8 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
     }
 
     Dtu::Error res = Dtu::NONE;
-    if (ep.msgCount < ep.size)
+    uint16_t vpeId = dtu.regs().get(DtuReg::VPE_ID);
+    if (addr.vpeId == vpeId && ep.msgCount < ep.size)
     {
         Dtu::MessageHeader* header = pkt->getPtr<Dtu::MessageHeader>();
 
@@ -378,7 +384,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
         delay += dtu.nocToTransferLatency;
 
         dtu.startTransfer(Dtu::TransferType::REMOTE_WRITE,
-                          NocAddr(0, 0),
+                          NocAddr(0, 0, 0),
                           localAddr,
                           pkt->getSize(),
                           pkt,
@@ -387,13 +393,23 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
 
         incrementWritePtr(epId);
     }
-    // ignore messages if there is not enough space
+    // ignore messages for other VPEs or if there is not enough space
     else
     {
-        DPRINTFS(Dtu, (&dtu),
-            "EP%u: ignoring message: no space left\n",
-            epId);
-        res = Dtu::NO_RING_SPACE;
+        if (addr.vpeId != vpeId)
+        {
+            DPRINTFS(Dtu, (&dtu),
+                "EP%u: received message for VPE %u, but VPE %u is running\n",
+                epId, addr.vpeId, vpeId);
+            res = Dtu::VPE_GONE;
+        }
+        else
+        {
+            DPRINTFS(Dtu, (&dtu),
+                "EP%u: ignoring message: no space left\n",
+                epId);
+            res = Dtu::NO_RING_SPACE;
+        }
 
         dtu.sendNocResponse(pkt);
     }

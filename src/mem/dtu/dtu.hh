@@ -45,6 +45,10 @@ class Dtu : public BaseDtu
 {
   public:
 
+    static const uint16_t INVALID_VPE_ID    = 0xFFFF;
+
+    static const int SYSCALL_EP             = 0;
+
     enum MemoryFlags : uint8_t
     {
         READ                = (1 << 0),
@@ -77,6 +81,7 @@ class Dtu : public BaseDtu
         // for a reply this is the enpoint that receives credits
         uint8_t replyEpId;
         uint16_t length;
+        uint16_t senderVpeId;
 
         // both should be large enough for pointers.
         uint64_t label;
@@ -86,6 +91,7 @@ class Dtu : public BaseDtu
     enum class NocPacketType
     {
         MESSAGE,
+        PAGEFAULT,
         READ_REQ,
         WRITE_REQ,
         CACHE_MEM_REQ_FUNC,
@@ -132,12 +138,12 @@ class Dtu : public BaseDtu
     {
         enum Opcode
         {
-            IDLE = 0,
-            SEND = 1,
-            REPLY = 2,
-            READ = 3,
-            WRITE = 4,
-            INC_READ_PTR = 5,
+            IDLE            = 0,
+            SEND            = 1,
+            REPLY           = 2,
+            READ            = 3,
+            WRITE           = 4,
+            INC_READ_PTR    = 5,
         };
 
         Error error;
@@ -290,6 +296,27 @@ class Dtu : public BaseDtu
         const char* description() const override { return "FinishCommandEvent"; }
 
         const std::string name() const override { return dtu.name(); }
+    };
+
+    struct VPEGoneTranslation : PtUnit::Translation
+    {
+        Dtu& dtu;
+
+        PacketPtr pkt;
+
+        VPEGoneTranslation(Dtu& _dtu, PacketPtr _pkt)
+            : dtu(_dtu), pkt(_pkt)
+        {}
+
+        void finished(bool success, const NocAddr &phys) override
+        {
+            if (success)
+                dtu.handleCacheMemRequest(pkt, false);
+            else
+                dtu.sendCacheMemResponse(pkt, false);
+
+            delete this;
+        }
     };
 
     bool cmdInProgress;

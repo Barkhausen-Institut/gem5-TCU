@@ -229,8 +229,8 @@ BaseDtu::NocSlavePort::getAddrRanges() const
 {
     AddrRangeList ranges;
 
-    Addr baseNocAddr = NocAddr(dtu.coreId, 0).getAddr();
-    Addr topNocAddr  = NocAddr(dtu.coreId + 1, 0).getAddr() - 1;
+    Addr baseNocAddr = NocAddr(dtu.coreId, 0, 0).getAddr();
+    Addr topNocAddr  = NocAddr(dtu.coreId + 1, 0, 0).getAddr() - 1;
 
     DPRINTF(DtuSlavePort, "Dtu %u covers %#x to %#x\n",
                           dtu.coreId,
@@ -416,14 +416,17 @@ BaseDtu::schedCpuResponse(PacketPtr pkt, Tick when)
 }
 
 void
-BaseDtu::sendCacheMemResponse(PacketPtr pkt)
+BaseDtu::sendCacheMemResponse(PacketPtr pkt, bool success)
 {
     DPRINTF(DtuSlavePort, "Send %s response at %#x (%u bytes)\n",
             pkt->cmd.toString(),
             pkt->getAddr(),
             pkt->getSize());
 
-    cacheMemSlavePort.sendTimingResp(pkt);
+    if (!success)
+        sendDummyResponse(cacheMemSlavePort, pkt, false);
+    else
+        cacheMemSlavePort.sendTimingResp(pkt);
 }
 
 void

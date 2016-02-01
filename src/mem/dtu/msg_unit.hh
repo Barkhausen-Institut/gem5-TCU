@@ -42,6 +42,7 @@ class MessageUnit
         bool ready;
         uint8_t flags;
         unsigned targetCoreId;
+        uint16_t targetVpeId;
         unsigned targetEpId;
         unsigned replyEpId;
         uint64_t label;

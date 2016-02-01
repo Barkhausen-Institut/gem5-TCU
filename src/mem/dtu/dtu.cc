@@ -105,6 +105,7 @@ Dtu::Dtu(DtuParams* p)
         memOffset = sys->memOffset;
         memSize = sys->memSize;
         regs().set(DtuReg::ROOT_PT, sys->getRootPt().getAddr());
+        regs().set(DtuReg::VPE_ID, INVALID_VPE_ID);
     }
 }
 
@@ -412,7 +413,19 @@ Dtu::completeNocRequest(PacketPtr pkt)
             pkt->popSenderState();
         }
 
-        sendCacheMemResponse(pkt);
+        if (senderState->result != NONE)
+        {
+            uint access = DtuTlb::INTERN | DtuTlb::GONE;
+            VPEGoneTranslation *trans = new VPEGoneTranslation(*this, pkt);
+            ptUnit->startTranslate(pkt->getAddr(), access, trans, true);
+        }
+        else
+            sendCacheMemResponse(pkt, true);
+    }
+    else if (senderState->packetType == NocPacketType::PAGEFAULT)
+    {
+        if (senderState->result != NONE)
+            ptUnit->sendingPfFailed(pkt, senderState->result);
     }
     else if (senderState->packetType != NocPacketType::CACHE_MEM_REQ_FUNC)
     {
@@ -473,6 +486,7 @@ Dtu::handleNocRequest(PacketPtr pkt)
     switch (senderState->packetType)
     {
     case NocPacketType::MESSAGE:
+    case NocPacketType::PAGEFAULT:
         res = msgUnit->recvFromNoc(pkt);
         break;
     case NocPacketType::READ_REQ:

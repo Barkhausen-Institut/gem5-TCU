@@ -86,10 +86,12 @@ class PtUnit
         Addr ptAddr;
         uint access;
         Translation *trans;
+        bool toKernel;
         bool pf;
 
         TranslateEvent(PtUnit& _unit)
-            : unit(_unit), level(), virt(), ptAddr(), access(), trans(), pf()
+            : unit(_unit), level(), virt(), ptAddr(), access(), trans(),
+              toKernel(), pf()
         {}
 
         void process() override;
@@ -123,6 +125,8 @@ class PtUnit
         TranslateEvent *ev = reinterpret_cast<TranslateEvent*>(event);
         ev->recvFromMem(pkt);
     }
+
+    void sendingPfFailed(PacketPtr pkt, int error);
 
     void finishPagefault(PacketPtr pkt);
 
