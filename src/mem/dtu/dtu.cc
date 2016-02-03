@@ -80,7 +80,6 @@ Dtu::Dtu(DtuParams* p)
     executeCommandEvent(*this),
     executeExternCommandEvent(*this),
     cmdInProgress(false),
-    irqVector(p->irq_vector),
     tlb(p->tlb_entries > 0 ? new DtuTlb(p->tlb_entries) : NULL),
     memPe(),
     memOffset(),
@@ -253,7 +252,7 @@ Dtu::executeExternCommand()
             tlb->remove(cmd.arg);
         break;
     case ExternCommand::INJECT_IRQ:
-        injectIRQ();
+        injectIRQ(cmd.arg);
         break;
     default:
         // TODO error handling
@@ -288,7 +287,7 @@ Dtu::updateSuspendablePin()
 }
 
 void
-Dtu::injectIRQ()
+Dtu::injectIRQ(int vector)
 {
     const int APIC_ID = 0;
 
@@ -298,7 +297,7 @@ Dtu::injectIRQ()
     message.destMode = 0;   // physical
     message.trigger = 0;    // edge
     message.level = 0;      // unused?
-    message.vector = irqVector;
+    message.vector = vector;
 
     PacketPtr pkt = X86ISA::buildIntRequest(APIC_ID, message);
     sendIRQRequest(pkt);

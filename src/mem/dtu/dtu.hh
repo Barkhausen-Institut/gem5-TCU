@@ -183,7 +183,7 @@ class Dtu : public BaseDtu
 
     void updateSuspendablePin();
 
-    void injectIRQ();
+    void injectIRQ(int vector);
 
     void forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest);
 
@@ -323,8 +323,6 @@ class Dtu : public BaseDtu
     };
 
     bool cmdInProgress;
-
-    const int irqVector;
 
   public:
 

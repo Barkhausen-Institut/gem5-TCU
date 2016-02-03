@@ -71,8 +71,6 @@ class Dtu(BaseDtu):
     buf_count = Param.Unsigned(4, "The number of temporary buffers for transfers")
     buf_size = Param.MemorySize("1kB", "The size of a temporary buffer")
 
-    irq_vector = Param.Unsigned(0x40, "The IRQ vector to trigger")
-
     register_access_latency = Param.Cycles(1, "Latency for CPU register accesses")
 
     command_to_noc_request_latency = Param.Cycles(1, "Number of cycles passed from writing a command to the register to starting the command")
