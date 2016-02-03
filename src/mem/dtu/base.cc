@@ -53,6 +53,12 @@ BaseDtu::DtuMasterPort::recvTimingResp(PacketPtr pkt)
 }
 
 void
+BaseDtu::IRQMasterPort::completeRequest(PacketPtr)
+{
+    // nothing to do
+}
+
+void
 BaseDtu::NocMasterPort::completeRequest(PacketPtr pkt)
 {
     dtu.completeNocRequest(pkt);
@@ -265,6 +271,7 @@ BaseDtu::BaseDtu(BaseDtuParams* p)
     icacheSlavePort(icacheMasterPort, *this, true),
     dcacheSlavePort(dcacheMasterPort, *this, false),
     cacheMemSlavePort(*this),
+    irqMasterPort(*this),
     watchRange(1, 0),
     nocReqFinishedEvent(*this),
     coreId(p->core_id),
@@ -350,6 +357,8 @@ BaseDtu::getMasterPort(const std::string &if_name, PortID idx)
         return dcacheMasterPort;
     else if (if_name == "noc_master_port")
         return nocMasterPort;
+    else if (if_name == "irq_master_port")
+        return irqMasterPort;
     else
         return MemObject::getMasterPort(if_name, idx);
 }
@@ -461,4 +470,10 @@ BaseDtu::sendAtomicMemRequest(PacketPtr pkt)
     checkWatchRange(pkt);
 
     dcacheMasterPort.sendAtomic(pkt);
+}
+
+void
+BaseDtu::sendIRQRequest(PacketPtr pkt)
+{
+    irqMasterPort.sendTimingReq(pkt);
 }

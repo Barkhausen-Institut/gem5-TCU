@@ -62,6 +62,17 @@ class BaseDtu : public MemObject
         bool recvTimingResp(PacketPtr pkt) override;
     };
 
+    class IRQMasterPort : public DtuMasterPort
+    {
+      public:
+
+        IRQMasterPort(BaseDtu& _dtu)
+            : DtuMasterPort(_dtu.name() + ".irq_master_port", _dtu)
+        { }
+
+        void completeRequest(PacketPtr pkt) override;
+    };
+
     class NocMasterPort : public DtuMasterPort
     {
       public:
@@ -291,6 +302,8 @@ class BaseDtu : public MemObject
 
     void sendAtomicMemRequest(PacketPtr pkt);
 
+    void sendIRQRequest(PacketPtr pkt);
+
     void sendCacheMemResponse(PacketPtr pkt, bool success);
 
     virtual void completeNocRequest(PacketPtr pkt) = 0;
@@ -329,6 +342,8 @@ class BaseDtu : public MemObject
     CacheSlavePort<DCacheMasterPort> dcacheSlavePort;
 
     CacheMemSlavePort cacheMemSlavePort;
+
+    IRQMasterPort irqMasterPort;
 
     AddrRange watchRange;
 

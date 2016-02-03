@@ -32,6 +32,7 @@
 #include <sstream>
 
 #include "arch/x86/m3/system.hh"
+#include "arch/x86/interrupts.hh"
 #include "debug/Dtu.hh"
 #include "debug/DtuBuf.hh"
 #include "debug/DtuCmd.hh"
@@ -64,6 +65,7 @@ static const char *extCmdNames[] =
 {
     "WAKEUP_CORE",
     "INV_PAGE",
+    "INJECT_IRQ",
 };
 
 Dtu::Dtu(DtuParams* p)
@@ -78,6 +80,7 @@ Dtu::Dtu(DtuParams* p)
     executeCommandEvent(*this),
     executeExternCommandEvent(*this),
     cmdInProgress(false),
+    irqVector(p->irq_vector),
     tlb(p->tlb_entries > 0 ? new DtuTlb(p->tlb_entries) : NULL),
     memPe(),
     memOffset(),
@@ -249,6 +252,9 @@ Dtu::executeExternCommand()
         if (tlb)
             tlb->remove(cmd.arg);
         break;
+    case ExternCommand::INJECT_IRQ:
+        injectIRQ();
+        break;
     default:
         // TODO error handling
         panic("Invalid opcode %#x\n", static_cast<RegFile::reg_t>(cmd.opcode));
@@ -279,6 +285,23 @@ Dtu::updateSuspendablePin()
     system->threadContexts[0]->getCpuPtr()->_denySuspend = pendingMsgs;
     if (hadPending && !pendingMsgs)
         DPRINTF(DtuPower, "Core can be suspended\n");
+}
+
+void
+Dtu::injectIRQ()
+{
+    const int APIC_ID = 0;
+
+    X86ISA::TriggerIntMessage message = 0;
+    message.deliveryMode = X86ISA::DeliveryMode::ExtInt;
+    message.destination = APIC_ID;
+    message.destMode = 0;   // physical
+    message.trigger = 0;    // edge
+    message.level = 0;      // unused?
+    message.vector = irqVector;
+
+    PacketPtr pkt = X86ISA::buildIntRequest(APIC_ID, message);
+    sendIRQRequest(pkt);
 }
 
 void

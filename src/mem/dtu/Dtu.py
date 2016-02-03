@@ -44,6 +44,8 @@ class BaseDtu(MemObject):
     icache_master_port = MasterPort("Port that connects the icache")
     dcache_master_port = MasterPort("Port that connects the dcache")
 
+    irq_master_port = MasterPort("Port that connects to the interrupt controller")
+
     cache_mem_slave_port = SlavePort("Port that performs memory requests on behalf of the cache")
 
     regfile_base_addr = Param.Addr(0xF0000000, "Register file address")
@@ -69,8 +71,10 @@ class Dtu(BaseDtu):
     buf_count = Param.Unsigned(4, "The number of temporary buffers for transfers")
     buf_size = Param.MemorySize("1kB", "The size of a temporary buffer")
 
+    irq_vector = Param.Unsigned(0x40, "The IRQ vector to trigger")
+
     register_access_latency = Param.Cycles(1, "Latency for CPU register accesses")
-    
+
     command_to_noc_request_latency = Param.Cycles(1, "Number of cycles passed from writing a command to the register to starting the command")
     start_msg_transfer_delay = Param.Cycles(2, "Number of cycles passed to build the header and start the message transfer")
 

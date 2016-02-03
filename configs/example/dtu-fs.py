@@ -280,7 +280,7 @@ def createCorePE(no, cache, l2cache, memPE):
     pe.cpu.createInterruptController()
 
     pe.cpu.interrupts.pio = pe.xbar.master
-    pe.cpu.interrupts.int_slave = pe.xbar.master
+    pe.cpu.interrupts.int_slave = pe.dtu.irq_master_port
     pe.cpu.interrupts.int_master = pe.xbar.slave
 
     pe.cpu.itb.walker.port = pe.xbar.slave

@@ -155,8 +155,9 @@ class Dtu : public BaseDtu
     {
         enum Opcode
         {
-            WAKEUP_CORE = 0,
-            INV_PAGE = 1,
+            WAKEUP_CORE     = 0,
+            INV_PAGE        = 1,
+            INJECT_IRQ      = 2,
         };
 
         Opcode opcode;
@@ -181,6 +182,8 @@ class Dtu : public BaseDtu
     void wakeupCore();
 
     void updateSuspendablePin();
+
+    void injectIRQ();
 
     void forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest);
 
@@ -320,6 +323,8 @@ class Dtu : public BaseDtu
     };
 
     bool cmdInProgress;
+
+    const int irqVector;
 
   public:
 
