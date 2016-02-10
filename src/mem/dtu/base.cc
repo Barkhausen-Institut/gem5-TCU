@@ -67,6 +67,10 @@ BaseDtu::NocMasterPort::completeRequest(PacketPtr pkt)
 bool
 BaseDtu::ICacheMasterPort::recvTimingResp(PacketPtr pkt)
 {
+    DPRINTF(DtuSlavePort, "Sending timing response at %#x [senderState=%#x]\n",
+                          pkt->getAddr(),
+                          pkt->senderState);
+
     // the DTU does never send requests to the icache. so just pass it back to
     // the CPU
     return dtu.icacheSlavePort.sendTimingResp(pkt);
@@ -77,7 +81,13 @@ BaseDtu::DCacheMasterPort::recvTimingResp(PacketPtr pkt)
 {
     // if there is a context-id and thread-id, the request came from the CPU
     if (pkt->req->hasContextId())
+    {
+        DPRINTF(DtuSlavePort, "Sending timing response at %#x [senderState=%#x]\n",
+                              pkt->getAddr(),
+                              pkt->senderState);
+
         return dtu.dcacheSlavePort.sendTimingResp(pkt);
+    }
 
     // otherwise from the DTU
     dtu.completeMemRequest(pkt);
@@ -342,6 +352,12 @@ BaseDtu::sendDummyResponse(DtuSlavePort &port, PacketPtr pkt, bool functional)
 
         if (!functional)
         {
+            DPRINTF(DtuSlavePort, "Sending dummy %s response at %#x (%u bytes) [senderState=%#x]\n",
+                                  pkt->cmd.toString(),
+                                  pkt->getAddr(),
+                                  pkt->getSize(),
+                                  pkt->senderState);
+
             // somehow we need to send that later to make the cache happy.
             port.schedTimingResp(pkt, clockEdge(Cycles(1)));
         }
