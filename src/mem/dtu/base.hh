@@ -239,7 +239,10 @@ class BaseDtu : public MemObject
                 // not supported here
                 assert(!functional);
 
-                dtu.handleCpuRequest(pkt);
+                if (icache)
+                    dtu.sendDummyResponse(*this, pkt, false);
+                else
+                    dtu.handleCpuRequest(pkt);
             }
             else
             {
