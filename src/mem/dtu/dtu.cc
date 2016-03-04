@@ -115,6 +115,8 @@ Dtu::Dtu(DtuParams* p)
 
 Dtu::~Dtu()
 {
+    delete tlb;
+    delete ptUnit;
     delete xferUnit;
     delete memUnit;
     delete msgUnit;
