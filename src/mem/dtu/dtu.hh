@@ -243,7 +243,7 @@ class Dtu : public BaseDtu
 
     ExternCommand getExternCommand();
 
-    void executeExternCommand();
+    void executeExternCommand(PacketPtr pkt);
 
     void finishCommand(Error error);
 
@@ -280,7 +280,26 @@ class Dtu : public BaseDtu
 
     EventWrapper<Dtu, &Dtu::executeCommand> executeCommandEvent;
 
-    EventWrapper<Dtu, &Dtu::executeExternCommand> executeExternCommandEvent;
+    struct ExecExternCmdEvent : public Event
+    {
+        Dtu& dtu;
+
+        PacketPtr pkt;
+
+        ExecExternCmdEvent(Dtu& _dtu, PacketPtr _pkt)
+            : dtu(_dtu), pkt(_pkt)
+        {}
+
+        void process() override
+        {
+            dtu.executeExternCommand(pkt);
+            setFlags(AutoDelete);
+        }
+
+        const char* description() const override { return "ExecExternCmdEvent"; }
+
+        const std::string name() const override { return dtu.name(); }
+    };
 
     struct FinishCommandEvent : public Event
     {
@@ -346,6 +365,8 @@ class Dtu : public BaseDtu
 
     const size_t bufCount;
     const size_t bufSize;
+
+    const unsigned cacheBlocksPerCycle;
 
     const Cycles registerAccessLatency;
 

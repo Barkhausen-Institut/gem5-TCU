@@ -80,7 +80,6 @@ Dtu::Dtu(DtuParams* p)
     xferUnit(new XferUnit(*this, p->block_size, p->buf_count, p->buf_size)),
     ptUnit(p->tlb_entries > 0 ? new PtUnit(*this) : NULL),
     executeCommandEvent(*this),
-    executeExternCommandEvent(*this),
     cmdInProgress(false),
     tlb(p->tlb_entries > 0 ? new DtuTlb(p->tlb_entries) : NULL),
     memPe(),
@@ -93,6 +92,7 @@ Dtu::Dtu(DtuParams* p)
     blockSize(p->block_size),
     bufCount(p->buf_count),
     bufSize(p->buf_size),
+    cacheBlocksPerCycle(p->cache_blocks_per_cycle),
     registerAccessLatency(p->register_access_latency),
     commandToNocRequestLatency(p->command_to_noc_request_latency),
     startMsgTransferDelay(p->start_msg_transfer_delay),
@@ -237,12 +237,14 @@ Dtu::getExternCommand()
 }
 
 void
-Dtu::executeExternCommand()
+Dtu::executeExternCommand(PacketPtr pkt)
 {
     ExternCommand cmd = getExternCommand();
 
     DPRINTF(DtuCmd, "Executing extern command %s with arg=%p\n",
             extCmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg);
+
+    Cycles delay(1);
 
     switch (cmd.opcode)
     {
@@ -258,10 +260,17 @@ Dtu::executeExternCommand()
             tlb->clear();
         break;
     case ExternCommand::INV_CACHE:
+        delay = Cycles(0);
         if(l1Cache)
+        {
             l1Cache->memInvalidate();
+            delay += Cycles(l1Cache->getBlockCount() / cacheBlocksPerCycle);
+        }
         if(l2Cache)
+        {
             l2Cache->memInvalidate();
+            delay += Cycles(l2Cache->getBlockCount() / cacheBlocksPerCycle);
+        }
         break;
     case ExternCommand::INJECT_IRQ:
         injectIRQ(cmd.arg);
@@ -270,6 +279,9 @@ Dtu::executeExternCommand()
         // TODO error handling
         panic("Invalid opcode %#x\n", static_cast<RegFile::reg_t>(cmd.opcode));
     }
+
+    if (pkt)
+        schedNocResponse(pkt, clockEdge(delay));
 }
 
 void
@@ -683,28 +695,31 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
 
         Tick when = clockEdge(transportDelay + registerAccessLatency);
 
-        pkt->headerDelay = 0;
-        pkt->payloadDelay = 0;
-
-        if (isCpuRequest)
-            schedCpuResponse(pkt, when);
-        else
-        {
+        if (!isCpuRequest)
             schedNocRequestFinished(clockEdge(Cycles(1)));
-            schedNocResponse(pkt, when);
-        }
 
-        if (result & RegFile::WROTE_CMD)
-            schedule(executeCommandEvent, when);
-        if (result & RegFile::WROTE_EXT_CMD)
-            schedule(executeExternCommandEvent, when);
+        if (~result & RegFile::WROTE_EXT_CMD)
+        {
+            pkt->headerDelay = 0;
+            pkt->payloadDelay = 0;
+
+            if (isCpuRequest)
+                schedCpuResponse(pkt, when);
+            else
+                schedNocResponse(pkt, when);
+
+            if (result & RegFile::WROTE_CMD)
+                schedule(executeCommandEvent, when);
+        }
+        else
+            schedule(new ExecExternCmdEvent(*this, pkt), when);
     }
     else
     {
         if (result & RegFile::WROTE_CMD)
             executeCommand();
         if (result & RegFile::WROTE_EXT_CMD)
-            executeExternCommand();
+            executeExternCommand(NULL);
     }
 }
 
