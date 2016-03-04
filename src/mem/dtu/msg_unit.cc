@@ -39,10 +39,12 @@
 #include "mem/dtu/noc_addr.hh"
 
 static const char *syscallNames[] = {
+    "PAGEFAULT",
     "CREATESRV",
     "CREATESESS",
     "CREATEGATE",
     "CREATEVPE",
+    "CREATEMAP",
     "ATTACHRB",
     "DETACHRB",
     "EXCHANGE",
