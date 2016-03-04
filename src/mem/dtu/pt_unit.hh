@@ -106,6 +106,8 @@ class PtUnit
         {
             for(auto it = trans.begin(); it != trans.end(); ++it)
                 (*it)->finished(success, addr);
+            // make sure that we don't do that twice
+            trans.clear();
             setFlags(AutoDelete);
         }
 
