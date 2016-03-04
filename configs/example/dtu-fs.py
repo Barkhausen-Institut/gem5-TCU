@@ -184,19 +184,19 @@ def createPE(no, mem=False, cache=True, l2cache=True, memPE=0):
 
     if not mem:
         if cache:
-            pe.l1cache = L1Cache(size='64kB')
-            pe.l1cache.forward_snoops = False
-            pe.l1cache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
-            pe.l1cache.cpu_side = pe.xbar.master
+            pe.dtu.l1cache = L1Cache(size='64kB')
+            pe.dtu.l1cache.forward_snoops = False
+            pe.dtu.l1cache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
+            pe.dtu.l1cache.cpu_side = pe.xbar.master
 
             if l2cache:
-                pe.l2cache = L2Cache(size='256kB')
-                pe.l2cache.forward_snoops = False
-                pe.l2cache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
-                pe.l2cache.cpu_side = pe.l1cache.mem_side
-                pe.l2cache.mem_side = pe.dtu.cache_mem_slave_port
+                pe.dtu.l2cache = L2Cache(size='256kB')
+                pe.dtu.l2cache.forward_snoops = False
+                pe.dtu.l2cache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
+                pe.dtu.l2cache.cpu_side = pe.dtu.l1cache.mem_side
+                pe.dtu.l2cache.mem_side = pe.dtu.cache_mem_slave_port
             else:
-                pe.l1cache.mem_side = pe.dtu.cache_mem_slave_port
+                pe.dtu.l1cache.mem_side = pe.dtu.cache_mem_slave_port
 
             # connect memory endpoint to the DRAM PE
             pe.memory_pe = memPE
@@ -251,9 +251,9 @@ def createCorePE(no, cache, l2cache, memPE):
     print "PE%d: %s" % (no, cmd_list[no])
     print '     core   =%s x86' % (options.cpu_type)
     try:
-        print '     L1cache=%d KiB' % (pe.l1cache.size.value / 1024)
+        print '     L1cache=%d KiB' % (pe.dtu.l1cache.size.value / 1024)
         if l2cache:
-            print '     L2cache=%d KiB' % (pe.l2cache.size.value / 1024)
+            print '     L2cache=%d KiB' % (pe.dtu.l2cache.size.value / 1024)
         print '     ExtMem =PE%d : %#010x .. %#010x' % \
           (pe.memory_pe, pe.memory_offset, pe.memory_offset + pe.memory_size.value)
     except:

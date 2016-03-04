@@ -38,6 +38,7 @@ python_class_map = {
                     "uint32_t" : "UInt32",
                     "std::string": "String",
                     "bool": "Bool",
+                    "Cache": "Cache",
                     "CacheMemory": "RubyCache",
                     "WireBuffer": "RubyWireBuffer",
                     "Sequencer": "RubySequencer",

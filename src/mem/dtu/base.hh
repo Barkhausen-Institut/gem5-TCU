@@ -348,6 +348,9 @@ class BaseDtu : public MemObject
 
     IRQMasterPort irqMasterPort;
 
+    Cache *l1Cache;
+    Cache *l2Cache;
+
     AddrRange watchRange;
 
     EventWrapper<BaseDtu, &BaseDtu::nocRequestFinished> nocReqFinishedEvent;

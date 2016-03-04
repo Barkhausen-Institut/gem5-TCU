@@ -282,6 +282,8 @@ BaseDtu::BaseDtu(BaseDtuParams* p)
     dcacheSlavePort(dcacheMasterPort, *this, false),
     cacheMemSlavePort(*this),
     irqMasterPort(*this),
+    l1Cache(p->l1cache),
+    l2Cache(p->l2cache),
     watchRange(1, 0),
     nocReqFinishedEvent(*this),
     coreId(p->core_id),

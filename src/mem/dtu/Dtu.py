@@ -48,6 +48,9 @@ class BaseDtu(MemObject):
 
     cache_mem_slave_port = SlavePort("Port that performs memory requests on behalf of the cache")
 
+    l1cache = Param.Cache(NULL, "The L1 cache (if any)")
+    l2cache = Param.Cache(NULL, "The L2 cache (if any)")
+
     regfile_base_addr = Param.Addr(0xF0000000, "Register file address")
     core_id = Param.Unsigned("ID of the core this DTU belongs to")
 

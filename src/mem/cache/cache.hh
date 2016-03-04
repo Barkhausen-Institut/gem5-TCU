@@ -321,9 +321,15 @@ class Cache : public BaseCache
      */
     PacketPtr cleanEvictBlk(CacheBlk *blk);
 
+public:
+    size_t getBlockCount() const {
+        return tags->getNumSets() * tags->getNumWays();
+    }
 
     void memWriteback();
     void memInvalidate();
+
+protected:
     bool isDirty() const;
 
     /**

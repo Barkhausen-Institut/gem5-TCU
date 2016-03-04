@@ -1521,11 +1521,11 @@ bool
 Cache::invalidateVisitor(CacheBlk &blk)
 {
 
-    if (blk.isDirty())
-        warn_once("Invalidating dirty cache lines. Expect things to break.\n");
+    // if (blk.isDirty())
+    //     warn_once("Invalidating dirty cache lines. Expect things to break.\n");
 
     if (blk.isValid()) {
-        assert(!blk.isDirty());
+        // assert(!blk.isDirty());
         tags->invalidate(&blk);
         blk.invalidate();
     }

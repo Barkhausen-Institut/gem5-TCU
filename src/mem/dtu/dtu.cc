@@ -47,7 +47,7 @@
 #include "mem/dtu/mem_unit.hh"
 #include "mem/dtu/xfer_unit.hh"
 #include "mem/dtu/pt_unit.hh"
-#include "mem/page_table.hh"
+#include "mem/cache/cache.hh"
 #include "sim/system.hh"
 #include "sim/process.hh"
 
@@ -66,6 +66,7 @@ static const char *extCmdNames[] =
     "WAKEUP_CORE",
     "INV_PAGE",
     "INV_TLB",
+    "INV_CACHE",
     "INJECT_IRQ",
 };
 
@@ -255,6 +256,12 @@ Dtu::executeExternCommand()
     case ExternCommand::INV_TLB:
         if (tlb)
             tlb->clear();
+        break;
+    case ExternCommand::INV_CACHE:
+        if(l1Cache)
+            l1Cache->memInvalidate();
+        if(l2Cache)
+            l2Cache->memInvalidate();
         break;
     case ExternCommand::INJECT_IRQ:
         injectIRQ(cmd.arg);

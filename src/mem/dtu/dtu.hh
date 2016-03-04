@@ -114,7 +114,7 @@ class Dtu : public BaseDtu
     {
         TRANSFER,
         HEADER,
-        TRANSLATION
+        TRANSLATION,
     };
 
     struct MemSenderState : public Packet::SenderState
@@ -158,7 +158,8 @@ class Dtu : public BaseDtu
             WAKEUP_CORE     = 0,
             INV_PAGE        = 1,
             INV_TLB         = 2,
-            INJECT_IRQ      = 3,
+            INV_CACHE       = 3,
+            INJECT_IRQ      = 4,
         };
 
         Opcode opcode;
