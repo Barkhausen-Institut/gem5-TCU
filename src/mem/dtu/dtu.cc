@@ -65,6 +65,7 @@ static const char *extCmdNames[] =
 {
     "WAKEUP_CORE",
     "INV_PAGE",
+    "INV_TLB",
     "INJECT_IRQ",
 };
 
@@ -250,6 +251,10 @@ Dtu::executeExternCommand()
     case ExternCommand::INV_PAGE:
         if (tlb)
             tlb->remove(cmd.arg);
+        break;
+    case ExternCommand::INV_TLB:
+        if (tlb)
+            tlb->clear();
         break;
     case ExternCommand::INJECT_IRQ:
         injectIRQ(cmd.arg);

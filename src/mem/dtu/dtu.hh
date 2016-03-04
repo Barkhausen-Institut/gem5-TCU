@@ -157,7 +157,8 @@ class Dtu : public BaseDtu
         {
             WAKEUP_CORE     = 0,
             INV_PAGE        = 1,
-            INJECT_IRQ      = 2,
+            INV_TLB         = 2,
+            INJECT_IRQ      = 3,
         };
 
         Opcode opcode;
