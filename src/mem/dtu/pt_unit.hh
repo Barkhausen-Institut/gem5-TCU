@@ -37,6 +37,8 @@
 #include "mem/dtu/noc_addr.hh"
 #include "mem/dtu/tlb.hh"
 
+#include <list>
+
 class Dtu;
 
 class PtUnit
@@ -85,7 +87,7 @@ class PtUnit
         Addr virt;
         Addr ptAddr;
         uint access;
-        Translation *trans;
+        std::vector<Translation*> trans;
         bool toKernel;
         bool pf;
 
@@ -102,7 +104,8 @@ class PtUnit
 
         void finish(bool success, const NocAddr &addr)
         {
-            trans->finished(success, addr);
+            for(auto it = trans.begin(); it != trans.end(); ++it)
+                (*it)->finished(success, addr);
             setFlags(AutoDelete);
         }
 
@@ -113,7 +116,7 @@ class PtUnit
 
   public:
 
-    PtUnit(Dtu& _dtu) : dtu(_dtu)
+    PtUnit(Dtu& _dtu) : dtu(_dtu), pfqueue()
     {}
 
     bool translateFunctional(Addr virt, uint access, NocAddr *phys);
@@ -132,6 +135,10 @@ class PtUnit
 
   private:
 
+    const char *describeAccess(uint access);
+
+    void nextPagefault(TranslateEvent *ev);
+
     PacketPtr createPacket(Addr virt, Addr ptAddr, int level);
 
     bool sendPagefaultMsg(TranslateEvent *ev, Addr virt, uint access);
@@ -143,6 +150,8 @@ class PtUnit
                          Addr *phys);
 
     Dtu& dtu;
+
+    std::list<TranslateEvent*> pfqueue;
 
 };
 
