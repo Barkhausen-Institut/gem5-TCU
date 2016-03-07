@@ -34,4 +34,6 @@ class M3X86System(X86System):
 
     memory_pe = Param.Unsigned(0, "The memory PE to use")
     memory_offset = Param.Addr(0, "The offset in the memory PE")
-    memory_size = Param.MemorySize("0kB", "The size of the memory range in the memory PE")
+    memory_size = Param.Addr(0, "The size in the memory PE")
+
+    mod_offset = Param.Addr(0, "The offset of the boot modules (only for kernel PE)")

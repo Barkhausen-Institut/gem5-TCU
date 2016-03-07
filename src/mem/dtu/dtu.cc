@@ -84,7 +84,6 @@ Dtu::Dtu(DtuParams* p)
     tlb(p->tlb_entries > 0 ? new DtuTlb(p->tlb_entries) : NULL),
     memPe(),
     memOffset(),
-    memSize(),
     atomicMode(p->system->isAtomicMode()),
     numEndpoints(p->num_endpoints),
     maxNocPacketSize(p->max_noc_packet_size),
@@ -107,7 +106,9 @@ Dtu::Dtu(DtuParams* p)
     {
         memPe = sys->memPe;
         memOffset = sys->memOffset;
-        memSize = sys->memSize;
+        DPRINTF(Dtu, "Using memory range %p .. %p\n",
+            memOffset, memOffset + sys->memSize);
+
         regs().set(DtuReg::ROOT_PT, sys->getRootPt().getAddr());
         regs().set(DtuReg::VPE_ID, INVALID_VPE_ID);
     }

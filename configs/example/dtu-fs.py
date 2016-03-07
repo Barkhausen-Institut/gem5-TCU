@@ -122,8 +122,18 @@ if args:
 # Start by parsing the command line options and do some basic sanity
 # checking
 
+IO_address_space_base         = 0xff20000000000000
+interrupts_address_space_base = 0xff40000000000000
+APIC_range_size = 1 << 12;
+
+base_offset = 32 * 1024 * 1024
+mod_offset = base_offset
+mod_size = 4 * 1024 * 1024
+pe_offset = mod_offset + mod_size
+pe_size = 8 * 1024 * 1024
+
 if not options.num_pes > 0:
-    print "Error: Must have at least one PE"
+    print "Error: must have at least one PE"
     sys.exit(1)
 
 CPUClass = CpuConfig.get(options.cpu_type)
@@ -152,12 +162,6 @@ CPUClass = CpuConfig.get(options.cpu_type)
 #          noc --O----------------------O----------------------O----          #
 #                                                                             #
 ###############################################################################
-
-IO_address_space_base         = 0xff20000000000000
-interrupts_address_space_base = 0xff40000000000000
-APIC_range_size = 1 << 12;
-
-base_offset = 32 * 1024 * 1024
 
 def createPE(no, mem=False, cache=True, l2cache=True, memPE=0):
     # each PE is represented by it's own subsystem
@@ -198,22 +202,19 @@ def createPE(no, mem=False, cache=True, l2cache=True, memPE=0):
             else:
                 pe.dtu.l1cache.mem_side = pe.dtu.cache_mem_slave_port
 
-            # connect memory endpoint to the DRAM PE
-            pe.memory_pe = memPE
-            pe.memory_size = "8MB"
-            pe.memory_offset = base_offset + pe.memory_size.value * no
-
-            # TODO for now, just create enough TLB entries to cover everything
-            pe.dtu.tlb_entries = (pe.memory_size.value + 4096 - 1) / 4096
-
             # don't check whether the kernel is in memory because a PE does not have memory in this
             # case, but just a cache that is connected to a different PE
             pe.kernel_addr_check = False
         else:
             pe.cachespm = Scratchpad(in_addr_map="true")
             pe.cachespm.cpu_port = pe.xbar.master
-            pe.memory_size = "8MB"
-            pe.cachespm.range = pe.memory_size
+            pe.cachespm.range = "8MB"
+
+        pe.memory_pe = memPE
+        pe.memory_offset = pe_offset + (pe_size * no)
+        pe.memory_size = pe_size
+        if no == 0:
+            pe.mod_offset = mod_offset
 
     # for memory PEs or PEs with SPM, we do not need a buffer. for the sake of an easy implementation
     # we just make the buffer very large and the block size as well, so that we can read a packet
@@ -254,8 +255,6 @@ def createCorePE(no, cache, l2cache, memPE):
         print '     L1cache=%d KiB' % (pe.dtu.l1cache.size.value / 1024)
         if l2cache:
             print '     L2cache=%d KiB' % (pe.dtu.l2cache.size.value / 1024)
-        print '     ExtMem =PE%d : %#010x .. %#010x' % \
-          (pe.memory_pe, pe.memory_offset, pe.memory_offset + pe.memory_size.value)
     except:
         print '     memsize=%d KiB' % (int(pe.cachespm.range.end + 1) / 1024)
     print '     bufsize=%d KiB, blocksize=%d B, count=%d' % \

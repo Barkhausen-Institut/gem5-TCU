@@ -32,6 +32,7 @@
 #include "arch/x86/isa_traits.hh"
 #include "arch/vtophys.hh"
 #include "base/trace.hh"
+#include "base/loader/object_file.hh"
 #include "cpu/thread_context.hh"
 #include "debug/DtuTlb.hh"
 #include "mem/port_proxy.hh"
@@ -40,8 +41,13 @@
 #include "params/M3X86System.hh"
 #include "sim/byteswap.hh"
 
+#include <libgen.h>
+
 using namespace LittleEndianGuest;
 using namespace X86ISA;
+
+const unsigned M3X86System::RES_PAGES =
+    (STACK_AREA + STACK_SIZE) >> DtuTlb::PAGE_BITS;
 
 M3X86System::M3X86System(Params *p)
     : X86System(p),
@@ -49,8 +55,9 @@ M3X86System::M3X86System(Params *p)
       memPe(p->memory_pe),
       memOffset(p->memory_offset),
       memSize(p->memory_size),
+      modOffset(p->mod_offset),
       // don't reuse root pt
-      nextFrame(1)
+      nextFrame(RES_PAGES)
 {
 }
 
@@ -97,6 +104,28 @@ M3X86System::writeArg(Addr &args, size_t &i, Addr argv, const char *cmd, const c
     i++;
 }
 
+Addr
+M3X86System::loadModule(const std::string &path, const std::string &name, Addr addr) const
+{
+    std::string filename = path + "/" + name;
+    FILE *f = fopen(filename.c_str(), "r");
+    if(!f)
+        panic("Unable to open '%s' for reading", filename.c_str());
+
+    fseek(f, 0L, SEEK_END);
+    size_t sz = ftell(f);
+    fseek(f, 0L, SEEK_SET);
+
+    auto data = new uint8_t[sz];
+    if(fread(data, 1, sz, f) != sz)
+        panic("Unable to read '%s'", filename.c_str());
+    physProxy.writeBlob(addr, data, sz);
+    delete[] data;
+    fclose(f);
+
+    return sz;
+}
+
 void
 M3X86System::mapPage(Addr virt, Addr phys, uint access)
 {
@@ -138,6 +167,19 @@ M3X86System::mapPage(Addr virt, Addr phys, uint access)
 }
 
 void
+M3X86System::mapSegment(Addr start, Addr size, unsigned perm)
+{
+    Addr virt = start;
+    size_t count = divCeil(size, DtuTlb::PAGE_SIZE);
+    for(size_t i = 0; i < count; ++i)
+    {
+        mapPage(virt, virt, perm);
+
+        virt += DtuTlb::PAGE_SIZE;
+    }
+}
+
+void
 M3X86System::mapMemory()
 {
     // clear root pt
@@ -154,16 +196,31 @@ M3X86System::mapMemory()
         DtuTlb::LEVEL_CNT - 1, getRootPt().getAddr() + off, entry);
     physProxy.write(getRootPt().getAddr() + off, entry);
 
-    Addr virt = 0;
-    size_t count = divCeil(memSize, DtuTlb::PAGE_SIZE);
-    for(size_t i = 0; i < count; ++i)
-    {
-        uint access = 0;
-        if(!(virt >= 0x100000 && virt < 0x200000))
-            access = DtuTlb::IRWX;
-        mapPage(virt, virt, access);
+    // program segments
+    mapSegment(kernel->textBase(), kernel->textSize(),
+        DtuTlb::INTERN | DtuTlb::RX);
+    mapSegment(kernel->dataBase(), kernel->dataSize(),
+        DtuTlb::INTERN | DtuTlb::RW);
+    mapSegment(kernel->bssBase(), kernel->bssSize(),
+        DtuTlb::INTERN | DtuTlb::RW);
 
-        virt += DtuTlb::PAGE_SIZE;
+    // idle doesn't need that stuff
+    if (modOffset)
+    {
+        // initial heap
+        Addr bssEnd = roundUp(kernel->bssBase() + kernel->bssSize(),
+            DtuTlb::PAGE_SIZE);
+        mapSegment(bssEnd, HEAP_SIZE, DtuTlb::INTERN | DtuTlb::RW);
+
+        // state and stack
+        mapSegment(STATE_AREA, STATE_SIZE, DtuTlb::INTERN | DtuTlb::RW);
+        mapSegment(STACK_AREA, STACK_SIZE, DtuTlb::INTERN | DtuTlb::RW);
+    }
+    else
+    {
+        // map a large portion of the address space on app PEs
+        // TODO this is temporary to still support clone and VPEs without AS
+        mapSegment(0, memSize, DtuTlb::IRWX);
     }
 }
 
@@ -174,25 +231,30 @@ M3X86System::initState()
 
     mapMemory();
 
-    const Addr stateSize = 0x1000;
-    // TODO
-    const Addr stateEnd = memSize - 0x2000;
-    const Addr stateArea = stateEnd - stateSize;
+    const Addr stateBegin = STATE_AREA;
+    const Addr stateEnd = STATE_AREA + STATE_SIZE;
 
     // write argc and argv
     uint64_t argc = getArgc();
-    uint64_t argv = stateArea + 2 * sizeof(uint64_t);
-    physProxy.writeBlob(stateArea + 0, (uint8_t*)&argc, sizeof(argc));
-    physProxy.writeBlob(stateArea + sizeof(uint64_t), (uint8_t*)&argv, sizeof(argv));
+    uint64_t argv = stateBegin + (2 + MAX_MODS) * sizeof(uint64_t);
+    physProxy.writeBlob(stateBegin + 0, (uint8_t*)&argc, sizeof(argc));
+    physProxy.writeBlob(stateBegin + sizeof(uint64_t), (uint8_t*)&argv, sizeof(argv));
 
-    Addr args = stateArea + (2 + argc + 1) * sizeof(uint64_t);
+    Addr args = stateBegin + (2 + MAX_MODS + 1 + argc + 1) * sizeof(uint64_t);
 
     // check if there is enough space
     if (commandLine.length() + 1 > stateEnd - args)
+    {
         panic("Command line \"%s\" is longer than %d characters.\n",
                 commandLine, stateEnd - args - 1);
+    }
 
-    // write arguments to state area
+    std::string kernelPath;
+    std::string prog;
+    std::string argstr;
+    std::vector<std::pair<std::string,std::string>> mods;
+
+    // write arguments to state area and determine boot modules
     const char *cmd = commandLine.c_str();
     const char *begin = cmd;
     size_t i = 0;
@@ -201,13 +263,107 @@ M3X86System::initState()
         if (isspace(*cmd))
         {
             if (cmd > begin)
+            {
+                // the first is the kernel; remember the path
+                if (i == 0)
+                {
+                    std::string path(begin, cmd - begin);
+                    char *copy = strdup(path.c_str());
+                    kernelPath = dirname(copy);
+                    free(copy);
+                }
+                else if (modOffset)
+                {
+                    if (strncmp(begin, "--", 2) == 0)
+                    {
+                        mods.push_back(std::make_pair(prog, argstr));
+                        prog = "";
+                        argstr = "";
+                    }
+                    else if (prog.empty())
+                        prog = std::string(begin, cmd - begin);
+                    else
+                    {
+                        if (!argstr.empty())
+                            argstr += ' ';
+                        argstr += std::string(begin, cmd - begin);
+                    }
+                }
+
                 writeArg(args, i, argv, cmd, begin);
+            }
             begin = cmd + 1;
         }
         cmd++;
     }
+
     if (cmd > begin)
+    {
+        if (prog.empty())
+            prog = std::string(begin, cmd - begin);
+        else
+        {
+            if (!argstr.empty())
+                argstr += ' ';
+            argstr += std::string(begin, cmd - begin);
+        }
+
+        mods.push_back(std::make_pair(prog, argstr));
+
         writeArg(args, i, argv, cmd, begin);
+    }
+
+    if (modOffset && mods.size() > 0)
+    {
+        // idle is always needed
+        mods.push_back(std::make_pair("idle", ""));
+
+        if(mods.size() > MAX_MODS)
+            panic("Too many modules");
+
+        // put the pointers behind argc and argv
+        i = 2;
+
+        Addr addr = NocAddr(memPe, 0, modOffset).getAddr();
+        for (const std::pair<std::string, std::string> &mod : mods)
+        {
+            Addr size = loadModule(kernelPath, mod.first, addr);
+
+            // construct module info
+            BootModule bmod;
+            size_t cmdlen = mod.first.length() + mod.second.length() + 1;
+            if(cmdlen >= sizeof(bmod.name))
+                panic("Module name too long: %s", mod.first.c_str());
+            strcpy(bmod.name, mod.first.c_str());
+            if (!mod.second.empty())
+            {
+                strcat(bmod.name, " ");
+                strcat(bmod.name, mod.second.c_str());
+            }
+            bmod.addr = addr;
+            bmod.size = size;
+
+            inform("Loaded '%s' to %p .. %p",
+                bmod.name, bmod.addr, bmod.addr + bmod.size);
+
+            // store pointer to area module info and info itself
+            uint64_t pointer = roundUp(addr + size, sizeof(uint64_t));
+            physProxy.writeBlob(stateBegin + sizeof(uint64_t) * i,
+                (uint8_t*)&pointer, sizeof(pointer));
+            physProxy.writeBlob(pointer, (uint8_t*)&bmod, sizeof(bmod));
+
+            // to next
+            addr = pointer + sizeof(bmod);
+            addr += DtuTlb::PAGE_SIZE - 1;
+            addr &= ~static_cast<Addr>(DtuTlb::PAGE_SIZE - 1);
+            i++;
+        }
+
+        // termination
+        uint64_t pointer = 0;
+        physProxy.writeBlob(stateBegin + sizeof(uint64_t) * i,
+            (uint8_t*)&pointer, sizeof(pointer));
+    }
 }
 
 M3X86System *

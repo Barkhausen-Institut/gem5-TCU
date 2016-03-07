@@ -81,6 +81,7 @@ class DtuTlb
         INTERN  = 8,
         GONE    = 16,   // only for pagefaults
         RW      = READ | WRITE,
+        RX      = READ | EXEC,
         RWX     = RW | EXEC,
         IRWX    = INTERN | RWX
     };

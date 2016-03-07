@@ -40,13 +40,29 @@
 class M3X86System : public X86System
 {
   protected:
+    static const size_t MAX_MODS        = 8;
+    static const size_t STATE_SIZE      = 0x2000;
+    static const uintptr_t STATE_AREA   = 0x1000;
+    static const size_t STACK_SIZE      = 0x1000;
+    static const uintptr_t STACK_AREA   = STATE_AREA + STATE_SIZE;
+    static const size_t HEAP_SIZE       = 64 * 1024;
+    static const unsigned RES_PAGES;
+
+    struct BootModule
+    {
+        char name[128];
+        uint64_t addr;
+        uint64_t size;
+    } M5_ATTR_PACKED;
+
     std::string commandLine;
 
   public:
     const unsigned memPe;
     const Addr memOffset;
     const Addr memSize;
-    Addr nextFrame;
+    const Addr modOffset;
+    unsigned nextFrame;
 
   public:
     typedef M3X86SystemParams Params;
@@ -62,9 +78,11 @@ class M3X86System : public X86System
 
   private:
     void mapPage(Addr virt, Addr phys, uint access);
+    void mapSegment(Addr start, Addr size, unsigned perm);
     void mapMemory();
     size_t getArgc() const;
     void writeArg(Addr &args, size_t &i, Addr argv, const char *cmd, const char *begin) const;
+    Addr loadModule(const std::string &path, const std::string &name, Addr addr) const;
 };
 
 #endif
