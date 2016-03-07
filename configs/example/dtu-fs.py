@@ -169,6 +169,7 @@ def createPE(no, mem=False, cache=True, l2cache=True, memPE=0):
         pe = MemSystem(mem_mode=CPUClass.memory_mode())
     else:
         pe = M3X86System(mem_mode=CPUClass.memory_mode())
+        pe.core_id = no
     setattr(root, 'pe%d' % no, pe)
 
     # TODO set latencies

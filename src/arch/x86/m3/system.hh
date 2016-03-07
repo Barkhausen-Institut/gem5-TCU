@@ -41,10 +41,10 @@ class M3X86System : public X86System
 {
   protected:
     static const size_t MAX_MODS        = 8;
-    static const size_t STATE_SIZE      = 0x2000;
-    static const uintptr_t STATE_AREA   = 0x1000;
+    static const size_t RT_SIZE         = 0x2000;
+    static const uintptr_t RT_START     = 0x1000;
     static const size_t STACK_SIZE      = 0x1000;
-    static const uintptr_t STACK_AREA   = STATE_AREA + STATE_SIZE;
+    static const uintptr_t STACK_AREA   = RT_START + RT_SIZE;
     static const size_t HEAP_SIZE       = 64 * 1024;
     static const unsigned RES_PAGES;
 
@@ -55,9 +55,32 @@ class M3X86System : public X86System
         uint64_t size;
     } M5_ATTR_PACKED;
 
+    struct StartEnv
+    {
+        uint64_t coreid;
+        int argc;
+        char **argv;
+        void *mods[MAX_MODS];
+
+        uintptr_t sp;
+        uintptr_t entry;
+        uintptr_t lambda;
+        int pager_sess;
+        int pager_gate;
+        size_t mount_len;
+        void *mounts;
+        void *eps;
+        void *caps;
+        uintptr_t exit;
+
+        uintptr_t def_recvbuf;
+        uintptr_t def_recvgate;
+    } M5_ATTR_PACKED;
+
     std::string commandLine;
 
   public:
+    const unsigned coreId;
     const unsigned memPe;
     const Addr memOffset;
     const Addr memSize;

@@ -52,6 +52,7 @@ const unsigned M3X86System::RES_PAGES =
 M3X86System::M3X86System(Params *p)
     : X86System(p),
       commandLine(p->boot_osflags),
+      coreId(p->core_id),
       memPe(p->memory_pe),
       memOffset(p->memory_offset),
       memSize(p->memory_size),
@@ -213,7 +214,7 @@ M3X86System::mapMemory()
         mapSegment(bssEnd, HEAP_SIZE, DtuTlb::INTERN | DtuTlb::RW);
 
         // state and stack
-        mapSegment(STATE_AREA, STATE_SIZE, DtuTlb::INTERN | DtuTlb::RW);
+        mapSegment(RT_START, RT_SIZE, DtuTlb::INTERN | DtuTlb::RW);
         mapSegment(STACK_AREA, STACK_SIZE, DtuTlb::INTERN | DtuTlb::RW);
     }
     else
@@ -231,22 +232,19 @@ M3X86System::initState()
 
     mapMemory();
 
-    const Addr stateBegin = STATE_AREA;
-    const Addr stateEnd = STATE_AREA + STATE_SIZE;
-
-    // write argc and argv
-    uint64_t argc = getArgc();
-    uint64_t argv = stateBegin + (2 + MAX_MODS) * sizeof(uint64_t);
-    physProxy.writeBlob(stateBegin + 0, (uint8_t*)&argc, sizeof(argc));
-    physProxy.writeBlob(stateBegin + sizeof(uint64_t), (uint8_t*)&argv, sizeof(argv));
-
-    Addr args = stateBegin + (2 + MAX_MODS + 1 + argc + 1) * sizeof(uint64_t);
+    StartEnv env;
+    memset(&env, 0, sizeof(env));
+    env.coreid = coreId;
+    env.argc = getArgc();
+    Addr argv = RT_START + sizeof(env);
+    Addr args = argv + sizeof(void*) * env.argc;
+    env.argv = reinterpret_cast<char**>(argv);
 
     // check if there is enough space
-    if (commandLine.length() + 1 > stateEnd - args)
+    if (commandLine.length() + 1 > RT_START + RT_SIZE - args)
     {
         panic("Command line \"%s\" is longer than %d characters.\n",
-                commandLine, stateEnd - args - 1);
+                commandLine, RT_START + RT_SIZE - args - 1);
     }
 
     std::string kernelPath;
@@ -321,9 +319,7 @@ M3X86System::initState()
         if(mods.size() > MAX_MODS)
             panic("Too many modules");
 
-        // put the pointers behind argc and argv
-        i = 2;
-
+        i = 0;
         Addr addr = NocAddr(memPe, 0, modOffset).getAddr();
         for (const std::pair<std::string, std::string> &mod : mods)
         {
@@ -348,9 +344,9 @@ M3X86System::initState()
 
             // store pointer to area module info and info itself
             uint64_t pointer = roundUp(addr + size, sizeof(uint64_t));
-            physProxy.writeBlob(stateBegin + sizeof(uint64_t) * i,
-                (uint8_t*)&pointer, sizeof(pointer));
-            physProxy.writeBlob(pointer, (uint8_t*)&bmod, sizeof(bmod));
+            env.mods[i] = reinterpret_cast<void*>(pointer);
+            physProxy.writeBlob(pointer,
+                reinterpret_cast<uint8_t*>(&bmod), sizeof(bmod));
 
             // to next
             addr = pointer + sizeof(bmod);
@@ -360,10 +356,11 @@ M3X86System::initState()
         }
 
         // termination
-        uint64_t pointer = 0;
-        physProxy.writeBlob(stateBegin + sizeof(uint64_t) * i,
-            (uint8_t*)&pointer, sizeof(pointer));
+        env.mods[i] = 0;
     }
+
+    // write env
+    physProxy.writeBlob(RT_START, reinterpret_cast<uint8_t*>(&env), sizeof(env));
 }
 
 M3X86System *
