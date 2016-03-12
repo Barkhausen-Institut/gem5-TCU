@@ -120,7 +120,8 @@ PtUnit::translateFunctional(Addr virt, uint access, NocAddr *phys)
 
         dtu.sendFunctionalMemRequest(pkt);
 
-        if (!finishTranslate(pkt, virt, level, &access, &ptePhys))
+        uint acccopy = access;
+        if (!finishTranslate(pkt, virt, level, &acccopy, &ptePhys))
             return false;
 
         ptAddr = ptePhys;
