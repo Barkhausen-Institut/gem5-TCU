@@ -58,23 +58,24 @@ class M3X86System : public X86System
     struct StartEnv
     {
         uint64_t coreid;
-        int argc;
+        uint32_t argc;
         char **argv;
-        void *mods[MAX_MODS];
+        uintptr_t mods[MAX_MODS];
 
         uintptr_t sp;
         uintptr_t entry;
         uintptr_t lambda;
-        int pager_sess;
-        int pager_gate;
-        size_t mount_len;
-        void *mounts;
-        void *eps;
-        void *caps;
+        uint32_t pager_sess;
+        uint32_t pager_gate;
+        uint32_t mounts_len;
+        uintptr_t mounts;
+        uint32_t fds_len;
+        uintptr_t fds;
+        uintptr_t eps;
+        uintptr_t caps;
         uintptr_t exit;
 
-        uintptr_t def_recvbuf;
-        uintptr_t def_recvgate;
+        uintptr_t backend;
     } M5_ATTR_PACKED;
 
     std::string commandLine;

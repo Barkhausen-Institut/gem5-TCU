@@ -343,13 +343,12 @@ M3X86System::initState()
                 bmod.name, bmod.addr, bmod.addr + bmod.size);
 
             // store pointer to area module info and info itself
-            uint64_t pointer = roundUp(addr + size, sizeof(uint64_t));
-            env.mods[i] = reinterpret_cast<void*>(pointer);
-            physProxy.writeBlob(pointer,
+            env.mods[i] = roundUp(addr + size, sizeof(uint64_t));
+            physProxy.writeBlob(env.mods[i],
                 reinterpret_cast<uint8_t*>(&bmod), sizeof(bmod));
 
             // to next
-            addr = pointer + sizeof(bmod);
+            addr = env.mods[i] + sizeof(bmod);
             addr += DtuTlb::PAGE_SIZE - 1;
             addr &= ~static_cast<Addr>(DtuTlb::PAGE_SIZE - 1);
             i++;
