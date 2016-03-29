@@ -86,6 +86,7 @@ class M3X86System : public X86System
     const Addr memOffset;
     const Addr memSize;
     const Addr modOffset;
+    const Addr modSize;
     unsigned nextFrame;
 
   public:

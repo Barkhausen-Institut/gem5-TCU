@@ -57,6 +57,7 @@ M3X86System::M3X86System(Params *p)
       memOffset(p->memory_offset),
       memSize(p->memory_size),
       modOffset(p->mod_offset),
+      modSize(p->mod_size),
       // don't reuse root pt
       nextFrame(RES_PAGES)
 {
@@ -352,6 +353,13 @@ M3X86System::initState()
             addr += DtuTlb::PAGE_SIZE - 1;
             addr &= ~static_cast<Addr>(DtuTlb::PAGE_SIZE - 1);
             i++;
+        }
+
+        Addr end = NocAddr(memPe, 0, modOffset + modSize).getAddr();
+        if (addr > end)
+        {
+            panic("Modules are too large (have: %lu, need: %lu)",
+                modSize, addr - NocAddr(memPe, 0, modOffset).getAddr());
         }
 
         // termination

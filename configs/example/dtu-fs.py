@@ -128,7 +128,7 @@ APIC_range_size = 1 << 12;
 
 base_offset = 32 * 1024 * 1024
 mod_offset = base_offset
-mod_size = 4 * 1024 * 1024
+mod_size = 16 * 1024 * 1024
 pe_offset = mod_offset + mod_size
 pe_size = 8 * 1024 * 1024
 
@@ -216,6 +216,7 @@ def createPE(no, mem=False, cache=True, l2cache=True, memPE=0):
         pe.memory_size = pe_size
         if no == 0:
             pe.mod_offset = mod_offset
+            pe.mod_size = mod_size
 
     # for memory PEs or PEs with SPM, we do not need a buffer. for the sake of an easy implementation
     # we just make the buffer very large and the block size as well, so that we can read a packet

@@ -39,3 +39,4 @@ class M3X86System(X86System):
     memory_size = Param.Addr(0, "The size in the memory PE")
 
     mod_offset = Param.Addr(0, "The offset of the boot modules (only for kernel PE)")
+    mod_size = Param.Addr(0, "The max. size of the boot modules (only for kernel PE)")
