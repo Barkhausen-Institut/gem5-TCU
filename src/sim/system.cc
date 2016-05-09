@@ -87,6 +87,7 @@ System::System(Params *p)
       kernel(nullptr),
       loadAddrMask(p->load_addr_mask),
       loadAddrOffset(p->load_offset),
+      pseudoMemOps(p->pseudo_mem_ops),
       nextPID(0),
       physmem(name() + ".physmem", p->memories, p->mmap_using_noreserve),
       memoryMode(p->mem_mode),

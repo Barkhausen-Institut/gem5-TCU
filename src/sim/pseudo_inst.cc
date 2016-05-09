@@ -91,6 +91,9 @@ panicFsOnlyPseudoInst(const char *name)
 uint64_t
 pseudoInst(ThreadContext *tc, uint8_t func, uint8_t subfunc)
 {
+    if (!tc->getSystemPtr()->hasPseudoMemOps())
+        return 0;
+
     uint64_t args[4];
 
     DPRINTF(PseudoInst, "PseudoInst::pseudoInst(%i, %i)\n", func, subfunc);

@@ -106,3 +106,5 @@ class System(MemObject):
     # Setting rgdb_wait to a positive integer waits for a remote debugger to
     # connect to that context ID before continuing.
     rgdb_wait = Param.Int(-1, "The context-id that should on remote gdb")
+
+    pseudo_mem_ops = Param.Bool(True, "Enable memory mapped pseudo instr.?")

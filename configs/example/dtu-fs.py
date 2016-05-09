@@ -178,6 +178,8 @@ def createPE(no, mem=False, cache=True, l2cache=True, memPE=0):
                               response_latency=1,
                               width=16)
 
+    pe.pseudo_mem_ops = False
+
     pe.dtu = Dtu()
     pe.dtu.core_id = no
 

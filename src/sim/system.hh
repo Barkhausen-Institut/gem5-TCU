@@ -250,6 +250,9 @@ class System : public MemObject
      */
     Addr loadAddrOffset;
 
+    /** Are the memory mapped pseudo operations enabled? */
+    bool pseudoMemOps;
+
   protected:
     uint64_t nextPID;
 
@@ -523,6 +526,8 @@ class System : public MemObject
     void unserialize(CheckpointIn &cp) M5_ATTR_OVERRIDE;
 
     void drainResume() M5_ATTR_OVERRIDE;
+
+    bool hasPseudoMemOps() const { return pseudoMemOps; }
 
   public:
     Counter totalNumInsts;
