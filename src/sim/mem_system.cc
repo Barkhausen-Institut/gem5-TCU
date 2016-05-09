@@ -55,13 +55,19 @@ MemSystem::initState()
         size_t sz = ftell(f);
         fseek(f, 0L, SEEK_SET);
 
-        // TODO for now, it should not be larger because the PEs use the space from 32MiB
-        assert(sz <= 32 * 1024 * 1024);
+        const size_t BUF_SIZE = 1024 * 1024;
+        auto data = new uint8_t[BUF_SIZE];
+        size_t rem = sz, off = 0;
+        while (rem > 0)
+        {
+            size_t amount = std::min(rem, BUF_SIZE);
+            if(fread(data, 1, amount, f) != amount)
+                panic("Unable to read '%s'", memFile.c_str());
+            physProxy.writeBlob(off, data, amount);
 
-        auto data = new uint8_t[sz];
-        if(fread(data, 1, sz, f) != sz)
-            panic("Unable to read '%s'", memFile.c_str());
-        physProxy.writeBlob(0x0, data, sz);
+            off += amount;
+            rem -= amount;
+        }
         delete[] data;
         fclose(f);
     }

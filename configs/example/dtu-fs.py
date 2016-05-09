@@ -126,7 +126,7 @@ IO_address_space_base         = 0xff20000000000000
 interrupts_address_space_base = 0xff40000000000000
 APIC_range_size = 1 << 12;
 
-base_offset = 32 * 1024 * 1024
+base_offset = 64 * 1024 * 1024
 mod_offset = base_offset
 mod_size = 16 * 1024 * 1024
 pe_offset = mod_offset + mod_size
@@ -294,6 +294,10 @@ def createMemPE(no, size, content=None):
     pe.mem_ctrl.range = MemorySize(size).value
     pe.mem_ctrl.port = pe.xbar.master
     if not content is None:
+        if os.stat(content).st_size > base_offset:
+            print 'File "%s" is too large for memory layout (%u vs %u)' \
+              % (content, os.stat(content).st_size, base_offset)
+            sys.exit(1)
         pe.mem_file = content
     print 'PE%d: %s' % (no, content)
     print '     memsize=%d KiB' % (int(pe.mem_ctrl.range.end + 1) / 1024)
