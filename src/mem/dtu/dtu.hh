@@ -144,11 +144,12 @@ class Dtu : public BaseDtu
             READ            = 3,
             WRITE           = 4,
             INC_READ_PTR    = 5,
+            DEBUG_MSG       = 6,
         };
 
         Error error;
         Opcode opcode;
-        unsigned epId;
+        unsigned arg;
     };
 
     struct ExternCommand

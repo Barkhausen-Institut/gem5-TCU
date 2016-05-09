@@ -62,14 +62,14 @@ static const char *syscallNames[] = {
 void
 MessageUnit::startTransmission(const Dtu::Command& cmd)
 {
-    unsigned epid = cmd.epId;
+    unsigned epid = cmd.arg;
 
     // if we want to reply, request the header first
     if (cmd.opcode == Dtu::Command::REPLY)
     {
         offset = 0;
         flagsPhys = 0;
-        requestHeader(cmd.epId);
+        requestHeader(cmd.arg);
         return;
     }
 
@@ -187,7 +187,7 @@ MessageUnit::recvFromMem(const Dtu::Command& cmd, PacketPtr pkt)
     // do we have the complete header yet? if not, request the rest
     if (offset < sizeof(Dtu::MessageHeader))
     {
-        requestHeader(cmd.epId);
+        requestHeader(cmd.arg);
         return;
     }
 
@@ -232,7 +232,7 @@ MessageUnit::startXfer(const Dtu::Command& cmd)
     DPRINTFS(Dtu, (&dtu), "\e[1m[%s -> %u]\e[0m with EP%u of %#018lx:%lu\n",
              cmd.opcode == Dtu::Command::REPLY ? "rp" : "sd",
              info.targetCoreId,
-             cmd.epId,
+             cmd.arg,
              dtu.regs().get(CmdReg::DATA_ADDR),
              messageSize);
 
@@ -252,7 +252,7 @@ MessageUnit::startXfer(const Dtu::Command& cmd)
 
     header->senderCoreId = dtu.coreId;
     header->senderVpeId  = dtu.regs().get(DtuReg::VPE_ID);
-    header->senderEpId   = cmd.epId;
+    header->senderEpId   = cmd.arg;
     header->replyEpId    = info.replyEpId;
     header->length       = messageSize;
     header->label        = info.label;

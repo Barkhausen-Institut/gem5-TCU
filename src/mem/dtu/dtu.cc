@@ -154,22 +154,21 @@ Dtu::getCommand()
     /*
      *   COMMAND                     0
      * |-----------------------------|
-     * |  error  |  epid  |  opcode  |
+     * |  error  |   arg  |  opcode  |
      * |-----------------------------|
      */
     reg_t opcodeMask = ((reg_t)1 << numCmdOpcodeBits) - 1;
-    reg_t epidMask   = (((reg_t)1 << numCmdEpidBits) - 1) << numCmdOpcodeBits;
 
     auto reg = regFile.get(CmdReg::COMMAND);
 
     Command cmd;
 
     unsigned bits = numCmdOpcodeBits + numCmdEpidBits;
-    cmd.error = static_cast<Error>(reg >> bits);
+    cmd.error  = static_cast<Error>(reg >> bits);
 
     cmd.opcode = static_cast<Command::Opcode>(reg & opcodeMask);
 
-    cmd.epId = (reg & epidMask) >> numCmdOpcodeBits;
+    cmd.arg    = reg >> numCmdOpcodeBits;
 
     return cmd;
 }
@@ -182,12 +181,15 @@ Dtu::executeCommand()
         return;
 
     assert(!cmdInProgress);
-    assert(cmd.epId < numEndpoints);
 
     cmdInProgress = true;
 
-    DPRINTF(DtuCmd, "Starting command %s with EP%d\n",
-            cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epId);
+    if(cmd.opcode != Command::DEBUG_MSG)
+    {
+        assert(cmd.arg < numEndpoints);
+        DPRINTF(DtuCmd, "Starting command %s with EP%u\n",
+                cmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg);
+    }
 
     switch (cmd.opcode)
     {
@@ -202,7 +204,11 @@ Dtu::executeCommand()
         memUnit->startWrite(cmd);
         break;
     case Command::INC_READ_PTR:
-        msgUnit->incrementReadPtr(cmd.epId);
+        msgUnit->incrementReadPtr(cmd.arg);
+        finishCommand(NONE);
+        break;
+    case Command::DEBUG_MSG:
+        DPRINTF(Dtu, "DEBUG %#x\n", cmd.arg);
         finishCommand(NONE);
         break;
     default:
@@ -218,8 +224,8 @@ Dtu::finishCommand(Error error)
 
     assert(cmdInProgress);
 
-    DPRINTF(DtuCmd, "Finished command %s with EP%d -> %u\n",
-            cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epId, error);
+    DPRINTF(DtuCmd, "Finished command %s with EP%u -> %u\n",
+            cmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg, error);
 
     // let the SW know that the command is finished
     unsigned bits = numCmdOpcodeBits + numCmdEpidBits;
