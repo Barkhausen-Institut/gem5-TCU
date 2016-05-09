@@ -234,8 +234,8 @@ Dtu::getExternCommand()
     auto reg = regFile.get(DtuReg::EXT_CMD);
 
     ExternCommand cmd;
-    cmd.opcode = static_cast<ExternCommand::Opcode>(reg & 0x3);
-    cmd.arg = reg >> 2;
+    cmd.opcode = static_cast<ExternCommand::Opcode>(reg & 0x7);
+    cmd.arg = reg >> 3;
     return cmd;
 }
 
