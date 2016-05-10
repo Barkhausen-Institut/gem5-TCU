@@ -249,12 +249,18 @@ class BaseDtu : public MemObject
                 dtu.checkWatchRange(pkt);
 
                 Translation *trans = new Translation(*this, pkt);
-                if (dtu.translate(trans, pkt, icache, functional))
+                int res = dtu.translate(trans, pkt, icache, functional);
+                if (res == 1)
                 {
                     if (functional)
                         port.sendFunctional(pkt);
                     else
                         port.schedTimingReq(pkt, curTick());
+                    delete trans;
+                }
+                else if (res == -1)
+                {
+                    dtu.sendDummyResponse(*this, pkt, functional);
                     delete trans;
                 }
             }
@@ -319,10 +325,10 @@ class BaseDtu : public MemObject
 
     virtual bool handleCacheMemRequest(PacketPtr pkt, bool functional) = 0;
 
-    virtual bool translate(PtUnit::Translation *trans,
-                           PacketPtr pkt,
-                           bool icache,
-                           bool functional) = 0;
+    virtual int translate(PtUnit::Translation *trans,
+                          PacketPtr pkt,
+                          bool icache,
+                          bool functional) = 0;
 
   protected:
 

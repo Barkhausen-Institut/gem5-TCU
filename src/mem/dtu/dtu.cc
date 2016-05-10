@@ -611,7 +611,7 @@ Dtu::handleCacheMemRequest(PacketPtr pkt, bool functional)
     return true;
 }
 
-bool
+int
 Dtu::translate(PtUnit::Translation *trans,
                PacketPtr pkt,
                bool icache,
@@ -655,24 +655,29 @@ Dtu::translate(PtUnit::Translation *trans,
 
             if (functional)
             {
-                assert(!pf);
-                NocAddr phys;
-                bool res = ptUnit->translateFunctional(pkt->getAddr(),
-                                                       access,
-                                                       &phys);
-                // TODO handle errors here
-                assert(res);
-                pkt->setAddr(phys.getAddr());
-                pkt->req->setPaddr(phys.getAddr());
-                return true;
+                int res = 0;
+                if (!pf)
+                {
+                    NocAddr phys;
+                    res = ptUnit->translateFunctional(pkt->getAddr(),
+                                                      access,
+                                                      &phys);
+                    if (res)
+                    {
+                        pkt->setAddr(phys.getAddr());
+                        pkt->req->setPaddr(phys.getAddr());
+                    }
+                }
+
+                return !res ? -1 : 1;
             }
 
             ptUnit->startTranslate(pkt->getAddr(), access, trans, pf);
         }
-        return false;
+        return 0;
     }
 
-    return true;
+    return 1;
 }
 
 void

@@ -258,10 +258,10 @@ class Dtu : public BaseDtu
 
     bool handleCacheMemRequest(PacketPtr pkt, bool functional) override;
 
-    bool translate(PtUnit::Translation *trans,
-                   PacketPtr pkt,
-                   bool icache,
-                   bool functional) override;
+    int translate(PtUnit::Translation *trans,
+                  PacketPtr pkt,
+                  bool icache,
+                  bool functional) override;
 
   private:
 
