@@ -68,8 +68,8 @@ parser.add_option("-c", "--cmd", default="", type="string",
                   help="comma separated list of binaries")
 parser.add_option("--init_mem", default="", type="string",
                   help="file to load into the memory-PE")
-parser.add_option("--debug", default="",
-                  help="the binary to debug")
+parser.add_option("--pausepe", default=-1, type="int",
+                  help="the PE to pause until GDB connects")
 
 parser.add_option("--list-mem-types",
                   action="callback", callback=_listMemTypes,
@@ -263,12 +263,14 @@ def createCorePE(no, cache, l2cache, memPE):
         print '     memsize=%d KiB' % (int(pe.cachespm.range.end + 1) / 1024)
     print '     bufsize=%d KiB, blocksize=%d B, count=%d' % \
         (pe.dtu.buf_size.value / 1024, pe.dtu.block_size.value, pe.dtu.buf_count)
-    print
 
     # if specified, let this PE wait for GDB
-    if options.debug != "" and options.debug in pe.kernel:
+    if options.pausepe == no:
+        print '     waiting for GDB'
         # = 0, because for us, it's always the first context
         pe.rgdb_wait = 0
+
+    print
 
     # connect the IO space via bridge to the root NoC
     pe.bridge = Bridge(delay='50ns')
