@@ -432,6 +432,12 @@ Dtu::startTransfer(TransferType type,
 }
 
 void
+Dtu::finishMsgReceive(unsigned epId)
+{
+    msgUnit->incrementMsgCnt(epId);
+}
+
+void
 Dtu::startTranslate(Addr virt,
                     uint access,
                     PtUnit::Translation *trans,

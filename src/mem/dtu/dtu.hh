@@ -232,6 +232,8 @@ class Dtu : public BaseDtu
                         PtUnit::Translation *trans,
                         bool pf);
 
+    void finishMsgReceive(unsigned epId);
+
     void handlePFResp(PacketPtr pkt);
 
     void printPacket(PacketPtr pkt) const;

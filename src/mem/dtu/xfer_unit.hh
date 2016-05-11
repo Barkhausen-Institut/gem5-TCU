@@ -42,6 +42,7 @@ class XferUnit
     {
         MESSAGE   = 1,
         LAST      = 2,
+        MSGRECV   = 4,
     };
 
   private:
@@ -195,7 +196,7 @@ class XferUnit
 
   private:
 
-    Buffer* allocateBuf();
+    Buffer* allocateBuf(bool recvmsg);
 
   private:
 

@@ -37,6 +37,7 @@
 #include "debug/DtuTlb.hh"
 #include "mem/dtu/msg_unit.hh"
 #include "mem/dtu/noc_addr.hh"
+#include "mem/dtu/xfer_unit.hh"
 
 static const char *syscallNames[] = {
     "PAGEFAULT",
@@ -307,13 +308,26 @@ MessageUnit::incrementWritePtr(unsigned epId)
         ep.wrOff = 0;
 
     DPRINTFS(DtuBuf, (&dtu),
-        "EP%u: increment write pointer to %#018lx (msgCount=%u)\n",
-        epId, ep.wrOff, ep.msgCount + 1);
+        "EP%u: increment write pointer to %#018lx\n",
+        epId, ep.wrOff);
+
+    dtu.regs().setRecvEp(epId, ep);
+    return true;
+}
+
+void
+MessageUnit::incrementMsgCnt(unsigned epId)
+{
+    RecvEp ep = dtu.regs().getRecvEp(epId);
+
+    DPRINTFS(DtuBuf, (&dtu),
+        "EP%u: increment message count to %u\n",
+        epId, ep.msgCount + 1);
 
     if (ep.msgCount == ep.size)
     {
         warn("EP%u: Buffer full!\n", epId);
-        return false;
+        return;
     }
     ep.msgCount++;
 
@@ -321,7 +335,6 @@ MessageUnit::incrementWritePtr(unsigned epId)
 
     dtu.updateSuspendablePin();
     dtu.wakeupCore();
-    return true;
 }
 
 Dtu::Error
@@ -391,7 +404,8 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
                           pkt->getSize(),
                           pkt,
                           NULL,
-                          delay);
+                          delay,
+                          XferUnit::XferFlags::MSGRECV);
 
         incrementWritePtr(epId);
     }

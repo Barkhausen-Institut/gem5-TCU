@@ -92,6 +92,11 @@ class MessageUnit
      */
     void incrementReadPtr(unsigned epId);
 
+    /**
+     * Increments the message counter
+     */
+    void incrementMsgCnt(unsigned epId);
+
   private:
 
     bool incrementWritePtr(unsigned epId);

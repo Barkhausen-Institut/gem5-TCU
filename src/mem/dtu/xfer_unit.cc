@@ -145,7 +145,7 @@ XferUnit::startTransfer(Dtu::TransferType type,
                         Cycles delay,
                         uint flags)
 {
-    Buffer *buf = allocateBuf();
+    Buffer *buf = allocateBuf(flags & XferFlags::MSGRECV);
 
     bool writing = type == Dtu::TransferType::REMOTE_WRITE ||
                    type == Dtu::TransferType::LOCAL_WRITE;
@@ -282,6 +282,12 @@ XferUnit::recvMemResponse(size_t bufId,
         }
         else
         {
+            if (buf->event.flags & XferFlags::MSGRECV)
+            {
+                NocAddr addr(buf->event.pkt->getAddr());
+                dtu.finishMsgReceive(addr.offset);
+            }
+
             // TODO should we respond earlier for remote reads? i.e. as soon
             // as its in the buffer
             assert(buf->event.pkt != NULL);
@@ -320,8 +326,23 @@ XferUnit::recvMemResponse(size_t bufId,
 }
 
 XferUnit::Buffer*
-XferUnit::allocateBuf()
+XferUnit::allocateBuf(bool recvmsg)
 {
+    // don't allow message receives in parallel. because otherwise we run into race conditions.
+    // e.g., we could overwrite unread messages because we can't increase the message counter when
+    // the receive starts (to not notify SW) and thus might start receiving without having space
+    // another problem is that we might finish receiving the second message before the first and
+    // then increase the message counter, so that the SW looks at the first message, which is not
+    // ready yet.
+    if (recvmsg)
+    {
+        for (size_t i = 0; i < bufCount; ++i)
+        {
+            if (!bufs[i]->free && (bufs[i]->event.flags & XferFlags::MSGRECV))
+                return NULL;
+        }
+    }
+
     for (size_t i = 0; i < bufCount; ++i)
     {
         if (bufs[i]->free)
