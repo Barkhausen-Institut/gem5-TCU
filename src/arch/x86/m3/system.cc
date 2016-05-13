@@ -91,6 +91,18 @@ M3X86System::getArgc() const
     return argc;
 }
 
+bool
+M3X86System::isKernelArg(const std::string &arg)
+{
+    if (arg == "daemon")
+        return true;
+    if (arg.find("requires=") == 0)
+        return true;
+    if (arg.find("core=") == 0)
+        return true;
+    return false;
+}
+
 void
 M3X86System::writeArg(Addr &args, size_t &i, Addr argv, const char *cmd, const char *begin) const
 {
@@ -283,9 +295,13 @@ M3X86System::initState()
                         prog = std::string(begin, cmd - begin);
                     else
                     {
-                        if (!argstr.empty())
-                            argstr += ' ';
-                        argstr += std::string(begin, cmd - begin);
+                        std::string arg(begin, cmd - begin);
+                        if (!isKernelArg(arg))
+                        {
+                            if (!argstr.empty())
+                                argstr += ' ';
+                            argstr += arg;
+                        }
                     }
                 }
 
@@ -302,9 +318,13 @@ M3X86System::initState()
             prog = std::string(begin, cmd - begin);
         else
         {
-            if (!argstr.empty())
-                argstr += ' ';
-            argstr += std::string(begin, cmd - begin);
+            std::string arg(begin, cmd - begin);
+            if (!isKernelArg(arg))
+            {
+                if (!argstr.empty())
+                    argstr += ' ';
+                argstr += arg;
+            }
         }
 
         mods.push_back(std::make_pair(prog, argstr));

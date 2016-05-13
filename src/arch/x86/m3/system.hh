@@ -102,6 +102,7 @@ class M3X86System : public X86System
     void initState();
 
   private:
+    bool isKernelArg(const std::string &arg);
     void mapPage(Addr virt, Addr phys, uint access);
     void mapSegment(Addr start, Addr size, unsigned perm);
     void mapMemory();
