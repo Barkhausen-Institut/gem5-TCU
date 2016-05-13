@@ -46,6 +46,7 @@ class Dtu : public BaseDtu
   public:
 
     static const uint16_t INVALID_VPE_ID    = 0xFFFF;
+    static const size_t CREDITS_UNLIM       = 0xFFFF;
 
     static const int SYSCALL_EP             = 0;
 

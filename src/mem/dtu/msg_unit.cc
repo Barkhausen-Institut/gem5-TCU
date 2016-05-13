@@ -81,22 +81,25 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
     // TODO error handling
     assert(messageSize + sizeof(Dtu::MessageHeader) <= ep.maxMsgSize);
 
-    if (ep.credits < ep.maxMsgSize)
+    if (ep.credits != Dtu::CREDITS_UNLIM)
     {
-        DPRINTFS(Dtu, (&dtu),
-            "EP%u: not enough credits (%lu) to send message (%lu)\n",
-            epid, ep.credits, ep.maxMsgSize);
-        dtu.scheduleFinishOp(Cycles(1), Dtu::MISS_CREDITS);
-        return;
+        if (ep.credits < ep.maxMsgSize)
+        {
+            DPRINTFS(Dtu, (&dtu),
+                "EP%u: not enough credits (%lu) to send message (%lu)\n",
+                epid, ep.credits, ep.maxMsgSize);
+            dtu.scheduleFinishOp(Cycles(1), Dtu::MISS_CREDITS);
+            return;
+        }
+
+        ep.credits -= ep.maxMsgSize;
+
+        DPRINTFS(DtuCredits, (&dtu), "EP%u pays %u credits (%u left)\n",
+                 epid, ep.maxMsgSize, ep.credits);
+
+        // pay the credits
+        dtu.regs().setSendEp(epid, ep);
     }
-
-    ep.credits -= ep.maxMsgSize;
-
-    DPRINTFS(DtuCredits, (&dtu), "EP%u pays %u credits (%u left)\n",
-             epid, ep.maxMsgSize, ep.credits);
-
-    // pay the credits
-    dtu.regs().setSendEp(epid, ep);
 
     // fill the info struct and start the transfer
     info.targetCoreId = ep.targetCore;
@@ -383,13 +386,16 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
         {
             SendEp sep = dtu.regs().getSendEp(header->replyEpId);
 
-            sep.credits += sep.maxMsgSize;
+            if (sep.credits != Dtu::CREDITS_UNLIM)
+            {
+                sep.credits += sep.maxMsgSize;
 
-            DPRINTFS(DtuCredits, (&dtu),
-                "EP%u: received %u credits (%u in total)\n",
-                header->replyEpId, sep.maxMsgSize, sep.credits);
+                DPRINTFS(DtuCredits, (&dtu),
+                    "EP%u: received %u credits (%u in total)\n",
+                    header->replyEpId, sep.maxMsgSize, sep.credits);
 
-            dtu.regs().setSendEp(header->replyEpId, sep);
+                dtu.regs().setSendEp(header->replyEpId, sep);
+            }
         }
 
         // the message is transferred piece by piece; we can start as soon as
