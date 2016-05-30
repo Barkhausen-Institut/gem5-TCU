@@ -34,6 +34,10 @@
 #include "debug/DtuRegRange.hh"
 #include "mem/dtu/regfile.hh"
 
+#define DPRINTFNS(name, ...) do {                                       \
+    Trace::getDebugLogger()->dprintf(curTick(), name, __VA_ARGS__);     \
+} while (0)
+
 const char *RegFile::dtuRegNames[] = {
     "STATUS",
     "ROOT_PT",
@@ -63,6 +67,12 @@ const char *RegFile::epTypeNames[] = {
     "??",
     "??",
 };
+
+static bool isTraceEnabled(bool read)
+{
+    return Trace::enabled &&
+        ((read && Debug::DtuRegRead) || (!read && Debug::DtuRegWrite));
+}
 
 static const char *regAccessName(RegAccess access)
 {
@@ -95,10 +105,10 @@ RegFile::get(DtuReg reg, RegAccess access) const
 {
     reg_t value = dtuRegs[static_cast<Addr>(reg)];
 
-    DPRINTF(DtuReg, "%s<- DTU[%-12s]: %#018x\n",
-                    regAccessName(access),
-                    dtuRegNames[static_cast<Addr>(reg)],
-                    value);
+    DPRINTF(DtuRegRead, "%s<- DTU[%-12s]: %#018x\n",
+                        regAccessName(access),
+                        dtuRegNames[static_cast<Addr>(reg)],
+                        value);
 
     return value;
 }
@@ -106,10 +116,10 @@ RegFile::get(DtuReg reg, RegAccess access) const
 void
 RegFile::set(DtuReg reg, reg_t value, RegAccess access)
 {
-    DPRINTF(DtuReg, "%s-> DTU[%-12s]: %#018x\n",
-                    regAccessName(access),
-                    dtuRegNames[static_cast<Addr>(reg)],
-                    value);
+    DPRINTF(DtuRegWrite, "%s-> DTU[%-12s]: %#018x\n",
+                         regAccessName(access),
+                         dtuRegNames[static_cast<Addr>(reg)],
+                         value);
 
     dtuRegs[static_cast<Addr>(reg)] = value;
 }
@@ -119,10 +129,10 @@ RegFile::get(CmdReg reg, RegAccess access) const
 {
     reg_t value = cmdRegs[static_cast<Addr>(reg)];
 
-    DPRINTF(DtuReg, "%s<- CMD[%-12s]: %#018x\n",
-                    regAccessName(access),
-                    cmdRegNames[static_cast<Addr>(reg)],
-                    value);
+    DPRINTF(DtuRegRead, "%s<- CMD[%-12s]: %#018x\n",
+                        regAccessName(access),
+                        cmdRegNames[static_cast<Addr>(reg)],
+                        value);
 
     return value;
 }
@@ -130,10 +140,10 @@ RegFile::get(CmdReg reg, RegAccess access) const
 void
 RegFile::set(CmdReg reg, reg_t value, RegAccess access)
 {
-    DPRINTF(DtuReg, "%s-> CMD[%-12s]: %#018x\n",
-                    regAccessName(access),
-                    cmdRegNames[static_cast<Addr>(reg)],
-                    value);
+    DPRINTF(DtuRegWrite, "%s-> CMD[%-12s]: %#018x\n",
+                         regAccessName(access),
+                         cmdRegNames[static_cast<Addr>(reg)],
+                         value);
 
     cmdRegs[static_cast<Addr>(reg)] = value;
 }
@@ -272,7 +282,10 @@ SendEp::print(const RegFile &rf,
               bool read,
               RegAccess access) const
 {
-    DPRINTFS(DtuReg, (&rf),
+    if(!isTraceEnabled(read))
+        return;
+
+    DPRINTFN(
         "%s%s EP%u%14s: Send[vpe=%u pe=%u ep=%u crd=%#x max=%#x lbl=%#llx]\n",
         regAccessName(access), read ? "<-" : "->",
         epId, "",
@@ -287,7 +300,10 @@ RecvEp::print(const RegFile &rf,
               bool read,
               RegAccess access) const
 {
-    DPRINTFS(DtuReg, (&rf),
+    if(!isTraceEnabled(read))
+        return;
+
+    DPRINTFNS(rf.name(),
         "%s%s EP%u%14s: Recv[buf=%p msz=%#x bsz=%#x msgs=%u rd=%#x wr=%#x]\n",
         regAccessName(access), read ? "<-" : "->",
         epId, "",
@@ -301,7 +317,10 @@ MemEp::print(const RegFile &rf,
              bool read,
              RegAccess access) const
 {
-    DPRINTFS(DtuReg, (&rf),
+    if(!isTraceEnabled(read))
+        return;
+
+    DPRINTFNS(rf.name(),
         "%s%s EP%u%14s: Mem[vpe=%u pe=%u addr=%#llx size=%#llx flags=%u]\n",
         regAccessName(access), read ? "<-" : "->",
         epId, "",
@@ -313,7 +332,7 @@ MemEp::print(const RegFile &rf,
 void
 RegFile::printEpAccess(unsigned epId, bool read, bool cpu) const
 {
-    if (DTRACE(DtuReg))
+    if (isTraceEnabled(read))
     {
         RegAccess access = cpu ? RegAccess::CPU : RegAccess::NOC;
         switch(getEpType(epId))
@@ -332,10 +351,10 @@ RegFile::printEpAccess(unsigned epId, bool read, bool cpu) const
 
             default:
             case EpType::INVALID:
-                DPRINTF(DtuReg, "%s%s EP%u%14s: INVALID (%#x)\n",
-                        regAccessName(access), read ? "<-" : "->",
-                        epId, "",
-                        static_cast<unsigned>(getEpType(epId)));
+                DPRINTFN("%s%s EP%u%14s: INVALID (%#x)\n",
+                         regAccessName(access), read ? "<-" : "->",
+                         epId, "",
+                         static_cast<unsigned>(getEpType(epId)));
                 break;
         }
     }
