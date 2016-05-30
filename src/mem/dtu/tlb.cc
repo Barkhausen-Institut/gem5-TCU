@@ -78,16 +78,21 @@ DtuTlb::evict()
 void
 DtuTlb::insert(Addr virt, NocAddr phys, uint flags)
 {
-    if (free.empty())
-        evict();
+    Entry *e = trie.lookup(virt);
+    if (!e)
+    {
+        if (free.empty())
+            evict();
 
-    assert(!free.empty());
-    Entry *e = free.back();
-    e->virt = virt;
+        assert(!free.empty());
+        e = free.back();
+        e->virt = virt;
+        e->handle = trie.insert(virt, 64 - PAGE_BITS, e);
+        free.pop_back();
+    }
+
     e->phys = phys;
     e->flags = flags;
-    e->handle = trie.insert(virt, 64 - PAGE_BITS, e);
-    free.pop_back();
 }
 
 void

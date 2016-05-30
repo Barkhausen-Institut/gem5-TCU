@@ -85,18 +85,11 @@ PtUnit::TranslateEvent::recvFromMem(PacketPtr pkt)
 
         Addr tlbVirt = virt & ~DtuTlb::PAGE_MASK;
 
-        // we can't insert an entry twice
-        NocAddr newPhys;
-        if (unit.dtu.tlb->lookup(tlbVirt, access, &newPhys) != DtuTlb::HIT)
-        {
-            DPRINTFS(DtuPf, (&unit.dtu),
-                "Inserting into TLB: virt=%p phys=%p flags=%u\n",
-                tlbVirt, phys, flags);
+        DPRINTFS(DtuPf, (&unit.dtu),
+            "Inserting into TLB: virt=%p phys=%p flags=%u\n",
+            tlbVirt, phys, flags);
 
-            unit.dtu.tlb->insert(tlbVirt, NocAddr(phys), flags);
-        }
-        else
-            assert(newPhys.getAddr() == phys);
+        unit.dtu.tlb->insert(tlbVirt, NocAddr(phys), flags);
 
         finish(success, NocAddr(phys + (virt & DtuTlb::PAGE_MASK)));
     }
