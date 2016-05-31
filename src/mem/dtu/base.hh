@@ -41,7 +41,7 @@
 
 class BaseDtu : public MemObject
 {
-  private:
+  protected:
 
     class DtuMasterPort : public QueuedMasterPort
     {
@@ -184,32 +184,6 @@ class BaseDtu : public MemObject
     {
       private:
 
-        struct Translation : PtUnit::Translation
-        {
-            CacheSlavePort& base;
-
-            PacketPtr pkt;
-
-            Translation(CacheSlavePort& _base, PacketPtr _pkt)
-                : base(_base), pkt(_pkt)
-            {}
-
-            void finished(bool success, const NocAddr &phys) override
-            {
-                if (!success)
-                    base.dtu.sendDummyResponse(base, pkt, false);
-                else
-                {
-                    pkt->setAddr(phys.getAddr());
-                    pkt->req->setPaddr(phys.getAddr());
-
-                    base.port.schedTimingReq(pkt, curTick());
-                }
-
-                delete this;
-            }
-        };
-
         T &port;
 
         bool icache;
@@ -232,38 +206,11 @@ class BaseDtu : public MemObject
             return ranges;
         }
 
-        bool handleRequest(PacketPtr pkt, bool *busy, bool functional) override
+        bool handleRequest(PacketPtr pkt, bool *, bool functional) override
         {
-            if (pkt->getAddr() >= dtu.regFileBaseAddr)
-            {
-                // not supported here
-                assert(!functional);
-
-                if (icache)
-                    dtu.sendDummyResponse(*this, pkt, false);
-                else
-                    dtu.handleCpuRequest(pkt);
-            }
-            else
-            {
-                dtu.checkWatchRange(pkt);
-
-                Translation *trans = new Translation(*this, pkt);
-                int res = dtu.translate(trans, pkt, icache, functional);
-                if (res == 1)
-                {
-                    if (functional)
-                        port.sendFunctional(pkt);
-                    else
-                        port.schedTimingReq(pkt, curTick());
-                    delete trans;
-                }
-                else if (res == -1)
-                {
-                    dtu.sendDummyResponse(*this, pkt, functional);
-                    delete trans;
-                }
-            }
+            bool res = dtu.handleCpuRequest(pkt, *this, port, icache, functional);
+            if (!res)
+                dtu.sendDummyResponse(*this, pkt, functional);
             return true;
         }
     };
@@ -321,7 +268,11 @@ class BaseDtu : public MemObject
 
     virtual void handleNocRequest(PacketPtr pkt) = 0;
 
-    virtual void handleCpuRequest(PacketPtr pkt) = 0;
+    virtual bool handleCpuRequest(PacketPtr pkt,
+                                  DtuSlavePort &sport,
+                                  DtuMasterPort &mport,
+                                  bool icache,
+                                  bool functional) = 0;
 
     virtual bool handleCacheMemRequest(PacketPtr pkt, bool functional) = 0;
 

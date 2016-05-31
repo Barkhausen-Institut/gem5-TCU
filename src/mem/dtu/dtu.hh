@@ -258,7 +258,11 @@ class Dtu : public BaseDtu
 
     void handleNocRequest(PacketPtr pkt) override;
 
-    void handleCpuRequest(PacketPtr pkt) override;
+    bool handleCpuRequest(PacketPtr pkt,
+                          DtuSlavePort &sport,
+                          DtuMasterPort &mport,
+                          bool icache,
+                          bool functional) override;
 
     bool handleCacheMemRequest(PacketPtr pkt, bool functional) override;
 
@@ -325,6 +329,38 @@ class Dtu : public BaseDtu
         const char* description() const override { return "FinishCommandEvent"; }
 
         const std::string name() const override { return dtu.name(); }
+    };
+
+    struct MemTranslation : PtUnit::Translation
+    {
+        Dtu& dtu;
+
+        DtuSlavePort& sport;
+        DtuMasterPort& mport;
+
+        PacketPtr pkt;
+
+        MemTranslation(Dtu &_dtu,
+                       DtuSlavePort& _sport,
+                       DtuMasterPort& _mport,
+                       PacketPtr _pkt)
+            : dtu(_dtu), sport(_sport), mport(_mport), pkt(_pkt)
+        {}
+
+        void finished(bool success, const NocAddr &phys) override
+        {
+            if (!success)
+                dtu.sendDummyResponse(sport, pkt, false);
+            else
+            {
+                pkt->setAddr(phys.getAddr());
+                pkt->req->setPaddr(phys.getAddr());
+
+                mport.schedTimingReq(pkt, curTick());
+            }
+
+            delete this;
+        }
     };
 
     struct VPEGoneTranslation : PtUnit::Translation

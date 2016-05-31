@@ -571,10 +571,47 @@ Dtu::handleNocRequest(PacketPtr pkt)
     senderState->result = res;
 }
 
-void
-Dtu::handleCpuRequest(PacketPtr pkt)
+bool
+Dtu::handleCpuRequest(PacketPtr pkt,
+                      DtuSlavePort &sport,
+                      DtuMasterPort &mport,
+                      bool icache,
+                      bool functional)
 {
-    forwardRequestToRegFile(pkt, true);
+    bool res = true;
+
+    if (pkt->getAddr() >= regFileBaseAddr)
+    {
+        // not supported here
+        assert(!functional);
+
+        if (icache)
+            res = false;
+        else
+            forwardRequestToRegFile(pkt, true);
+    }
+    else
+    {
+        checkWatchRange(pkt);
+
+        MemTranslation *trans = new MemTranslation(*this, sport, mport, pkt);
+        int tres = translate(trans, pkt, icache, functional);
+        if (tres == 1)
+        {
+            if (functional)
+                mport.sendFunctional(pkt);
+            else
+                mport.schedTimingReq(pkt, curTick());
+            delete trans;
+        }
+        else if (tres == -1)
+        {
+            res = false;
+            delete trans;
+        }
+    }
+
+    return res;
 }
 
 bool
