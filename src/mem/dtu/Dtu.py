@@ -52,6 +52,7 @@ class BaseDtu(MemObject):
     l2cache = Param.Cache(NULL, "The L2 cache (if any)")
 
     regfile_base_addr = Param.Addr(0xF0000000, "Register file address")
+    rw_barrier = Param.Addr(0xE0000000, "The default barrier address above which no write accesses are allowed")
     core_id = Param.Unsigned("ID of the core this DTU belongs to")
 
     watch_range_start = Param.Addr(0x0, "The start address of the address range to watch")

@@ -40,6 +40,7 @@
 enum class DtuReg : Addr
 {
     STATUS,
+    RW_BARRIER,
     ROOT_PT,
     PF_EP,
     VPE_ID,
@@ -54,7 +55,7 @@ enum class Status
     ASYNC_SEND  = 1 << 2,
 };
 
-constexpr unsigned numDtuRegs = 6;
+constexpr unsigned numDtuRegs = 7;
 
 // registers to issue a command
 enum class CmdReg : Addr

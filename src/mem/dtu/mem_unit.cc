@@ -41,6 +41,7 @@ void
 MemoryUnit::startRead(const Dtu::Command& cmd)
 {
     MemEp ep = dtu.regs().getMemEp(cmd.arg);
+    Addr rwBarrier = dtu.regs().get(DtuReg::RW_BARRIER);
 
     Addr localAddr = dtu.regs().get(CmdReg::DATA_ADDR);
     Addr requestSize = dtu.regs().get(CmdReg::DATA_SIZE);
@@ -60,6 +61,8 @@ MemoryUnit::startRead(const Dtu::Command& cmd)
         cmd.arg, localAddr, requestSize);
 
     // TODO error handling
+    assert(localAddr < rwBarrier);
+    assert(localAddr + requestSize <= rwBarrier);
     assert(ep.flags & Dtu::MemoryFlags::READ);
     assert(requestSize + offset >= requestSize);
     assert(requestSize + offset <= ep.remoteSize);
