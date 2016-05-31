@@ -667,7 +667,7 @@ Dtu::translate(PtUnit::Translation *trans,
                bool functional)
 {
     if (!tlb)
-        return true;
+        return 1;
 
     uint access = DtuTlb::INTERN;
     if (icache)
