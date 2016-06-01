@@ -43,6 +43,7 @@ static const char *syscallNames[] = {
     "PAGEFAULT",
     "CREATESRV",
     "CREATESESS",
+    "CREATESESSAT",
     "CREATEGATE",
     "CREATEVPE",
     "CREATEMAP",
