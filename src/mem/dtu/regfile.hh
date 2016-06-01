@@ -43,6 +43,7 @@ enum class DtuReg : Addr
     RW_BARRIER,
     ROOT_PT,
     PF_EP,
+    LAST_PF,
     VPE_ID,
     MSG_CNT,
     EXT_CMD,
@@ -55,7 +56,7 @@ enum class Status
     ASYNC_SEND  = 1 << 2,
 };
 
-constexpr unsigned numDtuRegs = 7;
+constexpr unsigned numDtuRegs = 8;
 
 // registers to issue a command
 enum class CmdReg : Addr

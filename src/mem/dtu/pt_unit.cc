@@ -395,6 +395,25 @@ PtUnit::finishTranslate(PacketPtr pkt,
 }
 
 void
+PtUnit::resolveFailed(Addr virt)
+{
+    if (virt == lastPfAddr)
+    {
+        if (++lastPfCnt == 10)
+        {
+            dtu.regs().set(DtuReg::LAST_PF, virt);
+            // TODO make the vector configurable
+            dtu.injectIRQ(0x41);
+        }
+    }
+    else
+    {
+        lastPfAddr = virt;
+        lastPfCnt = 1;
+    }
+}
+
+void
 PtUnit::startTranslate(Addr virt, uint access, Translation *trans, bool pf)
 {
     TranslateEvent *event = new TranslateEvent(*this);

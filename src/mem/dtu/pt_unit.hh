@@ -109,6 +109,9 @@ class PtUnit
             // make sure that we don't do that twice
             trans.clear();
             setFlags(AutoDelete);
+
+            if (!success)
+                unit.resolveFailed(virt);
         }
 
         const char* description() const override { return "TranslateEvent"; }
@@ -118,7 +121,7 @@ class PtUnit
 
   public:
 
-    PtUnit(Dtu& _dtu) : dtu(_dtu), pfqueue()
+    PtUnit(Dtu& _dtu) : dtu(_dtu), lastPfAddr(-1), lastPfCnt(0), pfqueue()
     {}
 
     bool translateFunctional(Addr virt, uint access, NocAddr *phys);
@@ -151,7 +154,13 @@ class PtUnit
                          uint *access,
                          Addr *phys);
 
+    void resolveFailed(Addr virt);
+
     Dtu& dtu;
+
+    Addr lastPfAddr;
+
+    int lastPfCnt;
 
     std::list<TranslateEvent*> pfqueue;
 

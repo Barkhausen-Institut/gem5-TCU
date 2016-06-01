@@ -43,6 +43,7 @@ const char *RegFile::dtuRegNames[] = {
     "RW_BARRIER",
     "ROOT_PT",
     "PF_EP",
+    "LAST_PF",
     "VPE_ID",
     "MSG_CNT",
     "EXT_CMD",
