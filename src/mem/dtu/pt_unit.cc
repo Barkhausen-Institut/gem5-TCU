@@ -399,7 +399,7 @@ PtUnit::resolveFailed(Addr virt)
 {
     if (virt == lastPfAddr)
     {
-        if (++lastPfCnt == 10)
+        if (++lastPfCnt == 100)
         {
             dtu.regs().set(DtuReg::LAST_PF, virt);
             // TODO make the vector configurable
