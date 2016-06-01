@@ -49,6 +49,7 @@ PtUnit::TranslateEvent::requestPTE()
     }
 
     unit.dtu.sendMemRequest(pkt,
+                            -1,  // no virtual address here
                             reinterpret_cast<Addr>(this),
                             Dtu::MemReqType::TRANSLATION,
                             Cycles(0));

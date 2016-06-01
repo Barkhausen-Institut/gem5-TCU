@@ -53,15 +53,17 @@ class MessageUnit
     {
         MessageUnit& unit;
 
+        Addr virt;
+
         unsigned epId;
 
-        Translation(MessageUnit& _unit, unsigned _epId)
-            : unit(_unit), epId(_epId)
+        Translation(MessageUnit& _unit, Addr _virt, unsigned _epId)
+            : unit(_unit), virt(_virt), epId(_epId)
         {}
 
         void finished(bool success, const NocAddr &phys) override
         {
-            unit.requestHeaderWithPhys(epId, success, phys);
+            unit.requestHeaderWithPhys(epId, success, virt, phys);
 
             delete this;
         }
@@ -105,6 +107,7 @@ class MessageUnit
 
     void requestHeaderWithPhys(unsigned epid,
                                bool success,
+                               Addr virt,
                                const NocAddr &phys);
 
     void startXfer(const Dtu::Command& cmd);

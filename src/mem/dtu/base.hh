@@ -281,11 +281,13 @@ class BaseDtu : public MemObject
                           bool icache,
                           bool functional) = 0;
 
+    void regWatchRange(PacketPtr pkt, Addr virt);
+
+    void checkWatchRange(PacketPtr pkt);
+
   protected:
 
     void nocRequestFinished();
-
-    void checkWatchRange(PacketPtr pkt);
 
     void sendDummyResponse(DtuSlavePort &port, PacketPtr pkt, bool functional);
 
@@ -309,6 +311,8 @@ class BaseDtu : public MemObject
     Cache *l2Cache;
 
     AddrRange watchRange;
+
+    std::map<PacketPtr, Addr> watches;
 
     EventWrapper<BaseDtu, &BaseDtu::nocRequestFinished> nocReqFinishedEvent;
 

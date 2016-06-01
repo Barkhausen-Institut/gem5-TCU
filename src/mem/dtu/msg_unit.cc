@@ -140,18 +140,19 @@ MessageUnit::requestHeader(unsigned epid)
                 pf ? "Pagefault" : "TLB-miss",
                 msgAddr);
 
-            Translation *trans = new Translation(*this, epid);
+            Translation *trans = new Translation(*this, msgAddr, epid);
             dtu.startTranslate(msgAddr, DtuTlb::READ, trans, pf);
             return;
         }
     }
 
-    requestHeaderWithPhys(epid, true, phys);
+    requestHeaderWithPhys(epid, true, msgAddr, phys);
 }
 
 void
 MessageUnit::requestHeaderWithPhys(unsigned epid,
                                    bool success,
+                                   Addr virt,
                                    const NocAddr &phys)
 {
     // TODO handle error
@@ -165,7 +166,9 @@ MessageUnit::requestHeaderWithPhys(unsigned epid,
     auto pkt = dtu.generateRequest(phys.getAddr(),
                                    reqSize,
                                    MemCmd::ReadReq);
+
     dtu.sendMemRequest(pkt,
+                       virt,
                        epid,
                        Dtu::MemReqType::HEADER,
                        Cycles(1));

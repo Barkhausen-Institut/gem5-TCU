@@ -126,6 +126,7 @@ XferUnit::TransferEvent::translateDone(bool success, const NocAddr &phys)
         phys.getAddr());
 
     xfer.dtu.sendMemRequest(pkt,
+                            localAddr,
                             buf->id,
                             Dtu::MemReqType::TRANSFER,
                             xfer.dtu.transferToMemRequestLatency);

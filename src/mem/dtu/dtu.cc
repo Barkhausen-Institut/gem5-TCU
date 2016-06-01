@@ -339,6 +339,7 @@ Dtu::injectIRQ(int vector)
 
 void
 Dtu::sendMemRequest(PacketPtr pkt,
+                    Addr virt,
                     Addr data,
                     MemReqType type,
                     Cycles delay)
@@ -347,6 +348,8 @@ Dtu::sendMemRequest(PacketPtr pkt,
     senderState->data = data;
     senderState->mid = pkt->req->masterId();
     senderState->type = type;
+
+    regWatchRange(pkt, virt);
 
     // ensure that this packet has our master id (not the id of a master in
     // a different PE)
@@ -537,6 +540,8 @@ Dtu::completeMemRequest(PacketPtr pkt)
         break;
     }
 
+    checkWatchRange(pkt);
+
     delete senderState;
     freeRequest(pkt);
 }
@@ -599,7 +604,7 @@ Dtu::handleCpuRequest(PacketPtr pkt,
     }
     else
     {
-        checkWatchRange(pkt);
+        regWatchRange(pkt, pkt->getAddr());
 
         MemTranslation *trans = new MemTranslation(*this, sport, mport, pkt);
         int tres = translate(trans, pkt, icache, functional);

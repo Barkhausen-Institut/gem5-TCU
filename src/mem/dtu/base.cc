@@ -30,9 +30,9 @@
 
 #include "debug/DtuSlavePort.hh"
 #include "debug/DtuMasterPort.hh"
-#include "debug/MemoryWatch.hh"
 #include "debug/Dtu.hh"
 #include "debug/DtuTlb.hh"
+#include "debug/MemoryWatch.hh"
 #include "mem/dtu/base.hh"
 #include "mem/dtu/noc_addr.hh"
 
@@ -67,6 +67,8 @@ BaseDtu::NocMasterPort::completeRequest(PacketPtr pkt)
 bool
 BaseDtu::ICacheMasterPort::recvTimingResp(PacketPtr pkt)
 {
+    dtu.checkWatchRange(pkt);
+
     DPRINTF(DtuSlavePort, "Sending timing response at %#x [senderState=%#x]\n",
                           pkt->getAddr(),
                           pkt->senderState);
@@ -79,6 +81,8 @@ BaseDtu::ICacheMasterPort::recvTimingResp(PacketPtr pkt)
 bool
 BaseDtu::DCacheMasterPort::recvTimingResp(PacketPtr pkt)
 {
+    dtu.checkWatchRange(pkt);
+
     // if there is a context-id and thread-id, the request came from the CPU
     if (pkt->req->hasContextId())
     {
@@ -285,6 +289,7 @@ BaseDtu::BaseDtu(BaseDtuParams* p)
     l1Cache(p->l1cache),
     l2Cache(p->l2cache),
     watchRange(1, 0),
+    watches(),
     nocReqFinishedEvent(*this),
     coreId(p->core_id),
     regFileBaseAddr(p->regfile_base_addr),
@@ -348,6 +353,8 @@ BaseDtu::sendDummyResponse(DtuSlavePort &port, PacketPtr pkt, bool functional)
     if (pkt->isRead())
         memset(pkt->getPtr<uint8_t>(), 0, pkt->getSize());
 
+    checkWatchRange(pkt);
+
     // if a response is necessary, send one
     if (pkt->needsResponse())
     {
@@ -363,6 +370,37 @@ BaseDtu::sendDummyResponse(DtuSlavePort &port, PacketPtr pkt, bool functional)
 
             // somehow we need to send that later to make the cache happy.
             port.schedTimingResp(pkt, clockEdge(Cycles(1)));
+        }
+    }
+}
+
+void
+BaseDtu::regWatchRange(PacketPtr pkt, Addr virt)
+{
+    if (watchRange.valid())
+    {
+        AddrRange range(virt, virt + pkt->getSize() - 1);
+        if (watchRange.intersects(range))
+            watches[pkt] = virt;
+    }
+}
+
+void
+BaseDtu::checkWatchRange(PacketPtr pkt)
+{
+    if (watchRange.valid())
+    {
+        std::map<PacketPtr, Addr>::iterator it = watches.find(pkt);
+        if (it != watches.end())
+        {
+            DPRINTF(MemoryWatch,
+                "%s access to %p..%p (watching %p..%p):\n",
+                pkt->isRead() ? "rd" : "wr",
+                it->second, it->second + pkt->getSize() - 1,
+                watchRange.start(), watchRange.end());
+            DDUMP(MemoryWatch, pkt->getPtr<uint8_t>(), pkt->getSize());
+
+            watches.erase(pkt);
         }
     }
 }
@@ -395,24 +433,6 @@ BaseDtu::getSlavePort(const std::string &if_name, PortID idx)
         return cacheMemSlavePort;
     else
         return MemObject::getSlavePort(if_name, idx);
-}
-
-void
-BaseDtu::checkWatchRange(PacketPtr pkt)
-{
-    if (watchRange.valid())
-    {
-        AddrRange range(pkt->getAddr(), pkt->getAddr() + pkt->getSize() - 1);
-        if (watchRange.intersects(range))
-        {
-            DPRINTF(MemoryWatch,
-                "%s access to address range %p..%p (watching %p..%p)\n",
-                pkt->isRead() ? "read" : "write",
-                range.start(), range.end(),
-                watchRange.start(), watchRange.end());
-            DDUMP(MemoryWatch, pkt->getPtr<uint8_t>(), pkt->getSize());
-        }
-    }
 }
 
 void
@@ -466,8 +486,6 @@ BaseDtu::schedNocRequest(PacketPtr pkt, Tick when)
 void
 BaseDtu::schedMemRequest(PacketPtr pkt, Tick when)
 {
-    checkWatchRange(pkt);
-
     dcacheMasterPort.schedTimingReq(pkt, when);
 }
 
@@ -486,8 +504,6 @@ BaseDtu::sendAtomicNocRequest(PacketPtr pkt)
 void
 BaseDtu::sendAtomicMemRequest(PacketPtr pkt)
 {
-    checkWatchRange(pkt);
-
     dcacheMasterPort.sendAtomic(pkt);
 }
 

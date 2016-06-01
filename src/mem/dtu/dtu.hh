@@ -209,6 +209,7 @@ class Dtu : public BaseDtu
     }
 
     void sendMemRequest(PacketPtr pkt,
+                        Addr virt,
                         Addr data,
                         MemReqType type,
                         Cycles delay);
