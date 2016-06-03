@@ -49,8 +49,15 @@ using namespace X86ISA;
 const unsigned M3X86System::RES_PAGES =
     (STACK_AREA + STACK_SIZE) >> DtuTlb::PAGE_BITS;
 
+M3X86System::NoCMasterPort::NoCMasterPort(M3X86System &_sys)
+  : QueuedMasterPort("noc_master_port", &_sys, reqQueue, snoopRespQueue),
+    reqQueue(_sys, *this),
+    snoopRespQueue(_sys, *this)
+{ }
+
 M3X86System::M3X86System(Params *p)
     : X86System(p),
+      nocPort(*this),
       commandLine(p->boot_osflags),
       coreId(p->core_id),
       memPe(p->memory_pe),
@@ -65,6 +72,14 @@ M3X86System::M3X86System(Params *p)
 
 M3X86System::~M3X86System()
 {
+}
+
+BaseMasterPort&
+M3X86System::getMasterPort(const std::string &if_name, PortID idx)
+{
+    if (if_name == "noc_master_port")
+        return nocPort;
+    return System::getMasterPort(if_name, idx);
 }
 
 size_t
@@ -104,7 +119,7 @@ M3X86System::isKernelArg(const std::string &arg)
 }
 
 void
-M3X86System::writeArg(Addr &args, size_t &i, Addr argv, const char *cmd, const char *begin) const
+M3X86System::writeArg(Addr &args, size_t &i, Addr argv, const char *cmd, const char *begin)
 {
     const char zero[] = {0};
     // write argument pointer
@@ -118,8 +133,26 @@ M3X86System::writeArg(Addr &args, size_t &i, Addr argv, const char *cmd, const c
     i++;
 }
 
+void
+M3X86System::writeRemote(Addr dest, const uint8_t *data, size_t size)
+{
+    Request req(dest, size, 0, Request::funcMasterId);
+    Packet pkt(&req, MemCmd::WriteReq);
+    pkt.dataStaticConst(data);
+
+    auto senderState = new Dtu::NocSenderState();
+    senderState->packetType = Dtu::NocPacketType::CACHE_MEM_REQ_FUNC;
+    senderState->result = Dtu::NONE;
+
+    pkt.pushSenderState(senderState);
+
+    nocPort.sendFunctional(&pkt);
+
+    delete senderState;
+}
+
 Addr
-M3X86System::loadModule(const std::string &path, const std::string &name, Addr addr) const
+M3X86System::loadModule(const std::string &path, const std::string &name, Addr addr)
 {
     std::string filename = path + "/" + name;
     FILE *f = fopen(filename.c_str(), "r");
@@ -133,7 +166,7 @@ M3X86System::loadModule(const std::string &path, const std::string &name, Addr a
     auto data = new uint8_t[sz];
     if(fread(data, 1, sz, f) != sz)
         panic("Unable to read '%s'", filename.c_str());
-    physProxy.writeBlob(addr, data, sz);
+    writeRemote(addr, data, sz);
     delete[] data;
     fclose(f);
 

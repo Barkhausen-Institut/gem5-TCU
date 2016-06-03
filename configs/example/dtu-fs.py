@@ -236,6 +236,8 @@ def createPE(no, mem=False, cache=True, l2cache=True, memPE=0):
         pe.dtu.watch_range_end = options.watch_end
 
     pe.system_port = pe.xbar.slave
+    if not mem:
+        pe.noc_master_port = root.noc.slave
 
     return pe
 

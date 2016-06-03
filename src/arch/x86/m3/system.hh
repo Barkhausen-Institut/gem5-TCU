@@ -35,6 +35,7 @@
 
 #include "arch/x86/system.hh"
 #include "params/M3X86System.hh"
+#include "mem/qport.hh"
 #include "mem/dtu/noc_addr.hh"
 
 class M3X86System : public X86System
@@ -47,6 +48,25 @@ class M3X86System : public X86System
     static const uintptr_t STACK_AREA   = RT_START + RT_SIZE;
     static const size_t HEAP_SIZE       = 64 * 1024;
     static const unsigned RES_PAGES;
+
+    class NoCMasterPort : public QueuedMasterPort
+    {
+      protected:
+
+        ReqPacketQueue reqQueue;
+
+        SnoopRespPacketQueue snoopRespQueue;
+
+      public:
+
+        NoCMasterPort(M3X86System &_sys);
+
+        bool recvTimingResp(PacketPtr) override
+        {
+            // unused
+            return true;
+        }
+    };
 
     struct BootModule
     {
@@ -78,6 +98,7 @@ class M3X86System : public X86System
         uintptr_t backend;
     } M5_ATTR_PACKED;
 
+    NoCMasterPort nocPort;
     std::string commandLine;
 
   public:
@@ -94,6 +115,9 @@ class M3X86System : public X86System
     M3X86System(Params *p);
     ~M3X86System();
 
+    BaseMasterPort& getMasterPort(const std::string &if_name,
+                                  PortID idx = InvalidPortID) override;
+
     NocAddr getRootPt() const
     {
         return NocAddr(memPe, 0, memOffset);
@@ -107,8 +131,9 @@ class M3X86System : public X86System
     void mapSegment(Addr start, Addr size, unsigned perm);
     void mapMemory();
     size_t getArgc() const;
-    void writeArg(Addr &args, size_t &i, Addr argv, const char *cmd, const char *begin) const;
-    Addr loadModule(const std::string &path, const std::string &name, Addr addr) const;
+    void writeRemote(Addr dest, const uint8_t *data, size_t size);
+    void writeArg(Addr &args, size_t &i, Addr argv, const char *cmd, const char *begin);
+    Addr loadModule(const std::string &path, const std::string &name, Addr addr);
 };
 
 #endif

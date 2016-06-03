@@ -40,3 +40,5 @@ class M3X86System(X86System):
 
     mod_offset = Param.Addr(0, "The offset of the boot modules (only for kernel PE)")
     mod_size = Param.Addr(0, "The max. size of the boot modules (only for kernel PE)")
+
+    noc_master_port = MasterPort("Port that connects to the global NoC (only for initialization)")
