@@ -40,10 +40,10 @@
 enum class DtuReg : Addr
 {
     STATUS,
-    RW_BARRIER,
     ROOT_PT,
     PF_EP,
     LAST_PF,
+    RW_BARRIER,
     VPE_ID,
     MSG_CNT,
     EXT_CMD,
