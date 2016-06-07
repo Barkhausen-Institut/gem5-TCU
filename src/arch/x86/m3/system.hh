@@ -42,8 +42,9 @@ class M3X86System : public X86System
 {
   protected:
     static const size_t MAX_MODS        = 8;
+    static const size_t MAX_PES         = 64;
     static const size_t RT_SIZE         = 0x2000;
-    static const uintptr_t RT_START     = 0x1000;
+    static const uintptr_t RT_START     = 0x3000;
     static const size_t STACK_SIZE      = 0x1000;
     static const uintptr_t STACK_AREA   = RT_START + RT_SIZE;
     static const size_t HEAP_SIZE       = 64 * 1024;
@@ -75,12 +76,24 @@ class M3X86System : public X86System
         uint64_t size;
     } M5_ATTR_PACKED;
 
+    struct KernelEnv
+    {
+        enum
+        {
+            TYPE_IMEM    = 0,
+            TYPE_EMEM    = 1,
+            TYPE_MEM     = 2,
+        };
+
+        uintptr_t mods[MAX_MODS];
+        uint32_t pes[MAX_PES];
+    } M5_ATTR_PACKED;
+
     struct StartEnv
     {
         uint64_t coreid;
         uint32_t argc;
         char **argv;
-        uintptr_t mods[MAX_MODS];
 
         uintptr_t sp;
         uintptr_t entry;
@@ -96,9 +109,12 @@ class M3X86System : public X86System
         uintptr_t exit;
 
         uintptr_t backend;
+        uintptr_t kenv;
+        uint32_t pe;
     } M5_ATTR_PACKED;
 
     NoCMasterPort nocPort;
+    std::vector<Addr> pes;
     std::string commandLine;
 
   public:

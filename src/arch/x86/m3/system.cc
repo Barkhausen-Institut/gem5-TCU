@@ -38,6 +38,7 @@
 #include "mem/port_proxy.hh"
 #include "mem/dtu/pt_unit.hh"
 #include "mem/dtu/tlb.hh"
+#include "mem/dtu/dtu.hh"
 #include "params/M3X86System.hh"
 #include "sim/byteswap.hh"
 
@@ -58,6 +59,7 @@ M3X86System::NoCMasterPort::NoCMasterPort(M3X86System &_sys)
 M3X86System::M3X86System(Params *p)
     : X86System(p),
       nocPort(*this),
+      pes(p->pes),
       commandLine(p->boot_osflags),
       coreId(p->core_id),
       memPe(p->memory_pe),
@@ -243,6 +245,8 @@ M3X86System::mapMemory()
         DtuTlb::LEVEL_CNT - 1, getRootPt().getAddr() + off, entry);
     physProxy.write(getRootPt().getAddr() + off, entry);
 
+    // TODO check whether the size of idle fits before the RT_SPACE
+
     // program segments
     mapSegment(kernel->textBase(), kernel->textSize(),
         DtuTlb::INTERN | DtuTlb::RX);
@@ -267,7 +271,7 @@ M3X86System::mapMemory()
     {
         // map a large portion of the address space on app PEs
         // TODO this is temporary to still support clone and VPEs without AS
-        mapSegment(0, memSize, DtuTlb::IRWX);
+        mapSegment(RT_START, memSize - RT_START, DtuTlb::IRWX);
     }
 }
 
@@ -276,13 +280,18 @@ M3X86System::initState()
 {
     X86System::initState();
 
-    mapMemory();
+    // no internal memory? then we use paging
+    if ((pes[coreId] & ~1) == 0)
+        mapMemory();
 
     StartEnv env;
     memset(&env, 0, sizeof(env));
     env.coreid = coreId;
     env.argc = getArgc();
     Addr argv = RT_START + sizeof(env);
+    // the kernel gets the kernel env behind the normal env
+    if (modOffset)
+        argv += sizeof(KernelEnv);
     Addr args = argv + sizeof(void*) * env.argc;
     env.argv = reinterpret_cast<char**>(argv);
 
@@ -365,12 +374,15 @@ M3X86System::initState()
         writeArg(args, i, argv, cmd, begin);
     }
 
-    if (modOffset && mods.size() > 0)
+    // modules for the kernel
+    if (modOffset)
     {
+        KernelEnv kenv;
+
         // idle is always needed
         mods.push_back(std::make_pair("idle", ""));
 
-        if(mods.size() > MAX_MODS)
+        if (mods.size() > MAX_MODS)
             panic("Too many modules");
 
         i = 0;
@@ -382,7 +394,7 @@ M3X86System::initState()
             // construct module info
             BootModule bmod;
             size_t cmdlen = mod.first.length() + mod.second.length() + 1;
-            if(cmdlen >= sizeof(bmod.name))
+            if (cmdlen >= sizeof(bmod.name))
                 panic("Module name too long: %s", mod.first.c_str());
             strcpy(bmod.name, mod.first.c_str());
             if (!mod.second.empty())
@@ -397,30 +409,52 @@ M3X86System::initState()
                 bmod.name, bmod.addr, bmod.addr + bmod.size);
 
             // store pointer to area module info and info itself
-            env.mods[i] = roundUp(addr + size, sizeof(uint64_t));
-            physProxy.writeBlob(env.mods[i],
+            kenv.mods[i] = roundUp(addr + size, sizeof(uint64_t));
+            writeRemote(kenv.mods[i],
                 reinterpret_cast<uint8_t*>(&bmod), sizeof(bmod));
 
             // to next
-            addr = env.mods[i] + sizeof(bmod);
+            addr = kenv.mods[i] + sizeof(bmod);
             addr += DtuTlb::PAGE_SIZE - 1;
             addr &= ~static_cast<Addr>(DtuTlb::PAGE_SIZE - 1);
             i++;
         }
 
+        // termination
+        kenv.mods[i] = 0;
+
+        // build PE array
+        memset(kenv.pes, 0, sizeof(kenv.pes));
+        for (size_t i = 0; i < pes.size(); ++i)
+        {
+            // 31..12: memsize in pages (0 = no internal memory)
+            // 3..0  : PE type
+            if (pes[i] & 1)
+                kenv.pes[i] = KernelEnv::TYPE_MEM;
+            else if(pes[i] & ~1)
+                kenv.pes[i] = KernelEnv::TYPE_IMEM;
+            else
+                kenv.pes[i] = KernelEnv::TYPE_EMEM;
+            kenv.pes[i] |= pes[i] & ~1;
+        }
+
+        // write kenv
+        env.kenv = addr;
+        writeRemote(env.kenv, reinterpret_cast<uint8_t*>(&kenv), sizeof(kenv));
+        addr += sizeof(kenv);
+
+        // check size
         Addr end = NocAddr(memPe, 0, modOffset + modSize).getAddr();
         if (addr > end)
         {
             panic("Modules are too large (have: %lu, need: %lu)",
                 modSize, addr - NocAddr(memPe, 0, modOffset).getAddr());
         }
-
-        // termination
-        env.mods[i] = 0;
     }
 
     // write env
-    physProxy.writeBlob(RT_START, reinterpret_cast<uint8_t*>(&env), sizeof(env));
+    physProxy.writeBlob(
+        RT_START, reinterpret_cast<uint8_t*>(&env), sizeof(env));
 }
 
 M3X86System *
