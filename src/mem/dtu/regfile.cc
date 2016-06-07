@@ -287,7 +287,7 @@ SendEp::print(const RegFile &rf,
     if(!isTraceEnabled(read))
         return;
 
-    DPRINTFN(
+    DPRINTFNS(rf.name(),
         "%s%s EP%u%14s: Send[vpe=%u pe=%u ep=%u crd=%#x max=%#x lbl=%#llx]\n",
         regAccessName(access), read ? "<-" : "->",
         epId, "",
