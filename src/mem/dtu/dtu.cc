@@ -59,6 +59,7 @@ static const char *cmdNames[] =
     "READ",
     "WRITE",
     "INC_READ_PTR",
+    "DEBUG_MSG",
 };
 
 static const char *extCmdNames[] =
