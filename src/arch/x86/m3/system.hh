@@ -85,7 +85,7 @@ class M3X86System : public X86System
             TYPE_MEM     = 2,
         };
 
-        uintptr_t mods[MAX_MODS];
+        uint64_t mods[MAX_MODS];
         uint32_t pes[MAX_PES];
     } M5_ATTR_PACKED;
 
@@ -95,21 +95,21 @@ class M3X86System : public X86System
         uint32_t argc;
         char **argv;
 
-        uintptr_t sp;
-        uintptr_t entry;
-        uintptr_t lambda;
+        uint64_t sp;
+        uint64_t entry;
+        uint64_t lambda;
         uint32_t pager_sess;
         uint32_t pager_gate;
         uint32_t mounts_len;
-        uintptr_t mounts;
+        uint64_t mounts;
         uint32_t fds_len;
-        uintptr_t fds;
-        uintptr_t eps;
-        uintptr_t caps;
-        uintptr_t exit;
+        uint64_t fds;
+        uint64_t eps;
+        uint64_t caps;
+        uint64_t exit;
 
-        uintptr_t backend;
-        uintptr_t kenv;
+        uint64_t backend;
+        uint64_t kenv;
         uint32_t pe;
     } M5_ATTR_PACKED;
 
