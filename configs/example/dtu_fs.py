@@ -204,9 +204,6 @@ def createPE(root, options, no, mem, l1size, l2size, spmsize, memPE):
         pe.memory_pe = memPE
         pe.memory_offset = pe_offset + (pe_size * no)
         pe.memory_size = pe_size
-        if no == 0:
-            pe.mod_offset = mod_offset
-            pe.mod_size = mod_size
     else:
         pe.dtu.buf_count = 8
 
@@ -246,6 +243,10 @@ def createCorePE(root, options, no, cmdline, memPE, l1size='0', l2size='0', spms
 
     pe.dtu.icache_slave_port = pe.cpu.icache_port
     pe.dtu.dcache_slave_port = pe.cpu.dcache_port
+
+    if "kernel" in cmdline:
+        pe.mod_offset = mod_offset
+        pe.mod_size = mod_size
 
     # Command line
     pe.kernel = cmdline.split(' ')[0]
