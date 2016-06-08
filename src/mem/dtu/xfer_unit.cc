@@ -272,20 +272,10 @@ XferUnit::recvMemResponse(size_t bufId,
 
             Dtu::NocPacketType pktType;
             if (buf->event.flags & MESSAGE)
-            {
-                bool async = dtu.regs().get(DtuReg::STATUS) &
-                    static_cast<uint>(Status::ASYNC_SEND);
-                if (async)
-                    pktType = Dtu::NocPacketType::ASYNC_MESSAGE;
-                else
-                    pktType = Dtu::NocPacketType::MESSAGE;
-            }
+                pktType = Dtu::NocPacketType::MESSAGE;
             else
                 pktType = Dtu::NocPacketType::WRITE_REQ;
             dtu.sendNocRequest(pktType, pkt, delay);
-
-            if(pktType == Dtu::NocPacketType::ASYNC_MESSAGE)
-                dtu.scheduleFinishOp(delay, Dtu::NONE);
         }
         else if (buf->event.type == Dtu::TransferType::LOCAL_WRITE)
         {

@@ -493,11 +493,6 @@ Dtu::completeNocRequest(PacketPtr pkt)
         if (senderState->result != NONE)
             ptUnit->sendingPfFailed(pkt, senderState->result);
     }
-    else if (senderState->packetType == NocPacketType::ASYNC_MESSAGE)
-    {
-        // don't do anything here; the sender's command is already finished
-        freeRequest(pkt);
-    }
     else if (senderState->packetType != NocPacketType::CACHE_MEM_REQ_FUNC)
     {
         if (pkt->isWrite())
@@ -559,7 +554,6 @@ Dtu::handleNocRequest(PacketPtr pkt)
     switch (senderState->packetType)
     {
     case NocPacketType::MESSAGE:
-    case NocPacketType::ASYNC_MESSAGE:
     case NocPacketType::PAGEFAULT:
         res = msgUnit->recvFromNoc(pkt);
         break;

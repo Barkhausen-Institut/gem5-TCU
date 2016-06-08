@@ -92,7 +92,6 @@ class Dtu : public BaseDtu
     enum class NocPacketType
     {
         MESSAGE,
-        ASYNC_MESSAGE,
         PAGEFAULT,
         READ_REQ,
         WRITE_REQ,
