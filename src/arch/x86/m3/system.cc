@@ -424,6 +424,7 @@ M3X86System::initState()
         kenv.mods[i] = 0;
 
         // build PE array
+        kenv.pe_count = pes.size();
         memset(kenv.pes, 0, sizeof(kenv.pes));
         for (size_t i = 0; i < pes.size(); ++i)
         {

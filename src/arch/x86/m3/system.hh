@@ -86,6 +86,7 @@ class M3X86System : public X86System
         };
 
         uint64_t mods[MAX_MODS];
+        uint64_t pe_count;
         uint32_t pes[MAX_PES];
     } M5_ATTR_PACKED;
 
