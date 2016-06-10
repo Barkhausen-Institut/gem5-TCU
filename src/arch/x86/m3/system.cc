@@ -295,6 +295,13 @@ M3X86System::initState()
     Addr args = argv + sizeof(void*) * env.argc;
     env.argv = reinterpret_cast<char**>(argv);
 
+    // with paging, the kernel gets an initial heap mapped
+    if ((pes[coreId] & ~1) == 0)
+        env.heapsize = HEAP_SIZE;
+    // otherwise, he should use all internal memory
+    else
+        env.heapsize = 0;
+
     // check if there is enough space
     if (commandLine.length() + 1 > RT_START + RT_SIZE - args)
     {
@@ -438,6 +445,9 @@ M3X86System::initState()
                 kenv.pes[i] = KernelEnv::TYPE_EMEM;
             kenv.pes[i] |= pes[i] & ~1;
         }
+
+        // the kernel needs to PE info in its env
+        env.pe = kenv.pes[coreId];
 
         // write kenv
         env.kenv = addr;

@@ -47,7 +47,7 @@ class M3X86System : public X86System
     static const uintptr_t RT_START     = 0x3000;
     static const size_t STACK_SIZE      = 0x1000;
     static const uintptr_t STACK_AREA   = RT_START + RT_SIZE;
-    static const size_t HEAP_SIZE       = 64 * 1024;
+    static const size_t HEAP_SIZE       = 0x1000;
     static const unsigned RES_PAGES;
 
     class NoCMasterPort : public QueuedMasterPort
@@ -108,6 +108,7 @@ class M3X86System : public X86System
         uint64_t eps;
         uint64_t caps;
         uint64_t exit;
+        uint64_t heapsize;
 
         uint64_t backend;
         uint64_t kenv;
