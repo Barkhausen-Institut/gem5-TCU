@@ -309,6 +309,12 @@ M3X86System::initState()
                 commandLine, RT_START + RT_SIZE - args - 1);
     }
 
+    if (pes.size() > MAX_PES)
+    {
+        const size_t max = MAX_PES;
+        panic("Too many PEs (%u vs. %u)", pes.size(), max);
+    }
+
     std::string kernelPath;
     std::string prog;
     std::string argstr;
