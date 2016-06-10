@@ -41,7 +41,7 @@
 class M3X86System : public X86System
 {
   protected:
-    static const size_t MAX_MODS        = 8;
+    static const size_t MAX_MODS        = 64;
     static const size_t MAX_PES         = 64;
     static const size_t RT_SIZE         = 0x2000;
     static const uintptr_t RT_START     = 0x3000;
