@@ -171,13 +171,13 @@ def createPE(root, options, no, mem, l1size, l2size, spmsize, memPE):
     pe.dtu.noc_slave_port  = root.noc.master
 
     if not mem:
-        if l1size != '0':
+        if not l1size is None:
             pe.dtu.l1cache = L1Cache(size=l1size)
             pe.dtu.l1cache.forward_snoops = False
             pe.dtu.l1cache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
             pe.dtu.l1cache.cpu_side = pe.xbar.master
 
-            if l2size != '0':
+            if not l2size is None:
                 pe.dtu.l2cache = L2Cache(size=l2size)
                 pe.dtu.l2cache.forward_snoops = False
                 pe.dtu.l2cache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
@@ -204,7 +204,7 @@ def createPE(root, options, no, mem, l1size, l2size, spmsize, memPE):
     # we just make the buffer very large and the block size as well, so that we can read a packet
     # from SPM/DRAM into the buffer and send it from there. Since that costs no simulated time,
     # it is the same as having no buffer.
-    if mem or not l1size != '0':
+    if mem or l1size is None:
         pe.dtu.block_size = pe.dtu.max_noc_packet_size
         pe.dtu.buf_size = pe.dtu.max_noc_packet_size
         # disable the TLB
@@ -216,7 +216,7 @@ def createPE(root, options, no, mem, l1size, l2size, spmsize, memPE):
 
     return pe
 
-def createCorePE(root, options, no, cmdline, memPE, l1size='0', l2size='0', spmsize='8MB'):
+def createCorePE(root, options, no, cmdline, memPE, l1size=None, l2size=None, spmsize='8MB'):
     CPUClass = CpuConfig.get(options.cpu_type)
 
     pe = createPE(
@@ -243,7 +243,7 @@ def createCorePE(root, options, no, cmdline, memPE, l1size='0', l2size='0', spms
     print '      core   =%s x86' % (options.cpu_type)
     try:
         print '      L1cache=%d KiB' % (pe.dtu.l1cache.size.value / 1024)
-        if l2size != '0':
+        if not l2size is None:
             print '      L2cache=%d KiB' % (pe.dtu.l2cache.size.value / 1024)
     except:
         print '      memsize=%d KiB' % (int(pe.spm.range.end + 1) / 1024)
@@ -282,7 +282,7 @@ def createCorePE(root, options, no, cmdline, memPE, l1size='0', l2size='0', spms
 def createMemPE(root, options, no, size, content=None):
     pe = createPE(
         root=root, options=options, no=no, mem=True,
-        l1size='0', l2size='0', spmsize='0', memPE=0
+        l1size=None, l2size=None, spmsize=None, memPE=0
     )
     pe.mem_ctrl = DDR3_1600_x64()
     pe.mem_ctrl.device_size = size
