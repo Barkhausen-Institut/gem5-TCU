@@ -32,7 +32,7 @@
 #include "debug/DtuMasterPort.hh"
 #include "debug/Dtu.hh"
 #include "debug/DtuTlb.hh"
-#include "debug/MemoryWatch.hh"
+#include "debug/DtuMemWatch.hh"
 #include "mem/dtu/base.hh"
 #include "mem/dtu/noc_addr.hh"
 
@@ -393,12 +393,12 @@ BaseDtu::checkWatchRange(PacketPtr pkt)
         std::map<PacketPtr, Addr>::iterator it = watches.find(pkt);
         if (it != watches.end())
         {
-            DPRINTF(MemoryWatch,
+            DPRINTF(DtuMemWatch,
                 "%s access to %p..%p (watching %p..%p):\n",
                 pkt->isRead() ? "rd" : "wr",
                 it->second, it->second + pkt->getSize() - 1,
                 watchRange.start(), watchRange.end());
-            DDUMP(MemoryWatch, pkt->getPtr<uint8_t>(), pkt->getSize());
+            DDUMP(DtuMemWatch, pkt->getPtr<uint8_t>(), pkt->getSize());
 
             watches.erase(pkt);
         }

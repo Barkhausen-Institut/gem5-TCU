@@ -114,13 +114,6 @@ def getOptions():
     parser.add_option("--pausepe", default=-1, type="int",
                       help="the PE to pause until GDB connects")
 
-    parser.add_option("--watch-pe", type="int", default=-1,
-                      help="the PE number for memory watching")
-    parser.add_option("--watch-start", type="int", default=0,
-                      help="The start address of the address range to watch")
-    parser.add_option("--watch-end", type="int", default=0,
-                      help="The end address of the address range to watch (exclusive")
-
     parser.add_option("--sys-voltage", action="store", type="string",
                       default='1.0V',
                       help="""Top-level voltage for blocks running at system
@@ -216,11 +209,6 @@ def createPE(root, options, no, mem, l1size, l2size, spmsize, memPE):
         pe.dtu.buf_size = pe.dtu.max_noc_packet_size
         # disable the TLB
         pe.dtu.tlb_entries = 0
-
-    if options.watch_pe == no:
-        print "PE%02d: watching memory %#x..%#x" % (no, options.watch_start, options.watch_end)
-        pe.dtu.watch_range_start = options.watch_start
-        pe.dtu.watch_range_end = options.watch_end
 
     pe.system_port = pe.xbar.slave
     if not mem:
