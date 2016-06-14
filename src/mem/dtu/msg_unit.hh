@@ -40,6 +40,7 @@ class MessageUnit
     struct MsgInfo
     {
         bool ready;
+        bool unlimcred;
         uint8_t flags;
         unsigned targetCoreId;
         uint16_t targetVpeId;

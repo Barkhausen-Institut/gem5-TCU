@@ -110,6 +110,7 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
     info.replyLabel   = dtu.regs().get(CmdReg::REPLY_LABEL);
     info.replyEpId    = dtu.regs().get(CmdReg::REPLY_EPID);
     info.flags        = 0;
+    info.unlimcred    = ep.credits == Dtu::CREDITS_UNLIM;
     info.ready        = true;
 
     startXfer(cmd);
@@ -213,6 +214,7 @@ MessageUnit::recvFromMem(const Dtu::Command& cmd, PacketPtr pkt)
     info.replyLabel   = 0;
     // the pagefault flag is moved to the reply header
     info.flags        = header.flags & Dtu::PAGEFAULT;
+    info.unlimcred    = false;
     info.ready        = true;
 
     // disable replies for this message
@@ -260,7 +262,7 @@ MessageUnit::startXfer(const Dtu::Command& cmd)
 
     header->senderCoreId = dtu.coreId;
     header->senderVpeId  = dtu.regs().get(DtuReg::VPE_ID);
-    header->senderEpId   = cmd.arg;
+    header->senderEpId   = info.unlimcred ? dtu.numEndpoints : cmd.arg;
     header->replyEpId    = info.replyEpId;
     header->length       = messageSize;
     header->label        = info.label;
