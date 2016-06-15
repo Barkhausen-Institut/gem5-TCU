@@ -292,8 +292,7 @@ BaseDtu::BaseDtu(BaseDtuParams* p)
     watches(),
     nocReqFinishedEvent(*this),
     coreId(p->core_id),
-    regFileBaseAddr(p->regfile_base_addr),
-    rwBarrier(p->rw_barrier)
+    regFileBaseAddr(p->regfile_base_addr)
 {
     if (p->watch_range_start != p->watch_range_end)
         watchRange = AddrRange(p->watch_range_start, p->watch_range_end - 1);

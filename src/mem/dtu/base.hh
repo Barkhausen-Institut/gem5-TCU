@@ -322,8 +322,6 @@ class BaseDtu : public MemObject
 
     const Addr regFileBaseAddr;
 
-    const Addr rwBarrier;
-
 };
 
 #endif // __MEM_DTU_BASE_HH__

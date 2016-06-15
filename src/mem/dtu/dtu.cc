@@ -110,7 +110,7 @@ Dtu::Dtu(DtuParams* p)
         DPRINTF(Dtu, "Using memory range %p .. %p\n",
             memOffset, memOffset + sys->memSize);
 
-        regs().set(DtuReg::RW_BARRIER, rwBarrier);
+        regs().set(DtuReg::RW_BARRIER, -1);
         regs().set(DtuReg::ROOT_PT, sys->getRootPt().getAddr());
         regs().set(DtuReg::VPE_ID, INVALID_VPE_ID);
     }
