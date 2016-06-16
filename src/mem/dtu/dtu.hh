@@ -70,6 +70,7 @@ class Dtu : public BaseDtu
         MISS_CREDITS        = 1,
         NO_RING_SPACE       = 2,
         VPE_GONE            = 3,
+        NO_MAPPING          = 4,
     };
 
     struct MessageHeader

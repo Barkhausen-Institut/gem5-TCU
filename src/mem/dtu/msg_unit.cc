@@ -138,8 +138,9 @@ MessageUnit::requestHeader(unsigned epid)
         {
             DPRINTFS(DtuTlb, (&dtu),
                 "%s for read access to %p\n",
-                res == DtuTlb::PAGEFAULT ? "Pagefault" : "TLB-miss",
+                res != DtuTlb::MISS ? "Pagefault" : "TLB-miss",
                 msgAddr);
+            assert(res != DtuTlb::NOMAP);
 
             Translation *trans = new Translation(*this, msgAddr, epid);
             dtu.startTranslate(msgAddr, DtuTlb::READ, trans);

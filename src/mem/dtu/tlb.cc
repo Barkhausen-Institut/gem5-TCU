@@ -47,6 +47,8 @@ DtuTlb::lookup(Addr virt, uint access, NocAddr *phys)
     if (!e)
         return MISS;
 
+    if (e->flags == 0)
+        return NOMAP;
     if ((e->flags & access) != access)
         return PAGEFAULT;
 

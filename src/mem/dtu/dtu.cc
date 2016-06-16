@@ -699,14 +699,20 @@ Dtu::translate(PtUnit::Translation *trans,
             pkt->req->setPaddr(phys.getAddr());
             break;
 
+        case DtuTlb::NOMAP:
         case DtuTlb::MISS:
         case DtuTlb::PAGEFAULT:
         {
-            bool pf = res == DtuTlb::PAGEFAULT;
-            DPRINTF(DtuTlb, "%s for %s access to %p\n",
+            bool pf = res != DtuTlb::MISS;
+            DPRINTF(DtuTlb, "%s%s for %s access to %p\n",
                     pf ? "Pagefault" : "TLB-miss",
+                    res == DtuTlb::NOMAP ? " (ignored)" : "",
                     icache ? "exec" : (pkt->isRead() ? "read" : "write"),
                     pkt->getAddr());
+
+            // don't cause a pagefault again in this case
+            if (res == DtuTlb::NOMAP)
+                return -1;
 
             if (functional)
             {

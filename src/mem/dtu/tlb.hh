@@ -70,6 +70,7 @@ class DtuTlb
         HIT,
         MISS,
         PAGEFAULT,
+        NOMAP
     };
 
     // note that these have to match with the bits in PTEs

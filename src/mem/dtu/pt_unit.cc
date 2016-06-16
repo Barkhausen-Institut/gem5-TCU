@@ -70,6 +70,8 @@ PtUnit::TranslateEvent::process()
     DtuTlb::Result res = unit.dtu.tlb->lookup(virt, access, &phys);
     if (res == DtuTlb::HIT)
         finish(true, phys);
+    else if (res == DtuTlb::NOMAP)
+        finish(false, phys);
     else if (res == DtuTlb::PAGEFAULT)
     {
         if (!unit.sendPagefaultMsg(this, virt, access))
@@ -96,13 +98,7 @@ PtUnit::TranslateEvent::recvFromMem(PacketPtr pkt)
             return;
         }
 
-        Addr tlbVirt = virt & ~DtuTlb::PAGE_MASK;
-
-        DPRINTFS(DtuPf, (&unit.dtu),
-            "Inserting into TLB: virt=%p phys=%p flags=%u\n",
-            tlbVirt, phys, flags);
-
-        unit.dtu.tlb->insert(tlbVirt, NocAddr(phys), flags);
+        unit.mkTlbEntry(virt, NocAddr(phys), flags);
 
         finish(success, NocAddr(phys + (virt & DtuTlb::PAGE_MASK)));
     }
@@ -308,6 +304,12 @@ PtUnit::finishPagefault(PacketPtr pkt)
                 describeAccess(ev->access), ev->virt, error);
         }
 
+        // if the pagefault handler tells us that there is no mapping, just
+        // store an entry with flags=0. this way, we will remember that we
+        // already tried to access there with no success
+        if (error == Dtu::NO_MAPPING)
+            mkTlbEntry(ev->virt, NocAddr(0), 0);
+
         ev->finish(false, NocAddr(0));
         return;
     }
@@ -320,6 +322,17 @@ PtUnit::finishPagefault(PacketPtr pkt)
     ev->toKernel = false;
     ev->forceWalk = true;
     dtu.schedule(ev, dtu.clockEdge(Cycles(1)));
+}
+
+void PtUnit::mkTlbEntry(Addr virt, NocAddr phys, uint flags)
+{
+    Addr tlbVirt = virt & ~DtuTlb::PAGE_MASK;
+
+    DPRINTFS(DtuPf, (&dtu),
+        "Inserting into TLB: virt=%p phys=%p flags=%u\n",
+        tlbVirt, phys.offset, flags);
+
+    dtu.tlb->insert(tlbVirt, phys, flags);
 }
 
 void

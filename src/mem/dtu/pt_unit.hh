@@ -143,6 +143,8 @@ class PtUnit
 
     const char *describeAccess(uint access);
 
+    void mkTlbEntry(Addr virt, NocAddr phys, uint flags);
+
     void nextPagefault(TranslateEvent *ev);
 
     PacketPtr createPacket(Addr virt, Addr ptAddr, int level);

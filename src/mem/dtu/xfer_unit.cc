@@ -75,9 +75,10 @@ XferUnit::TransferEvent::process()
         DtuTlb::Result res = xfer.dtu.tlb->lookup(localAddr, access, &phys);
         if (res != DtuTlb::HIT)
         {
+            assert(res != DtuTlb::NOMAP);
             DPRINTFS(DtuTlb, (&xfer.dtu),
                 "%s for %s access to %p\n",
-                res == DtuTlb::PAGEFAULT ? "Pagefault" : "TLB-miss",
+                res != DtuTlb::MISS ? "Pagefault" : "TLB-miss",
                 access == DtuTlb::READ ? "read" : "write",
                 localAddr);
 
