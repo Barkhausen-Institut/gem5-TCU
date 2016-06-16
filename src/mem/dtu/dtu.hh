@@ -231,8 +231,7 @@ class Dtu : public BaseDtu
 
     void startTranslate(Addr virt,
                         uint access,
-                        PtUnit::Translation *trans,
-                        bool pf);
+                        PtUnit::Translation *trans);
 
     void finishMsgReceive(unsigned epId);
 

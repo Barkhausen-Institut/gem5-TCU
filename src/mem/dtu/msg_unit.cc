@@ -136,14 +136,13 @@ MessageUnit::requestHeader(unsigned epid)
         DtuTlb::Result res = dtu.tlb->lookup(msgAddr, access, &phys);
         if (res != DtuTlb::HIT)
         {
-            bool pf = res == DtuTlb::PAGEFAULT;
             DPRINTFS(DtuTlb, (&dtu),
                 "%s for read access to %p\n",
-                pf ? "Pagefault" : "TLB-miss",
+                res == DtuTlb::PAGEFAULT ? "Pagefault" : "TLB-miss",
                 msgAddr);
 
             Translation *trans = new Translation(*this, msgAddr, epid);
-            dtu.startTranslate(msgAddr, DtuTlb::READ, trans, pf);
+            dtu.startTranslate(msgAddr, DtuTlb::READ, trans);
             return;
         }
     }

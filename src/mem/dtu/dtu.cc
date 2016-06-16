@@ -445,10 +445,9 @@ Dtu::finishMsgReceive(unsigned epId)
 void
 Dtu::startTranslate(Addr virt,
                     uint access,
-                    PtUnit::Translation *trans,
-                    bool pf)
+                    PtUnit::Translation *trans)
 {
-    ptUnit->startTranslate(virt, access, trans, pf);
+    ptUnit->startTranslate(virt, access, trans);
 }
 
 void
@@ -483,7 +482,7 @@ Dtu::completeNocRequest(PacketPtr pkt)
         {
             uint access = DtuTlb::INTERN | DtuTlb::GONE;
             VPEGoneTranslation *trans = new VPEGoneTranslation(*this, pkt);
-            ptUnit->startTranslate(pkt->getAddr(), access, trans, true);
+            ptUnit->startTranslate(pkt->getAddr(), access, trans);
         }
         else
             sendCacheMemResponse(pkt, true);
@@ -728,7 +727,7 @@ Dtu::translate(PtUnit::Translation *trans,
                 return !res ? -1 : 1;
             }
 
-            ptUnit->startTranslate(pkt->getAddr(), access, trans, pf);
+            ptUnit->startTranslate(pkt->getAddr(), access, trans);
         }
         return 0;
     }

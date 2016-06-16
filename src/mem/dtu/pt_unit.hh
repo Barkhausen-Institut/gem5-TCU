@@ -87,13 +87,13 @@ class PtUnit
         Addr virt;
         Addr ptAddr;
         uint access;
-        std::vector<Translation*> trans;
+        Translation* trans;
         bool toKernel;
-        bool pf;
+        bool forceWalk;
 
         TranslateEvent(PtUnit& _unit)
             : unit(_unit), level(), virt(), ptAddr(), access(), trans(),
-              toKernel(), pf()
+              toKernel(), forceWalk()
         {}
 
         void process() override;
@@ -104,14 +104,15 @@ class PtUnit
 
         void finish(bool success, const NocAddr &addr)
         {
-            for(auto it = trans.begin(); it != trans.end(); ++it)
-                (*it)->finished(success, addr);
+            if (trans)
+                trans->finished(success, addr);
             // make sure that we don't do that twice
-            trans.clear();
+            trans = NULL;
             setFlags(AutoDelete);
 
             if (!success)
                 unit.resolveFailed(virt);
+            unit.nextPagefault(this);
         }
 
         const char* description() const override { return "TranslateEvent"; }
@@ -126,7 +127,7 @@ class PtUnit
 
     bool translateFunctional(Addr virt, uint access, NocAddr *phys);
 
-    void startTranslate(Addr virt, uint access, Translation *trans, bool pf);
+    void startTranslate(Addr virt, uint access, Translation *trans);
 
     void recvFromMem(Addr event, PacketPtr pkt)
     {
