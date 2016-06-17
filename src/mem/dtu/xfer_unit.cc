@@ -45,10 +45,11 @@ XferUnit::XferUnit(Dtu &_dtu,
       blockSize(_blockSize),
       bufCount(_bufCount),
       bufSize(_bufSize),
-      bufs(new Buffer*[bufCount])
+      bufs(new Buffer*[bufCount]),
+      queue()
 {
     for (size_t i = 0; i < bufCount; ++i)
-        bufs[i] = new Buffer(*this, i, bufSize);
+        bufs[i] = new Buffer(i, bufSize);
 }
 
 XferUnit::~XferUnit()
@@ -59,8 +60,70 @@ XferUnit::~XferUnit()
 }
 
 void
+XferUnit::TransferEvent::tryStart()
+{
+    assert(buf == NULL);
+
+    buf = xfer.allocateBuf(this, flags);
+
+    bool writing = type == Dtu::TransferType::REMOTE_WRITE ||
+                   type == Dtu::TransferType::LOCAL_WRITE;
+
+    // try again later, if there is no free buffer
+    if (!buf)
+    {
+        DPRINTFS(DtuXfers, (&xfer.dtu),
+            "Delaying %s transfer of %lu bytes @ %p [flags=%#x]\n",
+            writing ? "mem-write" : "mem-read",
+            size,
+            localAddr,
+            flags);
+
+        xfer.queue.push_back(this);
+        return;
+    }
+
+    // if there is data to put into the buffer, do that now
+    if (header)
+    {
+        // note that this causes no additional delay because we assume that we
+        // create the header directly in the buffer (and if there is no one
+        // free we just wait until there is)
+        memcpy(buf->bytes, header, sizeof(Dtu::MessageHeader));
+        buf->event->flags |= XferFlags::MESSAGE;
+
+        // for the header
+        buf->offset += sizeof(Dtu::MessageHeader);
+        delete header;
+        header = nullptr;
+    }
+    else if (pkt)
+    {
+        // here is also no additional delay, because we are doing that in
+        // parallel and are already paying for it at other places
+        memcpy(buf->bytes, pkt->getPtr<uint8_t>(), pkt->getSize());
+    }
+
+    DPRINTFS(DtuXfers, (&xfer.dtu),
+        "buf%d: Starting %s transfer of %lu bytes @ %p [flags=%#x]\n",
+        buf->id,
+        writing ? "mem-write" : "mem-read",
+        size,
+        localAddr,
+        buf->event->flags);
+
+    xfer.dtu.schedule(this, xfer.dtu.clockEdge(Cycles(1)));
+}
+
+void
 XferUnit::TransferEvent::process()
 {
+    if (!buf)
+    {
+        tryStart();
+        return;
+    }
+
     NocAddr phys(localAddr);
     if (xfer.dtu.tlb)
     {
@@ -153,16 +216,17 @@ XferUnit::TransferEvent::pagefault()
     DPRINTFS(DtuXfers, (&xfer.dtu),
         "buf%d: Translation failed; aborting transfer",
         buf->id);
-    buf->event.size = 0;
-    buf->event.result = Dtu::Error::PAGEFAULT;
+
+    buf->event->size = 0;
+    buf->event->result = Dtu::Error::PAGEFAULT;
     xfer.recvMemResponse(buf->id,
                          NULL,
                          0,
-                         buf->event.pkt->headerDelay,
-                         buf->event.pkt->payloadDelay);
+                         buf->event->pkt->headerDelay,
+                         buf->event->pkt->payloadDelay);
 }
 
-bool
+void
 XferUnit::startTransfer(Dtu::TransferType type,
                         NocAddr remoteAddr,
                         Addr localAddr,
@@ -173,85 +237,24 @@ XferUnit::startTransfer(Dtu::TransferType type,
                         Cycles delay,
                         uint flags)
 {
-    Buffer *buf = allocateBuf(flags);
+    TransferEvent *event = new TransferEvent(*this);
 
-    bool writing = type == Dtu::TransferType::REMOTE_WRITE ||
-                   type == Dtu::TransferType::LOCAL_WRITE;
+    event->type = type;
+    event->remoteAddr = remoteAddr;
+    event->localAddr = localAddr;
+    event->size = size;
+    event->pkt = pkt;
+    event->vpeId = vpeId;
+    event->flags = flags;
+    event->header = header;
 
-    // try again later, if there is no free buffer
-    if (!buf)
-    {
-        DPRINTFS(DtuXfers, (&dtu),
-            "Delaying %s transfer of %lu bytes @ %p [flags=%#x]\n",
-            writing ? "mem-write" : "mem-read",
-            size,
-            localAddr,
-            flags);
-
-        auto event = new StartEvent(*this,
-                                    type,
-                                    remoteAddr,
-                                    localAddr,
-                                    size,
-                                    pkt,
-                                    vpeId,
-                                    header,
-                                    flags);
-
-        dtu.schedule(event, dtu.clockEdge(Cycles(delay + 1)));
-
-        return false;
-    }
-
-    // use that buffer and start transferring the data into it
-    assert(buf->event.size == 0);
-
-    buf->event.type = type;
-    buf->event.remoteAddr = remoteAddr;
-    buf->event.vpeId = vpeId;
-    buf->event.localAddr = localAddr;
-    buf->event.size = size;
-    buf->event.pkt = NULL;
-    buf->event.flags = flags;
-
-    // if there is data to put into the buffer, do that now
-    if (header)
-    {
-        // note that this causes no additional delay because we assume that we
-        // create the header directly in the buffer (and if there is no one
-        // free we just wait until there is)
-        memcpy(buf->bytes, header, sizeof(Dtu::MessageHeader));
-        buf->event.flags |= XferFlags::MESSAGE;
-
-        // for the header
-        buf->offset += sizeof(Dtu::MessageHeader);
-        delete header;
-    }
-    else if (pkt)
-    {
-        // here is also no additional delay, because we are doing that in
-        // parallel and are already paying for it at other places
-        memcpy(buf->bytes, pkt->getPtr<uint8_t>(), pkt->getSize());
-        buf->event.pkt = pkt;
-    }
-
-    DPRINTFS(DtuXfers, (&dtu),
-        "buf%d: Starting %s transfer of %lu bytes @ %p [flags=%#x]\n",
-        buf->id,
-        writing ? "mem-write" : "mem-read",
-        size,
-        localAddr,
-        buf->event.flags);
-
-    dtu.schedule(buf->event, dtu.clockEdge(Cycles(delay + 1)));
+    dtu.schedule(event, dtu.clockEdge(Cycles(delay + 1)));
 
     // finish the noc request now to make the port unbusy
     bool remote = type == Dtu::TransferType::REMOTE_READ ||
                   type == Dtu::TransferType::REMOTE_WRITE;
     if (remote)
         dtu.schedNocRequestFinished(dtu.clockEdge(Cycles(1)));
-
-    return true;
 }
 
 void
@@ -263,10 +266,10 @@ XferUnit::recvMemResponse(size_t bufId,
 {
     Buffer *buf = bufs[bufId];
 
-    assert(!buf->free);
+    assert(buf->event);
 
-    if (data && (buf->event.type == Dtu::TransferType::LOCAL_READ ||
-        buf->event.type == Dtu::TransferType::REMOTE_READ))
+    if (data && (buf->event->type == Dtu::TransferType::LOCAL_READ ||
+        buf->event->type == Dtu::TransferType::REMOTE_READ))
     {
         assert(buf->offset + size <= bufSize);
 
@@ -276,17 +279,17 @@ XferUnit::recvMemResponse(size_t bufId,
     }
 
     // nothing more to copy?
-    if (buf->event.size == 0)
+    if (buf->event->size == 0)
     {
-        if (buf->event.type == Dtu::TransferType::LOCAL_READ)
+        if (buf->event->type == Dtu::TransferType::LOCAL_READ)
         {
             DPRINTFS(DtuXfers, (&dtu),
                 "buf%d: Sending NoC request of %lu bytes @ %p\n",
                 buf->id,
                 buf->offset,
-                buf->event.remoteAddr.offset);
+                buf->event->remoteAddr.offset);
 
-            auto pkt = dtu.generateRequest(buf->event.remoteAddr.getAddr(),
+            auto pkt = dtu.generateRequest(buf->event->remoteAddr.getAddr(),
                                            buf->offset,
                                            MemCmd::WriteReq);
             memcpy(pkt->getPtr<uint8_t>(),
@@ -302,52 +305,52 @@ XferUnit::recvMemResponse(size_t bufId,
             dtu.printPacket(pkt);
 
             Dtu::NocPacketType pktType;
-            if (buf->event.flags & MESSAGE)
+            if (buf->event->flags & MESSAGE)
                 pktType = Dtu::NocPacketType::MESSAGE;
             else
                 pktType = Dtu::NocPacketType::WRITE_REQ;
-            uint cmdflags = (buf->event.flags & NOPF) ? Dtu::Command::NOPF : 0;
-            dtu.sendNocRequest(pktType, pkt, buf->event.vpeId, cmdflags, delay);
+            uint cmdflags = (buf->event->flags & NOPF) ? Dtu::Command::NOPF : 0;
+            dtu.sendNocRequest(pktType, pkt, buf->event->vpeId, cmdflags, delay);
         }
-        else if (buf->event.type == Dtu::TransferType::LOCAL_WRITE)
+        else if (buf->event->type == Dtu::TransferType::LOCAL_WRITE)
         {
-            if (buf->event.flags & LAST)
+            if (buf->event->flags & LAST)
                 dtu.scheduleFinishOp(Cycles(1));
 
-            dtu.freeRequest(buf->event.pkt);
+            dtu.freeRequest(buf->event->pkt);
         }
         else
         {
-            if (buf->event.flags & XferFlags::MSGRECV)
+            if (buf->event->flags & XferFlags::MSGRECV)
             {
-                NocAddr addr(buf->event.pkt->getAddr());
+                NocAddr addr(buf->event->pkt->getAddr());
                 dtu.finishMsgReceive(addr.offset);
             }
 
             // TODO should we respond earlier for remote reads? i.e. as soon
             // as its in the buffer
-            assert(buf->event.pkt != NULL);
+            assert(buf->event->pkt != NULL);
 
             // some requests from the cache (e.g. cleanEvict) do not need a
             // response
-            if (buf->event.pkt->needsResponse())
+            if (buf->event->pkt->needsResponse())
             {
                 DPRINTFS(DtuXfers, (&dtu),
                     "buf%d: Sending NoC response of %lu bytes\n",
                     buf->id,
                     buf->offset);
 
-                buf->event.pkt->makeResponse();
+                buf->event->pkt->makeResponse();
 
-                if (buf->event.type == Dtu::TransferType::REMOTE_READ)
+                if (buf->event->type == Dtu::TransferType::REMOTE_READ)
                 {
-                    memcpy(buf->event.pkt->getPtr<uint8_t>(),
+                    memcpy(buf->event->pkt->getPtr<uint8_t>(),
                            buf->bytes,
                            buf->offset);
                 }
 
                 Cycles delay = dtu.transferToNocLatency;
-                dtu.schedNocResponse(buf->event.pkt, dtu.clockEdge(delay));
+                dtu.schedNocResponse(buf->event->pkt, dtu.clockEdge(delay));
             }
         }
 
@@ -355,14 +358,23 @@ XferUnit::recvMemResponse(size_t bufId,
                  buf->id);
 
         // we're done with this buffer now
-        buf->free = true;
+        buf->event->finish();
+        buf->event = NULL;
+
+        // start the next one, if there is any
+        if (!queue.empty())
+        {
+            TransferEvent *ev = queue.front();
+            queue.pop_front();
+            dtu.schedule(ev, dtu.clockEdge(Cycles(1)));
+        }
     }
     else
-        buf->event.process();
+        buf->event->process();
 }
 
 XferUnit::Buffer*
-XferUnit::allocateBuf(uint flags)
+XferUnit::allocateBuf(TransferEvent *event, uint flags)
 {
     // don't allow message receives in parallel. because otherwise we run into race conditions.
     // e.g., we could overwrite unread messages because we can't increase the message counter when
@@ -374,7 +386,7 @@ XferUnit::allocateBuf(uint flags)
     {
         for (size_t i = 0; i < bufCount; ++i)
         {
-            if (!bufs[i]->free && (bufs[i]->event.flags & XferFlags::MSGRECV))
+            if (bufs[i]->event && (bufs[i]->event->flags & XferFlags::MSGRECV))
                 return NULL;
         }
     }
@@ -386,9 +398,9 @@ XferUnit::allocateBuf(uint flags)
     size_t i = (flags & XferFlags::NOPF) ? 0 : 1;
     for (; i < bufCount; ++i)
     {
-        if (bufs[i]->free)
+        if (!bufs[i]->event)
         {
-            bufs[i]->free = false;
+            bufs[i]->event = event;
             bufs[i]->offset = 0;
             return bufs[i];
         }

@@ -34,6 +34,8 @@
 #include "mem/dtu/dtu.hh"
 #include "mem/dtu/noc_addr.hh"
 
+#include <list>
+
 class XferUnit
 {
   public:
@@ -62,6 +64,7 @@ class XferUnit
         size_t size;
         PacketPtr pkt;
         uint vpeId;
+        Dtu::MessageHeader* header;
         uint flags;
         Dtu::Error result;
 
@@ -74,11 +77,19 @@ class XferUnit
               size(),
               pkt(),
               vpeId(),
+              header(),
               flags(),
               result(Dtu::Error::NONE)
         {}
 
+        void finish()
+        {
+            setFlags(AutoDelete);
+        }
+
         void process() override;
+
+        void tryStart();
 
         void translateDone(bool success, const NocAddr &phys);
 
@@ -107,14 +118,12 @@ class XferUnit
 
     struct Buffer
     {
-        Buffer(XferUnit& _xfer, int _id, size_t size)
+        Buffer(int _id, size_t size)
             : id(_id),
-              event(_xfer),
+              event(),
               bytes(new uint8_t[size]),
-              offset(),
-              free(true)
+              offset()
         {
-            event.buf = this;
         }
 
         ~Buffer()
@@ -123,65 +132,9 @@ class XferUnit
         }
 
         int id;
-        TransferEvent event;
+        TransferEvent *event;
         uint8_t *bytes;
         size_t offset;
-        bool free;
-    };
-
-    struct StartEvent : public Event
-    {
-        XferUnit& xfer;
-
-        Dtu::TransferType type;
-        NocAddr remoteAddr;
-        Addr localAddr;
-        size_t size;
-        PacketPtr pkt;
-        uint vpeId;
-        Dtu::MessageHeader* header;
-        uint flags;
-
-        StartEvent(XferUnit& _xfer,
-                   Dtu::TransferType _type,
-                   NocAddr _remoteAddr,
-                   Addr _localAddr,
-                   size_t _size,
-                   PacketPtr _pkt,
-                   uint _vpeId,
-                   Dtu::MessageHeader* _header,
-                   uint _flags)
-            : xfer(_xfer),
-              type(_type),
-              remoteAddr(_remoteAddr),
-              localAddr(_localAddr),
-              size(_size),
-              pkt(_pkt),
-              vpeId(_vpeId),
-              header(_header),
-              flags(_flags)
-        {}
-
-        void process() override
-        {
-            // the delay was already paid earlier
-            if (xfer.startTransfer(type,
-                                   remoteAddr,
-                                   localAddr,
-                                   size,
-                                   pkt,
-                                   vpeId,
-                                   header,
-                                   Cycles(0),
-                                   flags))
-            {
-                setFlags(AutoDelete);
-            }
-        }
-
-        const char* description() const override { return "StartXferEvent"; }
-
-        const std::string name() const override { return xfer.dtu.name(); }
     };
 
   public:
@@ -190,7 +143,7 @@ class XferUnit
 
     ~XferUnit();
 
-    bool startTransfer(Dtu::TransferType type,
+    void startTransfer(Dtu::TransferType type,
                        NocAddr remoteAddr,
                        Addr localAddr,
                        size_t size,
@@ -208,7 +161,7 @@ class XferUnit
 
   private:
 
-    Buffer* allocateBuf(uint flags);
+    Buffer* allocateBuf(TransferEvent *event, uint flags);
 
   private:
 
@@ -219,6 +172,8 @@ class XferUnit
     size_t bufCount;
     size_t bufSize;
     Buffer **bufs;
+
+    std::list<TransferEvent*> queue;
 };
 
 #endif
