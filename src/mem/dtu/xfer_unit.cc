@@ -395,7 +395,7 @@ XferUnit::allocateBuf(TransferEvent *event, uint flags)
     // transfers which abort if a pagefault is caused
     // this is required to resolve a deadlock due to additional transfers that
     // handle a already running pagefault transfer.
-    size_t i = (flags & XferFlags::NOPF) ? 0 : 1;
+    size_t i = !dtu.tlb || (flags & XferFlags::NOPF) ? 0 : 1;
     for (; i < bufCount; ++i)
     {
         if (!bufs[i]->event)
