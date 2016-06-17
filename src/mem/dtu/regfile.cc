@@ -323,7 +323,7 @@ MemEp::print(const RegFile &rf,
         return;
 
     DPRINTFNS(rf.name(),
-        "%s%s EP%u%14s: Mem[vpe=%u pe=%u addr=%#llx size=%#llx flags=%u]\n",
+        "%s%s EP%u%14s: Mem[vpe=%u pe=%u addr=%#llx size=%#llx flags=%#x]\n",
         regAccessName(access), read ? "<-" : "->",
         epId, "",
         vpeId, targetCore,
