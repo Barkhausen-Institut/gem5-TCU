@@ -193,7 +193,7 @@ PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, uint access)
     }
 
     // create packet
-    NocAddr nocAddr = NocAddr(ep.targetCore, ep.vpeId, ep.targetEp);
+    NocAddr nocAddr = NocAddr(ep.targetCore, ep.targetEp);
     auto pkt = dtu.generateRequest(nocAddr.getAddr(),
                                    size,
                                    MemCmd::WriteReq);
@@ -236,7 +236,7 @@ PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, uint access)
     // delay += dtu.ticksToCycles(headerDelay);
     // pkt->payloadDelay = payloadDelay;
     dtu.printPacket(pkt);
-    dtu.sendNocRequest(Dtu::NocPacketType::PAGEFAULT, pkt, delay);
+    dtu.sendNocRequest(Dtu::NocPacketType::PAGEFAULT, pkt, ep.vpeId, delay);
     return true;
 }
 

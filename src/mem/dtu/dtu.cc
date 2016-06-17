@@ -379,12 +379,14 @@ Dtu::sendMemRequest(PacketPtr pkt,
 void
 Dtu::sendNocRequest(NocPacketType type,
                     PacketPtr pkt,
+                    uint vpeId,
                     Cycles delay,
                     bool functional)
 {
     auto senderState = new NocSenderState();
     senderState->packetType = type;
     senderState->result = Error::NONE;
+    senderState->vpeId = vpeId;
 
     pkt->pushSenderState(senderState);
 
@@ -429,6 +431,7 @@ Dtu::startTransfer(TransferType type,
                    Addr sourceAddr,
                    Addr size,
                    PacketPtr pkt,
+                   uint vpeId,
                    MessageHeader* header,
                    Cycles delay,
                    uint flags)
@@ -438,6 +441,7 @@ Dtu::startTransfer(TransferType type,
                             sourceAddr,
                             size,
                             pkt,
+                            vpeId,
                             header,
                             delay,
                             flags);
@@ -561,12 +565,12 @@ Dtu::handleNocRequest(PacketPtr pkt)
     {
     case NocPacketType::MESSAGE:
     case NocPacketType::PAGEFAULT:
-        res = msgUnit->recvFromNoc(pkt);
+        res = msgUnit->recvFromNoc(pkt, senderState->vpeId);
         break;
     case NocPacketType::READ_REQ:
     case NocPacketType::WRITE_REQ:
     case NocPacketType::CACHE_MEM_REQ:
-        res = memUnit->recvFromNoc(pkt);
+        res = memUnit->recvFromNoc(pkt, senderState->vpeId);
         break;
     case NocPacketType::CACHE_MEM_REQ_FUNC:
         memUnit->recvFunctionalFromNoc(pkt);
@@ -650,7 +654,7 @@ Dtu::handleCacheMemRequest(PacketPtr pkt, bool functional)
     // and pseudoInst
     if (!phys.valid)
     {
-        phys = NocAddr(memPe, 0, memOffset + phys.offset);
+        phys = NocAddr(memPe, memOffset + phys.offset);
         pkt->setAddr(phys.getAddr());
         if (!functional)
         {
@@ -665,7 +669,8 @@ Dtu::handleCacheMemRequest(PacketPtr pkt, bool functional)
 
     auto type = functional ? Dtu::NocPacketType::CACHE_MEM_REQ_FUNC
                            : Dtu::NocPacketType::CACHE_MEM_REQ;
-    sendNocRequest(type, pkt, Cycles(1), functional);
+    // this does always target a memory PE, so vpeId is 0
+    sendNocRequest(type, pkt, 0, Cycles(1), functional);
 
     if (functional)
         pkt->setAddr(old);

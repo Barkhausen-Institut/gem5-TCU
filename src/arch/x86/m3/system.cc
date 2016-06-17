@@ -196,7 +196,7 @@ M3X86System::mapPage(Addr virt, Addr phys, uint access)
                 offset = memOffset + phys;
             else
                 offset = memOffset + (nextFrame++ << DtuTlb::PAGE_BITS);
-            NocAddr addr(memPe, 0, offset);
+            NocAddr addr(memPe, offset);
 
             // clear pagetables
             if (i > 0)
@@ -399,7 +399,7 @@ M3X86System::initState()
             panic("Too many modules");
 
         i = 0;
-        Addr addr = NocAddr(memPe, 0, modOffset).getAddr();
+        Addr addr = NocAddr(memPe, modOffset).getAddr();
         for (const std::pair<std::string, std::string> &mod : mods)
         {
             Addr size = loadModule(kernelPath, mod.first, addr);
@@ -461,11 +461,11 @@ M3X86System::initState()
         addr += sizeof(kenv);
 
         // check size
-        Addr end = NocAddr(memPe, 0, modOffset + modSize).getAddr();
+        Addr end = NocAddr(memPe, modOffset + modSize).getAddr();
         if (addr > end)
         {
             panic("Modules are too large (have: %lu, need: %lu)",
-                modSize, addr - NocAddr(memPe, 0, modOffset).getAddr());
+                modSize, addr - NocAddr(memPe, modOffset).getAddr());
         }
     }
 

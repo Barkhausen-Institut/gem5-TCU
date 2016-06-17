@@ -271,12 +271,13 @@ MessageUnit::startXfer(const Dtu::Command& cmd)
     assert(messageSize + sizeof(Dtu::MessageHeader) <= dtu.maxNocPacketSize);
 
     // start the transfer of the payload
-    NocAddr nocAddr(info.targetCoreId, info.targetVpeId, info.targetEpId);
+    NocAddr nocAddr(info.targetCoreId, info.targetEpId);
     dtu.startTransfer(Dtu::TransferType::LOCAL_READ,
                       nocAddr,
                       messageAddr,
                       messageSize,
                       NULL,
+                      info.targetVpeId,
                       header,
                       dtu.startMsgTransferDelay);
 
@@ -347,7 +348,7 @@ MessageUnit::incrementMsgCnt(unsigned epId)
 }
 
 Dtu::Error
-MessageUnit::recvFromNoc(PacketPtr pkt)
+MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId)
 {
     assert(pkt->isWrite());
     assert(pkt->hasData());
@@ -380,8 +381,8 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
     }
 
     Dtu::Error res = Dtu::Error::NONE;
-    uint16_t vpeId = dtu.regs().get(DtuReg::VPE_ID);
-    if (addr.vpeId == vpeId && ep.msgCount < ep.size)
+    uint16_t ourVpeId = dtu.regs().get(DtuReg::VPE_ID);
+    if (vpeId == ourVpeId && ep.msgCount < ep.size)
     {
         Dtu::MessageHeader* header = pkt->getPtr<Dtu::MessageHeader>();
 
@@ -411,10 +412,11 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
         delay += dtu.nocToTransferLatency;
 
         dtu.startTransfer(Dtu::TransferType::REMOTE_WRITE,
-                          NocAddr(0, 0, 0),
+                          NocAddr(0, 0),
                           localAddr,
                           pkt->getSize(),
                           pkt,
+                          0,
                           NULL,
                           delay,
                           XferUnit::XferFlags::MSGRECV);
@@ -424,11 +426,11 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
     // ignore messages for other VPEs or if there is not enough space
     else
     {
-        if (addr.vpeId != vpeId)
+        if (vpeId != ourVpeId)
         {
             DPRINTFS(Dtu, (&dtu),
                 "EP%u: received message for VPE %u, but VPE %u is running\n",
-                epId, addr.vpeId, vpeId);
+                epId, vpeId, ourVpeId);
             res = Dtu::Error::VPE_GONE;
         }
         else

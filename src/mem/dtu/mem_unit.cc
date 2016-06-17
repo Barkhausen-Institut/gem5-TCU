@@ -68,7 +68,6 @@ MemoryUnit::startRead(const Dtu::Command& cmd)
     assert(requestSize + offset <= ep.remoteSize);
 
     Addr nocAddr = NocAddr(ep.targetCore,
-                           ep.vpeId,
                            ep.remoteAddr + offset).getAddr();
     auto pkt = dtu.generateRequest(nocAddr,
                                    requestSize,
@@ -76,6 +75,7 @@ MemoryUnit::startRead(const Dtu::Command& cmd)
 
     dtu.sendNocRequest(Dtu::NocPacketType::READ_REQ,
                        pkt,
+                       ep.vpeId,
                        dtu.commandToNocRequestLatency);
 }
 
@@ -107,9 +107,13 @@ MemoryUnit::startWrite(const Dtu::Command& cmd)
     assert(requestSize + offset <= ep.remoteSize);
 
     dtu.startTransfer(Dtu::TransferType::LOCAL_READ,
-                      NocAddr(ep.targetCore, ep.vpeId, ep.remoteAddr + offset),
+                      NocAddr(ep.targetCore, ep.remoteAddr + offset),
                       localAddr,
-                      requestSize);
+                      requestSize,
+                      NULL,
+                      ep.vpeId,
+                      NULL,
+                      Cycles(0));
 }
 
 void
@@ -135,10 +139,11 @@ MemoryUnit::readComplete(PacketPtr pkt, Dtu::Error error)
 
     dtu.startTransfer(Dtu::TransferType::LOCAL_WRITE,
                       // remote address is irrelevant
-                      NocAddr(0, 0, 0),
+                      NocAddr(0, 0),
                       localAddr,
                       pkt->getSize(),
                       pkt,
+                      0,
                       NULL,
                       delay,
                       requestSize == 0 ? XferUnit::LAST : 0);
@@ -195,7 +200,7 @@ MemoryUnit::recvFunctionalFromNoc(PacketPtr pkt)
 }
 
 Dtu::Error
-MemoryUnit::recvFromNoc(PacketPtr pkt)
+MemoryUnit::recvFromNoc(PacketPtr pkt, uint vpeId)
 {
     NocAddr addr(pkt->getAddr());
 
@@ -207,12 +212,12 @@ MemoryUnit::recvFromNoc(PacketPtr pkt)
     if (pkt->isWrite())
         dtu.printPacket(pkt);
 
-    uint16_t vpeId = dtu.regs().get(DtuReg::VPE_ID);
-    if (addr.vpeId != vpeId)
+    uint16_t ourVpeId = dtu.regs().get(DtuReg::VPE_ID);
+    if (vpeId != ourVpeId)
     {
         DPRINTFS(Dtu, (&dtu),
             "Received memory request for VPE %u, but VPE %u is running\n",
-            addr.vpeId, vpeId);
+            vpeId, ourVpeId);
 
         dtu.sendNocResponse(pkt);
         return Dtu::Error::VPE_GONE;
@@ -238,11 +243,12 @@ MemoryUnit::recvFromNoc(PacketPtr pkt)
                                    : Dtu::TransferType::REMOTE_READ;
         dtu.startTransfer(type,
                           // remote address is irrelevant
-                          NocAddr(0, 0, 0),
+                          NocAddr(0, 0),
                           // other remote is our local
                           addr.offset,
                           pkt->getSize(),
                           pkt,
+                          0,
                           NULL,
                           delay);
     }

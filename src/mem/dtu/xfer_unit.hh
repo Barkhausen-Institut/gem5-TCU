@@ -60,6 +60,7 @@ class XferUnit
         NocAddr remoteAddr;
         size_t size;
         PacketPtr pkt;
+        uint vpeId;
         uint flags;
 
         TransferEvent(XferUnit& _xfer)
@@ -70,6 +71,7 @@ class XferUnit
               remoteAddr(),
               size(),
               pkt(),
+              vpeId(),
               flags()
         {}
 
@@ -131,6 +133,7 @@ class XferUnit
         Addr localAddr;
         size_t size;
         PacketPtr pkt;
+        uint vpeId;
         Dtu::MessageHeader* header;
         uint flags;
 
@@ -140,6 +143,7 @@ class XferUnit
                    Addr _localAddr,
                    size_t _size,
                    PacketPtr _pkt,
+                   uint _vpeId,
                    Dtu::MessageHeader* _header,
                    uint _flags)
             : xfer(_xfer),
@@ -148,6 +152,7 @@ class XferUnit
               localAddr(_localAddr),
               size(_size),
               pkt(_pkt),
+              vpeId(_vpeId),
               header(_header),
               flags(_flags)
         {}
@@ -160,6 +165,7 @@ class XferUnit
                                    localAddr,
                                    size,
                                    pkt,
+                                   vpeId,
                                    header,
                                    Cycles(0),
                                    flags))
@@ -184,6 +190,7 @@ class XferUnit
                        Addr localAddr,
                        size_t size,
                        PacketPtr pkt,
+                       uint vpeId,
                        Dtu::MessageHeader* header,
                        Cycles delay,
                        uint flags);

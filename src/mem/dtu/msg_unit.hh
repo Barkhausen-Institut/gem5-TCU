@@ -88,7 +88,7 @@ class MessageUnit
     /**
      * Received a message from NoC -> Mem request
      */
-    Dtu::Error recvFromNoc(PacketPtr pkt);
+    Dtu::Error recvFromNoc(PacketPtr pkt, uint vpeId);
 
     /**
      * Move read pointer forward

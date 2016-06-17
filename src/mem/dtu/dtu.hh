@@ -129,6 +129,7 @@ class Dtu : public BaseDtu
     struct NocSenderState : public Packet::SenderState
     {
         Error result;
+        uint vpeId;
         NocPacketType packetType;
     };
 
@@ -217,6 +218,7 @@ class Dtu : public BaseDtu
 
     void sendNocRequest(NocPacketType type,
                         PacketPtr pkt,
+                        uint vpeId,
                         Cycles delay,
                         bool functional = false);
 
@@ -227,6 +229,7 @@ class Dtu : public BaseDtu
                        Addr sourceAddr,
                        Addr size,
                        PacketPtr pkt = NULL,
+                       uint vpeId = 0,
                        MessageHeader* header = NULL,
                        Cycles delay = Cycles(0),
                        uint flags = 0);

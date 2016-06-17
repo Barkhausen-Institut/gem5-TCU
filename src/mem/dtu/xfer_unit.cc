@@ -142,6 +142,7 @@ XferUnit::startTransfer(Dtu::TransferType type,
                         Addr localAddr,
                         Addr size,
                         PacketPtr pkt,
+                        uint vpeId,
                         Dtu::MessageHeader* header,
                         Cycles delay,
                         uint flags)
@@ -166,6 +167,7 @@ XferUnit::startTransfer(Dtu::TransferType type,
                                     localAddr,
                                     size,
                                     pkt,
+                                    vpeId,
                                     header,
                                     flags);
 
@@ -179,6 +181,7 @@ XferUnit::startTransfer(Dtu::TransferType type,
 
     buf->event.type = type;
     buf->event.remoteAddr = remoteAddr;
+    buf->event.vpeId = vpeId;
     buf->event.localAddr = localAddr;
     buf->event.size = size;
     buf->event.pkt = NULL;
@@ -275,7 +278,7 @@ XferUnit::recvMemResponse(size_t bufId,
                 pktType = Dtu::NocPacketType::MESSAGE;
             else
                 pktType = Dtu::NocPacketType::WRITE_REQ;
-            dtu.sendNocRequest(pktType, pkt, delay);
+            dtu.sendNocRequest(pktType, pkt, buf->event.vpeId, delay);
         }
         else if (buf->event.type == Dtu::TransferType::LOCAL_WRITE)
         {

@@ -35,10 +35,10 @@
 
 /**
  *
- *  64    59        52      36         0
- *   -----------------------------------
- *   |res|V| coreId  | vpeId | offset  |
- *   -----------------------------------
+ *  64    59        52         0
+ *   ---------------------------
+ *   |res|V| coreId  | offset  |
+ *   ---------------------------
  */
 class NocAddr
 {
@@ -50,23 +50,20 @@ class NocAddr
     explicit NocAddr(Addr addr)
         : valid(addr >> 59),
           coreId((addr >> 52) & ((1 << 7) - 1)),
-          vpeId((addr >> 36) & ((1 << 16) - 1)),
           offset(addr & ((static_cast<Addr>(1) << 36) - 1))
     {}
 
-    explicit NocAddr(unsigned _coreId, unsigned _vpeId, Addr _offset)
-        : valid(1), coreId(_coreId), vpeId(_vpeId), offset(_offset)
+    explicit NocAddr(unsigned _coreId, Addr _offset)
+        : valid(1), coreId(_coreId), offset(_offset)
     {}
 
     Addr getAddr() const
     {
         assert((coreId & ~((1 << 7) - 1)) == 0);
-        assert((vpeId & ~((1 << 16) - 1)) == 0);
         assert((offset & ~((static_cast<Addr>(1) << 36) - 1)) == 0);
 
         Addr res = static_cast<Addr>(valid) << 59;
         res |= static_cast<Addr>(coreId) << 52;
-        res |= static_cast<Addr>(vpeId) << 36;
         res |= offset;
         return res;
     }
@@ -74,8 +71,6 @@ class NocAddr
     bool valid;
 
     unsigned coreId;
-
-    unsigned vpeId;
 
     Addr offset;
 };

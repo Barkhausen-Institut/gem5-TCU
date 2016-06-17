@@ -249,8 +249,8 @@ BaseDtu::NocSlavePort::getAddrRanges() const
 {
     AddrRangeList ranges;
 
-    Addr baseNocAddr = NocAddr(dtu.coreId, 0, 0).getAddr();
-    Addr topNocAddr  = NocAddr(dtu.coreId + 1, 0, 0).getAddr() - 1;
+    Addr baseNocAddr = NocAddr(dtu.coreId, 0).getAddr();
+    Addr topNocAddr  = NocAddr(dtu.coreId + 1, 0).getAddr() - 1;
 
     DPRINTF(DtuSlavePort, "Dtu %u covers %#x to %#x\n",
                           dtu.coreId,

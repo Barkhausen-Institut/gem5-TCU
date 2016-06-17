@@ -138,7 +138,7 @@ class M3X86System : public X86System
 
     NocAddr getRootPt() const
     {
-        return NocAddr(memPe, 0, memOffset);
+        return NocAddr(memPe, memOffset);
     }
 
     void initState();
