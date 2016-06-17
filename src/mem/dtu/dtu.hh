@@ -70,7 +70,8 @@ class Dtu : public BaseDtu
         MISS_CREDITS        = 1,
         NO_RING_SPACE       = 2,
         VPE_GONE            = 3,
-        NO_MAPPING          = 4,
+        PAGEFAULT           = 4,
+        NO_MAPPING          = 5,
     };
 
     struct MessageHeader
@@ -131,6 +132,7 @@ class Dtu : public BaseDtu
         Error result;
         uint vpeId;
         NocPacketType packetType;
+        uint flags;
     };
 
     struct InitSenderState : public Packet::SenderState
@@ -148,6 +150,12 @@ class Dtu : public BaseDtu
             WRITE           = 4,
             INC_READ_PTR    = 5,
             DEBUG_MSG       = 6,
+        };
+
+        enum Flags
+        {
+            NONE            = 0,
+            NOPF            = 1,
         };
 
         Error error;
@@ -219,6 +227,7 @@ class Dtu : public BaseDtu
     void sendNocRequest(NocPacketType type,
                         PacketPtr pkt,
                         uint vpeId,
+                        uint flags,
                         Cycles delay,
                         bool functional = false);
 

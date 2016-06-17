@@ -411,6 +411,8 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId)
         pkt->headerDelay = 0;
         delay += dtu.nocToTransferLatency;
 
+        // atm, message receives can never cause pagefaults
+        uint flags = XferUnit::XferFlags::MSGRECV | XferUnit::XferFlags::NOPF;
         dtu.startTransfer(Dtu::TransferType::REMOTE_WRITE,
                           NocAddr(0, 0),
                           localAddr,
@@ -419,7 +421,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId)
                           0,
                           NULL,
                           delay,
-                          XferUnit::XferFlags::MSGRECV);
+                          flags);
 
         incrementWritePtr(epId);
     }

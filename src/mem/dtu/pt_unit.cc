@@ -236,7 +236,11 @@ PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, uint access)
     // delay += dtu.ticksToCycles(headerDelay);
     // pkt->payloadDelay = payloadDelay;
     dtu.printPacket(pkt);
-    dtu.sendNocRequest(Dtu::NocPacketType::PAGEFAULT, pkt, ep.vpeId, delay);
+    dtu.sendNocRequest(Dtu::NocPacketType::PAGEFAULT,
+                       pkt,
+                       ep.vpeId,
+                       Dtu::Command::NOPF,
+                       delay);
     return true;
 }
 

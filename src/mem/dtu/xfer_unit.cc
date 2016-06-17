@@ -75,6 +75,14 @@ XferUnit::TransferEvent::process()
         DtuTlb::Result res = xfer.dtu.tlb->lookup(localAddr, access, &phys);
         if (res != DtuTlb::HIT)
         {
+            // if this is a pagefault and we are not allowed to cause one,
+            // report an error
+            if(res == DtuTlb::PAGEFAULT && (flags & XferFlags::NOPF))
+            {
+                pagefault();
+                return;
+            }
+
             assert(res != DtuTlb::NOMAP);
             DPRINTFS(DtuTlb, (&xfer.dtu),
                 "%s for %s access to %p\n",
@@ -94,8 +102,11 @@ XferUnit::TransferEvent::process()
 void
 XferUnit::TransferEvent::translateDone(bool success, const NocAddr &phys)
 {
-    // TODO handle error
-    assert(success);
+    if (!success)
+    {
+        pagefault();
+        return;
+    }
 
     assert(size > 0);
 
@@ -136,6 +147,21 @@ XferUnit::TransferEvent::translateDone(bool success, const NocAddr &phys)
     size -= reqSize;
 }
 
+void
+XferUnit::TransferEvent::pagefault()
+{
+    DPRINTFS(DtuXfers, (&xfer.dtu),
+        "buf%d: Translation failed; aborting transfer",
+        buf->id);
+    buf->event.size = 0;
+    buf->event.result = Dtu::Error::PAGEFAULT;
+    xfer.recvMemResponse(buf->id,
+                         NULL,
+                         0,
+                         buf->event.pkt->headerDelay,
+                         buf->event.pkt->payloadDelay);
+}
+
 bool
 XferUnit::startTransfer(Dtu::TransferType type,
                         NocAddr remoteAddr,
@@ -147,7 +173,7 @@ XferUnit::startTransfer(Dtu::TransferType type,
                         Cycles delay,
                         uint flags)
 {
-    Buffer *buf = allocateBuf(flags & XferFlags::MSGRECV);
+    Buffer *buf = allocateBuf(flags);
 
     bool writing = type == Dtu::TransferType::REMOTE_WRITE ||
                    type == Dtu::TransferType::LOCAL_WRITE;
@@ -156,10 +182,11 @@ XferUnit::startTransfer(Dtu::TransferType type,
     if (!buf)
     {
         DPRINTFS(DtuXfers, (&dtu),
-            "Delaying %s transfer of %lu bytes @ %p (all buffers busy)\n",
+            "Delaying %s transfer of %lu bytes @ %p [flags=%#x]\n",
             writing ? "mem-write" : "mem-read",
             size,
-            localAddr);
+            localAddr,
+            flags);
 
         auto event = new StartEvent(*this,
                                     type,
@@ -209,11 +236,12 @@ XferUnit::startTransfer(Dtu::TransferType type,
     }
 
     DPRINTFS(DtuXfers, (&dtu),
-        "buf%d: Starting %s transfer of %lu bytes @ %p\n",
+        "buf%d: Starting %s transfer of %lu bytes @ %p [flags=%#x]\n",
         buf->id,
         writing ? "mem-write" : "mem-read",
         size,
-        localAddr);
+        localAddr,
+        buf->event.flags);
 
     dtu.schedule(buf->event, dtu.clockEdge(Cycles(delay + 1)));
 
@@ -237,8 +265,8 @@ XferUnit::recvMemResponse(size_t bufId,
 
     assert(!buf->free);
 
-    if (buf->event.type == Dtu::TransferType::LOCAL_READ ||
-        buf->event.type == Dtu::TransferType::REMOTE_READ)
+    if (data && (buf->event.type == Dtu::TransferType::LOCAL_READ ||
+        buf->event.type == Dtu::TransferType::REMOTE_READ))
     {
         assert(buf->offset + size <= bufSize);
 
@@ -278,7 +306,8 @@ XferUnit::recvMemResponse(size_t bufId,
                 pktType = Dtu::NocPacketType::MESSAGE;
             else
                 pktType = Dtu::NocPacketType::WRITE_REQ;
-            dtu.sendNocRequest(pktType, pkt, buf->event.vpeId, delay);
+            uint cmdflags = (buf->event.flags & NOPF) ? Dtu::Command::NOPF : 0;
+            dtu.sendNocRequest(pktType, pkt, buf->event.vpeId, cmdflags, delay);
         }
         else if (buf->event.type == Dtu::TransferType::LOCAL_WRITE)
         {
@@ -333,7 +362,7 @@ XferUnit::recvMemResponse(size_t bufId,
 }
 
 XferUnit::Buffer*
-XferUnit::allocateBuf(bool recvmsg)
+XferUnit::allocateBuf(uint flags)
 {
     // don't allow message receives in parallel. because otherwise we run into race conditions.
     // e.g., we could overwrite unread messages because we can't increase the message counter when
@@ -341,7 +370,7 @@ XferUnit::allocateBuf(bool recvmsg)
     // another problem is that we might finish receiving the second message before the first and
     // then increase the message counter, so that the SW looks at the first message, which is not
     // ready yet.
-    if (recvmsg)
+    if (flags & XferFlags::MSGRECV)
     {
         for (size_t i = 0; i < bufCount; ++i)
         {
@@ -350,7 +379,12 @@ XferUnit::allocateBuf(bool recvmsg)
         }
     }
 
-    for (size_t i = 0; i < bufCount; ++i)
+    // the first buffer cannot cause pagefaults; thus we can only use it if for
+    // transfers which abort if a pagefault is caused
+    // this is required to resolve a deadlock due to additional transfers that
+    // handle a already running pagefault transfer.
+    size_t i = (flags & XferFlags::NOPF) ? 0 : 1;
+    for (; i < bufCount; ++i)
     {
         if (bufs[i]->free)
         {

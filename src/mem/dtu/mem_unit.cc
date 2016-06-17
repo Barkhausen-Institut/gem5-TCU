@@ -76,6 +76,7 @@ MemoryUnit::startRead(const Dtu::Command& cmd)
     dtu.sendNocRequest(Dtu::NocPacketType::READ_REQ,
                        pkt,
                        ep.vpeId,
+                       cmd.flags,
                        dtu.commandToNocRequestLatency);
 }
 
@@ -106,6 +107,10 @@ MemoryUnit::startWrite(const Dtu::Command& cmd)
     assert(requestSize + offset >= requestSize);
     assert(requestSize + offset <= ep.remoteSize);
 
+    uint flags = (cmd.flags & Dtu::Command::NOPF)
+                 ? XferUnit::XferFlags::NOPF
+                 : 0;
+
     dtu.startTransfer(Dtu::TransferType::LOCAL_READ,
                       NocAddr(ep.targetCore, ep.remoteAddr + offset),
                       localAddr,
@@ -113,7 +118,8 @@ MemoryUnit::startWrite(const Dtu::Command& cmd)
                       NULL,
                       ep.vpeId,
                       NULL,
-                      Cycles(0));
+                      Cycles(0),
+                      flags);
 }
 
 void
@@ -137,6 +143,11 @@ MemoryUnit::readComplete(PacketPtr pkt, Dtu::Error error)
         return;
     }
 
+    uint flags = (continueEvent.cmd.flags & Dtu::Command::NOPF)
+                 ? XferUnit::XferFlags::NOPF
+                 : 0;
+    flags |= requestSize == 0 ? XferUnit::LAST : 0;
+
     dtu.startTransfer(Dtu::TransferType::LOCAL_WRITE,
                       // remote address is irrelevant
                       NocAddr(0, 0),
@@ -146,7 +157,7 @@ MemoryUnit::readComplete(PacketPtr pkt, Dtu::Error error)
                       0,
                       NULL,
                       delay,
-                      requestSize == 0 ? XferUnit::LAST : 0);
+                      flags);
 
     if (requestSize > 0)
     {
@@ -200,7 +211,7 @@ MemoryUnit::recvFunctionalFromNoc(PacketPtr pkt)
 }
 
 Dtu::Error
-MemoryUnit::recvFromNoc(PacketPtr pkt, uint vpeId)
+MemoryUnit::recvFromNoc(PacketPtr pkt, uint vpeId, uint flags)
 {
     NocAddr addr(pkt->getAddr());
 
@@ -241,6 +252,8 @@ MemoryUnit::recvFromNoc(PacketPtr pkt, uint vpeId)
 
         auto type = pkt->isWrite() ? Dtu::TransferType::REMOTE_WRITE
                                    : Dtu::TransferType::REMOTE_READ;
+        uint xflags = (flags & Dtu::Command::NOPF) ? XferUnit::XferFlags::NOPF
+                                                   : 0;
         dtu.startTransfer(type,
                           // remote address is irrelevant
                           NocAddr(0, 0),
@@ -250,7 +263,8 @@ MemoryUnit::recvFromNoc(PacketPtr pkt, uint vpeId)
                           pkt,
                           0,
                           NULL,
-                          delay);
+                          delay,
+                          xflags);
     }
 
     return Dtu::Error::NONE;

@@ -380,6 +380,7 @@ void
 Dtu::sendNocRequest(NocPacketType type,
                     PacketPtr pkt,
                     uint vpeId,
+                    uint flags,
                     Cycles delay,
                     bool functional)
 {
@@ -387,6 +388,7 @@ Dtu::sendNocRequest(NocPacketType type,
     senderState->packetType = type;
     senderState->result = Error::NONE;
     senderState->vpeId = vpeId;
+    senderState->flags = flags;
 
     pkt->pushSenderState(senderState);
 
@@ -570,7 +572,7 @@ Dtu::handleNocRequest(PacketPtr pkt)
     case NocPacketType::READ_REQ:
     case NocPacketType::WRITE_REQ:
     case NocPacketType::CACHE_MEM_REQ:
-        res = memUnit->recvFromNoc(pkt, senderState->vpeId);
+        res = memUnit->recvFromNoc(pkt, senderState->vpeId, senderState->flags);
         break;
     case NocPacketType::CACHE_MEM_REQ_FUNC:
         memUnit->recvFunctionalFromNoc(pkt);
@@ -670,7 +672,7 @@ Dtu::handleCacheMemRequest(PacketPtr pkt, bool functional)
     auto type = functional ? Dtu::NocPacketType::CACHE_MEM_REQ_FUNC
                            : Dtu::NocPacketType::CACHE_MEM_REQ;
     // this does always target a memory PE, so vpeId is 0
-    sendNocRequest(type, pkt, 0, Cycles(1), functional);
+    sendNocRequest(type, pkt, 0, Command::NONE, Cycles(1), functional);
 
     if (functional)
         pkt->setAddr(old);

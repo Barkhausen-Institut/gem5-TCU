@@ -43,6 +43,7 @@ class XferUnit
         MESSAGE   = 1,
         LAST      = 2,
         MSGRECV   = 4,
+        NOPF      = 8,
     };
 
   private:
@@ -62,6 +63,7 @@ class XferUnit
         PacketPtr pkt;
         uint vpeId;
         uint flags;
+        Dtu::Error result;
 
         TransferEvent(XferUnit& _xfer)
             : xfer(_xfer),
@@ -72,12 +74,15 @@ class XferUnit
               size(),
               pkt(),
               vpeId(),
-              flags()
+              flags(),
+              result(Dtu::Error::NONE)
         {}
 
         void process() override;
 
         void translateDone(bool success, const NocAddr &phys);
+
+        void pagefault();
 
         const char* description() const override { return "TransferEvent"; }
 
@@ -203,7 +208,7 @@ class XferUnit
 
   private:
 
-    Buffer* allocateBuf(bool recvmsg);
+    Buffer* allocateBuf(uint flags);
 
   private:
 
