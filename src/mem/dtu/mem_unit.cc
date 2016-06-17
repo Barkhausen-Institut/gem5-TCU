@@ -127,7 +127,7 @@ MemoryUnit::readComplete(PacketPtr pkt, Dtu::Error error)
     // delay here
     Cycles delay = dtu.ticksToCycles(pkt->headerDelay);
 
-    if (error != Dtu::NONE)
+    if (error != Dtu::Error::NONE)
     {
         dtu.scheduleFinishOp(delay, error);
         return;
@@ -160,7 +160,7 @@ MemoryUnit::writeComplete(PacketPtr pkt, Dtu::Error error)
     Addr requestSize = dtu.regs().get(CmdReg::DATA_SIZE);
 
     // error, write finished or if requestSize < pkt->getSize(), it was a msg
-    if (error != Dtu::NONE || requestSize <= pkt->getSize())
+    if (error != Dtu::Error::NONE || requestSize <= pkt->getSize())
     {
         // we don't need to pay the payload delay here because the message
         // basically has no payload since we only receive an ACK back for
@@ -215,7 +215,7 @@ MemoryUnit::recvFromNoc(PacketPtr pkt)
             addr.vpeId, vpeId);
 
         dtu.sendNocResponse(pkt);
-        return Dtu::VPE_GONE;
+        return Dtu::Error::VPE_GONE;
     }
 
     if (addr.offset >= dtu.regFileBaseAddr)
@@ -247,5 +247,5 @@ MemoryUnit::recvFromNoc(PacketPtr pkt)
                           delay);
     }
 
-    return Dtu::NONE;
+    return Dtu::Error::NONE;
 }

@@ -64,7 +64,7 @@ class Dtu : public BaseDtu
         PAGEFAULT           = (1 << 3),
     };
 
-    enum Error
+    enum class Error
     {
         NONE                = 0,
         MISS_CREDITS        = 1,
@@ -152,6 +152,7 @@ class Dtu : public BaseDtu
         Error error;
         Opcode opcode;
         unsigned arg;
+        unsigned flags;
     };
 
     struct ExternCommand
@@ -197,7 +198,7 @@ class Dtu : public BaseDtu
         dcacheMasterPort.sendFunctional(pkt);
     }
 
-    void scheduleFinishOp(Cycles delay, Error error = NONE)
+    void scheduleFinishOp(Cycles delay, Error error = Error::NONE)
     {
         if (cmdInProgress)
             schedule(new FinishCommandEvent(*this, error), clockEdge(delay));
@@ -316,7 +317,7 @@ class Dtu : public BaseDtu
 
         Error error;
 
-        FinishCommandEvent(Dtu& _dtu, Error _error = NONE)
+        FinishCommandEvent(Dtu& _dtu, Error _error = Error::NONE)
             : dtu(_dtu), error(_error)
         {}
 
@@ -399,7 +400,8 @@ class Dtu : public BaseDtu
 
     const Addr maxNocPacketSize;
 
-    const unsigned numCmdEpidBits;
+    const unsigned numCmdArgBits;
+    const unsigned numCmdFlagsBits;
 
     const size_t blockSize;
 

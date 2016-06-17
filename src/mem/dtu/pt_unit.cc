@@ -250,7 +250,7 @@ PtUnit::sendingPfFailed(PacketPtr pkt, int error)
         "Sending Pagefault (%s @ %p) failed (%d); notifying kernel\n",
         describeAccess(ev->access), ev->virt, error);
 
-    if (error == Dtu::VPE_GONE)
+    if (error == static_cast<int>(Dtu::Error::VPE_GONE))
     {
         ev->toKernel = true;
         dtu.schedule(ev, dtu.clockEdge(Cycles(1)));
@@ -307,7 +307,7 @@ PtUnit::finishPagefault(PacketPtr pkt)
         // if the pagefault handler tells us that there is no mapping, just
         // store an entry with flags=0. this way, we will remember that we
         // already tried to access there with no success
-        if (error == Dtu::NO_MAPPING)
+        if (error == static_cast<int>(Dtu::Error::NO_MAPPING))
             mkTlbEntry(ev->virt, NocAddr(0), 0);
 
         ev->finish(false, NocAddr(0));

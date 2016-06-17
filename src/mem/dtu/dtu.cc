@@ -88,7 +88,8 @@ Dtu::Dtu(DtuParams* p)
     atomicMode(p->system->isAtomicMode()),
     numEndpoints(p->num_endpoints),
     maxNocPacketSize(p->max_noc_packet_size),
-    numCmdEpidBits(p->num_cmd_epid_bits),
+    numCmdArgBits(32),
+    numCmdFlagsBits(1),
     blockSize(p->block_size),
     bufCount(p->buf_count),
     bufSize(p->buf_size),
@@ -149,28 +150,33 @@ Dtu::freeRequest(PacketPtr pkt)
 Dtu::Command
 Dtu::getCommand()
 {
-    assert(numCmdEpidBits + numCmdOpcodeBits <= sizeof(RegFile::reg_t) * 8);
+    assert(numCmdArgBits + numCmdFlagsBits + numCmdOpcodeBits <=
+        sizeof(RegFile::reg_t) * 8);
 
     using reg_t = RegFile::reg_t;
 
     /*
-     *   COMMAND                     0
-     * |-----------------------------|
-     * |  error  |   arg  |  opcode  |
-     * |-----------------------------|
+     *                                          0
+     * |----------------------------------------|
+     * |  error  |   flags  |   arg  |  opcode  |
+     * |----------------------------------------|
      */
     reg_t opcodeMask = ((reg_t)1 << numCmdOpcodeBits) - 1;
+    reg_t argMask = ((reg_t)1 << numCmdArgBits) - 1;
+    reg_t flagMask = ((reg_t)1 << numCmdFlagsBits) - 1;
 
     auto reg = regFile.get(CmdReg::COMMAND);
 
     Command cmd;
 
-    unsigned bits = numCmdOpcodeBits + numCmdEpidBits;
+    unsigned bits = numCmdOpcodeBits + numCmdArgBits + numCmdFlagsBits;
     cmd.error  = static_cast<Error>(reg >> bits);
 
     cmd.opcode = static_cast<Command::Opcode>(reg & opcodeMask);
 
-    cmd.arg    = reg >> numCmdOpcodeBits;
+    cmd.arg    = (reg >> numCmdOpcodeBits) & argMask;
+
+    cmd.flags  = (reg >> (numCmdArgBits + numCmdOpcodeBits)) & flagMask;
 
     return cmd;
 }
@@ -189,8 +195,8 @@ Dtu::executeCommand()
     if(cmd.opcode != Command::DEBUG_MSG)
     {
         assert(cmd.arg < numEndpoints);
-        DPRINTF(DtuCmd, "Starting command %s with EP%u\n",
-                cmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg);
+        DPRINTF(DtuCmd, "Starting command %s with EP=%u, flags=%#x\n",
+                cmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg, cmd.flags);
     }
 
     switch (cmd.opcode)
@@ -207,11 +213,11 @@ Dtu::executeCommand()
         break;
     case Command::INC_READ_PTR:
         msgUnit->incrementReadPtr(cmd.arg);
-        finishCommand(NONE);
+        finishCommand(Error::NONE);
         break;
     case Command::DEBUG_MSG:
         DPRINTF(Dtu, "DEBUG %#x\n", cmd.arg);
-        finishCommand(NONE);
+        finishCommand(Error::NONE);
         break;
     default:
         // TODO error handling
@@ -226,12 +232,13 @@ Dtu::finishCommand(Error error)
 
     assert(cmdInProgress);
 
-    DPRINTF(DtuCmd, "Finished command %s with EP%u -> %u\n",
-            cmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg, error);
+    DPRINTF(DtuCmd, "Finished command %s with EP=%u, flags=%#x -> %u\n",
+            cmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg, cmd.flags,
+            static_cast<uint>(error));
 
     // let the SW know that the command is finished
-    unsigned bits = numCmdOpcodeBits + numCmdEpidBits;
-    regFile.set(CmdReg::COMMAND, error << bits);
+    unsigned bits = numCmdOpcodeBits + numCmdFlagsBits + numCmdArgBits;
+    regFile.set(CmdReg::COMMAND, static_cast<uint>(error) << bits);
 
     cmdInProgress = false;
 }
@@ -377,7 +384,7 @@ Dtu::sendNocRequest(NocPacketType type,
 {
     auto senderState = new NocSenderState();
     senderState->packetType = type;
-    senderState->result = NONE;
+    senderState->result = Error::NONE;
 
     pkt->pushSenderState(senderState);
 
@@ -468,7 +475,7 @@ Dtu::completeNocRequest(PacketPtr pkt)
             "Finished %s request of LLC for %u bytes @ %d:%#x -> %u\n",
             pkt->isRead() ? "read" : "write",
             pkt->getSize(), phys.coreId, phys.offset,
-            senderState->result);
+            static_cast<uint>(senderState->result));
 
         if (dynamic_cast<InitSenderState*>(pkt->senderState))
         {
@@ -478,7 +485,7 @@ Dtu::completeNocRequest(PacketPtr pkt)
             pkt->popSenderState();
         }
 
-        if (senderState->result != NONE)
+        if (senderState->result != Error::NONE)
         {
             uint access = DtuTlb::INTERN | DtuTlb::GONE;
             VPEGoneTranslation *trans = new VPEGoneTranslation(*this, pkt);
@@ -489,8 +496,8 @@ Dtu::completeNocRequest(PacketPtr pkt)
     }
     else if (senderState->packetType == NocPacketType::PAGEFAULT)
     {
-        if (senderState->result != NONE)
-            ptUnit->sendingPfFailed(pkt, senderState->result);
+        if (senderState->result != Error::NONE)
+            ptUnit->sendingPfFailed(pkt, static_cast<int>(senderState->result));
     }
     else if (senderState->packetType != NocPacketType::CACHE_MEM_REQ_FUNC)
     {
@@ -548,7 +555,7 @@ Dtu::handleNocRequest(PacketPtr pkt)
 
     auto senderState = dynamic_cast<NocSenderState*>(pkt->senderState);
 
-    Error res = NONE;
+    Error res = Error::NONE;
 
     switch (senderState->packetType)
     {

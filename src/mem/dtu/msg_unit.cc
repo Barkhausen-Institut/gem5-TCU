@@ -89,7 +89,7 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
             DPRINTFS(Dtu, (&dtu),
                 "EP%u: not enough credits (%lu) to send message (%lu)\n",
                 epid, ep.credits, ep.maxMsgSize);
-            dtu.scheduleFinishOp(Cycles(1), Dtu::MISS_CREDITS);
+            dtu.scheduleFinishOp(Cycles(1), Dtu::Error::MISS_CREDITS);
             return;
         }
 
@@ -358,7 +358,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
     if ((header->flags & pfResp) == pfResp)
     {
         dtu.handlePFResp(pkt);
-        return Dtu::NONE;
+        return Dtu::Error::NONE;
     }
 
     NocAddr addr(pkt->getAddr());
@@ -379,7 +379,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
             sysNo < total ? syscallNames[sysNo] : "Unknown");
     }
 
-    Dtu::Error res = Dtu::NONE;
+    Dtu::Error res = Dtu::Error::NONE;
     uint16_t vpeId = dtu.regs().get(DtuReg::VPE_ID);
     if (addr.vpeId == vpeId && ep.msgCount < ep.size)
     {
@@ -429,14 +429,14 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
             DPRINTFS(Dtu, (&dtu),
                 "EP%u: received message for VPE %u, but VPE %u is running\n",
                 epId, addr.vpeId, vpeId);
-            res = Dtu::VPE_GONE;
+            res = Dtu::Error::VPE_GONE;
         }
         else
         {
             DPRINTFS(Dtu, (&dtu),
                 "EP%u: ignoring message: no space left\n",
                 epId);
-            res = Dtu::NO_RING_SPACE;
+            res = Dtu::Error::NO_RING_SPACE;
         }
 
         dtu.sendNocResponse(pkt);

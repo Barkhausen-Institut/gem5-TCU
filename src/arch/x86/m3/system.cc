@@ -144,7 +144,7 @@ M3X86System::writeRemote(Addr dest, const uint8_t *data, size_t size)
 
     auto senderState = new Dtu::NocSenderState();
     senderState->packetType = Dtu::NocPacketType::CACHE_MEM_REQ_FUNC;
-    senderState->result = Dtu::NONE;
+    senderState->result = Dtu::Error::NONE;
 
     pkt.pushSenderState(senderState);
 
