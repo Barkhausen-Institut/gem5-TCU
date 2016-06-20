@@ -32,6 +32,9 @@
 #include "mem/dtu/dtu.hh"
 #include "mem/dtu/pt_unit.hh"
 
+PtUnit::PtUnit(Dtu& _dtu) : dtu(_dtu), lastPfAddr(-1), lastPfCnt(0), pfqueue()
+{}
+
 const std::string
 PtUnit::TranslateEvent::name() const
 {
@@ -107,6 +110,20 @@ PtUnit::TranslateEvent::recvFromMem(PacketPtr pkt)
         if (!unit.sendPagefaultMsg(this, virt, access))
             finish(false, NocAddr(0));
     }
+}
+
+void
+PtUnit::TranslateEvent::finish(bool success, const NocAddr &addr)
+{
+    if (trans)
+        trans->finished(success, addr);
+    // make sure that we don't do that twice
+    trans = NULL;
+    setFlags(AutoDelete);
+
+    if (!success)
+        unit.resolveFailed(virt);
+    unit.nextPagefault(this);
 }
 
 bool

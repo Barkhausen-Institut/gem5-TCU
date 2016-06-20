@@ -102,18 +102,7 @@ class PtUnit
 
         void requestPTE();
 
-        void finish(bool success, const NocAddr &addr)
-        {
-            if (trans)
-                trans->finished(success, addr);
-            // make sure that we don't do that twice
-            trans = NULL;
-            setFlags(AutoDelete);
-
-            if (!success)
-                unit.resolveFailed(virt);
-            unit.nextPagefault(this);
-        }
+        void finish(bool success, const NocAddr &addr);
 
         const char* description() const override { return "TranslateEvent"; }
 
@@ -122,8 +111,7 @@ class PtUnit
 
   public:
 
-    PtUnit(Dtu& _dtu) : dtu(_dtu), lastPfAddr(-1), lastPfCnt(0), pfqueue()
-    {}
+    PtUnit(Dtu& _dtu);
 
     bool translateFunctional(Addr virt, uint access, NocAddr *phys);
 
