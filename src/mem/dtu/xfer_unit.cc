@@ -66,15 +66,12 @@ XferUnit::TransferEvent::tryStart()
 
     buf = xfer.allocateBuf(this, flags);
 
-    bool writing = type == Dtu::TransferType::REMOTE_WRITE ||
-                   type == Dtu::TransferType::LOCAL_WRITE;
-
     // try again later, if there is no free buffer
     if (!buf)
     {
         DPRINTFS(DtuXfers, (&xfer.dtu),
             "Delaying %s transfer of %lu bytes @ %p [flags=%#x]\n",
-            writing ? "mem-write" : "mem-read",
+            isWrite() ? "mem-write" : "mem-read",
             size,
             localAddr,
             flags);
@@ -107,7 +104,7 @@ XferUnit::TransferEvent::tryStart()
     DPRINTFS(DtuXfers, (&xfer.dtu),
         "buf%d: Starting %s transfer of %lu bytes @ %p [flags=%#x]\n",
         buf->id,
-        writing ? "mem-write" : "mem-read",
+        isWrite() ? "mem-write" : "mem-read",
         size,
         localAddr,
         buf->event->flags);
@@ -127,13 +124,8 @@ XferUnit::TransferEvent::process()
     NocAddr phys(localAddr);
     if (xfer.dtu.tlb)
     {
-        bool writing = type == Dtu::TransferType::REMOTE_WRITE ||
-                       type == Dtu::TransferType::LOCAL_WRITE;
-        bool remote  = type == Dtu::TransferType::REMOTE_WRITE ||
-                       type == Dtu::TransferType::REMOTE_READ;
-
-        uint access = writing ? DtuTlb::WRITE : DtuTlb::READ;
-        access |= remote ? 0 : DtuTlb::INTERN;
+        uint access = isWrite() ? DtuTlb::WRITE : DtuTlb::READ;
+        access |= isRemote() ? 0 : DtuTlb::INTERN;
 
         DtuTlb::Result res = xfer.dtu.tlb->lookup(localAddr, access, &phys);
         if (res != DtuTlb::HIT)
@@ -176,13 +168,10 @@ XferUnit::TransferEvent::translateDone(bool success, const NocAddr &phys)
     Addr localOff = localAddr & (xfer.blockSize - 1);
     Addr reqSize = std::min(size, xfer.blockSize - localOff);
 
-    bool writing = type == Dtu::TransferType::REMOTE_WRITE ||
-                   type == Dtu::TransferType::LOCAL_WRITE;
-
-    auto cmd = writing ? MemCmd::WriteReq : MemCmd::ReadReq;
+    auto cmd = isWrite() ? MemCmd::WriteReq : MemCmd::ReadReq;
     auto pkt = xfer.dtu.generateRequest(phys.getAddr(), reqSize, cmd);
 
-    if (writing)
+    if (isWrite())
     {
         assert(buf->offset + reqSize <= xfer.bufSize);
 
@@ -194,7 +183,7 @@ XferUnit::TransferEvent::translateDone(bool success, const NocAddr &phys)
     DPRINTFS(DtuXfers, (&xfer.dtu),
         "buf%d: %s %lu bytes @ %p->%p in local memory\n",
         buf->id,
-        writing ? "Writing" : "Reading",
+        isWrite() ? "Writing" : "Reading",
         reqSize,
         localAddr,
         phys.getAddr());
@@ -251,9 +240,7 @@ XferUnit::startTransfer(Dtu::TransferType type,
     dtu.schedule(event, dtu.clockEdge(Cycles(delay + 1)));
 
     // finish the noc request now to make the port unbusy
-    bool remote = type == Dtu::TransferType::REMOTE_READ ||
-                  type == Dtu::TransferType::REMOTE_WRITE;
-    if (remote)
+    if (event->isRemote())
         dtu.schedNocRequestFinished(dtu.clockEdge(Cycles(1)));
 }
 
@@ -268,8 +255,7 @@ XferUnit::recvMemResponse(size_t bufId,
 
     assert(buf->event);
 
-    if (data && (buf->event->type == Dtu::TransferType::LOCAL_READ ||
-        buf->event->type == Dtu::TransferType::REMOTE_READ))
+    if (data && buf->event->isRead())
     {
         assert(buf->offset + size <= bufSize);
 

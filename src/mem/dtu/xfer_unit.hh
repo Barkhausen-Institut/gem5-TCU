@@ -87,6 +87,21 @@ class XferUnit
             setFlags(AutoDelete);
         }
 
+        bool isWrite() const
+        {
+            return type == Dtu::TransferType::REMOTE_WRITE ||
+                   type == Dtu::TransferType::LOCAL_WRITE;
+        }
+        bool isRead() const
+        {
+            return !isWrite();
+        }
+        bool isRemote() const
+        {
+            return type == Dtu::TransferType::REMOTE_READ ||
+                   type == Dtu::TransferType::REMOTE_WRITE;
+        }
+
         void process() override;
 
         void tryStart();
