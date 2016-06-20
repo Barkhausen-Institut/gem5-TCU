@@ -132,7 +132,7 @@ XferUnit::TransferEvent::process()
         {
             // if this is a pagefault and we are not allowed to cause one,
             // report an error
-            if(res == DtuTlb::PAGEFAULT && (flags & XferFlags::NOPF))
+            if (res == DtuTlb::PAGEFAULT && (flags & XferFlags::NOPF))
             {
                 pagefault();
                 return;
