@@ -82,7 +82,7 @@ Dtu::Dtu(DtuParams* p)
     ptUnit(p->tlb_entries > 0 ? new PtUnit(*this) : NULL),
     executeCommandEvent(*this),
     cmdInProgress(false),
-    tlb(p->tlb_entries > 0 ? new DtuTlb(p->tlb_entries) : NULL),
+    tlb(p->tlb_entries > 0 ? new DtuTlb(*this, p->tlb_entries) : NULL),
     memPe(),
     memOffset(),
     atomicMode(p->system->isAtomicMode()),
@@ -124,6 +124,57 @@ Dtu::~Dtu()
     delete xferUnit;
     delete memUnit;
     delete msgUnit;
+}
+
+void
+Dtu::regStats()
+{
+    nocMsgRecvs
+        .name(name() + ".nocMsgRecvs")
+        .desc("Number of received messages");
+    nocReadRecvs
+        .name(name() + ".nocReadRecvs")
+        .desc("Number of received read requests");
+    nocWriteRecvs
+        .name(name() + ".nocWriteRecvs")
+        .desc("Number of received write requests");
+
+    regFileReqs
+        .name(name() + ".regFileReqs")
+        .desc("Number of requests to the register file");
+    intMemReqs
+        .name(name() + ".intMemReqs")
+        .desc("Number of requests to the internal memory");
+    extMemReqs
+        .name(name() + ".extMemReqs")
+        .desc("Number of requests to the external memory");
+    irqInjects
+        .name(name() + ".irqInjects")
+        .desc("Number of injected IRQs");
+
+    commands
+        .init(sizeof(cmdNames) / sizeof(cmdNames[0]))
+        .name(name() + ".commands")
+        .desc("The executed commands")
+        .flags(Stats::total | Stats::nozero);
+    for (size_t i = 0; i < sizeof(cmdNames) / sizeof(cmdNames[0]); ++i)
+        commands.subname(i, cmdNames[i]);
+
+    extCommands
+        .init(sizeof(extCmdNames) / sizeof(extCmdNames[0]))
+        .name(name() + ".extCommands")
+        .desc("The executed external commands")
+        .flags(Stats::total | Stats::nozero);
+    for (size_t i = 0; i < sizeof(extCmdNames) / sizeof(extCmdNames[0]); ++i)
+        extCommands.subname(i, extCmdNames[i]);
+
+    if (tlb)
+        tlb->regStats();
+    if (ptUnit)
+        ptUnit->regStats();
+    xferUnit->regStats();
+    memUnit->regStats();
+    msgUnit->regStats();
 }
 
 PacketPtr
@@ -191,6 +242,7 @@ Dtu::executeCommand()
     assert(!cmdInProgress);
 
     cmdInProgress = true;
+    commands[static_cast<size_t>(cmd.opcode)]++;
 
     if(cmd.opcode != Command::DEBUG_MSG)
     {
@@ -261,6 +313,8 @@ Dtu::executeExternCommand(PacketPtr pkt)
 
     DPRINTF(DtuCmd, "Executing extern command %s with arg=%p\n",
             extCmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg);
+
+    extCommands[static_cast<size_t>(cmd.opcode)]++;
 
     Cycles delay(1);
 
@@ -343,6 +397,8 @@ Dtu::injectIRQ(int vector)
 
     PacketPtr pkt = X86ISA::buildIntRequest(APIC_ID, message);
     sendIRQRequest(pkt);
+
+    irqInjects++;
 }
 
 void
@@ -567,11 +623,16 @@ Dtu::handleNocRequest(PacketPtr pkt)
     {
     case NocPacketType::MESSAGE:
     case NocPacketType::PAGEFAULT:
+        nocMsgRecvs++;
         res = msgUnit->recvFromNoc(pkt, senderState->vpeId);
         break;
     case NocPacketType::READ_REQ:
     case NocPacketType::WRITE_REQ:
     case NocPacketType::CACHE_MEM_REQ:
+        if (senderState->packetType == NocPacketType::READ_REQ)
+            nocReadRecvs++;
+        else if (senderState->packetType == NocPacketType::WRITE_REQ)
+            nocWriteRecvs++;
         res = memUnit->recvFromNoc(pkt, senderState->vpeId, senderState->flags);
         break;
     case NocPacketType::CACHE_MEM_REQ_FUNC:
@@ -617,6 +678,7 @@ Dtu::handleCpuRequest(PacketPtr pkt,
         int tres = translate(trans, pkt, icache, functional);
         if (tres == 1)
         {
+            intMemReqs++;
             if (functional)
                 mport.sendFunctional(pkt);
             else
@@ -673,6 +735,8 @@ Dtu::handleCacheMemRequest(PacketPtr pkt, bool functional)
                            : Dtu::NocPacketType::CACHE_MEM_REQ;
     // this does always target a memory PE, so vpeId is 0
     sendNocRequest(type, pkt, 0, Command::NONE, Cycles(1), functional);
+
+    extMemReqs++;
 
     if (functional)
         pkt->setAddr(old);
@@ -764,6 +828,8 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
     pkt->setAddr(oldAddr - regFileBaseAddr);
 
     RegFile::Result result = regFile.handleRequest(pkt, isCpuRequest);
+
+    regFileReqs++;
 
     // restore old address
     pkt->setAddr(oldAddr);

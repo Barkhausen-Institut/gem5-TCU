@@ -35,6 +35,27 @@
 PtUnit::PtUnit(Dtu& _dtu) : dtu(_dtu), lastPfAddr(-1), lastPfCnt(0), pfqueue()
 {}
 
+void
+PtUnit::regStats()
+{
+    walks
+        .init(8)
+        .name(dtu.name() + ".pt.walks")
+        .desc("Page table walk time (in Cycles)")
+        .flags(Stats::nozero);
+    pagefaults
+        .init(8)
+        .name(dtu.name() + ".pt.pagefaults")
+        .desc("Pagefault time (in Cycles)")
+        .flags(Stats::nozero);
+    unresolved
+        .name(dtu.name() + ".pt.unresolved")
+        .desc("Number of unresolved pagefaults");
+    delays
+        .name(dtu.name() + ".pt.delays")
+        .desc("Number of delayed pagefaults due to running pagefaults");
+}
+
 const std::string
 PtUnit::TranslateEvent::name() const
 {
@@ -124,6 +145,8 @@ PtUnit::TranslateEvent::finish(bool success, const NocAddr &addr)
     if (!success)
         unit.resolveFailed(virt);
     unit.nextPagefault(this);
+
+    unit.walks.sample(unit.dtu.curCycle() - startCycle);
 }
 
 bool
@@ -205,6 +228,7 @@ PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, uint access)
             "Appending Pagefault (%s @ %#x) to queue\n",
             describeAccess(access), virt);
 
+        delays++;
         pfqueue.push_back(ev);
         return true;
     }
@@ -258,6 +282,8 @@ PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, uint access)
                        ep.vpeId,
                        Dtu::Command::NOPF,
                        delay);
+
+    ev->pfStartCycle = dtu.curCycle();
     return true;
 }
 
@@ -314,6 +340,8 @@ PtUnit::finishPagefault(PacketPtr pkt)
         dtu.schedNocResponse(pkt, dtu.clockEdge(delay));
     }
 
+    pagefaults.sample(dtu.curCycle() - ev->pfStartCycle);
+
     if (error != 0)
     {
         if (pkt->getSize() != expSize)
@@ -332,6 +360,7 @@ PtUnit::finishPagefault(PacketPtr pkt)
             mkTlbEntry(ev->virt, NocAddr(0), 0);
 
         ev->finish(false, NocAddr(0));
+        unresolved++;
         return;
     }
 
@@ -448,6 +477,8 @@ PtUnit::startTranslate(Addr virt, uint access, Translation *trans)
     event->trans = trans;
     event->ptAddr = dtu.regs().get(DtuReg::ROOT_PT);
     event->toKernel = false;
+
+    event->startCycle = dtu.curCycle();
 
     dtu.schedule(event, dtu.clockEdge(Cycles(1)));
 }

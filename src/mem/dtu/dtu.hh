@@ -189,6 +189,8 @@ class Dtu : public BaseDtu
 
     ~Dtu();
 
+    void regStats() override;
+
     RegFile &regs() { return regFile; }
 
     PacketPtr generateRequest(Addr addr, Addr size, MemCmd cmd);
@@ -430,6 +432,22 @@ class Dtu : public BaseDtu
     const Cycles transferToMemRequestLatency;
     const Cycles transferToNocLatency;
     const Cycles nocToTransferLatency;
+
+    // NoC receives
+    Stats::Scalar nocMsgRecvs;
+    Stats::Scalar nocReadRecvs;
+    Stats::Scalar nocWriteRecvs;
+
+    // other
+    Stats::Scalar regFileReqs;
+    Stats::Scalar intMemReqs;
+    Stats::Scalar extMemReqs;
+    Stats::Scalar irqInjects;
+
+    // commands
+    Stats::Vector commands;
+    Stats::Vector extCommands;
+
 };
 
 #endif // __MEM_DTU_DTU_HH__

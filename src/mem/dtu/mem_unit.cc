@@ -38,6 +38,30 @@
 #include "mem/dtu/noc_addr.hh"
 
 void
+MemoryUnit::regStats()
+{
+    readBytes
+        .init(8)
+        .name(dtu.name() + ".mem.readBytes")
+        .desc("Sent read requests (in bytes)")
+        .flags(Stats::nozero);
+    writtenBytes
+        .init(8)
+        .name(dtu.name() + ".mem.writtenBytes")
+        .desc("Sent write requests (in bytes)")
+        .flags(Stats::nozero);
+    receivedBytes
+        .init(8)
+        .name(dtu.name() + ".mem.receivedBytes")
+        .desc("Received read/write requests (in bytes)")
+        .flags(Stats::nozero);
+    wrongVPE
+        .name(dtu.name() + ".mem.wrongVPE")
+        .desc("Number of received requests that targeted the wrong VPE")
+        .flags(Stats::nozero);
+}
+
+void
 MemoryUnit::startRead(const Dtu::Command& cmd)
 {
     MemEp ep = dtu.regs().getMemEp(cmd.arg);
@@ -50,6 +74,8 @@ MemoryUnit::startRead(const Dtu::Command& cmd)
     // we'll need that in readComplete
     continueEvent.cmd = cmd;
     continueEvent.read = true;
+
+    readBytes.sample(requestSize);
 
     requestSize = std::min(dtu.maxNocPacketSize, requestSize);
     if (requestSize == 0)
@@ -92,6 +118,8 @@ MemoryUnit::startWrite(const Dtu::Command& cmd)
     // we'll need that in writeComplete
     continueEvent.cmd = cmd;
     continueEvent.read = false;
+
+    writtenBytes.sample(requestSize);
 
     requestSize = std::min(dtu.maxNocPacketSize, requestSize);
     if (requestSize == 0)
@@ -223,12 +251,16 @@ MemoryUnit::recvFromNoc(PacketPtr pkt, uint vpeId, uint flags)
     if (pkt->isWrite())
         dtu.printPacket(pkt);
 
+    receivedBytes.sample(pkt->getSize());
+
     uint16_t ourVpeId = dtu.regs().get(DtuReg::VPE_ID);
     if (vpeId != ourVpeId)
     {
         DPRINTFS(Dtu, (&dtu),
             "Received memory request for VPE %u, but VPE %u is running\n",
             vpeId, ourVpeId);
+
+        wrongVPE++;
 
         dtu.sendNocResponse(pkt);
         return Dtu::Error::VPE_GONE;

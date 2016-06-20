@@ -75,6 +75,8 @@ class MessageUnit
     MessageUnit(Dtu &_dtu)
       : dtu(_dtu), info(), header(), flagsPhys(), offset() {}
 
+    void regStats();
+
     /**
      * Start message transmission -> Mem request
      */
@@ -122,6 +124,13 @@ class MessageUnit
     Dtu::MessageHeader header;
     Addr flagsPhys;
     Addr offset;
+
+    Stats::Histogram sentBytes;
+    Stats::Histogram repliedBytes;
+    Stats::Histogram receivedBytes;
+    Stats::Scalar wrongVPE;
+    Stats::Scalar noSpace;
+
 };
 
 #endif

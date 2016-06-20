@@ -30,10 +30,13 @@
 #ifndef __MEM_DTU_TLB_HH__
 #define __MEM_DTU_TLB_HH__
 
+#include "base/statistics.hh"
 #include "base/types.hh"
 #include "base/trie.hh"
 #include "mem/dtu/noc_addr.hh"
 #include <vector>
+
+class Dtu;
 
 class DtuTlb
 {
@@ -104,7 +107,9 @@ class DtuTlb
         uint access;
     };
 
-    DtuTlb(size_t _num);
+    DtuTlb(Dtu &_dtu, size_t _num);
+
+    void regStats();
 
     Result lookup(Addr virt, uint access, NocAddr *phys);
 
@@ -118,11 +123,22 @@ class DtuTlb
 
     void evict();
 
+    Dtu &dtu;
     TlbEntryTrie trie;
     std::vector<Entry> entries;
     std::vector<Entry*> free;
     size_t num;
     uint lru_seq;
+
+    Stats::Scalar hits;
+    Stats::Scalar misses;
+    Stats::Scalar pagefaults;
+    Stats::Scalar noMapping;
+    Stats::Formula accesses;
+    Stats::Scalar inserts;
+    Stats::Scalar evicts;
+    Stats::Scalar invalidates;
+    Stats::Scalar flushes;
 };
 
 #endif

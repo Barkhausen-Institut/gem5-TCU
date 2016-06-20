@@ -66,6 +66,8 @@ class MemoryUnit
 
     MemoryUnit(Dtu &_dtu) : dtu(_dtu), continueEvent(*this) {}
 
+    void regStats();
+
     /**
      * Starts a read -> NoC request
      */
@@ -102,6 +104,12 @@ class MemoryUnit
     Dtu &dtu;
 
     ContinueEvent continueEvent;
+
+    Stats::Histogram readBytes;
+    Stats::Histogram writtenBytes;
+    Stats::Histogram receivedBytes;
+    Stats::Scalar wrongVPE;
+
 };
 
 #endif

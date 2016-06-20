@@ -83,6 +83,8 @@ class PtUnit
     {
         PtUnit& unit;
 
+        Cycles startCycle;
+        Cycles pfStartCycle;
         int level;
         Addr virt;
         Addr ptAddr;
@@ -92,8 +94,8 @@ class PtUnit
         bool forceWalk;
 
         TranslateEvent(PtUnit& _unit)
-            : unit(_unit), level(), virt(), ptAddr(), access(), trans(),
-              toKernel(), forceWalk()
+            : unit(_unit), startCycle(), pfStartCycle(), level(), virt(),
+              ptAddr(), access(), trans(), toKernel(), forceWalk()
         {}
 
         void process() override;
@@ -112,6 +114,8 @@ class PtUnit
   public:
 
     PtUnit(Dtu& _dtu);
+
+    void regStats();
 
     bool translateFunctional(Addr virt, uint access, NocAddr *phys);
 
@@ -154,6 +158,11 @@ class PtUnit
     int lastPfCnt;
 
     std::list<TranslateEvent*> pfqueue;
+
+    Stats::Histogram walks;
+    Stats::Histogram pagefaults;
+    Stats::Scalar unresolved;
+    Stats::Scalar delays;
 
 };
 

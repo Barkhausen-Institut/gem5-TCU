@@ -28,11 +28,12 @@
  */
 
 #include "mem/dtu/tlb.hh"
+#include "mem/dtu/dtu.hh"
 
 #include <limits>
 
-DtuTlb::DtuTlb(size_t _num)
-    : trie(), entries(), free(), num(_num), lru_seq()
+DtuTlb::DtuTlb(Dtu &_dtu, size_t _num)
+    : dtu(_dtu), trie(), entries(), free(), num(_num), lru_seq()
 {
     for (size_t i = 0; i < num; ++i) {
         entries.push_back(Entry());
@@ -40,21 +41,61 @@ DtuTlb::DtuTlb(size_t _num)
     }
 }
 
+void
+DtuTlb::regStats()
+{
+    hits
+        .name(dtu.name() + ".tlb.hits")
+        .desc("Number of TLB accesses that caused a hit");
+    misses
+        .name(dtu.name() + ".tlb.misses")
+        .desc("Number of TLB accesses that caused a miss");
+    pagefaults
+        .name(dtu.name() + ".tlb.pagefaults")
+        .desc("Number of TLB accesses that caused a pagefault");
+    noMapping
+        .name(dtu.name() + ".tlb.noMapping")
+        .desc("Number of TLB accesses that caused an ignored pagefault");
+    accesses
+        .name(dtu.name() + ".tlb.accesses")
+        .desc("Number of total TLB accesses");
+    accesses = hits + misses + pagefaults + noMapping;
+    inserts
+        .name(dtu.name() + ".tlb.inserts")
+        .desc("Number of TLB inserts");
+    evicts
+        .name(dtu.name() + ".tlb.evicts")
+        .desc("Number of TLB evictions");
+    invalidates
+        .name(dtu.name() + ".tlb.invalidates")
+        .desc("Number of TLB invalidates");
+    flushes
+        .name(dtu.name() + ".tlb.flushes")
+        .desc("Number of TLB flushes");
+}
+
 DtuTlb::Result
 DtuTlb::lookup(Addr virt, uint access, NocAddr *phys)
 {
     Entry *e = trie.lookup(virt);
-    if (!e)
+    if (!e) {
+        misses++;
         return MISS;
+    }
 
-    if (e->flags == 0)
+    if (e->flags == 0) {
+        noMapping++;
         return NOMAP;
-    if ((e->flags & access) != access)
+    }
+    if ((e->flags & access) != access) {
+        pagefaults++;
         return PAGEFAULT;
+    }
 
     e->lru_seq = ++lru_seq;
     *phys = e->phys;
     phys->offset += virt & PAGE_MASK;
+    hits++;
     return HIT;
 }
 
@@ -76,6 +117,7 @@ DtuTlb::evict()
     trie.remove(minEntry->handle);
     minEntry->handle = NULL;
     free.push_back(minEntry);
+    evicts++;
 }
 
 void
@@ -96,6 +138,7 @@ DtuTlb::insert(Addr virt, NocAddr phys, uint flags)
 
     e->phys = phys;
     e->flags = flags;
+    inserts++;
 }
 
 void
@@ -107,6 +150,7 @@ DtuTlb::remove(Addr virt)
         trie.remove(e->handle);
         e->handle = NULL;
         free.push_back(e);
+        invalidates++;
     }
 }
 
@@ -122,4 +166,5 @@ DtuTlb::clear()
             free.push_back(&entries[i]);
         }
     }
+    flushes++;
 }

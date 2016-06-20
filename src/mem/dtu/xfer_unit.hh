@@ -58,6 +58,7 @@ class XferUnit
 
         Buffer *buf;
 
+        Cycles startCycle;
         Dtu::TransferType type;
         Addr localAddr;
         NocAddr remoteAddr;
@@ -71,6 +72,7 @@ class XferUnit
         TransferEvent(XferUnit& _xfer)
             : xfer(_xfer),
               buf(),
+              startCycle(),
               type(),
               localAddr(),
               remoteAddr(),
@@ -158,6 +160,8 @@ class XferUnit
 
     ~XferUnit();
 
+    void regStats();
+
     void startTransfer(Dtu::TransferType type,
                        NocAddr remoteAddr,
                        Addr localAddr,
@@ -189,6 +193,14 @@ class XferUnit
     Buffer **bufs;
 
     std::list<TransferEvent*> queue;
+
+    Stats::Histogram reads;
+    Stats::Histogram writes;
+    Stats::Histogram bytesRead;
+    Stats::Histogram bytesWritten;
+    Stats::Scalar delays;
+    Stats::Scalar pagefaults;
+    Stats::Scalar pfAborts;
 };
 
 #endif

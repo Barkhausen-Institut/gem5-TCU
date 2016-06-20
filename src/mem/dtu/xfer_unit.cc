@@ -60,6 +60,40 @@ XferUnit::~XferUnit()
 }
 
 void
+XferUnit::regStats()
+{
+    reads
+        .init(8)
+        .name(dtu.name() + ".xfer.reads")
+        .desc("Read times (in Cycles)")
+        .flags(Stats::nozero);
+    writes
+        .init(8)
+        .name(dtu.name() + ".xfer.writes")
+        .desc("Write times (in Cycles)")
+        .flags(Stats::nozero);
+    bytesRead
+        .init(8)
+        .name(dtu.name() + ".xfer.bytesRead")
+        .desc("Read bytes (from internal memory)")
+        .flags(Stats::nozero);
+    bytesWritten
+        .init(8)
+        .name(dtu.name() + ".xfer.bytesWritten")
+        .desc("Written bytes (to internal memory)")
+        .flags(Stats::nozero);
+    delays
+        .name(dtu.name() + ".xfer.delays")
+        .desc("Number of delays due to occupied buffers");
+    pagefaults
+        .name(dtu.name() + ".xfer.pagefaults")
+        .desc("Number of pagefaults during transfers");
+    pfAborts
+        .name(dtu.name() + ".xfer.pfAborts")
+        .desc("Number of aborts due to pagefaults");
+}
+
+void
 XferUnit::TransferEvent::tryStart()
 {
     assert(buf == NULL);
@@ -76,6 +110,7 @@ XferUnit::TransferEvent::tryStart()
             localAddr,
             flags);
 
+        xfer.delays++;
         xfer.queue.push_back(this);
         return;
     }
@@ -130,6 +165,9 @@ XferUnit::TransferEvent::process()
         DtuTlb::Result res = xfer.dtu.tlb->lookup(localAddr, access, &phys);
         if (res != DtuTlb::HIT)
         {
+            if (res == DtuTlb::PAGEFAULT)
+                xfer.pagefaults++;
+
             // if this is a pagefault and we are not allowed to cause one,
             // report an error
             if (res == DtuTlb::PAGEFAULT && (flags & XferFlags::NOPF))
@@ -206,6 +244,8 @@ XferUnit::TransferEvent::pagefault()
         "buf%d: Translation failed; aborting transfer",
         buf->id);
 
+    xfer.pfAborts++;
+
     buf->event->size = 0;
     buf->event->result = Dtu::Error::PAGEFAULT;
     xfer.recvMemResponse(buf->id,
@@ -236,6 +276,12 @@ XferUnit::startTransfer(Dtu::TransferType type,
     event->vpeId = vpeId;
     event->flags = flags;
     event->header = header;
+    event->startCycle = dtu.curCycle();
+
+    if (event->isRead())
+        bytesRead.sample(size);
+    else
+        bytesWritten.sample(size);
 
     dtu.schedule(event, dtu.clockEdge(Cycles(delay + 1)));
 
@@ -344,6 +390,10 @@ XferUnit::recvMemResponse(size_t bufId,
                  buf->id);
 
         // we're done with this buffer now
+        if (buf->event->isRead())
+            reads.sample(dtu.curCycle() - buf->event->startCycle);
+        else
+            writes.sample(dtu.curCycle() - buf->event->startCycle);
         buf->event->finish();
         buf->event = NULL;
 

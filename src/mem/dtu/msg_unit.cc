@@ -62,6 +62,34 @@ static const char *syscallNames[] = {
 };
 
 void
+MessageUnit::regStats()
+{
+    sentBytes
+        .init(8)
+        .name(dtu.name() + ".msg.sentBytes")
+        .desc("Sent messages (in bytes)")
+        .flags(Stats::nozero);
+    repliedBytes
+        .init(8)
+        .name(dtu.name() + ".msg.repliedBytes")
+        .desc("Sent replies (in bytes)")
+        .flags(Stats::nozero);
+    receivedBytes
+        .init(8)
+        .name(dtu.name() + ".msg.receivedBytes")
+        .desc("Received messages (in bytes)")
+        .flags(Stats::nozero);
+    wrongVPE
+        .name(dtu.name() + ".msg.wrongVPE")
+        .desc("Number of received messages that targeted the wrong VPE")
+        .flags(Stats::nozero);
+    noSpace
+        .name(dtu.name() + ".msg.noSpace")
+        .desc("Number of received messages we dropped")
+        .flags(Stats::nozero);
+}
+
+void
 MessageUnit::startTransmission(const Dtu::Command& cmd)
 {
     unsigned epid = cmd.arg;
@@ -239,6 +267,11 @@ MessageUnit::startXfer(const Dtu::Command& cmd)
     Addr messageAddr = dtu.regs().get(CmdReg::DATA_ADDR);
     Addr messageSize = dtu.regs().get(CmdReg::DATA_SIZE);
 
+    if (cmd.opcode == Dtu::Command::REPLY)
+        repliedBytes.sample(messageSize);
+    else
+        sentBytes.sample(messageSize);
+
     DPRINTFS(Dtu, (&dtu), "\e[1m[%s -> %u]\e[0m with EP%u of %#018lx:%lu\n",
              cmd.opcode == Dtu::Command::REPLY ? "rp" : "sd",
              info.targetCoreId,
@@ -355,6 +388,8 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId)
 
     Dtu::MessageHeader* header = pkt->getPtr<Dtu::MessageHeader>();
 
+    receivedBytes.sample(header->length);
+
     uint8_t pfResp = Dtu::REPLY_FLAG | Dtu::PAGEFAULT;
     if ((header->flags & pfResp) == pfResp)
     {
@@ -434,6 +469,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId)
                 "EP%u: received message for VPE %u, but VPE %u is running\n",
                 epId, vpeId, ourVpeId);
             res = Dtu::Error::VPE_GONE;
+            wrongVPE++;
         }
         else
         {
@@ -441,6 +477,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId)
                 "EP%u: ignoring message: no space left\n",
                 epId);
             res = Dtu::Error::NO_RING_SPACE;
+            noSpace++;
         }
 
         dtu.sendNocResponse(pkt);
