@@ -158,10 +158,10 @@ MessageUnit::requestHeader(unsigned epid)
         epid, msgAddr);
 
     NocAddr phys(msgAddr);
-    if (dtu.tlb)
+    if (dtu.tlb())
     {
         uint access = DtuTlb::READ | DtuTlb::INTERN;
-        DtuTlb::Result res = dtu.tlb->lookup(msgAddr, access, &phys);
+        DtuTlb::Result res = dtu.tlb()->lookup(msgAddr, access, &phys);
         if (res != DtuTlb::HIT)
         {
             DPRINTFS(DtuTlb, (&dtu),

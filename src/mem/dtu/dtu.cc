@@ -76,13 +76,13 @@ Dtu::Dtu(DtuParams* p)
     masterId(p->system->getMasterId(name())),
     system(p->system),
     regFile(name() + ".regFile", p->num_endpoints),
+    tlBuf(p->tlb_entries > 0 ? new DtuTlb(*this, p->tlb_entries) : NULL),
     msgUnit(new MessageUnit(*this)),
     memUnit(new MemoryUnit(*this)),
     xferUnit(new XferUnit(*this, p->block_size, p->buf_count, p->buf_size)),
     ptUnit(p->tlb_entries > 0 ? new PtUnit(*this) : NULL),
     executeCommandEvent(*this),
     cmdInProgress(false),
-    tlb(p->tlb_entries > 0 ? new DtuTlb(*this, p->tlb_entries) : NULL),
     memPe(),
     memOffset(),
     atomicMode(p->system->isAtomicMode()),
@@ -119,11 +119,11 @@ Dtu::Dtu(DtuParams* p)
 
 Dtu::~Dtu()
 {
-    delete tlb;
     delete ptUnit;
     delete xferUnit;
     delete memUnit;
     delete msgUnit;
+    delete tlBuf;
 }
 
 void
@@ -168,8 +168,8 @@ Dtu::regStats()
     for (size_t i = 0; i < sizeof(extCmdNames) / sizeof(extCmdNames[0]); ++i)
         extCommands.subname(i, extCmdNames[i]);
 
-    if (tlb)
-        tlb->regStats();
+    if (tlb())
+        tlb()->regStats();
     if (ptUnit)
         ptUnit->regStats();
     xferUnit->regStats();
@@ -324,12 +324,12 @@ Dtu::executeExternCommand(PacketPtr pkt)
         wakeupCore();
         break;
     case ExternCommand::INV_PAGE:
-        if (tlb)
-            tlb->remove(cmd.arg);
+        if (tlb())
+            tlb()->remove(cmd.arg);
         break;
     case ExternCommand::INV_TLB:
-        if (tlb)
-            tlb->clear();
+        if (tlb())
+            tlb()->clear();
         break;
     case ExternCommand::INV_CACHE:
         delay = Cycles(0);
@@ -750,7 +750,7 @@ Dtu::translate(PtUnit::Translation *trans,
                bool icache,
                bool functional)
 {
-    if (!tlb)
+    if (!tlb())
         return 1;
 
     uint access = DtuTlb::INTERN;
@@ -765,7 +765,7 @@ Dtu::translate(PtUnit::Translation *trans,
         access |= DtuTlb::WRITE;
 
     NocAddr phys;
-    DtuTlb::Result res = tlb->lookup(pkt->getAddr(), access, &phys);
+    DtuTlb::Result res = tlb()->lookup(pkt->getAddr(), access, &phys);
     switch(res)
     {
         case DtuTlb::HIT:

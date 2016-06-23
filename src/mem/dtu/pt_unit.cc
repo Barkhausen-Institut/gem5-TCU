@@ -91,7 +91,7 @@ PtUnit::TranslateEvent::process()
 
     // first check the TLB again; maybe we don't need to do a translation
     NocAddr phys;
-    DtuTlb::Result res = unit.dtu.tlb->lookup(virt, access, &phys);
+    DtuTlb::Result res = unit.dtu.tlb()->lookup(virt, access, &phys);
     if (res == DtuTlb::HIT)
         finish(true, phys);
     else if (res == DtuTlb::NOMAP)
@@ -382,7 +382,7 @@ void PtUnit::mkTlbEntry(Addr virt, NocAddr phys, uint flags)
         "Inserting into TLB: virt=%p phys=%p flags=%u\n",
         tlbVirt, phys.offset, flags);
 
-    dtu.tlb->insert(tlbVirt, phys, flags);
+    dtu.tlb()->insert(tlbVirt, phys, flags);
 }
 
 void

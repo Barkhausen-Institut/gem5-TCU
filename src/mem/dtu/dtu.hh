@@ -193,6 +193,8 @@ class Dtu : public BaseDtu
 
     RegFile &regs() { return regFile; }
 
+    DtuTlb *tlb() { return tlBuf; }
+
     PacketPtr generateRequest(Addr addr, Addr size, MemCmd cmd);
     void freeRequest(PacketPtr pkt);
 
@@ -293,6 +295,8 @@ class Dtu : public BaseDtu
     System *system;
 
     RegFile regFile;
+
+    DtuTlb *tlBuf;
 
     MessageUnit *msgUnit;
 
@@ -402,8 +406,6 @@ class Dtu : public BaseDtu
     bool cmdInProgress;
 
   public:
-
-    DtuTlb *tlb;
 
     unsigned memPe;
     Addr memOffset;
