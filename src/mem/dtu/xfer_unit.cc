@@ -48,6 +48,9 @@ XferUnit::XferUnit(Dtu &_dtu,
       bufs(new Buffer*[bufCount]),
       queue()
 {
+    panic_if(dtu.tlb() && bufCount < 2,
+        "With paging enabled, at least 2 buffers are required");
+
     for (size_t i = 0; i < bufCount; ++i)
         bufs[i] = new Buffer(i, bufSize);
 }
