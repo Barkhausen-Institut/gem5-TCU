@@ -32,7 +32,6 @@
 #include "debug/DtuBuf.hh"
 #include "debug/DtuPackets.hh"
 #include "debug/DtuSysCalls.hh"
-#include "debug/DtuPower.hh"
 #include "debug/DtuXfers.hh"
 #include "debug/DtuTlb.hh"
 #include "mem/dtu/xfer_unit.hh"

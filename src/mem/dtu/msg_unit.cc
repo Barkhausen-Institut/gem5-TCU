@@ -33,7 +33,6 @@
 #include "debug/DtuCredits.hh"
 #include "debug/DtuPackets.hh"
 #include "debug/DtuSysCalls.hh"
-#include "debug/DtuPower.hh"
 #include "debug/DtuTlb.hh"
 #include "mem/dtu/msg_unit.hh"
 #include "mem/dtu/noc_addr.hh"
