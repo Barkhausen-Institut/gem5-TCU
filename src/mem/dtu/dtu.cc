@@ -111,10 +111,11 @@ Dtu::Dtu(DtuParams* p)
         DPRINTF(Dtu, "Using memory range %p .. %p\n",
             memOffset, memOffset + sys->memSize);
 
-        regs().set(DtuReg::RW_BARRIER, -1);
         regs().set(DtuReg::ROOT_PT, sys->getRootPt().getAddr());
-        regs().set(DtuReg::VPE_ID, INVALID_VPE_ID);
     }
+
+    regs().set(DtuReg::RW_BARRIER, -1);
+    regs().set(DtuReg::VPE_ID, INVALID_VPE_ID);
 }
 
 Dtu::~Dtu()
@@ -733,8 +734,13 @@ Dtu::handleCacheMemRequest(PacketPtr pkt, bool functional)
 
     auto type = functional ? Dtu::NocPacketType::CACHE_MEM_REQ_FUNC
                            : Dtu::NocPacketType::CACHE_MEM_REQ;
-    // this does always target a memory PE, so vpeId is 0
-    sendNocRequest(type, pkt, 0, Command::NONE, Cycles(1), functional);
+    // this does always target a memory PE, so vpeId is invalid
+    sendNocRequest(type,
+                   pkt,
+                   INVALID_VPE_ID,
+                   Command::NONE,
+                   Cycles(1),
+                   functional);
 
     extMemReqs++;
 
