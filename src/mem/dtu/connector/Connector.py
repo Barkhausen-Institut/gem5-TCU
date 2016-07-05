@@ -1,5 +1,4 @@
-# Copyright (c) 2015 Christian Menard
-# Copyright (c) 2015 Nils Asmussen
+# Copyright (c) 2016 Nils Asmussen
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -26,39 +25,16 @@
 # of the authors and should not be interpreted as representing official policies,
 # either expressed or implied, of the FreeBSD Project.
 
-Import('*')
+from MemObject import MemObject
+from m5.params import *
+from m5.proxy import *
 
-SimObject('Dtu.py')
-SimObject('connector/Connector.py')
+class BaseConnector(MemObject):
+    type = 'BaseConnector'
+    cxx_header = "mem/dtu/connector/base.hh"
 
-Source('connector/base.cc')
-Source('connector/x86.cc')
-Source('dtu.cc')
-Source('base.cc')
-Source('regfile.cc')
-Source('msg_unit.cc')
-Source('mem_unit.cc')
-Source('xfer_unit.cc')
-Source('pt_unit.cc')
-Source('tlb.cc')
-
-DebugFlag('Dtu')
-DebugFlag('DtuBuf')
-DebugFlag('DtuCmd')
-DebugFlag('DtuConnector')
-DebugFlag('DtuCredits')
-DebugFlag('DtuMasterPort')
-DebugFlag('DtuPackets')
-DebugFlag('DtuPower')
-DebugFlag('DtuSysCalls')
-DebugFlag('DtuRegRead')
-DebugFlag('DtuRegWrite')
-DebugFlag('DtuRegRange')
-DebugFlag('DtuSlavePort')
-DebugFlag('DtuXfers')
-DebugFlag('DtuTlb')
-DebugFlag('DtuPf')
-DebugFlag('DtuMem')
-DebugFlag('DtuMemWatch')
-
-CompoundFlag('DtuReg', [ 'DtuRegRead', 'DtuRegWrite' ])
+class X86Connector(BaseConnector):
+    type = 'X86Connector'
+    cxx_header = "mem/dtu/connector/x86.hh"
+    system = Param.System(Parent.any, "System we belong to")
+    irq_master_port = MasterPort("Port to send the IRQs to")

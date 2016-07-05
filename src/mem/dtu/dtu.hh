@@ -31,6 +31,7 @@
 #ifndef __MEM_DTU_DTU_HH__
 #define __MEM_DTU_DTU_HH__
 
+#include "mem/dtu/connector/base.hh"
 #include "mem/dtu/base.hh"
 #include "mem/dtu/regfile.hh"
 #include "mem/dtu/noc_addr.hh"
@@ -295,6 +296,8 @@ class Dtu : public BaseDtu
     System *system;
 
     RegFile regFile;
+
+    BaseConnector *connector;
 
     DtuTlb *tlBuf;
 

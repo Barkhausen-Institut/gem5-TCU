@@ -32,16 +32,13 @@
 #include <sstream>
 
 #include "arch/x86/m3/system.hh"
-#include "arch/x86/interrupts.hh"
 #include "debug/Dtu.hh"
 #include "debug/DtuBuf.hh"
 #include "debug/DtuCmd.hh"
 #include "debug/DtuPackets.hh"
 #include "debug/DtuSysCalls.hh"
-#include "debug/DtuPower.hh"
 #include "debug/DtuMem.hh"
 #include "debug/DtuTlb.hh"
-#include "cpu/simple/base.hh"
 #include "mem/dtu/dtu.hh"
 #include "mem/dtu/msg_unit.hh"
 #include "mem/dtu/mem_unit.hh"
@@ -49,7 +46,6 @@
 #include "mem/dtu/pt_unit.hh"
 #include "mem/cache/cache.hh"
 #include "sim/system.hh"
-#include "sim/process.hh"
 
 static const char *cmdNames[] =
 {
@@ -76,6 +72,7 @@ Dtu::Dtu(DtuParams* p)
     masterId(p->system->getMasterId(name())),
     system(p->system),
     regFile(name() + ".regFile", p->num_endpoints),
+    connector(p->connector),
     tlBuf(p->tlb_entries > 0 ? new DtuTlb(*this, p->tlb_entries) : NULL),
     msgUnit(new MessageUnit(*this)),
     memUnit(new MemoryUnit(*this)),
@@ -360,44 +357,19 @@ Dtu::executeExternCommand(PacketPtr pkt)
 void
 Dtu::wakeupCore()
 {
-    if (system->threadContexts.size() == 0)
-        return;
-
-    if (system->threadContexts[0]->status() == ThreadContext::Suspended)
-    {
-        DPRINTF(DtuPower, "Waking up core\n");
-        system->threadContexts[0]->activate();
-    }
+    connector->wakeup();
 }
 
 void
 Dtu::updateSuspendablePin()
 {
-    if (system->threadContexts.size() == 0)
-        return;
-
-    bool pendingMsgs = regFile.get(DtuReg::MSG_CNT) > 0;
-    bool hadPending = system->threadContexts[0]->getCpuPtr()->_denySuspend;
-    system->threadContexts[0]->getCpuPtr()->_denySuspend = pendingMsgs;
-    if (hadPending && !pendingMsgs)
-        DPRINTF(DtuPower, "Core can be suspended\n");
+    connector->suspend(regFile.get(DtuReg::MSG_CNT));
 }
 
 void
 Dtu::injectIRQ(int vector)
 {
-    const int APIC_ID = 0;
-
-    X86ISA::TriggerIntMessage message = 0;
-    message.deliveryMode = X86ISA::DeliveryMode::ExtInt;
-    message.destination = APIC_ID;
-    message.destMode = 0;   // physical
-    message.trigger = 0;    // edge
-    message.level = 0;      // unused?
-    message.vector = vector;
-
-    PacketPtr pkt = X86ISA::buildIntRequest(APIC_ID, message);
-    sendIRQRequest(pkt);
+    connector->injectIrq(vector);
 
     irqInjects++;
 }

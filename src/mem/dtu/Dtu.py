@@ -27,9 +27,9 @@
 # either expressed or implied, of the FreeBSD Project.
 
 from MemObject import MemObject
+from Connector import BaseConnector
 from m5.params import *
 from m5.proxy import *
-
 
 class BaseDtu(MemObject):
     type = 'BaseDtu'
@@ -43,8 +43,6 @@ class BaseDtu(MemObject):
 
     icache_master_port = MasterPort("Port that connects the icache")
     dcache_master_port = MasterPort("Port that connects the dcache")
-
-    irq_master_port = MasterPort("Port that connects to the interrupt controller")
 
     cache_mem_slave_port = SlavePort("Port that performs memory requests on behalf of the cache")
 
@@ -64,6 +62,8 @@ class Dtu(BaseDtu):
     cxx_header = "mem/dtu/dtu.hh"
     system = Param.System(Parent.any, "System we belong to")
     num_endpoints = Param.Unsigned(8, "Number of enpoints per DTU")
+
+    connector = Param.BaseConnector("The connector to the CPU")
 
     max_noc_packet_size = Param.MemorySize("1kB", "Maximum size of a NoC packet (needs to be the same for all DTUs)")
 

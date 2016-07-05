@@ -223,6 +223,7 @@ def createCorePE(root, options, no, cmdline, memPE, l1size=None, l2size=None, sp
         root=root, options=options, no=no, mem=False,
         l1size=l1size, l2size=l2size, spmsize=spmsize, memPE=memPE
     )
+    pe.dtu.connector = X86Connector()
     pe.readfile = "/dev/stdin"
 
     pe.cpu = CPUClass()
@@ -271,7 +272,7 @@ def createCorePE(root, options, no, cmdline, memPE, l1size=None, l2size=None, sp
     pe.cpu.createInterruptController()
 
     pe.cpu.interrupts.pio = pe.xbar.master
-    pe.cpu.interrupts.int_slave = pe.dtu.irq_master_port
+    pe.cpu.interrupts.int_slave = pe.dtu.connector.irq_master_port
     pe.cpu.interrupts.int_master = pe.xbar.slave
 
     pe.cpu.itb.walker.port = pe.xbar.slave
@@ -284,6 +285,8 @@ def createMemPE(root, options, no, size, content=None):
         root=root, options=options, no=no, mem=True,
         l1size=None, l2size=None, spmsize=None, memPE=0
     )
+    pe.dtu.connector = BaseConnector()
+
     pe.mem_ctrl = DDR3_1600_x64()
     pe.mem_ctrl.device_size = size
     pe.mem_ctrl.range = MemorySize(size).value
@@ -294,6 +297,7 @@ def createMemPE(root, options, no, size, content=None):
               % (content, os.stat(content).st_size, base_offset)
             sys.exit(1)
         pe.mem_file = content
+
     print 'PE%02d: %s' % (no, content)
     print '      memsize=%d KiB' % (int(pe.mem_ctrl.range.end + 1) / 1024)
     print '      bufsize=%d B, blocksize=%d B, count=%d' % \
