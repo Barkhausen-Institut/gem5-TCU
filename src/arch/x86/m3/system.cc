@@ -280,8 +280,8 @@ M3X86System::initState()
 {
     X86System::initState();
 
-    // no internal memory? then we use paging
-    if ((pes[coreId] & ~1) == 0)
+    // external memory? then we use paging
+    if ((pes[coreId] & 0x7) == 1)
         mapMemory();
 
     StartEnv env;
@@ -296,7 +296,7 @@ M3X86System::initState()
     env.argv = reinterpret_cast<char**>(argv);
 
     // with paging, the kernel gets an initial heap mapped
-    if ((pes[coreId] & ~1) == 0)
+    if ((pes[coreId] & 0x7) == 1)
         env.heapsize = HEAP_SIZE;
     // otherwise, he should use all internal memory
     else
@@ -440,17 +440,7 @@ M3X86System::initState()
         kenv.pe_count = pes.size();
         memset(kenv.pes, 0, sizeof(kenv.pes));
         for (size_t i = 0; i < pes.size(); ++i)
-        {
-            // 31..12: memsize in pages (0 = no internal memory)
-            // 3..0  : PE type
-            if (pes[i] & 1)
-                kenv.pes[i] = KernelEnv::TYPE_MEM;
-            else if(pes[i] & ~1)
-                kenv.pes[i] = KernelEnv::TYPE_IMEM;
-            else
-                kenv.pes[i] = KernelEnv::TYPE_EMEM;
-            kenv.pes[i] |= pes[i] & ~1;
-        }
+            kenv.pes[i] = pes[i];
 
         // the kernel needs to PE info in its env
         env.pe = kenv.pes[coreId];

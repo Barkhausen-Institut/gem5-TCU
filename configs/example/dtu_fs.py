@@ -345,17 +345,18 @@ def runSimulation(options, pes):
     pemems = []
     for pe in pes:
         size = 0
-        try:
+        if hasattr(pe, 'mem_ctrl'):
             size = int(pe.mem_ctrl.device_size)
             assert size % 4096 == 0, "Memory size not page aligned"
-            # set bit 0 to mark this as a memory PE
-            size += 1
-        except:
-            try:
+            size |= 2   # mem
+        else:
+            if hasattr(pe, 'spm'):
                 size = int(pe.spm.range.end + 1)
                 assert size % 4096 == 0, "Memory size not page aligned"
-            except:
-                pass
+            else:
+                size |= 1 # emem
+
+            size |= 1 << 3 # x86
         pemems.append(size)
 
     # give that to the PEs
