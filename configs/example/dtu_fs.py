@@ -170,30 +170,30 @@ def createPE(root, options, no, mem, l1size, l2size, spmsize, memPE):
     pe.dtu.noc_master_port = root.noc.slave
     pe.dtu.noc_slave_port  = root.noc.master
 
-    if not mem:
-        if not l1size is None:
-            pe.dtu.l1cache = L1Cache(size=l1size)
-            pe.dtu.l1cache.forward_snoops = False
-            pe.dtu.l1cache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
-            pe.dtu.l1cache.cpu_side = pe.xbar.master
+    if not l1size is None:
+        pe.dtu.l1cache = L1Cache(size=l1size)
+        pe.dtu.l1cache.forward_snoops = False
+        pe.dtu.l1cache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
+        pe.dtu.l1cache.cpu_side = pe.xbar.master
 
-            if not l2size is None:
-                pe.dtu.l2cache = L2Cache(size=l2size)
-                pe.dtu.l2cache.forward_snoops = False
-                pe.dtu.l2cache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
-                pe.dtu.l2cache.cpu_side = pe.dtu.l1cache.mem_side
-                pe.dtu.l2cache.mem_side = pe.dtu.cache_mem_slave_port
-            else:
-                pe.dtu.l1cache.mem_side = pe.dtu.cache_mem_slave_port
-
-            # don't check whether the kernel is in memory because a PE does not have memory in this
-            # case, but just a cache that is connected to a different PE
-            pe.kernel_addr_check = False
+        if not l2size is None:
+            pe.dtu.l2cache = L2Cache(size=l2size)
+            pe.dtu.l2cache.forward_snoops = False
+            pe.dtu.l2cache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
+            pe.dtu.l2cache.cpu_side = pe.dtu.l1cache.mem_side
+            pe.dtu.l2cache.mem_side = pe.dtu.cache_mem_slave_port
         else:
-            pe.spm = Scratchpad(in_addr_map="true")
-            pe.spm.cpu_port = pe.xbar.master
-            pe.spm.range = spmsize
+            pe.dtu.l1cache.mem_side = pe.dtu.cache_mem_slave_port
 
+        # don't check whether the kernel is in memory because a PE does not have memory in this
+        # case, but just a cache that is connected to a different PE
+        pe.kernel_addr_check = False
+    elif not spmsize is None:
+        pe.spm = Scratchpad(in_addr_map="true")
+        pe.spm.cpu_port = pe.xbar.master
+        pe.spm.range = spmsize
+
+    if not mem:
         pe.memory_pe = memPE
         pe.memory_offset = pe_offset + (pe_size * no)
         pe.memory_size = pe_size
