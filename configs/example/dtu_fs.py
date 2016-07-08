@@ -280,6 +280,26 @@ def createCorePE(root, options, no, cmdline, memPE, l1size=None, l2size=None, sp
 
     return pe
 
+def createHashAccelPE(root, options, no, spmsize='64kB'):
+    pe = createPE(
+        root=root, options=options, no=no, mem=True,
+        l1size=None, l2size=None, spmsize=spmsize, memPE=0
+    )
+    pe.dtu.connector = DtuAccelHashConnector()
+
+    pe.accelhash = DtuAccelHash()
+    pe.dtu.connector.accelerator = pe.accelhash
+    pe.dtu.dcache_slave_port = pe.accelhash.port
+    pe.accelhash.id = no;
+
+    print 'PE%02d: hash accelerator' % (no)
+    print '      memsize=%d KiB' % (int(pe.spm.range.end + 1) / 1024)
+    print '      bufsize=%d B, blocksize=%d B, count=%d' % \
+        (pe.dtu.buf_size.value, pe.dtu.block_size.value, pe.dtu.buf_count)
+    print
+
+    return pe
+
 def createMemPE(root, options, no, size, content=None):
     pe = createPE(
         root=root, options=options, no=no, mem=True,
@@ -360,7 +380,10 @@ def runSimulation(options, pes):
             else:
                 size |= 1 # emem
 
-            size |= 1 << 3 # x86
+            if hasattr(pe, 'accelhash'):
+                size |= 3 << 3 # hash accelerator
+            else:
+                size |= 1 << 3 # x86
         pemems.append(size)
 
     # give that to the PEs

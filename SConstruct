@@ -1206,6 +1206,9 @@ main.SConscript('ext/drampower/SConscript',
 main.SConscript('ext/nomali/SConscript',
                 variant_dir = joinpath(build_root, 'nomali'))
 
+
+main.Append(LIBS = ['ssl', 'crypto'])
+
 ###################################################
 #
 # This function is used to set up a directory with switching headers
