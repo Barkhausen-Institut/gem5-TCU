@@ -35,36 +35,9 @@
 
 class MemoryUnit
 {
-  private:
-
-    struct ContinueEvent : public Event
-    {
-        MemoryUnit& memUnit;
-
-        Dtu::Command cmd;
-
-        bool read;
-
-        ContinueEvent(MemoryUnit& _memUnit)
-            : memUnit(_memUnit), cmd(), read()
-        {}
-
-        void process() override
-        {
-            if (read)
-                memUnit.startRead(cmd);
-            else
-                memUnit.startWrite(cmd);
-        }
-
-        const char* description() const override { return "ContinueEvent"; }
-
-        const std::string name() const override { return memUnit.dtu.name(); }
-    };
-
   public:
 
-    MemoryUnit(Dtu &_dtu) : dtu(_dtu), continueEvent(*this) {}
+    MemoryUnit(Dtu &_dtu) : dtu(_dtu) {}
 
     void regStats();
 
@@ -81,12 +54,12 @@ class MemoryUnit
     /**
      * Read: response from remote DTU
      */
-    void readComplete(PacketPtr pkt, Dtu::Error error);
+    void readComplete(const Dtu::Command& cmd, PacketPtr pkt, Dtu::Error error);
 
     /**
      * Write: response from remote DTU
      */
-    void writeComplete(PacketPtr pkt, Dtu::Error error);
+    void writeComplete(const Dtu::Command& cmd, PacketPtr pkt, Dtu::Error error);
 
 
     /**
@@ -102,8 +75,6 @@ class MemoryUnit
   private:
 
     Dtu &dtu;
-
-    ContinueEvent continueEvent;
 
     Stats::Histogram readBytes;
     Stats::Histogram writtenBytes;

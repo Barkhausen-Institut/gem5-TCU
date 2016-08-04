@@ -43,9 +43,8 @@ class XferUnit
     enum XferFlags
     {
         MESSAGE   = 1,
-        LAST      = 2,
-        MSGRECV   = 4,
-        NOPF      = 8,
+        MSGRECV   = 2,
+        NOPF      = 4,
     };
 
   private:

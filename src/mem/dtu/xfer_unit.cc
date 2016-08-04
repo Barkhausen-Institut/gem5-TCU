@@ -348,8 +348,7 @@ XferUnit::recvMemResponse(size_t bufId,
         }
         else if (buf->event->type == Dtu::TransferType::LOCAL_WRITE)
         {
-            if (buf->event->flags & LAST)
-                dtu.scheduleFinishOp(Cycles(1));
+            dtu.scheduleFinishOp(Cycles(1));
 
             dtu.freeRequest(buf->event->pkt);
         }

@@ -544,9 +544,9 @@ Dtu::completeNocRequest(PacketPtr pkt)
     else if (senderState->packetType != NocPacketType::CACHE_MEM_REQ_FUNC)
     {
         if (pkt->isWrite())
-            memUnit->writeComplete(pkt, senderState->result);
+            memUnit->writeComplete(getCommand(), pkt, senderState->result);
         else if (pkt->isRead())
-            memUnit->readComplete(pkt, senderState->result);
+            memUnit->readComplete(getCommand(), pkt, senderState->result);
         else
             panic("unexpected packet type\n");
     }

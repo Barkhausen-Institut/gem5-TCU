@@ -70,10 +70,6 @@ MemoryUnit::startRead(const Dtu::Command& cmd)
     Addr requestSize = dtu.regs().get(CmdReg::DATA_SIZE);
     Addr offset = dtu.regs().get(CmdReg::OFFSET);
 
-    // we'll need that in readComplete
-    continueEvent.cmd = cmd;
-    continueEvent.read = true;
-
     readBytes.sample(requestSize);
 
     requestSize = std::min(dtu.maxNocPacketSize, requestSize);
@@ -114,10 +110,6 @@ MemoryUnit::startWrite(const Dtu::Command& cmd)
     Addr requestSize = dtu.regs().get(CmdReg::DATA_SIZE);
     Addr offset = dtu.regs().get(CmdReg::OFFSET);
 
-    // we'll need that in writeComplete
-    continueEvent.cmd = cmd;
-    continueEvent.read = false;
-
     writtenBytes.sample(requestSize);
 
     requestSize = std::min(dtu.maxNocPacketSize, requestSize);
@@ -150,13 +142,12 @@ MemoryUnit::startWrite(const Dtu::Command& cmd)
 }
 
 void
-MemoryUnit::readComplete(PacketPtr pkt, Dtu::Error error)
+MemoryUnit::readComplete(const Dtu::Command& cmd, PacketPtr pkt, Dtu::Error error)
 {
     dtu.printPacket(pkt);
 
     Addr localAddr = dtu.regs().get(CmdReg::DATA_ADDR);
     Addr requestSize = dtu.regs().get(CmdReg::DATA_SIZE);
-    Addr offset = dtu.regs().get(CmdReg::OFFSET);
 
     requestSize -= pkt->getSize();
 
@@ -170,10 +161,9 @@ MemoryUnit::readComplete(PacketPtr pkt, Dtu::Error error)
         return;
     }
 
-    uint flags = (continueEvent.cmd.flags & Dtu::Command::NOPF)
+    uint flags = (cmd.flags & Dtu::Command::NOPF)
                  ? XferUnit::XferFlags::NOPF
                  : 0;
-    flags |= requestSize == 0 ? XferUnit::LAST : 0;
 
     dtu.startTransfer(Dtu::TransferType::LOCAL_WRITE,
                       // remote address is irrelevant
@@ -185,20 +175,10 @@ MemoryUnit::readComplete(PacketPtr pkt, Dtu::Error error)
                       NULL,
                       delay,
                       flags);
-
-    if (requestSize > 0)
-    {
-        dtu.regs().set(CmdReg::DATA_SIZE, requestSize);
-        dtu.regs().set(CmdReg::DATA_ADDR, localAddr + pkt->getSize());
-        dtu.regs().set(CmdReg::OFFSET, offset + pkt->getSize());
-
-        // transfer the next packet
-        dtu.schedule(continueEvent, dtu.clockEdge(Cycles(1)));
-    }
 }
 
 void
-MemoryUnit::writeComplete(PacketPtr pkt, Dtu::Error error)
+MemoryUnit::writeComplete(const Dtu::Command& cmd, PacketPtr pkt, Dtu::Error error)
 {
     Addr requestSize = dtu.regs().get(CmdReg::DATA_SIZE);
 
@@ -210,19 +190,6 @@ MemoryUnit::writeComplete(PacketPtr pkt, Dtu::Error error)
         // writing
         Cycles delay = dtu.ticksToCycles(pkt->headerDelay);
         dtu.scheduleFinishOp(delay, error);
-    }
-    // write needs to be continued
-    else if (requestSize > pkt->getSize())
-    {
-        Addr localAddr = dtu.regs().get(CmdReg::DATA_ADDR);
-        Addr offset = dtu.regs().get(CmdReg::OFFSET);
-
-        dtu.regs().set(CmdReg::DATA_SIZE, requestSize - pkt->getSize());
-        dtu.regs().set(CmdReg::DATA_ADDR, localAddr + pkt->getSize());
-        dtu.regs().set(CmdReg::OFFSET, offset + pkt->getSize());
-
-        // transfer the next packet
-        dtu.schedule(continueEvent, dtu.clockEdge(Cycles(1)));
     }
 
     dtu.freeRequest(pkt);
