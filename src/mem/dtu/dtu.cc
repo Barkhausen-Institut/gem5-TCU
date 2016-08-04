@@ -60,6 +60,7 @@ static const char *cmdNames[] =
 
 static const char *extCmdNames[] =
 {
+    "IDLE",
     "WAKEUP_CORE",
     "INV_PAGE",
     "INV_TLB",
@@ -318,6 +319,8 @@ Dtu::executeExternCommand(PacketPtr pkt)
 
     switch (cmd.opcode)
     {
+    case ExternCommand::IDLE:
+        break;
     case ExternCommand::WAKEUP_CORE:
         wakeupCore();
         break;
@@ -352,6 +355,10 @@ Dtu::executeExternCommand(PacketPtr pkt)
 
     if (pkt)
         schedNocResponse(pkt, clockEdge(delay));
+
+    // set external command back to IDLE
+    regFile.set(DtuReg::EXT_CMD,
+        static_cast<RegFile::reg_t>(ExternCommand::IDLE));
 }
 
 void

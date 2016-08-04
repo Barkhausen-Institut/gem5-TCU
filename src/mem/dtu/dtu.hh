@@ -169,11 +169,12 @@ class Dtu : public BaseDtu
     {
         enum Opcode
         {
-            WAKEUP_CORE     = 0,
-            INV_PAGE        = 1,
-            INV_TLB         = 2,
-            INV_CACHE       = 3,
-            INJECT_IRQ      = 4,
+            IDLE            = 0,
+            WAKEUP_CORE     = 1,
+            INV_PAGE        = 2,
+            INV_TLB         = 3,
+            INV_CACHE       = 4,
+            INJECT_IRQ      = 5,
         };
 
         Opcode opcode;
