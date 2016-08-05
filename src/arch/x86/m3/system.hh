@@ -37,6 +37,7 @@
 #include "params/M3X86System.hh"
 #include "mem/qport.hh"
 #include "mem/dtu/noc_addr.hh"
+#include "sim/dtu_memory.hh"
 
 class M3X86System : public X86System
 {
@@ -115,18 +116,16 @@ class M3X86System : public X86System
         uint32_t pe;
     } M5_ATTR_PACKED;
 
+    DTUMemory mem;
     NoCMasterPort nocPort;
     std::vector<Addr> pes;
     std::string commandLine;
 
   public:
     const unsigned coreId;
-    const unsigned memPe;
-    const Addr memOffset;
     const Addr memSize;
     const Addr modOffset;
     const Addr modSize;
-    unsigned nextFrame;
 
   public:
     typedef M3X86SystemParams Params;
@@ -136,17 +135,15 @@ class M3X86System : public X86System
     BaseMasterPort& getMasterPort(const std::string &if_name,
                                   PortID idx = InvalidPortID) override;
 
-    NocAddr getRootPt() const
-    {
-        return NocAddr(memPe, memOffset);
-    }
-
     void initState();
+
+    NocAddr getPhys(Addr offset) const
+    {
+        return NocAddr(mem.memPe, mem.memOffset + offset);
+    }
 
   private:
     bool isKernelArg(const std::string &arg);
-    void mapPage(Addr virt, Addr phys, uint access);
-    void mapSegment(Addr start, Addr size, unsigned perm);
     void mapMemory();
     size_t getArgc() const;
     void writeRemote(Addr dest, const uint8_t *data, size_t size);

@@ -104,12 +104,13 @@ Dtu::Dtu(DtuParams* p)
     M3X86System *sys = dynamic_cast<M3X86System*>(system);
     if (sys)
     {
-        memPe = sys->memPe;
-        memOffset = sys->memOffset;
+        NocAddr phys = sys->getPhys(0);
+        memPe = phys.coreId;
+        memOffset = phys.offset;
         DPRINTF(Dtu, "Using memory range %p .. %p\n",
             memOffset, memOffset + sys->memSize);
 
-        regs().set(DtuReg::ROOT_PT, sys->getRootPt().getAddr());
+        regs().set(DtuReg::ROOT_PT, phys.getAddr());
     }
 
     regs().set(DtuReg::RW_BARRIER, -1);

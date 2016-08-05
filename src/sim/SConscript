@@ -69,6 +69,7 @@ Source('voltage_domain.cc')
 Source('system.cc')
 Source('dvfs_handler.cc')
 Source('mem_system.cc')
+Source('dtu_memory.cc')
 
 if env['TARGET_ISA'] != 'null':
     SimObject('InstTracer.py')

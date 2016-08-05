@@ -58,17 +58,14 @@ M3X86System::NoCMasterPort::NoCMasterPort(M3X86System &_sys)
 
 M3X86System::M3X86System(Params *p)
     : X86System(p),
+      mem(this, p->memory_pe, p->memory_offset, physProxy, RES_PAGES),
       nocPort(*this),
       pes(p->pes),
       commandLine(p->boot_osflags),
       coreId(p->core_id),
-      memPe(p->memory_pe),
-      memOffset(p->memory_offset),
       memSize(p->memory_size),
       modOffset(p->mod_offset),
-      modSize(p->mod_size),
-      // don't reuse root pt
-      nextFrame(RES_PAGES)
+      modSize(p->mod_size)
 {
 }
 
@@ -176,83 +173,17 @@ M3X86System::loadModule(const std::string &path, const std::string &name, Addr a
 }
 
 void
-M3X86System::mapPage(Addr virt, Addr phys, uint access)
-{
-    typedef PtUnit::PageTableEntry pte_t;
-    Addr ptAddr = getRootPt().getAddr();
-    for (int i = DtuTlb::LEVEL_CNT - 1; i >= 0; --i)
-    {
-        Addr idx = virt >> (DtuTlb::PAGE_BITS + i * DtuTlb::LEVEL_BITS);
-        idx &= DtuTlb::LEVEL_MASK;
-
-        Addr pteAddr = ptAddr + (idx << DtuTlb::PTE_BITS);
-        pte_t entry = physProxy.read<pte_t>(pteAddr);
-        assert(i > 0 || entry.ixwr == 0);
-        if(!entry.ixwr)
-        {
-            // determine phys address
-            Addr offset;
-            if (i == 0)
-                offset = memOffset + phys;
-            else
-                offset = memOffset + (nextFrame++ << DtuTlb::PAGE_BITS);
-            NocAddr addr(memPe, offset);
-
-            // clear pagetables
-            if (i > 0)
-                physProxy.memsetBlob(addr.getAddr(), 0, DtuTlb::PAGE_SIZE);
-
-            // insert entry
-            entry.base = addr.getAddr() >> DtuTlb::PAGE_BITS;
-            entry.ixwr = i == 0 ? access : DtuTlb::RWX;
-            DPRINTF(DtuTlb,
-                "Creating level %d PTE for virt=%#018x @ %#018x: %#018x\n",
-                i, virt, pteAddr, entry);
-            physProxy.write(pteAddr, entry);
-        }
-
-        ptAddr = entry.base << DtuTlb::PAGE_BITS;
-    }
-}
-
-void
-M3X86System::mapSegment(Addr start, Addr size, unsigned perm)
-{
-    Addr virt = start;
-    size_t count = divCeil(size, DtuTlb::PAGE_SIZE);
-    for(size_t i = 0; i < count; ++i)
-    {
-        mapPage(virt, virt, perm);
-
-        virt += DtuTlb::PAGE_SIZE;
-    }
-}
-
-void
 M3X86System::mapMemory()
 {
-    // clear root pt
-    physProxy.memsetBlob(getRootPt().getAddr(), 0, DtuTlb::PAGE_SIZE);
-
-    // let the last entry in the root pt point to the root pt itself
-    PtUnit::PageTableEntry entry = 0;
-    entry.base = getRootPt().getAddr() >> DtuTlb::PAGE_BITS;
-    // not internally accessible
-    entry.ixwr = DtuTlb::RWX;
-    size_t off = DtuTlb::PAGE_SIZE - sizeof(entry);
-    DPRINTF(DtuTlb,
-        "Creating recursive level %d PTE @ %#018x: %#018x\n",
-        DtuTlb::LEVEL_CNT - 1, getRootPt().getAddr() + off, entry);
-    physProxy.write(getRootPt().getAddr() + off, entry);
-
+    mem.initMemory();
     // TODO check whether the size of idle fits before the RT_SPACE
 
     // program segments
-    mapSegment(kernel->textBase(), kernel->textSize(),
+    mem.mapSegment(kernel->textBase(), kernel->textSize(),
         DtuTlb::INTERN | DtuTlb::RX);
-    mapSegment(kernel->dataBase(), kernel->dataSize(),
+    mem.mapSegment(kernel->dataBase(), kernel->dataSize(),
         DtuTlb::INTERN | DtuTlb::RW);
-    mapSegment(kernel->bssBase(), kernel->bssSize(),
+    mem.mapSegment(kernel->bssBase(), kernel->bssSize(),
         DtuTlb::INTERN | DtuTlb::RW);
 
     // idle doesn't need that stuff
@@ -261,17 +192,17 @@ M3X86System::mapMemory()
         // initial heap
         Addr bssEnd = roundUp(kernel->bssBase() + kernel->bssSize(),
             DtuTlb::PAGE_SIZE);
-        mapSegment(bssEnd, HEAP_SIZE, DtuTlb::INTERN | DtuTlb::RW);
+        mem.mapSegment(bssEnd, HEAP_SIZE, DtuTlb::INTERN | DtuTlb::RW);
 
         // state and stack
-        mapSegment(RT_START, RT_SIZE, DtuTlb::INTERN | DtuTlb::RW);
-        mapSegment(STACK_AREA, STACK_SIZE, DtuTlb::INTERN | DtuTlb::RW);
+        mem.mapSegment(RT_START, RT_SIZE, DtuTlb::INTERN | DtuTlb::RW);
+        mem.mapSegment(STACK_AREA, STACK_SIZE, DtuTlb::INTERN | DtuTlb::RW);
     }
     else
     {
         // map a large portion of the address space on app PEs
         // TODO this is temporary to still support clone and VPEs without AS
-        mapSegment(RT_START, memSize - RT_START, DtuTlb::IRWX);
+        mem.mapSegment(RT_START, memSize - RT_START, DtuTlb::IRWX);
     }
 }
 
@@ -399,7 +330,7 @@ M3X86System::initState()
             panic("Too many modules");
 
         i = 0;
-        Addr addr = NocAddr(memPe, modOffset).getAddr();
+        Addr addr = NocAddr(mem.memPe, modOffset).getAddr();
         for (const std::pair<std::string, std::string> &mod : mods)
         {
             Addr size = loadModule(kernelPath, mod.first, addr);
@@ -451,11 +382,11 @@ M3X86System::initState()
         addr += sizeof(kenv);
 
         // check size
-        Addr end = NocAddr(memPe, modOffset + modSize).getAddr();
+        Addr end = NocAddr(mem.memPe, modOffset + modSize).getAddr();
         if (addr > end)
         {
             panic("Modules are too large (have: %lu, need: %lu)",
-                modSize, addr - NocAddr(memPe, modOffset).getAddr());
+                modSize, addr - NocAddr(mem.memPe, modOffset).getAddr());
         }
     }
 
