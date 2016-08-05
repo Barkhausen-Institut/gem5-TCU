@@ -140,6 +140,21 @@ def getOptions():
 
     return options
 
+def printConfig(pe):
+    try:
+        print '      L1cache=%d KiB' % (pe.dtu.l1cache.size.value / 1024)
+        try:
+            print '      L2cache=%d KiB' % (pe.dtu.l2cache.size.value / 1024)
+        except:
+            pass
+    except:
+        try:
+            print '      memsize=%d KiB' % (int(pe.mem_ctrl.range.end + 1) / 1024)
+        except:
+            print '      memsize=%d KiB' % (int(pe.spm.range.end + 1) / 1024)
+    print '      bufsize=%d B, blocksize=%d B, count=%d' % \
+        (pe.dtu.buf_size.value, pe.dtu.block_size.value, pe.dtu.buf_count)
+
 def createPE(root, options, no, mem, l1size, l2size, spmsize, memPE):
     CPUClass = CpuConfig.get(options.cpu_type)
 
@@ -242,14 +257,7 @@ def createCorePE(root, options, no, cmdline, memPE, l1size=None, l2size=None, sp
     pe.boot_osflags = cmdline
     print "PE%02d: %s" % (no, cmdline)
     print '      core   =%s x86' % (options.cpu_type)
-    try:
-        print '      L1cache=%d KiB' % (pe.dtu.l1cache.size.value / 1024)
-        if not l2size is None:
-            print '      L2cache=%d KiB' % (pe.dtu.l2cache.size.value / 1024)
-    except:
-        print '      memsize=%d KiB' % (int(pe.spm.range.end + 1) / 1024)
-    print '      bufsize=%d B, blocksize=%d B, count=%d' % \
-        (pe.dtu.buf_size.value, pe.dtu.block_size.value, pe.dtu.buf_count)
+    printConfig(pe)
 
     # if specified, let this PE wait for GDB
     if options.pausepe == no:
@@ -293,9 +301,7 @@ def createHashAccelPE(root, options, no, spmsize='64kB'):
     pe.accelhash.id = no;
 
     print 'PE%02d: hash accelerator' % (no)
-    print '      memsize=%d KiB' % (int(pe.spm.range.end + 1) / 1024)
-    print '      bufsize=%d B, blocksize=%d B, count=%d' % \
-        (pe.dtu.buf_size.value, pe.dtu.block_size.value, pe.dtu.buf_count)
+    printConfig(pe)
     print
 
     return pe
@@ -319,9 +325,7 @@ def createMemPE(root, options, no, size, content=None):
         pe.mem_file = content
 
     print 'PE%02d: %s' % (no, content)
-    print '      memsize=%d KiB' % (int(pe.mem_ctrl.range.end + 1) / 1024)
-    print '      bufsize=%d B, blocksize=%d B, count=%d' % \
-        (pe.dtu.buf_size.value, pe.dtu.block_size.value, pe.dtu.buf_count)
+    printConfig(pe)
     print
 
     return pe
