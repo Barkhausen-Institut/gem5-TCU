@@ -1,4 +1,4 @@
-# Copyright (c) 2015, Nils Asmussen
+# Copyright (c) 2016, Nils Asmussen
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -28,10 +28,14 @@
 from m5.params import *
 from System import System
 
-class MemSystem(System):
-    type = 'MemSystem'
-    cxx_header = 'sim/mem_system.hh'
+class SpuSystem(System):
+    type = 'SpuSystem'
+    cxx_header = 'sim/spu_system.hh'
 
     core_id = Param.Unsigned("The core id")
 
-    mem_file = Param.String("", "The file to load into memory")
+    pes = VectorParam.Addr([], "All PEs in the system with their type and mem size")
+
+    memory_pe = Param.Unsigned(0, "The memory PE to use")
+    memory_offset = Param.Addr(0, "The offset in the memory PE")
+    memory_size = Param.Addr(0, "The size in the memory PE")

@@ -58,12 +58,12 @@ M3X86System::NoCMasterPort::NoCMasterPort(M3X86System &_sys)
 
 M3X86System::M3X86System(Params *p)
     : X86System(p),
-      mem(this, p->memory_pe, p->memory_offset, physProxy, RES_PAGES),
+      DTUMemory(this, p->memory_pe, p->memory_offset, p->memory_size,
+                physProxy, RES_PAGES),
       nocPort(*this),
       pes(p->pes),
       commandLine(p->boot_osflags),
       coreId(p->core_id),
-      memSize(p->memory_size),
       modOffset(p->mod_offset),
       modSize(p->mod_size)
 {
@@ -175,15 +175,15 @@ M3X86System::loadModule(const std::string &path, const std::string &name, Addr a
 void
 M3X86System::mapMemory()
 {
-    mem.initMemory();
+    initMemory();
     // TODO check whether the size of idle fits before the RT_SPACE
 
     // program segments
-    mem.mapSegment(kernel->textBase(), kernel->textSize(),
+    mapSegment(kernel->textBase(), kernel->textSize(),
         DtuTlb::INTERN | DtuTlb::RX);
-    mem.mapSegment(kernel->dataBase(), kernel->dataSize(),
+    mapSegment(kernel->dataBase(), kernel->dataSize(),
         DtuTlb::INTERN | DtuTlb::RW);
-    mem.mapSegment(kernel->bssBase(), kernel->bssSize(),
+    mapSegment(kernel->bssBase(), kernel->bssSize(),
         DtuTlb::INTERN | DtuTlb::RW);
 
     // idle doesn't need that stuff
@@ -192,17 +192,17 @@ M3X86System::mapMemory()
         // initial heap
         Addr bssEnd = roundUp(kernel->bssBase() + kernel->bssSize(),
             DtuTlb::PAGE_SIZE);
-        mem.mapSegment(bssEnd, HEAP_SIZE, DtuTlb::INTERN | DtuTlb::RW);
+        mapSegment(bssEnd, HEAP_SIZE, DtuTlb::INTERN | DtuTlb::RW);
 
         // state and stack
-        mem.mapSegment(RT_START, RT_SIZE, DtuTlb::INTERN | DtuTlb::RW);
-        mem.mapSegment(STACK_AREA, STACK_SIZE, DtuTlb::INTERN | DtuTlb::RW);
+        mapSegment(RT_START, RT_SIZE, DtuTlb::INTERN | DtuTlb::RW);
+        mapSegment(STACK_AREA, STACK_SIZE, DtuTlb::INTERN | DtuTlb::RW);
     }
     else
     {
         // map a large portion of the address space on app PEs
         // TODO this is temporary to still support clone and VPEs without AS
-        mem.mapSegment(RT_START, memSize - RT_START, DtuTlb::IRWX);
+        mapSegment(RT_START, DTUMemory::memSize - RT_START, DtuTlb::IRWX);
     }
 }
 
@@ -330,7 +330,7 @@ M3X86System::initState()
             panic("Too many modules");
 
         i = 0;
-        Addr addr = NocAddr(mem.memPe, modOffset).getAddr();
+        Addr addr = NocAddr(memPe, modOffset).getAddr();
         for (const std::pair<std::string, std::string> &mod : mods)
         {
             Addr size = loadModule(kernelPath, mod.first, addr);
@@ -382,11 +382,11 @@ M3X86System::initState()
         addr += sizeof(kenv);
 
         // check size
-        Addr end = NocAddr(mem.memPe, modOffset + modSize).getAddr();
+        Addr end = NocAddr(memPe, modOffset + modSize).getAddr();
         if (addr > end)
         {
             panic("Modules are too large (have: %lu, need: %lu)",
-                modSize, addr - NocAddr(mem.memPe, modOffset).getAddr());
+                modSize, addr - NocAddr(memPe, modOffset).getAddr());
         }
     }
 

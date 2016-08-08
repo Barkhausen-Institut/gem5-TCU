@@ -39,6 +39,7 @@ SimObject('System.py')
 SimObject('DVFSHandler.py')
 SimObject('SubSystem.py')
 SimObject('MemSystem.py')
+SimObject('SpuSystem.py')
 
 Source('arguments.cc')
 Source('async.cc')
@@ -69,6 +70,7 @@ Source('voltage_domain.cc')
 Source('system.cc')
 Source('dvfs_handler.cc')
 Source('mem_system.cc')
+Source('spu_system.cc')
 Source('dtu_memory.cc')
 
 if env['TARGET_ISA'] != 'null':

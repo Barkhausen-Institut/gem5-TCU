@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Nils Asmussen
+ * Copyright (c) 2015, Nils Asmussen
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,52 +27,33 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
-#ifndef __SIM_DTU_MEMORY_HH__
-#define __SIM_DTU_MEMORY_HH__
+#include "sim/spu_system.hh"
+#include "mem/port_proxy.hh"
+#include "params/SpuSystem.hh"
 
-#include "sim/system.hh"
-#include "mem/dtu/noc_addr.hh"
-
-class DTUMemory
+SpuSystem::SpuSystem(Params *p)
+    : System(p),
+      DTUMemory(this, p->memory_pe, p->memory_offset, p->memory_size, physProxy, 0),
+      pes(p->pes),
+      coreId(p->core_id)
 {
-  private:
+}
 
-    SimObject *obj;
+SpuSystem::~SpuSystem()
+{
+}
 
-    PortProxy &physp;
-    unsigned nextFrame;
+void
+SpuSystem::initState()
+{
+    System::initState();
 
-  public:
+    if ((pes[coreId] & 0x7) == 1)
+        initMemory();
+}
 
-    const unsigned memPe;
-    const Addr memOffset;
-    const Addr memSize;
-
-    DTUMemory(SimObject *obj,
-              unsigned memPe,
-              Addr memOffset,
-              Addr memSize,
-              PortProxy &phys,
-              unsigned firstFree);
-
-    bool hasVirtMem() const
-    {
-        return memSize != 0;
-    }
-
-    NocAddr getPhys(Addr offset) const
-    {
-        return NocAddr(memPe, memOffset + offset);
-    }
-
-    NocAddr getRootPt() const
-    {
-        return getPhys(0);
-    }
-
-    void initMemory();
-    void mapPage(Addr virt, Addr phys, uint access);
-    void mapSegment(Addr start, Addr size, unsigned perm);
-};
-
-#endif
+SpuSystem *
+SpuSystemParams::create()
+{
+    return new SpuSystem(this);
+}

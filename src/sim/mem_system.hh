@@ -39,6 +39,7 @@
 class MemSystem : public System
 {
   protected:
+    unsigned coreId;
     std::string memFile;
 
   public:

@@ -27,52 +27,28 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
-#ifndef __SIM_DTU_MEMORY_HH__
-#define __SIM_DTU_MEMORY_HH__
+#ifndef __SIM_SPU_SYSTEM_HH__
+#define __SIM_SPU_SYSTEM_HH__
+
+#include <string>
+#include <vector>
 
 #include "sim/system.hh"
-#include "mem/dtu/noc_addr.hh"
+#include "sim/dtu_memory.hh"
+#include "params/SpuSystem.hh"
 
-class DTUMemory
+class SpuSystem : public System, public DTUMemory
 {
-  private:
-
-    SimObject *obj;
-
-    PortProxy &physp;
-    unsigned nextFrame;
+  protected:
+    std::vector<Addr> pes;
+    unsigned coreId;
 
   public:
+    typedef SpuSystemParams Params;
+    SpuSystem(Params *p);
+    ~SpuSystem();
 
-    const unsigned memPe;
-    const Addr memOffset;
-    const Addr memSize;
-
-    DTUMemory(SimObject *obj,
-              unsigned memPe,
-              Addr memOffset,
-              Addr memSize,
-              PortProxy &phys,
-              unsigned firstFree);
-
-    bool hasVirtMem() const
-    {
-        return memSize != 0;
-    }
-
-    NocAddr getPhys(Addr offset) const
-    {
-        return NocAddr(memPe, memOffset + offset);
-    }
-
-    NocAddr getRootPt() const
-    {
-        return getPhys(0);
-    }
-
-    void initMemory();
-    void mapPage(Addr virt, Addr phys, uint access);
-    void mapSegment(Addr start, Addr size, unsigned perm);
+    void initState();
 };
 
 #endif

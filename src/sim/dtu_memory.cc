@@ -36,14 +36,16 @@
 DTUMemory::DTUMemory(SimObject *obj,
                      unsigned memPe,
                      Addr memOffset,
+                     Addr memSize,
                      PortProxy &phys,
                      unsigned firstFree)
     : obj(obj),
-      physProxy(phys),
+      physp(phys),
       // don't reuse root pt
       nextFrame(firstFree),
       memPe(memPe),
-      memOffset(memOffset)
+      memOffset(memOffset),
+      memSize(memSize)
 {
 }
 
@@ -51,7 +53,7 @@ void
 DTUMemory::initMemory()
 {
     // clear root pt
-    physProxy.memsetBlob(getRootPt().getAddr(), 0, DtuTlb::PAGE_SIZE);
+    physp.memsetBlob(getRootPt().getAddr(), 0, DtuTlb::PAGE_SIZE);
 
     // let the last entry in the root pt point to the root pt itself
     PtUnit::PageTableEntry entry = 0;
@@ -62,7 +64,7 @@ DTUMemory::initMemory()
     DPRINTFS(DtuTlb, obj,
         "Creating recursive level %d PTE @ %#018x: %#018x\n",
         DtuTlb::LEVEL_CNT - 1, getRootPt().getAddr() + off, entry);
-    physProxy.write(getRootPt().getAddr() + off, entry);
+    physp.write(getRootPt().getAddr() + off, entry);
 }
 
 void
@@ -76,7 +78,7 @@ DTUMemory::mapPage(Addr virt, Addr phys, uint access)
         idx &= DtuTlb::LEVEL_MASK;
 
         Addr pteAddr = ptAddr + (idx << DtuTlb::PTE_BITS);
-        pte_t entry = physProxy.read<pte_t>(pteAddr);
+        pte_t entry = physp.read<pte_t>(pteAddr);
         assert(i > 0 || entry.ixwr == 0);
         if(!entry.ixwr)
         {
@@ -90,7 +92,7 @@ DTUMemory::mapPage(Addr virt, Addr phys, uint access)
 
             // clear pagetables
             if (i > 0)
-                physProxy.memsetBlob(addr.getAddr(), 0, DtuTlb::PAGE_SIZE);
+                physp.memsetBlob(addr.getAddr(), 0, DtuTlb::PAGE_SIZE);
 
             // insert entry
             entry.base = addr.getAddr() >> DtuTlb::PAGE_BITS;
@@ -98,7 +100,7 @@ DTUMemory::mapPage(Addr virt, Addr phys, uint access)
             DPRINTFS(DtuTlb, obj,
                 "Creating level %d PTE for virt=%#018x @ %#018x: %#018x\n",
                 i, virt, pteAddr, entry);
-            physProxy.write(pteAddr, entry);
+            physp.write(pteAddr, entry);
         }
 
         ptAddr = entry.base << DtuTlb::PAGE_BITS;

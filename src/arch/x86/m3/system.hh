@@ -39,7 +39,7 @@
 #include "mem/dtu/noc_addr.hh"
 #include "sim/dtu_memory.hh"
 
-class M3X86System : public X86System
+class M3X86System : public X86System, public DTUMemory
 {
   protected:
     static const size_t MAX_MODS        = 64;
@@ -116,14 +116,12 @@ class M3X86System : public X86System
         uint32_t pe;
     } M5_ATTR_PACKED;
 
-    DTUMemory mem;
     NoCMasterPort nocPort;
     std::vector<Addr> pes;
     std::string commandLine;
 
   public:
     const unsigned coreId;
-    const Addr memSize;
     const Addr modOffset;
     const Addr modSize;
 
@@ -136,11 +134,6 @@ class M3X86System : public X86System
                                   PortID idx = InvalidPortID) override;
 
     void initState();
-
-    NocAddr getPhys(Addr offset) const
-    {
-        return NocAddr(mem.memPe, mem.memOffset + offset);
-    }
 
   private:
     bool isKernelArg(const std::string &arg);

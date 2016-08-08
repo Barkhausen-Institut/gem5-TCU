@@ -29,10 +29,13 @@
 
 #include "sim/mem_system.hh"
 #include "mem/port_proxy.hh"
+#include "mem/dtu/tlb.hh"
 #include "params/MemSystem.hh"
 
 MemSystem::MemSystem(Params *p)
-    : System(p), memFile(p->mem_file)
+    : System(p),
+      coreId(p->core_id),
+      memFile(p->mem_file)
 {
 }
 

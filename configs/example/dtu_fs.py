@@ -155,15 +155,12 @@ def printConfig(pe):
     print '      bufsize=%d B, blocksize=%d B, count=%d' % \
         (pe.dtu.buf_size.value, pe.dtu.block_size.value, pe.dtu.buf_count)
 
-def createPE(root, options, no, mem, l1size, l2size, spmsize, memPE):
+def createPE(root, options, no, systemType, l1size, l2size, spmsize, memPE):
     CPUClass = CpuConfig.get(options.cpu_type)
 
     # each PE is represented by it's own subsystem
-    if mem:
-        pe = MemSystem(mem_mode=CPUClass.memory_mode())
-    else:
-        pe = M3X86System(mem_mode=CPUClass.memory_mode())
-        pe.core_id = no
+    pe = systemType(mem_mode=CPUClass.memory_mode())
+    pe.core_id = no
     setattr(root, 'pe%02d' % no, pe)
 
     # TODO set latencies
@@ -208,7 +205,7 @@ def createPE(root, options, no, mem, l1size, l2size, spmsize, memPE):
         pe.spm.cpu_port = pe.xbar.master
         pe.spm.range = spmsize
 
-    if not mem:
+    if systemType != MemSystem:
         pe.memory_pe = memPE
         pe.memory_offset = pe_offset + (pe_size * no)
         pe.memory_size = pe_size
@@ -219,14 +216,14 @@ def createPE(root, options, no, mem, l1size, l2size, spmsize, memPE):
     # we just make the buffer very large and the block size as well, so that we can read a packet
     # from SPM/DRAM into the buffer and send it from there. Since that costs no simulated time,
     # it is the same as having no buffer.
-    if mem or l1size is None:
+    if systemType == MemSystem or l1size is None:
         pe.dtu.block_size = pe.dtu.max_noc_packet_size
         pe.dtu.buf_size = pe.dtu.max_noc_packet_size
         # disable the TLB
         pe.dtu.tlb_entries = 0
 
     pe.system_port = pe.xbar.slave
-    if not mem:
+    if systemType == M3X86System:
         pe.noc_master_port = root.noc.slave
 
     return pe
@@ -235,7 +232,7 @@ def createCorePE(root, options, no, cmdline, memPE, l1size=None, l2size=None, sp
     CPUClass = CpuConfig.get(options.cpu_type)
 
     pe = createPE(
-        root=root, options=options, no=no, mem=False,
+        root=root, options=options, no=no, systemType=M3X86System,
         l1size=l1size, l2size=l2size, spmsize=spmsize, memPE=memPE
     )
     pe.dtu.connector = X86Connector()
@@ -288,17 +285,18 @@ def createCorePE(root, options, no, cmdline, memPE, l1size=None, l2size=None, sp
 
     return pe
 
-def createHashAccelPE(root, options, no, spmsize='64kB'):
+def createHashAccelPE(root, options, no, memPE, l1size=None, l2size=None, spmsize='64kB'):
     pe = createPE(
-        root=root, options=options, no=no, mem=True,
-        l1size=None, l2size=None, spmsize=spmsize, memPE=0
+        root=root, options=options, no=no, systemType=SpuSystem,
+        l1size=l1size, l2size=l2size, spmsize=spmsize, memPE=memPE
     )
     pe.dtu.connector = DtuAccelHashConnector()
 
     pe.accelhash = DtuAccelHash()
     pe.dtu.connector.accelerator = pe.accelhash
-    pe.dtu.dcache_slave_port = pe.accelhash.port
     pe.accelhash.id = no;
+
+    pe.dtu.dcache_slave_port = pe.accelhash.port
 
     print 'PE%02d: hash accelerator' % (no)
     printConfig(pe)
@@ -308,7 +306,7 @@ def createHashAccelPE(root, options, no, spmsize='64kB'):
 
 def createMemPE(root, options, no, size, content=None):
     pe = createPE(
-        root=root, options=options, no=no, mem=True,
+        root=root, options=options, no=no, systemType=MemSystem,
         l1size=None, l2size=None, spmsize=None, memPE=0
     )
     pe.dtu.connector = BaseConnector()
