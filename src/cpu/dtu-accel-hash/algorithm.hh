@@ -38,66 +38,135 @@ class DtuAccelHashAlgorithm
 {
   public:
 
-    virtual size_t hash(const void *data, size_t len, uint8_t *res) = 0;
+    virtual void start() = 0;
+
+    virtual void update(const void *data, size_t len) = 0;
+
+    virtual size_t get(uint8_t *res) = 0;
 };
 
 class DtuAccelHashAlgorithmSHA1 : public DtuAccelHashAlgorithm
 {
-    size_t hash(const void *data, size_t len, uint8_t *res) override
+  private:
+
+    SHA_CTX ctx;
+
+  public:
+
+    void start() override
     {
-       SHA_CTX ctx;
-       SHA1_Init(&ctx);
-       SHA1_Update(&ctx, data, len);
-       SHA1_Final(res, &ctx);
-       return 20;
+        SHA1_Init(&ctx);
+    }
+
+    void update(const void *data, size_t len) override
+    {
+        SHA1_Update(&ctx, data, len);
+    }
+
+    size_t get(uint8_t *res) override
+    {
+        SHA1_Final(res, &ctx);
+        return 20;
     }
 };
 
 class DtuAccelHashAlgorithmSHA224 : public DtuAccelHashAlgorithm
 {
-    size_t hash(const void *data, size_t len, uint8_t *res) override
+  private:
+
+    SHA256_CTX ctx;
+
+  public:
+
+    void start() override
     {
-       SHA256_CTX ctx;
-       SHA224_Init(&ctx);
-       SHA224_Update(&ctx, data, len);
-       SHA224_Final(res, &ctx);
-       return 28;
+        SHA224_Init(&ctx);
+    }
+
+    void update(const void *data, size_t len) override
+    {
+        SHA224_Update(&ctx, data, len);
+    }
+
+    size_t get(uint8_t *res) override
+    {
+        SHA224_Final(res, &ctx);
+        return 28;
     }
 };
 
 class DtuAccelHashAlgorithmSHA256 : public DtuAccelHashAlgorithm
 {
-    size_t hash(const void *data, size_t len, uint8_t *res) override
+  private:
+
+    SHA256_CTX ctx;
+
+  public:
+
+    void start() override
     {
-       SHA256_CTX ctx;
-       SHA256_Init(&ctx);
-       SHA256_Update(&ctx, data, len);
-       SHA256_Final(res, &ctx);
-       return 32;
+        SHA256_Init(&ctx);
+    }
+
+    void update(const void *data, size_t len) override
+    {
+        SHA256_Update(&ctx, data, len);
+    }
+
+    size_t get(uint8_t *res) override
+    {
+        SHA256_Final(res, &ctx);
+        return 32;
     }
 };
 
 class DtuAccelHashAlgorithmSHA384 : public DtuAccelHashAlgorithm
 {
-    size_t hash(const void *data, size_t len, uint8_t *res) override
+  private:
+
+    SHA512_CTX ctx;
+
+  public:
+
+    void start() override
     {
-       SHA512_CTX ctx;
-       SHA384_Init(&ctx);
-       SHA384_Update(&ctx, data, len);
-       SHA384_Final(res, &ctx);
-       return 48;
+        SHA384_Init(&ctx);
+    }
+
+    void update(const void *data, size_t len) override
+    {
+        SHA384_Update(&ctx, data, len);
+    }
+
+    size_t get(uint8_t *res) override
+    {
+        SHA384_Final(res, &ctx);
+        return 48;
     }
 };
 
 class DtuAccelHashAlgorithmSHA512 : public DtuAccelHashAlgorithm
 {
-    size_t hash(const void *data, size_t len, uint8_t *res) override
+  private:
+
+    SHA512_CTX ctx;
+
+  public:
+
+    void start() override
     {
-       SHA512_CTX ctx;
-       SHA512_Init(&ctx);
-       SHA512_Update(&ctx, data, len);
-       SHA512_Final(res, &ctx);
-       return 64;
+        SHA512_Init(&ctx);
+    }
+
+    void update(const void *data, size_t len) override
+    {
+        SHA512_Update(&ctx, data, len);
+    }
+
+    size_t get(uint8_t *res) override
+    {
+        SHA512_Final(res, &ctx);
+        return 64;
     }
 };
 

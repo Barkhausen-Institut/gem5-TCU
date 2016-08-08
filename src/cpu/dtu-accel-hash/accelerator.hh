@@ -97,11 +97,15 @@ class DtuAccelHash : public MemObject
 
     void recvRetry();
 
+    static Addr getBufAddr(size_t id);
+
     static Addr getRegAddr(DtuReg reg);
 
     static Addr getRegAddr(CmdReg reg);
 
     static Addr getRegAddr(unsigned reg, unsigned epid);
+
+    System *system;
 
     EventWrapper<DtuAccelHash, &DtuAccelHash::tick> tickEvent;
 
@@ -111,13 +115,20 @@ class DtuAccelHash : public MemObject
 
     DtuAccelHashAlgorithm *algos[5];
 
+    size_t chunkSize;
+
     Algorithm algo;
     Addr msgOffset;
     Addr msgAddr;
     Addr dataAddr;
     size_t dataSize;
-    size_t resbytes;
-    uint8_t result[64];
+    size_t remSize;
+
+    size_t replyOffset;
+    struct {
+        uint64_t count;
+        uint8_t bytes[64];
+    } M5_ATTR_PACKED reply;
 
     /// Request id for all generated traffic
     MasterID masterId;

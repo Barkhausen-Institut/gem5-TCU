@@ -35,13 +35,13 @@
 #include "debug/DtuAccelState.hh"
 #include "mem/dtu/dtu.hh"
 #include "mem/dtu/regfile.hh"
+#include "sim/dtu_memory.hh"
 
 #include <iomanip>
 
-static const unsigned EP_RECV       = 2;
+static const unsigned EP_RECV       = 3;
 static const size_t MSG_SIZE        = 64;
 static const size_t BUF_SIZE        = 4096;
-static const uint BYTES_PER_CYCLE   = 64;
 static const size_t CLIENTS         = 8;
 
 static const char *stateNames[] =
@@ -55,6 +55,13 @@ static const char *stateNames[] =
     "REPLY_WAIT",
     "ACK_MSG",
 };
+
+Addr
+DtuAccelHash::getBufAddr(size_t id)
+{
+    // don't use the first page (m3's pager doesn't map it)
+    return DtuTlb::PAGE_SIZE + BUF_SIZE * id;
+}
 
 Addr
 DtuAccelHash::getRegAddr(DtuReg reg)
@@ -99,14 +106,16 @@ DtuAccelHash::CpuPort::recvReqRetry()
 
 DtuAccelHash::DtuAccelHash(const DtuAccelHashParams *p)
   : MemObject(p),
+    system(p->system),
     tickEvent(this),
     port("port", this),
     state(State::READ_REP),
     algos(),
+    chunkSize(system->cacheLineSize()),
     msgAddr(),
-    masterId(p->system->getMasterId(name())),
+    masterId(system->getMasterId(name())),
     id(p->id),
-    atomic(p->system->isAtomicMode()),
+    atomic(system->isAtomicMode()),
     reg_base(p->regfile_base_addr),
     retryPkt(nullptr)
 {
@@ -211,8 +220,6 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
 
     const uint8_t *pkt_data = pkt->getConstPtr<uint8_t>();
 
-    Cycles delay(1);
-
     if (pkt->isError())
     {
         warn("%s access failed at %#x\n",
@@ -253,45 +260,59 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
 
                 DPRINTF(DtuAccel, "  label=%p algo=%d size=%p\n",
                     header->label, args[0], args[1]);
-                dataAddr = header->label * BUF_SIZE;
+                dataAddr = getBufAddr(header->label);
                 if (header->length != sizeof(uint64_t) * 2 ||
                     static_cast<Algorithm>(args[0]) >= Algorithm::COUNT ||
                     args[1] > BUF_SIZE ||
                     (args[1] % 64) != 0)
                 {
-                    resbytes = 0;
+                    reply.count = 0;
+                    replyOffset = 0;
                     state = State::STORE_REPLY;
                 }
                 else
                 {
                     algo = static_cast<Algorithm>(args[0]);
-                    dataSize = args[1];
+                    remSize = dataSize = args[1];
                     state = State::READ_DATA;
                 }
                 break;
             }
             case State::READ_DATA:
             {
-                resbytes = algos[static_cast<size_t>(algo)]->hash(
-                    static_cast<const void*>(pkt_data),
-                    dataSize,
-                    result
-                );
-                assert(resbytes <= sizeof(result));
+                DtuAccelHashAlgorithm *al = algos[static_cast<size_t>(algo)];
 
-                std::ostringstream ss;
-                ss << std::hex;
-                for (size_t i = 0; i < resbytes; i++)
-                    ss << std::setw(2) << std::setfill('0') << (int)result[i];
-                DPRINTF(DtuAccel, "Hash: %s\n", ss.str().c_str());
+                if (remSize == dataSize)
+                    al->start();
+                al->update(static_cast<const void*>(pkt_data), pkt->getSize());
 
-                state = State::STORE_REPLY;
-                delay = Cycles((dataSize + BYTES_PER_CYCLE - 1) / BYTES_PER_CYCLE);
+                dataAddr += pkt->getSize();
+                remSize -= pkt->getSize();
+
+                if (remSize == 0)
+                {
+                    reply.count = al->get(reply.bytes);
+                    assert(reply.count <= sizeof(reply.bytes));
+
+                    std::ostringstream ss;
+                    ss << std::hex;
+                    for (size_t i = 0; i < reply.count; i++)
+                    {
+                        ss << std::setw(2) << std::setfill('0')
+                           << (int)reply.bytes[i];
+                    }
+                    DPRINTF(DtuAccel, "Hash: %s\n", ss.str().c_str());
+
+                    replyOffset = 0;
+                    state = State::STORE_REPLY;
+                }
                 break;
             }
             case State::STORE_REPLY:
             {
-                state = State::SEND_REPLY;
+                replyOffset += pkt->getSize();
+                if (replyOffset == sizeof(uint64_t) + reply.count)
+                    state = State::SEND_REPLY;
                 break;
             }
             case State::SEND_REPLY:
@@ -320,7 +341,7 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
     delete pkt;
 
     // kick things into action again
-    schedule(tickEvent, clockEdge(delay));
+    schedule(tickEvent, clockEdge(Cycles(1)));
 }
 
 void
@@ -361,35 +382,38 @@ DtuAccelHash::tick()
         }
         case State::READ_DATA:
         {
-            pkt = createPacket(dataAddr, dataSize, MemCmd::ReadReq);
+            size_t size = std::min(chunkSize, remSize);
+            pkt = createPacket(dataAddr, size, MemCmd::ReadReq);
             break;
         }
         case State::STORE_REPLY:
         {
-            msgAddr = CLIENTS * BUF_SIZE;
-            pkt = createPacket(msgAddr,
-                               sizeof(uint64_t) + resbytes,
+            size_t rem = sizeof(uint64_t) + reply.count - replyOffset;
+            size_t size = std::min(chunkSize, rem);
+            pkt = createPacket(getBufAddr(CLIENTS) + replyOffset,
+                               size,
                                MemCmd::WriteReq);
-            *pkt->getPtr<uint64_t>() = resbytes;
-            memcpy(pkt->getPtr<uint8_t>() + sizeof(uint64_t), result, resbytes);
+            memcpy(pkt->getPtr<uint8_t>(), (char*)&reply + replyOffset, size);
             break;
         }
         case State::SEND_REPLY:
         {
             static_assert(static_cast<int>(CmdReg::COMMAND) == 0, "");
-            static_assert(static_cast<int>(CmdReg::DATA_ADDR) == 1, "");
-            static_assert(static_cast<int>(CmdReg::DATA_SIZE) == 2, "");
-            static_assert(static_cast<int>(CmdReg::OFFSET) == 3, "");
+            static_assert(static_cast<int>(CmdReg::ABORT) == 1, "");
+            static_assert(static_cast<int>(CmdReg::DATA_ADDR) == 2, "");
+            static_assert(static_cast<int>(CmdReg::DATA_SIZE) == 3, "");
+            static_assert(static_cast<int>(CmdReg::OFFSET) == 4, "");
 
             pkt = createPacket(reg_base + getRegAddr(CmdReg::COMMAND),
-                               sizeof(RegFile::reg_t) * 4,
+                               sizeof(RegFile::reg_t) * 5,
                                MemCmd::WriteReq);
 
             RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
             regs[0] = Dtu::Command::REPLY | (EP_RECV << 3);
-            regs[1] = msgAddr;
-            regs[2] = sizeof(uint64_t) + resbytes;
-            regs[3] = msgOffset;
+            regs[1] = 0;
+            regs[2] = getBufAddr(CLIENTS);
+            regs[3] = sizeof(uint64_t) + reply.count;
+            regs[4] = msgOffset;
             break;
         }
         case State::REPLY_WAIT:
