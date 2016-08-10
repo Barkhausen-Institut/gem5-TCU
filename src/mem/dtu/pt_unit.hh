@@ -83,6 +83,7 @@ class PtUnit
     {
         PtUnit& unit;
 
+        uint64_t id;
         Cycles startCycle;
         Cycles pfStartCycle;
         int level;
@@ -94,8 +95,9 @@ class PtUnit
         bool forceWalk;
 
         TranslateEvent(PtUnit& _unit)
-            : unit(_unit), startCycle(), pfStartCycle(), level(), virt(),
-              ptAddr(), access(), trans(), toKernel(), forceWalk()
+            : unit(_unit), id(nextId++), startCycle(), pfStartCycle(),
+              level(), virt(), ptAddr(), access(), trans(), toKernel(),
+              forceWalk()
         {}
 
         void process() override;
@@ -109,6 +111,8 @@ class PtUnit
         const char* description() const override { return "TranslateEvent"; }
 
         const std::string name() const override;
+
+        static uint64_t nextId;
     };
 
   public:
@@ -121,10 +125,13 @@ class PtUnit
 
     void startTranslate(Addr virt, uint access, Translation *trans);
 
-    void recvFromMem(Addr event, PacketPtr pkt)
+    void abortAll();
+
+    void recvFromMem(Addr id, PacketPtr pkt)
     {
-        TranslateEvent *ev = reinterpret_cast<TranslateEvent*>(event);
-        ev->recvFromMem(pkt);
+        TranslateEvent *ev = getEvent(id);
+        if (ev)
+            ev->recvFromMem(pkt);
     }
 
     void sendingPfFailed(PacketPtr pkt, int error);
@@ -136,6 +143,9 @@ class PtUnit
     const char *describeAccess(uint access);
 
     void mkTlbEntry(Addr virt, NocAddr phys, uint flags);
+
+    TranslateEvent *getEvent(uint64_t id);
+    TranslateEvent *getPfEvent(uint64_t id);
 
     void nextPagefault(TranslateEvent *ev);
 
@@ -157,6 +167,7 @@ class PtUnit
 
     int lastPfCnt;
 
+    std::list<TranslateEvent*> translations;
     std::list<TranslateEvent*> pfqueue;
 
     Stats::Histogram walks;
