@@ -57,6 +57,7 @@ class XferUnit
 
         Buffer *buf;
 
+        uint64_t id;
         Cycles startCycle;
         Dtu::TransferType type;
         Addr localAddr;
@@ -71,6 +72,7 @@ class XferUnit
         TransferEvent(XferUnit& _xfer)
             : xfer(_xfer),
               buf(),
+              id(nextId++),
               startCycle(),
               type(),
               localAddr(),
@@ -114,6 +116,8 @@ class XferUnit
         const char* description() const override { return "TransferEvent"; }
 
         const std::string name() const override { return xfer.dtu.name(); }
+
+        static uint64_t nextId;
     };
 
     struct Translation : PtUnit::Translation
@@ -171,13 +175,15 @@ class XferUnit
                        Cycles delay,
                        uint flags);
 
-    void recvMemResponse(size_t bufId,
+    void recvMemResponse(uint64_t evId,
                          const void* data,
                          size_t size,
                          Tick headerDelay,
                          Tick payloadDelay);
 
   private:
+
+    Buffer *getBuffer(uint64_t id);
 
     Buffer* allocateBuf(TransferEvent *event, uint flags);
 

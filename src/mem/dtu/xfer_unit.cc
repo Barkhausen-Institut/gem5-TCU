@@ -36,6 +36,8 @@
 #include "debug/DtuTlb.hh"
 #include "mem/dtu/xfer_unit.hh"
 
+uint64_t XferUnit::TransferEvent::nextId = 0;
+
 XferUnit::XferUnit(Dtu &_dtu,
                    size_t _blockSize,
                    size_t _bufCount,
@@ -230,7 +232,7 @@ XferUnit::TransferEvent::translateDone(bool success, const NocAddr &phys)
 
     xfer.dtu.sendMemRequest(pkt,
                             localAddr,
-                            buf->id,
+                            id,
                             Dtu::MemReqType::TRANSFER,
                             xfer.dtu.transferToMemRequestLatency);
 
@@ -250,7 +252,7 @@ XferUnit::TransferEvent::pagefault()
 
     buf->event->size = 0;
     buf->event->result = Dtu::Error::PAGEFAULT;
-    xfer.recvMemResponse(buf->id,
+    xfer.recvMemResponse(id,
                          NULL,
                          0,
                          buf->event->pkt->headerDelay,
@@ -293,13 +295,16 @@ XferUnit::startTransfer(Dtu::TransferType type,
 }
 
 void
-XferUnit::recvMemResponse(size_t bufId,
+XferUnit::recvMemResponse(uint64_t evId,
                           const void* data,
                           Addr size,
                           Tick headerDelay,
                           Tick payloadDelay)
 {
-    Buffer *buf = bufs[bufId];
+    Buffer *buf = getBuffer(evId);
+    // ignore responses for aborted transfers
+    if (!buf)
+        return;
 
     assert(buf->event);
 
@@ -408,6 +413,18 @@ XferUnit::recvMemResponse(size_t bufId,
     }
     else
         buf->event->process();
+}
+
+XferUnit::Buffer *
+XferUnit::getBuffer(uint64_t evId)
+{
+    for (size_t i = 0; i < bufCount; ++i)
+    {
+        if (bufs[i]->event && bufs[i]->event->id == evId)
+            return bufs[i];
+    }
+
+    return NULL;
 }
 
 XferUnit::Buffer*
