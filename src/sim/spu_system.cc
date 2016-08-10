@@ -33,7 +33,7 @@
 
 SpuSystem::SpuSystem(Params *p)
     : System(p),
-      DTUMemory(this, p->memory_pe, p->memory_offset, p->memory_size, physProxy, 0),
+      DTUMemory(this, p->memory_pe, p->memory_offset, p->memory_size, physProxy, 1),
       pes(p->pes),
       coreId(p->core_id)
 {
