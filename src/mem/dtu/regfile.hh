@@ -61,6 +61,7 @@ constexpr unsigned numDtuRegs = 8;
 enum class CmdReg : Addr
 {
     COMMAND,
+    ABORT,
     DATA_ADDR,
     DATA_SIZE,
     OFFSET,
@@ -68,7 +69,7 @@ enum class CmdReg : Addr
     REPLY_LABEL,
 };
 
-constexpr unsigned numCmdRegs = 6;
+constexpr unsigned numCmdRegs = 7;
 
 // Ep Registers:
 //
@@ -168,6 +169,7 @@ class RegFile
         WROTE_NONE      = 0,
         WROTE_CMD       = 1,
         WROTE_EXT_CMD   = 2,
+        WROTE_ABORT     = 4,
     };
 
     RegFile(const std::string& name, unsigned numEndpoints);

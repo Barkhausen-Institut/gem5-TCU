@@ -139,9 +139,13 @@ PtUnit::TranslateEvent::recvFromMem(PacketPtr pkt)
 void
 PtUnit::TranslateEvent::finish(bool success, const NocAddr &addr)
 {
+    if (scheduled())
+        unit.dtu.deschedule(this);
+
     if (trans)
         trans->finished(success, addr);
     // make sure that we don't do that twice
+    trans->_event = NULL;
     trans = NULL;
     setFlags(AutoDelete);
 
@@ -511,11 +515,24 @@ PtUnit::startTranslate(Addr virt, uint access, Translation *trans)
     event->trans = trans;
     event->ptAddr = dtu.regs().get(DtuReg::ROOT_PT);
     event->toKernel = false;
+    trans->_event = event;
     translations.push_back(event);
 
     event->startCycle = dtu.curCycle();
 
     dtu.schedule(event, dtu.clockEdge(Cycles(1)));
+}
+
+void
+PtUnit::abortTranslate(Translation *trans)
+{
+    assert(trans->_event != NULL);
+
+    auto it = std::find(pfqueue.begin(), pfqueue.end(), trans->_event);
+    if (it != pfqueue.end())
+        pfqueue.erase(it);
+
+    trans->_event->finish(false, NocAddr(0));
 }
 
 void

@@ -80,7 +80,10 @@ Dtu::Dtu(DtuParams* p)
     xferUnit(new XferUnit(*this, p->block_size, p->buf_count, p->buf_size)),
     ptUnit(p->tlb_entries > 0 ? new PtUnit(*this) : NULL),
     executeCommandEvent(*this),
+    abortCommandEvent(*this),
     cmdInProgress(false),
+    abortInProgress(false),
+    cmdDest(-1),
     memPe(),
     memOffset(),
     atomicMode(p->system->isAtomicMode()),
@@ -185,8 +188,12 @@ Dtu::generateRequest(Addr paddr, Addr size, MemCmd cmd)
     auto req = new Request(paddr, size, flags, masterId);
 
     auto pkt = new Packet(req, cmd);
-    auto pktData = new uint8_t[size];
-    pkt->dataDynamic(pktData);
+
+    if (size)
+    {
+        auto pktData = new uint8_t[size];
+        pkt->dataDynamic(pktData);
+    }
 
     return pkt;
 }
@@ -278,21 +285,114 @@ Dtu::executeCommand()
 }
 
 void
+Dtu::abortCommand()
+{
+    Command cmd = getCommand();
+    RegFile::reg_t abort = regs().get(CmdReg::ABORT);
+
+    if ((abort & Command::ABORT_CMD) && cmd.opcode != Command::IDLE)
+    {
+        DPRINTF(DtuCmd, "Aborting command %s with EP=%u, flags=%#x\n",
+                cmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg, cmd.flags);
+
+        // local transfers are only issued by commands, i.e., the current one
+        size_t count = xferUnit->abortTransfers(XferUnit::ABORT_LOCAL, -1);
+        assert(count <= 1);
+
+        // if there was none and we already sent the request to the Noc,
+        // send an abort request to the core we sent to
+        if (count == 0 && cmdDest != -1)
+        {
+            assert(!abortInProgress);
+            DPRINTF(DtuCmd, "Sending abort request to PE%2d\n", cmdDest);
+
+            abortInProgress = true;
+            Addr nocAddr = NocAddr(cmdDest, 0).getAddr();
+            auto pkt = generateRequest(nocAddr, 0, MemCmd::WriteReq);
+
+            sendNocRequest(NocPacketType::ABORT,
+                           pkt,
+                           INVALID_VPE_ID,  // not relevant here
+                           0,
+                           Cycles(1));
+        }
+    }
+
+    if (abort & Command::ABORT_VPE)
+    {
+        DPRINTF(DtuCmd, "Resetting VPE id and disabling PFs\n");
+        regs().set(DtuReg::VPE_ID, INVALID_VPE_ID);
+        regs().set(DtuReg::STATUS, 0);
+        ptUnit->abortAll();
+    }
+
+    regs().set(CmdReg::ABORT, 0);
+}
+
+void
 Dtu::finishCommand(Error error)
 {
     Command cmd = getCommand();
 
     assert(cmdInProgress);
 
-    DPRINTF(DtuCmd, "Finished command %s with EP=%u, flags=%#x -> %u\n",
-            cmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg, cmd.flags,
-            static_cast<uint>(error));
+    // if the command succeeded, or we still have a valid VPE id, pay the
+    // credits or disable replies. the latter is required to prevent that a
+    // malicious app causes NoC traffic all the time by aborting commands
+    if (error == Error::NONE || regs().get(DtuReg::VPE_ID) != INVALID_VPE_ID)
+    {
+        if (cmd.opcode == Command::SEND)
+            msgUnit->payCredits(cmd.arg);
+        else if (cmd.opcode == Command::REPLY)
+            msgUnit->disableReplies();
+    }
+
+    if (abortInProgress)
+    {
+        assert(cmdDest != -1);
+
+        // for the reading case, we might have remembered to abort the next
+        // local transfer
+        xferUnit->abortTransfers(XferUnit::ABORT_ABORT, -1);
+
+        // for writing, if there was no error, the command already completed
+        // and we have to abort our abort request at the other DTU.
+        // for reading, we always sent the abort abort
+        // TODO we could optimize that by distinguishing local and remote aborts
+        if (cmd.opcode == Command::READ || error == Error::NONE)
+        {
+            // otherwise, abort it at the other DTU
+            DPRINTF(DtuCmd, "Sending abort abort request to PE%2d\n", cmdDest);
+
+            Addr nocAddr = NocAddr(cmdDest, 0).getAddr();
+            auto pkt = generateRequest(nocAddr, 0, MemCmd::WriteReq);
+
+            sendNocRequest(NocPacketType::ABORT_ABORT,
+                           pkt,
+                           INVALID_VPE_ID,  // not relevant here
+                           0,
+                           Cycles(1));
+
+            // TODO actually, we should finish the command if we received the
+            // response for the ABORT_ABORT
+        }
+
+        abortInProgress = false;
+    }
+
+    if (cmd.opcode != Command::DEBUG_MSG)
+    {
+        DPRINTF(DtuCmd, "Finished command %s with EP=%u, flags=%#x -> %u\n",
+                cmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg, cmd.flags,
+                static_cast<uint>(error));
+    }
 
     // let the SW know that the command is finished
     unsigned bits = numCmdOpcodeBits + numCmdFlagsBits + numCmdArgBits;
     regFile.set(CmdReg::COMMAND, static_cast<RegFile::reg_t>(error) << bits);
 
     cmdInProgress = false;
+    cmdDest = -1;
 }
 
 Dtu::ExternCommand
@@ -424,8 +524,17 @@ Dtu::sendNocRequest(NocPacketType type,
     auto senderState = new NocSenderState();
     senderState->packetType = type;
     senderState->result = Error::NONE;
+    senderState->sender = coreId;
     senderState->vpeId = vpeId;
     senderState->flags = flags;
+
+    // remember the destination for commands (needed for aborts)
+    if (type == NocPacketType::READ_REQ ||
+        type == NocPacketType::WRITE_REQ ||
+        type == NocPacketType::MESSAGE)
+    {
+        cmdDest = NocAddr(pkt->getAddr()).coreId;
+    }
 
     pkt->pushSenderState(senderState);
 
@@ -487,9 +596,9 @@ Dtu::startTransfer(TransferType type,
 }
 
 void
-Dtu::finishMsgReceive(unsigned epId)
+Dtu::finishMsgReceive(unsigned epId, const MessageHeader *header, Error error)
 {
-    msgUnit->incrementMsgCnt(epId);
+    msgUnit->finishMsgReceive(epId, header, error);
 }
 
 void
@@ -498,6 +607,12 @@ Dtu::startTranslate(Addr virt,
                     PtUnit::Translation *trans)
 {
     ptUnit->startTranslate(virt, access, trans);
+}
+
+void
+Dtu::abortTranslate(PtUnit::Translation *trans)
+{
+    ptUnit->abortTranslate(trans);
 }
 
 void
@@ -541,6 +656,11 @@ Dtu::completeNocRequest(PacketPtr pkt)
     {
         if (senderState->result != Error::NONE)
             ptUnit->sendingPfFailed(pkt, static_cast<int>(senderState->result));
+    }
+    else if (senderState->packetType == NocPacketType::ABORT ||
+             senderState->packetType == NocPacketType::ABORT_ABORT)
+    {
+        // nothing to do
     }
     else if (senderState->packetType != NocPacketType::CACHE_MEM_REQ_FUNC)
     {
@@ -619,11 +739,22 @@ Dtu::handleNocRequest(PacketPtr pkt)
     case NocPacketType::CACHE_MEM_REQ_FUNC:
         memUnit->recvFunctionalFromNoc(pkt);
         break;
+    case NocPacketType::ABORT:
+        xferUnit->abortTransfers(XferUnit::ABORT_REMOTE, senderState->sender);
+        break;
+    case NocPacketType::ABORT_ABORT:
+        xferUnit->abortTransfers(XferUnit::ABORT_ABORT, senderState->sender);
+        break;
     default:
         panic("Unexpected NocPacketType\n");
     }
 
     senderState->result = res;
+
+    // in this case, we can respond immediately
+    if (senderState->packetType == NocPacketType::ABORT ||
+        senderState->packetType == NocPacketType::ABORT_ABORT)
+        sendNocResponse(pkt);
 }
 
 bool
@@ -851,6 +982,8 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
 
             if (result & RegFile::WROTE_CMD)
                 schedule(executeCommandEvent, when);
+            else if (result & RegFile::WROTE_ABORT)
+                schedule(abortCommandEvent, when);
         }
         else
             schedule(new ExecExternCmdEvent(*this, pkt), when);
@@ -861,6 +994,8 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
             executeCommand();
         if (result & RegFile::WROTE_EXT_CMD)
             executeExternCommand(NULL);
+        if (result & RegFile::WROTE_ABORT)
+            abortCommand();
     }
 }
 

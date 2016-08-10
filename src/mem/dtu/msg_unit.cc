@@ -109,26 +109,6 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
     // TODO error handling
     assert(messageSize + sizeof(Dtu::MessageHeader) <= ep.maxMsgSize);
 
-    if (ep.credits != Dtu::CREDITS_UNLIM)
-    {
-        if (ep.credits < ep.maxMsgSize)
-        {
-            DPRINTFS(Dtu, (&dtu),
-                "EP%u: not enough credits (%lu) to send message (%lu)\n",
-                epid, ep.credits, ep.maxMsgSize);
-            dtu.scheduleFinishOp(Cycles(1), Dtu::Error::MISS_CREDITS);
-            return;
-        }
-
-        ep.credits -= ep.maxMsgSize;
-
-        DPRINTFS(DtuCredits, (&dtu), "EP%u pays %u credits (%u left)\n",
-                 epid, ep.maxMsgSize, ep.credits);
-
-        // pay the credits
-        dtu.regs().setSendEp(epid, ep);
-    }
-
     // fill the info struct and start the transfer
     info.targetCoreId = ep.targetCore;
     info.targetVpeId  = ep.vpeId;
@@ -244,16 +224,6 @@ MessageUnit::recvFromMem(const Dtu::Command& cmd, PacketPtr pkt)
     info.unlimcred    = false;
     info.ready        = true;
 
-    // disable replies for this message
-    // use a functional request here; we don't need to wait for it anyway
-    auto hpkt = dtu.generateRequest(flagsPhys,
-                                    sizeof(header.flags),
-                                    MemCmd::WriteReq);
-    header.flags &= ~Dtu::REPLY_ENABLED;
-    memcpy(hpkt->getPtr<uint8_t>(), &header.flags, sizeof(header.flags));
-    dtu.sendFunctionalMemRequest(hpkt);
-    dtu.freeRequest(hpkt);
-
     // now start the transfer
     startXfer(cmd);
 }
@@ -317,6 +287,67 @@ MessageUnit::startXfer(const Dtu::Command& cmd)
 }
 
 void
+MessageUnit::disableReplies()
+{
+    assert(flagsPhys != 0);
+
+    // use a functional request here; we don't need to wait for it anyway
+    auto hpkt = dtu.generateRequest(flagsPhys,
+                                    sizeof(header.flags),
+                                    MemCmd::WriteReq);
+
+    assert(header.flags & Dtu::REPLY_ENABLED);
+    header.flags &= ~Dtu::REPLY_ENABLED;
+    memcpy(hpkt->getPtr<uint8_t>(), &header.flags, sizeof(header.flags));
+
+    dtu.sendFunctionalMemRequest(hpkt);
+    dtu.freeRequest(hpkt);
+}
+
+void
+MessageUnit::payCredits(unsigned epid)
+{
+    SendEp ep = dtu.regs().getSendEp(epid);
+
+    if (ep.credits != Dtu::CREDITS_UNLIM)
+    {
+        if (ep.credits < ep.maxMsgSize)
+        {
+            DPRINTFS(Dtu, (&dtu),
+                "EP%u: not enough credits (%lu) to send message (%lu)\n",
+                epid, ep.credits, ep.maxMsgSize);
+            dtu.scheduleFinishOp(Cycles(1), Dtu::Error::MISS_CREDITS);
+            return;
+        }
+
+        ep.credits -= ep.maxMsgSize;
+
+        DPRINTFS(DtuCredits, (&dtu), "EP%u pays %u credits (%u left)\n",
+                 epid, ep.maxMsgSize, ep.credits);
+
+        // pay the credits
+        dtu.regs().setSendEp(epid, ep);
+    }
+}
+
+void
+MessageUnit::recvCredits(unsigned epid)
+{
+    SendEp ep = dtu.regs().getSendEp(epid);
+
+    if (ep.credits != Dtu::CREDITS_UNLIM)
+    {
+        ep.credits += ep.maxMsgSize;
+
+        DPRINTFS(DtuCredits, (&dtu),
+            "EP%u: received %u credits (%u in total)\n",
+            epid, ep.maxMsgSize, ep.credits);
+
+        dtu.regs().setSendEp(epid, ep);
+    }
+}
+
+void
 MessageUnit::incrementReadPtr(unsigned epId)
 {
     RecvEp ep = dtu.regs().getRecvEp(epId);
@@ -358,25 +389,48 @@ MessageUnit::incrementWritePtr(unsigned epId)
 }
 
 void
-MessageUnit::incrementMsgCnt(unsigned epId)
+MessageUnit::finishMsgReceive(unsigned epId,
+                              const Dtu::MessageHeader *header,
+                              Dtu::Error error)
 {
     RecvEp ep = dtu.regs().getRecvEp(epId);
 
-    DPRINTFS(DtuBuf, (&dtu),
-        "EP%u: increment message count to %u\n",
-        epId, ep.msgCount + 1);
-
-    if (ep.msgCount == ep.size)
+    if (error == Dtu::Error::NONE)
     {
-        warn("EP%u: Buffer full!\n", epId);
-        return;
+        // Note that replyEpId is the Id of *our* sending EP
+        if (header->flags & Dtu::REPLY_FLAG &&
+            header->flags & Dtu::GRANT_CREDITS_FLAG &&
+            header->replyEpId < dtu.numEndpoints)
+        {
+            recvCredits(header->replyEpId);
+        }
+
+        DPRINTFS(DtuBuf, (&dtu),
+            "EP%u: increment message count to %u\n",
+            epId, ep.msgCount + 1);
+
+        if (ep.msgCount == ep.size)
+        {
+            warn("EP%u: Buffer full!\n", epId);
+            return;
+        }
+        ep.msgCount++;
     }
-    ep.msgCount++;
+    else
+    {
+        if (ep.wrOff == 0)
+            ep.wrOff = (ep.size - 1) * ep.msgSize;
+        else
+            ep.wrOff -= ep.msgSize;
+    }
 
     dtu.regs().setRecvEp(epId, ep);
 
-    dtu.updateSuspendablePin();
-    dtu.wakeupCore();
+    if (error == Dtu::Error::NONE)
+    {
+        dtu.updateSuspendablePin();
+        dtu.wakeupCore();
+    }
 }
 
 Dtu::Error
@@ -418,27 +472,6 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId)
     uint16_t ourVpeId = dtu.regs().get(DtuReg::VPE_ID);
     if (vpeId == ourVpeId && ep.msgCount < ep.size)
     {
-        Dtu::MessageHeader* header = pkt->getPtr<Dtu::MessageHeader>();
-
-        // Note that replyEpId is the Id of *our* sending EP
-        if (header->flags & Dtu::REPLY_FLAG &&
-            header->flags & Dtu::GRANT_CREDITS_FLAG &&
-            header->replyEpId < dtu.numEndpoints)
-        {
-            SendEp sep = dtu.regs().getSendEp(header->replyEpId);
-
-            if (sep.credits != Dtu::CREDITS_UNLIM)
-            {
-                sep.credits += sep.maxMsgSize;
-
-                DPRINTFS(DtuCredits, (&dtu),
-                    "EP%u: received %u credits (%u in total)\n",
-                    header->replyEpId, sep.maxMsgSize, sep.credits);
-
-                dtu.regs().setSendEp(header->replyEpId, sep);
-            }
-        }
-
         // the message is transferred piece by piece; we can start as soon as
         // we have the header
         Cycles delay = dtu.ticksToCycles(pkt->headerDelay);

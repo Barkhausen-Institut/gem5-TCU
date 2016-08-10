@@ -93,14 +93,31 @@ class MessageUnit
     Dtu::Error recvFromNoc(PacketPtr pkt, uint vpeId);
 
     /**
+     * Disables replies for the message we replied on
+     */
+    void disableReplies();
+
+    /**
+     * Pays credits to send a message
+     */
+    void payCredits(unsigned epid);
+
+    /**
+     * Receives credits again
+     */
+    void recvCredits(unsigned epid);
+
+    /**
      * Move read pointer forward
      */
     void incrementReadPtr(unsigned epId);
 
     /**
-     * Increments the message counter
+     * Finishes a message receive
      */
-    void incrementMsgCnt(unsigned epId);
+    void finishMsgReceive(unsigned epId,
+                          const Dtu::MessageHeader *header,
+                          Dtu::Error error);
 
   private:
 

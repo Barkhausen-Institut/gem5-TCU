@@ -399,19 +399,21 @@ DtuAccelHash::tick()
         case State::SEND_REPLY:
         {
             static_assert(static_cast<int>(CmdReg::COMMAND) == 0, "");
-            static_assert(static_cast<int>(CmdReg::DATA_ADDR) == 1, "");
-            static_assert(static_cast<int>(CmdReg::DATA_SIZE) == 2, "");
-            static_assert(static_cast<int>(CmdReg::OFFSET) == 3, "");
+            static_assert(static_cast<int>(CmdReg::ABORT) == 1, "");
+            static_assert(static_cast<int>(CmdReg::DATA_ADDR) == 2, "");
+            static_assert(static_cast<int>(CmdReg::DATA_SIZE) == 3, "");
+            static_assert(static_cast<int>(CmdReg::OFFSET) == 4, "");
 
             pkt = createPacket(reg_base + getRegAddr(CmdReg::COMMAND),
-                               sizeof(RegFile::reg_t) * 4,
+                               sizeof(RegFile::reg_t) * 5,
                                MemCmd::WriteReq);
 
             RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
             regs[0] = Dtu::Command::REPLY | (EP_RECV << 3);
-            regs[1] = getBufAddr(CLIENTS);
-            regs[2] = sizeof(uint64_t) + reply.count;
-            regs[3] = msgOffset;
+            regs[1] = 0;
+            regs[2] = getBufAddr(CLIENTS);
+            regs[3] = sizeof(uint64_t) + reply.count;
+            regs[4] = msgOffset;
             break;
         }
         case State::REPLY_WAIT:

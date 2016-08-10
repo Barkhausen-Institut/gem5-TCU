@@ -35,6 +35,7 @@
 #include "mem/dtu/noc_addr.hh"
 
 #include <list>
+#include <vector>
 
 class XferUnit
 {
@@ -47,9 +48,17 @@ class XferUnit
         NOPF      = 4,
     };
 
+    enum AbortType
+    {
+        ABORT_LOCAL,
+        ABORT_REMOTE,
+        ABORT_ABORT,
+    };
+
   private:
 
     struct Buffer;
+    struct Translation;
 
     struct TransferEvent : public Event
     {
@@ -68,6 +77,7 @@ class XferUnit
         Dtu::MessageHeader* header;
         uint flags;
         Dtu::Error result;
+        Translation *trans;
 
         TransferEvent(XferUnit& _xfer)
             : xfer(_xfer),
@@ -82,11 +92,14 @@ class XferUnit
               vpeId(),
               header(),
               flags(),
-              result(Dtu::Error::NONE)
+              result(Dtu::Error::NONE),
+              trans()
         {}
 
         void finish()
         {
+            assert(trans == NULL);
+
             setFlags(AutoDelete);
         }
 
@@ -111,7 +124,7 @@ class XferUnit
 
         void translateDone(bool success, const NocAddr &phys);
 
-        void pagefault();
+        void abort(Dtu::Error error);
 
         const char* description() const override { return "TransferEvent"; }
 
@@ -127,6 +140,11 @@ class XferUnit
         Translation(TransferEvent& _event)
             : event(_event)
         {}
+
+        void abort()
+        {
+            event.xfer.dtu.abortTranslate(this);
+        }
 
         void finished(bool success, const NocAddr &phys) override
         {
@@ -175,6 +193,8 @@ class XferUnit
                        Cycles delay,
                        uint flags);
 
+    size_t abortTransfers(AbortType type, int coreId);
+
     void recvMemResponse(uint64_t evId,
                          const void* data,
                          size_t size,
@@ -197,6 +217,7 @@ class XferUnit
     size_t bufSize;
     Buffer **bufs;
 
+    std::list<int> abortReqs;
     std::list<TransferEvent*> queue;
 
     Stats::Histogram reads;
@@ -205,7 +226,7 @@ class XferUnit
     Stats::Histogram bytesWritten;
     Stats::Scalar delays;
     Stats::Scalar pagefaults;
-    Stats::Scalar pfAborts;
+    Stats::Scalar aborts;
 };
 
 #endif

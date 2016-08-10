@@ -43,16 +43,26 @@ class Dtu;
 
 class PtUnit
 {
+  private:
+
+    struct TranslateEvent;
+
   public:
 
     struct Translation
     {
-        Translation()
+        friend class PtUnit;
+
+        Translation() : _event()
         {}
         virtual ~Translation()
         {}
 
         virtual void finished(bool success, const NocAddr &phys) = 0;
+
+      private:
+
+        TranslateEvent *_event;
     };
 
     BitUnion64(PageTableEntry)
@@ -124,6 +134,8 @@ class PtUnit
     bool translateFunctional(Addr virt, uint access, NocAddr *phys);
 
     void startTranslate(Addr virt, uint access, Translation *trans);
+
+    void abortTranslate(Translation *trans);
 
     void abortAll();
 

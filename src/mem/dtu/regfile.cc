@@ -51,6 +51,7 @@ const char *RegFile::dtuRegNames[] = {
 
 const char *RegFile::cmdRegNames[] = {
     "COMMAND",
+    "ABORT",
     "DATA_ADDR",
     "DATA_SIZE",
     "OFFSET",
@@ -449,6 +450,8 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
             {
                 if (reg == CmdReg::COMMAND)
                     res |= WROTE_CMD;
+                else if (reg == CmdReg::ABORT)
+                    res |= WROTE_ABORT;
                 set(reg, data[offset / sizeof(reg_t)], access);
             }
         }

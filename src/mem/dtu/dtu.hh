@@ -73,6 +73,7 @@ class Dtu : public BaseDtu
         VPE_GONE            = 3,
         PAGEFAULT           = 4,
         NO_MAPPING          = 5,
+        ABORT               = 6,
     };
 
     struct MessageHeader
@@ -100,6 +101,8 @@ class Dtu : public BaseDtu
         WRITE_REQ,
         CACHE_MEM_REQ_FUNC,
         CACHE_MEM_REQ,
+        ABORT,
+        ABORT_ABORT,
     };
 
     enum class TransferType
@@ -131,6 +134,7 @@ class Dtu : public BaseDtu
     struct NocSenderState : public Packet::SenderState
     {
         Error result;
+        uint sender;
         uint vpeId;
         NocPacketType packetType;
         uint flags;
@@ -151,6 +155,12 @@ class Dtu : public BaseDtu
             WRITE           = 4,
             INC_READ_PTR    = 5,
             DEBUG_MSG       = 6,
+        };
+
+        enum
+        {
+            ABORT_VPE       = 1,
+            ABORT_CMD       = 2,
         };
 
         enum Flags
@@ -253,7 +263,11 @@ class Dtu : public BaseDtu
                         uint access,
                         PtUnit::Translation *trans);
 
-    void finishMsgReceive(unsigned epId);
+    void abortTranslate(PtUnit::Translation *trans);
+
+    void finishMsgReceive(unsigned epId,
+                          const MessageHeader *header,
+                          Error error);
 
     void handlePFResp(PacketPtr pkt);
 
@@ -264,6 +278,8 @@ class Dtu : public BaseDtu
     Command getCommand();
 
     void executeCommand();
+
+    void abortCommand();
 
     ExternCommand getExternCommand();
 
@@ -311,6 +327,8 @@ class Dtu : public BaseDtu
     PtUnit *ptUnit;
 
     EventWrapper<Dtu, &Dtu::executeCommand> executeCommandEvent;
+
+    EventWrapper<Dtu, &Dtu::abortCommand> abortCommandEvent;
 
     struct ExecExternCmdEvent : public Event
     {
@@ -408,6 +426,8 @@ class Dtu : public BaseDtu
     };
 
     bool cmdInProgress;
+    bool abortInProgress;
+    int cmdDest;
 
   public:
 

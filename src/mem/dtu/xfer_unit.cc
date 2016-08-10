@@ -47,6 +47,7 @@ XferUnit::XferUnit(Dtu &_dtu,
       bufCount(_bufCount),
       bufSize(_bufSize),
       bufs(new Buffer*[bufCount]),
+      abortReqs(),
       queue()
 {
     panic_if(dtu.tlb() && bufCount < 2,
@@ -92,9 +93,9 @@ XferUnit::regStats()
     pagefaults
         .name(dtu.name() + ".xfer.pagefaults")
         .desc("Number of pagefaults during transfers");
-    pfAborts
-        .name(dtu.name() + ".xfer.pfAborts")
-        .desc("Number of aborts due to pagefaults");
+    aborts
+        .name(dtu.name() + ".xfer.aborts")
+        .desc("Number of aborts");
 }
 
 void
@@ -148,6 +149,30 @@ XferUnit::TransferEvent::tryStart()
         localAddr,
         buf->event->flags);
 
+    // should we abort the next request from this core?
+    // actually, we could do that earlier, but doing it as soon as we have
+    // a buffer, makes it much easier
+    int coreId = -1;
+    Dtu::NocSenderState *state = nullptr;
+    if (pkt)
+    {
+        state = dynamic_cast<Dtu::NocSenderState*>(pkt->senderState);
+        if (state)
+            coreId = state->sender;
+    }
+
+    auto it = std::find(xfer.abortReqs.begin(),
+                        xfer.abortReqs.end(),
+                        coreId);
+    if (it != xfer.abortReqs.end())
+    {
+        if (state)
+            state->result = Dtu::Error::ABORT;
+        abort(Dtu::Error::ABORT);
+        xfer.abortReqs.erase(it);
+        return;
+    }
+
     xfer.dtu.schedule(this, xfer.dtu.clockEdge(Cycles(1)));
 }
 
@@ -176,7 +201,7 @@ XferUnit::TransferEvent::process()
             // report an error
             if (res == DtuTlb::PAGEFAULT && (flags & XferFlags::NOPF))
             {
-                pagefault();
+                abort(Dtu::Error::PAGEFAULT);
                 return;
             }
 
@@ -187,7 +212,7 @@ XferUnit::TransferEvent::process()
                 access == DtuTlb::READ ? "read" : "write",
                 localAddr);
 
-            Translation *trans = new Translation(*this);
+            trans = new Translation(*this);
             xfer.dtu.startTranslate(localAddr, access, trans);
             return;
         }
@@ -199,9 +224,16 @@ XferUnit::TransferEvent::process()
 void
 XferUnit::TransferEvent::translateDone(bool success, const NocAddr &phys)
 {
+    // if there was an error, we have aborted it on purpose
+    // in this case, TransferEvent::abort() will do the rest
+    if (result != Dtu::Error::NONE)
+        return;
+
+    trans = NULL;
+
     if (!success)
     {
-        pagefault();
+        abort(Dtu::Error::PAGEFAULT);
         return;
     }
 
@@ -242,21 +274,32 @@ XferUnit::TransferEvent::translateDone(bool success, const NocAddr &phys)
 }
 
 void
-XferUnit::TransferEvent::pagefault()
+XferUnit::TransferEvent::abort(Dtu::Error error)
 {
     DPRINTFS(DtuXfers, (&xfer.dtu),
-        "buf%d: Translation failed; aborting transfer",
-        buf->id);
+        "buf%d: aborting transfer (%d)\n",
+        buf->id,
+        static_cast<int>(error));
 
-    xfer.pfAborts++;
+    buf->event->result = error;
+    if (trans)
+    {
+        trans->abort();
+        trans = NULL;
+        // will be deleted by abort()
+    }
+
+    xfer.aborts++;
+
+    if(scheduled())
+        xfer.dtu.deschedule(this);
 
     buf->event->size = 0;
-    buf->event->result = Dtu::Error::PAGEFAULT;
     xfer.recvMemResponse(id,
                          NULL,
                          0,
-                         buf->event->pkt->headerDelay,
-                         buf->event->pkt->payloadDelay);
+                         buf->event->pkt ? buf->event->pkt->headerDelay : 0,
+                         buf->event->pkt ? buf->event->pkt->payloadDelay : 0);
 }
 
 void
@@ -294,6 +337,64 @@ XferUnit::startTransfer(Dtu::TransferType type,
         dtu.schedNocRequestFinished(dtu.clockEdge(Cycles(1)));
 }
 
+size_t
+XferUnit::abortTransfers(AbortType type, int coreId)
+{
+    size_t count = 0;
+
+    if (type != ABORT_ABORT)
+    {
+        for (size_t i = 0; i < bufCount; ++i)
+        {
+            auto ev = bufs[i]->event;
+            if (!ev)
+                continue;
+
+            if (type == ABORT_LOCAL && !ev->isRemote())
+            {
+                ev->abort(Dtu::Error::ABORT);
+                // by default, we auto-delete it, but in this case, we have to do
+                // that manually since it's not the current event
+                delete ev;
+                count++;
+            }
+            else if (type == ABORT_REMOTE && ev->isRemote())
+            {
+                auto state = dynamic_cast<Dtu::NocSenderState*>(ev->pkt->senderState);
+                if (state->sender == coreId)
+                {
+                    state->result = Dtu::Error::ABORT;
+                    ev->abort(Dtu::Error::ABORT);
+                    delete ev;
+                    count++;
+                }
+            }
+        }
+
+        // if we don't have any request of that core, remember the abort for
+        // the future
+        if (count == 0)
+        {
+            DPRINTFS(DtuXfers, (&dtu),
+                "Remembering transfer abort for PE%2d\n", coreId);
+            abortReqs.push_back(coreId);
+        }
+    }
+    else
+    {
+        auto it = std::find(abortReqs.begin(), abortReqs.end(), coreId);
+        if (it != abortReqs.end())
+        {
+            DPRINTFS(DtuXfers, (&dtu),
+                "Aborting abort for PE%2d\n", *it);
+            abortReqs.erase(it);
+            count++;
+        }
+    }
+
+    return count;
+}
+
 void
 XferUnit::recvMemResponse(uint64_t evId,
                           const void* data,
@@ -322,38 +423,48 @@ XferUnit::recvMemResponse(uint64_t evId,
     {
         if (buf->event->type == Dtu::TransferType::LOCAL_READ)
         {
-            DPRINTFS(DtuXfers, (&dtu),
-                "buf%d: Sending NoC request of %lu bytes @ %p\n",
-                buf->id,
-                buf->offset,
-                buf->event->remoteAddr.offset);
-
-            auto pkt = dtu.generateRequest(buf->event->remoteAddr.getAddr(),
-                                           buf->offset,
-                                           MemCmd::WriteReq);
-            memcpy(pkt->getPtr<uint8_t>(),
-                   buf->bytes,
-                   buf->offset);
-
-            /*
-             * See sendNocMessage() for an explanation of delay handling.
-             */
-            Cycles delay = dtu.transferToNocLatency;
-            delay += dtu.ticksToCycles(headerDelay);
-            pkt->payloadDelay = payloadDelay;
-            dtu.printPacket(pkt);
-
-            Dtu::NocPacketType pktType;
-            if (buf->event->flags & MESSAGE)
-                pktType = Dtu::NocPacketType::MESSAGE;
+            if (buf->event->result != Dtu::Error::NONE)
+            {
+                dtu.scheduleFinishOp(Cycles(1), buf->event->result);
+            }
             else
-                pktType = Dtu::NocPacketType::WRITE_REQ;
-            uint cmdflags = (buf->event->flags & NOPF) ? Dtu::Command::NOPF : 0;
-            dtu.sendNocRequest(pktType, pkt, buf->event->vpeId, cmdflags, delay);
+            {
+                DPRINTFS(DtuXfers, (&dtu),
+                    "buf%d: Sending NoC request of %lu bytes @ %p\n",
+                    buf->id,
+                    buf->offset,
+                    buf->event->remoteAddr.offset);
+
+                auto pkt = dtu.generateRequest(buf->event->remoteAddr.getAddr(),
+                                               buf->offset,
+                                               MemCmd::WriteReq);
+                memcpy(pkt->getPtr<uint8_t>(),
+                       buf->bytes,
+                       buf->offset);
+
+                /*
+                 * See sendNocMessage() for an explanation of delay handling.
+                 */
+                Cycles delay = dtu.transferToNocLatency;
+                delay += dtu.ticksToCycles(headerDelay);
+                pkt->payloadDelay = payloadDelay;
+                dtu.printPacket(pkt);
+
+                Dtu::NocPacketType pktType;
+                if (buf->event->flags & MESSAGE)
+                    pktType = Dtu::NocPacketType::MESSAGE;
+                else
+                    pktType = Dtu::NocPacketType::WRITE_REQ;
+                uint cmdflags = (buf->event->flags & NOPF)
+                    ? Dtu::Command::NOPF
+                    : 0;
+                uint vpeId = buf->event->vpeId;
+                dtu.sendNocRequest(pktType, pkt, vpeId, cmdflags, delay);
+            }
         }
         else if (buf->event->type == Dtu::TransferType::LOCAL_WRITE)
         {
-            dtu.scheduleFinishOp(Cycles(1));
+            dtu.scheduleFinishOp(Cycles(1), buf->event->result);
 
             dtu.freeRequest(buf->event->pkt);
         }
@@ -361,8 +472,11 @@ XferUnit::recvMemResponse(uint64_t evId,
         {
             if (buf->event->flags & XferFlags::MSGRECV)
             {
+                Dtu::MessageHeader* header =
+                    buf->event->pkt->getPtr<Dtu::MessageHeader>();
                 NocAddr addr(buf->event->pkt->getAddr());
-                dtu.finishMsgReceive(addr.offset);
+
+                dtu.finishMsgReceive(addr.offset, header, buf->event->result);
             }
 
             // TODO should we respond earlier for remote reads? i.e. as soon
