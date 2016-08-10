@@ -32,7 +32,7 @@
 #include "debug/DtuTestAccess.hh"
 #include "mem/dtu/regfile.hh"
 
-unsigned int TESTER_DTU = 0;
+static unsigned int TESTER_DTU = 0;
 
 Addr
 DtuTest::getRegAddr(DtuReg reg)
