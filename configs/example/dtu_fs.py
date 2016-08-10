@@ -328,6 +328,25 @@ def createMemPE(root, options, no, size, content=None):
 
     return pe
 
+def createAbortTestPE(root, options, no, memPE, l1size=None, l2size=None, spmsize='8MB'):
+    pe = createPE(
+        root=root, options=options, no=no, systemType=SpuSystem,
+        l1size=l1size, l2size=l2size, spmsize=spmsize, memPE=memPE
+    )
+    pe.dtu.connector = BaseConnector()
+
+    pe.cpu = DtuAbortTest()
+    pe.cpu.id = no;
+    pe.cpu.clk_domain = root.cpu_clk_domain
+
+    pe.dtu.dcache_slave_port = pe.cpu.port
+
+    print 'PE%02d: aborttest core' % (no)
+    printConfig(pe)
+    print
+
+    return pe
+
 def createRoot(options):
     root = Root(full_system=True)
 
