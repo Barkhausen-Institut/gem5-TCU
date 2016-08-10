@@ -290,7 +290,7 @@ Dtu::finishCommand(Error error)
 
     // let the SW know that the command is finished
     unsigned bits = numCmdOpcodeBits + numCmdFlagsBits + numCmdArgBits;
-    regFile.set(CmdReg::COMMAND, static_cast<uint>(error) << bits);
+    regFile.set(CmdReg::COMMAND, static_cast<RegFile::reg_t>(error) << bits);
 
     cmdInProgress = false;
 }
