@@ -35,6 +35,7 @@ class BaseDtu(MemObject):
     type = 'BaseDtu'
     abstract = True
     cxx_header = "mem/dtu/base.hh"
+
     noc_master_port = MasterPort("DTU master port")
     noc_slave_port  = SlavePort("DTU slave port")
 
