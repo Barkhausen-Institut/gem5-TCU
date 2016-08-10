@@ -101,7 +101,7 @@ Dtu::Dtu(DtuParams* p)
 {
     assert(p->buf_size >= maxNocPacketSize);
 
-    M3X86System *sys = dynamic_cast<M3X86System*>(system);
+    DTUMemory *sys = dynamic_cast<DTUMemory*>(system);
     if (sys)
     {
         NocAddr phys = sys->getPhys(0);
