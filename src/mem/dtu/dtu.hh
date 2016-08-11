@@ -74,6 +74,7 @@ class Dtu : public BaseDtu
         PAGEFAULT           = 4,
         NO_MAPPING          = 5,
         ABORT               = 6,
+        VPEID_INVALID       = 7,
     };
 
     struct MessageHeader

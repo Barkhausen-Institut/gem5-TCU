@@ -258,6 +258,15 @@ Dtu::executeCommand()
                 cmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg, cmd.flags);
     }
 
+    // if the VPE id is invalid and we are not privileged, commands cannot
+    // be executed
+    if (regs().get(DtuReg::VPE_ID) == INVALID_VPE_ID &&
+        !(regs().get(DtuReg::STATUS) & static_cast<RegFile::reg_t>(Status::PRIV)))
+    {
+        scheduleFinishOp(Cycles(1), Error::VPEID_INVALID);
+        return;
+    }
+
     switch (cmd.opcode)
     {
     case Command::SEND:
