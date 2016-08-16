@@ -58,6 +58,33 @@ BaseDtu::NocMasterPort::completeRequest(PacketPtr pkt)
     dtu.completeNocRequest(pkt);
 }
 
+void
+BaseDtu::NocMasterPort::recvFunctionalSnoop(PacketPtr pkt)
+{
+    if (dtu.cacheMemSlavePort.isConnected())
+        dtu.cacheMemSlavePort.sendFunctionalSnoop(pkt);
+}
+
+void
+BaseDtu::NocMasterPort::recvTimingSnoopReq(PacketPtr pkt)
+{
+    if (dtu.cacheMemSlavePort.isConnected())
+        dtu.cacheMemSlavePort.sendTimingSnoopReq(pkt);
+}
+
+void
+BaseDtu::NocMasterPort::recvRetrySnoopResp()
+{
+    if (dtu.cacheMemSlavePort.isConnected())
+        dtu.cacheMemSlavePort.sendRetrySnoopResp();
+}
+
+bool
+BaseDtu::CacheMemSlavePort::recvTimingSnoopResp(PacketPtr pkt)
+{
+    return dtu.nocMasterPort.sendTimingSnoopResp(pkt);
+}
+
 bool
 BaseDtu::ICacheMasterPort::recvTimingResp(PacketPtr pkt)
 {
@@ -285,7 +312,8 @@ BaseDtu::BaseDtu(BaseDtuParams* p)
     watches(),
     nocReqFinishedEvent(*this),
     coreId(p->core_id),
-    regFileBaseAddr(p->regfile_base_addr)
+    regFileBaseAddr(p->regfile_base_addr),
+    coherent(p->coherent)
 {
     if (p->watch_range_start != p->watch_range_end)
         watchRange = AddrRange(p->watch_range_start, p->watch_range_end - 1);

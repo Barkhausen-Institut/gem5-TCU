@@ -50,6 +50,8 @@ class BaseDtu(MemObject):
     l1cache = Param.Cache(NULL, "The L1 cache (if any)")
     l2cache = Param.Cache(NULL, "The L2 cache (if any)")
 
+    coherent = Param.Bool(False, "Whether the DTU should keep the caches coherent")
+
     regfile_base_addr = Param.Addr(0xF0000000, "Register file address")
     core_id = Param.Unsigned("ID of the core this DTU belongs to")
 

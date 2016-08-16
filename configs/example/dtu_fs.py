@@ -126,6 +126,9 @@ def getOptions():
                       default='2GHz',
                       help="Clock for blocks running at CPU speed")
 
+    parser.add_option("--coherent", action="store_true", default=False,
+                      help="Whether the caches should be kept coherent")
+
     parser.add_option("-m", "--maxtick", type="int", default=m5.MaxTick,
                       metavar="T",
                       help="Stop after T ticks")
@@ -142,9 +145,10 @@ def getOptions():
 
 def printConfig(pe):
     try:
-        print '      L1cache=%d KiB' % (pe.dtu.l1cache.size.value / 1024)
+        cc = "coherent" if pe.dtu.coherent else "non-coherent"
+        print '      L1cache=%d KiB (%s)' % (pe.dtu.l1cache.size.value / 1024, cc)
         try:
-            print '      L2cache=%d KiB' % (pe.dtu.l2cache.size.value / 1024)
+            print '      L2cache=%d KiB (%s)' % (pe.dtu.l2cache.size.value / 1024, cc)
         except:
             pass
     except:
@@ -182,6 +186,8 @@ def createPE(root, options, no, systemType, l1size, l2size, spmsize, memPE):
     pe.dtu.noc_master_port = root.noc.slave
     pe.dtu.noc_slave_port  = root.noc.master
 
+    pe.dtu.coherent = options.coherent
+
     if not l1size is None:
         pe.dtu.l1cache = L1Cache(size=l1size)
         pe.dtu.l1cache.forward_snoops = False
@@ -190,7 +196,7 @@ def createPE(root, options, no, systemType, l1size, l2size, spmsize, memPE):
 
         if not l2size is None:
             pe.dtu.l2cache = L2Cache(size=l2size)
-            pe.dtu.l2cache.forward_snoops = False
+            pe.dtu.l2cache.forward_snoops = options.coherent
             pe.dtu.l2cache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
             pe.dtu.l2cache.cpu_side = pe.dtu.l1cache.mem_side
             pe.dtu.l2cache.mem_side = pe.dtu.cache_mem_slave_port
@@ -364,12 +370,25 @@ def createRoot(options):
     root.cpu_clk_domain = SrcClockDomain(clock=options.cpu_clock,
                                          voltage_domain=root.cpu_voltage_domain)
 
+    # A dummy system for the CoherentXBar
+    root.noc_system = System()
+
     # All PEs are connected to a NoC (Network on Chip). In this case it's just
     # a simple XBar.
-    root.noc = NoncoherentXBar(forward_latency=0,
-                               frontend_latency=1,
-                               response_latency=1,
-                               width=12)
+    if options.coherent:
+        root.noc = CoherentXBar(forward_latency=0,
+                                frontend_latency=1,
+                                response_latency=1,
+                                snoop_response_latency=1,
+                                system=root.noc_system,
+                                width=12)
+    else:
+        root.noc = NoncoherentXBar(forward_latency=0,
+                                   frontend_latency=1,
+                                   response_latency=1,
+                                   width=12)
+
+    root.noc_system.system_port = root.noc.slave
 
     # create a dummy platform and system for the UART
     root.platform = IOPlatform()

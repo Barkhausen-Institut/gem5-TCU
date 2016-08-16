@@ -115,6 +115,9 @@ Dtu::Dtu(DtuParams* p)
 
         regs().set(DtuReg::ROOT_PT, phys.getAddr());
     }
+    // memory PEs don't participate in cache coherence
+    else
+        coherent = false;
 
     regs().set(DtuReg::RW_BARRIER, -1);
     regs().set(DtuReg::VPE_ID, INVALID_VPE_ID);
@@ -724,6 +727,13 @@ void
 Dtu::handleNocRequest(PacketPtr pkt)
 {
     assert(!pkt->isError());
+
+    if (pkt->memInhibitAsserted())
+    {
+        DPRINTF(DtuPackets, "Ignoring inhibited packet\n");
+        schedNocRequestFinished(clockEdge(Cycles(1)));
+        return;
+    }
 
     auto senderState = dynamic_cast<NocSenderState*>(pkt->senderState);
 

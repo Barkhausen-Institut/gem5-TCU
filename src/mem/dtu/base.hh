@@ -71,6 +71,14 @@ class BaseDtu : public MemObject
         { }
 
         void completeRequest(PacketPtr pkt) override;
+
+        void recvFunctionalSnoop(PacketPtr pkt) override;
+
+        void recvTimingSnoopReq(PacketPtr pkt) override;
+
+        void recvRetrySnoopResp() override;
+
+        bool isSnooping() const override { return dtu.coherent; }
     };
 
     class ICacheMasterPort : public DtuMasterPort
@@ -206,6 +214,8 @@ class BaseDtu : public MemObject
 
     class CacheMemSlavePort : public DtuSlavePort
     {
+        friend class NocMasterPort;
+
       public:
 
         CacheMemSlavePort(BaseDtu& _dtu)
@@ -219,6 +229,8 @@ class BaseDtu : public MemObject
         bool handleRequest(PacketPtr pkt,
                            bool *busy,
                            bool functional) override;
+
+        bool recvTimingSnoopResp(PacketPtr pkt) override;
     };
 
   public:
@@ -306,6 +318,8 @@ class BaseDtu : public MemObject
     const unsigned coreId;
 
     const Addr regFileBaseAddr;
+
+    bool coherent;
 
 };
 
