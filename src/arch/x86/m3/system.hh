@@ -114,6 +114,8 @@ class M3X86System : public X86System, public DTUMemory
         uint64_t backend;
         uint64_t kenv;
         uint32_t pe;
+
+        uint64_t isr64_handler;
     } M5_ATTR_PACKED;
 
     NoCMasterPort nocPort;
