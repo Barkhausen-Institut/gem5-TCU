@@ -435,8 +435,6 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
                     res |= WROTE_EXT_CMD;
                 set(reg, data[offset / sizeof(reg_t)], access);
             }
-            else
-                assert(false);
         }
         // cmd register
         else if (regAddr < sizeof(reg_t) * (numDtuRegs + numCmdRegs))
