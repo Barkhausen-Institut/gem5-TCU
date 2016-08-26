@@ -70,6 +70,8 @@ class X86Connector : public BaseConnector
 
     void suspend(unsigned msgs) override;
 
+    void reset(Addr addr) override;
+
     void injectIrq(unsigned vector) override;
 
   private:

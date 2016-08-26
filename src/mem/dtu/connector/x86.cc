@@ -104,6 +104,17 @@ X86Connector::suspend(unsigned msgs)
 }
 
 void
+X86Connector::reset(Addr addr)
+{
+    if (system->threadContexts.size() == 0)
+        return;
+
+    DPRINTF(DtuConnector, "Setting PC to %p\n", addr);
+
+    system->threadContexts[0]->pcState(addr);
+}
+
+void
 X86Connector::injectIrq(unsigned vector)
 {
     const int APIC_ID = 0;

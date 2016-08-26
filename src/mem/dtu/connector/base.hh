@@ -45,6 +45,8 @@ class BaseConnector : public MemObject
 
     virtual void suspend(unsigned msgs) {};
 
+    virtual void reset(Addr addr) {};
+
     virtual void injectIrq(unsigned vector) {};
 };
 

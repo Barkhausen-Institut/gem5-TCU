@@ -64,8 +64,8 @@ static const char *extCmdNames[] =
     "WAKEUP_CORE",
     "INV_PAGE",
     "INV_TLB",
-    "INV_CACHE",
     "INJECT_IRQ",
+    "RESET",
 };
 
 Dtu::Dtu(DtuParams* p)
@@ -157,6 +157,9 @@ Dtu::regStats()
     irqInjects
         .name(name() + ".irqInjects")
         .desc("Number of injected IRQs");
+    resets
+        .name(name() + ".resets")
+        .desc("Number of resets");
 
     commands
         .init(sizeof(cmdNames) / sizeof(cmdNames[0]))
@@ -445,21 +448,29 @@ Dtu::executeExternCommand(PacketPtr pkt)
         if (tlb())
             tlb()->clear();
         break;
-    case ExternCommand::INV_CACHE:
-        delay = Cycles(0);
-        if(l1Cache)
-        {
-            l1Cache->memInvalidate();
-            delay += Cycles(l1Cache->getBlockCount() / cacheBlocksPerCycle);
-        }
-        if(l2Cache)
-        {
-            l2Cache->memInvalidate();
-            delay += Cycles(l2Cache->getBlockCount() / cacheBlocksPerCycle);
-        }
-        break;
     case ExternCommand::INJECT_IRQ:
         injectIRQ(cmd.arg);
+        break;
+    case ExternCommand::RESET:
+        if(!coherent)
+        {
+            if(l1Cache)
+            {
+                l1Cache->memWriteback();
+                l1Cache->memInvalidate();
+                delay += Cycles(l1Cache->getBlockCount() / cacheBlocksPerCycle);
+            }
+            if(l2Cache)
+            {
+                l2Cache->memWriteback();
+                l2Cache->memInvalidate();
+                delay += Cycles(l2Cache->getBlockCount() / cacheBlocksPerCycle);
+            }
+        }
+
+        if (tlb())
+            tlb()->clear();
+        reset(cmd.arg);
         break;
     default:
         // TODO error handling
@@ -484,6 +495,14 @@ void
 Dtu::updateSuspendablePin()
 {
     connector->suspend(regFile.get(DtuReg::MSG_CNT));
+}
+
+void
+Dtu::reset(Addr addr)
+{
+    connector->reset(addr);
+
+    resets++;
 }
 
 void

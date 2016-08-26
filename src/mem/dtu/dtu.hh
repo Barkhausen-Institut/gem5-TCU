@@ -184,8 +184,8 @@ class Dtu : public BaseDtu
             WAKEUP_CORE     = 1,
             INV_PAGE        = 2,
             INV_TLB         = 3,
-            INV_CACHE       = 4,
-            INJECT_IRQ      = 5,
+            INJECT_IRQ      = 4,
+            RESET           = 5,
         };
 
         Opcode opcode;
@@ -214,6 +214,8 @@ class Dtu : public BaseDtu
     void wakeupCore();
 
     void updateSuspendablePin();
+
+    void reset(Addr addr);
 
     void injectIRQ(int vector);
 
@@ -470,6 +472,7 @@ class Dtu : public BaseDtu
     Stats::Scalar intMemReqs;
     Stats::Scalar extMemReqs;
     Stats::Scalar irqInjects;
+    Stats::Scalar resets;
 
     // commands
     Stats::Vector commands;
