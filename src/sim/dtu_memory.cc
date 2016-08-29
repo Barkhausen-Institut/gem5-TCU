@@ -31,7 +31,7 @@
 #include "mem/port_proxy.hh"
 #include "mem/dtu/tlb.hh"
 #include "mem/dtu/pt_unit.hh"
-#include "debug/DtuTlb.hh"
+#include "debug/DtuPtes.hh"
 
 DTUMemory::DTUMemory(SimObject *obj,
                      unsigned memPe,
@@ -61,7 +61,7 @@ DTUMemory::initMemory()
     // not internally accessible
     entry.ixwr = DtuTlb::RWX;
     size_t off = DtuTlb::PAGE_SIZE - sizeof(entry);
-    DPRINTFS(DtuTlb, obj,
+    DPRINTFS(DtuPtes, obj,
         "Creating recursive level %d PTE @ %#018x: %#018x\n",
         DtuTlb::LEVEL_CNT - 1, getRootPt().getAddr() + off, entry);
     physp.write(getRootPt().getAddr() + off, entry);
@@ -97,7 +97,7 @@ DTUMemory::mapPage(Addr virt, Addr phys, uint access)
             // insert entry
             entry.base = addr.getAddr() >> DtuTlb::PAGE_BITS;
             entry.ixwr = i == 0 ? access : DtuTlb::RWX;
-            DPRINTFS(DtuTlb, obj,
+            DPRINTFS(DtuPtes, obj,
                 "Creating level %d PTE for virt=%#018x @ %#018x: %#018x\n",
                 i, virt, pteAddr, entry);
             physp.write(pteAddr, entry);
