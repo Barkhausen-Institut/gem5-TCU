@@ -33,7 +33,6 @@
 #include "debug/DtuPackets.hh"
 #include "debug/DtuSysCalls.hh"
 #include "debug/DtuXfers.hh"
-#include "debug/DtuTlb.hh"
 #include "mem/dtu/xfer_unit.hh"
 
 uint64_t XferUnit::TransferEvent::nextId = 0;
@@ -206,12 +205,6 @@ XferUnit::TransferEvent::process()
             }
 
             assert(res != DtuTlb::NOMAP);
-            DPRINTFS(DtuTlb, (&xfer.dtu),
-                "%s for %s access to %p\n",
-                res != DtuTlb::MISS ? "Pagefault" : "TLB-miss",
-                access == DtuTlb::READ ? "read" : "write",
-                localAddr);
-
             trans = new Translation(*this);
             xfer.dtu.startTranslate(localAddr, access, trans);
             return;

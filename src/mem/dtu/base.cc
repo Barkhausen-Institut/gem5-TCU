@@ -31,7 +31,6 @@
 #include "debug/DtuSlavePort.hh"
 #include "debug/DtuMasterPort.hh"
 #include "debug/Dtu.hh"
-#include "debug/DtuTlb.hh"
 #include "debug/DtuMemWatch.hh"
 #include "mem/dtu/base.hh"
 #include "mem/dtu/noc_addr.hh"

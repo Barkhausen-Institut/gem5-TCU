@@ -121,6 +121,8 @@ class DtuTlb
 
   private:
 
+    DtuTlb::Result do_lookup(Addr virt, uint access, NocAddr *phys);
+
     void evict();
 
     Dtu &dtu;

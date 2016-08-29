@@ -30,7 +30,18 @@
 #include "mem/dtu/tlb.hh"
 #include "mem/dtu/dtu.hh"
 
+#include "debug/DtuTlb.hh"
+
 #include <limits>
+
+static const char *decode_access(uint access) {
+    static char buf[4];
+    buf[0] = (access & DtuTlb::INTERN) ? 'i' : '-';
+    buf[1] = (access & DtuTlb::READ) ? 'r' : '-';
+    buf[2] = (access & DtuTlb::WRITE) ? 'w' : '-';
+    buf[3] = (access & DtuTlb::EXEC) ? 'x' : '-';
+    return buf;
+}
 
 DtuTlb::DtuTlb(Dtu &_dtu, size_t _num)
     : dtu(_dtu), trie(), entries(), free(), num(_num), lru_seq()
@@ -76,6 +87,24 @@ DtuTlb::regStats()
 
 DtuTlb::Result
 DtuTlb::lookup(Addr virt, uint access, NocAddr *phys)
+{
+    static const char *results[] = {
+        "HIT",
+        "MISS",
+        "PAGEFAULT",
+        "NOMAP"
+    };
+
+    DtuTlb::Result res = do_lookup(virt, access, phys);
+
+    DPRINTFS(DtuTlbRead, (&dtu), "TLB lookup for %p %s -> %s (%p)\n",
+            virt, decode_access(access), results[res], phys->getAddr());
+
+    return res;
+}
+
+DtuTlb::Result
+DtuTlb::do_lookup(Addr virt, uint access, NocAddr *phys)
 {
     Entry *e = trie.lookup(virt);
     if (!e) {
@@ -136,6 +165,9 @@ DtuTlb::insert(Addr virt, NocAddr phys, uint flags)
         free.pop_back();
     }
 
+    DPRINTFS(DtuTlbWrite, (&dtu), "TLB insert for %p %s -> %p\n",
+            virt, decode_access(flags), phys.getAddr());
+
     e->phys = phys;
     e->flags = flags;
     inserts++;
@@ -147,6 +179,9 @@ DtuTlb::remove(Addr virt)
     Entry *e = trie.lookup(virt);
     if (e)
     {
+        DPRINTFS(DtuTlbWrite, (&dtu), "TLB invalidate for %p %s -> %p\n",
+                virt, decode_access(e->flags), e->phys.getAddr());
+
         trie.remove(e->handle);
         e->handle = NULL;
         free.push_back(e);
@@ -157,6 +192,8 @@ DtuTlb::remove(Addr virt)
 void
 DtuTlb::clear()
 {
+    DPRINTFS(DtuTlbWrite, (&dtu), "TLB flush\n");
+
     for (size_t i = 0; i < num; ++i)
     {
         if (entries[i].handle)

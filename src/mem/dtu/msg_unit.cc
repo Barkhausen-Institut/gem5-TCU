@@ -33,7 +33,6 @@
 #include "debug/DtuCredits.hh"
 #include "debug/DtuPackets.hh"
 #include "debug/DtuSysCalls.hh"
-#include "debug/DtuTlb.hh"
 #include "mem/dtu/msg_unit.hh"
 #include "mem/dtu/noc_addr.hh"
 #include "mem/dtu/xfer_unit.hh"
@@ -143,10 +142,6 @@ MessageUnit::requestHeader(unsigned epid)
         DtuTlb::Result res = dtu.tlb()->lookup(msgAddr, access, &phys);
         if (res != DtuTlb::HIT)
         {
-            DPRINTFS(DtuTlb, (&dtu),
-                "%s for read access to %p\n",
-                res != DtuTlb::MISS ? "Pagefault" : "TLB-miss",
-                msgAddr);
             assert(res != DtuTlb::NOMAP);
 
             Translation *trans = new Translation(*this, msgAddr, epid);

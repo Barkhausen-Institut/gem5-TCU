@@ -38,7 +38,6 @@
 #include "debug/DtuPackets.hh"
 #include "debug/DtuSysCalls.hh"
 #include "debug/DtuMem.hh"
-#include "debug/DtuTlb.hh"
 #include "mem/dtu/dtu.hh"
 #include "mem/dtu/msg_unit.hh"
 #include "mem/dtu/mem_unit.hh"
@@ -924,10 +923,6 @@ Dtu::translate(PtUnit::Translation *trans,
     switch(res)
     {
         case DtuTlb::HIT:
-            DPRINTF(DtuTlb, "Translated %s access for %p -> %p\n",
-                    icache ? "exec" : (pkt->isRead() ? "read" : "write"),
-                    pkt->getAddr(), phys.getAddr());
-
             pkt->setAddr(phys.getAddr());
             pkt->req->setPaddr(phys.getAddr());
             break;
@@ -937,12 +932,6 @@ Dtu::translate(PtUnit::Translation *trans,
         case DtuTlb::PAGEFAULT:
         {
             bool pf = res != DtuTlb::MISS;
-            DPRINTF(DtuTlb, "%s%s for %s access to %p\n",
-                    pf ? "Pagefault" : "TLB-miss",
-                    res == DtuTlb::NOMAP ? " (ignored)" : "",
-                    icache ? "exec" : (pkt->isRead() ? "read" : "write"),
-                    pkt->getAddr());
-
             // don't cause a pagefault again in this case
             if (res == DtuTlb::NOMAP)
                 return -1;
