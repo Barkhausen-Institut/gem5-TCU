@@ -877,7 +877,7 @@ Dtu::handleCacheMemRequest(PacketPtr pkt, bool functional)
     }
 
     DPRINTF(DtuMem, "Handling %s request of LLC for %u bytes @ %d:%#x\n",
-                    pkt->isRead() ? "read" : "write",
+                    pkt->cmdString(),
                     pkt->getSize(), phys.coreId, phys.offset);
 
     auto type = functional ? Dtu::NocPacketType::CACHE_MEM_REQ_FUNC
