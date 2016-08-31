@@ -94,6 +94,8 @@ class M3X86System : public X86System, public DTUMemory
     struct StartEnv
     {
         uint64_t coreid;
+        uint64_t idle_report;
+        uint32_t idle_active;
         uint32_t argc;
         char **argv;
 
