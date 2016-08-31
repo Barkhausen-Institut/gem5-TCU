@@ -68,7 +68,7 @@ class X86Connector : public BaseConnector
 
     void wakeup() override;
 
-    void suspend(unsigned msgs) override;
+    void suspend() override;
 
     void reset(Addr addr) override;
 

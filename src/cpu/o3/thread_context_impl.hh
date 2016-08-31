@@ -51,7 +51,6 @@
 #include "cpu/o3/thread_context.hh"
 #include "cpu/quiesce_event.hh"
 #include "debug/O3CPU.hh"
-#include "debug/DtuPower.hh"
 
 class WakeupEvent : public Event
 {
@@ -124,16 +123,6 @@ O3ThreadContext<Impl>::suspend()
 
     if (thread->status() == ThreadContext::Suspended)
         return;
-
-    if (cpu->_denySuspend)
-    {
-        DPRINTFS(DtuPower, cpu, "Ignoring suspend; messages pending\n");
-        cpu->schedule(new WakeupEvent(cpu), cpu->clockEdge(Cycles(1)));
-    }
-    else
-    {
-        DPRINTFS(DtuPower, cpu, "Suspending core\n");
-    }
 
     thread->lastActivate = curTick();
     thread->lastSuspend = curTick();

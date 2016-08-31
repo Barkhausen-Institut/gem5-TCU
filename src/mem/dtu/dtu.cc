@@ -491,9 +491,10 @@ Dtu::wakeupCore()
 }
 
 void
-Dtu::updateSuspendablePin()
+Dtu::suspend()
 {
-    connector->suspend(regFile.get(DtuReg::MSG_CNT));
+    if ((regFile.get(DtuReg::MSG_CNT) & 0xFFFF) == 0)
+        connector->suspend();
 }
 
 void
@@ -977,8 +978,6 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
 
     // restore old address
     pkt->setAddr(oldAddr);
-
-    updateSuspendablePin();
 
     if (!atomicMode)
     {

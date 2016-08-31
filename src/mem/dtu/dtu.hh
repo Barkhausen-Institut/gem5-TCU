@@ -213,7 +213,7 @@ class Dtu : public BaseDtu
 
     void wakeupCore();
 
-    void updateSuspendablePin();
+    void suspend();
 
     void reset(Addr addr);
 

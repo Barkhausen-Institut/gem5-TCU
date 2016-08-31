@@ -361,8 +361,6 @@ MessageUnit::incrementReadPtr(unsigned epId)
     ep.msgCount--;
 
     dtu.regs().setRecvEp(epId, ep);
-
-    dtu.updateSuspendablePin();
 }
 
 bool
@@ -422,10 +420,7 @@ MessageUnit::finishMsgReceive(unsigned epId,
     dtu.regs().setRecvEp(epId, ep);
 
     if (error == Dtu::Error::NONE)
-    {
-        dtu.updateSuspendablePin();
         dtu.wakeupCore();
-    }
 }
 
 Dtu::Error

@@ -91,16 +91,16 @@ X86Connector::wakeup()
 }
 
 void
-X86Connector::suspend(unsigned msgs)
+X86Connector::suspend()
 {
     if (system->threadContexts.size() == 0)
         return;
 
-    bool pendingMsgs = msgs > 0;
-    bool hadPending = system->threadContexts[0]->getCpuPtr()->_denySuspend;
-    system->threadContexts[0]->getCpuPtr()->_denySuspend = pendingMsgs;
-    if (hadPending && !pendingMsgs)
-        DPRINTF(DtuConnector, "Core can be suspended\n");
+    if (system->threadContexts[0]->status() == ThreadContext::Active)
+    {
+        DPRINTF(DtuConnector, "Suspending core\n");
+        system->threadContexts[0]->suspend();
+    }
 }
 
 void

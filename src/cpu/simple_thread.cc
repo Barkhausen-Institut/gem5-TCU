@@ -47,7 +47,6 @@
 #include "cpu/quiesce_event.hh"
 #include "cpu/simple_thread.hh"
 #include "cpu/thread_context.hh"
-#include "debug/DtuPower.hh"
 #include "mem/fs_translating_port_proxy.hh"
 #include "mem/se_translating_port_proxy.hh"
 #include "params/BaseCPU.hh"
@@ -176,15 +175,7 @@ SimpleThread::suspend()
 {
     if (status() == ThreadContext::Suspended)
         return;
-    
-    if (baseCpu->_denySuspend)
-    {
-        DPRINTF(DtuPower, "Ignoring suspend; messages pending\n");
-        return;
-    }
 
-    DPRINTF(DtuPower, "Suspending core\n");
-    
     lastActivate = curTick();
     lastSuspend = curTick();
     _status = ThreadContext::Suspended;

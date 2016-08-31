@@ -43,7 +43,7 @@ class BaseConnector : public MemObject
 
     virtual void wakeup() {};
 
-    virtual void suspend(unsigned msgs) {};
+    virtual void suspend() {};
 
     virtual void reset(Addr addr) {};
 
