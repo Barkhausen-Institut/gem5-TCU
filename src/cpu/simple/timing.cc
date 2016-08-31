@@ -94,6 +94,7 @@ TimingSimpleCPU::TimingSimpleCPU(TimingSimpleCPUParams *p)
       fetchEvent(this)
 {
     _status = Idle;
+    _lastStatus = Running;
 }
 
 
@@ -207,10 +208,14 @@ TimingSimpleCPU::activateContext(ThreadID thread_num)
     assert(_status == Idle);
 
     notIdleFraction = 1;
-    _status = BaseSimpleCPU::Running;
 
-    // kick things off by initiating the fetch of the next instruction
-    schedule(fetchEvent, clockEdge(Cycles(0)));
+    _status = _lastStatus;
+
+    if (_status == BaseSimpleCPU::Running)
+    {
+        // kick things off by initiating the fetch of the next instruction
+        schedule(fetchEvent, clockEdge(Cycles(0)));
+    }
 }
 
 
@@ -225,12 +230,11 @@ TimingSimpleCPU::suspendContext(ThreadID thread_num)
     if (_status == Idle)
         return;
 
-    assert(_status == BaseSimpleCPU::Running);
-
     // just change status to Idle... if status != Running,
     // completeInst() will not initiate fetch of next instruction.
 
     notIdleFraction = 0;
+    _lastStatus = _status;
     _status = Idle;
 }
 

@@ -260,6 +260,8 @@ class TimingSimpleCPU : public BaseSimpleCPU
 
     Cycles previousCycle;
 
+    Status _lastStatus;
+
   protected:
 
      /** Return a reference to the data port. */
