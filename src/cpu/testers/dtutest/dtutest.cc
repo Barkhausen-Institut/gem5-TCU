@@ -365,7 +365,7 @@ DtuTest::tick()
     }
     case State::WAIT:
     {
-        regAddr = getRegAddr(DtuReg::STATUS);
+        regAddr = getRegAddr(DtuReg::MSG_CNT);
         pkt = createDtuRegisterPkt(regAddr, 0, MemCmd::ReadReq);
 
         break;

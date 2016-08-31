@@ -33,18 +33,21 @@
 #include "debug/DtuReg.hh"
 #include "debug/DtuRegRange.hh"
 #include "mem/dtu/regfile.hh"
+#include "mem/dtu/dtu.hh"
 
 #define DPRINTFNS(name, ...) do {                                       \
     Trace::getDebugLogger()->dprintf(curTick(), name, __VA_ARGS__);     \
 } while (0)
 
 const char *RegFile::dtuRegNames[] = {
-    "STATUS",
+    "FEATURES",
     "ROOT_PT",
     "PF_EP",
     "LAST_PF",
     "RW_BARRIER",
     "VPE_ID",
+    "CUR_TIME",
+    "IDLE_TIME",
     "MSG_CNT",
     "EXT_CMD",
 };
@@ -86,15 +89,16 @@ static const char *regAccessName(RegAccess access)
     return "DTU";
 }
 
-RegFile::RegFile(const std::string& name, unsigned _numEndpoints)
-    : dtuRegs(numDtuRegs, 0),
+RegFile::RegFile(Dtu &_dtu, const std::string& name, unsigned _numEndpoints)
+    : dtu(_dtu),
+      dtuRegs(numDtuRegs, 0),
       cmdRegs(numCmdRegs, 0),
       epRegs(_numEndpoints),
       numEndpoints(_numEndpoints),
       _name(name)
 {
     // at boot, all PEs are privileged
-    set(DtuReg::STATUS, static_cast<reg_t>(Status::PRIV));
+    set(DtuReg::FEATURES, static_cast<reg_t>(Features::PRIV));
 
     for (int epid = 0; epid < numEndpoints; epid++)
     {
@@ -106,7 +110,12 @@ RegFile::RegFile(const std::string& name, unsigned _numEndpoints)
 RegFile::reg_t
 RegFile::get(DtuReg reg, RegAccess access) const
 {
-    reg_t value = dtuRegs[static_cast<Addr>(reg)];
+    reg_t value;
+
+    if (reg == DtuReg::CUR_TIME)
+        value = dtu.curCycle();
+    else
+        value = dtuRegs[static_cast<Addr>(reg)];
 
     DPRINTF(DtuRegRead, "%s<- DTU[%-12s]: %#018x\n",
                         regAccessName(access),
@@ -412,8 +421,8 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
     RegAccess access = isCpuRequest ? RegAccess::CPU : RegAccess::NOC;
     reg_t* data = pkt->getPtr<reg_t>();
     uint res = WROTE_NONE;
-    reg_t privFlag = static_cast<reg_t>(Status::PRIV);
-    bool isPrivileged = get(DtuReg::STATUS, RegAccess::DTU) & privFlag;
+    reg_t privFlag = static_cast<reg_t>(Features::PRIV);
+    bool isPrivileged = get(DtuReg::FEATURES, RegAccess::DTU) & privFlag;
     int lastEp = -1;
 
     // perform a single register access for each requested register
@@ -428,8 +437,8 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
 
             if (pkt->isRead())
                 data[offset / sizeof(reg_t)] = get(reg, access);
-            // MSG_CNT can't be set in general; all can't be set by the CPU
-            else if (pkt->isWrite() && !isCpuRequest && reg != DtuReg::MSG_CNT)
+            // dtu registers can't be set by the CPU
+            else if (pkt->isWrite() && !isCpuRequest)
             {
                 if (reg == DtuReg::EXT_CMD)
                     res |= WROTE_EXT_CMD;

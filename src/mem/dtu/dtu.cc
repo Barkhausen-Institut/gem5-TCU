@@ -54,6 +54,7 @@ static const char *cmdNames[] =
     "READ",
     "WRITE",
     "INC_READ_PTR",
+    "SLEEP",
     "DEBUG_MSG",
 };
 
@@ -71,15 +72,17 @@ Dtu::Dtu(DtuParams* p)
   : BaseDtu(p),
     masterId(p->system->getMasterId(name())),
     system(p->system),
-    regFile(name() + ".regFile", p->num_endpoints),
+    regFile(*this, name() + ".regFile", p->num_endpoints),
     connector(p->connector),
     tlBuf(p->tlb_entries > 0 ? new DtuTlb(*this, p->tlb_entries) : NULL),
     msgUnit(new MessageUnit(*this)),
     memUnit(new MemoryUnit(*this)),
     xferUnit(new XferUnit(*this, p->block_size, p->buf_count, p->buf_size)),
     ptUnit(p->tlb_entries > 0 ? new PtUnit(*this) : NULL),
-    executeCommandEvent(*this),
     abortCommandEvent(*this),
+    sleepStart(0),
+    cmdPkt(),
+    cmdFinish(),
     cmdInProgress(false),
     abortInProgress(false),
     cmdDest(-1),
@@ -245,28 +248,34 @@ Dtu::getCommand()
 }
 
 void
-Dtu::executeCommand()
+Dtu::executeCommand(PacketPtr pkt)
 {
     Command cmd = getCommand();
     if (cmd.opcode == Command::IDLE)
+    {
+        if (pkt)
+            schedCpuResponse(pkt, clockEdge(Cycles(1)));
         return;
+    }
 
     assert(!cmdInProgress);
 
+    cmdPkt = pkt;
     cmdInProgress = true;
     commands[static_cast<size_t>(cmd.opcode)]++;
 
     if(cmd.opcode != Command::DEBUG_MSG)
     {
-        assert(cmd.arg < numEndpoints);
-        DPRINTF(DtuCmd, "Starting command %s with EP=%u, flags=%#x\n",
+        if (cmd.opcode != Command::SLEEP)
+            assert(cmd.arg < numEndpoints);
+        DPRINTF(DtuCmd, "Starting command %s with arg=%u, flags=%#x\n",
                 cmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg, cmd.flags);
     }
 
     // if the VPE id is invalid and we are not privileged, commands cannot
     // be executed
     if (regs().get(DtuReg::VPE_ID) == INVALID_VPE_ID &&
-        !(regs().get(DtuReg::STATUS) & static_cast<RegFile::reg_t>(Status::PRIV)))
+        !(regs().get(DtuReg::FEATURES) & static_cast<RegFile::reg_t>(Features::PRIV)))
     {
         scheduleFinishOp(Cycles(1), Error::VPEID_INVALID);
         return;
@@ -288,6 +297,10 @@ Dtu::executeCommand()
         msgUnit->incrementReadPtr(cmd.arg);
         finishCommand(Error::NONE);
         break;
+    case Command::SLEEP:
+        if (!startSleep(cmd.arg))
+            finishCommand(Error::NONE);
+        break;
     case Command::DEBUG_MSG:
         DPRINTF(Dtu, "DEBUG %#x\n", cmd.arg);
         finishCommand(Error::NONE);
@@ -306,7 +319,7 @@ Dtu::abortCommand()
 
     if ((abort & Command::ABORT_CMD) && cmd.opcode != Command::IDLE)
     {
-        DPRINTF(DtuCmd, "Aborting command %s with EP=%u, flags=%#x\n",
+        DPRINTF(DtuCmd, "Aborting command %s with arg=%u, flags=%#x\n",
                 cmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg, cmd.flags);
 
         // local transfers are only issued by commands, i.e., the current one
@@ -336,11 +349,27 @@ Dtu::abortCommand()
     {
         DPRINTF(DtuCmd, "Resetting VPE id and disabling PFs\n");
         regs().set(DtuReg::VPE_ID, INVALID_VPE_ID);
-        regs().set(DtuReg::STATUS, 0);
+        regs().set(DtuReg::FEATURES, 0);
         ptUnit->abortAll();
     }
 
     regs().set(CmdReg::ABORT, 0);
+}
+
+void
+Dtu::scheduleFinishOp(Cycles delay, Error error)
+{
+    if (cmdInProgress)
+    {
+        if (cmdFinish)
+        {
+            deschedule(cmdFinish);
+            delete cmdFinish;
+        }
+
+        cmdFinish = new FinishCommandEvent(*this, error);
+        schedule(cmdFinish, clockEdge(delay));
+    }
 }
 
 void
@@ -394,6 +423,9 @@ Dtu::finishCommand(Error error)
         abortInProgress = false;
     }
 
+    if (cmd.opcode == Command::SLEEP)
+        stopSleep();
+
     if (cmd.opcode != Command::DEBUG_MSG)
     {
         DPRINTF(DtuCmd, "Finished command %s with EP=%u, flags=%#x -> %u\n",
@@ -405,6 +437,11 @@ Dtu::finishCommand(Error error)
     unsigned bits = numCmdOpcodeBits + numCmdFlagsBits + numCmdArgBits;
     regFile.set(CmdReg::COMMAND, static_cast<RegFile::reg_t>(error) << bits);
 
+    if (cmdPkt)
+        schedCpuResponse(cmdPkt, clockEdge(Cycles(1)));
+
+    cmdPkt = NULL;
+    cmdFinish = NULL;
     cmdInProgress = false;
     cmdDest = -1;
 }
@@ -448,6 +485,7 @@ Dtu::executeExternCommand(PacketPtr pkt)
             tlb()->clear();
         break;
     case ExternCommand::INJECT_IRQ:
+        wakeupCore();
         injectIRQ(cmd.arg);
         break;
     case ExternCommand::RESET:
@@ -484,10 +522,44 @@ Dtu::executeExternCommand(PacketPtr pkt)
         static_cast<RegFile::reg_t>(ExternCommand::IDLE));
 }
 
+bool
+Dtu::startSleep(uint64_t cycles)
+{
+    if ((regFile.get(DtuReg::MSG_CNT) & 0xFFFF) > 0)
+        return false;
+
+    // remember when we started
+    sleepStart = curCycle();
+
+    connector->suspend();
+    if (cycles)
+        scheduleFinishOp(Cycles(cycles));
+    return true;
+}
+
+void
+Dtu::stopSleep()
+{
+    if (sleepStart != 0)
+    {
+        // increase idle time in status register
+        RegFile::reg_t counter = regFile.get(DtuReg::IDLE_TIME);
+        counter += curCycle() - sleepStart;
+        regFile.set(DtuReg::IDLE_TIME, counter);
+
+        sleepStart = Cycles(0);
+
+        connector->wakeup();
+    }
+}
+
 void
 Dtu::wakeupCore()
 {
     connector->wakeup();
+
+    if (cmdInProgress && getCommand().opcode == Command::SLEEP)
+        scheduleFinishOp(Cycles(1));
 }
 
 void
@@ -1001,13 +1073,13 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
             pkt->headerDelay = 0;
             pkt->payloadDelay = 0;
 
-            if (isCpuRequest)
+            if (isCpuRequest && (~result & RegFile::WROTE_CMD))
                 schedCpuResponse(pkt, when);
-            else
+            else if(!isCpuRequest)
                 schedNocResponse(pkt, when);
 
             if (result & RegFile::WROTE_CMD)
-                schedule(executeCommandEvent, when);
+                schedule(new ExecCmdEvent(*this, pkt), when);
             else if (result & RegFile::WROTE_ABORT)
                 schedule(abortCommandEvent, when);
         }
@@ -1017,7 +1089,7 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
     else
     {
         if (result & RegFile::WROTE_CMD)
-            executeCommand();
+            executeCommand(NULL);
         if (result & RegFile::WROTE_EXT_CMD)
             executeExternCommand(NULL);
         if (result & RegFile::WROTE_ABORT)

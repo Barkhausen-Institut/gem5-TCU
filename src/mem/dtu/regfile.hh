@@ -39,23 +39,25 @@
 // global and readonly for SW
 enum class DtuReg : Addr
 {
-    STATUS,
+    FEATURES,
     ROOT_PT,
     PF_EP,
     LAST_PF,
     RW_BARRIER,
     VPE_ID,
+    CUR_TIME,
+    IDLE_TIME,
     MSG_CNT,
     EXT_CMD,
 };
 
-enum class Status
+enum class Features
 {
     PRIV        = 1 << 0,
     PAGEFAULTS  = 1 << 1,
 };
 
-constexpr unsigned numDtuRegs = 8;
+constexpr unsigned numDtuRegs = 10;
 
 // registers to issue a command
 enum class CmdReg : Addr
@@ -156,6 +158,8 @@ struct MemEp
     uint8_t flags;
 };
 
+class Dtu;
+
 class RegFile
 {
   public:
@@ -172,7 +176,7 @@ class RegFile
         WROTE_ABORT     = 4,
     };
 
-    RegFile(const std::string& name, unsigned numEndpoints);
+    RegFile(Dtu &dtu, const std::string& name, unsigned numEndpoints);
 
     reg_t get(DtuReg reg, RegAccess access = RegAccess::DTU) const;
 
@@ -210,6 +214,8 @@ class RegFile
     void printEpAccess(unsigned epId, bool read, bool cpu) const;
 
   private:
+
+    Dtu &dtu;
 
     std::vector<reg_t> dtuRegs;
 

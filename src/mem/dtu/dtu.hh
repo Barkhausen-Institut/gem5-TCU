@@ -155,7 +155,8 @@ class Dtu : public BaseDtu
             READ            = 3,
             WRITE           = 4,
             INC_READ_PTR    = 5,
-            DEBUG_MSG       = 6,
+            SLEEP           = 6,
+            DEBUG_MSG       = 7,
         };
 
         enum
@@ -211,6 +212,10 @@ class Dtu : public BaseDtu
     PacketPtr generateRequest(Addr addr, Addr size, MemCmd cmd);
     void freeRequest(PacketPtr pkt);
 
+    bool startSleep(uint64_t cycles);
+
+    void stopSleep();
+
     void wakeupCore();
 
     void suspend();
@@ -226,16 +231,7 @@ class Dtu : public BaseDtu
         dcacheMasterPort.sendFunctional(pkt);
     }
 
-    void scheduleFinishOp(Cycles delay, Error error = Error::NONE)
-    {
-        if (cmdInProgress)
-            schedule(new FinishCommandEvent(*this, error), clockEdge(delay));
-    }
-
-    void scheduleCommand(Cycles delay)
-    {
-        schedule(executeCommandEvent, clockEdge(delay));
-    }
+    void scheduleFinishOp(Cycles delay, Error error = Error::NONE);
 
     void sendMemRequest(PacketPtr pkt,
                         Addr virt,
@@ -280,7 +276,7 @@ class Dtu : public BaseDtu
 
     Command getCommand();
 
-    void executeCommand();
+    void executeCommand(PacketPtr pkt);
 
     void abortCommand();
 
@@ -329,18 +325,42 @@ class Dtu : public BaseDtu
 
     PtUnit *ptUnit;
 
-    EventWrapper<Dtu, &Dtu::executeCommand> executeCommandEvent;
-
     EventWrapper<Dtu, &Dtu::abortCommand> abortCommandEvent;
 
-    struct ExecExternCmdEvent : public Event
+    struct DtuEvent : public Event
     {
         Dtu& dtu;
 
+        DtuEvent(Dtu& _dtu)
+            : dtu(_dtu)
+        {}
+
+        const std::string name() const override { return dtu.name(); }
+    };
+
+    struct ExecCmdEvent : public DtuEvent
+    {
+        PacketPtr pkt;
+
+        ExecCmdEvent(Dtu& _dtu, PacketPtr _pkt)
+            : DtuEvent(_dtu), pkt(_pkt)
+        {}
+
+        void process() override
+        {
+            dtu.executeCommand(pkt);
+            setFlags(AutoDelete);
+        }
+
+        const char* description() const override { return "ExecCmdEvent"; }
+    };
+
+    struct ExecExternCmdEvent : public DtuEvent
+    {
         PacketPtr pkt;
 
         ExecExternCmdEvent(Dtu& _dtu, PacketPtr _pkt)
-            : dtu(_dtu), pkt(_pkt)
+            : DtuEvent(_dtu), pkt(_pkt)
         {}
 
         void process() override
@@ -350,18 +370,14 @@ class Dtu : public BaseDtu
         }
 
         const char* description() const override { return "ExecExternCmdEvent"; }
-
-        const std::string name() const override { return dtu.name(); }
     };
 
-    struct FinishCommandEvent : public Event
+    struct FinishCommandEvent : public DtuEvent
     {
-        Dtu& dtu;
-
         Error error;
 
         FinishCommandEvent(Dtu& _dtu, Error _error = Error::NONE)
-            : dtu(_dtu), error(_error)
+            : DtuEvent(_dtu), error(_error)
         {}
 
         void process() override
@@ -371,8 +387,6 @@ class Dtu : public BaseDtu
         }
 
         const char* description() const override { return "FinishCommandEvent"; }
-
-        const std::string name() const override { return dtu.name(); }
     };
 
     struct MemTranslation : PtUnit::Translation
@@ -428,6 +442,9 @@ class Dtu : public BaseDtu
         }
     };
 
+    Cycles sleepStart;
+    PacketPtr cmdPkt;
+    FinishCommandEvent *cmdFinish;
     bool cmdInProgress;
     bool abortInProgress;
     int cmdDest;
