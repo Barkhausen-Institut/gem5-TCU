@@ -323,7 +323,8 @@ M3X86System::initState()
     {
         KernelEnv kenv;
 
-        // idle is always needed
+        // rctmux and idle are always needed
+        mods.push_back(std::make_pair("rctmux", ""));
         mods.push_back(std::make_pair("idle", ""));
 
         if (mods.size() > MAX_MODS)
