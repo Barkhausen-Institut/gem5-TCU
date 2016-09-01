@@ -583,6 +583,9 @@ Dtu::reset(Addr addr)
     connector->reset(addr);
     connector->suspend();
 
+    // since we did a reset & suspend, restart the sleep
+    sleepStart = curCycle();
+
     resets++;
     return delay;
 }
