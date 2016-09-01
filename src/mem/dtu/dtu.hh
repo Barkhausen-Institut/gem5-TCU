@@ -220,7 +220,7 @@ class Dtu : public BaseDtu
 
     void suspend();
 
-    void reset(Addr addr);
+    Cycles reset(Addr addr);
 
     void injectIRQ(int vector);
 

@@ -193,7 +193,7 @@ class XferUnit
                        Cycles delay,
                        uint flags);
 
-    size_t abortTransfers(AbortType type, int coreId);
+    size_t abortTransfers(AbortType type, int coreId, bool all = false);
 
     void recvMemResponse(uint64_t evId,
                          const void* data,

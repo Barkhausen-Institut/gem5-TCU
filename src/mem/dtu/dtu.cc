@@ -489,25 +489,7 @@ Dtu::executeExternCommand(PacketPtr pkt)
         injectIRQ(cmd.arg);
         break;
     case ExternCommand::RESET:
-        if(!coherent)
-        {
-            if(l1Cache)
-            {
-                l1Cache->memWriteback();
-                l1Cache->memInvalidate();
-                delay += Cycles(l1Cache->getBlockCount() / cacheBlocksPerCycle);
-            }
-            if(l2Cache)
-            {
-                l2Cache->memWriteback();
-                l2Cache->memInvalidate();
-                delay += Cycles(l2Cache->getBlockCount() / cacheBlocksPerCycle);
-            }
-        }
-
-        if (tlb())
-            tlb()->clear();
-        reset(cmd.arg);
+        delay += reset(cmd.arg);
         break;
     default:
         // TODO error handling
@@ -569,12 +551,40 @@ Dtu::suspend()
         connector->suspend();
 }
 
-void
+Cycles
 Dtu::reset(Addr addr)
 {
+    Cycles delay(0);
+    if(!coherent)
+    {
+        if(l1Cache)
+        {
+            l1Cache->memWriteback();
+            l1Cache->memInvalidate();
+            delay += Cycles(l1Cache->getBlockCount() / cacheBlocksPerCycle);
+        }
+        if(l2Cache)
+        {
+            l2Cache->memWriteback();
+            l2Cache->memInvalidate();
+            delay += Cycles(l2Cache->getBlockCount() / cacheBlocksPerCycle);
+        }
+    }
+
+    xferUnit->abortTransfers(XferUnit::ABORT_LOCAL, -1, true);
+    xferUnit->abortTransfers(XferUnit::ABORT_REMOTE, -1, true);
+
+    if(ptUnit)
+        ptUnit->abortAll();
+
+    if (tlb())
+        tlb()->clear();
+
     connector->reset(addr);
+    connector->suspend();
 
     resets++;
+    return delay;
 }
 
 void

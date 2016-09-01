@@ -331,7 +331,7 @@ XferUnit::startTransfer(Dtu::TransferType type,
 }
 
 size_t
-XferUnit::abortTransfers(AbortType type, int coreId)
+XferUnit::abortTransfers(AbortType type, int coreId, bool all)
 {
     size_t count = 0;
 
@@ -354,7 +354,7 @@ XferUnit::abortTransfers(AbortType type, int coreId)
             else if (type == ABORT_REMOTE && ev->isRemote())
             {
                 auto state = dynamic_cast<Dtu::NocSenderState*>(ev->pkt->senderState);
-                if (state->sender == coreId)
+                if (all || state->sender == coreId)
                 {
                     state->result = Dtu::Error::ABORT;
                     ev->abort(Dtu::Error::ABORT);
@@ -366,7 +366,7 @@ XferUnit::abortTransfers(AbortType type, int coreId)
 
         // if we don't have any request of that core, remember the abort for
         // the future
-        if (count == 0)
+        if (!all && count == 0)
         {
             DPRINTFS(DtuXfers, (&dtu),
                 "Remembering transfer abort for PE%2d\n", coreId);
