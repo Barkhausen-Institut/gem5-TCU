@@ -350,7 +350,8 @@ Dtu::abortCommand()
         DPRINTF(DtuCmd, "Resetting VPE id and disabling PFs\n");
         regs().set(DtuReg::VPE_ID, INVALID_VPE_ID);
         regs().set(DtuReg::FEATURES, 0);
-        ptUnit->abortAll();
+        if (ptUnit)
+            ptUnit->abortAll();
     }
 
     regs().set(CmdReg::ABORT, 0);
