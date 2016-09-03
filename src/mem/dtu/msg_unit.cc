@@ -90,14 +90,14 @@ MessageUnit::regStats()
 void
 MessageUnit::startTransmission(const Dtu::Command& cmd)
 {
-    unsigned epid = cmd.arg;
+    unsigned epid = cmd.epid;
 
     // if we want to reply, request the header first
     if (cmd.opcode == Dtu::Command::REPLY)
     {
         offset = 0;
         flagsPhys = 0;
-        requestHeader(cmd.arg);
+        requestHeader(cmd.epid);
         return;
     }
 
@@ -206,7 +206,7 @@ MessageUnit::recvFromMem(const Dtu::Command& cmd, PacketPtr pkt)
     // do we have the complete header yet? if not, request the rest
     if (offset < sizeof(Dtu::MessageHeader))
     {
-        requestHeader(cmd.arg);
+        requestHeader(cmd.epid);
         return;
     }
 
@@ -247,7 +247,7 @@ MessageUnit::startXfer(const Dtu::Command& cmd)
     DPRINTFS(Dtu, (&dtu), "\e[1m[%s -> %u]\e[0m with EP%u of %#018lx:%lu\n",
              cmd.opcode == Dtu::Command::REPLY ? "rp" : "sd",
              info.targetCoreId,
-             cmd.arg,
+             cmd.epid,
              dtu.regs().get(CmdReg::DATA_ADDR),
              messageSize);
 
@@ -267,7 +267,7 @@ MessageUnit::startXfer(const Dtu::Command& cmd)
 
     header->senderCoreId = dtu.coreId;
     header->senderVpeId  = dtu.regs().get(DtuReg::VPE_ID);
-    header->senderEpId   = info.unlimcred ? dtu.numEndpoints : cmd.arg;
+    header->senderEpId   = info.unlimcred ? dtu.numEndpoints : cmd.epid;
     header->replyEpId    = info.replyEpId;
     header->length       = messageSize;
     header->label        = info.label;

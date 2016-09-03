@@ -174,7 +174,7 @@ class Dtu : public BaseDtu
 
         Error error;
         Opcode opcode;
-        unsigned arg;
+        unsigned epid;
         unsigned flags;
     };
 
@@ -213,7 +213,7 @@ class Dtu : public BaseDtu
     PacketPtr generateRequest(Addr addr, Addr size, MemCmd cmd);
     void freeRequest(PacketPtr pkt);
 
-    bool startSleep(uint64_t cycles);
+    bool startSleep();
 
     void stopSleep();
 
@@ -462,7 +462,7 @@ class Dtu : public BaseDtu
 
     const Addr maxNocPacketSize;
 
-    const unsigned numCmdArgBits;
+    const unsigned numCmdEpBits;
     const unsigned numCmdFlagsBits;
 
     const size_t blockSize;

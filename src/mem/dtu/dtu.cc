@@ -92,7 +92,7 @@ Dtu::Dtu(DtuParams* p)
     atomicMode(p->system->isAtomicMode()),
     numEndpoints(p->num_endpoints),
     maxNocPacketSize(p->max_noc_packet_size),
-    numCmdArgBits(32),
+    numCmdEpBits(8),
     numCmdFlagsBits(1),
     blockSize(p->block_size),
     bufCount(p->buf_count),
@@ -217,7 +217,7 @@ Dtu::freeRequest(PacketPtr pkt)
 Dtu::Command
 Dtu::getCommand()
 {
-    assert(numCmdArgBits + numCmdFlagsBits + numCmdOpcodeBits <=
+    assert(numCmdEpBits + numCmdFlagsBits + numCmdOpcodeBits <=
         sizeof(RegFile::reg_t) * 8);
 
     using reg_t = RegFile::reg_t;
@@ -225,25 +225,25 @@ Dtu::getCommand()
     /*
      *                                          0
      * |----------------------------------------|
-     * |  error  |   flags  |   arg  |  opcode  |
+     * |  error  |   flags  |  epid  |  opcode  |
      * |----------------------------------------|
      */
     reg_t opcodeMask = ((reg_t)1 << numCmdOpcodeBits) - 1;
-    reg_t argMask = ((reg_t)1 << numCmdArgBits) - 1;
+    reg_t argMask = ((reg_t)1 << numCmdEpBits) - 1;
     reg_t flagMask = ((reg_t)1 << numCmdFlagsBits) - 1;
 
     auto reg = regFile.get(CmdReg::COMMAND);
 
     Command cmd;
 
-    unsigned bits = numCmdOpcodeBits + numCmdArgBits + numCmdFlagsBits;
+    unsigned bits = numCmdOpcodeBits + numCmdEpBits + numCmdFlagsBits;
     cmd.error  = static_cast<Error>(reg >> bits);
 
     cmd.opcode = static_cast<Command::Opcode>(reg & opcodeMask);
 
-    cmd.arg    = (reg >> numCmdOpcodeBits) & argMask;
+    cmd.epid   = (reg >> numCmdOpcodeBits) & argMask;
 
-    cmd.flags  = (reg >> (numCmdArgBits + numCmdOpcodeBits)) & flagMask;
+    cmd.flags  = (reg >> (numCmdEpBits + numCmdOpcodeBits)) & flagMask;
 
     return cmd;
 }
@@ -267,10 +267,9 @@ Dtu::executeCommand(PacketPtr pkt)
 
     if(cmd.opcode != Command::DEBUG_MSG)
     {
-        if (cmd.opcode != Command::SLEEP)
-            assert(cmd.arg < numEndpoints);
-        DPRINTF(DtuCmd, "Starting command %s with arg=%u, flags=%#x\n",
-                cmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg, cmd.flags);
+        assert(cmd.epid < numEndpoints);
+        DPRINTF(DtuCmd, "Starting command %s with EP=%u, flags=%#x\n",
+                cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epid, cmd.flags);
     }
 
     // if the VPE id is invalid and we are not privileged, commands cannot
@@ -295,19 +294,19 @@ Dtu::executeCommand(PacketPtr pkt)
         memUnit->startWrite(cmd);
         break;
     case Command::FETCH_MSG:
-        regs().set(CmdReg::OFFSET, msgUnit->fetchMessage(cmd.arg));
+        regs().set(CmdReg::OFFSET, msgUnit->fetchMessage(cmd.epid));
         finishCommand(Error::NONE);
         break;
     case Command::ACK_MSG:
-        msgUnit->ackMessage(cmd.arg);
+        msgUnit->ackMessage(cmd.epid);
         finishCommand(Error::NONE);
         break;
     case Command::SLEEP:
-        if (!startSleep(cmd.arg))
+        if (!startSleep())
             finishCommand(Error::NONE);
         break;
     case Command::DEBUG_MSG:
-        DPRINTF(Dtu, "DEBUG %#x\n", cmd.arg);
+        DPRINTF(Dtu, "DEBUG %#x\n", regs().get(CmdReg::OFFSET));
         finishCommand(Error::NONE);
         break;
     default:
@@ -324,8 +323,8 @@ Dtu::abortCommand()
 
     if ((abort & Command::ABORT_CMD) && cmd.opcode != Command::IDLE)
     {
-        DPRINTF(DtuCmd, "Aborting command %s with arg=%u, flags=%#x\n",
-                cmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg, cmd.flags);
+        DPRINTF(DtuCmd, "Aborting command %s with EP=%u, flags=%#x\n",
+                cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epid, cmd.flags);
 
         // local transfers are only issued by commands, i.e., the current one
         size_t count = xferUnit->abortTransfers(XferUnit::ABORT_LOCAL, -1);
@@ -391,7 +390,7 @@ Dtu::finishCommand(Error error)
     if (error == Error::NONE || regs().get(DtuReg::VPE_ID) != INVALID_VPE_ID)
     {
         if (cmd.opcode == Command::SEND)
-            msgUnit->payCredits(cmd.arg);
+            msgUnit->payCredits(cmd.epid);
         else if (cmd.opcode == Command::REPLY)
             msgUnit->disableReplies();
     }
@@ -435,12 +434,12 @@ Dtu::finishCommand(Error error)
     if (cmd.opcode != Command::DEBUG_MSG)
     {
         DPRINTF(DtuCmd, "Finished command %s with EP=%u, flags=%#x -> %u\n",
-                cmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg, cmd.flags,
+                cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epid, cmd.flags,
                 static_cast<uint>(error));
     }
 
     // let the SW know that the command is finished
-    unsigned bits = numCmdOpcodeBits + numCmdFlagsBits + numCmdArgBits;
+    unsigned bits = numCmdOpcodeBits + numCmdFlagsBits + numCmdEpBits;
     regFile.set(CmdReg::COMMAND, static_cast<RegFile::reg_t>(error) << bits);
 
     if (cmdPkt)
@@ -511,10 +510,12 @@ Dtu::executeExternCommand(PacketPtr pkt)
 }
 
 bool
-Dtu::startSleep(uint64_t cycles)
+Dtu::startSleep()
 {
     if ((regFile.get(DtuReg::MSG_CNT) & 0xFFFF) > 0)
         return false;
+
+    uint64_t cycles = regs().get(CmdReg::OFFSET);
 
     // remember when we started
     sleepStart = curCycle();

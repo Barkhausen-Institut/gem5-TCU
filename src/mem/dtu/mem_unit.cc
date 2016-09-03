@@ -63,7 +63,7 @@ MemoryUnit::regStats()
 void
 MemoryUnit::startRead(const Dtu::Command& cmd)
 {
-    MemEp ep = dtu.regs().getMemEp(cmd.arg);
+    MemEp ep = dtu.regs().getMemEp(cmd.epid);
     Addr rwBarrier = dtu.regs().get(DtuReg::RW_BARRIER);
 
     Addr localAddr = dtu.regs().get(CmdReg::DATA_ADDR);
@@ -79,7 +79,7 @@ MemoryUnit::startRead(const Dtu::Command& cmd)
     DPRINTFS(Dtu, (&dtu),
         "\e[1m[rd -> %u]\e[0m at %#018lx+%#lx with EP%u into %#018lx:%lu\n",
         ep.targetCore, ep.remoteAddr, offset,
-        cmd.arg, localAddr, requestSize);
+        cmd.epid, localAddr, requestSize);
 
     // TODO error handling
     assert(localAddr < rwBarrier);
@@ -104,7 +104,7 @@ MemoryUnit::startRead(const Dtu::Command& cmd)
 void
 MemoryUnit::startWrite(const Dtu::Command& cmd)
 {
-    MemEp ep = dtu.regs().getMemEp(cmd.arg);
+    MemEp ep = dtu.regs().getMemEp(cmd.epid);
 
     Addr localAddr = dtu.regs().get(CmdReg::DATA_ADDR);
     Addr requestSize = dtu.regs().get(CmdReg::DATA_SIZE);
@@ -119,7 +119,7 @@ MemoryUnit::startWrite(const Dtu::Command& cmd)
     DPRINTFS(Dtu, (&dtu),
         "\e[1m[wr -> %u]\e[0m at %#018lx+%#lx with EP%u from %#018lx:%lu\n",
         ep.targetCore, ep.remoteAddr, offset,
-        cmd.arg, localAddr, requestSize);
+        cmd.epid, localAddr, requestSize);
 
     // TODO error handling
     assert(ep.flags & Dtu::MemoryFlags::WRITE);
