@@ -128,12 +128,20 @@ MessageUnit::requestHeader(unsigned epid)
     assert(offset < sizeof(Dtu::MessageHeader));
 
     RecvEp ep = dtu.regs().getRecvEp(epid);
-    Addr msgAddr = ep.bufAddr + ep.rdOff;
-    msgAddr += offset;
+    Addr msg = dtu.regs().get(CmdReg::OFFSET);
+
+    int msgidx = ep.msgToIdx(msg);
+    Addr msgOff = ep.msgSize * msgidx;
+    Addr msgAddr = ep.bufAddr + msgOff;
+
+    assert(msgidx != RecvEp::MAX_MSGS);
+    assert(ep.isOccupied(msgidx));
 
     DPRINTFS(DtuBuf, (&dtu),
-        "EP%d: requesting header for reply on message @ %p\n",
-        epid, msgAddr);
+        "EP%d: requesting header for reply on message @ %p (idx=%d)\n",
+        epid, msgAddr, msgidx);
+
+    msgAddr += offset;
 
     NocAddr phys(msgAddr);
     if (dtu.tlb())
@@ -342,51 +350,101 @@ MessageUnit::recvCredits(unsigned epid)
     }
 }
 
-void
-MessageUnit::incrementReadPtr(unsigned epId)
+Addr
+MessageUnit::fetchMessage(unsigned epid)
 {
-    RecvEp ep = dtu.regs().getRecvEp(epId);
+    RecvEp ep = dtu.regs().getRecvEp(epid);
 
-    ep.rdOff += ep.msgSize;
+    if (ep.msgCount == 0)
+        return 0;
 
-    if (ep.rdOff >= ep.size * ep.msgSize)
-        ep.rdOff = 0;
+    int i;
+    for (i = ep.rdPos; i < ep.size; ++i)
+    {
+        if (ep.isUnread(i))
+            goto found;
+    }
+    for (i = 0; i < ep.rdPos; ++i)
+    {
+        if (ep.isUnread(i))
+            goto found;
+    }
+
+    // should not get here
+    assert(false);
+
+found:
+    assert(ep.isOccupied(i));
+
+    ep.setUnread(i, false);
+    ep.msgCount--;
+    ep.rdPos = i + 1;
 
     DPRINTFS(DtuBuf, (&dtu),
-        "EP%u: increment read pointer to %#018lx (msgCount=%u)\n",
-        epId, ep.rdOff, ep.msgCount - 1);
+        "EP%u: fetched message at index %u (count=%u)\n",
+        epid, i, ep.msgCount);
 
-    // TODO error handling
-    assert(ep.msgCount != 0);
-    ep.msgCount--;
+    dtu.regs().setRecvEp(epid, ep);
 
-    dtu.regs().setRecvEp(epId, ep);
+    return ep.bufAddr + i * ep.msgSize;
 }
 
-bool
-MessageUnit::incrementWritePtr(unsigned epId)
+int
+MessageUnit::allocSlot(unsigned epid, RecvEp &ep)
 {
-    RecvEp ep = dtu.regs().getRecvEp(epId);
+    int i;
+    for (i = ep.wrPos; i < ep.size; ++i)
+    {
+        if (!ep.isOccupied(i))
+            goto found;
+    }
+    for (i = 0; i < ep.wrPos; ++i)
+    {
+        if (!ep.isOccupied(i))
+            goto found;
+    }
 
-    ep.wrOff += ep.msgSize;
+    return ep.size;
 
-    if (ep.wrOff >= ep.size * ep.msgSize)
-        ep.wrOff = 0;
+found:
+    ep.setOccupied(i, true);
+    ep.wrPos = i + 1;
 
     DPRINTFS(DtuBuf, (&dtu),
-        "EP%u: increment write pointer to %#018lx\n",
-        epId, ep.wrOff);
+        "EP%u: put message at index %u\n",
+        epid, i);
+
+    dtu.regs().setRecvEp(epid, ep);
+    return i;
+}
+
+void
+MessageUnit::ackMessage(unsigned epId)
+{
+    RecvEp ep = dtu.regs().getRecvEp(epId);
+    Addr msg = dtu.regs().get(CmdReg::OFFSET);
+
+    int msgidx = ep.msgToIdx(msg);
+    assert(msgidx != RecvEp::MAX_MSGS);
+    assert(ep.isOccupied(msgidx));
+
+    ep.setOccupied(msgidx, false);
+
+    DPRINTFS(DtuBuf, (&dtu),
+        "EP%u: acked msg at index %d\n",
+        epId, msgidx);
 
     dtu.regs().setRecvEp(epId, ep);
-    return true;
 }
 
 void
 MessageUnit::finishMsgReceive(unsigned epId,
+                              Addr msgAddr,
                               const Dtu::MessageHeader *header,
                               Dtu::Error error)
 {
     RecvEp ep = dtu.regs().getRecvEp(epId);
+    int idx = (msgAddr - ep.bufAddr) / ep.msgSize;
 
     if (error == Dtu::Error::NONE)
     {
@@ -407,15 +465,12 @@ MessageUnit::finishMsgReceive(unsigned epId,
             warn("EP%u: Buffer full!\n", epId);
             return;
         }
+
         ep.msgCount++;
+        ep.setUnread(idx, true);
     }
     else
-    {
-        if (ep.wrOff == 0)
-            ep.wrOff = (ep.size - 1) * ep.msgSize;
-        else
-            ep.wrOff -= ep.msgSize;
-    }
+        ep.setOccupied(idx, false);
 
     dtu.regs().setRecvEp(epId, ep);
 
@@ -443,7 +498,8 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId)
     NocAddr addr(pkt->getAddr());
     unsigned epId = addr.offset;
     RecvEp ep = dtu.regs().getRecvEp(epId);
-    Addr localAddr = ep.bufAddr + ep.wrOff;
+    int msgidx = allocSlot(epId, ep);
+    Addr localAddr = ep.bufAddr + msgidx * ep.msgSize;
 
     DPRINTFS(Dtu, (&dtu),
         "\e[1m[rv <- %u]\e[0m %lu bytes on EP%u to %#018lx\n",
@@ -460,7 +516,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId)
 
     Dtu::Error res = Dtu::Error::NONE;
     uint16_t ourVpeId = dtu.regs().get(DtuReg::VPE_ID);
-    if (vpeId == ourVpeId && ep.msgCount < ep.size)
+    if (vpeId == ourVpeId && msgidx != ep.size)
     {
         // the message is transferred piece by piece; we can start as soon as
         // we have the header
@@ -479,8 +535,6 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId)
                           NULL,
                           delay,
                           flags);
-
-        incrementWritePtr(epId);
     }
     // ignore messages for other VPEs or if there is not enough space
     else

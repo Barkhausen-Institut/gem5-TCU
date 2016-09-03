@@ -229,14 +229,16 @@ RegFile::getRecvEp(unsigned epId, bool print) const
     const reg_t r1  = regs[1];
     const reg_t r2  = regs[2];
 
+    ep.rdPos        = (r0 >> 54) & 0x3F;
+    ep.wrPos        = (r0 >> 48) & 0x3F;
     ep.msgSize      = (r0 >> 32) & 0xFFFF;
     ep.size         = (r0 >> 16) & 0xFFFF;
     ep.msgCount     = (r0 >>  0) & 0xFFFF;
 
     ep.bufAddr      = r1;
 
-    ep.rdOff        = (r2 >> 16) & 0xFFFF;
-    ep.wrOff        = (r2 >>  0) & 0xFFFF;
+    ep.occupied     = r2 & 0xFFFFFFFF;
+    ep.unread       = r2 >> 32;
 
     if (print)
         ep.print(*this, epId, true, RegAccess::DTU);
@@ -248,12 +250,15 @@ void
 RegFile::setRecvEp(unsigned epId, const RecvEp &ep)
 {
     set(epId, 0, (static_cast<reg_t>(EpType::RECEIVE) << 61) |
+                 (static_cast<reg_t>(ep.rdPos) << 54) |
+                 (static_cast<reg_t>(ep.wrPos) << 48) |
                  (static_cast<reg_t>(ep.msgSize) << 32) |
                  (ep.size << 16) | (ep.msgCount << 0));
 
     set(epId, 1, ep.bufAddr);
 
-    set(epId, 2, (ep.rdOff << 16) | (ep.wrOff << 0));
+    set(epId, 2, (static_cast<reg_t>(ep.unread) << 32) |
+                 ep.occupied);
 
     ep.print(*this, epId, false, RegAccess::DTU);
 }
@@ -316,11 +321,11 @@ RecvEp::print(const RegFile &rf,
         return;
 
     DPRINTFNS(rf.name(),
-        "%s%s EP%u%14s: Recv[buf=%p msz=%#x bsz=%#x msgs=%u rd=%#x wr=%#x]\n",
+        "%s%s EP%u%14s: Recv[buf=%p msz=%#x bsz=%#x msgs=%u occ=%#010x unr=%010x rd=%u wr=%u]\n",
         regAccessName(access), read ? "<-" : "->",
         epId, "",
         bufAddr, msgSize, size, msgCount,
-        rdOff, wrOff);
+        occupied, unread, rdPos, wrPos);
 }
 
 void

@@ -238,6 +238,7 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
             case State::READ_REP:
             {
                 const RegFile::reg_t *regs = pkt->getConstPtr<RegFile::reg_t>();
+                // TODO we need to use GET_MSG
                 if ((regs[0] & 0xFFFF) > 0)
                 {
                     msgOffset = (regs[2] >> 16) & 0xFFFF;
@@ -424,8 +425,9 @@ DtuAccelHash::tick()
         }
         case State::ACK_MSG:
         {
+            // TODO this is currently broken (OFFSET needs to be written)
             Addr regAddr = getRegAddr(CmdReg::COMMAND);
-            uint64_t val = Dtu::Command::INC_READ_PTR | (EP_RECV << 3);
+            uint64_t val = Dtu::Command::ACK_MSG | (EP_RECV << 3);
             pkt = createDtuRegisterPkt(regAddr, val, MemCmd::WriteReq);
             break;
         }

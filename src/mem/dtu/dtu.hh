@@ -154,9 +154,10 @@ class Dtu : public BaseDtu
             REPLY           = 2,
             READ            = 3,
             WRITE           = 4,
-            INC_READ_PTR    = 5,
-            SLEEP           = 6,
-            DEBUG_MSG       = 7,
+            FETCH_MSG       = 5,
+            ACK_MSG         = 6,
+            SLEEP           = 7,
+            DEBUG_MSG       = 8,
         };
 
         enum
@@ -265,6 +266,7 @@ class Dtu : public BaseDtu
     void abortTranslate(PtUnit::Translation *trans);
 
     void finishMsgReceive(unsigned epId,
+                          Addr msgAddr,
                           const MessageHeader *header,
                           Error error);
 

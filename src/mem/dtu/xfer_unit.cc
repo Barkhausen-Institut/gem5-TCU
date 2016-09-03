@@ -469,7 +469,8 @@ XferUnit::recvMemResponse(uint64_t evId,
                     buf->event->pkt->getPtr<Dtu::MessageHeader>();
                 NocAddr addr(buf->event->pkt->getAddr());
 
-                dtu.finishMsgReceive(addr.offset, header, buf->event->result);
+                dtu.finishMsgReceive(addr.offset, buf->event->localAddr,
+                    header, buf->event->result);
             }
 
             // TODO should we respond earlier for remote reads? i.e. as soon

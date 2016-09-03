@@ -76,13 +76,13 @@ constexpr unsigned numCmdRegs = 7;
 // Ep Registers:
 //
 // 0. TYPE[3] (for all)
-//    receive: BUF_MSG_SIZE[16] | BUF_SIZE[16] | BUF_MSG_CNT[16]
+//    receive: BUF_RD_POS[6] | BUF_WR_POS[6] | BUF_MSG_SIZE[16] | BUF_SIZE[16] | BUF_MSG_CNT[16]
 //    send:    VPE_ID[32] | MAX_MSG_SIZE[16]
 //    mem:     REQ_MEM_SIZE[61]
 // 1. receive: BUF_ADDR[64]
 //    send:    TGT_COREID[8] | TGT_EPID[8] | CREDITS[16]
 //    mem:     REQ_MEM_ADDR[64]
-// 2. receive: BUF_RD_PTR[16] | BUF_WR_PTR[16]
+// 2. receive: BUF_UNREAD[32] | BUF_OCCUPIED[32]
 //    send:    LABEL[64]
 //    mem:     VPE_ID[32] | REQ_COREID[8] | FLAGS[4]
 //
@@ -125,20 +125,54 @@ struct SendEp
 
 struct RecvEp
 {
-    RecvEp() : bufAddr(), msgSize(), size(), msgCount(), rdOff(), wrOff()
+    static const size_t MAX_MSGS    = 32;
+
+    RecvEp() : bufAddr(), msgSize(), size(), msgCount(), occupied(), unread()
     {}
+
+    int msgToIdx(Addr msg) const
+    {
+        int idx = (msg - bufAddr) / msgSize;
+        return (idx >= 0 && idx < MAX_MSGS) ? idx : MAX_MSGS;
+    }
+
+    bool isUnread(int idx) const
+    {
+        return unread & (static_cast<uint32_t>(1) << idx);
+    }
+    void setUnread(int idx, bool unr)
+    {
+        if (unr)
+            unread |= static_cast<uint32_t>(1) << idx;
+        else
+            unread &= ~(static_cast<uint32_t>(1) << idx);
+    }
+
+    bool isOccupied(int idx) const
+    {
+        return occupied & (static_cast<uint32_t>(1) << idx);
+    }
+    void setOccupied(int idx, bool occ)
+    {
+        if (occ)
+            occupied |= static_cast<uint32_t>(1) << idx;
+        else
+            occupied &= ~(static_cast<uint32_t>(1) << idx);
+    }
 
     void print(const RegFile &rf,
                unsigned epId,
                bool read,
                RegAccess access) const;
 
+    uint8_t rdPos;
+    uint8_t wrPos;
     uint64_t bufAddr;
     uint16_t msgSize;
     uint16_t size;
     uint16_t msgCount;
-    uint16_t rdOff;
-    uint16_t wrOff;
+    uint32_t occupied;
+    uint32_t unread;
 };
 
 struct MemEp

@@ -53,7 +53,8 @@ static const char *cmdNames[] =
     "REPLY",
     "READ",
     "WRITE",
-    "INC_READ_PTR",
+    "FETCH_MSG",
+    "ACK_MSG",
     "SLEEP",
     "DEBUG_MSG",
 };
@@ -293,8 +294,12 @@ Dtu::executeCommand(PacketPtr pkt)
     case Command::WRITE:
         memUnit->startWrite(cmd);
         break;
-    case Command::INC_READ_PTR:
-        msgUnit->incrementReadPtr(cmd.arg);
+    case Command::FETCH_MSG:
+        regs().set(CmdReg::OFFSET, msgUnit->fetchMessage(cmd.arg));
+        finishCommand(Error::NONE);
+        break;
+    case Command::ACK_MSG:
+        msgUnit->ackMessage(cmd.arg);
         finishCommand(Error::NONE);
         break;
     case Command::SLEEP:
@@ -713,9 +718,12 @@ Dtu::startTransfer(TransferType type,
 }
 
 void
-Dtu::finishMsgReceive(unsigned epId, const MessageHeader *header, Error error)
+Dtu::finishMsgReceive(unsigned epId,
+                      Addr msgAddr,
+                      const MessageHeader *header,
+                      Error error)
 {
-    msgUnit->finishMsgReceive(epId, header, error);
+    msgUnit->finishMsgReceive(epId, msgAddr, header, error);
 }
 
 void

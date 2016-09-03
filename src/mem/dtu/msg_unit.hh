@@ -108,20 +108,25 @@ class MessageUnit
     void recvCredits(unsigned epid);
 
     /**
-     * Move read pointer forward
+     * Fetches the next message and returns the address or 0
      */
-    void incrementReadPtr(unsigned epId);
+    Addr fetchMessage(unsigned epid);
+
+    /**
+     * Acknowledges the message in OFFSET register
+     */
+    void ackMessage(unsigned epId);
 
     /**
      * Finishes a message receive
      */
     void finishMsgReceive(unsigned epId,
+                          Addr msgAddr,
                           const Dtu::MessageHeader *header,
                           Dtu::Error error);
 
   private:
-
-    bool incrementWritePtr(unsigned epId);
+    int allocSlot(unsigned epid, RecvEp &ep);
 
     void requestHeader(unsigned epid);
 
