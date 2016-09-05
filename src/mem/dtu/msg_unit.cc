@@ -498,12 +498,10 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId)
     NocAddr addr(pkt->getAddr());
     unsigned epId = addr.offset;
     RecvEp ep = dtu.regs().getRecvEp(epId);
-    int msgidx = allocSlot(epId, ep);
-    Addr localAddr = ep.bufAddr + msgidx * ep.msgSize;
 
     DPRINTFS(Dtu, (&dtu),
-        "\e[1m[rv <- %u]\e[0m %lu bytes on EP%u to %#018lx\n",
-        header->senderCoreId, header->length, epId, localAddr);
+        "\e[1m[rv <- %u]\e[0m %lu bytes on EP%u\n",
+        header->senderCoreId, header->length, epId);
     dtu.printPacket(pkt);
 
     if (dtu.coreId == 0 && epId == 0)
@@ -516,7 +514,8 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId)
 
     Dtu::Error res = Dtu::Error::NONE;
     uint16_t ourVpeId = dtu.regs().get(DtuReg::VPE_ID);
-    if (vpeId == ourVpeId && msgidx != ep.size)
+    int msgidx;
+    if (vpeId == ourVpeId && (msgidx = allocSlot(epId, ep)) != ep.size)
     {
         // the message is transferred piece by piece; we can start as soon as
         // we have the header
@@ -526,6 +525,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId)
 
         // atm, message receives can never cause pagefaults
         uint flags = XferUnit::XferFlags::MSGRECV | XferUnit::XferFlags::NOPF;
+        Addr localAddr = ep.bufAddr + msgidx * ep.msgSize;
         dtu.startTransfer(Dtu::TransferType::REMOTE_WRITE,
                           NocAddr(0, 0),
                           localAddr,
