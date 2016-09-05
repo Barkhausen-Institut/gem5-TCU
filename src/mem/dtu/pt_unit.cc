@@ -329,7 +329,7 @@ PtUnit::finishPagefault(PacketPtr pkt)
     if (!ev)
     {
         DPRINTFS(Dtu, (&dtu),
-            "Ignoring unknown (%llu) Pagefault response",
+            "Ignoring unknown (%llu) Pagefault response\n",
             id);
     }
     else
