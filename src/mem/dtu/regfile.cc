@@ -443,7 +443,7 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
             if (pkt->isRead())
                 data[offset / sizeof(reg_t)] = get(reg, access);
             // dtu registers can't be set by the CPU
-            else if (pkt->isWrite() && !isCpuRequest)
+            else if (pkt->isWrite() && !isCpuRequest && reg != DtuReg::MSG_CNT)
             {
                 if (reg == DtuReg::EXT_CMD)
                     res |= WROTE_EXT_CMD;
