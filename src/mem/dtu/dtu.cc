@@ -86,6 +86,7 @@ Dtu::Dtu(DtuParams* p)
     cmdFinish(),
     cmdInProgress(false),
     abortInProgress(false),
+    irqPending(false),
     cmdDest(-1),
     memPe(),
     memOffset(),
@@ -358,6 +359,9 @@ Dtu::abortCommand()
     }
 
     regs().set(CmdReg::ABORT, 0);
+
+    // see comment below
+    irqPending = false;
 }
 
 void
@@ -514,6 +518,14 @@ Dtu::startSleep()
     if ((regFile.get(DtuReg::MSG_CNT) & 0xFFFF) > 0)
         return false;
 
+    // it might be that after an injected IRQ that the core continues to
+    // execute some instructions. if one of them instructs the DTU to sleep
+    // we suspend the core again and thus halt everything. thus, we prevent
+    // that by disallowing sleeps between injectIRQ and abort.
+    // TODO this is not a good solution
+    if (irqPending)
+        return false;
+
     uint64_t cycles = regs().get(CmdReg::OFFSET);
 
     // remember when we started
@@ -600,6 +612,8 @@ void
 Dtu::injectIRQ(int vector)
 {
     connector->injectIrq(vector);
+
+    irqPending = true;
 
     irqInjects++;
 }

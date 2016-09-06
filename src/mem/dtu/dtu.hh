@@ -449,6 +449,7 @@ class Dtu : public BaseDtu
     FinishCommandEvent *cmdFinish;
     bool cmdInProgress;
     bool abortInProgress;
+    bool irqPending;
     int cmdDest;
 
   public:
