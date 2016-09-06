@@ -544,7 +544,8 @@ PtUnit::abortAll()
             "Dropping all pending pagefaults (%lu)\n",
             pfqueue.size());
 
-        while (!pfqueue.empty()) {
+        while (!pfqueue.empty())
+        {
             auto qev = pfqueue.front();
             qev->finish(false, NocAddr(0));
         }
