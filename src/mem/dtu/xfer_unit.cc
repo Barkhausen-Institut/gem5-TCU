@@ -495,6 +495,15 @@ XferUnit::recvMemResponse(uint64_t evId,
                            buf->offset);
                 }
 
+                // set result
+                auto state = dynamic_cast<Dtu::NocSenderState*>(
+                    buf->event->pkt->senderState);
+                if (buf->event->result != Dtu::Error::NONE &&
+                    dtu.regs().get(DtuReg::VPE_ID) == Dtu::INVALID_VPE_ID)
+                    state->result = Dtu::Error::VPE_GONE;
+                else
+                    state->result = buf->event->result;
+
                 Cycles delay = dtu.transferToNocLatency;
                 dtu.schedNocResponse(buf->event->pkt, dtu.clockEdge(delay));
             }
