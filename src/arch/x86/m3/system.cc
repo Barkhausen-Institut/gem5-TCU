@@ -198,12 +198,6 @@ M3X86System::mapMemory()
         mapSegment(RT_START, RT_SIZE, DtuTlb::INTERN | DtuTlb::RW);
         mapSegment(STACK_AREA, STACK_SIZE, DtuTlb::INTERN | DtuTlb::RW);
     }
-    else
-    {
-        // map a large portion of the address space on app PEs
-        // TODO this is temporary to still support clone and VPEs without AS
-        mapSegment(RT_START, DTUMemory::memSize - RT_START, DtuTlb::IRWX);
-    }
 }
 
 void
