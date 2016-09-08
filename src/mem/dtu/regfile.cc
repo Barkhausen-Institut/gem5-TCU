@@ -387,9 +387,14 @@ void
 RegFile::set(unsigned epId, size_t idx, reg_t value)
 {
     // update global message count
-    if (getEpType(epId) == EpType::RECEIVE && idx == 0)
+    bool oldrecv = getEpType(epId) == EpType::RECEIVE;
+    bool newrecv = static_cast<EpType>(value >> 61) == EpType::RECEIVE;
+    if (idx == 0 && (newrecv || oldrecv))
     {
-        reg_t diff = (value & 0xFFFF) - (epRegs[epId][idx] & 0xFFFF);
+        reg_t oldcnt = oldrecv ? (epRegs[epId][idx] & 0xFFFF) : 0;
+        reg_t newcnt = newrecv ? (value & 0xFFFF) : 0;
+
+        reg_t diff = newcnt - oldcnt;
         reg_t old = dtuRegs[static_cast<Addr>(DtuReg::MSG_CNT)];
         set(DtuReg::MSG_CNT, old + diff);
     }
