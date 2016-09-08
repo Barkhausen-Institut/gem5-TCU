@@ -196,7 +196,7 @@ class Dtu : public BaseDtu
 
   public:
 
-    static constexpr unsigned numCmdOpcodeBits = 3;
+    static constexpr unsigned numCmdOpcodeBits = 4;
 
   public:
 
