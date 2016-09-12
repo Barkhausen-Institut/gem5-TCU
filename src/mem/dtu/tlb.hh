@@ -84,6 +84,7 @@ class DtuTlb
         EXEC    = 4,
         INTERN  = 8,
         GONE    = 16,   // only for pagefaults
+        BLOCKED = 32,
         RW      = READ | WRITE,
         RX      = READ | EXEC,
         RWX     = RW | EXEC,
@@ -114,6 +115,8 @@ class DtuTlb
     Result lookup(Addr virt, uint access, NocAddr *phys);
 
     void insert(Addr virt, NocAddr phys, uint flags);
+
+    void block(Addr virt, bool blocked);
 
     void remove(Addr virt);
 

@@ -116,7 +116,9 @@ DtuTlb::do_lookup(Addr virt, uint access, NocAddr *phys)
         noMapping++;
         return NOMAP;
     }
-    if ((e->flags & access) != access) {
+    // internal accesses to blocked entries pagefault
+    // this is only necessary to work around a bug (probably) in the LSQUnit
+    if (((access & INTERN) && (e->flags & BLOCKED)) || (e->flags & access) != access) {
         pagefaults++;
         return PAGEFAULT;
     }
@@ -171,6 +173,23 @@ DtuTlb::insert(Addr virt, NocAddr phys, uint flags)
     e->phys = phys;
     e->flags = flags;
     inserts++;
+}
+
+void
+DtuTlb::block(Addr virt, bool blocked)
+{
+    Entry *e = trie.lookup(virt);
+    if (e)
+    {
+        DPRINTFS(DtuTlbWrite, (&dtu), "TLB %s %p %s -> %p\n",
+                blocked ? "blocking" : "unblocking",
+                virt, decode_access(e->flags), e->phys.getAddr());
+
+        if (blocked)
+            e->flags |= BLOCKED;
+        else
+            e->flags &= ~BLOCKED;
+    }
 }
 
 void

@@ -206,6 +206,12 @@ PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, uint access)
         return false;
     }
 
+    // remove all access rights to ensure that all accesses fault until we have
+    // resolved it. this is required, because it seems that the LSQUnit does
+    // not forward loads to the store buffer properly, if the store has already
+    // been sent to cache, but took longer because of a DTU PF
+    dtu.tlb()->block(virt, true);
+
     int pfep = ev->toKernel ? Dtu::SYSCALL_EP : dtu.regs().get(DtuReg::PF_EP);
     assert(pfep < dtu.numEndpoints);
     SendEp ep = dtu.regs().getSendEp(pfep);
@@ -376,6 +382,8 @@ PtUnit::finishPagefault(PacketPtr pkt)
             // already tried to access there with no success
             if (error == static_cast<int>(Dtu::Error::NO_MAPPING))
                 mkTlbEntry(ev->virt, NocAddr(0), 0);
+            else
+                dtu.tlb()->block(ev->virt, false);
 
             ev->finish(false, NocAddr(0));
             unresolved++;
