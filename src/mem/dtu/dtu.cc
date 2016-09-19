@@ -1142,5 +1142,7 @@ DtuParams::create()
 void
 Dtu::printPacket(PacketPtr pkt) const
 {
+    DPRINTF(DtuPackets, "Dumping packet %s @ %p with %lu bytes\n",
+        pkt->cmdString(), pkt->getAddr(), pkt->getSize());
     DDUMP(DtuPackets, pkt->getPtr<uint8_t>(), pkt->getSize());
 }
