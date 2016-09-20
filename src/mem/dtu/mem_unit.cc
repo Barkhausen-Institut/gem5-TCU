@@ -88,17 +88,67 @@ MemoryUnit::startRead(const Dtu::Command& cmd)
     assert(requestSize + offset >= requestSize);
     assert(requestSize + offset <= ep.remoteSize);
 
-    Addr nocAddr = NocAddr(ep.targetCore,
-                           ep.remoteAddr + offset).getAddr();
-    auto pkt = dtu.generateRequest(nocAddr,
-                                   requestSize,
-                                   MemCmd::ReadReq);
+    NocAddr nocAddr(ep.targetCore, ep.remoteAddr + offset);
 
-    dtu.sendNocRequest(Dtu::NocPacketType::READ_REQ,
-                       pkt,
-                       ep.vpeId,
-                       cmd.flags,
-                       dtu.commandToNocRequestLatency);
+    uint flags = (cmd.flags & Dtu::Command::NOPF)
+                 ? XferUnit::XferFlags::NOPF
+                 : 0;
+
+    if (dtu.coherent && nocAddr.offset < dtu.regFileBaseAddr &&
+        dtu.isMemPE(nocAddr.coreId))
+    {
+        flags |= XferUnit::NOXLATE;
+
+        auto xfer = new LocalReadTransferEvent(nocAddr.getAddr(),
+                                               localAddr,
+                                               requestSize,
+                                               flags);
+        dtu.startTransfer(xfer, Cycles(1));
+    }
+    else
+    {
+        auto pkt = dtu.generateRequest(nocAddr.getAddr(),
+                                       requestSize,
+                                       MemCmd::ReadReq);
+
+        dtu.sendNocRequest(Dtu::NocPacketType::READ_REQ,
+                           pkt,
+                           ep.vpeId,
+                           flags,
+                           dtu.commandToNocRequestLatency);
+    }
+}
+
+void
+MemoryUnit::LocalReadTransferEvent::transferDone(Dtu::Error result)
+{
+    Cycles delay(1);
+
+    if (result != Dtu::Error::NONE)
+    {
+        dtu().scheduleFinishOp(delay, result);
+        return;
+    }
+
+    uint wflags = flags() & ~XferUnit::NOXLATE;
+    uint8_t *tmp = new uint8_t[size()];
+    memcpy(tmp, data(), size());
+
+    auto xfer = new LocalWriteTransferEvent(dest, tmp, size(), wflags);
+    dtu().startTransfer(xfer, delay);
+}
+
+void
+MemoryUnit::LocalWriteTransferEvent::transferStart()
+{
+    memcpy(data(), tmp, tmpSize);
+    delete[] tmp;
+}
+
+void
+MemoryUnit::LocalWriteTransferEvent::transferDone(Dtu::Error result)
+{
+    dtu().scheduleFinishOp(Cycles(1), result);
 }
 
 void
@@ -197,13 +247,25 @@ MemoryUnit::WriteTransferEvent::transferDone(Dtu::Error result)
         Cycles delay = dtu().transferToNocLatency;
         dtu().printPacket(pkt);
 
-        Dtu::NocPacketType pktType;
-        if (flags() & XferUnit::MESSAGE)
-            pktType = Dtu::NocPacketType::MESSAGE;
+        if (dtu().coherent && dest.offset < dtu().regFileBaseAddr &&
+            dtu().isMemPE(dest.coreId))
+        {
+            uint rflags = (flags() & XferUnit::NOPF) | XferUnit::NOXLATE;
+
+            auto xfer = new ReadTransferEvent(dest.getAddr(), rflags, pkt);
+            dtu().startTransfer(xfer, delay);
+        }
         else
-            pktType = Dtu::NocPacketType::WRITE_REQ;
-        uint cmdflags = (flags() & XferUnit::NOPF) ? Dtu::Command::NOPF : 0;
-        dtu().sendNocRequest(pktType, pkt, vpeId, cmdflags, delay);
+        {
+            Dtu::NocPacketType pktType;
+            if (flags() & XferUnit::MESSAGE)
+                pktType = Dtu::NocPacketType::MESSAGE;
+            else
+                pktType = Dtu::NocPacketType::WRITE_REQ;
+
+            uint cmdflags = (flags() & XferUnit::NOPF) ? Dtu::Command::NOPF : 0;
+            dtu().sendNocRequest(pktType, pkt, vpeId, cmdflags, delay);
+        }
     }
 }
 

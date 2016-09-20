@@ -55,6 +55,8 @@ class DTUMemory
               PortProxy &phys,
               unsigned firstFree);
 
+    virtual bool hasMem(unsigned pe) const = 0;
+
     bool hasVirtMem() const
     {
         return memSize != 0;

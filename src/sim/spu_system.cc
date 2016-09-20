@@ -52,6 +52,11 @@ SpuSystem::initState()
         initMemory();
 }
 
+bool SpuSystem::hasMem(unsigned pe) const
+{
+    return (pes[pe] & 0x7) != 1;
+}
+
 SpuSystem *
 SpuSystemParams::create()
 {

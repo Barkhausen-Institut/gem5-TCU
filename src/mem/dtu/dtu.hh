@@ -210,6 +210,8 @@ class Dtu : public BaseDtu
 
     DtuTlb *tlb() { return tlBuf; }
 
+    bool isMemPE(unsigned pe) const;
+
     PacketPtr generateRequest(Addr addr, Addr size, MemCmd cmd);
     void freeRequest(PacketPtr pkt);
 

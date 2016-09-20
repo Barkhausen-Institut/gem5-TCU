@@ -46,6 +46,7 @@ class XferUnit
         MESSAGE   = 1,
         MSGRECV   = 2,
         NOPF      = 4,
+        NOXLATE   = 8,
     };
 
     enum AbortType

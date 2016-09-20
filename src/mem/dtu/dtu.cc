@@ -190,6 +190,13 @@ Dtu::regStats()
     msgUnit->regStats();
 }
 
+bool
+Dtu::isMemPE(unsigned pe) const
+{
+    DTUMemory *sys = dynamic_cast<DTUMemory*>(system);
+    return !sys || sys->hasMem(pe);
+}
+
 PacketPtr
 Dtu::generateRequest(Addr paddr, Addr size, MemCmd cmd)
 {

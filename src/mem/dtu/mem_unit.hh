@@ -38,6 +38,46 @@ class MemoryUnit
 {
   public:
 
+    class LocalReadTransferEvent : public XferUnit::TransferEvent
+    {
+        Addr dest;
+
+      public:
+
+        LocalReadTransferEvent(Addr src, Addr _dest, size_t size, uint flags)
+            : TransferEvent(Dtu::TransferType::LOCAL_READ,
+                            src,
+                            size,
+                            flags),
+              dest(_dest)
+        {}
+
+        void transferStart() override {}
+
+        void transferDone(Dtu::Error result) override;
+    };
+
+    class LocalWriteTransferEvent : public XferUnit::TransferEvent
+    {
+        uint8_t *tmp;
+        size_t tmpSize;
+
+      public:
+
+        LocalWriteTransferEvent(Addr local, uint8_t *_tmp, size_t _size, uint flags)
+            : TransferEvent(Dtu::TransferType::LOCAL_WRITE,
+                            local,
+                            _size,
+                            flags),
+              tmp(_tmp),
+              tmpSize(_size)
+        {}
+
+        void transferStart() override;
+
+        void transferDone(Dtu::Error result) override;
+    };
+
     class ReadTransferEvent : public XferUnit::TransferEvent
     {
         PacketPtr pkt;

@@ -73,6 +73,11 @@ M3X86System::~M3X86System()
 {
 }
 
+bool M3X86System::hasMem(unsigned pe) const
+{
+    return (pes[pe] & 0x7) != 1;
+}
+
 BaseMasterPort&
 M3X86System::getMasterPort(const std::string &if_name, PortID idx)
 {

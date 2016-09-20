@@ -169,7 +169,7 @@ XferUnit::TransferEvent::process()
     }
 
     NocAddr phys(localAddr());
-    if (xfer->dtu.tlb())
+    if (xfer->dtu.tlb() && !(flags() & NOXLATE))
     {
         uint access = isWrite() ? DtuTlb::WRITE : DtuTlb::READ;
         access |= isRemote() ? 0 : DtuTlb::INTERN;

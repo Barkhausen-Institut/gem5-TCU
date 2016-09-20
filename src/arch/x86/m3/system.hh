@@ -133,6 +133,8 @@ class M3X86System : public X86System, public DTUMemory
     M3X86System(Params *p);
     ~M3X86System();
 
+    bool hasMem(unsigned pe) const override;
+
     BaseMasterPort& getMasterPort(const std::string &if_name,
                                   PortID idx = InvalidPortID) override;
 
