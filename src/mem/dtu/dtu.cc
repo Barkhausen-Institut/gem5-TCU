@@ -314,6 +314,13 @@ Dtu::executeCommand(PacketPtr pkt)
         // TODO error handling
         panic("Invalid opcode %#x\n", static_cast<RegFile::reg_t>(cmd.opcode));
     }
+
+    if(cmd.opcode == Command::SEND || cmd.opcode == Command::REPLY ||
+       cmd.opcode == Command::READ || cmd.opcode == Command::WRITE)
+    {
+        schedCpuResponse(cmdPkt, clockEdge(Cycles(1)));
+        cmdPkt = nullptr;
+    }
 }
 
 void
