@@ -37,6 +37,17 @@
 
 uint64_t XferUnit::TransferEvent::nextId = 0;
 
+static const char *decodeFlags(uint flags)
+{
+    static char buf[5];
+    buf[0] = (flags & XferUnit::MESSAGE) ? 'm' : '-';
+    buf[1] = (flags & XferUnit::MSGRECV) ? 'r' : '-';
+    buf[2] = (flags & XferUnit::NOPF)    ? 'p' : '-';
+    buf[3] = (flags & XferUnit::NOXLATE) ? 'x' : '-';
+    buf[4] = '\0';
+    return buf;
+}
+
 XferUnit::XferUnit(Dtu &_dtu,
                    size_t _blockSize,
                    size_t _bufCount,
@@ -122,11 +133,11 @@ XferUnit::TransferEvent::tryStart()
     if (!buf)
     {
         DPRINTFS(DtuXfers, (&xfer->dtu),
-            "Delaying %s transfer of %lu bytes @ %p [flags=%#x]\n",
+            "Delaying %s transfer of %lu bytes @ %p [flags=%s]\n",
             isWrite() ? "mem-write" : "mem-read",
             remaining,
             localAddr(),
-            flags());
+            decodeFlags(flags()));
 
         xfer->delays++;
         xfer->queue.push_back(this);
@@ -136,12 +147,12 @@ XferUnit::TransferEvent::tryStart()
     transferStart();
 
     DPRINTFS(DtuXfers, (&xfer->dtu),
-        "buf%d: Starting %s transfer of %lu bytes @ %p [flags=%#x]\n",
+        "buf%d: Starting %s transfer of %lu bytes @ %p [flags=%s]\n",
         buf->id,
         isWrite() ? "mem-write" : "mem-read",
         remaining,
         localAddr(),
-        flags());
+        decodeFlags(flags()));
 
     // should we abort the next request from this core?
     // actually, we could do that earlier, but doing it as soon as we have
