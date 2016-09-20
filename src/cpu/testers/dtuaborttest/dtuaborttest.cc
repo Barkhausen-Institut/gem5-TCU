@@ -226,7 +226,7 @@ DtuAbortTest::createCommandPkt(Dtu::Command::Opcode cmd,
                                  MemCmd::WriteReq);
 
     RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
-    regs[0] = static_cast<RegFile::reg_t>(cmd) | (ep << 3);
+    regs[0] = static_cast<RegFile::reg_t>(cmd) | (ep << 4);
     regs[1] = 0;
     regs[2] = data;
     regs[3] = size;
@@ -291,9 +291,9 @@ DtuAbortTest::completeRequest(PacketPtr pkt)
                     case SubState::WAIT:
                     {
                         RegFile::reg_t reg = *pkt->getPtr<RegFile::reg_t>();
-                        if ((reg & 0x7) == 0)
+                        if ((reg & 0xF) == 0)
                         {
-                            if ((reg >> 36) == 0)
+                            if ((reg >> 13) == 0)
                             {
                                 if (++testNo == TEST_COUNT)
                                     state = State::STOP;
@@ -318,7 +318,7 @@ DtuAbortTest::completeRequest(PacketPtr pkt)
                     case SubState::INVLPG_WAIT:
                     {
                         RegFile::reg_t reg = *pkt->getPtr<RegFile::reg_t>();
-                        if ((reg & 0x7) == 0)
+                        if ((reg & 0xF) == 0)
                         {
                             substate = SubState::START;
                             delay++;
@@ -452,7 +452,7 @@ DtuAbortTest::tick()
                                                EP_RECV,
                                                DATA_ADDR,
                                                system->cacheLineSize() * 2,
-                                               0);
+                                               RECV_ADDR);
                     }
                     break;
                 }
