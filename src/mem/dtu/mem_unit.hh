@@ -32,10 +32,77 @@
 #define __MEM_DTU_MEM_UNIT_HH__
 
 #include "mem/dtu/dtu.hh"
+#include "mem/dtu/xfer_unit.hh"
 
 class MemoryUnit
 {
   public:
+
+    class ReadTransferEvent : public XferUnit::TransferEvent
+    {
+        PacketPtr pkt;
+
+      public:
+
+        ReadTransferEvent(Addr local, uint flags, PacketPtr _pkt)
+            : TransferEvent(Dtu::TransferType::LOCAL_WRITE,
+                            local,
+                            _pkt->getSize(),
+                            flags),
+              pkt(_pkt)
+        {}
+
+        void transferStart() override;
+
+        void transferDone(Dtu::Error result) override;
+    };
+
+    class WriteTransferEvent : public XferUnit::TransferEvent
+    {
+      protected:
+
+        NocAddr dest;
+        uint vpeId;
+
+      public:
+
+        WriteTransferEvent(Addr local,
+                           size_t size,
+                           uint flags,
+                           NocAddr _dest,
+                           uint _vpeId)
+            : TransferEvent(Dtu::TransferType::LOCAL_READ, local, size, flags),
+              dest(_dest),
+              vpeId(_vpeId)
+        {}
+
+        void transferStart() override {};
+
+        void transferDone(Dtu::Error result) override;
+    };
+
+    class ReceiveTransferEvent : public XferUnit::TransferEvent
+    {
+      protected:
+
+        PacketPtr pkt;
+
+      public:
+
+        ReceiveTransferEvent(Dtu::TransferType type,
+                             Addr local,
+                             uint flags,
+                             PacketPtr _pkt)
+            : XferUnit::TransferEvent(type, local, _pkt->getSize(), flags),
+              pkt(_pkt)
+        {}
+
+        int senderCore() const override;
+
+        void transferStart() override;
+
+        void transferDone(Dtu::Error result) override;
+    };
 
     MemoryUnit(Dtu &_dtu) : dtu(_dtu) {}
 

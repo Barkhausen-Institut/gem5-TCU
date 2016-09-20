@@ -32,10 +32,11 @@
 #define __MEM_DTU_MSG_UNIT_HH__
 
 #include "mem/dtu/dtu.hh"
+#include "mem/dtu/mem_unit.hh"
 
 class MessageUnit
 {
-  private:
+  public:
 
     struct MsgInfo
     {
@@ -70,7 +71,42 @@ class MessageUnit
         }
     };
 
-  public:
+    class SendTransferEvent : public MemoryUnit::WriteTransferEvent
+    {
+        Dtu::MessageHeader *header;
+
+      public:
+
+        SendTransferEvent(Addr local,
+                          size_t size,
+                          uint flags,
+                          NocAddr dest,
+                          uint vpeId,
+                          Dtu::MessageHeader *_header)
+            : WriteTransferEvent(local, size, flags, dest, vpeId),
+              header(_header)
+        {}
+
+        void transferStart() override;
+    };
+
+    class ReceiveTransferEvent : public MemoryUnit::ReceiveTransferEvent
+    {
+        MessageUnit *msgUnit;
+
+      public:
+
+        ReceiveTransferEvent(MessageUnit *_msgUnit,
+                             Addr local,
+                             uint flags,
+                             PacketPtr pkt)
+            : MemoryUnit::ReceiveTransferEvent(
+                Dtu::TransferType::REMOTE_WRITE, local, flags, pkt),
+              msgUnit(_msgUnit)
+        {}
+
+        void transferDone(Dtu::Error result) override;
+    };
 
     MessageUnit(Dtu &_dtu)
       : dtu(_dtu), info(), header(), flagsPhys(), offset() {}

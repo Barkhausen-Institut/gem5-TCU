@@ -275,18 +275,32 @@ MessageUnit::startXfer(const Dtu::Command& cmd)
 
     assert(messageSize + sizeof(Dtu::MessageHeader) <= dtu.maxNocPacketSize);
 
-    // start the transfer of the payload
     NocAddr nocAddr(info.targetCoreId, info.targetEpId);
-    dtu.startTransfer(Dtu::TransferType::LOCAL_READ,
-                      nocAddr,
-                      messageAddr,
-                      messageSize,
-                      NULL,
-                      info.targetVpeId,
-                      header,
-                      dtu.startMsgTransferDelay);
+    uint flags = XferUnit::MESSAGE;
+
+    // start the transfer of the payload
+    auto *ev = new SendTransferEvent(
+        messageAddr, messageSize, flags, nocAddr, info.targetVpeId, header);
+    dtu.startTransfer(ev, dtu.startMsgTransferDelay);
 
     info.ready = false;
+}
+
+void
+MessageUnit::SendTransferEvent::transferStart()
+{
+    assert(header);
+
+    // note that this causes no additional delay because we assume that we
+    // create the header directly in the buffer (and if there is no one
+    // free we just wait until there is)
+    memcpy(data(), header, sizeof(*header));
+
+    // for the header
+    size(sizeof(*header));
+
+    delete header;
+    header = nullptr;
 }
 
 void
@@ -526,15 +540,9 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId)
         // atm, message receives can never cause pagefaults
         uint flags = XferUnit::XferFlags::MSGRECV | XferUnit::XferFlags::NOPF;
         Addr localAddr = ep.bufAddr + msgidx * ep.msgSize;
-        dtu.startTransfer(Dtu::TransferType::REMOTE_WRITE,
-                          NocAddr(0, 0),
-                          localAddr,
-                          pkt->getSize(),
-                          pkt,
-                          0,
-                          NULL,
-                          delay,
-                          flags);
+
+        auto *ev = new ReceiveTransferEvent(this, localAddr, flags, pkt);
+        dtu.startTransfer(ev, delay);
     }
     // ignore messages for other VPEs or if there is not enough space
     else
@@ -560,4 +568,15 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId)
     }
 
     return res;
+}
+
+void
+MessageUnit::ReceiveTransferEvent::transferDone(Dtu::Error result)
+{
+    Dtu::MessageHeader* header = pkt->getPtr<Dtu::MessageHeader>();
+    NocAddr addr(pkt->getAddr());
+
+    msgUnit->finishMsgReceive(addr.offset, localAddr(), header, result);
+
+    MemoryUnit::ReceiveTransferEvent::transferDone(result);
 }

@@ -102,6 +102,50 @@ MemoryUnit::startRead(const Dtu::Command& cmd)
 }
 
 void
+MemoryUnit::readComplete(const Dtu::Command& cmd, PacketPtr pkt, Dtu::Error error)
+{
+    dtu.printPacket(pkt);
+
+    Addr localAddr = dtu.regs().get(CmdReg::DATA_ADDR);
+    Addr requestSize = dtu.regs().get(CmdReg::DATA_SIZE);
+
+    requestSize -= pkt->getSize();
+
+    // since the transfer is done in steps, we can start after the header
+    // delay here
+    Cycles delay = dtu.ticksToCycles(pkt->headerDelay);
+
+    if (error != Dtu::Error::NONE)
+    {
+        dtu.scheduleFinishOp(delay, error);
+        return;
+    }
+
+    uint flags = (cmd.flags & Dtu::Command::NOPF)
+                 ? XferUnit::XferFlags::NOPF
+                 : 0;
+
+    auto xfer = new ReadTransferEvent(localAddr, flags, pkt);
+    dtu.startTransfer(xfer, delay);
+}
+
+void
+MemoryUnit::ReadTransferEvent::transferStart()
+{
+    // here is also no additional delay, because we are doing that in
+    // parallel and are already paying for it at other places
+    memcpy(data(), pkt->getPtr<uint8_t>(), pkt->getSize());
+}
+
+void
+MemoryUnit::ReadTransferEvent::transferDone(Dtu::Error result)
+{
+    dtu().scheduleFinishOp(Cycles(1), result);
+
+    dtu().freeRequest(pkt);
+}
+
+void
 MemoryUnit::startWrite(const Dtu::Command& cmd)
 {
     MemEp ep = dtu.regs().getMemEp(cmd.epid);
@@ -129,52 +173,38 @@ MemoryUnit::startWrite(const Dtu::Command& cmd)
     uint flags = (cmd.flags & Dtu::Command::NOPF)
                  ? XferUnit::XferFlags::NOPF
                  : 0;
+    NocAddr dest(ep.targetCore, ep.remoteAddr + offset);
 
-    dtu.startTransfer(Dtu::TransferType::LOCAL_READ,
-                      NocAddr(ep.targetCore, ep.remoteAddr + offset),
-                      localAddr,
-                      requestSize,
-                      NULL,
-                      ep.vpeId,
-                      NULL,
-                      Cycles(0),
-                      flags);
+    auto xfer = new WriteTransferEvent(
+        localAddr, requestSize, flags, dest, ep.vpeId);
+    dtu.startTransfer(xfer, Cycles(0));
 }
 
 void
-MemoryUnit::readComplete(const Dtu::Command& cmd, PacketPtr pkt, Dtu::Error error)
+MemoryUnit::WriteTransferEvent::transferDone(Dtu::Error result)
 {
-    dtu.printPacket(pkt);
-
-    Addr localAddr = dtu.regs().get(CmdReg::DATA_ADDR);
-    Addr requestSize = dtu.regs().get(CmdReg::DATA_SIZE);
-
-    requestSize -= pkt->getSize();
-
-    // since the transfer is done in steps, we can start after the header
-    // delay here
-    Cycles delay = dtu.ticksToCycles(pkt->headerDelay);
-
-    if (error != Dtu::Error::NONE)
+    if (result != Dtu::Error::NONE)
     {
-        dtu.scheduleFinishOp(delay, error);
-        return;
+        dtu().scheduleFinishOp(Cycles(1), result);
     }
+    else
+    {
+        auto pkt = dtu().generateRequest(dest.getAddr(),
+                                         size(),
+                                         MemCmd::WriteReq);
+        memcpy(pkt->getPtr<uint8_t>(), data(), size());
 
-    uint flags = (cmd.flags & Dtu::Command::NOPF)
-                 ? XferUnit::XferFlags::NOPF
-                 : 0;
+        Cycles delay = dtu().transferToNocLatency;
+        dtu().printPacket(pkt);
 
-    dtu.startTransfer(Dtu::TransferType::LOCAL_WRITE,
-                      // remote address is irrelevant
-                      NocAddr(0, 0),
-                      localAddr,
-                      pkt->getSize(),
-                      pkt,
-                      0,
-                      NULL,
-                      delay,
-                      flags);
+        Dtu::NocPacketType pktType;
+        if (flags() & XferUnit::MESSAGE)
+            pktType = Dtu::NocPacketType::MESSAGE;
+        else
+            pktType = Dtu::NocPacketType::WRITE_REQ;
+        uint cmdflags = (flags() & XferUnit::NOPF) ? Dtu::Command::NOPF : 0;
+        dtu().sendNocRequest(pktType, pkt, vpeId, cmdflags, delay);
+    }
 }
 
 void
@@ -252,18 +282,51 @@ MemoryUnit::recvFromNoc(PacketPtr pkt, uint vpeId, uint flags)
                                    : Dtu::TransferType::REMOTE_READ;
         uint xflags = (flags & Dtu::Command::NOPF) ? XferUnit::XferFlags::NOPF
                                                    : 0;
-        dtu.startTransfer(type,
-                          // remote address is irrelevant
-                          NocAddr(0, 0),
-                          // other remote is our local
-                          addr.offset,
-                          pkt->getSize(),
-                          pkt,
-                          0,
-                          NULL,
-                          delay,
-                          xflags);
+
+        auto *ev = new ReceiveTransferEvent(type, addr.offset, xflags, pkt);
+        dtu.startTransfer(ev, delay);
     }
 
     return Dtu::Error::NONE;
+}
+
+int
+MemoryUnit::ReceiveTransferEvent::senderCore() const
+{
+    auto state = dynamic_cast<Dtu::NocSenderState*>(pkt->senderState);
+    assert(state != NULL);
+    return state->sender;
+}
+
+void
+MemoryUnit::ReceiveTransferEvent::transferStart()
+{
+    // here is also no additional delay, because we are doing that in
+    // parallel and are already paying for it at other places
+    memcpy(data(), pkt->getPtr<uint8_t>(), pkt->getSize());
+}
+
+void
+MemoryUnit::ReceiveTransferEvent::transferDone(Dtu::Error result)
+{
+    // some requests from the cache (e.g. cleanEvict) do not need a
+    // response
+    if (pkt->needsResponse())
+    {
+        pkt->makeResponse();
+
+        if (pkt->isRead())
+            memcpy(pkt->getPtr<uint8_t>(), data(), size());
+
+        // set result
+        auto state = dynamic_cast<Dtu::NocSenderState*>(pkt->senderState);
+        if (result != Dtu::Error::NONE &&
+            dtu().regs().get(DtuReg::VPE_ID) == Dtu::INVALID_VPE_ID)
+            state->result = Dtu::Error::VPE_GONE;
+        else
+            state->result = result;
+
+        Cycles delay = dtu().transferToNocLatency;
+        dtu().schedNocResponse(pkt, dtu().clockEdge(delay));
+    }
 }

@@ -249,26 +249,13 @@ class Dtu : public BaseDtu
 
     void sendNocResponse(PacketPtr pkt);
 
-    void startTransfer(TransferType type,
-                       NocAddr targetAddr,
-                       Addr sourceAddr,
-                       Addr size,
-                       PacketPtr pkt = NULL,
-                       uint vpeId = 0,
-                       MessageHeader* header = NULL,
-                       Cycles delay = Cycles(0),
-                       uint flags = 0);
+    void startTransfer(void *event, Cycles delay);
 
     void startTranslate(Addr virt,
                         uint access,
                         PtUnit::Translation *trans);
 
     void abortTranslate(PtUnit::Translation *trans);
-
-    void finishMsgReceive(unsigned epId,
-                          Addr msgAddr,
-                          const MessageHeader *header,
-                          Error error);
 
     void handlePFResp(PacketPtr pkt);
 

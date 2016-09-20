@@ -717,34 +717,10 @@ Dtu::sendNocResponse(PacketPtr pkt)
 }
 
 void
-Dtu::startTransfer(TransferType type,
-                   NocAddr targetAddr,
-                   Addr sourceAddr,
-                   Addr size,
-                   PacketPtr pkt,
-                   uint vpeId,
-                   MessageHeader* header,
-                   Cycles delay,
-                   uint flags)
+Dtu::startTransfer(void *event, Cycles delay)
 {
-    xferUnit->startTransfer(type,
-                            targetAddr,
-                            sourceAddr,
-                            size,
-                            pkt,
-                            vpeId,
-                            header,
-                            delay,
-                            flags);
-}
-
-void
-Dtu::finishMsgReceive(unsigned epId,
-                      Addr msgAddr,
-                      const MessageHeader *header,
-                      Error error)
-{
-    msgUnit->finishMsgReceive(epId, msgAddr, header, error);
+    auto ev = reinterpret_cast<XferUnit::TransferEvent*>(event);
+    xferUnit->startTransfer(ev, delay);
 }
 
 void
@@ -837,9 +813,7 @@ Dtu::completeMemRequest(PacketPtr pkt)
     case MemReqType::TRANSFER:
         xferUnit->recvMemResponse(senderState->data,
                                   pkt->getConstPtr<uint8_t>(),
-                                  pkt->getSize(),
-                                  pkt->headerDelay,
-                                  pkt->payloadDelay);
+                                  pkt->getSize());
         break;
 
     case MemReqType::HEADER:

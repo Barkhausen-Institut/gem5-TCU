@@ -55,46 +55,108 @@ class XferUnit
         ABORT_ABORT,
     };
 
+    class TransferEvent;
+
   private:
 
-    struct Buffer;
-    struct Translation;
-
-    struct TransferEvent : public Event
+    struct Translation : PtUnit::Translation
     {
-        XferUnit& xfer;
+        TransferEvent& event;
+
+        Translation(TransferEvent& _event)
+            : event(_event)
+        {}
+
+        void abort();
+
+        void finished(bool success, const NocAddr &phys) override;
+    };
+
+    struct Buffer
+    {
+        Buffer(int _id, size_t size)
+            : id(_id),
+              event(),
+              bytes(new uint8_t[size]),
+              offset()
+        {
+        }
+
+        ~Buffer()
+        {
+            delete[] bytes;
+        }
+
+        int id;
+        TransferEvent *event;
+        uint8_t *bytes;
+        size_t offset;
+    };
+
+  public:
+
+    class TransferEvent : public Event
+    {
+        friend class XferUnit;
+
+      private:
+
+        XferUnit *xfer;
 
         Buffer *buf;
 
         uint64_t id;
         Cycles startCycle;
         Dtu::TransferType type;
-        Addr localAddr;
-        NocAddr remoteAddr;
-        size_t size;
-        PacketPtr pkt;
-        uint vpeId;
-        Dtu::MessageHeader* header;
-        uint flags;
+        Addr local;
+        size_t remaining;
+        uint xferFlags;
         Dtu::Error result;
         Translation *trans;
 
-        TransferEvent(XferUnit& _xfer)
-            : xfer(_xfer),
+      public:
+
+        TransferEvent(Dtu::TransferType _type,
+                      Addr _local,
+                      size_t _size,
+                      uint _flags = 0)
+            : xfer(),
               buf(),
               id(nextId++),
               startCycle(),
-              type(),
-              localAddr(),
-              remoteAddr(),
-              size(),
-              pkt(),
-              vpeId(),
-              header(),
-              flags(),
+              type(_type),
+              local(_local),
+              remaining(_size),
+              xferFlags(_flags),
               result(Dtu::Error::NONE),
               trans()
         {}
+
+        Dtu &dtu() { return xfer->dtu; }
+
+        uint flags() const { return xferFlags; }
+
+        Addr localAddr() const { return local; }
+
+        void *data() { return buf->bytes; }
+
+        const void *data() const { return buf->bytes; }
+
+        size_t size() const { return buf->offset; }
+
+        void size(size_t size) { buf->offset = size; }
+
+        const char* description() const override { return "TransferEvent"; }
+
+        const std::string name() const override { return xfer->dtu.name(); }
+
+        virtual int senderCore() const { return -1; }
+
+        virtual void transferStart() = 0;
+
+        virtual void transferDone(Dtu::Error result) = 0;
+
+      private:
 
         void finish()
         {
@@ -126,56 +188,8 @@ class XferUnit
 
         void abort(Dtu::Error error);
 
-        const char* description() const override { return "TransferEvent"; }
-
-        const std::string name() const override { return xfer.dtu.name(); }
-
         static uint64_t nextId;
     };
-
-    struct Translation : PtUnit::Translation
-    {
-        TransferEvent& event;
-
-        Translation(TransferEvent& _event)
-            : event(_event)
-        {}
-
-        void abort()
-        {
-            event.xfer.dtu.abortTranslate(this);
-        }
-
-        void finished(bool success, const NocAddr &phys) override
-        {
-            event.translateDone(success, phys);
-
-            delete this;
-        }
-    };
-
-    struct Buffer
-    {
-        Buffer(int _id, size_t size)
-            : id(_id),
-              event(),
-              bytes(new uint8_t[size]),
-              offset()
-        {
-        }
-
-        ~Buffer()
-        {
-            delete[] bytes;
-        }
-
-        int id;
-        TransferEvent *event;
-        uint8_t *bytes;
-        size_t offset;
-    };
-
-  public:
 
     XferUnit(Dtu &_dtu, size_t _blockSize, size_t _bufCount, size_t _bufSize);
 
@@ -183,23 +197,11 @@ class XferUnit
 
     void regStats();
 
-    void startTransfer(Dtu::TransferType type,
-                       NocAddr remoteAddr,
-                       Addr localAddr,
-                       size_t size,
-                       PacketPtr pkt,
-                       uint vpeId,
-                       Dtu::MessageHeader* header,
-                       Cycles delay,
-                       uint flags);
+    void startTransfer(TransferEvent *event, Cycles delay);
 
     size_t abortTransfers(AbortType type, int coreId, bool all = false);
 
-    void recvMemResponse(uint64_t evId,
-                         const void* data,
-                         size_t size,
-                         Tick headerDelay,
-                         Tick payloadDelay);
+    void recvMemResponse(uint64_t evId, const void* data, size_t size);
 
   private:
 
