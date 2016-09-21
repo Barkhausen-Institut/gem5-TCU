@@ -158,6 +158,7 @@ class Dtu : public BaseDtu
             ACK_MSG         = 6,
             SLEEP           = 7,
             DEBUG_MSG       = 8,
+            PRINT           = 9,
         };
 
         enum
@@ -214,6 +215,8 @@ class Dtu : public BaseDtu
 
     PacketPtr generateRequest(Addr addr, Addr size, MemCmd cmd);
     void freeRequest(PacketPtr pkt);
+
+    void printLine(Addr addr, Addr size);
 
     bool startSleep();
 

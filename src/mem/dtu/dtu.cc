@@ -57,6 +57,7 @@ static const char *cmdNames[] =
     "ACK_MSG",
     "SLEEP",
     "DEBUG_MSG",
+    "PRINT",
 };
 
 static const char *extCmdNames[] =
@@ -312,6 +313,10 @@ Dtu::executeCommand(PacketPtr pkt)
     case Command::SLEEP:
         if (!startSleep())
             finishCommand(Error::NONE);
+        break;
+    case Command::PRINT:
+        printLine(regs().get(CmdReg::DATA_ADDR), regs().get(CmdReg::DATA_SIZE));
+        finishCommand(Error::NONE);
         break;
     case Command::DEBUG_MSG:
         DPRINTF(Dtu, "DEBUG %#x\n", regs().get(CmdReg::OFFSET));
@@ -630,6 +635,52 @@ Dtu::injectIRQ(int vector)
     irqPending = true;
 
     irqInjects++;
+}
+
+void
+Dtu::printLine(Addr addr, Addr size)
+{
+    char buffer[256];
+    size_t pos = 0;
+    size_t rem = std::min(sizeof(buffer) - 1, size);
+    while (rem > 0)
+    {
+        size_t off = addr & (system->cacheLineSize() - 1);
+        size_t amount = std::min(rem, system->cacheLineSize() - off);
+
+
+        NocAddr phys(addr);
+        if(tlb())
+        {
+            DtuTlb::Result res = tlb()->lookup(addr, DtuTlb::READ, &phys);
+            assert(res != DtuTlb::PAGEFAULT);
+            assert(res != DtuTlb::NOMAP);
+
+            if(res == DtuTlb::MISS)
+            {
+                int xlate = ptUnit->translateFunctional(addr, DtuTlb::READ, &phys);
+                assert(xlate == 1);
+            }
+        }
+
+        auto pkt = generateRequest(phys.getAddr(), amount, MemCmd::ReadReq);
+        dcacheMasterPort.sendFunctional(pkt);
+
+        for(size_t i = 0; i < amount; ++i)
+        {
+            // ignore newlines. we have our own at the end
+            if(pkt->getPtr<char>()[i] != '\n')
+                buffer[pos++] = pkt->getPtr<char>()[i];
+        }
+
+        freeRequest(pkt);
+
+        rem -= amount;
+        addr += amount;
+    }
+    buffer[pos] = '\0';
+
+    DPRINTF(Dtu, "PRINT: %s\n", buffer);
 }
 
 void
