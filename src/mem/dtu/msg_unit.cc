@@ -404,8 +404,10 @@ found:
 }
 
 int
-MessageUnit::allocSlot(unsigned epid, RecvEp &ep)
+MessageUnit::allocSlot(size_t msgSize, unsigned epid, RecvEp &ep)
 {
+    assert(msgSize <= ep.msgSize);
+
     int i;
     for (i = ep.wrPos; i < ep.size; ++i)
     {
@@ -529,7 +531,8 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId)
     Dtu::Error res = Dtu::Error::NONE;
     uint16_t ourVpeId = dtu.regs().get(DtuReg::VPE_ID);
     int msgidx;
-    if (vpeId == ourVpeId && (msgidx = allocSlot(epId, ep)) != ep.size)
+    if (vpeId == ourVpeId &&
+        (msgidx = allocSlot(pkt->getSize(), epId, ep)) != ep.size)
     {
         // the message is transferred piece by piece; we can start as soon as
         // we have the header

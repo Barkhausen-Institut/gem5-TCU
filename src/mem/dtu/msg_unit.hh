@@ -162,7 +162,7 @@ class MessageUnit
                           Dtu::Error error);
 
   private:
-    int allocSlot(unsigned epid, RecvEp &ep);
+    int allocSlot(size_t msgSize, unsigned epid, RecvEp &ep);
 
     void requestHeader(unsigned epid);
 
