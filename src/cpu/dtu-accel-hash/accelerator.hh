@@ -78,7 +78,8 @@ class DtuAccelHash : public MemObject
     enum class State
     {
         IDLE,
-        READ_REP,
+        FETCH_MSG,
+        READ_MSG_ADDR,
         READ_MSG,
         READ_DATA,
         STORE_REPLY,
@@ -118,7 +119,6 @@ class DtuAccelHash : public MemObject
     size_t chunkSize;
 
     Algorithm algo;
-    Addr msgOffset;
     Addr msgAddr;
     Addr dataAddr;
     size_t dataSize;

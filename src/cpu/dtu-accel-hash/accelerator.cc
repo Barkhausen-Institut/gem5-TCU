@@ -39,7 +39,7 @@
 
 #include <iomanip>
 
-static const unsigned EP_RECV       = 3;
+static const unsigned EP_RECV       = 7;
 static const size_t MSG_SIZE        = 64;
 static const size_t BUF_SIZE        = 4096;
 static const size_t CLIENTS         = 8;
@@ -47,7 +47,8 @@ static const size_t CLIENTS         = 8;
 static const char *stateNames[] =
 {
     "IDLE",
-    "READ_REP",
+    "FETCH_MSG",
+    "READ_MSG_ADDR",
     "READ_MSG",
     "READ_DATA",
     "STORE_REPLY",
@@ -109,7 +110,7 @@ DtuAccelHash::DtuAccelHash(const DtuAccelHashParams *p)
     system(p->system),
     tickEvent(this),
     port("port", this),
-    state(State::READ_REP),
+    state(State::IDLE),
     algos(),
     chunkSize(system->cacheLineSize()),
     msgAddr(),
@@ -235,16 +236,18 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
                 break;
             }
 
-            case State::READ_REP:
+            case State::FETCH_MSG:
+            {
+                state = State::READ_MSG_ADDR;
+                break;
+            }
+            case State::READ_MSG_ADDR:
             {
                 const RegFile::reg_t *regs = pkt->getConstPtr<RegFile::reg_t>();
-                // TODO we need to use GET_MSG
-                if ((regs[0] & 0xFFFF) > 0)
+                if(regs[0])
                 {
-                    msgOffset = (regs[2] >> 16) & 0xFFFF;
-                    msgAddr = regs[1] + msgOffset;
-                    DPRINTF(DtuAccel, "Received message @ %p+%x\n",
-                        msgAddr, msgOffset);
+                    msgAddr = regs[0];
+                    DPRINTF(DtuAccel, "Received message @ %p\n", msgAddr);
                     state = State::READ_MSG;
                 }
                 else
@@ -331,7 +334,7 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
             }
             case State::ACK_MSG:
             {
-                state = State::READ_REP;
+                state = State::FETCH_MSG;
                 break;
             }
         }
@@ -350,7 +353,7 @@ DtuAccelHash::wakeup()
 {
     if (state == State::IDLE)
     {
-        state = State::READ_REP;
+        state = State::FETCH_MSG;
         schedule(tickEvent, clockEdge(Cycles(1)));
     }
 }
@@ -369,11 +372,17 @@ DtuAccelHash::tick()
         {
             break;
         }
-        case State::READ_REP:
+        case State::FETCH_MSG:
         {
-            pkt = createPacket(reg_base + getRegAddr(0, EP_RECV),
-                               sizeof(RegFile::reg_t) * 3,
-                               MemCmd::ReadReq);
+            Addr regAddr = getRegAddr(CmdReg::COMMAND);
+            uint64_t value = Dtu::Command::FETCH_MSG | (EP_RECV << 4);
+            pkt = createDtuRegisterPkt(regAddr, value, MemCmd::WriteReq);
+            break;
+        }
+        case State::READ_MSG_ADDR:
+        {
+            Addr regAddr = getRegAddr(CmdReg::OFFSET);
+            pkt = createDtuRegisterPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }
         case State::READ_MSG:
@@ -410,11 +419,11 @@ DtuAccelHash::tick()
                                MemCmd::WriteReq);
 
             RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
-            regs[0] = Dtu::Command::REPLY | (EP_RECV << 3);
+            regs[0] = Dtu::Command::REPLY | (EP_RECV << 4);
             regs[1] = 0;
             regs[2] = getBufAddr(CLIENTS);
             regs[3] = sizeof(uint64_t) + reply.count;
-            regs[4] = msgOffset;
+            regs[4] = msgAddr;
             break;
         }
         case State::REPLY_WAIT:
@@ -425,10 +434,16 @@ DtuAccelHash::tick()
         }
         case State::ACK_MSG:
         {
-            // TODO this is currently broken (OFFSET needs to be written)
-            Addr regAddr = getRegAddr(CmdReg::COMMAND);
-            uint64_t val = Dtu::Command::ACK_MSG | (EP_RECV << 3);
-            pkt = createDtuRegisterPkt(regAddr, val, MemCmd::WriteReq);
+            pkt = createPacket(reg_base + getRegAddr(CmdReg::COMMAND),
+                               sizeof(RegFile::reg_t) * 5,
+                               MemCmd::WriteReq);
+
+            RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
+            regs[0] = Dtu::Command::ACK_MSG | (EP_RECV << 4);
+            regs[1] = 0;
+            regs[2] = 0;
+            regs[3] = 0;
+            regs[4] = msgAddr;
             break;
         }
     }
