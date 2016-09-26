@@ -137,8 +137,6 @@ class XferUnit
 
         uint flags() const { return xferFlags; }
 
-        Addr localAddr() const { return local; }
-
         void *data() { return buf->bytes; }
 
         const void *data() const { return buf->bytes; }

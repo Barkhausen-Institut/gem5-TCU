@@ -93,6 +93,7 @@ class MessageUnit
     class ReceiveTransferEvent : public MemoryUnit::ReceiveTransferEvent
     {
         MessageUnit *msgUnit;
+        Addr msgAddr;
 
       public:
 
@@ -102,7 +103,7 @@ class MessageUnit
                              PacketPtr pkt)
             : MemoryUnit::ReceiveTransferEvent(
                 Dtu::TransferType::REMOTE_WRITE, local, flags, pkt),
-              msgUnit(_msgUnit)
+              msgUnit(_msgUnit), msgAddr(local)
         {}
 
         void transferDone(Dtu::Error result) override;

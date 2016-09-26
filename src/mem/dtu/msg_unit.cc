@@ -579,7 +579,7 @@ MessageUnit::ReceiveTransferEvent::transferDone(Dtu::Error result)
     Dtu::MessageHeader* header = pkt->getPtr<Dtu::MessageHeader>();
     NocAddr addr(pkt->getAddr());
 
-    msgUnit->finishMsgReceive(addr.offset, localAddr(), header, result);
+    msgUnit->finishMsgReceive(addr.offset, msgAddr, header, result);
 
     MemoryUnit::ReceiveTransferEvent::transferDone(result);
 }

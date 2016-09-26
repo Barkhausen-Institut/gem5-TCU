@@ -136,7 +136,7 @@ XferUnit::TransferEvent::tryStart()
             "Delaying %s transfer of %lu bytes @ %p [flags=%s]\n",
             isWrite() ? "mem-write" : "mem-read",
             remaining,
-            localAddr(),
+            local,
             decodeFlags(flags()));
 
         xfer->delays++;
@@ -151,7 +151,7 @@ XferUnit::TransferEvent::tryStart()
         buf->id,
         isWrite() ? "mem-write" : "mem-read",
         remaining,
-        localAddr(),
+        local,
         decodeFlags(flags()));
 
     // should we abort the next request from this core?
@@ -179,13 +179,13 @@ XferUnit::TransferEvent::process()
         return;
     }
 
-    NocAddr phys(localAddr());
+    NocAddr phys(local);
     if (xfer->dtu.tlb() && !(flags() & NOXLATE))
     {
         uint access = isWrite() ? DtuTlb::WRITE : DtuTlb::READ;
         access |= isRemote() ? 0 : DtuTlb::INTERN;
 
-        DtuTlb::Result res = xfer->dtu.tlb()->lookup(localAddr(), access, &phys);
+        DtuTlb::Result res = xfer->dtu.tlb()->lookup(local, access, &phys);
         if (res != DtuTlb::HIT)
         {
             if (res == DtuTlb::PAGEFAULT)
@@ -201,7 +201,7 @@ XferUnit::TransferEvent::process()
 
             assert(res != DtuTlb::NOMAP);
             trans = new Translation(*this);
-            xfer->dtu.startTranslate(localAddr(), access, trans);
+            xfer->dtu.startTranslate(local, access, trans);
             return;
         }
     }
@@ -227,7 +227,7 @@ XferUnit::TransferEvent::translateDone(bool success, const NocAddr &phys)
 
     assert(remaining > 0);
 
-    Addr localOff = localAddr() & (xfer->blockSize - 1);
+    Addr localOff = local & (xfer->blockSize - 1);
     Addr reqSize = std::min(remaining, xfer->blockSize - localOff);
 
     auto cmd = isWrite() ? MemCmd::WriteReq : MemCmd::ReadReq;
@@ -247,11 +247,11 @@ XferUnit::TransferEvent::translateDone(bool success, const NocAddr &phys)
         buf->id,
         isWrite() ? "Writing" : "Reading",
         reqSize,
-        localAddr(),
+        local,
         phys.getAddr());
 
     xfer->dtu.sendMemRequest(pkt,
-                            localAddr(),
+                            local,
                             id,
                             Dtu::MemReqType::TRANSFER,
                             xfer->dtu.transferToMemRequestLatency);
