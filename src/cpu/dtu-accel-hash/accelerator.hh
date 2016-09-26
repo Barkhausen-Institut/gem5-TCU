@@ -118,6 +118,7 @@ class DtuAccelHash : public MemObject
 
     size_t chunkSize;
 
+    uint client;
     Algorithm algo;
     Addr msgAddr;
     Addr dataAddr;

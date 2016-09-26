@@ -262,9 +262,10 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
                     reinterpret_cast<const uint64_t*>(
                         pkt_data + sizeof(Dtu::MessageHeader));
 
+                client = header->label;
                 DPRINTF(DtuAccel, "  label=%p algo=%d size=%p\n",
-                    header->label, args[0], args[1]);
-                dataAddr = getBufAddr(header->label);
+                    client, args[0], args[1]);
+                dataAddr = getBufAddr(client);
                 if (header->length != sizeof(uint64_t) * 2 ||
                     static_cast<Algorithm>(args[0]) >= Algorithm::COUNT ||
                     args[1] > BUF_SIZE ||
@@ -400,7 +401,7 @@ DtuAccelHash::tick()
         {
             size_t rem = sizeof(uint64_t) + reply.count - replyOffset;
             size_t size = std::min(chunkSize, rem);
-            pkt = createPacket(getBufAddr(CLIENTS) + replyOffset,
+            pkt = createPacket(getBufAddr(client) + replyOffset,
                                size,
                                MemCmd::WriteReq);
             memcpy(pkt->getPtr<uint8_t>(), (char*)&reply + replyOffset, size);
@@ -421,7 +422,7 @@ DtuAccelHash::tick()
             RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
             regs[0] = Dtu::Command::REPLY | (EP_RECV << 4);
             regs[1] = 0;
-            regs[2] = getBufAddr(CLIENTS);
+            regs[2] = getBufAddr(client);
             regs[3] = sizeof(uint64_t) + reply.count;
             regs[4] = msgAddr;
             break;
