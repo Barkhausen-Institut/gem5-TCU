@@ -35,7 +35,7 @@
 uint64_t PtUnit::TranslateEvent::nextId = 0;
 
 PtUnit::PtUnit(Dtu& _dtu)
-    : dtu(_dtu), lastPfAddr(-1), lastPfCnt(0), translations(), pfqueue()
+    : dtu(_dtu), translations(), pfqueue()
 {}
 
 void
@@ -153,8 +153,6 @@ PtUnit::TranslateEvent::finish(bool success, const NocAddr &addr)
     assert(it != unit.translations.end());
     unit.translations.erase(it);
 
-    if (!success)
-        unit.resolveFailed(virt);
     unit.nextPagefault(this);
 
     unit.walks.sample(unit.dtu.curCycle() - startCycle);
@@ -492,25 +490,6 @@ PtUnit::finishTranslate(PacketPtr pkt,
     *access = static_cast<uint>((uint64_t)e->ixwr);
     *phys = e->base << DtuTlb::PAGE_BITS;
     return true;
-}
-
-void
-PtUnit::resolveFailed(Addr virt)
-{
-    if (virt == lastPfAddr)
-    {
-        if (++lastPfCnt == 100)
-        {
-            dtu.regs().set(DtuReg::LAST_PF, virt);
-            // TODO make the vector configurable
-            dtu.injectIRQ(0x41);
-        }
-    }
-    else
-    {
-        lastPfAddr = virt;
-        lastPfCnt = 1;
-    }
 }
 
 void

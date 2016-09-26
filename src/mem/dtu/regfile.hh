@@ -42,7 +42,6 @@ enum class DtuReg : Addr
     FEATURES,
     ROOT_PT,
     PF_EP,
-    LAST_PF,
     RW_BARRIER,
     VPE_ID,
     CUR_TIME,
@@ -57,7 +56,7 @@ enum class Features
     PAGEFAULTS  = 1 << 1,
 };
 
-constexpr unsigned numDtuRegs = 10;
+constexpr unsigned numDtuRegs = 9;
 
 // registers to issue a command
 enum class CmdReg : Addr

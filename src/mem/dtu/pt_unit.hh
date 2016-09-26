@@ -171,13 +171,7 @@ class PtUnit
                          uint *access,
                          Addr *phys);
 
-    void resolveFailed(Addr virt);
-
     Dtu& dtu;
-
-    Addr lastPfAddr;
-
-    int lastPfCnt;
 
     std::list<TranslateEvent*> translations;
     std::list<TranslateEvent*> pfqueue;
