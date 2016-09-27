@@ -205,6 +205,39 @@ DtuAccelHash::createDtuRegisterPkt(Addr reg,
     return pkt;
 }
 
+PacketPtr
+DtuAccelHash::createCmdPacket(uint64_t cmd,
+                              uint64_t data,
+                              uint64_t size,
+                              uint64_t off)
+{
+    static_assert(static_cast<int>(CmdReg::COMMAND) == 0, "");
+    static_assert(static_cast<int>(CmdReg::ABORT) == 1, "");
+    static_assert(static_cast<int>(CmdReg::DATA_ADDR) == 2, "");
+    static_assert(static_cast<int>(CmdReg::DATA_SIZE) == 3, "");
+    static_assert(static_cast<int>(CmdReg::OFFSET) == 4, "");
+
+    auto pkt = createPacket(reg_base + getRegAddr(CmdReg::COMMAND),
+                            sizeof(RegFile::reg_t) * 5,
+                            MemCmd::WriteReq);
+
+    RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
+    regs[0] = cmd;
+    regs[1] = 0;
+    regs[2] = data;
+    regs[3] = size;
+    regs[4] = off;
+    return pkt;
+}
+
+void
+DtuAccelHash::freePacket(PacketPtr pkt)
+{
+    delete pkt->req;
+    // the packet will delete the data
+    delete pkt;
+}
+
 void
 DtuAccelHash::completeRequest(PacketPtr pkt)
 {
@@ -360,9 +393,7 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
         }
     }
 
-    delete pkt->req;
-    // the packet will delete the data
-    delete pkt;
+    freePacket(pkt);
 
     // kick things into action again
     schedule(tickEvent, clockEdge(Cycles(1)));
@@ -469,22 +500,10 @@ DtuAccelHash::tick()
         }
         case State::SEND_REPLY:
         {
-            static_assert(static_cast<int>(CmdReg::COMMAND) == 0, "");
-            static_assert(static_cast<int>(CmdReg::ABORT) == 1, "");
-            static_assert(static_cast<int>(CmdReg::DATA_ADDR) == 2, "");
-            static_assert(static_cast<int>(CmdReg::DATA_SIZE) == 3, "");
-            static_assert(static_cast<int>(CmdReg::OFFSET) == 4, "");
-
-            pkt = createPacket(reg_base + getRegAddr(CmdReg::COMMAND),
-                               sizeof(RegFile::reg_t) * 5,
-                               MemCmd::WriteReq);
-
-            RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
-            regs[0] = Dtu::Command::REPLY | (EP_RECV << 4);
-            regs[1] = 0;
-            regs[2] = BUF_ADDR;
-            regs[3] = sizeof(uint64_t) + reply.count;
-            regs[4] = msgAddr;
+            pkt = createCmdPacket(Dtu::Command::REPLY | (EP_RECV << 4),
+                                  BUF_ADDR,
+                                  sizeof(uint64_t) + reply.count,
+                                  msgAddr);
             break;
         }
         case State::REPLY_WAIT:
@@ -495,16 +514,10 @@ DtuAccelHash::tick()
         }
         case State::ACK_MSG:
         {
-            pkt = createPacket(reg_base + getRegAddr(CmdReg::COMMAND),
-                               sizeof(RegFile::reg_t) * 5,
-                               MemCmd::WriteReq);
-
-            RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
-            regs[0] = Dtu::Command::ACK_MSG | (EP_RECV << 4);
-            regs[1] = 0;
-            regs[2] = 0;
-            regs[3] = 0;
-            regs[4] = msgAddr;
+            pkt = createCmdPacket(Dtu::Command::ACK_MSG | (EP_RECV << 4),
+                                  0,
+                                  0,
+                                  msgAddr);
             break;
         }
     }

@@ -67,7 +67,8 @@ class DtuAccelHash : public MemObject
         void recvReqRetry() override;
     };
 
-    enum RCTMuxCtrl {
+    enum RCTMuxCtrl
+    {
         NONE    = 0,
         INIT    = 1 << 0, // set during first restore
         STORE   = 1 << 1, // store operation required
@@ -108,6 +109,10 @@ class DtuAccelHash : public MemObject
     PacketPtr createPacket(Addr paddr, size_t size, MemCmd cmd);
 
     PacketPtr createDtuRegisterPkt(Addr reg, RegFile::reg_t value, MemCmd cmd);
+
+    PacketPtr createCmdPacket(uint64_t cmd, uint64_t data, uint64_t size, uint64_t off);
+
+    void freePacket(PacketPtr pkt);
 
     bool sendPkt(PacketPtr pkt);
 
