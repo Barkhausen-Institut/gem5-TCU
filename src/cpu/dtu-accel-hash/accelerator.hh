@@ -44,6 +44,8 @@ class DtuAccelHash : public MemObject
     BaseMasterPort& getMasterPort(const std::string &if_name,
                                   PortID idx = InvalidPortID) override;
 
+    void interrupt();
+
     void wakeup();
 
   protected:
@@ -63,6 +65,16 @@ class DtuAccelHash : public MemObject
         bool recvTimingResp(PacketPtr pkt) override;
 
         void recvReqRetry() override;
+    };
+
+    enum RCTMuxCtrl {
+        NONE    = 0,
+        INIT    = 1 << 0, // set during first restore
+        STORE   = 1 << 1, // store operation required
+        RESTORE = 1 << 2, // restore operation required
+        WAITING = 1 << 3, // set by the kernel if a signal is required
+        SIGNAL  = 1 << 4, // used to signal completion to the kernel
+        BLOCK   = 1 << 5, // used to tell the kernel that we can be blocked
     };
 
     enum class Algorithm
@@ -86,6 +98,11 @@ class DtuAccelHash : public MemObject
         SEND_REPLY,
         REPLY_WAIT,
         ACK_MSG,
+
+        CTX_SAVE,
+        CTX_WAIT,
+        CTX_CHECK,
+        CTX_RESTORE,
     };
 
     PacketPtr createPacket(Addr paddr, size_t size, MemCmd cmd);
@@ -113,6 +130,8 @@ class DtuAccelHash : public MemObject
     DtuAccelHashAlgorithm *algos[5];
 
     size_t chunkSize;
+
+    bool irqPending;
 
     State state;
 

@@ -42,7 +42,9 @@
 static const unsigned EP_RECV       = 7;
 static const size_t MSG_SIZE        = 64;
 static const size_t BUF_SIZE        = 4096;
-static const Addr BUF_ADDR          = DtuTlb::PAGE_SIZE;
+static const Addr BUF_ADDR          = 0x3000;
+
+static const Addr RCTMUX_FLAGS      = 0x2ff8;
 
 static const char *stateNames[] =
 {
@@ -55,6 +57,10 @@ static const char *stateNames[] =
     "SEND_REPLY",
     "REPLY_WAIT",
     "ACK_MSG",
+
+    "CTX_SAVE",
+    "CTX_WAIT",
+    "CTX_RESTORE",
 };
 
 Addr
@@ -105,6 +111,7 @@ DtuAccelHash::DtuAccelHash(const DtuAccelHashParams *p)
     port("port", this),
     algos(),
     chunkSize(system->cacheLineSize()),
+    irqPending(false),
     state(State::IDLE),
     msgAddr(),
     masterId(system->getMasterId(name())),
@@ -224,8 +231,29 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
         switch(state)
         {
             case State::IDLE:
+            case State::CTX_WAIT:
             {
                 assert(false);
+                break;
+            }
+
+            case State::CTX_SAVE:
+            {
+                state = State::CTX_WAIT;
+                break;
+            }
+            case State::CTX_CHECK:
+            {
+                uint64_t val = *pkt->getConstPtr<uint64_t>();
+                if(val & RCTMuxCtrl::WAITING)
+                    state = State::CTX_RESTORE;
+                else
+                    state = State::FETCH_MSG;
+                break;
+            }
+            case State::CTX_RESTORE:
+            {
+                state = State::FETCH_MSG;
                 break;
             }
 
@@ -326,7 +354,7 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
             }
             case State::ACK_MSG:
             {
-                state = State::FETCH_MSG;
+                state = State::CTX_CHECK;
                 break;
             }
         }
@@ -341,11 +369,23 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
 }
 
 void
-DtuAccelHash::wakeup()
+DtuAccelHash::interrupt()
 {
     if (state == State::IDLE)
     {
-        state = State::FETCH_MSG;
+        state = State::CTX_SAVE;
+        schedule(tickEvent, clockEdge(Cycles(1)));
+    }
+    else
+        irqPending = true;
+}
+
+void
+DtuAccelHash::wakeup()
+{
+    if (state == State::IDLE || state == State::CTX_WAIT)
+    {
+        state = State::CTX_CHECK;
         schedule(tickEvent, clockEdge(Cycles(1)));
     }
 }
@@ -361,14 +401,43 @@ DtuAccelHash::tick()
     switch(state)
     {
         case State::IDLE:
+        case State::CTX_WAIT:
         {
             break;
         }
+
+        case State::CTX_SAVE:
+        {
+            pkt = createPacket(RCTMUX_FLAGS, sizeof(uint64_t), MemCmd::WriteReq);
+            *pkt->getPtr<uint64_t>() = RCTMuxCtrl::SIGNAL;
+            break;
+        }
+        case State::CTX_CHECK:
+        {
+            pkt = createPacket(RCTMUX_FLAGS, sizeof(uint64_t), MemCmd::ReadReq);
+            break;
+        }
+        case State::CTX_RESTORE:
+        {
+            pkt = createPacket(RCTMUX_FLAGS, sizeof(uint64_t), MemCmd::WriteReq);
+            *pkt->getPtr<uint64_t>() = RCTMuxCtrl::SIGNAL;
+            break;
+        }
+
         case State::FETCH_MSG:
         {
-            Addr regAddr = getRegAddr(CmdReg::COMMAND);
-            uint64_t value = Dtu::Command::FETCH_MSG | (EP_RECV << 4);
-            pkt = createDtuRegisterPkt(regAddr, value, MemCmd::WriteReq);
+            if (irqPending)
+            {
+                irqPending = false;
+                state = State::CTX_SAVE;
+                schedule(tickEvent, clockEdge(Cycles(1)));
+            }
+            else
+            {
+                Addr regAddr = getRegAddr(CmdReg::COMMAND);
+                uint64_t value = Dtu::Command::FETCH_MSG | (EP_RECV << 4);
+                pkt = createDtuRegisterPkt(regAddr, value, MemCmd::WriteReq);
+            }
             break;
         }
         case State::READ_MSG_ADDR:

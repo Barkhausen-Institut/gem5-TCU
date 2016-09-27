@@ -38,6 +38,13 @@ DtuAccelHashConnector::DtuAccelHashConnector(const DtuAccelHashConnectorParams *
 }
 
 void
+DtuAccelHashConnector::injectIrq(unsigned)
+{
+    DPRINTF(DtuConnector, "Sending interrupt signal to accelerator\n");
+    acc->interrupt();
+}
+
+void
 DtuAccelHashConnector::wakeup()
 {
     DPRINTF(DtuConnector, "Waking up accelerator\n");
