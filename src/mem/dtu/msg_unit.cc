@@ -528,49 +528,44 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId)
             sysNo < total ? syscallNames[sysNo] : "Unknown");
     }
 
-    Dtu::Error res = Dtu::Error::NONE;
     uint16_t ourVpeId = dtu.regs().get(DtuReg::VPE_ID);
-    int msgidx;
-    if (vpeId == ourVpeId &&
-        (msgidx = allocSlot(pkt->getSize(), epId, ep)) != ep.size)
+    if (vpeId != ourVpeId)
     {
-        // the message is transferred piece by piece; we can start as soon as
-        // we have the header
-        Cycles delay = dtu.ticksToCycles(pkt->headerDelay);
-        pkt->headerDelay = 0;
-        delay += dtu.nocToTransferLatency;
-
-        // atm, message receives can never cause pagefaults
-        uint flags = XferUnit::XferFlags::MSGRECV | XferUnit::XferFlags::NOPF;
-        Addr localAddr = ep.bufAddr + msgidx * ep.msgSize;
-
-        auto *ev = new ReceiveTransferEvent(this, localAddr, flags, pkt);
-        dtu.startTransfer(ev, delay);
-    }
-    // ignore messages for other VPEs or if there is not enough space
-    else
-    {
-        if (vpeId != ourVpeId)
-        {
-            DPRINTFS(Dtu, (&dtu),
-                "EP%u: received message for VPE %u, but VPE %u is running\n",
-                epId, vpeId, ourVpeId);
-            res = Dtu::Error::VPE_GONE;
-            wrongVPE++;
-        }
-        else
-        {
-            DPRINTFS(Dtu, (&dtu),
-                "EP%u: ignoring message: no space left\n",
-                epId);
-            res = Dtu::Error::NO_RING_SPACE;
-            noSpace++;
-        }
+        DPRINTFS(Dtu, (&dtu),
+            "EP%u: received message for VPE %u, but VPE %u is running\n",
+            epId, vpeId, ourVpeId);
+        wrongVPE++;
 
         dtu.sendNocResponse(pkt);
+        return Dtu::Error::VPE_GONE;
     }
 
-    return res;
+    int msgidx = allocSlot(pkt->getSize(), epId, ep);
+    if (msgidx == ep.size)
+    {
+        DPRINTFS(Dtu, (&dtu),
+            "EP%u: ignoring message: no space left\n",
+            epId);
+        noSpace++;
+
+        dtu.sendNocResponse(pkt);
+        return Dtu::Error::NO_RING_SPACE;
+    }
+
+    // the message is transferred piece by piece; we can start as soon as
+    // we have the header
+    Cycles delay = dtu.ticksToCycles(pkt->headerDelay);
+    pkt->headerDelay = 0;
+    delay += dtu.nocToTransferLatency;
+
+    // atm, message receives can never cause pagefaults
+    uint flags = XferUnit::XferFlags::MSGRECV | XferUnit::XferFlags::NOPF;
+    Addr localAddr = ep.bufAddr + msgidx * ep.msgSize;
+
+    auto *ev = new ReceiveTransferEvent(this, localAddr, flags, pkt);
+    dtu.startTransfer(ev, delay);
+
+    return Dtu::Error::NONE;
 }
 
 void
