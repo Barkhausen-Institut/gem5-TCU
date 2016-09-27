@@ -292,39 +292,39 @@ Dtu::executeCommand(PacketPtr pkt)
 
     switch (cmd.opcode)
     {
-    case Command::SEND:
-    case Command::REPLY:
-        msgUnit->startTransmission(cmd);
-        break;
-    case Command::READ:
-        memUnit->startRead(cmd);
-        break;
-    case Command::WRITE:
-        memUnit->startWrite(cmd);
-        break;
-    case Command::FETCH_MSG:
-        regs().set(CmdReg::OFFSET, msgUnit->fetchMessage(cmd.epid));
-        finishCommand(Error::NONE);
-        break;
-    case Command::ACK_MSG:
-        msgUnit->ackMessage(cmd.epid);
-        finishCommand(Error::NONE);
-        break;
-    case Command::SLEEP:
-        if (!startSleep())
+        case Command::SEND:
+        case Command::REPLY:
+            msgUnit->startTransmission(cmd);
+            break;
+        case Command::READ:
+            memUnit->startRead(cmd);
+            break;
+        case Command::WRITE:
+            memUnit->startWrite(cmd);
+            break;
+        case Command::FETCH_MSG:
+            regs().set(CmdReg::OFFSET, msgUnit->fetchMessage(cmd.epid));
             finishCommand(Error::NONE);
-        break;
-    case Command::PRINT:
-        printLine(regs().get(CmdReg::DATA_ADDR), regs().get(CmdReg::DATA_SIZE));
-        finishCommand(Error::NONE);
-        break;
-    case Command::DEBUG_MSG:
-        DPRINTF(Dtu, "DEBUG %#x\n", regs().get(CmdReg::OFFSET));
-        finishCommand(Error::NONE);
-        break;
-    default:
-        // TODO error handling
-        panic("Invalid opcode %#x\n", static_cast<RegFile::reg_t>(cmd.opcode));
+            break;
+        case Command::ACK_MSG:
+            msgUnit->ackMessage(cmd.epid);
+            finishCommand(Error::NONE);
+            break;
+        case Command::SLEEP:
+            if (!startSleep())
+                finishCommand(Error::NONE);
+            break;
+        case Command::PRINT:
+            printLine(regs().get(CmdReg::DATA_ADDR), regs().get(CmdReg::DATA_SIZE));
+            finishCommand(Error::NONE);
+            break;
+        case Command::DEBUG_MSG:
+            DPRINTF(Dtu, "DEBUG %#x\n", regs().get(CmdReg::OFFSET));
+            finishCommand(Error::NONE);
+            break;
+        default:
+            // TODO error handling
+            panic("Invalid opcode %#x\n", static_cast<RegFile::reg_t>(cmd.opcode));
     }
 
     if(cmd.opcode == Command::SEND || cmd.opcode == Command::REPLY ||
@@ -498,29 +498,29 @@ Dtu::executeExternCommand(PacketPtr pkt)
 
     switch (cmd.opcode)
     {
-    case ExternCommand::IDLE:
-        break;
-    case ExternCommand::WAKEUP_CORE:
-        wakeupCore();
-        break;
-    case ExternCommand::INV_PAGE:
-        if (tlb())
-            tlb()->remove(cmd.arg);
-        break;
-    case ExternCommand::INV_TLB:
-        if (tlb())
-            tlb()->clear();
-        break;
-    case ExternCommand::INJECT_IRQ:
-        wakeupCore();
-        injectIRQ(cmd.arg);
-        break;
-    case ExternCommand::RESET:
-        delay += reset(cmd.arg);
-        break;
-    default:
-        // TODO error handling
-        panic("Invalid opcode %#x\n", static_cast<RegFile::reg_t>(cmd.opcode));
+        case ExternCommand::IDLE:
+            break;
+        case ExternCommand::WAKEUP_CORE:
+            wakeupCore();
+            break;
+        case ExternCommand::INV_PAGE:
+            if (tlb())
+                tlb()->remove(cmd.arg);
+            break;
+        case ExternCommand::INV_TLB:
+            if (tlb())
+                tlb()->clear();
+            break;
+        case ExternCommand::INJECT_IRQ:
+            wakeupCore();
+            injectIRQ(cmd.arg);
+            break;
+        case ExternCommand::RESET:
+            delay += reset(cmd.arg);
+            break;
+        default:
+            // TODO error handling
+            panic("Invalid opcode %#x\n", static_cast<RegFile::reg_t>(cmd.opcode));
     }
 
     if (pkt)
@@ -868,19 +868,19 @@ Dtu::completeMemRequest(PacketPtr pkt)
 
     switch(senderState->type)
     {
-    case MemReqType::TRANSFER:
-        xferUnit->recvMemResponse(senderState->data,
-                                  pkt->getConstPtr<uint8_t>(),
-                                  pkt->getSize());
-        break;
+        case MemReqType::TRANSFER:
+            xferUnit->recvMemResponse(senderState->data,
+                                      pkt->getConstPtr<uint8_t>(),
+                                      pkt->getSize());
+            break;
 
-    case MemReqType::HEADER:
-        msgUnit->recvFromMem(getCommand(), pkt);
-        break;
+        case MemReqType::HEADER:
+            msgUnit->recvFromMem(getCommand(), pkt);
+            break;
 
-    case MemReqType::TRANSLATION:
-        ptUnit->recvFromMem(senderState->data, pkt);
-        break;
+        case MemReqType::TRANSLATION:
+            ptUnit->recvFromMem(senderState->data, pkt);
+            break;
     }
 
     checkWatchRange(pkt);
@@ -907,31 +907,31 @@ Dtu::handleNocRequest(PacketPtr pkt)
 
     switch (senderState->packetType)
     {
-    case NocPacketType::MESSAGE:
-    case NocPacketType::PAGEFAULT:
-        nocMsgRecvs++;
-        res = msgUnit->recvFromNoc(pkt, senderState->vpeId);
-        break;
-    case NocPacketType::READ_REQ:
-    case NocPacketType::WRITE_REQ:
-    case NocPacketType::CACHE_MEM_REQ:
-        if (senderState->packetType == NocPacketType::READ_REQ)
-            nocReadRecvs++;
-        else if (senderState->packetType == NocPacketType::WRITE_REQ)
-            nocWriteRecvs++;
-        res = memUnit->recvFromNoc(pkt, senderState->vpeId, senderState->flags);
-        break;
-    case NocPacketType::CACHE_MEM_REQ_FUNC:
-        memUnit->recvFunctionalFromNoc(pkt);
-        break;
-    case NocPacketType::ABORT:
-        xferUnit->abortTransfers(XferUnit::ABORT_REMOTE, senderState->sender);
-        break;
-    case NocPacketType::ABORT_ABORT:
-        xferUnit->abortTransfers(XferUnit::ABORT_ABORT, senderState->sender);
-        break;
-    default:
-        panic("Unexpected NocPacketType\n");
+        case NocPacketType::MESSAGE:
+        case NocPacketType::PAGEFAULT:
+            nocMsgRecvs++;
+            res = msgUnit->recvFromNoc(pkt, senderState->vpeId);
+            break;
+        case NocPacketType::READ_REQ:
+        case NocPacketType::WRITE_REQ:
+        case NocPacketType::CACHE_MEM_REQ:
+            if (senderState->packetType == NocPacketType::READ_REQ)
+                nocReadRecvs++;
+            else if (senderState->packetType == NocPacketType::WRITE_REQ)
+                nocWriteRecvs++;
+            res = memUnit->recvFromNoc(pkt, senderState->vpeId, senderState->flags);
+            break;
+        case NocPacketType::CACHE_MEM_REQ_FUNC:
+            memUnit->recvFunctionalFromNoc(pkt);
+            break;
+        case NocPacketType::ABORT:
+            xferUnit->abortTransfers(XferUnit::ABORT_REMOTE, senderState->sender);
+            break;
+        case NocPacketType::ABORT_ABORT:
+            xferUnit->abortTransfers(XferUnit::ABORT_ABORT, senderState->sender);
+            break;
+        default:
+            panic("Unexpected NocPacketType\n");
     }
 
     senderState->result = res;
