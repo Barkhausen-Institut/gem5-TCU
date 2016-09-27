@@ -127,7 +127,7 @@ class MessageUnit
     /**
      * Received a message from NoC -> Mem request
      */
-    Dtu::Error recvFromNoc(PacketPtr pkt, uint vpeId);
+    Dtu::Error recvFromNoc(PacketPtr pkt, uint vpeId, uint sender);
 
     /**
      * Disables replies for the message we replied on

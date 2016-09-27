@@ -495,7 +495,7 @@ MessageUnit::finishMsgReceive(unsigned epId,
 }
 
 Dtu::Error
-MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId)
+MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId, uint sender)
 {
     assert(pkt->isWrite());
     assert(pkt->hasData());
@@ -529,11 +529,14 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId)
     }
 
     uint16_t ourVpeId = dtu.regs().get(DtuReg::VPE_ID);
-    if (vpeId != ourVpeId)
+    if (vpeId != ourVpeId ||
+        (sender != 0 && dtu.regs().hasFeature(Features::COM_DISABLED)))
     {
         DPRINTFS(Dtu, (&dtu),
-            "EP%u: received message for VPE %u, but VPE %u is running\n",
-            epId, vpeId, ourVpeId);
+            "EP%u: received message for VPE %u, but VPE %u is running"
+            " with communication %sabled\n",
+            epId, vpeId, ourVpeId,
+            dtu.regs().hasFeature(Features::COM_DISABLED) ? "dis" : "en");
         wrongVPE++;
 
         dtu.sendNocResponse(pkt);

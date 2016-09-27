@@ -52,8 +52,9 @@ enum class DtuReg : Addr
 
 enum class Features
 {
-    PRIV        = 1 << 0,
-    PAGEFAULTS  = 1 << 1,
+    PRIV            = 1 << 0,
+    PAGEFAULTS      = 1 << 1,
+    COM_DISABLED    = 1 << 2,
 };
 
 constexpr unsigned numDtuRegs = 9;

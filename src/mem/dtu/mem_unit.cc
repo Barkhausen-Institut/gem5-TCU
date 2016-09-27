@@ -297,7 +297,7 @@ MemoryUnit::recvFunctionalFromNoc(PacketPtr pkt)
 }
 
 Dtu::Error
-MemoryUnit::recvFromNoc(PacketPtr pkt, uint vpeId, uint flags)
+MemoryUnit::recvFromNoc(PacketPtr pkt, uint vpeId, uint sender, uint flags)
 {
     NocAddr addr(pkt->getAddr());
 
@@ -312,11 +312,15 @@ MemoryUnit::recvFromNoc(PacketPtr pkt, uint vpeId, uint flags)
     receivedBytes.sample(pkt->getSize());
 
     uint16_t ourVpeId = dtu.regs().get(DtuReg::VPE_ID);
-    if (vpeId != ourVpeId)
+    if (vpeId != ourVpeId || (sender != 0 &&
+        dtu.regs().hasFeature(Features::COM_DISABLED)))
     {
         DPRINTFS(Dtu, (&dtu),
-            "Received memory request for VPE %u, but VPE %u is running\n",
-            vpeId, ourVpeId);
+            "Received memory request for VPE %u, but VPE %u is running with"
+            " communication %sabled\n",
+            vpeId,
+            ourVpeId,
+            dtu.regs().hasFeature(Features::COM_DISABLED) ? "dis" : "en");
 
         wrongVPE++;
 
@@ -383,7 +387,7 @@ MemoryUnit::ReceiveTransferEvent::transferDone(Dtu::Error result)
         // set result
         auto state = dynamic_cast<Dtu::NocSenderState*>(pkt->senderState);
         if (result != Dtu::Error::NONE &&
-            dtu().regs().get(DtuReg::VPE_ID) == Dtu::INVALID_VPE_ID)
+            dtu().regs().hasFeature(Features::COM_DISABLED))
             state->result = Dtu::Error::VPE_GONE;
         else
             state->result = result;

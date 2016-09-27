@@ -281,15 +281,6 @@ Dtu::executeCommand(PacketPtr pkt)
                 cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epid, cmd.flags);
     }
 
-    // if the VPE id is invalid and we are not privileged, commands cannot
-    // be executed
-    if (regs().get(DtuReg::VPE_ID) == INVALID_VPE_ID &&
-        !(regs().get(DtuReg::FEATURES) & static_cast<RegFile::reg_t>(Features::PRIV)))
-    {
-        scheduleFinishOp(Cycles(1), Error::VPEID_INVALID);
-        return;
-    }
-
     switch (cmd.opcode)
     {
         case Command::SEND:
@@ -371,8 +362,12 @@ Dtu::abortCommand()
 
     if (abort & Command::ABORT_VPE)
     {
-        DPRINTF(DtuCmd, "Resetting VPE id and aborting PFs\n");
-        regs().set(DtuReg::VPE_ID, INVALID_VPE_ID);
+        DPRINTF(DtuCmd, "Disabling communication and aborting PFs\n");
+
+        RegFile::reg_t val = regs().get(DtuReg::FEATURES);
+        val |= static_cast<RegFile::reg_t>(Features::COM_DISABLED);
+        regs().set(DtuReg::FEATURES, val);
+
         if (ptUnit)
             ptUnit->abortAll();
     }
@@ -406,16 +401,10 @@ Dtu::finishCommand(Error error)
 
     assert(cmdInProgress);
 
-    // if the command succeeded, or we still have a valid VPE id, pay the
-    // credits or disable replies. the latter is required to prevent that a
-    // malicious app causes NoC traffic all the time by aborting commands
-    if (error == Error::NONE || regs().get(DtuReg::VPE_ID) != INVALID_VPE_ID)
-    {
-        if (cmd.opcode == Command::SEND)
-            msgUnit->payCredits(cmd.epid);
-        else if (cmd.opcode == Command::REPLY)
-            msgUnit->disableReplies();
-    }
+    if (cmd.opcode == Command::SEND)
+        msgUnit->payCredits(cmd.epid);
+    else if (cmd.opcode == Command::REPLY)
+        msgUnit->disableReplies();
 
     if (abortInProgress)
     {
@@ -815,6 +804,9 @@ Dtu::completeNocRequest(PacketPtr pkt)
             pkt->getSize(), phys.coreId, phys.offset,
             static_cast<uint>(senderState->result));
 
+        if(pkt->isRead())
+            printPacket(pkt);
+
         if (dynamic_cast<InitSenderState*>(pkt->senderState))
         {
             // undo the change from handleCacheMemRequest
@@ -909,18 +901,25 @@ Dtu::handleNocRequest(PacketPtr pkt)
     {
         case NocPacketType::MESSAGE:
         case NocPacketType::PAGEFAULT:
+        {
             nocMsgRecvs++;
-            res = msgUnit->recvFromNoc(pkt, senderState->vpeId);
+            uint sender = senderState->sender;
+            res = msgUnit->recvFromNoc(pkt, senderState->vpeId, sender);
             break;
+        }
         case NocPacketType::READ_REQ:
         case NocPacketType::WRITE_REQ:
         case NocPacketType::CACHE_MEM_REQ:
+        {
             if (senderState->packetType == NocPacketType::READ_REQ)
                 nocReadRecvs++;
             else if (senderState->packetType == NocPacketType::WRITE_REQ)
                 nocWriteRecvs++;
-            res = memUnit->recvFromNoc(pkt, senderState->vpeId, senderState->flags);
+            uint flags = senderState->flags;
+            uint sender = senderState->sender;
+            res = memUnit->recvFromNoc(pkt, senderState->vpeId, sender, flags);
             break;
+        }
         case NocPacketType::CACHE_MEM_REQ_FUNC:
             memUnit->recvFunctionalFromNoc(pkt);
             break;
@@ -1027,6 +1026,9 @@ Dtu::handleCacheMemRequest(PacketPtr pkt, bool functional)
     DPRINTF(DtuMem, "Handling %s request of LLC for %u bytes @ %d:%#x\n",
                     pkt->cmdString(),
                     pkt->getSize(), phys.coreId, phys.offset);
+
+    if(pkt->isWrite())
+        printPacket(pkt);
 
     auto type = functional ? Dtu::NocPacketType::CACHE_MEM_REQ_FUNC
                            : Dtu::NocPacketType::CACHE_MEM_REQ;
