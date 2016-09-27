@@ -39,9 +39,12 @@
 
 #include <iomanip>
 
+static const unsigned EP_SYSC       = 0;
+static const unsigned EP_DEFR       = 1;
 static const unsigned EP_RECV       = 7;
 static const size_t MSG_SIZE        = 64;
 static const size_t BUF_SIZE        = 4096;
+static const Addr MSG_ADDR          = 0x2000;
 static const Addr BUF_ADDR          = 0x3000;
 
 static const Addr RCTMUX_FLAGS      = 0x2ff8;
@@ -56,10 +59,16 @@ static const char *stateNames[] =
     "STORE_REPLY",
     "SEND_REPLY",
     "REPLY_WAIT",
+    "REPLY_ERROR",
+    "REPLY_SYSCALL",
+    "REPLY_FETCH",
+    "REPLY_READ_ADDR",
+    "REPLY_ACK",
     "ACK_MSG",
 
     "CTX_SAVE",
     "CTX_WAIT",
+    "CTX_CHECK",
     "CTX_RESTORE",
 };
 
@@ -381,8 +390,45 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
             {
                 RegFile::reg_t reg =
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
-                if ((reg & 0x7) == 0)
-                    state = State::ACK_MSG;
+                if ((reg & 0xF) == 0)
+                {
+                    if ((reg >> 13) == 0)
+                        state = State::ACK_MSG;
+                    else
+                        state = State::REPLY_ERROR;
+                }
+                break;
+            }
+            case State::REPLY_ERROR:
+            {
+                state = State::REPLY_SYSCALL;
+                break;
+            }
+            case State::REPLY_SYSCALL:
+            {
+                state = State::REPLY_FETCH;
+                break;
+            }
+            case State::REPLY_FETCH:
+            {
+                state = State::REPLY_READ_ADDR;
+                break;
+            }
+            case State::REPLY_READ_ADDR:
+            {
+                const RegFile::reg_t *regs = pkt->getConstPtr<RegFile::reg_t>();
+                if(regs[0])
+                {
+                    sysreplyAddr = regs[0];
+                    state = State::REPLY_ACK;
+                }
+                else
+                    state = State::REPLY_FETCH;
+                break;
+            }
+            case State::REPLY_ACK:
+            {
+                state = State::SEND_REPLY;
                 break;
             }
             case State::ACK_MSG:
@@ -510,6 +556,47 @@ DtuAccelHash::tick()
         {
             Addr regAddr = getRegAddr(CmdReg::COMMAND);
             pkt = createDtuRegisterPkt(regAddr, 0, MemCmd::ReadReq);
+            break;
+        }
+        case State::REPLY_ERROR:
+        {
+            ActivateReply syscall;
+            syscall.opcode = 14;
+            syscall.ep = EP_RECV;
+            syscall.msg_addr = msgAddr;
+            syscall.event = 0;
+
+            pkt = createPacket(MSG_ADDR, sizeof(syscall), MemCmd::WriteReq);
+            memcpy(pkt->getPtr<ActivateReply>(), &syscall, sizeof(syscall));
+            break;
+        }
+        case State::REPLY_SYSCALL:
+        {
+            pkt = createCmdPacket(Dtu::Command::SEND | (EP_SYSC << 4),
+                                  MSG_ADDR,
+                                  sizeof(ActivateReply),
+                                  0);
+            break;
+        }
+        case State::REPLY_FETCH:
+        {
+            Addr regAddr = getRegAddr(CmdReg::COMMAND);
+            uint64_t value = Dtu::Command::FETCH_MSG | (EP_DEFR << 4);
+            pkt = createDtuRegisterPkt(regAddr, value, MemCmd::WriteReq);
+            break;
+        }
+        case State::REPLY_READ_ADDR:
+        {
+            Addr regAddr = getRegAddr(CmdReg::OFFSET);
+            pkt = createDtuRegisterPkt(regAddr, 0, MemCmd::ReadReq);
+            break;
+        }
+        case State::REPLY_ACK:
+        {
+            pkt = createCmdPacket(Dtu::Command::ACK_MSG | (EP_DEFR << 4),
+                                  0,
+                                  0,
+                                  sysreplyAddr);
             break;
         }
         case State::ACK_MSG:

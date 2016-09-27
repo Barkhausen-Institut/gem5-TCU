@@ -78,6 +78,14 @@ class DtuAccelHash : public MemObject
         BLOCK   = 1 << 5, // used to tell the kernel that we can be blocked
     };
 
+    struct ActivateReply
+    {
+        uint64_t opcode;
+        uint64_t ep;
+        uint64_t msg_addr;
+        uint64_t event;
+    } M5_PACKED;
+
     enum class Algorithm
     {
         SHA1,
@@ -98,6 +106,11 @@ class DtuAccelHash : public MemObject
         STORE_REPLY,
         SEND_REPLY,
         REPLY_WAIT,
+        REPLY_ERROR,
+        REPLY_SYSCALL,
+        REPLY_FETCH,
+        REPLY_READ_ADDR,
+        REPLY_ACK,
         ACK_MSG,
 
         CTX_SAVE,
@@ -151,6 +164,8 @@ class DtuAccelHash : public MemObject
         uint64_t count;
         uint8_t bytes[64];
     } M5_ATTR_PACKED reply;
+
+    Addr sysreplyAddr;
 
     /// Request id for all generated traffic
     MasterID masterId;
