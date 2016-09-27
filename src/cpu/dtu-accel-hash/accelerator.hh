@@ -98,8 +98,6 @@ class DtuAccelHash : public MemObject
 
     void recvRetry();
 
-    static Addr getBufAddr(size_t id);
-
     static Addr getRegAddr(DtuReg reg);
 
     static Addr getRegAddr(CmdReg reg);
@@ -112,13 +110,12 @@ class DtuAccelHash : public MemObject
 
     CpuPort port;
 
-    State state;
-
     DtuAccelHashAlgorithm *algos[5];
 
     size_t chunkSize;
 
-    uint client;
+    State state;
+
     Algorithm algo;
     Addr msgAddr;
     Addr dataAddr;

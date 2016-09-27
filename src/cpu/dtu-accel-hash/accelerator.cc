@@ -42,7 +42,7 @@
 static const unsigned EP_RECV       = 7;
 static const size_t MSG_SIZE        = 64;
 static const size_t BUF_SIZE        = 4096;
-static const size_t CLIENTS         = 8;
+static const Addr BUF_ADDR          = DtuTlb::PAGE_SIZE;
 
 static const char *stateNames[] =
 {
@@ -56,13 +56,6 @@ static const char *stateNames[] =
     "REPLY_WAIT",
     "ACK_MSG",
 };
-
-Addr
-DtuAccelHash::getBufAddr(size_t id)
-{
-    // don't use the first page (m3's pager doesn't map it)
-    return DtuTlb::PAGE_SIZE + BUF_SIZE * id;
-}
 
 Addr
 DtuAccelHash::getRegAddr(DtuReg reg)
@@ -110,9 +103,9 @@ DtuAccelHash::DtuAccelHash(const DtuAccelHashParams *p)
     system(p->system),
     tickEvent(this),
     port("port", this),
-    state(State::IDLE),
     algos(),
     chunkSize(system->cacheLineSize()),
+    state(State::IDLE),
     msgAddr(),
     masterId(system->getMasterId(name())),
     id(p->id),
@@ -262,10 +255,8 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
                     reinterpret_cast<const uint64_t*>(
                         pkt_data + sizeof(Dtu::MessageHeader));
 
-                client = header->label;
-                DPRINTF(DtuAccel, "  label=%p algo=%d size=%p\n",
-                    client, args[0], args[1]);
-                dataAddr = getBufAddr(client);
+                DPRINTF(DtuAccel, "  algo=%d size=%p\n", args[0], args[1]);
+                dataAddr = BUF_ADDR;
                 if (header->length != sizeof(uint64_t) * 2 ||
                     static_cast<Algorithm>(args[0]) >= Algorithm::COUNT ||
                     args[1] > BUF_SIZE ||
@@ -401,7 +392,7 @@ DtuAccelHash::tick()
         {
             size_t rem = sizeof(uint64_t) + reply.count - replyOffset;
             size_t size = std::min(chunkSize, rem);
-            pkt = createPacket(getBufAddr(client) + replyOffset,
+            pkt = createPacket(BUF_ADDR + replyOffset,
                                size,
                                MemCmd::WriteReq);
             memcpy(pkt->getPtr<uint8_t>(), (char*)&reply + replyOffset, size);
@@ -422,7 +413,7 @@ DtuAccelHash::tick()
             RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
             regs[0] = Dtu::Command::REPLY | (EP_RECV << 4);
             regs[1] = 0;
-            regs[2] = getBufAddr(client);
+            regs[2] = BUF_ADDR;
             regs[3] = sizeof(uint64_t) + reply.count;
             regs[4] = msgAddr;
             break;
