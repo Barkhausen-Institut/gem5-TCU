@@ -211,6 +211,10 @@ class RegFile
 
     RegFile(Dtu &dtu, const std::string& name, unsigned numEndpoints);
 
+    bool hasFeature(Features feature) const {
+        return get(DtuReg::FEATURES) & static_cast<reg_t>(feature);
+    }
+
     reg_t get(DtuReg reg, RegAccess access = RegAccess::DTU) const;
 
     void set(DtuReg reg, reg_t value, RegAccess access = RegAccess::DTU);

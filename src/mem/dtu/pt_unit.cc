@@ -194,7 +194,7 @@ PtUnit::describeAccess(uint access)
 bool
 PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, uint access)
 {
-    if (~dtu.regs().get(DtuReg::FEATURES) & static_cast<int>(Features::PAGEFAULTS))
+    if (!dtu.regs().hasFeature(Features::PAGEFAULTS))
     {
         DPRINTFS(DtuPf, (&dtu),
             "Pagefault (%llu: %s @ %p), but pagefault sending is disabled\n",
