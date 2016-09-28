@@ -406,6 +406,10 @@ found:
 int
 MessageUnit::allocSlot(size_t msgSize, unsigned epid, RecvEp &ep)
 {
+    // the RecvEp might be invalid
+    if (ep.size == 0)
+        return 0;
+
     assert(msgSize <= ep.msgSize);
 
     int i;
