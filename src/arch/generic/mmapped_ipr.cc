@@ -29,15 +29,20 @@
  */
 
 #include "arch/generic/mmapped_ipr.hh"
+#include "cpu/thread_context.hh"
 #include "mem/packet.hh"
 #include "mem/packet_access.hh"
 #include "sim/pseudo_inst.hh"
+#include "sim/system.hh"
 
 using namespace GenericISA;
 
 static void
 handlePseudoInst(ThreadContext *xc, Packet *pkt)
 {
+    if (!xc->getSystemPtr()->hasPseudoMemOps())
+        return;
+
     const Addr offset(pkt->getAddr() & IPR_IN_CLASS_MASK);
     const uint8_t func((offset >> 8) & 0xFF);
     const uint8_t subfunc(offset & 0xFF);

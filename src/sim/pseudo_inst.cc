@@ -91,9 +91,6 @@ panicFsOnlyPseudoInst(const char *name)
 uint64_t
 pseudoInst(ThreadContext *tc, uint8_t func, uint8_t subfunc)
 {
-    if (!tc->getSystemPtr()->hasPseudoMemOps())
-        return 0;
-
     uint64_t args[4];
 
     DPRINTF(PseudoInst, "PseudoInst::pseudoInst(%i, %i)\n", func, subfunc);
@@ -617,7 +614,7 @@ switchcpu(ThreadContext *tc)
 }
 
 //
-// This function is executed when annotated work items begin.  Depending on 
+// This function is executed when annotated work items begin.  Depending on
 // what the user specified at the command line, the simulation may exit and/or
 // take a checkpoint when a certain work item begins.
 //
@@ -630,7 +627,7 @@ workbegin(ThreadContext *tc, uint64_t workid, uint64_t threadid)
     const System::Params *params = sys->params();
     sys->workItemBegin(threadid, workid);
 
-    DPRINTF(WorkItems, "Work Begin workid: %d, threadid %d\n", workid, 
+    DPRINTF(WorkItems, "Work Begin workid: %d, threadid %d\n", workid,
             threadid);
 
     //
@@ -675,7 +672,7 @@ workbegin(ThreadContext *tc, uint64_t workid, uint64_t threadid)
 }
 
 //
-// This function is executed when annotated work items end.  Depending on 
+// This function is executed when annotated work items end.  Depending on
 // what the user specified at the command line, the simulation may exit and/or
 // take a checkpoint when a certain work item ends.
 //
