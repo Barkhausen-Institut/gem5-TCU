@@ -114,6 +114,7 @@ class DtuAccelHash : public MemObject
         ACK_MSG,
 
         CTX_SAVE,
+        CTX_SAVE_DONE,
         CTX_WAIT,
         CTX_CHECK,
         CTX_RESTORE,

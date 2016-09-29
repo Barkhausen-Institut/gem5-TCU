@@ -66,6 +66,7 @@ static const char *stateNames[] =
     "ACK_MSG",
 
     "CTX_SAVE",
+    "CTX_SAVE_DONE",
     "CTX_WAIT",
     "CTX_CHECK",
     "CTX_RESTORE",
@@ -254,7 +255,7 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
     DPRINTF(DtuAccelState, "[%s] Got response from memory\n",
         stateNames[static_cast<size_t>(state)]);
 
-    DPRINTF(DtuAccelAccess, "Completing %s at address %x:%zu %s\n",
+    DPRINTF(DtuAccelAccess, "Completing %s at address %x:%lu %s\n",
         pkt->isWrite() ? "write" : "read",
         req->getPaddr(),
         req->getSize(),
@@ -279,6 +280,11 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
             }
 
             case State::CTX_SAVE:
+            {
+                state = State::CTX_SAVE_DONE;
+                break;
+            }
+            case State::CTX_SAVE_DONE:
             {
                 state = State::CTX_WAIT;
                 break;
@@ -486,6 +492,13 @@ DtuAccelHash::tick()
         }
 
         case State::CTX_SAVE:
+        {
+            Addr regAddr = getRegAddr(CmdReg::ABORT);
+            uint64_t value = Dtu::Command::ABORT_VPE;
+            pkt = createDtuRegisterPkt(regAddr, value, MemCmd::WriteReq);
+            break;
+        }
+        case State::CTX_SAVE_DONE:
         {
             pkt = createPacket(RCTMUX_FLAGS, sizeof(uint64_t), MemCmd::WriteReq);
             *pkt->getPtr<uint64_t>() = RCTMuxCtrl::SIGNAL;
