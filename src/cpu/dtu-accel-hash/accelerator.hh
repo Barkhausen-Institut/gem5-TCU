@@ -147,7 +147,7 @@ class DtuAccelHash : public MemObject
 
     DtuAccelHashAlgorithm *algos[5];
 
-    size_t chunkSize;
+    Addr chunkSize;
 
     bool irqPending;
 
@@ -156,8 +156,9 @@ class DtuAccelHash : public MemObject
     Algorithm algo;
     Addr msgAddr;
     Addr dataAddr;
-    size_t dataSize;
-    size_t remSize;
+    Addr dataOff;
+    Addr dataSize;
+    Addr remSize;
 
     size_t replyOffset;
     struct {

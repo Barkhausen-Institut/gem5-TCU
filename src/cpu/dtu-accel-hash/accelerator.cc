@@ -45,7 +45,6 @@ static const unsigned EP_RECV       = 7;
 static const size_t MSG_SIZE        = 64;
 static const size_t BUF_SIZE        = 4096;
 static const Addr MSG_ADDR          = 0x2000;
-static const Addr BUF_ADDR          = 0x3000;
 
 static const Addr RCTMUX_FLAGS      = 0x2ff8;
 
@@ -325,8 +324,11 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
                     reinterpret_cast<const uint64_t*>(
                         pkt_data + sizeof(Dtu::MessageHeader));
 
-                DPRINTF(DtuAccel, "  algo=%d size=%p\n", args[0], args[1]);
-                dataAddr = BUF_ADDR;
+                DPRINTF(DtuAccel, "  algo=%d data=%p size=%p\n",
+                    args[0], header->label, args[1]);
+
+                dataAddr = header->label;
+                dataOff = 0;
                 if (header->length != sizeof(uint64_t) * 2 ||
                     static_cast<Algorithm>(args[0]) >= Algorithm::COUNT ||
                     args[1] > BUF_SIZE ||
@@ -352,7 +354,7 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
                     al->start();
                 al->update(static_cast<const void*>(pkt_data), pkt->getSize());
 
-                dataAddr += pkt->getSize();
+                dataOff += pkt->getSize();
                 remSize -= pkt->getSize();
 
                 if (remSize == 0)
@@ -531,14 +533,14 @@ DtuAccelHash::tick()
         case State::READ_DATA:
         {
             size_t size = std::min(chunkSize, remSize);
-            pkt = createPacket(dataAddr, size, MemCmd::ReadReq);
+            pkt = createPacket(dataAddr + dataOff, size, MemCmd::ReadReq);
             break;
         }
         case State::STORE_REPLY:
         {
             size_t rem = sizeof(uint64_t) + reply.count - replyOffset;
             size_t size = std::min(chunkSize, rem);
-            pkt = createPacket(BUF_ADDR + replyOffset,
+            pkt = createPacket(dataAddr + replyOffset,
                                size,
                                MemCmd::WriteReq);
             memcpy(pkt->getPtr<uint8_t>(), (char*)&reply + replyOffset, size);
@@ -547,7 +549,7 @@ DtuAccelHash::tick()
         case State::SEND_REPLY:
         {
             pkt = createCmdPacket(Dtu::Command::REPLY | (EP_RECV << 4),
-                                  BUF_ADDR,
+                                  dataAddr,
                                   sizeof(uint64_t) + reply.count,
                                   msgAddr);
             break;
