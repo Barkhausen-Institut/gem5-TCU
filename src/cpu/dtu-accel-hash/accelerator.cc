@@ -189,8 +189,8 @@ DtuAccelHash::recvRetry()
 
 PacketPtr
 DtuAccelHash::createPacket(Addr paddr,
-                          size_t size,
-                          MemCmd cmd = MemCmd::WriteReq)
+                           size_t size,
+                           MemCmd cmd = MemCmd::WriteReq)
 {
     Request::Flags flags;
 
@@ -205,9 +205,9 @@ DtuAccelHash::createPacket(Addr paddr,
 }
 
 PacketPtr
-DtuAccelHash::createDtuRegisterPkt(Addr reg,
-                                  RegFile::reg_t value,
-                                  MemCmd cmd = MemCmd::WriteReq)
+DtuAccelHash::createDtuRegPkt(Addr reg,
+                              RegFile::reg_t value,
+                              MemCmd cmd = MemCmd::WriteReq)
 {
     auto pkt = createPacket(reg_base + reg, sizeof(RegFile::reg_t), cmd);
     *pkt->getPtr<RegFile::reg_t>() = value;
@@ -215,7 +215,7 @@ DtuAccelHash::createDtuRegisterPkt(Addr reg,
 }
 
 PacketPtr
-DtuAccelHash::createCmdPacket(uint64_t cmd,
+DtuAccelHash::createDtuCmdPkt(uint64_t cmd,
                               uint64_t data,
                               uint64_t size,
                               uint64_t off)
@@ -495,7 +495,7 @@ DtuAccelHash::tick()
         {
             Addr regAddr = getRegAddr(CmdReg::ABORT);
             uint64_t value = Dtu::Command::ABORT_VPE;
-            pkt = createDtuRegisterPkt(regAddr, value, MemCmd::WriteReq);
+            pkt = createDtuRegPkt(regAddr, value, MemCmd::WriteReq);
             break;
         }
         case State::CTX_SAVE_DONE:
@@ -528,14 +528,14 @@ DtuAccelHash::tick()
             {
                 Addr regAddr = getRegAddr(CmdReg::COMMAND);
                 uint64_t value = Dtu::Command::FETCH_MSG | (EP_RECV << 4);
-                pkt = createDtuRegisterPkt(regAddr, value, MemCmd::WriteReq);
+                pkt = createDtuRegPkt(regAddr, value, MemCmd::WriteReq);
             }
             break;
         }
         case State::READ_MSG_ADDR:
         {
             Addr regAddr = getRegAddr(CmdReg::OFFSET);
-            pkt = createDtuRegisterPkt(regAddr, 0, MemCmd::ReadReq);
+            pkt = createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }
         case State::READ_MSG:
@@ -561,7 +561,7 @@ DtuAccelHash::tick()
         }
         case State::SEND_REPLY:
         {
-            pkt = createCmdPacket(Dtu::Command::REPLY | (EP_RECV << 4),
+            pkt = createDtuCmdPkt(Dtu::Command::REPLY | (EP_RECV << 4),
                                   dataAddr,
                                   sizeof(uint64_t) + reply.count,
                                   msgAddr);
@@ -570,7 +570,7 @@ DtuAccelHash::tick()
         case State::REPLY_WAIT:
         {
             Addr regAddr = getRegAddr(CmdReg::COMMAND);
-            pkt = createDtuRegisterPkt(regAddr, 0, MemCmd::ReadReq);
+            pkt = createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }
         case State::REPLY_ERROR:
@@ -587,7 +587,7 @@ DtuAccelHash::tick()
         }
         case State::REPLY_SYSCALL:
         {
-            pkt = createCmdPacket(Dtu::Command::SEND | (EP_SYSC << 4),
+            pkt = createDtuCmdPkt(Dtu::Command::SEND | (EP_SYSC << 4),
                                   MSG_ADDR,
                                   sizeof(ActivateReply),
                                   0);
@@ -597,18 +597,18 @@ DtuAccelHash::tick()
         {
             Addr regAddr = getRegAddr(CmdReg::COMMAND);
             uint64_t value = Dtu::Command::FETCH_MSG | (EP_DEFR << 4);
-            pkt = createDtuRegisterPkt(regAddr, value, MemCmd::WriteReq);
+            pkt = createDtuRegPkt(regAddr, value, MemCmd::WriteReq);
             break;
         }
         case State::REPLY_READ_ADDR:
         {
             Addr regAddr = getRegAddr(CmdReg::OFFSET);
-            pkt = createDtuRegisterPkt(regAddr, 0, MemCmd::ReadReq);
+            pkt = createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }
         case State::REPLY_ACK:
         {
-            pkt = createCmdPacket(Dtu::Command::ACK_MSG | (EP_DEFR << 4),
+            pkt = createDtuCmdPkt(Dtu::Command::ACK_MSG | (EP_DEFR << 4),
                                   0,
                                   0,
                                   sysreplyAddr);
@@ -616,7 +616,7 @@ DtuAccelHash::tick()
         }
         case State::ACK_MSG:
         {
-            pkt = createCmdPacket(Dtu::Command::ACK_MSG | (EP_RECV << 4),
+            pkt = createDtuCmdPkt(Dtu::Command::ACK_MSG | (EP_RECV << 4),
                                   0,
                                   0,
                                   msgAddr);

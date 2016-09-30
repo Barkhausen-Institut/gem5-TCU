@@ -122,9 +122,9 @@ class DtuAccelHash : public MemObject
 
     PacketPtr createPacket(Addr paddr, size_t size, MemCmd cmd);
 
-    PacketPtr createDtuRegisterPkt(Addr reg, RegFile::reg_t value, MemCmd cmd);
+    PacketPtr createDtuRegPkt(Addr reg, RegFile::reg_t value, MemCmd cmd);
 
-    PacketPtr createCmdPacket(uint64_t cmd, uint64_t data, uint64_t size, uint64_t off);
+    PacketPtr createDtuCmdPkt(uint64_t cmd, uint64_t data, uint64_t size, uint64_t off);
 
     void freePacket(PacketPtr pkt);
 
