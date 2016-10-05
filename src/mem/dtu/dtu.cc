@@ -402,9 +402,9 @@ Dtu::finishCommand(Error error)
     assert(cmdInProgress);
 
     if (cmd.opcode == Command::SEND)
-        msgUnit->payCredits(cmd.epid);
+        msgUnit->finishMsgSend(error, cmd.epid);
     else if (cmd.opcode == Command::REPLY)
-        msgUnit->disableReplies();
+        msgUnit->finishMsgReply(error, cmd.epid);
 
     if (abortInProgress)
     {

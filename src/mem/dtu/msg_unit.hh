@@ -130,14 +130,14 @@ class MessageUnit
     Dtu::Error recvFromNoc(PacketPtr pkt, uint vpeId, uint sender);
 
     /**
-     * Disables replies for the message we replied on
+     * Finishes the reply-on-message command
      */
-    void disableReplies();
+    void finishMsgReply(Dtu::Error error, unsigned epid);
 
     /**
-     * Pays credits to send a message
+     * Finishes the send-message command
      */
-    void payCredits(unsigned epid);
+    void finishMsgSend(Dtu::Error error, unsigned epid);
 
     /**
      * Receives credits again

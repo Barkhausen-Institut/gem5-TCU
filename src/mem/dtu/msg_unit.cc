@@ -304,7 +304,7 @@ MessageUnit::SendTransferEvent::transferStart()
 }
 
 void
-MessageUnit::disableReplies()
+MessageUnit::finishMsgReply(Dtu::Error error, unsigned epid)
 {
     assert(flagsPhys != 0);
 
@@ -315,6 +315,8 @@ MessageUnit::disableReplies()
 
     assert(header.flags & Dtu::REPLY_ENABLED);
     header.flags &= ~Dtu::REPLY_ENABLED;
+    if(error == Dtu::Error::VPE_GONE)
+        header.flags |= Dtu::REPLY_FAILED;
     memcpy(hpkt->getPtr<uint8_t>(), &header.flags, sizeof(header.flags));
 
     dtu.sendFunctionalMemRequest(hpkt);
@@ -322,9 +324,12 @@ MessageUnit::disableReplies()
 }
 
 void
-MessageUnit::payCredits(unsigned epid)
+MessageUnit::finishMsgSend(Dtu::Error error, unsigned epid)
 {
     SendEp ep = dtu.regs().getSendEp(epid);
+
+    if (error == Dtu::Error::VPE_GONE)
+        ep.vpeId = Dtu::INVALID_VPE_ID;
 
     if (ep.credits != Dtu::CREDITS_UNLIM)
     {
@@ -337,14 +342,14 @@ MessageUnit::payCredits(unsigned epid)
             return;
         }
 
+        // pay the credits
         ep.credits -= ep.maxMsgSize;
 
         DPRINTFS(DtuCredits, (&dtu), "EP%u pays %u credits (%u left)\n",
                  epid, ep.maxMsgSize, ep.credits);
-
-        // pay the credits
-        dtu.regs().setSendEp(epid, ep);
     }
+
+    dtu.regs().setSendEp(epid, ep);
 }
 
 void
