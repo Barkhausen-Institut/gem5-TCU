@@ -265,8 +265,15 @@ MessageUnit::startXfer(const Dtu::Command& cmd)
         header->flags = Dtu::REPLY_ENABLED; // normal message
     header->flags |= info.flags;
 
-    header->senderCoreId = dtu.coreId;
-    header->senderVpeId  = dtu.regs().get(DtuReg::VPE_ID);
+    if (cmd.opcode == Dtu::Command::SEND && dtu.regs().hasFeature(Features::PRIV)) {
+        RegFile::reg_t sender = dtu.regs().get(CmdReg::OFFSET);
+        header->senderCoreId = sender & 0xFF;
+        header->senderVpeId  = (sender >> 8) & 0xFFFF;
+    }
+    else {
+        header->senderCoreId = dtu.coreId;
+        header->senderVpeId  = dtu.regs().get(DtuReg::VPE_ID);
+    }
     header->senderEpId   = info.unlimcred ? dtu.numEndpoints : cmd.epid;
     header->replyEpId    = info.replyEpId;
     header->length       = messageSize;
