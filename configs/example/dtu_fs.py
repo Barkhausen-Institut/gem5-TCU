@@ -180,6 +180,8 @@ def createPE(root, options, no, systemType, l1size, l2size, spmsize, memPE):
     pe.dtu.core_id = no
     pe.dtu.clk_domain = root.cpu_clk_domain
 
+    pe.dtu.num_endpoints = 12
+
     pe.dtu.icache_master_port = pe.xbar.slave
     pe.dtu.dcache_master_port = pe.xbar.slave
 
