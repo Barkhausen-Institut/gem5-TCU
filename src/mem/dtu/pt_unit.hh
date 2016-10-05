@@ -58,6 +58,8 @@ class PtUnit
         virtual ~Translation()
         {}
 
+        virtual bool causePagefault() { return true; }
+
         virtual void finished(bool success, const NocAddr &phys) = 0;
 
       private:

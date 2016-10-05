@@ -114,6 +114,12 @@ XferUnit::Translation::abort()
     event.xfer->dtu.abortTranslate(this);
 }
 
+bool
+XferUnit::Translation::causePagefault()
+{
+    return !(event.flags() & XferFlags::NOPF);
+}
+
 void
 XferUnit::Translation::finished(bool success, const NocAddr &phys)
 {

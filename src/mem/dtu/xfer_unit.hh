@@ -70,6 +70,8 @@ class XferUnit
 
         void abort();
 
+        bool causePagefault() override;
+
         void finished(bool success, const NocAddr &phys) override;
     };
 
