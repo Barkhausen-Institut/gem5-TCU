@@ -501,7 +501,6 @@ Dtu::executeExternCommand(PacketPtr pkt)
                 tlb()->clear();
             break;
         case ExternCommand::INJECT_IRQ:
-            wakeupCore();
             injectIRQ(cmd.arg);
             break;
         case ExternCommand::RESET:
@@ -619,6 +618,15 @@ Dtu::reset(Addr addr)
 void
 Dtu::injectIRQ(int vector)
 {
+    if (cmdInProgress && getCommand().opcode == Command::SLEEP)
+    {
+        RegFile::reg_t val = regs().get(DtuReg::FEATURES);
+        val |= static_cast<RegFile::reg_t>(Features::IRQ_WAKEUP);
+        regs().set(DtuReg::FEATURES, val);
+    }
+
+    wakeupCore();
+
     connector->injectIrq(vector);
 
     irqPending = true;
