@@ -52,11 +52,15 @@ static const char *syscallNames[] = {
     "DELEGATE",
     "OBTAIN",
     "ACTIVATE",
+    "FORWARDMSG",
+    "FORWARDMEM",
+    "FORWARDREPLY",
     "REQMEM",
     "DERIVEMEM",
     "REVOKE",
     "EXIT",
     "NOOP",
+    "IDLE",
 };
 
 void
