@@ -540,12 +540,15 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId, uint sender)
         header->senderCoreId, header->length, epId);
     dtu.printPacket(pkt);
 
-    if (dtu.coreId == 0 && epId == 0)
+    if (dtu.coreId == 0 && epId == 0 && DTRACE(DtuSysCalls))
     {
         const size_t total = (sizeof(syscallNames) / sizeof(syscallNames[0]));
         size_t sysNo = pkt->getPtr<uint8_t>()[sizeof(*header) + 0];
         DPRINTFS(DtuSysCalls, (&dtu), "  syscall: %s\n",
             sysNo < total ? syscallNames[sysNo] : "Unknown");
+        uint64_t *words = reinterpret_cast<uint64_t*>(header + 1);
+        for(size_t i = 0; i < header->length / sizeof(uint64_t); ++i)
+            DPRINTFS(DtuSysCalls, (&dtu), "    word%lu: %#016x\n", i, words[i]);
     }
 
     uint16_t ourVpeId = dtu.regs().get(DtuReg::VPE_ID);
