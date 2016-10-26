@@ -185,10 +185,11 @@ class Dtu : public BaseDtu
         {
             IDLE            = 0,
             WAKEUP_CORE     = 1,
-            INV_PAGE        = 2,
-            INV_TLB         = 3,
-            INJECT_IRQ      = 4,
-            RESET           = 5,
+            INV_EP          = 2,
+            INV_PAGE        = 3,
+            INV_TLB         = 4,
+            INJECT_IRQ      = 5,
+            RESET           = 6,
         };
 
         Opcode opcode;

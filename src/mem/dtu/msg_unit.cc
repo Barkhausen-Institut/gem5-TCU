@@ -33,6 +33,7 @@
 #include "debug/DtuCredits.hh"
 #include "debug/DtuPackets.hh"
 #include "debug/DtuSysCalls.hh"
+#include "debug/DtuMsgs.hh"
 #include "mem/dtu/msg_unit.hh"
 #include "mem/dtu/noc_addr.hh"
 #include "mem/dtu/xfer_unit.hh"
@@ -120,7 +121,7 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
     info.replyLabel   = dtu.regs().get(CmdReg::REPLY_LABEL);
     info.replyEpId    = dtu.regs().get(CmdReg::REPLY_EPID);
     info.flags        = 0;
-    info.unlimcred    = ep.credits == Dtu::CREDITS_UNLIM;
+    info.unlimcred    = ep.curcrd == Dtu::CREDITS_UNLIM;
     info.ready        = true;
 
     startXfer(cmd);
@@ -344,22 +345,22 @@ MessageUnit::finishMsgSend(Dtu::Error error, unsigned epid)
     if (error == Dtu::Error::VPE_GONE)
         ep.vpeId = Dtu::INVALID_VPE_ID;
 
-    if (ep.credits != Dtu::CREDITS_UNLIM)
+    if (ep.curcrd != Dtu::CREDITS_UNLIM)
     {
-        if (ep.credits < ep.maxMsgSize)
+        if (ep.curcrd < ep.maxMsgSize)
         {
             DPRINTFS(Dtu, (&dtu),
                 "EP%u: not enough credits (%lu) to send message (%lu)\n",
-                epid, ep.credits, ep.maxMsgSize);
+                epid, ep.curcrd, ep.maxMsgSize);
             dtu.scheduleFinishOp(Cycles(1), Dtu::Error::MISS_CREDITS);
             return;
         }
 
         // pay the credits
-        ep.credits -= ep.maxMsgSize;
+        ep.curcrd -= ep.maxMsgSize;
 
         DPRINTFS(DtuCredits, (&dtu), "EP%u pays %u credits (%u left)\n",
-                 epid, ep.maxMsgSize, ep.credits);
+                 epid, ep.maxMsgSize, ep.curcrd);
     }
 
     dtu.regs().setSendEp(epid, ep);
@@ -370,13 +371,14 @@ MessageUnit::recvCredits(unsigned epid)
 {
     SendEp ep = dtu.regs().getSendEp(epid);
 
-    if (ep.credits != Dtu::CREDITS_UNLIM)
+    if (ep.curcrd != Dtu::CREDITS_UNLIM)
     {
-        ep.credits += ep.maxMsgSize;
+        ep.curcrd += ep.maxMsgSize;
+        assert(ep.curcrd <= ep.maxcrd);
 
         DPRINTFS(DtuCredits, (&dtu),
             "EP%u: received %u credits (%u in total)\n",
-            epid, ep.maxMsgSize, ep.credits);
+            epid, ep.maxMsgSize, ep.curcrd);
 
         dtu.regs().setSendEp(epid, ep);
     }

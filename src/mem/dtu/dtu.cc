@@ -64,6 +64,7 @@ static const char *extCmdNames[] =
 {
     "IDLE",
     "WAKEUP_CORE",
+    "INV_EP",
     "INV_PAGE",
     "INV_TLB",
     "INJECT_IRQ",
@@ -485,12 +486,18 @@ Dtu::executeExternCommand(PacketPtr pkt)
 
     Cycles delay(1);
 
+    Error result = Error::NONE;
+
     switch (cmd.opcode)
     {
         case ExternCommand::IDLE:
             break;
         case ExternCommand::WAKEUP_CORE:
             wakeupCore();
+            break;
+        case ExternCommand::INV_EP:
+            if (!regs().invalidate(cmd.arg))
+                result = Error::MISS_CREDITS;
             break;
         case ExternCommand::INV_PAGE:
             if (tlb())
@@ -512,7 +519,12 @@ Dtu::executeExternCommand(PacketPtr pkt)
     }
 
     if (pkt)
+    {
+        auto senderState = dynamic_cast<NocSenderState*>(pkt->senderState);
+        assert(senderState != nullptr);
+        senderState->result = result;
         schedNocResponse(pkt, clockEdge(delay));
+    }
 
     // set external command back to IDLE
     regFile.set(DtuReg::EXT_CMD,

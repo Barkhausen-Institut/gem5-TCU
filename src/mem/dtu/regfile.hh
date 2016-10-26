@@ -81,7 +81,7 @@ constexpr unsigned numCmdRegs = 7;
 //    send:    VPE_ID[32] | MAX_MSG_SIZE[16]
 //    mem:     REQ_MEM_SIZE[61]
 // 1. receive: BUF_ADDR[64]
-//    send:    TGT_COREID[8] | TGT_EPID[8] | CREDITS[16]
+//    send:    TGT_COREID[8] | TGT_EPID[8] | MAXCRD[16] | CURCRD[16]
 //    mem:     REQ_MEM_ADDR[64]
 // 2. receive: BUF_UNREAD[32] | BUF_OCCUPIED[32]
 //    send:    LABEL[64]
@@ -108,7 +108,8 @@ class RegFile;
 
 struct SendEp
 {
-    SendEp() : vpeId(), targetCore(), targetEp(), maxMsgSize(), credits(), label()
+    SendEp() : vpeId(), targetCore(), targetEp(), maxMsgSize(), maxcrd(),
+               curcrd(), label()
     {}
 
     void print(const RegFile &rf,
@@ -120,7 +121,8 @@ struct SendEp
     uint8_t targetCore;
     uint8_t targetEp;
     uint16_t maxMsgSize;
-    uint16_t credits;
+    uint16_t maxcrd;
+    uint16_t curcrd;
     uint64_t label;
 };
 
@@ -218,6 +220,8 @@ class RegFile
     bool hasFeature(Features feature) const {
         return get(DtuReg::FEATURES) & static_cast<reg_t>(feature);
     }
+
+    bool invalidate(unsigned epId);
 
     reg_t get(DtuReg reg, RegAccess access = RegAccess::DTU) const;
 

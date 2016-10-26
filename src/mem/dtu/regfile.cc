@@ -106,6 +106,22 @@ RegFile::RegFile(Dtu &_dtu, const std::string& name, unsigned _numEndpoints)
     }
 }
 
+bool
+RegFile::invalidate(unsigned epId)
+{
+    if (getEpType(epId) == EpType::SEND)
+    {
+        SendEp sep = getSendEp(epId);
+        if (sep.curcrd != sep.maxcrd)
+            return false;
+    }
+
+    for (int i = 0; i < numEpRegs; ++i)
+        epRegs[epId][i] = 0;
+
+    return true;
+}
+
 RegFile::reg_t
 RegFile::get(DtuReg reg, RegAccess access) const
 {
@@ -185,9 +201,10 @@ RegFile::getSendEp(unsigned epId, bool print) const
     ep.vpeId        = (r0 >> 16) & 0xFFFFFFFF;
     ep.maxMsgSize   = r0 & 0xFFFF;
 
-    ep.targetCore   = (r1 >> 24) & 0xFF;
-    ep.targetEp     = (r1 >> 16) & 0xFF;
-    ep.credits      = (r1 >>  0) & 0xFFFF;
+    ep.targetCore   = (r1 >> 40) & 0xFF;
+    ep.targetEp     = (r1 >> 32) & 0xFF;
+    ep.maxcrd       = (r1 >> 16) & 0xFFFF;
+    ep.curcrd       = (r1 >>  0) & 0xFFFF;
 
     ep.label        = r2;
 
@@ -204,8 +221,10 @@ RegFile::setSendEp(unsigned epId, const SendEp &ep)
                  (ep.vpeId << 16) |
                  ep.maxMsgSize);
 
-    set(epId, 1, (ep.targetCore << 24) | (ep.targetEp << 16) |
-                 (ep.credits << 0));
+    set(epId, 1, (static_cast<reg_t>(ep.targetCore) << 40) |
+                 (static_cast<reg_t>(ep.targetEp) << 32) |
+                 ((static_cast<reg_t>(ep.maxcrd) & 0xFFFF) << 16) |
+                 ((static_cast<reg_t>(ep.curcrd) & 0xFFFF) << 0));
 
     set(epId, 2, ep.label);
 
@@ -302,11 +321,11 @@ SendEp::print(const RegFile &rf,
         return;
 
     DPRINTFNS(rf.name(),
-        "%s%s EP%u%14s: Send[vpe=%u pe=%u ep=%u crd=%#x max=%#x lbl=%#llx]\n",
+        "%s%s EP%u%14s: Send[vpe=%u pe=%u ep=%u maxcrd=%#x curcrd=%#x max=%#x lbl=%#llx]\n",
         regAccessName(access), read ? "<-" : "->",
         epId, "",
         vpeId, targetCore, targetEp,
-        credits, maxMsgSize,
+        maxcrd, curcrd, maxMsgSize,
         label);
 }
 
