@@ -69,22 +69,12 @@ class DtuAccelHash : public MemObject
 
     enum RCTMuxCtrl
     {
-        NONE    = 0,
-        INIT    = 1 << 0, // set during first restore
-        STORE   = 1 << 1, // store operation required
-        RESTORE = 1 << 2, // restore operation required
-        WAITING = 1 << 3, // set by the kernel if a signal is required
-        SIGNAL  = 1 << 4, // used to signal completion to the kernel
-        BLOCK   = 1 << 5, // used to tell the kernel that we can be blocked
+        NONE        = 0,
+        STORE       = 1 << 0, // store operation required
+        RESTORE     = 1 << 1, // restore operation required
+        WAITING     = 1 << 2, // set by the kernel if a signal is required
+        SIGNAL      = 1 << 3, // used to signal completion to the kernel
     };
-
-    struct ActivateReply
-    {
-        uint64_t opcode;
-        uint64_t ep;
-        uint64_t msg_addr;
-        uint64_t event;
-    } M5_PACKED;
 
     enum class Algorithm
     {
@@ -162,9 +152,21 @@ class DtuAccelHash : public MemObject
     Addr remSize;
 
     size_t replyOffset;
-    struct {
-        uint64_t count;
-        uint8_t bytes[64];
+    struct
+    {
+        struct
+        {
+            uint64_t opcode;
+            uint64_t cap;
+            uint64_t msgaddr;
+            uint64_t len;
+            uint64_t event;
+        } M5_ATTR_PACKED sys;
+        struct
+        {
+            uint64_t count;
+            uint8_t bytes[64];
+        } M5_ATTR_PACKED msg;
     } M5_ATTR_PACKED reply;
 
     Addr sysreplyAddr;

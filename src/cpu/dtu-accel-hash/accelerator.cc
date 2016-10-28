@@ -39,9 +39,10 @@
 
 #include <iomanip>
 
-static const unsigned EP_SYSC       = 0;
-static const unsigned EP_DEFR       = 1;
+static const unsigned EP_SYSS       = 0;
+static const unsigned EP_SYSR       = 2;
 static const unsigned EP_RECV       = 7;
+static const unsigned CAP_RBUF      = 2;
 static const size_t MSG_SIZE        = 64;
 static const size_t BUF_SIZE        = 4096;
 static const Addr MSG_ADDR          = 0x2000;
@@ -340,7 +341,7 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
                     args[1] > BUF_SIZE ||
                     (args[1] % 64) != 0)
                 {
-                    reply.count = 0;
+                    reply.msg.count = 0;
                     replyOffset = 0;
                     state = State::STORE_REPLY;
                 }
@@ -365,15 +366,15 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
 
                 if (remSize == 0)
                 {
-                    reply.count = al->get(reply.bytes);
-                    assert(reply.count <= sizeof(reply.bytes));
+                    reply.msg.count = al->get(reply.msg.bytes);
+                    assert(reply.msg.count <= sizeof(reply.msg.bytes));
 
                     std::ostringstream ss;
                     ss << std::hex;
-                    for (size_t i = 0; i < reply.count; i++)
+                    for (size_t i = 0; i < reply.msg.count; i++)
                     {
                         ss << std::setw(2) << std::setfill('0')
-                           << (int)reply.bytes[i];
+                           << (int)reply.msg.bytes[i];
                     }
                     DPRINTF(DtuAccel, "Hash: %s\n", ss.str().c_str());
 
@@ -385,7 +386,7 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
             case State::STORE_REPLY:
             {
                 replyOffset += pkt->getSize();
-                if (replyOffset == sizeof(uint64_t) + reply.count)
+                if (replyOffset == sizeof(uint64_t) + reply.msg.count)
                     state = State::SEND_REPLY;
                 break;
             }
@@ -436,7 +437,7 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
             }
             case State::REPLY_ACK:
             {
-                state = State::SEND_REPLY;
+                state = State::ACK_MSG;
                 break;
             }
             case State::ACK_MSG:
@@ -551,19 +552,19 @@ DtuAccelHash::tick()
         }
         case State::STORE_REPLY:
         {
-            size_t rem = sizeof(uint64_t) + reply.count - replyOffset;
+            size_t rem = sizeof(uint64_t) + reply.msg.count - replyOffset;
             size_t size = std::min(chunkSize, rem);
             pkt = createPacket(dataAddr + replyOffset,
                                size,
                                MemCmd::WriteReq);
-            memcpy(pkt->getPtr<uint8_t>(), (char*)&reply + replyOffset, size);
+            memcpy(pkt->getPtr<uint8_t>(), (char*)&reply.msg + replyOffset, size);
             break;
         }
         case State::SEND_REPLY:
         {
             pkt = createDtuCmdPkt(Dtu::Command::REPLY | (EP_RECV << 4),
                                   dataAddr,
-                                  sizeof(uint64_t) + reply.count,
+                                  sizeof(uint64_t) + reply.msg.count,
                                   msgAddr);
             break;
         }
@@ -575,28 +576,29 @@ DtuAccelHash::tick()
         }
         case State::REPLY_ERROR:
         {
-            ActivateReply syscall;
-            syscall.opcode = 14;
-            syscall.ep = EP_RECV;
-            syscall.msg_addr = msgAddr;
-            syscall.event = 0;
+            reply.sys.opcode = 15;
+            reply.sys.cap = CAP_RBUF;
+            reply.sys.msgaddr = msgAddr;
+            reply.sys.event = 0;
+            reply.sys.len = sizeof(uint64_t) + reply.msg.count;
+            reply.sys.event = 0;
 
-            pkt = createPacket(MSG_ADDR, sizeof(syscall), MemCmd::WriteReq);
-            memcpy(pkt->getPtr<ActivateReply>(), &syscall, sizeof(syscall));
+            pkt = createPacket(MSG_ADDR, sizeof(reply), MemCmd::WriteReq);
+            memcpy(pkt->getPtr<void>(), &reply, sizeof(reply));
             break;
         }
         case State::REPLY_SYSCALL:
         {
-            pkt = createDtuCmdPkt(Dtu::Command::SEND | (EP_SYSC << 4),
+            pkt = createDtuCmdPkt(Dtu::Command::SEND | (EP_SYSS << 4),
                                   MSG_ADDR,
-                                  sizeof(ActivateReply),
+                                  sizeof(reply),
                                   0);
             break;
         }
         case State::REPLY_FETCH:
         {
             Addr regAddr = getRegAddr(CmdReg::COMMAND);
-            uint64_t value = Dtu::Command::FETCH_MSG | (EP_DEFR << 4);
+            uint64_t value = Dtu::Command::FETCH_MSG | (EP_SYSR << 4);
             pkt = createDtuRegPkt(regAddr, value, MemCmd::WriteReq);
             break;
         }
@@ -608,7 +610,7 @@ DtuAccelHash::tick()
         }
         case State::REPLY_ACK:
         {
-            pkt = createDtuCmdPkt(Dtu::Command::ACK_MSG | (EP_DEFR << 4),
+            pkt = createDtuCmdPkt(Dtu::Command::ACK_MSG | (EP_SYSR << 4),
                                   0,
                                   0,
                                   sysreplyAddr);
