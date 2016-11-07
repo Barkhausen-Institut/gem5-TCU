@@ -550,9 +550,13 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId, uint sender)
         size_t sysNo = pkt->getPtr<uint8_t>()[sizeof(*header) + 0];
         DPRINTFS(DtuSysCalls, (&dtu), "  syscall: %s\n",
             sysNo < total ? syscallNames[sysNo] : "Unknown");
+    }
+
+    if (DTRACE(DtuMsgs))
+    {
         uint64_t *words = reinterpret_cast<uint64_t*>(header + 1);
         for(size_t i = 0; i < header->length / sizeof(uint64_t); ++i)
-            DPRINTFS(DtuSysCalls, (&dtu), "    word%lu: %#016x\n", i, words[i]);
+            DPRINTFS(DtuMsgs, (&dtu), "    word%lu: %#016x\n", i, words[i]);
     }
 
     uint16_t ourVpeId = dtu.regs().get(DtuReg::VPE_ID);

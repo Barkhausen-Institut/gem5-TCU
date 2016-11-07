@@ -61,6 +61,7 @@ DebugFlag('DtuPtes')
 DebugFlag('DtuPf')
 DebugFlag('DtuMem')
 DebugFlag('DtuMemWatch')
+DebugFlag('DtuMsgs')
 
 CompoundFlag('DtuReg', [ 'DtuRegRead', 'DtuRegWrite' ])
 CompoundFlag('DtuTlb', [ 'DtuTlbRead', 'DtuTlbWrite' ])
