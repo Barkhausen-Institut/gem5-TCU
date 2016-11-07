@@ -342,7 +342,7 @@ RubyMemoryControl::enqueueToDirectory(MemoryNode *req, Cycles latency)
 
 // getBank returns an integer that is unique for each
 // bank across this memory controller.
-const int
+int
 RubyMemoryControl::getBank(const Addr addr) const
 {
     int dimm = (addr >> m_dimm_bit_0) & (m_dimms_per_channel - 1);
@@ -353,7 +353,7 @@ RubyMemoryControl::getBank(const Addr addr) const
         + bank;
 }
 
-const int
+int
 RubyMemoryControl::getRank(const Addr addr) const
 {
     int bank = getBank(addr);
@@ -364,7 +364,7 @@ RubyMemoryControl::getRank(const Addr addr) const
 
 // getRank returns an integer that is unique for each rank
 // and independent of individual bank.
-const int
+int
 RubyMemoryControl::getRank(int bank) const
 {
     int rank = (bank / m_banks_per_rank);
@@ -373,7 +373,7 @@ RubyMemoryControl::getRank(int bank) const
 }
 
 // Not used!
-const int
+int
 RubyMemoryControl::getChannel(const Addr addr) const
 {
     assert(false);
@@ -381,7 +381,7 @@ RubyMemoryControl::getChannel(const Addr addr) const
 }
 
 // Not used!
-const int
+int
 RubyMemoryControl::getRow(const Addr addr) const
 {
     assert(false);
@@ -527,6 +527,8 @@ RubyMemoryControl::issueRequest(int bank)
         m_busBusyCounter_Write = m_basic_bus_busy_time;
         m_busBusyCounter_ReadNewRank = m_basic_bus_busy_time;
     }
+
+    delete req;
 }
 
 // executeCycle:  This function is called once per memory clock cycle
@@ -637,7 +639,7 @@ DrainState
 RubyMemoryControl::drain()
 {
     DPRINTF(RubyMemory, "MemoryController drain\n");
-    if(m_event.scheduled()) {
+    if (m_event.scheduled()) {
         deschedule(m_event);
     }
     return DrainState::Drained;

@@ -35,9 +35,9 @@
 #include <cassert>
 #include <iostream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
-#include "base/hashmap.hh"
 #include "base/misc.hh"
 #include "base/trace.hh"
 #include "cpu/smt.hh"
@@ -263,9 +263,9 @@ Event::unserialize(CheckpointIn &cp)
 
     // Old checkpoints had no concept of the Initialized flag
     // so restoring from old checkpoints always fail.
-    // Events are initialized on construction but original code 
-    // "flags = _flags" would just overwrite the initialization. 
-    // So, read in the checkpoint flags, but then set the Initialized 
+    // Events are initialized on construction but original code
+    // "flags = _flags" would just overwrite the initialization.
+    // So, read in the checkpoint flags, but then set the Initialized
     // flag on top of it in order to avoid failures.
     assert(initialized());
     flags = _flags;
@@ -319,7 +319,7 @@ EventQueue::dump() const
 bool
 EventQueue::debugVerify() const
 {
-    m5::hash_map<long, bool> map;
+    std::unordered_map<long, bool> map;
 
     Tick time = 0;
     short priority = 0;

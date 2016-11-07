@@ -235,7 +235,8 @@ TLB::finalizePhysical(RequestPtr req, ThreadContext *tc, Mode mode) const
 
     if (m5opRange.contains(paddr)) {
         if (m5opRange.contains(paddr)) {
-            req->setFlags(Request::MMAPPED_IPR | Request::GENERIC_IPR);
+            req->setFlags(Request::MMAPPED_IPR | Request::GENERIC_IPR |
+                          Request::STRICT_ORDER);
             req->setPaddr(GenericISA::iprAddressPseudoInst(
                             (paddr >> 8) & 0xFF,
                             paddr & 0xFF));
@@ -273,7 +274,7 @@ Fault
 TLB::translate(RequestPtr req, ThreadContext *tc, Translation *translation,
         Mode mode, bool &delayedResponse, bool timing)
 {
-    uint32_t flags = req->getFlags();
+    Request::Flags flags = req->getFlags();
     int seg = flags & SegmentFlagMask;
     bool storeCheck = flags & (StoreCheck << FlagShift);
 

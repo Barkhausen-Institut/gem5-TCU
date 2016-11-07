@@ -69,6 +69,7 @@ SimpleThread::SimpleThread(BaseCPU *_cpu, int _thread_num, System *_sys,
 {
     clearArchRegs();
     tc = new ProxyThreadContext<SimpleThread>(this);
+    quiesceEvent = new EndQuiesceEvent(tc);
 }
 
 SimpleThread::SimpleThread(BaseCPU *_cpu, int _thread_num, System *_sys,
@@ -154,9 +155,9 @@ SimpleThread::startup()
 void
 SimpleThread::dumpFuncProfile()
 {
-    std::ostream *os = simout.create(csprintf("profile.%s.dat",
-                                              baseCpu->name()));
-    profile->dump(tc, *os);
+    OutputStream *os(simout.create(csprintf("profile.%s.dat", baseCpu->name())));
+    profile->dump(tc, *os->stream());
+    simout.close(os);
 }
 
 void

@@ -45,8 +45,10 @@ from m5.objects import *
 from m5.defines import buildEnv
 from m5.util import addToPath, fatal
 
-import MemConfig
-addToPath('../topologies')
+from common import MemConfig
+
+from topologies import *
+from network import Network
 
 def define_options(parser):
     # By default, ruby uses the simple timing cpu
@@ -64,15 +66,7 @@ def define_options(parser):
                       help="used of transitions per cycle which is a proxy \
                             for the number of ports.")
 
-    # ruby network options
-    parser.add_option("--topology", type="string", default="Crossbar",
-                      help="check configs/topologies for complete set")
-    parser.add_option("--mesh-rows", type="int", default=1,
-                      help="the number of rows in the mesh topology")
-    parser.add_option("--garnet-network", type="choice",
-                      choices=['fixed', 'flexible'], help="'fixed'|'flexible'")
-    parser.add_option("--network-fault-model", action="store_true", default=False,
-                      help="enable network fault model: see src/mem/ruby/network/fault_model/")
+    # network options are in network/Network.py
 
     # ruby mapping options
     parser.add_option("--numa-high-bit", type="int", default=0,
@@ -85,6 +79,7 @@ def define_options(parser):
     protocol = buildEnv['PROTOCOL']
     exec "import %s" % protocol
     eval("%s.define_options(parser)" % protocol)
+    Network.define_options(parser)
 
 def setup_memory_controllers(system, ruby, dir_cntrls, options):
     ruby.block_size_bytes = options.cacheline_size
@@ -122,6 +117,9 @@ def setup_memory_controllers(system, ruby, dir_cntrls, options):
                 MemConfig.get(options.mem_type), r, index, options.num_dirs,
                 int(math.log(options.num_dirs, 2)), options.cacheline_size)
 
+            if options.access_backing_store:
+                mem_ctrl.kvm_map=False
+
             mem_ctrls.append(mem_ctrl)
 
             if crossbar != None:
@@ -143,7 +141,7 @@ def create_topology(controllers, options):
         found in configs/topologies/BaseTopology.py
         This is a wrapper for the legacy topologies.
     """
-    exec "import %s as Topo" % options.topology
+    exec "import topologies.%s as Topo" % options.topology
     topology = eval("Topo.%s(controllers)" % options.topology)
     return topology
 
@@ -152,31 +150,9 @@ def create_system(options, full_system, system, piobus = None, dma_ports = []):
     system.ruby = RubySystem()
     ruby = system.ruby
 
-    # Set the network classes based on the command line options
-    if options.garnet_network == "fixed":
-        NetworkClass = GarnetNetwork_d
-        IntLinkClass = GarnetIntLink_d
-        ExtLinkClass = GarnetExtLink_d
-        RouterClass = GarnetRouter_d
-        InterfaceClass = GarnetNetworkInterface_d
-
-    elif options.garnet_network == "flexible":
-        NetworkClass = GarnetNetwork
-        IntLinkClass = GarnetIntLink
-        ExtLinkClass = GarnetExtLink
-        RouterClass = GarnetRouter
-        InterfaceClass = GarnetNetworkInterface
-
-    else:
-        NetworkClass = SimpleNetwork
-        IntLinkClass = SimpleIntLink
-        ExtLinkClass = SimpleExtLink
-        RouterClass = Switch
-        InterfaceClass = None
-
-    # Instantiate the network object so that the controllers can connect to it.
-    network = NetworkClass(ruby_system = ruby, topology = options.topology,
-            routers = [], ext_links = [], int_links = [], netifs = [])
+    # Create the network object
+    (network, IntLinkClass, ExtLinkClass, RouterClass, InterfaceClass) = \
+        Network.create_network(options, ruby)
     ruby.network = network
 
     protocol = buildEnv['PROTOCOL']
@@ -190,10 +166,19 @@ def create_system(options, full_system, system, piobus = None, dma_ports = []):
         print "Error: could not create sytem for ruby protocol %s" % protocol
         raise
 
+    # Create the network topology
+    topology.makeTopology(options, network, IntLinkClass, ExtLinkClass,
+            RouterClass)
+
+    # Initialize network based on topology
+    Network.init_network(options, network, InterfaceClass)
+
     # Create a port proxy for connecting the system port. This is
     # independent of the protocol and kept in the protocol-agnostic
     # part (i.e. here).
     sys_port_proxy = RubyPortProxy(ruby_system = ruby)
+    if piobus is not None:
+        sys_port_proxy.pio_master_port = piobus.slave
 
     # Give the system port proxy a SimObject parent without creating a
     # full-fledged controller
@@ -201,24 +186,6 @@ def create_system(options, full_system, system, piobus = None, dma_ports = []):
 
     # Connect the system port for loading of binaries etc
     system.system_port = system.sys_port_proxy.slave
-
-    # Create the network topology
-    topology.makeTopology(options, network, IntLinkClass, ExtLinkClass,
-            RouterClass)
-
-    if options.garnet_network is None:
-        assert(NetworkClass == SimpleNetwork)
-        assert(RouterClass == Switch)
-        network.setup_buffers()
-
-    if InterfaceClass != None:
-        netifs = [InterfaceClass(id=i) for (i,n) in enumerate(network.ext_links)]
-        network.netifs = netifs
-
-    if options.network_fault_model:
-        assert(options.garnet_network == "fixed")
-        network.enable_fault_model = True
-        network.fault_model = FaultModel()
 
     setup_memory_controllers(system, ruby, dir_cntrls, options)
 
@@ -231,6 +198,7 @@ def create_system(options, full_system, system, piobus = None, dma_ports = []):
             if buildEnv['TARGET_ISA'] == "x86":
                 cpu_seq.pio_slave_port = piobus.master
 
+    ruby.number_of_virtual_networks = ruby.network.number_of_virtual_networks
     ruby._cpu_ports = cpu_sequencers
     ruby.num_of_sequencers = len(cpu_sequencers)
 

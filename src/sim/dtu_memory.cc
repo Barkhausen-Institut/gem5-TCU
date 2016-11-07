@@ -96,7 +96,7 @@ DTUMemory::mapPage(Addr virt, Addr phys, uint access)
 
             // insert entry
             entry.base = addr.getAddr() >> DtuTlb::PAGE_BITS;
-            entry.ixwr = i == 0 ? access : DtuTlb::RWX;
+            entry.ixwr = i == 0 ? static_cast<DtuTlb::Flag>(access) : DtuTlb::RWX;
             DPRINTFS(DtuPtes, obj,
                 "Creating level %d PTE for virt=%#018x @ %#018x: %#018x\n",
                 i, virt, pteAddr, entry);

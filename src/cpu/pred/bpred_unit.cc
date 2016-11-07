@@ -59,8 +59,18 @@ BPredUnit::BPredUnit(const Params *params)
       predHist(numThreads),
       BTB(params->BTBEntries,
           params->BTBTagSize,
-          params->instShiftAmt),
+          params->instShiftAmt,
+          params->numThreads),
       RAS(numThreads),
+      useIndirect(params->useIndirect),
+      iPred(params->indirectHashGHR,
+            params->indirectHashTargets,
+            params->indirectSets,
+            params->indirectWays,
+            params->indirectTagSize,
+            params->indirectPathLength,
+            params->instShiftAmt,
+            params->numThreads),
       instShiftAmt(params->instShiftAmt)
 {
     for (auto& r : RAS)
@@ -70,6 +80,8 @@ BPredUnit::BPredUnit(const Params *params)
 void
 BPredUnit::regStats()
 {
+    SimObject::regStats();
+
     lookups
         .name(name() + ".lookups")
         .desc("Number of BP lookups")
@@ -116,6 +128,27 @@ BPredUnit::regStats()
         .name(name() + ".RASInCorrect")
         .desc("Number of incorrect RAS predictions.")
         ;
+
+    indirectLookups
+        .name(name() + ".indirectLookups")
+        .desc("Number of indirect predictor lookups.")
+        ;
+
+    indirectHits
+        .name(name() + ".indirectHits")
+        .desc("Number of indirect target hits.")
+        ;
+
+    indirectMisses
+        .name(name() + ".indirectMisses")
+        .desc("Number of indirect misses.")
+        ;
+
+    indirectMispredicted
+        .name(name() + "indirectMispredicted")
+        .desc("Number of mispredicted indirect branches.")
+        ;
+
 }
 
 ProbePoints::PMUUPtr
@@ -164,10 +197,10 @@ BPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
         DPRINTF(Branch, "[tid:%i]: Unconditional control.\n", tid);
         pred_taken = true;
         // Tell the BP there was an unconditional branch.
-        uncondBranch(pc.instAddr(), bp_history);
+        uncondBranch(tid, pc.instAddr(), bp_history);
     } else {
         ++condPredicted;
-        pred_taken = lookup(pc.instAddr(), bp_history);
+        pred_taken = lookup(tid, pc.instAddr(), bp_history);
 
         DPRINTF(Branch, "[tid:%i]: [sn:%i] Branch predictor"
                 " predicted %i for PC %s\n", tid, seqNum,  pred_taken, pc);
@@ -215,31 +248,59 @@ BPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
                         tid, pc, pc, RAS[tid].topIdx());
             }
 
-            if (BTB.valid(pc.instAddr(), tid)) {
-                ++BTBHits;
+            if (inst->isDirectCtrl() || !useIndirect) {
+                // Check BTB on direct branches
+                if (BTB.valid(pc.instAddr(), tid)) {
+                    ++BTBHits;
 
-                // If it's not a return, use the BTB to get the target addr.
-                target = BTB.lookup(pc.instAddr(), tid);
+                    // If it's not a return, use the BTB to get target addr.
+                    target = BTB.lookup(pc.instAddr(), tid);
 
-                DPRINTF(Branch, "[tid:%i]: Instruction %s predicted"
-                        " target is %s.\n", tid, pc, target);
+                    DPRINTF(Branch, "[tid:%i]: Instruction %s predicted"
+                            " target is %s.\n", tid, pc, target);
 
-            } else {
-                DPRINTF(Branch, "[tid:%i]: BTB doesn't have a "
-                        "valid entry.\n",tid);
-                pred_taken = false;
-                // The Direction of the branch predictor is altered because the
-                // BTB did not have an entry
-                // The predictor needs to be updated accordingly
-                if (!inst->isCall() && !inst->isReturn()) {
-                      btbUpdate(pc.instAddr(), bp_history);
-                      DPRINTF(Branch, "[tid:%i]:[sn:%i] btbUpdate"
-                              " called for %s\n", tid, seqNum, pc);
-                } else if (inst->isCall() && !inst->isUncondCtrl()) {
-                      RAS[tid].pop();
-                      predict_record.pushedRAS = false;
+                } else {
+                    DPRINTF(Branch, "[tid:%i]: BTB doesn't have a "
+                            "valid entry.\n",tid);
+                    pred_taken = false;
+                    // The Direction of the branch predictor is altered
+                    // because the BTB did not have an entry
+                    // The predictor needs to be updated accordingly
+                    if (!inst->isCall() && !inst->isReturn()) {
+                        btbUpdate(tid, pc.instAddr(), bp_history);
+                        DPRINTF(Branch, "[tid:%i]:[sn:%i] btbUpdate"
+                                " called for %s\n", tid, seqNum, pc);
+                    } else if (inst->isCall() && !inst->isUncondCtrl()) {
+                        RAS[tid].pop();
+                        predict_record.pushedRAS = false;
+                    }
+                    TheISA::advancePC(target, inst);
                 }
-                TheISA::advancePC(target, inst);
+            } else {
+                predict_record.wasIndirect = true;
+                ++indirectLookups;
+                //Consult indirect predictor on indirect control
+                if (iPred.lookup(pc.instAddr(), getGHR(tid, bp_history),
+                        target, tid)) {
+                    // Indirect predictor hit
+                    ++indirectHits;
+                    DPRINTF(Branch, "[tid:%i]: Instruction %s predicted "
+                            "indirect target is %s.\n", tid, pc, target);
+                } else {
+                    ++indirectMisses;
+                    pred_taken = false;
+                    DPRINTF(Branch, "[tid:%i]: Instruction %s no indirect "
+                            "target.\n", tid, pc);
+                    if (!inst->isCall() && !inst->isReturn()) {
+
+                    } else if (inst->isCall() && !inst->isUncondCtrl()) {
+                        RAS[tid].pop();
+                        predict_record.pushedRAS = false;
+                    }
+                    TheISA::advancePC(target, inst);
+                }
+                iPred.recordIndirect(pc.instAddr(), target.instAddr(), seqNum,
+                        tid);
             }
         }
     } else {
@@ -287,7 +348,7 @@ BPredUnit::predictInOrder(const StaticInstPtr &inst, const InstSeqNum &seqNum,
         DPRINTF(Branch, "[tid:%i] Unconditional control.\n", tid);
         pred_taken = true;
         // Tell the BP there was an unconditional branch.
-        uncondBranch(instPC.instAddr(), bp_history);
+        uncondBranch(tid, instPC.instAddr(), bp_history);
 
         if (inst->isReturn() && RAS[tid].empty()) {
             DPRINTF(Branch, "[tid:%i] RAS is empty, predicting "
@@ -297,7 +358,7 @@ BPredUnit::predictInOrder(const StaticInstPtr &inst, const InstSeqNum &seqNum,
     } else {
         ++condPredicted;
 
-        pred_taken = lookup(predPC.instAddr(), bp_history);
+        pred_taken = lookup(tid, predPC.instAddr(), bp_history);
     }
 
     PredictorHistory predict_record(seqNum, predPC.instAddr(), pred_taken,
@@ -387,14 +448,16 @@ BPredUnit::update(const InstSeqNum &done_sn, ThreadID tid)
     DPRINTF(Branch, "[tid:%i]: Committing branches until "
             "[sn:%lli].\n", tid, done_sn);
 
+    iPred.commit(done_sn, tid);
     while (!predHist[tid].empty() &&
            predHist[tid].back().seqNum <= done_sn) {
         // Update the branch predictor with the correct results.
         if (!predHist[tid].back().wasSquashed) {
-            update(predHist[tid].back().pc, predHist[tid].back().predTaken,
-                predHist[tid].back().bpHistory, false);
+            update(tid, predHist[tid].back().pc,
+                        predHist[tid].back().predTaken,
+                        predHist[tid].back().bpHistory, false);
         } else {
-            retireSquashed(predHist[tid].back().bpHistory);
+            retireSquashed(tid, predHist[tid].back().bpHistory);
         }
 
         predHist[tid].pop_back();
@@ -406,6 +469,7 @@ BPredUnit::squash(const InstSeqNum &squashed_sn, ThreadID tid)
 {
     History &pred_hist = predHist[tid];
 
+    iPred.squash(squashed_sn, tid);
     while (!pred_hist.empty() &&
            pred_hist.front().seqNum > squashed_sn) {
         if (pred_hist.front().usedRAS) {
@@ -415,7 +479,7 @@ BPredUnit::squash(const InstSeqNum &squashed_sn, ThreadID tid)
 
             RAS[tid].restore(pred_hist.front().RASIndex,
                              pred_hist.front().RASTarget);
-        } else if(pred_hist.front().wasCall && pred_hist.front().pushedRAS) {
+        } else if (pred_hist.front().wasCall && pred_hist.front().pushedRAS) {
              // Was a call but predicated false. Pop RAS here
              DPRINTF(Branch, "[tid: %i] Squashing"
                      "  Call [sn:%i] PC: %s Popping RAS\n", tid,
@@ -424,7 +488,7 @@ BPredUnit::squash(const InstSeqNum &squashed_sn, ThreadID tid)
         }
 
         // This call should delete the bpHistory.
-        squash(pred_hist.front().bpHistory);
+        squash(tid, pred_hist.front().bpHistory);
 
         DPRINTF(Branch, "[tid:%i]: Removing history for [sn:%i] "
                 "PC %s.\n", tid, pred_hist.front().seqNum,
@@ -484,9 +548,14 @@ BPredUnit::squash(const InstSeqNum &squashed_sn,
 
         if ((*hist_it).usedRAS) {
             ++RASIncorrect;
+            DPRINTF(Branch, "[tid:%i]: Incorrect RAS [sn:%i]\n",
+                    tid, hist_it->seqNum);
         }
 
-        update((*hist_it).pc, actually_taken,
+        // Have to get GHR here because the update deletes bpHistory
+        unsigned ghr = getGHR(tid, hist_it->bpHistory);
+
+        update(tid, (*hist_it).pc, actually_taken,
                pred_hist.front().bpHistory, true);
         hist_it->wasSquashed = true;
 
@@ -498,12 +567,15 @@ BPredUnit::squash(const InstSeqNum &squashed_sn,
                  RAS[tid].pop();
                  hist_it->usedRAS = true;
             }
+            if (hist_it->wasIndirect) {
+                ++indirectMispredicted;
+                iPred.recordTarget(hist_it->seqNum, ghr, corrTarget, tid);
+            } else {
+                DPRINTF(Branch,"[tid: %i] BTB Update called for [sn:%i]"
+                        " PC: %s\n", tid,hist_it->seqNum, hist_it->pc);
 
-            DPRINTF(Branch,"[tid: %i] BTB Update called for [sn:%i]"
-                    " PC: %s\n", tid,hist_it->seqNum, hist_it->pc);
-
-            BTB.update((*hist_it).pc, corrTarget, tid);
-
+                BTB.update((*hist_it).pc, corrTarget, tid);
+            }
         } else {
            //Actually not Taken
            if (hist_it->usedRAS) {

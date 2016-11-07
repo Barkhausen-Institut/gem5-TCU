@@ -107,8 +107,12 @@ class Process : public SimObject
     Addr next_thread_stack_base;
 
     // Base of region for mmaps (when user doesn't specify an address).
-    Addr mmap_start;
     Addr mmap_end;
+
+    // Does mmap region grow upward or downward from mmap_end?  Most
+    // platforms grow downward, but a few (such as Alpha) grow upward
+    // instead, so they can override thie method to return false.
+    virtual bool mmapGrowsDown() const { return true; }
 
     // Base of region for nxm data
     Addr nxm_start;
@@ -122,9 +126,9 @@ class Process : public SimObject
     // constructor
     Process(ProcessParams *params);
 
-    virtual void initState();
+    void initState() override;
 
-    DrainState drain() M5_ATTR_OVERRIDE;
+    DrainState drain() override;
 
   public:
 
@@ -158,7 +162,7 @@ class Process : public SimObject
     void inheritFDArray(Process *p);
 
     // override of virtual SimObject method: register statistics
-    virtual void regStats();
+    void regStats() override;
 
     // After getting registered with system object, tell process which
     // system-wide context id it is assigned.
@@ -225,8 +229,8 @@ class Process : public SimObject
      */
     bool map(Addr vaddr, Addr paddr, int size, bool cacheable = true);
 
-    void serialize(CheckpointOut &cp) const M5_ATTR_OVERRIDE;
-    void unserialize(CheckpointIn &cp) M5_ATTR_OVERRIDE;
+    void serialize(CheckpointOut &cp) const override;
+    void unserialize(CheckpointIn &cp) override;
 };
 
 //
@@ -240,6 +244,7 @@ class LiveProcess : public Process
     std::vector<std::string> argv;
     std::vector<std::string> envp;
     std::string cwd;
+    std::string executable;
 
     LiveProcess(LiveProcessParams *params, ObjectFile *objFile);
 
@@ -296,7 +301,7 @@ class LiveProcess : public Process
     inline uint64_t ppid() {return __ppid;}
 
     // provide program name for debug messages
-    virtual const char *progName() const { return argv[0].c_str(); }
+    virtual const char *progName() const { return executable.c_str(); }
 
     std::string
     fullPath(const std::string &filename)
@@ -332,6 +337,16 @@ class LiveProcess : public Process
      * @return Pointer to driver object if found, else NULL
      */
     EmulatedDriver *findDriver(std::string filename);
+
+    // This function acts as a callback to update the bias value in
+    // the object file because the parameters needed to calculate the
+    // bias are not available when the object file is created.
+    void updateBias();
+
+    ObjectFile *getInterpreter();
+
+    Addr getBias();
+    Addr getStartPC();
 
     // this function is used to create the LiveProcess object, since
     // we can't tell which subclass of LiveProcess to use until we

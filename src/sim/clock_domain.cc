@@ -56,6 +56,8 @@
 void
 ClockDomain::regStats()
 {
+    SimObject::regStats();
+
     using namespace Stats;
 
     // Expose the current clock period as a stat for observability in
@@ -147,6 +149,11 @@ SrcClockDomain::perfLevel(PerfLevel perf_level)
 
     _perfLevel = perf_level;
 
+    signalPerfLevelUpdate();
+}
+
+void SrcClockDomain::signalPerfLevelUpdate()
+{
     // Signal the voltage domain that we have changed our perf level so that the
     // voltage domain can recompute its performance level
     voltageDomain()->sanitiseVoltages();
@@ -174,7 +181,7 @@ SrcClockDomain::startup()
 {
     // Perform proper clock update when all related components have been
     // created (i.e. after unserialization / object creation)
-    perfLevel(_perfLevel);
+    signalPerfLevelUpdate();
 }
 
 SrcClockDomain *

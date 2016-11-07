@@ -42,6 +42,7 @@
 #include "config/the_isa.hh"
 #include "cpu/base.hh"
 #include "cpu/thread_context.hh"
+#include "debug/SyscallBase.hh"
 #include "debug/SyscallVerbose.hh"
 #include "mem/page_table.hh"
 #include "sim/process.hh"
@@ -55,28 +56,31 @@ using namespace TheISA;
 void
 SyscallDesc::doSyscall(int callnum, LiveProcess *process, ThreadContext *tc)
 {
-    if (DTRACE(SyscallVerbose)) {
+    if (DTRACE(SyscallBase)) {
         int index = 0;
-        IntReg arg[4] M5_VAR_USED;
+        IntReg arg[6] M5_VAR_USED;
 
         // we can't just put the calls to getSyscallArg() in the
         // DPRINTF arg list, because C++ doesn't guarantee their order
-        for (int i = 0; i < 4; ++i)
+        for (int i = 0; i < 6; ++i)
             arg[i] = process->getSyscallArg(tc, index);
 
-        DPRINTFNR("%d: %s: syscall %s called w/arguments %d,%d,%d,%d\n",
-                  curTick(), tc->getCpuPtr()->name(), name,
-                  arg[0], arg[1], arg[2], arg[3]);
+        // Linux supports up to six system call arguments through registers
+        // so we want to print all six. Check to the relevant man page to
+        // verify how many are actually used by a given system call.
+        DPRINTF_SYSCALL(Base,
+                        "%s called w/arguments %d, %d, %d, %d, %d, %d\n",
+                        name, arg[0], arg[1], arg[2], arg[3], arg[4],
+                        arg[5]);
     }
 
     SyscallReturn retval = (*funcPtr)(this, callnum, process, tc);
 
     if (retval.needsRetry()) {
-        DPRINTFS(SyscallVerbose, tc->getCpuPtr(), "syscall %s needs retry\n",
-                 name);
+        DPRINTF_SYSCALL(Base, "%s needs retry\n", name);
     } else {
-        DPRINTFS(SyscallVerbose, tc->getCpuPtr(), "syscall %s returns %d\n",
-                 name, retval.encodedValue());
+        DPRINTF_SYSCALL(Base, "%s returns %d\n", name,
+                        retval.encodedValue());
     }
 
     if (!(flags & SyscallDesc::SuppressReturnValue) && !retval.needsRetry())
@@ -201,7 +205,8 @@ brkFunc(SyscallDesc *desc, int num, LiveProcess *p, ThreadContext *tc)
     }
 
     p->brk_point = new_brk;
-    DPRINTF(SyscallVerbose, "Break Point changed to: %#X\n", p->brk_point);
+    DPRINTF_SYSCALL(Verbose, "brk: break point changed to: %#X\n",
+                    p->brk_point);
     return p->brk_point;
 }
 
@@ -240,7 +245,7 @@ readFunc(SyscallDesc *desc, int num, LiveProcess *p, ThreadContext *tc)
 
     int bytes_read = read(sim_fd, bufArg.bufferPtr(), nbytes);
 
-    if (bytes_read != -1)
+    if (bytes_read > 0)
         bufArg.copyOut(tc->getMemProxy());
 
     return bytes_read;
@@ -306,26 +311,22 @@ _llseekFunc(SyscallDesc *desc, int num, LiveProcess *p, ThreadContext *tc)
     uint64_t result = lseek(sim_fd, offset, whence);
     result = TheISA::htog(result);
 
-    if (result == (off_t)-1) {
-        //The seek failed.
+    if (result == (off_t)-1)
         return -errno;
-    } else {
-        // The seek succeeded.
-        // Copy "result" to "result_ptr"
-        // XXX We'll assume that the size of loff_t is 64 bits on the
-        // target platform
-        BufferArg result_buf(result_ptr, sizeof(result));
-        memcpy(result_buf.bufferPtr(), &result, sizeof(result));
-        result_buf.copyOut(tc->getMemProxy());
-        return 0;
-    }
+    // Assuming that the size of loff_t is 64 bits on the target platform
+    BufferArg result_buf(result_ptr, sizeof(result));
+    memcpy(result_buf.bufferPtr(), &result, sizeof(result));
+    result_buf.copyOut(tc->getMemProxy());
+    return 0;
 }
 
 
 SyscallReturn
 munmapFunc(SyscallDesc *desc, int num, LiveProcess *p, ThreadContext *tc)
 {
-    // given that we don't really implement mmap, munmap is really easy
+    // With mmap more fully implemented, it might be worthwhile to bite
+    // the bullet and implement munmap. Should allow us to reuse simulated
+    // memory.
     return 0;
 }
 
@@ -407,25 +408,38 @@ readlinkFunc(SyscallDesc *desc, int num, LiveProcess *p, ThreadContext *tc,
     if (path != "/proc/self/exe") {
         result = readlink(path.c_str(), (char *)buf.bufferPtr(), bufsiz);
     } else {
-        // readlink() will return the path of the binary given
-        // with the -c option, however it is possible that this
-        // will still result in incorrect behavior if one binary
-        // runs another, e.g., -c time -o "my_binary" where
-        // my_binary calls readlink(). this is a very unlikely case,
-        // so we issue a warning.
-        warn_once("readlink may yield unexpected results if multiple "
-                  "binaries are used\n");
-        if (strlen(p->progName()) > bufsiz) {
+        // Emulate readlink() called on '/proc/self/exe' should return the
+        // absolute path of the binary running in the simulated system (the
+        // LiveProcess' executable). It is possible that using this path in
+        // the simulated system will result in unexpected behavior if:
+        //  1) One binary runs another (e.g., -c time -o "my_binary"), and
+        //     called binary calls readlink().
+        //  2) The host's full path to the running benchmark changes from one
+        //     simulation to another. This can result in different simulated
+        //     performance since the simulated system will process the binary
+        //     path differently, even if the binary itself does not change.
+
+        // Get the absolute canonical path to the running application
+        char real_path[PATH_MAX];
+        char *check_real_path = realpath(p->progName(), real_path);
+        if (!check_real_path) {
+            fatal("readlink('/proc/self/exe') unable to resolve path to "
+                  "executable: %s", p->progName());
+        }
+        strncpy((char*)buf.bufferPtr(), real_path, bufsiz);
+        size_t real_path_len = strlen(real_path);
+        if (real_path_len > bufsiz) {
             // readlink will truncate the contents of the
             // path to ensure it is no more than bufsiz
-            strncpy((char*)buf.bufferPtr(), p->progName(), bufsiz);
             result = bufsiz;
         } else {
-            // return the program's working path rather
-            // than the one for the gem5 binary itself.
-            strcpy((char*)buf.bufferPtr(), p->progName());
-            result = strlen((char*)buf.bufferPtr());
+            result = real_path_len;
         }
+
+        // Issue a warning about potential unexpected results
+        warn_once("readlink() called on '/proc/self/exe' may yield unexpected "
+                  "results in various settings.\n      Returning '%s'\n",
+                  (char*)buf.bufferPtr());
     }
 
     buf.copyOut(tc->getMemProxy());

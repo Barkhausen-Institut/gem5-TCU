@@ -91,17 +91,23 @@ def parse_options():
         help="Create JSON output of the configuration [Default: %default]")
     option("--dot-config", metavar="FILE", default="config.dot",
         help="Create DOT & pdf outputs of the configuration [Default: %default]")
+    option("--dot-dvfs-config", metavar="FILE", default=None,
+        help="Create DOT & pdf outputs of the DVFS configuration" + \
+             " [Default: %default]")
 
     # Debugging options
     group("Debugging Options")
-    option("--debug-break", metavar="TIME[,TIME]", action='append', split=',',
-        help="Tick to create a breakpoint")
+    option("--debug-break", metavar="TICK[,TICK]", action='append', split=',',
+        help="Create breakpoint(s) at TICK(s) " \
+             "(kills process if no debugger attached)")
     option("--debug-help", action='store_true',
         help="Print help on debug flags")
     option("--debug-flags", metavar="FLAG[,FLAG]", action='append', split=',',
         help="Sets the flags for debug output (-FLAG disables a flag)")
-    option("--debug-start", metavar="TIME", type='int',
-        help="Start debug output at TIME (must be in ticks)")
+    option("--debug-start", metavar="TICK", type='int',
+        help="Start debug output at TICK")
+    option("--debug-end", metavar="TICK", type='int',
+        help="End debug output at TICK")
     option("--debug-file", metavar="FILE", default="cout",
         help="Sets the output file for debug [Default: %default]")
     option("--debug-ignore", metavar="EXPR", action='append', split=':',
@@ -145,7 +151,7 @@ def interact(scope):
         try:
             import IPython
             from IPython.config.loader import Config
-            from IPython.frontend.terminal.embed import InteractiveShellEmbed
+            from IPython.terminal.embed import InteractiveShellEmbed
 
             cfg = Config()
             cfg.PromptManager.in_template = prompt_in1
@@ -291,7 +297,8 @@ def main(*args):
 
         print "gem5 started %s" % \
             datetime.datetime.now().strftime("%b %e %Y %X")
-        print "gem5 executing on %s" % socket.gethostname()
+        print "gem5 executing on %s, pid %d" % \
+            (socket.gethostname(), os.getpid())
 
         # in Python 3 pipes.quote() is moved to shlex.quote()
         import pipes
@@ -345,6 +352,11 @@ def main(*args):
         event.mainq.schedule(e, options.debug_start)
     else:
         trace.enable()
+
+    if options.debug_end:
+        check_tracing()
+        e = event.create(trace.disable, event.Event.Debug_Enable_Pri)
+        event.mainq.schedule(e, options.debug_end)
 
     trace.output(options.debug_file)
 

@@ -32,6 +32,7 @@
 #include "mem/protocol/MemoryMsg.hh"
 #include "mem/ruby/system/RubySystem.hh"
 #include "mem/ruby/system/Sequencer.hh"
+#include "mem/ruby/system/GPUCoalescer.hh"
 #include "sim/system.hh"
 
 AbstractController::AbstractController(const Params *p)
@@ -75,6 +76,8 @@ AbstractController::resetStats()
 void
 AbstractController::regStats()
 {
+    MemObject::regStats();
+
     m_fully_busy_cycles
         .name(name() + ".fully_busy_cycles")
         .desc("cycles for which number of transistions == max transitions")
@@ -155,7 +158,7 @@ AbstractController::wakeUpAllBuffers()
     std::vector<MsgVecType*> wokeUpMsgVecs;
     MsgBufType wokeUpMsgBufs;
 
-    if(m_waiting_buffers.size() > 0) {
+    if (m_waiting_buffers.size() > 0) {
         for (WaitingBufType::iterator buf_iter = m_waiting_buffers.begin();
              buf_iter != m_waiting_buffers.end();
              ++buf_iter) {
@@ -191,6 +194,12 @@ AbstractController::blockOnQueue(Addr addr, MessageBuffer* port)
     m_block_map[addr] = port;
 }
 
+bool
+AbstractController::isBlocked(Addr addr) const
+{
+    return m_is_blocking && (m_block_map.find(addr) != m_block_map.end());
+}
+
 void
 AbstractController::unblock(Addr addr)
 {
@@ -198,6 +207,12 @@ AbstractController::unblock(Addr addr)
     if (m_block_map.size() == 0) {
        m_is_blocking = false;
     }
+}
+
+bool
+AbstractController::isBlocked(Addr addr)
+{
+    return (m_block_map.count(addr) > 0);
 }
 
 BaseMasterPort &
@@ -263,8 +278,7 @@ AbstractController::queueMemoryWritePartial(const MachineID &id, Addr addr,
                                             Cycles latency,
                                             const DataBlock &block, int size)
 {
-    RequestPtr req = new Request(addr, RubySystem::getBlockSizeBytes(), 0,
-                                 m_masterId);
+    RequestPtr req = new Request(addr, size, 0, m_masterId);
 
     PacketPtr pkt = Packet::createWrite(req);
     uint8_t *newData = new uint8_t[size];
@@ -328,6 +342,7 @@ AbstractController::recvTimingResp(PacketPtr pkt)
     }
 
     getMemoryQueue()->enqueue(msg, clockEdge(), cyclesToTicks(Cycles(1)));
+    delete pkt->req;
     delete pkt;
 }
 

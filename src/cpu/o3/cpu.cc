@@ -92,9 +92,9 @@ bool
 FullO3CPU<Impl>::IcachePort::recvTimingResp(PacketPtr pkt)
 {
     DPRINTF(O3CPU, "Fetch unit received timing\n");
-    // We shouldn't ever get a cacheable block in ownership state
+    // We shouldn't ever get a cacheable block in Modified state
     assert(pkt->req->isUncacheable() ||
-           !(pkt->memInhibitAsserted() && !pkt->sharedAsserted()));
+           !(pkt->cacheResponding() && !pkt->hasSharers()));
     fetch->processCacheCompletion(pkt);
 
     return true;
@@ -118,9 +118,10 @@ template <class Impl>
 void
 FullO3CPU<Impl>::DcachePort::recvTimingSnoopReq(PacketPtr pkt)
 {
-    // X86 ISA: Snooping an invalidation for monitor/mwait
-    if(cpu->getCpuAddrMonitor()->doMonitor(pkt)) {
-        cpu->wakeup();
+    for (ThreadID tid = 0; tid < cpu->numThreads; tid++) {
+        if (cpu->getCpuAddrMonitor(tid)->doMonitor(pkt)) {
+            cpu->wakeup(tid);
+        }
     }
     lsq->recvTimingSnoopReq(pkt);
 }
@@ -379,10 +380,9 @@ FullO3CPU<Impl>::FullO3CPU(DerivO3CPUParams *params)
         assert(o3_tc->cpu);
         o3_tc->thread = this->thread[tid];
 
-        if (FullSystem) {
-            // Setup quiesce event.
-            this->thread[tid]->quiesceEvent = new EndQuiesceEvent(tc);
-        }
+        // Setup quiesce event.
+        this->thread[tid]->quiesceEvent = new EndQuiesceEvent(tc);
+
         // Give the thread the TC.
         this->thread[tid]->tc = tc;
 
@@ -391,7 +391,7 @@ FullO3CPU<Impl>::FullO3CPU(DerivO3CPUParams *params)
     }
 
     // FullO3CPU always requires an interrupt controller.
-    if (!params->switched_out && !interrupts) {
+    if (!params->switched_out && interrupts.empty()) {
         fatal("FullO3CPU %s has no interrupt controller.\n"
               "Ensure createInterruptController() is called.\n", name());
     }
@@ -415,6 +415,7 @@ FullO3CPU<Impl>::regProbePoints()
     ppDataAccessComplete = new ProbePointArg<std::pair<DynInstPtr, PacketPtr> >(getProbeManager(), "DataAccessComplete");
 
     fetch.regProbePoints();
+    rename.regProbePoints();
     iew.regProbePoints();
     commit.regProbePoints();
 }
@@ -733,6 +734,8 @@ FullO3CPU<Impl>::activateContext(ThreadID tid)
         lastActivatedCycle = curTick();
 
         _status = Running;
+
+        BaseCPU::activateContext(tid);
     }
 }
 
@@ -753,6 +756,8 @@ FullO3CPU<Impl>::suspendContext(ThreadID tid)
     }
 
     DPRINTF(Quiesce, "Suspending Context\n");
+
+    BaseCPU::suspendContext(tid);
 }
 
 template <class Impl>
@@ -789,8 +794,8 @@ FullO3CPU<Impl>::insertThread(ThreadID tid)
     }
 
     //Bind Float Regs to Rename Map
-    int max_reg = TheISA::NumIntRegs + TheISA::NumFloatRegs;
-    for (int freg = TheISA::NumIntRegs; freg < max_reg; freg++) {
+    int max_reg = TheISA::FP_Reg_Base + TheISA::NumFloatRegs;
+    for (int freg = TheISA::FP_Reg_Base; freg < max_reg; freg++) {
         PhysRegIndex phys_reg = freeList.getFloatReg();
 
         renameMap[tid].setEntry(freg,phys_reg);
@@ -798,8 +803,8 @@ FullO3CPU<Impl>::insertThread(ThreadID tid)
     }
 
     //Bind condition-code Regs to Rename Map
-    max_reg = TheISA::NumIntRegs + TheISA::NumFloatRegs + TheISA::NumCCRegs;
-    for (int creg = TheISA::NumIntRegs + TheISA::NumFloatRegs;
+    max_reg = TheISA::CC_Reg_Base + TheISA::NumCCRegs;
+    for (int creg = TheISA::CC_Reg_Base;
          creg < max_reg; creg++) {
         PhysRegIndex phys_reg = freeList.getCCReg();
 
@@ -934,7 +939,7 @@ Fault
 FullO3CPU<Impl>::getInterrupts()
 {
     // Check if there are any outstanding interrupts
-    return this->interrupts->getInterrupt(this->threadContexts[0]);
+    return this->interrupts[0]->getInterrupt(this->threadContexts[0]);
 }
 
 template <class Impl>
@@ -948,7 +953,7 @@ FullO3CPU<Impl>::processInterrupts(const Fault &interrupt)
     // @todo: Allow other threads to handle interrupts.
 
     assert(interrupt != NoFault);
-    this->interrupts->updateIntrInfo(this->threadContexts[0]);
+    this->interrupts[0]->updateIntrInfo(this->threadContexts[0]);
 
     DPRINTF(O3CPU, "Interrupt %s being handled\n", interrupt->name());
     this->trap(interrupt, 0, nullptr);
@@ -1632,15 +1637,15 @@ FullO3CPU<Impl>::wakeCPU()
 
 template <class Impl>
 void
-FullO3CPU<Impl>::wakeup()
+FullO3CPU<Impl>::wakeup(ThreadID tid)
 {
-    if (this->thread[0]->status() != ThreadContext::Suspended)
+    if (this->thread[tid]->status() != ThreadContext::Suspended)
         return;
 
     this->wakeCPU();
 
     DPRINTF(Quiesce, "Suspended Processor woken\n");
-    this->threadContexts[0]->activate();
+    this->threadContexts[tid]->activate();
 }
 
 template <class Impl>

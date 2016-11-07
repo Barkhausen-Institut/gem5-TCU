@@ -141,6 +141,8 @@ Dtu::~Dtu()
 void
 Dtu::regStats()
 {
+    BaseDtu::regStats();
+
     nocMsgRecvs
         .name(name() + ".nocMsgRecvs")
         .desc("Number of received messages");
@@ -906,9 +908,9 @@ Dtu::handleNocRequest(PacketPtr pkt)
 {
     assert(!pkt->isError());
 
-    if (pkt->memInhibitAsserted())
+    if (pkt->cacheResponding())
     {
-        DPRINTF(DtuPackets, "Ignoring inhibited packet\n");
+        DPRINTF(DtuPackets, "Ignoring packet, because cache is responding\n");
         schedNocRequestFinished(clockEdge(Cycles(1)));
         return;
     }

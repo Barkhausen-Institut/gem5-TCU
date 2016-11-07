@@ -1,4 +1,4 @@
-# Copyright (c) 2010-2013 ARM Limited
+# Copyright (c) 2010-2013, 2016 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -49,19 +49,18 @@ from m5.defines import buildEnv
 from m5.objects import *
 from m5.util import addToPath, fatal
 
-addToPath('../common')
-addToPath('../ruby')
+addToPath('../')
 
-import Ruby
+from ruby import Ruby
 
-from FSConfig import *
-from SysPaths import *
-from Benchmarks import *
-import Simulation
-import CacheConfig
-import MemConfig
-from Caches import *
-import Options
+from common.FSConfig import *
+from common.SysPaths import *
+from common.Benchmarks import *
+from common import Simulation
+from common import CacheConfig
+from common import MemConfig
+from common.Caches import *
+from common import Options
 
 
 # Check if KVM support has been enabled, we might need to do VM
@@ -99,7 +98,8 @@ def build_test_system(np):
                                  options.num_cpus, bm[0], options.dtb_filename,
                                  bare_metal=options.bare_metal,
                                  cmdline=cmdline,
-                                 external_memory=options.external_memory_system)
+                                 external_memory=options.external_memory_system,
+                                 ruby=options.ruby)
         if options.enable_context_switch_stats_dump:
             test_sys.enable_context_switch_stats_dump = True
     else:
@@ -172,13 +172,14 @@ def build_test_system(np):
             cpu.icache_port = test_sys.ruby._cpu_ports[i].slave
             cpu.dcache_port = test_sys.ruby._cpu_ports[i].slave
 
-            if buildEnv['TARGET_ISA'] == "x86":
+            if buildEnv['TARGET_ISA'] in ("x86", "arm"):
                 cpu.itb.walker.port = test_sys.ruby._cpu_ports[i].slave
                 cpu.dtb.walker.port = test_sys.ruby._cpu_ports[i].slave
 
-                cpu.interrupts.pio = test_sys.ruby._cpu_ports[i].master
-                cpu.interrupts.int_master = test_sys.ruby._cpu_ports[i].slave
-                cpu.interrupts.int_slave = test_sys.ruby._cpu_ports[i].master
+            if buildEnv['TARGET_ISA'] in "x86":
+                cpu.interrupts[0].pio = test_sys.ruby._cpu_ports[i].master
+                cpu.interrupts[0].int_master = test_sys.ruby._cpu_ports[i].slave
+                cpu.interrupts[0].int_slave = test_sys.ruby._cpu_ports[i].master
 
     else:
         if options.caches or options.l2cache:
@@ -214,7 +215,19 @@ def build_test_system(np):
                 test_sys.cpu[i].addCheckerCpu()
             test_sys.cpu[i].createThreads()
 
+        # If elastic tracing is enabled when not restoring from checkpoint and
+        # when not fast forwarding using the atomic cpu, then check that the
+        # TestCPUClass is DerivO3CPU or inherits from DerivO3CPU. If the check
+        # passes then attach the elastic trace probe.
+        # If restoring from checkpoint or fast forwarding, the code that does this for
+        # FutureCPUClass is in the Simulation module. If the check passes then the
+        # elastic trace probe is attached to the switch CPUs.
+        if options.elastic_trace_en and options.checkpoint_restore == None and \
+            not options.fast_forward:
+            CpuConfig.config_etrace(TestCPUClass, test_sys.cpu, options)
+
         CacheConfig.config_cache(options, test_sys)
+
         MemConfig.config_mem(options, test_sys)
 
     return test_sys
@@ -328,6 +341,18 @@ test_sys = build_test_system(np)
 if len(bm) == 2:
     drive_sys = build_drive_system(np)
     root = makeDualRoot(True, test_sys, drive_sys, options.etherdump)
+elif len(bm) == 1 and options.dist:
+    # This system is part of a dist-gem5 simulation
+    root = makeDistRoot(test_sys,
+                        options.dist_rank,
+                        options.dist_size,
+                        options.dist_server_name,
+                        options.dist_server_port,
+                        options.dist_sync_repeat,
+                        options.dist_sync_start,
+                        options.ethernet_linkspeed,
+                        options.ethernet_linkdelay,
+                        options.etherdump);
 elif len(bm) == 1:
     root = Root(full_system=True, system=test_sys)
 else:

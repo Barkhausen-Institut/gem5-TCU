@@ -115,11 +115,13 @@ CommMonitor::recvFunctionalSnoop(PacketPtr pkt)
 Tick
 CommMonitor::recvAtomic(PacketPtr pkt)
 {
-    ppPktReq->notify(pkt);
+    ProbePoints::PacketInfo req_pkt_info(pkt);
+    ppPktReq->notify(req_pkt_info);
 
     const Tick delay(masterPort.sendAtomic(pkt));
     assert(pkt->isResponse());
-    ppPktResp->notify(pkt);
+    ProbePoints::PacketInfo resp_pkt_info(pkt);
+    ppPktResp->notify(resp_pkt_info);
     return delay;
 }
 
@@ -137,24 +139,22 @@ CommMonitor::recvTimingReq(PacketPtr pkt)
 
     // Store relevant fields of packet, because packet may be modified
     // or even deleted when sendTiming() is called.
+    const ProbePoints::PacketInfo pkt_info(pkt);
+
     const bool is_read = pkt->isRead();
     const bool is_write = pkt->isWrite();
-    const MemCmd cmd = pkt->cmd;
-    const unsigned size = pkt->getSize();
-    const Addr addr = pkt->getAddr();
     const bool expects_response(
-        pkt->needsResponse() && !pkt->memInhibitAsserted());
+        pkt->needsResponse() && !pkt->cacheResponding());
 
     // If a cache miss is served by a cache, a monitor near the memory
     // would see a request which needs a response, but this response
-    // would be inhibited and not come back from the memory. Therefore
-    // we additionally have to check the inhibit flag.
+    // would not come back from the memory. Therefore we additionally
+    // have to check the cacheResponding flag
     if (expects_response && !stats.disableLatencyHists) {
         pkt->pushSenderState(new CommMonitorSenderState(curTick()));
     }
 
-    // Attempt to send the packet (always succeeds for inhibited
-    // packets)
+    // Attempt to send the packet
     bool successful = masterPort.sendTimingReq(pkt);
 
     // If not successful, restore the sender state
@@ -163,14 +163,7 @@ CommMonitor::recvTimingReq(PacketPtr pkt)
     }
 
     if (successful) {
-        // The receiver might already have modified the packet. We
-        // want to give the probe access to the original packet, which
-        // means we need to fake the original packet by temporarily
-        // restoring the command.
-        const MemCmd response_cmd(pkt->cmd);
-        pkt->cmd = cmd;
-        ppPktReq->notify(pkt);
-        pkt->cmd = response_cmd;
+        ppPktReq->notify(pkt_info);
     }
 
     if (successful && is_read) {
@@ -183,12 +176,12 @@ CommMonitor::recvTimingReq(PacketPtr pkt)
 
         // Get sample of burst length
         if (!stats.disableBurstLengthHists) {
-            stats.readBurstLengthHist.sample(size);
+            stats.readBurstLengthHist.sample(pkt_info.size);
         }
 
         // Sample the masked address
         if (!stats.disableAddrDists) {
-            stats.readAddrDist.sample(addr & readAddrMask);
+            stats.readAddrDist.sample(pkt_info.addr & readAddrMask);
         }
 
         // If it needs a response increment number of outstanding read
@@ -219,18 +212,18 @@ CommMonitor::recvTimingReq(PacketPtr pkt)
         }
 
         if (!stats.disableBurstLengthHists) {
-            stats.writeBurstLengthHist.sample(size);
+            stats.writeBurstLengthHist.sample(pkt_info.size);
         }
 
         // Update the bandwidth stats on the request
         if (!stats.disableBandwidthHists) {
-            stats.writtenBytes += size;
-            stats.totalWrittenBytes += size;
+            stats.writtenBytes += pkt_info.size;
+            stats.totalWrittenBytes += pkt_info.size;
         }
 
         // Sample the masked write address
         if (!stats.disableAddrDists) {
-            stats.writeAddrDist.sample(addr & writeAddrMask);
+            stats.writeAddrDist.sample(pkt_info.addr & writeAddrMask);
         }
 
         if (!stats.disableOutstandingHists && expects_response) {
@@ -265,9 +258,10 @@ CommMonitor::recvTimingResp(PacketPtr pkt)
 
     // Store relevant fields of packet, because packet may be modified
     // or even deleted when sendTiming() is called.
+    const ProbePoints::PacketInfo pkt_info(pkt);
+
     bool is_read = pkt->isRead();
     bool is_write = pkt->isWrite();
-    unsigned size = pkt->getSize();
     Tick latency = 0;
     CommMonitorSenderState* received_state =
         dynamic_cast<CommMonitorSenderState*>(pkt->senderState);
@@ -299,8 +293,7 @@ CommMonitor::recvTimingResp(PacketPtr pkt)
     }
 
     if (successful) {
-        assert(pkt->isResponse());
-        ppPktResp->notify(pkt);
+        ppPktResp->notify(pkt_info);
     }
 
     if (successful && is_read) {
@@ -317,8 +310,8 @@ CommMonitor::recvTimingResp(PacketPtr pkt)
 
         // Update the bandwidth stats based on responses for reads
         if (!stats.disableBandwidthHists) {
-            stats.readBytes += size;
-            stats.totalReadBytes += size;
+            stats.readBytes += pkt_info.size;
+            stats.totalReadBytes += pkt_info.size;
         }
 
     } else if (successful && is_write) {
@@ -348,6 +341,12 @@ bool
 CommMonitor::recvTimingSnoopResp(PacketPtr pkt)
 {
     return masterPort.sendTimingSnoopResp(pkt);
+}
+
+void
+CommMonitor::recvRetrySnoopResp()
+{
+    slavePort.sendRetrySnoopResp();
 }
 
 bool
@@ -385,6 +384,8 @@ CommMonitor::recvRangeChange()
 void
 CommMonitor::regStats()
 {
+    MemObject::regStats();
+
     // Initialise all the monitor stats
     using namespace Stats;
 

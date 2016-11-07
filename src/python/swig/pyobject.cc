@@ -36,8 +36,8 @@
 #include "base/output.hh"
 #include "config/the_isa.hh"
 #if THE_ISA != NULL_ISA
-#include "dev/etherdevice.hh"
-#include "dev/etherobject.hh"
+#include "dev/net/etherdevice.hh"
+#include "dev/net/etherobject.hh"
 #endif
 #include "mem/ruby/slicc_interface/AbstractController.hh"
 #include "mem/mem_object.hh"
@@ -77,25 +77,23 @@ connectPorts(SimObject *o1, const std::string &name1, int i1,
              SimObject *o2, const std::string &name2, int i2)
 {
 #if THE_ISA != NULL_ISA
-    if (FullSystem) {
-        EtherObject *eo1, *eo2;
-        EtherDevice *ed1, *ed2;
-        eo1 = dynamic_cast<EtherObject*>(o1);
-        ed1 = dynamic_cast<EtherDevice*>(o1);
-        eo2 = dynamic_cast<EtherObject*>(o2);
-        ed2 = dynamic_cast<EtherDevice*>(o2);
+    EtherObject *eo1, *eo2;
+    EtherDevice *ed1, *ed2;
+    eo1 = dynamic_cast<EtherObject*>(o1);
+    ed1 = dynamic_cast<EtherDevice*>(o1);
+    eo2 = dynamic_cast<EtherObject*>(o2);
+    ed2 = dynamic_cast<EtherDevice*>(o2);
 
-        if ((eo1 || ed1) && (eo2 || ed2)) {
-            EtherInt *p1 = lookupEthPort(o1, name1, i1);
-            EtherInt *p2 = lookupEthPort(o2, name2, i2);
+    if ((eo1 || ed1) && (eo2 || ed2)) {
+        EtherInt *p1 = lookupEthPort(o1, name1, i1);
+        EtherInt *p2 = lookupEthPort(o2, name2, i2);
 
-            if (p1 != NULL &&  p2 != NULL) {
+        if (p1 != NULL &&  p2 != NULL) {
 
-                p1->setPeer(p2);
-                p2->setPeer(p1);
+            p1->setPeer(p2);
+            p2->setPeer(p1);
 
-                return 1;
-            }
+            return 1;
         }
     }
 #endif
@@ -119,7 +117,7 @@ connectPorts(SimObject *o1, const std::string &name1, int i1,
     mo1 = dynamic_cast<MemObject*>(o1);
     mo2 = dynamic_cast<MemObject*>(o2);
 
-    if(mo1 == NULL || mo2 == NULL) {
+    if (mo1 == NULL || mo2 == NULL) {
         panic ("Error casting SimObjects %s and %s to MemObject", o1->name(),
                o2->name());
     }

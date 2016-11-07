@@ -46,8 +46,9 @@
  * Definitions of BaseTags.
  */
 
-#include "cpu/smt.hh" //maxThreadsPerCPU
 #include "mem/cache/tags/base.hh"
+
+#include "cpu/smt.hh" //maxThreadsPerCPU
 #include "mem/cache/base.hh"
 #include "sim/sim_exit.hh"
 
@@ -70,7 +71,10 @@ BaseTags::setCache(BaseCache *_cache)
 void
 BaseTags::regStats()
 {
+    ClockedObject::regStats();
+
     using namespace Stats;
+
     replacements
         .init(maxThreadsPerCPU)
         .name(name() + ".replacements")

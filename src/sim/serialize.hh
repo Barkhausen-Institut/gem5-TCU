@@ -175,7 +175,7 @@ objParamIn(CheckpointIn &cp, const std::string &name, SimObject * &param);
     do {                                                \
         event.unserializeSection(cp, #event);           \
         eventQueue()->checkpointReschedule(&event);     \
-    } while(0)
+    } while (0)
 
 #define SERIALIZE_OBJ(obj) obj.serializeSection(cp, #obj)
 #define UNSERIALIZE_OBJ(obj) obj.unserializeSection(cp, #obj)
@@ -323,32 +323,6 @@ class Serializable
         unserializeSection(cp, name.c_str());
     }
 
-    /**
-     * @{
-     * @name Legacy interface
-     *
-     * Interface for objects that insist on changing their state when
-     * serializing. Such state change should be done in drain(),
-     * memWriteback(), or memInvalidate() and not in the serialization
-     * method. In general, if state changes occur in serialize, it
-     * complicates testing since it breaks assumptions about draining
-     * and serialization. It potentially also makes components more
-     * fragile since they there are no ordering guarantees when
-     * serializing SimObjects.
-     *
-     * @warn This interface is considered deprecated and should never
-     * be used.
-     */
-
-    virtual void serializeOld(CheckpointOut &cp) {
-        serialize(cp);
-    }
-    void serializeSectionOld(CheckpointOut &cp, const char *name);
-    void serializeSectionOld(CheckpointOut &cp, const std::string &name) {
-        serializeSectionOld(cp, name.c_str());
-    }
-    /** @} */
-
     /** Get the fully-qualified name of the active section */
     static const std::string &currentSection();
 
@@ -385,6 +359,8 @@ class CheckpointIn
     bool findObj(const std::string &section, const std::string &entry,
                  SimObject *&value);
 
+
+    bool entryExists(const std::string &section, const std::string &entry);
     bool sectionExists(const std::string &section);
 
     // The following static functions have to do with checkpoint

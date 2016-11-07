@@ -143,7 +143,8 @@ LSQUnit<Impl>::completeDataAccess(PacketPtr pkt)
 template <class Impl>
 LSQUnit<Impl>::LSQUnit()
     : loads(0), stores(0), storesToWB(0), cacheBlockMask(0), stalled(false),
-      isStoreBlocked(false), storeInFlight(false), hasPendingPkt(false)
+      isStoreBlocked(false), storeInFlight(false), hasPendingPkt(false),
+      pendingPkt(nullptr)
 {
 }
 
@@ -434,13 +435,14 @@ template <class Impl>
 void
 LSQUnit<Impl>::checkSnoop(PacketPtr pkt)
 {
+    // Should only ever get invalidations in here
+    assert(pkt->isInvalidate());
+
     int load_idx = loadHead;
     DPRINTF(LSQUnit, "Got snoop for address %#x\n", pkt->getAddr());
 
-    // Unlock the cpu-local monitor when the CPU sees a snoop to a locked
-    // address. The CPU can speculatively execute a LL operation after a pending
-    // SC operation in the pipeline and that can make the cache monitor the CPU
-    // is connected to valid while it really shouldn't be.
+    // Only Invalidate packet calls checkSnoop
+    assert(pkt->isInvalidate());
     for (int x = 0; x < cpu->numContexts(); x++) {
         ThreadContext *tc = cpu->getContext(x);
         bool no_squash = cpu->thread[x]->noSquashFromTC;

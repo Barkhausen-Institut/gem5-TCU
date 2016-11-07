@@ -263,7 +263,7 @@ MessageBuffer::recycle(Tick current_time, Tick recycle_latency)
 void
 MessageBuffer::reanalyzeList(list<MsgPtr> &lt, Tick schdTick)
 {
-    while(!lt.empty()) {
+    while (!lt.empty()) {
         m_msg_counter++;
         MsgPtr m = lt.front();
         m->setLastEnqueueTime(schdTick);
@@ -348,32 +348,6 @@ MessageBuffer::isReady(Tick current_time) const
 {
     return ((m_prio_heap.size() > 0) &&
         (m_prio_heap.front()->getLastEnqueueTime() <= current_time));
-}
-
-bool
-MessageBuffer::functionalRead(Packet *pkt)
-{
-    // Check the priority heap and read any messages that may
-    // correspond to the address in the packet.
-    for (unsigned int i = 0; i < m_prio_heap.size(); ++i) {
-        Message *msg = m_prio_heap[i].get();
-        if (msg->functionalRead(pkt)) return true;
-    }
-
-    // Read the messages in the stall queue that correspond
-    // to the address in the packet.
-    for (StallMsgMapType::iterator map_iter = m_stall_msg_map.begin();
-         map_iter != m_stall_msg_map.end();
-         ++map_iter) {
-
-        for (std::list<MsgPtr>::iterator it = (map_iter->second).begin();
-            it != (map_iter->second).end(); ++it) {
-
-            Message *msg = (*it).get();
-            if (msg->functionalRead(pkt)) return true;
-        }
-    }
-    return false;
 }
 
 uint32_t

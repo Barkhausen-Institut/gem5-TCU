@@ -62,24 +62,28 @@ class O3_ARM_v7a_FP(FUDesc):
                OpDesc(opClass='SimdFloatDiv', opLat=3),
                OpDesc(opClass='SimdFloatMisc', opLat=3),
                OpDesc(opClass='SimdFloatMult', opLat=3),
-               OpDesc(opClass='SimdFloatMultAcc',opLat=1),
+               OpDesc(opClass='SimdFloatMultAcc',opLat=5),
                OpDesc(opClass='SimdFloatSqrt', opLat=9),
                OpDesc(opClass='FloatAdd', opLat=5),
                OpDesc(opClass='FloatCmp', opLat=5),
                OpDesc(opClass='FloatCvt', opLat=5),
                OpDesc(opClass='FloatDiv', opLat=9, pipelined=False),
                OpDesc(opClass='FloatSqrt', opLat=33, pipelined=False),
-               OpDesc(opClass='FloatMult', opLat=4) ]
+               OpDesc(opClass='FloatMult', opLat=4),
+               OpDesc(opClass='FloatMultAcc', opLat=5),
+               OpDesc(opClass='FloatMisc', opLat=3) ]
     count = 2
 
 
 # Load/Store Units
 class O3_ARM_v7a_Load(FUDesc):
-    opList = [ OpDesc(opClass='MemRead',opLat=2) ]
+    opList = [ OpDesc(opClass='MemRead',opLat=2),
+               OpDesc(opClass='FloatMemRead',opLat=2) ]
     count = 1
 
 class O3_ARM_v7a_Store(FUDesc):
-    opList = [OpDesc(opClass='MemWrite',opLat=2) ]
+    opList = [ OpDesc(opClass='MemWrite',opLat=2),
+               OpDesc(opClass='FloatMemWrite',opLat=2) ]
     count = 1
 
 # Functional Units for this CPU
@@ -149,8 +153,9 @@ class O3_ARM_v7a_ICache(Cache):
     tgts_per_mshr = 8
     size = '32kB'
     assoc = 2
-    forward_snoops = False
     is_read_only = True
+    # Writeback clean lines as well
+    writeback_clean = True
 
 # Data Cache
 class O3_ARM_v7a_DCache(Cache):
@@ -161,6 +166,8 @@ class O3_ARM_v7a_DCache(Cache):
     size = '32kB'
     assoc = 2
     write_buffers = 16
+    # Consider the L2 a victim cache also for clean lines
+    writeback_clean = True
 
 # TLB Cache
 # Use a cache as a L2 TLB
@@ -172,8 +179,9 @@ class O3_ARM_v7aWalkCache(Cache):
     size = '1kB'
     assoc = 8
     write_buffers = 16
-    forward_snoops = False
     is_read_only = True
+    # Writeback clean lines as well
+    writeback_clean = True
 
 # L2 Cache
 class O3_ARM_v7aL2(Cache):
@@ -185,6 +193,7 @@ class O3_ARM_v7aL2(Cache):
     assoc = 16
     write_buffers = 8
     prefetch_on_access = True
+    clusivity = 'mostly_excl'
     # Simple stride prefetcher
     prefetcher = StridePrefetcher(degree=8, latency = 1)
     tags = RandomRepl()

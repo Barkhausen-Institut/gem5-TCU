@@ -38,12 +38,12 @@
 inline void
 output(const char *filename)
 {
-    std::ostream *file_stream = simout.find(filename);
+    OutputStream *file_stream = simout.find(filename);
 
     if (!file_stream)
         file_stream = simout.create(filename);
 
-    Trace::setDebugLogger(new Trace::OstreamLogger(*file_stream));
+    Trace::setDebugLogger(new Trace::OstreamLogger(*file_stream->stream()));
 }
 
 inline void
@@ -54,9 +54,11 @@ ignore(const char *expr)
     Trace::getDebugLogger()->setIgnore(ignore);
 }
 
-using Trace::enabled;
+inline void enable()  { Trace::enable(); }
+inline void disable() { Trace::disable(); }
 %}
 
 extern void output(const char *string);
 extern void ignore(const char *expr);
-extern bool enabled;
+extern void enable();
+extern void disable();

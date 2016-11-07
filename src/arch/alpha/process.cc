@@ -57,7 +57,7 @@ AlphaLiveProcess::AlphaLiveProcess(LiveProcessParams *params,
 
     // Set up region for mmaps.  Tru64 seems to start just above 0 and
     // grow up from there.
-    mmap_start = mmap_end = 0x10000;
+    mmap_end = 0x10000;
 
     // Set pointer for next thread stack.  Reserve 8M for main stack.
     next_thread_stack_base = stack_base - (8 * 1024 * 1024);
@@ -67,15 +67,18 @@ AlphaLiveProcess::AlphaLiveProcess(LiveProcessParams *params,
 void
 AlphaLiveProcess::argsInit(int intSize, int pageSize)
 {
+    // Patch the ld_bias for dynamic executables.
+    updateBias();
+
     objFile->loadSections(initVirtMem);
 
     typedef AuxVector<uint64_t> auxv_t;
     std::vector<auxv_t>  auxv;
 
     ElfObject * elfObject = dynamic_cast<ElfObject *>(objFile);
-    if(elfObject)
+    if (elfObject)
     {
-        // modern glibc uses a bunch of auxiliary vectors to set up 
+        // modern glibc uses a bunch of auxiliary vectors to set up
         // TLS as well as do a bunch of other stuff
         // these vectors go on the bottom of the stack, below argc/argv/envp
         // pointers but above actual arg strings
@@ -88,6 +91,10 @@ AlphaLiveProcess::argsInit(int intSize, int pageSize)
         auxv.push_back(auxv_t(M5_AT_PHDR, elfObject->programHeaderTable()));
         DPRINTF(Loader, "auxv at PHDR %08p\n", elfObject->programHeaderTable());
         auxv.push_back(auxv_t(M5_AT_PHNUM, elfObject->programHeaderCount()));
+        // This is the base address of the ELF interpreter; it should be
+        // zero for static executables or contain the base address for
+        // dynamic executables.
+        auxv.push_back(auxv_t(M5_AT_BASE, getBias()));
         auxv.push_back(auxv_t(M5_AT_ENTRY, objFile->entryPoint()));
         auxv.push_back(auxv_t(M5_AT_UID, uid()));
         auxv.push_back(auxv_t(M5_AT_EUID, euid()));
@@ -111,10 +118,10 @@ AlphaLiveProcess::argsInit(int intSize, int pageSize)
     }
 
     int space_needed =
-        argv_array_size + 
-        envp_array_size + 
+        argv_array_size +
+        envp_array_size +
         auxv_array_size +
-        arg_data_size + 
+        arg_data_size +
         env_data_size;
 
     if (space_needed < 32*1024)
@@ -163,7 +170,7 @@ AlphaLiveProcess::argsInit(int intSize, int pageSize)
     setSyscallArg(tc, 1, argv_array_base);
     tc->setIntReg(StackPointerReg, stack_min);
 
-    tc->pcState(objFile->entryPoint());
+    tc->pcState(getStartPC());
 }
 
 void

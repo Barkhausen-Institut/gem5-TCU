@@ -52,11 +52,14 @@ class NetDest;
 class Network;
 
 typedef std::vector<std::vector<int> > Matrix;
+typedef std::string PortDirection;
 
-struct LinkEntry 
+struct LinkEntry
 {
     BasicLink *link;
     LinkDirection direction;
+    PortDirection src_outport_dirn;
+    PortDirection dst_inport_dirn;
 };
 
 typedef std::map<std::pair<SwitchID, SwitchID>, LinkEntry> LinkMap;
@@ -73,7 +76,8 @@ class Topology
 
   private:
     void addLink(SwitchID src, SwitchID dest, BasicLink* link,
-                 LinkDirection dir);
+                 PortDirection src_outport_dirn = "",
+                 PortDirection dest_inport_dirn = "");
     void makeLink(Network *net, SwitchID src, SwitchID dest,
                   const NetDest& routing_table_entry);
 

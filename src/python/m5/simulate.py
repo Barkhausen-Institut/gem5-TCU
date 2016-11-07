@@ -51,7 +51,7 @@ import stats
 import SimObject
 import ticks
 import objects
-from m5.util.dot_writer import do_dot
+from m5.util.dot_writer import do_dot, do_dvfs_dot
 from m5.internal.stats import updateEvents as updateStatEvents
 
 from util import fatal
@@ -125,6 +125,12 @@ def instantiate(ckpt_dir=None):
 
     # Do a fifth pass to connect probe listeners
     for obj in root.descendants(): obj.regProbeListeners()
+
+    # We want to generate the DVFS diagram for the system. This can only be
+    # done once all of the CPP objects have been created and initialised so
+    # that we are able to figure out which object belongs to which domain.
+    if options.dot_dvfs_config:
+        do_dvfs_dot(root, options.outdir, options.dot_dvfs_config)
 
     # We're done registering statistics.  Enable the stats package now.
     stats.enable()
@@ -308,4 +314,61 @@ def switchCpus(system, cpuList, verbose=True):
     for old_cpu, new_cpu in cpuList:
         new_cpu.takeOverFrom(old_cpu)
 
+def notifyFork(root):
+    for obj in root.descendants():
+        obj.notifyFork()
+
+fork_count = 0
+def fork(simout="%(parent)s.f%(fork_seq)i"):
+    """Fork the simulator.
+
+    This function forks the simulator. After forking the simulator,
+    the child process gets its output files redirected to a new output
+    directory. The default name of the output directory is the same as
+    the parent with the suffix ".fN" added where N is the fork
+    sequence number. The name of the output directory can be
+    overridden using the simout keyword argument.
+
+    Output file formatting dictionary:
+      parent -- Path to the parent process's output directory.
+      fork_seq -- Fork sequence number.
+      pid -- PID of the child process.
+
+    Keyword Arguments:
+      simout -- New simulation output directory.
+
+    Return Value:
+      pid of the child process or 0 if running in the child.
+    """
+    from m5 import options
+    global fork_count
+
+    if not internal.core.listenersDisabled():
+        raise RuntimeError, "Can not fork a simulator with listeners enabled"
+
+    drain()
+
+    try:
+        pid = os.fork()
+    except OSError, e:
+        raise e
+
+    if pid == 0:
+        # In child, notify objects of the fork
+        root = objects.Root.getInstance()
+        notifyFork(root)
+        # Setup a new output directory
+        parent = options.outdir
+        options.outdir = simout % {
+                "parent" : parent,
+                "fork_seq" : fork_count,
+                "pid" : os.getpid(),
+                }
+        core.setOutputDir(options.outdir)
+    else:
+        fork_count += 1
+
+    return pid
+
 from internal.core import disableAllListeners
+from internal.core import listenersDisabled

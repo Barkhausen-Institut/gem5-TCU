@@ -26,21 +26,24 @@
 # of the authors and should not be interpreted as representing official policies,
 # either expressed or implied, of the FreeBSD Project.
 
-import math
 import optparse
+import sys
 import os
 
 import m5
+from m5.defines import buildEnv
 from m5.objects import *
 from m5.util import addToPath, fatal
 
-addToPath('../hw/gem5/configs/common')
+addToPath('../hw/gem5/configs')
 
-from FSConfig import *
-from Caches import *
-import CpuConfig
-import MemConfig
-import Options
+from common.FSConfig import *
+from common import Simulation
+from common import CpuConfig
+from common import CacheConfig
+from common import MemConfig
+from common.Caches import *
+from common import Options
 
 # Each PE is represented as an instance of System. Whereas each PE has a CPU,
 # a Scratchpad, and a DTU. Because it seems that the gem5 crossbar is not able
@@ -192,13 +195,11 @@ def createPE(root, options, no, systemType, l1size, l2size, spmsize, memPE):
 
     if not l1size is None:
         pe.dtu.l1cache = L1Cache(size=l1size)
-        pe.dtu.l1cache.forward_snoops = False
         pe.dtu.l1cache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
         pe.dtu.l1cache.cpu_side = pe.xbar.master
 
         if not l2size is None:
             pe.dtu.l2cache = L2Cache(size=l2size)
-            pe.dtu.l2cache.forward_snoops = options.coherent
             pe.dtu.l2cache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
             pe.dtu.l2cache.cpu_side = pe.dtu.l1cache.mem_side
             pe.dtu.l2cache.mem_side = pe.dtu.cache_mem_slave_port
@@ -284,9 +285,9 @@ def createCorePE(root, options, no, cmdline, memPE, l1size=None, l2size=None, sp
 
     pe.cpu.createInterruptController()
 
-    pe.cpu.interrupts.pio = pe.xbar.master
-    pe.cpu.interrupts.int_slave = pe.dtu.connector.irq_master_port
-    pe.cpu.interrupts.int_master = pe.xbar.slave
+    pe.cpu.interrupts[0].pio = pe.xbar.master
+    pe.cpu.interrupts[0].int_slave = pe.dtu.connector.irq_master_port
+    pe.cpu.interrupts[0].int_master = pe.xbar.slave
 
     pe.cpu.itb.walker.port = pe.xbar.slave
     pe.cpu.dtb.walker.port = pe.xbar.slave

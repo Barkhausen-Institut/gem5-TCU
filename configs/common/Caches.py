@@ -55,6 +55,8 @@ class L1Cache(Cache):
 
 class L1_ICache(L1Cache):
     is_read_only = True
+    # Writeback clean lines as well
+    writeback_clean = True
 
 class L1_DCache(L1Cache):
     pass
@@ -74,7 +76,6 @@ class IOCache(Cache):
     mshrs = 20
     size = '1kB'
     tgts_per_mshr = 12
-    forward_snoops = False
 
 class PageTableWalkerCache(Cache):
     assoc = 2
@@ -83,9 +84,11 @@ class PageTableWalkerCache(Cache):
     mshrs = 10
     size = '1kB'
     tgts_per_mshr = 12
-    forward_snoops = False
+
     # the x86 table walker actually writes to the table-walker cache
     if buildEnv['TARGET_ISA'] == 'x86':
         is_read_only = False
     else:
         is_read_only = True
+        # Writeback clean lines as well
+        writeback_clean = True

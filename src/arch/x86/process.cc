@@ -73,15 +73,21 @@ static const int ArgumentReg[] = {
     INTREG_R8W,
     INTREG_R9W
 };
-static const int NumArgumentRegs = sizeof(ArgumentReg) / sizeof(const int);
+
+static const int NumArgumentRegs M5_VAR_USED =
+    sizeof(ArgumentReg) / sizeof(const int);
+
 static const int ArgumentReg32[] = {
     INTREG_EBX,
     INTREG_ECX,
     INTREG_EDX,
     INTREG_ESI,
     INTREG_EDI,
+    INTREG_EBP
 };
-static const int NumArgumentRegs32 = sizeof(ArgumentReg) / sizeof(const int);
+
+static const int NumArgumentRegs32 M5_VAR_USED =
+    sizeof(ArgumentReg) / sizeof(const int);
 
 X86LiveProcess::X86LiveProcess(LiveProcessParams * params, ObjectFile *objFile,
         SyscallDesc *_syscallDescs, int _numSyscallDescs) :
@@ -111,9 +117,15 @@ X86_64LiveProcess::X86_64LiveProcess(LiveProcessParams *params,
     // Set pointer for next thread stack.  Reserve 8M for main stack.
     next_thread_stack_base = stack_base - (8 * 1024 * 1024);
 
-    // Set up region for mmaps. This was determined empirically and may not
-    // always be correct.
-    mmap_start = mmap_end = (Addr)0x2aaaaaaab000ULL;
+    // "mmap_base" is a function which defines where mmap region starts in
+    // the process address space.
+    // mmap_base: PAGE_ALIGN(TASK_SIZE-MIN_GAP-mmap_rnd())
+    // TASK_SIZE: (1<<47)-PAGE_SIZE
+    // MIN_GAP: 128*1024*1024+stack_maxrandom_size()
+    // We do not use any address space layout randomization in gem5
+    // therefore the random fields become zero; the smallest gap space was
+    // chosen but gap could potentially be much larger.
+    mmap_end = (Addr)0x7FFFF7FFF000ULL;
 }
 
 void
@@ -148,9 +160,15 @@ I386LiveProcess::I386LiveProcess(LiveProcessParams *params,
     // Set pointer for next thread stack.  Reserve 8M for main stack.
     next_thread_stack_base = stack_base - (8 * 1024 * 1024);
 
-    // Set up region for mmaps. This was determined empirically and may not
-    // always be correct.
-    mmap_start = mmap_end = (Addr)0xf7ffe000ULL;
+    // "mmap_base" is a function which defines where mmap region starts in
+    // the process address space.
+    // mmap_base: PAGE_ALIGN(TASK_SIZE-MIN_GAP-mmap_rnd())
+    // TASK_SIZE: 0xC0000000
+    // MIN_GAP: 128*1024*1024+stack_maxrandom_size()
+    // We do not use any address space layout randomization in gem5
+    // therefore the random fields become zero; the smallest gap space was
+    // chosen but gap could potentially be much larger.
+    mmap_end = (Addr)0xB7FFF000ULL;
 }
 
 SyscallDesc*
@@ -552,7 +570,7 @@ X86_64LiveProcess::initState()
             dataAttr.system = 1;
 
             //Initialize the segment registers.
-            for(int seg = 0; seg < NUM_SEGMENTREGS; seg++) {
+            for (int seg = 0; seg < NUM_SEGMENTREGS; seg++) {
                 tc->setMiscRegNoEffect(MISCREG_SEG_BASE(seg), 0);
                 tc->setMiscRegNoEffect(MISCREG_SEG_EFF_BASE(seg), 0);
                 tc->setMiscRegNoEffect(MISCREG_SEG_ATTR(seg), dataAttr);
@@ -612,7 +630,7 @@ I386LiveProcess::initState()
 
     argsInit(sizeof(uint32_t), PageBytes);
 
-    /* 
+    /*
      * Set up a GDT for this process. The whole GDT wouldn't really be for
      * this process, but the only parts we care about are.
      */
@@ -663,7 +681,7 @@ I386LiveProcess::initState()
         dataAttr.system = 1;
 
         //Initialize the segment registers.
-        for(int seg = 0; seg < NUM_SEGMENTREGS; seg++) {
+        for (int seg = 0; seg < NUM_SEGMENTREGS; seg++) {
             tc->setMiscRegNoEffect(MISCREG_SEG_BASE(seg), 0);
             tc->setMiscRegNoEffect(MISCREG_SEG_EFF_BASE(seg), 0);
             tc->setMiscRegNoEffect(MISCREG_SEG_ATTR(seg), dataAttr);
@@ -735,13 +753,16 @@ X86LiveProcess::argsInit(int pageSize,
     std::vector<auxv_t> auxv = extraAuxvs;
 
     string filename;
-    if(argv.size() < 1)
+    if (argv.size() < 1)
         filename = "";
     else
         filename = argv[0];
 
     //We want 16 byte alignment
     uint64_t align = 16;
+
+    // Patch the ld_bias for dynamic executables.
+    updateBias();
 
     // load object file into target memory
     objFile->loadSections(initVirtMem);
@@ -785,8 +806,10 @@ X86LiveProcess::argsInit(int pageSize,
         X86_IA64Processor = 1 << 30
     };
 
-    // Setup the auxilliary vectors. These will already have endian conversion.
-    // Auxilliary vectors are loaded only for elf formatted executables.
+    // Setup the auxiliary vectors. These will already have endian
+    // conversion. Auxiliary vectors are loaded only for elf formatted
+    // executables; the auxv is responsible for passing information from
+    // the OS to the interpreter.
     ElfObject * elfObject = dynamic_cast<ElfObject *>(objFile);
     if (elfObject) {
         uint64_t features =
@@ -829,18 +852,17 @@ X86LiveProcess::argsInit(int pageSize,
         //Frequency at which times() increments
         //Defined to be 100 in the kernel source.
         auxv.push_back(auxv_t(M5_AT_CLKTCK, 100));
-        // For statically linked executables, this is the virtual address of the
-        // program header tables if they appear in the executable image
+        // This is the virtual address of the program header tables if they
+        // appear in the executable image.
         auxv.push_back(auxv_t(M5_AT_PHDR, elfObject->programHeaderTable()));
         // This is the size of a program header entry from the elf file.
         auxv.push_back(auxv_t(M5_AT_PHENT, elfObject->programHeaderSize()));
         // This is the number of program headers from the original elf file.
         auxv.push_back(auxv_t(M5_AT_PHNUM, elfObject->programHeaderCount()));
-        //This is the address of the elf "interpreter", It should be set
-        //to 0 for regular executables. It should be something else
-        //(not sure what) for dynamic libraries.
-        auxv.push_back(auxv_t(M5_AT_BASE, 0));
-
+        // This is the base address of the ELF interpreter; it should be
+        // zero for static executables or contain the base address for
+        // dynamic executables.
+        auxv.push_back(auxv_t(M5_AT_BASE, getBias()));
         //XXX Figure out what this should be.
         auxv.push_back(auxv_t(M5_AT_FLAGS, 0));
         //The entry point to the program
@@ -983,8 +1005,10 @@ X86LiveProcess::argsInit(int pageSize,
     }
     //Write out the terminating zeroed auxilliary vector
     const uint64_t zero = 0;
-    initVirtMem.writeBlob(auxv_array_base + 2 * intSize * auxv.size(),
-            (uint8_t*)&zero, 2 * intSize);
+    initVirtMem.writeBlob(auxv_array_base + auxv.size() * 2 * intSize,
+                          (uint8_t*)&zero, intSize);
+    initVirtMem.writeBlob(auxv_array_base + (auxv.size() * 2 + 1) * intSize,
+                          (uint8_t*)&zero, intSize);
 
     initVirtMem.writeString(aux_data_base, platform.c_str());
 
@@ -999,7 +1023,7 @@ X86LiveProcess::argsInit(int pageSize,
 
     // There doesn't need to be any segment base added in since we're dealing
     // with the flat segmentation model.
-    tc->pcState(objFile->entryPoint());
+    tc->pcState(getStartPC());
 
     //Align the "stack_min" to a page boundary.
     stack_min = roundDown(stack_min, pageSize);

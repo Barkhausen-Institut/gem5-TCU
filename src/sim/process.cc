@@ -182,7 +182,7 @@ Process::Process(ProcessParams * params)
     fde_stderr->set(sim_fd, params->errout, O_WRONLY | O_CREAT | O_TRUNC,
                     0664, false);
 
-    mmap_start = mmap_end = 0;
+    mmap_end = 0;
     nxm_start = nxm_end = 0;
     // other parameters will be initialized when the program is loaded
 }
@@ -191,6 +191,8 @@ Process::Process(ProcessParams * params)
 void
 Process::regStats()
 {
+    SimObject::regStats();
+
     using namespace Stats;
 
     num_syscalls
@@ -242,9 +244,6 @@ int
 Process::allocFD(int sim_fd, const string& filename, int flags, int mode,
                  bool pipe)
 {
-    if (sim_fd == -1)
-        return -1;
-
     for (int free_fd = 0; free_fd < fd_array->size(); free_fd++) {
         FDEntry *fde = getFDEntry(free_fd);
         if (fde->isFree()) {
@@ -293,7 +292,8 @@ Process::allocateMem(Addr vaddr, int64_t size, bool clobber)
 {
     int npages = divCeil(size, (int64_t)PageBytes);
     Addr paddr = system->allocPhysPages(npages);
-    pTable->map(vaddr, paddr, size, clobber ? PageTableBase::Clobber : 0);
+    pTable->map(vaddr, paddr, size,
+                clobber ? PageTableBase::Clobber : PageTableBase::Zero);
 }
 
 bool
@@ -380,8 +380,7 @@ Process::fixFileOffsets()
             fde->fd = fds[0];
 
             FDEntry *fde_write = getFDEntry(fde->readPipeSource);
-            assert(
-                    fde_write->filename == "PIPE-WRITE");
+            assert(fde_write->filename == "PIPE-WRITE");
             fde_write->fd = fds[1];
         } else {
             fde->fd = openFile(fde->filename.c_str(), fde->flags, fde->mode);
@@ -415,7 +414,6 @@ Process::serialize(CheckpointOut &cp) const
     SERIALIZE_SCALAR(stack_size);
     SERIALIZE_SCALAR(stack_min);
     SERIALIZE_SCALAR(next_thread_stack_base);
-    SERIALIZE_SCALAR(mmap_start);
     SERIALIZE_SCALAR(mmap_end);
     SERIALIZE_SCALAR(nxm_start);
     SERIALIZE_SCALAR(nxm_end);
@@ -435,7 +433,6 @@ Process::unserialize(CheckpointIn &cp)
     UNSERIALIZE_SCALAR(stack_size);
     UNSERIALIZE_SCALAR(stack_min);
     UNSERIALIZE_SCALAR(next_thread_stack_base);
-    UNSERIALIZE_SCALAR(mmap_start);
     UNSERIALIZE_SCALAR(mmap_end);
     UNSERIALIZE_SCALAR(nxm_start);
     UNSERIALIZE_SCALAR(nxm_end);
@@ -457,7 +454,7 @@ bool
 Process::map(Addr vaddr, Addr paddr, int size, bool cacheable)
 {
     pTable->map(vaddr, paddr, size,
-                cacheable ? 0 : PageTableBase::Uncacheable);
+                cacheable ? PageTableBase::Zero : PageTableBase::Uncacheable);
     return true;
 }
 
@@ -472,6 +469,7 @@ Process::map(Addr vaddr, Addr paddr, int size, bool cacheable)
 LiveProcess::LiveProcess(LiveProcessParams *params, ObjectFile *_objFile)
     : Process(params), objFile(_objFile),
       argv(params->cmd), envp(params->env), cwd(params->cwd),
+      executable(params->executable),
       __uid(params->uid), __euid(params->euid),
       __gid(params->gid), __egid(params->egid),
       __pid(params->pid), __ppid(params->ppid),
@@ -519,23 +517,71 @@ LiveProcess::findDriver(std::string filename)
     return NULL;
 }
 
+void
+LiveProcess::updateBias()
+{
+    ObjectFile *interp = objFile->getInterpreter();
+
+    if (!interp || !interp->relocatable())
+        return;
+
+    // Determine how large the interpreters footprint will be in the process
+    // address space.
+    Addr interp_mapsize = roundUp(interp->mapSize(), TheISA::PageBytes);
+
+    // We are allocating the memory area; set the bias to the lowest address
+    // in the allocated memory region.
+    Addr ld_bias = mmapGrowsDown() ? mmap_end - interp_mapsize : mmap_end;
+
+    // Adjust the process mmap area to give the interpreter room; the real
+    // execve system call would just invoke the kernel's internal mmap
+    // functions to make these adjustments.
+    mmap_end = mmapGrowsDown() ? ld_bias : mmap_end + interp_mapsize;
+
+    interp->updateBias(ld_bias);
+}
+
+
+ObjectFile *
+LiveProcess::getInterpreter()
+{
+    return objFile->getInterpreter();
+}
+
+
+Addr
+LiveProcess::getBias()
+{
+    ObjectFile *interp = getInterpreter();
+
+    return interp ? interp->bias() : objFile->bias();
+}
+
+
+Addr
+LiveProcess::getStartPC()
+{
+    ObjectFile *interp = getInterpreter();
+
+    return interp ? interp->entryPoint() : objFile->entryPoint();
+}
+
 
 LiveProcess *
 LiveProcess::create(LiveProcessParams * params)
 {
     LiveProcess *process = NULL;
 
-    string executable =
-        params->executable == "" ? params->cmd[0] : params->executable;
-    ObjectFile *objFile = createObjectFile(executable);
-    if (objFile == NULL) {
-        fatal("Can't load object file %s", executable);
+    // If not specified, set the executable parameter equal to the
+    // simulated system's zeroth command line parameter
+    if (params->executable == "") {
+        params->executable = params->cmd[0];
     }
 
-    if (objFile->isDynamic())
-       fatal("Object file is a dynamic executable however only static "
-             "executables are supported!\n       Please recompile your "
-             "executable as a static binary and try again.\n");
+    ObjectFile *objFile = createObjectFile(params->executable);
+    if (objFile == NULL) {
+        fatal("Can't load object file %s", params->executable);
+    }
 
 #if THE_ISA == ALPHA_ISA
     if (objFile->getArch() != ObjectFile::Alpha)

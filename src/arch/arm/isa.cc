@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2015 ARM Limited
+ * Copyright (c) 2010-2016 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -127,6 +127,7 @@ const struct ISA::MiscRegInitializerEntry
 ISA::ISA(Params *p)
     : SimObject(p),
       system(NULL),
+      _decoderFlavour(p->decoderFlavour),
       pmu(p->pmu),
       lookUpMiscReg(NUM_MISCREGS, {0,0})
 {
@@ -358,9 +359,8 @@ ISA::clear64(const ArmISAParams *p)
     if (haveSecurity) {
         miscRegs[MISCREG_SCTLR_EL3] = 0x30c50870;
         miscRegs[MISCREG_SCR_EL3]   = 0x00000030;  // RES1 fields
-    // @todo: uncomment this to enable Virtualization
-    // } else if (haveVirtualization) {
-    //     miscRegs[MISCREG_SCTLR_EL2] = 0x30c50870;
+    } else if (haveVirtualization) {
+        miscRegs[MISCREG_SCTLR_EL2] = 0x30c50870;
     } else {
         miscRegs[MISCREG_SCTLR_EL1] = 0x30c50870;
         // Always non-secure
@@ -390,15 +390,13 @@ ISA::clear64(const ArmISAParams *p)
     // Enforce consistency with system-level settings...
 
     // EL3
-    // (no AArch32/64 interprocessing support for now)
     miscRegs[MISCREG_ID_AA64PFR0_EL1] = insertBits(
         miscRegs[MISCREG_ID_AA64PFR0_EL1], 15, 12,
-        haveSecurity ? 0x1 : 0x0);
+        haveSecurity ? 0x2 : 0x0);
     // EL2
-    // (no AArch32/64 interprocessing support for now)
     miscRegs[MISCREG_ID_AA64PFR0_EL1] = insertBits(
         miscRegs[MISCREG_ID_AA64PFR0_EL1], 11, 8,
-        haveVirtualization ? 0x1 : 0x0);
+        haveVirtualization ? 0x2 : 0x0);
     // Large ASID support
     miscRegs[MISCREG_ID_AA64MMFR0_EL1] = insertBits(
         miscRegs[MISCREG_ID_AA64MMFR0_EL1], 7, 4,
@@ -668,12 +666,12 @@ ISA::readMiscReg(int misc_reg, ThreadContext *tc)
       case MISCREG_DBGDSCRint:
         return 0;
       case MISCREG_ISR:
-        return tc->getCpuPtr()->getInterruptController()->getISR(
+        return tc->getCpuPtr()->getInterruptController(tc->threadId())->getISR(
             readMiscRegNoEffect(MISCREG_HCR),
             readMiscRegNoEffect(MISCREG_CPSR),
             readMiscRegNoEffect(MISCREG_SCR));
       case MISCREG_ISR_EL1:
-        return tc->getCpuPtr()->getInterruptController()->getISR(
+        return tc->getCpuPtr()->getInterruptController(tc->threadId())->getISR(
             readMiscRegNoEffect(MISCREG_HCR_EL2),
             readMiscRegNoEffect(MISCREG_CPSR),
             readMiscRegNoEffect(MISCREG_SCR_EL3));
@@ -1395,8 +1393,27 @@ ISA::setMiscReg(int misc_reg, const MiscReg &val, ThreadContext *tc)
           case MISCREG_TLBI_IPAS2E1IS_Xt:
           case MISCREG_TLBI_IPAS2E1_Xt:
             assert64(tc);
-            // @todo: implement these as part of Virtualization
-            warn("Not doing anything for write of miscreg ITLB_IPAS2\n");
+            target_el = 1; // EL 0 and 1 are handled together
+            scr = readMiscReg(MISCREG_SCR, tc);
+            secure_lookup = haveSecurity && !scr.ns;
+            sys = tc->getSystemPtr();
+            for (x = 0; x < sys->numContexts(); x++) {
+                oc = sys->getThreadContext(x);
+                assert(oc->getITBPtr() && oc->getDTBPtr());
+                Addr ipa = ((Addr) bits(newVal, 35, 0)) << 12;
+                oc->getITBPtr()->flushIpaVmid(ipa,
+                    secure_lookup, false, target_el);
+                oc->getDTBPtr()->flushIpaVmid(ipa,
+                    secure_lookup, false, target_el);
+
+                CheckerCPU *checker = oc->getCheckerCpuPtr();
+                if (checker) {
+                    checker->getITBPtr()->flushIpaVmid(ipa,
+                        secure_lookup, false, target_el);
+                    checker->getDTBPtr()->flushIpaVmid(ipa,
+                        secure_lookup, false, target_el);
+                }
+            }
             return;
           case MISCREG_ACTLR:
             warn("Not doing anything for write of miscreg ACTLR\n");
@@ -1448,7 +1465,7 @@ ISA::setMiscReg(int misc_reg, const MiscReg &val, ThreadContext *tc)
           case MISCREG_ATS1HR:
           case MISCREG_ATS1HW:
             {
-              unsigned flags = 0;
+              Request::Flags flags = 0;
               BaseTLB::Mode mode = BaseTLB::Read;
               TLB::ArmTranslationType tranType = TLB::NormalTran;
               Fault fault;
@@ -1519,9 +1536,8 @@ ISA::setMiscReg(int misc_reg, const MiscReg &val, ThreadContext *tc)
               // can't be an atomic translation because that causes problems
               // with unexpected atomic snoop requests.
               warn("Translating via MISCREG(%d) in functional mode! Fix Me!\n", misc_reg);
-              Request req(0, val, 1, flags,  Request::funcMasterId,
-                          tc->pcState().pc(), tc->contextId(),
-                          tc->threadId());
+              Request req(0, val, 0, flags,  Request::funcMasterId,
+                          tc->pcState().pc(), tc->contextId());
               fault = tc->getDTBPtr()->translateFunctional(&req, tc, mode, tranType);
               TTBCR ttbcr = readMiscRegNoEffect(MISCREG_TTBCR);
               HCR   hcr   = readMiscRegNoEffect(MISCREG_HCR);
@@ -1624,11 +1640,13 @@ ISA::setMiscReg(int misc_reg, const MiscReg &val, ThreadContext *tc)
           case MISCREG_DACR:
           case MISCREG_VTTBR:
           case MISCREG_SCR_EL3:
+          case MISCREG_HCR_EL2:
           case MISCREG_TCR_EL1:
           case MISCREG_TCR_EL2:
           case MISCREG_TCR_EL3:
           case MISCREG_SCTLR_EL2:
           case MISCREG_SCTLR_EL3:
+          case MISCREG_HSCTLR:
           case MISCREG_TTBR0_EL1:
           case MISCREG_TTBR1_EL1:
           case MISCREG_TTBR0_EL2:
@@ -1692,69 +1710,69 @@ ISA::setMiscReg(int misc_reg, const MiscReg &val, ThreadContext *tc)
           case MISCREG_AT_S1E3W_Xt:
             {
                 RequestPtr req = new Request;
-                unsigned flags = 0;
+                Request::Flags flags = 0;
                 BaseTLB::Mode mode = BaseTLB::Read;
                 TLB::ArmTranslationType tranType = TLB::NormalTran;
                 Fault fault;
                 switch(misc_reg) {
                   case MISCREG_AT_S1E1R_Xt:
                     flags    = TLB::MustBeOne;
-                    tranType = TLB::S1CTran;
+                    tranType = TLB::S1E1Tran;
                     mode     = BaseTLB::Read;
                     break;
                   case MISCREG_AT_S1E1W_Xt:
                     flags    = TLB::MustBeOne;
-                    tranType = TLB::S1CTran;
+                    tranType = TLB::S1E1Tran;
                     mode     = BaseTLB::Write;
                     break;
                   case MISCREG_AT_S1E0R_Xt:
                     flags    = TLB::MustBeOne | TLB::UserMode;
-                    tranType = TLB::S1CTran;
+                    tranType = TLB::S1E0Tran;
                     mode     = BaseTLB::Read;
                     break;
                   case MISCREG_AT_S1E0W_Xt:
                     flags    = TLB::MustBeOne | TLB::UserMode;
-                    tranType = TLB::S1CTran;
+                    tranType = TLB::S1E0Tran;
                     mode     = BaseTLB::Write;
                     break;
                   case MISCREG_AT_S1E2R_Xt:
                     flags    = TLB::MustBeOne;
-                    tranType = TLB::HypMode;
+                    tranType = TLB::S1E2Tran;
                     mode     = BaseTLB::Read;
                     break;
                   case MISCREG_AT_S1E2W_Xt:
                     flags    = TLB::MustBeOne;
-                    tranType = TLB::HypMode;
+                    tranType = TLB::S1E2Tran;
                     mode     = BaseTLB::Write;
                     break;
                   case MISCREG_AT_S12E0R_Xt:
                     flags    = TLB::MustBeOne | TLB::UserMode;
-                    tranType = TLB::S1S2NsTran;
+                    tranType = TLB::S12E0Tran;
                     mode     = BaseTLB::Read;
                     break;
                   case MISCREG_AT_S12E0W_Xt:
                     flags    = TLB::MustBeOne | TLB::UserMode;
-                    tranType = TLB::S1S2NsTran;
+                    tranType = TLB::S12E0Tran;
                     mode     = BaseTLB::Write;
                     break;
                   case MISCREG_AT_S12E1R_Xt:
                     flags    = TLB::MustBeOne;
-                    tranType = TLB::S1S2NsTran;
+                    tranType = TLB::S12E1Tran;
                     mode     = BaseTLB::Read;
                     break;
                   case MISCREG_AT_S12E1W_Xt:
                     flags    = TLB::MustBeOne;
-                    tranType = TLB::S1S2NsTran;
+                    tranType = TLB::S12E1Tran;
                     mode     = BaseTLB::Write;
                     break;
                   case MISCREG_AT_S1E3R_Xt:
                     flags    = TLB::MustBeOne;
-                    tranType = TLB::HypMode; // There is no TZ mode defined.
+                    tranType = TLB::S1E3Tran;
                     mode     = BaseTLB::Read;
                     break;
                   case MISCREG_AT_S1E3W_Xt:
                     flags    = TLB::MustBeOne;
-                    tranType = TLB::HypMode; // There is no TZ mode defined.
+                    tranType = TLB::S1E3Tran;
                     mode     = BaseTLB::Write;
                     break;
                 }
@@ -1765,9 +1783,9 @@ ISA::setMiscReg(int misc_reg, const MiscReg &val, ThreadContext *tc)
                 // can't be an atomic translation because that causes problems
                 // with unexpected atomic snoop requests.
                 warn("Translating via MISCREG(%d) in functional mode! Fix Me!\n", misc_reg);
-                req->setVirt(0, val, 1, flags,  Request::funcMasterId,
+                req->setVirt(0, val, 0, flags,  Request::funcMasterId,
                                tc->pcState().pc());
-                req->setThreadContext(tc->contextId(), tc->threadId());
+                req->setContext(tc->contextId());
                 fault = tc->getDTBPtr()->translateFunctional(req, tc, mode,
                                                              tranType);
 
@@ -1789,12 +1807,22 @@ ISA::setMiscReg(int misc_reg, const MiscReg &val, ThreadContext *tc)
                     // Set fault bit and FSR
                     FSR fsr = armFault->getFsr(tc);
 
-                    newVal = ((fsr >> 9) & 1) << 11;
-                    // rearange fault status
-                    newVal |= ((fsr >>  0) & 0x3f) << 1;
-                    newVal |= 0x1; // F bit
-                    newVal |= ((armFault->iss() >> 7) & 0x1) << 8;
-                    newVal |= armFault->isStage2() ? 0x200 : 0;
+                    CPSR cpsr = tc->readMiscReg(MISCREG_CPSR);
+                    if (cpsr.width) { // AArch32
+                        newVal = ((fsr >> 9) & 1) << 11;
+                        // rearrange fault status
+                        newVal |= ((fsr >>  0) & 0x3f) << 1;
+                        newVal |= 0x1; // F bit
+                        newVal |= ((armFault->iss() >> 7) & 0x1) << 8;
+                        newVal |= armFault->isStage2() ? 0x200 : 0;
+                    } else { // AArch64
+                        newVal = 1; // F bit
+                        newVal |= fsr << 1; // FST
+                        // TODO: DDI 0487A.f D7-2083, AbortFault's s1ptw bit.
+                        newVal |= armFault->isStage2() ? 1 << 8 : 0; // PTW
+                        newVal |= armFault->isStage2() ? 1 << 9 : 0; // S
+                        newVal |= 1 << 11; // RES1
+                    }
                     DPRINTF(MiscRegs,
                             "MISCREG: Translated addr %#x fault fsr %#x: PAR: %#x\n",
                             val, fsr, newVal);
@@ -1929,7 +1957,7 @@ ISA::getGenericTimer(ThreadContext *tc)
               "been configured to use a generic timer.\n");
     }
 
-    timer.reset(new GenericTimerISA(*generic_timer, tc->cpuId()));
+    timer.reset(new GenericTimerISA(*generic_timer, tc->contextId()));
     return *timer.get();
 }
 

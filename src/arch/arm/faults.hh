@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2012-2013 ARM Limited
+ * Copyright (c) 2010, 2012-2013, 2016 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -58,7 +58,7 @@
 
 namespace ArmISA
 {
-typedef const Addr FaultOffset;
+typedef Addr FaultOffset;
 
 class ArmFault : public FaultBase
 {
@@ -352,6 +352,8 @@ class HypervisorCall : public ArmFaultVals<HypervisorCall>
 {
   public:
     HypervisorCall(ExtMachInst _machInst, uint32_t _imm);
+
+    ExceptionClass ec(ThreadContext *tc) const;
 };
 
 class HypervisorTrap : public ArmFaultVals<HypervisorTrap>

@@ -86,12 +86,18 @@ Pl011::read(PacketPtr pkt)
             // Since we don't simulate a FIFO for incoming data, we
             // assume it's empty and clear RXINTR and RTINTR.
             clearInterrupts(UART_RXINTR | UART_RTINTR);
+            if (term->dataAvailable()) {
+                DPRINTF(Uart, "Re-raising interrupt due to more data "
+                        "after UART_DR read\n");
+                dataAvailable();
+            }
         }
         break;
       case UART_FR:
         data =
             UART_FR_CTS | // Clear To Send
-            (!term->dataAvailable() ? UART_FR_RXFE : 0) | // RX FIFO Empty
+            // Given we do not simulate a FIFO we are either empty or full.
+            (!term->dataAvailable() ? UART_FR_RXFE : UART_FR_RXFF) |
             UART_FR_TXFE; // TX FIFO empty
 
         DPRINTF(Uart,
@@ -223,6 +229,11 @@ Pl011::write(PacketPtr pkt)
       case UART_ICR:
         DPRINTF(Uart, "Clearing interrupts 0x%x\n", data);
         clearInterrupts(data);
+        if (term->dataAvailable()) {
+            DPRINTF(Uart, "Re-raising interrupt due to more data after "
+                    "UART_ICR write\n");
+            dataAvailable();
+        }
         break;
       default:
         panic("Tried to write PL011 at offset %#x that doesn't exist\n", daddr);

@@ -78,7 +78,7 @@ class SourceMeta(type):
     def __init__(cls, name, bases, dict):
         super(SourceMeta, cls).__init__(name, bases, dict)
         cls.all = []
-        
+
     def get(cls, **guards):
         '''Find all files that match the specified guards.  If a source
         file does not specify a flag, the default is False'''
@@ -236,6 +236,7 @@ class SwigSource(SourceFile):
         modname,ext = self.extname
         assert ext == 'i'
 
+        self.package = package
         self.module = modname
         cc_file = joinpath(self.dirname, modname + '_wrap.cc')
         py_file = joinpath(self.dirname, modname + '.py')
@@ -367,9 +368,9 @@ def makeTheISA(source, target, env):
     target_isa = env['TARGET_ISA']
     def define(isa):
         return isa.upper() + '_ISA'
-    
+
     def namespace(isa):
-        return isa[0].upper() + isa[1:].lower() + 'ISA' 
+        return isa[0].upper() + isa[1:].lower() + 'ISA'
 
 
     code = code_formatter()
@@ -406,6 +407,51 @@ def makeTheISA(source, target, env):
 
 env.Command('config/the_isa.hh', map(Value, all_isa_list),
             MakeAction(makeTheISA, Transform("CFG ISA", 0)))
+
+def makeTheGPUISA(source, target, env):
+    isas = [ src.get_contents() for src in source ]
+    target_gpu_isa = env['TARGET_GPU_ISA']
+    def define(isa):
+        return isa.upper() + '_ISA'
+
+    def namespace(isa):
+        return isa[0].upper() + isa[1:].lower() + 'ISA'
+
+
+    code = code_formatter()
+    code('''\
+#ifndef __CONFIG_THE_GPU_ISA_HH__
+#define __CONFIG_THE_GPU_ISA_HH__
+
+''')
+
+    # create defines for the preprocessing and compile-time determination
+    for i,isa in enumerate(isas):
+        code('#define $0 $1', define(isa), i + 1)
+    code()
+
+    # create an enum for any run-time determination of the ISA, we
+    # reuse the same name as the namespaces
+    code('enum class GPUArch {')
+    for i,isa in enumerate(isas):
+        if i + 1 == len(isas):
+            code('  $0 = $1', namespace(isa), define(isa))
+        else:
+            code('  $0 = $1,', namespace(isa), define(isa))
+    code('};')
+
+    code('''
+
+#define THE_GPU_ISA ${{define(target_gpu_isa)}}
+#define TheGpuISA ${{namespace(target_gpu_isa)}}
+#define THE_GPU_ISA_STR "${{target_gpu_isa}}"
+
+#endif // __CONFIG_THE_GPU_ISA_HH__''')
+
+    code.write(str(target[0]))
+
+env.Command('config/the_gpu_isa.hh', map(Value, all_gpu_isa_list),
+            MakeAction(makeTheGPUISA, Transform("CFG ISA", 0)))
 
 ########################################################################
 #
@@ -771,20 +817,28 @@ for name,simobj in sorted(sim_objects.iteritems()):
     SwigSource('m5.internal', i_file)
 
 # Generate the main swig init file
-def makeEmbeddedSwigInit(target, source, env):
-    code = code_formatter()
-    module = source[0].get_contents()
-    code('''\
-#include "sim/init.hh"
+def makeEmbeddedSwigInit(package):
+    def body(target, source, env):
+        assert len(target) == 1 and len(source) == 1
 
-extern "C" {
-    void init_${module}();
-}
+        code = code_formatter()
+        module = source[0].get_contents()
+        # Provide the full context so that the swig-generated call to
+        # Py_InitModule ends up placing the embedded module in the
+        # right package.
+        context = str(package) + "._" + str(module)
+        code('''\
+        #include "sim/init.hh"
 
-EmbeddedSwig embed_swig_${module}(init_${module});
-''')
-    code.write(str(target[0]))
-    
+        extern "C" {
+            void init_${module}();
+        }
+
+        EmbeddedSwig embed_swig_${module}(init_${module}, "${context}");
+        ''')
+        code.write(str(target[0]))
+    return body
+
 # Build all swig modules
 for swig in SwigSource.all:
     env.Command([swig.cc_source.tnode, swig.py_source.tnode], swig.tnode,
@@ -793,7 +847,8 @@ for swig in SwigSource.all:
     cc_file = str(swig.tnode)
     init_file = '%s/%s_init.cc' % (dirname(cc_file), basename(cc_file))
     env.Command(init_file, Value(swig.module),
-                MakeAction(makeEmbeddedSwigInit, Transform("EMBED SW")))
+                MakeAction(makeEmbeddedSwigInit(swig.package),
+                           Transform("EMBED SW")))
     env.Depends(SWIG, init_file)
     Source(init_file, **swig.guards)
 
@@ -917,9 +972,11 @@ env.Depends(SWIG, 'debug/flags.cc')
 Source('debug/flags.cc')
 
 # version tags
+tags = \
 env.Command('sim/tags.cc', None,
             MakeAction('util/cpt_upgrader.py --get-cc-file > $TARGET',
                        Transform("VER TAGS")))
+env.AlwaysBuild(tags)
 
 # Embed python files.  All .py files that have been indicated by a
 # PySource() call in a SConscript need to be embedded into the M5
@@ -959,7 +1016,7 @@ const uint8_t data_${sym}[] = {
         x = array.array('B', data[i:i+step])
         code(''.join('%d,' % d for d in x))
     code.dedent()
-    
+
     code('''};
 
 EmbeddedPython embedded_${sym}(
@@ -1018,11 +1075,6 @@ def makeEnv(env, label, objsfx, strip = False, **kwargs):
     # the SWIG generated code
     swig_env.Append(CCFLAGS=['-Wno-unused-label', '-Wno-unused-value'])
 
-    # Add additional warnings here that should not be applied to
-    # the SWIG generated code
-    new_env.Append(CXXFLAGS=['-Wmissing-declarations',
-                             '-Wdelete-non-virtual-dtor'])
-
     if env['GCC']:
         # Depending on the SWIG version, we also need to supress
         # warnings about uninitialized variables and missing field
@@ -1030,7 +1082,8 @@ def makeEnv(env, label, objsfx, strip = False, **kwargs):
         swig_env.Append(CCFLAGS=['-Wno-uninitialized',
                                  '-Wno-missing-field-initializers',
                                  '-Wno-unused-but-set-variable',
-                                 '-Wno-maybe-uninitialized'])
+                                 '-Wno-maybe-uninitialized',
+                                 '-Wno-type-limits'])
 
         # Only gcc >= 4.9 supports UBSan, so check both the version
         # and the command-line option before adding the compiler and
@@ -1040,20 +1093,27 @@ def makeEnv(env, label, objsfx, strip = False, **kwargs):
             new_env.Append(CCFLAGS='-fsanitize=undefined')
             new_env.Append(LINKFLAGS='-fsanitize=undefined')
 
-    if env['CLANG']:
-        swig_env.Append(CCFLAGS=[
-                # Some versions of SWIG can return uninitialized values
-                '-Wno-sometimes-uninitialized',
-                # Register storage is requested in a lot of places in
-                # SWIG-generated code.
-                '-Wno-deprecated-register',
-                ])
+        # The address sanitizer is available for gcc >= 4.8
+        if GetOption('with_asan'):
+            new_env.Append(CCFLAGS=['-fsanitize=address',
+                                    '-fno-omit-frame-pointer'])
+            new_env.Append(LINKFLAGS='-fsanitize=address')
 
-        # All supported clang versions have support for UBSan, so if
-        # asked to use it, append the compiler and linker flags.
+    if env['CLANG']:
+        swig_env.Append(CCFLAGS=['-Wno-sometimes-uninitialized',
+                                 '-Wno-deprecated-register',
+                                 '-Wno-tautological-compare'])
+
+        # We require clang >= 3.1, so there is no need to check any
+        # versions here.
         if GetOption('with_ubsan'):
             new_env.Append(CCFLAGS='-fsanitize=undefined')
             new_env.Append(LINKFLAGS='-fsanitize=undefined')
+
+        if GetOption('with_asan'):
+            new_env.Append(CCFLAGS=['-fsanitize=address',
+                                    '-fno-omit-frame-pointer'])
+            new_env.Append(LINKFLAGS='-fsanitize=address')
 
     werror_env = new_env.Clone()
     # Treat warnings as errors but white list some warnings that we
@@ -1202,7 +1262,6 @@ needed_envs = [identifyTarget(target) for target in BUILD_TARGETS]
 if 'all' in needed_envs:
     needed_envs += target_types
 
-gem5_root = Dir('.').up().up().abspath
 def makeEnvirons(target, source, env):
     # cause any later Source() calls to be fatal, as a diagnostic.
     Source.done()
@@ -1251,7 +1310,7 @@ def makeEnvirons(target, source, env):
 
     # Set up the regression tests for each build.
     for e in envList:
-        SConscript(os.path.join(gem5_root, 'tests', 'SConscript'),
+        SConscript(os.path.join(env.root.abspath, 'tests', 'SConscript'),
                    variant_dir = variantd('tests', e.Label),
                    exports = { 'env' : e }, duplicate = False)
 

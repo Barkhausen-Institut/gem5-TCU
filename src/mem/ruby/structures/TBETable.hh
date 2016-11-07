@@ -30,8 +30,8 @@
 #define __MEM_RUBY_STRUCTURES_TBETABLE_HH__
 
 #include <iostream>
+#include <unordered_map>
 
-#include "base/hashmap.hh"
 #include "mem/ruby/common/Address.hh"
 
 template<class ENTRY>
@@ -63,7 +63,7 @@ class TBETable
     TBETable& operator=(const TBETable& obj);
 
     // Data Members (m_prefix)
-    m5::hash_map<Addr, ENTRY> m_map;
+    std::unordered_map<Addr, ENTRY> m_map;
 
   private:
     int m_number_of_TBEs;
@@ -110,7 +110,7 @@ template<class ENTRY>
 inline ENTRY*
 TBETable<ENTRY>::lookup(Addr address)
 {
-  if(m_map.find(address) != m_map.end()) return &(m_map.find(address)->second);
+  if (m_map.find(address) != m_map.end()) return &(m_map.find(address)->second);
   return NULL;
 }
 

@@ -80,6 +80,7 @@ int System::numSystemsRunning = 0;
 System::System(Params *p)
     : MemObject(p), _systemPort("system_port", this),
       _numContexts(0),
+      multiThread(p->multi_thread),
       pagePtr(0),
       init_param(p->init_param),
       physProxy(_systemPort, p->cache_line_size),
@@ -95,6 +96,7 @@ System::System(Params *p)
       workItemsBegin(0),
       workItemsEnd(0),
       numWorkIds(p->num_work_ids),
+      thermalModel(p->thermal_model),
       rgdb_wait(p->rgdb_wait),
       _params(p),
       totalNumInsts(0),
@@ -381,6 +383,8 @@ System::unserialize(CheckpointIn &cp)
 void
 System::regStats()
 {
+    MemObject::regStats();
+
     for (uint32_t j = 0; j < numWorkIds ; j++) {
         workItemStats[j] = new Stats::Histogram();
         stringstream namestr;

@@ -196,7 +196,7 @@ DtuAccelHash::createPacket(Addr paddr,
     Request::Flags flags;
 
     auto req = new Request(paddr, size, flags, masterId);
-    req->setThreadContext(id, 0);
+    req->setContext(id);
 
     auto pkt = new Packet(req, cmd);
     auto pkt_data = new uint8_t[size];

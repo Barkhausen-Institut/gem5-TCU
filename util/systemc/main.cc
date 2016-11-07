@@ -35,6 +35,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Authors: Andrew Bardsley
+ *          Abdul Mutaal Ahmad
  */
 
 /**
@@ -72,6 +73,9 @@
 #include "sc_logger.hh"
 #include "sc_module.hh"
 #include "stats.hh"
+
+// Defining global string variable decalred in stats.hh
+std::string filename;
 
 void
 usage(const std::string &prog_name)
@@ -162,7 +166,7 @@ SimControl::SimControl(sc_core::sc_module_name name,
     Stats::initSimStats();
     Stats::registerHandlers(CxxConfig::statsReset, CxxConfig::statsDump);
 
-    Trace::enabled = true;
+    Trace::enable();
     setDebugFlag("Terminal");
 
     checkpoint_restore = false;
@@ -243,6 +247,11 @@ SimControl::SimControl(sc_core::sc_module_name name,
         fatal("Config problem in sim object %s: %s", e.name, e.message);
     }
 
+    if (checkpoint_save && checkpoint_restore) {
+        fatal("Don't try to save and restore a checkpoint in the same"
+                "run");
+    }
+
     CxxConfig::statsEnable();
     getEventQueue(0)->dump();
 
@@ -266,25 +275,31 @@ void SimControl::run()
         if (checkpoint_restore) {
             std::cerr << "Restoring checkpoint\n";
 
-            Checkpoint *checkpoint = new Checkpoint(checkpoint_dir,
+            CheckpointIn *checkpoint = new CheckpointIn(checkpoint_dir,
                 config_manager->getSimObjectResolver());
 
             /* Catch SystemC up with gem5 after checkpoint restore.
              *  Note that gem5 leading SystemC is always a violation of the
              *  required relationship between the two, hence this careful
              *  catchup */
+
+            DrainManager::instance().preCheckpointRestore();
+            Serializable::unserializeGlobals(*checkpoint);
+
             Tick systemc_time = sc_core::sc_time_stamp().value();
             if (curTick() > systemc_time) {
                 Tick wait_period = curTick() - systemc_time;
 
                 std::cerr << "Waiting for " << wait_period << "ps for"
                     " SystemC to catch up to gem5\n";
-                wait(sc_core::sc_time(wait_period, sc_core::SC_PS));
+                wait(sc_core::sc_time::from_value(wait_period));
             }
 
-            config_manager->loadState(checkpoint);
+            config_manager->loadState(*checkpoint);
             config_manager->startup();
             config_manager->drainResume();
+
+            std::cerr << "Restored from Checkpoint\n";
         } else {
             config_manager->initState();
             config_manager->startup();
@@ -298,16 +313,13 @@ void SimControl::run()
     if (checkpoint_save) {
         exit_event = simulate(pre_run_time);
 
-        DrainManager drain_manager;
-
         unsigned int drain_count = 1;
         do {
-            drain_count = config_manager->drain(&drain_manager);
+            drain_count = config_manager->drain();
 
             std::cerr << "Draining " << drain_count << '\n';
 
             if (drain_count > 0) {
-                drain_manager.setCount(drain_count);
                 exit_event = simulate();
             }
         } while (drain_count > 0);
@@ -337,15 +349,13 @@ void SimControl::run()
         BaseCPU &old_cpu = config_manager->getObject<BaseCPU>(from_cpu);
         BaseCPU &new_cpu = config_manager->getObject<BaseCPU>(to_cpu);
 
-        DrainManager drain_manager;
         unsigned int drain_count = 1;
         do {
-            drain_count = config_manager->drain(&drain_manager);
+            drain_count = config_manager->drain();
 
             std::cerr << "Draining " << drain_count << '\n';
 
             if (drain_count > 0) {
-                drain_manager.setCount(drain_count);
                 exit_event = simulate();
             }
         } while (drain_count > 0);
@@ -376,7 +386,11 @@ sc_main(int argc, char **argv)
 {
     SimControl sim_control("gem5", argc, argv);
 
+    filename = "m5out/stats-systemc.txt";
+
     sc_core::sc_start();
+
+    CxxConfig::statsDump();
 
     return EXIT_SUCCESS;
 }

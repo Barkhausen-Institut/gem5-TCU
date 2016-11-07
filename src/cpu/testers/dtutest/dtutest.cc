@@ -230,7 +230,7 @@ DtuTest::createDtuRegisterPkt(Addr reg,
     Request::Flags flags;
 
     auto req = new Request(paddr, sizeof(RegFile::reg_t), flags, masterId);
-    req->setThreadContext(id, 0);
+    req->setContext(id);
 
     auto pkt = new Packet(req, cmd);
     auto pkt_data = new RegFile::reg_t;
@@ -260,7 +260,7 @@ DtuTest::tick()
         Request::Flags flags;
 
         auto req = new Request(paddr, 1, flags, masterId);
-        req->setThreadContext(id, 0);
+        req->setContext(id);
 
         pkt = new Packet(req, MemCmd::WriteReq);
         auto pkt_data = new uint8_t[1];
@@ -380,7 +380,7 @@ DtuTest::tick()
         Request::Flags flags;
 
         auto req = new Request(paddr, 1, flags, masterId);
-        req->setThreadContext(id, 0);
+        req->setContext(id);
 
         pkt = new Packet(req, MemCmd::ReadReq);
         auto pkt_data = new uint8_t[1];

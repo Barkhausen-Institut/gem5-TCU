@@ -59,6 +59,10 @@ class System(MemObject):
                                           "All memories in the system")
     mem_mode = Param.MemoryMode('atomic', "The mode the memory system is in")
 
+    thermal_model = Param.ThermalModel(NULL, "Thermal model")
+    thermal_components = VectorParam.SimObject([],
+            "A collection of all thermal components in the system.")
+
     # When reserving memory on the host, we have the option of
     # reserving swap space or not (by passing MAP_NORESERVE to
     # mmap). By enabling this flag, we accomodate cases where a large
@@ -73,6 +77,8 @@ class System(MemObject):
 
     cache_line_size = Param.Unsigned(64, "Cache line size in bytes")
 
+    exit_on_work_items = Param.Bool(False, "Exit from the simulation loop when "
+                                    "encountering work item annotations.")
     work_item_id = Param.Int(-1, "specific work item id")
     num_work_ids = Param.Int(16, "Number of distinct work item types")
     work_begin_cpu_id_exit = Param.Int(-1,
@@ -98,6 +104,9 @@ class System(MemObject):
     load_addr_mask = Param.UInt64(0xffffffffff,
             "Address to mask loading binaries with")
     load_offset = Param.UInt64(0, "Address to offset loading binaries with")
+
+    multi_thread = Param.Bool(False,
+            "Supports multi-threaded CPUs? Impacts Thread/Context IDs")
 
     # Dynamic voltage and frequency handler for the system, disabled by default
     # Provide list of domains that need to be controlled by the handler

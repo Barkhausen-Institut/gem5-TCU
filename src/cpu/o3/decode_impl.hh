@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2012, 2014 ARM Limited
  * All rights reserved
  *
@@ -209,7 +209,8 @@ bool
 DefaultDecode<Impl>::isDrained() const
 {
     for (ThreadID tid = 0; tid < numThreads; ++tid) {
-        if (!insts[tid].empty() || !skidBuffer[tid].empty())
+        if (!insts[tid].empty() || !skidBuffer[tid].empty() ||
+                (decodeStatus[tid] != Running && decodeStatus[tid] != Idle))
             return false;
     }
     return true;

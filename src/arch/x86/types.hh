@@ -45,7 +45,6 @@
 #include "arch/generic/types.hh"
 #include "base/bitunion.hh"
 #include "base/cprintf.hh"
-#include "base/hashmap.hh"
 #include "base/types.hh"
 #include "sim/serialize.hh"
 
@@ -259,31 +258,31 @@ namespace X86ISA
     inline static bool
         operator == (const ExtMachInst &emi1, const ExtMachInst &emi2)
     {
-        if(emi1.legacy != emi2.legacy)
+        if (emi1.legacy != emi2.legacy)
             return false;
-        if(emi1.rex != emi2.rex)
+        if (emi1.rex != emi2.rex)
             return false;
-        if(emi1.opcode.type != emi2.opcode.type)
+        if (emi1.opcode.type != emi2.opcode.type)
             return false;
-        if(emi1.opcode.op != emi2.opcode.op)
+        if (emi1.opcode.op != emi2.opcode.op)
             return false;
-        if(emi1.modRM != emi2.modRM)
+        if (emi1.modRM != emi2.modRM)
             return false;
-        if(emi1.sib != emi2.sib)
+        if (emi1.sib != emi2.sib)
             return false;
-        if(emi1.immediate != emi2.immediate)
+        if (emi1.immediate != emi2.immediate)
             return false;
-        if(emi1.displacement != emi2.displacement)
+        if (emi1.displacement != emi2.displacement)
             return false;
-        if(emi1.mode != emi2.mode)
+        if (emi1.mode != emi2.mode)
             return false;
-        if(emi1.opSize != emi2.opSize)
+        if (emi1.opSize != emi2.opSize)
             return false;
-        if(emi1.addrSize != emi2.addrSize)
+        if (emi1.addrSize != emi2.addrSize)
             return false;
-        if(emi1.stackSize != emi2.stackSize)
+        if (emi1.stackSize != emi2.stackSize)
             return false;
-        if(emi1.dispSize != emi2.dispSize)
+        if (emi1.dispSize != emi2.dispSize)
             return false;
         return true;
     }
@@ -346,7 +345,7 @@ namespace X86ISA
 
 }
 
-__hash_namespace_begin
+namespace std {
     template<>
     struct hash<X86ISA::ExtMachInst> {
         size_t operator()(const X86ISA::ExtMachInst &emi) const {
@@ -362,7 +361,7 @@ __hash_namespace_begin
                     emi.stackSize ^ emi.dispSize;
         };
     };
-__hash_namespace_end
+}
 
 // These two functions allow ExtMachInst to be used with SERIALIZE_SCALAR
 // and UNSERIALIZE_SCALAR.

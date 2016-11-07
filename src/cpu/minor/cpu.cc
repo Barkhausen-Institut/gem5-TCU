@@ -47,31 +47,32 @@
 #include "debug/Quiesce.hh"
 
 MinorCPU::MinorCPU(MinorCPUParams *params) :
-    BaseCPU(params)
+    BaseCPU(params),
+    threadPolicy(params->threadPolicy)
 {
     /* This is only written for one thread at the moment */
     Minor::MinorThread *thread;
 
-    if (FullSystem) {
-        thread = new Minor::MinorThread(this, 0, params->system, params->itb,
-            params->dtb, params->isa[0]);
-    } else {
-        /* thread_id 0 */
-        thread = new Minor::MinorThread(this, 0, params->system,
-            params->workload[0], params->itb, params->dtb, params->isa[0]);
+    for (ThreadID i = 0; i < numThreads; i++) {
+        if (FullSystem) {
+            thread = new Minor::MinorThread(this, i, params->system,
+                    params->itb, params->dtb, params->isa[i]);
+            thread->setStatus(ThreadContext::Halted);
+        } else {
+            thread = new Minor::MinorThread(this, i, params->system,
+                    params->workload[i], params->itb, params->dtb,
+                    params->isa[i]);
+        }
+
+        threads.push_back(thread);
+        ThreadContext *tc = thread->getTC();
+        threadContexts.push_back(tc);
     }
 
-    threads.push_back(thread);
-
-    thread->setStatus(ThreadContext::Halted);
-
-    ThreadContext *tc = thread->getTC();
 
     if (params->checker) {
         fatal("The Minor model doesn't support checking (yet)\n");
     }
-
-    threadContexts.push_back(tc);
 
     Minor::MinorDynInst::init();
 
@@ -137,9 +138,6 @@ MinorCPU::serializeThread(CheckpointOut &cp, ThreadID thread_id) const
 void
 MinorCPU::unserializeThread(CheckpointIn &cp, ThreadID thread_id)
 {
-    if (thread_id != 0)
-        fatal("Trying to load more than one thread into a MinorCPU\n");
-
     threads[thread_id]->unserialize(cp);
 }
 
@@ -167,16 +165,14 @@ MinorCPU::dbg_vtophys(Addr addr)
 }
 
 void
-MinorCPU::wakeup()
+MinorCPU::wakeup(ThreadID tid)
 {
-    DPRINTF(Drain, "MinorCPU wakeup\n");
+    DPRINTF(Drain, "[tid:%d] MinorCPU wakeup\n", tid);
+    assert(tid < numThreads);
 
-    for (auto i = threads.begin(); i != threads.end(); i ++) {
-        if ((*i)->status() == ThreadContext::Suspended)
-            (*i)->activate();
+    if (threads[tid]->status() == ThreadContext::Suspended) {
+        threads[tid]->activate();
     }
-
-    DPRINTF(Drain,"Suspended Processor awoke\n");
 }
 
 void
@@ -189,13 +185,10 @@ MinorCPU::startup()
     for (auto i = threads.begin(); i != threads.end(); i ++)
         (*i)->startup();
 
-    /* Workaround cases in SE mode where a thread is activated with an
-     * incorrect PC that is updated after the call to activate. This
-     * causes problems for Minor since it instantiates a virtual
-     * branch instruction when activateContext() is called which ends
-     * up pointing to an illegal address.  */
-    if (threads[0]->status() == ThreadContext::Active)
-        activateContext(0);
+    for (ThreadID tid = 0; tid < numThreads; tid++) {
+        threads[tid]->startup();
+        pipeline->wakeupFetch(tid);
+    }
 }
 
 DrainState
@@ -229,6 +222,11 @@ MinorCPU::signalDrainDone()
 void
 MinorCPU::drainResume()
 {
+    /* When taking over from another cpu make sure lastStopped
+     * is reset since it might have not been defined previously
+     * and might lead to a stats corruption */
+    pipeline->resetLastStopped();
+
     if (switchedOut()) {
         DPRINTF(Drain, "drainResume while switched out.  Ignoring\n");
         return;
@@ -241,7 +239,9 @@ MinorCPU::drainResume()
             "'timing' mode.\n");
     }
 
-    wakeup();
+    for (ThreadID tid = 0; tid < numThreads; tid++)
+        wakeup(tid);
+
     pipeline->drainResume();
 }
 
@@ -269,14 +269,12 @@ MinorCPU::takeOverFrom(BaseCPU *old_cpu)
     DPRINTF(MinorCPU, "MinorCPU takeOverFrom\n");
 
     BaseCPU::takeOverFrom(old_cpu);
-
-    /* Don't think I need to do anything here */
 }
 
 void
 MinorCPU::activateContext(ThreadID thread_id)
 {
-    DPRINTF(MinorCPU, "ActivateContext thread: %d", thread_id);
+    DPRINTF(MinorCPU, "ActivateContext thread: %d\n", thread_id);
 
     /* Do some cycle accounting.  lastStopped is reset to stop the
      *  wakeup call on the pipeline from adding the quiesce period
@@ -287,7 +285,9 @@ MinorCPU::activateContext(ThreadID thread_id)
     /* Wake up the thread, wakeup the pipeline tick */
     threads[thread_id]->activate();
     wakeupOnEvent(Minor::Pipeline::CPUStageId);
-    pipeline->wakeupFetch();
+    pipeline->wakeupFetch(thread_id);
+
+    BaseCPU::activateContext(thread_id);
 }
 
 void
@@ -296,6 +296,8 @@ MinorCPU::suspendContext(ThreadID thread_id)
     DPRINTF(MinorCPU, "SuspendContext %d\n", thread_id);
 
     threads[thread_id]->suspend();
+
+    BaseCPU::suspendContext(thread_id);
 }
 
 void
@@ -311,9 +313,6 @@ MinorCPU::wakeupOnEvent(unsigned int stage_id)
 MinorCPU *
 MinorCPUParams::create()
 {
-    numThreads = 1;
-    if (!FullSystem && workload.size() != 1)
-        panic("only one workload allowed");
     return new MinorCPU(this);
 }
 

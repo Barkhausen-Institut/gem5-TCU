@@ -45,12 +45,13 @@
  * Definitions a fully associative LRU tagstore.
  */
 
+#include "mem/cache/tags/fa_lru.hh"
+
 #include <cassert>
 #include <sstream>
 
 #include "base/intmath.hh"
 #include "base/misc.hh"
-#include "mem/cache/tags/fa_lru.hh"
 
 using namespace std;
 
@@ -67,7 +68,7 @@ FALRU::FALRU(const Params *p)
     numCaches = floorLog2(size) - 17;
     if (numCaches >0){
         cacheBoundaries = new FALRUBlk *[numCaches];
-        cacheMask = (1 << numCaches) - 1;
+        cacheMask = (ULL(1) << numCaches) - 1;
     } else {
         cacheMask = 0;
     }
@@ -79,12 +80,12 @@ FALRU::FALRU(const Params *p)
     head = &(blks[0]);
     tail = &(blks[numBlocks-1]);
 
-    head->prev = NULL;
+    head->prev = nullptr;
     head->next = &(blks[1]);
     head->inCache = cacheMask;
 
     tail->prev = &(blks[numBlocks-2]);
-    tail->next = NULL;
+    tail->next = nullptr;
     tail->inCache = 0;
 
     unsigned index = (1 << 17) / blkSize;
@@ -159,7 +160,7 @@ FALRU::hashLookup(Addr addr) const
     if (iter != tagHash.end()) {
         return (*iter).second;
     }
-    return NULL;
+    return nullptr;
 }
 
 void
@@ -199,7 +200,7 @@ FALRU::accessBlock(Addr addr, bool is_secure, Cycles &lat, int context_src,
             moveToHead(blk);
         }
     } else {
-        blk = NULL;
+        blk = nullptr;
         for (unsigned i = 0; i <= numCaches; ++i) {
             misses[i]++;
         }
@@ -223,7 +224,7 @@ FALRU::findBlock(Addr addr, bool is_secure) const
     if (blk && blk->isValid()) {
         assert(blk->tag == blkAddr);
     } else {
-        blk = NULL;
+        blk = nullptr;
     }
     return blk;
 }
@@ -277,15 +278,15 @@ FALRU::moveToHead(FALRUBlk *blk)
     blk->inCache = cacheMask;
     if (blk != head) {
         if (blk == tail){
-            assert(blk->next == NULL);
+            assert(blk->next == nullptr);
             tail = blk->prev;
-            tail->next = NULL;
+            tail->next = nullptr;
         } else {
             blk->prev->next = blk->next;
             blk->next->prev = blk->prev;
         }
         blk->next = head;
-        blk->prev = NULL;
+        blk->prev = nullptr;
         head->prev = blk;
         head = blk;
     }

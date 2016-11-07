@@ -51,16 +51,17 @@ from m5.defines import buildEnv
 from m5.objects import *
 from m5.util import addToPath, fatal
 
-addToPath('../common')
-addToPath('../ruby')
+addToPath('../')
 
-import Options
-import Ruby
-import Simulation
-import CacheConfig
-import MemConfig
-from Caches import *
-from cpu2000 import *
+from ruby import Ruby
+
+from common import Options
+from common import Simulation
+from common import CacheConfig
+from common import CpuConfig
+from common import MemConfig
+from common.Caches import *
+from common.cpu2000 import *
 
 # Check if KVM support has been enabled, we might need to do VM
 # configuration if that's the case.
@@ -178,6 +179,9 @@ system = System(cpu = [CPUClass(cpu_id=i) for i in xrange(np)],
                 mem_ranges = [AddrRange(options.mem_size)],
                 cache_line_size = options.cacheline_size)
 
+if numThreads > 1:
+    system.multi_thread = True
+
 # Create a top-level voltage domain
 system.voltage_domain = VoltageDomain(voltage = options.sys_voltage)
 
@@ -192,6 +196,11 @@ system.cpu_voltage_domain = VoltageDomain()
 system.cpu_clk_domain = SrcClockDomain(clock = options.cpu_clock,
                                        voltage_domain =
                                        system.cpu_voltage_domain)
+
+# If elastic tracing is enabled, then configure the cpu and attach the elastic
+# trace probe
+if options.elastic_trace_en:
+    CpuConfig.config_etrace(CPUClass, system.cpu, options)
 
 # All cpus belong to a common cpu_clk_domain, therefore running at a common
 # frequency.
@@ -262,9 +271,9 @@ if options.ruby:
         system.cpu[i].icache_port = ruby_port.slave
         system.cpu[i].dcache_port = ruby_port.slave
         if buildEnv['TARGET_ISA'] == 'x86':
-            system.cpu[i].interrupts.pio = ruby_port.master
-            system.cpu[i].interrupts.int_master = ruby_port.slave
-            system.cpu[i].interrupts.int_slave = ruby_port.master
+            system.cpu[i].interrupts[0].pio = ruby_port.master
+            system.cpu[i].interrupts[0].int_master = ruby_port.slave
+            system.cpu[i].interrupts[0].int_slave = ruby_port.master
             system.cpu[i].itb.walker.port = ruby_port.slave
             system.cpu[i].dtb.walker.port = ruby_port.slave
 else:

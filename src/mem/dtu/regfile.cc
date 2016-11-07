@@ -75,8 +75,7 @@ const char *RegFile::epTypeNames[] = {
 
 static bool isTraceEnabled(bool read)
 {
-    return Trace::enabled &&
-        ((read && Debug::DtuRegRead) || (!read && Debug::DtuRegWrite));
+    return (read && DTRACE(DtuRegRead)) || (!read && DTRACE(DtuRegWrite));
 }
 
 static const char *regAccessName(RegAccess access)

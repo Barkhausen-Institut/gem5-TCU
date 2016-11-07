@@ -59,15 +59,14 @@ class SimpleNetwork : public Network
     bool isVNetOrdered(int vnet) const { return m_ordered[vnet]; }
 
     // Methods used by Topology to setup the network
-    void makeOutLink(SwitchID src, NodeID dest, BasicLink* link,
-                     LinkDirection direction,
+    void makeExtOutLink(SwitchID src, NodeID dest, BasicLink* link,
                      const NetDest& routing_table_entry);
-    void makeInLink(NodeID src, SwitchID dest, BasicLink* link,
-                    LinkDirection direction,
+    void makeExtInLink(NodeID src, SwitchID dest, BasicLink* link,
                     const NetDest& routing_table_entry);
     void makeInternalLink(SwitchID src, SwitchID dest, BasicLink* link,
-                          LinkDirection direction,
-                          const NetDest& routing_table_entry);
+                          const NetDest& routing_table_entry,
+                          PortDirection src_outport,
+                          PortDirection dst_inport);
 
     void print(std::ostream& out) const;
 
@@ -87,11 +86,9 @@ class SimpleNetwork : public Network
     std::vector<Switch*> m_switches;
     std::vector<MessageBuffer*> m_int_link_buffers;
     int m_num_connected_buffers;
-    std::vector<Switch*> m_endpoint_switches;
-
-    int m_buffer_size;
-    int m_endpoint_bandwidth;
-    bool m_adaptive_routing;
+    const int m_buffer_size;
+    const int m_endpoint_bandwidth;
+    const bool m_adaptive_routing;
 
     //Statistical variables
     Stats::Formula m_msg_counts[MessageSizeType_NUM];

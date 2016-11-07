@@ -487,8 +487,8 @@ class Globals : public Serializable
     Globals()
         : unserializedCurTick(0) {}
 
-    void serialize(CheckpointOut &cp) const M5_ATTR_OVERRIDE;
-    void unserialize(CheckpointIn &cp) M5_ATTR_OVERRIDE;
+    void serialize(CheckpointOut &cp) const override;
+    void unserialize(CheckpointIn &cp) override;
 
     Tick unserializedCurTick;
 };
@@ -578,13 +578,6 @@ Serializable::serializeSection(CheckpointOut &cp, const char *name) const
 {
     Serializable::ScopedCheckpointSection sec(cp, name);
     serialize(cp);
-}
-
-void
-Serializable::serializeSectionOld(CheckpointOut &cp, const char *name)
-{
-    Serializable::ScopedCheckpointSection sec(cp, name);
-    serializeOld(cp);
 }
 
 void
@@ -697,6 +690,12 @@ CheckpointIn::CheckpointIn(const string &cpt_dir, SimObjectResolver &resolver)
 CheckpointIn::~CheckpointIn()
 {
     delete db;
+}
+
+bool
+CheckpointIn::entryExists(const string &section, const string &entry)
+{
+    return db->entryExists(section, entry);
 }
 
 bool

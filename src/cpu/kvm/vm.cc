@@ -291,12 +291,12 @@ Kvm::createVM()
 
 KvmVM::KvmVM(KvmVMParams *params)
     : SimObject(params),
-      kvm(), system(params->system),
-      vmFD(kvm.createVM()),
+      kvm(new Kvm()), system(params->system),
+      vmFD(kvm->createVM()),
       started(false),
       nextVCPUID(0)
 {
-    maxMemorySlot = kvm.capNumMemSlots();
+    maxMemorySlot = kvm->capNumMemSlots();
     /* If we couldn't determine how memory slots there are, guess 32. */
     if (!maxMemorySlot)
         maxMemorySlot = 32;
@@ -307,7 +307,25 @@ KvmVM::KvmVM(KvmVMParams *params)
 
 KvmVM::~KvmVM()
 {
-    close(vmFD);
+    if (vmFD != -1)
+        close(vmFD);
+
+    if (kvm)
+        delete kvm;
+}
+
+void
+KvmVM::notifyFork()
+{
+    if (vmFD != -1) {
+        if (close(vmFD) == -1)
+            warn("kvm VM: notifyFork failed to close vmFD\n");
+
+        vmFD = -1;
+
+        delete kvm;
+        kvm = NULL;
+    }
 }
 
 void
@@ -323,13 +341,18 @@ KvmVM::cpuStartup()
 void
 KvmVM::delayedStartup()
 {
-    const std::vector<std::pair<AddrRange, uint8_t*> >&memories(
+    const std::vector<BackingStoreEntry> &memories(
         system->getPhysMem().getBackingStore());
 
     DPRINTF(Kvm, "Mapping %i memory region(s)\n", memories.size());
     for (int slot(0); slot < memories.size(); ++slot) {
-        const AddrRange &range(memories[slot].first);
-        void *pmem(memories[slot].second);
+        if (!memories[slot].kvmMap) {
+            DPRINTF(Kvm, "Skipping region marked as not usable by KVM\n");
+            continue;
+        }
+
+        const AddrRange &range(memories[slot].range);
+        void *pmem(memories[slot].pmem);
 
         if (pmem) {
             DPRINTF(Kvm, "Mapping region: 0x%p -> 0x%llx [size: 0x%llx]\n",

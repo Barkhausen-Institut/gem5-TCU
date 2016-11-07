@@ -53,15 +53,15 @@ class RubyMemoryControl : public AbstractMemory, public Consumer
   public:
     typedef RubyMemoryControlParams Params;
     RubyMemoryControl(const Params *p);
-    void init();
+    void init() override;
     void reset();
 
     ~RubyMemoryControl();
 
     virtual BaseSlavePort& getSlavePort(const std::string& if_name,
-                                        PortID idx = InvalidPortID);
-    DrainState drain() M5_ATTR_OVERRIDE;
-    void wakeup();
+                                        PortID idx = InvalidPortID) override;
+    DrainState drain() override;
+    void wakeup() override;
 
     void setDescription(const std::string& name) { m_description = name; };
     std::string getDescription() { return m_description; };
@@ -72,15 +72,15 @@ class RubyMemoryControl : public AbstractMemory, public Consumer
     void enqueueMemRef(MemoryNode *memRef);
     bool areNSlotsAvailable(int n) { return true; };  // infinite queue length
 
-    void print(std::ostream& out) const;
-    void regStats();
+    void print(std::ostream& out) const override;
+    void regStats() override;
 
-    const int getBank(const Addr addr) const;
-    const int getRank(const Addr addr) const;
+    int getBank(const Addr addr) const;
+    int getRank(const Addr addr) const;
 
     // not used in Ruby memory controller
-    const int getChannel(const Addr addr) const;
-    const int getRow(const Addr addr) const;
+    int getChannel(const Addr addr) const;
+    int getRow(const Addr addr) const;
 
     //added by SS
     int getBanksPerRank() { return m_banks_per_rank; };
@@ -92,7 +92,7 @@ class RubyMemoryControl : public AbstractMemory, public Consumer
 
   private:
     void enqueueToDirectory(MemoryNode *req, Cycles latency);
-    const int getRank(int bank) const;
+    int getRank(int bank) const;
     bool queueReady(int bank);
     void issueRequest(int bank);
     bool issueRefresh(int bank);

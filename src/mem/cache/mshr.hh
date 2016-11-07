@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2013, 2015 ARM Limited
+ * Copyright (c) 2012-2013, 2015-2016 ARM Limited
  * All rights reserved.
  *
  * The license below extends only to copyright in the software and shall
@@ -51,37 +51,55 @@
 #include <list>
 
 #include "base/printable.hh"
-#include "mem/packet.hh"
+#include "mem/cache/queue_entry.hh"
 
-class CacheBlk;
-class MSHRQueue;
+class Cache;
 
 /**
  * Miss Status and handling Register. This class keeps all the information
  * needed to handle a cache miss including a list of target requests.
  * @sa  \ref gem5MemorySystem "gem5 Memory System"
  */
-class MSHR : public Packet::SenderState, public Printable
+class MSHR : public QueueEntry, public Printable
 {
 
     /**
-     * Consider the MSHRQueue a friend to avoid making everything public
+     * Consider the queues friends to avoid making everything public.
      */
+    template<typename Entry>
+    friend class Queue;
     friend class MSHRQueue;
 
   private:
 
-    /** Cycle when ready to issue */
-    Tick readyTime;
-
-    /** True if the request is uncacheable */
-    bool _isUncacheable;
-
     /** Flag set by downstream caches */
     bool downstreamPending;
 
-    /** Will we have a dirty copy after this request? */
-    bool pendingDirty;
+    /**
+     * Here we use one flag to track both if:
+     *
+     * 1. We are going to become owner or not, i.e., we will get the
+     * block in an ownership state (Owned or Modified) with BlkDirty
+     * set. This determines whether or not we are going to become the
+     * responder and ordering point for future requests that we snoop.
+     *
+     * 2. We know that we are going to get a writable block, i.e. we
+     * will get the block in writable state (Exclusive or Modified
+     * state) with BlkWritable set. That determines whether additional
+     * targets with needsWritable set will be able to be satisfied, or
+     * if not should be put on the deferred list to possibly wait for
+     * another request that does give us writable access.
+     *
+     * Condition 2 is actually just a shortcut that saves us from
+     * possibly building a deferred target list and calling
+     * promoteWritable() every time we get a writable block. Condition
+     * 1, tracking ownership, is what is important. However, we never
+     * receive ownership without marking the block dirty, and
+     * consequently use pendingModified to track both ownership and
+     * writability rather than having separate pendingDirty and
+     * pendingWritable flags.
+     */
+    bool pendingModified;
 
     /** Did we snoop an invalidate while waiting for data? */
     bool postInvalidate;
@@ -90,6 +108,9 @@ class MSHR : public Packet::SenderState, public Printable
     bool postDowngrade;
 
   public:
+
+    /** True if the entry is just a simple forward from an upper level */
+    bool isForward;
 
     class Target {
       public:
@@ -118,15 +139,21 @@ class MSHR : public Packet::SenderState, public Printable
     class TargetList : public std::list<Target> {
 
       public:
-        bool needsExclusive;
+        bool needsWritable;
         bool hasUpgrade;
 
         TargetList();
-        void resetFlags() { needsExclusive = hasUpgrade = false; }
-        bool isReset() const { return !needsExclusive && !hasUpgrade; }
+        void resetFlags() { needsWritable = hasUpgrade = false; }
+        bool isReset() const { return !needsWritable && !hasUpgrade; }
         void add(PacketPtr pkt, Tick readyTime, Counter order,
                  Target::Source source, bool markPending);
+
+        /**
+         * Convert upgrades to the equivalent request if the cache line they
+         * refer to would have been invalid (Upgrade -> ReadEx, SC* -> Fail).
+         * Used to rejig ordering between targets waiting on an MSHR. */
         void replaceUpgrades();
+
         void clearDownstreamPending();
         bool checkFunctional(PacketPtr pkt);
         void print(std::ostream &os, int verbosity,
@@ -137,40 +164,20 @@ class MSHR : public Packet::SenderState, public Printable
     typedef std::list<MSHR *> List;
     /** MSHR list iterator. */
     typedef List::iterator Iterator;
-    /** MSHR list const_iterator. */
-    typedef List::const_iterator ConstIterator;
 
-    /** Pointer to queue containing this MSHR. */
-    MSHRQueue *queue;
-
-    /** Order number assigned by the miss queue. */
-    Counter order;
-
-    /** Block aligned address of the MSHR. */
-    Addr blkAddr;
-
-    /** Block size of the cache. */
-    unsigned blkSize;
-
-    /** True if the request targets the secure memory space. */
-    bool isSecure;
-
-    /** True if the request has been sent to the bus. */
-    bool inService;
-
-    /** True if the request is just a simple forward from an upper level */
-    bool isForward;
+    /** Keep track of whether we should allocate on fill or not */
+    bool allocOnFill;
 
     /** The pending* and post* flags are only valid if inService is
      *  true.  Using the accessor functions lets us detect if these
      *  flags are accessed improperly.
      */
 
-    /** True if we need to get an exclusive copy of the block. */
-    bool needsExclusive() const { return targets.needsExclusive; }
+    /** True if we need to get a writable copy of the block. */
+    bool needsWritable() const { return targets.needsWritable; }
 
-    bool isPendingDirty() const {
-        assert(inService); return pendingDirty;
+    bool isPendingModified() const {
+        assert(inService); return pendingModified;
     }
 
     bool hasPostInvalidate() const {
@@ -181,14 +188,9 @@ class MSHR : public Packet::SenderState, public Printable
         assert(inService); return postDowngrade;
     }
 
-    /** Thread number of the miss. */
-    ThreadID threadNum;
+    bool sendPacket(Cache &cache);
 
   private:
-
-    /** Data buffer (if needed).  Currently used only for pending
-     * upgrade handling. */
-    uint8_t *data;
 
     /**
      * Pointer to this MSHR on the ready list.
@@ -209,8 +211,6 @@ class MSHR : public Packet::SenderState, public Printable
 
   public:
 
-    bool isUncacheable() const { return _isUncacheable; }
-
     /**
      * Allocate a miss to this MSHR.
      * @param blk_addr The address of the block.
@@ -218,11 +218,12 @@ class MSHR : public Packet::SenderState, public Printable
      * @param pkt The original miss.
      * @param when_ready When should the MSHR be ready to act upon.
      * @param _order The logical order of this MSHR
+     * @param alloc_on_fill Should the cache allocate a block on fill
      */
     void allocate(Addr blk_addr, unsigned blk_size, PacketPtr pkt,
-                  Tick when_ready, Counter _order);
+                  Tick when_ready, Counter _order, bool alloc_on_fill);
 
-    bool markInService(bool pending_dirty_resp);
+    void markInService(bool pending_modified_resp);
 
     void clearDownstreamPending();
 
@@ -235,7 +236,8 @@ class MSHR : public Packet::SenderState, public Printable
      * Add a request to the list of targets.
      * @param target The target.
      */
-    void allocateTarget(PacketPtr target, Tick when, Counter order);
+    void allocateTarget(PacketPtr target, Tick when, Counter order,
+                        bool alloc_on_fill);
     bool handleSnoop(PacketPtr target, Counter order);
 
     /** A simple constructor. */
@@ -272,17 +274,9 @@ class MSHR : public Packet::SenderState, public Printable
         targets.pop_front();
     }
 
-    bool isForwardNoResponse() const
-    {
-        if (getNumTargets() != 1)
-            return false;
-        const Target *tgt = &targets.front();
-        return tgt->source == Target::FromCPU && !tgt->pkt->needsResponse();
-    }
-
     bool promoteDeferredTargets();
 
-    void handleFill(PacketPtr pkt, CacheBlk *blk);
+    void promoteWritable();
 
     bool checkFunctional(PacketPtr pkt);
 

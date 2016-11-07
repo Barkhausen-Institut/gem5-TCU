@@ -134,8 +134,9 @@ class CacheBlk
         Addr lowAddr;      // low address of lock range
         Addr highAddr;     // high address of lock range
 
-        // check for matching execution context
-        bool matchesContext(const RequestPtr req) const
+        // check for matching execution context, and an address that
+        // is within the lock
+        bool matches(const RequestPtr req) const
         {
             Addr req_low = req->getPaddr();
             Addr req_high = req_low + req->getSize() -1;
@@ -143,7 +144,8 @@ class CacheBlk
                    (req_low >= lowAddr) && (req_high <= highAddr);
         }
 
-        bool overlapping(const RequestPtr req) const
+        // check if a request is intersecting and thus invalidating the lock
+        bool intersects(const RequestPtr req) const
         {
             Addr req_low = req->getPaddr();
             Addr req_high = req_low + req->getSize() - 1;
@@ -214,7 +216,7 @@ class CacheBlk
     {
         status = 0;
         isTouched = false;
-        clearLoadLocks();
+        lockList.clear();
     }
 
     /**
@@ -246,42 +248,42 @@ class CacheBlk
     }
 
     /**
-     * Track the fact that a local locked was issued to the block.  If
-     * multiple LLs get issued from the same context we could have
-     * redundant records on the list, but that's OK, as they'll all
-     * get blown away at the next store.
+     * Track the fact that a local locked was issued to the
+     * block. Invalidate any previous LL to the same address.
      */
     void trackLoadLocked(PacketPtr pkt)
     {
         assert(pkt->isLLSC());
+        auto l = lockList.begin();
+        while (l != lockList.end()) {
+            if (l->intersects(pkt->req))
+                l = lockList.erase(l);
+            else
+                ++l;
+        }
+
         lockList.emplace_front(pkt->req);
     }
 
     /**
-     * Clear the list of valid load locks.  Should be called whenever
-     * block is written to or invalidated.
+     * Clear the any load lock that intersect the request, and is from
+     * a different context.
      */
-    void clearLoadLocks(RequestPtr req = nullptr)
+    void clearLoadLocks(RequestPtr req)
     {
-        if (!req) {
-            // No request, invaldate all locks to this line
-            lockList.clear();
-        } else {
-            // Only invalidate locks that overlap with this request
-            auto lock_itr = lockList.begin();
-            while (lock_itr != lockList.end()) {
-                if (lock_itr->overlapping(req)) {
-                    lock_itr = lockList.erase(lock_itr);
-                } else {
-                    ++lock_itr;
-                }
+        auto l = lockList.begin();
+        while (l != lockList.end()) {
+            if (l->intersects(req) && l->contextId != req->contextId()) {
+                l = lockList.erase(l);
+            } else {
+                ++l;
             }
         }
     }
 
     /**
      * Pretty-print a tag, and interpret state bits to readable form
-     * including mapping to a MOESI stat.
+     * including mapping to a MOESI state.
      *
      * @return string with basic state information
      */
@@ -299,6 +301,17 @@ class CacheBlk
          *  E       1           0       1
          *  S       0           0       1
          *  I       0           0       0
+         *
+         * Note that only one cache ever has a block in Modified or
+         * Owned state, i.e., only one cache owns the block, or
+         * equivalently has the BlkDirty bit set. However, multiple
+         * caches on the same path to memory can have a block in the
+         * Exclusive state (despite the name). Exclusive means this
+         * cache has the only copy at this level of the hierarchy,
+         * i.e., there may be copies in caches above this cache (in
+         * various states), but there are no peers that have copies on
+         * this branch of the hierarchy, and no caches at or above
+         * this level on any other branch have copies either.
          **/
         unsigned state = isWritable() << 2 | isDirty() << 1 | isValid();
         char s = '?';
@@ -322,6 +335,8 @@ class CacheBlk
      */
     bool checkWrite(PacketPtr pkt)
     {
+        assert(pkt->isWrite());
+
         // common case
         if (!pkt->isLLSC() && lockList.empty())
             return true;
@@ -333,22 +348,28 @@ class CacheBlk
             // load locked.
             bool success = false;
 
-            for (const auto& l : lockList) {
-                if (l.matchesContext(req)) {
-                    // it's a store conditional, and as far as the memory
-                    // system can tell, the requesting context's lock is
-                    // still valid.
+            auto l = lockList.begin();
+            while (!success && l != lockList.end()) {
+                if (l->matches(pkt->req)) {
+                    // it's a store conditional, and as far as the
+                    // memory system can tell, the requesting
+                    // context's lock is still valid.
                     success = true;
-                    break;
+                    lockList.erase(l);
+                } else {
+                    ++l;
                 }
             }
 
             req->setExtraData(success ? 1 : 0);
+            // clear any intersected locks from other contexts (our LL
+            // should already have cleared them)
             clearLoadLocks(req);
             return success;
         } else {
-            // for *all* stores (conditional or otherwise) we have to
-            // clear the list of load-locks as they're all invalid now.
+            // a normal write, if there is any lock not from this
+            // context we clear the list, thus for a private cache we
+            // never clear locks on normal writes
             clearLoadLocks(req);
             return true;
         }

@@ -173,7 +173,7 @@
                         PseudoInst::m5fail(xc->tcBase(), Rdi, Rsi);
                     }}, IsNonSpeculative);
                     0x30: m5initparam({{
-                        Rax = PseudoInst::initParam(xc->tcBase());
+                        Rax = PseudoInst::initParam(xc->tcBase(), Rdi, Rsi);
                     }}, IsNonSpeculative);
                     0x31: m5loadsymbol({{
                         PseudoInst::loadsymbol(xc->tcBase());
@@ -232,6 +232,9 @@
                     0x5b: m5_work_end({{
                         PseudoInst::workend(xc->tcBase(), Rdi, Rsi);
                     }}, IsNonSpeculative);
+                    0x62: m5togglesync({{
+                        PseudoInst::togglesync(xc->tcBase());
+                    }}, IsNonSpeculative, IsQuiesce);
                     default: Inst::UD2();
                 }
             }
@@ -467,7 +470,7 @@
                     0x0: MOVMSKPS(Gd,VRo);
                     0x1: SQRTPS(Vo,Wo);
                     0x2: WarnUnimpl::rqsrtps_Vo_Wo();
-                    0x3: WarnUnimpl::rcpps_Vo_Wo();
+                    0x3: RCPPS(Vo,Wo);
                     0x4: ANDPS(Vo,Wo);
                     0x5: ANDNPS(Vo,Wo);
                     0x6: ORPS(Vo,Wo);
@@ -477,7 +480,7 @@
                 0x4: decode OPCODE_OP_BOTTOM3 {
                     0x1: SQRTSS(Vd,Wd);
                     0x2: WarnUnimpl::rsqrtss_Vd_Wd();
-                    0x3: WarnUnimpl::rcpss_Vd_Wd();
+                    0x3: RCPSS(Vd,Wd);
                     default: UD2();
                 }
                 // operand size (0x66)

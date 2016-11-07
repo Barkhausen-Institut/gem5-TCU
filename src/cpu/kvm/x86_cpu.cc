@@ -118,7 +118,7 @@ static_assert(sizeof(FXSave) == 512, "Unexpected size of FXSave");
         APPLY_IREG(r13, INTREG_R13);            \
         APPLY_IREG(r14, INTREG_R14);            \
         APPLY_IREG(r15, INTREG_R15);            \
-    } while(0)
+    } while (0)
 
 #define FOREACH_SREG()                                  \
     do {                                                \
@@ -129,7 +129,7 @@ static_assert(sizeof(FXSave) == 512, "Unexpected size of FXSave");
         APPLY_SREG(cr8, MISCREG_CR8);                   \
         APPLY_SREG(efer, MISCREG_EFER);                 \
         APPLY_SREG(apic_base, MISCREG_APIC_BASE);       \
-    } while(0)
+    } while (0)
 
 #define FOREACH_DREG()                          \
     do {                                        \
@@ -139,7 +139,7 @@ static_assert(sizeof(FXSave) == 512, "Unexpected size of FXSave");
         APPLY_DREG(db[3], MISCREG_DR3);         \
         APPLY_DREG(dr6, MISCREG_DR6);           \
         APPLY_DREG(dr7, MISCREG_DR7);           \
-    } while(0)
+    } while (0)
 
 #define FOREACH_SEGMENT()                                       \
     do {                                                        \
@@ -151,13 +151,13 @@ static_assert(sizeof(FXSave) == 512, "Unexpected size of FXSave");
         APPLY_SEGMENT(ss, MISCREG_SS - MISCREG_SEG_SEL_BASE);   \
         APPLY_SEGMENT(tr, MISCREG_TR - MISCREG_SEG_SEL_BASE);   \
         APPLY_SEGMENT(ldt, MISCREG_TSL - MISCREG_SEG_SEL_BASE); \
-    } while(0)
+    } while (0)
 
 #define FOREACH_DTABLE()                                        \
     do {                                                        \
         APPLY_DTABLE(gdt, MISCREG_TSG - MISCREG_SEG_SEL_BASE);  \
         APPLY_DTABLE(idt, MISCREG_IDTR - MISCREG_SEG_SEL_BASE); \
-    } while(0)
+    } while (0)
 
 template<typename STRUCT, typename ENTRY>
 static STRUCT *newVarStruct(size_t entries)
@@ -519,7 +519,7 @@ X86KvmCPU::X86KvmCPU(X86KvmCPUParams *params)
     : BaseKvmCPU(params),
       useXSave(params->useXSave)
 {
-    Kvm &kvm(vm.kvm);
+    Kvm &kvm(*vm.kvm);
 
     if (!kvm.capSetTSSAddress())
         panic("KVM: Missing capability (KVM_CAP_SET_TSS_ADDR)\n");
@@ -649,7 +649,7 @@ X86KvmCPU::dumpVCpuEvents() const
 void
 X86KvmCPU::dumpMSRs() const
 {
-    const Kvm::MSRIndexVector &supported_msrs(vm.kvm.getSupportedMSRs());
+    const Kvm::MSRIndexVector &supported_msrs(vm.kvm->getSupportedMSRs());
     std::unique_ptr<struct kvm_msrs> msrs(
         newVarStruct<struct kvm_msrs, struct kvm_msr_entry>(
             supported_msrs.size()));
@@ -1142,9 +1142,9 @@ X86KvmCPU::deliverInterrupts()
         // call across threads, we might still lose interrupts unless
         // they are getInterrupt() and updateIntrInfo() are called
         // atomically.
-        EventQueue::ScopedMigration migrate(interrupts->eventQueue());
-        fault = interrupts->getInterrupt(tc);
-        interrupts->updateIntrInfo(tc);
+        EventQueue::ScopedMigration migrate(interrupts[0]->eventQueue());
+        fault = interrupts[0]->getInterrupt(tc);
+        interrupts[0]->updateIntrInfo(tc);
     }
 
     X86Interrupt *x86int(dynamic_cast<X86Interrupt *>(fault.get()));
@@ -1187,8 +1187,8 @@ X86KvmCPU::kvmRun(Tick ticks)
 {
     struct kvm_run &kvm_run(*getKvmRunState());
 
-    if (interrupts->checkInterruptsRaw()) {
-        if (interrupts->hasPendingUnmaskable()) {
+    if (interrupts[0]->checkInterruptsRaw()) {
+        if (interrupts[0]->hasPendingUnmaskable()) {
             DPRINTF(KvmInt,
                     "Delivering unmaskable interrupt.\n");
             syncThreadContext();
@@ -1200,7 +1200,7 @@ X86KvmCPU::kvmRun(Tick ticks)
             // the thread context and check if there are /really/
             // interrupts that should be delivered now.
             syncThreadContext();
-            if (interrupts->checkInterrupts(tc)) {
+            if (interrupts[0]->checkInterrupts(tc)) {
                 DPRINTF(KvmInt,
                         "M5 has pending interrupts, delivering interrupt.\n");
 
@@ -1344,20 +1344,20 @@ X86KvmCPU::handleKvmExitIO()
         pAddr = X86ISA::x86IOAddress(port);
     }
 
-    Request io_req(pAddr, kvm_run.io.size, Request::UNCACHEABLE,
-                   dataMasterId());
-    io_req.setThreadContext(tc->contextId(), 0);
-
     const MemCmd cmd(isWrite ? MemCmd::WriteReq : MemCmd::ReadReq);
     // Temporarily lock and migrate to the event queue of the
     // VM. This queue is assumed to "own" all devices we need to
     // access if running in multi-core mode.
     EventQueue::ScopedMigration migrate(vm.eventQueue());
     for (int i = 0; i < count; ++i) {
-        Packet pkt(&io_req, cmd);
+        RequestPtr io_req = new Request(pAddr, kvm_run.io.size,
+                                        Request::UNCACHEABLE, dataMasterId());
+        io_req->setContext(tc->contextId());
 
-        pkt.dataStatic(guestData);
-        delay += dataPort.sendAtomic(&pkt);
+        PacketPtr pkt = new Packet(io_req, cmd);
+
+        pkt->dataStatic(guestData);
+        delay += dataPort.submitIO(pkt);
 
         guestData += kvm_run.io.size;
     }
@@ -1539,7 +1539,7 @@ const Kvm::MSRIndexVector &
 X86KvmCPU::getMsrIntersection() const
 {
     if (cachedMsrIntersection.empty()) {
-        const Kvm::MSRIndexVector &kvm_msrs(vm.kvm.getSupportedMSRs());
+        const Kvm::MSRIndexVector &kvm_msrs(vm.kvm->getSupportedMSRs());
 
         DPRINTF(Kvm, "kvm-x86: Updating MSR intersection\n");
         for (auto it = kvm_msrs.cbegin(); it != kvm_msrs.cend(); ++it) {

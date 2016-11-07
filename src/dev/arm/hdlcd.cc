@@ -97,6 +97,8 @@ HDLcd::~HDLcd()
 void
 HDLcd::regStats()
 {
+    AmbaDmaDevice::regStats();
+
     using namespace Stats;
 
     stats.underruns
@@ -544,8 +546,8 @@ HDLcd::pxlFrameDone()
         }
 
         assert(pic);
-        pic->seekp(0);
-        bmp.write(*pic);
+        pic->stream()->seekp(0);
+        bmp.write(*pic->stream());
     }
 }
 
