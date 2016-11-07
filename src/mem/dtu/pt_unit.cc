@@ -96,9 +96,15 @@ PtUnit::TranslateEvent::process()
     NocAddr phys;
     DtuTlb::Result res = unit.dtu.tlb()->lookup(virt, access, &phys);
     if (res == DtuTlb::HIT)
+    {
+        unit.dtu.tlb()->block(virt, false);
         finish(true, phys);
+    }
     else if (res == DtuTlb::NOMAP)
+    {
+        unit.dtu.tlb()->block(virt, false);
         finish(false, phys);
+    }
     else if (res == DtuTlb::PAGEFAULT)
     {
         if (!unit.sendPagefaultMsg(this, virt, access))
@@ -367,6 +373,9 @@ PtUnit::finishPagefault(PacketPtr pkt)
     {
         pagefaults.sample(dtu.curCycle() - ev->pfStartCycle);
 
+        // unblock the entry now; pagefault handling is finished
+        dtu.tlb()->block(ev->virt, false);
+
         if (error != 0)
         {
             if (pkt->getSize() != expSize)
@@ -383,8 +392,6 @@ PtUnit::finishPagefault(PacketPtr pkt)
             // already tried to access there with no success
             if (error == static_cast<int>(Dtu::Error::NO_MAPPING))
                 mkTlbEntry(ev->virt, NocAddr(0), 0);
-            else
-                dtu.tlb()->block(ev->virt, false);
 
             ev->finish(false, NocAddr(0));
             unresolved++;

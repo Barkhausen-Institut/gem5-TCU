@@ -34,7 +34,8 @@
 
 #include <limits>
 
-static const char *decode_access(uint access) {
+static const char *decode_access(uint access)
+{
     static char buf[4];
     buf[0] = (access & DtuTlb::INTERN) ? 'i' : '-';
     buf[1] = (access & DtuTlb::READ) ? 'r' : '-';
@@ -46,7 +47,8 @@ static const char *decode_access(uint access) {
 DtuTlb::DtuTlb(Dtu &_dtu, size_t _num)
     : dtu(_dtu), trie(), entries(), free(), num(_num), lru_seq()
 {
-    for (size_t i = 0; i < num; ++i) {
+    for (size_t i = 0; i < num; ++i)
+    {
         entries.push_back(Entry());
         free.push_back(&entries[i]);
     }
@@ -88,7 +90,8 @@ DtuTlb::regStats()
 DtuTlb::Result
 DtuTlb::lookup(Addr virt, uint access, NocAddr *phys)
 {
-    static const char *results[] = {
+    static const char *results[] =
+    {
         "HIT",
         "MISS",
         "PAGEFAULT",
@@ -107,18 +110,35 @@ DtuTlb::Result
 DtuTlb::do_lookup(Addr virt, uint access, NocAddr *phys)
 {
     Entry *e = trie.lookup(virt);
-    if (!e) {
+    if (!e)
+    {
         misses++;
         return MISS;
     }
 
-    if (e->flags == 0) {
+    if (e->flags == 0)
+    {
         noMapping++;
         return NOMAP;
     }
+
     // internal accesses to blocked entries pagefault
     // this is only necessary to work around a bug (probably) in the LSQUnit
-    if (((access & INTERN) && (e->flags & BLOCKED)) || (e->flags & access) != access) {
+    if ((access & INTERN) && (e->flags & BLOCKED))
+    {
+        pagefaults++;
+        return PAGEFAULT;
+    }
+
+    if ((e->flags & access) != access)
+    {
+        // external accesses to blocked entries w/o permissions, cause a miss
+        if ((~access & INTERN) && (e->flags & BLOCKED))
+        {
+            misses++;
+            return MISS;
+        }
+
         pagefaults++;
         return PAGEFAULT;
     }
@@ -162,6 +182,7 @@ DtuTlb::insert(Addr virt, NocAddr phys, uint flags)
 
         assert(!free.empty());
         e = free.back();
+        e->flags = 0;
         e->virt = virt;
         e->handle = trie.insert(virt, 64 - PAGE_BITS, e);
         free.pop_back();
@@ -171,7 +192,8 @@ DtuTlb::insert(Addr virt, NocAddr phys, uint flags)
             virt, decode_access(flags), phys.getAddr());
 
     e->phys = phys;
-    e->flags = flags;
+    // keep the blocked flag here
+    e->flags = flags | (e->flags & BLOCKED);
     inserts++;
 }
 
@@ -179,17 +201,24 @@ void
 DtuTlb::block(Addr virt, bool blocked)
 {
     Entry *e = trie.lookup(virt);
-    if (e)
+    if (!e)
     {
-        DPRINTFS(DtuTlbWrite, (&dtu), "TLB %s %p %s -> %p\n",
-                blocked ? "blocking" : "unblocking",
-                virt, decode_access(e->flags), e->phys.getAddr());
+        // if we want to unblock it, we do not need to create an entry
+        if(!blocked)
+            return;
 
-        if (blocked)
-            e->flags |= BLOCKED;
-        else
-            e->flags &= ~BLOCKED;
+        insert(virt, NocAddr(0), 0);
+        e = trie.lookup(virt);
     }
+
+    DPRINTFS(DtuTlbWrite, (&dtu), "TLB %s %p %s -> %p\n",
+            blocked ? "blocking" : "unblocking",
+            virt, decode_access(e->flags), e->phys.getAddr());
+
+    if (blocked)
+        e->flags |= BLOCKED;
+    else
+        e->flags &= ~BLOCKED;
 }
 
 void
