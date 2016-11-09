@@ -295,14 +295,14 @@ MessageUnit::startXfer(const Dtu::Command& cmd)
     header->replyLabel   = info.replyLabel;
 
     DPRINTFS(Dtu, (&dtu),
-        "  header: flags=%#x tgtVPE=%u tgtEP=%u lbl=%#018lx\n",
-        header->flags, info.targetVpeId, info.targetEpId, info.label);
+        "  src: pe=%u vpe=%u ep=%u rpep=%u rplbl=%#018lx flags=%#x%s\n",
+        header->senderCoreId, header->senderVpeId, header->senderEpId,
+        header->replyEpId, info.replyLabel, header->flags,
+        header->senderCoreId != dtu.coreId ? " (on behalf)" : "");
 
     DPRINTFS(Dtu, (&dtu),
-        "  sender: pe=%u vpe=%u ep=%u replyep=%u rpLbl=%#018lx%s\n",
-        header->senderCoreId, header->senderVpeId, header->senderEpId,
-        header->replyEpId, info.replyLabel,
-        header->senderCoreId != dtu.coreId ? " (on behalf)" : "");
+        "  dst: pe=%u vpe=%u ep=%u lbl=%#018lx\n",
+        info.targetCoreId, info.targetVpeId, info.targetEpId, info.label);
 
     assert(messageSize + sizeof(Dtu::MessageHeader) <= dtu.maxNocPacketSize);
 
@@ -369,7 +369,7 @@ MessageUnit::finishMsgSend(Dtu::Error error, unsigned epid)
         // pay the credits
         ep.curcrd -= ep.maxMsgSize;
 
-        DPRINTFS(DtuCredits, (&dtu), "EP%u pays %u credits (%u left)\n",
+        DPRINTFS(DtuCredits, (&dtu), "EP%u paid %u credits (%u left)\n",
                  epid, ep.maxMsgSize, ep.curcrd);
     }
 
@@ -387,7 +387,7 @@ MessageUnit::recvCredits(unsigned epid)
         assert(ep.curcrd <= ep.maxcrd);
 
         DPRINTFS(DtuCredits, (&dtu),
-            "EP%u: received %u credits (%u in total)\n",
+            "EP%u received %u credits (%u in total)\n",
             epid, ep.maxMsgSize, ep.curcrd);
 
         dtu.regs().setSendEp(epid, ep);
