@@ -265,12 +265,6 @@ MessageUnit::startXfer(const Dtu::Command& cmd)
              dtu.regs().get(CmdReg::DATA_ADDR),
              messageSize);
 
-    DPRINTFS(Dtu, (&dtu),
-        "  header: flags=%#x tgtVPE=%u tgtEP=%u lbl=%#018lx"
-        " rpLbl=%#018lx rpEP=%u\n",
-        info.flags, info.targetVpeId, info.targetEpId, info.label,
-        info.replyLabel, info.replyEpId);
-
     Dtu::MessageHeader* header = new Dtu::MessageHeader;
 
     if (cmd.opcode == Dtu::Command::REPLY)
@@ -283,18 +277,32 @@ MessageUnit::startXfer(const Dtu::Command& cmd)
     {
         RegFile::reg_t sender = dtu.regs().get(CmdReg::OFFSET);
         header->senderCoreId = sender & 0xFF;
-        header->senderVpeId  = (sender >> 8) & 0xFFFF;
+        header->senderVpeId = (sender >> 8) & 0xFFFF;
+        header->senderEpId = (sender >> 24) & 0xFF;
+        header->replyEpId = (sender >> 32) & 0xFF;
+        if(sender >> 40)
+            header->flags = Dtu::REPLY_FLAG | Dtu::GRANT_CREDITS_FLAG | info.flags;
     }
     else
     {
         header->senderCoreId = dtu.coreId;
         header->senderVpeId  = dtu.regs().get(DtuReg::VPE_ID);
+        header->senderEpId   = info.unlimcred ? dtu.numEndpoints : cmd.epid;
+        header->replyEpId    = info.replyEpId;
     }
-    header->senderEpId   = info.unlimcred ? dtu.numEndpoints : cmd.epid;
-    header->replyEpId    = info.replyEpId;
     header->length       = messageSize;
     header->label        = info.label;
     header->replyLabel   = info.replyLabel;
+
+    DPRINTFS(Dtu, (&dtu),
+        "  header: flags=%#x tgtVPE=%u tgtEP=%u lbl=%#018lx\n",
+        header->flags, info.targetVpeId, info.targetEpId, info.label);
+
+    DPRINTFS(Dtu, (&dtu),
+        "  sender: pe=%u vpe=%u ep=%u replyep=%u rpLbl=%#018lx%s\n",
+        header->senderCoreId, header->senderVpeId, header->senderEpId,
+        header->replyEpId, info.replyLabel,
+        header->senderCoreId != dtu.coreId ? " (on behalf)" : "");
 
     assert(messageSize + sizeof(Dtu::MessageHeader) <= dtu.maxNocPacketSize);
 
