@@ -110,6 +110,15 @@ MessageUnit::startTransmission(const Dtu::Command& cmd)
     Addr messageSize = dtu.regs().get(CmdReg::DATA_SIZE);
     SendEp ep = dtu.regs().getSendEp(epid);
 
+    if (ep.curcrd != Dtu::CREDITS_UNLIM && ep.curcrd < ep.maxMsgSize)
+    {
+        DPRINTFS(Dtu, (&dtu),
+            "EP%u: not enough credits (%lu) to send message (%lu)\n",
+            epid, ep.curcrd, ep.maxMsgSize);
+        dtu.scheduleFinishOp(Cycles(1), Dtu::Error::MISS_CREDITS);
+        return;
+    }
+
     // TODO error handling
     assert(messageSize + sizeof(Dtu::MessageHeader) <= ep.maxMsgSize);
 
@@ -347,14 +356,7 @@ MessageUnit::finishMsgSend(Dtu::Error error, unsigned epid)
 
     if (ep.curcrd != Dtu::CREDITS_UNLIM)
     {
-        if (ep.curcrd < ep.maxMsgSize)
-        {
-            DPRINTFS(Dtu, (&dtu),
-                "EP%u: not enough credits (%lu) to send message (%lu)\n",
-                epid, ep.curcrd, ep.maxMsgSize);
-            dtu.scheduleFinishOp(Cycles(1), Dtu::Error::MISS_CREDITS);
-            return;
-        }
+        assert(ep.curcrd >= ep.maxMsgSize);
 
         // pay the credits
         ep.curcrd -= ep.maxMsgSize;
