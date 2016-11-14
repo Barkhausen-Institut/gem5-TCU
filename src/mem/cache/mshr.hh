@@ -124,7 +124,7 @@ class MSHR : public QueueEntry, public Printable
         const Tick recvTime;  //!< Time when request was received (for stats)
         const Tick readyTime; //!< Time when request is ready to be serviced
         const Counter order;  //!< Global order (for memory consistency mgmt)
-        const PacketPtr pkt;  //!< Pending request packet.
+        PacketPtr pkt;        //!< Pending request packet.
         const Source source;  //!< Request from cpu, memory, or prefetcher?
         const bool markedPending; //!< Did we mark upstream MSHR
                                   //!< as downstreamPending?

@@ -165,6 +165,18 @@ MemCmd::commandInfo[] =
     /* StoreCondResp */
     { SET3(IsWrite, IsLlsc, IsResponse),
             InvalidCmd, "StoreCondResp" },
+    /* LockedRMWReadReq */
+    { SET5(IsRead, IsLockedRMW, NeedsWritable, IsRequest, NeedsResponse),
+            LockedRMWReadResp, "LockedRMWReadReq" },
+    /* LockedRMWReadResp */
+    { SET5(IsRead, IsLockedRMW, NeedsWritable, IsResponse, HasData),
+            InvalidCmd, "LockedRMWReadResp" },
+    /* LockedRMWWriteReq */
+    { SET6(IsWrite, IsLockedRMW, NeedsWritable, IsRequest, NeedsResponse,
+           HasData), LockedRMWWriteResp, "LockedRMWWriteReq" },
+    /* LockedRMWWriteResp */
+    { SET4(IsWrite, IsLockedRMW, NeedsWritable, IsResponse),
+            InvalidCmd, "LockedRMWWriteResp" },
     /* SwapReq -- for Swap ldstub type operations */
     { SET6(IsRead, IsWrite, NeedsWritable, IsRequest, HasData, NeedsResponse),
         SwapResp, "SwapReq" },
