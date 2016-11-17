@@ -31,10 +31,10 @@
 #define __MEM_DTU_X86_CONNECTOR__
 
 #include "params/X86Connector.hh"
-#include "mem/dtu/connector/base.hh"
+#include "mem/dtu/connector/core.hh"
 #include "sim/system.hh"
 
-class X86Connector : public BaseConnector
+class X86Connector : public CoreConnector
 {
   private:
 
@@ -66,17 +66,9 @@ class X86Connector : public BaseConnector
 
     BaseMasterPort& getMasterPort(const std::string &n, PortID idx) override;
 
-    void wakeup() override;
-
-    void suspend() override;
-
-    void reset(Addr addr) override;
-
     void injectIrq(unsigned vector) override;
 
   private:
-
-    System *system;
 
     IrqMasterPort irqPort;
 };

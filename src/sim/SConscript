@@ -76,6 +76,7 @@ Source('mathexpr.cc')
 Source('mem_system.cc')
 Source('spu_system.cc')
 Source('dtu_memory.cc')
+Source('m3_loader.cc')
 
 if env['TARGET_ISA'] != 'null':
     SimObject('InstTracer.py')

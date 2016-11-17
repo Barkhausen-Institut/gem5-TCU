@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Nils Asmussen
+ * Copyright (c) 2016, Nils Asmussen
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,49 +27,57 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
-#include "arch/x86/m3/system.hh"
-#include "params/M3X86System.hh"
+#include "debug/DtuConnector.hh"
+#include "mem/dtu/connector/core.hh"
+#include "mem/dtu/dtu.hh"
+#include "cpu/simple/base.hh"
+#include "sim/process.hh"
 
-#include <libgen.h>
-
-M3X86System::NoCMasterPort::NoCMasterPort(M3X86System &_sys)
-  : QueuedMasterPort("noc_master_port", &_sys, reqQueue, snoopRespQueue),
-    reqQueue(_sys, *this),
-    snoopRespQueue(_sys, *this)
-{ }
-
-M3X86System::M3X86System(Params *p)
-    : X86System(p),
-      DTUMemory(this, p->memory_pe, p->memory_offset, p->memory_size,
-                physProxy, M3Loader::RES_PAGES),
-      nocPort(*this),
-      loader(p->pes, p->boot_osflags, p->core_id, p->mod_offset, p->mod_size)
+CoreConnector::CoreConnector(const CoreConnectorParams *p)
+  : BaseConnector(p),
+    system(p->system)
 {
-}
-
-bool M3X86System::hasMem(unsigned pe) const
-{
-    return (loader.pe_attr()[pe] & 0x7) != 1;
-}
-
-BaseMasterPort&
-M3X86System::getMasterPort(const std::string &if_name, PortID idx)
-{
-    if (if_name == "noc_master_port")
-        return nocPort;
-    return System::getMasterPort(if_name, idx);
 }
 
 void
-M3X86System::initState()
+CoreConnector::wakeup()
 {
-    X86System::initState();
+    if (system->threadContexts.size() == 0)
+        return;
 
-    loader.initState(*this, *this, nocPort);
+    if (system->threadContexts[0]->status() == ThreadContext::Suspended)
+    {
+        DPRINTF(DtuConnector, "Waking up core\n");
+        system->threadContexts[0]->activate();
+    }
 }
 
-M3X86System *
-M3X86SystemParams::create()
+void
+CoreConnector::suspend()
 {
-    return new M3X86System(this);
+    if (system->threadContexts.size() == 0)
+        return;
+
+    if (system->threadContexts[0]->status() == ThreadContext::Active)
+    {
+        DPRINTF(DtuConnector, "Suspending core\n");
+        system->threadContexts[0]->suspend();
+    }
+}
+
+void
+CoreConnector::reset(Addr addr)
+{
+    if (system->threadContexts.size() == 0)
+        return;
+
+    DPRINTF(DtuConnector, "Setting PC to %p\n", addr);
+
+    system->threadContexts[0]->pcState(addr);
+}
+
+CoreConnector*
+CoreConnectorParams::create()
+{
+    return new CoreConnector(this);
 }

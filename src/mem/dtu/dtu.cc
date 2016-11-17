@@ -31,7 +31,6 @@
 #include <iomanip>
 #include <sstream>
 
-#include "arch/x86/m3/system.hh"
 #include "debug/Dtu.hh"
 #include "debug/DtuBuf.hh"
 #include "debug/DtuCmd.hh"
@@ -44,6 +43,7 @@
 #include "mem/dtu/xfer_unit.hh"
 #include "mem/dtu/pt_unit.hh"
 #include "mem/cache/cache.hh"
+#include "sim/dtu_memory.hh"
 #include "sim/system.hh"
 
 static const char *cmdNames[] =

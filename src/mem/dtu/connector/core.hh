@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Nils Asmussen
+ * Copyright (c) 2016, Nils Asmussen
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,49 +27,28 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
-#include "arch/x86/m3/system.hh"
-#include "params/M3X86System.hh"
+#ifndef __MEM_DTU_CORE_CONNECTOR__
+#define __MEM_DTU_CORE_CONNECTOR__
 
-#include <libgen.h>
+#include "params/CoreConnector.hh"
+#include "mem/dtu/connector/base.hh"
+#include "sim/system.hh"
 
-M3X86System::NoCMasterPort::NoCMasterPort(M3X86System &_sys)
-  : QueuedMasterPort("noc_master_port", &_sys, reqQueue, snoopRespQueue),
-    reqQueue(_sys, *this),
-    snoopRespQueue(_sys, *this)
-{ }
-
-M3X86System::M3X86System(Params *p)
-    : X86System(p),
-      DTUMemory(this, p->memory_pe, p->memory_offset, p->memory_size,
-                physProxy, M3Loader::RES_PAGES),
-      nocPort(*this),
-      loader(p->pes, p->boot_osflags, p->core_id, p->mod_offset, p->mod_size)
+class CoreConnector : public BaseConnector
 {
-}
+  public:
 
-bool M3X86System::hasMem(unsigned pe) const
-{
-    return (loader.pe_attr()[pe] & 0x7) != 1;
-}
+    CoreConnector(const CoreConnectorParams *p);
 
-BaseMasterPort&
-M3X86System::getMasterPort(const std::string &if_name, PortID idx)
-{
-    if (if_name == "noc_master_port")
-        return nocPort;
-    return System::getMasterPort(if_name, idx);
-}
+    void wakeup() override;
 
-void
-M3X86System::initState()
-{
-    X86System::initState();
+    void suspend() override;
 
-    loader.initState(*this, *this, nocPort);
-}
+    void reset(Addr addr) override;
 
-M3X86System *
-M3X86SystemParams::create()
-{
-    return new M3X86System(this);
-}
+  protected:
+
+    System *system;
+};
+
+#endif // __MEM_DTU_CORE_CONNECTOR__

@@ -38,19 +38,10 @@
 #include "mem/qport.hh"
 #include "mem/dtu/noc_addr.hh"
 #include "sim/dtu_memory.hh"
+#include "sim/m3_loader.hh"
 
 class M3X86System : public X86System, public DTUMemory
 {
-  protected:
-    static const size_t MAX_MODS        = 64;
-    static const size_t MAX_PES         = 64;
-    static const size_t RT_SIZE         = 0x2000;
-    static const uintptr_t RT_START     = 0x6000;
-    static const size_t STACK_SIZE      = 0x1000;
-    static const uintptr_t STACK_AREA   = RT_START + RT_SIZE;
-    static const size_t HEAP_SIZE       = 0x1000;
-    static const unsigned RES_PAGES;
-
     class NoCMasterPort : public QueuedMasterPort
     {
       protected:
@@ -70,67 +61,11 @@ class M3X86System : public X86System, public DTUMemory
         }
     };
 
-    struct BootModule
-    {
-        char name[256];
-        uint64_t addr;
-        uint64_t size;
-    } M5_ATTR_PACKED;
-
-    struct KernelEnv
-    {
-        enum
-        {
-            TYPE_IMEM    = 0,
-            TYPE_EMEM    = 1,
-            TYPE_MEM     = 2,
-        };
-
-        uint64_t mods[MAX_MODS];
-        uint64_t pe_count;
-        uint32_t pes[MAX_PES];
-    } M5_ATTR_PACKED;
-
-    struct StartEnv
-    {
-        uint64_t coreid;
-        uint32_t argc;
-        char **argv;
-
-        uint64_t sp;
-        uint64_t entry;
-        uint64_t lambda;
-        uint32_t pager_sess;
-        uint32_t pager_gate;
-        uint32_t mounts_len;
-        uint64_t mounts;
-        uint32_t fds_len;
-        uint64_t fds;
-        uint64_t eps;
-        uint64_t caps;
-        uint64_t exit;
-        uint64_t heapsize;
-
-        uint64_t backend;
-        uint64_t kenv;
-        uint32_t pe;
-
-        uint64_t isr64_handler;
-    } M5_ATTR_PACKED;
-
     NoCMasterPort nocPort;
-    std::vector<Addr> pes;
-    std::string commandLine;
-
-  public:
-    const unsigned coreId;
-    const Addr modOffset;
-    const Addr modSize;
 
   public:
     typedef M3X86SystemParams Params;
     M3X86System(Params *p);
-    ~M3X86System();
 
     bool hasMem(unsigned pe) const override;
 
@@ -140,12 +75,8 @@ class M3X86System : public X86System, public DTUMemory
     void initState();
 
   private:
-    bool isKernelArg(const std::string &arg);
-    void mapMemory();
-    size_t getArgc() const;
-    void writeRemote(Addr dest, const uint8_t *data, size_t size);
-    void writeArg(Addr &args, size_t &i, Addr argv, const char *cmd, const char *begin);
-    Addr loadModule(const std::string &path, const std::string &name, Addr addr);
+
+    M3Loader loader;
 };
 
 #endif

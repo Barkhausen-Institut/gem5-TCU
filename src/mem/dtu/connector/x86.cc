@@ -35,8 +35,7 @@
 #include "sim/process.hh"
 
 X86Connector::X86Connector(const X86ConnectorParams *p)
-  : BaseConnector(p),
-    system(p->system),
+  : CoreConnector(p),
     irqPort("irq_master_port", this)
 {
 }
@@ -75,43 +74,6 @@ X86Connector::IrqMasterPort::recvReqRetry()
     assert(pending);
     if (sendTimingReq(pending))
         pending = nullptr;
-}
-
-void
-X86Connector::wakeup()
-{
-    if (system->threadContexts.size() == 0)
-        return;
-
-    if (system->threadContexts[0]->status() == ThreadContext::Suspended)
-    {
-        DPRINTF(DtuConnector, "Waking up core\n");
-        system->threadContexts[0]->activate();
-    }
-}
-
-void
-X86Connector::suspend()
-{
-    if (system->threadContexts.size() == 0)
-        return;
-
-    if (system->threadContexts[0]->status() == ThreadContext::Active)
-    {
-        DPRINTF(DtuConnector, "Suspending core\n");
-        system->threadContexts[0]->suspend();
-    }
-}
-
-void
-X86Connector::reset(Addr addr)
-{
-    if (system->threadContexts.size() == 0)
-        return;
-
-    DPRINTF(DtuConnector, "Setting PC to %p\n", addr);
-
-    system->threadContexts[0]->pcState(addr);
 }
 
 void

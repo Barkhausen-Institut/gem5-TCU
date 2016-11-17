@@ -25,15 +25,11 @@
 # of the authors and should not be interpreted as representing official policies,
 # either expressed or implied, of the FreeBSD Project.
 
-from MemObject import MemObject
+from Connector import CoreConnector
 from m5.params import *
 from m5.proxy import *
 
-class BaseConnector(MemObject):
-    type = 'BaseConnector'
-    cxx_header = "mem/dtu/connector/base.hh"
-
-class CoreConnector(BaseConnector):
-    type = 'CoreConnector'
-    cxx_header = "mem/dtu/connector/core.hh"
-    system = Param.System(Parent.any, "System we belong to")
+class X86Connector(CoreConnector):
+    type = 'X86Connector'
+    cxx_header = "mem/dtu/connector/x86.hh"
+    irq_master_port = MasterPort("Port to send the IRQs to")

@@ -32,7 +32,10 @@ SimObject('Dtu.py')
 SimObject('connector/Connector.py')
 
 Source('connector/base.cc')
-Source('connector/x86.cc')
+Source('connector/core.cc')
+if env['TARGET_ISA'] == 'x86':
+    Source('connector/x86.cc')
+    SimObject('connector/X86Connector.py')
 Source('dtu.cc')
 Source('base.cc')
 Source('regfile.cc')
