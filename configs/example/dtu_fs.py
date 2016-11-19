@@ -100,6 +100,10 @@ def getOptions():
                       choices=CpuConfig.cpu_names(),
                       help="type of cpu to run with")
 
+    parser.add_option("--isa", type="choice", default="x86_64",
+                      choices=['x86_64'],
+                      help="The ISA to use")
+
     parser.add_option("-c", "--cmd", default="", type="string",
                       help="comma separated list of binaries")
 
@@ -285,9 +289,10 @@ def createCorePE(root, options, no, cmdline, memPE, l1size=None, l2size=None, sp
 
     pe.cpu.createInterruptController()
 
-    pe.cpu.interrupts[0].pio = pe.xbar.master
-    pe.cpu.interrupts[0].int_slave = pe.dtu.connector.irq_master_port
-    pe.cpu.interrupts[0].int_master = pe.xbar.slave
+    if options.isa == 'x86_64':
+        pe.cpu.interrupts[0].pio = pe.xbar.master
+        pe.cpu.interrupts[0].int_slave = pe.dtu.connector.irq_master_port
+        pe.cpu.interrupts[0].int_master = pe.xbar.slave
 
     pe.cpu.itb.walker.port = pe.xbar.slave
     pe.cpu.dtb.walker.port = pe.xbar.slave
