@@ -101,7 +101,7 @@ def getOptions():
                       help="type of cpu to run with")
 
     parser.add_option("--isa", type="choice", default="x86_64",
-                      choices=['x86_64'],
+                      choices=['arm', 'x86_64'],
                       help="The ISA to use")
 
     parser.add_option("-c", "--cmd", default="", type="string",
@@ -236,7 +236,7 @@ def createPE(root, options, no, systemType, l1size, l2size, spmsize, memPE):
         pe.dtu.tlb_entries = 0
 
     pe.system_port = pe.xbar.slave
-    if systemType == M3X86System:
+    if hasattr(pe, 'noc_master_port'):
         pe.noc_master_port = root.noc.slave
 
     return pe
@@ -244,11 +244,14 @@ def createPE(root, options, no, systemType, l1size, l2size, spmsize, memPE):
 def createCorePE(root, options, no, cmdline, memPE, l1size=None, l2size=None, spmsize='8MB'):
     CPUClass = CpuConfig.get(options.cpu_type)
 
+    sysType = M3ArmSystem if options.isa == 'arm' else M3X86System
+    con = ArmConnector if options.isa == 'arm' else X86Connector
+
     pe = createPE(
-        root=root, options=options, no=no, systemType=M3X86System,
+        root=root, options=options, no=no, systemType=sysType,
         l1size=l1size, l2size=l2size, spmsize=spmsize, memPE=memPE
     )
-    pe.dtu.connector = X86Connector()
+    pe.dtu.connector = con()
     pe.readfile = "/dev/stdin"
 
     pe.cpu = CPUClass()
@@ -266,7 +269,7 @@ def createCorePE(root, options, no, cmdline, memPE, l1size=None, l2size=None, sp
     pe.kernel = cmdline.split(' ')[0]
     pe.boot_osflags = cmdline
     print "PE%02d: %s" % (no, cmdline)
-    print '      core   =%s x86' % (options.cpu_type)
+    print '      core   =%s %s' % (options.cpu_type, options.isa)
     printConfig(pe)
 
     # if specified, let this PE wait for GDB
@@ -429,7 +432,9 @@ def runSimulation(options, pes):
                 size |= 1 # emem
 
             if hasattr(pe, 'accelhash'):
-                size |= 3 << 3 # hash accelerator
+                size |= 4 << 3 # hash accelerator
+            elif options.isa == 'arm':
+                size |= 2 << 3 # arm
             else:
                 size |= 1 << 3 # x86
         pemems.append(size)

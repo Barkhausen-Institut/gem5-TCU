@@ -70,6 +70,7 @@ if env['TARGET_ISA'] == 'arm':
     Source('freebsd/freebsd.cc')
     Source('freebsd/process.cc')
     Source('freebsd/system.cc')
+    Source('m3/system.cc')
     Source('miscregs.cc')
     Source('nativetrace.cc')
     Source('pmu.cc')
@@ -90,6 +91,7 @@ if env['TARGET_ISA'] == 'arm':
     SimObject('ArmSystem.py')
     SimObject('ArmTLB.py')
     SimObject('ArmPMU.py')
+    SimObject('M3ArmSystem.py')
 
     DebugFlag('Arm')
     DebugFlag('Decoder', "Instructions returned by the predecoder")
