@@ -77,7 +77,7 @@ X86Connector::IrqMasterPort::recvReqRetry()
 }
 
 void
-X86Connector::injectIrq(unsigned vector)
+X86Connector::setIrq()
 {
     const int APIC_ID = 0;
 
@@ -87,9 +87,9 @@ X86Connector::injectIrq(unsigned vector)
     message.destMode = 0;   // physical
     message.trigger = 0;    // edge
     message.level = 0;      // unused?
-    message.vector = vector;
+    message.vector = 0x40;
 
-    DPRINTF(DtuConnector, "Injecting IRQ %u\n", vector);
+    DPRINTF(DtuConnector, "Injecting IRQ %u\n", message.vector);
 
     PacketPtr pkt = X86ISA::buildIntRequest(APIC_ID, message);
     irqPort.sendPacket(pkt);

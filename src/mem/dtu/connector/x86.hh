@@ -66,7 +66,7 @@ class X86Connector : public CoreConnector
 
     BaseMasterPort& getMasterPort(const std::string &n, PortID idx) override;
 
-    void injectIrq(unsigned vector) override;
+    void setIrq() override;
 
   private:
 

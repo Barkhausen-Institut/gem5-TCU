@@ -40,7 +40,7 @@ class DtuAccelHashConnector : public BaseConnector
 
     DtuAccelHashConnector(const DtuAccelHashConnectorParams *p);
 
-    void injectIrq(unsigned vector) override;
+    void setIrq() override;
 
     void wakeup() override;
 

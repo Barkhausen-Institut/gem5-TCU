@@ -229,7 +229,7 @@ class Dtu : public BaseDtu
 
     Cycles reset(Addr addr);
 
-    void injectIRQ(int vector);
+    void setIrq();
 
     void forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest);
 

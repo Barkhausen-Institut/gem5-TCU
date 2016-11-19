@@ -38,7 +38,7 @@ DtuAccelHashConnector::DtuAccelHashConnector(const DtuAccelHashConnectorParams *
 }
 
 void
-DtuAccelHashConnector::injectIrq(unsigned)
+DtuAccelHashConnector::setIrq()
 {
     DPRINTF(DtuConnector, "Sending interrupt signal to accelerator\n");
     acc->interrupt();

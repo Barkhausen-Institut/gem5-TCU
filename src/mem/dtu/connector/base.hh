@@ -47,7 +47,7 @@ class BaseConnector : public MemObject
 
     virtual void reset(Addr addr) {};
 
-    virtual void injectIrq(unsigned vector) {};
+    virtual void setIrq() {};
 };
 
 #endif // __MEM_DTU_BASE_CONNECTOR__

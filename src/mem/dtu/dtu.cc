@@ -510,7 +510,7 @@ Dtu::executeExternCommand(PacketPtr pkt)
                 tlb()->clear();
             break;
         case ExternCommand::INJECT_IRQ:
-            injectIRQ(cmd.arg);
+            setIrq();
             break;
         case ExternCommand::RESET:
             delay += reset(cmd.arg);
@@ -630,7 +630,7 @@ Dtu::reset(Addr addr)
 }
 
 void
-Dtu::injectIRQ(int vector)
+Dtu::setIrq()
 {
     if (cmdInProgress && getCommand().opcode == Command::SLEEP)
     {
@@ -641,7 +641,7 @@ Dtu::injectIRQ(int vector)
 
     wakeupCore();
 
-    connector->injectIrq(vector);
+    connector->setIrq();
 
     irqPending = true;
 
