@@ -48,6 +48,8 @@ class BaseConnector : public MemObject
     virtual void reset(Addr addr) {};
 
     virtual void setIrq() {};
+
+    virtual void clearIrq() {};
 };
 
 #endif // __MEM_DTU_BASE_CONNECTOR__

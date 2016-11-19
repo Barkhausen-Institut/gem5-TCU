@@ -56,6 +56,7 @@ static const char *cmdNames[] =
     "FETCH_MSG",
     "ACK_MSG",
     "SLEEP",
+    "CLEAR_IRQ",
     "DEBUG_MSG",
     "PRINT",
 };
@@ -307,6 +308,10 @@ Dtu::executeCommand(PacketPtr pkt)
         case Command::SLEEP:
             if (!startSleep())
                 finishCommand(Error::NONE);
+            break;
+        case Command::CLEAR_IRQ:
+            clearIrq();
+            finishCommand(Error::NONE);
             break;
         case Command::PRINT:
             printLine(regs().get(CmdReg::DATA_ADDR), regs().get(CmdReg::DATA_SIZE));
@@ -646,6 +651,12 @@ Dtu::setIrq()
     irqPending = true;
 
     irqInjects++;
+}
+
+void
+Dtu::clearIrq()
+{
+    connector->clearIrq();
 }
 
 void

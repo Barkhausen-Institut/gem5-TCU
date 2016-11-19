@@ -157,8 +157,9 @@ class Dtu : public BaseDtu
             FETCH_MSG       = 5,
             ACK_MSG         = 6,
             SLEEP           = 7,
-            DEBUG_MSG       = 8,
-            PRINT           = 9,
+            CLEAR_IRQ       = 8,
+            DEBUG_MSG       = 9,
+            PRINT           = 10,
         };
 
         enum
@@ -230,6 +231,8 @@ class Dtu : public BaseDtu
     Cycles reset(Addr addr);
 
     void setIrq();
+
+    void clearIrq();
 
     void forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest);
 
