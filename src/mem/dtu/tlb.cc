@@ -48,10 +48,9 @@ DtuTlb::DtuTlb(Dtu &_dtu, size_t _num)
     : dtu(_dtu), trie(), entries(), free(), num(_num), lru_seq()
 {
     for (size_t i = 0; i < num; ++i)
-    {
         entries.push_back(Entry());
+    for (size_t i = 0; i < num; ++i)
         free.push_back(&entries[i]);
-    }
 }
 
 void
