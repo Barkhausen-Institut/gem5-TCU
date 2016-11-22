@@ -151,7 +151,6 @@ PtUnit::TranslateEvent::finish(bool success, const NocAddr &addr)
     if (trans)
         trans->finished(success, addr);
     // make sure that we don't do that twice
-    trans->_event = NULL;
     trans = NULL;
     setFlags(AutoDelete);
 
