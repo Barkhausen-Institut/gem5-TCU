@@ -234,6 +234,7 @@ def createPE(root, options, no, systemType, l1size, l2size, spmsize, memPE):
         pe.dtu.buf_size = pe.dtu.max_noc_packet_size
         # disable the TLB
         pe.dtu.tlb_entries = 0
+        pe.dtu.cpu_to_cache_latency = 0
 
     pe.system_port = pe.xbar.slave
     if hasattr(pe, 'noc_master_port'):

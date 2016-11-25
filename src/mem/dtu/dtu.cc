@@ -103,6 +103,7 @@ Dtu::Dtu(DtuParams* p)
     bufSize(p->buf_size),
     cacheBlocksPerCycle(p->cache_blocks_per_cycle),
     registerAccessLatency(p->register_access_latency),
+    cpuToCacheLatency(p->cpu_to_cache_latency),
     commandToNocRequestLatency(p->command_to_noc_request_latency),
     startMsgTransferDelay(p->start_msg_transfer_delay),
     transferToMemRequestLatency(p->transfer_to_mem_request_latency),
@@ -1011,7 +1012,14 @@ Dtu::handleCpuRequest(PacketPtr pkt,
             if (functional)
                 mport.sendFunctional(pkt);
             else
-                mport.schedTimingReq(pkt, curTick());
+            {
+                Tick tick;
+                if (cpuToCacheLatency < Cycles(1))
+                    tick = curTick();
+                else
+                    tick = clockEdge(cpuToCacheLatency);
+                mport.schedTimingReq(pkt, tick);
+            }
             delete trans;
         }
         else if (tres == -1)

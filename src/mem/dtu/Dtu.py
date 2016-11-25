@@ -79,6 +79,8 @@ class Dtu(BaseDtu):
 
     register_access_latency = Param.Cycles(1, "Latency for CPU register accesses")
 
+    cpu_to_cache_latency = Param.Cycles(1, "Latency for cache access for the CPU (for the DTU's address translation)")
+
     command_to_noc_request_latency = Param.Cycles(1, "Number of cycles passed from writing a command to the register to starting the command")
     start_msg_transfer_delay = Param.Cycles(2, "Number of cycles passed to build the header and start the message transfer")
 

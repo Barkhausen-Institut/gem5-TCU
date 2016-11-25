@@ -471,6 +471,8 @@ class Dtu : public BaseDtu
 
     const Cycles registerAccessLatency;
 
+    const Cycles cpuToCacheLatency;
+
     const Cycles commandToNocRequestLatency;
     const Cycles startMsgTransferDelay;
 
