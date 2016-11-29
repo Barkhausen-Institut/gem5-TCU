@@ -1116,42 +1116,35 @@ Dtu::translate(PtUnit::Translation *trans,
         case DtuTlb::HIT:
             pkt->setAddr(phys.getAddr());
             pkt->req->setPaddr(phys.getAddr());
-            break;
+            return 1;
 
         case DtuTlb::NOMAP:
-        case DtuTlb::MISS:
-        case DtuTlb::PAGEFAULT:
-        {
-            bool pf = res != DtuTlb::MISS;
             // don't cause a pagefault again in this case
-            if (res == DtuTlb::NOMAP)
-                return -1;
+            return -1;
 
+        default:
             if (functional)
             {
-                int res = 0;
-                if (!pf)
+                int xlres = 0;
+                if (res == DtuTlb::MISS)
                 {
                     NocAddr phys;
-                    res = ptUnit->translateFunctional(pkt->getAddr(),
-                                                      access,
-                                                      &phys);
-                    if (res)
+                    xlres = ptUnit->translateFunctional(pkt->getAddr(),
+                                                        access,
+                                                        &phys);
+                    if (xlres)
                     {
                         pkt->setAddr(phys.getAddr());
                         pkt->req->setPaddr(phys.getAddr());
                     }
                 }
 
-                return !res ? -1 : 1;
+                return !xlres ? -1 : 1;
             }
 
             ptUnit->startTranslate(pkt->getAddr(), access, trans);
-        }
-        return 0;
+            return 0;
     }
-
-    return 1;
 }
 
 void
