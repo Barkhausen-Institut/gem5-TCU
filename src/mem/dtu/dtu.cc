@@ -91,6 +91,7 @@ Dtu::Dtu(DtuParams* p)
     abortInProgress(false),
     irqPending(false),
     cmdDest(-1),
+    xlates(),
     memPe(),
     memOffset(),
     atomicMode(p->system->isAtomicMode()),
@@ -983,6 +984,7 @@ Dtu::handleCpuRequest(PacketPtr pkt,
                       bool functional)
 {
     bool res = true;
+    bool delayed = false;
     Addr virt = pkt->getAddr();
 
     if (virt >= regFileBaseAddr)
@@ -1029,9 +1031,35 @@ Dtu::handleCpuRequest(PacketPtr pkt,
             res = false;
             delete trans;
         }
+        else
+            xlates.push_back(trans);
     }
 
     return res;
+}
+
+void
+Dtu::completeCpuRequests()
+{
+    while (!xlates.empty())
+    {
+        MemTranslation *xlt = xlates.front();
+        if (!xlt->complete)
+            break;
+
+        if (!xlt->success)
+            sendDummyResponse(xlt->sport, xlt->pkt, false);
+        else
+        {
+            xlt->pkt->setAddr(xlt->phys.getAddr());
+            xlt->pkt->req->setPaddr(xlt->phys.getAddr());
+
+            xlt->mport.schedTimingReq(xlt->pkt, curTick());
+        }
+
+        xlates.pop_front();
+        delete xlt;
+    }
 }
 
 bool
@@ -1208,6 +1236,27 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
         if (result & RegFile::WROTE_ABORT)
             abortCommand();
     }
+}
+
+void
+Dtu::MemTranslation::finished(bool _success, const NocAddr &_phys)
+{
+    complete = true;
+    success = _success;
+    phys = _phys;
+
+    dtu.completeCpuRequests();
+}
+
+void
+Dtu::VPEGoneTranslation::finished(bool success, const NocAddr &phys)
+{
+    if (success)
+        dtu.handleCacheMemRequest(pkt, false);
+    else
+        dtu.sendCacheMemResponse(pkt, false);
+
+    delete this;
 }
 
 Dtu*

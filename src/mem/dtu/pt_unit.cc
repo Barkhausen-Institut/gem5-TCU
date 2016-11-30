@@ -94,17 +94,11 @@ PtUnit::TranslateEvent::process()
 
     // first check the TLB again; maybe we don't need to do a translation
     NocAddr phys;
-    DtuTlb::Result res = unit.dtu.tlb()->lookup(virt, access, &phys);
+    DtuTlb::Result res = unit.dtu.tlb()->lookup(virt, access, &phys, true);
     if (res == DtuTlb::HIT)
-    {
-        unit.dtu.tlb()->block(virt, false);
         finish(true, phys);
-    }
     else if (res == DtuTlb::NOMAP)
-    {
-        unit.dtu.tlb()->block(virt, false);
         finish(false, phys);
-    }
     else if (res == DtuTlb::PAGEFAULT)
     {
         if (!unit.sendPagefaultMsg(this, virt, access))
@@ -157,6 +151,9 @@ PtUnit::TranslateEvent::finish(bool success, const NocAddr &addr)
     auto it = std::find(unit.translations.begin(), unit.translations.end(), this);
     assert(it != unit.translations.end());
     unit.translations.erase(it);
+
+    // decrease xlate counter
+    unit.dtu.tlb()->finish_translate(virt);
 
     unit.nextPagefault(this);
 
@@ -211,12 +208,6 @@ PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, uint access)
         abortAll();
         return false;
     }
-
-    // remove all access rights to ensure that all accesses fault until we have
-    // resolved it. this is required, because it seems that the LSQUnit does
-    // not forward loads to the store buffer properly, if the store has already
-    // been sent to cache, but took longer because of a DTU PF
-    dtu.tlb()->block(virt, true);
 
     int pfep = ev->toKernel ? Dtu::SYSCALL_EP : dtu.regs().get(DtuReg::PF_EP);
     assert(pfep < dtu.numEndpoints);
@@ -372,9 +363,6 @@ PtUnit::finishPagefault(PacketPtr pkt)
     {
         pagefaults.sample(dtu.curCycle() - ev->pfStartCycle);
 
-        // unblock the entry now; pagefault handling is finished
-        dtu.tlb()->block(ev->virt, false);
-
         if (error != 0)
         {
             if (pkt->getSize() != expSize)
@@ -513,6 +501,8 @@ PtUnit::startTranslate(Addr virt, uint access, Translation *trans)
     event->toKernel = false;
     trans->_event = event;
     translations.push_back(event);
+
+    dtu.tlb()->start_translate(virt);
 
     event->startCycle = dtu.curCycle();
 

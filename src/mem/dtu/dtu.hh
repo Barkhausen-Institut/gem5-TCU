@@ -288,6 +288,8 @@ class Dtu : public BaseDtu
 
     void completeMemRequest(PacketPtr pkt) override;
 
+    void completeCpuRequests();
+
     void handleNocRequest(PacketPtr pkt) override;
 
     bool handleCpuRequest(PacketPtr pkt,
@@ -396,27 +398,19 @@ class Dtu : public BaseDtu
 
         PacketPtr pkt;
 
+        bool complete;
+        bool success;
+        NocAddr phys;
+
         MemTranslation(Dtu &_dtu,
                        DtuSlavePort& _sport,
                        DtuMasterPort& _mport,
                        PacketPtr _pkt)
-            : dtu(_dtu), sport(_sport), mport(_mport), pkt(_pkt)
+            : dtu(_dtu), sport(_sport), mport(_mport), pkt(_pkt),
+              complete(), success(), phys()
         {}
 
-        void finished(bool success, const NocAddr &phys) override
-        {
-            if (!success)
-                dtu.sendDummyResponse(sport, pkt, false);
-            else
-            {
-                pkt->setAddr(phys.getAddr());
-                pkt->req->setPaddr(phys.getAddr());
-
-                mport.schedTimingReq(pkt, curTick());
-            }
-
-            delete this;
-        }
+        void finished(bool success, const NocAddr &phys) override;
     };
 
     struct VPEGoneTranslation : PtUnit::Translation
@@ -429,15 +423,7 @@ class Dtu : public BaseDtu
             : dtu(_dtu), pkt(_pkt)
         {}
 
-        void finished(bool success, const NocAddr &phys) override
-        {
-            if (success)
-                dtu.handleCacheMemRequest(pkt, false);
-            else
-                dtu.sendCacheMemResponse(pkt, false);
-
-            delete this;
-        }
+        void finished(bool success, const NocAddr &phys) override;
     };
 
     Cycles sleepStart;
@@ -447,6 +433,8 @@ class Dtu : public BaseDtu
     bool abortInProgress;
     bool irqPending;
     int cmdDest;
+
+    std::list<MemTranslation*> xlates;
 
   public:
 

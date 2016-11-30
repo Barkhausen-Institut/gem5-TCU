@@ -47,6 +47,7 @@ class DtuTlb
         Addr virt;
         NocAddr phys;
         uint flags;
+        uint xlates;
 
         uint lru_seq;
         Trie<Addr, Entry>::Handle handle;
@@ -84,7 +85,7 @@ class DtuTlb
         EXEC    = 4,
         INTERN  = 8,
         GONE    = 16,   // only for pagefaults
-        BLOCKED = 32,
+        INVALID = 32,
         RW      = READ | WRITE,
         RX      = READ | EXEC,
         RWX     = RW | EXEC,
@@ -112,11 +113,13 @@ class DtuTlb
 
     void regStats();
 
-    Result lookup(Addr virt, uint access, NocAddr *phys);
+    Result lookup(Addr virt, uint access, NocAddr *phys, bool xlate = false);
 
     void insert(Addr virt, NocAddr phys, uint flags);
 
-    void block(Addr virt, bool blocked);
+    void start_translate(Addr virt);
+
+    void finish_translate(Addr virt);
 
     void remove(Addr virt);
 
@@ -124,7 +127,7 @@ class DtuTlb
 
   private:
 
-    DtuTlb::Result do_lookup(Addr virt, uint access, NocAddr *phys);
+    DtuTlb::Result do_lookup(Addr virt, uint access, NocAddr *phys, bool xlate);
 
     void evict();
 
