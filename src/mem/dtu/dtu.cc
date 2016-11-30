@@ -37,6 +37,7 @@
 #include "debug/DtuPackets.hh"
 #include "debug/DtuSysCalls.hh"
 #include "debug/DtuMem.hh"
+#include "debug/DtuCpuReq.hh"
 #include "mem/dtu/dtu.hh"
 #include "mem/dtu/msg_unit.hh"
 #include "mem/dtu/mem_unit.hh"
@@ -987,6 +988,9 @@ Dtu::handleCpuRequest(PacketPtr pkt,
     bool delayed = false;
     Addr virt = pkt->getAddr();
 
+    DPRINTF(DtuCpuReq, "%s access for %#lx: start\n",
+        pkt->cmdString(), virt);
+
     if (virt >= regFileBaseAddr)
     {
         // not supported here
@@ -1032,7 +1036,16 @@ Dtu::handleCpuRequest(PacketPtr pkt,
             delete trans;
         }
         else
+        {
+            delayed = true;
             xlates.push_back(trans);
+        }
+    }
+
+    if (!delayed)
+    {
+        DPRINTF(DtuCpuReq, "%s access for %#lx: finished\n",
+            pkt->cmdString(), virt);
     }
 
     return res;
@@ -1046,6 +1059,10 @@ Dtu::completeCpuRequests()
         MemTranslation *xlt = xlates.front();
         if (!xlt->complete)
             break;
+
+        DPRINTF(DtuCpuReq, "%s access for %#lx: finished (success=%d, phys=%#lx)\n",
+            xlt->pkt->cmdString(), xlt->pkt->getAddr(),
+            xlt->success, xlt->phys.getAddr());
 
         if (!xlt->success)
             sendDummyResponse(xlt->sport, xlt->pkt, false);
