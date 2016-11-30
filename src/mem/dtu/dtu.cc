@@ -983,8 +983,9 @@ Dtu::handleCpuRequest(PacketPtr pkt,
                       bool functional)
 {
     bool res = true;
+    Addr virt = pkt->getAddr();
 
-    if (pkt->getAddr() >= regFileBaseAddr)
+    if (virt >= regFileBaseAddr)
     {
         // not supported here
         assert(!functional);
@@ -995,20 +996,21 @@ Dtu::handleCpuRequest(PacketPtr pkt,
             forwardRequestToRegFile(pkt, true);
     }
     else if(pkt->isWrite() &&
-            pkt->getAddr() >= regFile.get(DtuReg::RW_BARRIER))
+            virt >= regFile.get(DtuReg::RW_BARRIER))
     {
         DPRINTF(Dtu, "Warning: ignoring write access above rwBarrier\n");
         res = false;
     }
     else
     {
-        regWatchRange(pkt, pkt->getAddr());
+        regWatchRange(pkt, virt);
+
+        intMemReqs++;
 
         MemTranslation *trans = new MemTranslation(*this, sport, mport, pkt);
         int tres = translate(trans, pkt, icache, functional);
         if (tres == 1)
         {
-            intMemReqs++;
             if (functional)
                 mport.sendFunctional(pkt);
             else

@@ -414,7 +414,7 @@ void PtUnit::mkTlbEntry(Addr virt, NocAddr phys, uint flags)
 
     DPRINTFS(DtuPf, (&dtu),
         "Inserting into TLB: virt=%p phys=%p flags=%u\n",
-        tlbVirt, phys.offset, flags);
+        tlbVirt, phys.getAddr(), flags);
 
     dtu.tlb()->insert(tlbVirt, phys, flags);
 }
