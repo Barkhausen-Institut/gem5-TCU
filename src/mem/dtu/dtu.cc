@@ -1038,6 +1038,10 @@ Dtu::handleCpuRequest(PacketPtr pkt,
         else
         {
             delayed = true;
+            // remember that a translation is going on for that page.
+            // this way, subsequent requests to that page will be enqueued and
+            // thus sent to the cache in order.
+            tlb()->start_translate(virt);
             xlates.push_back(trans);
         }
     }
@@ -1063,6 +1067,11 @@ Dtu::completeCpuRequests()
         DPRINTF(DtuCpuReq, "%s access for %#lx: finished (success=%d, phys=%#lx)\n",
             xlt->pkt->cmdString(), xlt->pkt->getAddr(),
             xlt->success, xlt->phys.getAddr());
+
+        // translation is done. if no other translation is in progress for that
+        // page, requests can hit the TLB again and can be sent directly to the
+        // cache.
+        tlb()->finish_translate(xlt->pkt->getAddr());
 
         if (!xlt->success)
             sendDummyResponse(xlt->sport, xlt->pkt, false);

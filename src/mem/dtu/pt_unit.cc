@@ -152,9 +152,6 @@ PtUnit::TranslateEvent::finish(bool success, const NocAddr &addr)
     assert(it != unit.translations.end());
     unit.translations.erase(it);
 
-    // decrease xlate counter
-    unit.dtu.tlb()->finish_translate(virt);
-
     unit.nextPagefault(this);
 
     unit.walks.sample(unit.dtu.curCycle() - startCycle);
@@ -501,8 +498,6 @@ PtUnit::startTranslate(Addr virt, uint access, Translation *trans)
     event->toKernel = false;
     trans->_event = event;
     translations.push_back(event);
-
-    dtu.tlb()->start_translate(virt);
 
     event->startCycle = dtu.curCycle();
 
