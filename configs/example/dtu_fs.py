@@ -322,17 +322,22 @@ def createHashAccelPE(root, options, no, memPE, l1size=None, l2size=None, spmsiz
 
     return pe
 
-def createMemPE(root, options, no, size, content=None):
+def createMemPE(root, options, no, size, dram=True, content=None):
     pe = createPE(
         root=root, options=options, no=no, systemType=MemSystem,
         l1size=None, l2size=None, spmsize=None, memPE=0
     )
     pe.dtu.connector = BaseConnector()
 
-    pe.mem_ctrl = DDR3_1600_x64()
-    pe.mem_ctrl.device_size = size
+    if dram:
+        pe.mem_ctrl = DDR3_1600_x64()
+        pe.mem_ctrl.device_size = size
+        pe.mem_ctrl.port = pe.xbar.master
+    else:
+        pe.mem_ctrl = Scratchpad(in_addr_map="true")
+        pe.mem_ctrl.cpu_port = pe.xbar.master
     pe.mem_ctrl.range = MemorySize(size).value
-    pe.mem_ctrl.port = pe.xbar.master
+
     if not content is None:
         if os.stat(content).st_size > base_offset:
             print 'File "%s" is too large for memory layout (%u vs %u)' \
