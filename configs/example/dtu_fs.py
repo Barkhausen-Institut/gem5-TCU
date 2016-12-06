@@ -422,7 +422,7 @@ def runSimulation(options, pes):
     for pe in pes:
         size = 0
         if hasattr(pe, 'mem_ctrl'):
-            size = int(pe.mem_ctrl.device_size)
+            size = int(pe.mem_ctrl.range.end + 1)
             assert size % 4096 == 0, "Memory size not page aligned"
             size |= 2   # mem
         else:
