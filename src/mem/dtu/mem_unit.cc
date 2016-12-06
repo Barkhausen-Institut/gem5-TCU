@@ -367,9 +367,12 @@ MemoryUnit::ReceiveTransferEvent::senderCore() const
 void
 MemoryUnit::ReceiveTransferEvent::transferStart()
 {
-    // here is also no additional delay, because we are doing that in
-    // parallel and are already paying for it at other places
-    memcpy(data(), pkt->getPtr<uint8_t>(), pkt->getSize());
+    if (pkt->isWrite())
+    {
+        // here is also no additional delay, because we are doing that in
+        // parallel and are already paying for it at other places
+        memcpy(data(), pkt->getPtr<uint8_t>(), pkt->getSize());
+    }
 }
 
 void
