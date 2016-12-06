@@ -238,6 +238,9 @@ class Dtu : public BaseDtu
 
     void sendFunctionalMemRequest(PacketPtr pkt)
     {
+        // set our master id (it might be from a different PE)
+        pkt->req->setMasterId(masterId);
+
         dcacheMasterPort.sendFunctional(pkt);
     }
 
