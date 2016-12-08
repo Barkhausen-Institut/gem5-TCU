@@ -71,6 +71,7 @@ static const char *extCmdNames[] =
     "INV_TLB",
     "INJECT_IRQ",
     "RESET",
+    "ACK_MSG",
 };
 
 Dtu::Dtu(DtuParams* p)
@@ -305,7 +306,7 @@ Dtu::executeCommand(PacketPtr pkt)
             finishCommand(Error::NONE);
             break;
         case Command::ACK_MSG:
-            msgUnit->ackMessage(cmd.epid);
+            msgUnit->ackMessage(cmd.epid, regs().get(CmdReg::OFFSET));
             finishCommand(Error::NONE);
             break;
         case Command::SLEEP:
@@ -415,7 +416,7 @@ Dtu::finishCommand(Error error)
     if (cmd.opcode == Command::SEND)
         msgUnit->finishMsgSend(error, cmd.epid);
     else if (cmd.opcode == Command::REPLY)
-        msgUnit->finishMsgReply(error, cmd.epid);
+        msgUnit->finishMsgReply(error, cmd.epid, regs().get(CmdReg::OFFSET));
 
     if (abortInProgress)
     {
@@ -523,6 +524,12 @@ Dtu::executeExternCommand(PacketPtr pkt)
         case ExternCommand::RESET:
             delay += reset(cmd.arg);
             break;
+        case ExternCommand::ACK_MSG:
+        {
+            unsigned epid = cmd.arg & ((1 << numCmdEpBits) - 1);
+            msgUnit->ackMessage(epid, cmd.arg >> numCmdEpBits);
+            break;
+        }
         default:
             // TODO error handling
             panic("Invalid opcode %#x\n", static_cast<RegFile::reg_t>(cmd.opcode));

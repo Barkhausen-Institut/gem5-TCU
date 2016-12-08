@@ -132,7 +132,7 @@ class MessageUnit
     /**
      * Finishes the reply-on-message command
      */
-    void finishMsgReply(Dtu::Error error, unsigned epid);
+    void finishMsgReply(Dtu::Error error, unsigned epid, Addr msgAddr);
 
     /**
      * Finishes the send-message command
@@ -150,9 +150,9 @@ class MessageUnit
     Addr fetchMessage(unsigned epid);
 
     /**
-     * Acknowledges the message in OFFSET register
+     * Acknowledges the message @ <msgAddr>
      */
-    void ackMessage(unsigned epId);
+    void ackMessage(unsigned epId, Addr msgAddr);
 
     /**
      * Finishes a message receive

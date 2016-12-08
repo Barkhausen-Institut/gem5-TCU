@@ -332,7 +332,7 @@ MessageUnit::SendTransferEvent::transferStart()
 }
 
 void
-MessageUnit::finishMsgReply(Dtu::Error error, unsigned epid)
+MessageUnit::finishMsgReply(Dtu::Error error, unsigned epid, Addr msgAddr)
 {
     assert(flagsPhys != 0);
 
@@ -352,11 +352,7 @@ MessageUnit::finishMsgReply(Dtu::Error error, unsigned epid)
 
     // on VPE_GONE, the kernel wants to reply later; so don't free the slot
     if (error != Dtu::Error::VPE_GONE)
-    {
-        // this assumes that the offset register is used for both the reply and
-        // the ack command to hold the message.
-        ackMessage(epid);
-    }
+        ackMessage(epid, msgAddr);
 }
 
 void
@@ -474,12 +470,11 @@ found:
 }
 
 void
-MessageUnit::ackMessage(unsigned epId)
+MessageUnit::ackMessage(unsigned epId, Addr msgAddr)
 {
     RecvEp ep = dtu.regs().getRecvEp(epId);
-    Addr msg = dtu.regs().get(CmdReg::OFFSET);
 
-    int msgidx = ep.msgToIdx(msg);
+    int msgidx = ep.msgToIdx(msgAddr);
     assert(msgidx != RecvEp::MAX_MSGS);
     assert(ep.isOccupied(msgidx));
 
