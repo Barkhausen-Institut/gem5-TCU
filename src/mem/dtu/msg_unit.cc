@@ -343,12 +343,20 @@ MessageUnit::finishMsgReply(Dtu::Error error, unsigned epid)
 
     assert(header.flags & Dtu::REPLY_ENABLED);
     header.flags &= ~Dtu::REPLY_ENABLED;
-    if(error == Dtu::Error::VPE_GONE)
+    if (error == Dtu::Error::VPE_GONE)
         header.flags |= Dtu::REPLY_FAILED;
     memcpy(hpkt->getPtr<uint8_t>(), &header.flags, sizeof(header.flags));
 
     dtu.sendFunctionalMemRequest(hpkt);
     dtu.freeRequest(hpkt);
+
+    // on VPE_GONE, the kernel wants to reply later; so don't free the slot
+    if (error != Dtu::Error::VPE_GONE)
+    {
+        // this assumes that the offset register is used for both the reply and
+        // the ack command to hold the message.
+        ackMessage(epid);
+    }
 }
 
 void
