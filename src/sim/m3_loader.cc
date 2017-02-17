@@ -57,11 +57,6 @@ M3Loader::M3Loader(const std::vector<Addr> &pes,
 {
 }
 
-bool M3Loader::hasMem(unsigned pe) const
-{
-    return (pes[pe] & 0x7) != 1;
-}
-
 size_t
 M3Loader::getArgc() const
 {

@@ -118,8 +118,6 @@ class M3Loader
         return pes;
     }
 
-    bool hasMem(unsigned pe) const;
-
     void initState(System &sys, DTUMemory &dtumem, MasterPort &noc);
 
   private:
