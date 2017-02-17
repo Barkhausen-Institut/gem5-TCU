@@ -38,135 +38,68 @@ class DtuAccelHashAlgorithm
 {
   public:
 
-    virtual void start() = 0;
+    enum Type
+    {
+        SHA1,
+        SHA224,
+        SHA256,
+        SHA384,
+        SHA512,
+    };
 
-    virtual void update(const void *data, size_t len) = 0;
-
-    virtual size_t get(uint8_t *res) = 0;
-};
-
-class DtuAccelHashAlgorithmSHA1 : public DtuAccelHashAlgorithm
-{
   private:
 
-    SHA_CTX ctx;
+    Type type;
+    union
+    {
+        SHA_CTX sha1;
+        SHA256_CTX sha224;
+        SHA256_CTX sha256;
+        SHA512_CTX sha384;
+        SHA512_CTX sha512;
+    } ctx;
+    char pad[32];
 
   public:
 
-    void start() override
+    DtuAccelHashAlgorithm() : type(SHA1), ctx() {}
+
+    void start(Type _type)
     {
-        SHA1_Init(&ctx);
+        type = _type;
+        switch(type)
+        {
+            case SHA1:      SHA1_Init(&ctx.sha1); break;
+            case SHA224:    SHA224_Init(&ctx.sha224); break;
+            case SHA256:    SHA256_Init(&ctx.sha256); break;
+            case SHA384:    SHA384_Init(&ctx.sha384); break;
+            case SHA512:    SHA512_Init(&ctx.sha512); break;
+        }
     }
 
-    void update(const void *data, size_t len) override
+    void update(const void *data, size_t len)
     {
-        SHA1_Update(&ctx, data, len);
+        switch(type)
+        {
+            case SHA1:      SHA1_Update(&ctx.sha1, data, len); break;
+            case SHA224:    SHA224_Update(&ctx.sha224, data, len); break;
+            case SHA256:    SHA256_Update(&ctx.sha256, data, len); break;
+            case SHA384:    SHA384_Update(&ctx.sha384, data, len); break;
+            case SHA512:    SHA512_Update(&ctx.sha512, data, len); break;
+        }
     }
 
-    size_t get(uint8_t *res) override
+    size_t get(uint8_t *res)
     {
-        SHA1_Final(res, &ctx);
-        return 20;
-    }
-};
-
-class DtuAccelHashAlgorithmSHA224 : public DtuAccelHashAlgorithm
-{
-  private:
-
-    SHA256_CTX ctx;
-
-  public:
-
-    void start() override
-    {
-        SHA224_Init(&ctx);
-    }
-
-    void update(const void *data, size_t len) override
-    {
-        SHA224_Update(&ctx, data, len);
-    }
-
-    size_t get(uint8_t *res) override
-    {
-        SHA224_Final(res, &ctx);
-        return 28;
-    }
-};
-
-class DtuAccelHashAlgorithmSHA256 : public DtuAccelHashAlgorithm
-{
-  private:
-
-    SHA256_CTX ctx;
-
-  public:
-
-    void start() override
-    {
-        SHA256_Init(&ctx);
-    }
-
-    void update(const void *data, size_t len) override
-    {
-        SHA256_Update(&ctx, data, len);
-    }
-
-    size_t get(uint8_t *res) override
-    {
-        SHA256_Final(res, &ctx);
-        return 32;
-    }
-};
-
-class DtuAccelHashAlgorithmSHA384 : public DtuAccelHashAlgorithm
-{
-  private:
-
-    SHA512_CTX ctx;
-
-  public:
-
-    void start() override
-    {
-        SHA384_Init(&ctx);
-    }
-
-    void update(const void *data, size_t len) override
-    {
-        SHA384_Update(&ctx, data, len);
-    }
-
-    size_t get(uint8_t *res) override
-    {
-        SHA384_Final(res, &ctx);
-        return 48;
-    }
-};
-
-class DtuAccelHashAlgorithmSHA512 : public DtuAccelHashAlgorithm
-{
-  private:
-
-    SHA512_CTX ctx;
-
-  public:
-
-    void start() override
-    {
-        SHA512_Init(&ctx);
-    }
-
-    void update(const void *data, size_t len) override
-    {
-        SHA512_Update(&ctx, data, len);
-    }
-
-    size_t get(uint8_t *res) override
-    {
-        SHA512_Final(res, &ctx);
-        return 64;
+        switch(type)
+        {
+            case SHA1:      SHA1_Final(res, &ctx.sha1); return 20;
+            case SHA224:    SHA224_Final(res, &ctx.sha224); return 28;
+            case SHA256:    SHA256_Final(res, &ctx.sha256); return 32;
+            case SHA384:    SHA384_Final(res, &ctx.sha384); return 48;
+            case SHA512:    SHA512_Final(res, &ctx.sha512); return 64;
+        }
+        return 0;
     }
 };
 

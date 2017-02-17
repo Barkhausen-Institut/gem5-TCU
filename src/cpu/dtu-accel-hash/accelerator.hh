@@ -76,14 +76,11 @@ class DtuAccelHash : public MemObject
         SIGNAL      = 1 << 3, // used to signal completion to the kernel
     };
 
-    enum class Algorithm
+    enum class Command
     {
-        SHA1,
-        SHA224,
-        SHA256,
-        SHA384,
-        SHA512,
-        COUNT
+        INIT,
+        UPDATE,
+        FINISH
     };
 
     enum class State
@@ -104,10 +101,17 @@ class DtuAccelHash : public MemObject
         ACK_MSG,
 
         CTX_SAVE,
+        CTX_SAVE_WRITE,
+        CTX_SAVE_SEND,
+        CTX_SAVE_WAIT,
         CTX_SAVE_DONE,
         CTX_WAIT,
+
         CTX_CHECK,
         CTX_RESTORE,
+        CTX_RESTORE_WAIT,
+        CTX_RESTORE_READ,
+        CTX_RESTORE_DONE,
     };
 
     PacketPtr createPacket(Addr paddr, size_t size, MemCmd cmd);
@@ -136,15 +140,16 @@ class DtuAccelHash : public MemObject
 
     CpuPort port;
 
-    DtuAccelHashAlgorithm *algos[5];
-
+    bool haveVM;
     Addr chunkSize;
 
     bool irqPending;
 
     State state;
+    DtuAccelHashAlgorithm hash;
 
-    Algorithm algo;
+    Addr ctxOffset;
+
     Addr msgAddr;
     Addr dataAddr;
     Addr dataOff;
@@ -152,6 +157,7 @@ class DtuAccelHash : public MemObject
     Addr remSize;
 
     size_t replyOffset;
+    size_t replySize;
     struct
     {
         struct
@@ -164,7 +170,7 @@ class DtuAccelHash : public MemObject
         } M5_ATTR_PACKED sys;
         struct
         {
-            uint64_t count;
+            uint64_t res;
             uint8_t bytes[64];
         } M5_ATTR_PACKED msg;
     } M5_ATTR_PACKED reply;

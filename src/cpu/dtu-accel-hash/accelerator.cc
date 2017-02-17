@@ -42,10 +42,12 @@
 static const unsigned EP_SYSS       = 0;
 static const unsigned EP_SYSR       = 2;
 static const unsigned EP_RECV       = 7;
+static const unsigned EP_MEM        = 8;
 static const unsigned CAP_RBUF      = 2;
 static const size_t MSG_SIZE        = 64;
-static const size_t BUF_SIZE        = 4096;
+static const size_t BUF_SIZE        = 512;
 static const Addr MSG_ADDR          = 0x2000;
+static const Addr BUF_ADDR          = 0x4000;
 
 static const Addr RCTMUX_FLAGS      = 0x2ff8;
 
@@ -67,10 +69,17 @@ static const char *stateNames[] =
     "ACK_MSG",
 
     "CTX_SAVE",
+    "CTX_SAVE_WRITE",
+    "CTX_SAVE_SEND",
+    "CTX_SAVE_WAIT",
     "CTX_SAVE_DONE",
     "CTX_WAIT",
+
     "CTX_CHECK",
     "CTX_RESTORE",
+    "CTX_RESTORE_WAIT",
+    "CTX_RESTORE_READ",
+    "CTX_RESTORE_DONE",
 };
 
 Addr
@@ -119,10 +128,11 @@ DtuAccelHash::DtuAccelHash(const DtuAccelHashParams *p)
     system(p->system),
     tickEvent(this),
     port("port", this),
-    algos(),
     chunkSize(system->cacheLineSize()),
     irqPending(false),
     state(State::IDLE),
+    hash(),
+    ctxOffset(),
     msgAddr(),
     masterId(system->getMasterId(name())),
     id(p->id),
@@ -130,16 +140,14 @@ DtuAccelHash::DtuAccelHash(const DtuAccelHashParams *p)
     reg_base(p->regfile_base_addr),
     retryPkt(nullptr)
 {
-    algos[static_cast<size_t>(Algorithm::SHA1)] =
-        new DtuAccelHashAlgorithmSHA1();
-    algos[static_cast<size_t>(Algorithm::SHA224)] =
-        new DtuAccelHashAlgorithmSHA224();
-    algos[static_cast<size_t>(Algorithm::SHA256)] =
-        new DtuAccelHashAlgorithmSHA256();
-    algos[static_cast<size_t>(Algorithm::SHA384)] =
-        new DtuAccelHashAlgorithmSHA384();
-    algos[static_cast<size_t>(Algorithm::SHA512)] =
-        new DtuAccelHashAlgorithmSHA512();
+    static_assert(sizeof(DtuAccelHashAlgorithm) % 64 == 0, "Hash state size invalid");
+
+    DTUMemory *sys = dynamic_cast<DTUMemory*>(system);
+    haveVM = !sys->hasMem(id);
+    // if we don't have VM, we have an SPM, which supports larger chunks
+    // TODO this is actually dependent on the max. chunk size the DTU supports
+    if (!haveVM)
+        chunkSize = 1024;
 
     // kick things into action
     schedule(tickEvent, curTick());
@@ -282,7 +290,33 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
 
             case State::CTX_SAVE:
             {
-                state = State::CTX_SAVE_DONE;
+                ctxOffset = 0;
+                state = State::CTX_SAVE_WRITE;
+                break;
+            }
+            case State::CTX_SAVE_WRITE:
+            {
+                ctxOffset += pkt->getSize();
+                if (ctxOffset == sizeof(hash))
+                {
+                    if (haveVM)
+                        state = State::CTX_SAVE_DONE;
+                    else
+                        state = State::CTX_SAVE_SEND;
+                }
+                break;
+            }
+            case State::CTX_SAVE_SEND:
+            {
+                state = State::CTX_SAVE_WAIT;
+                break;
+            }
+            case State::CTX_SAVE_WAIT:
+            {
+                RegFile::reg_t reg =
+                    *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
+                if ((reg & 0xF) == 0)
+                    state = State::CTX_SAVE_DONE;
                 break;
             }
             case State::CTX_SAVE_DONE:
@@ -290,16 +324,54 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
                 state = State::CTX_WAIT;
                 break;
             }
+
             case State::CTX_CHECK:
             {
                 uint64_t val = *pkt->getConstPtr<uint64_t>();
-                if(val & RCTMuxCtrl::WAITING)
-                    state = State::CTX_RESTORE;
+                if (val & RCTMuxCtrl::RESTORE)
+                {
+                    if (haveVM)
+                    {
+                        ctxOffset = 0;
+                        state = State::CTX_RESTORE_READ;
+                    }
+                    else
+                        state = State::CTX_RESTORE;
+                }
+                else if((val & RCTMuxCtrl::WAITING) && (~val & RCTMuxCtrl::STORE))
+                    state = State::CTX_RESTORE_DONE;
                 else
                     state = State::FETCH_MSG;
                 break;
             }
             case State::CTX_RESTORE:
+            {
+                state = State::CTX_RESTORE_WAIT;
+                break;
+            }
+            case State::CTX_RESTORE_WAIT:
+            {
+                RegFile::reg_t reg =
+                    *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
+                if ((reg & 0xF) == 0)
+                {
+                    ctxOffset = 0;
+                    state = State::CTX_RESTORE_READ;
+                }
+                break;
+            }
+            case State::CTX_RESTORE_READ:
+            {
+                memcpy((char*)&hash + ctxOffset,
+                       pkt->getPtr<char>(),
+                       pkt->getSize());
+
+                ctxOffset += pkt->getSize();
+                if (ctxOffset == sizeof(hash))
+                    state = State::CTX_RESTORE_DONE;
+                break;
+            }
+            case State::CTX_RESTORE_DONE:
             {
                 state = State::FETCH_MSG;
                 break;
@@ -331,62 +403,76 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
                     reinterpret_cast<const uint64_t*>(
                         pkt_data + sizeof(Dtu::MessageHeader));
 
-                DPRINTF(DtuAccel, "  algo=%d data=%p size=%p\n",
-                    args[0], header->label, args[1]);
+                DPRINTF(DtuAccel, "  cmd=%d arg=%d label=%p\n",
+                    args[0], args[1], header->label);
 
+                replyOffset = 0;
+                replySize = sizeof(uint64_t);
                 dataAddr = header->label;
-                dataOff = 0;
-                if (header->length != sizeof(uint64_t) * 2 ||
-                    static_cast<Algorithm>(args[0]) >= Algorithm::COUNT ||
-                    args[1] > BUF_SIZE ||
-                    (args[1] % 64) != 0)
+                switch(static_cast<Command>(args[0]))
                 {
-                    reply.msg.count = 0;
-                    replyOffset = 0;
-                    state = State::STORE_REPLY;
-                }
-                else
-                {
-                    algo = static_cast<Algorithm>(args[0]);
-                    remSize = dataSize = args[1];
-                    state = State::READ_DATA;
+                    case Command::INIT:
+                    {
+                        auto algo = static_cast<DtuAccelHashAlgorithm::Type>(args[1]);
+                        hash.start(algo);
+
+                        reply.msg.res = algo <= DtuAccelHashAlgorithm::SHA512;
+                        state = State::STORE_REPLY;
+                        break;
+                    }
+
+                    case Command::UPDATE:
+                    {
+                        if(args[1] > BUF_SIZE || (args[1] % 64) != 0)
+                        {
+                            reply.msg.res = 0;
+                            state = State::STORE_REPLY;
+                        }
+                        else
+                        {
+                            remSize = dataSize = args[1];
+                            dataOff = 0;
+                            state = State::READ_DATA;
+                        }
+                        break;
+                    }
+
+                    case Command::FINISH:
+                    {
+                        reply.msg.res = hash.get(reply.msg.bytes);
+                        assert(reply.msg.res <= sizeof(reply.msg.bytes));
+
+                        std::ostringstream ss;
+                        ss << std::hex;
+                        for (size_t i = 0; i < reply.msg.res; i++)
+                        {
+                            ss << std::setw(2) << std::setfill('0')
+                               << (int)reply.msg.bytes[i];
+                        }
+                        DPRINTF(DtuAccel, "Hash: %s\n", ss.str().c_str());
+
+                        replySize += reply.msg.res;
+                        state = State::STORE_REPLY;
+                        break;
+                    }
                 }
                 break;
             }
             case State::READ_DATA:
             {
-                DtuAccelHashAlgorithm *al = algos[static_cast<size_t>(algo)];
-
-                if (remSize == dataSize)
-                    al->start();
-                al->update(static_cast<const void*>(pkt_data), pkt->getSize());
+                hash.update(static_cast<const void*>(pkt_data), pkt->getSize());
 
                 dataOff += pkt->getSize();
                 remSize -= pkt->getSize();
 
                 if (remSize == 0)
-                {
-                    reply.msg.count = al->get(reply.msg.bytes);
-                    assert(reply.msg.count <= sizeof(reply.msg.bytes));
-
-                    std::ostringstream ss;
-                    ss << std::hex;
-                    for (size_t i = 0; i < reply.msg.count; i++)
-                    {
-                        ss << std::setw(2) << std::setfill('0')
-                           << (int)reply.msg.bytes[i];
-                    }
-                    DPRINTF(DtuAccel, "Hash: %s\n", ss.str().c_str());
-
-                    replyOffset = 0;
                     state = State::STORE_REPLY;
-                }
                 break;
             }
             case State::STORE_REPLY:
             {
                 replyOffset += pkt->getSize();
-                if (replyOffset == sizeof(uint64_t) + reply.msg.count)
+                if (replyOffset == replySize)
                     state = State::SEND_REPLY;
                 break;
             }
@@ -501,18 +587,66 @@ DtuAccelHash::tick()
             pkt = createDtuRegPkt(regAddr, value, MemCmd::WriteReq);
             break;
         }
+        case State::CTX_SAVE_WRITE:
+        {
+            size_t rem = sizeof(hash) - ctxOffset;
+            size_t size = std::min(chunkSize, rem);
+            pkt = createPacket((BUF_ADDR - sizeof(hash)) + ctxOffset,
+                               size,
+                               MemCmd::WriteReq);
+            memcpy(pkt->getPtr<uint8_t>(), (char*)&hash + ctxOffset, size);
+            break;
+        }
+        case State::CTX_SAVE_SEND:
+        {
+            pkt = createDtuCmdPkt(Dtu::Command::WRITE | (EP_MEM << 4),
+                                  BUF_ADDR - sizeof(hash),
+                                  sizeof(hash) + BUF_SIZE,
+                                  0);
+            break;
+        }
+        case State::CTX_SAVE_WAIT:
+        {
+            Addr regAddr = getRegAddr(CmdReg::COMMAND);
+            pkt = createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
+            break;
+        }
         case State::CTX_SAVE_DONE:
         {
             pkt = createPacket(RCTMUX_FLAGS, sizeof(uint64_t), MemCmd::WriteReq);
             *pkt->getPtr<uint64_t>() = RCTMuxCtrl::SIGNAL;
             break;
         }
+
         case State::CTX_CHECK:
         {
             pkt = createPacket(RCTMUX_FLAGS, sizeof(uint64_t), MemCmd::ReadReq);
             break;
         }
         case State::CTX_RESTORE:
+        {
+            pkt = createDtuCmdPkt(Dtu::Command::READ | (EP_MEM << 4),
+                                  BUF_ADDR - sizeof(hash),
+                                  sizeof(hash) + BUF_SIZE,
+                                  0);
+            break;
+        }
+        case State::CTX_RESTORE_WAIT:
+        {
+            Addr regAddr = getRegAddr(CmdReg::COMMAND);
+            pkt = createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
+            break;
+        }
+        case State::CTX_RESTORE_READ:
+        {
+            size_t rem = sizeof(hash) - ctxOffset;
+            size_t size = std::min(chunkSize, rem);
+            pkt = createPacket((BUF_ADDR - sizeof(hash)) + ctxOffset,
+                               size,
+                               MemCmd::ReadReq);
+            break;
+        }
+        case State::CTX_RESTORE_DONE:
         {
             pkt = createPacket(RCTMUX_FLAGS, sizeof(uint64_t), MemCmd::WriteReq);
             *pkt->getPtr<uint64_t>() = RCTMuxCtrl::SIGNAL;
@@ -554,7 +688,7 @@ DtuAccelHash::tick()
         }
         case State::STORE_REPLY:
         {
-            size_t rem = sizeof(uint64_t) + reply.msg.count - replyOffset;
+            size_t rem = replySize - replyOffset;
             size_t size = std::min(chunkSize, rem);
             pkt = createPacket(dataAddr + replyOffset,
                                size,
@@ -566,7 +700,7 @@ DtuAccelHash::tick()
         {
             pkt = createDtuCmdPkt(Dtu::Command::REPLY | (EP_RECV << 4),
                                   dataAddr,
-                                  sizeof(uint64_t) + reply.msg.count,
+                                  replySize,
                                   msgAddr);
             break;
         }
@@ -582,7 +716,7 @@ DtuAccelHash::tick()
             reply.sys.cap = CAP_RBUF;
             reply.sys.msgaddr = msgAddr;
             reply.sys.event = 0;
-            reply.sys.len = sizeof(uint64_t) + reply.msg.count;
+            reply.sys.len = replySize;
             reply.sys.event = 0;
 
             pkt = createPacket(MSG_ADDR, sizeof(reply), MemCmd::WriteReq);
