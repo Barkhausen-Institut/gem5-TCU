@@ -67,7 +67,7 @@ class M3X86System : public X86System, public DTUMemory
     typedef M3X86SystemParams Params;
     M3X86System(Params *p);
 
-    bool hasMem(unsigned pe) const override;
+    uint32_t pedesc(unsigned pe) const override;
 
     BaseMasterPort& getMasterPort(const std::string &if_name,
                                   PortID idx = InvalidPortID) override;

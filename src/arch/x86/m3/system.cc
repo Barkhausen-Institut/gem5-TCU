@@ -47,9 +47,9 @@ M3X86System::M3X86System(Params *p)
 {
 }
 
-bool M3X86System::hasMem(unsigned pe) const
+uint32_t M3X86System::pedesc(unsigned pe) const
 {
-    return (loader.pe_attr()[pe] & 0x7) != 1;
+    return loader.pe_attr()[pe];
 }
 
 BaseMasterPort&

@@ -55,12 +55,12 @@ class DTUMemory
               PortProxy &phys,
               unsigned firstFree);
 
-    virtual bool hasMem(unsigned pe) const = 0;
-
-    bool hasVirtMem() const
+    bool hasMem(unsigned pe) const
     {
-        return memSize != 0;
+        return (pedesc(pe) & 0x7) != 1;
     }
+
+    virtual uint32_t pedesc(unsigned pe) const = 0;
 
     NocAddr getPhys(Addr offset) const
     {

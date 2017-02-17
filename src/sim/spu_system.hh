@@ -48,7 +48,7 @@ class SpuSystem : public System, public DTUMemory
     SpuSystem(Params *p);
     ~SpuSystem();
 
-    bool hasMem(unsigned pe) const override;
+    uint32_t pedesc(unsigned pe) const override;
 
     void initState();
 };

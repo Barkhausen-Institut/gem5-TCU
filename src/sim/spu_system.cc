@@ -52,9 +52,9 @@ SpuSystem::initState()
         initMemory();
 }
 
-bool SpuSystem::hasMem(unsigned pe) const
+uint32_t SpuSystem::pedesc(unsigned pe) const
 {
-    return (pes[pe] & 0x7) != 1;
+    return pes[pe];
 }
 
 SpuSystem *

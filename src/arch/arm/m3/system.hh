@@ -69,7 +69,7 @@ class M3ArmSystem : public ArmSystem, public DTUMemory
     typedef M3ArmSystemParams Params;
     M3ArmSystem(Params *p);
 
-    bool hasMem(unsigned pe) const override;
+    uint32_t pedesc(unsigned pe) const override;
 
     BaseMasterPort& getMasterPort(const std::string &if_name,
                                   PortID idx = InvalidPortID) override;
