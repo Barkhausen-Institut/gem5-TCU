@@ -64,6 +64,13 @@ void
 MemoryUnit::startRead(const Dtu::Command& cmd)
 {
     MemEp ep = dtu.regs().getMemEp(cmd.epid);
+
+    if(!(ep.flags & Dtu::MemoryFlags::READ))
+    {
+        dtu.scheduleFinishOp(Cycles(1), Dtu::Error::INV_EP);
+        return;
+    }
+
     Addr rwBarrier = dtu.regs().get(DtuReg::RW_BARRIER);
 
     Addr localAddr = dtu.regs().get(CmdReg::DATA_ADDR);
@@ -84,7 +91,6 @@ MemoryUnit::startRead(const Dtu::Command& cmd)
     // TODO error handling
     assert(localAddr < rwBarrier);
     assert(localAddr + requestSize <= rwBarrier);
-    assert(ep.flags & Dtu::MemoryFlags::READ);
     assert(requestSize + offset >= requestSize);
     assert(requestSize + offset <= ep.remoteSize);
 
@@ -199,6 +205,12 @@ void
 MemoryUnit::startWrite(const Dtu::Command& cmd)
 {
     MemEp ep = dtu.regs().getMemEp(cmd.epid);
+
+    if(!(ep.flags & Dtu::MemoryFlags::WRITE))
+    {
+        dtu.scheduleFinishOp(Cycles(1), Dtu::Error::INV_EP);
+        return;
+    }
 
     Addr localAddr = dtu.regs().get(CmdReg::DATA_ADDR);
     Addr requestSize = dtu.regs().get(CmdReg::DATA_SIZE);
