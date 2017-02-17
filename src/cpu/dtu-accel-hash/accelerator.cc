@@ -460,7 +460,8 @@ DtuAccelHash::interrupt()
     if (state == State::IDLE)
     {
         state = State::CTX_SAVE;
-        schedule(tickEvent, clockEdge(Cycles(1)));
+        if (!tickEvent.scheduled())
+            schedule(tickEvent, clockEdge(Cycles(1)));
     }
     else
         irqPending = true;
@@ -472,7 +473,8 @@ DtuAccelHash::wakeup()
     if (state == State::IDLE || state == State::CTX_WAIT)
     {
         state = State::CTX_CHECK;
-        schedule(tickEvent, clockEdge(Cycles(1)));
+        if (!tickEvent.scheduled())
+            schedule(tickEvent, clockEdge(Cycles(1)));
     }
 }
 
