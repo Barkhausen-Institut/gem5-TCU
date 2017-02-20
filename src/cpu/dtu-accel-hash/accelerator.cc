@@ -66,7 +66,6 @@ static const char *stateNames[] =
     "REPLY_FETCH",
     "REPLY_READ_ADDR",
     "REPLY_ACK",
-    "ACK_MSG",
 
     "CTX_SAVE",
     "CTX_SAVE_WRITE",
@@ -488,7 +487,7 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
                 if ((reg & 0xF) == 0)
                 {
                     if ((reg >> 13) == 0)
-                        state = State::ACK_MSG;
+                        state = State::CTX_CHECK;
                     else
                         state = State::REPLY_ERROR;
                 }
@@ -522,11 +521,6 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
                 break;
             }
             case State::REPLY_ACK:
-            {
-                state = State::ACK_MSG;
-                break;
-            }
-            case State::ACK_MSG:
             {
                 state = State::CTX_CHECK;
                 break;
@@ -750,14 +744,6 @@ DtuAccelHash::tick()
                                   0,
                                   0,
                                   sysreplyAddr);
-            break;
-        }
-        case State::ACK_MSG:
-        {
-            pkt = createDtuCmdPkt(Dtu::Command::ACK_MSG | (EP_RECV << 4),
-                                  0,
-                                  0,
-                                  msgAddr);
             break;
         }
     }

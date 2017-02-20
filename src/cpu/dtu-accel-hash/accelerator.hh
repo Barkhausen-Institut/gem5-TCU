@@ -98,7 +98,6 @@ class DtuAccelHash : public MemObject
         REPLY_FETCH,
         REPLY_READ_ADDR,
         REPLY_ACK,
-        ACK_MSG,
 
         CTX_SAVE,
         CTX_SAVE_WRITE,
