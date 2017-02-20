@@ -396,18 +396,16 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
             }
             case State::READ_MSG:
             {
-                const Dtu::MessageHeader *header =
-                    pkt->getPtr<Dtu::MessageHeader>();
                 const uint64_t *args =
                     reinterpret_cast<const uint64_t*>(
                         pkt_data + sizeof(Dtu::MessageHeader));
 
-                DPRINTF(DtuAccel, "  cmd=%d arg=%d label=%p\n",
-                    args[0], args[1], header->label);
+                DPRINTF(DtuAccel, "  cmd=%lld arg1=%#llx arg2=%#llx\n",
+                    args[0], args[1], args[2]);
 
                 replyOffset = 0;
                 replySize = sizeof(uint64_t);
-                dataAddr = header->label;
+                dataAddr = args[2];
                 switch(static_cast<Command>(args[0]))
                 {
                     case Command::INIT:
@@ -684,7 +682,7 @@ DtuAccelHash::tick()
         {
             size_t rem = replySize - replyOffset;
             size_t size = std::min(chunkSize, rem);
-            pkt = createPacket(dataAddr + replyOffset,
+            pkt = createPacket(BUF_ADDR + replyOffset,
                                size,
                                MemCmd::WriteReq);
             memcpy(pkt->getPtr<uint8_t>(), (char*)&reply.msg + replyOffset, size);
@@ -693,7 +691,7 @@ DtuAccelHash::tick()
         case State::SEND_REPLY:
         {
             pkt = createDtuCmdPkt(Dtu::Command::REPLY | (EP_RECV << 4),
-                                  dataAddr,
+                                  BUF_ADDR,
                                   replySize,
                                   msgAddr);
             break;
