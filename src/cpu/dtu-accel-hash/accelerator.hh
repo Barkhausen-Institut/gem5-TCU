@@ -141,6 +141,8 @@ class DtuAccelHash : public MemObject
 
     static Addr getRegAddr(unsigned reg, unsigned epid);
 
+    size_t getStateSize() const;
+
     System *system;
 
     EventWrapper<DtuAccelHash, &DtuAccelHash::tick> tickEvent;

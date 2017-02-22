@@ -60,6 +60,7 @@ static const char *stateNames[] =
     "READ_MSG",
     "READ_DATA",
     "READ_DATA_WAIT",
+    "HASH_DATA",
     "STORE_REPLY",
     "SEND_REPLY",
     "REPLY_WAIT",
@@ -259,6 +260,15 @@ DtuAccelHash::freePacket(PacketPtr pkt)
     delete pkt;
 }
 
+size_t DtuAccelHash::getStateSize() const
+{
+    // if we fill the buffer, we do not need to save it, since we don't
+    // interrupt that operation.
+    if (hash.isAutonomous())
+        return sizeof(hash);
+    return sizeof(hash) + bufSize;
+}
+
 void
 DtuAccelHash::completeRequest(PacketPtr pkt)
 {
@@ -323,7 +333,7 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
                 {
                     // don't continue on errors here; maybe we don't have the
                     // memory EP yet.
-                    if ((reg >> 13) != 0 || ctxOffset == sizeof(hash) + bufSize)
+                    if ((reg >> 13) != 0 || ctxOffset == getStateSize())
                         state = State::CTX_SAVE_DONE;
                     else
                         state = State::CTX_SAVE_SEND;
@@ -364,7 +374,7 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
                 if ((reg & 0xF) == 0)
                 {
-                    if (ctxOffset == sizeof(hash) + bufSize)
+                    if (ctxOffset == getStateSize())
                     {
                         ctxOffset = 0;
                         state = State::CTX_RESTORE_READ;
@@ -424,8 +434,9 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
                 {
                     case Command::INIT:
                     {
-                        auto algo = static_cast<DtuAccelHashAlgorithm::Type>(args[1]);
-                        hash.start(algo);
+                        bool autonomous = static_cast<bool>(args[1]);
+                        auto algo = static_cast<DtuAccelHashAlgorithm::Type>(args[2]);
+                        hash.start(autonomous, algo);
 
                         reply.msg.res = algo <= DtuAccelHashAlgorithm::SHA512;
                         state = State::STORE_REPLY;
@@ -437,7 +448,13 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
                         memOff = args[1];
                         dataSize = args[2];
                         dataOff = 0;
-                        state = State::READ_DATA;
+                        if (hash.isAutonomous())
+                            state = State::READ_DATA;
+                        else
+                        {
+                            dataOff = lastSize = dataSize;
+                            state = State::HASH_DATA;
+                        }
                         break;
                     }
 
@@ -612,7 +629,7 @@ DtuAccelHash::tick()
         }
         case State::CTX_SAVE_SEND:
         {
-            size_t rem = sizeof(hash) + bufSize - ctxOffset;
+            size_t rem = getStateSize() - ctxOffset;
             size_t size = std::min(maxDataSize, rem);
             pkt = createDtuCmdPkt(Dtu::Command::WRITE | (EP_MEM << 4),
                                   (BUF_ADDR - sizeof(hash)) + ctxOffset,
@@ -641,7 +658,7 @@ DtuAccelHash::tick()
         }
         case State::CTX_RESTORE:
         {
-            size_t rem = sizeof(hash) + bufSize - ctxOffset;
+            size_t rem = getStateSize() - ctxOffset;
             size_t size = std::min(maxDataSize, rem);
             pkt = createDtuCmdPkt(Dtu::Command::READ | (EP_MEM << 4),
                                   (BUF_ADDR - sizeof(hash)) + ctxOffset,

@@ -49,6 +49,7 @@ class DtuAccelHashAlgorithm
 
   private:
 
+    bool autonomous;
     Type type;
     union
     {
@@ -62,10 +63,16 @@ class DtuAccelHashAlgorithm
 
   public:
 
-    DtuAccelHashAlgorithm() : type(SHA1), ctx() {}
+    DtuAccelHashAlgorithm() : autonomous(true), type(SHA1), ctx() {}
 
-    void start(Type _type)
+    bool isAutonomous() const
     {
+        return autonomous;
+    }
+
+    void start(bool _autonomous, Type _type)
+    {
+        autonomous = _autonomous;
         type = _type;
         switch(type)
         {
