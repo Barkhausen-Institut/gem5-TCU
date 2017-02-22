@@ -43,6 +43,7 @@ static const unsigned EP_SYSS       = 0;
 static const unsigned EP_SYSR       = 2;
 static const unsigned EP_RECV       = 7;
 static const unsigned EP_MEM        = 8;
+static const unsigned EP_DATA       = 9;
 static const unsigned CAP_RBUF      = 2;
 static const size_t MSG_SIZE        = 64;
 static const Addr MSG_ADDR          = 0x2000;
@@ -57,6 +58,7 @@ static const char *stateNames[] =
     "READ_MSG_ADDR",
     "READ_MSG",
     "READ_DATA",
+    "READ_DATA_WAIT",
     "STORE_REPLY",
     "SEND_REPLY",
     "REPLY_WAIT",
@@ -127,7 +129,7 @@ DtuAccelHash::DtuAccelHash(const DtuAccelHashParams *p)
     tickEvent(this),
     port("port", this),
     bufSize(p->buf_size),
-    stepSize(p->step_size),
+    maxDataSize(p->max_data_size),
     chunkSize(system->cacheLineSize()),
     irqPending(false),
     state(State::IDLE),
@@ -145,9 +147,8 @@ DtuAccelHash::DtuAccelHash(const DtuAccelHashParams *p)
     DTUMemory *sys = dynamic_cast<DTUMemory*>(system);
     haveVM = !sys->hasMem(id);
     // if we don't have VM, we have an SPM, which supports larger chunks
-    // TODO this is actually dependent on the max. chunk size the DTU supports
     if (!haveVM)
-        chunkSize = 1024;
+        chunkSize = maxDataSize;
 
     // kick things into action
     schedule(tickEvent, curTick());
@@ -417,7 +418,6 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
 
                 replyOffset = 0;
                 replySize = sizeof(uint64_t);
-                dataAddr = args[2];
                 switch(static_cast<Command>(args[0]))
                 {
                     case Command::INIT:
@@ -432,17 +432,10 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
 
                     case Command::UPDATE:
                     {
-                        if(args[1] > bufSize || (dataAddr % 64) != 0)
-                        {
-                            reply.msg.res = 0;
-                            state = State::STORE_REPLY;
-                        }
-                        else
-                        {
-                            remSize = dataSize = args[1];
-                            dataOff = 0;
-                            state = State::READ_DATA;
-                        }
+                        memOff = args[1];
+                        dataSize = args[2];
+                        dataOff = 0;
+                        state = State::READ_DATA;
                         break;
                     }
 
@@ -469,13 +462,25 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
             }
             case State::READ_DATA:
             {
-                hash.update(static_cast<const void*>(pkt_data), pkt->getSize());
+                state = State::READ_DATA_WAIT;
+                break;
+            }
+            case State::READ_DATA_WAIT:
+            {
+                RegFile::reg_t reg =
+                    *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
+                if ((reg & 0xF) == 0)
+                    state = State::HASH_DATA;
+                break;
+            }
+            case State::HASH_DATA:
+            {
+                hash.update(pkt->getPtr<char>(), pkt->getSize());
 
-                dataOff += pkt->getSize();
-                remSize -= pkt->getSize();
-
-                if (remSize == 0)
+                if (dataOff == dataSize)
                     state = State::STORE_REPLY;
+                else
+                    state = State::READ_DATA;
                 break;
             }
             case State::STORE_REPLY:
@@ -604,7 +609,7 @@ DtuAccelHash::tick()
         case State::CTX_SAVE_SEND:
         {
             size_t rem = sizeof(hash) + bufSize - ctxOffset;
-            size_t size = std::min(1024UL, rem);
+            size_t size = std::min(maxDataSize, rem);
             pkt = createDtuCmdPkt(Dtu::Command::WRITE | (EP_MEM << 4),
                                   (BUF_ADDR - sizeof(hash)) + ctxOffset,
                                   size,
@@ -633,7 +638,7 @@ DtuAccelHash::tick()
         case State::CTX_RESTORE:
         {
             size_t rem = sizeof(hash) + bufSize - ctxOffset;
-            size_t size = std::min(1024UL, rem);
+            size_t size = std::min(maxDataSize, rem);
             pkt = createDtuCmdPkt(Dtu::Command::READ | (EP_MEM << 4),
                                   (BUF_ADDR - sizeof(hash)) + ctxOffset,
                                   size,
@@ -692,8 +697,23 @@ DtuAccelHash::tick()
         }
         case State::READ_DATA:
         {
-            size_t size = std::min(stepSize, remSize);
-            pkt = createPacket(dataAddr + dataOff, size, MemCmd::ReadReq);
+            lastSize = std::min(maxDataSize, dataSize - dataOff);
+            pkt = createDtuCmdPkt(Dtu::Command::READ | (EP_DATA << 4),
+                                  BUF_ADDR,
+                                  lastSize,
+                                  memOff + dataOff);
+            dataOff += lastSize;
+            break;
+        }
+        case State::READ_DATA_WAIT:
+        {
+            Addr regAddr = getRegAddr(CmdReg::COMMAND);
+            pkt = createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
+            break;
+        }
+        case State::HASH_DATA:
+        {
+            pkt = createPacket(BUF_ADDR, lastSize, MemCmd::ReadReq);
             break;
         }
         case State::STORE_REPLY:

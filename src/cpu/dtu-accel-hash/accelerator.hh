@@ -90,6 +90,8 @@ class DtuAccelHash : public MemObject
         READ_MSG_ADDR,
         READ_MSG,
         READ_DATA,
+        READ_DATA_WAIT,
+        HASH_DATA,
         STORE_REPLY,
         SEND_REPLY,
         REPLY_WAIT,
@@ -140,7 +142,7 @@ class DtuAccelHash : public MemObject
     CpuPort port;
 
     size_t bufSize;
-    size_t stepSize;
+    size_t maxDataSize;
 
     bool haveVM;
     Addr chunkSize;
@@ -153,10 +155,10 @@ class DtuAccelHash : public MemObject
     Addr ctxOffset;
 
     Addr msgAddr;
-    Addr dataAddr;
+    Addr memOff;
     Addr dataOff;
     Addr dataSize;
-    Addr remSize;
+    Addr lastSize;
 
     size_t replyOffset;
     size_t replySize;

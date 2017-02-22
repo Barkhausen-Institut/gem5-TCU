@@ -39,7 +39,7 @@ class DtuAccelHash(MemObject):
     regfile_base_addr = Param.Addr(0xF0000000, "Register file address")
 
     buf_size = Param.MemorySize("4kB", "The size of the buffer")
-    step_size = Param.Unsigned(64, "The number of bytes to fetch from memory at once during hash generation")
+    max_data_size = Param.Unsigned(1024, "The maximum size of data transfers")
 
 class DtuAccelHashConnector(BaseConnector):
     type = 'DtuAccelHashConnector'
