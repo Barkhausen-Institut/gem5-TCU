@@ -33,6 +33,7 @@
 #include "debug/DtuAccel.hh"
 #include "debug/DtuAccelAccess.hh"
 #include "debug/DtuAccelState.hh"
+#include "debug/DtuConnector.hh"
 #include "mem/dtu/dtu.hh"
 #include "mem/dtu/regfile.hh"
 #include "sim/dtu_memory.hh"
@@ -140,7 +141,8 @@ DtuAccelHash::DtuAccelHash(const DtuAccelHashParams *p)
     id(p->id),
     atomic(system->isAtomicMode()),
     reg_base(p->regfile_base_addr),
-    retryPkt(nullptr)
+    retryPkt(nullptr),
+    connector()
 {
     static_assert(sizeof(DtuAccelHashAlgorithm) % 64 == 0, "Hash state size invalid");
 
@@ -586,6 +588,8 @@ DtuAccelHash::tick()
         case State::IDLE:
         case State::CTX_WAIT:
         {
+            if (connector)
+                DPRINTFS(DtuConnector, connector, "Suspending accelerator\n");
             break;
         }
 

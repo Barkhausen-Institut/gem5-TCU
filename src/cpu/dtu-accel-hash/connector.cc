@@ -35,6 +35,7 @@ DtuAccelHashConnector::DtuAccelHashConnector(const DtuAccelHashConnectorParams *
   : BaseConnector(p),
     acc(p->accelerator)
 {
+    acc->setConnector(this);
 }
 
 void

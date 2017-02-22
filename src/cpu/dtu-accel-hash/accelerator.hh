@@ -33,6 +33,7 @@
 
 #include "params/DtuAccelHash.hh"
 #include "cpu/dtu-accel-hash/algorithm.hh"
+#include "mem/dtu/connector/base.hh"
 #include "mem/dtu/regfile.hh"
 #include "sim/system.hh"
 
@@ -43,6 +44,11 @@ class DtuAccelHash : public MemObject
 
     BaseMasterPort& getMasterPort(const std::string &if_name,
                                   PortID idx = InvalidPortID) override;
+
+    void setConnector(BaseConnector *con)
+    {
+        connector = con;
+    }
 
     void interrupt();
 
@@ -192,6 +198,8 @@ class DtuAccelHash : public MemObject
 
     /// Stores the Packet for later retry
     PacketPtr retryPkt;
+
+    BaseConnector *connector;
 };
 
 #endif // __CPU_DTU_ACCEL_HASH_ACCELERATOR_HH__
