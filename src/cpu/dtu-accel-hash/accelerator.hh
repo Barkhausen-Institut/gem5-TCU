@@ -139,6 +139,9 @@ class DtuAccelHash : public MemObject
 
     CpuPort port;
 
+    size_t bufSize;
+    size_t stepSize;
+
     bool haveVM;
     Addr chunkSize;
 
