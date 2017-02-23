@@ -166,6 +166,7 @@ class DtuAccelHash : public MemObject
     Addr memOff;
     Addr dataOff;
     Addr dataSize;
+    Addr hashOff;
     Addr lastSize;
 
     size_t replyOffset;

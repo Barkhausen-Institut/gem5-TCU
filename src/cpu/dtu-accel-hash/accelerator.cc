@@ -453,6 +453,7 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
                         else
                         {
                             dataOff = lastSize = dataSize;
+                            hashOff = 0;
                             state = State::HASH_DATA;
                         }
                         break;
@@ -489,17 +490,24 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
                 RegFile::reg_t reg =
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
                 if ((reg & 0xF) == 0)
+                {
+                    hashOff = 0;
                     state = State::HASH_DATA;
+                }
                 break;
             }
             case State::HASH_DATA:
             {
                 hash.update(pkt->getPtr<char>(), pkt->getSize());
 
-                if (dataOff == dataSize)
-                    state = State::STORE_REPLY;
-                else
-                    state = State::READ_DATA;
+                hashOff += pkt->getSize();
+                if (hashOff == lastSize)
+                {
+                    if (dataOff == dataSize)
+                        state = State::STORE_REPLY;
+                    else
+                        state = State::READ_DATA;
+                }
                 break;
             }
             case State::STORE_REPLY:
@@ -734,7 +742,9 @@ DtuAccelHash::tick()
         }
         case State::HASH_DATA:
         {
-            pkt = createPacket(BUF_ADDR, lastSize, MemCmd::ReadReq);
+            size_t rem = lastSize - hashOff;
+            size_t size = std::min(chunkSize, rem);
+            pkt = createPacket(BUF_ADDR + hashOff, size, MemCmd::ReadReq);
             break;
         }
         case State::STORE_REPLY:
