@@ -313,6 +313,7 @@ def createHashAccelPE(root, options, no, memPE, l1size=None, l2size=None, spmsiz
     pe.accelhash = DtuAccelHash()
     pe.dtu.connector.accelerator = pe.accelhash
     pe.accelhash.id = no;
+    pe.accelhash.clk_domain = root.cpu_clk_domain
 
     pe.dtu.dcache_slave_port = pe.accelhash.port
 
