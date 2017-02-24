@@ -46,6 +46,10 @@ static const unsigned EP_RECV       = 7;
 static const unsigned EP_MEM        = 8;
 static const unsigned EP_DATA       = 9;
 static const unsigned CAP_RBUF      = 2;
+// the time for one 64 block; determined by ALADDIN and picking the sweet spot
+// between area, power and performance. based on the SHA256 algorithm from:
+// https://github.com/B-Con/crypto-algorithms/blob/master/sha256.c
+static const Cycles BLOCK_TIME      = Cycles(85);
 static const size_t MSG_SIZE        = 64;
 static const Addr MSG_ADDR          = 0x2000;
 static const Addr BUF_ADDR          = 0x4000;
@@ -285,6 +289,7 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
 
     const uint8_t *pkt_data = pkt->getConstPtr<uint8_t>();
 
+    Cycles delay(1);
     if (pkt->isError())
     {
         warn("%s access failed at %#x\n",
@@ -503,6 +508,19 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
                 hashOff += pkt->getSize();
                 if (hashOff == lastSize)
                 {
+                    // the time for the hash operation on lastSize bytes
+                    delay = Cycles(BLOCK_TIME * (lastSize / 64));
+                    DPRINTF(DtuAccel, "Hash generation took %llu cycles\n", delay);
+
+                    // decrease it by the time we've already spent reading the
+                    // data from SPM, because that's already included in the
+                    // BLOCK_TIME.
+                    // TODO if we use caches, this is not correct
+                    if (delay > (curCycle() - hashStart))
+                        delay = delay - (curCycle() - hashStart);
+                    else
+                        delay = Cycles(1);
+
                     if (dataOff == dataSize)
                         state = State::STORE_REPLY;
                     else
@@ -573,7 +591,7 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
     freePacket(pkt);
 
     // kick things into action again
-    schedule(tickEvent, clockEdge(Cycles(1)));
+    schedule(tickEvent, clockEdge(delay));
 }
 
 void
@@ -742,6 +760,8 @@ DtuAccelHash::tick()
         }
         case State::HASH_DATA:
         {
+            if (hashOff == 0)
+                hashStart = curCycle();
             size_t rem = lastSize - hashOff;
             size_t size = std::min(chunkSize, rem);
             pkt = createPacket(BUF_ADDR + hashOff, size, MemCmd::ReadReq);
