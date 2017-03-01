@@ -242,9 +242,10 @@ DtuAccelHash::createDtuCmdPkt(uint64_t cmd,
     static_assert(static_cast<int>(CmdReg::DATA_ADDR) == 2, "");
     static_assert(static_cast<int>(CmdReg::DATA_SIZE) == 3, "");
     static_assert(static_cast<int>(CmdReg::OFFSET) == 4, "");
+    static_assert(static_cast<int>(CmdReg::REPLY_EPID) == 5, "");
 
     auto pkt = createPacket(reg_base + getRegAddr(CmdReg::COMMAND),
-                            sizeof(RegFile::reg_t) * 5,
+                            sizeof(RegFile::reg_t) * 6,
                             MemCmd::WriteReq);
 
     RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
@@ -253,6 +254,7 @@ DtuAccelHash::createDtuCmdPkt(uint64_t cmd,
     regs[2] = data;
     regs[3] = size;
     regs[4] = off;
+    regs[5] = EP_SYSR;
     return pkt;
 }
 
