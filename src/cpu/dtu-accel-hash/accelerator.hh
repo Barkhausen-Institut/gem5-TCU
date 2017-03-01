@@ -102,10 +102,6 @@ class DtuAccelHash : public MemObject
         SEND_REPLY,
         REPLY_WAIT,
         REPLY_ERROR,
-        REPLY_SYSCALL,
-        REPLY_FETCH,
-        REPLY_READ_ADDR,
-        REPLY_ACK,
 
         CTX_SAVE,
         CTX_SAVE_WRITE,
@@ -119,6 +115,12 @@ class DtuAccelHash : public MemObject
         CTX_RESTORE_WAIT,
         CTX_RESTORE_READ,
         CTX_RESTORE_DONE,
+
+        SYSC_SEND,
+        SYSC_WAIT,
+        SYSC_FETCH,
+        SYSC_READ_ADDR,
+        SYSC_ACK,
     };
 
     PacketPtr createPacket(Addr paddr, size_t size, MemCmd cmd);
@@ -190,6 +192,8 @@ class DtuAccelHash : public MemObject
         } M5_ATTR_PACKED msg;
     } M5_ATTR_PACKED reply;
 
+    Addr syscallSize;
+    State syscallNextState;
     Addr sysreplyAddr;
 
     /// Request id for all generated traffic
