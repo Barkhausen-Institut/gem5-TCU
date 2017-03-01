@@ -49,8 +49,8 @@ class DtuAccelHashAlgorithm
 
   private:
 
-    bool autonomous;
-    Type type;
+    bool _autonomous;
+    Type _type;
     union
     {
         SHA_CTX sha1;
@@ -58,53 +58,78 @@ class DtuAccelHashAlgorithm
         SHA256_CTX sha256;
         SHA512_CTX sha384;
         SHA512_CTX sha512;
-    } ctx;
-    char pad[32];
+    } _ctx;
+    uint32_t _memOff;
+    uint32_t _dataSize;
+    uint32_t _dataOff;
+    char _pad[20];
 
   public:
 
-    DtuAccelHashAlgorithm() : autonomous(true), type(SHA1), ctx() {}
+    DtuAccelHashAlgorithm()
+        : _autonomous(true), _type(SHA1), _ctx(), _memOff(), _dataSize(), _dataOff() {}
 
-    bool isAutonomous() const
+    uint32_t memOffset() const { return _memOff; }
+    uint32_t dataSize() const { return _dataSize; }
+    uint32_t dataOffset() const { return _dataOff; }
+
+    bool autonomous() const
     {
-        return autonomous;
+        return _autonomous;
     }
 
-    void start(bool _autonomous, Type _type)
+    void start(bool autonomous, Type type)
     {
-        autonomous = _autonomous;
-        type = _type;
+        _autonomous = autonomous;
+        _type = type;
         switch(type)
         {
-            case SHA1:      SHA1_Init(&ctx.sha1); break;
-            case SHA224:    SHA224_Init(&ctx.sha224); break;
-            case SHA256:    SHA256_Init(&ctx.sha256); break;
-            case SHA384:    SHA384_Init(&ctx.sha384); break;
-            case SHA512:    SHA512_Init(&ctx.sha512); break;
+            case SHA1:      SHA1_Init(&_ctx.sha1); break;
+            case SHA224:    SHA224_Init(&_ctx.sha224); break;
+            case SHA256:    SHA256_Init(&_ctx.sha256); break;
+            case SHA384:    SHA384_Init(&_ctx.sha384); break;
+            case SHA512:    SHA512_Init(&_ctx.sha512); break;
         }
+    }
+
+    void startUpdate(uint32_t memOff, uint32_t dataSize, uint32_t dataOff)
+    {
+        _memOff = memOff;
+        _dataSize = dataSize;
+        _dataOff = dataOff;
+    }
+
+    void incOffset(uint32_t amount)
+    {
+        _dataOff += amount;
+    }
+
+    void finishUpdate()
+    {
+        _dataSize = 0;
     }
 
     void update(const void *data, size_t len)
     {
-        switch(type)
+        switch(_type)
         {
-            case SHA1:      SHA1_Update(&ctx.sha1, data, len); break;
-            case SHA224:    SHA224_Update(&ctx.sha224, data, len); break;
-            case SHA256:    SHA256_Update(&ctx.sha256, data, len); break;
-            case SHA384:    SHA384_Update(&ctx.sha384, data, len); break;
-            case SHA512:    SHA512_Update(&ctx.sha512, data, len); break;
+            case SHA1:      SHA1_Update(&_ctx.sha1, data, len); break;
+            case SHA224:    SHA224_Update(&_ctx.sha224, data, len); break;
+            case SHA256:    SHA256_Update(&_ctx.sha256, data, len); break;
+            case SHA384:    SHA384_Update(&_ctx.sha384, data, len); break;
+            case SHA512:    SHA512_Update(&_ctx.sha512, data, len); break;
         }
     }
 
     size_t get(uint8_t *res)
     {
-        switch(type)
+        switch(_type)
         {
-            case SHA1:      SHA1_Final(res, &ctx.sha1); return 20;
-            case SHA224:    SHA224_Final(res, &ctx.sha224); return 28;
-            case SHA256:    SHA256_Final(res, &ctx.sha256); return 32;
-            case SHA384:    SHA384_Final(res, &ctx.sha384); return 48;
-            case SHA512:    SHA512_Final(res, &ctx.sha512); return 64;
+            case SHA1:      SHA1_Final(res, &_ctx.sha1); return 20;
+            case SHA224:    SHA224_Final(res, &_ctx.sha224); return 28;
+            case SHA256:    SHA256_Final(res, &_ctx.sha256); return 32;
+            case SHA384:    SHA384_Final(res, &_ctx.sha384); return 48;
+            case SHA512:    SHA512_Final(res, &_ctx.sha512); return 64;
         }
         return 0;
     }

@@ -173,9 +173,6 @@ class DtuAccelHash : public MemObject
     Addr ctxOffset;
 
     Addr msgAddr;
-    Addr memOff;
-    Addr dataOff;
-    Addr dataSize;
     Addr hashOff;
     Addr lastSize;
 

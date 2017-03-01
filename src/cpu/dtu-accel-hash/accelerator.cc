@@ -279,7 +279,7 @@ size_t DtuAccelHash::getStateSize() const
 {
     // if we fill the buffer, we do not need to save it, since we don't
     // interrupt that operation.
-    if (hash.isAutonomous())
+    if (hash.autonomous())
         return sizeof(hash);
     return sizeof(hash) + bufSize;
 }
@@ -452,7 +452,10 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
             case State::CTX_RESTORE_DONE:
             {
                 ctxSwPending = false;
-                state = State::FETCH_MSG;
+                if (hash.autonomous() && hash.dataOffset() != hash.dataSize())
+                    state = State::READ_DATA;
+                else
+                    state = State::FETCH_MSG;
                 break;
             }
 
@@ -500,14 +503,15 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
 
                     case Command::UPDATE:
                     {
-                        memOff = args[1];
-                        dataSize = args[2];
-                        dataOff = 0;
-                        if (hash.isAutonomous())
+                        if (hash.autonomous())
+                        {
+                            hash.startUpdate(args[1], args[2], 0);
                             state = State::READ_DATA;
+                        }
                         else
                         {
-                            dataOff = lastSize = dataSize;
+                            hash.startUpdate(0, args[2], args[2]);
+                            lastSize = args[2];
                             hashOff = 0;
                             state = State::HASH_DATA;
                         }
@@ -571,8 +575,13 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
                     else
                         delay = Cycles(1);
 
-                    if (dataOff == dataSize)
+                    if (hash.dataOffset() == hash.dataSize())
+                    {
+                        replyOffset = 0;
                         state = State::STORE_REPLY;
+                    }
+                    else if (hash.autonomous() && irqPending)
+                        state = State::CTX_SAVE;
                     else
                         state = State::READ_DATA;
                 }
@@ -833,12 +842,13 @@ DtuAccelHash::tick()
         }
         case State::READ_DATA:
         {
-            lastSize = std::min(maxDataSize, dataSize - dataOff);
+            size_t left = hash.dataSize() - hash.dataOffset();
+            lastSize = std::min(maxDataSize, left);
             pkt = createDtuCmdPkt(Dtu::Command::READ | (EP_DATA << 4),
                                   BUF_ADDR,
                                   lastSize,
-                                  memOff + dataOff);
-            dataOff += lastSize;
+                                  hash.memOffset() + hash.dataOffset());
+            hash.incOffset(lastSize);
             break;
         }
         case State::READ_DATA_WAIT:
