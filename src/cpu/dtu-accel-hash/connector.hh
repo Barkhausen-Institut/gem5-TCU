@@ -44,6 +44,8 @@ class DtuAccelHashConnector : public BaseConnector
 
     void wakeup() override;
 
+    void suspend() override;
+
   private:
 
     DtuAccelHash *acc;

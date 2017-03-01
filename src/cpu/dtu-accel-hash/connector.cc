@@ -52,6 +52,12 @@ DtuAccelHashConnector::wakeup()
     acc->wakeup();
 }
 
+void
+DtuAccelHashConnector::suspend()
+{
+    DPRINTF(DtuConnector, "Suspending accelerator\n");
+}
+
 DtuAccelHashConnector*
 DtuAccelHashConnectorParams::create()
 {

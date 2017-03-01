@@ -92,6 +92,10 @@ class DtuAccelHash : public MemObject
     enum class State
     {
         IDLE,
+        IDLE_WAIT,
+        IDLE_REPORT,
+        IDLE_START,
+
         FETCH_MSG,
         READ_MSG_ADDR,
         READ_MSG,
@@ -158,6 +162,7 @@ class DtuAccelHash : public MemObject
     Addr chunkSize;
 
     bool irqPending;
+    bool ctxSwPending;
 
     State state;
     DtuAccelHashAlgorithm hash;
@@ -172,6 +177,7 @@ class DtuAccelHash : public MemObject
     Addr lastSize;
 
     Cycles hashStart;
+    Cycles yieldStart;
 
     size_t replyOffset;
     size_t replySize;
@@ -191,6 +197,15 @@ class DtuAccelHash : public MemObject
             uint8_t bytes[64];
         } M5_ATTR_PACKED msg;
     } M5_ATTR_PACKED reply;
+
+    struct
+    {
+        uint64_t opcode;
+        uint64_t vpe_sel;
+        uint64_t op;
+        uint64_t arg;
+    } M5_ATTR_PACKED yieldSyscall;
+    uint64_t yieldReport;
 
     Addr syscallSize;
     State syscallNextState;

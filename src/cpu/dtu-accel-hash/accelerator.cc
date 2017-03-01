@@ -54,11 +54,16 @@ static const size_t MSG_SIZE        = 64;
 static const Addr MSG_ADDR          = 0x2000;
 static const Addr BUF_ADDR          = 0x4000;
 
+static const Addr RCTMUX_YIELD      = 0x2ff0;
 static const Addr RCTMUX_FLAGS      = 0x2ff8;
 
 static const char *stateNames[] =
 {
     "IDLE",
+    "IDLE_WAIT",
+    "IDLE_REPORT",
+    "IDLE_START",
+
     "FETCH_MSG",
     "READ_MSG_ADDR",
     "READ_MSG",
@@ -140,6 +145,7 @@ DtuAccelHash::DtuAccelHash(const DtuAccelHashParams *p)
     maxDataSize(p->max_data_size),
     chunkSize(system->cacheLineSize()),
     irqPending(false),
+    ctxSwPending(false),
     state(State::IDLE),
     hash(),
     ctxOffset(),
@@ -304,6 +310,41 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
         switch(state)
         {
             case State::IDLE:
+            {
+                yieldReport = *reinterpret_cast<const uint64_t*>(pkt_data);
+                if (yieldReport > 0)
+                    state = State::IDLE_WAIT;
+                else
+                    state = State::IDLE_START;
+                break;
+            }
+            case State::IDLE_WAIT:
+            {
+                if (curCycle() < yieldStart + yieldReport)
+                    state = State::CTX_CHECK;
+                else
+                    state = State::IDLE_REPORT;
+                break;
+            }
+            case State::IDLE_REPORT:
+            {
+                syscallSize = sizeof(yieldSyscall);
+                syscallNextState = State::IDLE_START;
+                state = State::SYSC_SEND;
+                break;
+            }
+            case State::IDLE_START:
+            {
+                if (irqPending)
+                {
+                    irqPending = false;
+                    state = State::CTX_SAVE;
+                }
+                else
+                    state = State::CTX_CHECK;
+                break;
+            }
+
             case State::CTX_WAIT:
             {
                 assert(false);
@@ -351,6 +392,7 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
             }
             case State::CTX_SAVE_DONE:
             {
+                ctxSwPending = true;
                 state = State::CTX_WAIT;
                 break;
             }
@@ -366,8 +408,10 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
                     else
                         state = State::CTX_RESTORE;
                 }
-                else if((val & RCTMuxCtrl::WAITING) && (~val & RCTMuxCtrl::STORE))
+                else if ((val & RCTMuxCtrl::WAITING) && (~val & RCTMuxCtrl::STORE))
                     state = State::CTX_RESTORE_DONE;
+                else if (ctxSwPending)
+                    state = State::CTX_WAIT;
                 else
                     state = State::FETCH_MSG;
                 break;
@@ -406,6 +450,7 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
             }
             case State::CTX_RESTORE_DONE:
             {
+                ctxSwPending = false;
                 state = State::FETCH_MSG;
                 break;
             }
@@ -612,20 +657,13 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
 void
 DtuAccelHash::interrupt()
 {
-    if (state == State::IDLE)
-    {
-        state = State::CTX_SAVE;
-        if (!tickEvent.scheduled())
-            schedule(tickEvent, clockEdge(Cycles(1)));
-    }
-    else
-        irqPending = true;
+    irqPending = true;
 }
 
 void
 DtuAccelHash::wakeup()
 {
-    if (state == State::IDLE || state == State::CTX_WAIT)
+    if (state == State::CTX_WAIT)
     {
         state = State::CTX_CHECK;
         if (!tickEvent.scheduled())
@@ -644,12 +682,35 @@ DtuAccelHash::tick()
     switch(state)
     {
         case State::IDLE:
-        case State::CTX_WAIT:
         {
-            if (connector)
-                DPRINTFS(DtuConnector, connector, "Suspending accelerator\n");
+            pkt = createPacket(RCTMUX_YIELD, sizeof(uint64_t), MemCmd::ReadReq);
             break;
         }
+        case State::IDLE_WAIT:
+        {
+            yieldStart = curCycle();
+            pkt = createDtuCmdPkt(Dtu::Command::SLEEP, 0, 0, yieldReport);
+            break;
+        }
+        case State::IDLE_REPORT:
+        {
+            yieldSyscall.opcode = 10;   /* VPE_CTRL */
+            yieldSyscall.vpe_sel = 0;   /* self */
+            yieldSyscall.op = 2;        /* VCTRL_YIELD */
+            yieldSyscall.arg = 0;       /* unused */
+
+            pkt = createPacket(MSG_ADDR, sizeof(yieldSyscall), MemCmd::WriteReq);
+            memcpy(pkt->getPtr<void>(), &yieldSyscall, sizeof(yieldSyscall));
+            break;
+        }
+        case State::IDLE_START:
+        {
+            pkt = createDtuCmdPkt(Dtu::Command::SLEEP, 0, 0, 0);
+            break;
+        }
+
+        case State::CTX_WAIT:
+            break;
 
         case State::CTX_SAVE:
         {
