@@ -46,6 +46,13 @@ DtuAccelHashConnector::setIrq()
 }
 
 void
+DtuAccelHashConnector::reset(Addr addr)
+{
+    DPRINTF(DtuConnector, "Resetting accelerator\n");
+    acc->reset();
+}
+
+void
 DtuAccelHashConnector::wakeup()
 {
     DPRINTF(DtuConnector, "Waking up accelerator\n");

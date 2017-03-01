@@ -54,6 +54,8 @@ class DtuAccelHash : public MemObject
 
     void wakeup();
 
+    void reset();
+
   protected:
 
     /// main simulation loop
@@ -163,6 +165,7 @@ class DtuAccelHash : public MemObject
 
     bool irqPending;
     bool ctxSwPending;
+    bool memPending;
 
     State state;
     DtuAccelHashAlgorithm hash;

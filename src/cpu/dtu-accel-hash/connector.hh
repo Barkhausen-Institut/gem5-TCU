@@ -42,6 +42,8 @@ class DtuAccelHashConnector : public BaseConnector
 
     void setIrq() override;
 
+    void reset(Addr addr) override;
+
     void wakeup() override;
 
     void suspend() override;

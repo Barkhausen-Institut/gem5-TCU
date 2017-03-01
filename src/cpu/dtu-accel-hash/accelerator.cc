@@ -146,6 +146,7 @@ DtuAccelHash::DtuAccelHash(const DtuAccelHashParams *p)
     chunkSize(system->cacheLineSize()),
     irqPending(false),
     ctxSwPending(false),
+    memPending(false),
     state(State::IDLE),
     hash(),
     ctxOffset(),
@@ -648,6 +649,7 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
         }
     }
 
+    memPending = false;
     freePacket(pkt);
 
     // kick things into action again
@@ -669,6 +671,17 @@ DtuAccelHash::wakeup()
         if (!tickEvent.scheduled())
             schedule(tickEvent, clockEdge(Cycles(1)));
     }
+}
+
+void
+DtuAccelHash::reset()
+{
+    irqPending = false;
+    ctxSwPending = false;
+    state = State::IDLE_START;
+
+    if (!memPending && !tickEvent.scheduled())
+        schedule(tickEvent, clockEdge(Cycles(1)));
 }
 
 void
@@ -919,7 +932,10 @@ DtuAccelHash::tick()
     }
 
     if (pkt != nullptr)
+    {
+        memPending = true;
         sendPkt(pkt);
+    }
 }
 
 DtuAccelHash*
