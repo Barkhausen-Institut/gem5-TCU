@@ -359,6 +359,9 @@ else:
     print "Error I don't know how to create more than 2 systems."
     sys.exit(1)
 
+if hasattr(test_sys, 'l2'):
+    test_sys.l2.prefetcher = StridePrefetcher(degree = 16)
+
 if options.timesync:
     root.time_sync_enable = True
 

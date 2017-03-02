@@ -207,8 +207,10 @@ def createPE(root, options, no, systemType, l1size, l2size, spmsize, memPE):
             pe.dtu.l2cache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
             pe.dtu.l2cache.cpu_side = pe.dtu.l1cache.mem_side
             pe.dtu.l2cache.mem_side = pe.dtu.cache_mem_slave_port
+            pe.dtu.l2cache.prefetcher = StridePrefetcher(degree = 16)
         else:
             pe.dtu.l1cache.mem_side = pe.dtu.cache_mem_slave_port
+            pe.dtu.l1cache.prefetcher = StridePrefetcher(degree = 16)
 
         # don't check whether the kernel is in memory because a PE does not have memory in this
         # case, but just a cache that is connected to a different PE
