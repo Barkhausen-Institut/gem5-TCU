@@ -75,22 +75,6 @@ class DtuAccelHash : public MemObject
         void recvReqRetry() override;
     };
 
-    enum RCTMuxCtrl
-    {
-        NONE        = 0,
-        STORE       = 1 << 0, // store operation required
-        RESTORE     = 1 << 1, // restore operation required
-        WAITING     = 1 << 2, // set by the kernel if a signal is required
-        SIGNAL      = 1 << 3, // used to signal completion to the kernel
-    };
-
-    enum class Command
-    {
-        INIT,
-        UPDATE,
-        FINISH
-    };
-
     enum class State
     {
         IDLE,
@@ -122,11 +106,59 @@ class DtuAccelHash : public MemObject
         CTX_RESTORE_READ,
         CTX_RESTORE_DONE,
 
-        SYSC_SEND,
-        SYSC_WAIT,
-        SYSC_FETCH,
-        SYSC_READ_ADDR,
-        SYSC_ACK,
+        SYSCALL,
+    };
+
+    class SyscallSM
+    {
+      public:
+
+        enum State
+        {
+            SYSC_SEND,
+            SYSC_WAIT,
+            SYSC_FETCH,
+            SYSC_READ_ADDR,
+            SYSC_ACK,
+        };
+
+        explicit SyscallSM(DtuAccelHash *_accel)
+            : accel(_accel), state(), replyAddr(), syscallSize() {}
+
+        const char *stateName() const;
+
+        void start(Addr size)
+        {
+            syscallSize = size;
+            state = SYSC_SEND;
+        }
+
+        PacketPtr tick();
+
+        bool handleMemResp(PacketPtr pkt);
+
+       private:
+
+        DtuAccelHash *accel;
+        State state;
+        Addr replyAddr;
+        Addr syscallSize;
+    };
+
+    enum RCTMuxCtrl
+    {
+        NONE        = 0,
+        STORE       = 1 << 0, // store operation required
+        RESTORE     = 1 << 1, // restore operation required
+        WAITING     = 1 << 2, // set by the kernel if a signal is required
+        SIGNAL      = 1 << 3, // used to signal completion to the kernel
+    };
+
+    enum class Command
+    {
+        INIT,
+        UPDATE,
+        FINISH
     };
 
     PacketPtr createPacket(Addr paddr, size_t size, MemCmd cmd);
@@ -207,9 +239,8 @@ class DtuAccelHash : public MemObject
     } M5_ATTR_PACKED yieldSyscall;
     uint64_t yieldReport;
 
-    Addr syscallSize;
-    State syscallNextState;
-    Addr sysreplyAddr;
+    SyscallSM sysc;
+    State syscNext;
 
     /// Request id for all generated traffic
     MasterID masterId;

@@ -88,11 +88,7 @@ static const char *stateNames[] =
     "CTX_RESTORE_READ",
     "CTX_RESTORE_DONE",
 
-    "SYSC_SEND",
-    "SYSC_WAIT",
-    "SYSC_FETCH",
-    "SYSC_READ_ADDR",
-    "SYSC_ACK",
+    "SYSCALL",
 };
 
 Addr
@@ -151,6 +147,7 @@ DtuAccelHash::DtuAccelHash(const DtuAccelHashParams *p)
     hash(),
     ctxOffset(),
     msgAddr(),
+    sysc(this),
     masterId(system->getMasterId(name())),
     id(p->id),
     atomic(system->isAtomicMode()),
@@ -284,13 +281,114 @@ size_t DtuAccelHash::getStateSize() const
     return sizeof(hash) + bufSize;
 }
 
+const char *
+DtuAccelHash::SyscallSM::stateName() const
+{
+    static const char *names[] =
+    {
+        ":SEND", ":WAIT", ":FETCH", ":READ_ADDR", ":ACK"
+    };
+    return names[static_cast<size_t>(state)];
+}
+
+PacketPtr
+DtuAccelHash::SyscallSM::tick()
+{
+    PacketPtr pkt = nullptr;
+
+    switch(state)
+    {
+        case State::SYSC_SEND:
+        {
+            pkt = accel->createDtuCmdPkt(Dtu::Command::SEND | (EP_SYSS << 4),
+                                         MSG_ADDR,
+                                         syscallSize,
+                                         0);
+            break;
+        }
+        case State::SYSC_WAIT:
+        {
+            Addr regAddr = getRegAddr(CmdReg::COMMAND);
+            pkt = accel->createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
+            break;
+        }
+        case State::SYSC_FETCH:
+        {
+            Addr regAddr = getRegAddr(CmdReg::COMMAND);
+            uint64_t value = Dtu::Command::FETCH_MSG | (EP_SYSR << 4);
+            pkt = accel->createDtuRegPkt(regAddr, value, MemCmd::WriteReq);
+            break;
+        }
+        case State::SYSC_READ_ADDR:
+        {
+            Addr regAddr = getRegAddr(CmdReg::OFFSET);
+            pkt = accel->createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
+            break;
+        }
+        case State::SYSC_ACK:
+        {
+            pkt = accel->createDtuCmdPkt(Dtu::Command::ACK_MSG | (EP_SYSR << 4),
+                                         0,
+                                         0,
+                                         replyAddr);
+            break;
+        }
+    }
+
+    return pkt;
+}
+
+bool
+DtuAccelHash::SyscallSM::handleMemResp(PacketPtr pkt)
+{
+    switch(state)
+    {
+        case State::SYSC_SEND:
+        {
+            state = State::SYSC_WAIT;
+            break;
+        }
+        case State::SYSC_WAIT:
+        {
+            RegFile::reg_t reg = *pkt->getConstPtr<RegFile::reg_t>();
+            if ((reg & 0xF) == 0)
+                state = State::SYSC_FETCH;
+            break;
+        }
+        case State::SYSC_FETCH:
+        {
+            state = State::SYSC_READ_ADDR;
+            break;
+        }
+        case State::SYSC_READ_ADDR:
+        {
+            const RegFile::reg_t *regs = pkt->getConstPtr<RegFile::reg_t>();
+            if(regs[0])
+            {
+                replyAddr = regs[0];
+                state = State::SYSC_ACK;
+            }
+            else
+                state = State::SYSC_FETCH;
+            break;
+        }
+        case State::SYSC_ACK:
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 void
 DtuAccelHash::completeRequest(PacketPtr pkt)
 {
     Request* req = pkt->req;
 
-    DPRINTF(DtuAccelState, "[%s] Got response from memory\n",
-        stateNames[static_cast<size_t>(state)]);
+    DPRINTF(DtuAccelState, "[%s%s] Got response from memory\n",
+        stateNames[static_cast<size_t>(state)],
+        state == State::SYSCALL ? sysc.stateName() : "");
 
     DPRINTF(DtuAccelAccess, "Completing %s at address %x:%lu %s\n",
         pkt->isWrite() ? "write" : "read",
@@ -329,9 +427,9 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
             }
             case State::IDLE_REPORT:
             {
-                syscallSize = sizeof(yieldSyscall);
-                syscallNextState = State::IDLE_START;
-                state = State::SYSC_SEND;
+                sysc.start(sizeof(yieldSyscall));
+                syscNext = State::IDLE_START;
+                state = State::SYSCALL;
                 break;
             }
             case State::IDLE_START:
@@ -614,45 +712,16 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
             }
             case State::REPLY_ERROR:
             {
-                syscallSize = sizeof(reply);
-                syscallNextState = State::CTX_CHECK;
-                state = State::SYSC_SEND;
+                sysc.start(sizeof(reply));
+                syscNext = State::CTX_CHECK;
+                state = State::SYSCALL;
                 break;
             }
 
-            case State::SYSC_SEND:
+            case State::SYSCALL:
             {
-                state = State::SYSC_WAIT;
-                break;
-            }
-            case State::SYSC_WAIT:
-            {
-                RegFile::reg_t reg =
-                    *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
-                if ((reg & 0xF) == 0)
-                    state = State::SYSC_FETCH;
-                break;
-            }
-            case State::SYSC_FETCH:
-            {
-                state = State::SYSC_READ_ADDR;
-                break;
-            }
-            case State::SYSC_READ_ADDR:
-            {
-                const RegFile::reg_t *regs = pkt->getConstPtr<RegFile::reg_t>();
-                if(regs[0])
-                {
-                    sysreplyAddr = regs[0];
-                    state = State::SYSC_ACK;
-                }
-                else
-                    state = State::SYSC_FETCH;
-                break;
-            }
-            case State::SYSC_ACK:
-            {
-                state = syscallNextState;
+                if(sysc.handleMemResp(pkt))
+                    state = syscNext;
                 break;
             }
         }
@@ -698,8 +767,9 @@ DtuAccelHash::tick()
 {
     PacketPtr pkt = nullptr;
 
-    DPRINTF(DtuAccelState, "[%s] tick\n",
-        stateNames[static_cast<size_t>(state)]);
+    DPRINTF(DtuAccelState, "[%s%s] tick\n",
+        stateNames[static_cast<size_t>(state)],
+        state == State::SYSCALL ? sysc.stateName() : "");
 
     switch(state)
     {
@@ -904,39 +974,9 @@ DtuAccelHash::tick()
             break;
         }
 
-        case State::SYSC_SEND:
+        case State::SYSCALL:
         {
-            pkt = createDtuCmdPkt(Dtu::Command::SEND | (EP_SYSS << 4),
-                                  MSG_ADDR,
-                                  syscallSize,
-                                  0);
-            break;
-        }
-        case State::SYSC_WAIT:
-        {
-            Addr regAddr = getRegAddr(CmdReg::COMMAND);
-            pkt = createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
-            break;
-        }
-        case State::SYSC_FETCH:
-        {
-            Addr regAddr = getRegAddr(CmdReg::COMMAND);
-            uint64_t value = Dtu::Command::FETCH_MSG | (EP_SYSR << 4);
-            pkt = createDtuRegPkt(regAddr, value, MemCmd::WriteReq);
-            break;
-        }
-        case State::SYSC_READ_ADDR:
-        {
-            Addr regAddr = getRegAddr(CmdReg::OFFSET);
-            pkt = createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
-            break;
-        }
-        case State::SYSC_ACK:
-        {
-            pkt = createDtuCmdPkt(Dtu::Command::ACK_MSG | (EP_SYSR << 4),
-                                  0,
-                                  0,
-                                  sysreplyAddr);
+            pkt = sysc.tick();
             break;
         }
     }
