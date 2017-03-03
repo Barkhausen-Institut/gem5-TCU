@@ -30,9 +30,7 @@
 #include "cpu/dtu-accel-hash/algorithm.hh"
 #include "cpu/dtu-accel-hash/accelerator.hh"
 #include "debug/DtuAccel.hh"
-#include "debug/DtuAccelAccess.hh"
 #include "debug/DtuAccelState.hh"
-#include "debug/DtuConnector.hh"
 #include "mem/dtu/dtu.hh"
 #include "mem/dtu/regfile.hh"
 #include "sim/dtu_memory.hh"
@@ -128,12 +126,6 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
 
     DPRINTF(DtuAccelState, "[%s] Got response from memory\n",
         getStateName().c_str());
-
-    DPRINTF(DtuAccelAccess, "Completing %s at address %x:%lu %s\n",
-        pkt->isWrite() ? "write" : "read",
-        req->getPaddr(),
-        req->getSize(),
-        pkt->isError() ? "error" : "success");
 
     const uint8_t *pkt_data = pkt->getConstPtr<uint8_t>();
 

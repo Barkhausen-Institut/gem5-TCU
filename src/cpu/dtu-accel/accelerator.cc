@@ -29,7 +29,6 @@
  */
 
 #include "cpu/dtu-accel/accelerator.hh"
-#include "debug/DtuAccelAccess.hh"
 #include "debug/DtuConnector.hh"
 #include "mem/dtu/dtu.hh"
 #include "mem/dtu/regfile.hh"
@@ -122,11 +121,6 @@ DtuAccel::getMasterPort(const std::string& if_name, PortID idx)
 bool
 DtuAccel::sendPkt(PacketPtr pkt)
 {
-    DPRINTF(DtuAccelAccess, "Send %s %s request at address 0x%x\n",
-        atomic ? "atomic" : "timed",
-        pkt->isWrite() ? "write" : "read",
-        pkt->getAddr());
-
     if (atomic)
     {
         port.sendAtomic(pkt);
@@ -146,11 +140,7 @@ DtuAccel::recvRetry()
 {
     assert(retryPkt);
     if (port.sendTimingReq(retryPkt))
-    {
-        DPRINTF(DtuAccelAccess, "Proceeding after successful retry\n");
-
         retryPkt = nullptr;
-    }
 }
 
 PacketPtr

@@ -31,5 +31,3 @@ SimObject('DtuAccel.py')
 
 Source('accelerator.cc')
 Source('connector.cc')
-
-DebugFlag('DtuAccelAccess')
