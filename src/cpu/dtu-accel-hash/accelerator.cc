@@ -40,22 +40,18 @@
 
 #include <iomanip>
 
-static const unsigned EP_SYSS       = 0;
-static const unsigned EP_SYSR       = 2;
 static const unsigned EP_RECV       = 7;
 static const unsigned EP_MEM        = 8;
 static const unsigned EP_DATA       = 9;
 static const unsigned CAP_RBUF      = 2;
+
 // the time for one 64 block; determined by ALADDIN and picking the sweet spot
 // between area, power and performance. based on the SHA256 algorithm from:
 // https://github.com/B-Con/crypto-algorithms/blob/master/sha256.c
 static const Cycles BLOCK_TIME      = Cycles(85);
-static const size_t MSG_SIZE        = 64;
-static const Addr MSG_ADDR          = 0x2000;
-static const Addr BUF_ADDR          = 0x4000;
 
-static const Addr RCTMUX_YIELD      = 0x2ff0;
-static const Addr RCTMUX_FLAGS      = 0x2ff8;
+static const size_t MSG_SIZE        = 64;
+static const Addr BUF_ADDR          = 0x4000;
 
 static const char *stateNames[] =
 {
@@ -91,55 +87,9 @@ static const char *stateNames[] =
     "SYSCALL",
 };
 
-Addr
-DtuAccelHash::getRegAddr(DtuReg reg)
-{
-    return static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
-}
-
-Addr
-DtuAccelHash::getRegAddr(CmdReg reg)
-{
-    Addr result = sizeof(RegFile::reg_t) * numDtuRegs;
-
-    result += static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
-
-    return result;
-}
-
-Addr
-DtuAccelHash::getRegAddr(unsigned reg, unsigned epid)
-{
-    Addr result = sizeof(RegFile::reg_t) * (numDtuRegs + numCmdRegs);
-
-    result += epid * numEpRegs * sizeof(RegFile::reg_t);
-
-    result += reg * sizeof(RegFile::reg_t);
-
-    return result;
-}
-
-bool
-DtuAccelHash::CpuPort::recvTimingResp(PacketPtr pkt)
-{
-    dtutest.completeRequest(pkt);
-    return true;
-}
-
-void
-DtuAccelHash::CpuPort::recvReqRetry()
-{
-    dtutest.recvRetry();
-}
-
 DtuAccelHash::DtuAccelHash(const DtuAccelHashParams *p)
-  : MemObject(p),
-    system(p->system),
-    tickEvent(this),
-    port("port", this),
+  : DtuAccel(p),
     bufSize(p->buf_size),
-    maxDataSize(p->max_data_size),
-    chunkSize(system->cacheLineSize()),
     irqPending(false),
     ctxSwPending(false),
     memPending(false),
@@ -147,129 +97,9 @@ DtuAccelHash::DtuAccelHash(const DtuAccelHashParams *p)
     hash(),
     ctxOffset(),
     msgAddr(),
-    sysc(this),
-    masterId(system->getMasterId(name())),
-    id(p->id),
-    atomic(system->isAtomicMode()),
-    reg_base(p->regfile_base_addr),
-    retryPkt(nullptr),
-    connector()
+    sysc(this)
 {
     static_assert(sizeof(DtuAccelHashAlgorithm) % 64 == 0, "Hash state size invalid");
-
-    DTUMemory *sys = dynamic_cast<DTUMemory*>(system);
-    haveVM = !sys->hasMem(id);
-    // if we don't have VM, we have an SPM, which supports larger chunks
-    if (!haveVM)
-        chunkSize = maxDataSize;
-
-    // kick things into action
-    schedule(tickEvent, curTick());
-}
-
-BaseMasterPort &
-DtuAccelHash::getMasterPort(const std::string& if_name, PortID idx)
-{
-    if (if_name == "port")
-        return port;
-    else
-        return MemObject::getMasterPort(if_name, idx);
-}
-
-bool
-DtuAccelHash::sendPkt(PacketPtr pkt)
-{
-    DPRINTF(DtuAccelAccess, "Send %s %s request at address 0x%x\n",
-        atomic ? "atomic" : "timed",
-        pkt->isWrite() ? "write" : "read",
-        pkt->getAddr());
-
-    if (atomic)
-    {
-        port.sendAtomic(pkt);
-        completeRequest(pkt);
-    }
-    else if (!port.sendTimingReq(pkt))
-    {
-        retryPkt = pkt;
-        return false;
-    }
-
-    return true;
-}
-
-void
-DtuAccelHash::recvRetry()
-{
-    assert(retryPkt);
-    if (port.sendTimingReq(retryPkt))
-    {
-        DPRINTF(DtuAccelAccess, "Proceeding after successful retry\n");
-
-        retryPkt = nullptr;
-    }
-}
-
-PacketPtr
-DtuAccelHash::createPacket(Addr paddr,
-                           size_t size,
-                           MemCmd cmd = MemCmd::WriteReq)
-{
-    Request::Flags flags;
-
-    auto req = new Request(paddr, size, flags, masterId);
-    req->setContext(id);
-
-    auto pkt = new Packet(req, cmd);
-    auto pkt_data = new uint8_t[size];
-    pkt->dataDynamic(pkt_data);
-
-    return pkt;
-}
-
-PacketPtr
-DtuAccelHash::createDtuRegPkt(Addr reg,
-                              RegFile::reg_t value,
-                              MemCmd cmd = MemCmd::WriteReq)
-{
-    auto pkt = createPacket(reg_base + reg, sizeof(RegFile::reg_t), cmd);
-    *pkt->getPtr<RegFile::reg_t>() = value;
-    return pkt;
-}
-
-PacketPtr
-DtuAccelHash::createDtuCmdPkt(uint64_t cmd,
-                              uint64_t data,
-                              uint64_t size,
-                              uint64_t off)
-{
-    static_assert(static_cast<int>(CmdReg::COMMAND) == 0, "");
-    static_assert(static_cast<int>(CmdReg::ABORT) == 1, "");
-    static_assert(static_cast<int>(CmdReg::DATA_ADDR) == 2, "");
-    static_assert(static_cast<int>(CmdReg::DATA_SIZE) == 3, "");
-    static_assert(static_cast<int>(CmdReg::OFFSET) == 4, "");
-    static_assert(static_cast<int>(CmdReg::REPLY_EPID) == 5, "");
-
-    auto pkt = createPacket(reg_base + getRegAddr(CmdReg::COMMAND),
-                            sizeof(RegFile::reg_t) * 6,
-                            MemCmd::WriteReq);
-
-    RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
-    regs[0] = cmd;
-    regs[1] = 0;
-    regs[2] = data;
-    regs[3] = size;
-    regs[4] = off;
-    regs[5] = EP_SYSR;
-    return pkt;
-}
-
-void
-DtuAccelHash::freePacket(PacketPtr pkt)
-{
-    delete pkt->req;
-    // the packet will delete the data
-    delete pkt;
 }
 
 size_t DtuAccelHash::getStateSize() const
@@ -279,106 +109,6 @@ size_t DtuAccelHash::getStateSize() const
     if (hash.autonomous())
         return sizeof(hash);
     return sizeof(hash) + bufSize;
-}
-
-const char *
-DtuAccelHash::SyscallSM::stateName() const
-{
-    static const char *names[] =
-    {
-        ":SEND", ":WAIT", ":FETCH", ":READ_ADDR", ":ACK"
-    };
-    return names[static_cast<size_t>(state)];
-}
-
-PacketPtr
-DtuAccelHash::SyscallSM::tick()
-{
-    PacketPtr pkt = nullptr;
-
-    switch(state)
-    {
-        case State::SYSC_SEND:
-        {
-            pkt = accel->createDtuCmdPkt(Dtu::Command::SEND | (EP_SYSS << 4),
-                                         MSG_ADDR,
-                                         syscallSize,
-                                         0);
-            break;
-        }
-        case State::SYSC_WAIT:
-        {
-            Addr regAddr = getRegAddr(CmdReg::COMMAND);
-            pkt = accel->createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
-            break;
-        }
-        case State::SYSC_FETCH:
-        {
-            Addr regAddr = getRegAddr(CmdReg::COMMAND);
-            uint64_t value = Dtu::Command::FETCH_MSG | (EP_SYSR << 4);
-            pkt = accel->createDtuRegPkt(regAddr, value, MemCmd::WriteReq);
-            break;
-        }
-        case State::SYSC_READ_ADDR:
-        {
-            Addr regAddr = getRegAddr(CmdReg::OFFSET);
-            pkt = accel->createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
-            break;
-        }
-        case State::SYSC_ACK:
-        {
-            pkt = accel->createDtuCmdPkt(Dtu::Command::ACK_MSG | (EP_SYSR << 4),
-                                         0,
-                                         0,
-                                         replyAddr);
-            break;
-        }
-    }
-
-    return pkt;
-}
-
-bool
-DtuAccelHash::SyscallSM::handleMemResp(PacketPtr pkt)
-{
-    switch(state)
-    {
-        case State::SYSC_SEND:
-        {
-            state = State::SYSC_WAIT;
-            break;
-        }
-        case State::SYSC_WAIT:
-        {
-            RegFile::reg_t reg = *pkt->getConstPtr<RegFile::reg_t>();
-            if ((reg & 0xF) == 0)
-                state = State::SYSC_FETCH;
-            break;
-        }
-        case State::SYSC_FETCH:
-        {
-            state = State::SYSC_READ_ADDR;
-            break;
-        }
-        case State::SYSC_READ_ADDR:
-        {
-            const RegFile::reg_t *regs = pkt->getConstPtr<RegFile::reg_t>();
-            if(regs[0])
-            {
-                replyAddr = regs[0];
-                state = State::SYSC_ACK;
-            }
-            else
-                state = State::SYSC_FETCH;
-            break;
-        }
-        case State::SYSC_ACK:
-        {
-            return true;
-        }
-    }
-
-    return false;
 }
 
 void

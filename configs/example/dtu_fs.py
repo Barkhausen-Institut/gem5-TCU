@@ -310,7 +310,7 @@ def createHashAccelPE(root, options, no, memPE, l1size=None, l2size=None, spmsiz
         root=root, options=options, no=no, systemType=SpuSystem,
         l1size=l1size, l2size=l2size, spmsize=spmsize, memPE=memPE
     )
-    pe.dtu.connector = DtuAccelHashConnector()
+    pe.dtu.connector = DtuAccelConnector()
 
     pe.accelhash = DtuAccelHash()
     pe.dtu.connector.accelerator = pe.accelhash

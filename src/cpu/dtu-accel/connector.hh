@@ -27,46 +27,30 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
-#include "cpu/dtu-accel-hash/accelerator.hh"
-#include "cpu/dtu-accel-hash/connector.hh"
-#include "debug/DtuConnector.hh"
+#ifndef __CPU_DTU_ACCEL_CONNECTOR_HH__
+#define __CPU_DTU_ACCEL_CONNECTOR_HH__
 
-DtuAccelHashConnector::DtuAccelHashConnector(const DtuAccelHashConnectorParams *p)
-  : BaseConnector(p),
-    acc(p->accelerator)
-{
-    acc->setConnector(this);
-}
+#include "params/DtuAccelConnector.hh"
+#include "mem/dtu/connector/base.hh"
+#include "sim/system.hh"
 
-void
-DtuAccelHashConnector::setIrq()
+class DtuAccelConnector : public BaseConnector
 {
-    DPRINTF(DtuConnector, "Sending interrupt signal to accelerator\n");
-    acc->interrupt();
-}
+  public:
 
-void
-DtuAccelHashConnector::reset(Addr addr)
-{
-    DPRINTF(DtuConnector, "Resetting accelerator\n");
-    acc->reset();
-}
+    DtuAccelConnector(const DtuAccelConnectorParams *p);
 
-void
-DtuAccelHashConnector::wakeup()
-{
-    DPRINTF(DtuConnector, "Waking up accelerator\n");
-    acc->wakeup();
-}
+    void setIrq() override;
 
-void
-DtuAccelHashConnector::suspend()
-{
-    DPRINTF(DtuConnector, "Suspending accelerator\n");
-}
+    void reset(Addr addr) override;
 
-DtuAccelHashConnector*
-DtuAccelHashConnectorParams::create()
-{
-    return new DtuAccelHashConnector(this);
-}
+    void wakeup() override;
+
+    void suspend() override;
+
+  private:
+
+    DtuAccel *acc;
+};
+
+#endif // __CPU_DTU_ACCEL_CONNECTOR_HH__

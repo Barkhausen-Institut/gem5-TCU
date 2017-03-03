@@ -32,48 +32,29 @@
 #define __CPU_DTU_ACCEL_HASH_ACCELERATOR_HH__
 
 #include "params/DtuAccelHash.hh"
+#include "cpu/dtu-accel/accelerator.hh"
 #include "cpu/dtu-accel-hash/algorithm.hh"
 #include "mem/dtu/connector/base.hh"
 #include "mem/dtu/regfile.hh"
 #include "sim/system.hh"
 
-class DtuAccelHash : public MemObject
+class DtuAccelHash : public DtuAccel
 {
   public:
     DtuAccelHash(const DtuAccelHashParams *p);
 
-    BaseMasterPort& getMasterPort(const std::string &if_name,
-                                  PortID idx = InvalidPortID) override;
+    void interrupt() override;
 
-    void setConnector(BaseConnector *con)
-    {
-        connector = con;
-    }
+    void wakeup() override;
 
-    void interrupt();
-
-    void wakeup();
-
-    void reset();
+    void reset() override;
 
   protected:
 
     /// main simulation loop
-    void tick();
+    void tick() override;
 
-    class CpuPort : public MasterPort
-    {
-      private:
-        DtuAccelHash& dtutest;
-      public:
-        CpuPort(const std::string& _name, DtuAccelHash* _dtutest)
-            : MasterPort(_name, _dtutest), dtutest(*_dtutest)
-        { }
-      protected:
-        bool recvTimingResp(PacketPtr pkt) override;
-
-        void recvReqRetry() override;
-    };
+    void completeRequest(PacketPtr pkt) override;
 
     enum class State
     {
@@ -109,51 +90,6 @@ class DtuAccelHash : public MemObject
         SYSCALL,
     };
 
-    class SyscallSM
-    {
-      public:
-
-        enum State
-        {
-            SYSC_SEND,
-            SYSC_WAIT,
-            SYSC_FETCH,
-            SYSC_READ_ADDR,
-            SYSC_ACK,
-        };
-
-        explicit SyscallSM(DtuAccelHash *_accel)
-            : accel(_accel), state(), replyAddr(), syscallSize() {}
-
-        const char *stateName() const;
-
-        void start(Addr size)
-        {
-            syscallSize = size;
-            state = SYSC_SEND;
-        }
-
-        PacketPtr tick();
-
-        bool handleMemResp(PacketPtr pkt);
-
-       private:
-
-        DtuAccelHash *accel;
-        State state;
-        Addr replyAddr;
-        Addr syscallSize;
-    };
-
-    enum RCTMuxCtrl
-    {
-        NONE        = 0,
-        STORE       = 1 << 0, // store operation required
-        RESTORE     = 1 << 1, // restore operation required
-        WAITING     = 1 << 2, // set by the kernel if a signal is required
-        SIGNAL      = 1 << 3, // used to signal completion to the kernel
-    };
-
     enum class Command
     {
         INIT,
@@ -161,39 +97,9 @@ class DtuAccelHash : public MemObject
         FINISH
     };
 
-    PacketPtr createPacket(Addr paddr, size_t size, MemCmd cmd);
-
-    PacketPtr createDtuRegPkt(Addr reg, RegFile::reg_t value, MemCmd cmd);
-
-    PacketPtr createDtuCmdPkt(uint64_t cmd, uint64_t data, uint64_t size, uint64_t off);
-
-    void freePacket(PacketPtr pkt);
-
-    bool sendPkt(PacketPtr pkt);
-
-    void completeRequest(PacketPtr pkt);
-
-    void recvRetry();
-
-    static Addr getRegAddr(DtuReg reg);
-
-    static Addr getRegAddr(CmdReg reg);
-
-    static Addr getRegAddr(unsigned reg, unsigned epid);
-
     size_t getStateSize() const;
 
-    System *system;
-
-    EventWrapper<DtuAccelHash, &DtuAccelHash::tick> tickEvent;
-
-    CpuPort port;
-
     size_t bufSize;
-    size_t maxDataSize;
-
-    bool haveVM;
-    Addr chunkSize;
 
     bool irqPending;
     bool ctxSwPending;
@@ -230,31 +136,11 @@ class DtuAccelHash : public MemObject
         } M5_ATTR_PACKED msg;
     } M5_ATTR_PACKED reply;
 
-    struct
-    {
-        uint64_t opcode;
-        uint64_t vpe_sel;
-        uint64_t op;
-        uint64_t arg;
-    } M5_ATTR_PACKED yieldSyscall;
+    YieldSyscall yieldSyscall;
     uint64_t yieldReport;
 
     SyscallSM sysc;
     State syscNext;
-
-    /// Request id for all generated traffic
-    MasterID masterId;
-
-    unsigned int id;
-
-    const bool atomic;
-
-    Addr reg_base;
-
-    /// Stores the Packet for later retry
-    PacketPtr retryPkt;
-
-    BaseConnector *connector;
 };
 
 #endif // __CPU_DTU_ACCEL_HASH_ACCELERATOR_HH__

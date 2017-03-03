@@ -27,9 +27,9 @@
 
 Import('*')
 
-SimObject('DtuAccelHash.py')
+SimObject('DtuAccel.py')
 
 Source('accelerator.cc')
+Source('connector.cc')
 
-DebugFlag('DtuAccel')
-DebugFlag('DtuAccelState')
+DebugFlag('DtuAccelAccess')

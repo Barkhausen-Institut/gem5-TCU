@@ -27,22 +27,12 @@
 
 from MemObject import MemObject
 from Connector import BaseConnector
+from DtuAccel import DtuAccel
 from m5.params import *
 from m5.proxy import *
 
-class DtuAccelHash(MemObject):
+class DtuAccelHash(DtuAccel):
     type = 'DtuAccelHash'
     cxx_header = "cpu/dtu-accel-hash/accelerator.hh"
-    port = MasterPort("Port to the DTU and Scratch-Pad-Memory")
-    system = Param.System(Parent.any, "System this tester is part of")
-    id = Param.Unsigned("Core ID")
-    regfile_base_addr = Param.Addr(0xF0000000, "Register file address")
 
     buf_size = Param.MemorySize("4kB", "The size of the buffer")
-    max_data_size = Param.Unsigned(1024, "The maximum size of data transfers")
-
-class DtuAccelHashConnector(BaseConnector):
-    type = 'DtuAccelHashConnector'
-    cxx_header = "cpu/dtu-accel-hash/connector.hh"
-
-    accelerator = Param.DtuAccelHash("The accelerator")

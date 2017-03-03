@@ -25,11 +25,24 @@
 # of the authors and should not be interpreted as representing official policies,
 # either expressed or implied, of the FreeBSD Project.
 
-Import('*')
+from MemObject import MemObject
+from Connector import BaseConnector
+from m5.params import *
+from m5.proxy import *
 
-SimObject('DtuAccelHash.py')
+class DtuAccel(MemObject):
+    type = 'DtuAccel'
+    abstract = True
+    cxx_header = "cpu/dtu-accel/accelerator.hh"
+    port = MasterPort("Port to the DTU and Scratch-Pad-Memory")
+    system = Param.System(Parent.any, "System this tester is part of")
+    id = Param.Unsigned("Core ID")
+    regfile_base_addr = Param.Addr(0xF0000000, "Register file address")
 
-Source('accelerator.cc')
+    max_data_size = Param.Unsigned(1024, "The maximum size of data transfers")
 
-DebugFlag('DtuAccel')
-DebugFlag('DtuAccelState')
+class DtuAccelConnector(BaseConnector):
+    type = 'DtuAccelConnector'
+    cxx_header = "cpu/dtu-accel/connector.hh"
+
+    accelerator = Param.DtuAccel("The accelerator")

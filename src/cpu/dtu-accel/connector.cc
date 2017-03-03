@@ -27,30 +27,46 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
-#ifndef __CPU_DTU_ACCEL_HASH_CONNECTOR_HH__
-#define __CPU_DTU_ACCEL_HASH_CONNECTOR_HH__
+#include "cpu/dtu-accel/accelerator.hh"
+#include "cpu/dtu-accel/connector.hh"
+#include "debug/DtuConnector.hh"
 
-#include "params/DtuAccelHashConnector.hh"
-#include "mem/dtu/connector/base.hh"
-#include "sim/system.hh"
-
-class DtuAccelHashConnector : public BaseConnector
+DtuAccelConnector::DtuAccelConnector(const DtuAccelConnectorParams *p)
+  : BaseConnector(p),
+    acc(p->accelerator)
 {
-  public:
+    acc->setConnector(this);
+}
 
-    DtuAccelHashConnector(const DtuAccelHashConnectorParams *p);
+void
+DtuAccelConnector::setIrq()
+{
+    DPRINTF(DtuConnector, "Sending interrupt signal to accelerator\n");
+    acc->interrupt();
+}
 
-    void setIrq() override;
+void
+DtuAccelConnector::reset(Addr addr)
+{
+    DPRINTF(DtuConnector, "Resetting accelerator\n");
+    acc->reset();
+}
 
-    void reset(Addr addr) override;
+void
+DtuAccelConnector::wakeup()
+{
+    DPRINTF(DtuConnector, "Waking up accelerator\n");
+    acc->wakeup();
+}
 
-    void wakeup() override;
+void
+DtuAccelConnector::suspend()
+{
+    DPRINTF(DtuConnector, "Suspending accelerator\n");
+}
 
-    void suspend() override;
-
-  private:
-
-    DtuAccelHash *acc;
-};
-
-#endif // __CPU_DTU_ACCEL_HASH_CONNECTOR_HH__
+DtuAccelConnector*
+DtuAccelConnectorParams::create()
+{
+    return new DtuAccelConnector(this);
+}
