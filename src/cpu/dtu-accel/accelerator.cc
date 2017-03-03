@@ -215,12 +215,12 @@ DtuAccel::freePacket(PacketPtr pkt)
     delete pkt;
 }
 
-const char *
+std::string
 DtuAccel::SyscallSM::stateName() const
 {
-    static const char *names[] =
+    const char *names[] =
     {
-        ":SEND", ":WAIT", ":FETCH", ":READ_ADDR", ":ACK"
+        "SEND", "WAIT", "FETCH", "READ_ADDR", "ACK"
     };
     return names[static_cast<size_t>(state)];
 }
@@ -307,6 +307,107 @@ DtuAccel::SyscallSM::handleMemResp(PacketPtr pkt)
             break;
         }
         case State::SYSC_ACK:
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+std::string
+DtuAccel::YieldSM::stateName() const
+{
+    std::ostringstream os;
+    static const char *names[] =
+    {
+        "CHECK", "WAIT", "REPORT", "SYSCALL", "SLEEP"
+    };
+    os << names[static_cast<size_t>(state)];
+    if (state == YLD_SYSCALL)
+        os << ":" << syscsm->stateName();
+    return os.str();
+}
+
+PacketPtr
+DtuAccel::YieldSM::tick()
+{
+    PacketPtr pkt = nullptr;
+
+    switch(state)
+    {
+        case State::YLD_CHECK:
+        {
+            pkt = accel->createPacket(RCTMUX_YIELD, sizeof(uint64_t), MemCmd::ReadReq);
+            break;
+        }
+        case State::YLD_WAIT:
+        {
+            yieldStart = accel->curCycle();
+            pkt = accel->createDtuCmdPkt(Dtu::Command::SLEEP, 0, 0, report);
+            break;
+        }
+        case State::YLD_REPORT:
+        {
+            syscall.opcode = 10;   /* VPE_CTRL */
+            syscall.vpe_sel = 0;   /* self */
+            syscall.op = 2;        /* VCTRL_YIELD */
+            syscall.arg = 0;       /* unused */
+
+            pkt = accel->createPacket(MSG_ADDR, sizeof(syscall), MemCmd::WriteReq);
+            memcpy(pkt->getPtr<void>(), &syscall, sizeof(syscall));
+            break;
+        }
+        case State::YLD_SYSCALL:
+        {
+            pkt = syscsm->tick();
+            break;
+        }
+        case State::YLD_SLEEP:
+        {
+            pkt = accel->createDtuCmdPkt(Dtu::Command::SLEEP, 0, 0, 0);
+            break;
+        }
+    }
+
+    return pkt;
+}
+
+bool
+DtuAccel::YieldSM::handleMemResp(PacketPtr pkt)
+{
+    switch(state)
+    {
+        case State::YLD_CHECK:
+        {
+            report = *pkt->getConstPtr<uint64_t>();
+            if (report > 0)
+                state = State::YLD_WAIT;
+            else
+                state = State::YLD_SLEEP;
+            break;
+        }
+        case State::YLD_WAIT:
+        {
+            if (accel->curCycle() < yieldStart + report)
+                return true;
+
+            state = State::YLD_REPORT;
+            break;
+        }
+        case State::YLD_REPORT:
+        {
+            syscsm->start(sizeof(syscall));
+            state = State::YLD_SYSCALL;
+            break;
+        }
+        case State::YLD_SYSCALL:
+        {
+            if(syscsm->handleMemResp(pkt))
+                state = State::YLD_SLEEP;
+            break;
+        }
+        case State::YLD_SLEEP:
         {
             return true;
         }

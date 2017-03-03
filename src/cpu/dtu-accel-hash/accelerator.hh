@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2016, Nils Asmussen
- * Copyright (c) 2015, Christian Menard
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -49,7 +48,7 @@ class DtuAccelHash : public DtuAccel
 
     void reset() override;
 
-  protected:
+  private:
 
     /// main simulation loop
     void tick() override;
@@ -59,9 +58,6 @@ class DtuAccelHash : public DtuAccel
     enum class State
     {
         IDLE,
-        IDLE_WAIT,
-        IDLE_REPORT,
-        IDLE_START,
 
         FETCH_MSG,
         READ_MSG_ADDR,
@@ -99,6 +95,8 @@ class DtuAccelHash : public DtuAccel
 
     size_t getStateSize() const;
 
+    std::string getStateName() const;
+
     size_t bufSize;
 
     bool irqPending;
@@ -115,7 +113,6 @@ class DtuAccelHash : public DtuAccel
     Addr lastSize;
 
     Cycles hashStart;
-    Cycles yieldStart;
 
     size_t replyOffset;
     size_t replySize;
@@ -136,11 +133,9 @@ class DtuAccelHash : public DtuAccel
         } M5_ATTR_PACKED msg;
     } M5_ATTR_PACKED reply;
 
-    YieldSyscall yieldSyscall;
-    uint64_t yieldReport;
-
     SyscallSM sysc;
     State syscNext;
+    YieldSM yield;
 };
 
 #endif // __CPU_DTU_ACCEL_HASH_ACCELERATOR_HH__

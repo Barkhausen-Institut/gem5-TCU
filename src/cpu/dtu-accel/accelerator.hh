@@ -102,7 +102,7 @@ class DtuAccel : public MemObject
         explicit SyscallSM(DtuAccel *_accel)
             : accel(_accel), state(), replyAddr(), syscallSize() {}
 
-        const char *stateName() const;
+        std::string stateName() const;
 
         void start(Addr size)
         {
@@ -122,13 +122,48 @@ class DtuAccel : public MemObject
         Addr syscallSize;
     };
 
-    struct YieldSyscall
+    class YieldSM
     {
-        uint64_t opcode;
-        uint64_t vpe_sel;
-        uint64_t op;
-        uint64_t arg;
-    } M5_ATTR_PACKED;
+        struct Syscall
+        {
+            uint64_t opcode;
+            uint64_t vpe_sel;
+            uint64_t op;
+            uint64_t arg;
+        } M5_ATTR_PACKED;
+
+      public:
+
+        enum State
+        {
+            YLD_CHECK,
+            YLD_WAIT,
+            YLD_REPORT,
+            YLD_SYSCALL,
+            YLD_SLEEP,
+        };
+
+        explicit YieldSM(DtuAccel *_accel, SyscallSM *_syscsm)
+            : accel(_accel), syscsm(_syscsm), state() {}
+
+        std::string stateName() const;
+
+        void start(bool check = true)
+        {
+            state = check ? YLD_CHECK : YLD_SLEEP;
+        }
+
+        PacketPtr tick();
+
+        bool handleMemResp(PacketPtr pkt);
+
+        DtuAccel *accel;
+        SyscallSM *syscsm;
+        Syscall syscall;
+        uint64_t report;
+        Cycles yieldStart;
+        State state;
+    };
 
     enum RCTMuxCtrl
     {
