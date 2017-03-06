@@ -66,6 +66,8 @@ static const char *substateNames[] =
     "INVLPG_DATA",
     "INVLPG_CMD",
     "INVLPG_WAIT",
+    "REPAIR_REP",
+    "REPAIR_MSG",
 };
 
 Addr
@@ -320,9 +322,22 @@ DtuAbortTest::completeRequest(PacketPtr pkt)
                         RegFile::reg_t reg = *pkt->getPtr<RegFile::reg_t>();
                         if ((reg & 0xF) == 0)
                         {
-                            substate = SubState::START;
                             delay++;
+                            if (testNo == 3)
+                                substate = SubState::REPAIR_REP;
+                            else
+                                substate = SubState::START;
                         }
+                        break;
+                    }
+                    case SubState::REPAIR_REP:
+                    {
+                        substate = SubState::REPAIR_MSG;
+                        break;
+                    }
+                    case SubState::REPAIR_MSG:
+                    {
+                        substate = SubState::START;
                         break;
                     }
                 }
@@ -391,11 +406,12 @@ DtuAbortTest::tick()
             RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
             regs[0] = (static_cast<RegFile::reg_t>(EpType::SEND) << 61) |
                       (static_cast<RegFile::reg_t>(Dtu::INVALID_VPE_ID) << 16) |
-                      (256 << 0);                   // max msg size
-            regs[1] = (id << 24) |                  // target core
-                      (EP_RECV << 16) |             // target EP
-                      (256 << 0);                   // credits
-            regs[2] = 0;                            // label
+                      (256 << 0);                                               // max msg size
+            regs[1] = (static_cast<RegFile::reg_t>(id) << 40) |                 // target core
+                      (static_cast<RegFile::reg_t>(EP_RECV) << 32) |            // target EP
+                      (static_cast<RegFile::reg_t>(Dtu::CREDITS_UNLIM) << 16) | // max credits
+                      (Dtu::CREDITS_UNLIM << 0);                                // cur credits
+            regs[2] = 0;                                                        // label
             break;
         }
 
@@ -411,7 +427,7 @@ DtuAbortTest::tick()
                       (4 << 16) |                   // size
                       (0 << 0);                     // msg count
             regs[1] = RECV_ADDR;                    // buf addr
-            regs[2] = 0;                            // rd + wr offset
+            regs[2] = 0;                            // occupied + unread
             break;
         }
 
@@ -439,11 +455,19 @@ DtuAbortTest::tick()
                     }
                     else if (testNo == 2)
                     {
+                        // since we are privileged, we have to specify the
+                        // source of the message in OFFSET
+                        uint64_t off =
+                            (0 << 0) |                              // sender core
+                            (Dtu::INVALID_VPE_ID << 8) |            // sender VPE
+                            (EP_SEND << 24) |                       // sender EP
+                            (static_cast<uint64_t>(EP_RECV) << 32); // reply EP
+
                         pkt = createCommandPkt(Dtu::Command::SEND,
                                                EP_SEND,
                                                DATA_ADDR,
                                                system->cacheLineSize() * 2,
-                                               0,
+                                               off,
                                                EP_RECV);
                     }
                     else if (testNo == 3)
@@ -507,6 +531,35 @@ DtuAbortTest::tick()
                 {
                     Addr regAddr = getRegAddr(CmdReg::COMMAND);
                     pkt = createDtuRegisterPkt(regAddr, 0, MemCmd::ReadReq);
+                    break;
+                }
+
+                case SubState::REPAIR_REP:
+                {
+                    pkt = createPacket(reg_base + getRegAddr(0, EP_RECV),
+                                       sizeof(RegFile::reg_t) * numEpRegs,
+                                       MemCmd::WriteReq);
+
+                    // mark the message as occupied again, to be able to reply again
+                    // TODO actually, we need to FETCH the message first, which
+                    // would make it read; we simply set it read here
+                    RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
+                    regs[0] = (static_cast<RegFile::reg_t>(EpType::RECEIVE) << 61) |
+                              (static_cast<RegFile::reg_t>(256) << 32) | // max msg size
+                              (4 << 16) |                   // size
+                              (0 << 0);                     // msg count
+                    regs[1] = RECV_ADDR;                    // buf addr
+                    regs[2] = 0x0000000000000001;           // occupied + unread
+                    break;
+                }
+
+                case SubState::REPAIR_MSG:
+                {
+                    pkt = createPacket(RECV_ADDR, 1, MemCmd::WriteReq);
+
+                    // re-enable replies for the message
+                    uint8_t *header = pkt->getPtr<uint8_t>();
+                    *header = Dtu::REPLY_ENABLED;
                     break;
                 }
             }

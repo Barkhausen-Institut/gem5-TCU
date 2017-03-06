@@ -86,6 +86,8 @@ class DtuAbortTest : public MemObject
         INVLPG_DATA,
         INVLPG_CMD,
         INVLPG_WAIT,
+        REPAIR_REP,
+        REPAIR_MSG,
     };
 
     State state;
