@@ -74,6 +74,10 @@ static const char *extCmdNames[] =
     "ACK_MSG",
 };
 
+// cmdId = 0 is reserved for "no command"
+// cmdId = 1 is reserved for a dummy command (waiting for remote xfers)
+uint64_t Dtu::nextCmdId = 2;
+
 Dtu::Dtu(DtuParams* p)
   : BaseDtu(p),
     masterId(p->system->getMasterId(name())),
@@ -89,10 +93,9 @@ Dtu::Dtu(DtuParams* p)
     sleepStart(0),
     cmdPkt(),
     cmdFinish(),
-    cmdInProgress(false),
-    abortInProgress(false),
+    cmdId(0),
+    abortCmd(0),
     irqPending(false),
-    cmdDest(-1),
     xlates(),
     memPe(),
     memOffset(),
@@ -276,17 +279,18 @@ Dtu::executeCommand(PacketPtr pkt)
         return;
     }
 
-    assert(!cmdInProgress);
+    assert(cmdId == 0);
 
     cmdPkt = pkt;
-    cmdInProgress = true;
+    cmdId = nextCmdId++;
     commands[static_cast<size_t>(cmd.opcode)]++;
 
     if(cmd.opcode != Command::DEBUG_MSG)
     {
         assert(cmd.epid < numEndpoints);
-        DPRINTF(DtuCmd, "Starting command %s with EP=%u, flags=%#x\n",
-                cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epid, cmd.flags);
+        DPRINTF(DtuCmd, "Starting command %s with EP=%u, flags=%#x (id=%llu)\n",
+                cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epid,
+                cmd.flags, cmdId);
     }
 
     switch (cmd.opcode)
@@ -342,37 +346,16 @@ void
 Dtu::abortCommand()
 {
     Command cmd = getCommand();
-    RegFile::reg_t abort = regs().get(CmdReg::ABORT);
+    abortCmd = regs().get(CmdReg::ABORT);
 
-    if ((abort & Command::ABORT_CMD) && cmd.opcode != Command::IDLE)
+    if ((abortCmd & Command::ABORT_CMD) && cmd.opcode != Command::IDLE)
     {
-        DPRINTF(DtuCmd, "Aborting command %s with EP=%u, flags=%#x\n",
-                cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epid, cmd.flags);
-
-        // local transfers are only issued by commands, i.e., the current one
-        size_t count = xferUnit->abortTransfers(XferUnit::ABORT_LOCAL, -1);
-        assert(count <= 1);
-
-        // if there was none and we already sent the request to the Noc,
-        // send an abort request to the core we sent to
-        if (count == 0 && cmdDest != -1)
-        {
-            assert(!abortInProgress);
-            DPRINTF(DtuCmd, "Sending abort request to PE%2d\n", cmdDest);
-
-            abortInProgress = true;
-            Addr nocAddr = NocAddr(cmdDest, 0).getAddr();
-            auto pkt = generateRequest(nocAddr, 0, MemCmd::WriteReq);
-
-            sendNocRequest(NocPacketType::ABORT,
-                           pkt,
-                           INVALID_VPE_ID,  // not relevant here
-                           0,
-                           Cycles(1));
-        }
+        DPRINTF(DtuCmd, "Aborting command %s with EP=%u, flags=%#x (id=%llu)\n",
+                cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epid,
+                cmd.flags, cmdId);
     }
 
-    if (abort & Command::ABORT_VPE)
+    if (abortCmd & Command::ABORT_VPE)
     {
         DPRINTF(DtuCmd, "Disabling communication and aborting PFs\n");
 
@@ -384,7 +367,35 @@ Dtu::abortCommand()
             ptUnit->abortAll();
     }
 
+    uint types = 0;
+    if (abortCmd & Command::ABORT_CMD)
+        types |= XferUnit::ABORT_LOCAL;
+    if (abortCmd & Command::ABORT_VPE)
+        types |= XferUnit::ABORT_REMOTE;
+    xferUnit->abortTransfers(types);
+
     regs().set(CmdReg::ABORT, 0);
+
+    // if no command was running, let the SW wait until the currently received
+    // messages are finished
+    Error err;
+    if (cmd.opcode == Command::IDLE)
+    {
+        regs().set(CmdReg::COMMAND, Command::DEBUG_MSG);
+        cmdId = 1;
+        err = Error::NONE;
+    }
+    // reads/writes are aborted immediately
+    else if(cmd.opcode == Command::READ || cmd.opcode == Command::WRITE)
+    {
+        cmdId = 0;
+        err = Error::ABORT;
+    }
+
+    if (cmd.opcode == Command::IDLE ||
+        cmd.opcode == Command::READ ||
+        cmd.opcode == Command::WRITE)
+        scheduleFinishOp(Cycles(1), err);
 
     // see comment below
     irqPending = false;
@@ -393,7 +404,7 @@ Dtu::abortCommand()
 void
 Dtu::scheduleFinishOp(Cycles delay, Error error)
 {
-    if (cmdInProgress)
+    if (getCommand().opcode != Command::IDLE)
     {
         if (cmdFinish)
         {
@@ -411,54 +422,39 @@ Dtu::finishCommand(Error error)
 {
     Command cmd = getCommand();
 
-    assert(cmdInProgress);
+    cmdFinish = NULL;
+
+    if (abortCmd)
+    {
+        // try to abort everything
+        uint types = 0;
+        if (abortCmd & Command::ABORT_CMD)
+            types |= XferUnit::ABORT_LOCAL;
+        if (abortCmd & Command::ABORT_VPE)
+            types |= XferUnit::ABORT_REMOTE;
+        if (!xferUnit->abortTransfers(types))
+        {
+            // okay, retry later
+            scheduleFinishOp(Cycles(1), error);
+            return;
+        }
+
+        abortCmd = 0;
+    }
 
     if (cmd.opcode == Command::SEND)
         msgUnit->finishMsgSend(error, cmd.epid);
     else if (cmd.opcode == Command::REPLY)
         msgUnit->finishMsgReply(error, cmd.epid, regs().get(CmdReg::OFFSET));
 
-    if (abortInProgress)
-    {
-        assert(cmdDest != -1);
-
-        // for the reading case, we might have remembered to abort the next
-        // local transfer
-        xferUnit->abortTransfers(XferUnit::ABORT_ABORT, -1);
-
-        // for writing, if there was no error, the command already completed
-        // and we have to abort our abort request at the other DTU.
-        // for reading, we always sent the abort abort
-        // TODO we could optimize that by distinguishing local and remote aborts
-        if (cmd.opcode == Command::READ || error == Error::NONE)
-        {
-            // otherwise, abort it at the other DTU
-            DPRINTF(DtuCmd, "Sending abort abort request to PE%2d\n", cmdDest);
-
-            Addr nocAddr = NocAddr(cmdDest, 0).getAddr();
-            auto pkt = generateRequest(nocAddr, 0, MemCmd::WriteReq);
-
-            sendNocRequest(NocPacketType::ABORT_ABORT,
-                           pkt,
-                           INVALID_VPE_ID,  // not relevant here
-                           0,
-                           Cycles(1));
-
-            // TODO actually, we should finish the command if we received the
-            // response for the ABORT_ABORT
-        }
-
-        abortInProgress = false;
-    }
-
     if (cmd.opcode == Command::SLEEP)
         stopSleep();
 
     if (cmd.opcode != Command::DEBUG_MSG)
     {
-        DPRINTF(DtuCmd, "Finished command %s with EP=%u, flags=%#x -> %u\n",
+        DPRINTF(DtuCmd, "Finished command %s with EP=%u, flags=%#x (id=%llu) -> %u\n",
                 cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epid, cmd.flags,
-                static_cast<uint>(error));
+                cmdId, static_cast<uint>(error));
     }
 
     // let the SW know that the command is finished
@@ -469,9 +465,7 @@ Dtu::finishCommand(Error error)
         schedCpuResponse(cmdPkt, clockEdge(Cycles(1)));
 
     cmdPkt = NULL;
-    cmdFinish = NULL;
-    cmdInProgress = false;
-    cmdDest = -1;
+    cmdId = 0;
 }
 
 Dtu::ExternCommand
@@ -594,7 +588,7 @@ Dtu::wakeupCore()
 {
     connector->wakeup();
 
-    if (cmdInProgress && getCommand().opcode == Command::SLEEP)
+    if (getCommand().opcode == Command::SLEEP)
         scheduleFinishOp(Cycles(1));
 }
 
@@ -625,8 +619,9 @@ Dtu::reset(Addr addr)
         }
     }
 
-    xferUnit->abortTransfers(XferUnit::ABORT_LOCAL, -1, true);
-    xferUnit->abortTransfers(XferUnit::ABORT_REMOTE, -1, true);
+    // hard-abort everything
+    xferUnit->abortTransfers(
+        XferUnit::ABORT_LOCAL | XferUnit::ABORT_REMOTE | XferUnit::ABORT_MSGS);
 
     if(ptUnit)
         ptUnit->abortAll();
@@ -647,7 +642,7 @@ Dtu::reset(Addr addr)
 void
 Dtu::setIrq()
 {
-    if (cmdInProgress && getCommand().opcode == Command::SLEEP)
+    if (getCommand().opcode == Command::SLEEP)
     {
         RegFile::reg_t val = regs().get(DtuReg::FEATURES);
         val |= static_cast<RegFile::reg_t>(Features::IRQ_WAKEUP);
@@ -760,14 +755,7 @@ Dtu::sendNocRequest(NocPacketType type,
     senderState->sender = coreId;
     senderState->vpeId = vpeId;
     senderState->flags = flags;
-
-    // remember the destination for commands (needed for aborts)
-    if (type == NocPacketType::READ_REQ ||
-        type == NocPacketType::WRITE_REQ ||
-        type == NocPacketType::MESSAGE)
-    {
-        cmdDest = NocAddr(pkt->getAddr()).coreId;
-    }
+    senderState->cmdId = cmdId;
 
     pkt->pushSenderState(senderState);
 
@@ -872,19 +860,23 @@ Dtu::completeNocRequest(PacketPtr pkt)
         if (senderState->result != Error::NONE)
             ptUnit->sendingPfFailed(pkt, static_cast<int>(senderState->result));
     }
-    else if (senderState->packetType == NocPacketType::ABORT ||
-             senderState->packetType == NocPacketType::ABORT_ABORT)
-    {
-        // nothing to do
-    }
     else if (senderState->packetType != NocPacketType::CACHE_MEM_REQ_FUNC)
     {
-        if (pkt->isWrite())
-            memUnit->writeComplete(getCommand(), pkt, senderState->result);
-        else if (pkt->isRead())
-            memUnit->readComplete(getCommand(), pkt, senderState->result);
+        // ignore responses for aborted commands
+        if (senderState->cmdId == cmdId)
+        {
+            if (pkt->isWrite())
+                memUnit->writeComplete(getCommand(), pkt, senderState->result);
+            else if (pkt->isRead())
+                memUnit->readComplete(getCommand(), pkt, senderState->result);
+            else
+                panic("unexpected packet type\n");
+        }
         else
-            panic("unexpected packet type\n");
+        {
+            DPRINTF(Dtu,"Ignoring response for cmdId=%llu (current=%llu)\n",
+                    senderState->cmdId, cmdId);
+        }
     }
 
     delete senderState;
@@ -966,22 +958,11 @@ Dtu::handleNocRequest(PacketPtr pkt)
         case NocPacketType::CACHE_MEM_REQ_FUNC:
             memUnit->recvFunctionalFromNoc(pkt);
             break;
-        case NocPacketType::ABORT:
-            xferUnit->abortTransfers(XferUnit::ABORT_REMOTE, senderState->sender);
-            break;
-        case NocPacketType::ABORT_ABORT:
-            xferUnit->abortTransfers(XferUnit::ABORT_ABORT, senderState->sender);
-            break;
         default:
             panic("Unexpected NocPacketType\n");
     }
 
     senderState->result = res;
-
-    // in this case, we can respond immediately
-    if (senderState->packetType == NocPacketType::ABORT ||
-        senderState->packetType == NocPacketType::ABORT_ABORT)
-        sendNocResponse(pkt);
 }
 
 bool

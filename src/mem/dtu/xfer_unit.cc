@@ -57,7 +57,6 @@ XferUnit::XferUnit(Dtu &_dtu,
       bufCount(_bufCount),
       bufSize(_bufSize),
       bufs(new Buffer*[bufCount]),
-      abortReqs(),
       queue()
 {
     panic_if(dtu.tlb() && bufCount < 2,
@@ -159,19 +158,6 @@ XferUnit::TransferEvent::tryStart()
         remaining,
         local,
         decodeFlags(flags()));
-
-    // should we abort the next request from this core?
-    // actually, we could do that earlier, but doing it as soon as we have
-    // a buffer, makes it much easier
-    auto it = std::find(xfer->abortReqs.begin(),
-                        xfer->abortReqs.end(),
-                        senderCore());
-    if (it != xfer->abortReqs.end())
-    {
-        abort(Dtu::Error::ABORT);
-        xfer->abortReqs.erase(it);
-        return;
-    }
 
     xfer->dtu.schedule(this, xfer->dtu.clockEdge(Cycles(1)));
 }
@@ -310,60 +296,34 @@ XferUnit::startTransfer(TransferEvent *event, Cycles delay)
         dtu.schedNocRequestFinished(dtu.clockEdge(Cycles(1)));
 }
 
-size_t
-XferUnit::abortTransfers(AbortType type, int coreId, bool all)
+bool
+XferUnit::abortTransfers(uint types)
 {
-    size_t count = 0;
+    bool rem = false;
 
-    if (type != ABORT_ABORT)
+    for (size_t i = 0; i < bufCount; ++i)
     {
-        for (size_t i = 0; i < bufCount; ++i)
-        {
-            auto ev = bufs[i]->event;
-            if (!ev)
-                continue;
+        auto ev = bufs[i]->event;
+        if (!ev)
+            continue;
 
-            if (type == ABORT_LOCAL && !ev->isRemote())
-            {
-                ev->abort(Dtu::Error::ABORT);
-                // by default, we auto-delete it, but in this case, we have to do
-                // that manually since it's not the current event
-                delete ev;
-                count++;
-            }
-            else if (type == ABORT_REMOTE && ev->isRemote())
-            {
-                if (all || ev->senderCore() == coreId)
-                {
-                    ev->abort(Dtu::Error::ABORT);
-                    delete ev;
-                    count++;
-                }
-            }
-        }
+        bool ismsg = ev->flags() & (XferFlags::MESSAGE | XferFlags::MSGRECV);
+        bool abort = (ev->isRemote() && (types & ABORT_REMOTE)) ||
+            (!ev->isRemote() && (types & ABORT_LOCAL));
+        abort &= !ismsg || (types & ABORT_MSGS);
 
-        // if we don't have any request of that core, remember the abort for
-        // the future
-        if (!all && count == 0)
+        if (abort)
         {
-            DPRINTFS(DtuXfers, (&dtu),
-                "Remembering transfer abort for PE%2d\n", coreId);
-            abortReqs.push_back(coreId);
+            ev->abort(Dtu::Error::ABORT);
+            // by default, we auto-delete it, but in this case, we have to do
+            // that manually since it's not the current event
+            delete ev;
         }
-    }
-    else
-    {
-        auto it = std::find(abortReqs.begin(), abortReqs.end(), coreId);
-        if (it != abortReqs.end())
-        {
-            DPRINTFS(DtuXfers, (&dtu),
-                "Aborting abort for PE%2d\n", *it);
-            abortReqs.erase(it);
-            count++;
-        }
+        else
+            rem = true;
     }
 
-    return count;
+    return !rem;
 }
 
 void

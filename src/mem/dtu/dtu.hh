@@ -103,8 +103,6 @@ class Dtu : public BaseDtu
         WRITE_REQ,
         CACHE_MEM_REQ_FUNC,
         CACHE_MEM_REQ,
-        ABORT,
-        ABORT_ABORT,
     };
 
     enum class TransferType
@@ -139,6 +137,7 @@ class Dtu : public BaseDtu
         uint sender;
         uint vpeId;
         NocPacketType packetType;
+        uint64_t cmdId;
         uint flags;
     };
 
@@ -434,10 +433,9 @@ class Dtu : public BaseDtu
     Cycles sleepStart;
     PacketPtr cmdPkt;
     FinishCommandEvent *cmdFinish;
-    bool cmdInProgress;
-    bool abortInProgress;
+    uint64_t cmdId;
+    uint abortCmd;
     bool irqPending;
-    int cmdDest;
 
     std::list<MemTranslation*> xlates;
 
@@ -488,6 +486,8 @@ class Dtu : public BaseDtu
     // commands
     Stats::Vector commands;
     Stats::Vector extCommands;
+
+    static uint64_t nextCmdId;
 
 };
 

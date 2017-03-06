@@ -51,9 +51,9 @@ class XferUnit
 
     enum AbortType
     {
-        ABORT_LOCAL,
-        ABORT_REMOTE,
-        ABORT_ABORT,
+        ABORT_LOCAL     = 1,
+        ABORT_REMOTE    = 2,
+        ABORT_MSGS      = 4,
     };
 
     class TransferEvent;
@@ -200,7 +200,7 @@ class XferUnit
 
     void startTransfer(TransferEvent *event, Cycles delay);
 
-    size_t abortTransfers(AbortType type, int coreId, bool all = false);
+    bool abortTransfers(uint types);
 
     void recvMemResponse(uint64_t evId, const void* data, size_t size);
 
@@ -220,7 +220,6 @@ class XferUnit
     size_t bufSize;
     Buffer **bufs;
 
-    std::list<int> abortReqs;
     std::list<TransferEvent*> queue;
 
     Stats::Histogram reads;
