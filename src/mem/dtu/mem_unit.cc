@@ -79,16 +79,13 @@ MemoryUnit::startRead(const Dtu::Command& cmd)
 
     readBytes.sample(requestSize);
 
-    requestSize = std::min(dtu.maxNocPacketSize, requestSize);
-    if (requestSize == 0)
-        return;
-
     DPRINTFS(Dtu, (&dtu),
         "\e[1m[rd -> %u]\e[0m at %#018lx+%#lx with EP%u into %#018lx:%lu\n",
         ep.targetCore, ep.remoteAddr, offset,
         cmd.epid, localAddr, requestSize);
 
     // TODO error handling
+    assert(requestSize <= dtu.maxNocPacketSize);
     assert(localAddr < rwBarrier);
     assert(localAddr + requestSize <= rwBarrier);
     assert(requestSize + offset >= requestSize);
@@ -218,16 +215,13 @@ MemoryUnit::startWrite(const Dtu::Command& cmd)
 
     writtenBytes.sample(requestSize);
 
-    requestSize = std::min(dtu.maxNocPacketSize, requestSize);
-    if (requestSize == 0)
-        return;
-
     DPRINTFS(Dtu, (&dtu),
         "\e[1m[wr -> %u]\e[0m at %#018lx+%#lx with EP%u from %#018lx:%lu\n",
         ep.targetCore, ep.remoteAddr, offset,
         cmd.epid, localAddr, requestSize);
 
     // TODO error handling
+    assert(requestSize <= dtu.maxNocPacketSize);
     assert(ep.flags & Dtu::MemoryFlags::WRITE);
     assert(requestSize + offset >= requestSize);
     assert(requestSize + offset <= ep.remoteSize);
