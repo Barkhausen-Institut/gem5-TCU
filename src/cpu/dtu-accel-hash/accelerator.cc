@@ -29,8 +29,8 @@
 
 #include "cpu/dtu-accel-hash/algorithm.hh"
 #include "cpu/dtu-accel-hash/accelerator.hh"
-#include "debug/DtuAccel.hh"
-#include "debug/DtuAccelState.hh"
+#include "debug/DtuAccelHash.hh"
+#include "debug/DtuAccelHashState.hh"
 #include "mem/dtu/dtu.hh"
 #include "mem/dtu/regfile.hh"
 #include "sim/dtu_memory.hh"
@@ -46,6 +46,7 @@ static const unsigned CAP_RBUF      = 2;
 // between area, power and performance. based on the SHA256 algorithm from:
 // https://github.com/B-Con/crypto-algorithms/blob/master/sha256.c
 static const Cycles BLOCK_TIME      = Cycles(85);
+static const size_t BLOCK_SIZE      = 64;
 
 static const size_t MSG_SIZE        = 64;
 static const Addr BUF_ADDR          = 0x4000;
@@ -124,7 +125,7 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
 {
     Request* req = pkt->req;
 
-    DPRINTF(DtuAccelState, "[%s] Got response from memory\n",
+    DPRINTF(DtuAccelHashState, "[%s] Got response from memory\n",
         getStateName().c_str());
 
     const uint8_t *pkt_data = pkt->getConstPtr<uint8_t>();
@@ -278,7 +279,7 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
                 if(regs[0])
                 {
                     msgAddr = regs[0];
-                    DPRINTF(DtuAccel, "Received message @ %p\n", msgAddr);
+                    DPRINTF(DtuAccelHash, "Received message @ %p\n", msgAddr);
                     state = State::READ_MSG;
                 }
                 else
@@ -294,7 +295,7 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
                     reinterpret_cast<const uint64_t*>(
                         pkt_data + sizeof(Dtu::MessageHeader));
 
-                DPRINTF(DtuAccel, "  cmd=%lld arg1=%#llx arg2=%#llx\n",
+                DPRINTF(DtuAccelHash, "  cmd=%lld arg1=%#llx arg2=%#llx\n",
                     args[0], args[1], args[2]);
 
                 replyOffset = 0;
@@ -341,7 +342,7 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
                             ss << std::setw(2) << std::setfill('0')
                                << (int)reply.msg.bytes[i];
                         }
-                        DPRINTF(DtuAccel, "Hash: %s\n", ss.str().c_str());
+                        DPRINTF(DtuAccelHash, "Hash: %s\n", ss.str().c_str());
 
                         replySize += reply.msg.res;
                         state = State::STORE_REPLY;
@@ -374,8 +375,10 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
                 if (hashOff == lastSize)
                 {
                     // the time for the hash operation on lastSize bytes
-                    delay = Cycles(BLOCK_TIME * (lastSize / 64));
-                    DPRINTF(DtuAccel, "Hash generation took %llu cycles\n", delay);
+                    size_t blocks = (lastSize + BLOCK_SIZE - 1) / BLOCK_SIZE;
+                    delay = Cycles(BLOCK_TIME * blocks);
+                    DPRINTF(DtuAccelHash, "Hash for %luB took %llu cycles\n",
+                        lastSize, delay);
 
                     // decrease it by the time we've already spent reading the
                     // data from SPM, because that's already included in the
@@ -482,7 +485,7 @@ DtuAccelHash::tick()
 {
     PacketPtr pkt = nullptr;
 
-    DPRINTF(DtuAccelState, "[%s] tick\n",
+    DPRINTF(DtuAccelHashState, "[%s] tick\n",
         getStateName().c_str());
 
     switch(state)

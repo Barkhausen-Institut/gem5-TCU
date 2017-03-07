@@ -31,5 +31,5 @@ SimObject('DtuAccelHash.py')
 
 Source('accelerator.cc')
 
-DebugFlag('DtuAccel')
-DebugFlag('DtuAccelState')
+DebugFlag('DtuAccelHash')
+DebugFlag('DtuAccelHashState')

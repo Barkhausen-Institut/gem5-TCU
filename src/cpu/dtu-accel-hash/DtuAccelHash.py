@@ -25,8 +25,6 @@
 # of the authors and should not be interpreted as representing official policies,
 # either expressed or implied, of the FreeBSD Project.
 
-from MemObject import MemObject
-from Connector import BaseConnector
 from DtuAccel import DtuAccel
 from m5.params import *
 from m5.proxy import *
