@@ -39,7 +39,7 @@ class DtuAccel(MemObject):
     id = Param.Unsigned("Core ID")
     regfile_base_addr = Param.Addr(0xF0000000, "Register file address")
 
-    max_data_size = Param.Unsigned(1024, "The maximum size of data transfers")
+    max_data_size = Param.MemorySize("1kB", "The maximum size of data transfers")
 
 class DtuAccelConnector(BaseConnector):
     type = 'DtuAccelConnector'
