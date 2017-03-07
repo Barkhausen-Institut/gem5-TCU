@@ -148,14 +148,22 @@ DtuAccel::createPacket(Addr paddr,
                        size_t size,
                        MemCmd cmd = MemCmd::WriteReq)
 {
+    return createPacket(paddr, new uint8_t[size], size, cmd);
+}
+
+PacketPtr
+DtuAccel::createPacket(Addr paddr,
+                       const void *data,
+                       size_t size,
+                       MemCmd cmd = MemCmd::WriteReq)
+{
     Request::Flags flags;
 
     auto req = new Request(paddr, size, flags, masterId);
     req->setContext(id);
 
     auto pkt = new Packet(req, cmd);
-    auto pkt_data = new uint8_t[size];
-    pkt->dataDynamic(pkt_data);
+    pkt->dataDynamic(data);
 
     return pkt;
 }

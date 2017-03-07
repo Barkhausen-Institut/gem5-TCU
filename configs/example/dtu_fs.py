@@ -305,21 +305,31 @@ def createCorePE(root, options, no, cmdline, memPE, l1size=None, l2size=None, sp
 
     return pe
 
-def createHashAccelPE(root, options, no, memPE, l1size=None, l2size=None, spmsize='64kB'):
+def createAccelPE(root, options, no, accel, memPE, l1size=None, l2size=None, spmsize='64kB'):
     pe = createPE(
         root=root, options=options, no=no, systemType=SpuSystem,
         l1size=l1size, l2size=l2size, spmsize=spmsize, memPE=memPE
     )
     pe.dtu.connector = DtuAccelConnector()
 
-    pe.accelhash = DtuAccelHash()
-    pe.dtu.connector.accelerator = pe.accelhash
-    pe.accelhash.id = no;
-    pe.accelhash.clk_domain = root.cpu_clk_domain
+    if accel == 'hash':
+        pe.accel = DtuAccelHash()
+    elif accel == 'fft':
+        pe.accel = DtuAccelStream()
+        pe.accel.algorithm = 0
+    elif accel == 'toupper':
+        pe.accel = DtuAccelStream()
+        pe.accel.algorithm = 1
+    else:
+        print 'Accelerator "%s" does not exist' % (accel)
+        sys.exit(1)
+    pe.dtu.connector.accelerator = pe.accel
+    pe.accel.id = no;
+    pe.accel.clk_domain = root.cpu_clk_domain
 
-    pe.dtu.dcache_slave_port = pe.accelhash.port
+    pe.dtu.dcache_slave_port = pe.accel.port
 
-    print 'PE%02d: hash accelerator' % (no)
+    print 'PE%02d: %s accelerator' % (no, accel)
     printConfig(pe)
     print
 
@@ -440,8 +450,13 @@ def runSimulation(options, pes):
             else:
                 size |= 1 # emem
 
-            if hasattr(pe, 'accelhash'):
-                size |= 4 << 3 # hash accelerator
+            if hasattr(pe, 'accel'):
+                if type(pe.accel).__name__ == 'DtuAccelHash':
+                    size |= 4 << 3 # hash accelerator
+                elif int(pe.accel.algorithm) == 0:
+                    size |= 5 << 3 # fft accelerator
+                elif int(pe.accel.algorithm) == 1:
+                    size |= 6 << 3 # toupper accelerator
             elif options.isa == 'arm':
                 size |= 2 << 3 # arm
             else:

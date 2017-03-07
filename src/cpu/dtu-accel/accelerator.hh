@@ -176,6 +176,8 @@ class DtuAccel : public MemObject
 
     PacketPtr createPacket(Addr paddr, size_t size, MemCmd cmd);
 
+    PacketPtr createPacket(Addr paddr, const void *data, size_t size, MemCmd cmd);
+
     PacketPtr createDtuRegPkt(Addr reg, RegFile::reg_t value, MemCmd cmd);
 
     PacketPtr createDtuCmdPkt(uint64_t cmd, uint64_t data, uint64_t size, uint64_t off);
