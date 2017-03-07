@@ -290,6 +290,8 @@ class BaseDtu : public MemObject
 
     void sendDummyResponse(DtuSlavePort &port, PacketPtr pkt, bool functional);
 
+    void printNocRequest(PacketPtr pkt, const char *type);
+
     NocMasterPort  nocMasterPort;
 
     NocSlavePort   nocSlavePort;

@@ -54,6 +54,12 @@ BaseDtu::DtuMasterPort::recvTimingResp(PacketPtr pkt)
 void
 BaseDtu::NocMasterPort::completeRequest(PacketPtr pkt)
 {
+    DPRINTF(DtuMasterPort,
+            "Received %s at %#x (%u bytes)\n",
+            pkt->cmd.toString(),
+            pkt->getAddr(),
+            pkt->getSize());
+
     dtu.completeNocRequest(pkt);
 }
 
@@ -497,6 +503,7 @@ BaseDtu::sendCacheMemResponse(PacketPtr pkt, bool success)
 void
 BaseDtu::schedNocRequest(PacketPtr pkt, Tick when)
 {
+    printNocRequest(pkt, "timing");
     nocMasterPort.schedTimingReq(pkt, when);
 }
 
@@ -509,13 +516,27 @@ BaseDtu::schedMemRequest(PacketPtr pkt, Tick when)
 void
 BaseDtu::sendFunctionalNocRequest(PacketPtr pkt)
 {
+    printNocRequest(pkt, "functional");
     nocMasterPort.sendFunctional(pkt);
 }
 
 void
 BaseDtu::sendAtomicNocRequest(PacketPtr pkt)
 {
+    printNocRequest(pkt, "atomic");
     nocMasterPort.sendAtomic(pkt);
+}
+
+void
+BaseDtu::printNocRequest(PacketPtr pkt, const char *type)
+{
+    DPRINTFS(DtuMasterPort,
+             (&nocMasterPort),
+             "Sending %s %s at %#x (%u bytes)\n",
+             type,
+             pkt->cmd.toString(),
+             pkt->getAddr(),
+             pkt->getSize());
 }
 
 void
