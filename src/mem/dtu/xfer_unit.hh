@@ -151,8 +151,6 @@ class XferUnit
 
         const std::string name() const override { return xfer->dtu.name(); }
 
-        virtual int senderCore() const { return -1; }
-
         virtual void transferStart() = 0;
 
         virtual void transferDone(Dtu::Error result) = 0;

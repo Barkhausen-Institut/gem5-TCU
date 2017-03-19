@@ -137,8 +137,6 @@ class MemoryUnit
               pkt(_pkt)
         {}
 
-        int senderCore() const override;
-
         void transferStart() override;
 
         void transferDone(Dtu::Error result) override;

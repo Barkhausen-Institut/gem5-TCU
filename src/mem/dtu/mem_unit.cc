@@ -362,14 +362,6 @@ MemoryUnit::recvFromNoc(PacketPtr pkt, uint vpeId, uint sender, uint flags)
     return Dtu::Error::NONE;
 }
 
-int
-MemoryUnit::ReceiveTransferEvent::senderCore() const
-{
-    auto state = dynamic_cast<Dtu::NocSenderState*>(pkt->senderState);
-    assert(state != NULL);
-    return state->sender;
-}
-
 void
 MemoryUnit::ReceiveTransferEvent::transferStart()
 {
