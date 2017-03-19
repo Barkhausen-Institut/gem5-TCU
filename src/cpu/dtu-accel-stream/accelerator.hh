@@ -87,8 +87,6 @@ class DtuAccelStream : public DtuAccel
 
     std::string getStateName() const;
 
-    size_t bufSize;
-
     bool irqPending;
     bool ctxSwPending;
     bool memPending;

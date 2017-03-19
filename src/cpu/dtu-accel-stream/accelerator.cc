@@ -80,7 +80,6 @@ static const char *stateNames[] =
 DtuAccelStream::DtuAccelStream(const DtuAccelStreamParams *p)
   : DtuAccel(p),
     algo(),
-    bufSize(p->buf_size),
     irqPending(false),
     ctxSwPending(false),
     memPending(false),
