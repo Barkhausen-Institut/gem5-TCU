@@ -282,7 +282,7 @@ PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, uint access)
     dtu.sendNocRequest(Dtu::NocPacketType::PAGEFAULT,
                        pkt,
                        ep.vpeId,
-                       Dtu::Command::NOPF,
+                       Dtu::NocFlags::NOPF,
                        delay);
 
     ev->pfStartCycle = dtu.curCycle();

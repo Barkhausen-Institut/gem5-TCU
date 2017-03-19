@@ -94,8 +94,8 @@ MemoryUnit::startRead(const Dtu::Command& cmd)
     NocAddr nocAddr(ep.targetCore, ep.remoteAddr + offset);
 
     uint flags = (cmd.flags & Dtu::Command::NOPF)
-                 ? XferUnit::XferFlags::NOPF
-                 : 0;
+                 ? Dtu::NocFlags::NOPF
+                 : Dtu::NocFlags::NONE;
 
     if (dtu.coherent && nocAddr.offset < dtu.regFileBaseAddr &&
         dtu.isMemPE(nocAddr.coreId))
@@ -269,8 +269,10 @@ MemoryUnit::WriteTransferEvent::transferDone(Dtu::Error result)
             else
                 pktType = Dtu::NocPacketType::WRITE_REQ;
 
-            uint cmdflags = (flags() & XferUnit::NOPF) ? Dtu::Command::NOPF : 0;
-            dtu().sendNocRequest(pktType, pkt, vpeId, cmdflags, delay);
+            uint rflags = (flags() & XferUnit::NOPF)
+                          ? Dtu::NocFlags::NOPF
+                          : Dtu::NocFlags::NONE;
+            dtu().sendNocRequest(pktType, pkt, vpeId, rflags, delay);
         }
     }
 }
@@ -303,7 +305,7 @@ MemoryUnit::recvFunctionalFromNoc(PacketPtr pkt)
 }
 
 Dtu::Error
-MemoryUnit::recvFromNoc(PacketPtr pkt, uint vpeId, uint sender, uint flags)
+MemoryUnit::recvFromNoc(PacketPtr pkt, uint vpeId, uint flags)
 {
     NocAddr addr(pkt->getAddr());
 
@@ -318,8 +320,9 @@ MemoryUnit::recvFromNoc(PacketPtr pkt, uint vpeId, uint sender, uint flags)
     receivedBytes.sample(pkt->getSize());
 
     uint16_t ourVpeId = dtu.regs().get(DtuReg::VPE_ID);
-    if (vpeId != ourVpeId || (sender != 0 &&
-        dtu.regs().hasFeature(Features::COM_DISABLED)))
+    if (vpeId != ourVpeId ||
+        (!(flags & Dtu::NocFlags::PRIV) &&
+         dtu.regs().hasFeature(Features::COM_DISABLED)))
     {
         DPRINTFS(Dtu, (&dtu),
             "Received memory request for VPE %u, but VPE %u is running with"
@@ -352,8 +355,11 @@ MemoryUnit::recvFromNoc(PacketPtr pkt, uint vpeId, uint sender, uint flags)
 
         auto type = pkt->isWrite() ? Dtu::TransferType::REMOTE_WRITE
                                    : Dtu::TransferType::REMOTE_READ;
-        uint xflags = (flags & Dtu::Command::NOPF) ? XferUnit::XferFlags::NOPF
-                                                   : 0;
+        uint xflags = (flags & Dtu::NocFlags::NOPF)
+                      ? XferUnit::XferFlags::NOPF
+                      : 0;
+        if (flags & Dtu::NocFlags::PRIV)
+            xflags |= XferUnit::XferFlags::PRIV;
 
         auto *ev = new ReceiveTransferEvent(type, addr.offset, xflags, pkt);
         dtu.startTransfer(ev, delay);

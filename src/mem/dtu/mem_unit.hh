@@ -175,7 +175,7 @@ class MemoryUnit
     /**
      * Received read/write request from NoC -> Mem/regfile request
      */
-    Dtu::Error recvFromNoc(PacketPtr pkt, uint vpeId, uint sender, uint flags);
+    Dtu::Error recvFromNoc(PacketPtr pkt, uint vpeId, uint flags);
 
   private:
 

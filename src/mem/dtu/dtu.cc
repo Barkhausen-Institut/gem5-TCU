@@ -752,9 +752,10 @@ Dtu::sendNocRequest(NocPacketType type,
     auto senderState = new NocSenderState();
     senderState->packetType = type;
     senderState->result = Error::NONE;
-    senderState->sender = coreId;
     senderState->vpeId = vpeId;
     senderState->flags = flags;
+    if (regFile.hasFeature(Features::PRIV))
+        senderState->flags |= NocFlags::PRIV;
     senderState->cmdId = cmdId;
 
     pkt->pushSenderState(senderState);
@@ -938,8 +939,8 @@ Dtu::handleNocRequest(PacketPtr pkt)
         case NocPacketType::PAGEFAULT:
         {
             nocMsgRecvs++;
-            uint sender = senderState->sender;
-            res = msgUnit->recvFromNoc(pkt, senderState->vpeId, sender);
+            uint flags = senderState->flags;
+            res = msgUnit->recvFromNoc(pkt, senderState->vpeId, flags);
             break;
         }
         case NocPacketType::READ_REQ:
@@ -951,8 +952,7 @@ Dtu::handleNocRequest(PacketPtr pkt)
             else if (senderState->packetType == NocPacketType::WRITE_REQ)
                 nocWriteRecvs++;
             uint flags = senderState->flags;
-            uint sender = senderState->sender;
-            res = memUnit->recvFromNoc(pkt, senderState->vpeId, sender, flags);
+            res = memUnit->recvFromNoc(pkt, senderState->vpeId, flags);
             break;
         }
         case NocPacketType::CACHE_MEM_REQ_FUNC:
@@ -1121,7 +1121,7 @@ Dtu::handleCacheMemRequest(PacketPtr pkt, bool functional)
     sendNocRequest(type,
                    pkt,
                    INVALID_VPE_ID,
-                   Command::NONE,
+                   NocFlags::NONE,
                    Cycles(1),
                    functional);
 

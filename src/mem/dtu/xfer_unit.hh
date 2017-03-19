@@ -47,6 +47,7 @@ class XferUnit
         MSGRECV   = 2,
         NOPF      = 4,
         NOXLATE   = 8,
+        PRIV      = 16,
     };
 
     enum AbortType

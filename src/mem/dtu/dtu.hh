@@ -131,10 +131,16 @@ class Dtu : public BaseDtu
         MemReqType type;
     };
 
+    enum NocFlags
+    {
+        NONE    = 0,
+        NOPF    = 1,
+        PRIV    = 2,
+    };
+
     struct NocSenderState : public Packet::SenderState
     {
         Error result;
-        uint sender;
         uint vpeId;
         NocPacketType packetType;
         uint64_t cmdId;

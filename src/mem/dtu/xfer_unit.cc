@@ -308,8 +308,12 @@ XferUnit::abortTransfers(uint types)
             continue;
 
         bool ismsg = ev->flags() & (XferFlags::MESSAGE | XferFlags::MSGRECV);
-        bool abort = (ev->isRemote() && (types & ABORT_REMOTE)) ||
-            (!ev->isRemote() && (types & ABORT_LOCAL));
+        // only unprivileged remote transfers are aborted
+        bool abort = ev->isRemote() &&
+            (types & ABORT_REMOTE) &&
+            !(ev->flags() & XferFlags::PRIV);
+        abort |= !ev->isRemote() && (types & ABORT_LOCAL);
+        // messages are only aborted on reset
         abort &= !ismsg || (types & ABORT_MSGS);
 
         if (abort)

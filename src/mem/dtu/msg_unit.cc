@@ -529,7 +529,7 @@ MessageUnit::finishMsgReceive(unsigned epId,
 }
 
 Dtu::Error
-MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId, uint sender)
+MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId, uint flags)
 {
     assert(pkt->isWrite());
     assert(pkt->hasData());
@@ -571,7 +571,8 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId, uint sender)
 
     uint16_t ourVpeId = dtu.regs().get(DtuReg::VPE_ID);
     if (vpeId != ourVpeId ||
-        (sender != 0 && dtu.regs().hasFeature(Features::COM_DISABLED)))
+        (!(flags & Dtu::NocFlags::PRIV) &&
+         dtu.regs().hasFeature(Features::COM_DISABLED)))
     {
         DPRINTFS(Dtu, (&dtu),
             "EP%u: received message for VPE %u, but VPE %u is running"
@@ -603,10 +604,12 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId, uint sender)
     delay += dtu.nocToTransferLatency;
 
     // atm, message receives can never cause pagefaults
-    uint flags = XferUnit::XferFlags::MSGRECV | XferUnit::XferFlags::NOPF;
+    uint rflags = XferUnit::XferFlags::MSGRECV | XferUnit::XferFlags::NOPF;
+    if (flags & Dtu::NocFlags::PRIV)
+        rflags |= XferUnit::XferFlags::PRIV;
     Addr localAddr = ep.bufAddr + msgidx * ep.msgSize;
 
-    auto *ev = new ReceiveTransferEvent(this, localAddr, flags, pkt);
+    auto *ev = new ReceiveTransferEvent(this, localAddr, rflags, pkt);
     dtu.startTransfer(ev, delay);
 
     return Dtu::Error::NONE;
