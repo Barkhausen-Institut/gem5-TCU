@@ -279,7 +279,7 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
 
                     if (!autonomous)
                     {
-                        reply.msg.res = 0;
+                        reply.msg.res = lastSize;
                         state = State::STORE_REPLY;
                     }
                     else
@@ -300,9 +300,9 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
                 if ((reg & 0xF) == 0)
                 {
-                    if (dataOff == dataSize)
+                    if (dataOff == dataSize || irqPending)
                     {
-                        reply.msg.res = 0;
+                        reply.msg.res = dataOff;
                         state = State::STORE_REPLY;
                     }
                     else
