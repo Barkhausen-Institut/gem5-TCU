@@ -36,6 +36,22 @@
 #include "mem/dtu/xfer_unit.hh"
 #include "mem/dtu/noc_addr.hh"
 
+static uint cmdToXferFlags(uint flags) {
+    return flags & 1;
+}
+
+static uint cmdToNocFlags(uint flags) {
+    return flags & 1;
+}
+
+static uint nocToXferFlags(uint flags) {
+    return flags & 3;
+}
+
+static uint xferToNocFlags(uint flags) {
+    return flags & 3;
+}
+
 void
 MemoryUnit::regStats()
 {
@@ -93,9 +109,7 @@ MemoryUnit::startRead(const Dtu::Command& cmd)
 
     NocAddr nocAddr(ep.targetCore, ep.remoteAddr + offset);
 
-    uint flags = (cmd.flags & Dtu::Command::NOPF)
-                 ? Dtu::NocFlags::NOPF
-                 : Dtu::NocFlags::NONE;
+    uint flags = cmdToNocFlags(cmd.flags);
 
     if (dtu.coherent && nocAddr.offset < dtu.regFileBaseAddr &&
         dtu.isMemPE(nocAddr.coreId))
@@ -174,10 +188,7 @@ MemoryUnit::readComplete(const Dtu::Command& cmd, PacketPtr pkt, Dtu::Error erro
         return;
     }
 
-    uint flags = (cmd.flags & Dtu::Command::NOPF)
-                 ? XferUnit::XferFlags::NOPF
-                 : 0;
-
+    uint flags = cmdToXferFlags(cmd.flags);
     auto xfer = new ReadTransferEvent(localAddr, flags, pkt);
     dtu.startTransfer(xfer, delay);
 }
@@ -226,11 +237,9 @@ MemoryUnit::startWrite(const Dtu::Command& cmd)
     assert(requestSize + offset >= requestSize);
     assert(requestSize + offset <= ep.remoteSize);
 
-    uint flags = (cmd.flags & Dtu::Command::NOPF)
-                 ? XferUnit::XferFlags::NOPF
-                 : 0;
     NocAddr dest(ep.targetCore, ep.remoteAddr + offset);
 
+    uint flags = cmdToXferFlags(cmd.flags);
     auto xfer = new WriteTransferEvent(
         localAddr, requestSize, flags, dest, ep.vpeId);
     dtu.startTransfer(xfer, Cycles(0));
@@ -269,9 +278,7 @@ MemoryUnit::WriteTransferEvent::transferDone(Dtu::Error result)
             else
                 pktType = Dtu::NocPacketType::WRITE_REQ;
 
-            uint rflags = (flags() & XferUnit::NOPF)
-                          ? Dtu::NocFlags::NOPF
-                          : Dtu::NocFlags::NONE;
+            uint rflags = xferToNocFlags(flags());
             dtu().sendNocRequest(pktType, pkt, vpeId, rflags, delay);
         }
     }
@@ -355,11 +362,7 @@ MemoryUnit::recvFromNoc(PacketPtr pkt, uint vpeId, uint flags)
 
         auto type = pkt->isWrite() ? Dtu::TransferType::REMOTE_WRITE
                                    : Dtu::TransferType::REMOTE_READ;
-        uint xflags = (flags & Dtu::NocFlags::NOPF)
-                      ? XferUnit::XferFlags::NOPF
-                      : 0;
-        if (flags & Dtu::NocFlags::PRIV)
-            xflags |= XferUnit::XferFlags::PRIV;
+        uint xflags = nocToXferFlags(flags);
 
         auto *ev = new ReceiveTransferEvent(type, addr.offset, xflags, pkt);
         dtu.startTransfer(ev, delay);
