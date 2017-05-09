@@ -605,11 +605,17 @@ Dtu::reset(Addr addr)
     Cycles delay(0);
     if(!coherent)
     {
-        if(l1Cache)
+        if(l1ICache)
         {
-            l1Cache->memWriteback();
-            l1Cache->memInvalidate();
-            delay += Cycles(l1Cache->getBlockCount() / cacheBlocksPerCycle);
+            // no writeback necessary
+            l1ICache->memInvalidate();
+            delay += Cycles(l1ICache->getBlockCount() / cacheBlocksPerCycle);
+        }
+        if(l1DCache)
+        {
+            l1DCache->memWriteback();
+            l1DCache->memInvalidate();
+            delay += Cycles(l1DCache->getBlockCount() / cacheBlocksPerCycle);
         }
         if(l2Cache)
         {

@@ -306,7 +306,8 @@ class BaseDtu : public MemObject
 
     CacheMemSlavePort cacheMemSlavePort;
 
-    Cache *l1Cache;
+    Cache *l1ICache;
+    Cache *l1DCache;
     Cache *l2Cache;
 
     AddrRange watchRange;

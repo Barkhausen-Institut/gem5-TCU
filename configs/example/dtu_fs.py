@@ -153,7 +153,8 @@ def getOptions():
 def printConfig(pe):
     try:
         cc = "coherent" if pe.dtu.coherent else "non-coherent"
-        print '      L1cache=%d KiB (%s)' % (pe.dtu.l1cache.size.value / 1024, cc)
+        print '      L1icache=%d KiB (%s)' % (pe.dtu.l1icache.size.value / 1024, cc)
+        print '      L1dcache=%d KiB (%s)' % (pe.dtu.l1dcache.size.value / 1024, cc)
         try:
             print '      L2cache=%d KiB (%s)' % (pe.dtu.l2cache.size.value / 1024, cc)
         except:
@@ -189,7 +190,7 @@ def createPE(root, options, no, systemType, l1size, l2size, spmsize, memPE):
 
     pe.dtu.num_endpoints = 12
 
-    pe.dtu.icache_master_port = pe.xbar.slave
+    # only connect the dcache directly; only the CPU can access the icache
     pe.dtu.dcache_master_port = pe.xbar.slave
 
     pe.dtu.noc_master_port = root.noc.slave
@@ -198,19 +199,32 @@ def createPE(root, options, no, systemType, l1size, l2size, spmsize, memPE):
     pe.dtu.coherent = options.coherent
 
     if not l1size is None:
-        pe.dtu.l1cache = L1Cache(size=l1size)
-        pe.dtu.l1cache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
-        pe.dtu.l1cache.cpu_side = pe.xbar.master
+        pe.dtu.l1icache = L1_ICache(size=l1size)
+        pe.dtu.l1icache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
+        pe.dtu.l1icache.cpu_side = pe.dtu.icache_master_port
+
+        pe.dtu.l1dcache = L1_DCache(size=l1size)
+        pe.dtu.l1dcache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
+        pe.dtu.l1dcache.cpu_side = pe.xbar.master
 
         if not l2size is None:
             pe.dtu.l2cache = L2Cache(size=l2size)
             pe.dtu.l2cache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
-            pe.dtu.l2cache.cpu_side = pe.dtu.l1cache.mem_side
+
+            # use a crossbar to connect l1icache and l1dcache to l2cache
+            pe.tol2bus = L2XBar(clk_domain = root.cpu_clk_domain)
+            pe.dtu.l2cache.cpu_side = pe.tol2bus.master
             pe.dtu.l2cache.mem_side = pe.dtu.cache_mem_slave_port
+            pe.dtu.l1icache.mem_side = pe.tol2bus.slave
+            pe.dtu.l1dcache.mem_side = pe.tol2bus.slave
+
             pe.dtu.l2cache.prefetcher = StridePrefetcher(degree = 16)
         else:
-            pe.dtu.l1cache.mem_side = pe.dtu.cache_mem_slave_port
-            pe.dtu.l1cache.prefetcher = StridePrefetcher(degree = 16)
+            pe.dtu.l1icache.mem_side = pe.dtu.cache_mem_slave_port
+            pe.dtu.l1icache.prefetcher = StridePrefetcher(degree = 16)
+
+            pe.dtu.l1dcache.mem_side = pe.dtu.cache_mem_slave_port
+            pe.dtu.l1dcache.prefetcher = StridePrefetcher(degree = 16)
 
         # don't check whether the kernel is in memory because a PE does not have memory in this
         # case, but just a cache that is connected to a different PE
