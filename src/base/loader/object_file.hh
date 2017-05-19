@@ -56,7 +56,8 @@ class ObjectFile
         Arm64,
         Arm,
         Thumb,
-        Power
+        Power,
+        Riscv
     };
 
     enum OpSys {
@@ -73,7 +74,7 @@ class ObjectFile
     uint8_t *fileData;
     size_t len;
 
-    Arch  arch;
+    Arch arch;
     OpSys opSys;
 
     ObjectFile(const std::string &_filename, size_t _len, uint8_t *_data,
@@ -113,9 +114,9 @@ class ObjectFile
   protected:
 
     struct Section {
-        Addr     baseAddr;
+        Addr baseAddr;
         uint8_t *fileImage;
-        size_t   size;
+        size_t size;
     };
 
     Addr entry;

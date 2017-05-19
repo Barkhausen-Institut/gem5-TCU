@@ -119,13 +119,14 @@
  * "Stub" to allow remote cpu to debug over a serial line using gdb.
  */
 
-#include <signal.h>
+#include "arch/sparc/remote_gdb.hh"
+
 #include <sys/signal.h>
 #include <unistd.h>
 
+#include <csignal>
 #include <string>
 
-#include "arch/sparc/remote_gdb.hh"
 #include "arch/vtophys.hh"
 #include "base/intmath.hh"
 #include "base/remote_gdb.hh"
@@ -147,7 +148,7 @@ using namespace std;
 using namespace SparcISA;
 
 RemoteGDB::RemoteGDB(System *_system, ThreadContext *c)
-    : BaseRemoteGDB(_system, c)
+    : BaseRemoteGDB(_system, c), regCache32(this), regCache64(this)
 {}
 
 ///////////////////////////////////////////////////////////
@@ -247,10 +248,9 @@ RemoteGDB::BaseGdbRegCache*
 RemoteGDB::gdbRegs()
 {
     PSTATE pstate = context->readMiscReg(MISCREG_PSTATE);
-    if (pstate.am)
-    {DPRINTF(GDBRead, "Creating 32-bit GDB\n");
-        return new SPARCGdbRegCache(this);}
-    else
-    {DPRINTF(GDBRead, "Creating 64-bit GDB\n");
-        return new SPARC64GdbRegCache(this);}
+    if (pstate.am) {
+        return &regCache32;
+    } else {
+        return &regCache64;
+    }
 }

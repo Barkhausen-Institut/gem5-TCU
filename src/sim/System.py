@@ -28,7 +28,7 @@
 # Authors: Nathan Binkert
 #          Rick Strong
 
-from m5.SimObject import SimObject
+from m5.SimObject import *
 from m5.defines import buildEnv
 from m5.params import *
 from m5.proxy import *
@@ -44,16 +44,10 @@ class System(MemObject):
     cxx_header = "sim/system.hh"
     system_port = MasterPort("System port")
 
-    @classmethod
-    def export_method_cxx_predecls(cls, code):
-        code('#include "sim/system.hh"')
-
-    @classmethod
-    def export_methods(cls, code):
-        code('''
-      Enums::MemoryMode getMemoryMode() const;
-      void setMemoryMode(Enums::MemoryMode mode);
-''')
+    cxx_exports = [
+        PyBindMethod("getMemoryMode"),
+        PyBindMethod("setMemoryMode"),
+    ]
 
     memories = VectorParam.AbstractMemory(Self.all,
                                           "All memories in the system")
@@ -65,7 +59,7 @@ class System(MemObject):
 
     # When reserving memory on the host, we have the option of
     # reserving swap space or not (by passing MAP_NORESERVE to
-    # mmap). By enabling this flag, we accomodate cases where a large
+    # mmap). By enabling this flag, we accommodate cases where a large
     # (but sparse) memory is simulated.
     mmap_using_noreserve = Param.Bool(False, "mmap the backing store " \
                                           "without reserving swap")
@@ -117,3 +111,6 @@ class System(MemObject):
     rgdb_wait = Param.Int(-1, "The context-id that should on remote gdb")
 
     pseudo_mem_ops = Param.Bool(True, "Enable memory mapped pseudo instr.?")
+
+    if buildEnv['USE_KVM']:
+        kvm_vm = Param.KvmVM(NULL, 'KVM VM (i.e., shared memory domain)')

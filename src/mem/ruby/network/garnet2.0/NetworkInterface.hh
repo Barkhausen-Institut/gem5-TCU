@@ -62,6 +62,7 @@ class NetworkInterface : public ClockedObject, public Consumer
     void addOutPort(NetworkLink *out_link, CreditLink *credit_link,
         SwitchID router_id);
 
+    void dequeueCallback();
     void wakeup();
     void addNode(std::vector<MessageBuffer *> &inNode,
                  std::vector<MessageBuffer *> &outNode);
@@ -83,11 +84,16 @@ class NetworkInterface : public ClockedObject, public Consumer
     int m_vc_round_robin; // For round robin scheduling
     flitBuffer *outFlitQueue; // For modeling link contention
     flitBuffer *outCreditQueue;
+    int m_deadlock_threshold;
 
     NetworkLink *inNetLink;
     NetworkLink *outNetLink;
     CreditLink *inCreditLink;
     CreditLink *outCreditLink;
+
+    // Queue for stalled flits
+    std::deque<flit *> m_stall_queue;
+    std::vector<int> m_stall_count;
 
     // Input Flit Buffers
     // The flit buffers which will serve the Consumer
@@ -98,11 +104,18 @@ class NetworkInterface : public ClockedObject, public Consumer
     std::vector<MessageBuffer *> inNode_ptr;
     // The Message buffers that provides messages to the protocol
     std::vector<MessageBuffer *> outNode_ptr;
+    // When a vc stays busy for a long time, it indicates a deadlock
+    std::vector<int> vc_busy_counter;
 
+    bool checkStallQueue();
     bool flitisizeMessage(MsgPtr msg_ptr, int vnet);
     int calculateVC(int vnet);
+
     void scheduleOutputLink();
     void checkReschedule();
+    void sendCredit(flit *t_flit, bool is_free);
+
+    void incrementStats(flit *t_flit);
 };
 
 #endif // __MEM_RUBY_NETWORK_GARNET_NETWORK_INTERFACE_HH__

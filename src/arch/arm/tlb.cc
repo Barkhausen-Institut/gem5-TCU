@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2013, 2016 ARM Limited
+ * Copyright (c) 2010-2013, 2016-2017 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -50,11 +50,12 @@
 
 #include "arch/arm/faults.hh"
 #include "arch/arm/pagetable.hh"
-#include "arch/arm/system.hh"
-#include "arch/arm/table_walker.hh"
 #include "arch/arm/stage2_lookup.hh"
 #include "arch/arm/stage2_mmu.hh"
+#include "arch/arm/system.hh"
+#include "arch/arm/table_walker.hh"
 #include "arch/arm/utility.hh"
+#include "arch/generic/mmapped_ipr.hh"
 #include "base/inifile.hh"
 #include "base/str.hh"
 #include "base/trace.hh"
@@ -81,12 +82,17 @@ TLB::TLB(const ArmTLBParams *p)
       isHyp(false), asid(0), vmid(0), dacr(0),
       miscRegValid(false), miscRegContext(0), curTranType(NormalTran)
 {
+    const ArmSystem *sys = dynamic_cast<const ArmSystem *>(p->sys);
+
     tableWalker->setTlb(this);
 
     // Cache system-level properties
     haveLPAE = tableWalker->haveLPAE();
     haveVirtualization = tableWalker->haveVirtualization();
     haveLargeAsid64 = tableWalker->haveLargeAsid64();
+
+    if (sys)
+        m5opRange = sys->m5opRange();
 }
 
 TLB::~TLB()
@@ -129,6 +135,15 @@ TLB::translateFunctional(ThreadContext *tc, Addr va, Addr &pa)
 Fault
 TLB::finalizePhysical(RequestPtr req, ThreadContext *tc, Mode mode) const
 {
+    const Addr paddr = req->getPaddr();
+
+    if (m5opRange.contains(paddr)) {
+        req->setFlags(Request::MMAPPED_IPR | Request::GENERIC_IPR);
+        req->setPaddr(GenericISA::iprAddressPseudoInst(
+                          (paddr >> 8) & 0xFF,
+                          paddr & 0xFF));
+    }
+
     return NoFault;
 }
 
@@ -582,7 +597,7 @@ TLB::translateSe(RequestPtr req, ThreadContext *tc, Mode mode,
         return std::make_shared<GenericPageTableFault>(vaddr_tainted);
     req->setPaddr(paddr);
 
-    return NoFault;
+    return finalizePhysical(req, tc, mode);
 }
 
 Fault
@@ -642,12 +657,15 @@ TLB::checkPermissions(TlbEntry *te, RequestPtr req, Mode mode)
             DPRINTF(TLB, "TLB Fault: Data abort on domain. DACR: %#x"
                     " domain: %#x write:%d\n", dacr,
                     static_cast<uint8_t>(te->domain), is_write);
-            if (is_fetch)
+            if (is_fetch) {
+                // Use PC value instead of vaddr because vaddr might
+                // be aligned to cache line and should not be the
+                // address reported in FAR
                 return std::make_shared<PrefetchAbort>(
-                    vaddr,
+                    req->getPC(),
                     ArmFault::DomainLL + te->lookupLevel,
                     isStage2, tranMethod);
-            else
+            } else
                 return std::make_shared<DataAbort>(
                     vaddr, te->domain, is_write,
                     ArmFault::DomainLL + te->lookupLevel,
@@ -735,8 +753,10 @@ TLB::checkPermissions(TlbEntry *te, RequestPtr req, Mode mode)
         DPRINTF(TLB, "TLB Fault: Prefetch abort on permission check. AP:%d "
                      "priv:%d write:%d ns:%d sif:%d sctlr.afe: %d \n",
                      ap, is_priv, is_write, te->ns, scr.sif,sctlr.afe);
+        // Use PC value instead of vaddr because vaddr might be aligned to
+        // cache line and should not be the address reported in FAR
         return std::make_shared<PrefetchAbort>(
-            vaddr,
+            req->getPC(),
             ArmFault::PermissionLL + te->lookupLevel,
             isStage2, tranMethod);
     } else if (abt | hapAbt) {
@@ -1103,14 +1123,18 @@ TLB::translateFs(RequestPtr req, ThreadContext *tc, Mode mode,
             fault = testTranslation(req, mode, te->domain);
     }
 
-    // Generate Illegal Inst Set State fault if IL bit is set in CPSR
     if (fault == NoFault) {
+        // Generate Illegal Inst Set State fault if IL bit is set in CPSR
         if (aarch64 && is_fetch && cpsr.il == 1) {
             return std::make_shared<IllegalInstSetStateFault>();
         }
-    }
 
-    return fault;
+        // Don't try to finalize a physical address unless the
+        // translation has completed (i.e., there is a table entry).
+        return te ? finalizePhysical(req, tc, mode) : NoFault;
+    } else {
+        return fault;
+    }
 }
 
 Fault

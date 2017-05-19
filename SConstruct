@@ -209,7 +209,7 @@ termcap = get_termcap(GetOption('use_colors'))
 # export TERM so that clang reports errors in color
 use_vars = set([ 'AS', 'AR', 'CC', 'CXX', 'HOME', 'LD_LIBRARY_PATH',
                  'LIBRARY_PATH', 'PATH', 'PKG_CONFIG_PATH', 'PROTOC',
-                 'PYTHONPATH', 'RANLIB', 'SWIG', 'TERM' ])
+                 'PYTHONPATH', 'RANLIB', 'TERM' ])
 
 use_prefixes = [
     "ASAN_",           # address sanitizer symbolizer path and settings
@@ -241,11 +241,6 @@ if not ('CC' in main_dict_keys and 'CXX' in main_dict_keys):
     print "No C++ compiler installed (package g++ on Ubuntu and RedHat)"
     Exit(1)
 
-# Check that swig is present
-if not 'SWIG' in main_dict_keys:
-    print "swig is not installed (package swig on Ubuntu and RedHat)"
-    Exit(1)
-
 # add useful python code PYTHONPATH so it can be used by subprocesses
 # as well
 main.AppendENVPath('PYTHONPATH', extra_python_paths)
@@ -268,10 +263,17 @@ against the gem5 style rules on %s.
 This script will now install the hook in your %s.
 Press enter to continue, or ctrl-c to abort: """
 
-mercurial_style_message = style_message % ("hg commit and qrefresh commands",
-                                           ".hg/hgrc file")
-git_style_message = style_message % ("'git commit'",
-                                     ".git/hooks/ directory")
+mercurial_style_message = """
+You're missing the gem5 style hook, which automatically checks your code
+against the gem5 style rules on hg commit and qrefresh commands.
+This script will now install the hook in your .hg/hgrc file.
+Press enter to continue, or ctrl-c to abort: """
+
+git_style_message = """
+You're missing the gem5 style or commit message hook. These hooks help
+to ensure that your code follows gem5's style rules on git commit.
+This script will now install the hook in your .git/hooks/ directory.
+Press enter to continue, or ctrl-c to abort: """
 
 mercurial_style_upgrade_message = """
 Your Mercurial style hooks are not up-to-date. This script will now
@@ -376,10 +378,43 @@ def install_git_style_hooks():
         return
 
     git_hooks = gitdir.Dir("hooks")
-    git_pre_commit_hook = git_hooks.File("pre-commit")
-    git_style_script = File("util/git-pre-commit.py")
+    def hook_exists(hook_name):
+        hook = git_hooks.File(hook_name)
+        return hook.exists()
 
-    if git_pre_commit_hook.exists():
+    def hook_install(hook_name, script):
+        hook = git_hooks.File(hook_name)
+        if hook.exists():
+            print "Warning: Can't install %s, hook already exists." % hook_name
+            return
+
+        if hook.islink():
+            print "Warning: Removing broken symlink for hook %s." % hook_name
+            os.unlink(hook.get_abspath())
+
+        if not git_hooks.exists():
+            mkdir(git_hooks.get_abspath())
+            git_hooks.clear()
+
+        abs_symlink_hooks = git_hooks.islink() and \
+            os.path.isabs(os.readlink(git_hooks.get_abspath()))
+
+        # Use a relative symlink if the hooks live in the source directory,
+        # and the hooks directory is not a symlink to an absolute path.
+        if hook.is_under(main.root) and not abs_symlink_hooks:
+            script_path = os.path.relpath(
+                os.path.realpath(script.get_abspath()),
+                os.path.realpath(hook.Dir(".").get_abspath()))
+        else:
+            script_path = script.get_abspath()
+
+        try:
+            os.symlink(script_path, hook.get_abspath())
+        except:
+            print "Error updating git %s hook" % hook_name
+            raise
+
+    if hook_exists("pre-commit") and hook_exists("commit-msg"):
         return
 
     print git_style_message,
@@ -389,22 +424,11 @@ def install_git_style_hooks():
         print "Input exception, exiting scons.\n"
         sys.exit(1)
 
-    if not git_hooks.exists():
-        mkdir(git_hooks.get_abspath())
+    git_style_script = File("util/git-pre-commit.py")
+    git_msg_script = File("ext/git-commit-msg")
 
-    # Use a relative symlink if the hooks live in the source directory
-    if git_pre_commit_hook.is_under(main.root):
-        script_path = os.path.relpath(
-            git_style_script.get_abspath(),
-            git_pre_commit_hook.Dir(".").get_abspath())
-    else:
-        script_path = git_style_script.get_abspath()
-
-    try:
-        os.symlink(script_path, git_pre_commit_hook.get_abspath())
-    except:
-        print "Error updating git pre-commit hook"
-        raise
+    hook_install("pre-commit", git_style_script)
+    hook_install("commit-msg", git_msg_script)
 
 # Try to wire up git to the style hooks
 if not ignore_style and main.root.Entry(".git").exists():
@@ -495,7 +519,6 @@ global_vars = Variables(global_vars_file, args=ARGUMENTS)
 global_vars.AddVariables(
     ('CC', 'C compiler', environ.get('CC', main['CC'])),
     ('CXX', 'C++ compiler', environ.get('CXX', main['CXX'])),
-    ('SWIG', 'SWIG tool', environ.get('SWIG', main['SWIG'])),
     ('PROTOC', 'protoc tool', environ.get('PROTOC', 'protoc')),
     ('BATCH', 'Use batch pool for build and tests', False),
     ('BATCH_CMD', 'Batch pool submission command name', 'qdo'),
@@ -616,9 +639,9 @@ else:
     main['CCCOMSTR']        = Transform("CC")
     main['CXXCOMSTR']       = Transform("CXX")
     main['ASCOMSTR']        = Transform("AS")
-    main['SWIGCOMSTR']      = Transform("SWIG")
     main['ARCOMSTR']        = Transform("AR", 0)
     main['LINKCOMSTR']      = Transform("LINK", 0)
+    main['SHLINKCOMSTR']    = Transform("SHLINK", 0)
     main['RANLIBCOMSTR']    = Transform("RANLIB", 0)
     main['M4COMSTR']        = Transform("M4")
     main['SHCCCOMSTR']      = Transform("SHCC")
@@ -655,6 +678,16 @@ if main['GCC'] or main['CLANG']:
                          '-Wno-sign-compare', '-Wno-unused-parameter'])
     # We always compile using C++11
     main.Append(CXXFLAGS=['-std=c++11'])
+    if sys.platform.startswith('freebsd'):
+        main.Append(CCFLAGS=['-I/usr/local/include'])
+        main.Append(CXXFLAGS=['-I/usr/local/include'])
+
+    main['FILTER_PSHLINKFLAGS'] = lambda x: str(x).replace(' -shared', '')
+    main['PSHLINKFLAGS'] = main.subst('${FILTER_PSHLINKFLAGS(SHLINKFLAGS)}')
+    main['PLINKFLAGS'] = main.subst('${LINKFLAGS}')
+    shared_partial_flags = ['-r', '-nostdlib']
+    main.Append(PSHLINKFLAGS=shared_partial_flags)
+    main.Append(PLINKFLAGS=shared_partial_flags)
 else:
     print termcap.Yellow + termcap.Bold + 'Error' + termcap.Normal,
     print "Don't know what compiler options to use for your compiler."
@@ -690,7 +723,8 @@ if main['GCC']:
     # to avoid performance penalties on certain AMD chips. Older
     # assemblers detect this as an error, "Error: expecting string
     # instruction after `rep'"
-    as_version_raw = readCommand([main['AS'], '-v', '/dev/null'],
+    as_version_raw = readCommand([main['AS'], '-v', '/dev/null',
+                                  '-o', '/dev/null'],
                                  exception=False).split()
 
     # version strings may contain extra distro-specific
@@ -771,6 +805,10 @@ elif main['CLANG']:
         main.Append(CXXFLAGS=['-stdlib=libc++'])
         main.Append(LIBS=['c++'])
 
+    # On FreeBSD we need libthr.
+    if sys.platform.startswith('freebsd'):
+        main.Append(LIBS=['thr'])
+
 else:
     print termcap.Yellow + termcap.Bold + 'Error' + termcap.Normal,
     print "Don't know what compiler options to use for your compiler."
@@ -846,71 +884,20 @@ else:
                     'Warning: pkg-config could not get protobuf flags.' + \
                     termcap.Normal
 
-# Check for SWIG
-if not main.has_key('SWIG'):
-    print 'Error: SWIG utility not found.'
-    print '       Please install (see http://www.swig.org) and retry.'
-    Exit(1)
-
-# Check for appropriate SWIG version
-swig_version = readCommand([main['SWIG'], '-version'], exception='').split()
-# First 3 words should be "SWIG Version x.y.z"
-if len(swig_version) < 3 or \
-        swig_version[0] != 'SWIG' or swig_version[1] != 'Version':
-    print 'Error determining SWIG version.'
-    Exit(1)
-
-min_swig_version = '2.0.4'
-if compareVersions(swig_version[2], min_swig_version) < 0:
-    print 'Error: SWIG version', min_swig_version, 'or newer required.'
-    print '       Installed version:', swig_version[2]
-    Exit(1)
-
-# Check for known incompatibilities. The standard library shipped with
-# gcc >= 4.9 does not play well with swig versions prior to 3.0
-if main['GCC'] and compareVersions(gcc_version, '4.9') >= 0 and \
-        compareVersions(swig_version[2], '3.0') < 0:
-    print termcap.Yellow + termcap.Bold + \
-        'Warning: This combination of gcc and swig have' + \
-        ' known incompatibilities.\n' + \
-        '         If you encounter build problems, please update ' + \
-        'swig to 3.0 or later.' + \
-        termcap.Normal
-
-# Set up SWIG flags & scanner
-swig_flags=Split('-c++ -python -modern -templatereduce $_CPPINCFLAGS')
-main.Append(SWIGFLAGS=swig_flags)
 
 # Check for 'timeout' from GNU coreutils. If present, regressions will
 # be run with a time limit. We require version 8.13 since we rely on
 # support for the '--foreground' option.
-timeout_lines = readCommand(['timeout', '--version'],
-                            exception='').splitlines()
+if sys.platform.startswith('freebsd'):
+    timeout_lines = readCommand(['gtimeout', '--version'],
+                                exception='').splitlines()
+else:
+    timeout_lines = readCommand(['timeout', '--version'],
+                                exception='').splitlines()
 # Get the first line and tokenize it
 timeout_version = timeout_lines[0].split() if timeout_lines else []
 main['TIMEOUT'] =  timeout_version and \
     compareVersions(timeout_version[-1], '8.13') >= 0
-
-# filter out all existing swig scanners, they mess up the dependency
-# stuff for some reason
-scanners = []
-for scanner in main['SCANNERS']:
-    skeys = scanner.skeys
-    if skeys == '.i':
-        continue
-
-    if isinstance(skeys, (list, tuple)) and '.i' in skeys:
-        continue
-
-    scanners.append(scanner)
-
-# add the new swig scanner that we like better
-from SCons.Scanner import ClassicCPP as CPPScanner
-swig_inc_re = '^[ \t]*[%,#][ \t]*(?:include|import)[ \t]*(<|")([^>"]+)(>|")'
-scanners.append(CPPScanner("SwigScan", [ ".i" ], "CPPPATH", swig_inc_re))
-
-# replace the scanners list that has what we want
-main['SCANNERS'] = scanners
 
 # Add a custom Check function to test for structure members.
 def CheckMember(context, include, decl, member, include_quotes="<>"):
@@ -978,7 +965,8 @@ if main['M5_BUILD_CACHE']:
     print 'Using build cache located at', main['M5_BUILD_CACHE']
     CacheDir(main['M5_BUILD_CACHE'])
 
-if not GetOption('without_python'):
+main['USE_PYTHON'] = not GetOption('without_python')
+if main['USE_PYTHON']:
     # Find Python include and library directories for embedding the
     # interpreter. We rely on python-config to resolve the appropriate
     # includes and linker flags. ParseConfig does not seem to understand
@@ -1083,6 +1071,11 @@ backtrace_impls = [ "none" ]
 if conf.CheckLibWithHeader(None, 'execinfo.h', 'C',
                            'backtrace_symbols_fd((void*)0, 0, 0);'):
     backtrace_impls.append("glibc")
+elif conf.CheckLibWithHeader('execinfo', 'execinfo.h', 'C',
+                           'backtrace_symbols_fd((void*)0, 0, 0);'):
+    # NetBSD and FreeBSD need libexecinfo.
+    backtrace_impls.append("glibc")
+    main.Append(LIBS=['execinfo'])
 
 if backtrace_impls[-1] == "none":
     default_backtrace_impl = "none"
@@ -1293,105 +1286,76 @@ config_builder = Builder(emitter = config_emitter, action = config_action)
 
 main.Append(BUILDERS = { 'ConfigFile' : config_builder })
 
-# libelf build is shared across all configs in the build root.
-main.SConscript('ext/libelf/SConscript',
-                variant_dir = joinpath(build_root, 'libelf'))
-
-# iostream3 build is shared across all configs in the build root.
-main.SConscript('ext/iostream3/SConscript',
-                variant_dir = joinpath(build_root, 'iostream3'))
-
-# libfdt build is shared across all configs in the build root.
-main.SConscript('ext/libfdt/SConscript',
-                variant_dir = joinpath(build_root, 'libfdt'))
-
-# fputils build is shared across all configs in the build root.
-main.SConscript('ext/fputils/SConscript',
-                variant_dir = joinpath(build_root, 'fputils'))
-
-# DRAMSim2 build is shared across all configs in the build root.
-main.SConscript('ext/dramsim2/SConscript',
-                variant_dir = joinpath(build_root, 'dramsim2'))
-
-# DRAMPower build is shared across all configs in the build root.
-main.SConscript('ext/drampower/SConscript',
-                variant_dir = joinpath(build_root, 'drampower'))
-
-# nomali build is shared across all configs in the build root.
-main.SConscript('ext/nomali/SConscript',
-                variant_dir = joinpath(build_root, 'nomali'))
-
-
 main.Append(LIBS = ['ssl', 'crypto'])
 
 ###################################################
 #
-# This function is used to set up a directory with switching headers
+# Builders for static and shared partially linked object files.
 #
 ###################################################
 
-main['ALL_ISA_LIST'] = all_isa_list
-main['ALL_GPU_ISA_LIST'] = all_gpu_isa_list
-all_isa_deps = {}
-def make_switching_dir(dname, switch_headers, env):
-    # Generate the header.  target[0] is the full path of the output
-    # header to generate.  'source' is a dummy variable, since we get the
-    # list of ISAs from env['ALL_ISA_LIST'].
-    def gen_switch_hdr(target, source, env):
-        fname = str(target[0])
-        isa = env['TARGET_ISA'].lower()
-        try:
-            f = open(fname, 'w')
-            print >>f, '#include "%s/%s/%s"' % (dname, isa, basename(fname))
-            f.close()
-        except IOError:
-            print "Failed to create %s" % fname
-            raise
+partial_static_builder = Builder(action=SCons.Defaults.LinkAction,
+                                 src_suffix='$OBJSUFFIX',
+                                 src_builder=['StaticObject', 'Object'],
+                                 LINKFLAGS='$PLINKFLAGS',
+                                 LIBS='')
 
-    # Build SCons Action object. 'varlist' specifies env vars that this
-    # action depends on; when env['ALL_ISA_LIST'] changes these actions
-    # should get re-executed.
-    switch_hdr_action = MakeAction(gen_switch_hdr,
-                          Transform("GENERATE"), varlist=['ALL_ISA_LIST'])
+def partial_shared_emitter(target, source, env):
+    for tgt in target:
+        tgt.attributes.shared = 1
+    return (target, source)
+partial_shared_builder = Builder(action=SCons.Defaults.ShLinkAction,
+                                 emitter=partial_shared_emitter,
+                                 src_suffix='$SHOBJSUFFIX',
+                                 src_builder='SharedObject',
+                                 SHLINKFLAGS='$PSHLINKFLAGS',
+                                 LIBS='')
 
-    # Instantiate actions for each header
-    for hdr in switch_headers:
-        env.Command(hdr, [], switch_hdr_action)
+main.Append(BUILDERS = { 'PartialShared' : partial_shared_builder,
+                         'PartialStatic' : partial_static_builder })
 
-    isa_target = Dir('.').up().name.lower().replace('_', '-')
-    env['PHONY_BASE'] = '#'+isa_target
-    all_isa_deps[isa_target] = None
+# builds in ext are shared across all configs in the build root.
+ext_dir = abspath(joinpath(str(main.root), 'ext'))
+for root, dirs, files in os.walk(ext_dir):
+    if 'SConscript' in files:
+        build_dir = os.path.relpath(root, ext_dir)
+        main.SConscript(joinpath(root, 'SConscript'),
+                        variant_dir=joinpath(build_root, build_dir))
 
-Export('make_switching_dir')
+main.Prepend(CPPPATH=Dir('ext/pybind11/include/'))
 
-def make_gpu_switching_dir(dname, switch_headers, env):
-    # Generate the header.  target[0] is the full path of the output
-    # header to generate.  'source' is a dummy variable, since we get the
-    # list of ISAs from env['ALL_ISA_LIST'].
-    def gen_switch_hdr(target, source, env):
-        fname = str(target[0])
+###################################################
+#
+# This builder and wrapper method are used to set up a directory with
+# switching headers. Those are headers which are in a generic location and
+# that include more specific headers from a directory chosen at build time
+# based on the current build settings.
+#
+###################################################
 
-        isa = env['TARGET_GPU_ISA'].lower()
+def build_switching_header(target, source, env):
+    path = str(target[0])
+    subdir = str(source[0])
+    dp, fp = os.path.split(path)
+    dp = os.path.relpath(os.path.realpath(dp),
+                         os.path.realpath(env['BUILDDIR']))
+    with open(path, 'w') as hdr:
+        print >>hdr, '#include "%s/%s/%s"' % (dp, subdir, fp)
 
-        try:
-            f = open(fname, 'w')
-            print >>f, '#include "%s/%s/%s"' % (dname, isa, basename(fname))
-            f.close()
-        except IOError:
-            print "Failed to create %s" % fname
-            raise
+switching_header_action = MakeAction(build_switching_header,
+                                     Transform('GENERATE'))
 
-    # Build SCons Action object. 'varlist' specifies env vars that this
-    # action depends on; when env['ALL_ISA_LIST'] changes these actions
-    # should get re-executed.
-    switch_hdr_action = MakeAction(gen_switch_hdr,
-                          Transform("GENERATE"), varlist=['ALL_ISA_GPU_LIST'])
+switching_header_builder = Builder(action=switching_header_action,
+                                   source_factory=Value,
+                                   single_source=True)
 
-    # Instantiate actions for each header
-    for hdr in switch_headers:
-        env.Command(hdr, [], switch_hdr_action)
+main.Append(BUILDERS = { 'SwitchingHeader': switching_header_builder })
 
-Export('make_gpu_switching_dir')
+def switching_headers(self, headers, source):
+    for header in headers:
+        self.SwitchingHeader(header, source)
+
+main.AddMethod(switching_headers, 'SwitchingHeaders')
 
 # all-isas -> all-deps -> all-environs -> all_targets
 main.Alias('#all-isas', [])
@@ -1422,6 +1386,11 @@ BUILD_TARGETS[:] = ['#all-targets']
 # Define build environments for selected configurations.
 #
 ###################################################
+
+def variant_name(path):
+    return os.path.basename(path).lower().replace('_', '-')
+main['variant_name'] = variant_name
+main['VARIANT_NAME'] = '${variant_name(BUILDDIR)}'
 
 for variant_path in variant_paths:
     if not GetOption('silent'):
@@ -1505,6 +1474,9 @@ for variant_path in variant_paths:
                 "target ISA combination"
             env['USE_KVM'] = False
 
+    if env['BUILD_GPU']:
+        env.Append(CPPDEFINES=['BUILD_GPU'])
+
     # Warn about missing optional functionality
     if env['USE_KVM']:
         if not main['HAVE_PERF_ATTR_EXCLUDE_HOST']:
@@ -1529,6 +1501,8 @@ def pairwise(iterable):
     b.next()
     return itertools.izip(a, b)
 
+variant_names = [variant_name(path) for path in variant_paths]
+
 # Create false dependencies so SCons will parse ISAs, establish
 # dependencies, and setup the build Environments serially. Either
 # SCons (likely) and/or our SConscripts (possibly) cannot cope with -j
@@ -1537,7 +1511,7 @@ def pairwise(iterable):
 # Every time I tried to remove this, builds would fail in some
 # creative new way. So, don't do that. You'll want to, though, because
 # tests/SConscript takes a long time to make its Environments.
-for t1, t2 in pairwise(sorted(all_isa_deps.iterkeys())):
+for t1, t2 in pairwise(sorted(variant_names)):
     main.Depends('#%s-deps'     % t2, '#%s-deps'     % t1)
     main.Depends('#%s-environs' % t2, '#%s-environs' % t1)
 

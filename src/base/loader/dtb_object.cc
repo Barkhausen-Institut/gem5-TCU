@@ -28,16 +28,16 @@
  * Authors: Anthony Gutierrez
  */
 
+#include "base/loader/dtb_object.hh"
+
 #include <sys/mman.h>
-#include <err.h>
 #include <unistd.h>
 
 #include <cassert>
 
-#include "base/loader/dtb_object.hh"
-#include "sim/byteswap.hh"
 #include "fdt.h"
 #include "libfdt.h"
+#include "sim/byteswap.hh"
 
 ObjectFile *
 DtbObject::tryFile(const std::string &fname, size_t len, uint8_t *data)

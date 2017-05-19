@@ -48,13 +48,14 @@
  * between a single level of the memory heirarchy (ie L1->L2).
  */
 
+#include "mem/packet.hh"
+
 #include <cstring>
 #include <iostream>
 
 #include "base/cprintf.hh"
 #include "base/misc.hh"
 #include "base/trace.hh"
-#include "mem/packet.hh"
 
 using namespace std;
 
@@ -357,8 +358,12 @@ Packet::popSenderState()
 void
 Packet::print(ostream &o, const int verbosity, const string &prefix) const
 {
-    ccprintf(o, "%s[%x:%x] %s\n", prefix,
-             getAddr(), getAddr() + getSize() - 1, cmdString());
+    ccprintf(o, "%s%s [%x:%x]%s%s%s%s", prefix, cmdString(),
+             getAddr(), getAddr() + getSize() - 1,
+             req->isSecure() ? " (s)" : "",
+             req->isInstFetch() ? " IF" : "",
+             req->isUncacheable() ? " UC" : "",
+             isExpressSnoop() ? " ES" : "");
 }
 
 std::string

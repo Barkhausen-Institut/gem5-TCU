@@ -1,4 +1,4 @@
-# Copyright (c) 2016 ARM Limited
+# Copyright (c) 2016-2017 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -44,8 +44,11 @@ m5.util.addToPath('../../')
 from common.Caches import *
 from common import CpuConfig
 
+have_kvm = "kvm" in CpuConfig.cpu_names()
+
 class L1I(L1_ICache):
-    hit_latency = 1
+    tag_latency = 1
+    data_latency = 1
     response_latency = 1
     mshrs = 4
     tgts_per_mshr = 8
@@ -54,7 +57,8 @@ class L1I(L1_ICache):
 
 
 class L1D(L1_DCache):
-    hit_latency = 2
+    tag_latency = 2
+    data_latency = 2
     response_latency = 1
     mshrs = 16
     tgts_per_mshr = 16
@@ -64,7 +68,8 @@ class L1D(L1_DCache):
 
 
 class WalkCache(PageTableWalkerCache):
-    hit_latency = 4
+    tag_latency = 4
+    data_latency = 4
     response_latency = 4
     mshrs = 6
     tgts_per_mshr = 8
@@ -74,7 +79,8 @@ class WalkCache(PageTableWalkerCache):
 
 
 class L2(L2Cache):
-    hit_latency = 12
+    tag_latency = 12
+    data_latency = 12
     response_latency = 5
     mshrs = 32
     tgts_per_mshr = 8
@@ -87,7 +93,8 @@ class L2(L2Cache):
 class L3(Cache):
     size = '16MB'
     assoc = 16
-    hit_latency = 20
+    tag_latency = 20
+    data_latency = 20
     response_latency = 20
     mshrs = 20
     tgts_per_mshr = 12
@@ -165,11 +172,19 @@ class AtomicCluster(CpuCluster):
     def addL1(self):
         pass
 
+class KvmCluster(CpuCluster):
+    def __init__(self, system, num_cpus, cpu_clock, cpu_voltage="1.0V"):
+        cpu_config = [ CpuConfig.get("kvm"), None, None, None, None ]
+        super(KvmCluster, self).__init__(system, num_cpus, cpu_clock,
+                                         cpu_voltage, *cpu_config)
+    def addL1(self):
+        pass
+
 
 class SimpleSystem(LinuxArmSystem):
     cache_line_size = 64
 
-    def __init__(self, **kwargs):
+    def __init__(self, caches, mem_size, **kwargs):
         super(SimpleSystem, self).__init__(**kwargs)
 
         self.voltage_domain = VoltageDomain(voltage="1.0V")
@@ -191,8 +206,16 @@ class SimpleSystem(LinuxArmSystem):
         # CPUs->PIO
         self.iobridge = Bridge(delay='50ns')
         # Device DMA -> MEM
-        self.dmabridge = Bridge(delay='50ns',
-                                ranges=self.realview._mem_regions)
+        mem_range = self.realview._mem_regions[0]
+        mem_range_size = long(mem_range[1]) - long(mem_range[0])
+        assert mem_range_size >= long(Addr(mem_size))
+        self._mem_range = AddrRange(start=mem_range[0], size=mem_size)
+        self._caches = caches
+        if self._caches:
+            self.iocache = IOCache(addr_ranges=[self._mem_range])
+        else:
+            self.dmabridge = Bridge(delay='50ns',
+                                    ranges=[self._mem_range])
 
         self._pci_devices = 0
         self._clusters = []
@@ -207,8 +230,12 @@ class SimpleSystem(LinuxArmSystem):
         self.iobridge.master = self.iobus.slave
         self.iobridge.slave = self.membus.master
 
-        self.dmabridge.master = self.membus.slave
-        self.dmabridge.slave = self.iobus.master
+        if self._caches:
+            self.iocache.mem_side = self.membus.slave
+            self.iocache.cpu_side = self.iobus.master
+        else:
+            self.dmabridge.master = self.membus.slave
+            self.dmabridge.slave = self.iobus.master
 
         self.gic_cpu_addr = self.realview.gic.cpu_addr
         self.realview.attachOnChipIO(self.membus, self.iobridge)

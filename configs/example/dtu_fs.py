@@ -96,7 +96,7 @@ def getOptions():
     parser.add_option("--list-cpu-types",
                       action="callback", callback=_listCpuTypes,
                       help="List available CPU types")
-    parser.add_option("--cpu-type", type="choice", default="atomic",
+    parser.add_option("--cpu-type", type="choice", default="DerivO3CPU",
                       choices=CpuConfig.cpu_names(),
                       help="type of cpu to run with")
 
@@ -110,7 +110,7 @@ def getOptions():
     parser.add_option("--list-mem-types",
                       action="callback", callback=_listMemTypes,
                      help="List available memory types")
-    parser.add_option("--mem-type", type="choice", default="DDR3_1600_x64",
+    parser.add_option("--mem-type", type="choice", default="DDR3_1600_8x8",
                       choices=MemConfig.mem_names(),
                       help="type of memory to use")
     parser.add_option("--mem-channels", type="int", default=1,
@@ -357,7 +357,7 @@ def createMemPE(root, options, no, size, dram=True, content=None):
     pe.dtu.connector = BaseConnector()
 
     if dram:
-        pe.mem_ctrl = DDR3_1600_x64()
+        pe.mem_ctrl = DDR3_1600_8x8()
         pe.mem_ctrl.device_size = size
         pe.mem_ctrl.port = pe.xbar.master
     else:

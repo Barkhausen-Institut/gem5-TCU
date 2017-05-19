@@ -133,6 +133,7 @@
  * "Stub" to allow remote cpu to debug over a serial line using gdb.
  */
 
+
 #include "arch/power/remote_gdb.hh"
 
 #include <sys/signal.h>
@@ -144,13 +145,14 @@
 #include "cpu/thread_state.hh"
 #include "debug/GDBAcc.hh"
 #include "debug/GDBMisc.hh"
+#include "mem/page_table.hh"
 #include "sim/byteswap.hh"
 
 using namespace std;
 using namespace PowerISA;
 
 RemoteGDB::RemoteGDB(System *_system, ThreadContext *tc)
-    : BaseRemoteGDB(_system, tc)
+    : BaseRemoteGDB(_system, tc), regCache(this)
 {
 }
 
@@ -216,6 +218,6 @@ RemoteGDB::PowerGdbRegCache::setRegs(ThreadContext *context) const
 
 RemoteGDB::BaseGdbRegCache*
 RemoteGDB::gdbRegs() {
-    return new PowerGdbRegCache(this);
+    return &regCache;
 }
 

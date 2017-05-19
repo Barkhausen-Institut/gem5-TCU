@@ -77,7 +77,7 @@ def addNoISAOptions(parser):
     parser.add_option("--list-mem-types",
                       action="callback", callback=_listMemTypes,
                       help="List available memory types")
-    parser.add_option("--mem-type", type="choice", default="DDR3_1600_x64",
+    parser.add_option("--mem-type", type="choice", default="DDR3_1600_8x8",
                       choices=MemConfig.mem_names(),
                       help = "type of memory to use")
     parser.add_option("--mem-channels", type="int", default=1,
@@ -135,7 +135,7 @@ def addCommonOptions(parser):
     parser.add_option("--list-cpu-types",
                       action="callback", callback=_listCpuTypes,
                       help="List available CPU types")
-    parser.add_option("--cpu-type", type="choice", default="atomic",
+    parser.add_option("--cpu-type", type="choice", default="AtomicSimpleCPU",
                       choices=CpuConfig.cpu_names(),
                       help = "type of cpu to run with")
     parser.add_option("--checker", action="store_true");
@@ -253,7 +253,7 @@ def addCommonOptions(parser):
     parser.add_option("--work-cpus-checkpoint-count", action="store", type="int",
                       help="checkpoint and exit when active cpu count is reached")
     parser.add_option("--restore-with-cpu", action="store", type="choice",
-                      default="atomic", choices=CpuConfig.cpu_names(),
+                      default="AtomicSimpleCPU", choices=CpuConfig.cpu_names(),
                       help = "cpu type for restoring from a checkpoint")
 
 

@@ -111,6 +111,8 @@ ElfObject::tryFile(const std::string &fname, size_t len, uint8_t *data,
     } else if (ehdr.e_machine == EM_AARCH64 &&
                ehdr.e_ident[EI_CLASS] == ELFCLASS64) {
         arch = Arm64;
+    } else if (ehdr.e_machine == EM_RISCV) {
+        arch = Riscv;
     } else if (ehdr.e_machine == EM_PPC &&
                ehdr.e_ident[EI_CLASS] == ELFCLASS32) {
         arch = Power;
@@ -543,6 +545,8 @@ ElfObject::getSections()
         sectionNames.insert(elf_strptr(elf, ehdr.e_shstrndx, shdr.sh_name));
         section = elf_getscn(elf, ++sec_idx);
     } // while sections
+
+    elf_end(elf);
 }
 
 bool

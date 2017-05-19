@@ -619,6 +619,7 @@ class Packet : public Printable
     void setResponderHadWritable()
     {
         assert(cacheResponding());
+        assert(!responderHadWritable());
         flags.set(RESPONDER_HAD_WRITABLE);
     }
     bool responderHadWritable() const

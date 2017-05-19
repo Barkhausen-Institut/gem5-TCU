@@ -568,7 +568,7 @@ DtuAbortTest::tick()
 
         case State::STOP:
         {
-            exit_message("info", 1, "Test done");
+            exit_message(::Logger::get(::Logger::INFO), 1, "Test done");
             break;
         }
     }

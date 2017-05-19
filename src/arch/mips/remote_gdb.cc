@@ -133,13 +133,14 @@
  * "Stub" to allow remote cpu to debug over a serial line using gdb.
  */
 
+#include "arch/mips/remote_gdb.hh"
+
 #include <sys/signal.h>
 #include <unistd.h>
 
 #include <string>
 
 #include "arch/mips/decoder.hh"
-#include "arch/mips/remote_gdb.hh"
 #include "arch/mips/vtophys.hh"
 #include "cpu/thread_state.hh"
 #include "debug/GDBAcc.hh"
@@ -151,7 +152,7 @@ using namespace std;
 using namespace MipsISA;
 
 RemoteGDB::RemoteGDB(System *_system, ThreadContext *tc)
-    : BaseRemoteGDB(_system, tc)
+    : BaseRemoteGDB(_system, tc), regCache(this)
 {
 }
 
@@ -206,5 +207,5 @@ RemoteGDB::MipsGdbRegCache::setRegs(ThreadContext *context) const
 
 RemoteGDB::BaseGdbRegCache*
 RemoteGDB::gdbRegs() {
-    return new MipsGdbRegCache(this);
+    return &regCache;
 }

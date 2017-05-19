@@ -132,6 +132,8 @@ class CheckerThreadContext : public ThreadContext
 
     Process *getProcessPtr() { return actualTC->getProcessPtr(); }
 
+    void setProcessPtr(Process *p) { actualTC->setProcessPtr(p); }
+
     PortProxy &getPhysProxy() { return actualTC->getPhysProxy(); }
 
     FSTranslatingPortProxy &getVirtProxy()
@@ -148,8 +150,8 @@ class CheckerThreadContext : public ThreadContext
     SETranslatingPortProxy &getMemProxy() { return actualTC->getMemProxy(); }
 
     /** Executes a syscall in SE mode. */
-    void syscall(int64_t callnum)
-    { return actualTC->syscall(callnum); }
+    void syscall(int64_t callnum, Fault *fault)
+    { return actualTC->syscall(callnum, fault); }
 
     Status status() const { return actualTC->status(); }
 
@@ -254,6 +256,12 @@ class CheckerThreadContext : public ThreadContext
         checkerTC->pcState(val);
         checkerCPU->recordPCChange(val);
         return actualTC->pcState(val);
+    }
+
+    void setNPC(Addr val)
+    {
+        checkerTC->setNPC(val);
+        actualTC->setNPC(val);
     }
 
     void pcStateNoRecord(const TheISA::PCState &val)

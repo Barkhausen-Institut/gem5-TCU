@@ -78,8 +78,6 @@ class BaseSetAssoc : public BaseTags
   public:
     /** Typedef the block type used in this tag store. */
     typedef CacheBlk BlkType;
-    /** Typedef for a list of pointers to the local block class. */
-    typedef std::list<BlkType*> BlkList;
     /** Typedef the set type used in this tag store. */
     typedef CacheSet<CacheBlk> SetType;
 
@@ -108,8 +106,6 @@ class BaseSetAssoc : public BaseTags
     int tagShift;
     /** Mask out all bits that aren't part of the set index. */
     unsigned setMask;
-    /** Mask out all bits that aren't part of the block offset. */
-    unsigned blkMask;
 
 public:
 
@@ -125,47 +121,6 @@ public:
      * Destructor
      */
     virtual ~BaseSetAssoc();
-
-    /**
-     * Return the block size.
-     * @return the block size.
-     */
-    unsigned
-    getBlockSize() const
-    {
-        return blkSize;
-    }
-
-    /**
-     * Return the subblock size. In the case of BaseSetAssoc it is always
-     * the block size.
-     * @return The block size.
-     */
-    unsigned
-    getSubBlockSize() const
-    {
-        return blkSize;
-    }
-
-    /**
-     * Return the number of sets this cache has
-     * @return The number of sets.
-     */
-    unsigned
-    getNumSets() const override
-    {
-        return numSets;
-    }
-
-    /**
-     * Return the number of ways this cache has
-     * @return The number of ways.
-     */
-    unsigned
-    getNumWays() const override
-    {
-        return assoc;
-    }
 
     /**
      * Find the cache block given set and way
@@ -198,17 +153,14 @@ public:
      * side effect.
      * @param addr The address to find.
      * @param is_secure True if the target memory space is secure.
-     * @param asid The address space ID.
      * @param lat The access latency.
      * @return Pointer to the cache block if found.
      */
-    CacheBlk* accessBlock(Addr addr, bool is_secure, Cycles &lat,
-                          int context_src) override
+    CacheBlk* accessBlock(Addr addr, bool is_secure, Cycles &lat) override
     {
         Addr tag = extractTag(addr);
         int set = extractSet(addr);
         BlkType *blk = sets[set].findBlk(tag, is_secure);
-        lat = accessLatency;;
 
         // Access all tags in parallel, hence one in each way.  The data side
         // either accesses all blocks in parallel, or one block sequentially on
@@ -223,12 +175,20 @@ public:
         }
 
         if (blk != nullptr) {
-            if (blk->whenReady > curTick()
-                && cache->ticksToCycles(blk->whenReady - curTick())
-                > accessLatency) {
-                lat = cache->ticksToCycles(blk->whenReady - curTick());
+            // If a cache hit
+            lat = accessLatency;
+            // Check if the block to be accessed is available. If not,
+            // apply the accessLatency on top of block->whenReady.
+            if (blk->whenReady > curTick() &&
+                cache->ticksToCycles(blk->whenReady - curTick()) >
+                accessLatency) {
+                lat = cache->ticksToCycles(blk->whenReady - curTick()) +
+                accessLatency;
             }
             blk->refCount += 1;
+        } else {
+            // If a cache miss
+            lat = lookupLatency;
         }
 
         return blk;
@@ -357,16 +317,6 @@ public:
     int extractSet(Addr addr) const override
     {
         return ((addr >> setShift) & setMask);
-    }
-
-    /**
-     * Align an address to the block size.
-     * @param addr the address to align.
-     * @return The block address.
-     */
-    Addr blkAlign(Addr addr) const
-    {
-        return (addr & ~(Addr)blkMask);
     }
 
     /**

@@ -43,6 +43,7 @@
 
 import sys
 
+from m5.SimObject import *
 from m5.defines import buildEnv
 from m5.params import *
 from m5.proxy import *
@@ -85,24 +86,27 @@ elif buildEnv['TARGET_ISA'] == 'power':
     from PowerInterrupts import PowerInterrupts
     from PowerISA import PowerISA
     isa_class = PowerISA
+elif buildEnv['TARGET_ISA'] == 'riscv':
+    from RiscvTLB import RiscvTLB
+    from RiscvInterrupts import RiscvInterrupts
+    from RiscvISA import RiscvISA
+    isa_class = RiscvISA
 
 class BaseCPU(MemObject):
     type = 'BaseCPU'
     abstract = True
     cxx_header = "cpu/base.hh"
 
-    @classmethod
-    def export_methods(cls, code):
-        code('''
-    void switchOut();
-    void takeOverFrom(BaseCPU *cpu);
-    bool switchedOut();
-    void flushTLBs();
-    Counter totalInsts();
-    void scheduleInstStop(ThreadID tid, Counter insts, const char *cause);
-    void scheduleLoadStop(ThreadID tid, Counter loads, const char *cause);
-    uint64_t getCurrentInstCount(ThreadID tid);
-''')
+    cxx_exports = [
+        PyBindMethod("switchOut"),
+        PyBindMethod("takeOverFrom"),
+        PyBindMethod("switchedOut"),
+        PyBindMethod("flushTLBs"),
+        PyBindMethod("totalInsts"),
+        PyBindMethod("scheduleInstStop"),
+        PyBindMethod("scheduleLoadStop"),
+        PyBindMethod("getCurrentInstCount"),
+    ]
 
     @classmethod
     def memory_mode(cls):
@@ -136,6 +140,8 @@ class BaseCPU(MemObject):
     function_trace_start = Param.Tick(0, "Tick to start function trace")
 
     checker = Param.BaseCPU(NULL, "checker CPU")
+
+    syscallRetryLatency = Param.Cycles(10000, "Cycles to wait until retry")
 
     do_checkpoint_insts = Param.Bool(True,
         "enable checkpoint pseudo instructions")
@@ -185,6 +191,12 @@ class BaseCPU(MemObject):
         interrupts = VectorParam.PowerInterrupts(
                 [], "Interrupt Controller")
         isa = VectorParam.PowerISA([ isa_class() ], "ISA instance")
+    elif buildEnv['TARGET_ISA'] == 'riscv':
+        dtb = Param.RiscvTLB(RiscvTLB(), "Data TLB")
+        itb = Param.RiscvTLB(RiscvTLB(), "Instruction TLB")
+        interrupts = VectorParam.RiscvInterrupts(
+                [], "Interrupt Controller")
+        isa = VectorParam.RiscvISA([ isa_class() ], "ISA instance")
     else:
         print "Don't know what TLB to use for ISA %s" % \
             buildEnv['TARGET_ISA']
@@ -242,6 +254,9 @@ class BaseCPU(MemObject):
             self.interrupts = [ArmInterrupts() for i in xrange(self.numThreads)]
         elif buildEnv['TARGET_ISA'] == 'power':
             self.interrupts = [PowerInterrupts() for i in xrange(self.numThreads)]
+        elif buildEnv['TARGET_ISA'] == 'riscv':
+            self.interrupts = \
+                [RiscvInterrupts() for i in xrange(self.numThreads)]
         else:
             print "Don't know what Interrupt Controller to use for ISA %s" % \
                 buildEnv['TARGET_ISA']

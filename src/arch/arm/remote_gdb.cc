@@ -132,6 +132,8 @@
  * "Stub" to allow remote cpu to debug over a serial line using gdb.
  */
 
+#include "arch/arm/remote_gdb.hh"
+
 #include <sys/signal.h>
 #include <unistd.h>
 
@@ -140,7 +142,6 @@
 #include "arch/arm/decoder.hh"
 #include "arch/arm/pagetable.hh"
 #include "arch/arm/registers.hh"
-#include "arch/arm/remote_gdb.hh"
 #include "arch/arm/system.hh"
 #include "arch/arm/utility.hh"
 #include "arch/arm/vtophys.hh"
@@ -164,7 +165,7 @@ using namespace std;
 using namespace ArmISA;
 
 RemoteGDB::RemoteGDB(System *_system, ThreadContext *tc)
-    : BaseRemoteGDB(_system, tc)
+    : BaseRemoteGDB(_system, tc), regCache32(this), regCache64(this)
 {
 }
 
@@ -296,7 +297,7 @@ RemoteGDB::BaseGdbRegCache*
 RemoteGDB::gdbRegs()
 {
     if (inAArch64(context))
-        return new AArch64GdbRegCache(this);
+        return &regCache32;
     else
-        return new AArch32GdbRegCache(this);
+        return &regCache64;
 }

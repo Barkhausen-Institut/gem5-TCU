@@ -117,15 +117,15 @@
  * "Stub" to allow remote cpu to debug over a serial line using gdb.
  */
 
+#include "arch/alpha/remote_gdb.hh"
+
 #include <sys/signal.h>
 #include <unistd.h>
 
 #include <string>
 
-
 #include "arch/alpha/decoder.hh"
 #include "arch/alpha/regredir.hh"
-#include "arch/alpha/remote_gdb.hh"
 #include "arch/alpha/utility.hh"
 #include "arch/alpha/vtophys.hh"
 #include "base/intmath.hh"
@@ -138,8 +138,8 @@
 #include "debug/GDBMisc.hh"
 #include "mem/physical.hh"
 #include "mem/port.hh"
-#include "sim/system.hh"
 #include "sim/full_system.hh"
+#include "sim/system.hh"
 
 using namespace std;
 using namespace AlphaISA;
@@ -262,12 +262,12 @@ RemoteGDB::write(Addr vaddr, size_t size, const char *data)
 }
 
 
-bool
+void
 RemoteGDB::insertHardBreak(Addr addr, size_t len)
 {
     warn_once("Breakpoints do not work in Alpha PAL mode.\n"
               "      See PCEventQueue::doService() in cpu/pc_event.cc.\n");
-    return BaseRemoteGDB::insertHardBreak(addr, len);
+    BaseRemoteGDB::insertHardBreak(addr, len);
 }
 
 RemoteGDB::BaseGdbRegCache*

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 ARM Limited
+ * Copyright (c) 2013,2016 ARM Limited
  * All rights reserved.
  *
  * The license below extends only to copyright in the software and shall
@@ -55,8 +55,13 @@
 using namespace std;
 
 BaseTags::BaseTags(const Params *p)
-    : ClockedObject(p), blkSize(p->block_size), size(p->size),
-      accessLatency(p->hit_latency), cache(nullptr), warmupBound(0),
+    : ClockedObject(p), blkSize(p->block_size), blkMask(blkSize - 1),
+      size(p->size),
+      lookupLatency(p->tag_latency),
+      accessLatency(p->sequential_access ?
+                    p->tag_latency + p->data_latency :
+                    std::max(p->tag_latency, p->data_latency)),
+      cache(nullptr), warmupBound(0),
       warmedUp(false), numBlocks(0)
 {
 }

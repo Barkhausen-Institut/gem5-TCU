@@ -1,4 +1,4 @@
-# Copyright (c) 2009-2015 ARM Limited
+# Copyright (c) 2009-2017 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -56,6 +56,18 @@ from Gic import *
 from EnergyCtrl import EnergyCtrl
 from ClockDomain import SrcClockDomain
 from SubSystem import SubSystem
+
+# Platforms with KVM support should generally use in-kernel GIC
+# emulation. Use a GIC model that automatically switches between
+# gem5's GIC model and KVM's GIC model if KVM is available.
+try:
+    from KvmGic import MuxingKvmGic
+    kvm_gicv2_class = MuxingKvmGic
+except ImportError:
+    # KVM support wasn't compiled into gem5. Fallback to a
+    # software-only GIC.
+    kvm_gicv2_class = Pl390
+    pass
 
 class AmbaPioDevice(BasicPioDevice):
     type = 'AmbaPioDevice'
@@ -286,6 +298,8 @@ class HDLcd(AmbaDmaDevice):
 
     pxl_clk = Param.ClockDomain("Pixel clock source")
     pixel_chunk = Param.Unsigned(32, "Number of pixels to handle in one batch")
+    virt_refresh_rate = Param.Frequency("20Hz", "Frame refresh rate "
+                                        "in KVM mode")
 
 class RealView(Platform):
     type = 'RealView'
@@ -803,6 +817,7 @@ Memory map:
    0x0c000000-0x0fffffff: Reserved (Off-chip, CS4)
    0x10000000-0x13ffffff: gem5-specific peripherals (Off-chip, CS5)
        0x10000000-0x1000ffff: gem5 energy controller
+       0x10010000-0x1001ffff: gem5 pseudo-ops
 
    0x14000000-0x17ffffff: Reserved (Off-chip, PSRAM, CS1)
    0x18000000-0x1bffffff: Reserved (Off-chip, Peripherals, CS2)
@@ -883,7 +898,8 @@ Interrupts:
     dcc = CoreTile2A15DCC()
 
     ### On-chip devices ###
-    gic = Pl390(dist_addr=0x2c001000, cpu_addr=0x2c002000, it_lines=512)
+    gic = kvm_gicv2_class(dist_addr=0x2c001000, cpu_addr=0x2c002000,
+                          it_lines=512)
     vgic = VGic(vcpu_addr=0x2c006000, hv_addr=0x2c004000, ppint=25)
     gicv2m = Gicv2m()
     gicv2m.frames = [
@@ -941,3 +957,8 @@ Interrupts:
         cur_sys.atags_addr = 0x8000000
         cur_sys.load_addr_mask = 0xfffffff
         cur_sys.load_offset = 0x80000000
+
+        #  Setup m5ops. It's technically not a part of the boot
+        #  loader, but this is the only place we can configure the
+        #  system.
+        cur_sys.m5ops_base = 0x10010000

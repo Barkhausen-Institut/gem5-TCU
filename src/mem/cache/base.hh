@@ -265,6 +265,12 @@ class BaseCache : public MemObject
     const Cycles lookupLatency;
 
     /**
+     * The latency of data access of a cache. It occurs when there is
+     * an access to the cache.
+     */
+    const Cycles dataLatency;
+
+    /**
      * This is the forward latency of the cache. It occurs when there
      * is a cache miss and a request is forwarded downstream, in
      * particular an outbound miss.
@@ -478,15 +484,11 @@ class BaseCache : public MemObject
         return blkSize;
     }
 
-
-    Addr blockAlign(Addr addr) const { return (addr & ~(Addr(blkSize - 1))); }
-
-
     const AddrRangeList &getAddrRanges() const { return addrRanges; }
 
     MSHR *allocateMissBuffer(PacketPtr pkt, Tick time, bool sched_send = true)
     {
-        MSHR *mshr = mshrQueue.allocate(blockAlign(pkt->getAddr()), blkSize,
+        MSHR *mshr = mshrQueue.allocate(pkt->getBlockAddr(blkSize), blkSize,
                                         pkt, time, order++,
                                         allocOnFill(pkt->cmd));
 
@@ -507,13 +509,12 @@ class BaseCache : public MemObject
         // should only see writes or clean evicts here
         assert(pkt->isWrite() || pkt->cmd == MemCmd::CleanEvict);
 
-        Addr blk_addr = blockAlign(pkt->getAddr());
+        Addr blk_addr = pkt->getBlockAddr(blkSize);
 
         WriteQueueEntry *wq_entry =
             writeBuffer.findMatch(blk_addr, pkt->isSecure());
         if (wq_entry && !wq_entry->inService) {
-            DPRINTF(Cache, "Potential to merge writeback %s to %#llx",
-                    pkt->cmdString(), pkt->getAddr());
+            DPRINTF(Cache, "Potential to merge writeback %s", pkt->print());
         }
 
         writeBuffer.allocate(blk_addr, blkSize, pkt, time, order++);

@@ -40,17 +40,18 @@
  *          Boris Shingarov
  */
 
+#include "arch/x86/remote_gdb.hh"
+
 #include <sys/signal.h>
 #include <unistd.h>
 
 #include <string>
 
-#include "arch/x86/regs/int.hh"
-#include "arch/x86/regs/misc.hh"
+#include "arch/vtophys.hh"
 #include "arch/x86/pagetable_walker.hh"
 #include "arch/x86/process.hh"
-#include "arch/x86/remote_gdb.hh"
-#include "arch/vtophys.hh"
+#include "arch/x86/regs/int.hh"
+#include "arch/x86/regs/misc.hh"
 #include "base/remote_gdb.hh"
 #include "base/socket.hh"
 #include "base/trace.hh"
@@ -64,7 +65,7 @@ using namespace std;
 using namespace X86ISA;
 
 RemoteGDB::RemoteGDB(System *_system, ThreadContext *c) :
-    BaseRemoteGDB(_system, c)
+    BaseRemoteGDB(_system, c), regCache32(this), regCache64(this)
 {}
 
 bool
@@ -96,9 +97,9 @@ RemoteGDB::gdbRegs()
 {
     HandyM5Reg m5reg = context->readMiscRegNoEffect(MISCREG_M5_REG);
     if (m5reg.submode == SixtyFourBitMode)
-        return new AMD64GdbRegCache(this);
+        return &regCache64;
     else
-        return new X86GdbRegCache(this);
+        return &regCache32;
 }
 
 
