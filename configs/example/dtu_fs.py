@@ -414,25 +414,25 @@ def createRoot(options):
     root.cpu_clk_domain = SrcClockDomain(clock=options.cpu_clock,
                                          voltage_domain=root.cpu_voltage_domain)
 
-    # A dummy system for the CoherentXBar
-    root.noc_system = System()
-
     # All PEs are connected to a NoC (Network on Chip). In this case it's just
     # a simple XBar.
     if options.coherent:
+        # A dummy system for the CoherentXBar
+        root.noc_system = System()
+
         root.noc = CoherentXBar(forward_latency=0,
                                 frontend_latency=1,
                                 response_latency=1,
                                 snoop_response_latency=1,
                                 system=root.noc_system,
                                 width=12)
+
+        root.noc_system.system_port = root.noc.slave
     else:
         root.noc = NoncoherentXBar(forward_latency=0,
                                    frontend_latency=1,
                                    response_latency=1,
                                    width=12)
-
-    root.noc_system.system_port = root.noc.slave
 
     # create a dummy platform and system for the UART
     root.platform = IOPlatform()
