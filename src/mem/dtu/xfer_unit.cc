@@ -254,6 +254,55 @@ XferUnit::TransferEvent::translateDone(bool success, const NocAddr &phys)
 }
 
 void
+XferUnit::recvMemResponse(uint64_t evId,
+                          const void* data,
+                          Addr size)
+{
+    Buffer *buf = getBuffer(evId);
+    // ignore responses for aborted transfers
+    if (!buf)
+        return;
+
+    assert(buf->event);
+
+    if (data && buf->event->isRead())
+    {
+        assert(buf->offset + size <= bufSize);
+
+        memcpy(buf->bytes + buf->offset, data, size);
+
+        buf->offset += size;
+    }
+
+    // nothing more to copy?
+    if (buf->event->remaining == 0)
+    {
+        buf->event->transferDone(buf->event->result);
+
+        DPRINTFS(DtuXfers, (&dtu), "buf%d: Transfer done\n",
+                 buf->id);
+
+        // we're done with this buffer now
+        if (buf->event->isRead())
+            reads.sample(dtu.curCycle() - buf->event->startCycle);
+        else
+            writes.sample(dtu.curCycle() - buf->event->startCycle);
+        buf->event->finish();
+        buf->event = NULL;
+
+        // start the next one, if there is any
+        if (!queue.empty())
+        {
+            TransferEvent *ev = queue.front();
+            queue.pop_front();
+            dtu.schedule(ev, dtu.clockEdge(Cycles(1)));
+        }
+    }
+    else
+        buf->event->process();
+}
+
+void
 XferUnit::TransferEvent::abort(Dtu::Error error)
 {
     DPRINTFS(DtuXfers, (&xfer->dtu),
@@ -328,55 +377,6 @@ XferUnit::abortTransfers(uint types)
     }
 
     return !rem;
-}
-
-void
-XferUnit::recvMemResponse(uint64_t evId,
-                          const void* data,
-                          Addr size)
-{
-    Buffer *buf = getBuffer(evId);
-    // ignore responses for aborted transfers
-    if (!buf)
-        return;
-
-    assert(buf->event);
-
-    if (data && buf->event->isRead())
-    {
-        assert(buf->offset + size <= bufSize);
-
-        memcpy(buf->bytes + buf->offset, data, size);
-
-        buf->offset += size;
-    }
-
-    // nothing more to copy?
-    if (buf->event->remaining == 0)
-    {
-        buf->event->transferDone(buf->event->result);
-
-        DPRINTFS(DtuXfers, (&dtu), "buf%d: Transfer done\n",
-                 buf->id);
-
-        // we're done with this buffer now
-        if (buf->event->isRead())
-            reads.sample(dtu.curCycle() - buf->event->startCycle);
-        else
-            writes.sample(dtu.curCycle() - buf->event->startCycle);
-        buf->event->finish();
-        buf->event = NULL;
-
-        // start the next one, if there is any
-        if (!queue.empty())
-        {
-            TransferEvent *ev = queue.front();
-            queue.pop_front();
-            dtu.schedule(ev, dtu.clockEdge(Cycles(1)));
-        }
-    }
-    else
-        buf->event->process();
 }
 
 XferUnit::Buffer *
