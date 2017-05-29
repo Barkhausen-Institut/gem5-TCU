@@ -835,12 +835,14 @@ Dtu::completeNocRequest(PacketPtr pkt)
 
     if (senderState->packetType == NocPacketType::CACHE_MEM_REQ)
     {
+        // as these target memory PEs, there can't be any error
+        assert(senderState->result == Error::NONE);
+
         NocAddr phys(pkt->getAddr());
         DPRINTF(DtuMem,
-            "Finished %s request of LLC for %u bytes @ %d:%#x -> %u\n",
+            "Finished %s request of LLC for %u bytes @ %d:%#x\n",
             pkt->isRead() ? "read" : "write",
-            pkt->getSize(), phys.coreId, phys.offset,
-            static_cast<uint>(senderState->result));
+            pkt->getSize(), phys.coreId, phys.offset);
 
         if(pkt->isRead())
             printPacket(pkt);
@@ -853,14 +855,7 @@ Dtu::completeNocRequest(PacketPtr pkt)
             pkt->popSenderState();
         }
 
-        if (senderState->result != Error::NONE)
-        {
-            uint access = DtuTlb::INTERN | DtuTlb::GONE;
-            VPEGoneTranslation *trans = new VPEGoneTranslation(*this, pkt);
-            ptUnit->startTranslate(pkt->getAddr(), access, trans);
-        }
-        else
-            sendCacheMemResponse(pkt, true);
+        sendCacheMemResponse(pkt, true);
     }
     else if (senderState->packetType == NocPacketType::PAGEFAULT)
     {
@@ -1266,17 +1261,6 @@ Dtu::MemTranslation::finished(bool _success, const NocAddr &_phys)
     phys = _phys;
 
     dtu.completeCpuRequests();
-}
-
-void
-Dtu::VPEGoneTranslation::finished(bool success, const NocAddr &phys)
-{
-    if (success)
-        dtu.handleCacheMemRequest(pkt, false);
-    else
-        dtu.sendCacheMemResponse(pkt, false);
-
-    delete this;
 }
 
 Dtu*

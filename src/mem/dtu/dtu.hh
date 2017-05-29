@@ -423,19 +423,6 @@ class Dtu : public BaseDtu
         void finished(bool success, const NocAddr &phys) override;
     };
 
-    struct VPEGoneTranslation : PtUnit::Translation
-    {
-        Dtu& dtu;
-
-        PacketPtr pkt;
-
-        VPEGoneTranslation(Dtu& _dtu, PacketPtr _pkt)
-            : dtu(_dtu), pkt(_pkt)
-        {}
-
-        void finished(bool success, const NocAddr &phys) override;
-    };
-
     Cycles sleepStart;
     PacketPtr cmdPkt;
     FinishCommandEvent *cmdFinish;
