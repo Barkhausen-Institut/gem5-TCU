@@ -498,7 +498,7 @@ BaseDtu::sendCacheMemResponse(PacketPtr pkt, bool success)
     if (!success)
         sendDummyResponse(cacheMemSlavePort, pkt, false);
     else
-        cacheMemSlavePort.sendTimingResp(pkt);
+        cacheMemSlavePort.schedTimingResp(pkt, clockEdge(Cycles(1)));
 }
 
 void
