@@ -40,7 +40,7 @@ class BaseDtu(MemObject):
     noc_slave_port  = SlavePort("DTU slave port")
 
     icache_slave_port = SlavePort("Port that forwards requests from the CPU to the icache")
-    dcache_slave_port = SlavePort("Port that forwards requests from the CPU to the icache")
+    dcache_slave_port = SlavePort("Port that forwards requests from the CPU to the dcache")
 
     icache_master_port = MasterPort("Port that connects the icache")
     dcache_master_port = MasterPort("Port that connects the dcache")
