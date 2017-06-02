@@ -436,6 +436,7 @@ class Dtu : public BaseDtu
 
     unsigned memPe;
     Addr memOffset;
+    Addr memSize;
 
     const bool atomicMode;
 

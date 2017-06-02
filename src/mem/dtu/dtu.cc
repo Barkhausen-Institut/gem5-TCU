@@ -124,8 +124,9 @@ Dtu::Dtu(DtuParams* p)
         NocAddr phys = sys->getPhys(0);
         memPe = phys.coreId;
         memOffset = phys.offset;
+        memSize = sys->memSize;
         DPRINTF(Dtu, "Using memory range %p .. %p\n",
-            memOffset, memOffset + sys->memSize);
+            memOffset, memOffset + memSize);
 
         regs().set(DtuReg::ROOT_PT, phys.getAddr());
     }
@@ -1100,6 +1101,13 @@ Dtu::handleCacheMemRequest(PacketPtr pkt, bool functional)
     // and pseudoInst
     if (!phys.valid)
     {
+        if (phys.offset > memSize)
+        {
+            DPRINTF(DtuMem, "Ignoring %s request of LLC for %u bytes @ %d:%#x\n",
+                pkt->cmdString(), pkt->getSize(), phys.coreId, phys.offset);
+            return false;
+        }
+
         phys = NocAddr(memPe, memOffset + phys.offset);
         pkt->setAddr(phys.getAddr());
         if (!functional)
