@@ -681,6 +681,7 @@ class MetaSimObject(type):
 #include "pybind11/stl.h"
 
 #include "params/$cls.hh"
+#include "python/pybind11/core.hh"
 #include "sim/init.hh"
 #include "sim/sim_object.hh"
 
@@ -700,10 +701,13 @@ module_init(py::module &m_internal)
 ''')
         code.indent()
         if cls._base:
-            code('py::class_<${cls}Params, ${{cls._base.type}}Params>(m, ' \
-                 '"${cls}Params")')
+            code('py::class_<${cls}Params, ${{cls._base.type}}Params, ' \
+                 'std::unique_ptr<${{cls}}Params, py::nodelete>>(' \
+                 'm, "${cls}Params")')
         else:
-            code('py::class_<${cls}Params>(m, "${cls}Params")')
+            code('py::class_<${cls}Params, ' \
+                 'std::unique_ptr<${cls}Params, py::nodelete>>(' \
+                 'm, "${cls}Params")')
 
         code.indent()
         if not hasattr(cls, 'abstract') or not cls.abstract:
@@ -728,10 +732,13 @@ module_init(py::module &m_internal)
                 cls.cxx_bases
         if bases:
             base_str = ", ".join(bases)
-            code('py::class_<${{cls.cxx_class}}, ${base_str}>(m, ' \
-                 '"${py_class_name}")')
+            code('py::class_<${{cls.cxx_class}}, ${base_str}, ' \
+                 'std::unique_ptr<${{cls.cxx_class}}, py::nodelete>>(' \
+                 'm, "${py_class_name}")')
         else:
-            code('py::class_<${{cls.cxx_class}}>(m, "${py_class_name}")')
+            code('py::class_<${{cls.cxx_class}}, ' \
+                 'std::unique_ptr<${{cls.cxx_class}}, py::nodelete>>(' \
+                 'm, "${py_class_name}")')
         code.indent()
         for exp in cls.cxx_exports:
             exp.export(code, cls.cxx_class)
@@ -1418,7 +1425,14 @@ class SimObject(object):
                 assert isinstance(value, list)
                 vec = getattr(cc_params, param)
                 assert not len(vec)
-                setattr(cc_params, param, list(value))
+                # Some types are exposed as opaque types. They support
+                # the append operation unlike the automatically
+                # wrapped types.
+                if isinstance(vec, list):
+                    setattr(cc_params, param, list(value))
+                else:
+                    for v in value:
+                        getattr(cc_params, param).append(v)
             else:
                 setattr(cc_params, param, value)
 
