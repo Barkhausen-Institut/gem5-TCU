@@ -49,6 +49,9 @@ const char *RegFile::dtuRegNames[] = {
     "IDLE_TIME",
     "MSG_CNT",
     "EXT_CMD",
+    "EXT_ARG",
+    "XLATE_REQ",
+    "XLATE_RESP",
 };
 
 const char *RegFile::cmdRegNames[] = {
@@ -465,10 +468,14 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
             if (pkt->isRead())
                 data[offset / sizeof(reg_t)] = get(reg, access);
             // dtu registers can't be set by the CPU
-            else if (pkt->isWrite() && !isCpuRequest && reg != DtuReg::MSG_CNT)
+            else if (pkt->isWrite() &&
+                     (!isCpuRequest || reg >= DtuReg::EXT_ARG) &&
+                     reg != DtuReg::MSG_CNT)
             {
                 if (reg == DtuReg::EXT_CMD)
                     res |= WROTE_EXT_CMD;
+                if (reg == DtuReg::XLATE_REQ || reg == DtuReg::XLATE_RESP)
+                    res |= WROTE_XLATE;
                 set(reg, data[offset / sizeof(reg_t)], access);
             }
         }

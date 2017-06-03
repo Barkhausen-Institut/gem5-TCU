@@ -35,7 +35,7 @@
 
 /**
  *
- *  64    59        52         0
+ *  64    51        44         0
  *   ---------------------------
  *   |res|V| coreId  | offset  |
  *   ---------------------------
@@ -48,9 +48,9 @@ class NocAddr
     {}
 
     explicit NocAddr(Addr addr)
-        : valid(addr >> 59),
-          coreId((addr >> 52) & ((1 << 7) - 1)),
-          offset(addr & ((static_cast<Addr>(1) << 36) - 1))
+        : valid(addr >> 51),
+          coreId((addr >> 44) & ((1 << 7) - 1)),
+          offset(addr & ((static_cast<Addr>(1) << 44) - 1))
     {}
 
     explicit NocAddr(unsigned _coreId, Addr _offset)
@@ -60,10 +60,10 @@ class NocAddr
     Addr getAddr() const
     {
         assert((coreId & ~((1 << 7) - 1)) == 0);
-        assert((offset & ~((static_cast<Addr>(1) << 36) - 1)) == 0);
+        assert((offset & ~((static_cast<Addr>(1) << 44) - 1)) == 0);
 
-        Addr res = static_cast<Addr>(valid) << 59;
-        res |= static_cast<Addr>(coreId) << 52;
+        Addr res = static_cast<Addr>(valid) << 51;
+        res |= static_cast<Addr>(coreId) << 44;
         res |= offset;
         return res;
     }

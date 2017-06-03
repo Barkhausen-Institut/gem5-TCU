@@ -38,6 +38,7 @@
 #include "debug/DtuSysCalls.hh"
 #include "debug/DtuMem.hh"
 #include "debug/DtuCpuReq.hh"
+#include "debug/DtuXlate.hh"
 #include "mem/dtu/dtu.hh"
 #include "mem/dtu/msg_unit.hh"
 #include "mem/dtu/mem_unit.hh"
@@ -88,8 +89,9 @@ Dtu::Dtu(DtuParams* p)
     msgUnit(new MessageUnit(*this)),
     memUnit(new MemoryUnit(*this)),
     xferUnit(new XferUnit(*this, p->block_size, p->buf_count, p->buf_size)),
-    ptUnit(p->tlb_entries > 0 ? new PtUnit(*this) : NULL),
+    ptUnit(p->pt_walker ? new PtUnit(*this) : NULL),
     abortCommandEvent(*this),
+    completeTranslateEvent(*this),
     sleepStart(0),
     cmdPkt(),
     cmdFinish(),
@@ -97,6 +99,8 @@ Dtu::Dtu(DtuParams* p)
     abortCmd(0),
     irqPending(false),
     xlates(),
+    coreXlates(new CoreTranslation[p->buf_count + 1]()),
+    coreXlateSlots(p->buf_count + 1),
     memPe(),
     memOffset(),
     atomicMode(p->system->isAtomicMode()),
@@ -684,7 +688,7 @@ Dtu::printLine(Addr addr, Addr size)
 
 
         NocAddr phys(addr);
-        if(tlb())
+        if(tlb() && ptUnit)
         {
             DtuTlb::Result res = tlb()->lookup(addr, DtuTlb::READ, &phys);
             assert(res != DtuTlb::PAGEFAULT);
@@ -810,17 +814,90 @@ Dtu::startTransfer(void *event, Cycles delay)
 }
 
 void
-Dtu::startTranslate(Addr virt,
+Dtu::startTranslate(size_t id,
+                    Addr virt,
                     uint access,
                     PtUnit::Translation *trans)
 {
-    ptUnit->startTranslate(virt, access, trans);
+    if (ptUnit)
+        ptUnit->startTranslate(virt, access, trans);
+    else
+    {
+        if (coreXlates[id].trans)
+            return;
+
+        coreXlates[id].trans = trans;
+        coreXlates[id].virt = virt;
+        coreXlates[id].access = access;
+        coreXlates[id].ongoing = false;
+
+        DPRINTF(DtuXlate, "Translation[%lu] = %p:%#x\n",
+            id, virt, access);
+
+        if(regs().get(DtuReg::XLATE_REQ) == 0)
+        {
+            const Addr npagemask = ~static_cast<Addr>(DtuTlb::PAGE_MASK);
+            const Addr virtPage = coreXlates[id].virt & npagemask;
+            regs().set(DtuReg::XLATE_REQ,
+                virtPage | coreXlates[id].access | (id << 4));
+            coreXlates[id].ongoing = true;
+
+            DPRINTF(DtuXlate, "Translation[%lu] started\n", id);
+            setIrq();
+        }
+    }
+}
+
+void
+Dtu::completeTranslate()
+{
+    const Addr npagemask = ~static_cast<Addr>(DtuTlb::PAGE_MASK);
+
+    RegFile::reg_t resp = regs().get(DtuReg::XLATE_RESP);
+    if (resp)
+    {
+        size_t id = (resp >> 4) & 0x7;
+        assert(coreXlates[id].trans);
+        assert(coreXlates[id].ongoing);
+        DPRINTF(DtuXlate, "Translation[%lu] done\n", id);
+
+        NocAddr phys((resp & npagemask) |
+                     (coreXlates[id].virt & DtuTlb::PAGE_MASK));
+        tlb()->insert(coreXlates[id].virt & npagemask,
+                      NocAddr(phys.getAddr() & npagemask),
+                      resp & DtuTlb::IRWX);
+        coreXlates[id].trans->finished(true, phys);
+
+        coreXlates[id].trans = nullptr;
+        regs().set(DtuReg::XLATE_RESP, 0);
+    }
+
+    if (regs().get(DtuReg::XLATE_REQ) == 0)
+    {
+        for (size_t id = 0; id < coreXlateSlots; ++id)
+        {
+            if (coreXlates[id].trans && !coreXlates[id].ongoing)
+            {
+                const Addr virtPage = coreXlates[id].virt & ~npagemask;
+                regs().set(DtuReg::XLATE_REQ,
+                    virtPage | coreXlates[id].access | (id << 4));
+                coreXlates[id].ongoing = true;
+                DPRINTF(DtuXlate, "Translation[%lu] started\n", id);
+
+                setIrq();
+                break;
+            }
+        }
+    }
+
+    irqPending = false;
 }
 
 void
 Dtu::abortTranslate(PtUnit::Translation *trans)
 {
-    ptUnit->abortTranslate(trans);
+    if (ptUnit)
+        ptUnit->abortTranslate(trans);
 }
 
 void
@@ -1000,8 +1077,15 @@ Dtu::handleCpuRequest(PacketPtr pkt,
 
         intMemReqs++;
 
-        MemTranslation *trans = new MemTranslation(*this, sport, mport, pkt);
-        int tres = translate(trans, pkt, icache, functional);
+        MemTranslation *trans = nullptr;
+        int tres = 1;
+        // CPU requests are only translated if we have a PT unit
+        if (ptUnit)
+        {
+            trans = new MemTranslation(*this, sport, mport, pkt);
+            tres = translate(trans, pkt, icache, functional);
+        }
+
         if (tres == 1)
         {
             if (functional)
@@ -1145,18 +1229,14 @@ Dtu::translate(PtUnit::Translation *trans,
                bool icache,
                bool functional)
 {
-    if (!tlb())
-        return 1;
+    assert(ptUnit);
 
     uint access = DtuTlb::INTERN;
     if (icache)
-    {
-        assert(pkt->isRead());
         access |= DtuTlb::EXEC;
-    }
-    else if (pkt->isRead())
+    if (pkt->isRead())
         access |= DtuTlb::READ;
-    else
+    if (pkt->isWrite())
         access |= DtuTlb::WRITE;
 
     NocAddr phys;
@@ -1243,6 +1323,8 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
                 schedule(new ExecCmdEvent(*this, pkt), when);
             else if (result & RegFile::WROTE_ABORT)
                 schedule(abortCommandEvent, when);
+            else if (result & RegFile::WROTE_XLATE)
+                schedule(completeTranslateEvent, when);
         }
         else
             schedule(new ExecExternCmdEvent(*this, pkt), when);
@@ -1255,6 +1337,8 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
             executeExternCommand(NULL);
         if (result & RegFile::WROTE_ABORT)
             abortCommand();
+        if (result & RegFile::WROTE_XLATE)
+            completeTranslate();
     }
 }
 

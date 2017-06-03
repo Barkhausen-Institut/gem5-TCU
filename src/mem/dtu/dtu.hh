@@ -270,7 +270,8 @@ class Dtu : public BaseDtu
 
     void startTransfer(void *event, Cycles delay);
 
-    void startTranslate(Addr virt,
+    void startTranslate(size_t id,
+                        Addr virt,
                         uint access,
                         PtUnit::Translation *trans);
 
@@ -299,6 +300,8 @@ class Dtu : public BaseDtu
     void completeMemRequest(PacketPtr pkt) override;
 
     void completeCpuRequests();
+
+    void completeTranslate();
 
     void handleNocRequest(PacketPtr pkt) override;
 
@@ -336,6 +339,8 @@ class Dtu : public BaseDtu
     PtUnit *ptUnit;
 
     EventWrapper<Dtu, &Dtu::abortCommand> abortCommandEvent;
+
+    EventWrapper<Dtu, &Dtu::completeTranslate> completeTranslateEvent;
 
     struct DtuEvent : public Event
     {
@@ -423,6 +428,14 @@ class Dtu : public BaseDtu
         void finished(bool success, const NocAddr &phys) override;
     };
 
+    struct CoreTranslation
+    {
+        PtUnit::Translation *trans;
+        Addr virt;
+        uint access;
+        bool ongoing;
+    };
+
     Cycles sleepStart;
     PacketPtr cmdPkt;
     FinishCommandEvent *cmdFinish;
@@ -431,6 +444,9 @@ class Dtu : public BaseDtu
     bool irqPending;
 
     std::list<MemTranslation*> xlates;
+
+    CoreTranslation *coreXlates;
+    size_t coreXlateSlots;
 
   public:
 

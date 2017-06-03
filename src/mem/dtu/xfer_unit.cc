@@ -193,7 +193,7 @@ XferUnit::TransferEvent::process()
 
             assert(res != DtuTlb::NOMAP);
             trans = new Translation(*this);
-            xfer->dtu.startTranslate(local, access, trans);
+            xfer->dtu.startTranslate(buf->id, local, access, trans);
             return;
         }
     }

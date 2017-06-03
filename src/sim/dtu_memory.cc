@@ -60,7 +60,7 @@ DTUMemory::initMemory()
     entry.base = getRootPt().getAddr() >> DtuTlb::PAGE_BITS;
     // not internally accessible
     entry.ixwr = DtuTlb::RWX;
-    size_t off = DtuTlb::PAGE_SIZE - sizeof(entry);
+    size_t off = 0x10 * sizeof(entry);
     DPRINTFS(DtuPtes, obj,
         "Creating recursive level %d PTE @ %#018x: %#018x\n",
         DtuTlb::LEVEL_CNT - 1, getRootPt().getAddr() + off, entry);

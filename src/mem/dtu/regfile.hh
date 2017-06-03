@@ -48,6 +48,9 @@ enum class DtuReg : Addr
     IDLE_TIME,
     MSG_CNT,
     EXT_CMD,
+    EXT_ARG,
+    XLATE_REQ,
+    XLATE_RESP,
 };
 
 enum class Features
@@ -58,7 +61,7 @@ enum class Features
     IRQ_WAKEUP      = 1 << 3,
 };
 
-constexpr unsigned numDtuRegs = 9;
+constexpr unsigned numDtuRegs = 12;
 
 // registers to issue a command
 enum class CmdReg : Addr
@@ -213,6 +216,7 @@ class RegFile
         WROTE_CMD       = 1,
         WROTE_EXT_CMD   = 2,
         WROTE_ABORT     = 4,
+        WROTE_XLATE     = 8,
     };
 
     RegFile(Dtu &dtu, const std::string& name, unsigned numEndpoints);

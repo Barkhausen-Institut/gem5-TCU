@@ -196,9 +196,8 @@ class BaseDtu : public MemObject
         {
             AddrRangeList ranges;
 
-            auto range = AddrRange(0, static_cast<Addr>(-1));
-
-            ranges.push_back(range);
+            for (auto &r : dtu.slaveRegion)
+                ranges.push_back(r);
 
             return ranges;
         }
@@ -321,6 +320,8 @@ class BaseDtu : public MemObject
     const unsigned coreId;
 
     const AddrRange mmioRegion;
+
+    const std::vector<AddrRange> slaveRegion;
 
     bool coherent;
 

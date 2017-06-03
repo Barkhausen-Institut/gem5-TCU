@@ -153,21 +153,22 @@ def getOptions():
 def printConfig(pe):
     try:
         cc = "coherent" if pe.dtu.coherent else "non-coherent"
-        print '      L1icache=%d KiB (%s)' % (pe.dtu.l1icache.size.value / 1024, cc)
-        print '      L1dcache=%d KiB (%s)' % (pe.dtu.l1dcache.size.value / 1024, cc)
+        print '      L1i$ =%d KiB (%s)' % (pe.dtu.l1icache.size.value / 1024, cc)
+        print '      L1d$ =%d KiB (%s)' % (pe.dtu.l1dcache.size.value / 1024, cc)
         try:
-            print '      L2cache=%d KiB (%s)' % (pe.dtu.l2cache.size.value / 1024, cc)
+            print '      L2$  =%d KiB (%s)' % (pe.dtu.l2cache.size.value / 1024, cc)
         except:
             pass
     except:
         try:
-            print '      memsize=%d KiB' % (int(pe.mem_ctrl.range.end + 1) / 1024)
+            print '      imem =%d KiB' % (int(pe.mem_ctrl.range.end + 1) / 1024)
         except:
-            print '      memsize=%d KiB' % (int(pe.spm.range.end + 1) / 1024)
-    print '      bufsize=%d B, blocksize=%d B, count=%d' % \
-        (pe.dtu.buf_size.value, pe.dtu.block_size.value, pe.dtu.buf_count)
+            print '      imem =%d KiB' % (int(pe.spm.range.end + 1) / 1024)
+    print '      bufsz=%d B, blocksz=%d B, count=%d, tlb=%d, walker=%d' % \
+        (pe.dtu.buf_size.value, pe.dtu.block_size.value, pe.dtu.buf_count,
+         pe.dtu.tlb_entries, 1 if pe.dtu.pt_walker else 0)
 
-def createPE(root, options, no, systemType, l1size, l2size, spmsize, memPE):
+def createPE(root, options, no, systemType, l1size, l2size, spmsize, dtupos, memPE):
     CPUClass = CpuConfig.get(options.cpu_type)
 
     # each PE is represented by it's own subsystem
@@ -175,56 +176,82 @@ def createPE(root, options, no, systemType, l1size, l2size, spmsize, memPE):
     pe.core_id = no
     setattr(root, 'pe%02d' % no, pe)
 
-    # TODO set latencies
-    pe.xbar = NoncoherentXBar(forward_latency=0,
-                              frontend_latency=0,
-                              response_latency=1,
-                              width=16)
+    if not l2size is None:
+        pe.xbar = SystemXBar()
+    else:
+        pe.xbar = L2XBar()
     pe.xbar.clk_domain = root.cpu_clk_domain
 
+    # we want to use the instructions, not the memory based pseudo operations
     pe.pseudo_mem_ops = False
 
     pe.dtu = Dtu()
     pe.dtu.core_id = no
     pe.dtu.clk_domain = root.cpu_clk_domain
 
+    pe.dtu.coherent = options.coherent
     pe.dtu.num_endpoints = 12
 
-    # only connect the dcache directly; only the CPU can access the icache
-    pe.dtu.dcache_master_port = pe.xbar.slave
-
+    # connection to noc
     pe.dtu.noc_master_port = root.noc.slave
     pe.dtu.noc_slave_port  = root.noc.master
 
-    pe.dtu.coherent = options.coherent
+    pe.dtu.slave_region = [AddrRange(0, pe.dtu.mmio_region.start - 1)]
 
+    # create caches
     if not l1size is None:
         pe.dtu.l1icache = L1_ICache(size=l1size)
         pe.dtu.l1icache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
-        pe.dtu.l1icache.cpu_side = pe.dtu.icache_master_port
+        pe.dtu.l1icache.tag_latency = 4
+        pe.dtu.l1icache.data_latency = 4
+        pe.dtu.l1icache.response_latency = 4
 
         pe.dtu.l1dcache = L1_DCache(size=l1size)
         pe.dtu.l1dcache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
-        pe.dtu.l1dcache.cpu_side = pe.xbar.master
+        pe.dtu.l1dcache.tag_latency = 4
+        pe.dtu.l1dcache.data_latency = 4
+        pe.dtu.l1dcache.response_latency = 4
 
         if not l2size is None:
             pe.dtu.l2cache = L2Cache(size=l2size)
             pe.dtu.l2cache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
-
-            # use a crossbar to connect l1icache and l1dcache to l2cache
-            pe.tol2bus = L2XBar(clk_domain = root.cpu_clk_domain)
-            pe.dtu.l2cache.cpu_side = pe.tol2bus.master
-            pe.dtu.l2cache.mem_side = pe.dtu.cache_mem_slave_port
-            pe.dtu.l1icache.mem_side = pe.tol2bus.slave
-            pe.dtu.l1dcache.mem_side = pe.tol2bus.slave
+            pe.dtu.l2cache.tag_latency = 12
+            pe.dtu.l2cache.data_latency = 12
+            pe.dtu.l2cache.response_latency = 12
 
             pe.dtu.l2cache.prefetcher = StridePrefetcher(degree = 16)
-        else:
-            pe.dtu.l1icache.mem_side = pe.dtu.cache_mem_slave_port
-            pe.dtu.l1icache.prefetcher = StridePrefetcher(degree = 16)
 
-            pe.dtu.l1dcache.mem_side = pe.dtu.cache_mem_slave_port
+            # use a crossbar to connect l1icache and l1dcache to l2cache
+            pe.tol2bus = L2XBar()
+            pe.tol2bus.clk_domain = root.cpu_clk_domain
+            pe.dtu.l2cache.cpu_side = pe.tol2bus.master
+            pe.dtu.l2cache.mem_side = pe.xbar.slave
+
+            pe.dtu.l1icache.mem_side = pe.tol2bus.slave
+            pe.dtu.l1dcache.mem_side = pe.tol2bus.slave
+        else:
             pe.dtu.l1dcache.prefetcher = StridePrefetcher(degree = 16)
+
+            pe.dtu.l1icache.mem_side = pe.xbar.slave
+            pe.dtu.l1dcache.mem_side = pe.xbar.slave
+
+        # connect DTU and caches
+        if dtupos == 0:
+            pe.dtu.l1icache.cpu_side = pe.dtu.icache_master_port
+            pe.dtu.l1dcache.cpu_side = pe.dtu.dcache_master_port
+        else:
+            pe.iocache = L1_DCache(size='4kB')
+            pe.iocache.tag_latency = 4
+            pe.iocache.data_latency = 4
+            pe.iocache.response_latency = 4
+            pe.iocache.cpu_side = pe.dtu.dcache_master_port
+            if not l2size is None and dtupos == 1:
+                pe.iocache.mem_side = pe.tol2bus.slave
+            else:
+                pe.iocache.mem_side = pe.xbar.slave
+
+        # the DTU handles LLC misses
+        pe.dtu.cache_mem_slave_port = pe.xbar.master
 
         # don't check whether the kernel is in memory because a PE does not have memory in this
         # case, but just a cache that is connected to a different PE
@@ -238,45 +265,73 @@ def createPE(root, options, no, systemType, l1size, l2size, spmsize, memPE):
         pe.memory_pe = memPE
         pe.memory_offset = pe_offset + (pe_size * no)
         pe.memory_size = pe_size
-    else:
-        pe.dtu.buf_count = 8
 
-    # for memory PEs or PEs with SPM, we do not need a buffer. for the sake of an easy implementation
-    # we just make the buffer very large and the block size as well, so that we can read a packet
-    # from SPM/DRAM into the buffer and send it from there. Since that costs no simulated time,
-    # it is the same as having no buffer.
     if systemType == MemSystem or l1size is None:
+        # for memory PEs or PEs with SPM, we do not need a buffer. for the sake of
+        # an easy implementation we just make the buffer very large and the block
+        # size as well, so that we can read a packet from SPM/DRAM into the buffer
+        # and send it from there. Since that costs no simulated time, it is the
+        # same as having no buffer.
         pe.dtu.block_size = pe.dtu.max_noc_packet_size
         pe.dtu.buf_size = pe.dtu.max_noc_packet_size
-        # disable the TLB
+
+        # disable the TLB and PT walker
         pe.dtu.tlb_entries = 0
+        pe.dtu.pt_walker = False
         pe.dtu.cpu_to_cache_latency = 0
 
+        # the DTU sends requests to SPM/mem via xbar
+        pe.dtu.dcache_master_port = pe.xbar.slave
+        pe.dtu.icache_master_port = pe.xbar.slave
+
     pe.system_port = pe.xbar.slave
-    if hasattr(pe, 'noc_master_port'):
-        pe.noc_master_port = root.noc.slave
 
     return pe
 
-def createCorePE(root, options, no, cmdline, memPE, l1size=None, l2size=None, spmsize='8MB'):
+def createCorePE(root, options, no, cmdline, memPE, l1size=None, l2size=None,
+                 dtupos=0, mmu=False, spmsize='8MB'):
     CPUClass = CpuConfig.get(options.cpu_type)
 
     sysType = M3ArmSystem if options.isa == 'arm' else M3X86System
     con = ArmConnector if options.isa == 'arm' else X86Connector
 
+    # the DTU can't do address translation behind a cache
+    assert dtupos == 0 or mmu
+
     pe = createPE(
         root=root, options=options, no=no, systemType=sysType,
-        l1size=l1size, l2size=l2size, spmsize=spmsize, memPE=memPE
+        l1size=l1size, l2size=l2size, spmsize=spmsize, dtupos=dtupos,
+        memPE=memPE
     )
     pe.dtu.connector = con()
     pe.readfile = "/dev/stdin"
+
+    # connection to the NoC for initialization
+    pe.noc_master_port = root.noc.slave
 
     pe.cpu = CPUClass()
     pe.cpu.cpu_id = 0
     pe.cpu.clk_domain = root.cpu_clk_domain
 
-    pe.dtu.icache_slave_port = pe.cpu.icache_port
-    pe.dtu.dcache_slave_port = pe.cpu.dcache_port
+    # connect CPU to caches
+    if not l1size is None and dtupos > 0:
+        pe.dtu.l1icache.cpu_side = pe.cpu.icache_port
+        pe.dtu.l1dcache.cpu_side = pe.cpu.dcache_port
+
+        pe.dtu.dcache_slave_port = pe.xbar.master
+        pe.dtu.slave_region = [pe.dtu.mmio_region]
+    else:
+        pe.dtu.icache_slave_port = pe.cpu.icache_port
+        pe.dtu.dcache_slave_port = pe.cpu.dcache_port
+
+    # disable PT walker if MMU should be used
+    if mmu:
+        # for the kernel, we disable all translations in the DTU, letting him
+        # run with physical addresses.
+        # TODO that is actually not necessary. the kernel could have a PF handler
+        if no == 0:
+            pe.dtu.tlb_entries = 0
+        pe.dtu.pt_walker = False
 
     if "kernel" in cmdline:
         pe.mod_offset = mod_offset
@@ -286,7 +341,7 @@ def createCorePE(root, options, no, cmdline, memPE, l1size=None, l2size=None, sp
     pe.kernel = cmdline.split(' ')[0]
     pe.boot_osflags = cmdline
     print "PE%02d: %s" % (no, cmdline)
-    print '      core   =%s %s' % (options.cpu_type, options.isa)
+    print '      core =%s %s' % (options.cpu_type, options.isa)
     printConfig(pe)
 
     # if specified, let this PE wait for GDB
@@ -314,15 +369,20 @@ def createCorePE(root, options, no, cmdline, memPE, l1size=None, l2size=None, sp
         pe.cpu.interrupts[0].int_slave = pe.dtu.connector.irq_master_port
         pe.cpu.interrupts[0].int_master = pe.xbar.slave
 
-    pe.cpu.itb.walker.port = pe.xbar.slave
-    pe.cpu.dtb.walker.port = pe.xbar.slave
+    if not l2size is None:
+        pe.cpu.itb.walker.port = pe.tol2bus.slave
+        pe.cpu.dtb.walker.port = pe.tol2bus.slave
+    else:
+        pe.cpu.itb.walker.port = pe.xbar.slave
+        pe.cpu.dtb.walker.port = pe.xbar.slave
 
     return pe
 
 def createAccelPE(root, options, no, accel, memPE, l1size=None, l2size=None, spmsize='64kB'):
     pe = createPE(
         root=root, options=options, no=no, systemType=SpuSystem,
-        l1size=l1size, l2size=l2size, spmsize=spmsize, memPE=memPE
+        l1size=l1size, l2size=l2size, spmsize=spmsize, memPE=memPE,
+        dtupos=0
     )
     pe.dtu.connector = DtuAccelConnector()
 
@@ -352,9 +412,14 @@ def createAccelPE(root, options, no, accel, memPE, l1size=None, l2size=None, spm
 def createMemPE(root, options, no, size, dram=True, content=None):
     pe = createPE(
         root=root, options=options, no=no, systemType=MemSystem,
-        l1size=None, l2size=None, spmsize=None, memPE=0
+        l1size=None, l2size=None, spmsize=None, memPE=0,
+        dtupos=0
     )
     pe.dtu.connector = BaseConnector()
+
+    # use many buffers to prevent that this is a bottleneck (this is just a
+    # simulation artefact anyway)
+    pe.dtu.buf_count = 8
 
     if dram:
         pe.mem_ctrl = DDR3_1600_8x8()
@@ -381,7 +446,8 @@ def createMemPE(root, options, no, size, dram=True, content=None):
 def createAbortTestPE(root, options, no, memPE, l1size=None, l2size=None, spmsize='8MB'):
     pe = createPE(
         root=root, options=options, no=no, systemType=SpuSystem,
-        l1size=l1size, l2size=l2size, spmsize=spmsize, memPE=memPE
+        l1size=l1size, l2size=l2size, spmsize=spmsize, memPE=memPE,
+        dtupos=0
     )
     pe.dtu.connector = BaseConnector()
 
@@ -456,13 +522,15 @@ def runSimulation(options, pes):
         if hasattr(pe, 'mem_ctrl'):
             size = int(pe.mem_ctrl.range.end + 1)
             assert size % 4096 == 0, "Memory size not page aligned"
-            size |= 2   # mem
+            size |= 3   # mem
         else:
             if hasattr(pe, 'spm'):
                 size = int(pe.spm.range.end + 1)
                 assert size % 4096 == 0, "Memory size not page aligned"
+            elif not pe.dtu.pt_walker:
+                size |= 2 # mmu
             else:
-                size |= 1 # emem
+                size |= 1 # DTU+VM
 
             if hasattr(pe, 'accel'):
                 if type(pe.accel).__name__ == 'DtuAccelHash':

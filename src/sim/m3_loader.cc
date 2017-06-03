@@ -197,7 +197,7 @@ M3Loader::initState(System &sys, DTUMemory &dtumem, MasterPort &noc)
     env.argv = argv;
 
     // with paging, the kernel gets an initial heap mapped
-    if ((pes[coreId] & 0x7) == 1)
+    if ((pes[coreId] & 0x7) == 1 || (pes[coreId] & 0x7) == 2)
         env.heapsize = HEAP_SIZE;
     // otherwise, he should use all internal memory
     else

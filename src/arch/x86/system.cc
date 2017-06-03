@@ -249,6 +249,8 @@ X86System::initState()
     // Point to the PDTs
     for (int table = 0; table < NumPDTs; table++) {
         pdpe = X86ISA::htog(0x7 | PageDirTable[table]);
+        if (table == NumPDTs - 1)
+            pdpe |= X86ISA::htog(1 << 4);
         physProxy.writeBlob(PageDirPtrTable + table * 8,
                             (uint8_t *)(&pdpe), 8);
     }
@@ -261,6 +263,8 @@ X86System::initState()
         for (int offset = 0; offset < (1 << PDTBits) * 8; offset += 8) {
             // read/write, user, present, 4MB
             uint64_t pdte = X86ISA::htog(0x87 | base);
+            if (table == NumPDTs - 1)
+                pdte |= X86ISA::htog(1 << 4);
             physProxy.writeBlob(PageDirTable[table] + offset,
                                 (uint8_t *)(&pdte), 8);
             base += pageSize;

@@ -164,7 +164,7 @@ MessageUnit::requestHeader(unsigned epid)
             assert(res != DtuTlb::NOMAP);
 
             Translation *trans = new Translation(*this, msgAddr, epid);
-            dtu.startTranslate(msgAddr, DtuTlb::READ, trans);
+            dtu.startTranslate(dtu.bufCount, msgAddr, DtuTlb::READ, trans);
             return;
         }
     }

@@ -64,7 +64,7 @@ class DtuTlb
         PAGE_MASK    = PAGE_SIZE - 1,
         PTE_BITS     = 3,
         PTE_SIZE     = 1 << PTE_BITS,
-        LEVEL_CNT    = 2,
+        LEVEL_CNT    = 4,
         LEVEL_BITS   = PAGE_BITS - PTE_BITS,
         LEVEL_MASK   = (1 << LEVEL_BITS) - 1,
     };

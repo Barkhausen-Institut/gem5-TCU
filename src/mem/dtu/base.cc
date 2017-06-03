@@ -295,9 +295,9 @@ BaseDtu::CacheMemSlavePort::getAddrRanges() const
 {
     AddrRangeList ranges;
 
-    auto range = AddrRange(0, -1);
-
-    ranges.push_back(range);
+    // requests to the MMIO region never leave the PE
+    ranges.push_back(AddrRange(0, dtu.mmioRegion.start() - 1));
+    ranges.push_back(AddrRange(dtu.mmioRegion.end() + 1, 0x1000000000000000 - 1));
 
     return ranges;
 }
@@ -319,6 +319,7 @@ BaseDtu::BaseDtu(BaseDtuParams* p)
     nocReqFinishedEvent(*this),
     coreId(p->core_id),
     mmioRegion(p->mmio_region),
+    slaveRegion(p->slave_region),
     coherent(p->coherent)
 {
     if (p->watch_range_start != p->watch_range_end)
