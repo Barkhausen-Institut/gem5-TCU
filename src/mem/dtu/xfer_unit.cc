@@ -254,9 +254,7 @@ XferUnit::TransferEvent::translateDone(bool success, const NocAddr &phys)
 }
 
 void
-XferUnit::recvMemResponse(uint64_t evId,
-                          const void* data,
-                          Addr size)
+XferUnit::recvMemResponse(uint64_t evId, PacketPtr pkt)
 {
     Buffer *buf = getBuffer(evId);
     // ignore responses for aborted transfers
@@ -265,13 +263,15 @@ XferUnit::recvMemResponse(uint64_t evId,
 
     assert(buf->event);
 
-    if (data && buf->event->isRead())
+    if (pkt && buf->event->isRead())
     {
-        assert(buf->offset + size <= bufSize);
+        assert(buf->offset + pkt->getSize() <= bufSize);
 
-        memcpy(buf->bytes + buf->offset, data, size);
+        memcpy(buf->bytes + buf->offset,
+               pkt->getConstPtr<uint8_t>(),
+               pkt->getSize());
 
-        buf->offset += size;
+        buf->offset += pkt->getSize();
     }
 
     // nothing more to copy?
@@ -324,7 +324,7 @@ XferUnit::TransferEvent::abort(Dtu::Error error)
         xfer->dtu.deschedule(this);
 
     buf->event->remaining = 0;
-    xfer->recvMemResponse(id, NULL, 0);
+    xfer->recvMemResponse(id, NULL);
 }
 
 void

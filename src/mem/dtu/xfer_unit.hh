@@ -201,7 +201,7 @@ class XferUnit
 
     bool abortTransfers(uint types);
 
-    void recvMemResponse(uint64_t evId, const void* data, size_t size);
+    void recvMemResponse(uint64_t evId, PacketPtr pkt);
 
   private:
 

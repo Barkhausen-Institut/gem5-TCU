@@ -899,9 +899,7 @@ Dtu::completeMemRequest(PacketPtr pkt)
     switch(senderState->type)
     {
         case MemReqType::TRANSFER:
-            xferUnit->recvMemResponse(senderState->data,
-                                      pkt->getConstPtr<uint8_t>(),
-                                      pkt->getSize());
+            xferUnit->recvMemResponse(senderState->data, pkt);
             break;
 
         case MemReqType::HEADER:
