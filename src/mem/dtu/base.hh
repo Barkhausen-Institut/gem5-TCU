@@ -320,7 +320,7 @@ class BaseDtu : public MemObject
 
     const unsigned coreId;
 
-    const Addr regFileBaseAddr;
+    const AddrRange mmioRegion;
 
     bool coherent;
 

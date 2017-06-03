@@ -111,7 +111,7 @@ MemoryUnit::startRead(const Dtu::Command& cmd)
 
     uint flags = cmdToNocFlags(cmd.flags);
 
-    if (dtu.coherent && nocAddr.offset < dtu.regFileBaseAddr &&
+    if (dtu.coherent && !dtu.mmioRegion.contains(nocAddr.offset) &&
         dtu.isMemPE(nocAddr.coreId))
     {
         flags |= XferUnit::NOXLATE;
@@ -262,7 +262,7 @@ MemoryUnit::WriteTransferEvent::transferDone(Dtu::Error result)
         Cycles delay = dtu().transferToNocLatency;
         dtu().printPacket(pkt);
 
-        if (dtu().coherent && dest.offset < dtu().regFileBaseAddr &&
+        if (dtu().coherent && !dtu().mmioRegion.contains(dest.offset) &&
             dtu().isMemPE(dest.coreId))
         {
             uint rflags = (flags() & XferUnit::NOPF) | XferUnit::NOXLATE;
@@ -344,7 +344,7 @@ MemoryUnit::recvFromNoc(PacketPtr pkt, uint vpeId, uint flags)
         return Dtu::Error::VPE_GONE;
     }
 
-    if (addr.offset >= dtu.regFileBaseAddr)
+    if (dtu.mmioRegion.contains(addr.offset))
     {
         pkt->setAddr(addr.offset);
 

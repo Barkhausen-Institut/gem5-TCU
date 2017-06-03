@@ -979,7 +979,7 @@ Dtu::handleCpuRequest(PacketPtr pkt,
     DPRINTF(DtuCpuReq, "%s access for %#lx: start\n",
         pkt->cmdString(), virt);
 
-    if (virt >= regFileBaseAddr)
+    if (mmioRegion.contains(virt))
     {
         // not supported here
         assert(!functional);
@@ -989,8 +989,7 @@ Dtu::handleCpuRequest(PacketPtr pkt,
         else
             forwardRequestToRegFile(pkt, true);
     }
-    else if(pkt->isWrite() &&
-            virt >= regFile.get(DtuReg::RW_BARRIER))
+    else if(pkt->isWrite() && virt >= regFile.get(DtuReg::RW_BARRIER))
     {
         DPRINTF(Dtu, "Warning: ignoring write access above rwBarrier\n");
         res = false;
@@ -1204,7 +1203,7 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
     Addr oldAddr = pkt->getAddr();
 
     // Strip the base address to handle requests based on the reg. addr. only.
-    pkt->setAddr(oldAddr - regFileBaseAddr);
+    pkt->setAddr(oldAddr - mmioRegion.start());
 
     RegFile::Result result = regFile.handleRequest(pkt, isCpuRequest);
 

@@ -53,7 +53,8 @@ class BaseDtu(MemObject):
 
     coherent = Param.Bool(False, "Whether the DTU should keep the caches coherent")
 
-    regfile_base_addr = Param.Addr(0xF0000000, "Register file address")
+    mmio_region = Param.AddrRange(AddrRange(0xF0000000, 0xFFFFFFFF), "MMIO region of the DTU")
+
     core_id = Param.Unsigned("ID of the core this DTU belongs to")
 
     watch_range_start = Param.Addr(0x0, "The start address of the address range to watch")
