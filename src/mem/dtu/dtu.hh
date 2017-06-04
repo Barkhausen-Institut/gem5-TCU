@@ -181,7 +181,8 @@ class Dtu : public BaseDtu
         };
 
         BitUnion64(Bits)
-            Bitfield<31, 13> error;
+            Bitfield<63, 16> arg;
+            Bitfield<15, 13> error;
             Bitfield<12> flags;
             Bitfield<11, 4> epid;
             Bitfield<3, 0> opcode;
@@ -227,7 +228,7 @@ class Dtu : public BaseDtu
 
     void printLine(Addr addr, Addr size);
 
-    bool startSleep();
+    bool startSleep(uint64_t cycles);
 
     void stopSleep();
 

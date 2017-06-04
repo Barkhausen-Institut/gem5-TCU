@@ -279,11 +279,11 @@ Dtu::executeCommand(PacketPtr pkt)
             finishCommand(Error::NONE);
             break;
         case Command::ACK_MSG:
-            msgUnit->ackMessage(cmd.epid, regs().get(CmdReg::OFFSET));
+            msgUnit->ackMessage(cmd.epid, cmd.arg);
             finishCommand(Error::NONE);
             break;
         case Command::SLEEP:
-            if (!startSleep())
+            if (!startSleep(cmd.arg))
                 finishCommand(Error::NONE);
             break;
         case Command::CLEAR_IRQ:
@@ -291,9 +291,12 @@ Dtu::executeCommand(PacketPtr pkt)
             finishCommand(Error::NONE);
             break;
         case Command::PRINT:
-            printLine(regs().get(CmdReg::DATA_ADDR), regs().get(CmdReg::DATA_SIZE));
+        {
+            const DataReg data = regs().getDataReg();
+            printLine(data.addr, data.size);
             finishCommand(Error::NONE);
-            break;
+        }
+        break;
         case Command::DEBUG_MSG:
             DPRINTF(Dtu, "DEBUG %#x\n", regs().get(CmdReg::OFFSET));
             finishCommand(Error::NONE);
@@ -414,7 +417,7 @@ Dtu::finishCommand(Error error)
     if (cmd.opcode == Command::SEND)
         msgUnit->finishMsgSend(error, cmd.epid);
     else if (cmd.opcode == Command::REPLY)
-        msgUnit->finishMsgReply(error, cmd.epid, regs().get(CmdReg::OFFSET));
+        msgUnit->finishMsgReply(error, cmd.epid, cmd.arg);
 
     if (cmd.opcode == Command::SLEEP)
         stopSleep();
@@ -427,6 +430,7 @@ Dtu::finishCommand(Error error)
     }
 
     // let the SW know that the command is finished
+    cmd = 0;
     cmd.error = static_cast<unsigned>(error);
     cmd.opcode = Command::IDLE;
     regFile.set(CmdReg::COMMAND, cmd);
@@ -513,7 +517,7 @@ Dtu::executeExternCommand(PacketPtr pkt)
 }
 
 bool
-Dtu::startSleep()
+Dtu::startSleep(uint64_t cycles)
 {
     if ((regFile.get(DtuReg::MSG_CNT) & 0xFFFF) > 0)
         return false;
@@ -525,8 +529,6 @@ Dtu::startSleep()
     // TODO this is not a good solution
     if (irqPending)
         return false;
-
-    uint64_t cycles = regs().get(CmdReg::OFFSET);
 
     // remember when we started
     sleepStart = curCycle();

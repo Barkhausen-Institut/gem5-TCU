@@ -89,23 +89,22 @@ MemoryUnit::startRead(const Dtu::Command::Bits& cmd)
 
     Addr rwBarrier = dtu.regs().get(DtuReg::RW_BARRIER);
 
-    Addr localAddr = dtu.regs().get(CmdReg::DATA_ADDR);
-    Addr requestSize = dtu.regs().get(CmdReg::DATA_SIZE);
-    Addr offset = dtu.regs().get(CmdReg::OFFSET);
+    const DataReg data = dtu.regs().getDataReg();
+    Addr offset = cmd.arg;
 
-    readBytes.sample(requestSize);
+    readBytes.sample(data.size);
 
     DPRINTFS(Dtu, (&dtu),
         "\e[1m[rd -> %u]\e[0m at %#018lx+%#lx with EP%u into %#018lx:%lu\n",
         ep.targetCore, ep.remoteAddr, offset,
-        cmd.epid, localAddr, requestSize);
+        cmd.epid, data.addr, data.size);
 
     // TODO error handling
-    assert(requestSize <= dtu.maxNocPacketSize);
-    assert(localAddr < rwBarrier);
-    assert(localAddr + requestSize <= rwBarrier);
-    assert(requestSize + offset >= requestSize);
-    assert(requestSize + offset <= ep.remoteSize);
+    assert(data.size <= dtu.maxNocPacketSize);
+    assert(data.addr < rwBarrier);
+    assert(data.addr + data.size <= rwBarrier);
+    assert(data.size + offset >= data.size);
+    assert(data.size + offset <= ep.remoteSize);
 
     NocAddr nocAddr(ep.targetCore, ep.remoteAddr + offset);
 
@@ -117,15 +116,15 @@ MemoryUnit::startRead(const Dtu::Command::Bits& cmd)
         flags |= XferUnit::NOXLATE;
 
         auto xfer = new LocalReadTransferEvent(nocAddr.getAddr(),
-                                               localAddr,
-                                               requestSize,
+                                               data.addr,
+                                               data.size,
                                                flags);
         dtu.startTransfer(xfer, Cycles(1));
     }
     else
     {
         auto pkt = dtu.generateRequest(nocAddr.getAddr(),
-                                       requestSize,
+                                       data.size,
                                        MemCmd::ReadReq);
 
         dtu.sendNocRequest(Dtu::NocPacketType::READ_REQ,
@@ -173,10 +172,7 @@ MemoryUnit::readComplete(const Dtu::Command::Bits& cmd, PacketPtr pkt, Dtu::Erro
 {
     dtu.printPacket(pkt);
 
-    Addr localAddr = dtu.regs().get(CmdReg::DATA_ADDR);
-    Addr requestSize = dtu.regs().get(CmdReg::DATA_SIZE);
-
-    requestSize -= pkt->getSize();
+    const DataReg data = dtu.regs().getDataReg();
 
     // since the transfer is done in steps, we can start after the header
     // delay here
@@ -189,7 +185,7 @@ MemoryUnit::readComplete(const Dtu::Command::Bits& cmd, PacketPtr pkt, Dtu::Erro
     }
 
     uint flags = cmdToXferFlags(cmd.flags);
-    auto xfer = new ReadTransferEvent(localAddr, flags, pkt);
+    auto xfer = new ReadTransferEvent(data.addr, flags, pkt);
     dtu.startTransfer(xfer, delay);
 }
 
@@ -220,28 +216,27 @@ MemoryUnit::startWrite(const Dtu::Command::Bits& cmd)
         return;
     }
 
-    Addr localAddr = dtu.regs().get(CmdReg::DATA_ADDR);
-    Addr requestSize = dtu.regs().get(CmdReg::DATA_SIZE);
-    Addr offset = dtu.regs().get(CmdReg::OFFSET);
+    const DataReg data = dtu.regs().getDataReg();
+    Addr offset = cmd.arg;
 
-    writtenBytes.sample(requestSize);
+    writtenBytes.sample(data.size);
 
     DPRINTFS(Dtu, (&dtu),
         "\e[1m[wr -> %u]\e[0m at %#018lx+%#lx with EP%u from %#018lx:%lu\n",
         ep.targetCore, ep.remoteAddr, offset,
-        cmd.epid, localAddr, requestSize);
+        cmd.epid, data.addr, data.size);
 
     // TODO error handling
-    assert(requestSize <= dtu.maxNocPacketSize);
+    assert(data.size <= dtu.maxNocPacketSize);
     assert(ep.flags & Dtu::MemoryFlags::WRITE);
-    assert(requestSize + offset >= requestSize);
-    assert(requestSize + offset <= ep.remoteSize);
+    assert(data.size + offset >= data.size);
+    assert(data.size + offset <= ep.remoteSize);
 
     NocAddr dest(ep.targetCore, ep.remoteAddr + offset);
 
     uint flags = cmdToXferFlags(cmd.flags);
     auto xfer = new WriteTransferEvent(
-        localAddr, requestSize, flags, dest, ep.vpeId);
+        data.addr, data.size, flags, dest, ep.vpeId);
     dtu.startTransfer(xfer, Cycles(0));
 }
 
@@ -287,10 +282,10 @@ MemoryUnit::WriteTransferEvent::transferDone(Dtu::Error result)
 void
 MemoryUnit::writeComplete(const Dtu::Command::Bits& cmd, PacketPtr pkt, Dtu::Error error)
 {
-    Addr requestSize = dtu.regs().get(CmdReg::DATA_SIZE);
+    const DataReg data = dtu.regs().getDataReg();
 
-    // error, write finished or if requestSize < pkt->getSize(), it was a msg
-    if (error != Dtu::Error::NONE || requestSize <= pkt->getSize())
+    // error, write finished or if data.size < pkt->getSize(), it was a msg
+    if (error != Dtu::Error::NONE || data.size <= pkt->getSize())
     {
         // we don't need to pay the payload delay here because the message
         // basically has no payload since we only receive an ACK back for

@@ -57,10 +57,8 @@ const char *RegFile::dtuRegNames[] = {
 const char *RegFile::cmdRegNames[] = {
     "COMMAND",
     "ABORT",
-    "DATA_ADDR",
-    "DATA_SIZE",
+    "DATA",
     "OFFSET",
-    "REPLY_EPID",
     "REPLY_LABEL",
 };
 

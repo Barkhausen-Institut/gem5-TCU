@@ -165,7 +165,7 @@ class MessageUnit
   private:
     int allocSlot(size_t msgSize, unsigned epid, RecvEp &ep);
 
-    void requestHeader(unsigned epid);
+    void requestHeader(const Dtu::Command::Bits& cmd);
 
     void requestHeaderWithPhys(unsigned epid,
                                bool success,

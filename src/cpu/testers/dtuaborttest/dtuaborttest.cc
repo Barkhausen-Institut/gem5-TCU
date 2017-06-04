@@ -218,25 +218,23 @@ DtuAbortTest::createCommandPkt(Dtu::Command::Opcode cmd,
 {
     static_assert(static_cast<int>(CmdReg::COMMAND) == 0, "");
     static_assert(static_cast<int>(CmdReg::ABORT) == 1, "");
-    static_assert(static_cast<int>(CmdReg::DATA_ADDR) == 2, "");
-    static_assert(static_cast<int>(CmdReg::DATA_SIZE) == 3, "");
-    static_assert(static_cast<int>(CmdReg::OFFSET) == 4, "");
-    static_assert(static_cast<int>(CmdReg::REPLY_EPID) == 5, "");
+    static_assert(static_cast<int>(CmdReg::DATA) == 2, "");
+    static_assert(static_cast<int>(CmdReg::OFFSET) == 3, "");
 
-    PacketPtr pkt = createPacket(reg_base + getRegAddr(CmdReg::COMMAND),
-                                 sizeof(RegFile::reg_t) * 6,
-                                 MemCmd::WriteReq);
+    auto pkt = createPacket(reg_base + getRegAddr(CmdReg::COMMAND),
+                            sizeof(RegFile::reg_t) * 4,
+                            MemCmd::WriteReq);
+
     Dtu::Command::Bits cmdreg = 0;
     cmdreg.opcode = static_cast<RegFile::reg_t>(cmd);
     cmdreg.epid = ep;
+    cmdreg.arg = reply_ep;
 
     RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
     regs[0] = cmdreg;
     regs[1] = 0;
-    regs[2] = data;
-    regs[3] = size;
-    regs[4] = off;
-    regs[5] = reply_ep;
+    regs[2] = DataReg(data, size).value();
+    regs[3] = off;
     return pkt;
 }
 

@@ -282,17 +282,17 @@ DtuTest::tick()
     {
         switch (counter)
         {
-        case 0:
-            DPRINTF(DtuTest, "Setup Ep 0 to transmit 128 Bytes from local "
-                             "Scratchpad at address 0x0 to Ep 1 at core %u\n",
-                             TESTER_DTU, (id + 1) % TESTER_DTU);
-            regAddr = getRegAddr(CmdReg::DATA_ADDR);
-            pkt = createDtuRegisterPkt(regAddr, 0);
-            break;
-        case 1:
-            regAddr = getRegAddr(CmdReg::DATA_SIZE);
-            pkt = createDtuRegisterPkt(regAddr, 128);
-            break;
+        // case 0:
+        //     DPRINTF(DtuTest, "Setup Ep 0 to transmit 128 Bytes from local "
+        //                      "Scratchpad at address 0x0 to Ep 1 at core %u\n",
+        //                      TESTER_DTU, (id + 1) % TESTER_DTU);
+        //     regAddr = getRegAddr(CmdReg::DATA_ADDR);
+        //     pkt = createDtuRegisterPkt(regAddr, 0);
+        //     break;
+        // case 1:
+        //     regAddr = getRegAddr(CmdReg::DATA_SIZE);
+        //     pkt = createDtuRegisterPkt(regAddr, 128);
+        //     break;
         // case 2:
         //     regAddr = getRegAddr(EpReg::TGT_EPID, 0);
         //     pkt = createDtuRegisterPkt(regAddr, 1);

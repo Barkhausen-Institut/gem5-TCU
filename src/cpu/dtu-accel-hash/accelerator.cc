@@ -520,7 +520,8 @@ DtuAccelHash::tick()
         {
             size_t rem = getStateSize() - ctxOffset;
             size_t size = std::min(maxDataSize, rem);
-            pkt = createDtuCmdPkt(Dtu::Command::WRITE | (EP_MEM << 4),
+            pkt = createDtuCmdPkt(Dtu::Command::WRITE,
+                                  EP_MEM,
                                   (BUF_ADDR - sizeof(hash)) + ctxOffset,
                                   size,
                                   ctxOffset);
@@ -549,7 +550,8 @@ DtuAccelHash::tick()
         {
             size_t rem = getStateSize() - ctxOffset;
             size_t size = std::min(maxDataSize, rem);
-            pkt = createDtuCmdPkt(Dtu::Command::READ | (EP_MEM << 4),
+            pkt = createDtuCmdPkt(Dtu::Command::READ,
+                                  EP_MEM,
                                   (BUF_ADDR - sizeof(hash)) + ctxOffset,
                                   size,
                                   ctxOffset);
@@ -609,7 +611,8 @@ DtuAccelHash::tick()
         {
             size_t left = hash.dataSize() - hash.dataOffset();
             lastSize = std::min(maxDataSize, left);
-            pkt = createDtuCmdPkt(Dtu::Command::READ | (EP_DATA << 4),
+            pkt = createDtuCmdPkt(Dtu::Command::READ,
+                                  EP_DATA,
                                   BUF_ADDR,
                                   lastSize,
                                   hash.memOffset() + hash.dataOffset());
@@ -643,7 +646,8 @@ DtuAccelHash::tick()
         }
         case State::SEND_REPLY:
         {
-            pkt = createDtuCmdPkt(Dtu::Command::REPLY | (EP_RECV << 4),
+            pkt = createDtuCmdPkt(Dtu::Command::REPLY,
+                                  EP_RECV,
                                   BUF_ADDR,
                                   replySize,
                                   msgAddr);

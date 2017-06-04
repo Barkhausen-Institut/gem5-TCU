@@ -68,14 +68,12 @@ enum class CmdReg : Addr
 {
     COMMAND,
     ABORT,
-    DATA_ADDR,
-    DATA_SIZE,
+    DATA,
     OFFSET,
-    REPLY_EPID,
     REPLY_LABEL,
 };
 
-constexpr unsigned numCmdRegs = 7;
+constexpr unsigned numCmdRegs = 5;
 
 // Ep Registers:
 //
@@ -200,6 +198,24 @@ struct MemEp
     uint8_t flags;
 };
 
+struct DataReg
+{
+    DataReg() : addr(), size()
+    {}
+    DataReg(uint64_t value) : addr(value & 0xFFFFFFFFFFFF), size(value >> 48)
+    {}
+    DataReg(uint64_t _addr, uint16_t _size) : addr(_addr), size(_size)
+    {}
+
+    uint64_t value() const
+    {
+        return addr | (static_cast<uint64_t>(size) << 48);
+    }
+
+    uint64_t addr;
+    uint16_t size;
+};
+
 class Dtu;
 
 class RegFile
@@ -221,7 +237,8 @@ class RegFile
 
     RegFile(Dtu &dtu, const std::string& name, unsigned numEndpoints);
 
-    bool hasFeature(Features feature) const {
+    bool hasFeature(Features feature) const
+    {
         return get(DtuReg::FEATURES) & static_cast<reg_t>(feature);
     }
 
@@ -234,6 +251,16 @@ class RegFile
     reg_t get(CmdReg reg, RegAccess access = RegAccess::DTU) const;
 
     void set(CmdReg reg, reg_t value, RegAccess access = RegAccess::DTU);
+
+    DataReg getDataReg() const
+    {
+        return DataReg(get(CmdReg::DATA));
+    }
+
+    void setDataReg(const DataReg &data)
+    {
+        set(CmdReg::DATA, data.value());
+    }
 
     SendEp getSendEp(unsigned epId, bool print = true) const;
 

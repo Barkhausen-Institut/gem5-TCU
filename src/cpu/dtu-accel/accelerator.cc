@@ -179,33 +179,29 @@ DtuAccel::createDtuRegPkt(Addr reg,
 }
 
 PacketPtr
-DtuAccel::createDtuCmdPkt(uint64_t cmd,
+DtuAccel::createDtuCmdPkt(Dtu::Command::Opcode cmd,
+                          unsigned epid,
                           uint64_t data,
                           uint64_t size,
-                          uint64_t off)
+                          uint64_t arg)
 {
     static_assert(static_cast<int>(CmdReg::COMMAND) == 0, "");
     static_assert(static_cast<int>(CmdReg::ABORT) == 1, "");
-    static_assert(static_cast<int>(CmdReg::DATA_ADDR) == 2, "");
-    static_assert(static_cast<int>(CmdReg::DATA_SIZE) == 3, "");
-    static_assert(static_cast<int>(CmdReg::OFFSET) == 4, "");
-    static_assert(static_cast<int>(CmdReg::REPLY_EPID) == 5, "");
+    static_assert(static_cast<int>(CmdReg::DATA) == 2, "");
 
     auto pkt = createPacket(reg_base + getRegAddr(CmdReg::COMMAND),
-                            sizeof(RegFile::reg_t) * 6,
+                            sizeof(RegFile::reg_t) * 3,
                             MemCmd::WriteReq);
 
     Dtu::Command::Bits cmdreg = 0;
     cmdreg.opcode = static_cast<RegFile::reg_t>(cmd);
     cmdreg.epid = epid;
+    cmdreg.arg = arg;
 
     RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
     regs[0] = cmdreg;
     regs[1] = 0;
-    regs[2] = data;
-    regs[3] = size;
-    regs[4] = off;
-    regs[5] = EP_SYSR;
+    regs[2] = DataReg(data, size).value();
     return pkt;
 }
 
@@ -236,10 +232,11 @@ DtuAccel::SyscallSM::tick()
     {
         case State::SYSC_SEND:
         {
-            pkt = accel->createDtuCmdPkt(Dtu::Command::SEND | (EP_SYSS << 4),
+            pkt = accel->createDtuCmdPkt(Dtu::Command::SEND,
+                                         EP_SYSS,
                                          MSG_ADDR,
                                          syscallSize,
-                                         0);
+                                         EP_SYSR);
             break;
         }
         case State::SYSC_WAIT:
@@ -263,7 +260,8 @@ DtuAccel::SyscallSM::tick()
         }
         case State::SYSC_ACK:
         {
-            pkt = accel->createDtuCmdPkt(Dtu::Command::ACK_MSG | (EP_SYSR << 4),
+            pkt = accel->createDtuCmdPkt(Dtu::Command::ACK_MSG,
+                                         EP_SYSR,
                                          0,
                                          0,
                                          replyAddr);
@@ -346,7 +344,7 @@ DtuAccel::YieldSM::tick()
         case State::YLD_WAIT:
         {
             yieldStart = accel->curCycle();
-            pkt = accel->createDtuCmdPkt(Dtu::Command::SLEEP, 0, 0, report);
+            pkt = accel->createDtuCmdPkt(Dtu::Command::SLEEP, 0, 0, 0, report);
             break;
         }
         case State::YLD_REPORT:
@@ -367,7 +365,7 @@ DtuAccel::YieldSM::tick()
         }
         case State::YLD_SLEEP:
         {
-            pkt = accel->createDtuCmdPkt(Dtu::Command::SLEEP, 0, 0, 0);
+            pkt = accel->createDtuCmdPkt(Dtu::Command::SLEEP, 0, 0, 0, 0);
             break;
         }
     }

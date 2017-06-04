@@ -463,7 +463,8 @@ DtuAccelStream::tick()
         {
             size_t left = dataSize - dataOff;
             lastSize = std::min(maxDataSize, left);
-            pkt = createDtuCmdPkt(Dtu::Command::READ | (EP_INPUT << 4),
+            pkt = createDtuCmdPkt(Dtu::Command::READ,
+                                  EP_INPUT,
                                   BUF_ADDR,
                                   lastSize,
                                   inOff + dataOff);
@@ -494,7 +495,8 @@ DtuAccelStream::tick()
         }
         case State::WRITE_DATA:
         {
-            pkt = createDtuCmdPkt(Dtu::Command::WRITE | (EP_OUTPUT << 4),
+            pkt = createDtuCmdPkt(Dtu::Command::WRITE,
+                                  EP_OUTPUT,
                                   BUF_ADDR,
                                   lastSize,
                                   outOff + dataOff);
@@ -517,7 +519,8 @@ DtuAccelStream::tick()
         }
         case State::SEND_REPLY:
         {
-            pkt = createDtuCmdPkt(Dtu::Command::REPLY | (EP_RECV << 4),
+            pkt = createDtuCmdPkt(Dtu::Command::REPLY,
+                                  EP_RECV,
                                   BUF_ADDR,
                                   sizeof(reply.msg),
                                   msgAddr);

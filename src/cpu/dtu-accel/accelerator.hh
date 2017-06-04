@@ -35,6 +35,7 @@
 #include "cpu/dtu-accel-hash/algorithm.hh"
 #include "mem/dtu/connector/base.hh"
 #include "mem/dtu/regfile.hh"
+#include "mem/dtu/dtu.hh"
 #include "sim/system.hh"
 
 class DtuAccel : public MemObject
@@ -180,7 +181,8 @@ class DtuAccel : public MemObject
 
     PacketPtr createDtuRegPkt(Addr reg, RegFile::reg_t value, MemCmd cmd);
 
-    PacketPtr createDtuCmdPkt(uint64_t cmd, uint64_t data, uint64_t size, uint64_t off);
+    PacketPtr createDtuCmdPkt(Dtu::Command::Opcode cmd, unsigned epid,
+                              uint64_t data, uint64_t size, uint64_t arg);
 
     void freePacket(PacketPtr pkt);
 

@@ -99,12 +99,12 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
     {
         offset = 0;
         flagsPhys = 0;
-        requestHeader(cmd.epid);
+        requestHeader(cmd);
         return;
     }
 
     // check if we have enough credits
-    Addr messageSize = dtu.regs().get(CmdReg::DATA_SIZE);
+    const DataReg data = dtu.regs().getDataReg();
     SendEp ep = dtu.regs().getSendEp(epid);
 
     if (ep.curcrd != Dtu::CREDITS_UNLIM && ep.curcrd < ep.maxMsgSize)
@@ -117,7 +117,7 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
     }
 
     // TODO error handling
-    assert(messageSize + sizeof(Dtu::MessageHeader) <= ep.maxMsgSize);
+    assert(data.size + sizeof(Dtu::MessageHeader) <= ep.maxMsgSize);
 
     // fill the info struct and start the transfer
     info.targetCoreId = ep.targetCore;
@@ -125,7 +125,7 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
     info.targetEpId   = ep.targetEp;
     info.label        = ep.label;
     info.replyLabel   = dtu.regs().get(CmdReg::REPLY_LABEL);
-    info.replyEpId    = dtu.regs().get(CmdReg::REPLY_EPID);
+    info.replyEpId    = cmd.arg;
     info.flags        = 0;
     info.unlimcred    = ep.curcrd == Dtu::CREDITS_UNLIM;
     info.ready        = true;
@@ -134,12 +134,12 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
 }
 
 void
-MessageUnit::requestHeader(unsigned epid)
+MessageUnit::requestHeader(const Dtu::Command::Bits& cmd)
 {
     assert(offset < sizeof(Dtu::MessageHeader));
 
-    RecvEp ep = dtu.regs().getRecvEp(epid);
-    Addr msg = dtu.regs().get(CmdReg::OFFSET);
+    RecvEp ep = dtu.regs().getRecvEp(cmd.epid);
+    Addr msg = cmd.arg;
 
     int msgidx = ep.msgToIdx(msg);
     Addr msgOff = ep.msgSize * msgidx;
@@ -150,7 +150,7 @@ MessageUnit::requestHeader(unsigned epid)
 
     DPRINTFS(DtuBuf, (&dtu),
         "EP%d: requesting header for reply on message @ %p (idx=%d)\n",
-        epid, msgAddr, msgidx);
+        cmd.epid, msgAddr, msgidx);
 
     msgAddr += offset;
 
@@ -163,13 +163,13 @@ MessageUnit::requestHeader(unsigned epid)
         {
             assert(res != DtuTlb::NOMAP);
 
-            Translation *trans = new Translation(*this, msgAddr, epid);
+            Translation *trans = new Translation(*this, msgAddr, cmd.epid);
             dtu.startTranslate(dtu.bufCount, msgAddr, DtuTlb::READ, trans);
             return;
         }
     }
 
-    requestHeaderWithPhys(epid, true, msgAddr, phys);
+    requestHeaderWithPhys(cmd.epid, true, msgAddr, phys);
 }
 
 void
@@ -217,7 +217,7 @@ MessageUnit::recvFromMem(const Dtu::Command::Bits& cmd, PacketPtr pkt)
     // do we have the complete header yet? if not, request the rest
     if (offset < sizeof(Dtu::MessageHeader))
     {
-        requestHeader(cmd.epid);
+        requestHeader(cmd);
         return;
     }
 
@@ -247,20 +247,19 @@ MessageUnit::startXfer(const Dtu::Command::Bits& cmd)
 {
     assert(info.ready);
 
-    Addr messageAddr = dtu.regs().get(CmdReg::DATA_ADDR);
-    Addr messageSize = dtu.regs().get(CmdReg::DATA_SIZE);
+    const DataReg data = dtu.regs().getDataReg();
 
     if (cmd.opcode == Dtu::Command::REPLY)
-        repliedBytes.sample(messageSize);
+        repliedBytes.sample(data.size);
     else
-        sentBytes.sample(messageSize);
+        sentBytes.sample(data.size);
 
     DPRINTFS(Dtu, (&dtu), "\e[1m[%s -> %u]\e[0m with EP%u of %#018lx:%lu\n",
              cmd.opcode == Dtu::Command::REPLY ? "rp" : "sd",
              info.targetCoreId,
              cmd.epid,
-             dtu.regs().get(CmdReg::DATA_ADDR),
-             messageSize);
+             data.addr,
+             data.size);
 
     Dtu::MessageHeader* header = new Dtu::MessageHeader;
 
@@ -287,7 +286,7 @@ MessageUnit::startXfer(const Dtu::Command::Bits& cmd)
         header->senderEpId   = info.unlimcred ? dtu.numEndpoints : cmd.epid;
         header->replyEpId    = info.replyEpId;
     }
-    header->length       = messageSize;
+    header->length       = data.size;
     header->label        = info.label;
     header->replyLabel   = info.replyLabel;
 
@@ -301,14 +300,14 @@ MessageUnit::startXfer(const Dtu::Command::Bits& cmd)
         "  dst: pe=%u vpe=%u ep=%u lbl=%#018lx\n",
         info.targetCoreId, info.targetVpeId, info.targetEpId, info.label);
 
-    assert(messageSize + sizeof(Dtu::MessageHeader) <= dtu.maxNocPacketSize);
+    assert(data.size + sizeof(Dtu::MessageHeader) <= dtu.maxNocPacketSize);
 
     NocAddr nocAddr(info.targetCoreId, info.targetEpId);
     uint flags = XferUnit::MESSAGE;
 
     // start the transfer of the payload
     auto *ev = new SendTransferEvent(
-        messageAddr, messageSize, flags, nocAddr, info.targetVpeId, header);
+        data.addr, data.size, flags, nocAddr, info.targetVpeId, header);
     dtu.startTransfer(ev, dtu.startMsgTransferDelay);
 
     info.ready = false;
