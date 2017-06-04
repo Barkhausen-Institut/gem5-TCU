@@ -657,7 +657,7 @@ DtuAccelHash::tick()
         }
         case State::REPLY_ERROR:
         {
-            reply.sys.opcode = 15;          /* FORWARD_REPLY */
+            reply.sys.opcode = 18;          /* FORWARD_REPLY */
             reply.sys.cap = CAP_RBUF;
             reply.sys.msgaddr = msgAddr;
             reply.sys.event = 0;
