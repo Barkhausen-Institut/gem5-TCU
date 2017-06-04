@@ -106,8 +106,6 @@ Dtu::Dtu(DtuParams* p)
     atomicMode(p->system->isAtomicMode()),
     numEndpoints(p->num_endpoints),
     maxNocPacketSize(p->max_noc_packet_size),
-    numCmdEpBits(8),
-    numCmdFlagsBits(1),
     blockSize(p->block_size),
     bufCount(p->buf_count),
     bufSize(p->buf_size),
@@ -239,44 +237,10 @@ Dtu::freeRequest(PacketPtr pkt)
     delete pkt;
 }
 
-Dtu::Command
-Dtu::getCommand()
-{
-    assert(numCmdEpBits + numCmdFlagsBits + numCmdOpcodeBits <=
-        sizeof(RegFile::reg_t) * 8);
-
-    using reg_t = RegFile::reg_t;
-
-    /*
-     *                                          0
-     * |----------------------------------------|
-     * |  error  |   flags  |  epid  |  opcode  |
-     * |----------------------------------------|
-     */
-    reg_t opcodeMask = ((reg_t)1 << numCmdOpcodeBits) - 1;
-    reg_t argMask = ((reg_t)1 << numCmdEpBits) - 1;
-    reg_t flagMask = ((reg_t)1 << numCmdFlagsBits) - 1;
-
-    auto reg = regFile.get(CmdReg::COMMAND);
-
-    Command cmd;
-
-    unsigned bits = numCmdOpcodeBits + numCmdEpBits + numCmdFlagsBits;
-    cmd.error  = static_cast<Error>(reg >> bits);
-
-    cmd.opcode = static_cast<Command::Opcode>(reg & opcodeMask);
-
-    cmd.epid   = (reg >> numCmdOpcodeBits) & argMask;
-
-    cmd.flags  = (reg >> (numCmdEpBits + numCmdOpcodeBits)) & flagMask;
-
-    return cmd;
-}
-
 void
 Dtu::executeCommand(PacketPtr pkt)
 {
-    Command cmd = getCommand();
+    Command::Bits cmd = getCommand();
     if (cmd.opcode == Command::IDLE)
     {
         if (pkt)
@@ -350,7 +314,7 @@ Dtu::executeCommand(PacketPtr pkt)
 void
 Dtu::abortCommand()
 {
-    Command cmd = getCommand();
+    Command::Bits cmd = getCommand();
     abortCmd = regs().get(CmdReg::ABORT);
 
     if ((abortCmd & Command::ABORT_CMD) && cmd.opcode != Command::IDLE)
@@ -425,7 +389,7 @@ Dtu::scheduleFinishOp(Cycles delay, Error error)
 void
 Dtu::finishCommand(Error error)
 {
-    Command cmd = getCommand();
+    Command::Bits cmd = getCommand();
 
     cmdFinish = NULL;
 
@@ -463,8 +427,9 @@ Dtu::finishCommand(Error error)
     }
 
     // let the SW know that the command is finished
-    unsigned bits = numCmdOpcodeBits + numCmdFlagsBits + numCmdEpBits;
-    regFile.set(CmdReg::COMMAND, static_cast<RegFile::reg_t>(error) << bits);
+    cmd.error = static_cast<unsigned>(error);
+    cmd.opcode = Command::IDLE;
+    regFile.set(CmdReg::COMMAND, cmd);
 
     if (cmdPkt)
         schedCpuResponse(cmdPkt, clockEdge(Cycles(1)));
@@ -525,8 +490,8 @@ Dtu::executeExternCommand(PacketPtr pkt)
             break;
         case ExternCommand::ACK_MSG:
         {
-            unsigned epid = cmd.arg & ((1 << numCmdEpBits) - 1);
-            msgUnit->ackMessage(epid, cmd.arg >> numCmdEpBits);
+            unsigned epid = cmd.arg & ((1 << 8) - 1);
+            msgUnit->ackMessage(epid, cmd.arg >> 8);
             break;
         }
         default:

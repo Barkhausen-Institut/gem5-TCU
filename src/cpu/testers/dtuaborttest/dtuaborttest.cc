@@ -226,9 +226,12 @@ DtuAbortTest::createCommandPkt(Dtu::Command::Opcode cmd,
     PacketPtr pkt = createPacket(reg_base + getRegAddr(CmdReg::COMMAND),
                                  sizeof(RegFile::reg_t) * 6,
                                  MemCmd::WriteReq);
+    Dtu::Command::Bits cmdreg = 0;
+    cmdreg.opcode = static_cast<RegFile::reg_t>(cmd);
+    cmdreg.epid = ep;
 
     RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
-    regs[0] = static_cast<RegFile::reg_t>(cmd) | (ep << 4);
+    regs[0] = cmdreg;
     regs[1] = 0;
     regs[2] = data;
     regs[3] = size;

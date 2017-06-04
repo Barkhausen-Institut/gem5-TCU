@@ -77,7 +77,7 @@ MemoryUnit::regStats()
 }
 
 void
-MemoryUnit::startRead(const Dtu::Command& cmd)
+MemoryUnit::startRead(const Dtu::Command::Bits& cmd)
 {
     MemEp ep = dtu.regs().getMemEp(cmd.epid);
 
@@ -169,7 +169,7 @@ MemoryUnit::LocalWriteTransferEvent::transferDone(Dtu::Error result)
 }
 
 void
-MemoryUnit::readComplete(const Dtu::Command& cmd, PacketPtr pkt, Dtu::Error error)
+MemoryUnit::readComplete(const Dtu::Command::Bits& cmd, PacketPtr pkt, Dtu::Error error)
 {
     dtu.printPacket(pkt);
 
@@ -210,7 +210,7 @@ MemoryUnit::ReadTransferEvent::transferDone(Dtu::Error result)
 }
 
 void
-MemoryUnit::startWrite(const Dtu::Command& cmd)
+MemoryUnit::startWrite(const Dtu::Command::Bits& cmd)
 {
     MemEp ep = dtu.regs().getMemEp(cmd.epid);
 
@@ -285,7 +285,7 @@ MemoryUnit::WriteTransferEvent::transferDone(Dtu::Error result)
 }
 
 void
-MemoryUnit::writeComplete(const Dtu::Command& cmd, PacketPtr pkt, Dtu::Error error)
+MemoryUnit::writeComplete(const Dtu::Command::Bits& cmd, PacketPtr pkt, Dtu::Error error)
 {
     Addr requestSize = dtu.regs().get(CmdReg::DATA_SIZE);
 

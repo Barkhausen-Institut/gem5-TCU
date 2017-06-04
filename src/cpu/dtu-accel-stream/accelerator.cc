@@ -236,9 +236,9 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
             }
             case State::READ_DATA_WAIT:
             {
-                RegFile::reg_t reg =
+                Dtu::Command::Bits cmd =
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
-                if ((reg & 0xF) == 0)
+                if (cmd.opcode == 0)
                 {
                     streamOff = 0;
                     state = State::PULL_DATA;
@@ -296,9 +296,9 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
             }
             case State::WRITE_DATA_WAIT:
             {
-                RegFile::reg_t reg =
+                Dtu::Command::Bits cmd =
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
-                if ((reg & 0xF) == 0)
+                if (cmd.opcode == 0)
                 {
                     if (dataOff == dataSize || irqPending)
                     {
@@ -322,11 +322,11 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
             }
             case State::REPLY_WAIT:
             {
-                RegFile::reg_t reg =
+                Dtu::Command::Bits cmd =
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
-                if ((reg & 0xF) == 0)
+                if (cmd.opcode == 0)
                 {
-                    if ((reg >> 13) == 0)
+                    if (cmd.error == 0)
                         state = State::CTX_CHECK;
                     else
                         state = State::REPLY_ERROR;

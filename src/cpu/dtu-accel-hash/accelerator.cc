@@ -187,13 +187,13 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
             }
             case State::CTX_SAVE_WAIT:
             {
-                RegFile::reg_t reg =
+                Dtu::Command::Bits cmd =
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
-                if ((reg & 0xF) == 0)
+                if (cmd.opcode == 0)
                 {
                     // don't continue on errors here; maybe we don't have the
                     // memory EP yet.
-                    if ((reg >> 13) != 0 || ctxOffset == getStateSize())
+                    if (cmd.error != 0 || ctxOffset == getStateSize())
                         state = State::CTX_SAVE_DONE;
                     else
                         state = State::CTX_SAVE_SEND;
@@ -233,9 +233,9 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
             }
             case State::CTX_RESTORE_WAIT:
             {
-                RegFile::reg_t reg =
+                Dtu::Command::Bits cmd =
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
-                if ((reg & 0xF) == 0)
+                if (cmd.opcode == 0)
                 {
                     if (ctxOffset == getStateSize())
                     {
@@ -358,9 +358,9 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
             }
             case State::READ_DATA_WAIT:
             {
-                RegFile::reg_t reg =
+                Dtu::Command::Bits cmd =
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
-                if ((reg & 0xF) == 0)
+                if (cmd.opcode == 0)
                 {
                     hashOff = 0;
                     state = State::HASH_DATA;
@@ -415,11 +415,11 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
             }
             case State::REPLY_WAIT:
             {
-                RegFile::reg_t reg =
+                Dtu::Command::Bits cmd =
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
-                if ((reg & 0xF) == 0)
+                if (cmd.opcode == 0)
                 {
-                    if ((reg >> 13) == 0)
+                    if (cmd.error == 0)
                         state = State::CTX_CHECK;
                     else
                         state = State::REPLY_ERROR;

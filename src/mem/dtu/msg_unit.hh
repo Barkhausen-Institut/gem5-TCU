@@ -117,12 +117,12 @@ class MessageUnit
     /**
      * Start message transmission -> Mem request
      */
-    void startTransmission(const Dtu::Command& cmd);
+    void startTransmission(const Dtu::Command::Bits& cmd);
 
     /**
      * Received response from local memory (header lookup)
      */
-    void recvFromMem(const Dtu::Command& cmd, PacketPtr pkt);
+    void recvFromMem(const Dtu::Command::Bits& cmd, PacketPtr pkt);
 
     /**
      * Received a message from NoC -> Mem request
@@ -172,7 +172,7 @@ class MessageUnit
                                Addr virt,
                                const NocAddr &phys);
 
-    void startXfer(const Dtu::Command& cmd);
+    void startXfer(const Dtu::Command::Bits& cmd);
 
   private:
 

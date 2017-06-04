@@ -90,7 +90,7 @@ MessageUnit::regStats()
 }
 
 void
-MessageUnit::startTransmission(const Dtu::Command& cmd)
+MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
 {
     unsigned epid = cmd.epid;
 
@@ -198,7 +198,7 @@ MessageUnit::requestHeaderWithPhys(unsigned epid,
 }
 
 void
-MessageUnit::recvFromMem(const Dtu::Command& cmd, PacketPtr pkt)
+MessageUnit::recvFromMem(const Dtu::Command::Bits& cmd, PacketPtr pkt)
 {
     // simply collect the header in a member for simplicity
     assert(offset + pkt->getSize() <= sizeof(header));
@@ -243,7 +243,7 @@ MessageUnit::recvFromMem(const Dtu::Command& cmd, PacketPtr pkt)
 }
 
 void
-MessageUnit::startXfer(const Dtu::Command& cmd)
+MessageUnit::startXfer(const Dtu::Command::Bits& cmd)
 {
     assert(info.ready);
 

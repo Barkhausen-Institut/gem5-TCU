@@ -149,22 +149,22 @@ class MemoryUnit
     /**
      * Starts a read -> NoC request
      */
-    void startRead(const Dtu::Command& cmd);
+    void startRead(const Dtu::Command::Bits& cmd);
 
     /**
      * Starts a write -> Mem request
      */
-    void startWrite(const Dtu::Command& cmd);
+    void startWrite(const Dtu::Command::Bits& cmd);
 
     /**
      * Read: response from remote DTU
      */
-    void readComplete(const Dtu::Command& cmd, PacketPtr pkt, Dtu::Error error);
+    void readComplete(const Dtu::Command::Bits& cmd, PacketPtr pkt, Dtu::Error error);
 
     /**
      * Write: response from remote DTU
      */
-    void writeComplete(const Dtu::Command& cmd, PacketPtr pkt, Dtu::Error error);
+    void writeComplete(const Dtu::Command::Bits& cmd, PacketPtr pkt, Dtu::Error error);
 
 
     /**

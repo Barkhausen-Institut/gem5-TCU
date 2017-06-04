@@ -195,8 +195,12 @@ DtuAccel::createDtuCmdPkt(uint64_t cmd,
                             sizeof(RegFile::reg_t) * 6,
                             MemCmd::WriteReq);
 
+    Dtu::Command::Bits cmdreg = 0;
+    cmdreg.opcode = static_cast<RegFile::reg_t>(cmd);
+    cmdreg.epid = epid;
+
     RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
-    regs[0] = cmd;
+    regs[0] = cmdreg;
     regs[1] = 0;
     regs[2] = data;
     regs[3] = size;

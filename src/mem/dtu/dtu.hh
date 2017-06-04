@@ -180,10 +180,14 @@ class Dtu : public BaseDtu
             NOPF            = 1,
         };
 
-        Error error;
-        Opcode opcode;
-        unsigned epid;
-        unsigned flags;
+        BitUnion64(Bits)
+            Bitfield<31, 13> error;
+            Bitfield<12> flags;
+            Bitfield<11, 4> epid;
+            Bitfield<3, 0> opcode;
+        EndBitUnion(Bits)
+
+        Bits value;
     };
 
     struct ExternCommand
@@ -203,10 +207,6 @@ class Dtu : public BaseDtu
         Opcode opcode;
         uint64_t arg;
     };
-
-  public:
-
-    static constexpr unsigned numCmdOpcodeBits = 4;
 
   public:
 
@@ -283,7 +283,10 @@ class Dtu : public BaseDtu
 
   private:
 
-    Command getCommand();
+    Command::Bits getCommand()
+    {
+        return regFile.get(CmdReg::COMMAND);
+    }
 
     void executeCommand(PacketPtr pkt);
 
@@ -459,9 +462,6 @@ class Dtu : public BaseDtu
     const unsigned numEndpoints;
 
     const Addr maxNocPacketSize;
-
-    const unsigned numCmdEpBits;
-    const unsigned numCmdFlagsBits;
 
     const size_t blockSize;
 
