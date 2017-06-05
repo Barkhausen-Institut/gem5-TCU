@@ -173,6 +173,7 @@ def createPE(root, options, no, systemType, l1size, l2size, spmsize, dtupos, mem
 
     # each PE is represented by it's own subsystem
     pe = systemType(mem_mode=CPUClass.memory_mode())
+    pe.clk_domain = root.cpu_clk_domain
     pe.core_id = no
     setattr(root, 'pe%02d' % no, pe)
 
@@ -180,14 +181,13 @@ def createPE(root, options, no, systemType, l1size, l2size, spmsize, dtupos, mem
         pe.xbar = SystemXBar()
     else:
         pe.xbar = L2XBar()
-    pe.xbar.clk_domain = root.cpu_clk_domain
+    pe.xbar.point_of_coherency = True
 
     # we want to use the instructions, not the memory based pseudo operations
     pe.pseudo_mem_ops = False
 
     pe.dtu = Dtu()
     pe.dtu.core_id = no
-    pe.dtu.clk_domain = root.cpu_clk_domain
 
     pe.dtu.coherent = options.coherent
     pe.dtu.num_endpoints = 12
@@ -223,7 +223,6 @@ def createPE(root, options, no, systemType, l1size, l2size, spmsize, dtupos, mem
 
             # use a crossbar to connect l1icache and l1dcache to l2cache
             pe.tol2bus = L2XBar()
-            pe.tol2bus.clk_domain = root.cpu_clk_domain
             pe.dtu.l2cache.cpu_side = pe.tol2bus.master
             pe.dtu.l2cache.mem_side = pe.xbar.slave
 
@@ -311,7 +310,6 @@ def createCorePE(root, options, no, cmdline, memPE, l1size=None, l2size=None,
 
     pe.cpu = CPUClass()
     pe.cpu.cpu_id = 0
-    pe.cpu.clk_domain = root.cpu_clk_domain
 
     # connect CPU to caches
     if not l1size is None and dtupos > 0:
@@ -399,7 +397,6 @@ def createAccelPE(root, options, no, accel, memPE, l1size=None, l2size=None, spm
         sys.exit(1)
     pe.dtu.connector.accelerator = pe.accel
     pe.accel.id = no;
-    pe.accel.clk_domain = root.cpu_clk_domain
 
     pe.dtu.dcache_slave_port = pe.accel.port
 
@@ -415,6 +412,7 @@ def createMemPE(root, options, no, size, dram=True, content=None):
         l1size=None, l2size=None, spmsize=None, memPE=0,
         dtupos=0
     )
+    pe.clk_domain = root.clk_domain
     pe.dtu.connector = BaseConnector()
 
     # use many buffers to prevent that this is a bottleneck (this is just a
@@ -453,7 +451,6 @@ def createAbortTestPE(root, options, no, memPE, l1size=None, l2size=None, spmsiz
 
     pe.cpu = DtuAbortTest()
     pe.cpu.id = no;
-    pe.cpu.clk_domain = root.cpu_clk_domain
 
     pe.dtu.dcache_slave_port = pe.cpu.port
 
