@@ -418,6 +418,19 @@ Dtu::finishCommand(Error error)
         msgUnit->finishMsgSend(error, cmd.epid);
     else if (cmd.opcode == Command::REPLY)
         msgUnit->finishMsgReply(error, cmd.epid, cmd.arg);
+    else if (error == Error::NONE && !abortCmd &&
+             (cmd.opcode == Command::READ || cmd.opcode == Command::WRITE))
+    {
+        const DataReg data = regs().getDataReg();
+        if (data.size > 0)
+        {
+            if (cmd.opcode == Command::READ)
+                memUnit->startRead(cmd);
+            else
+                memUnit->startWrite(cmd);
+            return;
+        }
+    }
 
     if (cmd.opcode == Command::SLEEP)
         stopSleep();
