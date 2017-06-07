@@ -353,8 +353,14 @@ Dtu::abortCommand()
     Error err;
     if (cmd.opcode == Command::IDLE)
     {
-        regs().set(CmdReg::COMMAND, Command::DEBUG_MSG);
-        cmdId = 1;
+        if (abortCmd & Command::ABORT_VPE)
+        {
+            regs().set(CmdReg::COMMAND, Command::DEBUG_MSG);
+            cmdId = 1;
+        }
+        // all done
+        else
+            abortCmd = 0;
         err = Error::NONE;
     }
     // reads/writes are aborted immediately
