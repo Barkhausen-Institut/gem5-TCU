@@ -849,10 +849,16 @@ Dtu::completeTranslate()
 
         NocAddr phys((resp & npagemask) |
                      (coreXlates[id].virt & DtuTlb::PAGE_MASK));
-        tlb()->insert(coreXlates[id].virt & npagemask,
-                      NocAddr(phys.getAddr() & npagemask),
-                      resp & DtuTlb::IRWX);
-        coreXlates[id].trans->finished(true, phys);
+        uint perm = resp & DtuTlb::IRWX;
+        if (perm == 0)
+            coreXlates[id].trans->finished(false, phys);
+        else
+        {
+            tlb()->insert(coreXlates[id].virt & npagemask,
+                          NocAddr(phys.getAddr() & npagemask),
+                          perm);
+            coreXlates[id].trans->finished(true, phys);
+        }
 
         coreXlates[id].trans = nullptr;
         regs().set(DtuReg::XLATE_RESP, 0);
