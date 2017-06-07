@@ -276,7 +276,7 @@ class Dtu : public BaseDtu
                         uint access,
                         PtUnit::Translation *trans);
 
-    void abortTranslate(PtUnit::Translation *trans);
+    void abortTranslate(size_t id, PtUnit::Translation *trans);
 
     void handlePFResp(PacketPtr pkt);
 

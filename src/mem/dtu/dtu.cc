@@ -886,10 +886,15 @@ Dtu::completeTranslate()
 }
 
 void
-Dtu::abortTranslate(PtUnit::Translation *trans)
+Dtu::abortTranslate(size_t id, PtUnit::Translation *trans)
 {
     if (ptUnit)
         ptUnit->abortTranslate(trans);
+    else
+    {
+        coreXlates[id].trans = NULL;
+        coreXlates[id].ongoing = false;
+    }
 }
 
 void

@@ -110,7 +110,7 @@ XferUnit::regStats()
 void
 XferUnit::Translation::abort()
 {
-    event.xfer->dtu.abortTranslate(this);
+    event.xfer->dtu.abortTranslate(event.buf->id, this);
 }
 
 bool
