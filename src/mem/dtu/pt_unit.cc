@@ -206,7 +206,8 @@ PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, uint access)
         return false;
     }
 
-    int pfep = ev->toKernel ? Dtu::SYSCALL_EP : dtu.regs().get(DtuReg::PF_EP);
+    int pfep = ev->toKernel ? Dtu::SYSCALL_EP
+                            : (dtu.regs().get(DtuReg::PF_EP) & 0xFF);
     assert(pfep < dtu.numEndpoints);
     SendEp ep = dtu.regs().getSendEp(pfep);
 
