@@ -512,11 +512,14 @@ class DefaultFetch
     /** Thread ID being fetched. */
     ThreadID threadFetched;
 
+    // TODO for the workaround in O3ThreadContext<Impl>::suspend()
+public:
     /** Checks if there is an interrupt pending.  If there is, fetch
      * must stop once it is not fetching PAL instructions.
      */
     bool interruptPending;
 
+private:
     /** Set to true if a pipelined I-cache request should be issued. */
     bool issuePipelinedIfetch[Impl::MaxThreads];
 

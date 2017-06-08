@@ -129,6 +129,13 @@ O3ThreadContext<Impl>::suspend()
 
     thread->setStatus(ThreadContext::Suspended);
     cpu->suspendContext(thread->threadId());
+
+    // TODO workaround for a bug in interrupt handling (as far as I can see).
+    // In some cases, gem5 waits for ever until the ROB is empty and simply
+    // suspends the CPU with the next hlt. Apparently, simply reactivating
+    // it if there is still an interrupt pending, solves it for me.
+    if (cpu->fetch.interruptPending)
+        activate();
 }
 
 template <class Impl>
