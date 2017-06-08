@@ -41,8 +41,8 @@ const unsigned DtuAccel::EP_SYSR       = 2;
 
 const Addr DtuAccel::MSG_ADDR          = 0x2000;
 
-const Addr DtuAccel::RCTMUX_YIELD      = 0x2ff0;
-const Addr DtuAccel::RCTMUX_FLAGS      = 0x2ff8;
+const Addr DtuAccel::RCTMUX_YIELD      = 0x5ff0;
+const Addr DtuAccel::RCTMUX_FLAGS      = 0x5ff8;
 
 Addr
 DtuAccel::getRegAddr(DtuReg reg)
