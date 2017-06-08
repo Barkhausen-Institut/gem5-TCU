@@ -119,8 +119,8 @@ class DtuAbortTest : public MemObject
                                unsigned ep,
                                Addr data,
                                Addr size,
-                               Addr off,
-                               unsigned reply_ep);
+                               Addr arg,
+                               Addr off = 0);
 
     bool sendPkt(PacketPtr pkt);
 

@@ -36,11 +36,11 @@
 #include "sim/dtu_memory.hh"
 #include "base/misc.hh"
 
-// start at 0x2000, because it is 1:1 mapped and we use the first 2 for PTs
-static const Addr TEMP_ADDR         = DtuTlb::PAGE_SIZE * 2;
-static const Addr DATA_ADDR         = DtuTlb::PAGE_SIZE * 3;
-static const Addr DEST_ADDR         = DtuTlb::PAGE_SIZE * 4;
-static const Addr RECV_ADDR         = DtuTlb::PAGE_SIZE * 5;
+// start at 0x4000, because it is 1:1 mapped and we use the first 4 for PTs
+static const Addr TEMP_ADDR         = DtuTlb::PAGE_SIZE * 4;
+static const Addr DATA_ADDR         = DtuTlb::PAGE_SIZE * 5;
+static const Addr DEST_ADDR         = DtuTlb::PAGE_SIZE * 6;
+static const Addr RECV_ADDR         = DtuTlb::PAGE_SIZE * 7;
 static const unsigned EP_MEM        = 0;
 static const unsigned EP_SEND       = 1;
 static const unsigned EP_RECV       = 2;
@@ -213,8 +213,8 @@ DtuAbortTest::createCommandPkt(Dtu::Command::Opcode cmd,
                                unsigned ep,
                                Addr data,
                                Addr size,
-                               Addr off,
-                               unsigned reply_ep = 0)
+                               Addr arg,
+                               Addr off)
 {
     static_assert(static_cast<int>(CmdReg::COMMAND) == 0, "");
     static_assert(static_cast<int>(CmdReg::ABORT) == 1, "");
@@ -228,7 +228,7 @@ DtuAbortTest::createCommandPkt(Dtu::Command::Opcode cmd,
     Dtu::Command::Bits cmdreg = 0;
     cmdreg.opcode = static_cast<RegFile::reg_t>(cmd);
     cmdreg.epid = ep;
-    cmdreg.arg = reply_ep;
+    cmdreg.arg = arg;
 
     RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
     regs[0] = cmdreg;
@@ -376,7 +376,7 @@ DtuAbortTest::tick()
             DTUMemory *sys = dynamic_cast<DTUMemory*>(system);
             if (sys)
             {
-                sys->mapSegment(0, DtuTlb::PAGE_SIZE * 6, DtuTlb::IRWX);
+                sys->mapSegment(0, RECV_ADDR + DtuTlb::PAGE_SIZE, DtuTlb::IRWX);
             }
             state = State::INIT_MEM_EP;
             break;
@@ -468,8 +468,8 @@ DtuAbortTest::tick()
                                                EP_SEND,
                                                DATA_ADDR,
                                                system->cacheLineSize() * 2,
-                                               off,
-                                               EP_RECV);
+                                               EP_RECV,
+                                               off);
                     }
                     else if (testNo == 3)
                     {
@@ -511,7 +511,7 @@ DtuAbortTest::tick()
                                        sizeof(RegFile::reg_t),
                                        MemCmd::WriteReq);
 
-                    RegFile::reg_t cmd = 0;
+                    RegFile::reg_t cmd = DATA_ADDR << 3;
                     cmd += static_cast<RegFile::reg_t>(Dtu::ExternCommand::INV_TLB);
                     *pkt->getPtr<RegFile::reg_t>() = cmd;
                     break;
