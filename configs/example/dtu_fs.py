@@ -150,7 +150,11 @@ def getOptions():
 
     return options
 
-def printConfig(pe):
+def printConfig(pe, dtupos):
+    print '      DTU  =bufsz:%d B, blocksz:%d B, count:%d, tlb:%d, walker:%d' % \
+        (pe.dtu.buf_size.value, pe.dtu.block_size.value, pe.dtu.buf_count,
+         pe.dtu.tlb_entries, 1 if pe.dtu.pt_walker else 0)
+
     try:
         cc = "coherent" if pe.dtu.coherent else "non-coherent"
         print '      L1i$ =%d KiB (%s)' % (pe.dtu.l1icache.size.value / 1024, cc)
@@ -159,14 +163,27 @@ def printConfig(pe):
             print '      L2$  =%d KiB (%s)' % (pe.dtu.l2cache.size.value / 1024, cc)
         except:
             pass
+
+        dtustr = 'DTU+AT' if pe.dtu.pt_walker else 'DTU'
+        str = '      Comp =Core' + ('+AT' if not pe.dtu.pt_walker else '') + ' -> '
+        if dtupos == 0:
+            str += dtustr + ' -> L1'
+        elif dtupos == 1:
+            str += 'L1 -> ' + dtustr
+        else:
+            str += 'L1'
+        if hasattr(pe.dtu, 'l2cache'):
+            str += ' -> L2'
+        if dtupos == 2:
+            str += ' -> ' + dtustr
+        print str
     except:
         try:
             print '      imem =%d KiB' % (int(pe.mem_ctrl.range.end + 1) / 1024)
+            print '      Comp =DTU -> DRAM'
         except:
             print '      imem =%d KiB' % (int(pe.spm.range.end + 1) / 1024)
-    print '      bufsz=%d B, blocksz=%d B, count=%d, tlb=%d, walker=%d' % \
-        (pe.dtu.buf_size.value, pe.dtu.block_size.value, pe.dtu.buf_count,
-         pe.dtu.tlb_entries, 1 if pe.dtu.pt_walker else 0)
+            print '      Comp =Core -> DTU -> SPM'
 
 def createPE(root, options, no, systemType, l1size, l2size, spmsize, dtupos, memPE):
     CPUClass = CpuConfig.get(options.cpu_type)
@@ -339,8 +356,8 @@ def createCorePE(root, options, no, cmdline, memPE, l1size=None, l2size=None,
     pe.kernel = cmdline.split(' ')[0]
     pe.boot_osflags = cmdline
     print "PE%02d: %s" % (no, cmdline)
-    print '      core =%s %s' % (options.cpu_type, options.isa)
-    printConfig(pe)
+    print '      Core =%s %s' % (type(pe.cpu), options.isa)
+    printConfig(pe, dtupos)
 
     # if specified, let this PE wait for GDB
     if options.pausepe == no:
@@ -401,7 +418,7 @@ def createAccelPE(root, options, no, accel, memPE, l1size=None, l2size=None, spm
     pe.dtu.dcache_slave_port = pe.accel.port
 
     print 'PE%02d: %s accelerator' % (no, accel)
-    printConfig(pe)
+    printConfig(pe, 0)
     print
 
     return pe
@@ -436,7 +453,7 @@ def createMemPE(root, options, no, size, dram=True, content=None):
         pe.mem_file = content
 
     print 'PE%02d: %s' % (no, content)
-    printConfig(pe)
+    printConfig(pe, 0)
     print
 
     return pe
@@ -455,7 +472,7 @@ def createAbortTestPE(root, options, no, memPE, l1size=None, l2size=None, spmsiz
     pe.dtu.dcache_slave_port = pe.cpu.port
 
     print 'PE%02d: aborttest core' % (no)
-    printConfig(pe)
+    printConfig(pe, 0)
     print
 
     return pe
