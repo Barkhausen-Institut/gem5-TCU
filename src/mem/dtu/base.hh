@@ -308,6 +308,7 @@ class BaseDtu : public MemObject
     Cache *l1ICache;
     Cache *l1DCache;
     Cache *l2Cache;
+    Cache *ioCache;
 
     AddrRange watchRange;
 

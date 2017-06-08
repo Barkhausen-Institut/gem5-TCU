@@ -239,15 +239,15 @@ def createPE(root, options, no, systemType, l1size, l2size, spmsize, dtupos, mem
             pe.dtu.l1icache.cpu_side = pe.dtu.icache_master_port
             pe.dtu.l1dcache.cpu_side = pe.dtu.dcache_master_port
         else:
-            pe.iocache = L1_DCache(size='4kB')
-            pe.iocache.tag_latency = 4
-            pe.iocache.data_latency = 4
-            pe.iocache.response_latency = 4
-            pe.iocache.cpu_side = pe.dtu.dcache_master_port
+            pe.dtu.iocache = L1_DCache(size='4kB')
+            pe.dtu.iocache.tag_latency = 4
+            pe.dtu.iocache.data_latency = 4
+            pe.dtu.iocache.response_latency = 4
+            pe.dtu.iocache.cpu_side = pe.dtu.dcache_master_port
             if not l2size is None and dtupos == 1:
-                pe.iocache.mem_side = pe.tol2bus.slave
+                pe.dtu.iocache.mem_side = pe.tol2bus.slave
             else:
-                pe.iocache.mem_side = pe.xbar.slave
+                pe.dtu.iocache.mem_side = pe.xbar.slave
 
         # the DTU handles LLC misses
         pe.dtu.cache_mem_slave_port = pe.xbar.master

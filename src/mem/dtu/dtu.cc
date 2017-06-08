@@ -614,6 +614,12 @@ Dtu::reset(Addr addr)
             l2Cache->memInvalidate();
             delay += Cycles(l2Cache->getBlockCount() / cacheBlocksPerCycle);
         }
+        if(ioCache)
+        {
+            ioCache->memWriteback();
+            ioCache->memInvalidate();
+            delay += Cycles(ioCache->getBlockCount() / cacheBlocksPerCycle);
+        }
     }
 
     // hard-abort everything

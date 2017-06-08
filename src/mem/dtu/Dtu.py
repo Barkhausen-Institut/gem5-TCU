@@ -51,6 +51,7 @@ class BaseDtu(MemObject):
     l1icache = Param.Cache(NULL, "The L1 instruction cache (if any)")
     l1dcache = Param.Cache(NULL, "The L1 data cache (if any)")
     l2cache = Param.Cache(NULL, "The L2 cache (if any)")
+    iocache = Param.Cache(NULL, "The IO cache (if any)")
 
     coherent = Param.Bool(False, "Whether the DTU should keep the caches coherent")
 

@@ -314,6 +314,7 @@ BaseDtu::BaseDtu(BaseDtuParams* p)
     l1ICache(p->l1icache),
     l1DCache(p->l1dcache),
     l2Cache(p->l2cache),
+    ioCache(p->iocache),
     watchRange(1, 0),
     watches(),
     nocReqFinishedEvent(*this),
