@@ -596,29 +596,12 @@ Dtu::reset(Addr addr)
     Cycles delay(0);
     if(!coherent)
     {
-        if(l1ICache)
+        for (auto &c : caches)
         {
             // no writeback necessary
-            l1ICache->memInvalidate();
-            delay += Cycles(l1ICache->getBlockCount() / cacheBlocksPerCycle);
-        }
-        if(l1DCache)
-        {
-            l1DCache->memWriteback();
-            l1DCache->memInvalidate();
-            delay += Cycles(l1DCache->getBlockCount() / cacheBlocksPerCycle);
-        }
-        if(l2Cache)
-        {
-            l2Cache->memWriteback();
-            l2Cache->memInvalidate();
-            delay += Cycles(l2Cache->getBlockCount() / cacheBlocksPerCycle);
-        }
-        if(ioCache)
-        {
-            ioCache->memWriteback();
-            ioCache->memInvalidate();
-            delay += Cycles(ioCache->getBlockCount() / cacheBlocksPerCycle);
+            c->memWriteback();
+            c->memInvalidate();
+            delay += Cycles(c->getBlockCount() / cacheBlocksPerCycle);
         }
     }
 

@@ -48,10 +48,7 @@ class BaseDtu(MemObject):
 
     cache_mem_slave_port = SlavePort("Port that performs memory requests on behalf of the cache")
 
-    l1icache = Param.Cache(NULL, "The L1 instruction cache (if any)")
-    l1dcache = Param.Cache(NULL, "The L1 data cache (if any)")
-    l2cache = Param.Cache(NULL, "The L2 cache (if any)")
-    iocache = Param.Cache(NULL, "The IO cache (if any)")
+    caches = VectorParam.Cache([], "The caches that need to be flushed/invalidated")
 
     coherent = Param.Bool(False, "Whether the DTU should keep the caches coherent")
 

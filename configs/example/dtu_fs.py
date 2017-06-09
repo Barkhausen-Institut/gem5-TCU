@@ -157,10 +157,10 @@ def printConfig(pe, dtupos):
 
     try:
         cc = "coherent" if pe.dtu.coherent else "non-coherent"
-        print '      L1i$ =%d KiB (%s)' % (pe.dtu.l1icache.size.value / 1024, cc)
-        print '      L1d$ =%d KiB (%s)' % (pe.dtu.l1dcache.size.value / 1024, cc)
+        print '      L1i$ =%d KiB (%s)' % (pe.l1icache.size.value / 1024, cc)
+        print '      L1d$ =%d KiB (%s)' % (pe.l1dcache.size.value / 1024, cc)
         try:
-            print '      L2$  =%d KiB (%s)' % (pe.dtu.l2cache.size.value / 1024, cc)
+            print '      L2$  =%d KiB (%s)' % (pe.l2cache.size.value / 1024, cc)
         except:
             pass
 
@@ -172,7 +172,7 @@ def printConfig(pe, dtupos):
             str += 'L1 -> ' + dtustr
         else:
             str += 'L1'
-        if hasattr(pe.dtu, 'l2cache'):
+        if hasattr(pe, 'l2cache'):
             str += ' -> L2'
         if dtupos == 2:
             str += ' -> ' + dtustr
@@ -215,56 +215,63 @@ def createPE(root, options, no, systemType, l1size, l2size, spmsize, dtupos, mem
 
     pe.dtu.slave_region = [AddrRange(0, pe.dtu.mmio_region.start - 1)]
 
+    # for some reason, we need to initialize that here explicitly
+    pe.dtu.caches = []
+
     # create caches
     if not l1size is None:
-        pe.dtu.l1icache = L1_ICache(size=l1size)
-        pe.dtu.l1icache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
-        pe.dtu.l1icache.tag_latency = 4
-        pe.dtu.l1icache.data_latency = 4
-        pe.dtu.l1icache.response_latency = 4
+        pe.l1icache = L1_ICache(size=l1size)
+        pe.l1icache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
+        pe.l1icache.tag_latency = 4
+        pe.l1icache.data_latency = 4
+        pe.l1icache.response_latency = 4
+        pe.dtu.caches.append(pe.l1icache)
 
-        pe.dtu.l1dcache = L1_DCache(size=l1size)
-        pe.dtu.l1dcache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
-        pe.dtu.l1dcache.tag_latency = 4
-        pe.dtu.l1dcache.data_latency = 4
-        pe.dtu.l1dcache.response_latency = 4
+        pe.l1dcache = L1_DCache(size=l1size)
+        pe.l1dcache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
+        pe.l1dcache.tag_latency = 4
+        pe.l1dcache.data_latency = 4
+        pe.l1dcache.response_latency = 4
+        pe.dtu.caches.append(pe.l1dcache)
 
         if not l2size is None:
-            pe.dtu.l2cache = L2Cache(size=l2size)
-            pe.dtu.l2cache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
-            pe.dtu.l2cache.tag_latency = 12
-            pe.dtu.l2cache.data_latency = 12
-            pe.dtu.l2cache.response_latency = 12
+            pe.l2cache = L2Cache(size=l2size)
+            pe.l2cache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
+            pe.l2cache.tag_latency = 12
+            pe.l2cache.data_latency = 12
+            pe.l2cache.response_latency = 12
+            pe.dtu.caches.append(pe.l2cache)
 
-            pe.dtu.l2cache.prefetcher = StridePrefetcher(degree = 16)
+            pe.l2cache.prefetcher = StridePrefetcher(degree = 16)
 
             # use a crossbar to connect l1icache and l1dcache to l2cache
             pe.tol2bus = L2XBar()
-            pe.dtu.l2cache.cpu_side = pe.tol2bus.master
-            pe.dtu.l2cache.mem_side = pe.xbar.slave
+            pe.l2cache.cpu_side = pe.tol2bus.master
+            pe.l2cache.mem_side = pe.xbar.slave
 
-            pe.dtu.l1icache.mem_side = pe.tol2bus.slave
-            pe.dtu.l1dcache.mem_side = pe.tol2bus.slave
+            pe.l1icache.mem_side = pe.tol2bus.slave
+            pe.l1dcache.mem_side = pe.tol2bus.slave
         else:
-            pe.dtu.l1dcache.prefetcher = StridePrefetcher(degree = 16)
+            pe.l1dcache.prefetcher = StridePrefetcher(degree = 16)
 
-            pe.dtu.l1icache.mem_side = pe.xbar.slave
-            pe.dtu.l1dcache.mem_side = pe.xbar.slave
+            pe.l1icache.mem_side = pe.xbar.slave
+            pe.l1dcache.mem_side = pe.xbar.slave
 
         # connect DTU and caches
         if dtupos == 0:
-            pe.dtu.l1icache.cpu_side = pe.dtu.icache_master_port
-            pe.dtu.l1dcache.cpu_side = pe.dtu.dcache_master_port
+            pe.l1icache.cpu_side = pe.dtu.icache_master_port
+            pe.l1dcache.cpu_side = pe.dtu.dcache_master_port
         else:
-            pe.dtu.iocache = L1_DCache(size='4kB')
-            pe.dtu.iocache.tag_latency = 4
-            pe.dtu.iocache.data_latency = 4
-            pe.dtu.iocache.response_latency = 4
-            pe.dtu.iocache.cpu_side = pe.dtu.dcache_master_port
+            pe.iocache = L1_DCache(size='4kB')
+            pe.iocache.tag_latency = 4
+            pe.iocache.data_latency = 4
+            pe.iocache.response_latency = 4
+            pe.iocache.cpu_side = pe.dtu.dcache_master_port
+            pe.dtu.caches.append(pe.iocache)
             if not l2size is None and dtupos == 1:
-                pe.dtu.iocache.mem_side = pe.tol2bus.slave
+                pe.iocache.mem_side = pe.tol2bus.slave
             else:
-                pe.dtu.iocache.mem_side = pe.xbar.slave
+                pe.iocache.mem_side = pe.xbar.slave
 
         # the DTU handles LLC misses
         pe.dtu.cache_mem_slave_port = pe.xbar.master
@@ -330,8 +337,8 @@ def createCorePE(root, options, no, cmdline, memPE, l1size=None, l2size=None,
 
     # connect CPU to caches
     if not l1size is None and dtupos > 0:
-        pe.dtu.l1icache.cpu_side = pe.cpu.icache_port
-        pe.dtu.l1dcache.cpu_side = pe.cpu.dcache_port
+        pe.l1icache.cpu_side = pe.cpu.icache_port
+        pe.l1dcache.cpu_side = pe.cpu.dcache_port
 
         pe.dtu.dcache_slave_port = pe.xbar.master
         pe.dtu.slave_region = [pe.dtu.mmio_region]

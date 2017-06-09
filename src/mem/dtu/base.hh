@@ -305,10 +305,7 @@ class BaseDtu : public MemObject
 
     CacheMemSlavePort cacheMemSlavePort;
 
-    Cache *l1ICache;
-    Cache *l1DCache;
-    Cache *l2Cache;
-    Cache *ioCache;
+    std::vector<Cache*> caches;
 
     AddrRange watchRange;
 
