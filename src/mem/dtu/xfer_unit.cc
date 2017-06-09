@@ -174,7 +174,10 @@ XferUnit::TransferEvent::process()
     NocAddr phys(local);
     if (xfer->dtu.tlb() && !(flags() & NOXLATE))
     {
-        uint access = isWrite() ? DtuTlb::WRITE : DtuTlb::READ;
+        // the DTU can always write to receive buffers and they are pinned
+        // so, don't check for write access in that case
+        uint access = isWrite() && !(flags() & MSGRECV) ? DtuTlb::WRITE
+                                                        : DtuTlb::READ;
         access |= isRemote() ? 0 : DtuTlb::INTERN;
 
         DtuTlb::Result res = xfer->dtu.tlb()->lookup(local, access, &phys);
