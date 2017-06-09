@@ -150,6 +150,11 @@ def getOptions():
 
     return options
 
+def getCacheStr(cache):
+    return '%d KiB (%d-way assoc, %d cycles)' % (
+        cache.size.value / 1024, cache.assoc, cache.tag_latency
+    )
+
 def printConfig(pe, dtupos):
     print '      DTU  =bufsz:%d B, blocksz:%d B, count:%d, tlb:%d, walker:%d' % \
         (pe.dtu.buf_size.value, pe.dtu.block_size.value, pe.dtu.buf_count,
@@ -157,25 +162,29 @@ def printConfig(pe, dtupos):
 
     try:
         cc = "coherent" if pe.dtu.coherent else "non-coherent"
-        print '      L1i$ =%d KiB (%s)' % (pe.l1icache.size.value / 1024, cc)
-        print '      L1d$ =%d KiB (%s)' % (pe.l1dcache.size.value / 1024, cc)
+        print '      L1i$ =%s' % (getCacheStr(pe.l1icache))
+        print '      L1d$ =%s' % (getCacheStr(pe.l1dcache))
         try:
-            print '      L2$  =%d KiB (%s)' % (pe.l2cache.size.value / 1024, cc)
+            print '      L2$  =%s' % (getCacheStr(pe.l2cache))
+        except:
+            pass
+        try:
+            print '      IO$  =%s' % (getCacheStr(pe.iocache))
         except:
             pass
 
         dtustr = 'DTU+AT' if pe.dtu.pt_walker else 'DTU'
         str = '      Comp =Core' + ('+AT' if not pe.dtu.pt_walker else '') + ' -> '
         if dtupos == 0:
-            str += dtustr + ' -> L1'
+            str += dtustr + ' -> L1$'
         elif dtupos == 1:
-            str += 'L1 -> ' + dtustr
+            str += 'L1$ -> ' + dtustr
         else:
-            str += 'L1'
+            str += 'L1$'
         if hasattr(pe, 'l2cache'):
-            str += ' -> L2'
+            str += ' -> L2$'
         if dtupos == 2:
-            str += ' -> ' + dtustr
+            str += ' -> IO$ -> ' + dtustr
         print str
     except:
         try:
