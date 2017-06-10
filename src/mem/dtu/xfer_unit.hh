@@ -117,6 +117,7 @@ class XferUnit
         uint xferFlags;
         Dtu::Error result;
         Translation *trans;
+        int freeSlots;
 
       public:
 
@@ -133,7 +134,8 @@ class XferUnit
               remaining(_size),
               xferFlags(_flags),
               result(Dtu::Error::NONE),
-              trans()
+              trans(),
+              freeSlots()
         {}
 
         Dtu &dtu() { return xfer->dtu; }

@@ -76,6 +76,7 @@ class Dtu(BaseDtu):
 
     buf_count = Param.Unsigned(4, "The number of temporary buffers for transfers")
     buf_size = Param.MemorySize("1kB", "The size of a temporary buffer")
+    req_count = Param.Unsigned(4, "The number of parallel requests to memory")
 
     cache_blocks_per_cycle = Param.Unsigned(8, "The number of cache blocks that can be invalidated per cycle")
 

@@ -467,6 +467,7 @@ class Dtu : public BaseDtu
 
     const size_t bufCount;
     const size_t bufSize;
+    const size_t reqCount;
 
     const unsigned cacheBlocksPerCycle;
 

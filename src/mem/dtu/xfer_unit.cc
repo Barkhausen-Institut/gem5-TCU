@@ -220,65 +220,86 @@ XferUnit::TransferEvent::translateDone(bool success, const NocAddr &phys)
         return;
     }
 
-    assert(remaining > 0);
+    // it might happen that we called process() multiple times in a row. if
+    // another one already generated all remaining memory requests, we are
+    // done here
+    if (remaining == 0)
+        return;
 
-    Addr localOff = local & (xfer->blockSize - 1);
-    Addr reqSize = std::min(remaining, xfer->blockSize - localOff);
+    Addr nextPage = local + DtuTlb::PAGE_SIZE;
+    nextPage &= ~static_cast<Addr>(DtuTlb::PAGE_MASK);
+    Addr pageRemaining = std::min(remaining, nextPage - local);
+    Addr physAddr = phys.getAddr();
 
-    auto cmd = isWrite() ? MemCmd::WriteReq : MemCmd::ReadReq;
-    auto pkt = xfer->dtu.generateRequest(phys.getAddr(), reqSize, cmd);
-
-    if (isWrite())
+    while(freeSlots > 0 && pageRemaining > 0)
     {
-        assert(buf->offset + reqSize <= xfer->bufSize);
+        Addr localOff = local & (xfer->blockSize - 1);
+        Addr reqSize = std::min(remaining, xfer->blockSize - localOff);
 
-        memcpy(pkt->getPtr<uint8_t>(), buf->bytes + buf->offset, reqSize);
+        auto cmd = isWrite() ? MemCmd::WriteReq : MemCmd::ReadReq;
+        auto pkt = xfer->dtu.generateRequest(physAddr, reqSize, cmd);
 
+        DPRINTFS(DtuXfers, (&xfer->dtu),
+            "buf%d: %s %lu bytes @ %p->%p in local memory\n",
+            buf->id,
+            isWrite() ? "Writing" : "Reading",
+            reqSize,
+            local,
+            physAddr);
+
+        Cycles lat = xfer->dtu.transferToMemRequestLatency;
+
+        if (isWrite())
+        {
+            assert(buf->offset + reqSize <= xfer->bufSize);
+
+            memcpy(pkt->getPtr<uint8_t>(), buf->bytes + buf->offset, reqSize);
+        }
+
+        xfer->dtu.sendMemRequest(pkt,
+                                local,
+                                id | (buf->offset << 32),
+                                Dtu::MemReqType::TRANSFER,
+                                lat);
+
+        // to next block
+        local += reqSize;
         buf->offset += reqSize;
+        physAddr += reqSize;
+        remaining -= reqSize;
+        pageRemaining -= reqSize;
+        freeSlots--;
     }
-
-    DPRINTFS(DtuXfers, (&xfer->dtu),
-        "buf%d: %s %lu bytes @ %p->%p in local memory\n",
-        buf->id,
-        isWrite() ? "Writing" : "Reading",
-        reqSize,
-        local,
-        phys.getAddr());
-
-    xfer->dtu.sendMemRequest(pkt,
-                            local,
-                            id,
-                            Dtu::MemReqType::TRANSFER,
-                            xfer->dtu.transferToMemRequestLatency);
-
-    // to next block
-    local += reqSize;
-    remaining -= reqSize;
 }
 
 void
 XferUnit::recvMemResponse(uint64_t evId, PacketPtr pkt)
 {
-    Buffer *buf = getBuffer(evId);
+    Buffer *buf = getBuffer(evId & 0xFFFFFFFF);
     // ignore responses for aborted transfers
-    if (!buf)
+    if (!buf || !buf->event)
         return;
 
-    assert(buf->event);
-
-    if (pkt && buf->event->isRead())
+    if (pkt)
     {
-        assert(buf->offset + pkt->getSize() <= bufSize);
+        if (buf->event->isRead())
+        {
+            Addr offset = evId >> 32;
 
-        memcpy(buf->bytes + buf->offset,
-               pkt->getConstPtr<uint8_t>(),
-               pkt->getSize());
+            assert(offset + pkt->getSize() <= bufSize);
 
-        buf->offset += pkt->getSize();
+            memcpy(buf->bytes + offset,
+                   pkt->getConstPtr<uint8_t>(),
+                   pkt->getSize());
+        }
+
+        buf->event->freeSlots++;
     }
 
-    // nothing more to copy?
-    if (buf->event->remaining == 0)
+    // transfer done?
+    if (buf->event->result != Dtu::Error::NONE ||
+        (buf->event->remaining == 0 &&
+         buf->event->freeSlots == dtu.reqCount))
     {
         buf->event->transferDone(buf->event->result);
 
@@ -301,7 +322,7 @@ XferUnit::recvMemResponse(uint64_t evId, PacketPtr pkt)
             dtu.schedule(ev, dtu.clockEdge(Cycles(1)));
         }
     }
-    else
+    else if(buf->event->remaining > 0)
         buf->event->process();
 }
 
@@ -334,6 +355,7 @@ void
 XferUnit::startTransfer(TransferEvent *event, Cycles delay)
 {
     event->xfer = this;
+    event->freeSlots = dtu.reqCount;
     event->startCycle = dtu.curCycle();
 
     if (event->isRead())

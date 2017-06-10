@@ -108,6 +108,7 @@ Dtu::Dtu(DtuParams* p)
     blockSize(p->block_size),
     bufCount(p->buf_count),
     bufSize(p->buf_size),
+    reqCount(p->req_count),
     cacheBlocksPerCycle(p->cache_blocks_per_cycle),
     registerAccessLatency(p->register_access_latency),
     cpuToCacheLatency(p->cpu_to_cache_latency),
