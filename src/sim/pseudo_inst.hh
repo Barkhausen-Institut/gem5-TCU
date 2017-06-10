@@ -90,6 +90,7 @@ uint64_t translate(ThreadContext *tc, uint64_t vaddr);
 void workbegin(ThreadContext *tc, uint64_t workid, uint64_t threadid);
 void workend(ThreadContext *tc, uint64_t workid, uint64_t threadid);
 void togglesync(ThreadContext *tc);
+uint64_t getCycles(ThreadContext *tc, uint64_t msg);
 
 } // namespace PseudoInst
 
