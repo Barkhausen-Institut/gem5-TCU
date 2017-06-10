@@ -1396,8 +1396,10 @@ Cache::recvTimingResp(PacketPtr pkt)
 
     MSHR::TargetList targets = mshr->extractServiceableTargets(pkt);
     for (auto &target: targets) {
-        if (early_exit)
-            break;
+        if (early_exit) {
+            mshr->pushTarget(target);
+            continue;
+        }
 
         Packet *tgt_pkt = target.pkt;
         switch (target.source) {
@@ -1481,6 +1483,7 @@ Cache::recvTimingResp(PacketPtr pkt)
                     early_exit = true;
                     // Mark block inaccessible until write arrives
                     blk->status &= ~(BlkReadable | BlkWritable);
+                    mshr->pushTarget(target);
                 }
             } else if (pkt->cmd == MemCmd::UpgradeFailResp) {
                 // failed StoreCond upgrade

@@ -342,6 +342,11 @@ class MSHR : public QueueEntry, public Printable
         return &targets.front();
     }
 
+    void pushTarget(const Target &tgt)
+    {
+        targets.push_front(tgt);
+    }
+
     /**
      * Pop first target.
      */
