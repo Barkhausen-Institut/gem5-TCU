@@ -36,8 +36,8 @@
 #include "base/types.hh"
 #include "mem/packet.hh"
 
-// global and readonly for SW
-enum class DtuReg : Addr
+// only writable by master DTUs
+enum class MasterReg : Addr
 {
     FEATURES,
     ROOT_PT,
@@ -48,20 +48,28 @@ enum class DtuReg : Addr
     IDLE_TIME,
     MSG_CNT,
     EXT_CMD,
-    EXT_ARG,
-    XLATE_REQ,
-    XLATE_RESP,
 };
 
 enum class Features
 {
-    PRIV            = 1 << 0,
-    PAGEFAULTS      = 1 << 1,
-    COM_DISABLED    = 1 << 2,
-    IRQ_WAKEUP      = 1 << 3,
+    MASTER          = 1 << 0,
+    PRIV            = 1 << 1,
+    PAGEFAULTS      = 1 << 2,
+    COM_DISABLED    = 1 << 3,
+    IRQ_WAKEUP      = 1 << 4,
 };
 
-constexpr unsigned numDtuRegs = 12;
+constexpr unsigned numMasterRegs = 9;
+
+// only writable by privileged DTUs
+enum class PrivReg : Addr
+{
+    MASTER_REQ,
+    XLATE_REQ,
+    XLATE_RESP,
+};
+
+constexpr unsigned numPrivRegs = 3;
 
 // registers to issue a command
 enum class CmdReg : Addr
@@ -233,20 +241,25 @@ class RegFile
         WROTE_EXT_CMD   = 2,
         WROTE_ABORT     = 4,
         WROTE_XLATE     = 8,
+        WROTE_MST_CMD   = 16,
     };
 
     RegFile(Dtu &dtu, const std::string& name, unsigned numEndpoints);
 
     bool hasFeature(Features feature) const
     {
-        return get(DtuReg::FEATURES) & static_cast<reg_t>(feature);
+        return get(MasterReg::FEATURES) & static_cast<reg_t>(feature);
     }
 
     bool invalidate(unsigned epId);
 
-    reg_t get(DtuReg reg, RegAccess access = RegAccess::DTU) const;
+    reg_t get(MasterReg reg, RegAccess access = RegAccess::DTU) const;
 
-    void set(DtuReg reg, reg_t value, RegAccess access = RegAccess::DTU);
+    void set(MasterReg reg, reg_t value, RegAccess access = RegAccess::DTU);
+
+    reg_t get(PrivReg reg, RegAccess access = RegAccess::DTU) const;
+
+    void set(PrivReg reg, reg_t value, RegAccess access = RegAccess::DTU);
 
     reg_t get(CmdReg reg, RegAccess access = RegAccess::DTU) const;
 
@@ -277,8 +290,6 @@ class RegFile
 
     const std::string name() const { return _name; }
 
-    Addr getSize() const;
-
   private:
 
     reg_t get(unsigned epId, size_t idx) const;
@@ -289,11 +300,15 @@ class RegFile
 
     void printEpAccess(unsigned epId, bool read, bool cpu) const;
 
+    Addr getSize() const;
+
   private:
 
     Dtu &dtu;
 
-    std::vector<reg_t> dtuRegs;
+    std::vector<reg_t> masterRegs;
+
+    std::vector<reg_t> privRegs;
 
     std::vector<reg_t> cmdRegs;
 
@@ -306,7 +321,8 @@ class RegFile
 
   private:
 
-    static const char *dtuRegNames[];
+    static const char *masterRegNames[];
+    static const char *privRegNames[];
     static const char *cmdRegNames[];
     static const char *epTypeNames[];
 };

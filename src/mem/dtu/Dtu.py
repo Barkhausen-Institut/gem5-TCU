@@ -52,7 +52,7 @@ class BaseDtu(MemObject):
 
     coherent = Param.Bool(False, "Whether the DTU should keep the caches coherent")
 
-    mmio_region = Param.AddrRange(AddrRange(0xF0000000, 0xFFFFFFFF), "MMIO region of the DTU")
+    mmio_region = Param.AddrRange(AddrRange(0xF0000000, 0xF0001FFF), "MMIO region of the DTU")
 
     core_id = Param.Unsigned("ID of the core this DTU belongs to")
 

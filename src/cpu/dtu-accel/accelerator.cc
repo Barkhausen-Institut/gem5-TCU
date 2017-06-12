@@ -45,7 +45,7 @@ const Addr DtuAccel::RCTMUX_YIELD      = 0x5ff0;
 const Addr DtuAccel::RCTMUX_FLAGS      = 0x5ff8;
 
 Addr
-DtuAccel::getRegAddr(DtuReg reg)
+DtuAccel::getRegAddr(MasterReg reg)
 {
     return static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
 }
@@ -53,7 +53,7 @@ DtuAccel::getRegAddr(DtuReg reg)
 Addr
 DtuAccel::getRegAddr(CmdReg reg)
 {
-    Addr result = sizeof(RegFile::reg_t) * numDtuRegs;
+    Addr result = sizeof(RegFile::reg_t) * numMasterRegs;
 
     result += static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
 
@@ -63,7 +63,7 @@ DtuAccel::getRegAddr(CmdReg reg)
 Addr
 DtuAccel::getRegAddr(unsigned reg, unsigned epid)
 {
-    Addr result = sizeof(RegFile::reg_t) * (numDtuRegs + numCmdRegs);
+    Addr result = sizeof(RegFile::reg_t) * (numMasterRegs + numCmdRegs);
 
     result += epid * numEpRegs * sizeof(RegFile::reg_t);
 

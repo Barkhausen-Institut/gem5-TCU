@@ -128,7 +128,9 @@ class DtuAbortTest : public MemObject
 
     void recvRetry();
 
-    static Addr getRegAddr(DtuReg reg);
+    static Addr getRegAddr(MasterReg reg);
+
+    static Addr getRegAddr(PrivReg reg);
 
     static Addr getRegAddr(CmdReg reg);
 

@@ -39,7 +39,7 @@
     Trace::getDebugLogger()->dprintf(curTick(), name, __VA_ARGS__);     \
 } while (0)
 
-const char *RegFile::dtuRegNames[] = {
+const char *RegFile::masterRegNames[] = {
     "FEATURES",
     "ROOT_PT",
     "PF_EP",
@@ -49,7 +49,10 @@ const char *RegFile::dtuRegNames[] = {
     "IDLE_TIME",
     "MSG_CNT",
     "EXT_CMD",
-    "EXT_ARG",
+};
+
+const char *RegFile::privRegNames[] = {
+    "MASTER_REQ",
     "XLATE_REQ",
     "XLATE_RESP",
 };
@@ -90,14 +93,17 @@ static const char *regAccessName(RegAccess access)
 
 RegFile::RegFile(Dtu &_dtu, const std::string& name, unsigned _numEndpoints)
     : dtu(_dtu),
-      dtuRegs(numDtuRegs, 0),
+      masterRegs(numMasterRegs, 0),
+      privRegs(numPrivRegs, 0),
       cmdRegs(numCmdRegs, 0),
       epRegs(_numEndpoints),
       numEndpoints(_numEndpoints),
       _name(name)
 {
-    // at boot, all PEs are privileged
-    set(DtuReg::FEATURES, static_cast<reg_t>(Features::PRIV));
+    // at boot, all PEs are masters
+    reg_t feat = static_cast<reg_t>(Features::PRIV) |
+                 static_cast<reg_t>(Features::MASTER);
+    set(MasterReg::FEATURES, feat);
 
     for (int epid = 0; epid < numEndpoints; epid++)
     {
@@ -123,32 +129,56 @@ RegFile::invalidate(unsigned epId)
 }
 
 RegFile::reg_t
-RegFile::get(DtuReg reg, RegAccess access) const
+RegFile::get(MasterReg reg, RegAccess access) const
 {
     reg_t value;
 
-    if (reg == DtuReg::CUR_TIME)
+    if (reg == MasterReg::CUR_TIME)
         value = dtu.curCycle();
     else
-        value = dtuRegs[static_cast<Addr>(reg)];
+        value = masterRegs[static_cast<Addr>(reg)];
 
-    DPRINTF(DtuRegRead, "%s<- DTU[%-12s]: %#018x\n",
+    DPRINTF(DtuRegRead, "%s<- MST[%-12s]: %#018x\n",
                         regAccessName(access),
-                        dtuRegNames[static_cast<Addr>(reg)],
+                        masterRegNames[static_cast<Addr>(reg)],
                         value);
 
     return value;
 }
 
 void
-RegFile::set(DtuReg reg, reg_t value, RegAccess access)
+RegFile::set(MasterReg reg, reg_t value, RegAccess access)
 {
-    DPRINTF(DtuRegWrite, "%s-> DTU[%-12s]: %#018x\n",
+    DPRINTF(DtuRegWrite, "%s-> MST[%-12s]: %#018x\n",
                          regAccessName(access),
-                         dtuRegNames[static_cast<Addr>(reg)],
+                         masterRegNames[static_cast<Addr>(reg)],
                          value);
 
-    dtuRegs[static_cast<Addr>(reg)] = value;
+    masterRegs[static_cast<Addr>(reg)] = value;
+}
+
+RegFile::reg_t
+RegFile::get(PrivReg reg, RegAccess access) const
+{
+    reg_t value = privRegs[static_cast<Addr>(reg)];
+
+    DPRINTF(DtuRegRead, "%s<- PRV[%-12s]: %#018x\n",
+                        regAccessName(access),
+                        privRegNames[static_cast<Addr>(reg)],
+                        value);
+
+    return value;
+}
+
+void
+RegFile::set(PrivReg reg, reg_t value, RegAccess access)
+{
+    DPRINTF(DtuRegWrite, "%s-> PRV[%-12s]: %#018x\n",
+                         regAccessName(access),
+                         privRegNames[static_cast<Addr>(reg)],
+                         value);
+
+    privRegs[static_cast<Addr>(reg)] = value;
 }
 
 RegFile::reg_t
@@ -413,8 +443,8 @@ RegFile::set(unsigned epId, size_t idx, reg_t value)
         reg_t newcnt = newrecv ? (value & 0xFFFF) : 0;
 
         reg_t diff = newcnt - oldcnt;
-        reg_t old = dtuRegs[static_cast<Addr>(DtuReg::MSG_CNT)];
-        set(DtuReg::MSG_CNT, old + diff);
+        reg_t old = masterRegs[static_cast<Addr>(MasterReg::MSG_CNT)];
+        set(MasterReg::MSG_CNT, old + diff);
     }
 
     epRegs[epId][idx] = value;
@@ -449,8 +479,8 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
     RegAccess access = isCpuRequest ? RegAccess::CPU : RegAccess::NOC;
     reg_t* data = pkt->getPtr<reg_t>();
     uint res = WROTE_NONE;
-    reg_t privFlag = static_cast<reg_t>(Features::PRIV);
-    bool isPrivileged = get(DtuReg::FEATURES, RegAccess::DTU) & privFlag;
+    bool isMaster = hasFeature(Features::MASTER);
+    bool isPriv = hasFeature(Features::PRIV);
     int lastEp = -1;
 
     // perform a single register access for each requested register
@@ -458,29 +488,48 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
     {
         Addr regAddr = pktAddr + offset;
 
-        // dtu register
-        if (regAddr < sizeof(reg_t) * numDtuRegs)
+        // master register
+        if (regAddr < sizeof(reg_t) * numMasterRegs)
         {
-            auto reg = static_cast<DtuReg>(regAddr / sizeof(reg_t));
+            auto reg = static_cast<MasterReg>(regAddr / sizeof(reg_t));
 
             if (pkt->isRead())
                 data[offset / sizeof(reg_t)] = get(reg, access);
-            // dtu registers can't be set by the CPU
-            else if (pkt->isWrite() &&
-                     (!isCpuRequest || reg >= DtuReg::EXT_ARG) &&
-                     reg != DtuReg::MSG_CNT)
+            // master registers can't be set by the CPU
+            else if (pkt->isWrite() && !isCpuRequest && reg != MasterReg::MSG_CNT)
             {
-                if (reg == DtuReg::EXT_CMD)
+                if (reg == MasterReg::EXT_CMD)
                     res |= WROTE_EXT_CMD;
-                if (reg == DtuReg::XLATE_REQ || reg == DtuReg::XLATE_RESP)
-                    res |= WROTE_XLATE;
                 set(reg, data[offset / sizeof(reg_t)], access);
             }
         }
-        // cmd register
-        else if (regAddr < sizeof(reg_t) * (numDtuRegs + numCmdRegs))
+        else if (regAddr >= DtuTlb::PAGE_SIZE)
         {
-            size_t idx = regAddr / sizeof(reg_t) - numDtuRegs;
+            Addr privAddr = regAddr - DtuTlb::PAGE_SIZE;
+
+            // only accessible from remote or by privileged DTUs
+            if ((!isCpuRequest || isPriv) && privAddr < sizeof(reg_t) * numPrivRegs)
+            {
+                auto reg = static_cast<PrivReg>(privAddr / sizeof(reg_t));
+
+                if (pkt->isRead())
+                    data[offset / sizeof(reg_t)] = get(reg, access);
+                // master registers can't be set by the CPU
+                else if (pkt->isWrite())
+                {
+                    if (reg == PrivReg::XLATE_REQ || reg == PrivReg::XLATE_RESP)
+                        res |= WROTE_XLATE;
+                    // it only triggers an IRQ if the value is non-zero
+                    else if (data[offset / sizeof(reg_t)] != 0)
+                        res |= WROTE_MST_CMD;
+                    set(reg, data[offset / sizeof(reg_t)], access);
+                }
+            }
+        }
+        // cmd register
+        else if (regAddr < sizeof(reg_t) * (numMasterRegs + numCmdRegs))
+        {
+            size_t idx = regAddr / sizeof(reg_t) - numMasterRegs;
             auto reg = static_cast<CmdReg>(idx);
 
             if (pkt->isRead())
@@ -498,27 +547,29 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
         // endpoint address
         else
         {
-            size_t nonEpRegs = numDtuRegs + numCmdRegs;
-            unsigned epId = (regAddr - sizeof(reg_t) * nonEpRegs) /
-                            (sizeof(reg_t) * numEpRegs);
+            size_t nonEpRegs = numMasterRegs + numCmdRegs;
+            Addr epAddr = regAddr - sizeof(reg_t) * nonEpRegs;
 
-            unsigned regNumber = (regAddr / sizeof(reg_t) -
-                                 nonEpRegs) % numEpRegs;
-
-            if (lastEp != epId)
+            if (epAddr < sizeof(reg_t) * numEpRegs * dtu.numEndpoints)
             {
-                if (lastEp != -1)
-                    printEpAccess(lastEp, pkt->isRead(), isCpuRequest);
-                lastEp = epId;
-            }
+                unsigned epId = epAddr / (sizeof(reg_t) * numEpRegs);
+                unsigned regNumber = (epAddr / sizeof(reg_t)) % numEpRegs;
 
-            if (pkt->isRead())
-                data[offset / sizeof(reg_t)] = get(epId, regNumber);
-            // writable only from remote and on privileged PEs
-            else if (!isCpuRequest || isPrivileged)
-                set(epId, regNumber, data[offset / sizeof(reg_t)]);
-            else
-                assert(false);
+                if (lastEp != epId)
+                {
+                    if (lastEp != -1)
+                        printEpAccess(lastEp, pkt->isRead(), isCpuRequest);
+                    lastEp = epId;
+                }
+
+                if (pkt->isRead())
+                    data[offset / sizeof(reg_t)] = get(epId, regNumber);
+                // writable only from remote and master DTUs
+                else if (!isCpuRequest || isMaster)
+                    set(epId, regNumber, data[offset / sizeof(reg_t)]);
+                else
+                    assert(false);
+            }
         }
     }
 
@@ -534,9 +585,5 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
 Addr
 RegFile::getSize() const
 {
-    Addr size = sizeof(reg_t) * (numDtuRegs + numCmdRegs);
-
-    size += sizeof(reg_t) * (numEndpoints * numEpRegs);
-
-    return size;
+    return DtuTlb::PAGE_SIZE + sizeof(reg_t) * numPrivRegs;
 }

@@ -130,14 +130,14 @@ Dtu::Dtu(DtuParams* p)
         DPRINTF(Dtu, "Using memory range %p .. %p\n",
             memOffset, memOffset + memSize);
 
-        regs().set(DtuReg::ROOT_PT, phys.getAddr());
+        regs().set(MasterReg::ROOT_PT, phys.getAddr());
     }
     // memory PEs don't participate in cache coherence
     else
         coherent = false;
 
-    regs().set(DtuReg::RW_BARRIER, -1);
-    regs().set(DtuReg::VPE_ID, INVALID_VPE_ID);
+    regs().set(MasterReg::RW_BARRIER, -1);
+    regs().set(MasterReg::VPE_ID, INVALID_VPE_ID);
 }
 
 Dtu::~Dtu()
@@ -324,9 +324,9 @@ Dtu::abortCommand()
     {
         DPRINTF(DtuCmd, "Disabling communication and aborting PFs\n");
 
-        RegFile::reg_t val = regs().get(DtuReg::FEATURES);
+        RegFile::reg_t val = regs().get(MasterReg::FEATURES);
         val |= static_cast<RegFile::reg_t>(Features::COM_DISABLED);
-        regs().set(DtuReg::FEATURES, val);
+        regs().set(MasterReg::FEATURES, val);
 
         if (ptUnit)
             ptUnit->abortAll();
@@ -454,7 +454,7 @@ Dtu::finishCommand(Error error)
 Dtu::ExternCommand
 Dtu::getExternCommand()
 {
-    auto reg = regFile.get(DtuReg::EXT_CMD);
+    auto reg = regFile.get(MasterReg::EXT_CMD);
 
     ExternCommand cmd;
     cmd.opcode = static_cast<ExternCommand::Opcode>(reg & 0x7);
@@ -521,14 +521,14 @@ Dtu::executeExternCommand(PacketPtr pkt)
     }
 
     // set external command back to IDLE
-    regFile.set(DtuReg::EXT_CMD,
+    regFile.set(MasterReg::EXT_CMD,
         static_cast<RegFile::reg_t>(ExternCommand::IDLE));
 }
 
 bool
 Dtu::startSleep(uint64_t cycles)
 {
-    if ((regFile.get(DtuReg::MSG_CNT) & 0xFFFF) > 0)
+    if ((regFile.get(MasterReg::MSG_CNT) & 0xFFFF) > 0)
         return false;
 
     // it might be that after an injected IRQ that the core continues to
@@ -554,9 +554,9 @@ Dtu::stopSleep()
     if (sleepStart != 0)
     {
         // increase idle time in status register
-        RegFile::reg_t counter = regFile.get(DtuReg::IDLE_TIME);
+        RegFile::reg_t counter = regFile.get(MasterReg::IDLE_TIME);
         counter += curCycle() - sleepStart;
-        regFile.set(DtuReg::IDLE_TIME, counter);
+        regFile.set(MasterReg::IDLE_TIME, counter);
 
         sleepStart = Cycles(0);
 
@@ -576,7 +576,7 @@ Dtu::wakeupCore()
 void
 Dtu::suspend()
 {
-    if ((regFile.get(DtuReg::MSG_CNT) & 0xFFFF) == 0)
+    if ((regFile.get(MasterReg::MSG_CNT) & 0xFFFF) == 0)
         connector->suspend();
 }
 
@@ -620,9 +620,9 @@ Dtu::setIrq()
 {
     if (getCommand().opcode == Command::SLEEP)
     {
-        RegFile::reg_t val = regs().get(DtuReg::FEATURES);
+        RegFile::reg_t val = regs().get(MasterReg::FEATURES);
         val |= static_cast<RegFile::reg_t>(Features::IRQ_WAKEUP);
-        regs().set(DtuReg::FEATURES, val);
+        regs().set(MasterReg::FEATURES, val);
     }
 
     wakeupCore();
@@ -730,7 +730,7 @@ Dtu::sendNocRequest(NocPacketType type,
     senderState->result = Error::NONE;
     senderState->vpeId = vpeId;
     senderState->flags = flags;
-    if (regFile.hasFeature(Features::PRIV))
+    if (regFile.hasFeature(Features::MASTER))
         senderState->flags |= NocFlags::PRIV;
     senderState->cmdId = cmdId;
 
@@ -799,11 +799,11 @@ Dtu::startTranslate(size_t id,
         DPRINTF(DtuXlate, "Translation[%lu] = %p:%#x\n",
             id, virt, access);
 
-        if(regs().get(DtuReg::XLATE_REQ) == 0)
+        if(regs().get(PrivReg::XLATE_REQ) == 0)
         {
             const Addr npagemask = ~static_cast<Addr>(DtuTlb::PAGE_MASK);
             const Addr virtPage = coreXlates[id].virt & npagemask;
-            regs().set(DtuReg::XLATE_REQ,
+            regs().set(PrivReg::XLATE_REQ,
                 virtPage | coreXlates[id].access | (id << 4));
             coreXlates[id].ongoing = true;
 
@@ -818,7 +818,7 @@ Dtu::completeTranslate()
 {
     const Addr npagemask = ~static_cast<Addr>(DtuTlb::PAGE_MASK);
 
-    RegFile::reg_t resp = regs().get(DtuReg::XLATE_RESP);
+    RegFile::reg_t resp = regs().get(PrivReg::XLATE_RESP);
     if (resp)
     {
         size_t id = (resp >> 4) & 0x7;
@@ -840,17 +840,17 @@ Dtu::completeTranslate()
         }
 
         coreXlates[id].trans = nullptr;
-        regs().set(DtuReg::XLATE_RESP, 0);
+        regs().set(PrivReg::XLATE_RESP, 0);
     }
 
-    if (regs().get(DtuReg::XLATE_REQ) == 0)
+    if (regs().get(PrivReg::XLATE_REQ) == 0)
     {
         for (size_t id = 0; id < coreXlateSlots; ++id)
         {
             if (coreXlates[id].trans && !coreXlates[id].ongoing)
             {
                 const Addr virtPage = coreXlates[id].virt & ~npagemask;
-                regs().set(DtuReg::XLATE_REQ,
+                regs().set(PrivReg::XLATE_REQ,
                     virtPage | coreXlates[id].access | (id << 4));
                 coreXlates[id].ongoing = true;
                 DPRINTF(DtuXlate, "Translation[%lu] started\n", id);
@@ -1042,7 +1042,7 @@ Dtu::handleCpuRequest(PacketPtr pkt,
         else
             forwardRequestToRegFile(pkt, true);
     }
-    else if(pkt->isWrite() && virt >= regFile.get(DtuReg::RW_BARRIER))
+    else if(pkt->isWrite() && virt >= regFile.get(MasterReg::RW_BARRIER))
     {
         DPRINTF(Dtu, "Warning: ignoring write access above rwBarrier\n");
         res = false;
@@ -1301,6 +1301,8 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
                 schedule(abortCommandEvent, when);
             else if (result & RegFile::WROTE_XLATE)
                 schedule(completeTranslateEvent, when);
+            else if (result & RegFile::WROTE_MST_CMD)
+                setIrq();
         }
         else
             schedule(new ExecExternCmdEvent(*this, pkt), when);
@@ -1315,6 +1317,8 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
             abortCommand();
         if (result & RegFile::WROTE_XLATE)
             completeTranslate();
+        if (result & RegFile::WROTE_MST_CMD)
+            setIrq();
     }
 }
 

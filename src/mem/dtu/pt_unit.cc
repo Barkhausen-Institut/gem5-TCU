@@ -161,7 +161,7 @@ bool
 PtUnit::translateFunctional(Addr virt, uint access, NocAddr *phys)
 {
     Addr ptePhys;
-    Addr ptAddr = dtu.regs().get(DtuReg::ROOT_PT);
+    Addr ptAddr = dtu.regs().get(MasterReg::ROOT_PT);
     for (int level = DtuTlb::LEVEL_CNT - 1; level >= 0; --level)
     {
         auto pkt = createPacket(virt, ptAddr, level);
@@ -207,7 +207,7 @@ PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, uint access)
     }
 
     int pfep = ev->toKernel ? Dtu::SYSCALL_EP
-                            : (dtu.regs().get(DtuReg::PF_EP) & 0xFF);
+                            : (dtu.regs().get(MasterReg::PF_EP) & 0xFF);
     assert(pfep < dtu.numEndpoints);
     SendEp ep = dtu.regs().getSendEp(pfep);
 
@@ -495,7 +495,7 @@ PtUnit::startTranslate(Addr virt, uint access, Translation *trans)
     event->virt = virt;
     event->access = access;
     event->trans = trans;
-    event->ptAddr = dtu.regs().get(DtuReg::ROOT_PT);
+    event->ptAddr = dtu.regs().get(MasterReg::ROOT_PT);
     event->toKernel = false;
     trans->_event = event;
     translations.push_back(event);
