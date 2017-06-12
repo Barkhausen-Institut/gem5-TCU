@@ -96,7 +96,6 @@ Dtu::Dtu(DtuParams* p)
     cmdFinish(),
     cmdId(0),
     abortCmd(0),
-    irqPending(false),
     xlates(),
     coreXlates(new CoreTranslation[p->buf_count + 1]()),
     coreXlateSlots(p->buf_count + 1),
@@ -367,9 +366,6 @@ Dtu::abortCommand()
         cmd.opcode == Command::READ ||
         cmd.opcode == Command::WRITE)
         scheduleFinishOp(Cycles(1), err);
-
-    // see comment below
-    irqPending = false;
 }
 
 void
@@ -531,14 +527,6 @@ Dtu::startSleep(uint64_t cycles)
     if ((regFile.get(MasterReg::MSG_CNT) & 0xFFFF) > 0)
         return false;
 
-    // it might be that after an injected IRQ that the core continues to
-    // execute some instructions. if one of them instructs the DTU to sleep
-    // we suspend the core again and thus halt everything. thus, we prevent
-    // that by disallowing sleeps between injectIRQ and abort.
-    // TODO this is not a good solution
-    if (irqPending)
-        return false;
-
     // remember when we started
     sleepStart = curCycle();
 
@@ -628,8 +616,6 @@ Dtu::setIrq()
     wakeupCore();
 
     connector->setIrq();
-
-    irqPending = true;
 
     irqInjects++;
 }
@@ -860,8 +846,6 @@ Dtu::completeTranslate()
             }
         }
     }
-
-    irqPending = false;
 }
 
 void
