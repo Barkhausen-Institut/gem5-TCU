@@ -507,15 +507,14 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
         {
             Addr privAddr = regAddr - DtuTlb::PAGE_SIZE;
 
-            // only accessible from remote or by privileged DTUs
-            if ((!isCpuRequest || isPriv) && privAddr < sizeof(reg_t) * numPrivRegs)
+            if (privAddr < sizeof(reg_t) * numPrivRegs)
             {
                 auto reg = static_cast<PrivReg>(privAddr / sizeof(reg_t));
 
                 if (pkt->isRead())
                     data[offset / sizeof(reg_t)] = get(reg, access);
-                // master registers can't be set by the CPU
-                else if (pkt->isWrite())
+                // privileged registers can only be set if we're privileged
+                else if (pkt->isWrite() && (!isCpuRequest || isPriv))
                 {
                     if (reg == PrivReg::XLATE_REQ || reg == PrivReg::XLATE_RESP)
                         res |= WROTE_XLATE;
