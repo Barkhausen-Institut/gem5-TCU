@@ -362,7 +362,8 @@ MessageUnit::finishMsgSend(Dtu::Error error, unsigned epid)
     if (error == Dtu::Error::VPE_GONE)
         ep.vpeId = Dtu::INVALID_VPE_ID;
 
-    if (ep.curcrd != Dtu::CREDITS_UNLIM)
+    if (ep.curcrd != Dtu::CREDITS_UNLIM &&
+        (error == Dtu::Error::NONE || error == Dtu::Error::VPE_GONE))
     {
         assert(ep.curcrd >= ep.maxMsgSize);
 
