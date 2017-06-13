@@ -198,16 +198,10 @@ def printConfig(pe, dtupos):
         print str
     except:
         try:
-            print '      imem =%d KiB' % (int(pe.proxy.size) / 1024)
-            print '      Comp =IDE -> Proxy -> DTU'
+            print '      imem =%d KiB' % (int(pe.spm.range.end + 1) / 1024)
+            print '      Comp =Core -> DTU -> SPM'
         except:
-            try:
-                print '      imem =%d KiB' % (int(pe.mem_ctrl.range.end + 1) / 1024)
-                name = 'SPM' if type(pe.mem_ctrl).__name__ == 'Scratchpad' else 'DRAM'
-                print '      Comp =DTU -> %s' % (name)
-            except:
-                print '      imem =%d KiB' % (int(pe.spm.range.end + 1) / 1024)
-                print '      Comp =Core -> DTU -> SPM'
+            pass
 
 def interpose(pe, options, name, port):
     if options.mem_watches.has_key(int(pe.core_id)):
@@ -539,9 +533,57 @@ def createStoragePE(noc, options, no, memPE, img0=None, img1=None):
 
     print 'pe%02d: %s' % (no, img0)
     printConfig(pe, 0)
+    print '      imem =%d KiB' % (int(pe.proxy.size) / 1024)
+    print '      Comp =DTU -> Proxy -> IDE'
     print
 
     return pe
+
+def createEtherPE(noc, options, no, memPE):
+    pe = createPE(
+        noc=noc, options=options, no=no, systemType=SpuSystem,
+        l1size=None, l2size=None, spmsize=None, memPE=memPE, dtupos=0
+    )
+    pe.dtu.connector = BaseConnector()
+
+    pe.proxy = DtuPciProxy()
+    pe.proxy.id = no
+    pe.proxy.clk_domain = SrcClockDomain(clock=options.sys_clock,
+                                         voltage_domain=pe.voltage_domain)
+
+    connectCuToMem(pe, options, pe.proxy.dtu_master_port)
+    pe.proxy.dtu_slave_port = pe.xbar.master
+
+    pe.pci_host = DtuPciHost()
+    pe.pci_host.pci_proxy = pe.proxy
+    pe.pci_host.conf_base = 0
+
+    pe.nic = IGbE_e1000()
+    pe.nic.clk_domain = SrcClockDomain(clock=options.sys_clock,
+                                       voltage_domain=pe.voltage_domain)
+
+    pe.nic.host = pe.pci_host
+    pe.nic.pci_bus = 0
+    pe.nic.pci_dev = 0
+    pe.nic.pci_func = 0
+
+    pe.nic.pio = pe.proxy.pio_port
+    pe.nic.dma = pe.proxy.dma_port
+
+    print 'PE%02d: IGbE_e1000' % (no)
+    printConfig(pe, 0)
+    print '      Comp =DTU -> Proxy -> NIC'
+    print
+
+    return pe
+
+def linkEtherPEs(ether0, ether1):
+    link = EtherLink()
+    link.int0 = ether0.nic.interface
+    link.int1 = ether1.nic.interface
+
+    ether0.etherlink = link
+    ether1.etherlink = link
 
 def createAccelPE(noc, options, no, accel, memPE, l1size=None, l2size=None, spmsize='64kB'):
     pe = createPE(
@@ -711,6 +753,9 @@ def createMemPE(noc, options, no, size, dram=True, image=None, imageNum=0):
 
     print 'PE%02d: %s x %d' % (no, image, imageNum)
     printConfig(pe, 0)
+    print '      imem =%d KiB' % (int(pe.mem_ctrl.range.end + 1) / 1024)
+    name = 'SPM' if type(pe.mem_ctrl).__name__ == 'Scratchpad' else 'DRAM'
+    print '      Comp =DTU -> %s' % (name)
     print
 
     return pe
@@ -799,6 +844,8 @@ def runSimulation(root, options, pes):
             if hasattr(pe, 'idectrl'):
                 size = int(pe.proxy.size)
                 size |= 11 << 3
+            elif hasattr(pe, 'nic'):
+                size = 12 << 3
         pemems.append(size)
 
     # give that to the PEs
