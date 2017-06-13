@@ -229,7 +229,10 @@ XferUnit::TransferEvent::translateDone(bool success, const NocAddr &phys)
     Addr nextPage = local + DtuTlb::PAGE_SIZE;
     nextPage &= ~static_cast<Addr>(DtuTlb::PAGE_MASK);
     Addr pageRemaining = std::min(remaining, nextPage - local);
-    Addr physAddr = phys.getAddr();
+    // local might have been moved forward
+    // make sure to use the correct page offset
+    Addr physAddr = phys.getAddr() & ~static_cast<Addr>(DtuTlb::PAGE_MASK);
+    physAddr += local & DtuTlb::PAGE_MASK;
 
     while(freeSlots > 0 && pageRemaining > 0)
     {
