@@ -195,6 +195,16 @@ Dtu::regStats()
     for (size_t i = 0; i < sizeof(extCmdNames) / sizeof(extCmdNames[0]); ++i)
         extCommands.subname(i, extCmdNames[i]);
 
+    xlateReqs
+        .name(name() + ".xlateReqs")
+        .desc("Number of translate requests to the core");
+    xlateDelays
+        .name(name() + ".xlateDelays")
+        .desc("Number of delayed translate requests to the core");
+    xlateFails
+        .name(name() + ".xlateFails")
+        .desc("Number of failed translate requests to the core");
+
     if (tlb())
         tlb()->regStats();
     if (ptUnit)
@@ -784,6 +794,7 @@ Dtu::startTranslate(size_t id,
 
         DPRINTF(DtuXlate, "Translation[%lu] = %p:%#x\n",
             id, virt, access);
+        xlateReqs++;
 
         if(regs().get(PrivReg::XLATE_REQ) == 0)
         {
@@ -796,6 +807,8 @@ Dtu::startTranslate(size_t id,
             DPRINTF(DtuXlate, "Translation[%lu] started\n", id);
             setIrq();
         }
+        else
+            xlateDelays++;
     }
 }
 
@@ -816,7 +829,10 @@ Dtu::completeTranslate()
                      (coreXlates[id].virt & DtuTlb::PAGE_MASK));
         uint perm = resp & DtuTlb::IRWX;
         if (perm == 0)
+        {
             coreXlates[id].trans->finished(false, phys);
+            xlateFails++;
+        }
         else
         {
             tlb()->insert(coreXlates[id].virt & npagemask,

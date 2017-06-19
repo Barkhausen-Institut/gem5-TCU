@@ -493,6 +493,11 @@ class Dtu : public BaseDtu
     Stats::Scalar irqInjects;
     Stats::Scalar resets;
 
+    // core translations
+    Stats::Scalar xlateReqs;
+    Stats::Scalar xlateDelays;
+    Stats::Scalar xlateFails;
+
     // commands
     Stats::Vector commands;
     Stats::Vector extCommands;
