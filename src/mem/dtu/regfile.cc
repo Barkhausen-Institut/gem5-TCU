@@ -369,7 +369,7 @@ RecvEp::print(const RegFile &rf,
         return;
 
     DPRINTFNS(rf.name(),
-        "%s%s EP%u%14s: Recv[buf=%p msz=%#x bsz=%#x msgs=%u occ=%#010x unr=%010x rd=%u wr=%u]\n",
+        "%s%s EP%u%14s: Recv[buf=%p msz=%#x bsz=%#x msgs=%u occ=%#010x unr=%#010x rd=%u wr=%u]\n",
         regAccessName(access), read ? "<-" : "->",
         epId, "",
         bufAddr, msgSize, size, msgCount,
