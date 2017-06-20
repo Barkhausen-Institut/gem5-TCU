@@ -87,6 +87,7 @@ DtuAccelHash::DtuAccelHash(const DtuAccelHashParams *p)
   : DtuAccel(p),
     bufSize(p->buf_size),
     irqPending(false),
+    ctxSwPending(false),
     memPending(false),
     state(State::IDLE),
     hash(),
@@ -199,6 +200,7 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
             case State::CTX_SAVE_DONE:
             {
                 state = State::CTX_WAIT;
+                ctxSwPending = true;
                 break;
             }
 
@@ -222,6 +224,8 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
                     state = State::CTX_SAVE;
                 else if (val & RCTMuxCtrl::WAITING)
                     state = State::CTX_RESTORE_DONE;
+                else if(ctxSwPending)
+                    state = State::CTX_WAIT;
                 else
                     state = State::FETCH_MSG;
                 break;
@@ -260,6 +264,7 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
             }
             case State::CTX_RESTORE_DONE:
             {
+                ctxSwPending = false;
                 if (hash.autonomous() && hash.dataOffset() != hash.dataSize())
                     state = State::READ_DATA;
                 else

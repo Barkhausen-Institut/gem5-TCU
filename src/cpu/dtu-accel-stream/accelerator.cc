@@ -79,6 +79,7 @@ DtuAccelStream::DtuAccelStream(const DtuAccelStreamParams *p)
   : DtuAccel(p),
     algo(),
     irqPending(false),
+    ctxSwPending(false),
     memPending(false),
     state(State::IDLE),
     msgAddr(),
@@ -151,6 +152,7 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
             case State::CTX_SAVE_DONE:
             {
                 state = State::CTX_WAIT;
+                ctxSwPending = true;
                 break;
             }
 
@@ -168,12 +170,15 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                     state = State::CTX_SAVE;
                 else if (val & RCTMuxCtrl::WAITING)
                     state = State::CTX_RESTORE;
+                else if (ctxSwPending)
+                    state = State::CTX_WAIT;
                 else
                     state = State::FETCH_MSG;
                 break;
             }
             case State::CTX_RESTORE:
             {
+                ctxSwPending = false;
                 state = State::FETCH_MSG;
                 break;
             }

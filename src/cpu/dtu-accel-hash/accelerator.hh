@@ -99,6 +99,7 @@ class DtuAccelHash : public DtuAccel
     size_t bufSize;
 
     bool irqPending;
+    bool ctxSwPending;
     bool memPending;
 
     State state;

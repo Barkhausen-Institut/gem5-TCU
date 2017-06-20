@@ -87,6 +87,7 @@ class DtuAccelStream : public DtuAccel
     std::string getStateName() const;
 
     bool irqPending;
+    bool ctxSwPending;
     bool memPending;
 
     State state;
