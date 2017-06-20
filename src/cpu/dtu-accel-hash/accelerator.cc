@@ -74,6 +74,7 @@ static const char *stateNames[] =
     "CTX_WAIT",
 
     "CTX_CHECK",
+    "CTX_FLAGS",
     "CTX_RESTORE",
     "CTX_RESTORE_WAIT",
     "CTX_RESTORE_READ",
@@ -86,7 +87,6 @@ DtuAccelHash::DtuAccelHash(const DtuAccelHashParams *p)
   : DtuAccel(p),
     bufSize(p->buf_size),
     irqPending(false),
-    ctxSwPending(false),
     memPending(false),
     state(State::IDLE),
     hash(),
@@ -145,12 +145,8 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
                 if (yield.handleMemResp(pkt))
                 {
                     if (irqPending)
-                    {
                         irqPending = false;
-                        state = State::CTX_SAVE;
-                    }
-                    else
-                        state = State::CTX_CHECK;
+                    state = State::CTX_CHECK;
                 }
                 break;
             }
@@ -202,12 +198,16 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
             }
             case State::CTX_SAVE_DONE:
             {
-                ctxSwPending = true;
                 state = State::CTX_WAIT;
                 break;
             }
 
             case State::CTX_CHECK:
+            {
+                state = State::CTX_FLAGS;
+                break;
+            }
+            case State::CTX_FLAGS:
             {
                 uint64_t val = *pkt->getConstPtr<uint64_t>();
                 if (val & RCTMuxCtrl::RESTORE)
@@ -218,10 +218,10 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
                     else
                         state = State::CTX_RESTORE;
                 }
-                else if ((val & RCTMuxCtrl::WAITING) && (~val & RCTMuxCtrl::STORE))
+                else if(val & RCTMuxCtrl::STORE)
+                    state = State::CTX_SAVE;
+                else if (val & RCTMuxCtrl::WAITING)
                     state = State::CTX_RESTORE_DONE;
-                else if (ctxSwPending)
-                    state = State::CTX_WAIT;
                 else
                     state = State::FETCH_MSG;
                 break;
@@ -260,7 +260,6 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
             }
             case State::CTX_RESTORE_DONE:
             {
-                ctxSwPending = false;
                 if (hash.autonomous() && hash.dataOffset() != hash.dataSize())
                     state = State::READ_DATA;
                 else
@@ -395,7 +394,10 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
                         state = State::STORE_REPLY;
                     }
                     else if (hash.autonomous() && irqPending)
-                        state = State::CTX_SAVE;
+                    {
+                        irqPending = false;
+                        state = State::CTX_CHECK;
+                    }
                     else
                         state = State::READ_DATA;
                 }
@@ -454,11 +456,7 @@ void
 DtuAccelHash::interrupt()
 {
     irqPending = true;
-}
 
-void
-DtuAccelHash::wakeup()
-{
     if (state == State::CTX_WAIT)
     {
         state = State::CTX_CHECK;
@@ -471,7 +469,6 @@ void
 DtuAccelHash::reset()
 {
     irqPending = false;
-    ctxSwPending = false;
 
     yield.start(false);
     state = State::IDLE;
@@ -543,6 +540,13 @@ DtuAccelHash::tick()
 
         case State::CTX_CHECK:
         {
+            Addr regAddr = getRegAddr(ReqReg::EXT_REQ);
+            pkt = createDtuRegPkt(regAddr, sizeof(uint64_t), MemCmd::WriteReq);
+            *pkt->getPtr<uint64_t>() = 0;
+            break;
+        }
+        case State::CTX_FLAGS:
+        {
             pkt = createPacket(RCTMUX_FLAGS, sizeof(uint64_t), MemCmd::ReadReq);
             break;
         }
@@ -585,7 +589,7 @@ DtuAccelHash::tick()
             if (irqPending)
             {
                 irqPending = false;
-                state = State::CTX_SAVE;
+                state = State::CTX_CHECK;
                 schedule(tickEvent, clockEdge(Cycles(1)));
             }
             else

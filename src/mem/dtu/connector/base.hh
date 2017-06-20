@@ -41,8 +41,8 @@ class BaseConnector : public MemObject
       : MemObject(p)
     { }
 
+    // wakeup and suspend are only used to improve simulation speed.
     virtual void wakeup() {};
-
     virtual void suspend() {};
 
     virtual void reset(Addr addr) {};

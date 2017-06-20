@@ -71,13 +71,13 @@ static const char *substateNames[] =
 };
 
 Addr
-DtuAbortTest::getRegAddr(MasterReg reg)
+DtuAbortTest::getRegAddr(DtuReg reg)
 {
     return static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
 }
 
 Addr
-DtuAbortTest::getRegAddr(PrivReg reg)
+DtuAbortTest::getRegAddr(ReqReg reg)
 {
     return DtuTlb::PAGE_SIZE + static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
 }
@@ -85,7 +85,7 @@ DtuAbortTest::getRegAddr(PrivReg reg)
 Addr
 DtuAbortTest::getRegAddr(CmdReg reg)
 {
-    Addr result = sizeof(RegFile::reg_t) * numMasterRegs;
+    Addr result = sizeof(RegFile::reg_t) * numDtuRegs;
 
     result += static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
 
@@ -95,7 +95,7 @@ DtuAbortTest::getRegAddr(CmdReg reg)
 Addr
 DtuAbortTest::getRegAddr(unsigned reg, unsigned epid)
 {
-    Addr result = sizeof(RegFile::reg_t) * (numMasterRegs + numCmdRegs);
+    Addr result = sizeof(RegFile::reg_t) * (numDtuRegs + numCmdRegs);
 
     result += epid * numEpRegs * sizeof(RegFile::reg_t);
 
@@ -525,7 +525,7 @@ DtuAbortTest::tick()
 
                 case SubState::INVLPG_CMD:
                 {
-                    Addr off = reg_base + getRegAddr(MasterReg::EXT_CMD);
+                    Addr off = reg_base + getRegAddr(DtuReg::EXT_CMD);
                     pkt = createCommandPkt(Dtu::Command::WRITE,
                                            EP_MEM,
                                            TEMP_ADDR,

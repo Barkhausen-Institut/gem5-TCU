@@ -44,10 +44,6 @@ class DtuAccelConnector : public BaseConnector
 
     void reset(Addr addr) override;
 
-    void wakeup() override;
-
-    void suspend() override;
-
   private:
 
     DtuAccel *acc;

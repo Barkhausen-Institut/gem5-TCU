@@ -52,19 +52,6 @@ DtuAccelConnector::reset(Addr addr)
     acc->reset();
 }
 
-void
-DtuAccelConnector::wakeup()
-{
-    DPRINTF(DtuConnector, "Waking up accelerator\n");
-    acc->wakeup();
-}
-
-void
-DtuAccelConnector::suspend()
-{
-    DPRINTF(DtuConnector, "Suspending accelerator\n");
-}
-
 DtuAccelConnector*
 DtuAccelConnectorParams::create()
 {

@@ -269,7 +269,7 @@ MessageUnit::startXfer(const Dtu::Command::Bits& cmd)
         header->flags = Dtu::REPLY_ENABLED; // normal message
     header->flags |= info.flags;
 
-    if (cmd.opcode == Dtu::Command::SEND && dtu.regs().hasFeature(Features::MASTER))
+    if (cmd.opcode == Dtu::Command::SEND && dtu.regs().hasFeature(Features::PRIV))
     {
         RegFile::reg_t sender = dtu.regs().get(CmdReg::OFFSET);
         header->senderCoreId = sender & 0xFF;
@@ -282,7 +282,7 @@ MessageUnit::startXfer(const Dtu::Command::Bits& cmd)
     else
     {
         header->senderCoreId = dtu.coreId;
-        header->senderVpeId  = dtu.regs().get(MasterReg::VPE_ID);
+        header->senderVpeId  = dtu.regs().get(DtuReg::VPE_ID);
         header->senderEpId   = info.unlimcred ? dtu.numEndpoints : cmd.epid;
         header->replyEpId    = info.replyEpId;
     }
@@ -569,7 +569,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId, uint flags)
             DPRINTFS(DtuMsgs, (&dtu), "    word%lu: %#016x\n", i, words[i]);
     }
 
-    uint16_t ourVpeId = dtu.regs().get(MasterReg::VPE_ID);
+    uint16_t ourVpeId = dtu.regs().get(DtuReg::VPE_ID);
     if (vpeId != ourVpeId ||
         (!(flags & Dtu::NocFlags::PRIV) &&
          dtu.regs().hasFeature(Features::COM_DISABLED)))

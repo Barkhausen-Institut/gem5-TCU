@@ -199,9 +199,8 @@ class Dtu : public BaseDtu
             INV_EP          = 2,
             INV_PAGE        = 3,
             INV_TLB         = 4,
-            INJECT_IRQ      = 5,
-            RESET           = 6,
-            ACK_MSG         = 7,
+            RESET           = 5,
+            ACK_MSG         = 6,
         };
 
         Opcode opcode;
@@ -233,9 +232,7 @@ class Dtu : public BaseDtu
 
     void wakeupCore();
 
-    void suspend();
-
-    Cycles reset(Addr addr);
+    Cycles reset();
 
     void setIrq();
 

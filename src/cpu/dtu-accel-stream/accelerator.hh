@@ -44,8 +44,6 @@ class DtuAccelStream : public DtuAccel
 
     void interrupt() override;
 
-    void wakeup() override;
-
     void reset() override;
 
   private:
@@ -78,6 +76,7 @@ class DtuAccelStream : public DtuAccel
         CTX_WAIT,
 
         CTX_CHECK,
+        CTX_FLAGS,
         CTX_RESTORE,
 
         SYSCALL,
@@ -88,7 +87,6 @@ class DtuAccelStream : public DtuAccel
     std::string getStateName() const;
 
     bool irqPending;
-    bool ctxSwPending;
     bool memPending;
 
     State state;

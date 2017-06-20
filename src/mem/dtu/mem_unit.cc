@@ -102,7 +102,7 @@ MemoryUnit::startRead(const Dtu::Command::Bits& cmd)
         return;
     }
 
-    Addr rwBarrier = dtu.regs().get(MasterReg::RW_BARRIER);
+    Addr rwBarrier = dtu.regs().get(DtuReg::RW_BARRIER);
 
     DataReg data = dtu.regs().getDataReg();
     Addr offset = cmd.arg;
@@ -339,7 +339,7 @@ MemoryUnit::recvFromNoc(PacketPtr pkt, uint vpeId, uint flags)
 
     receivedBytes.sample(pkt->getSize());
 
-    uint16_t ourVpeId = dtu.regs().get(MasterReg::VPE_ID);
+    uint16_t ourVpeId = dtu.regs().get(DtuReg::VPE_ID);
     if (vpeId != ourVpeId ||
         (!(flags & Dtu::NocFlags::PRIV) &&
          dtu.regs().hasFeature(Features::COM_DISABLED)))

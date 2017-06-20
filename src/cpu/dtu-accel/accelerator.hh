@@ -62,8 +62,6 @@ class DtuAccel : public MemObject
 
     virtual void interrupt() = 0;
 
-    virtual void wakeup() = 0;
-
     virtual void reset() = 0;
 
   protected:
@@ -190,7 +188,9 @@ class DtuAccel : public MemObject
 
     void recvRetry();
 
-    static Addr getRegAddr(MasterReg reg);
+    static Addr getRegAddr(DtuReg reg);
+
+    static Addr getRegAddr(ReqReg reg);
 
     static Addr getRegAddr(CmdReg reg);
 

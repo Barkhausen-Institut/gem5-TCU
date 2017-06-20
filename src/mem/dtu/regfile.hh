@@ -36,8 +36,8 @@
 #include "base/types.hh"
 #include "mem/packet.hh"
 
-// only writable by master DTUs
-enum class MasterReg : Addr
+// only writable by remote DTUs
+enum class DtuReg : Addr
 {
     FEATURES,
     ROOT_PT,
@@ -52,24 +52,23 @@ enum class MasterReg : Addr
 
 enum class Features
 {
-    MASTER          = 1 << 0,
-    PRIV            = 1 << 1,
-    PAGEFAULTS      = 1 << 2,
-    COM_DISABLED    = 1 << 3,
-    IRQ_WAKEUP      = 1 << 4,
+    PRIV            = 1 << 0,
+    PAGEFAULTS      = 1 << 1,
+    COM_DISABLED    = 1 << 2,
+    IRQ_WAKEUP      = 1 << 3,
 };
 
-constexpr unsigned numMasterRegs = 9;
+constexpr unsigned numDtuRegs = 9;
 
-// only writable by privileged DTUs
-enum class PrivReg : Addr
+// registers for external requests and DTU requests
+enum class ReqReg : Addr
 {
-    MASTER_REQ,
+    EXT_REQ,
     XLATE_REQ,
     XLATE_RESP,
 };
 
-constexpr unsigned numPrivRegs = 3;
+constexpr unsigned numReqRegs = 3;
 
 // registers to issue a command
 enum class CmdReg : Addr
@@ -241,25 +240,25 @@ class RegFile
         WROTE_EXT_CMD   = 2,
         WROTE_ABORT     = 4,
         WROTE_XLATE     = 8,
-        WROTE_MST_CMD   = 16,
+        WROTE_EXT_REQ   = 16,
     };
 
     RegFile(Dtu &dtu, const std::string& name, unsigned numEndpoints);
 
     bool hasFeature(Features feature) const
     {
-        return get(MasterReg::FEATURES) & static_cast<reg_t>(feature);
+        return get(DtuReg::FEATURES) & static_cast<reg_t>(feature);
     }
 
     bool invalidate(unsigned epId);
 
-    reg_t get(MasterReg reg, RegAccess access = RegAccess::DTU) const;
+    reg_t get(DtuReg reg, RegAccess access = RegAccess::DTU) const;
 
-    void set(MasterReg reg, reg_t value, RegAccess access = RegAccess::DTU);
+    void set(DtuReg reg, reg_t value, RegAccess access = RegAccess::DTU);
 
-    reg_t get(PrivReg reg, RegAccess access = RegAccess::DTU) const;
+    reg_t get(ReqReg reg, RegAccess access = RegAccess::DTU) const;
 
-    void set(PrivReg reg, reg_t value, RegAccess access = RegAccess::DTU);
+    void set(ReqReg reg, reg_t value, RegAccess access = RegAccess::DTU);
 
     reg_t get(CmdReg reg, RegAccess access = RegAccess::DTU) const;
 
@@ -306,9 +305,9 @@ class RegFile
 
     Dtu &dtu;
 
-    std::vector<reg_t> masterRegs;
+    std::vector<reg_t> dtuRegs;
 
-    std::vector<reg_t> privRegs;
+    std::vector<reg_t> reqRegs;
 
     std::vector<reg_t> cmdRegs;
 
@@ -321,8 +320,8 @@ class RegFile
 
   private:
 
-    static const char *masterRegNames[];
-    static const char *privRegNames[];
+    static const char *dtuRegNames[];
+    static const char *reqRegNames[];
     static const char *cmdRegNames[];
     static const char *epTypeNames[];
 };

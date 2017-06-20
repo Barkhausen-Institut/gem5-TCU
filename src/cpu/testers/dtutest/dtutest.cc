@@ -35,7 +35,7 @@
 static unsigned int TESTER_DTU = 0;
 
 Addr
-DtuTest::getRegAddr(MasterReg reg)
+DtuTest::getRegAddr(DtuReg reg)
 {
     return static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
 }
@@ -43,7 +43,7 @@ DtuTest::getRegAddr(MasterReg reg)
 Addr
 DtuTest::getRegAddr(CmdReg reg)
 {
-    return sizeof(RegFile::reg_t) * numMasterRegs +
+    return sizeof(RegFile::reg_t) * numDtuRegs +
         static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
 }
 
@@ -366,7 +366,7 @@ DtuTest::tick()
     }
     case State::WAIT:
     {
-        regAddr = getRegAddr(MasterReg::MSG_CNT);
+        regAddr = getRegAddr(DtuReg::MSG_CNT);
         pkt = createDtuRegisterPkt(regAddr, 0, MemCmd::ReadReq);
 
         break;

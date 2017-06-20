@@ -44,8 +44,6 @@ class DtuAccelHash : public DtuAccel
 
     void interrupt() override;
 
-    void wakeup() override;
-
     void reset() override;
 
   private:
@@ -78,6 +76,7 @@ class DtuAccelHash : public DtuAccel
         CTX_WAIT,
 
         CTX_CHECK,
+        CTX_FLAGS,
         CTX_RESTORE,
         CTX_RESTORE_WAIT,
         CTX_RESTORE_READ,
@@ -100,7 +99,6 @@ class DtuAccelHash : public DtuAccel
     size_t bufSize;
 
     bool irqPending;
-    bool ctxSwPending;
     bool memPending;
 
     State state;
