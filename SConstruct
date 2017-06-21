@@ -183,6 +183,9 @@ AddLocalOption('--ignore-style', dest='ignore_style', action='store_true',
                help='Disable style checking hooks')
 AddLocalOption('--no-lto', dest='no_lto', action='store_true',
                help='Disable Link-Time Optimization for fast')
+AddLocalOption('--force-lto', dest='force_lto', action='store_true',
+               help='Use Link-Time Optimization instead of partial linking' +
+                    ' when the compiler doesn\'t support using them together.')
 AddLocalOption('--update-ref', dest='update_ref', action='store_true',
                help='Update test reference outputs')
 AddLocalOption('--verbose', dest='verbose', action='store_true',
@@ -197,6 +200,10 @@ AddLocalOption('--with-ubsan', dest='with_ubsan', action='store_true',
                help='Build with Undefined Behavior Sanitizer if available')
 AddLocalOption('--with-asan', dest='with_asan', action='store_true',
                help='Build with Address Sanitizer if available')
+
+if GetOption('no_lto') and GetOption('force_lto'):
+    print '--no-lto and --force-lto are mutually exclusive'
+    Exit(1)
 
 termcap = get_termcap(GetOption('use_colors'))
 
@@ -719,6 +726,28 @@ if main['GCC']:
 
     main['GCC_VERSION'] = gcc_version
 
+    if compareVersions(gcc_version, '4.9') >= 0:
+        # Incremental linking with LTO is currently broken in gcc versions
+        # 4.9 and above. A version where everything works completely hasn't
+        # yet been identified.
+        #
+        # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=67548
+        main['BROKEN_INCREMENTAL_LTO'] = True
+    if compareVersions(gcc_version, '6.0') >= 0:
+        # gcc versions 6.0 and greater accept an -flinker-output flag which
+        # selects what type of output the linker should generate. This is
+        # necessary for incremental lto to work, but is also broken in
+        # current versions of gcc. It may not be necessary in future
+        # versions. We add it here since it might be, and as a reminder that
+        # it exists. It's excluded if lto is being forced.
+        #
+        # https://gcc.gnu.org/gcc-6/changes.html
+        # https://gcc.gnu.org/ml/gcc-patches/2015-11/msg03161.html
+        # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=69866
+        if not GetOption('force_lto'):
+            main.Append(PSHLINKFLAGS='-flinker-output=rel')
+            main.Append(PLINKFLAGS='-flinker-output=rel')
+
     # gcc from version 4.8 and above generates "rep; ret" instructions
     # to avoid performance penalties on certain AMD chips. Older
     # assemblers detect this as an error, "Error: expecting string
@@ -749,10 +778,21 @@ if main['GCC']:
             'Warning: UBSan is only supported using gcc 4.9 and later.' + \
             termcap.Normal
 
+    disable_lto = GetOption('no_lto')
+    if not disable_lto and main.get('BROKEN_INCREMENTAL_LTO', False) and \
+            not GetOption('force_lto'):
+        print termcap.Yellow + termcap.Bold + \
+            'Warning: Your compiler doesn\'t support incremental linking' + \
+            ' and lto at the same time, so lto is being disabled. To force' + \
+            ' lto on anyway, use the --force-lto option. That will disable' + \
+            ' partial linking.' + \
+            termcap.Normal
+        disable_lto = True
+
     # Add the appropriate Link-Time Optimization (LTO) flags
     # unless LTO is explicitly turned off. Note that these flags
     # are only used by the fast target.
-    if not GetOption('no_lto'):
+    if not disable_lto:
         # Pass the LTO flag when compiling to produce GIMPLE
         # output, we merely create the flags here and only append
         # them later
@@ -1101,6 +1141,11 @@ if not have_kvm:
     print "Info: Compatible header file <linux/kvm.h> not found, " \
         "disabling KVM support."
 
+# Check if the TUN/TAP driver is available.
+have_tuntap = conf.CheckHeader('linux/if_tun.h', '<>')
+if not have_tuntap:
+    print "Info: Compatible header file <linux/if_tun.h> not found."
+
 # x86 needs support for xsave. We test for the structure here since we
 # won't be able to run new tests by the time we know which ISA we're
 # targeting.
@@ -1233,6 +1278,9 @@ sticky_vars.AddVariables(
     BoolVariable('USE_FENV', 'Use <fenv.h> IEEE mode control', have_fenv),
     BoolVariable('CP_ANNOTATE', 'Enable critical path annotation capability', False),
     BoolVariable('USE_KVM', 'Enable hardware virtualized (KVM) CPU models', have_kvm),
+    BoolVariable('USE_TUNTAP',
+                 'Enable using a tap device to bridge to the host network',
+                 have_tuntap),
     BoolVariable('BUILD_GPU', 'Build the compute-GPU model', False),
     EnumVariable('PROTOCOL', 'Coherence protocol for Ruby', 'None',
                   all_protocols),
@@ -1242,8 +1290,8 @@ sticky_vars.AddVariables(
 
 # These variables get exported to #defines in config/*.hh (see src/SConscript).
 export_vars += ['USE_FENV', 'SS_COMPATIBLE_FP', 'TARGET_ISA', 'TARGET_GPU_ISA',
-                'CP_ANNOTATE', 'USE_POSIX_CLOCK', 'USE_KVM', 'PROTOCOL',
-                'HAVE_PROTOBUF', 'HAVE_PERF_ATTR_EXCLUDE_HOST']
+                'CP_ANNOTATE', 'USE_POSIX_CLOCK', 'USE_KVM', 'USE_TUNTAP',
+                'PROTOCOL', 'HAVE_PROTOBUF', 'HAVE_PERF_ATTR_EXCLUDE_HOST']
 
 ###################################################
 #
@@ -1478,6 +1526,11 @@ for variant_path in variant_paths:
             print "Info: KVM support disabled due to unsupported host and " \
                 "target ISA combination"
             env['USE_KVM'] = False
+
+    if env['USE_TUNTAP']:
+        if not have_tuntap:
+            print "Warning: Can't connect EtherTap with a tap device."
+            env['USE_TUNTAP'] = False
 
     if env['BUILD_GPU']:
         env.Append(CPPDEFINES=['BUILD_GPU'])

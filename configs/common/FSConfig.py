@@ -1,4 +1,4 @@
-# Copyright (c) 2010-2012, 2015-2016 ARM Limited
+# Copyright (c) 2010-2012, 2015-2017 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -204,7 +204,7 @@ def makeSparcSystem(mem_mode, mdesc=None, cmdline=None):
 
 def makeArmSystem(mem_mode, machine_type, num_cpus=1, mdesc=None,
                   dtb_filename=None, bare_metal=False, cmdline=None,
-                  external_memory="", ruby=False):
+                  external_memory="", ruby=False, security=False):
     assert machine_type
 
     default_dtbs = {
@@ -295,6 +295,8 @@ def makeArmSystem(mem_mode, machine_type, num_cpus=1, mdesc=None,
         fatal("The currently selected ARM platforms doesn't support" \
               " the amount of DRAM you've selected. Please try" \
               " another platform")
+
+    self.have_security = security
 
     if bare_metal:
         # EOT character on UART will end the simulation
@@ -402,9 +404,12 @@ def makeArmSystem(mem_mode, machine_type, num_cpus=1, mdesc=None,
         self.system_port = self.membus.slave
 
     if ruby:
-        fatal("You're trying to use Ruby on ARM, which is not working " \
-              "properly yet. If you want to test it anyway, you " \
-              "need to remove this fatal error from FSConfig.py.")
+        if buildEnv['PROTOCOL'] == 'MI_example' and num_cpus > 1:
+            fatal("The MI_example protocol cannot implement Load/Store "
+                  "Exclusive operations. Multicore ARM systems configured "
+                  "with the MI_example protocol will not work properly.")
+        warn("You are trying to use Ruby on ARM, which is not working "
+             "properly yet.")
 
     return self
 
