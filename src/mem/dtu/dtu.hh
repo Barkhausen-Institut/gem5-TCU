@@ -441,6 +441,7 @@ class Dtu : public BaseDtu
     FinishCommandEvent *cmdFinish;
     uint64_t cmdId;
     uint abortCmd;
+    size_t cmdXferBuf;
 
     std::list<MemTranslation*> xlates;
 

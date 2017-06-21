@@ -95,6 +95,7 @@ Dtu::Dtu(DtuParams* p)
     cmdFinish(),
     cmdId(0),
     abortCmd(0),
+    cmdXferBuf(0),
     xlates(),
     coreXlates(new CoreTranslation[p->buf_count + 1]()),
     coreXlateSlots(p->buf_count + 1),
@@ -340,14 +341,18 @@ Dtu::abortCommand()
             ptUnit->abortAll();
     }
 
+    cmdXferBuf = -1;
     uint types = 0;
     if (abortCmd & Command::ABORT_CMD)
         types |= XferUnit::ABORT_LOCAL;
     if (abortCmd & Command::ABORT_VPE)
+    {
         types |= XferUnit::ABORT_REMOTE;
+        cmdXferBuf = -1;
+    }
     xferUnit->abortTransfers(types);
 
-    regs().set(CmdReg::ABORT, 0);
+    regs().set(CmdReg::ABORT, cmdXferBuf);
 
     // if no command was running, let the SW wait until the currently received
     // messages are finished
@@ -866,6 +871,7 @@ Dtu::abortTranslate(size_t id, PtUnit::Translation *trans)
     {
         coreXlates[id].trans = NULL;
         coreXlates[id].ongoing = false;
+        cmdXferBuf = id;
     }
 }
 
