@@ -85,6 +85,8 @@ class M3Loader
         uint64_t mounts;
         uint32_t fds_len;
         uint64_t fds;
+        uint64_t rbufcur;
+        uint64_t rbufend;
         uint64_t eps;
         uint64_t caps;
         uint64_t exit;
