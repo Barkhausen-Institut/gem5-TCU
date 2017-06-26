@@ -66,10 +66,12 @@ class DtuAccelStream : public DtuAccel
         PUSH_DATA,
         WRITE_DATA,
         WRITE_DATA_WAIT,
-        STORE_REPLY,
-        SEND_REPLY,
-        REPLY_WAIT,
-        REPLY_ERROR,
+
+        STORE_MSG,
+        SEND_MSG,
+        MSG_WAIT,
+        MSG_ERROR,
+        ACK_MSG,
 
         CTX_SAVE,
         CTX_SAVE_DONE,
@@ -82,6 +84,12 @@ class DtuAccelStream : public DtuAccel
         SYSCALL,
     };
 
+    enum class Command
+    {
+        INIT,
+        UPDATE,
+    };
+
     DtuAccelStreamAlgo *algo;
 
     std::string getStateName() const;
@@ -91,13 +99,18 @@ class DtuAccelStream : public DtuAccel
     bool memPending;
 
     State state;
+    State lastState;
 
     Addr msgAddr;
 
-    bool autonomous;
+    bool eof;
+    Addr off;
     Addr inOff;
     Addr outOff;
-    Addr dataOff;
+    Addr outSize;
+    Addr bufSize;
+    Addr reportSize;
+    Addr accSize;
     Addr dataSize;
     Addr lastSize;
     Addr streamOff;
@@ -110,16 +123,20 @@ class DtuAccelStream : public DtuAccel
         struct
         {
             uint64_t opcode;
-            uint64_t cap;
-            uint64_t msgaddr;
+            uint64_t sgate_sel;
+            uint64_t rgate_sel;
             uint64_t len;
+            uint64_t rlabel;
             uint64_t event;
         } M5_ATTR_PACKED sys;
         struct
         {
-            uint64_t res;
+            uint64_t cmd;
+            uint64_t off;
+            uint64_t len;
+            uint64_t eof;
         } M5_ATTR_PACKED msg;
-    } M5_ATTR_PACKED reply;
+    } M5_ATTR_PACKED msg;
 
     SyscallSM sysc;
     State syscNext;

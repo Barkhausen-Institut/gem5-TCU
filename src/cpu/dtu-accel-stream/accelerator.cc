@@ -41,10 +41,12 @@
 static const unsigned EP_RECV       = 7;
 static const unsigned EP_INPUT      = 8;
 static const unsigned EP_OUTPUT     = 9;
-static const unsigned CAP_RBUF      = 2;
+static const unsigned EP_SEND       = 10;
+static const unsigned CAP_RGATE     = 2;
+static const unsigned CAP_SGATE     = 3;
 
 static const size_t MSG_SIZE        = 64;
-static const Addr BUF_ADDR          = 0x4000;
+static const Addr BUF_ADDR          = 0x6000;
 
 static const char *stateNames[] =
 {
@@ -59,10 +61,12 @@ static const char *stateNames[] =
     "PUSH_DATA",
     "WRITE_DATA",
     "WRITE_DATA_WAIT",
-    "STORE_REPLY",
-    "SEND_REPLY",
-    "REPLY_WAIT",
-    "REPLY_ERROR",
+
+    "STORE_MSG",
+    "SEND_MSG",
+    "MSG_WAIT",
+    "MSG_ERROR",
+    "ACK_MSG",
 
     "CTX_SAVE",
     "CTX_SAVE_DONE",
@@ -82,6 +86,7 @@ DtuAccelStream::DtuAccelStream(const DtuAccelStreamParams *p)
     ctxSwPending(false),
     memPending(false),
     state(State::IDLE),
+    lastState(State::CTX_CHECK), // something different
     msgAddr(),
     sysc(this),
     yield(this, &sysc)
@@ -112,8 +117,12 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
 {
     Request* req = pkt->req;
 
-    DPRINTF(DtuAccelStreamState, "[%s] Got response from memory\n",
-        getStateName().c_str());
+    if (state != lastState)
+    {
+        DPRINTF(DtuAccelStreamState, "[%s] Got response from memory\n",
+            getStateName().c_str());
+        lastState = state;
+    }
 
     const uint8_t *pkt_data = pkt->getConstPtr<uint8_t>();
 
@@ -210,23 +219,30 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                     reinterpret_cast<const uint64_t*>(
                         pkt_data + sizeof(Dtu::MessageHeader));
 
-                DPRINTF(DtuAccelStream, "  inoff=%lld outoff=%lld len=%#llx auto=%d\n",
-                    args[0], args[1], args[2], args[3]);
-
-                autonomous = args[3];
-                if (autonomous)
+                Command cmd = static_cast<Command>(args[0]);
+                if (cmd == Command::INIT)
                 {
-                    inOff = args[0];
-                    outOff = args[1];
-                    dataOff = 0;
-                    dataSize = args[2];
-                    state = State::READ_DATA;
+                    DPRINTF(DtuAccelStream,
+                            "  init(bufsz=%#llx, outsz=%#llx, reportsz=%#llx)\n",
+                            args[1], args[2], args[3]);
+
+                    bufSize = args[1];
+                    outSize = args[2];
+                    reportSize = args[3];
+                    outOff = 0;
+                    state = State::ACK_MSG;
                 }
                 else
                 {
-                    lastSize = args[2];
-                    streamOff = 0;
-                    state = State::PULL_DATA;
+                    DPRINTF(DtuAccelStream,
+                            "  update(off=%lld len=%#llx eof=%lld)\n",
+                            args[1], args[2], args[3]);
+
+                    off = args[1];
+                    inOff = 0;
+                    dataSize = args[2];
+                    eof = args[3];
+                    state = State::READ_DATA;
                 }
                 break;
             }
@@ -278,13 +294,7 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                     else
                         delay = Cycles(1);
 
-                    if (!autonomous)
-                    {
-                        reply.msg.res = lastSize;
-                        state = State::STORE_REPLY;
-                    }
-                    else
-                        state = State::WRITE_DATA;
+                    state = State::WRITE_DATA;
                 }
                 else
                     state = State::PULL_DATA;
@@ -301,44 +311,55 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
                 if (cmd.opcode == 0)
                 {
-                    if (dataOff == dataSize || irqPending)
-                    {
-                        reply.msg.res = dataOff;
-                        state = State::STORE_REPLY;
-                    }
+                    if (accSize >= reportSize || (inOff == dataSize && eof))
+                        state = State::STORE_MSG;
+                    else if (inOff == dataSize)
+                        state = State::ACK_MSG;
                     else
                         state = State::READ_DATA;
                 }
                 break;
             }
-            case State::STORE_REPLY:
+
+            case State::STORE_MSG:
             {
-                state = State::SEND_REPLY;
+                state = State::SEND_MSG;
                 break;
             }
-            case State::SEND_REPLY:
+            case State::SEND_MSG:
             {
-                state = State::REPLY_WAIT;
+                state = State::MSG_WAIT;
                 break;
             }
-            case State::REPLY_WAIT:
+            case State::MSG_WAIT:
             {
                 Dtu::Command::Bits cmd =
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
                 if (cmd.opcode == 0)
                 {
                     if (cmd.error == 0)
-                        state = State::CTX_CHECK;
+                    {
+                        if (inOff == dataSize)
+                            state = State::ACK_MSG;
+                        else
+                            state = State::READ_DATA;
+                    }
                     else
-                        state = State::REPLY_ERROR;
+                        state = State::MSG_ERROR;
                 }
                 break;
             }
-            case State::REPLY_ERROR:
+            case State::MSG_ERROR:
             {
-                sysc.start(sizeof(reply));
-                syscNext = State::CTX_CHECK;
+                sysc.start(sizeof(msg));
+                syscNext = State::READ_DATA;
                 state = State::SYSCALL;
+                break;
+            }
+
+            case State::ACK_MSG:
+            {
+                state = State::CTX_CHECK;
                 break;
             }
 
@@ -388,8 +409,12 @@ DtuAccelStream::tick()
 {
     PacketPtr pkt = nullptr;
 
-    DPRINTF(DtuAccelStreamState, "[%s] tick\n",
-        getStateName().c_str());
+    if (state != lastState)
+    {
+        DPRINTF(DtuAccelStreamState, "[%s] tick\n",
+            getStateName().c_str());
+        lastState = state;
+    }
 
     switch(state)
     {
@@ -464,13 +489,14 @@ DtuAccelStream::tick()
         }
         case State::READ_DATA:
         {
-            size_t left = dataSize - dataOff;
-            lastSize = std::min(maxDataSize, left);
+            size_t left = dataSize - inOff;
+            lastSize = std::min(bufSize, std::min(reportSize, left));
             pkt = createDtuCmdPkt(Dtu::Command::READ,
                                   EP_INPUT,
                                   BUF_ADDR,
                                   lastSize,
-                                  inOff + dataOff);
+                                  off + inOff);
+            inOff += lastSize;
             break;
         }
         case State::READ_DATA_WAIT:
@@ -502,8 +528,15 @@ DtuAccelStream::tick()
                                   EP_OUTPUT,
                                   BUF_ADDR,
                                   lastSize,
-                                  outOff + dataOff);
-            dataOff += lastSize;
+                                  outOff);
+
+            msg.msg.cmd = static_cast<uint64_t>(Command::UPDATE);
+            msg.msg.off = outOff - accSize;
+            msg.msg.len = accSize + lastSize;
+            msg.msg.eof = eof && inOff == dataSize;
+
+            accSize += lastSize;
+            outOff = (outOff + lastSize) % outSize;
             break;
         }
         case State::WRITE_DATA_WAIT:
@@ -512,40 +545,50 @@ DtuAccelStream::tick()
             pkt = createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }
-        case State::STORE_REPLY:
+
+        case State::STORE_MSG:
         {
+            accSize = 0;
             pkt = createPacket(BUF_ADDR,
-                               sizeof(reply.msg),
+                               sizeof(msg.msg),
                                MemCmd::WriteReq);
-            memcpy(pkt->getPtr<uint8_t>(), (char*)&reply.msg, sizeof(reply.msg));
+            memcpy(pkt->getPtr<uint8_t>(), (char*)&msg.msg, sizeof(msg.msg));
             break;
         }
-        case State::SEND_REPLY:
+        case State::SEND_MSG:
         {
-            pkt = createDtuCmdPkt(Dtu::Command::REPLY,
-                                  EP_RECV,
+            pkt = createDtuCmdPkt(Dtu::Command::SEND,
+                                  EP_SEND,
                                   BUF_ADDR,
-                                  sizeof(reply.msg),
-                                  msgAddr);
+                                  sizeof(msg.msg),
+                                  0);
             break;
         }
-        case State::REPLY_WAIT:
+        case State::MSG_WAIT:
         {
             Addr regAddr = getRegAddr(CmdReg::COMMAND);
             pkt = createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }
-        case State::REPLY_ERROR:
+        case State::MSG_ERROR:
         {
-            reply.sys.opcode = 18;          /* FORWARD_REPLY */
-            reply.sys.cap = CAP_RBUF;
-            reply.sys.msgaddr = msgAddr;
-            reply.sys.event = 0;
-            reply.sys.len = sizeof(reply.msg);
-            reply.sys.event = 0;
+            msg.sys.opcode = 16;            /* FORWARD_MSG */
+            msg.sys.sgate_sel = CAP_SGATE;
+            msg.sys.rgate_sel = 0xFFFF;
+            msg.sys.len = sizeof(msg.msg);
+            msg.sys.rlabel = 0;
+            msg.sys.event = 0;
 
-            pkt = createPacket(MSG_ADDR, sizeof(reply), MemCmd::WriteReq);
-            memcpy(pkt->getPtr<void>(), &reply, sizeof(reply));
+            pkt = createPacket(MSG_ADDR, sizeof(msg), MemCmd::WriteReq);
+            memcpy(pkt->getPtr<void>(), &msg, sizeof(msg));
+            break;
+        }
+
+        case State::ACK_MSG:
+        {
+            Addr regAddr = getRegAddr(CmdReg::COMMAND);
+            uint64_t value = Dtu::Command::ACK_MSG | (EP_RECV << 4) | (msgAddr << 16);
+            pkt = createDtuRegPkt(regAddr, value, MemCmd::WriteReq);
             break;
         }
 

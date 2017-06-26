@@ -49,7 +49,7 @@ static const Cycles BLOCK_TIME      = Cycles(85);
 static const size_t BLOCK_SIZE      = 64;
 
 static const size_t MSG_SIZE        = 64;
-static const Addr BUF_ADDR          = 0x4000;
+static const Addr BUF_ADDR          = 0x6000;
 
 static const char *stateNames[] =
 {

@@ -46,10 +46,13 @@ class DtuAccelStreamAlgoFFT : public DtuAccelStreamAlgo
 
     Cycles getDelay(size_t len) override
     {
-        // the time for one 4096 block for FFT; determined by ALADDIN and picking the
-        // sweet spot between area, power and performance.
-        const Cycles BLOCK_TIME      = Cycles(16942);
-        const size_t BLOCK_SIZE      = 4096;
+        // the time for one 2048 block for 2D-FFT; determined by ALADDIN and
+        // picking the sweet spot between area, power and performance.
+        // 732 cycles for the FFT function. we have two loops in FFT2D with
+        // 16 iterations each. we unroll both 4 times, leading to
+        // (4 + 4) * 732 = 5856.
+        const Cycles BLOCK_TIME      = Cycles(5856);
+        const size_t BLOCK_SIZE      = 2048;
 
         return Cycles((BLOCK_TIME * len) / BLOCK_SIZE);
     }
