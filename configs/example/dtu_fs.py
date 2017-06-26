@@ -552,15 +552,17 @@ def runSimulation(options, pes):
         if hasattr(pe, 'mem_ctrl'):
             size = int(pe.mem_ctrl.range.end + 1)
             assert size % 4096 == 0, "Memory size not page aligned"
-            size |= 3   # mem
+            size |= 2   # mem
         else:
             if hasattr(pe, 'spm'):
                 size = int(pe.spm.range.end + 1)
                 assert size % 4096 == 0, "Memory size not page aligned"
-            elif not pe.dtu.pt_walker:
-                size |= 2 # mmu
             else:
-                size |= 1 # DTU+VM
+                size |= 1 # emem
+                if not pe.dtu.pt_walker:
+                    size |= 1 << 6 # mmu
+                else:
+                    size |= 2 << 6 # dtuvm
 
             if hasattr(pe, 'accel'):
                 if type(pe.accel).__name__ == 'DtuAccelHash':
