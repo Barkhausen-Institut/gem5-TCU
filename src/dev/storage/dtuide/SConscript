@@ -1,0 +1,12 @@
+Import('*')
+
+DebugFlag('BaseProxy')
+DebugFlag('PCIConnector')
+
+SimObject('BaseProxy.py')
+SimObject('DtuPlatform.py')
+SimObject('PCIConnector.py')
+
+Source('base_proxy.cc')
+Source('pci_connector.cc')
+Source('dtu_platform.cc')
