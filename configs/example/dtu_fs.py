@@ -199,7 +199,8 @@ def createPE(root, options, no, systemType, l1size, l2size, spmsize, dtupos, mem
 
     # each PE is represented by it's own subsystem
     pe = systemType(mem_mode=CPUClass.memory_mode())
-    pe.clk_domain = root.cpu_clk_domain
+    pe.clk_domain = SrcClockDomain(clock=options.cpu_clock,
+                                   voltage_domain=root.cpu_voltage_domain)
     pe.core_id = no
     setattr(root, 'pe%02d' % no, pe)
 
@@ -372,7 +373,7 @@ def createCorePE(root, options, no, cmdline, memPE, l1size=None, l2size=None,
     pe.kernel = cmdline.split(' ')[0]
     pe.boot_osflags = cmdline
     print "PE%02d: %s" % (no, cmdline)
-    print '      Core =%s %s' % (type(pe.cpu), options.isa)
+    print '      Core =%s %s @ %s' % (type(pe.cpu), options.isa, options.cpu_clock)
     printConfig(pe, dtupos)
 
     # if specified, let this PE wait for GDB
@@ -433,7 +434,7 @@ def createAccelPE(root, options, no, accel, memPE, l1size=None, l2size=None, spm
 
     pe.dtu.dcache_slave_port = pe.accel.port
 
-    print 'PE%02d: %s accelerator' % (no, accel)
+    print 'PE%02d: %s accelerator @ %s' % (no, accel, options.cpu_clock)
     printConfig(pe, 0)
     print
 
