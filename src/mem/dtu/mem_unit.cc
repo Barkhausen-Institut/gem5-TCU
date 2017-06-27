@@ -116,6 +116,7 @@ MemoryUnit::startRead(const Dtu::Command::Bits& cmd)
         cmd.epid, data.addr, size);
 
     // TODO error handling
+    assert(size > 0);
     assert(data.addr < rwBarrier);
     assert(data.addr + size <= rwBarrier);
     assert(size + offset >= size);
@@ -249,6 +250,7 @@ MemoryUnit::startWrite(const Dtu::Command::Bits& cmd)
         cmd.epid, data.addr, size);
 
     // TODO error handling
+    assert(size > 0);
     assert(ep.flags & Dtu::MemoryFlags::WRITE);
     assert(size + offset >= size);
     assert(size + offset <= ep.remoteSize);
