@@ -281,7 +281,17 @@ XferUnit::recvMemResponse(uint64_t evId, PacketPtr pkt)
     Buffer *buf = getBuffer(evId & 0xFFFFFFFF);
     // ignore responses for aborted transfers
     if (!buf || !buf->event)
+    {
+        DPRINTFS(DtuXfers, (&dtu),
+                 "buf%d: Ignoring mem response (buf=%#lx, event=%#lx)\n",
+                 (evId & 0xFFFFFFFF), buf, buf ? buf->event : nullptr);
         return;
+    }
+
+    DPRINTFS(DtuXfers, (&dtu),
+             "buf%d: Received mem response for %#lx (rem=%#lx, slots=%d/%d)\n",
+             buf->id, (Addr)(evId >> 32), buf->event->remaining,
+             buf->event->freeSlots + 1, dtu.reqCount);
 
     if (pkt)
     {
