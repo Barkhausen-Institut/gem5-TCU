@@ -101,7 +101,8 @@ BaseDtu::ICacheMasterPort::recvTimingResp(PacketPtr pkt)
 
     // the DTU does never send requests to the icache. so just pass it back to
     // the CPU
-    return dtu.icacheSlavePort.sendTimingResp(pkt);
+    dtu.icacheSlavePort.schedTimingResp(pkt, dtu.clockEdge(Cycles(1)));
+    return true;
 }
 
 bool
@@ -116,7 +117,8 @@ BaseDtu::DCacheMasterPort::recvTimingResp(PacketPtr pkt)
                               pkt->getAddr(),
                               pkt->senderState);
 
-        return dtu.dcacheSlavePort.sendTimingResp(pkt);
+        dtu.dcacheSlavePort.schedTimingResp(pkt, dtu.clockEdge(Cycles(1)));
+        return true;
     }
 
     // otherwise from the DTU
