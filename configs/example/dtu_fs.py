@@ -194,15 +194,15 @@ def printConfig(pe, dtupos):
             print '      imem =%d KiB' % (int(pe.spm.range.end + 1) / 1024)
             print '      Comp =Core -> DTU -> SPM'
 
-def createPE(root, options, no, systemType, l1size, l2size, spmsize, dtupos, memPE):
+def createPE(noc, options, no, systemType, l1size, l2size, spmsize, dtupos, memPE):
     CPUClass = CpuConfig.get(options.cpu_type)
 
     # each PE is represented by it's own subsystem
     pe = systemType(mem_mode=CPUClass.memory_mode())
+    pe.voltage_domain = VoltageDomain(voltage=options.sys_voltage)
     pe.clk_domain = SrcClockDomain(clock=options.cpu_clock,
-                                   voltage_domain=root.cpu_voltage_domain)
+                                   voltage_domain=pe.voltage_domain)
     pe.core_id = no
-    setattr(root, 'pe%02d' % no, pe)
 
     if not l2size is None:
         pe.xbar = SystemXBar()
@@ -220,8 +220,8 @@ def createPE(root, options, no, systemType, l1size, l2size, spmsize, dtupos, mem
     pe.dtu.num_endpoints = 12
 
     # connection to noc
-    pe.dtu.noc_master_port = root.noc.slave
-    pe.dtu.noc_slave_port  = root.noc.master
+    pe.dtu.noc_master_port = noc.slave
+    pe.dtu.noc_slave_port  = noc.master
 
     pe.dtu.slave_region = [AddrRange(0, pe.dtu.mmio_region.start - 1)]
 
@@ -321,7 +321,7 @@ def createPE(root, options, no, systemType, l1size, l2size, spmsize, dtupos, mem
 
     return pe
 
-def createCorePE(root, options, no, cmdline, memPE, l1size=None, l2size=None,
+def createCorePE(noc, options, no, cmdline, memPE, l1size=None, l2size=None,
                  dtupos=0, mmu=False, spmsize='8MB'):
     CPUClass = CpuConfig.get(options.cpu_type)
 
@@ -332,7 +332,7 @@ def createCorePE(root, options, no, cmdline, memPE, l1size=None, l2size=None,
     assert dtupos == 0 or mmu
 
     pe = createPE(
-        root=root, options=options, no=no, systemType=sysType,
+        noc=noc, options=options, no=no, systemType=sysType,
         l1size=l1size, l2size=l2size, spmsize=spmsize, dtupos=dtupos,
         memPE=memPE
     )
@@ -340,7 +340,7 @@ def createCorePE(root, options, no, cmdline, memPE, l1size=None, l2size=None,
     pe.readfile = "/dev/stdin"
 
     # connection to the NoC for initialization
-    pe.noc_master_port = root.noc.slave
+    pe.noc_master_port = noc.slave
 
     pe.cpu = CPUClass()
     pe.cpu.cpu_id = 0
@@ -386,7 +386,7 @@ def createCorePE(root, options, no, cmdline, memPE, l1size=None, l2size=None,
 
     # connect the IO space via bridge to the root NoC
     pe.bridge = Bridge(delay='50ns')
-    pe.bridge.master = root.noc.slave
+    pe.bridge.master = noc.slave
     pe.bridge.slave = pe.xbar.master
     pe.bridge.ranges = \
         [
@@ -410,9 +410,9 @@ def createCorePE(root, options, no, cmdline, memPE, l1size=None, l2size=None,
 
     return pe
 
-def createAccelPE(root, options, no, accel, memPE, l1size=None, l2size=None, spmsize='64kB'):
+def createAccelPE(noc, options, no, accel, memPE, l1size=None, l2size=None, spmsize='64kB'):
     pe = createPE(
-        root=root, options=options, no=no, systemType=SpuSystem,
+        noc=noc, options=options, no=no, systemType=SpuSystem,
         l1size=l1size, l2size=l2size, spmsize=spmsize, memPE=memPE,
         dtupos=0
     )
@@ -440,13 +440,14 @@ def createAccelPE(root, options, no, accel, memPE, l1size=None, l2size=None, spm
 
     return pe
 
-def createMemPE(root, options, no, size, dram=True, content=None):
+def createMemPE(noc, options, no, size, dram=True, content=None):
     pe = createPE(
-        root=root, options=options, no=no, systemType=MemSystem,
+        noc=noc, options=options, no=no, systemType=MemSystem,
         l1size=None, l2size=None, spmsize=None, memPE=0,
         dtupos=0
     )
-    pe.clk_domain = root.clk_domain
+    pe.clk_domain = SrcClockDomain(clock=options.sys_clock,
+                                   voltage_domain=pe.voltage_domain)
     pe.dtu.connector = BaseConnector()
 
     # use many buffers to prevent that this is a bottleneck (this is just a
@@ -475,9 +476,9 @@ def createMemPE(root, options, no, size, dram=True, content=None):
 
     return pe
 
-def createAbortTestPE(root, options, no, memPE, l1size=None, l2size=None, spmsize='8MB'):
+def createAbortTestPE(noc, options, no, memPE, l1size=None, l2size=None, spmsize='8MB'):
     pe = createPE(
-        root=root, options=options, no=no, systemType=SpuSystem,
+        noc=noc, options=options, no=no, systemType=SpuSystem,
         l1size=l1size, l2size=l2size, spmsize=spmsize, memPE=memPE,
         dtupos=0
     )
@@ -501,15 +502,8 @@ def createRoot(options):
     root.voltage_domain = VoltageDomain(voltage=options.sys_voltage)
 
     # Create a source clock for the system and set the clock period
-    root.clk_domain = SrcClockDomain(clock= options.sys_clock,
+    root.clk_domain = SrcClockDomain(clock=options.sys_clock,
                                      voltage_domain=root.voltage_domain)
-
-    # Create a CPU voltage domain
-    root.cpu_voltage_domain = VoltageDomain()
-
-    # Create a separate clock domain for the CPUs
-    root.cpu_clk_domain = SrcClockDomain(clock=options.cpu_clock,
-                                         voltage_domain=root.cpu_voltage_domain)
 
     # All PEs are connected to a NoC (Network on Chip). In this case it's just
     # a simple XBar.
@@ -545,7 +539,7 @@ def createRoot(options):
 
     return root
 
-def runSimulation(options, pes):
+def runSimulation(root, options, pes):
     # determine types of PEs and their internal memory size
     pemems = []
     for pe in pes:
@@ -580,6 +574,7 @@ def runSimulation(options, pes):
 
     # give that to the PEs
     for pe in pes:
+        setattr(root, 'pe%02d' % pe.core_id, pe)
         try:
             pe.pes = pemems
         except:
