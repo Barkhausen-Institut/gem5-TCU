@@ -49,7 +49,7 @@ class DtuAccelStreamAlgoToUpper : public DtuAccelStreamAlgo
         }
     }
 
-    Cycles getDelay(size_t len) override
+    Cycles getDelay(Cycles, size_t len) override
     {
         const Cycles BLOCK_TIME      = Cycles(1);
         const size_t BLOCK_SIZE      = 64;

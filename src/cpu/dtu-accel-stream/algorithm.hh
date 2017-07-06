@@ -40,7 +40,7 @@ class DtuAccelStreamAlgo
 
     virtual void execute(uint8_t *dst, const uint8_t *src, size_t len) = 0;
 
-    virtual Cycles getDelay(size_t len) = 0;
+    virtual Cycles getDelay(Cycles time, size_t len) = 0;
 };
 
 #endif // __CPU_DTU_ACCEL_STREAM_ALGORITHM_HH__

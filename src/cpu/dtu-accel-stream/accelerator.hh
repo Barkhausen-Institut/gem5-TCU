@@ -110,6 +110,7 @@ class DtuAccelStream : public DtuAccel
     Addr outSize;
     Addr bufSize;
     Addr reportSize;
+    Cycles compTime;
     Addr accSize;
     Addr dataSize;
     Addr lastSize;

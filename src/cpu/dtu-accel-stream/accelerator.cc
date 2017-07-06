@@ -223,12 +223,14 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                 if (cmd == Command::INIT)
                 {
                     DPRINTF(DtuAccelStream,
-                            "  init(bufsz=%#llx, outsz=%#llx, reportsz=%#llx)\n",
-                            args[1], args[2], args[3]);
+                            "  init(bufsz=%#llx, outsz=%#llx,"
+                            " reportsz=%#llx, comptime=%#llx)\n",
+                            args[1], args[2], args[3], args[4]);
 
                     bufSize = args[1];
                     outSize = args[2];
                     reportSize = args[3];
+                    compTime = Cycles(args[4]);
                     outOff = 0;
                     state = State::ACK_MSG;
                 }
@@ -285,7 +287,7 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                     // data from SPM, because that's already included in the
                     // BLOCK_TIME.
                     // TODO if we use caches, this is not correct
-                    delay = algo->getDelay(lastSize);
+                    delay = algo->getDelay(compTime, lastSize);
                     DPRINTF(DtuAccelStream, "%s for %luB took %llu cycles\n",
                         algo->name(), lastSize, delay);
 
