@@ -59,7 +59,7 @@ DTUMemory::initMemory()
     PtUnit::PageTableEntry entry = 0;
     entry.base = getRootPt().getAddr() >> DtuTlb::PAGE_BITS;
     // not internally accessible
-    entry.ixwr = DtuTlb::RWX;
+    entry.lixwr = DtuTlb::RWX;
     size_t off = 0x10 * sizeof(entry);
     DPRINTFS(DtuPtes, obj,
         "Creating recursive level %d PTE @ %#018x: %#018x\n",
@@ -79,8 +79,8 @@ DTUMemory::mapPage(Addr virt, Addr phys, uint access)
 
         Addr pteAddr = ptAddr + (idx << DtuTlb::PTE_BITS);
         pte_t entry = physp.read<pte_t>(pteAddr);
-        assert(i > 0 || entry.ixwr == 0);
-        if(!entry.ixwr)
+        assert(i > 0 || entry.lixwr == 0);
+        if(!entry.lixwr)
         {
             // determine phys address
             Addr offset;
@@ -96,7 +96,7 @@ DTUMemory::mapPage(Addr virt, Addr phys, uint access)
 
             // insert entry
             entry.base = addr.getAddr() >> DtuTlb::PAGE_BITS;
-            entry.ixwr = i == 0 ? static_cast<DtuTlb::Flag>(access) : DtuTlb::RWX;
+            entry.lixwr = i == 0 ? static_cast<DtuTlb::Flag>(access) : DtuTlb::RWX;
             DPRINTFS(DtuPtes, obj,
                 "Creating level %d PTE for virt=%#018x @ %#018x: %#018x\n",
                 i, virt, pteAddr, entry);

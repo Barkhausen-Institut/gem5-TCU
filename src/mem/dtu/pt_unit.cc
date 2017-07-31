@@ -117,6 +117,15 @@ PtUnit::TranslateEvent::recvFromMem(PacketPtr pkt)
 
     if (success)
     {
+        // stop if it's a large page
+        if (level == 1 && (flags & DtuTlb::LARGE))
+        {
+            const Addr mask = DtuTlb::LPAGE_MASK;
+            unit.mkTlbEntry(virt, NocAddr(phys), flags);
+            finish(success, NocAddr((phys & ~mask) + (virt & mask)));
+            return;
+        }
+
         if (level > 0)
         {
             level--;
@@ -126,7 +135,6 @@ PtUnit::TranslateEvent::recvFromMem(PacketPtr pkt)
         }
 
         unit.mkTlbEntry(virt, NocAddr(phys), flags);
-
         finish(success, NocAddr(phys + (virt & DtuTlb::PAGE_MASK)));
     }
     else
@@ -471,18 +479,18 @@ PtUnit::finishTranslate(PacketPtr pkt,
     // for last-level PTEs, we need the desired access permissions
     if (level == 0)
     {
-        if ((e->ixwr & *access) != *access)
+        if ((e->lixwr & *access) != *access)
             return false;
     }
     // for others, we don't need the INTERN bit
     else
     {
         uint pteAccess = *access & ~DtuTlb::INTERN;
-        if ((e->ixwr & pteAccess) != pteAccess)
+        if ((e->lixwr & pteAccess) != pteAccess)
             return false;
     }
 
-    *access = static_cast<uint>((uint64_t)e->ixwr);
+    *access = static_cast<uint>((uint64_t)e->lixwr);
     *phys = e->base << DtuTlb::PAGE_BITS;
     return true;
 }

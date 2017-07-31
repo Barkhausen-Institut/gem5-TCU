@@ -36,13 +36,14 @@
 
 static const char *decode_access(uint access)
 {
-    static char buf[6];
+    static char buf[7];
     buf[0] = (access & DtuTlb::INVALID) ? 'I' : '-';
-    buf[1] = (access & DtuTlb::INTERN) ? 'i' : '-';
-    buf[2] = (access & DtuTlb::READ) ? 'r' : '-';
-    buf[3] = (access & DtuTlb::WRITE) ? 'w' : '-';
-    buf[4] = (access & DtuTlb::EXEC) ? 'x' : '-';
-    buf[5] = '\0';
+    buf[1] = (access & DtuTlb::LARGE) ? 'l' : '-';
+    buf[2] = (access & DtuTlb::INTERN) ? 'i' : '-';
+    buf[3] = (access & DtuTlb::READ) ? 'r' : '-';
+    buf[4] = (access & DtuTlb::WRITE) ? 'w' : '-';
+    buf[5] = (access & DtuTlb::EXEC) ? 'x' : '-';
+    buf[6] = '\0';
     return buf;
 }
 
@@ -139,7 +140,8 @@ DtuTlb::do_lookup(Addr virt, uint access, NocAddr *phys, bool xlate)
 
     e->lru_seq = ++lru_seq;
     *phys = e->phys;
-    phys->offset += virt & PAGE_MASK;
+    Addr mask = (e->flags & LARGE) ? LPAGE_MASK : PAGE_MASK;
+    phys->offset += virt & mask;
     hits++;
     return HIT;
 }
@@ -168,6 +170,10 @@ DtuTlb::evict()
 void
 DtuTlb::insert(Addr virt, NocAddr phys, uint flags)
 {
+    uint width = (flags & LARGE) ? (64 - (PAGE_BITS + LEVEL_BITS))
+                                 : (64 - PAGE_BITS);
+    Addr mask = (flags & LARGE) ? LPAGE_MASK : PAGE_MASK;
+
     Entry *e = trie.lookup(virt);
     if (!e)
     {
@@ -176,17 +182,23 @@ DtuTlb::insert(Addr virt, NocAddr phys, uint flags)
 
         assert(!free.empty());
         e = free.back();
-        e->virt = virt;
-        e->handle = trie.insert(virt, 64 - PAGE_BITS, e);
+        e->virt = virt & ~mask;
+        e->handle = trie.insert(e->virt, width, e);
         e->xlates = 0;
         free.pop_back();
     }
+    else if((e->flags & LARGE) != (flags & LARGE))
+    {
+        trie.remove(virt);
+        e->virt = virt & ~mask;
+        e->handle = trie.insert(e->virt, width, e);
+    }
 
-    e->phys = phys;
+    e->phys = NocAddr(phys.getAddr() & ~mask);
     e->flags = flags;
 
     DPRINTFS(DtuTlbWrite, (&dtu), "TLB insert for %p %s -> %p (%u xlates left)\n",
-            virt, decode_access(e->flags), phys.getAddr(), e->xlates);
+            e->virt, decode_access(e->flags), e->phys.getAddr(), e->xlates);
     inserts++;
 }
 

@@ -796,10 +796,10 @@ Dtu::startTranslate(size_t id,
 
         if(regs().get(ReqReg::XLATE_REQ) == 0)
         {
-            const Addr npagemask = ~static_cast<Addr>(DtuTlb::PAGE_MASK);
-            const Addr virtPage = coreXlates[id].virt & npagemask;
+            const Addr mask = DtuTlb::PAGE_MASK;
+            const Addr virtPage = coreXlates[id].virt & ~mask;
             regs().set(ReqReg::XLATE_REQ,
-                virtPage | coreXlates[id].access | (id << 4));
+                virtPage | coreXlates[id].access | (id << 5));
             coreXlates[id].ongoing = true;
 
             DPRINTF(DtuXlate, "Translation[%lu] started\n", id);
@@ -813,29 +813,26 @@ Dtu::startTranslate(size_t id,
 void
 Dtu::completeTranslate()
 {
-    const Addr npagemask = ~static_cast<Addr>(DtuTlb::PAGE_MASK);
-
     RegFile::reg_t resp = regs().get(ReqReg::XLATE_RESP);
     if (resp)
     {
-        size_t id = (resp >> 4) & 0x7;
+        size_t id = (resp >> 5) & 0x7;
+        Addr mask = (resp & DtuTlb::LARGE) ? DtuTlb::LPAGE_MASK
+                                           : DtuTlb::PAGE_MASK;
         assert(coreXlates[id].trans);
         assert(coreXlates[id].ongoing);
         DPRINTF(DtuXlate, "Translation[%lu] done\n", id);
 
-        NocAddr phys((resp & npagemask) |
-                     (coreXlates[id].virt & DtuTlb::PAGE_MASK));
-        uint perm = resp & DtuTlb::IRWX;
-        if (perm == 0)
+        NocAddr phys((resp & ~mask) | (coreXlates[id].virt & mask));
+        uint flags = resp & (DtuTlb::IRWX | DtuTlb::LARGE);
+        if (flags == 0)
         {
             coreXlates[id].trans->finished(false, phys);
             xlateFails++;
         }
         else
         {
-            tlb()->insert(coreXlates[id].virt & npagemask,
-                          NocAddr(phys.getAddr() & npagemask),
-                          perm);
+            tlb()->insert(coreXlates[id].virt, phys, flags);
             coreXlates[id].trans->finished(true, phys);
         }
 
@@ -849,9 +846,10 @@ Dtu::completeTranslate()
         {
             if (coreXlates[id].trans && !coreXlates[id].ongoing)
             {
-                const Addr virtPage = coreXlates[id].virt & ~npagemask;
+                const Addr mask = DtuTlb::PAGE_MASK;
+                const Addr virtPage = coreXlates[id].virt & ~mask;
                 regs().set(ReqReg::XLATE_REQ,
-                    virtPage | coreXlates[id].access | (id << 4));
+                    virtPage | coreXlates[id].access | (id << 5));
                 coreXlates[id].ongoing = true;
                 DPRINTF(DtuXlate, "Translation[%lu] started\n", id);
 

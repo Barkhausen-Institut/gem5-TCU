@@ -59,14 +59,17 @@ class DtuTlb
 
     enum : Addr
     {
-        PAGE_BITS    = 12,
-        PAGE_SIZE    = 1 << PAGE_BITS,
-        PAGE_MASK    = PAGE_SIZE - 1,
         PTE_BITS     = 3,
         PTE_SIZE     = 1 << PTE_BITS,
+        PAGE_BITS    = 12,
+        PAGE_SIZE    = 1UL << PAGE_BITS,
+        PAGE_MASK    = PAGE_SIZE - 1,
         LEVEL_CNT    = 4,
         LEVEL_BITS   = PAGE_BITS - PTE_BITS,
         LEVEL_MASK   = (1 << LEVEL_BITS) - 1,
+        LPAGE_BITS   = PAGE_BITS + LEVEL_BITS,
+        LPAGE_SIZE   = 1UL << LPAGE_BITS,
+        LPAGE_MASK   = LPAGE_SIZE - 1,
     };
 
     enum Result
@@ -84,7 +87,7 @@ class DtuTlb
         WRITE   = 2,
         EXEC    = 4,
         INTERN  = 8,
-        GONE    = 16,   // only for pagefaults
+        LARGE   = 16,
         INVALID = 32,
         RW      = READ | WRITE,
         RX      = READ | EXEC,

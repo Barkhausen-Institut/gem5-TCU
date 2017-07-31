@@ -69,7 +69,8 @@ class PtUnit
 
     BitUnion64(PageTableEntry)
         Bitfield<63, DtuTlb::PAGE_BITS> base;
-        Bitfield<3,0> ixwr;
+        Bitfield<4,0> lixwr;
+        Bitfield<4> l;
         Bitfield<3> i;
         Bitfield<2> x;
         Bitfield<1> w;
