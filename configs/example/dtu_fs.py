@@ -218,6 +218,10 @@ def createPE(noc, options, no, systemType, l1size, l2size, spmsize, dtupos, memP
 
     pe.dtu.coherent = options.coherent
     pe.dtu.num_endpoints = 12
+    if dtupos > 0:
+        pe.dtu.tlb_entries = 32
+    else:
+        pe.dtu.tlb_entries = 128
 
     # connection to noc
     pe.dtu.noc_master_port = noc.slave
