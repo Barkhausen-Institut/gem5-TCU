@@ -551,7 +551,7 @@ DtuAccelStream::tick()
         case State::STORE_MSG:
         {
             accSize = 0;
-            pkt = createPacket(BUF_ADDR,
+            pkt = createPacket(BUF_ADDR + bufSize,
                                sizeof(msg.msg),
                                MemCmd::WriteReq);
             memcpy(pkt->getPtr<uint8_t>(), (char*)&msg.msg, sizeof(msg.msg));
@@ -561,7 +561,7 @@ DtuAccelStream::tick()
         {
             pkt = createDtuCmdPkt(Dtu::Command::SEND,
                                   EP_SEND,
-                                  BUF_ADDR,
+                                  BUF_ADDR + bufSize,
                                   sizeof(msg.msg),
                                   0);
             break;
