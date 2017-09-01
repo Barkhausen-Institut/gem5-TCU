@@ -292,7 +292,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
     switch(state) {
       case LongPML4:
         DPRINTF(PageTableWalker,
-                "Got long mode PML4 entry %#016x.\n", (uint64_t)pte);
+                "Got long mode PML4 entry %#016x for %#016x.\n", (uint64_t)pte, vaddr);
         nextRead = ((uint64_t)pte & (mask(40) << 12)) + vaddr.longl3 * dataSize;
         doWrite = !pte.a;
         pte.a = 1;
@@ -308,7 +308,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
         break;
       case LongPDP:
         DPRINTF(PageTableWalker,
-                "Got long mode PDP entry %#016x.\n", (uint64_t)pte);
+                "Got long mode PDP entry %#016x for %#016x.\n", (uint64_t)pte, vaddr);
         nextRead = ((uint64_t)pte & (mask(40) << 12)) + vaddr.longl2 * dataSize;
         doWrite = !pte.a;
         pte.a = 1;
@@ -323,7 +323,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
         break;
       case LongPD:
         DPRINTF(PageTableWalker,
-                "Got long mode PD entry %#016x.\n", (uint64_t)pte);
+                "Got long mode PD entry %#016x for %#016x.\n", (uint64_t)pte, vaddr);
         doWrite = !pte.a;
         pte.a = 1;
         entry.writable = entry.writable && pte.w;
@@ -354,7 +354,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
         }
       case LongPTE:
         DPRINTF(PageTableWalker,
-                "Got long mode PTE entry %#016x.\n", (uint64_t)pte);
+                "Got long mode PTE entry %#016x for %#016x.\n", (uint64_t)pte, vaddr);
         doWrite = !pte.a;
         pte.a = 1;
         entry.writable = entry.writable && pte.w;
@@ -374,7 +374,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
         break;
       case PAEPDP:
         DPRINTF(PageTableWalker,
-                "Got legacy mode PAE PDP entry %#08x.\n", (uint32_t)pte);
+                "Got legacy mode PAE PDP entry %#08x for %#08x.\n", (uint32_t)pte, vaddr);
         nextRead = ((uint64_t)pte & (mask(40) << 12)) + vaddr.pael2 * dataSize;
         if (!pte.p) {
             doEndWalk = true;
@@ -385,7 +385,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
         break;
       case PAEPD:
         DPRINTF(PageTableWalker,
-                "Got legacy mode PAE PD entry %#08x.\n", (uint32_t)pte);
+                "Got legacy mode PAE PD entry %#08x for %#08x.\n", (uint32_t)pte, vaddr);
         doWrite = !pte.a;
         pte.a = 1;
         entry.writable = pte.w;
@@ -415,7 +415,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
         }
       case PAEPTE:
         DPRINTF(PageTableWalker,
-                "Got legacy mode PAE PTE entry %#08x.\n", (uint32_t)pte);
+                "Got legacy mode PAE PTE entry %#08x for %#08x.\n", (uint32_t)pte, vaddr);
         doWrite = !pte.a;
         pte.a = 1;
         entry.writable = entry.writable && pte.w;
@@ -435,7 +435,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
         break;
       case PSEPD:
         DPRINTF(PageTableWalker,
-                "Got legacy mode PSE PD entry %#08x.\n", (uint32_t)pte);
+                "Got legacy mode PSE PD entry %#08x for %#08x.\n", (uint32_t)pte, vaddr);
         doWrite = !pte.a;
         pte.a = 1;
         entry.writable = pte.w;
@@ -466,7 +466,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
         }
       case PD:
         DPRINTF(PageTableWalker,
-                "Got legacy mode PD entry %#08x.\n", (uint32_t)pte);
+                "Got legacy mode PD entry %#08x for %#08x.\n", (uint32_t)pte, vaddr);
         doWrite = !pte.a;
         pte.a = 1;
         entry.writable = pte.w;
@@ -483,7 +483,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
         break;
       case PTE:
         DPRINTF(PageTableWalker,
-                "Got legacy mode PTE entry %#08x.\n", (uint32_t)pte);
+                "Got legacy mode PTE entry %#08x for %#08x.\n", (uint32_t)pte, vaddr);
         doWrite = !pte.a;
         pte.a = 1;
         entry.writable = pte.w;
