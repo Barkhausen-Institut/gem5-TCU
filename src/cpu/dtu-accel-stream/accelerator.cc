@@ -217,7 +217,7 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
             {
                 const uint64_t *args =
                     reinterpret_cast<const uint64_t*>(
-                        pkt_data + sizeof(Dtu::MessageHeader));
+                        pkt_data + sizeof(MessageHeader));
 
                 Command cmd = static_cast<Command>(args[0]);
                 if (cmd == Command::INIT)

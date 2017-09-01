@@ -97,148 +97,57 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
     // if we want to reply, request the header first
     if (cmd.opcode == Dtu::Command::REPLY)
     {
-        offset = 0;
-        flagsPhys = 0;
-        requestHeader(cmd);
-        return;
+        RecvEp ep = dtu.regs().getRecvEp(epid);
+        int msgidx = ep.msgToIdx(cmd.arg);
+        auto &hd = dtu.regs().getHeader(ep.header + msgidx, RegAccess::DTU);
+
+        // now that we have the header, fill the info struct
+        assert(hd.flags & Dtu::REPLY_ENABLED);
+
+        info.targetCoreId = hd.senderCoreId;
+        info.targetVpeId  = hd.senderVpeId;
+        info.targetEpId   = hd.replyEpId;  // send message to the reply EP
+        info.replyEpId    = hd.senderEpId; // and grant credits to the sender
+
+        // the receiver of the reply should get the label that he has set
+        info.label        = hd.replyLabel;
+        // replies don't have replies. so, we don't need that
+        info.replyLabel   = 0;
+        // the pagefault flag is moved to the reply hd
+        info.flags        = hd.flags & Dtu::PAGEFAULT;
+        info.unlimcred    = false;
+        info.ready        = true;
     }
-
-    // check if we have enough credits
-    const DataReg data = dtu.regs().getDataReg();
-    SendEp ep = dtu.regs().getSendEp(epid);
-
-    if (ep.curcrd != Dtu::CREDITS_UNLIM && ep.curcrd < ep.maxMsgSize)
+    else
     {
-        DPRINTFS(Dtu, (&dtu),
-            "EP%u: not enough credits (%lu) to send message (%lu)\n",
-            epid, ep.curcrd, ep.maxMsgSize);
-        dtu.scheduleFinishOp(Cycles(1), Dtu::Error::MISS_CREDITS);
-        return;
-    }
+        // check if we have enough credits
+        const DataReg data = dtu.regs().getDataReg();
+        SendEp ep = dtu.regs().getSendEp(epid);
 
-    // TODO error handling
-    assert(data.size + sizeof(Dtu::MessageHeader) <= ep.maxMsgSize);
-
-    // fill the info struct and start the transfer
-    info.targetCoreId = ep.targetCore;
-    info.targetVpeId  = ep.vpeId;
-    info.targetEpId   = ep.targetEp;
-    info.label        = ep.label;
-    info.replyLabel   = dtu.regs().get(CmdReg::REPLY_LABEL);
-    info.replyEpId    = cmd.arg;
-    info.flags        = 0;
-    info.unlimcred    = ep.curcrd == Dtu::CREDITS_UNLIM;
-    info.ready        = true;
-
-    startXfer(cmd);
-}
-
-void
-MessageUnit::requestHeader(const Dtu::Command::Bits& cmd)
-{
-    assert(offset < sizeof(Dtu::MessageHeader));
-
-    RecvEp ep = dtu.regs().getRecvEp(cmd.epid);
-    Addr msg = cmd.arg;
-
-    int msgidx = ep.msgToIdx(msg);
-    Addr msgOff = ep.msgSize * msgidx;
-    Addr msgAddr = ep.bufAddr + msgOff;
-
-    assert(msgidx != RecvEp::MAX_MSGS);
-    assert(ep.isOccupied(msgidx));
-
-    DPRINTFS(DtuBuf, (&dtu),
-        "EP%d: requesting header for reply on message @ %p (idx=%d)\n",
-        cmd.epid, msgAddr, msgidx);
-
-    msgAddr += offset;
-
-    NocAddr phys(msgAddr);
-    if (dtu.tlb())
-    {
-        uint access = DtuTlb::READ | DtuTlb::INTERN;
-        DtuTlb::Result res = dtu.tlb()->lookup(msgAddr, access, &phys);
-        if (res != DtuTlb::HIT)
+        if (ep.curcrd != Dtu::CREDITS_UNLIM && ep.curcrd < ep.maxMsgSize)
         {
-            assert(res != DtuTlb::NOMAP);
-
-            Translation *trans = new Translation(*this, msgAddr, cmd.epid);
-            dtu.startTranslate(dtu.bufCount, msgAddr, DtuTlb::READ, trans);
+            DPRINTFS(Dtu, (&dtu),
+                "EP%u: not enough credits (%lu) to send message (%lu)\n",
+                epid, ep.curcrd, ep.maxMsgSize);
+            dtu.scheduleFinishOp(Cycles(1), Dtu::Error::MISS_CREDITS);
             return;
         }
+
+        // TODO error handling
+        assert(data.size + sizeof(MessageHeader) <= ep.maxMsgSize);
+
+        // fill the info struct and start the transfer
+        info.targetCoreId = ep.targetCore;
+        info.targetVpeId  = ep.vpeId;
+        info.targetEpId   = ep.targetEp;
+        info.label        = ep.label;
+        info.replyLabel   = dtu.regs().get(CmdReg::REPLY_LABEL);
+        info.replyEpId    = cmd.arg;
+        info.flags        = 0;
+        info.unlimcred    = ep.curcrd == Dtu::CREDITS_UNLIM;
+        info.ready        = true;
     }
 
-    requestHeaderWithPhys(cmd.epid, true, msgAddr, phys);
-}
-
-void
-MessageUnit::requestHeaderWithPhys(unsigned epid,
-                                   bool success,
-                                   Addr virt,
-                                   const NocAddr &phys)
-{
-    // TODO handle error
-    assert(success);
-
-    // take care that we might need 2 loads to request the header
-    Addr blockOff = (phys.getAddr() + offset) & (dtu.blockSize - 1);
-    Addr reqSize = std::min(dtu.blockSize - blockOff,
-                            sizeof(Dtu::MessageHeader) - offset);
-
-    auto pkt = dtu.generateRequest(phys.getAddr(),
-                                   reqSize,
-                                   MemCmd::ReadReq);
-
-    dtu.sendMemRequest(pkt,
-                       virt,
-                       epid,
-                       Dtu::MemReqType::HEADER,
-                       Cycles(1));
-}
-
-void
-MessageUnit::recvFromMem(const Dtu::Command::Bits& cmd, PacketPtr pkt)
-{
-    // simply collect the header in a member for simplicity
-    assert(offset + pkt->getSize() <= sizeof(header));
-    memcpy(reinterpret_cast<char*>(&header) + offset,
-           pkt->getPtr<char*>(),
-           pkt->getSize());
-
-    // we need the physical address of the flags field later
-    static_assert(offsetof(Dtu::MessageHeader, flags) == 0, "Header changed");
-    static_assert(sizeof(header.flags) == 1, "Header changed");
-    if (offset == 0)
-        flagsPhys = pkt->getAddr();
-
-    offset += pkt->getSize();
-
-    // do we have the complete header yet? if not, request the rest
-    if (offset < sizeof(Dtu::MessageHeader))
-    {
-        requestHeader(cmd);
-        return;
-    }
-
-    // now that we have the header, fill the info struct
-    assert(header.flags & Dtu::REPLY_ENABLED);
-
-    info.targetCoreId = header.senderCoreId;
-    info.targetVpeId  = header.senderVpeId;
-    info.targetEpId   = header.replyEpId;  // send message to the reply EP
-    info.replyEpId    = header.senderEpId; // and grant credits to the sender
-
-    // the receiver of the reply should get the label that he has set
-    info.label        = header.replyLabel;
-    // replies don't have replies. so, we don't need that
-    info.replyLabel   = 0;
-    // the pagefault flag is moved to the reply header
-    info.flags        = header.flags & Dtu::PAGEFAULT;
-    info.unlimcred    = false;
-    info.ready        = true;
-
-    // now start the transfer
     startXfer(cmd);
 }
 
@@ -261,7 +170,7 @@ MessageUnit::startXfer(const Dtu::Command::Bits& cmd)
              data.addr,
              data.size);
 
-    Dtu::MessageHeader* header = new Dtu::MessageHeader;
+    MessageHeader* header = new MessageHeader;
 
     if (cmd.opcode == Dtu::Command::REPLY)
         header->flags = Dtu::REPLY_FLAG | Dtu::GRANT_CREDITS_FLAG;
@@ -300,7 +209,7 @@ MessageUnit::startXfer(const Dtu::Command::Bits& cmd)
         "  dst: pe=%u vpe=%u ep=%u lbl=%#018lx\n",
         info.targetCoreId, info.targetVpeId, info.targetEpId, info.label);
 
-    assert(data.size + sizeof(Dtu::MessageHeader) <= dtu.maxNocPacketSize);
+    assert(data.size + sizeof(MessageHeader) <= dtu.maxNocPacketSize);
 
     NocAddr nocAddr(info.targetCoreId, info.targetEpId);
     uint flags = XferUnit::MESSAGE;
@@ -333,21 +242,17 @@ MessageUnit::SendTransferEvent::transferStart()
 void
 MessageUnit::finishMsgReply(Dtu::Error error, unsigned epid, Addr msgAddr)
 {
-    assert(flagsPhys != 0);
+    RecvEp ep = dtu.regs().getRecvEp(epid);
+    int msgidx = ep.msgToIdx(msgAddr);
 
-    // use a functional request here; we don't need to wait for it anyway
-    auto hpkt = dtu.generateRequest(flagsPhys,
-                                    sizeof(header.flags),
-                                    MemCmd::WriteReq);
+    ReplyHeader hd = dtu.regs().getHeader(ep.header + msgidx, RegAccess::DTU);
 
-    assert(header.flags & Dtu::REPLY_ENABLED);
-    header.flags &= ~Dtu::REPLY_ENABLED;
+    assert(hd.flags & Dtu::REPLY_ENABLED);
+    hd.flags &= ~Dtu::REPLY_ENABLED;
     if (error == Dtu::Error::VPE_GONE)
-        header.flags |= Dtu::REPLY_FAILED;
-    memcpy(hpkt->getPtr<uint8_t>(), &header.flags, sizeof(header.flags));
+        hd.flags |= Dtu::REPLY_FAILED;
 
-    dtu.sendFunctionalMemRequest(hpkt);
-    dtu.freeRequest(hpkt);
+    dtu.regs().setHeader(ep.header + msgidx, RegAccess::DTU, hd);
 
     // on VPE_GONE, the kernel wants to reply later; so don't free the slot
     if (error != Dtu::Error::VPE_GONE)
@@ -490,7 +395,7 @@ MessageUnit::ackMessage(unsigned epId, Addr msgAddr)
 void
 MessageUnit::finishMsgReceive(unsigned epId,
                               Addr msgAddr,
-                              const Dtu::MessageHeader *header,
+                              const MessageHeader *header,
                               Dtu::Error error)
 {
     RecvEp ep = dtu.regs().getRecvEp(epId);
@@ -518,6 +423,7 @@ MessageUnit::finishMsgReceive(unsigned epId,
 
         ep.msgCount++;
         ep.setUnread(idx, true);
+        dtu.regs().setHeader(ep.header + idx, RegAccess::DTU, *header);
     }
     else
         ep.setOccupied(idx, false);
@@ -534,7 +440,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId, uint flags)
     assert(pkt->isWrite());
     assert(pkt->hasData());
 
-    Dtu::MessageHeader* header = pkt->getPtr<Dtu::MessageHeader>();
+    MessageHeader* header = pkt->getPtr<MessageHeader>();
 
     receivedBytes.sample(header->length);
 
@@ -618,7 +524,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId, uint flags)
 void
 MessageUnit::ReceiveTransferEvent::transferDone(Dtu::Error result)
 {
-    Dtu::MessageHeader* header = pkt->getPtr<Dtu::MessageHeader>();
+    MessageHeader* header = pkt->getPtr<MessageHeader>();
     NocAddr addr(pkt->getAddr());
 
     msgUnit->finishMsgReceive(addr.offset, msgAddr, header, result);

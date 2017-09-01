@@ -227,7 +227,7 @@ PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, uint access)
         ep = dtu.regs().getSendEp(pfep);
     }
 
-    size_t size = sizeof(Dtu::MessageHeader) + sizeof(PagefaultMessage);
+    size_t size = sizeof(MessageHeader) + sizeof(PagefaultMessage);
     assert(size <= ep.maxMsgSize);
 
     if (pfqueue.empty())
@@ -251,7 +251,7 @@ PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, uint access)
                                    MemCmd::WriteReq);
 
     // build the message and put it in the packet
-    Dtu::MessageHeader header;
+    MessageHeader header;
     header.length = sizeof(PagefaultMessage);
     header.flags = Dtu::PAGEFAULT | Dtu::REPLY_ENABLED;
     header.label = ep.label;
@@ -301,7 +301,7 @@ PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, uint access)
 void
 PtUnit::sendingPfFailed(PacketPtr pkt, int error)
 {
-    Dtu::MessageHeader* header = pkt->getPtr<Dtu::MessageHeader>();
+    MessageHeader* header = pkt->getPtr<MessageHeader>();
     uint64_t id = header->label;
     TranslateEvent *ev = getPfEvent(id);
 
@@ -327,9 +327,9 @@ PtUnit::sendingPfFailed(PacketPtr pkt, int error)
 void
 PtUnit::finishPagefault(PacketPtr pkt)
 {
-    Dtu::MessageHeader* header = pkt->getPtr<Dtu::MessageHeader>();
+    MessageHeader* header = pkt->getPtr<MessageHeader>();
     uint64_t *errorPtr = reinterpret_cast<uint64_t*>(header + 1);
-    size_t expSize = sizeof(Dtu::MessageHeader) + sizeof(uint64_t);
+    size_t expSize = sizeof(MessageHeader) + sizeof(uint64_t);
     int error = pkt->getSize() == expSize ? *errorPtr : -1;
 
     uint64_t id = header->label;

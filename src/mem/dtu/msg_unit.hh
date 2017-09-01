@@ -51,29 +51,9 @@ class MessageUnit
         uint64_t replyLabel;
     };
 
-    struct Translation : PtUnit::Translation
-    {
-        MessageUnit& unit;
-
-        Addr virt;
-
-        unsigned epId;
-
-        Translation(MessageUnit& _unit, Addr _virt, unsigned _epId)
-            : unit(_unit), virt(_virt), epId(_epId)
-        {}
-
-        void finished(bool success, const NocAddr &phys) override
-        {
-            unit.requestHeaderWithPhys(epId, success, virt, phys);
-
-            delete this;
-        }
-    };
-
     class SendTransferEvent : public MemoryUnit::WriteTransferEvent
     {
-        Dtu::MessageHeader *header;
+        MessageHeader *header;
 
       public:
 
@@ -82,7 +62,7 @@ class MessageUnit
                           uint flags,
                           NocAddr dest,
                           uint vpeId,
-                          Dtu::MessageHeader *_header)
+                          MessageHeader *_header)
             : WriteTransferEvent(local, size, flags, dest, vpeId),
               header(_header)
         {}
@@ -109,8 +89,7 @@ class MessageUnit
         void transferDone(Dtu::Error result) override;
     };
 
-    MessageUnit(Dtu &_dtu)
-      : dtu(_dtu), info(), header(), flagsPhys(), offset() {}
+    MessageUnit(Dtu &_dtu) : dtu(_dtu), info() {}
 
     void regStats();
 
@@ -118,11 +97,6 @@ class MessageUnit
      * Start message transmission -> Mem request
      */
     void startTransmission(const Dtu::Command::Bits& cmd);
-
-    /**
-     * Received response from local memory (header lookup)
-     */
-    void recvFromMem(const Dtu::Command::Bits& cmd, PacketPtr pkt);
 
     /**
      * Received a message from NoC -> Mem request
@@ -159,18 +133,11 @@ class MessageUnit
      */
     void finishMsgReceive(unsigned epId,
                           Addr msgAddr,
-                          const Dtu::MessageHeader *header,
+                          const MessageHeader *header,
                           Dtu::Error error);
 
   private:
     int allocSlot(size_t msgSize, unsigned epid, RecvEp &ep);
-
-    void requestHeader(const Dtu::Command::Bits& cmd);
-
-    void requestHeaderWithPhys(unsigned epid,
-                               bool success,
-                               Addr virt,
-                               const NocAddr &phys);
 
     void startXfer(const Dtu::Command::Bits& cmd);
 
@@ -179,10 +146,6 @@ class MessageUnit
     Dtu &dtu;
 
     MsgInfo info;
-
-    Dtu::MessageHeader header;
-    Addr flagsPhys;
-    Addr offset;
 
     Stats::Histogram sentBytes;
     Stats::Histogram repliedBytes;

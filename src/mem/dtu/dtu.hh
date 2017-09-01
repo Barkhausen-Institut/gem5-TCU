@@ -78,23 +78,6 @@ class Dtu : public BaseDtu
         ABORT               = 7,
     };
 
-    struct MessageHeader
-    {
-         // if bit 0 is set its a reply, if bit 1 is set we grant credits
-        uint8_t flags;
-        uint8_t senderCoreId;
-        uint8_t senderEpId;
-         // for a normal message this is the reply epId
-        // for a reply this is the enpoint that receives credits
-        uint8_t replyEpId;
-        uint16_t length;
-        uint16_t senderVpeId;
-
-        // both should be large enough for pointers.
-        uint64_t label;
-        uint64_t replyLabel;
-    } M5_ATTR_PACKED;
-
     enum class NocPacketType
     {
         MESSAGE,
@@ -120,7 +103,6 @@ class Dtu : public BaseDtu
     enum class MemReqType
     {
         TRANSFER,
-        HEADER,
         TRANSLATION,
     };
 

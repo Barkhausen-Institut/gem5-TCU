@@ -81,7 +81,7 @@ Dtu::Dtu(DtuParams* p)
   : BaseDtu(p),
     masterId(p->system->getMasterId(name())),
     system(p->system),
-    regFile(*this, name() + ".regFile", p->num_endpoints),
+    regFile(*this, name() + ".regFile", p->num_endpoints, p->num_header),
     connector(p->connector),
     tlBuf(p->tlb_entries > 0 ? new DtuTlb(*this, p->tlb_entries) : NULL),
     msgUnit(new MessageUnit(*this)),
@@ -951,10 +951,6 @@ Dtu::completeMemRequest(PacketPtr pkt)
     {
         case MemReqType::TRANSFER:
             xferUnit->recvMemResponse(senderState->data, pkt);
-            break;
-
-        case MemReqType::HEADER:
-            msgUnit->recvFromMem(getCommand(), pkt);
             break;
 
         case MemReqType::TRANSLATION:

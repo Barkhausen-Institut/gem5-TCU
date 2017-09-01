@@ -85,7 +85,7 @@ constexpr unsigned numCmdRegs = 5;
 // Ep Registers:
 //
 // 0. TYPE[3] (for all)
-//    receive: BUF_RD_POS[6] | BUF_WR_POS[6] | BUF_MSG_SIZE[16] | BUF_SIZE[16] | BUF_MSG_CNT[16]
+//    receive: BUF_RD_POS[6] | BUF_WR_POS[6] | BUF_MSG_SIZE[16] | BUF_SIZE[16] | BUF_HEADER[11] BUF_MSG_CNT[5]
 //    send:    VPE_ID[32] | MAX_MSG_SIZE[16]
 //    mem:     REQ_MEM_SIZE[61]
 // 1. receive: BUF_ADDR[64]
@@ -183,7 +183,8 @@ struct RecvEp
     uint64_t bufAddr;
     uint16_t msgSize;
     uint16_t size;
-    uint16_t msgCount;
+    uint16_t header;
+    uint8_t msgCount;
     uint32_t occupied;
     uint32_t unread;
 };
@@ -223,6 +224,27 @@ struct DataReg
     uint16_t size;
 };
 
+struct ReplyHeader
+{
+     // if bit 0 is set its a reply, if bit 1 is set we grant credits
+    uint8_t flags;
+    uint8_t senderCoreId;
+    uint8_t senderEpId;
+     // for a normal message this is the reply epId
+    // for a reply this is the enpoint that receives credits
+    uint8_t replyEpId;
+    uint16_t length;
+    uint16_t senderVpeId;
+
+    // should be large enough for pointers.
+    uint64_t replyLabel;
+} M5_ATTR_PACKED;
+
+struct MessageHeader : public ReplyHeader
+{
+    uint64_t label;
+} M5_ATTR_PACKED;
+
 class Dtu;
 
 class RegFile
@@ -243,7 +265,8 @@ class RegFile
         WROTE_EXT_REQ   = 16,
     };
 
-    RegFile(Dtu &dtu, const std::string& name, unsigned numEndpoints);
+    RegFile(Dtu &dtu, const std::string& name, unsigned numEndpoints,
+            unsigned _numHeader);
 
     bool hasFeature(Features feature) const
     {
@@ -284,6 +307,10 @@ class RegFile
 
     MemEp getMemEp(unsigned epId, bool print = true) const;
 
+    const ReplyHeader &getHeader(size_t idx, RegAccess access) const;
+
+    void setHeader(size_t idx, RegAccess access, const ReplyHeader &hd);
+
     /// returns which command registers have been written
     Result handleRequest(PacketPtr pkt, bool isCpuRequest);
 
@@ -299,6 +326,8 @@ class RegFile
 
     void printEpAccess(unsigned epId, bool read, bool cpu) const;
 
+    void printHeaderAccess(size_t idx, bool read, RegAccess access) const;
+
     Addr getSize() const;
 
   private:
@@ -312,6 +341,8 @@ class RegFile
     std::vector<reg_t> cmdRegs;
 
     std::vector<std::vector<reg_t>> epRegs;
+
+    std::vector<ReplyHeader> header;
 
     const unsigned numEndpoints;
 

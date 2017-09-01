@@ -297,7 +297,7 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
             {
                 const uint64_t *args =
                     reinterpret_cast<const uint64_t*>(
-                        pkt_data + sizeof(Dtu::MessageHeader));
+                        pkt_data + sizeof(MessageHeader));
 
                 DPRINTF(DtuAccelHash, "  cmd=%lld arg1=%#llx arg2=%#llx\n",
                     args[0], args[1], args[2]);
