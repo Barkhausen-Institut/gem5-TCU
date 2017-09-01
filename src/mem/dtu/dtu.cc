@@ -477,9 +477,6 @@ Dtu::executeExternCommand(PacketPtr pkt)
 {
     ExternCommand cmd = getExternCommand();
 
-    DPRINTF(DtuCmd, "Executing extern command %s with arg=%p\n",
-            extCmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg);
-
     extCommands[static_cast<size_t>(cmd.opcode)]++;
 
     Cycles delay(1);
@@ -528,6 +525,10 @@ Dtu::executeExternCommand(PacketPtr pkt)
         senderState->result = result;
         schedNocResponse(pkt, clockEdge(delay));
     }
+
+    DPRINTF(DtuCmd, "Executing extern command %s with arg=%p -> %u\n",
+            extCmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg,
+            (unsigned)result);
 
     // set external command back to IDLE
     regFile.set(DtuReg::EXT_CMD,
