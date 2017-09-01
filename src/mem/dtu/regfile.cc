@@ -431,6 +431,9 @@ RegFile::printEpAccess(unsigned epId, bool read, bool cpu) const
 void
 RegFile::printHeaderAccess(size_t idx, bool read, RegAccess access) const
 {
+    if(!isTraceEnabled(read))
+        return;
+
     const ReplyHeader &hd = header[idx];
     DPRINTFN("%s%s HD%lu%14s: fl=%#x sdpe=%u sdvpe=%u sdep=%u rpep=%u rplbl=%#llx\n",
              regAccessName(access), read ? "<-" : "->",
