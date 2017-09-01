@@ -42,7 +42,6 @@ enum class DtuReg : Addr
     FEATURES,
     ROOT_PT,
     PF_EP,
-    RW_BARRIER,
     VPE_ID,
     CUR_TIME,
     IDLE_TIME,
@@ -58,7 +57,7 @@ enum class Features
     IRQ_WAKEUP      = 1 << 3,
 };
 
-constexpr unsigned numDtuRegs = 9;
+constexpr unsigned numDtuRegs = 8;
 
 // registers for external requests and DTU requests
 enum class ReqReg : Addr

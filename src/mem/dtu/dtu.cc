@@ -135,7 +135,6 @@ Dtu::Dtu(DtuParams* p)
     else
         coherent = false;
 
-    regs().set(DtuReg::RW_BARRIER, -1);
     regs().set(DtuReg::VPE_ID, INVALID_VPE_ID);
 }
 
@@ -1035,11 +1034,6 @@ Dtu::handleCpuRequest(PacketPtr pkt,
             res = false;
         else
             forwardRequestToRegFile(pkt, true);
-    }
-    else if(pkt->isWrite() && virt >= regFile.get(DtuReg::RW_BARRIER))
-    {
-        DPRINTF(Dtu, "Warning: ignoring write access above rwBarrier\n");
-        res = false;
     }
     else
     {

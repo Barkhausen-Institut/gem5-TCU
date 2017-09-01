@@ -102,8 +102,6 @@ MemoryUnit::startRead(const Dtu::Command::Bits& cmd)
         return;
     }
 
-    Addr rwBarrier = dtu.regs().get(DtuReg::RW_BARRIER);
-
     DataReg data = dtu.regs().getDataReg();
     Addr offset = cmd.arg;
     Addr size = std::min(static_cast<Addr>(data.size), dtu.maxNocPacketSize);
@@ -117,8 +115,6 @@ MemoryUnit::startRead(const Dtu::Command::Bits& cmd)
 
     // TODO error handling
     assert(size > 0);
-    assert(data.addr < rwBarrier);
-    assert(data.addr + size <= rwBarrier);
     assert(size + offset >= size);
     assert(size + offset <= ep.remoteSize);
 
