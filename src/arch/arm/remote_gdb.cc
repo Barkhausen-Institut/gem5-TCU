@@ -297,7 +297,7 @@ RemoteGDB::BaseGdbRegCache*
 RemoteGDB::gdbRegs()
 {
     if (inAArch64(context))
-        return &regCache32;
-    else
         return &regCache64;
+    else
+        return &regCache32;
 }
