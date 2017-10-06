@@ -515,19 +515,12 @@ def createRoot(options):
         # A dummy system for the CoherentXBar
         root.noc_system = System()
 
-        root.noc = CoherentXBar(forward_latency=0,
-                                frontend_latency=1,
-                                response_latency=1,
-                                snoop_response_latency=1,
-                                system=root.noc_system,
-                                width=12)
+        root.noc = SystemXBar(system=root.noc_system,
+                              point_of_coherency=False)
 
         root.noc_system.system_port = root.noc.slave
     else:
-        root.noc = NoncoherentXBar(forward_latency=0,
-                                   frontend_latency=1,
-                                   response_latency=1,
-                                   width=12)
+        root.noc = IOXBar()
 
     # create a dummy platform and system for the UART
     root.platform = IOPlatform()
