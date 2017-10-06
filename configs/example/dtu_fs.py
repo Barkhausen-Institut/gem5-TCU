@@ -276,7 +276,7 @@ def createPE(noc, options, no, systemType, l1size, l2size, spmsize, dtupos, memP
             pe.l1icache.cpu_side = pe.dtu.icache_master_port
             pe.l1dcache.cpu_side = pe.dtu.dcache_master_port
         else:
-            pe.iocache = L1_DCache(size='4kB')
+            pe.iocache = L1_DCache(size='8kB')
             pe.iocache.tag_latency = 4
             pe.iocache.data_latency = 4
             pe.iocache.response_latency = 4
