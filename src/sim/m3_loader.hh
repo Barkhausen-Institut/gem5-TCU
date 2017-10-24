@@ -44,8 +44,8 @@ class M3Loader
     static const size_t MAX_PES         = 64;
     static const size_t RT_SIZE         = 0x2000;
     static const uintptr_t RT_START     = 0x6000;
-    static const size_t STACK_SIZE      = 0x4000;
-    static const uintptr_t STACK_AREA   = RT_START + RT_SIZE;
+    static const size_t STACK_SIZE      = 0x8000;
+    static const uintptr_t STACK_AREA   = RT_START + RT_SIZE + 0x1000;
     static const size_t HEAP_SIZE       = 0x1000;
 
     struct BootModule
