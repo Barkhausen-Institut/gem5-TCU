@@ -72,11 +72,14 @@ class M3Loader
     struct StartEnv
     {
         uint64_t coreid;
+        uint32_t pe;
         uint32_t argc;
         uint64_t argv;
-
         uint64_t sp;
         uint64_t entry;
+        uint64_t heapsize;
+        uint64_t kenv;
+
         uint64_t lambda;
         uint32_t pager_sess;
         uint32_t pager_sgate;
@@ -90,12 +93,7 @@ class M3Loader
         uint64_t eps;
         uint64_t caps;
         uint64_t exit;
-        uint64_t heapsize;
-
         uint64_t backend;
-        uint64_t kenv;
-        uint32_t pe;
-
         uint64_t isr64_handler;
     } M5_ATTR_PACKED;
 
