@@ -346,6 +346,12 @@ MSHR::handleSnoop(PacketPtr pkt, Counter _order)
 {
     DPRINTF(Cache, "%s for %s\n", __func__, pkt->print());
 
+    // TODO this is a hack to make it work for me. I guess, it only fixes the
+    // symptom, but not the cause (without it, the following panic triggers).
+    if (pkt->cmd == MemCmd::WriteReq) {
+        return false;
+    }
+
     // when we snoop packets the needsWritable and isInvalidate flags
     // should always be the same, however, this assumes that we never
     // snoop writes as they are currently not marked as invalidations
