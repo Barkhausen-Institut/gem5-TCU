@@ -49,6 +49,7 @@ const char *RegFile::dtuRegNames[] = {
     "MSG_CNT",
     "EXT_CMD",
     "CLEAR_IRQ",
+    "CLOCK",
 };
 
 const char *RegFile::reqRegNames[] = {
@@ -136,6 +137,8 @@ RegFile::get(DtuReg reg, RegAccess access) const
 
     if (reg == DtuReg::CUR_TIME)
         value = dtu.curCycle();
+    else if (reg == DtuReg::CLOCK)
+        value = dtu.frequency();
     else
         value = dtuRegs[static_cast<Addr>(reg)];
 

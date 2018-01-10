@@ -48,6 +48,7 @@ enum class DtuReg : Addr
     MSG_CNT,
     EXT_CMD,
     CLEAR_IRQ,
+    CLOCK,
 };
 
 enum class Features
@@ -58,7 +59,7 @@ enum class Features
     IRQ_WAKEUP      = 1 << 3,
 };
 
-constexpr unsigned numDtuRegs = 9;
+constexpr unsigned numDtuRegs = 10;
 
 // registers for external requests and DTU requests
 enum class ReqReg : Addr
