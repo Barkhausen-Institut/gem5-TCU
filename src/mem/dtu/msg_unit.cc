@@ -453,7 +453,6 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId, uint flags)
 
     NocAddr addr(pkt->getAddr());
     unsigned epId = addr.offset;
-    RecvEp ep = dtu.regs().getRecvEp(epId);
 
     DPRINTFS(Dtu, (&dtu),
         "\e[1m[rv <- %u]\e[0m %lu bytes on EP%u\n",
@@ -490,6 +489,20 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId, uint flags)
         dtu.sendNocResponse(pkt);
         return Dtu::Error::VPE_GONE;
     }
+
+    // support credit receives without storing reply messages
+    if (epId >= dtu.numEndpoints &&
+        (header->flags & Dtu::REPLY_FLAG) &&
+        (header->flags & Dtu::GRANT_CREDITS_FLAG) &&
+        header->replyEpId < dtu.numEndpoints)
+    {
+        recvCredits(header->replyEpId);
+        dtu.sendNocResponse(pkt);
+        dtu.wakeupCore();
+        return Dtu::Error::NONE;
+    }
+
+    RecvEp ep = dtu.regs().getRecvEp(epId);
 
     int msgidx = allocSlot(pkt->getSize(), epId, ep);
     if (msgidx == ep.size)
