@@ -62,11 +62,15 @@ static const char *stateNames[] =
     "WRITE_DATA",
     "WRITE_DATA_WAIT",
 
-    "STORE_MSG",
-    "SEND_MSG",
+    "MSG_STORE",
+    "MSG_SEND",
     "MSG_WAIT",
+    "MSG_IDLE",
     "MSG_ERROR",
-    "ACK_MSG",
+
+    "REPLY_SEND",
+    "REPLY_WAIT",
+    "REPLY_ERROR",
 
     "CTX_SAVE",
     "CTX_SAVE_DONE",
@@ -231,8 +235,9 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                     outSize = args[2];
                     reportSize = args[3];
                     compTime = Cycles(args[4]);
+                    accSize = 0;
                     outOff = 0;
-                    state = State::ACK_MSG;
+                    state = State::REPLY_SEND;
                 }
                 else
                 {
@@ -314,21 +319,21 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                 if (cmd.opcode == 0)
                 {
                     if (accSize >= reportSize || (inOff == dataSize && eof))
-                        state = State::STORE_MSG;
+                        state = State::MSG_STORE;
                     else if (inOff == dataSize)
-                        state = State::ACK_MSG;
+                        state = State::REPLY_SEND;
                     else
                         state = State::READ_DATA;
                 }
                 break;
             }
 
-            case State::STORE_MSG:
+            case State::MSG_STORE:
             {
-                state = State::SEND_MSG;
+                state = State::MSG_SEND;
                 break;
             }
-            case State::SEND_MSG:
+            case State::MSG_SEND:
             {
                 state = State::MSG_WAIT;
                 break;
@@ -339,16 +344,26 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
                 if (cmd.opcode == 0)
                 {
-                    if (cmd.error == 0)
+                    auto err = static_cast<Dtu::Error>((long)cmd.error);
+                    if (err == Dtu::Error::NONE)
                     {
                         if (inOff == dataSize)
-                            state = State::ACK_MSG;
+                            state = State::REPLY_SEND;
                         else
                             state = State::READ_DATA;
                     }
-                    else
+                    else if (err == Dtu::Error::VPE_GONE)
                         state = State::MSG_ERROR;
+                    else if (err == Dtu::Error::MISS_CREDITS)
+                        state = State::MSG_IDLE;
+                    else
+                        state = State::MSG_SEND;
                 }
+                break;
+            }
+            case State::MSG_IDLE:
+            {
+                state = State::MSG_SEND;
                 break;
             }
             case State::MSG_ERROR:
@@ -359,9 +374,27 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                 break;
             }
 
-            case State::ACK_MSG:
+            case State::REPLY_SEND:
             {
-                state = State::CTX_CHECK;
+                state = State::REPLY_WAIT;
+                break;
+            }
+            case State::REPLY_WAIT:
+            {
+                Dtu::Command::Bits cmd =
+                    *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
+                if (cmd.opcode == 0)
+                {
+                    state = cmd.error == 0 ? State::CTX_CHECK
+                                           : State::REPLY_ERROR;
+                }
+                break;
+            }
+            case State::REPLY_ERROR:
+            {
+                sysc.start(sizeof(reply));
+                syscNext = State::CTX_CHECK;
+                state = State::SYSCALL;
                 break;
             }
 
@@ -379,6 +412,13 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
 
     // kick things into action again
     schedule(tickEvent, clockEdge(delay));
+}
+
+void
+DtuAccelStream::wakeup()
+{
+    if (!memPending && !tickEvent.scheduled())
+        schedule(tickEvent, clockEdge(Cycles(1)));
 }
 
 void
@@ -538,7 +578,10 @@ DtuAccelStream::tick()
             msg.msg.eof = eof && inOff == dataSize;
 
             accSize += lastSize;
-            outOff = (outOff + lastSize) % outSize;
+            if (msg.msg.eof)
+                outOff = 0;
+            else
+                outOff = (outOff + lastSize) % outSize;
             break;
         }
         case State::WRITE_DATA_WAIT:
@@ -548,7 +591,7 @@ DtuAccelStream::tick()
             break;
         }
 
-        case State::STORE_MSG:
+        case State::MSG_STORE:
         {
             accSize = 0;
             pkt = createPacket(BUF_ADDR + bufSize,
@@ -557,19 +600,25 @@ DtuAccelStream::tick()
             memcpy(pkt->getPtr<uint8_t>(), (char*)&msg.msg, sizeof(msg.msg));
             break;
         }
-        case State::SEND_MSG:
+        case State::MSG_SEND:
         {
             pkt = createDtuCmdPkt(Dtu::Command::SEND,
                                   EP_SEND,
                                   BUF_ADDR + bufSize,
                                   sizeof(msg.msg),
-                                  0);
+                                  // specify an invalid reply EP
+                                  0xFFFF);
             break;
         }
         case State::MSG_WAIT:
         {
             Addr regAddr = getRegAddr(CmdReg::COMMAND);
             pkt = createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
+            break;
+        }
+        case State::MSG_IDLE:
+        {
+            pkt = createDtuCmdPkt(Dtu::Command::SLEEP, 0, 0, 0, 0);
             break;
         }
         case State::MSG_ERROR:
@@ -586,11 +635,31 @@ DtuAccelStream::tick()
             break;
         }
 
-        case State::ACK_MSG:
+        case State::REPLY_SEND:
+        {
+            pkt = createDtuCmdPkt(Dtu::Command::REPLY,
+                                  EP_RECV,
+                                  BUF_ADDR + bufSize,
+                                  1,
+                                  msgAddr);
+            break;
+        }
+        case State::REPLY_WAIT:
         {
             Addr regAddr = getRegAddr(CmdReg::COMMAND);
-            uint64_t value = Dtu::Command::ACK_MSG | (EP_RECV << 4) | (msgAddr << 16);
-            pkt = createDtuRegPkt(regAddr, value, MemCmd::WriteReq);
+            pkt = createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
+            break;
+        }
+        case State::REPLY_ERROR:
+        {
+            reply.sys.opcode = 18;            /* FORWARD_REPLY */
+            reply.sys.rgate_sel = CAP_RGATE;
+            reply.sys.msgaddr = msgAddr;
+            reply.sys.len = sizeof(reply.msg);
+            reply.sys.event = 0;
+
+            pkt = createPacket(MSG_ADDR, sizeof(reply), MemCmd::WriteReq);
+            memcpy(pkt->getPtr<void>(), &reply, sizeof(reply));
             break;
         }
 

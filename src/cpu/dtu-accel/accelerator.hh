@@ -60,6 +60,9 @@ class DtuAccel : public MemObject
         connector = con;
     }
 
+    virtual void wakeup() {
+    }
+
     virtual void interrupt() = 0;
 
     virtual void reset() = 0;

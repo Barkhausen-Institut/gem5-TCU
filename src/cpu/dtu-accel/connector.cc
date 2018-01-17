@@ -39,6 +39,13 @@ DtuAccelConnector::DtuAccelConnector(const DtuAccelConnectorParams *p)
 }
 
 void
+DtuAccelConnector::wakeup()
+{
+    DPRINTF(DtuConnector, "Waking up accelerator\n");
+    acc->wakeup();
+}
+
+void
 DtuAccelConnector::setIrq()
 {
     DPRINTF(DtuConnector, "Sending interrupt signal to accelerator\n");

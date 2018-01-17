@@ -40,6 +40,8 @@ class DtuAccelConnector : public BaseConnector
 
     DtuAccelConnector(const DtuAccelConnectorParams *p);
 
+    void wakeup() override;
+
     void setIrq() override;
 
     void reset(Addr addr) override;

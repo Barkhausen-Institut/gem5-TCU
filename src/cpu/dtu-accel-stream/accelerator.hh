@@ -42,6 +42,8 @@ class DtuAccelStream : public DtuAccel
   public:
     DtuAccelStream(const DtuAccelStreamParams *p);
 
+    void wakeup() override;
+
     void interrupt() override;
 
     void reset() override;
@@ -67,11 +69,15 @@ class DtuAccelStream : public DtuAccel
         WRITE_DATA,
         WRITE_DATA_WAIT,
 
-        STORE_MSG,
-        SEND_MSG,
+        MSG_STORE,
+        MSG_SEND,
         MSG_WAIT,
+        MSG_IDLE,
         MSG_ERROR,
-        ACK_MSG,
+
+        REPLY_SEND,
+        REPLY_WAIT,
+        REPLY_ERROR,
 
         CTX_SAVE,
         CTX_SAVE_DONE,
@@ -138,6 +144,22 @@ class DtuAccelStream : public DtuAccel
             uint64_t eof;
         } M5_ATTR_PACKED msg;
     } M5_ATTR_PACKED msg;
+
+    struct
+    {
+        struct
+        {
+            uint64_t opcode;
+            uint64_t rgate_sel;
+            uint64_t msgaddr;
+            uint64_t len;
+            uint64_t event;
+        } M5_ATTR_PACKED sys;
+        struct
+        {
+            uint8_t dummy;
+        } M5_ATTR_PACKED msg;
+    } M5_ATTR_PACKED reply;
 
     SyscallSM sysc;
     State syscNext;
