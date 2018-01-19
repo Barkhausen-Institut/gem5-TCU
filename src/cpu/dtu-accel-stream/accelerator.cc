@@ -249,7 +249,16 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                     inOff = 0;
                     dataSize = args[2];
                     eof = args[3];
-                    state = State::READ_DATA;
+                    if (dataSize == 0)
+                    {
+                        msg.msg.cmd = static_cast<uint64_t>(Command::UPDATE);
+                        msg.msg.off = outOff;
+                        msg.msg.len = 0;
+                        msg.msg.eof = true;
+                        state = State::MSG_STORE;
+                    }
+                    else
+                        state = State::READ_DATA;
                 }
                 break;
             }
