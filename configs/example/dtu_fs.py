@@ -260,7 +260,7 @@ def createPE(noc, options, no, systemType, l1size, l2size, spmsize, dtupos, memP
 
             # use a crossbar to connect l1icache and l1dcache to l2cache
             pe.tol2bus = L2XBar()
-            pe.l2cache.cpu_side = pe.tol2bus.master
+            pe.l2cache.cpu_side = pe.tol2bus.default
             pe.l2cache.mem_side = pe.xbar.slave
 
             pe.l1icache.mem_side = pe.tol2bus.slave
@@ -288,7 +288,7 @@ def createPE(noc, options, no, systemType, l1size, l2size, spmsize, dtupos, memP
                 pe.iocache.mem_side = pe.xbar.slave
 
         # the DTU handles LLC misses
-        pe.dtu.cache_mem_slave_port = pe.xbar.master
+        pe.dtu.cache_mem_slave_port = pe.xbar.default
 
         # don't check whether the kernel is in memory because a PE does not have memory in this
         # case, but just a cache that is connected to a different PE

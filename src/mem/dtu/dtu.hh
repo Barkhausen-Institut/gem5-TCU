@@ -247,6 +247,9 @@ class Dtu : public BaseDtu
 
     void sendNocResponse(PacketPtr pkt);
 
+    Addr physToNoc(Addr phys) const;
+    Addr nocToPhys(Addr noc) const;
+
     void startTransfer(void *event, Cycles delay);
 
     void startTranslate(size_t id,

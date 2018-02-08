@@ -232,6 +232,7 @@ XferUnit::TransferEvent::translateDone(bool success, const NocAddr &phys)
     // local might have been moved forward
     // make sure to use the correct page offset
     Addr physAddr = phys.getAddr() & ~static_cast<Addr>(DtuTlb::PAGE_MASK);
+    physAddr = xfer->dtu.nocToPhys(physAddr);
     physAddr += local & DtuTlb::PAGE_MASK;
 
     while(freeSlots > 0 && pageRemaining > 0)

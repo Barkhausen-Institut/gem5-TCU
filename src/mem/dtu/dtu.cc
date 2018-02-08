@@ -263,9 +263,9 @@ Dtu::executeCommand(PacketPtr pkt)
     commands[static_cast<size_t>(cmd.opcode)]++;
 
     assert(cmd.epid < numEndpoints);
-    DPRINTF(DtuCmd, "Starting command %s with EP=%u, flags=%#x (id=%llu)\n",
+    DPRINTF(DtuCmd, "Starting command %s with EP=%u, flags=%#x arg=%#lx (id=%llu)\n",
             cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epid,
-            cmd.flags, cmdId);
+            cmd.flags, cmd.arg, cmdId);
 
     switch (cmd.opcode)
     {
@@ -765,6 +765,24 @@ Dtu::sendNocResponse(PacketPtr pkt)
     }
 }
 
+Addr
+Dtu::physToNoc(Addr phys) const
+{
+    Addr noc = phys;
+    if (!ptUnit)
+        noc = (noc & ~0x0000FF0000000000ULL) | ((noc & 0x0000FF0000000000ULL) << 16);
+    return noc;
+}
+
+Addr
+Dtu::nocToPhys(Addr noc) const
+{
+    Addr phys = noc;
+    if (!ptUnit)
+        phys = (phys & ~0xFF00000000000000ULL) | ((phys & 0xFF00000000000000ULL) >> 16);
+    return phys;
+}
+
 void
 Dtu::startTransfer(void *event, Cycles delay)
 {
@@ -889,11 +907,11 @@ Dtu::completeNocRequest(PacketPtr pkt)
         // as these target memory PEs, there can't be any error
         assert(senderState->result == Error::NONE);
 
-        NocAddr phys(pkt->getAddr());
+        NocAddr noc(pkt->getAddr());
         DPRINTF(DtuMem,
             "Finished %s request of LLC for %u bytes @ %d:%#x\n",
             pkt->isRead() ? "read" : "write",
-            pkt->getSize(), phys.coreId, phys.offset);
+            pkt->getSize(), noc.coreId, noc.offset);
 
         if(pkt->isRead())
             printPacket(pkt);
@@ -901,9 +919,17 @@ Dtu::completeNocRequest(PacketPtr pkt)
         if (dynamic_cast<InitSenderState*>(pkt->senderState))
         {
             // undo the change from handleCacheMemRequest
-            pkt->setAddr(phys.offset - memOffset);
-            pkt->req->setPaddr(phys.offset - memOffset);
+            pkt->setAddr(noc.offset - memOffset);
+            pkt->req->setPaddr(noc.offset - memOffset);
             pkt->popSenderState();
+        }
+
+        if (!ptUnit)
+        {
+            // translate NoC address to physical address
+            Addr phys = nocToPhys(pkt->getAddr());
+            pkt->setAddr(phys);
+            pkt->req->setPaddr(phys);
         }
 
         sendCacheMemResponse(pkt, true);
@@ -1139,22 +1165,31 @@ Dtu::handleCacheMemRequest(PacketPtr pkt, bool functional)
     if (pkt->cmd == MemCmd::BadAddressError)
         return false;
 
-    Addr old = pkt->getAddr();
-    NocAddr phys(pkt->getAddr());
+    Addr physAddr = pkt->getAddr();
+
+    // translate physical address to NoC address
+    Addr nocAddr = physAddr;
+    if (!ptUnit)
+    {
+        nocAddr = physToNoc(physAddr);
+        pkt->setAddr(nocAddr);
+    }
+
+    NocAddr noc(nocAddr);
     // special case: we check whether this is actually a NocAddr. this does
     // only happen when loading a program at startup, TLB misses in the core
     // and pseudoInst
-    if (!phys.valid)
+    if (!noc.valid)
     {
-        if (phys.offset > memSize)
+        if (noc.offset > memSize)
         {
             DPRINTF(DtuMem, "Ignoring %s request of LLC for %u bytes @ %d:%#x\n",
-                pkt->cmdString(), pkt->getSize(), phys.coreId, phys.offset);
+                pkt->cmdString(), pkt->getSize(), noc.coreId, noc.offset);
             return false;
         }
 
-        phys = NocAddr(memPe, memOffset + phys.offset);
-        pkt->setAddr(phys.getAddr());
+        noc = NocAddr(memPe, memOffset + noc.offset);
+        pkt->setAddr(noc.getAddr());
         if (!functional)
         {
             // remember that we did this change
@@ -1164,7 +1199,7 @@ Dtu::handleCacheMemRequest(PacketPtr pkt, bool functional)
 
     DPRINTF(DtuMem, "Handling %s request of LLC for %u bytes @ %d:%#x\n",
                     pkt->cmdString(),
-                    pkt->getSize(), phys.coreId, phys.offset);
+                    pkt->getSize(), noc.coreId, noc.offset);
 
     if(pkt->isWrite())
         printPacket(pkt);
@@ -1182,7 +1217,7 @@ Dtu::handleCacheMemRequest(PacketPtr pkt, bool functional)
     extMemReqs++;
 
     if (functional)
-        pkt->setAddr(old);
+        pkt->setAddr(physAddr);
 
     return true;
 }

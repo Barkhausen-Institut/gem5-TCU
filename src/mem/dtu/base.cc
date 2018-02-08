@@ -296,11 +296,7 @@ AddrRangeList
 BaseDtu::CacheMemSlavePort::getAddrRanges() const
 {
     AddrRangeList ranges;
-
-    // requests to the MMIO region never leave the PE
-    ranges.push_back(AddrRange(0, dtu.mmioRegion.start() - 1));
-    ranges.push_back(AddrRange(dtu.mmioRegion.end() + 1, 0x1000000000000000 - 1));
-
+    ranges.push_back(AddrRange(0, -1));
     return ranges;
 }
 
