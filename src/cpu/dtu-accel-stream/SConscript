@@ -30,6 +30,7 @@ Import('*')
 SimObject('DtuAccelStream.py')
 
 Source('accelerator.cc')
+Source('ctxsw.cc')
 Source('logic.cc')
 
 DebugFlag('DtuAccelStream')

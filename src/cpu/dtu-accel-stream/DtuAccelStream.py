@@ -34,3 +34,4 @@ class DtuAccelStream(DtuAccel):
     cxx_header = "cpu/dtu-accel-stream/accelerator.hh"
 
     algorithm = Param.Int(0, "The algorithm to use (0 = fft, 1 = toupper)")
+    buf_size = Param.MemorySize("4kB", "The size of the buffer")

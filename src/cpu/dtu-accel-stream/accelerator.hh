@@ -31,6 +31,7 @@
 #define __CPU_DTU_ACCEL_STREAM_ACCELERATOR_HH__
 
 #include "params/DtuAccelStream.hh"
+#include "cpu/dtu-accel-stream/ctxsw.hh"
 #include "cpu/dtu-accel-stream/logic.hh"
 #include "cpu/dtu-accel/accelerator.hh"
 #include "mem/dtu/connector/base.hh"
@@ -43,6 +44,16 @@ class DtuAccelStream : public DtuAccel
 
     static const Addr BUF_ADDR          = 0x6000;
 
+    static const unsigned EP_RECV       = 7;
+    static const unsigned EP_INPUT      = 8;
+    static const unsigned EP_OUTPUT     = 9;
+    static const unsigned EP_SEND       = 10;
+    static const unsigned EP_CTX        = 11;
+    static const unsigned CAP_RGATE     = 2;
+    static const unsigned CAP_SGATE     = 3;
+
+    static const size_t MSG_SIZE        = 64;
+
   public:
     DtuAccelStream(const DtuAccelStreamParams *p);
 
@@ -51,6 +62,10 @@ class DtuAccelStream : public DtuAccel
     void interrupt() override;
 
     void reset() override;
+
+    size_t stateSize() const override { return bufSize; }
+    size_t contextSize() const override { return sizeof(ctx); }
+    void *context() override { return &ctx; }
 
   private:
 
@@ -82,13 +97,7 @@ class DtuAccelStream : public DtuAccel
         REPLY_WAIT,
         REPLY_ERROR,
 
-        CTX_SAVE,
-        CTX_SAVE_DONE,
-        CTX_WAIT,
-
-        CTX_CHECK,
-        CTX_FLAGS,
-        CTX_RESTORE,
+        CTXSW,
 
         SYSCALL,
     };
@@ -102,7 +111,6 @@ class DtuAccelStream : public DtuAccel
     std::string getStateName() const;
 
     bool irqPending;
-    bool ctxSwPending;
     bool memPending;
 
     State state;
@@ -116,7 +124,6 @@ class DtuAccelStream : public DtuAccel
         Addr inOff;
         Addr outOff;
         Addr outSize;
-        Addr bufSize;
         Addr reportSize;
         Cycles compTime;
         Addr accSize;
@@ -160,10 +167,12 @@ class DtuAccelStream : public DtuAccel
         } M5_ATTR_PACKED msg;
     } M5_ATTR_PACKED reply;
 
+    size_t bufSize;
     SyscallSM sysc;
     State syscNext;
     YieldSM yield;
     AccelLogic logic;
+    ContextSwitch ctxsw;
 };
 
 #endif // __CPU_DTU_ACCEL_STREAM_ACCELERATOR_HH__

@@ -46,6 +46,10 @@ class DtuAccelHash : public DtuAccel
 
     void reset() override;
 
+    size_t stateSize() const override { return bufSize; }
+    size_t contextSize() const override { return sizeof(hash); }
+    void *context() override { return &hash; }
+
   private:
 
     /// main simulation loop

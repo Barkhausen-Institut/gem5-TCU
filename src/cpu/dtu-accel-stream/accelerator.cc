@@ -36,15 +36,6 @@
 
 #include <iomanip>
 
-static const unsigned EP_RECV       = 7;
-static const unsigned EP_INPUT      = 8;
-static const unsigned EP_OUTPUT     = 9;
-static const unsigned EP_SEND       = 10;
-static const unsigned CAP_RGATE     = 2;
-static const unsigned CAP_SGATE     = 3;
-
-static const size_t MSG_SIZE        = 64;
-
 static const char *stateNames[] =
 {
     "IDLE",
@@ -68,13 +59,7 @@ static const char *stateNames[] =
     "REPLY_WAIT",
     "REPLY_ERROR",
 
-    "CTX_SAVE",
-    "CTX_SAVE_DONE",
-    "CTX_WAIT",
-
-    "CTX_CHECK",
-    "CTX_FLAGS",
-    "CTX_RESTORE",
+    "CTXSW",
 
     "SYSCALL",
 };
@@ -82,14 +67,15 @@ static const char *stateNames[] =
 DtuAccelStream::DtuAccelStream(const DtuAccelStreamParams *p)
   : DtuAccel(p),
     irqPending(false),
-    ctxSwPending(false),
     memPending(false),
     state(State::IDLE),
-    lastState(State::CTX_CHECK), // something different
+    lastState(State::FETCH_MSG), // something different
     ctx(),
+    bufSize(p->buf_size),
     sysc(this),
     yield(this, &sysc),
-    logic(this, p->algorithm)
+    logic(this, p->algorithm),
+    ctxsw(this)
 {
     yield.start();
 }
@@ -104,6 +90,8 @@ std::string DtuAccelStream::getStateName() const
         os << ":" << sysc.stateName();
     else if (state == State::COMPUTE)
         os << ":" << logic.stateName();
+    else if (state == State::CTXSW)
+        os << ":" << ctxsw.stateName();
     return os.str();
 }
 
@@ -137,53 +125,15 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                 {
                     if (irqPending)
                         irqPending = false;
-                    state = State::CTX_CHECK;
+                    state = State::CTXSW;
                 }
                 break;
             }
 
-            case State::CTX_WAIT:
+            case State::CTXSW:
             {
-                assert(false);
-                break;
-            }
-
-            case State::CTX_SAVE:
-            {
-                state = State::CTX_SAVE_DONE;
-                break;
-            }
-            case State::CTX_SAVE_DONE:
-            {
-                state = State::CTX_WAIT;
-                ctxSwPending = true;
-                break;
-            }
-
-            case State::CTX_CHECK:
-            {
-                state = State::CTX_FLAGS;
-                break;
-            }
-            case State::CTX_FLAGS:
-            {
-                uint64_t val = *pkt->getConstPtr<uint64_t>();
-                if (val & RCTMuxCtrl::RESTORE)
-                    state = State::CTX_RESTORE;
-                else if (val & RCTMuxCtrl::STORE)
-                    state = State::CTX_SAVE;
-                else if (val & RCTMuxCtrl::WAITING)
-                    state = State::CTX_RESTORE;
-                else if (ctxSwPending)
-                    state = State::CTX_WAIT;
-                else
+                if(ctxsw.handleMemResp(pkt))
                     state = State::FETCH_MSG;
-                break;
-            }
-            case State::CTX_RESTORE:
-            {
-                ctxSwPending = false;
-                state = State::FETCH_MSG;
                 break;
             }
 
@@ -218,14 +168,12 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                 if (cmd == Command::INIT)
                 {
                     DPRINTF(DtuAccelStream,
-                            "  init(bufsz=%#llx, outsz=%#llx,"
-                            " reportsz=%#llx, comptime=%#llx)\n",
-                            args[1], args[2], args[3], args[4]);
+                            "  init(outsz=%#llx, reportsz=%#llx, comptime=%#llx)\n",
+                            args[1], args[2], args[3]);
 
-                    ctx.bufSize = args[1];
-                    ctx.outSize = args[2];
-                    ctx.reportSize = args[3];
-                    ctx.compTime = Cycles(args[4]);
+                    ctx.outSize = args[1];
+                    ctx.reportSize = args[2];
+                    ctx.compTime = Cycles(args[3]);
                     ctx.accSize = 0;
                     ctx.outOff = 0;
                     state = State::REPLY_SEND;
@@ -354,7 +302,7 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
                 if (cmd.opcode == 0)
                 {
-                    state = cmd.error == 0 ? State::CTX_CHECK
+                    state = cmd.error == 0 ? State::CTXSW
                                            : State::REPLY_ERROR;
                 }
                 break;
@@ -362,7 +310,7 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
             case State::REPLY_ERROR:
             {
                 sysc.start(sizeof(reply));
-                syscNext = State::CTX_CHECK;
+                syscNext = State::CTXSW;
                 state = State::SYSCALL;
                 break;
             }
@@ -395,9 +343,9 @@ DtuAccelStream::interrupt()
 {
     irqPending = true;
 
-    if (state == State::CTX_WAIT)
+    if (ctxsw.isWaiting())
     {
-        state = State::CTX_CHECK;
+        ctxsw.restart();
         if (!tickEvent.scheduled())
             schedule(tickEvent, clockEdge(Cycles(1)));
     }
@@ -435,39 +383,9 @@ DtuAccelStream::tick()
             break;
         }
 
-        case State::CTX_WAIT:
-            break;
-
-        case State::CTX_SAVE:
+        case State::CTXSW:
         {
-            Addr regAddr = getRegAddr(CmdReg::ABORT);
-            uint64_t value = Dtu::Command::ABORT_VPE;
-            pkt = createDtuRegPkt(regAddr, value, MemCmd::WriteReq);
-            break;
-        }
-        case State::CTX_SAVE_DONE:
-        {
-            pkt = createPacket(RCTMUX_FLAGS, sizeof(uint64_t), MemCmd::WriteReq);
-            *pkt->getPtr<uint64_t>() = RCTMuxCtrl::SIGNAL;
-            break;
-        }
-
-        case State::CTX_CHECK:
-        {
-            Addr regAddr = getRegAddr(ReqReg::EXT_REQ);
-            pkt = createDtuRegPkt(regAddr, sizeof(uint64_t), MemCmd::WriteReq);
-            *pkt->getPtr<uint64_t>() = 0;
-            break;
-        }
-        case State::CTX_FLAGS:
-        {
-            pkt = createPacket(RCTMUX_FLAGS, sizeof(uint64_t), MemCmd::ReadReq);
-            break;
-        }
-        case State::CTX_RESTORE:
-        {
-            pkt = createPacket(RCTMUX_FLAGS, sizeof(uint64_t), MemCmd::WriteReq);
-            *pkt->getPtr<uint64_t>() = RCTMuxCtrl::SIGNAL;
+            pkt = ctxsw.tick();
             break;
         }
 
@@ -476,7 +394,7 @@ DtuAccelStream::tick()
             if (irqPending)
             {
                 irqPending = false;
-                state = State::CTX_CHECK;
+                state = State::CTXSW;
                 schedule(tickEvent, clockEdge(Cycles(1)));
             }
             else
@@ -501,7 +419,7 @@ DtuAccelStream::tick()
         case State::READ_DATA:
         {
             size_t left = ctx.dataSize - ctx.inOff;
-            ctx.lastSize = std::min(ctx.bufSize, std::min(ctx.reportSize, left));
+            ctx.lastSize = std::min(bufSize, std::min(ctx.reportSize, left));
             pkt = createDtuCmdPkt(Dtu::Command::READ,
                                   EP_INPUT,
                                   BUF_ADDR,
@@ -551,7 +469,7 @@ DtuAccelStream::tick()
         case State::MSG_STORE:
         {
             ctx.accSize = 0;
-            pkt = createPacket(BUF_ADDR + ctx.bufSize,
+            pkt = createPacket(BUF_ADDR + bufSize,
                                sizeof(msg.msg),
                                MemCmd::WriteReq);
             memcpy(pkt->getPtr<uint8_t>(), (char*)&msg.msg, sizeof(msg.msg));
@@ -561,7 +479,7 @@ DtuAccelStream::tick()
         {
             pkt = createDtuCmdPkt(Dtu::Command::SEND,
                                   EP_SEND,
-                                  BUF_ADDR + ctx.bufSize,
+                                  BUF_ADDR + bufSize,
                                   sizeof(msg.msg),
                                   // specify an invalid reply EP
                                   0xFFFF);
@@ -596,7 +514,7 @@ DtuAccelStream::tick()
         {
             pkt = createDtuCmdPkt(Dtu::Command::REPLY,
                                   EP_RECV,
-                                  BUF_ADDR + ctx.bufSize,
+                                  BUF_ADDR + bufSize,
                                   1,
                                   ctx.msgAddr);
             break;
