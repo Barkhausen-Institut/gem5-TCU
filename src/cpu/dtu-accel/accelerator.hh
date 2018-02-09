@@ -67,8 +67,6 @@ class DtuAccel : public MemObject
 
     virtual void reset() = 0;
 
-  protected:
-
     /// main simulation loop
     virtual void tick() = 0;
 

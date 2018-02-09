@@ -28,8 +28,6 @@
  */
 
 #include "cpu/dtu-accel-stream/accelerator.hh"
-#include "cpu/dtu-accel-stream/algorithm_fft.hh"
-#include "cpu/dtu-accel-stream/algorithm_toupper.hh"
 #include "debug/DtuAccelStream.hh"
 #include "debug/DtuAccelStreamState.hh"
 #include "mem/dtu/dtu.hh"
@@ -46,7 +44,6 @@ static const unsigned CAP_RGATE     = 2;
 static const unsigned CAP_SGATE     = 3;
 
 static const size_t MSG_SIZE        = 64;
-static const Addr BUF_ADDR          = 0x6000;
 
 static const char *stateNames[] =
 {
@@ -57,8 +54,7 @@ static const char *stateNames[] =
     "READ_MSG",
     "READ_DATA",
     "READ_DATA_WAIT",
-    "PULL_DATA",
-    "PUSH_DATA",
+    "COMPUTE",
     "WRITE_DATA",
     "WRITE_DATA_WAIT",
 
@@ -85,7 +81,6 @@ static const char *stateNames[] =
 
 DtuAccelStream::DtuAccelStream(const DtuAccelStreamParams *p)
   : DtuAccel(p),
-    algo(),
     irqPending(false),
     ctxSwPending(false),
     memPending(false),
@@ -93,15 +88,9 @@ DtuAccelStream::DtuAccelStream(const DtuAccelStreamParams *p)
     lastState(State::CTX_CHECK), // something different
     msgAddr(),
     sysc(this),
-    yield(this, &sysc)
+    yield(this, &sysc),
+    logic(this, p->algorithm)
 {
-    if (p->algorithm == 0)
-        algo = new DtuAccelStreamAlgoFFT();
-    else if(p->algorithm == 1)
-        algo = new DtuAccelStreamAlgoToUpper();
-    else
-        panic("Unknown algorithm %d\n", p->algorithm);
-
     yield.start();
 }
 
@@ -113,6 +102,8 @@ std::string DtuAccelStream::getStateName() const
         os << ":" << yield.stateName();
     else if (state == State::SYSCALL)
         os << ":" << sysc.stateName();
+    else if (state == State::COMPUTE)
+        os << ":" << logic.stateName();
     return os.str();
 }
 
@@ -273,47 +264,15 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
                 if (cmd.opcode == 0)
                 {
-                    streamOff = 0;
-                    state = State::PULL_DATA;
+                    logic.start(lastSize, compTime);
+                    state = State::COMPUTE;
                 }
                 break;
             }
-            case State::PULL_DATA:
+            case State::COMPUTE:
             {
-                // load data to be able to change it and write it back
-                lastData = new uint8_t[lastPullSize];
-
-                // execute the algorithm
-                algo->execute(lastData,
-                              pkt->getConstPtr<uint8_t>(),
-                              lastPullSize);
-
-                state = State::PUSH_DATA;
-                break;
-            }
-            case State::PUSH_DATA:
-            {
-                streamOff += lastPullSize;
-
-                if (streamOff == lastSize)
-                {
-                    // decrease it by the time we've already spent reading the
-                    // data from SPM, because that's already included in the
-                    // BLOCK_TIME.
-                    // TODO if we use caches, this is not correct
-                    delay = algo->getDelay(compTime, lastSize);
-                    DPRINTF(DtuAccelStream, "%s for %luB took %llu cycles\n",
-                        algo->name(), lastSize, delay);
-
-                    if (delay > (curCycle() - opStart))
-                        delay = delay - (curCycle() - opStart);
-                    else
-                        delay = Cycles(1);
-
+                if(logic.handleMemResp(pkt, &delay))
                     state = State::WRITE_DATA;
-                }
-                else
-                    state = State::PULL_DATA;
                 break;
             }
             case State::WRITE_DATA:
@@ -556,21 +515,9 @@ DtuAccelStream::tick()
             pkt = createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }
-        case State::PULL_DATA:
+        case State::COMPUTE:
         {
-            if (streamOff == 0)
-                opStart = curCycle();
-            size_t rem = lastSize - streamOff;
-            lastPullSize = std::min(chunkSize, rem);
-            pkt = createPacket(BUF_ADDR + streamOff, lastPullSize, MemCmd::ReadReq);
-            break;
-        }
-        case State::PUSH_DATA:
-        {
-            pkt = createPacket(BUF_ADDR + streamOff,
-                               lastData,
-                               lastPullSize,
-                               MemCmd::WriteReq);
+            pkt = logic.tick();
             break;
         }
         case State::WRITE_DATA:

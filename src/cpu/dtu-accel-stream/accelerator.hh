@@ -31,7 +31,7 @@
 #define __CPU_DTU_ACCEL_STREAM_ACCELERATOR_HH__
 
 #include "params/DtuAccelStream.hh"
-#include "cpu/dtu-accel-stream/algorithm.hh"
+#include "cpu/dtu-accel-stream/logic.hh"
 #include "cpu/dtu-accel/accelerator.hh"
 #include "mem/dtu/connector/base.hh"
 #include "mem/dtu/regfile.hh"
@@ -39,6 +39,10 @@
 
 class DtuAccelStream : public DtuAccel
 {
+  public:
+
+    static const Addr BUF_ADDR          = 0x6000;
+
   public:
     DtuAccelStream(const DtuAccelStreamParams *p);
 
@@ -64,8 +68,7 @@ class DtuAccelStream : public DtuAccel
         READ_MSG,
         READ_DATA,
         READ_DATA_WAIT,
-        PULL_DATA,
-        PUSH_DATA,
+        COMPUTE,
         WRITE_DATA,
         WRITE_DATA_WAIT,
 
@@ -96,8 +99,6 @@ class DtuAccelStream : public DtuAccel
         UPDATE,
     };
 
-    DtuAccelStreamAlgo *algo;
-
     std::string getStateName() const;
 
     bool irqPending;
@@ -120,10 +121,6 @@ class DtuAccelStream : public DtuAccel
     Addr accSize;
     Addr dataSize;
     Addr lastSize;
-    Addr streamOff;
-    Addr lastPullSize;
-    uint8_t *lastData;
-    Cycles opStart;
 
     struct
     {
@@ -164,6 +161,7 @@ class DtuAccelStream : public DtuAccel
     SyscallSM sysc;
     State syscNext;
     YieldSM yield;
+    AccelLogic logic;
 };
 
 #endif // __CPU_DTU_ACCEL_STREAM_ACCELERATOR_HH__
