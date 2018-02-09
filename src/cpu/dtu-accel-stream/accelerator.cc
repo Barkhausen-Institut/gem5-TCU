@@ -86,7 +86,7 @@ DtuAccelStream::DtuAccelStream(const DtuAccelStreamParams *p)
     memPending(false),
     state(State::IDLE),
     lastState(State::CTX_CHECK), // something different
-    msgAddr(),
+    ctx(),
     sysc(this),
     yield(this, &sysc),
     logic(this, p->algorithm)
@@ -197,8 +197,8 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                 const RegFile::reg_t *regs = pkt->getConstPtr<RegFile::reg_t>();
                 if(regs[0])
                 {
-                    msgAddr = regs[0];
-                    DPRINTF(DtuAccelStream, "Received message @ %p\n", msgAddr);
+                    ctx.msgAddr = regs[0];
+                    DPRINTF(DtuAccelStream, "Received message @ %p\n", ctx.msgAddr);
                     state = State::READ_MSG;
                 }
                 else
@@ -222,12 +222,12 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                             " reportsz=%#llx, comptime=%#llx)\n",
                             args[1], args[2], args[3], args[4]);
 
-                    bufSize = args[1];
-                    outSize = args[2];
-                    reportSize = args[3];
-                    compTime = Cycles(args[4]);
-                    accSize = 0;
-                    outOff = 0;
+                    ctx.bufSize = args[1];
+                    ctx.outSize = args[2];
+                    ctx.reportSize = args[3];
+                    ctx.compTime = Cycles(args[4]);
+                    ctx.accSize = 0;
+                    ctx.outOff = 0;
                     state = State::REPLY_SEND;
                 }
                 else
@@ -236,14 +236,14 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                             "  update(off=%lld len=%#llx eof=%lld)\n",
                             args[1], args[2], args[3]);
 
-                    off = args[1];
-                    inOff = 0;
-                    dataSize = args[2];
-                    eof = args[3];
-                    if (dataSize == 0)
+                    ctx.off = args[1];
+                    ctx.inOff = 0;
+                    ctx.dataSize = args[2];
+                    ctx.eof = args[3];
+                    if (ctx.dataSize == 0)
                     {
                         msg.msg.cmd = static_cast<uint64_t>(Command::UPDATE);
-                        msg.msg.off = outOff;
+                        msg.msg.off = ctx.outOff;
                         msg.msg.len = 0;
                         msg.msg.eof = true;
                         state = State::MSG_STORE;
@@ -264,7 +264,7 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
                 if (cmd.opcode == 0)
                 {
-                    logic.start(lastSize, compTime);
+                    logic.start(ctx.lastSize, ctx.compTime);
                     state = State::COMPUTE;
                 }
                 break;
@@ -286,9 +286,10 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
                 if (cmd.opcode == 0)
                 {
-                    if (accSize >= reportSize || (inOff == dataSize && eof))
+                    if (ctx.accSize >= ctx.reportSize ||
+                        (ctx.inOff == ctx.dataSize && ctx.eof))
                         state = State::MSG_STORE;
-                    else if (inOff == dataSize)
+                    else if (ctx.inOff == ctx.dataSize)
                         state = State::REPLY_SEND;
                     else
                         state = State::READ_DATA;
@@ -315,7 +316,7 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                     auto err = static_cast<Dtu::Error>((long)cmd.error);
                     if (err == Dtu::Error::NONE)
                     {
-                        if (inOff == dataSize)
+                        if (ctx.inOff == ctx.dataSize)
                             state = State::REPLY_SEND;
                         else
                             state = State::READ_DATA;
@@ -494,19 +495,19 @@ DtuAccelStream::tick()
         }
         case State::READ_MSG:
         {
-            pkt = createPacket(msgAddr, MSG_SIZE, MemCmd::ReadReq);
+            pkt = createPacket(ctx.msgAddr, MSG_SIZE, MemCmd::ReadReq);
             break;
         }
         case State::READ_DATA:
         {
-            size_t left = dataSize - inOff;
-            lastSize = std::min(bufSize, std::min(reportSize, left));
+            size_t left = ctx.dataSize - ctx.inOff;
+            ctx.lastSize = std::min(ctx.bufSize, std::min(ctx.reportSize, left));
             pkt = createDtuCmdPkt(Dtu::Command::READ,
                                   EP_INPUT,
                                   BUF_ADDR,
-                                  lastSize,
-                                  off + inOff);
-            inOff += lastSize;
+                                  ctx.lastSize,
+                                  ctx.off + ctx.inOff);
+            ctx.inOff += ctx.lastSize;
             break;
         }
         case State::READ_DATA_WAIT:
@@ -525,19 +526,19 @@ DtuAccelStream::tick()
             pkt = createDtuCmdPkt(Dtu::Command::WRITE,
                                   EP_OUTPUT,
                                   BUF_ADDR,
-                                  lastSize,
-                                  outOff);
+                                  ctx.lastSize,
+                                  ctx.outOff);
 
             msg.msg.cmd = static_cast<uint64_t>(Command::UPDATE);
-            msg.msg.off = outOff - accSize;
-            msg.msg.len = accSize + lastSize;
-            msg.msg.eof = eof && inOff == dataSize;
+            msg.msg.off = ctx.outOff - ctx.accSize;
+            msg.msg.len = ctx.accSize + ctx.lastSize;
+            msg.msg.eof = ctx.eof && ctx.inOff == ctx.dataSize;
 
-            accSize += lastSize;
+            ctx.accSize += ctx.lastSize;
             if (msg.msg.eof)
-                outOff = 0;
+                ctx.outOff = 0;
             else
-                outOff = (outOff + lastSize) % outSize;
+                ctx.outOff = (ctx.outOff + ctx.lastSize) % ctx.outSize;
             break;
         }
         case State::WRITE_DATA_WAIT:
@@ -549,8 +550,8 @@ DtuAccelStream::tick()
 
         case State::MSG_STORE:
         {
-            accSize = 0;
-            pkt = createPacket(BUF_ADDR + bufSize,
+            ctx.accSize = 0;
+            pkt = createPacket(BUF_ADDR + ctx.bufSize,
                                sizeof(msg.msg),
                                MemCmd::WriteReq);
             memcpy(pkt->getPtr<uint8_t>(), (char*)&msg.msg, sizeof(msg.msg));
@@ -560,7 +561,7 @@ DtuAccelStream::tick()
         {
             pkt = createDtuCmdPkt(Dtu::Command::SEND,
                                   EP_SEND,
-                                  BUF_ADDR + bufSize,
+                                  BUF_ADDR + ctx.bufSize,
                                   sizeof(msg.msg),
                                   // specify an invalid reply EP
                                   0xFFFF);
@@ -595,9 +596,9 @@ DtuAccelStream::tick()
         {
             pkt = createDtuCmdPkt(Dtu::Command::REPLY,
                                   EP_RECV,
-                                  BUF_ADDR + bufSize,
+                                  BUF_ADDR + ctx.bufSize,
                                   1,
-                                  msgAddr);
+                                  ctx.msgAddr);
             break;
         }
         case State::REPLY_WAIT:
@@ -610,7 +611,7 @@ DtuAccelStream::tick()
         {
             reply.sys.opcode = 18;            /* FORWARD_REPLY */
             reply.sys.rgate_sel = CAP_RGATE;
-            reply.sys.msgaddr = msgAddr;
+            reply.sys.msgaddr = ctx.msgAddr;
             reply.sys.len = sizeof(reply.msg);
             reply.sys.event = 0;
 

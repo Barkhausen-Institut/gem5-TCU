@@ -108,19 +108,21 @@ class DtuAccelStream : public DtuAccel
     State state;
     State lastState;
 
-    Addr msgAddr;
-
-    bool eof;
-    Addr off;
-    Addr inOff;
-    Addr outOff;
-    Addr outSize;
-    Addr bufSize;
-    Addr reportSize;
-    Cycles compTime;
-    Addr accSize;
-    Addr dataSize;
-    Addr lastSize;
+    struct
+    {
+        Addr msgAddr;
+        bool eof;
+        Addr off;
+        Addr inOff;
+        Addr outOff;
+        Addr outSize;
+        Addr bufSize;
+        Addr reportSize;
+        Cycles compTime;
+        Addr accSize;
+        Addr dataSize;
+        Addr lastSize;
+    } ctx;
 
     struct
     {
