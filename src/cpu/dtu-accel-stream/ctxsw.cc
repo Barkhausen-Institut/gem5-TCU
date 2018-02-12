@@ -31,8 +31,8 @@
 #include "cpu/dtu-accel-stream/ctxsw.hh"
 
 ContextSwitch::ContextSwitch(DtuAccel *_accel)
-    : ctxSize(_accel->contextSize()), accel(_accel), state(), offset(),
-      ctxSwPending()
+    : ctxSize(_accel->contextSize()), accel(_accel), state(), stateChanged(),
+      offset(), ctxSwPending()
 {
 }
 
@@ -181,6 +181,8 @@ ContextSwitch::handleMemResp(PacketPtr pkt)
 {
     const uint8_t *pkt_data = pkt->getConstPtr<uint8_t>();
 
+    auto lastState = state;
+
     switch(state)
     {
         case State::WAIT:
@@ -298,6 +300,8 @@ ContextSwitch::handleMemResp(PacketPtr pkt)
             return true;
         }
     }
+
+    stateChanged = state != lastState;
 
     return false;
 }

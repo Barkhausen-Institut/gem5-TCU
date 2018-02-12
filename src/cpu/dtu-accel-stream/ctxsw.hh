@@ -59,6 +59,8 @@ class ContextSwitch
 
     std::string stateName() const;
 
+    bool hasStateChanged() const { return stateChanged; }
+
     bool isWaiting() const { return state == WAIT; }
     void restart() { state = CHECK; }
 
@@ -71,6 +73,7 @@ class ContextSwitch
     size_t ctxSize;
     DtuAccel *accel;
     State state;
+    bool stateChanged;
     Addr offset;
     bool ctxSwPending;
 };

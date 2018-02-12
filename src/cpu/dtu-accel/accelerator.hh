@@ -108,6 +108,8 @@ class DtuAccel : public MemObject
 
         std::string stateName() const;
 
+        bool hasStateChanged() const { return stateChanged; }
+
         void start(Addr size)
         {
             syscallSize = size;
@@ -122,6 +124,7 @@ class DtuAccel : public MemObject
 
         DtuAccel *accel;
         State state;
+        bool stateChanged;
         Addr replyAddr;
         Addr syscallSize;
     };
@@ -152,6 +155,8 @@ class DtuAccel : public MemObject
 
         std::string stateName() const;
 
+        bool hasStateChanged() const { return stateChanged; }
+
         void start(bool check = true)
         {
             state = check ? YLD_CHECK : YLD_SLEEP;
@@ -167,6 +172,7 @@ class DtuAccel : public MemObject
         uint64_t report;
         Cycles yieldStart;
         State state;
+        bool stateChanged;
     };
 
     enum RCTMuxCtrl

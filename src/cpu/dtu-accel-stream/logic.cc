@@ -34,7 +34,7 @@
 #include "cpu/dtu-accel-stream/logic.hh"
 
 AccelLogic::AccelLogic(DtuAccel *_accel, int _algo)
-    : accel(_accel), algo(), state(),
+    : accel(_accel), algo(), state(), stateChanged(),
       compTime(), opStart(), dataSize(), offset(), pullSize(), pullData()
 {
     if (_algo == 0)
@@ -92,6 +92,8 @@ AccelLogic::handleMemResp(PacketPtr pkt, Cycles *delay)
 {
     *delay = Cycles(0);
 
+    auto lastState = state;
+
     switch(state)
     {
         case State::LOGIC_PULL:
@@ -133,6 +135,8 @@ AccelLogic::handleMemResp(PacketPtr pkt, Cycles *delay)
             break;
         }
     }
+
+    stateChanged = state != lastState;
 
     return false;
 }

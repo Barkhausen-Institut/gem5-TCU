@@ -48,6 +48,8 @@ class AccelLogic
 
     std::string stateName() const;
 
+    bool hasStateChanged() const { return stateChanged; }
+
     void start(Addr _dataSize, Cycles _compTime)
     {
         dataSize = _dataSize;
@@ -65,6 +67,7 @@ class AccelLogic
     DtuAccel *accel;
     DtuAccelStreamAlgo *algo;
     State state;
+    bool stateChanged;
     Cycles compTime;
     Cycles opStart;
     Addr dataSize;

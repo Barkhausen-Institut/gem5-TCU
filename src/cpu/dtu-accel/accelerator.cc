@@ -281,6 +281,8 @@ DtuAccel::SyscallSM::tick()
 bool
 DtuAccel::SyscallSM::handleMemResp(PacketPtr pkt)
 {
+    auto lastState = state;
+
     switch(state)
     {
         case State::SYSC_SEND:
@@ -317,6 +319,8 @@ DtuAccel::SyscallSM::handleMemResp(PacketPtr pkt)
             return true;
         }
     }
+
+    stateChanged = state != lastState;
 
     return false;
 }
@@ -382,6 +386,8 @@ DtuAccel::YieldSM::tick()
 bool
 DtuAccel::YieldSM::handleMemResp(PacketPtr pkt)
 {
+    auto lastState = state;
+
     switch(state)
     {
         case State::YLD_CHECK:
@@ -418,6 +424,8 @@ DtuAccel::YieldSM::handleMemResp(PacketPtr pkt)
             return true;
         }
     }
+
+    stateChanged = state != lastState;
 
     return false;
 }

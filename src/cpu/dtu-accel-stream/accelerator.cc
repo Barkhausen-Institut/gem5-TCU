@@ -100,7 +100,11 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
 {
     Request* req = pkt->req;
 
-    if (state != lastState)
+    if (state != lastState ||
+        (state == State::COMPUTE && logic.hasStateChanged()) ||
+        (state == State::CTXSW && ctxsw.hasStateChanged()) ||
+        (state == State::SYSCALL && sysc.hasStateChanged()) ||
+        (state == State::IDLE && yield.hasStateChanged()))
     {
         DPRINTF(DtuAccelStreamState, "[%s] Got response from memory\n",
             getStateName().c_str());
@@ -368,7 +372,11 @@ DtuAccelStream::tick()
 {
     PacketPtr pkt = nullptr;
 
-    if (state != lastState)
+    if (state != lastState ||
+        (state == State::COMPUTE && logic.hasStateChanged()) ||
+        (state == State::CTXSW && ctxsw.hasStateChanged()) ||
+        (state == State::SYSCALL && sysc.hasStateChanged()) ||
+        (state == State::IDLE && yield.hasStateChanged()))
     {
         DPRINTF(DtuAccelStreamState, "[%s] tick\n",
             getStateName().c_str());
