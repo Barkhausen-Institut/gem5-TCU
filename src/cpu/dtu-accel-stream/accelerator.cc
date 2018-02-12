@@ -208,8 +208,8 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                         msg.msg.cmd = static_cast<uint64_t>(Command::UPDATE);
                         msg.msg.off = ctx.outOff;
                         msg.msg.len = 0;
-                        msg.msg.eof = true;
-                        state = State::MSG_STORE;
+                        msg.msg.eof = args[3];
+                        state = args[3] ? State::MSG_STORE : State::REPLY_SEND;
                     }
                     else
                         state = State::READ_DATA;
@@ -235,7 +235,10 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
             case State::COMPUTE:
             {
                 if(logic.handleMemResp(pkt, &delay))
+                {
+                    ctx.lastSize = logic.outDataSize();
                     state = State::WRITE_DATA;
+                }
                 break;
             }
             case State::WRITE_DATA:

@@ -38,7 +38,7 @@ class DtuAccelStreamAlgo
 
     virtual const char *name() const = 0;
 
-    virtual void execute(uint8_t *dst, const uint8_t *src, size_t len) = 0;
+    virtual size_t execute(uint8_t *dst, const uint8_t *src, size_t len) = 0;
 
     virtual Cycles getDelay(Cycles time, size_t len) = 0;
 };

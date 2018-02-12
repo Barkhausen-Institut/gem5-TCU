@@ -102,9 +102,9 @@ AccelLogic::handleMemResp(PacketPtr pkt, Cycles *delay)
             pullData = new uint8_t[pullSize];
 
             // execute the algorithm
-            algo->execute(pullData,
-                          pkt->getConstPtr<uint8_t>(),
-                          pullSize);
+            outSize += algo->execute(
+                pullData, pkt->getConstPtr<uint8_t>(), pullSize
+            );
 
             state = State::LOGIC_PUSH;
             break;

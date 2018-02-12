@@ -50,12 +50,15 @@ class AccelLogic
 
     bool hasStateChanged() const { return stateChanged; }
 
+    size_t outDataSize() const { return outSize; }
+
     void start(Addr _dataSize, Cycles _compTime)
     {
         dataSize = _dataSize;
         compTime = _compTime;
         state = LOGIC_PULL;
         offset = 0;
+        outSize = 0;
     }
 
     PacketPtr tick();
@@ -71,6 +74,7 @@ class AccelLogic
     Cycles compTime;
     Cycles opStart;
     Addr dataSize;
+    Addr outSize;
     Addr offset;
     Addr pullSize;
     uint8_t *pullData;

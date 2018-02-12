@@ -38,7 +38,7 @@ class DtuAccelStreamAlgoToUpper : public DtuAccelStreamAlgo
 
     const char *name() const override { return "ToUpper"; }
 
-    void execute(uint8_t *dst, const uint8_t *src, size_t len) override
+    size_t execute(uint8_t *dst, const uint8_t *src, size_t len) override
     {
         for (size_t i = 0; i < len; ++i)
         {
@@ -47,6 +47,7 @@ class DtuAccelStreamAlgoToUpper : public DtuAccelStreamAlgo
             else
                 dst[i] = src[i];
         }
+        return len;
     }
 
     Cycles getDelay(Cycles, size_t len) override

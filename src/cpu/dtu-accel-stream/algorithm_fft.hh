@@ -38,10 +38,11 @@ class DtuAccelStreamAlgoFFT : public DtuAccelStreamAlgo
 
     const char *name() const override { return "FFT"; }
 
-    void execute(uint8_t *dst, const uint8_t *src, size_t len) override
+    size_t execute(uint8_t *dst, const uint8_t *src, size_t len) override
     {
         // only pretend to do fft
         memcpy(dst, src, len);
+        return len;
     }
 
     Cycles getDelay(Cycles time, size_t len) override
