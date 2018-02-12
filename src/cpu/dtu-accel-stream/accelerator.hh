@@ -66,6 +66,7 @@ class DtuAccelStream : public DtuAccel
     size_t stateSize() const override { return bufSize; }
     size_t contextSize() const override { return sizeof(ctx); }
     void *context() override { return &ctx; }
+    void setSwitched() override { ctxSwPerformed = true; }
 
   private:
 
@@ -119,6 +120,7 @@ class DtuAccelStream : public DtuAccel
     struct
     {
         Addr msgAddr;
+        bool interrupted;
         bool eof;
         Addr off;
         Addr inOff;
@@ -173,6 +175,7 @@ class DtuAccelStream : public DtuAccel
     YieldSM yield;
     AccelLogic logic;
     ContextSwitch ctxsw;
+    bool ctxSwPerformed;
 };
 
 #endif // __CPU_DTU_ACCEL_STREAM_ACCELERATOR_HH__

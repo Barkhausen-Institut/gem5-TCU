@@ -297,6 +297,7 @@ ContextSwitch::handleMemResp(PacketPtr pkt)
         {
             ctxSwPending = false;
             state = State::CHECK;
+            accel->setSwitched();
             return true;
         }
     }

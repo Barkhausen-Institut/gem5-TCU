@@ -75,7 +75,8 @@ DtuAccelStream::DtuAccelStream(const DtuAccelStreamParams *p)
     sysc(this),
     yield(this, &sysc),
     logic(this, p->algorithm),
-    ctxsw(this)
+    ctxsw(this),
+    ctxSwPerformed()
 {
     yield.start();
 }
@@ -137,7 +138,17 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
             case State::CTXSW:
             {
                 if(ctxsw.handleMemResp(pkt))
-                    state = State::FETCH_MSG;
+                {
+                    // if we didn't perform a context switch, go back to our
+                    // previous state
+                    if (ctx.interrupted && !ctxSwPerformed)
+                    {
+                        state = State::READ_DATA;
+                        ctx.interrupted = false;
+                    }
+                    else
+                        state = State::FETCH_MSG;
+                }
                 break;
             }
 
@@ -345,14 +356,16 @@ DtuAccelStream::wakeup()
 void
 DtuAccelStream::interrupt()
 {
-    irqPending = true;
-
+    // if we're waiting after SAVE, start with the RESTORE
     if (ctxsw.isWaiting())
     {
         ctxsw.restart();
         if (!tickEvent.scheduled())
             schedule(tickEvent, clockEdge(Cycles(1)));
     }
+    // we'll handle the IRQ later
+    else
+        irqPending = true;
 }
 
 void
@@ -371,6 +384,14 @@ void
 DtuAccelStream::tick()
 {
     PacketPtr pkt = nullptr;
+
+    // after a context switch, continue at then position we left off
+    if (ctxSwPerformed)
+    {
+        state = ctx.interrupted ? State::READ_DATA : State::FETCH_MSG;
+        ctxSwPerformed = false;
+        ctx.interrupted = false;
+    }
 
     if (state != lastState ||
         (state == State::COMPUTE && logic.hasStateChanged()) ||
@@ -426,14 +447,24 @@ DtuAccelStream::tick()
         }
         case State::READ_DATA:
         {
-            size_t left = ctx.dataSize - ctx.inOff;
-            ctx.lastSize = std::min(bufSize, std::min(ctx.reportSize, left));
-            pkt = createDtuCmdPkt(Dtu::Command::READ,
-                                  EP_INPUT,
-                                  BUF_ADDR,
-                                  ctx.lastSize,
-                                  ctx.off + ctx.inOff);
-            ctx.inOff += ctx.lastSize;
+            if (irqPending)
+            {
+                irqPending = false;
+                ctx.interrupted = true;
+                state = State::CTXSW;
+                schedule(tickEvent, clockEdge(Cycles(1)));
+            }
+            else
+            {
+                size_t left = ctx.dataSize - ctx.inOff;
+                ctx.lastSize = std::min(bufSize, std::min(ctx.reportSize, left));
+                pkt = createDtuCmdPkt(Dtu::Command::READ,
+                                      EP_INPUT,
+                                      BUF_ADDR,
+                                      ctx.lastSize,
+                                      ctx.off + ctx.inOff);
+                ctx.inOff += ctx.lastSize;
+            }
             break;
         }
         case State::READ_DATA_WAIT:

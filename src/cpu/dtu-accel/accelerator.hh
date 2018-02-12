@@ -75,6 +75,7 @@ class DtuAccel : public MemObject
     virtual size_t stateSize() const = 0;
     virtual size_t contextSize() const = 0;
     virtual void *context() = 0;
+    virtual void setSwitched() = 0;
 
     class CpuPort : public MasterPort
     {
