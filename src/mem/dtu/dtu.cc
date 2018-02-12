@@ -614,12 +614,12 @@ Dtu::reset()
 void
 Dtu::setIrq()
 {
+    RegFile::reg_t val = regs().get(DtuReg::FEATURES);
     if (getCommand().opcode == Command::SLEEP)
-    {
-        RegFile::reg_t val = regs().get(DtuReg::FEATURES);
         val |= static_cast<RegFile::reg_t>(Features::IRQ_WAKEUP);
-        regs().set(DtuReg::FEATURES, val);
-    }
+    else
+        val &= ~static_cast<RegFile::reg_t>(Features::IRQ_WAKEUP);
+    regs().set(DtuReg::FEATURES, val);
 
     wakeupCore();
 
