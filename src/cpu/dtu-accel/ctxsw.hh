@@ -27,14 +27,14 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
-#ifndef __CPU_DTU_ACCEL_STREAM_CTXSW_HH__
-#define __CPU_DTU_ACCEL_STREAM_CTXSW_HH__
+#ifndef __CPU_DTU_ACCEL_CTXSW_HH__
+#define __CPU_DTU_ACCEL_CTXSW_HH__
 
 #include "cpu/dtu-accel/accelerator.hh"
 #include "cpu/dtu-accel-stream/algorithm.hh"
 #include "sim/system.hh"
 
-class ContextSwitch
+class AccelContextSwitch
 {
   public:
 
@@ -55,7 +55,7 @@ class ContextSwitch
         RESTORE_DONE,
     };
 
-    explicit ContextSwitch(DtuAccel *_accel);
+    explicit AccelContextSwitch(DtuAccel *_accel);
 
     std::string stateName() const;
 
@@ -78,4 +78,4 @@ class ContextSwitch
     bool ctxSwPending;
 };
 
-#endif /* __CPU_DTU_ACCEL_STREAM_CTXSW_HH__ */
+#endif /* __CPU_DTU_ACCEL_CTXSW_HH__ */

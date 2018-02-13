@@ -31,9 +31,9 @@
 #define __CPU_DTU_ACCEL_STREAM_ACCELERATOR_HH__
 
 #include "params/DtuAccelStream.hh"
-#include "cpu/dtu-accel-stream/ctxsw.hh"
 #include "cpu/dtu-accel-stream/logic.hh"
 #include "cpu/dtu-accel/accelerator.hh"
+#include "cpu/dtu-accel/ctxsw.hh"
 #include "mem/dtu/connector/base.hh"
 #include "mem/dtu/regfile.hh"
 #include "sim/system.hh"
@@ -63,6 +63,8 @@ class DtuAccelStream : public DtuAccel
 
     void reset() override;
 
+    Addr bufferAddr() const override { return BUF_ADDR; }
+    int contextEp() const override { return EP_CTX; }
     size_t stateSize() const override { return bufSize; }
     size_t contextSize() const override { return sizeof(ctx); }
     void *context() override { return &ctx; }
@@ -174,7 +176,7 @@ class DtuAccelStream : public DtuAccel
     State syscNext;
     YieldSM yield;
     AccelLogic logic;
-    ContextSwitch ctxsw;
+    AccelContextSwitch ctxsw;
     bool ctxSwPerformed;
 };
 

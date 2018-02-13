@@ -32,6 +32,7 @@
 
 #include "params/DtuAccelHash.hh"
 #include "cpu/dtu-accel/accelerator.hh"
+#include "cpu/dtu-accel/ctxsw.hh"
 #include "cpu/dtu-accel-hash/algorithm.hh"
 #include "mem/dtu/connector/base.hh"
 #include "mem/dtu/regfile.hh"
@@ -39,6 +40,14 @@
 
 class DtuAccelHash : public DtuAccel
 {
+    static const unsigned EP_RECV       = 7;
+    static const unsigned EP_CTX        = 8;
+    static const unsigned EP_DATA       = 9;
+    static const unsigned CAP_RBUF      = 2;
+
+    static const size_t MSG_SIZE        = 64;
+    static const Addr BUF_ADDR          = 0x6000;
+
   public:
     DtuAccelHash(const DtuAccelHashParams *p);
 
@@ -46,10 +55,12 @@ class DtuAccelHash : public DtuAccel
 
     void reset() override;
 
+    Addr bufferAddr() const override { return BUF_ADDR; }
+    int contextEp() const override { return EP_CTX; }
     size_t stateSize() const override { return bufSize; }
     size_t contextSize() const override { return sizeof(hash); }
     void *context() override { return &hash; }
-    void setSwitched() override {}
+    void setSwitched() override { ctxSwPerformed = true; }
 
   private:
 
@@ -73,19 +84,7 @@ class DtuAccelHash : public DtuAccel
         REPLY_WAIT,
         REPLY_ERROR,
 
-        CTX_SAVE,
-        CTX_SAVE_WRITE,
-        CTX_SAVE_SEND,
-        CTX_SAVE_WAIT,
-        CTX_SAVE_DONE,
-        CTX_WAIT,
-
-        CTX_CHECK,
-        CTX_FLAGS,
-        CTX_RESTORE,
-        CTX_RESTORE_WAIT,
-        CTX_RESTORE_READ,
-        CTX_RESTORE_DONE,
+        CTXSW,
 
         SYSCALL,
     };
@@ -109,8 +108,6 @@ class DtuAccelHash : public DtuAccel
 
     State state;
     DtuAccelHashAlgorithm hash;
-
-    Addr ctxOffset;
 
     Addr msgAddr;
     Addr hashOff;
@@ -140,6 +137,8 @@ class DtuAccelHash : public DtuAccel
     SyscallSM sysc;
     State syscNext;
     YieldSM yield;
+    AccelContextSwitch ctxsw;
+    bool ctxSwPerformed;
 };
 
 #endif // __CPU_DTU_ACCEL_HASH_ACCELERATOR_HH__

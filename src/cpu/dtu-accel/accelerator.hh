@@ -72,6 +72,9 @@ class DtuAccel : public MemObject
 
     virtual void completeRequest(PacketPtr pkt) = 0;
 
+    virtual Addr bufferAddr() const = 0;
+
+    virtual int contextEp() const = 0;
     virtual size_t stateSize() const = 0;
     virtual size_t contextSize() const = 0;
     virtual void *context() = 0;

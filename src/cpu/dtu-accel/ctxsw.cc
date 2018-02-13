@@ -27,17 +27,16 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
-#include "cpu/dtu-accel-stream/accelerator.hh"
-#include "cpu/dtu-accel-stream/ctxsw.hh"
+#include "cpu/dtu-accel/ctxsw.hh"
 
-ContextSwitch::ContextSwitch(DtuAccel *_accel)
+AccelContextSwitch::AccelContextSwitch(DtuAccel *_accel)
     : ctxSize(_accel->contextSize()), accel(_accel), state(), stateChanged(),
       offset(), ctxSwPending()
 {
 }
 
 std::string
-ContextSwitch::stateName() const
+AccelContextSwitch::stateName() const
 {
     const char *names[] =
     {
@@ -58,7 +57,7 @@ ContextSwitch::stateName() const
 }
 
 PacketPtr
-ContextSwitch::tick()
+AccelContextSwitch::tick()
 {
     PacketPtr pkt = nullptr;
 
@@ -79,7 +78,7 @@ ContextSwitch::tick()
             size_t rem = ctxSize - offset;
             size_t size = std::min(accel->chunkSize, rem);
             pkt = accel->createPacket(
-                (DtuAccelStream::BUF_ADDR - ctxSize) + offset,
+                (accel->bufferAddr() - ctxSize) + offset,
                 size,
                 MemCmd::WriteReq
             );
@@ -92,8 +91,8 @@ ContextSwitch::tick()
             size_t size = std::min(accel->maxDataSize, rem);
             pkt = accel->createDtuCmdPkt(
                 Dtu::Command::WRITE,
-                DtuAccelStream::EP_CTX,
-                (DtuAccelStream::BUF_ADDR - ctxSize) + offset,
+                accel->contextEp(),
+                (accel->bufferAddr() - ctxSize) + offset,
                 size,
                 offset
             );
@@ -138,8 +137,8 @@ ContextSwitch::tick()
             size_t size = std::min(accel->maxDataSize, rem);
             pkt = accel->createDtuCmdPkt(
                 Dtu::Command::READ,
-                DtuAccelStream::EP_CTX,
-                (DtuAccelStream::BUF_ADDR - ctxSize) + offset,
+                accel->contextEp(),
+                (accel->bufferAddr() - ctxSize) + offset,
                 size,
                 offset
             );
@@ -157,7 +156,7 @@ ContextSwitch::tick()
             size_t rem = ctxSize - offset;
             size_t size = std::min(accel->chunkSize, rem);
             pkt = accel->createPacket(
-                (DtuAccelStream::BUF_ADDR - ctxSize) + offset,
+                (accel->bufferAddr() - ctxSize) + offset,
                 size,
                 MemCmd::ReadReq
             );
@@ -177,7 +176,7 @@ ContextSwitch::tick()
 }
 
 bool
-ContextSwitch::handleMemResp(PacketPtr pkt)
+AccelContextSwitch::handleMemResp(PacketPtr pkt)
 {
     const uint8_t *pkt_data = pkt->getConstPtr<uint8_t>();
 

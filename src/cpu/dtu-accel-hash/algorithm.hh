@@ -73,6 +73,11 @@ class DtuAccelHashAlgorithm
     uint32_t dataSize() const { return _dataSize; }
     uint32_t dataOffset() const { return _dataOff; }
 
+    bool interrupted() const
+    {
+        return autonomous() && dataOffset() != dataSize();
+    }
+
     bool autonomous() const
     {
         return _autonomous;
