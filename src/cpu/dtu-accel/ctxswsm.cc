@@ -27,16 +27,16 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
-#include "cpu/dtu-accel/ctxsw.hh"
+#include "cpu/dtu-accel/ctxswsm.hh"
 
-AccelContextSwitch::AccelContextSwitch(DtuAccel *_accel)
+AccelCtxSwSM::AccelCtxSwSM(DtuAccel *_accel)
     : ctxSize(_accel->contextSize()), accel(_accel), state(), stateChanged(),
       offset(), ctxSwPending()
 {
 }
 
 std::string
-AccelContextSwitch::stateName() const
+AccelCtxSwSM::stateName() const
 {
     const char *names[] =
     {
@@ -57,7 +57,7 @@ AccelContextSwitch::stateName() const
 }
 
 PacketPtr
-AccelContextSwitch::tick()
+AccelCtxSwSM::tick()
 {
     PacketPtr pkt = nullptr;
 
@@ -176,7 +176,7 @@ AccelContextSwitch::tick()
 }
 
 bool
-AccelContextSwitch::handleMemResp(PacketPtr pkt)
+AccelCtxSwSM::handleMemResp(PacketPtr pkt)
 {
     const uint8_t *pkt_data = pkt->getConstPtr<uint8_t>();
 

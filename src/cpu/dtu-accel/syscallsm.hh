@@ -27,42 +27,37 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
-#ifndef __CPU_DTU_ACCEL_CTXSW_HH__
-#define __CPU_DTU_ACCEL_CTXSW_HH__
+#ifndef __CPU_DTU_ACCEL_SYSCALLSM_HH__
+#define __CPU_DTU_ACCEL_SYSCALLSM_HH__
 
 #include "cpu/dtu-accel/accelerator.hh"
-#include "cpu/dtu-accel-stream/algorithm.hh"
 #include "sim/system.hh"
 
-class AccelContextSwitch
+class SyscallSM
 {
   public:
 
     enum State
     {
-        SAVE,
-        SAVE_WRITE,
-        SAVE_SEND,
-        SAVE_WAIT,
-        SAVE_DONE,
-        WAIT,
-
-        CHECK,
-        FLAGS,
-        RESTORE,
-        RESTORE_WAIT,
-        RESTORE_READ,
-        RESTORE_DONE,
+        SYSC_SEND,
+        SYSC_WAIT,
+        SYSC_FETCH,
+        SYSC_READ_ADDR,
+        SYSC_ACK,
     };
 
-    explicit AccelContextSwitch(DtuAccel *_accel);
+    explicit SyscallSM(DtuAccel *_accel)
+        : accel(_accel), state(), replyAddr(), syscallSize() {}
 
     std::string stateName() const;
 
     bool hasStateChanged() const { return stateChanged; }
 
-    bool isWaiting() const { return state == WAIT; }
-    void restart() { state = CHECK; }
+    void start(Addr size)
+    {
+        syscallSize = size;
+        state = SYSC_SEND;
+    }
 
     PacketPtr tick();
 
@@ -70,12 +65,11 @@ class AccelContextSwitch
 
    private:
 
-    size_t ctxSize;
     DtuAccel *accel;
     State state;
     bool stateChanged;
-    Addr offset;
-    bool ctxSwPending;
+    Addr replyAddr;
+    Addr syscallSize;
 };
 
-#endif /* __CPU_DTU_ACCEL_CTXSW_HH__ */
+#endif /* __CPU_DTU_ACCEL_SYSCALLSM_HH__ */

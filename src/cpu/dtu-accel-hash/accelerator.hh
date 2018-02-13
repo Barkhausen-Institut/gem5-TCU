@@ -32,7 +32,9 @@
 
 #include "params/DtuAccelHash.hh"
 #include "cpu/dtu-accel/accelerator.hh"
-#include "cpu/dtu-accel/ctxsw.hh"
+#include "cpu/dtu-accel/ctxswsm.hh"
+#include "cpu/dtu-accel/syscallsm.hh"
+#include "cpu/dtu-accel/yieldsm.hh"
 #include "cpu/dtu-accel-hash/algorithm.hh"
 #include "mem/dtu/connector/base.hh"
 #include "mem/dtu/regfile.hh"
@@ -143,7 +145,7 @@ class DtuAccelHash : public DtuAccel
     SyscallSM sysc;
     State syscNext;
     YieldSM yield;
-    AccelContextSwitch ctxsw;
+    AccelCtxSwSM ctxsw;
     bool ctxSwPerformed;
 };
 

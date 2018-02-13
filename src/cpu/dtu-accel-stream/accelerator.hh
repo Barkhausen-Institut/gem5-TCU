@@ -33,7 +33,9 @@
 #include "params/DtuAccelStream.hh"
 #include "cpu/dtu-accel-stream/logic.hh"
 #include "cpu/dtu-accel/accelerator.hh"
-#include "cpu/dtu-accel/ctxsw.hh"
+#include "cpu/dtu-accel/ctxswsm.hh"
+#include "cpu/dtu-accel/syscallsm.hh"
+#include "cpu/dtu-accel/yieldsm.hh"
 #include "mem/dtu/connector/base.hh"
 #include "mem/dtu/regfile.hh"
 #include "sim/system.hh"
@@ -176,7 +178,7 @@ class DtuAccelStream : public DtuAccel
     State syscNext;
     YieldSM yield;
     AccelLogic logic;
-    AccelContextSwitch ctxsw;
+    AccelCtxSwSM ctxsw;
     bool ctxSwPerformed;
 };
 

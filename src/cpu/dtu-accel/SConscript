@@ -31,4 +31,6 @@ SimObject('DtuAccel.py')
 
 Source('accelerator.cc')
 Source('connector.cc')
-Source('ctxsw.cc')
+Source('ctxswsm.cc')
+Source('syscallsm.cc')
+Source('yieldsm.cc')
