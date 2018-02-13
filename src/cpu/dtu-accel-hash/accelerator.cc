@@ -175,8 +175,11 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
                     reinterpret_cast<const uint64_t*>(
                         pkt_data + sizeof(MessageHeader));
 
-                DPRINTF(DtuAccelHash, "  cmd=%lld arg1=%#llx arg2=%#llx\n",
-                    args[0], args[1], args[2]);
+                const char *cmdnames[] = {
+                    "INIT", "UPDATE", "FINISH"
+                };
+                DPRINTF(DtuAccelHash, "  cmd=%s arg1=%#llx arg2=%#llx\n",
+                    cmdnames[args[0] % 3], args[1], args[2]);
 
                 replyOffset = 0;
                 replySize = sizeof(uint64_t);
