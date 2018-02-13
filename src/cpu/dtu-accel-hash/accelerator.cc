@@ -82,15 +82,6 @@ DtuAccelHash::DtuAccelHash(const DtuAccelHashParams *p)
     yield.start();
 }
 
-size_t DtuAccelHash::getStateSize() const
-{
-    // if we fill the buffer, we do not need to save it, since we don't
-    // interrupt that operation.
-    if (hash.autonomous())
-        return sizeof(hash);
-    return sizeof(hash) + bufSize;
-}
-
 std::string DtuAccelHash::getStateName() const
 {
     std::ostringstream os;

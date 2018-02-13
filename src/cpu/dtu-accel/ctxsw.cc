@@ -87,7 +87,7 @@ AccelContextSwitch::tick()
         }
         case State::SAVE_SEND:
         {
-            size_t rem = accel->stateSize() - offset;
+            size_t rem = ctxSize + accel->stateSize() - offset;
             size_t size = std::min(accel->maxDataSize, rem);
             pkt = accel->createDtuCmdPkt(
                 Dtu::Command::WRITE,
@@ -133,7 +133,7 @@ AccelContextSwitch::tick()
 
         case State::RESTORE:
         {
-            size_t rem = accel->stateSize() - offset;
+            size_t rem = ctxSize + accel->stateSize() - offset;
             size_t size = std::min(accel->maxDataSize, rem);
             pkt = accel->createDtuCmdPkt(
                 Dtu::Command::READ,
@@ -219,7 +219,7 @@ AccelContextSwitch::handleMemResp(PacketPtr pkt)
             {
                 // don't continue on errors here; maybe we don't have the
                 // memory EP yet.
-                if (cmd.error != 0 || offset == accel->stateSize())
+                if (cmd.error != 0 || offset == ctxSize + accel->stateSize())
                     state = State::SAVE_DONE;
                 else
                     state = State::SAVE_SEND;
@@ -271,7 +271,7 @@ AccelContextSwitch::handleMemResp(PacketPtr pkt)
                 *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
             if (cmd.opcode == 0)
             {
-                if (offset == accel->stateSize())
+                if (offset == ctxSize + accel->stateSize())
                 {
                     offset = 0;
                     state = State::RESTORE_READ;

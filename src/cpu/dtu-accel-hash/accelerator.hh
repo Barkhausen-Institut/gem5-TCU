@@ -57,7 +57,14 @@ class DtuAccelHash : public DtuAccel
 
     Addr bufferAddr() const override { return BUF_ADDR; }
     int contextEp() const override { return EP_CTX; }
-    size_t stateSize() const override { return bufSize; }
+    size_t stateSize() const override
+    {
+        // if we fill the buffer, we do not need to save it, since we don't
+        // interrupt that operation.
+        if (hash.autonomous())
+            return 0;
+        return bufSize;
+    }
     size_t contextSize() const override { return sizeof(hash); }
     void *context() override { return &hash; }
     void setSwitched() override { ctxSwPerformed = true; }
@@ -95,8 +102,6 @@ class DtuAccelHash : public DtuAccel
         UPDATE,
         FINISH
     };
-
-    size_t getStateSize() const;
 
     std::string getStateName() const;
 
