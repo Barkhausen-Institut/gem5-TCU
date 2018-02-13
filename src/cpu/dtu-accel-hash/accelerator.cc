@@ -70,6 +70,7 @@ DtuAccelHash::DtuAccelHash(const DtuAccelHashParams *p)
     ctxSwPending(false),
     memPending(false),
     state(State::IDLE),
+    lastState(State::CTXSW),    // something different
     hash(),
     msgAddr(),
     sysc(this),
@@ -90,6 +91,8 @@ std::string DtuAccelHash::getStateName() const
         os << ":" << yield.stateName();
     else if (state == State::SYSCALL)
         os << ":" << sysc.stateName();
+    else if (state == State::CTXSW)
+        os << ":" << ctxsw.stateName();
     return os.str();
 }
 
@@ -98,8 +101,15 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
 {
     Request* req = pkt->req;
 
-    DPRINTF(DtuAccelHashState, "[%s] Got response from memory\n",
-        getStateName().c_str());
+    if (state != lastState ||
+        (state == State::CTXSW && ctxsw.hasStateChanged()) ||
+        (state == State::SYSCALL && sysc.hasStateChanged()) ||
+        (state == State::IDLE && yield.hasStateChanged()))
+    {
+        DPRINTF(DtuAccelHashState, "[%s] Got response from memory\n",
+            getStateName().c_str());
+        lastState = state;
+    }
 
     const uint8_t *pkt_data = pkt->getConstPtr<uint8_t>();
 
@@ -360,8 +370,15 @@ DtuAccelHash::tick()
         ctxSwPerformed = false;
     }
 
-    DPRINTF(DtuAccelHashState, "[%s] tick\n",
-        getStateName().c_str());
+    if (state != lastState ||
+        (state == State::CTXSW && ctxsw.hasStateChanged()) ||
+        (state == State::SYSCALL && sysc.hasStateChanged()) ||
+        (state == State::IDLE && yield.hasStateChanged()))
+    {
+        DPRINTF(DtuAccelHashState, "[%s] tick\n",
+            getStateName().c_str());
+        lastState = state;
+    }
 
     switch(state)
     {

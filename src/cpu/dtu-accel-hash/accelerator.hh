@@ -112,6 +112,7 @@ class DtuAccelHash : public DtuAccel
     bool memPending;
 
     State state;
+    State lastState;
     DtuAccelHashAlgorithm hash;
 
     Addr msgAddr;
