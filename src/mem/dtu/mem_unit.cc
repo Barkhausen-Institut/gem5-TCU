@@ -113,8 +113,13 @@ MemoryUnit::startRead(const Dtu::Command::Bits& cmd)
         ep.targetCore, ep.remoteAddr, offset,
         cmd.epid, data.addr, size);
 
+    if(size == 0)
+    {
+        dtu.scheduleFinishOp(Cycles(1), Dtu::Error::NONE);
+        return;
+    }
+
     // TODO error handling
-    assert(size > 0);
     assert(size + offset >= size);
     assert(size + offset <= ep.remoteSize);
 
@@ -245,8 +250,13 @@ MemoryUnit::startWrite(const Dtu::Command::Bits& cmd)
         ep.targetCore, ep.remoteAddr, offset,
         cmd.epid, data.addr, size);
 
+    if(size == 0)
+    {
+        dtu.scheduleFinishOp(Cycles(1), Dtu::Error::NONE);
+        return;
+    }
+
     // TODO error handling
-    assert(size > 0);
     assert(ep.flags & Dtu::MemoryFlags::WRITE);
     assert(size + offset >= size);
     assert(size + offset <= ep.remoteSize);
