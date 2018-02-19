@@ -30,7 +30,8 @@
 #include "cpu/dtu-accel/ctxswsm.hh"
 
 AccelCtxSwSM::AccelCtxSwSM(DtuAccel *_accel)
-    : ctxSize(_accel->contextSize()), accel(_accel), state(), stateChanged(),
+    : ctxSize(_accel->contextSize()), accel(_accel),
+      state(CHECK), stateChanged(),
       offset(), ctxSwPending()
 {
 }
