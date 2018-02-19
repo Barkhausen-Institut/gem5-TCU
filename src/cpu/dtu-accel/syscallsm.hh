@@ -47,7 +47,7 @@ class SyscallSM
     };
 
     explicit SyscallSM(DtuAccel *_accel)
-        : accel(_accel), state(), replyAddr(), syscallSize() {}
+        : accel(_accel), state(), stateChanged(), replyAddr(), syscallSize() {}
 
     std::string stateName() const;
 

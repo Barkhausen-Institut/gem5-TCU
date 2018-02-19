@@ -56,7 +56,7 @@ class YieldSM
     };
 
     explicit YieldSM(DtuAccel *_accel, SyscallSM *_syscsm)
-        : accel(_accel), syscsm(_syscsm), state() {}
+        : accel(_accel), syscsm(_syscsm), state(), stateChanged() {}
 
     std::string stateName() const;
 
