@@ -59,6 +59,13 @@ DtuAccelConnector::reset(Addr addr)
     acc->reset();
 }
 
+void
+DtuAccelConnector::signalFinished()
+{
+    DPRINTF(DtuConnector, "Signaling finish\n");
+    acc->signalFinished();
+}
+
 DtuAccelConnector*
 DtuAccelConnectorParams::create()
 {

@@ -46,6 +46,8 @@ class DtuAccelConnector : public BaseConnector
 
     void reset(Addr addr) override;
 
+    void signalFinished();
+
   private:
 
     DtuAccel *acc;
