@@ -61,7 +61,7 @@ DtuAccelAladdin::DtuAccelAladdin(const DtuAccelAladdinParams *p)
     memPending(false),
     state(State::IDLE),
     lastState(State::CTXSW),    // something different
-    msgAddr(),
+    ctx(),
     accelId(p->accel_id),
     sysc(this),
     yield(this, &sysc),
@@ -139,9 +139,9 @@ DtuAccelAladdin::completeRequest(PacketPtr pkt)
                 const RegFile::reg_t *regs = pkt->getConstPtr<RegFile::reg_t>();
                 if(regs[0])
                 {
-                    msgAddr = regs[0];
-                    msgOff = 0;
-                    DPRINTF(DtuAccelAladdin, "Received message @ %p\n", msgAddr);
+                    ctx.msgAddr = regs[0];
+                    ctx.msgOff = 0;
+                    DPRINTF(DtuAccelAladdin, "Received message @ %p\n", ctx.msgAddr);
                     state = State::READ_MSG;
                 }
                 else
@@ -153,35 +153,36 @@ DtuAccelAladdin::completeRequest(PacketPtr pkt)
             }
             case State::READ_MSG:
             {
-                size_t maxOff = sizeof(msg) + sizeof(MessageHeader);
-                if (msgOff < maxOff)
+                size_t maxOff = sizeof(ctx.msg) + sizeof(MessageHeader);
+                if (ctx.msgOff < maxOff)
                 {
-                    char *dst = (char*)&msg;
-                    size_t amount = std::min<size_t>(maxOff - msgOff, pkt->getSize());
-                    if (msgOff == 0)
+                    char *dst = (char*)&ctx.msg;
+                    size_t amount = std::min<size_t>(maxOff - ctx.msgOff, pkt->getSize());
+                    if (ctx.msgOff == 0)
                     {
                         pkt_data += sizeof(MessageHeader);
                         amount -= sizeof(MessageHeader);
                     }
                     else
-                        dst += msgOff - sizeof(MessageHeader);
+                        dst += ctx.msgOff - sizeof(MessageHeader);
                     memcpy(dst, pkt_data, amount);
                 }
 
-                msgOff += pkt->getSize();
-                if (msgOff == MSG_SIZE)
+                ctx.msgOff += pkt->getSize();
+                if (ctx.msgOff == MSG_SIZE)
                 {
                     DPRINTF(DtuAccelAladdin,
                         "  invokeMsg(iters=%llu, arrays=%llu: [\n",
-                        msg.iterations, msg.array_count);
-                    for(uint64_t i = 0; i < msg.array_count; ++i)
+                        ctx.msg.iterations, ctx.msg.array_count);
+                    for(uint64_t i = 0; i < ctx.msg.array_count; ++i)
                     {
                         DPRINTFR(DtuAccelAladdin, "    addr=%#llx, size=%#llx\n",
-                            msg.arrays[i].addr, msg.arrays[i].size);
+                            ctx.msg.arrays[i].addr, ctx.msg.arrays[i].size);
                     }
                     DPRINTFR(DtuAccelAladdin, "  ])\n");
 
-                    iteration = 0;
+                    ctx.iteration = 0;
+                    ctx.interrupted = false;
                     state = State::COMPUTE;
                 }
                 break;
@@ -263,10 +264,12 @@ DtuAccelAladdin::reset()
 }
 
 void
-DtuAccelAladdin::signalFinished()
+DtuAccelAladdin::signalFinished(size_t off)
 {
+    ctx.trace_off = off;
+
     assert(state == State::COMPUTE);
-    if (iteration == msg.iterations)
+    if (ctx.iteration == ctx.msg.iterations)
         state = State::STORE_REPLY;
 
     if (!tickEvent.scheduled())
@@ -281,8 +284,10 @@ DtuAccelAladdin::tick()
     // after a context switch, continue at then position we left off
     if (ctxSwPerformed)
     {
-        state = State::FETCH_MSG;
+        state = ctx.interrupted ? State::COMPUTE : State::FETCH_MSG;
         ctxSwPerformed = false;
+        ctx.interrupted = false;
+        irqPending = false;
     }
 
     if (state != lastState ||
@@ -333,13 +338,22 @@ DtuAccelAladdin::tick()
         }
         case State::READ_MSG:
         {
-            size_t size = std::min(chunkSize, MSG_SIZE - msgOff);
-            pkt = createPacket(msgAddr + msgOff, size, MemCmd::ReadReq);
+            size_t size = std::min(chunkSize, MSG_SIZE - ctx.msgOff);
+            pkt = createPacket(ctx.msgAddr + ctx.msgOff, size, MemCmd::ReadReq);
             break;
         }
 
         case State::COMPUTE:
         {
+            if (irqPending)
+            {
+                irqPending = false;
+                ctx.interrupted = true;
+                state = State::CTXSW;
+                schedule(tickEvent, clockEdge(Cycles(1)));
+                break;
+            }
+
             auto addArray = [this](const char *name, Addr addr, Addr size) {
                 system->insertArrayLabelMapping(
                     accelId, name, addr, size
@@ -386,11 +400,11 @@ DtuAccelAladdin::tick()
             else
                 fatal("Unknown accelerator id %d", accelId);
 
-            for (uint64_t i = 0; i < msg.array_count; ++i)
-                addArray(names[i], msg.arrays[i].addr, msg.arrays[i].size);
-            system->activateAccelerator(accelId, 0x1000, 0, 0);
+            for (uint64_t i = 0; i < ctx.msg.array_count; ++i)
+                addArray(names[i], ctx.msg.arrays[i].addr, ctx.msg.arrays[i].size);
+            system->activateAccelerator(accelId, 0x1000, 0, 0, ctx.trace_off);
 
-            iteration += 1;
+            ctx.iteration += 1;
             pkt = nullptr;
             break;
         }
@@ -409,7 +423,7 @@ DtuAccelAladdin::tick()
                                   EP_RECV,
                                   BUF_ADDR,
                                   sizeof(reply.msg),
-                                  msgAddr);
+                                  ctx.msgAddr);
             break;
         }
         case State::REPLY_WAIT:
@@ -422,7 +436,7 @@ DtuAccelAladdin::tick()
         {
             reply.sys.opcode = 18;          /* FORWARD_REPLY */
             reply.sys.cap = CAP_RBUF;
-            reply.sys.msgaddr = msgAddr;
+            reply.sys.msgaddr = ctx.msgAddr;
             reply.sys.event = 0;
             reply.sys.len = sizeof(reply.msg);
             reply.sys.event = 0;

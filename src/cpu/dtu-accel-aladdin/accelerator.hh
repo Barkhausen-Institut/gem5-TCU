@@ -56,14 +56,14 @@ class DtuAccelAladdin : public DtuAccel
 
     void reset() override;
 
-    void signalFinished() override;
+    void signalFinished(size_t off) override;
 
     Addr sendMsgAddr() const override { return BUF_ADDR; }
     Addr bufferAddr() const override { return BUF_ADDR; }
     int contextEp() const override { return EP_CTX; }
     size_t stateSize() const override { return 0; }
-    size_t contextSize() const override { return 0; }
-    void *context() override { return nullptr; }
+    size_t contextSize() const override { return sizeof(ctx); }
+    void *context() override { return &ctx; }
     void setSwitched() override { ctxSwPerformed = true; }
 
   private:
@@ -111,10 +111,15 @@ class DtuAccelAladdin : public DtuAccel
     State state;
     State lastState;
 
-    Addr msgAddr;
-    Addr msgOff;
-    InvokeMessage msg;
-    uint64_t iteration;
+    struct Context {
+        uint64_t msgAddr;
+        uint64_t msgOff;
+        InvokeMessage msg;
+        uint64_t iteration;
+        uint64_t interrupted;
+        uint64_t trace_off;
+        char _pad[8];
+    } M5_ATTR_PACKED ctx;
 
     struct
     {

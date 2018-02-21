@@ -65,7 +65,7 @@ class DtuAccel : public MemObject
 
     virtual void reset() = 0;
 
-    virtual void signalFinished() {};
+    virtual void signalFinished(size_t) {};
 
     /// main simulation loop
     virtual void tick() = 0;

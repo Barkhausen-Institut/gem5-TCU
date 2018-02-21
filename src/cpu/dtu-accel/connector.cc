@@ -60,10 +60,10 @@ DtuAccelConnector::reset(Addr addr)
 }
 
 void
-DtuAccelConnector::signalFinished()
+DtuAccelConnector::signalFinished(size_t off)
 {
-    DPRINTF(DtuConnector, "Signaling finish\n");
-    acc->signalFinished();
+    DPRINTF(DtuConnector, "Signaling finish (off=%lu)\n", off);
+    acc->signalFinished(off);
 }
 
 DtuAccelConnector*

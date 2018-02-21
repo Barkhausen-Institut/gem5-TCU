@@ -233,22 +233,22 @@ void System::setAcceleratorIds(int accel_id, int context_id, int thread_id)
 /* Adds the specified accelerator to the event queue with a given number of
  * delay cycles (to emulate software overhead during invocation).
  */
-void System::scheduleAccelerator(int id, int delay)
+void System::scheduleAccelerator(int id, int delay, size_t trace_off)
 {
     if (accelerators.find(id) == accelerators.end())
         fatal("Unable to schedule accelerator: No accelerator with id %#x.", id);
     Gem5Datapath *datapath = accelerators[id]->datapath;
-    datapath->initializeDatapath(delay);
+    datapath->initializeDatapath(delay, trace_off);
     DPRINTF(Aladdin, "Scheduling accelerator %d\n", id);
 }
 
 /* Activates an accelerator with the provided parameters. */
-void System::activateAccelerator(
-        unsigned accel_id, Addr finish_flag, int context_id, int thread_id) {
+void System::activateAccelerator(unsigned accel_id, Addr finish_flag,
+                                 int context_id, int thread_id, size_t trace_off) {
     DPRINTF(Aladdin, "Activating accelerator id %d\n", accel_id);
     setAcceleratorFinishFlag(accel_id, finish_flag);
     setAcceleratorIds(accel_id, context_id, thread_id);
-    scheduleAccelerator(accel_id, 1);
+    scheduleAccelerator(accel_id, 1, trace_off);
 }
 
 /* Add an address tranlation into the datapath TLB for the specified array. */
