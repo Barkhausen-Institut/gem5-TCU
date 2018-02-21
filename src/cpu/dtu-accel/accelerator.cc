@@ -39,8 +39,6 @@
 const unsigned DtuAccel::EP_SYSS       = 0;
 const unsigned DtuAccel::EP_SYSR       = 2;
 
-const Addr DtuAccel::MSG_ADDR          = 0x2000;
-
 const Addr DtuAccel::RCTMUX_YIELD      = 0x5ff0;
 const Addr DtuAccel::RCTMUX_FLAGS      = 0x5ff8;
 

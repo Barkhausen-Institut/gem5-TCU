@@ -427,7 +427,7 @@ DtuAccelAladdin::tick()
             reply.sys.len = sizeof(reply.msg);
             reply.sys.event = 0;
 
-            pkt = createPacket(MSG_ADDR, sizeof(reply), MemCmd::WriteReq);
+            pkt = createPacket(BUF_ADDR, sizeof(reply), MemCmd::WriteReq);
             memcpy(pkt->getPtr<void>(), &reply, sizeof(reply));
             break;
         }

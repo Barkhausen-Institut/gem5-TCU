@@ -48,6 +48,7 @@ class DtuAccelHash : public DtuAccel
     static const unsigned CAP_RBUF      = 2;
 
     static const size_t MSG_SIZE        = 64;
+    static const Addr MSG_ADDR          = 0x2000;
     static const Addr BUF_ADDR          = 0x6000;
 
   public:
@@ -57,6 +58,7 @@ class DtuAccelHash : public DtuAccel
 
     void reset() override;
 
+    Addr sendMsgAddr() const override { return MSG_ADDR; }
     Addr bufferAddr() const override { return BUF_ADDR; }
     int contextEp() const override { return EP_CTX; }
     size_t stateSize() const override

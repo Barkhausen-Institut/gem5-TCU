@@ -45,8 +45,6 @@ class DtuAccel : public MemObject
     static const unsigned EP_SYSS;
     static const unsigned EP_SYSR;
 
-    static const Addr MSG_ADDR;
-
     static const Addr RCTMUX_YIELD;
     static const Addr RCTMUX_FLAGS;
 
@@ -74,6 +72,7 @@ class DtuAccel : public MemObject
 
     virtual void completeRequest(PacketPtr pkt) = 0;
 
+    virtual Addr sendMsgAddr() const = 0;
     virtual Addr bufferAddr() const = 0;
 
     virtual int contextEp() const = 0;

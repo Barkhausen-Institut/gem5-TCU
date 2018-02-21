@@ -58,6 +58,7 @@ class DtuAccelAladdin : public DtuAccel
 
     void signalFinished() override;
 
+    Addr sendMsgAddr() const override { return BUF_ADDR; }
     Addr bufferAddr() const override { return BUF_ADDR; }
     int contextEp() const override { return EP_CTX; }
     size_t stateSize() const override { return 0; }

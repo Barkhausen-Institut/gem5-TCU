@@ -44,6 +44,7 @@ class DtuAccelStream : public DtuAccel
 {
   public:
 
+    static const Addr MSG_ADDR          = 0x2000;
     static const Addr BUF_ADDR          = 0x6000;
 
     static const unsigned EP_RECV       = 7;
@@ -65,6 +66,7 @@ class DtuAccelStream : public DtuAccel
 
     void reset() override;
 
+    Addr sendMsgAddr() const override { return MSG_ADDR; }
     Addr bufferAddr() const override { return BUF_ADDR; }
     int contextEp() const override { return EP_CTX; }
     size_t stateSize() const override { return bufSize; }

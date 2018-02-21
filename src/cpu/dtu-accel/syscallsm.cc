@@ -50,7 +50,7 @@ SyscallSM::tick()
         {
             pkt = accel->createDtuCmdPkt(Dtu::Command::SEND,
                                          DtuAccel::EP_SYSS,
-                                         DtuAccel::MSG_ADDR,
+                                         accel->sendMsgAddr(),
                                          syscallSize,
                                          DtuAccel::EP_SYSR);
             break;

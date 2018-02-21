@@ -71,7 +71,7 @@ YieldSM::tick()
             syscall.arg = 0;       /* unused */
 
             pkt = accel->createPacket(
-                DtuAccel::MSG_ADDR, sizeof(syscall), MemCmd::WriteReq
+                accel->sendMsgAddr(), sizeof(syscall), MemCmd::WriteReq
             );
             memcpy(pkt->getPtr<void>(), &syscall, sizeof(syscall));
             break;
