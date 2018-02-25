@@ -228,6 +228,18 @@ let {{
     decoder_output += BasicConstructor.subst(deprecated_exitIop)
     exec_output += PredOpExecute.subst(deprecated_exitIop)
 
+    m5getcycles_code = '''
+        R0 = PseudoInst::getCycles(xc->tcBase(), R0);
+    '''
+
+    m5getcyclesIop = InstObjParams("m5getcycles", "M5getcycles", "PredOp",
+                                   { "code": m5getcycles_code,
+                                     "predicate_test": predicateTest },
+                                     ["No_OpClass", "IsNonSpeculative"])
+    header_output += BasicDeclare.subst(m5getcyclesIop)
+    decoder_output += BasicConstructor.subst(m5getcyclesIop)
+    exec_output += PredOpExecute.subst(m5getcyclesIop)
+
     m5exit_code = '''
         PseudoInst::m5exit(xc->tcBase(), join32to64(R1, R0));
     '''
