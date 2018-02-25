@@ -290,6 +290,11 @@ DtuAccelAladdin::tick()
     // after a context switch, continue at then position we left off
     if (ctxSwPerformed)
     {
+        DPRINTF(DtuAccelAladdin,
+            "Resuming %swork at %llu/%llu, off=%llu\n",
+            ctx.interrupted ? "interrupted " : "",
+            ctx.iteration, ctx.msg.iterations, ctx.trace_off);
+
         state = ctx.interrupted ? State::COMPUTE : State::FETCH_MSG;
         ctxSwPerformed = false;
         ctx.interrupted = false;
@@ -353,6 +358,10 @@ DtuAccelAladdin::tick()
         {
             if (irqPending)
             {
+                DPRINTF(DtuAccelAladdin,
+                    "Interrupting work at %llu/%llu, off=%llu\n",
+                    ctx.iteration, ctx.msg.iterations, ctx.trace_off);
+
                 irqPending = false;
                 ctx.interrupted = true;
                 system->resetAccelerator(accelId);
