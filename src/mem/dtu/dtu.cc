@@ -129,7 +129,7 @@ Dtu::Dtu(DtuParams* p)
         DPRINTF(Dtu, "Using memory range %p .. %p\n",
             memOffset, memOffset + memSize);
 
-        regs().set(DtuReg::ROOT_PT, phys.getAddr());
+        regs().set(DtuReg::ROOT_PT, sys->getRootPt().getAddr());
     }
     // memory PEs don't participate in cache coherence
     else

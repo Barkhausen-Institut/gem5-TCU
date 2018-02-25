@@ -41,6 +41,7 @@ class DTUMemory
 
     PortProxy &physp;
     unsigned nextFrame;
+    const Addr rootPTOffset;
 
   public:
 
@@ -69,7 +70,7 @@ class DTUMemory
 
     NocAddr getRootPt() const
     {
-        return getPhys(0);
+        return getPhys(rootPTOffset);
     }
 
     void initMemory();

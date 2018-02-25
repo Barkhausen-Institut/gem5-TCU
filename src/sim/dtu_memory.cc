@@ -42,7 +42,8 @@ DTUMemory::DTUMemory(SimObject *obj,
     : obj(obj),
       physp(phys),
       // don't reuse root pt
-      nextFrame(firstFree),
+      nextFrame(firstFree + 1),
+      rootPTOffset(firstFree * DtuTlb::PAGE_SIZE),
       memPe(memPe),
       memOffset(memOffset),
       memSize(memSize)
