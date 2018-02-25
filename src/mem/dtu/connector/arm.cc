@@ -41,6 +41,8 @@ ArmConnector::ArmConnector(const ArmConnectorParams *p)
 void
 ArmConnector::setIrq()
 {
+    DPRINTF(DtuConnector, "Injecting IRQ 2\n");
+
     ThreadContext *tc = system->getThreadContext(0);
     tc->getCpuPtr()->getInterruptController(0)->post(2, 0);
 }
@@ -48,6 +50,8 @@ ArmConnector::setIrq()
 void
 ArmConnector::clearIrq()
 {
+    DPRINTF(DtuConnector, "Clearing IRQ 2\n");
+
     ThreadContext *tc = system->getThreadContext(0);
     tc->getCpuPtr()->getInterruptController(0)->clear(2, 0);
 }
