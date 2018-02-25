@@ -251,6 +251,16 @@ void System::activateAccelerator(unsigned accel_id, Addr finish_flag,
     scheduleAccelerator(accel_id, 1, trace_off);
 }
 
+void
+System::resetAccelerator(unsigned id)
+{
+    if (accelerators.find(id) == accelerators.end())
+        fatal("Unable to reset accelerator: No accelerator with id %#x.", id);
+
+    Gem5Datapath* datapath = accelerators[id]->datapath;
+    datapath->reset();
+}
+
 /* Add an address tranlation into the datapath TLB for the specified array. */
 void System::insertAddressTranslationMapping(int id, Addr sim_vaddr, Addr sim_paddr) {
     if (accelerators.find(id) == accelerators.end())

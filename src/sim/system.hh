@@ -276,6 +276,9 @@ class System : public MemObject
     void activateAccelerator(unsigned accel_id, Addr finish_flag,
                              int context_id, int thread_id, size_t trace_off);
 
+    /* Resets an accelerator to its initial state */
+    void resetAccelerator(unsigned accel_id);
+
     /* Add an address tranlation into the datapath TLB for the specified array. */
     void insertAddressTranslationMapping(int id, Addr sim_vaddr, Addr sim_paddr);
 

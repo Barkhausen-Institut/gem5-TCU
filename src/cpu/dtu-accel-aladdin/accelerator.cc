@@ -249,6 +249,11 @@ DtuAccelAladdin::interrupt()
         if (!tickEvent.scheduled())
             schedule(tickEvent, clockEdge(Cycles(1)));
     }
+    else if(state == State::COMPUTE)
+    {
+        if (!tickEvent.scheduled())
+            schedule(tickEvent, clockEdge(Cycles(1)));
+    }
 }
 
 void
@@ -267,6 +272,7 @@ void
 DtuAccelAladdin::signalFinished(size_t off)
 {
     ctx.trace_off = off;
+    ctx.iteration += 1;
 
     assert(state == State::COMPUTE);
     if (ctx.iteration == ctx.msg.iterations)
@@ -349,6 +355,7 @@ DtuAccelAladdin::tick()
             {
                 irqPending = false;
                 ctx.interrupted = true;
+                system->resetAccelerator(accelId);
                 state = State::CTXSW;
                 schedule(tickEvent, clockEdge(Cycles(1)));
                 break;
@@ -404,7 +411,6 @@ DtuAccelAladdin::tick()
                 addArray(names[i], ctx.msg.arrays[i].addr, ctx.msg.arrays[i].size);
             system->activateAccelerator(accelId, 0x1000, 0, 0, ctx.trace_off);
 
-            ctx.iteration += 1;
             pkt = nullptr;
             break;
         }

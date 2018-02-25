@@ -111,7 +111,8 @@ class DtuAccelAladdin : public DtuAccel
     State state;
     State lastState;
 
-    struct Context {
+    struct Context
+    {
         uint64_t msgAddr;
         uint64_t msgOff;
         InvokeMessage msg;
