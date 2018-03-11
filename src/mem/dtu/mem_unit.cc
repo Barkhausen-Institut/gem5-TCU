@@ -311,7 +311,7 @@ MemoryUnit::WriteTransferEvent::transferDone(Dtu::Error result)
 void
 MemoryUnit::writeComplete(const Dtu::Command::Bits& cmd, PacketPtr pkt, Dtu::Error error)
 {
-    if (error == Dtu::Error::NONE)
+    if (cmd.opcode == Dtu::Command::WRITE && error == Dtu::Error::NONE)
         finishReadWrite(dtu, pkt->getSize());
 
     // we don't need to pay the payload delay here because the message
