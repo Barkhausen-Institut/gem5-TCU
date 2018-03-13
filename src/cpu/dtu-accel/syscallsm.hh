@@ -36,6 +36,49 @@
 class SyscallSM
 {
   public:
+    enum Operation
+    {
+        // sent by the DTU if the PF handler is not reachable
+        PAGEFAULT = 0,
+
+        // capability creations
+        CREATE_SRV,
+        CREATE_SESS,
+        CREATE_SESS_AT,
+        CREATE_RGATE,
+        CREATE_SGATE,
+        CREATE_MGATE,
+        CREATE_MAP,
+        CREATE_VPE,
+
+        // capability operations
+        ACTIVATE,
+        VPE_CTRL,
+        VPE_WAIT,
+        DERIVE_MEM,
+
+        // capability exchange
+        DELEGATE,
+        OBTAIN,
+        EXCHANGE,
+        REVOKE,
+
+        // forwarding
+        FORWARD_MSG,
+        FORWARD_MEM,
+        FORWARD_REPLY,
+
+        // misc
+        NOOP,
+    };
+
+    enum VPEOp
+    {
+        VCTRL_INIT,
+        VCTRL_START,
+        VCTRL_YIELD,
+        VCTRL_STOP,
+    };
 
     enum State
     {

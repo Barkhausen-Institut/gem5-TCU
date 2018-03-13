@@ -587,8 +587,8 @@ DtuAccelStream::tick()
 
         case State::EXIT:
         {
-            exit_msg.opcode = 10;     /* VPE_CTRL */
-            exit_msg.op = 3;          /* VCTRL_STOP */
+            exit_msg.opcode = SyscallSM::Operation::VPE_CTRL;
+            exit_msg.op = SyscallSM::VPEOp::VCTRL_STOP;
             exit_msg.vpe_sel = 0;
             exit_msg.arg = 0;
 

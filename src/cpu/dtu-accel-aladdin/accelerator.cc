@@ -449,7 +449,7 @@ DtuAccelAladdin::tick()
         }
         case State::REPLY_ERROR:
         {
-            reply.sys.opcode = 18;          /* FORWARD_REPLY */
+            reply.sys.opcode = SyscallSM::Operation::FORWARD_REPLY;
             reply.sys.cap = CAP_RBUF;
             reply.sys.msgaddr = ctx.msgAddr;
             reply.sys.event = 0;
