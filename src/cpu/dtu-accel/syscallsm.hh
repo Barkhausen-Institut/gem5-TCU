@@ -47,16 +47,18 @@ class SyscallSM
     };
 
     explicit SyscallSM(DtuAccel *_accel)
-        : accel(_accel), state(), stateChanged(), replyAddr(), syscallSize() {}
+        : accel(_accel), state(), stateChanged(), waitForReply(),
+          replyAddr(), syscallSize() {}
 
     std::string stateName() const;
 
     bool hasStateChanged() const { return stateChanged; }
 
-    void start(Addr size)
+    void start(Addr size, bool wait = true)
     {
         syscallSize = size;
         state = SYSC_SEND;
+        waitForReply = wait;
     }
 
     PacketPtr tick();
@@ -68,6 +70,7 @@ class SyscallSM
     DtuAccel *accel;
     State state;
     bool stateChanged;
+    bool waitForReply;
     Addr replyAddr;
     Addr syscallSize;
 };

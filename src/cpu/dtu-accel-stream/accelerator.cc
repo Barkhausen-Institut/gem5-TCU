@@ -43,25 +43,26 @@ static const char *stateNames[] =
     "FETCH_MSG",
     "READ_MSG_ADDR",
     "READ_MSG",
+
+    "INOUT_START",
+    "INOUT_SEND",
+    "INOUT_SEND_WAIT",
+    "INOUT_SEND_ERROR",
+    "INOUT_ACK",
+
     "READ_DATA",
     "READ_DATA_WAIT",
     "COMPUTE",
+
     "WRITE_DATA",
     "WRITE_DATA_WAIT",
 
-    "MSG_STORE",
-    "MSG_SEND",
-    "MSG_WAIT",
-    "MSG_IDLE",
-    "MSG_ERROR",
-
-    "REPLY_SEND",
-    "REPLY_WAIT",
-    "REPLY_ERROR",
 
     "CTXSW",
 
     "SYSCALL",
+
+    "EXIT",
 };
 
 DtuAccelStream::DtuAccelStream(const DtuAccelStreamParams *p)
@@ -78,6 +79,7 @@ DtuAccelStream::DtuAccelStream(const DtuAccelStreamParams *p)
     ctxsw(this),
     ctxSwPerformed()
 {
+    ctx.flags = Flags::INPUT;
     yield.start();
 }
 
@@ -141,13 +143,65 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                 {
                     // if we didn't perform a context switch, go back to our
                     // previous state
-                    if (ctx.interrupted && !ctxSwPerformed)
+                    if ((ctx.flags & Flags::INTRPT) && !ctxSwPerformed)
                     {
                         state = State::READ_DATA;
-                        ctx.interrupted = false;
+                        ctx.flags &= ~Flags::INTRPT;
                     }
                     else
-                        state = State::FETCH_MSG;
+                    {
+                        state = (ctx.flags & Flags::WAIT) ? State::FETCH_MSG
+                                                          : State::INOUT_START;
+                    }
+                }
+                break;
+            }
+
+            case State::INOUT_START:
+            {
+                state = State::INOUT_SEND;
+                break;
+            }
+            case State::INOUT_SEND:
+            {
+                state = State::INOUT_SEND_WAIT;
+                break;
+            }
+            case State::INOUT_SEND_WAIT:
+            {
+                Dtu::Command::Bits cmd =
+                    *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
+                if (cmd.opcode == 0)
+                {
+                    auto err = static_cast<Dtu::Error>((long)cmd.error);
+                    if (err == Dtu::Error::VPE_GONE)
+                        state = State::INOUT_SEND_ERROR;
+                    else
+                    {
+                        if (err == Dtu::Error::NONE)
+                            ctx.flags |= Flags::WAIT;
+                        // ignore other errors
+                        yield.start();
+                        state = State::IDLE;
+                    }
+                }
+                break;
+            }
+            case State::INOUT_SEND_ERROR:
+            {
+                sysc.start(sizeof(rdwr_msg));
+                syscNext = State::IDLE;
+                state = State::SYSCALL;
+                break;
+            }
+            case State::INOUT_ACK:
+            {
+                if (ctx.flags & Flags::EXIT)
+                    state = State::EXIT;
+                else
+                {
+                    state = (ctx.flags & Flags::INPUT) ? State::READ_DATA
+                                                       : State::WRITE_DATA;
                 }
                 break;
             }
@@ -163,7 +217,8 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                 if(regs[0])
                 {
                     ctx.msgAddr = regs[0];
-                    DPRINTF(DtuAccelStream, "Received message @ %p\n", ctx.msgAddr);
+                    DPRINTF(DtuAccelStream,
+                            "Received message @ %p\n", ctx.msgAddr);
                     state = State::READ_MSG;
                 }
                 else
@@ -175,47 +230,57 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
             }
             case State::READ_MSG:
             {
-                const uint64_t *args =
-                    reinterpret_cast<const uint64_t*>(
-                        pkt_data + sizeof(MessageHeader));
+                auto head = reinterpret_cast<const MessageHeader*>(pkt_data);
+                auto args = reinterpret_cast<const uint64_t*>(
+                    pkt_data + sizeof(MessageHeader));
 
-                Command cmd = static_cast<Command>(args[0]);
-                if (cmd == Command::INIT)
+                switch(head->label)
                 {
-                    DPRINTF(DtuAccelStream,
-                            "  init(outsz=%#llx, reportsz=%#llx, comptime=%#llx)\n",
-                            args[1], args[2], args[3]);
-
-                    ctx.outSize = args[1];
-                    ctx.reportSize = args[2];
-                    ctx.compTime = Cycles(args[3]);
-                    ctx.accSize = 0;
-                    ctx.outOff = 0;
-                    state = State::REPLY_SEND;
-                }
-                else
-                {
-                    DPRINTF(DtuAccelStream,
-                            "  update(off=%lld len=%#llx eof=%lld)\n",
-                            args[1], args[2], args[3]);
-
-                    ctx.off = args[1];
-                    ctx.inOff = 0;
-                    ctx.dataSize = args[2];
-                    ctx.eof = args[3];
-                    if (ctx.dataSize == 0)
+                    case LBL_IN_REPLY:
                     {
-                        msg.msg.cmd = static_cast<uint64_t>(Command::UPDATE);
-                        msg.msg.off = ctx.outOff;
-                        msg.msg.len = 0;
-                        msg.msg.eof = args[3];
-                        state = args[3] ? State::MSG_STORE : State::REPLY_SEND;
+                        DPRINTF(
+                            DtuAccelStream,
+                            "  input reply(err=%#llx, off=%#llx, len=%#llx)\n",
+                            args[0], args[1], args[2]
+                        );
+
+                        ctx.inOff = args[1];
+                        ctx.inLen = args[2];
+                        ctx.inPos = 0;
+                        ctx.flags &= ~Flags::WAIT;
+                        if (ctx.inLen == 0)
+                        {
+                            ctx.flags |= Flags::EXIT;
+                            ctx.flags &= ~Flags::INPUT;
+                            state = State::INOUT_START;
+                        }
+                        else
+                            state = State::INOUT_ACK;
+                        break;
                     }
-                    else
-                        state = State::READ_DATA;
+
+                    case LBL_OUT_REPLY:
+                    {
+                        DPRINTF(
+                            DtuAccelStream,
+                            "  output reply(err=%#llx, off=%#llx, len=%#llx)\n",
+                            args[0], args[1], args[2]
+                        );
+
+                        ctx.outOff = args[1];
+                        ctx.outLen = args[2];
+                        ctx.outPos = 0;
+                        ctx.flags &= ~Flags::WAIT;
+                        state = State::INOUT_ACK;
+                        break;
+                    }
+
+                    default:
+                        panic("Unexpected label: %#llx\n", head->label);
                 }
                 break;
             }
+
             case State::READ_DATA:
             {
                 state = State::READ_DATA_WAIT;
@@ -227,7 +292,7 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
                 if (cmd.opcode == 0)
                 {
-                    logic.start(ctx.lastSize, ctx.compTime);
+                    logic.start(ctx.lastSize, Cycles(4096) /* TODO */);
                     state = State::COMPUTE;
                 }
                 break;
@@ -237,10 +302,12 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                 if(logic.handleMemResp(pkt, &delay))
                 {
                     ctx.lastSize = logic.outDataSize();
-                    state = State::WRITE_DATA;
+                    ctx.flags &= ~Flags::INPUT;
+                    state = State::INOUT_START;
                 }
                 break;
             }
+
             case State::WRITE_DATA:
             {
                 state = State::WRITE_DATA_WAIT;
@@ -252,91 +319,27 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
                 if (cmd.opcode == 0)
                 {
-                    if (ctx.accSize >= ctx.reportSize ||
-                        (ctx.inOff == ctx.dataSize && ctx.eof))
-                        state = State::MSG_STORE;
-                    else if (ctx.inOff == ctx.dataSize)
-                        state = State::REPLY_SEND;
-                    else
-                        state = State::READ_DATA;
+                    ctx.flags |= Flags::INPUT;
+                    state = State::INOUT_START;
                 }
                 break;
             }
 
-            case State::MSG_STORE:
-            {
-                state = State::MSG_SEND;
-                break;
-            }
-            case State::MSG_SEND:
-            {
-                state = State::MSG_WAIT;
-                break;
-            }
-            case State::MSG_WAIT:
-            {
-                Dtu::Command::Bits cmd =
-                    *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
-                if (cmd.opcode == 0)
-                {
-                    auto err = static_cast<Dtu::Error>((long)cmd.error);
-                    if (err == Dtu::Error::NONE)
-                    {
-                        if (ctx.inOff == ctx.dataSize)
-                            state = State::REPLY_SEND;
-                        else
-                            state = State::READ_DATA;
-                    }
-                    else if (err == Dtu::Error::VPE_GONE)
-                        state = State::MSG_ERROR;
-                    else if (err == Dtu::Error::MISS_CREDITS)
-                        state = State::MSG_IDLE;
-                    else
-                        state = State::MSG_SEND;
-                }
-                break;
-            }
-            case State::MSG_IDLE:
-            {
-                state = State::MSG_SEND;
-                break;
-            }
-            case State::MSG_ERROR:
-            {
-                sysc.start(sizeof(msg));
-                syscNext = State::READ_DATA;
-                state = State::SYSCALL;
-                break;
-            }
-
-            case State::REPLY_SEND:
-            {
-                state = State::REPLY_WAIT;
-                break;
-            }
-            case State::REPLY_WAIT:
-            {
-                Dtu::Command::Bits cmd =
-                    *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
-                if (cmd.opcode == 0)
-                {
-                    state = cmd.error == 0 ? State::CTXSW
-                                           : State::REPLY_ERROR;
-                }
-                break;
-            }
-            case State::REPLY_ERROR:
-            {
-                sysc.start(sizeof(reply));
-                syscNext = State::CTXSW;
-                state = State::SYSCALL;
-                break;
-            }
 
             case State::SYSCALL:
             {
                 if(sysc.handleMemResp(pkt))
                     state = syscNext;
+                break;
+            }
+
+            case State::EXIT:
+            {
+                sysc.start(sizeof(exit_msg), false);
+                syscNext = State::IDLE;
+                state = State::SYSCALL;
+                // in case we don't restore any state, reset flags
+                ctx.flags = Flags::INPUT;
                 break;
             }
         }
@@ -391,9 +394,27 @@ DtuAccelStream::tick()
     // after a context switch, continue at then position we left off
     if (ctxSwPerformed)
     {
-        state = ctx.interrupted ? State::READ_DATA : State::FETCH_MSG;
+        if (ctx.flags & Flags::INTRPT)
+            state = State::READ_DATA;
+        else if (ctx.flags & Flags::WAIT)
+            state = State::FETCH_MSG;
+        else
+            state = State::INOUT_START;
         ctxSwPerformed = false;
-        ctx.interrupted = false;
+        ctx.flags &= ~Flags::INTRPT;
+    }
+
+    if (state == State::INOUT_START)
+    {
+        if (ctx.flags & Flags::EXIT)
+        {
+            if (ctx.outPos == ctx.outLen)
+                state = State::EXIT;
+        }
+        else if ((ctx.flags & Flags::INPUT) && ctx.inPos < ctx.inLen)
+            state = State::READ_DATA;
+        else if (!(ctx.flags & Flags::INPUT) && ctx.outPos < ctx.outLen)
+            state = State::WRITE_DATA;
     }
 
     if (state != lastState ||
@@ -418,6 +439,62 @@ DtuAccelStream::tick()
         case State::CTXSW:
         {
             pkt = ctxsw.tick();
+            break;
+        }
+
+        case State::INOUT_START:
+        {
+            rdwr_msg.msg.cmd = static_cast<uint64_t>(
+                (ctx.flags & Flags::INPUT) ? Command::READ : Command::WRITE
+            );
+            rdwr_msg.msg.submit = (ctx.flags & Flags::EXIT) ? ctx.outPos : 0;
+            pkt = createPacket(BUF_ADDR + bufSize,
+                               sizeof(rdwr_msg.msg),
+                               MemCmd::WriteReq);
+            memcpy(pkt->getPtr<uint8_t>(),
+                   (char*)&rdwr_msg.msg,
+                   sizeof(rdwr_msg.msg));
+            break;
+        }
+        case State::INOUT_SEND:
+        {
+            pkt = createDtuCmdPkt(
+                Dtu::Command::SEND,
+                (ctx.flags & Flags::INPUT) ? EP_IN_SEND : EP_OUT_SEND,
+                BUF_ADDR + bufSize,
+                sizeof(rdwr_msg.msg),
+                EP_RECV,
+                (ctx.flags & Flags::INPUT) ? LBL_IN_REPLY : LBL_OUT_REPLY
+            );
+            break;
+        }
+        case State::INOUT_SEND_WAIT:
+        {
+            Addr regAddr = getRegAddr(CmdReg::COMMAND);
+            pkt = createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
+            break;
+        }
+        case State::INOUT_SEND_ERROR:
+        {
+            uint64_t sel = (ctx.flags & Flags::INPUT) ? CAP_IN : CAP_OUT;
+            rdwr_msg.sys.opcode = 16;            /* FORWARD_MSG */
+            rdwr_msg.sys.sgate_sel = sel;
+            rdwr_msg.sys.rgate_sel = 0xFFFF;
+            rdwr_msg.sys.len = sizeof(rdwr_msg.msg);
+            rdwr_msg.sys.rlabel = 0;
+            rdwr_msg.sys.event = 0;
+
+            pkt = createPacket(MSG_ADDR, sizeof(rdwr_msg), MemCmd::WriteReq);
+            memcpy(pkt->getPtr<void>(), &rdwr_msg, sizeof(rdwr_msg));
+            break;
+        }
+        case State::INOUT_ACK:
+        {
+            pkt = createDtuCmdPkt(Dtu::Command::ACK_MSG,
+                                  EP_RECV,
+                                  0,
+                                  0,
+                                  ctx.msgAddr);
             break;
         }
 
@@ -448,25 +525,25 @@ DtuAccelStream::tick()
             pkt = createPacket(ctx.msgAddr, MSG_SIZE, MemCmd::ReadReq);
             break;
         }
+
         case State::READ_DATA:
         {
             if (irqPending)
             {
                 irqPending = false;
-                ctx.interrupted = true;
+                ctx.flags |= Flags::INTRPT;
                 state = State::CTXSW;
                 schedule(tickEvent, clockEdge(Cycles(1)));
             }
             else
             {
-                size_t left = ctx.dataSize - ctx.inOff;
-                ctx.lastSize = std::min(bufSize, std::min(ctx.reportSize, left));
+                ctx.lastSize = std::min(bufSize, ctx.inLen - ctx.inPos);
                 pkt = createDtuCmdPkt(Dtu::Command::READ,
-                                      EP_INPUT,
+                                      EP_IN_MEM,
                                       BUF_ADDR,
                                       ctx.lastSize,
-                                      ctx.off + ctx.inOff);
-                ctx.inOff += ctx.lastSize;
+                                      ctx.inOff + ctx.inPos);
+                ctx.inPos += ctx.lastSize;
             }
             break;
         }
@@ -481,24 +558,17 @@ DtuAccelStream::tick()
             pkt = logic.tick();
             break;
         }
+
         case State::WRITE_DATA:
         {
+            size_t amount = std::min(ctx.lastSize, ctx.outLen - ctx.outPos);
             pkt = createDtuCmdPkt(Dtu::Command::WRITE,
-                                  EP_OUTPUT,
+                                  EP_OUT_MEM,
                                   BUF_ADDR,
-                                  ctx.lastSize,
-                                  ctx.outOff);
+                                  amount,
+                                  ctx.outOff + ctx.outPos);
 
-            msg.msg.cmd = static_cast<uint64_t>(Command::UPDATE);
-            msg.msg.off = ctx.outOff - ctx.accSize;
-            msg.msg.len = ctx.accSize + ctx.lastSize;
-            msg.msg.eof = ctx.eof && ctx.inOff == ctx.dataSize;
-
-            ctx.accSize += ctx.lastSize;
-            if (msg.msg.eof)
-                ctx.outOff = 0;
-            else
-                ctx.outOff = (ctx.outOff + ctx.lastSize) % ctx.outSize;
+            ctx.outPos += amount;
             break;
         }
         case State::WRITE_DATA_WAIT:
@@ -508,81 +578,22 @@ DtuAccelStream::tick()
             break;
         }
 
-        case State::MSG_STORE:
-        {
-            ctx.accSize = 0;
-            pkt = createPacket(BUF_ADDR + bufSize,
-                               sizeof(msg.msg),
-                               MemCmd::WriteReq);
-            memcpy(pkt->getPtr<uint8_t>(), (char*)&msg.msg, sizeof(msg.msg));
-            break;
-        }
-        case State::MSG_SEND:
-        {
-            pkt = createDtuCmdPkt(Dtu::Command::SEND,
-                                  EP_SEND,
-                                  BUF_ADDR + bufSize,
-                                  sizeof(msg.msg),
-                                  // specify an invalid reply EP
-                                  0xFFFF);
-            break;
-        }
-        case State::MSG_WAIT:
-        {
-            Addr regAddr = getRegAddr(CmdReg::COMMAND);
-            pkt = createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
-            break;
-        }
-        case State::MSG_IDLE:
-        {
-            pkt = createDtuCmdPkt(Dtu::Command::SLEEP, 0, 0, 0, 0);
-            break;
-        }
-        case State::MSG_ERROR:
-        {
-            msg.sys.opcode = 16;            /* FORWARD_MSG */
-            msg.sys.sgate_sel = CAP_SGATE;
-            msg.sys.rgate_sel = 0xFFFF;
-            msg.sys.len = sizeof(msg.msg);
-            msg.sys.rlabel = 0;
-            msg.sys.event = 0;
-
-            pkt = createPacket(MSG_ADDR, sizeof(msg), MemCmd::WriteReq);
-            memcpy(pkt->getPtr<void>(), &msg, sizeof(msg));
-            break;
-        }
-
-        case State::REPLY_SEND:
-        {
-            pkt = createDtuCmdPkt(Dtu::Command::REPLY,
-                                  EP_RECV,
-                                  BUF_ADDR + bufSize,
-                                  1,
-                                  ctx.msgAddr);
-            break;
-        }
-        case State::REPLY_WAIT:
-        {
-            Addr regAddr = getRegAddr(CmdReg::COMMAND);
-            pkt = createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
-            break;
-        }
-        case State::REPLY_ERROR:
-        {
-            reply.sys.opcode = 18;            /* FORWARD_REPLY */
-            reply.sys.rgate_sel = CAP_RGATE;
-            reply.sys.msgaddr = ctx.msgAddr;
-            reply.sys.len = sizeof(reply.msg);
-            reply.sys.event = 0;
-
-            pkt = createPacket(MSG_ADDR, sizeof(reply), MemCmd::WriteReq);
-            memcpy(pkt->getPtr<void>(), &reply, sizeof(reply));
-            break;
-        }
 
         case State::SYSCALL:
         {
             pkt = sysc.tick();
+            break;
+        }
+
+        case State::EXIT:
+        {
+            exit_msg.opcode = 10;     /* VPE_CTRL */
+            exit_msg.op = 3;          /* VCTRL_STOP */
+            exit_msg.vpe_sel = 0;
+            exit_msg.arg = 0;
+
+            pkt = createPacket(MSG_ADDR, sizeof(exit_msg), MemCmd::WriteReq);
+            memcpy(pkt->getPtr<void>(), &exit_msg, sizeof(exit_msg));
             break;
         }
     }

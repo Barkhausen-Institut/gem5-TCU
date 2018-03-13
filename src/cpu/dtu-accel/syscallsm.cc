@@ -104,7 +104,11 @@ SyscallSM::handleMemResp(PacketPtr pkt)
         {
             RegFile::reg_t reg = *pkt->getConstPtr<RegFile::reg_t>();
             if ((reg & 0xF) == 0)
+            {
+                if (!waitForReply)
+                    return true;
                 state = State::SYSC_FETCH;
+            }
             break;
         }
         case State::SYSC_FETCH:

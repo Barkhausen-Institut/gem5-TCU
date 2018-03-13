@@ -47,13 +47,21 @@ class DtuAccelStream : public DtuAccel
     static const Addr MSG_ADDR          = 0x2000;
     static const Addr BUF_ADDR          = 0x6000;
 
-    static const unsigned EP_RECV       = 7;
-    static const unsigned EP_INPUT      = 8;
-    static const unsigned EP_OUTPUT     = 9;
-    static const unsigned EP_SEND       = 10;
-    static const unsigned EP_CTX        = 11;
-    static const unsigned CAP_RGATE     = 2;
-    static const unsigned CAP_SGATE     = 3;
+    static const unsigned EP_RECV       = 5;
+    static const unsigned EP_IN_SEND    = 6;
+    static const unsigned EP_IN_MEM     = 7;
+    static const unsigned EP_OUT_SEND   = 8;
+    static const unsigned EP_OUT_MEM    = 9;
+    static const unsigned EP_CTX        = 10;
+
+    static const unsigned CAP_IN       = 64;
+    static const unsigned CAP_OUT      = 65;
+    static const unsigned CAP_RECV     = 66;
+
+    static const uint64_t LBL_IN_REQ    = 1;
+    static const uint64_t LBL_IN_REPLY  = 2;
+    static const uint64_t LBL_OUT_REQ   = 3;
+    static const uint64_t LBL_OUT_REPLY = 4;
 
     static const size_t MSG_SIZE        = 64;
 
@@ -88,31 +96,34 @@ class DtuAccelStream : public DtuAccel
         FETCH_MSG,
         READ_MSG_ADDR,
         READ_MSG,
+
+        INOUT_START,
+        INOUT_SEND,
+        INOUT_SEND_WAIT,
+        INOUT_SEND_ERROR,
+        INOUT_ACK,
+
         READ_DATA,
         READ_DATA_WAIT,
         COMPUTE,
+
         WRITE_DATA,
         WRITE_DATA_WAIT,
 
-        MSG_STORE,
-        MSG_SEND,
-        MSG_WAIT,
-        MSG_IDLE,
-        MSG_ERROR,
-
-        REPLY_SEND,
-        REPLY_WAIT,
-        REPLY_ERROR,
 
         CTXSW,
 
         SYSCALL,
+
+        EXIT,
     };
 
     enum class Command
     {
-        INIT,
-        UPDATE,
+        STAT,
+        SEEK,
+        READ,
+        WRITE,
     };
 
     std::string getStateName() const;
@@ -123,19 +134,24 @@ class DtuAccelStream : public DtuAccel
     State state;
     State lastState;
 
+    enum Flags
+    {
+        INTRPT = 0x1,
+        INPUT  = 0x2,
+        WAIT   = 0x4,
+        EXIT   = 0x8,
+    };
+
     struct
     {
         Addr msgAddr;
-        bool interrupted;
-        bool eof;
-        Addr off;
+        uint8_t flags;
         Addr inOff;
+        Addr inPos;
+        Addr inLen;
         Addr outOff;
-        Addr outSize;
-        Addr reportSize;
-        Cycles compTime;
-        Addr accSize;
-        Addr dataSize;
+        Addr outPos;
+        Addr outLen;
         Addr lastSize;
     } ctx;
 
@@ -153,11 +169,17 @@ class DtuAccelStream : public DtuAccel
         struct
         {
             uint64_t cmd;
-            uint64_t off;
-            uint64_t len;
-            uint64_t eof;
+            uint64_t submit;
         } M5_ATTR_PACKED msg;
-    } M5_ATTR_PACKED msg;
+    } M5_ATTR_PACKED rdwr_msg;
+
+    struct
+    {
+        uint64_t opcode;
+        uint64_t vpe_sel;
+        uint64_t op;
+        uint64_t arg;
+    } M5_ATTR_PACKED exit_msg;
 
     struct
     {
