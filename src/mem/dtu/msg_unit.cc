@@ -124,6 +124,13 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
         const DataReg data = dtu.regs().getDataReg();
         SendEp ep = dtu.regs().getSendEp(epid);
 
+        if (ep.maxMsgSize == 0)
+        {
+            DPRINTFS(Dtu, (&dtu), "EP%u: invalid EP\n", epid);
+            dtu.scheduleFinishOp(Cycles(1), Dtu::Error::INV_EP);
+            return;
+        }
+
         if (ep.curcrd != Dtu::CREDITS_UNLIM && ep.curcrd < ep.maxMsgSize)
         {
             DPRINTFS(Dtu, (&dtu),
