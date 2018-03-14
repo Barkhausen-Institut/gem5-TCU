@@ -136,10 +136,10 @@ class DtuAccelStream : public DtuAccel
 
     enum Flags
     {
-        INTRPT = 0x1,
-        INPUT  = 0x2,
-        WAIT   = 0x4,
-        EXIT   = 0x8,
+        INTRPT      = 0x1,
+        OUTPUT      = 0x2,
+        WAIT        = 0x4,
+        EXIT        = 0x20,
     };
 
     struct

@@ -79,7 +79,6 @@ DtuAccelStream::DtuAccelStream(const DtuAccelStreamParams *p)
     ctxsw(this),
     ctxSwPerformed()
 {
-    ctx.flags = Flags::INPUT;
     yield.start();
 }
 
@@ -200,8 +199,8 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                     state = State::EXIT;
                 else
                 {
-                    state = (ctx.flags & Flags::INPUT) ? State::READ_DATA
-                                                       : State::WRITE_DATA;
+                    state = (ctx.flags & Flags::OUTPUT) ? State::WRITE_DATA
+                                                        : State::READ_DATA;
                 }
                 break;
             }
@@ -250,8 +249,7 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                         ctx.flags &= ~Flags::WAIT;
                         if (ctx.inLen == 0)
                         {
-                            ctx.flags |= Flags::EXIT;
-                            ctx.flags &= ~Flags::INPUT;
+                            ctx.flags |= Flags::EXIT | Flags::OUTPUT;
                             state = State::INOUT_START;
                         }
                         else
@@ -302,7 +300,7 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                 if(logic.handleMemResp(pkt, &delay))
                 {
                     ctx.lastSize = logic.outDataSize();
-                    ctx.flags &= ~Flags::INPUT;
+                    ctx.flags |= Flags::OUTPUT;
                     state = State::INOUT_START;
                 }
                 break;
@@ -319,7 +317,7 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
                 if (cmd.opcode == 0)
                 {
-                    ctx.flags |= Flags::INPUT;
+                    ctx.flags &= ~Flags::OUTPUT;
                     state = State::INOUT_START;
                 }
                 break;
@@ -338,8 +336,7 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                 sysc.start(sizeof(exit_msg), false);
                 syscNext = State::IDLE;
                 state = State::SYSCALL;
-                // in case we don't restore any state, reset flags
-                ctx.flags = Flags::INPUT;
+                ctx.flags |= Flags::EXIT;
                 break;
             }
         }
@@ -411,9 +408,9 @@ DtuAccelStream::tick()
             if (ctx.outPos == ctx.outLen)
                 state = State::EXIT;
         }
-        else if ((ctx.flags & Flags::INPUT) && ctx.inPos < ctx.inLen)
+        else if (!(ctx.flags & Flags::OUTPUT) && ctx.inPos < ctx.inLen)
             state = State::READ_DATA;
-        else if (!(ctx.flags & Flags::INPUT) && ctx.outPos < ctx.outLen)
+        else if ((ctx.flags & Flags::OUTPUT) && ctx.outPos < ctx.outLen)
             state = State::WRITE_DATA;
     }
 
@@ -445,7 +442,7 @@ DtuAccelStream::tick()
         case State::INOUT_START:
         {
             rdwr_msg.msg.cmd = static_cast<uint64_t>(
-                (ctx.flags & Flags::INPUT) ? Command::READ : Command::WRITE
+                (ctx.flags & Flags::OUTPUT) ? Command::WRITE : Command::READ
             );
             rdwr_msg.msg.submit = (ctx.flags & Flags::EXIT) ? ctx.outPos : 0;
             pkt = createPacket(BUF_ADDR + bufSize,
@@ -460,11 +457,11 @@ DtuAccelStream::tick()
         {
             pkt = createDtuCmdPkt(
                 Dtu::Command::SEND,
-                (ctx.flags & Flags::INPUT) ? EP_IN_SEND : EP_OUT_SEND,
+                (ctx.flags & Flags::OUTPUT) ? EP_OUT_SEND : EP_IN_SEND,
                 BUF_ADDR + bufSize,
                 sizeof(rdwr_msg.msg),
                 EP_RECV,
-                (ctx.flags & Flags::INPUT) ? LBL_IN_REPLY : LBL_OUT_REPLY
+                (ctx.flags & Flags::OUTPUT) ? LBL_OUT_REPLY : LBL_IN_REPLY
             );
             break;
         }
@@ -476,8 +473,8 @@ DtuAccelStream::tick()
         }
         case State::INOUT_SEND_ERROR:
         {
-            uint64_t sel = (ctx.flags & Flags::INPUT) ? CAP_IN : CAP_OUT;
-            rdwr_msg.sys.opcode = 16;            /* FORWARD_MSG */
+            uint64_t sel = (ctx.flags & Flags::OUTPUT) ? CAP_OUT : CAP_IN;
+            rdwr_msg.sys.opcode = SyscallSM::Operation::FORWARD_MSG;
             rdwr_msg.sys.sgate_sel = sel;
             rdwr_msg.sys.rgate_sel = 0xFFFF;
             rdwr_msg.sys.len = sizeof(rdwr_msg.msg);
