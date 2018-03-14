@@ -26,6 +26,7 @@
 # either expressed or implied, of the FreeBSD Project.
 
 from DtuAccel import DtuAccel
+from AccelLogic import AccelLogic
 from m5.params import *
 from m5.proxy import *
 
@@ -33,5 +34,5 @@ class DtuAccelStream(DtuAccel):
     type = 'DtuAccelStream'
     cxx_header = "cpu/dtu-accel-stream/accelerator.hh"
 
-    algorithm = Param.Int(0, "The algorithm to use (0 = fft, 1 = toupper)")
+    logic = Param.AccelLogic("The accelerator logic")
     buf_size = Param.MemorySize("4kB", "The size of the buffer")

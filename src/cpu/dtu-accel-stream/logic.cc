@@ -28,45 +28,61 @@
  */
 
 #include "debug/DtuAccelStream.hh"
+#include "debug/DtuAccelStreamState.hh"
 #include "cpu/dtu-accel-stream/accelerator.hh"
 #include "cpu/dtu-accel-stream/algorithm_fft.hh"
 #include "cpu/dtu-accel-stream/algorithm_toupper.hh"
 #include "cpu/dtu-accel-stream/logic.hh"
 
-AccelLogic::AccelLogic(DtuAccel *_accel, int _algo)
-    : accel(_accel), algo(), state(), stateChanged(),
-      compTime(), opStart(), dataSize(), offset(), pullSize(), pullData()
+AccelLogic::AccelLogic(const AccelLogicParams *p)
+    : MemObject(p), tickEvent(this), port("port", this),
+      accel(), algo(), state(), stateChanged(),
+      compTime(), opStart(), dataSize(), offset(), pos(), pullSize(), pullData()
 {
-    if (_algo == 0)
+    if (p->algorithm == 0)
         algo = new DtuAccelStreamAlgoFFT();
-    else if(_algo == 1)
+    else if(p->algorithm == 1)
         algo = new DtuAccelStreamAlgoToUpper();
     else
-        panic("Unknown algorithm %d\n", _algo);
+        panic("Unknown algorithm %d\n", p->algorithm);
 }
 
 std::string
 AccelLogic::stateName() const
 {
-    const char *names[] = {"PULL", "PUSH"};
+    const char *names[] = {"PULL", "PUSH", "DONE"};
     return names[static_cast<size_t>(state)];
 }
 
-PacketPtr
+void
+AccelLogic::start(Addr _offset, Addr _dataSize, Cycles _compTime)
+{
+    dataSize = _dataSize;
+    compTime = _compTime;
+    state = LOGIC_PULL;
+    offset = _offset;
+    pos = 0;
+    outSize = 0;
+    opStart = curCycle();
+    schedule(tickEvent, clockEdge(Cycles(1)));
+}
+
+void
 AccelLogic::tick()
 {
     PacketPtr pkt = nullptr;
+
+    DPRINTF(DtuAccelStreamState, "[%s] tick\n",
+        stateName().c_str());
 
     switch(state)
     {
         case State::LOGIC_PULL:
         {
-            if (offset == 0)
-                opStart = accel->curCycle();
-            size_t rem = dataSize - offset;
+            size_t rem = dataSize - pos;
             pullSize = std::min(accel->chunkSize, rem);
             pkt = accel->createPacket(
-                DtuAccelStream::BUF_ADDR + offset,
+                DtuAccelStream::BUF_ADDR + offset + pos,
                 pullSize,
                 MemCmd::ReadReq
             );
@@ -75,22 +91,31 @@ AccelLogic::tick()
         case State::LOGIC_PUSH:
         {
             pkt = accel->createPacket(
-                DtuAccelStream::BUF_ADDR + offset,
+                DtuAccelStream::BUF_ADDR + offset + pos,
                 pullData,
                 pullSize,
                 MemCmd::WriteReq
             );
             break;
         }
+        case State::LOGIC_DONE:
+        {
+            accel->logicFinished();
+            break;
+        }
     }
 
-    return pkt;
+    if (pkt)
+        sendPkt(pkt);
 }
 
-bool
-AccelLogic::handleMemResp(PacketPtr pkt, Cycles *delay)
+void
+AccelLogic::handleMemResp(PacketPtr pkt)
 {
-    *delay = Cycles(0);
+    Cycles delay(1);
+
+    DPRINTF(DtuAccelStreamState, "[%s] Got response from memory\n",
+        stateName().c_str());
 
     auto lastState = state;
 
@@ -111,32 +136,84 @@ AccelLogic::handleMemResp(PacketPtr pkt, Cycles *delay)
         }
         case State::LOGIC_PUSH:
         {
-            offset += pullSize;
+            pos += pullSize;
 
-            if (offset == dataSize)
+            if (pos == dataSize)
             {
                 // decrease it by the time we've already spent reading the
                 // data from SPM, because that's already included in the
                 // BLOCK_TIME.
                 // TODO if we use caches, this is not correct
-                *delay = algo->getDelay(compTime, dataSize);
+                delay = algo->getDelay(compTime, dataSize);
                 DPRINTF(DtuAccelStream, "%s for %luB took %llu cycles\n",
-                    algo->name(), dataSize, *delay);
+                    algo->name(), dataSize, delay);
 
-                if (*delay > (accel->curCycle() - opStart))
-                    *delay = *delay - (accel->curCycle() - opStart);
+                if (delay > (curCycle() - opStart))
+                    delay = delay - (curCycle() - opStart);
                 else
-                    *delay = Cycles(1);
-
-                return true;
+                    delay = Cycles(1);
+                state = State::LOGIC_DONE;
             }
             else
                 state = State::LOGIC_PULL;
+            break;
+        }
+        case State::LOGIC_DONE:
+        {
+            assert(false);
             break;
         }
     }
 
     stateChanged = state != lastState;
 
-    return false;
+    schedule(tickEvent, clockEdge(delay));
+}
+
+bool
+AccelLogic::CpuPort::recvTimingResp(PacketPtr pkt)
+{
+    logic.handleMemResp(pkt);
+    return true;
+}
+
+void
+AccelLogic::CpuPort::recvReqRetry()
+{
+    logic.recvRetry();
+}
+
+BaseMasterPort &
+AccelLogic::getMasterPort(const std::string& if_name, PortID idx)
+{
+    if (if_name == "port")
+        return port;
+    else
+        return MemObject::getMasterPort(if_name, idx);
+}
+
+bool
+AccelLogic::sendPkt(PacketPtr pkt)
+{
+    if (!port.sendTimingReq(pkt))
+    {
+        retryPkt = pkt;
+        return false;
+    }
+
+    return true;
+}
+
+void
+AccelLogic::recvRetry()
+{
+    assert(retryPkt);
+    if (port.sendTimingReq(retryPkt))
+        retryPkt = nullptr;
+}
+
+AccelLogic*
+AccelLogicParams::create()
+{
+    return new AccelLogic(this);
 }

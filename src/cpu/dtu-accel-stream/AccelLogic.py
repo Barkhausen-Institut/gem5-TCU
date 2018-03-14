@@ -25,13 +25,14 @@
 # of the authors and should not be interpreted as representing official policies,
 # either expressed or implied, of the FreeBSD Project.
 
-Import('*')
+from MemObject import MemObject
 
-SimObject('DtuAccelStream.py')
-SimObject('AccelLogic.py')
+from m5.params import *
+from m5.proxy import *
 
-Source('accelerator.cc')
-Source('logic.cc')
+class AccelLogic(MemObject):
+    type = 'AccelLogic'
+    cxx_header = "cpu/dtu-accel-stream/logic.hh"
 
-DebugFlag('DtuAccelStream')
-DebugFlag('DtuAccelStreamState')
+    port = MasterPort("Port to the DTU and Scratch-Pad-Memory")
+    algorithm = Param.Int(0, "The algorithm to use (0 = fft, 1 = toupper)")

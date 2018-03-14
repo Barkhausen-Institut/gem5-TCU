@@ -30,21 +30,46 @@
 #ifndef __CPU_DTU_ACCEL_STREAM_LOGIC_HH__
 #define __CPU_DTU_ACCEL_STREAM_LOGIC_HH__
 
+#include "params/AccelLogic.hh"
 #include "cpu/dtu-accel/accelerator.hh"
 #include "cpu/dtu-accel-stream/algorithm.hh"
 #include "sim/system.hh"
 
-class AccelLogic
+class DtuAccelStream;
+
+class AccelLogic : public MemObject
 {
+    class CpuPort : public MasterPort
+    {
+      private:
+        AccelLogic& logic;
+      public:
+        CpuPort(const std::string& _name, AccelLogic* _logic)
+            : MasterPort(_name, _logic), logic(*_logic)
+        { }
+      protected:
+        bool recvTimingResp(PacketPtr pkt) override;
+
+        void recvReqRetry() override;
+    };
+
   public:
 
     enum State
     {
         LOGIC_PULL,
         LOGIC_PUSH,
+        LOGIC_DONE,
     };
 
-    explicit AccelLogic(DtuAccel *_accel, int algo);
+    explicit AccelLogic(const AccelLogicParams *p);
+
+    BaseMasterPort& getMasterPort(const std::string &if_name,
+                                  PortID idx = InvalidPortID) override;
+
+    void setAccelerator(DtuAccelStream *_accel) {
+        accel = _accel;
+    }
 
     std::string stateName() const;
 
@@ -52,22 +77,21 @@ class AccelLogic
 
     size_t outDataSize() const { return outSize; }
 
-    void start(Addr _dataSize, Cycles _compTime)
-    {
-        dataSize = _dataSize;
-        compTime = _compTime;
-        state = LOGIC_PULL;
-        offset = 0;
-        outSize = 0;
-    }
-
-    PacketPtr tick();
-
-    bool handleMemResp(PacketPtr pkt, Cycles *delay);
+    void start(Addr _offset, Addr _dataSize, Cycles _compTime);
 
    private:
+    void tick();
+    void handleMemResp(PacketPtr pkt);
 
-    DtuAccel *accel;
+    bool sendPkt(PacketPtr pkt);
+    void recvRetry();
+
+    EventWrapper<AccelLogic, &AccelLogic::tick> tickEvent;
+
+    CpuPort port;
+    PacketPtr retryPkt;
+
+    DtuAccelStream *accel;
     DtuAccelStreamAlgo *algo;
     State state;
     bool stateChanged;
@@ -76,6 +100,7 @@ class AccelLogic
     Addr dataSize;
     Addr outSize;
     Addr offset;
+    Addr pos;
     Addr pullSize;
     uint8_t *pullData;
 };

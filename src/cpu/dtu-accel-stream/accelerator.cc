@@ -52,16 +52,25 @@ static const char *stateNames[] =
 
     "READ_DATA",
     "READ_DATA_WAIT",
-    "COMPUTE",
 
     "WRITE_DATA",
     "WRITE_DATA_WAIT",
 
+    "REPLY_STORE",
+    "REPLY_SEND",
+    "REPLY_WAIT",
+    "REPLY_ERROR",
 
     "CTXSW",
 
     "SYSCALL",
 
+    "SUBMIT_START",
+    "SUBMIT_SEND",
+    "SUBMIT_SEND_WAIT",
+    "SUBMIT_SEND_ERROR",
+
+    "EXIT_ACK",
     "EXIT",
 };
 
@@ -71,14 +80,22 @@ DtuAccelStream::DtuAccelStream(const DtuAccelStreamParams *p)
     memPending(false),
     state(State::IDLE),
     lastState(State::FETCH_MSG), // something different
+    bufOff(),
     ctx(),
     bufSize(p->buf_size),
     sysc(this),
     yield(this, &sysc),
-    logic(this, p->algorithm),
+    logic(p->logic),
     ctxsw(this),
     ctxSwPerformed()
 {
+    rdwr_msg.sys.opcode = SyscallSM::Operation::FORWARD_MSG;
+    rdwr_msg.sys.rgate_sel = 0xFFFF;
+    rdwr_msg.sys.len = sizeof(rdwr_msg.msg);
+    rdwr_msg.sys.rlabel = 0;
+    rdwr_msg.sys.event = 0;
+
+    logic->setAccelerator(this);
     yield.start();
 }
 
@@ -90,8 +107,6 @@ std::string DtuAccelStream::getStateName() const
         os << ":" << yield.stateName();
     else if (state == State::SYSCALL)
         os << ":" << sysc.stateName();
-    else if (state == State::COMPUTE)
-        os << ":" << logic.stateName();
     else if (state == State::CTXSW)
         os << ":" << ctxsw.stateName();
     return os.str();
@@ -103,7 +118,6 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
     Request* req = pkt->req;
 
     if (state != lastState ||
-        (state == State::COMPUTE && logic.hasStateChanged()) ||
         (state == State::CTXSW && ctxsw.hasStateChanged()) ||
         (state == State::SYSCALL && sysc.hasStateChanged()) ||
         (state == State::IDLE && yield.hasStateChanged()))
@@ -149,6 +163,7 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                     }
                     else
                     {
+                        ctx.flags &= ~Flags::FETCHED;
                         state = (ctx.flags & Flags::WAIT) ? State::FETCH_MSG
                                                           : State::INOUT_START;
                     }
@@ -195,13 +210,8 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
             }
             case State::INOUT_ACK:
             {
-                if (ctx.flags & Flags::EXIT)
-                    state = State::EXIT;
-                else
-                {
-                    state = (ctx.flags & Flags::OUTPUT) ? State::WRITE_DATA
-                                                        : State::READ_DATA;
-                }
+                state = (ctx.flags & Flags::OUTPUT) ? State::WRITE_DATA
+                                                    : State::READ_DATA;
                 break;
             }
 
@@ -213,11 +223,22 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
             case State::READ_MSG_ADDR:
             {
                 const RegFile::reg_t *regs = pkt->getConstPtr<RegFile::reg_t>();
-                if(regs[0])
+                if (regs[0])
                 {
                     ctx.msgAddr = regs[0];
                     DPRINTF(DtuAccelStream,
                             "Received message @ %p\n", ctx.msgAddr);
+                    if (ctx.flags & Flags::EXIT)
+                    {
+                        (ctx.inReqAddr ? ctx.outReqAddr : ctx.inReqAddr) = ctx.msgAddr;
+                        state = State::EXIT_ACK;
+                    }
+                    else
+                        state = State::READ_MSG;
+                }
+                else if (ctx.inReqAddr || ctx.outReqAddr)
+                {
+                    ctx.msgAddr = ctx.inReqAddr ? ctx.inReqAddr : ctx.outReqAddr;
                     state = State::READ_MSG;
                 }
                 else
@@ -233,13 +254,16 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                 auto args = reinterpret_cast<const uint64_t*>(
                     pkt_data + sizeof(MessageHeader));
 
+                DPRINTF(DtuAccelStream,
+                        "Considering message @ %p\n", ctx.msgAddr);
+
                 switch(head->label)
                 {
                     case LBL_IN_REPLY:
                     {
                         DPRINTF(
                             DtuAccelStream,
-                            "  input reply(err=%#llx, off=%#llx, len=%#llx)\n",
+                            "MSG: received input reply(err=%#llx, off=%#llx, len=%#llx)\n",
                             args[0], args[1], args[2]
                         );
 
@@ -249,8 +273,8 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                         ctx.flags &= ~Flags::WAIT;
                         if (ctx.inLen == 0)
                         {
-                            ctx.flags |= Flags::EXIT | Flags::OUTPUT;
-                            state = State::INOUT_START;
+                            ctx.flags |= Flags::SEEN_EOF;
+                            state = State::SUBMIT_START;
                         }
                         else
                             state = State::INOUT_ACK;
@@ -261,7 +285,7 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                     {
                         DPRINTF(
                             DtuAccelStream,
-                            "  output reply(err=%#llx, off=%#llx, len=%#llx)\n",
+                            "MSG: received output reply(err=%#llx, off=%#llx, len=%#llx)\n",
                             args[0], args[1], args[2]
                         );
 
@@ -270,6 +294,78 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                         ctx.outPos = 0;
                         ctx.flags &= ~Flags::WAIT;
                         state = State::INOUT_ACK;
+                        break;
+                    }
+
+                    case LBL_IN_REQ:
+                    {
+                        if (ctx.inReqAddr == 0)
+                        {
+                            DPRINTF(
+                                DtuAccelStream,
+                                "MSG: received input request();"
+                                " state: (pos=%#llx, len=%#llx)\n",
+                                ctx.outPos, ctx.outLen
+                            );
+                        }
+
+                        if (ctx.outLen > 0 && ctx.outPos == ctx.outLen)
+                        {
+                            reply.msg.err = 0;
+                            reply.msg.off = ctx.outOff;
+                            reply.msg.len = ctx.outLen;
+                            replyAddr = ctx.msgAddr;
+                            replyNext = State::IDLE;
+                            state = State::REPLY_STORE;
+                            ctx.outPos = ctx.outLen = 0;
+                            ctx.inReqAddr = 0;
+                        }
+                        else
+                        {
+                            state = State::IDLE;
+                            yield.start();
+                            ctx.inReqAddr = ctx.msgAddr;
+                        }
+                        break;
+                    }
+
+                    case LBL_OUT_REQ:
+                    {
+                        if (ctx.outReqAddr == 0)
+                        {
+                            DPRINTF(
+                                DtuAccelStream,
+                                "MSG: received output request(submit=%#llx);"
+                                " state: (blocked=%d)\n",
+                                args[1], !!(ctx.flags & Flags::BUFBLOCKED)
+                            );
+                        }
+
+                        // submit != 0 implies EOF
+                        if (args[1] != 0)
+                        {
+                            ctx.flags |= Flags::SEEN_SUBMIT;
+                            ctx.commitOff = 0;
+                            ctx.commitLen = args[1] == -1 ? 0 : args[1];
+                        }
+
+                        if (!(ctx.flags & Flags::BUFBLOCKED))
+                        {
+                            reply.msg.err = 0;
+                            reply.msg.off = 0;
+                            reply.msg.len = bufSize;
+                            replyAddr = ctx.msgAddr;
+                            replyNext = State::IDLE;
+                            ctx.flags |= Flags::BUFBLOCKED;
+                            state = State::REPLY_STORE;
+                            ctx.outReqAddr = 0;
+                        }
+                        else
+                        {
+                            state = State::IDLE;
+                            yield.start();
+                            ctx.outReqAddr = ctx.msgAddr;
+                        }
                         break;
                     }
 
@@ -290,18 +386,10 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
                 if (cmd.opcode == 0)
                 {
-                    logic.start(ctx.lastSize, Cycles(4096) /* TODO */);
-                    state = State::COMPUTE;
-                }
-                break;
-            }
-            case State::COMPUTE:
-            {
-                if(logic.handleMemResp(pkt, &delay))
-                {
-                    ctx.lastSize = logic.outDataSize();
-                    ctx.flags |= Flags::OUTPUT;
-                    state = State::INOUT_START;
+                    bufOff = (cmd.error != 0) ? ctx.inOff : 0;
+                    logic->start(bufOff, ctx.lastSize, Cycles(4096) /* TODO */);
+                    ctx.flags |= Flags::COMP;
+                    state = State::FETCH_MSG;
                 }
                 break;
             }
@@ -317,17 +405,93 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
                 if (cmd.opcode == 0)
                 {
-                    ctx.flags &= ~Flags::OUTPUT;
-                    state = State::INOUT_START;
+                    if (ctx.lastSize > 0)
+                        state = State::INOUT_START;
+                    else
+                    {
+                        if (ctx.inPos == ctx.inLen)
+                            ctx.flags &= ~Flags::BUFBLOCKED;
+                        ctx.flags &= ~Flags::OUTPUT;
+                        state = State::INOUT_START;
+                    }
                 }
                 break;
             }
 
+            case State::REPLY_STORE:
+            {
+                state = State::REPLY_SEND;
+                break;
+            }
+            case State::REPLY_SEND:
+            {
+                state = State::REPLY_WAIT;
+                break;
+            }
+            case State::REPLY_WAIT:
+            {
+                Dtu::Command::Bits cmd =
+                    *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
+                if (cmd.opcode == 0)
+                {
+                    state = cmd.error == 0 ? replyNext
+                                           : State::REPLY_ERROR;
+                }
+                break;
+            }
+            case State::REPLY_ERROR:
+            {
+                sysc.start(sizeof(reply));
+                syscNext = replyNext;
+                state = State::SYSCALL;
+                break;
+            }
 
             case State::SYSCALL:
             {
                 if(sysc.handleMemResp(pkt))
                     state = syscNext;
+                break;
+            }
+
+            case State::SUBMIT_START:
+            {
+                state = State::SUBMIT_SEND;
+                break;
+            }
+            case State::SUBMIT_SEND:
+            {
+                state = State::SUBMIT_SEND_WAIT;
+                break;
+            }
+            case State::SUBMIT_SEND_WAIT:
+            {
+                Dtu::Command::Bits cmd =
+                    *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
+                if (cmd.opcode == 0)
+                {
+                    auto err = static_cast<Dtu::Error>((long)cmd.error);
+                    if (err == Dtu::Error::VPE_GONE)
+                        state = State::SUBMIT_SEND_ERROR;
+                    else
+                        state = State::EXIT_ACK;
+                }
+                break;
+            }
+            case State::SUBMIT_SEND_ERROR:
+            {
+                sysc.start(sizeof(rdwr_msg));
+                syscNext = State::EXIT_ACK;
+                state = State::SYSCALL;
+                break;
+            }
+
+            case State::EXIT_ACK:
+            {
+                if (ctx.inReqAddr)
+                    ctx.inReqAddr = 0;
+                else
+                    ctx.outReqAddr = 0;
                 break;
             }
 
@@ -337,6 +501,7 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                 syscNext = State::IDLE;
                 state = State::SYSCALL;
                 ctx.flags |= Flags::EXIT;
+                yield.start();
                 break;
             }
         }
@@ -384,6 +549,14 @@ DtuAccelStream::reset()
 }
 
 void
+DtuAccelStream::logicFinished()
+{
+    ctx.lastSize = logic->outDataSize();
+    ctx.flags &= ~Flags::COMP;
+    ctx.flags |= Flags::OUTPUT | Flags::COMPDONE;
+}
+
+void
 DtuAccelStream::tick()
 {
     PacketPtr pkt = nullptr;
@@ -394,28 +567,74 @@ DtuAccelStream::tick()
         if (ctx.flags & Flags::INTRPT)
             state = State::READ_DATA;
         else if (ctx.flags & Flags::WAIT)
+        {
+            ctx.flags &= ~Flags::FETCHED;
             state = State::FETCH_MSG;
+        }
         else
             state = State::INOUT_START;
         ctxSwPerformed = false;
         ctx.flags &= ~Flags::INTRPT;
     }
 
+    if (state == State::IDLE)
+    {
+        if (ctx.flags & Flags::COMPDONE)
+        {
+            state = State::INOUT_START;
+            ctx.flags &= ~Flags::COMPDONE;
+        }
+        else if (ctx.flags & Flags::COMP)
+            state = State::FETCH_MSG;
+        // can we answer a pending input request?
+        else if (ctx.inReqAddr && ctx.outLen > 0 && ctx.outPos == ctx.outLen)
+        {
+            ctx.flags &= ~Flags::FETCHED;
+            state = State::FETCH_MSG;
+        }
+        // can we answer a pending output request?
+        else if (ctx.outReqAddr && !(ctx.flags & Flags::BUFBLOCKED))
+        {
+            ctx.flags &= ~Flags::FETCHED;
+            state = State::FETCH_MSG;
+        }
+        // if we're waiting for input and have seen a submit, give up waiting
+        else if ((ctx.flags & (Flags::SEEN_SUBMIT | Flags::OUTPUT)) == Flags::SEEN_SUBMIT)
+            state = State::INOUT_START;
+    }
+
     if (state == State::INOUT_START)
     {
+        // if we waked up because of some message, just ack it
         if (ctx.flags & Flags::EXIT)
+            state = State::FETCH_MSG;
+        else if (!(ctx.flags & Flags::OUTPUT))
         {
-            if (ctx.outPos == ctx.outLen)
-                state = State::EXIT;
+            // can we still read?
+            if (ctx.inPos < ctx.inLen)
+                state = State::READ_DATA;
+            // have seen submit? take that as input
+            else if (ctx.flags & Flags::SEEN_SUBMIT)
+            {
+                ctx.inOff = ctx.commitOff;
+                ctx.inLen = ctx.commitLen;
+                ctx.inPos = 0;
+                ctx.flags &= ~Flags::SEEN_SUBMIT;
+                ctx.flags |= Flags::SEEN_EOF;
+                state = State::READ_DATA;
+            }
+            // if we've seen EOF, submit and exit
+            else if (ctx.flags & Flags::SEEN_EOF)
+                state = State::SUBMIT_START;
         }
-        else if (!(ctx.flags & Flags::OUTPUT) && ctx.inPos < ctx.inLen)
-            state = State::READ_DATA;
-        else if ((ctx.flags & Flags::OUTPUT) && ctx.outPos < ctx.outLen)
-            state = State::WRITE_DATA;
+        else
+        {
+            if (ctx.outPos < ctx.outLen)
+                state = State::WRITE_DATA;
+        }
     }
 
     if (state != lastState ||
-        (state == State::COMPUTE && logic.hasStateChanged()) ||
         (state == State::CTXSW && ctxsw.hasStateChanged()) ||
         (state == State::SYSCALL && sysc.hasStateChanged()) ||
         (state == State::IDLE && yield.hasStateChanged()))
@@ -444,7 +663,13 @@ DtuAccelStream::tick()
             rdwr_msg.msg.cmd = static_cast<uint64_t>(
                 (ctx.flags & Flags::OUTPUT) ? Command::WRITE : Command::READ
             );
-            rdwr_msg.msg.submit = (ctx.flags & Flags::EXIT) ? ctx.outPos : 0;
+            rdwr_msg.msg.submit = 0;
+
+            DPRINTF(DtuAccelStream,
+                    "MSG: sending %s request(submit=%#llx)\n",
+                    (ctx.flags & Flags::OUTPUT) ? "output" : "input",
+                    rdwr_msg.msg.submit);
+
             pkt = createPacket(BUF_ADDR + bufSize,
                                sizeof(rdwr_msg.msg),
                                MemCmd::WriteReq);
@@ -473,14 +698,7 @@ DtuAccelStream::tick()
         }
         case State::INOUT_SEND_ERROR:
         {
-            uint64_t sel = (ctx.flags & Flags::OUTPUT) ? CAP_OUT : CAP_IN;
-            rdwr_msg.sys.opcode = SyscallSM::Operation::FORWARD_MSG;
-            rdwr_msg.sys.sgate_sel = sel;
-            rdwr_msg.sys.rgate_sel = 0xFFFF;
-            rdwr_msg.sys.len = sizeof(rdwr_msg.msg);
-            rdwr_msg.sys.rlabel = 0;
-            rdwr_msg.sys.event = 0;
-
+            rdwr_msg.sys.sgate_sel = (ctx.flags & Flags::OUTPUT) ? CAP_OUT : CAP_IN;
             pkt = createPacket(MSG_ADDR, sizeof(rdwr_msg), MemCmd::WriteReq);
             memcpy(pkt->getPtr<void>(), &rdwr_msg, sizeof(rdwr_msg));
             break;
@@ -550,21 +768,18 @@ DtuAccelStream::tick()
             pkt = createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }
-        case State::COMPUTE:
-        {
-            pkt = logic.tick();
-            break;
-        }
 
         case State::WRITE_DATA:
         {
             size_t amount = std::min(ctx.lastSize, ctx.outLen - ctx.outPos);
             pkt = createDtuCmdPkt(Dtu::Command::WRITE,
                                   EP_OUT_MEM,
-                                  BUF_ADDR,
+                                  BUF_ADDR + bufOff,
                                   amount,
                                   ctx.outOff + ctx.outPos);
 
+            bufOff += amount;
+            ctx.lastSize -= amount;
             ctx.outPos += amount;
             break;
         }
@@ -575,11 +790,121 @@ DtuAccelStream::tick()
             break;
         }
 
+        case State::REPLY_STORE:
+        {
+            DPRINTF(DtuAccelStream,
+                    "MSG: sending reply(off=%#llx, len=%#llx)\n",
+                    reply.msg.off, reply.msg.len);
+
+            pkt = createPacket(BUF_ADDR + bufSize,
+                               sizeof(reply.msg),
+                               MemCmd::WriteReq);
+            memcpy(pkt->getPtr<uint8_t>(), (char*)&reply.msg, sizeof(reply.msg));
+            break;
+        }
+        case State::REPLY_SEND:
+        {
+            pkt = createDtuCmdPkt(Dtu::Command::REPLY,
+                                  EP_RECV,
+                                  BUF_ADDR + bufSize,
+                                  sizeof(reply.msg),
+                                  replyAddr);
+            break;
+        }
+        case State::REPLY_WAIT:
+        {
+            Addr regAddr = getRegAddr(CmdReg::COMMAND);
+            pkt = createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
+            break;
+        }
+        case State::REPLY_ERROR:
+        {
+            reply.sys.opcode = SyscallSM::Operation::FORWARD_REPLY;
+            reply.sys.rgate_sel = CAP_RECV;
+            reply.sys.msgaddr = ctx.msgAddr;
+            reply.sys.len = sizeof(reply.msg);
+            reply.sys.event = 0;
+
+            pkt = createPacket(MSG_ADDR, sizeof(reply), MemCmd::WriteReq);
+            memcpy(pkt->getPtr<void>(), &reply, sizeof(reply));
+            break;
+        }
 
         case State::SYSCALL:
         {
             pkt = sysc.tick();
             break;
+        }
+
+        case State::SUBMIT_START:
+        {
+            rdwr_msg.msg.cmd = static_cast<uint64_t>(Command::WRITE);
+            rdwr_msg.msg.submit = ctx.outPos ? ctx.outPos : -1;
+
+            DPRINTF(DtuAccelStream,
+                    "MSG: sending %s request(submit=%#llx)\n",
+                    (ctx.flags & Flags::OUTPUT) ? "output" : "input",
+                    rdwr_msg.msg.submit);
+
+            pkt = createPacket(BUF_ADDR + bufSize,
+                               sizeof(rdwr_msg.msg),
+                               MemCmd::WriteReq);
+            memcpy(pkt->getPtr<uint8_t>(),
+                   (char*)&rdwr_msg.msg,
+                   sizeof(rdwr_msg.msg));
+            break;
+        }
+        case State::SUBMIT_SEND:
+        {
+            pkt = createDtuCmdPkt(
+                Dtu::Command::SEND,
+                EP_OUT_SEND,
+                BUF_ADDR + bufSize,
+                sizeof(rdwr_msg.msg),
+                EP_RECV,
+                LBL_OUT_REPLY
+            );
+            break;
+        }
+        case State::SUBMIT_SEND_WAIT:
+        {
+            Addr regAddr = getRegAddr(CmdReg::COMMAND);
+            pkt = createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
+            break;
+        }
+        case State::SUBMIT_SEND_ERROR:
+        {
+            rdwr_msg.sys.sgate_sel = CAP_OUT;
+            pkt = createPacket(MSG_ADDR, sizeof(rdwr_msg), MemCmd::WriteReq);
+            memcpy(pkt->getPtr<void>(), &rdwr_msg, sizeof(rdwr_msg));
+            break;
+        }
+
+        case State::EXIT_ACK:
+        {
+            if (ctx.inReqAddr || ctx.outReqAddr)
+            {
+                auto addr = ctx.inReqAddr ? ctx.inReqAddr : ctx.outReqAddr;
+                pkt = createDtuCmdPkt(Dtu::Command::ACK_MSG,
+                                      EP_RECV,
+                                      0,
+                                      0,
+                                      addr);
+                break;
+            }
+
+            if (ctx.flags & Flags::EXIT)
+            {
+                state = State::IDLE;
+                yield.start();
+                pkt = yield.tick();
+                break;
+            }
+            else
+            {
+                state = State::EXIT;
+                [[fallthrough]];
+            }
         }
 
         case State::EXIT:

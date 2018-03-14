@@ -427,11 +427,15 @@ def createAccelPE(noc, options, no, accel, memPE, l1size=None, l2size=None, spms
         pe.accel = DtuAccelHash()
     elif accel == 'fft':
         pe.accel = DtuAccelStream()
-        pe.accel.algorithm = 0
+        pe.accel.logic = AccelLogic()
+        pe.accel.logic.algorithm = 0
+        pe.accel.logic.port = pe.xbar.slave
         pe.accel.buf_size = "8kB"
     elif accel == 'toupper':
         pe.accel = DtuAccelStream()
-        pe.accel.algorithm = 1
+        pe.accel.logic = AccelLogic()
+        pe.accel.logic.algorithm = 1
+        pe.accel.logic.port = pe.xbar.slave
         pe.accel.buf_size = "8kB"
     else:
         print 'Accelerator "%s" does not exist' % (accel)
@@ -654,9 +658,9 @@ def runSimulation(root, options, pes):
                         assert(False);
                 elif type(pe.accel).__name__ == 'DtuAccelHash':
                     size |= 4 << 3 # hash accelerator
-                elif int(pe.accel.algorithm) == 0:
+                elif int(pe.accel.logic.algorithm) == 0:
                     size |= 5 << 3 # fft accelerator
-                elif int(pe.accel.algorithm) == 1:
+                elif int(pe.accel.logic.algorithm) == 1:
                     size |= 6 << 3 # toupper accelerator
             elif options.isa == 'arm':
                 size |= 2 << 3 # arm

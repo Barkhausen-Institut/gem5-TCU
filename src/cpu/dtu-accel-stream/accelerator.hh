@@ -74,6 +74,8 @@ class DtuAccelStream : public DtuAccel
 
     void reset() override;
 
+    void logicFinished();
+
     Addr sendMsgAddr() const override { return MSG_ADDR; }
     Addr bufferAddr() const override { return BUF_ADDR; }
     int contextEp() const override { return EP_CTX; }
@@ -105,16 +107,25 @@ class DtuAccelStream : public DtuAccel
 
         READ_DATA,
         READ_DATA_WAIT,
-        COMPUTE,
 
         WRITE_DATA,
         WRITE_DATA_WAIT,
 
+        REPLY_STORE,
+        REPLY_SEND,
+        REPLY_WAIT,
+        REPLY_ERROR,
 
         CTXSW,
 
         SYSCALL,
 
+        SUBMIT_START,
+        SUBMIT_SEND,
+        SUBMIT_SEND_WAIT,
+        SUBMIT_SEND_ERROR,
+
+        EXIT_ACK,
         EXIT,
     };
 
@@ -133,19 +144,29 @@ class DtuAccelStream : public DtuAccel
 
     State state;
     State lastState;
+    Addr bufOff;
 
     enum Flags
     {
         INTRPT      = 0x1,
         OUTPUT      = 0x2,
         WAIT        = 0x4,
+        SEEN_EOF    = 0x8,
+        SEEN_SUBMIT = 0x10,
         EXIT        = 0x20,
+        COMP        = 0x40,
+        COMPDONE    = 0x80,
+        BUFBLOCKED  = 0x200,
     };
 
     struct
     {
+        uint16_t flags;
         Addr msgAddr;
-        uint8_t flags;
+        Addr inReqAddr;
+        Addr outReqAddr;
+        Addr commitOff;
+        Addr commitLen;
         Addr inOff;
         Addr inPos;
         Addr inLen;
@@ -193,15 +214,19 @@ class DtuAccelStream : public DtuAccel
         } M5_ATTR_PACKED sys;
         struct
         {
-            uint8_t dummy;
+            uint64_t err;
+            uint64_t off;
+            uint64_t len;
         } M5_ATTR_PACKED msg;
     } M5_ATTR_PACKED reply;
 
     size_t bufSize;
     SyscallSM sysc;
     State syscNext;
+    Addr replyAddr;
+    State replyNext;
     YieldSM yield;
-    AccelLogic logic;
+    AccelLogic *logic;
     AccelCtxSwSM ctxsw;
     bool ctxSwPerformed;
 };
