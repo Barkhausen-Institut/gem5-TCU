@@ -99,10 +99,12 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
     {
         RecvEp ep = dtu.regs().getRecvEp(epid);
         int msgidx = ep.msgToIdx(cmd.arg);
-        auto &hd = dtu.regs().getHeader(ep.header + msgidx, RegAccess::DTU);
+        auto hd = dtu.regs().getHeader(ep.header + msgidx, RegAccess::DTU);
 
         // now that we have the header, fill the info struct
         assert(hd.flags & Dtu::REPLY_ENABLED);
+        hd.flags &= ~Dtu::REPLY_ENABLED;
+        dtu.regs().setHeader(ep.header + msgidx, RegAccess::DTU, hd);
 
         info.targetCoreId = hd.senderCoreId;
         info.targetVpeId  = hd.senderVpeId;
@@ -131,13 +133,24 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
             return;
         }
 
-        if (ep.curcrd != Dtu::CREDITS_UNLIM && ep.curcrd < ep.maxMsgSize)
+        if (ep.curcrd != Dtu::CREDITS_UNLIM)
         {
-            DPRINTFS(Dtu, (&dtu),
-                "EP%u: not enough credits (%lu) to send message (%lu)\n",
-                epid, ep.curcrd, ep.maxMsgSize);
-            dtu.scheduleFinishOp(Cycles(1), Dtu::Error::MISS_CREDITS);
-            return;
+            if (ep.curcrd < ep.maxMsgSize)
+            {
+                DPRINTFS(Dtu, (&dtu),
+                    "EP%u: not enough credits (%lu) to send message (%lu)\n",
+                    epid, ep.curcrd, ep.maxMsgSize);
+                dtu.scheduleFinishOp(Cycles(1), Dtu::Error::MISS_CREDITS);
+                return;
+            }
+
+            // pay the credits
+            ep.curcrd -= ep.maxMsgSize;
+
+            DPRINTFS(DtuCredits, (&dtu), "EP%u paid %u credits (%u left)\n",
+                     epid, ep.maxMsgSize, ep.curcrd);
+
+            dtu.regs().setSendEp(epid, ep);
         }
 
         // TODO error handling
@@ -249,20 +262,17 @@ MessageUnit::SendTransferEvent::transferStart()
 void
 MessageUnit::finishMsgReply(Dtu::Error error, unsigned epid, Addr msgAddr)
 {
-    RecvEp ep = dtu.regs().getRecvEp(epid);
-    int msgidx = ep.msgToIdx(msgAddr);
-
-    ReplyHeader hd = dtu.regs().getHeader(ep.header + msgidx, RegAccess::DTU);
-
-    assert(hd.flags & Dtu::REPLY_ENABLED);
-    hd.flags &= ~Dtu::REPLY_ENABLED;
     if (error == Dtu::Error::VPE_GONE)
+    {
+        RecvEp ep = dtu.regs().getRecvEp(epid);
+        int msgidx = ep.msgToIdx(msgAddr);
+
+        ReplyHeader hd = dtu.regs().getHeader(ep.header + msgidx, RegAccess::DTU);
         hd.flags |= Dtu::REPLY_FAILED;
-
-    dtu.regs().setHeader(ep.header + msgidx, RegAccess::DTU, hd);
-
+        dtu.regs().setHeader(ep.header + msgidx, RegAccess::DTU, hd);
+    }
     // on VPE_GONE, the kernel wants to reply later; so don't free the slot
-    if (error != Dtu::Error::VPE_GONE)
+    else
         ackMessage(epid, msgAddr);
 }
 
@@ -274,16 +284,12 @@ MessageUnit::finishMsgSend(Dtu::Error error, unsigned epid)
     if (error == Dtu::Error::VPE_GONE)
         ep.vpeId = Dtu::INVALID_VPE_ID;
 
+    // undo the credit reduction on errors except for VPE_GONE
     if (ep.curcrd != Dtu::CREDITS_UNLIM &&
-        (error == Dtu::Error::NONE || error == Dtu::Error::VPE_GONE))
+        error != Dtu::Error::NONE && error != Dtu::Error::VPE_GONE)
     {
-        assert(ep.curcrd >= ep.maxMsgSize);
-
-        // pay the credits
-        ep.curcrd -= ep.maxMsgSize;
-
-        DPRINTFS(DtuCredits, (&dtu), "EP%u paid %u credits (%u left)\n",
-                 epid, ep.maxMsgSize, ep.curcrd);
+        ep.curcrd += ep.maxMsgSize;
+        assert(ep.curcrd <= ep.maxcrd);
     }
 
     dtu.regs().setSendEp(epid, ep);
