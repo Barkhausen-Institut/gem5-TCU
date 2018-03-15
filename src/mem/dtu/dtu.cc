@@ -577,6 +577,8 @@ Dtu::wakeupCore()
 {
     if (getCommand().opcode == Command::SLEEP)
         scheduleFinishOp(Cycles(1));
+    else
+        connector->wakeup();
 }
 
 Cycles

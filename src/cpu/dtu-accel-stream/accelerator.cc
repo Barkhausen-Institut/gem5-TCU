@@ -238,11 +238,13 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                 }
                 else if (ctx.inReqAddr || ctx.outReqAddr)
                 {
+                    ctx.flags |= Flags::FETCHED;
                     ctx.msgAddr = ctx.inReqAddr ? ctx.inReqAddr : ctx.outReqAddr;
                     state = State::READ_MSG;
                 }
                 else
                 {
+                    ctx.flags |= Flags::FETCHED;
                     yield.start();
                     state = State::IDLE;
                 }
@@ -517,6 +519,8 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
 void
 DtuAccelStream::wakeup()
 {
+    ctx.flags &= ~Flags::FETCHED;
+
     if (!memPending && !tickEvent.scheduled())
         schedule(tickEvent, clockEdge(Cycles(1)));
 }
@@ -552,8 +556,11 @@ void
 DtuAccelStream::logicFinished()
 {
     ctx.lastSize = logic->outDataSize();
-    ctx.flags &= ~Flags::COMP;
+    ctx.flags &= ~(Flags::COMP | Flags::FETCHED);
     ctx.flags |= Flags::OUTPUT | Flags::COMPDONE;
+
+    if (!memPending && !tickEvent.scheduled())
+        schedule(tickEvent, clockEdge(Cycles(1)));
 }
 
 void
@@ -721,7 +728,7 @@ DtuAccelStream::tick()
                 state = State::CTXSW;
                 schedule(tickEvent, clockEdge(Cycles(1)));
             }
-            else
+            else if (!(ctx.flags & Flags::FETCHED))
             {
                 Addr regAddr = getRegAddr(CmdReg::COMMAND);
                 uint64_t value = Dtu::Command::FETCH_MSG | (EP_RECV << 4);

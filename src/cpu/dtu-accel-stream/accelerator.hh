@@ -156,6 +156,7 @@ class DtuAccelStream : public DtuAccel
         EXIT        = 0x20,
         COMP        = 0x40,
         COMPDONE    = 0x80,
+        FETCHED     = 0x100,
         BUFBLOCKED  = 0x200,
     };
 
