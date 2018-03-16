@@ -423,8 +423,8 @@ def createAccelPE(noc, options, no, accel, memPE, l1size=None, l2size=None, spms
     )
     pe.dtu.connector = DtuAccelConnector()
 
-    if accel == 'hash':
-        pe.accel = DtuAccelHash()
+    if accel == 'indir':
+        pe.accel = DtuAccelInDir()
     elif accel == 'fft':
         pe.accel = DtuAccelStream()
         pe.accel.logic = AccelLogic()
@@ -656,8 +656,8 @@ def runSimulation(root, options, pes):
                         size |= 10 << 3
                     else:
                         assert(False);
-                elif type(pe.accel).__name__ == 'DtuAccelHash':
-                    size |= 4 << 3 # hash accelerator
+                elif type(pe.accel).__name__ == 'DtuAccelInDir':
+                    size |= 4 << 3 # indir accelerator
                 elif int(pe.accel.logic.algorithm) == 0:
                     size |= 5 << 3 # fft accelerator
                 elif int(pe.accel.logic.algorithm) == 1:

@@ -27,9 +27,9 @@
 
 Import('*')
 
-SimObject('DtuAccelHash.py')
+SimObject('DtuAccelInDir.py')
 
 Source('accelerator.cc')
 
-DebugFlag('DtuAccelHash')
-DebugFlag('DtuAccelHashState')
+DebugFlag('DtuAccelInDir')
+DebugFlag('DtuAccelInDirState')

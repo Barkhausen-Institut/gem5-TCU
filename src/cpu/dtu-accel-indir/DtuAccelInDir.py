@@ -29,8 +29,8 @@ from DtuAccel import DtuAccel
 from m5.params import *
 from m5.proxy import *
 
-class DtuAccelHash(DtuAccel):
-    type = 'DtuAccelHash'
-    cxx_header = "cpu/dtu-accel-hash/accelerator.hh"
+class DtuAccelInDir(DtuAccel):
+    type = 'DtuAccelInDir'
+    cxx_header = "cpu/dtu-accel-indir/accelerator.hh"
 
     buf_size = Param.MemorySize("4kB", "The size of the buffer")

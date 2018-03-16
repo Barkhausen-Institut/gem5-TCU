@@ -32,7 +32,6 @@
 #define __CPU_DTU_ACCEL_HH__
 
 #include "params/DtuAccel.hh"
-#include "cpu/dtu-accel-hash/algorithm.hh"
 #include "mem/dtu/connector/base.hh"
 #include "mem/dtu/regfile.hh"
 #include "mem/dtu/dtu.hh"

@@ -27,32 +27,31 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
-#ifndef __CPU_DTU_ACCEL_HASH_ACCELERATOR_HH__
-#define __CPU_DTU_ACCEL_HASH_ACCELERATOR_HH__
+#ifndef __CPU_DTU_ACCEL_INDIR_HH__
+#define __CPU_DTU_ACCEL_INDIR_HH__
 
-#include "params/DtuAccelHash.hh"
+#include "params/DtuAccelInDir.hh"
 #include "cpu/dtu-accel/accelerator.hh"
 #include "cpu/dtu-accel/ctxswsm.hh"
 #include "cpu/dtu-accel/syscallsm.hh"
 #include "cpu/dtu-accel/yieldsm.hh"
-#include "cpu/dtu-accel-hash/algorithm.hh"
 #include "mem/dtu/connector/base.hh"
 #include "mem/dtu/regfile.hh"
 #include "sim/system.hh"
 
-class DtuAccelHash : public DtuAccel
+class DtuAccelInDir : public DtuAccel
 {
-    static const unsigned EP_RECV       = 7;
-    static const unsigned EP_CTX        = 8;
-    static const unsigned EP_DATA       = 9;
-    static const unsigned CAP_RBUF      = 2;
+    static const unsigned EP_RECV       = 4;
+    static const unsigned EP_OUT        = 5;
+    static const unsigned CAP_RBUF      = 64;
 
     static const size_t MSG_SIZE        = 64;
     static const Addr MSG_ADDR          = 0x2000;
     static const Addr BUF_ADDR          = 0x6000;
+    static const size_t BLOCK_SIZE      = 2048;
 
   public:
-    DtuAccelHash(const DtuAccelHashParams *p);
+    DtuAccelInDir(const DtuAccelInDirParams *p);
 
     void interrupt() override;
 
@@ -60,18 +59,11 @@ class DtuAccelHash : public DtuAccel
 
     Addr sendMsgAddr() const override { return MSG_ADDR; }
     Addr bufferAddr() const override { return BUF_ADDR; }
-    int contextEp() const override { return EP_CTX; }
-    size_t stateSize() const override
-    {
-        // if we fill the buffer, we do not need to save it, since we don't
-        // interrupt that operation.
-        if (hash.autonomous())
-            return 0;
-        return bufSize;
-    }
-    size_t contextSize() const override { return sizeof(hash); }
-    void *context() override { return &hash; }
-    void setSwitched() override { ctxSwPerformed = true; }
+    int contextEp() const override { return 0; }
+    size_t stateSize() const override { return 0; }
+    size_t contextSize() const override { return sizeof(Context); }
+    void *context() override { return &ctx; }
+    void setSwitched() override {}
 
   private:
 
@@ -87,9 +79,10 @@ class DtuAccelHash : public DtuAccel
         FETCH_MSG,
         READ_MSG_ADDR,
         READ_MSG,
-        READ_DATA,
-        READ_DATA_WAIT,
-        HASH_DATA,
+
+        WRITE_DATA,
+        WRITE_DATA_WAIT,
+
         STORE_REPLY,
         SEND_REPLY,
         REPLY_WAIT,
@@ -100,33 +93,23 @@ class DtuAccelHash : public DtuAccel
         SYSCALL,
     };
 
-    enum class Command
-    {
-        INIT,
-        UPDATE,
-        FINISH
-    };
-
     std::string getStateName() const;
 
     size_t bufSize;
 
     bool irqPending;
-    bool ctxSwPending;
     bool memPending;
 
     State state;
     State lastState;
-    DtuAccelHashAlgorithm hash;
 
     Addr msgAddr;
-    Addr hashOff;
-    Addr lastSize;
+    Addr dataSize;
 
-    Cycles hashStart;
+    struct Context {
+        uint64_t dummy;
+    } PACKED;
 
-    size_t replyOffset;
-    size_t replySize;
     struct
     {
         struct
@@ -139,16 +122,15 @@ class DtuAccelHash : public DtuAccel
         } M5_ATTR_PACKED sys;
         struct
         {
-            uint64_t res;
-            uint8_t bytes[64];
+            uint64_t count;
         } M5_ATTR_PACKED msg;
     } M5_ATTR_PACKED reply;
 
+    Context ctx;
     SyscallSM sysc;
     State syscNext;
     YieldSM yield;
     AccelCtxSwSM ctxsw;
-    bool ctxSwPerformed;
 };
 
-#endif // __CPU_DTU_ACCEL_HASH_ACCELERATOR_HH__
+#endif // __CPU_DTU_ACCEL_INDIR_HH__

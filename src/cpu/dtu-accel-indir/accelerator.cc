@@ -27,21 +27,14 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
-#include "cpu/dtu-accel-hash/algorithm.hh"
-#include "cpu/dtu-accel-hash/accelerator.hh"
-#include "debug/DtuAccelHash.hh"
-#include "debug/DtuAccelHashState.hh"
+#include "cpu/dtu-accel-indir/accelerator.hh"
+#include "debug/DtuAccelInDir.hh"
+#include "debug/DtuAccelInDirState.hh"
 #include "mem/dtu/dtu.hh"
 #include "mem/dtu/regfile.hh"
 #include "sim/dtu_memory.hh"
 
 #include <iomanip>
-
-// the time for one 64 block; determined by ALADDIN and picking the sweet spot
-// between area, power and performance. based on the SHA256 algorithm from:
-// https://github.com/B-Con/crypto-algorithms/blob/master/sha256.c
-static const Cycles BLOCK_TIME      = Cycles(85);
-static const size_t BLOCK_SIZE      = 64;
 
 static const char *stateNames[] =
 {
@@ -50,9 +43,10 @@ static const char *stateNames[] =
     "FETCH_MSG",
     "READ_MSG_ADDR",
     "READ_MSG",
-    "READ_DATA",
-    "READ_DATA_WAIT",
-    "HASH_DATA",
+
+    "WRITE_DATA",
+    "WRITE_DATA_WAIT",
+
     "STORE_REPLY",
     "SEND_REPLY",
     "REPLY_WAIT",
@@ -63,27 +57,25 @@ static const char *stateNames[] =
     "SYSCALL",
 };
 
-DtuAccelHash::DtuAccelHash(const DtuAccelHashParams *p)
+DtuAccelInDir::DtuAccelInDir(const DtuAccelInDirParams *p)
   : DtuAccel(p),
     bufSize(p->buf_size),
     irqPending(false),
-    ctxSwPending(false),
     memPending(false),
     state(State::IDLE),
     lastState(State::CTXSW),    // something different
-    hash(),
     msgAddr(),
+    ctx(),
     sysc(this),
     yield(this, &sysc),
-    ctxsw(this),
-    ctxSwPerformed()
+    ctxsw(this)
 {
-    static_assert(sizeof(DtuAccelHashAlgorithm) % 64 == 0, "Hash state size invalid");
-
+    static_assert((sizeof(stateNames) / sizeof(stateNames[0]) ==
+                  static_cast<size_t>(State::SYSCALL) + 1), "Missmatch");
     yield.start();
 }
 
-std::string DtuAccelHash::getStateName() const
+std::string DtuAccelInDir::getStateName() const
 {
     std::ostringstream os;
     os << stateNames[static_cast<size_t>(state)];
@@ -97,7 +89,7 @@ std::string DtuAccelHash::getStateName() const
 }
 
 void
-DtuAccelHash::completeRequest(PacketPtr pkt)
+DtuAccelInDir::completeRequest(PacketPtr pkt)
 {
     Request* req = pkt->req;
 
@@ -106,7 +98,7 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
         (state == State::SYSCALL && sysc.hasStateChanged()) ||
         (state == State::IDLE && yield.hasStateChanged()))
     {
-        DPRINTF(DtuAccelHashState, "[%s] Got response from memory\n",
+        DPRINTF(DtuAccelInDirState, "[%s] Got response from memory\n",
             getStateName().c_str());
         lastState = state;
     }
@@ -137,14 +129,7 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
             case State::CTXSW:
             {
                 if(ctxsw.handleMemResp(pkt))
-                {
-                    // if we didn't perform a context switch, go back to our
-                    // previous state
-                    if (!ctxSwPerformed && hash.interrupted())
-                        state = State::READ_DATA;
-                    else
-                        state = State::FETCH_MSG;
-                }
+                    state = State::FETCH_MSG;
                 break;
             }
 
@@ -159,7 +144,7 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
                 if(regs[0])
                 {
                     msgAddr = regs[0];
-                    DPRINTF(DtuAccelHash, "Received message @ %p\n", msgAddr);
+                    DPRINTF(DtuAccelInDir, "Received message @ %p\n", msgAddr);
                     state = State::READ_MSG;
                 }
                 else
@@ -175,123 +160,37 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
                     reinterpret_cast<const uint64_t*>(
                         pkt_data + sizeof(MessageHeader));
 
-                const char *cmdnames[] = {
-                    "INIT", "UPDATE", "FINISH"
-                };
-                DPRINTF(DtuAccelHash, "  cmd=%s arg1=%#llx arg2=%#llx\n",
-                    cmdnames[args[0] % 3], args[1], args[2]);
+                DPRINTF(DtuAccelInDir, "  arg0=%#llx arg1=%#llx\n",
+                    args[0], args[1]);
 
-                replyOffset = 0;
-                replySize = sizeof(uint64_t);
-                switch(static_cast<Command>(args[0]))
-                {
-                    case Command::INIT:
-                    {
-                        bool autonomous = static_cast<bool>(args[1]);
-                        auto algo = static_cast<DtuAccelHashAlgorithm::Type>(args[2]);
-                        hash.start(autonomous, algo);
-
-                        reply.msg.res = algo <= DtuAccelHashAlgorithm::SHA512;
-                        state = State::STORE_REPLY;
-                        break;
-                    }
-
-                    case Command::UPDATE:
-                    {
-                        if (hash.autonomous())
-                        {
-                            hash.startUpdate(args[1], args[2], 0);
-                            state = State::READ_DATA;
-                        }
-                        else
-                        {
-                            hash.startUpdate(0, args[2], args[2]);
-                            lastSize = args[2];
-                            hashOff = 0;
-                            state = State::HASH_DATA;
-                        }
-                        break;
-                    }
-
-                    case Command::FINISH:
-                    {
-                        reply.msg.res = hash.get(reply.msg.bytes);
-                        assert(reply.msg.res <= sizeof(reply.msg.bytes));
-
-                        std::ostringstream ss;
-                        ss << std::hex;
-                        for (size_t i = 0; i < reply.msg.res; i++)
-                        {
-                            ss << std::setw(2) << std::setfill('0')
-                               << (int)reply.msg.bytes[i];
-                        }
-                        DPRINTF(DtuAccelHash, "Hash: %s\n", ss.str().c_str());
-
-                        replySize += reply.msg.res;
-                        state = State::STORE_REPLY;
-                        break;
-                    }
-                }
+                dataSize = args[0];
+                size_t blocks = (dataSize + BLOCK_SIZE - 1) / BLOCK_SIZE;
+                size_t compTime = args[1];
+                delay = Cycles(blocks * compTime);
+                state = State::WRITE_DATA;
                 break;
             }
-            case State::READ_DATA:
+
+            case State::WRITE_DATA:
             {
-                state = State::READ_DATA_WAIT;
+                state = State::WRITE_DATA_WAIT;
                 break;
             }
-            case State::READ_DATA_WAIT:
+            case State::WRITE_DATA_WAIT:
             {
                 Dtu::Command::Bits cmd =
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
                 if (cmd.opcode == 0)
                 {
-                    hashOff = 0;
-                    state = State::HASH_DATA;
+                    reply.msg.count = dataSize;
+                    state = State::STORE_REPLY;
                 }
                 break;
             }
-            case State::HASH_DATA:
-            {
-                hash.update(pkt->getPtr<char>(), pkt->getSize());
 
-                hashOff += pkt->getSize();
-                if (hashOff == lastSize)
-                {
-                    // the time for the hash operation on lastSize bytes
-                    size_t blocks = (lastSize + BLOCK_SIZE - 1) / BLOCK_SIZE;
-                    delay = Cycles(BLOCK_TIME * blocks);
-                    DPRINTF(DtuAccelHash, "Hash for %luB took %llu cycles\n",
-                        lastSize, delay);
-
-                    // decrease it by the time we've already spent reading the
-                    // data from SPM, because that's already included in the
-                    // BLOCK_TIME.
-                    // TODO if we use caches, this is not correct
-                    if (delay > (curCycle() - hashStart))
-                        delay = delay - (curCycle() - hashStart);
-                    else
-                        delay = Cycles(1);
-
-                    if (hash.dataOffset() == hash.dataSize())
-                    {
-                        replyOffset = 0;
-                        state = State::STORE_REPLY;
-                    }
-                    else if (hash.autonomous() && irqPending)
-                    {
-                        irqPending = false;
-                        state = State::CTXSW;
-                    }
-                    else
-                        state = State::READ_DATA;
-                }
-                break;
-            }
             case State::STORE_REPLY:
             {
-                replyOffset += pkt->getSize();
-                if (replyOffset == replySize)
-                    state = State::SEND_REPLY;
+                state = State::SEND_REPLY;
                 break;
             }
             case State::SEND_REPLY:
@@ -337,7 +236,7 @@ DtuAccelHash::completeRequest(PacketPtr pkt)
 }
 
 void
-DtuAccelHash::interrupt()
+DtuAccelInDir::interrupt()
 {
     irqPending = true;
 
@@ -350,7 +249,7 @@ DtuAccelHash::interrupt()
 }
 
 void
-DtuAccelHash::reset()
+DtuAccelInDir::reset()
 {
     irqPending = false;
 
@@ -362,23 +261,16 @@ DtuAccelHash::reset()
 }
 
 void
-DtuAccelHash::tick()
+DtuAccelInDir::tick()
 {
     PacketPtr pkt = nullptr;
-
-    // after a context switch, continue at then position we left off
-    if (ctxSwPerformed)
-    {
-        state = hash.interrupted() ? State::READ_DATA : State::FETCH_MSG;
-        ctxSwPerformed = false;
-    }
 
     if (state != lastState ||
         (state == State::CTXSW && ctxsw.hasStateChanged()) ||
         (state == State::SYSCALL && sysc.hasStateChanged()) ||
         (state == State::IDLE && yield.hasStateChanged()))
     {
-        DPRINTF(DtuAccelHashState, "[%s] tick\n",
+        DPRINTF(DtuAccelInDirState, "[%s] tick\n",
             getStateName().c_str());
         lastState = state;
     }
@@ -424,41 +316,29 @@ DtuAccelHash::tick()
             pkt = createPacket(msgAddr, MSG_SIZE, MemCmd::ReadReq);
             break;
         }
-        case State::READ_DATA:
+
+        case State::WRITE_DATA:
         {
-            size_t left = hash.dataSize() - hash.dataOffset();
-            lastSize = std::min(maxDataSize, left);
-            pkt = createDtuCmdPkt(Dtu::Command::READ,
-                                  EP_DATA,
+            pkt = createDtuCmdPkt(Dtu::Command::WRITE,
+                                  EP_OUT,
                                   BUF_ADDR,
-                                  lastSize,
-                                  hash.memOffset() + hash.dataOffset());
-            hash.incOffset(lastSize);
+                                  dataSize,
+                                  0);
             break;
         }
-        case State::READ_DATA_WAIT:
+        case State::WRITE_DATA_WAIT:
         {
             Addr regAddr = getRegAddr(CmdReg::COMMAND);
             pkt = createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }
-        case State::HASH_DATA:
-        {
-            if (hashOff == 0)
-                hashStart = curCycle();
-            size_t rem = lastSize - hashOff;
-            size_t size = std::min(chunkSize, rem);
-            pkt = createPacket(BUF_ADDR + hashOff, size, MemCmd::ReadReq);
-            break;
-        }
+
         case State::STORE_REPLY:
         {
-            size_t rem = replySize - replyOffset;
-            size_t size = std::min(chunkSize, rem);
-            pkt = createPacket(BUF_ADDR + replyOffset,
-                               size,
+            pkt = createPacket(BUF_ADDR,
+                               sizeof(reply.msg),
                                MemCmd::WriteReq);
-            memcpy(pkt->getPtr<uint8_t>(), (char*)&reply.msg + replyOffset, size);
+            memcpy(pkt->getPtr<uint8_t>(), (char*)&reply.msg, sizeof(reply.msg));
             break;
         }
         case State::SEND_REPLY:
@@ -466,7 +346,7 @@ DtuAccelHash::tick()
             pkt = createDtuCmdPkt(Dtu::Command::REPLY,
                                   EP_RECV,
                                   BUF_ADDR,
-                                  replySize,
+                                  sizeof(reply.msg),
                                   msgAddr);
             break;
         }
@@ -482,7 +362,7 @@ DtuAccelHash::tick()
             reply.sys.cap = CAP_RBUF;
             reply.sys.msgaddr = msgAddr;
             reply.sys.event = 0;
-            reply.sys.len = replySize;
+            reply.sys.len = sizeof(reply.msg);
             reply.sys.event = 0;
 
             pkt = createPacket(MSG_ADDR, sizeof(reply), MemCmd::WriteReq);
@@ -504,8 +384,8 @@ DtuAccelHash::tick()
     }
 }
 
-DtuAccelHash*
-DtuAccelHashParams::create()
+DtuAccelInDir*
+DtuAccelInDirParams::create()
 {
-    return new DtuAccelHash(this);
+    return new DtuAccelInDir(this);
 }
