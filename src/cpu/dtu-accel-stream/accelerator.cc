@@ -348,7 +348,7 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                         {
                             ctx.flags |= Flags::SEEN_SUBMIT;
                             ctx.commitOff = 0;
-                            ctx.commitLen = args[1] == -1 ? 0 : args[1];
+                            ctx.commitLen = args[1] == NO_SUBMIT ? 0 : args[1];
                         }
 
                         if (!(ctx.flags & Flags::BUFBLOCKED))
@@ -846,7 +846,7 @@ DtuAccelStream::tick()
         case State::SUBMIT_START:
         {
             rdwr_msg.msg.cmd = static_cast<uint64_t>(Command::WRITE);
-            rdwr_msg.msg.submit = ctx.outPos ? ctx.outPos : -1;
+            rdwr_msg.msg.submit = ctx.outPos ? ctx.outPos : NO_SUBMIT;
 
             DPRINTF(DtuAccelStream,
                     "MSG: sending %s request(submit=%#llx)\n",

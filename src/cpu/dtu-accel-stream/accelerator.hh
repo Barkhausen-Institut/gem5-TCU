@@ -65,6 +65,8 @@ class DtuAccelStream : public DtuAccel
 
     static const size_t MSG_SIZE        = 64;
 
+    static const uint64_t NO_SUBMIT     = 0xFFFFFFFFFFFFFFFF;
+
   public:
     DtuAccelStream(const DtuAccelStreamParams *p);
 
