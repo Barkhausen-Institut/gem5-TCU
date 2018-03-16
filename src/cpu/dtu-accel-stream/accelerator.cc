@@ -90,6 +90,9 @@ DtuAccelStream::DtuAccelStream(const DtuAccelStreamParams *p)
     ctxsw(this),
     ctxSwPerformed()
 {
+    static_assert((sizeof(stateNames) / sizeof(stateNames[0]) ==
+                  static_cast<size_t>(State::EXIT) + 1), "Missmatch");
+
     rdwr_msg.sys.opcode = SyscallSM::Operation::FORWARD_MSG;
     rdwr_msg.sys.rgate_sel = 0xFFFF;
     rdwr_msg.sys.len = sizeof(rdwr_msg.msg);

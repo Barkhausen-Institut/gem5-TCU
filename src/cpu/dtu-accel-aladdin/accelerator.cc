@@ -68,6 +68,9 @@ DtuAccelAladdin::DtuAccelAladdin(const DtuAccelAladdinParams *p)
     ctxsw(this),
     ctxSwPerformed()
 {
+    static_assert((sizeof(stateNames) / sizeof(stateNames[0]) ==
+                  static_cast<size_t>(State::SYSCALL) + 1), "Missmatch");
+
     yield.start();
 }
 
