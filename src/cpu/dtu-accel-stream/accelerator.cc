@@ -849,8 +849,7 @@ DtuAccelStream::tick()
             rdwr_msg.msg.submit = ctx.outPos ? ctx.outPos : NO_SUBMIT;
 
             DPRINTF(DtuAccelStream,
-                    "MSG: sending %s request(submit=%#llx)\n",
-                    (ctx.flags & Flags::OUTPUT) ? "output" : "input",
+                    "MSG: sending output request(submit=%#llx)\n",
                     rdwr_msg.msg.submit);
 
             pkt = createPacket(BUF_ADDR + bufSize,

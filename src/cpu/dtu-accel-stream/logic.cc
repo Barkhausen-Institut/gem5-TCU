@@ -59,7 +59,7 @@ AccelLogic::start(Addr _offset, Addr _dataSize, Cycles _compTime)
 {
     dataSize = _dataSize;
     compTime = _compTime;
-    state = LOGIC_PULL;
+    state = dataSize == 0 ? LOGIC_DONE : LOGIC_PULL;
     offset = _offset;
     pos = 0;
     outSize = 0;
