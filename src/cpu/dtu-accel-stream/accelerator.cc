@@ -409,15 +409,13 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
                 if (cmd.opcode == 0)
                 {
-                    if (ctx.lastSize > 0)
-                        state = State::INOUT_START;
-                    else
+                    if (ctx.lastSize == 0)
                     {
                         if (ctx.inPos == ctx.inLen)
                             ctx.flags &= ~Flags::BUFBLOCKED;
                         ctx.flags &= ~Flags::OUTPUT;
-                        state = State::INOUT_START;
                     }
+                    state = State::INOUT_START;
                 }
                 break;
             }
