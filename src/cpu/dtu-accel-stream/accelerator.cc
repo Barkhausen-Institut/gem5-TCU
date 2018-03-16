@@ -80,6 +80,7 @@ DtuAccelStream::DtuAccelStream(const DtuAccelStreamParams *p)
     memPending(false),
     state(State::IDLE),
     lastState(State::FETCH_MSG), // something different
+    lastFlags(),
     bufOff(),
     ctx(),
     bufSize(p->buf_size),
@@ -117,14 +118,15 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
 {
     Request* req = pkt->req;
 
-    if (state != lastState ||
+    if (ctx.flags != lastFlags || state != lastState ||
         (state == State::CTXSW && ctxsw.hasStateChanged()) ||
         (state == State::SYSCALL && sysc.hasStateChanged()) ||
         (state == State::IDLE && yield.hasStateChanged()))
     {
-        DPRINTF(DtuAccelStreamState, "[%s] Got response from memory\n",
-            getStateName().c_str());
+        DPRINTF(DtuAccelStreamState, "[%s:%#02x] Got response from memory\n",
+            getStateName().c_str(), ctx.flags);
         lastState = state;
+        lastFlags = ctx.flags;
     }
 
     const uint8_t *pkt_data = pkt->getConstPtr<uint8_t>();
@@ -641,14 +643,15 @@ DtuAccelStream::tick()
         }
     }
 
-    if (state != lastState ||
+    if (ctx.flags != lastFlags || state != lastState ||
         (state == State::CTXSW && ctxsw.hasStateChanged()) ||
         (state == State::SYSCALL && sysc.hasStateChanged()) ||
         (state == State::IDLE && yield.hasStateChanged()))
     {
-        DPRINTF(DtuAccelStreamState, "[%s] tick\n",
-            getStateName().c_str());
+        DPRINTF(DtuAccelStreamState, "[%s:%#02x] tick\n",
+            getStateName().c_str(), ctx.flags);
         lastState = state;
+        lastFlags = ctx.flags;
     }
 
     switch(state)

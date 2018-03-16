@@ -146,6 +146,7 @@ class DtuAccelStream : public DtuAccel
 
     State state;
     State lastState;
+    uint16_t lastFlags;
     Addr bufOff;
 
     enum Flags
