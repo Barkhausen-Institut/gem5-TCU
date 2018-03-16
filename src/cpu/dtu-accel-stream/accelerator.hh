@@ -165,20 +165,21 @@ class DtuAccelStream : public DtuAccel
 
     struct
     {
-        uint16_t flags;
-        Addr msgAddr;
-        Addr inReqAddr;
-        Addr outReqAddr;
-        Addr commitOff;
-        Addr commitLen;
-        Addr inOff;
-        Addr inPos;
-        Addr inLen;
-        Addr outOff;
-        Addr outPos;
-        Addr outLen;
-        Addr lastSize;
-    } ctx;
+        uint64_t flags;
+        uint64_t compTime;
+        uint64_t msgAddr;
+        uint64_t inReqAddr;
+        uint64_t outReqAddr;
+        uint64_t commitOff;
+        uint64_t commitLen;
+        uint64_t inOff;
+        uint64_t inPos;
+        uint64_t inLen;
+        uint64_t outOff;
+        uint64_t outPos;
+        uint64_t outLen;
+        uint64_t lastSize;
+    } M5_ATTR_PACKED ctx;
 
     struct
     {

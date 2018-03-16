@@ -394,7 +394,7 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                 if (cmd.opcode == 0)
                 {
                     bufOff = (cmd.error != 0) ? ctx.inOff : 0;
-                    logic->start(bufOff, ctx.lastSize, Cycles(4096) /* TODO */);
+                    logic->start(bufOff, ctx.lastSize, Cycles(ctx.compTime));
                     ctx.flags |= Flags::COMP;
                     state = State::FETCH_MSG;
                 }
