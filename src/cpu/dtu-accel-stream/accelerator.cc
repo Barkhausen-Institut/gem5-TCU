@@ -343,8 +343,8 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                             DPRINTF(
                                 DtuAccelStream,
                                 "MSG: received output request(submit=%#llx);"
-                                " state: (blocked=%d)\n",
-                                args[1], !!(ctx.flags & Flags::BUFBLOCKED)
+                                " state: (used=%#02x)\n",
+                                args[1], ctx.used
                             );
                         }
 
@@ -356,14 +356,15 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                             ctx.commitLen = args[1] == NO_SUBMIT ? 0 : args[1];
                         }
 
-                        if (!(ctx.flags & Flags::BUFBLOCKED))
+                        if (ctx.used != 0b11)
                         {
                             reply.msg.err = 0;
-                            reply.msg.off = 0;
-                            reply.msg.len = bufSize;
+                            reply.msg.off = !(ctx.used & 0b01) ? 0x0 : bufSize / 2;
+                            reply.msg.len = bufSize / 2;
                             replyAddr = ctx.msgAddr;
                             replyNext = State::IDLE;
-                            ctx.flags |= Flags::BUFBLOCKED;
+                            ctx.used |= !(ctx.used & 0b01) ? 0b01 : 0b10;
+                            // ctx.flags |= Flags::BUFBLOCKED;
                             state = State::REPLY_STORE;
                             ctx.outReqAddr = 0;
                         }
@@ -415,7 +416,7 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                     if (ctx.lastSize == 0)
                     {
                         if (ctx.inPos == ctx.inLen)
-                            ctx.flags &= ~Flags::BUFBLOCKED;
+                            ctx.used &= ~((ctx.inOff == 0) ? 0b01 : 0b10);
                         ctx.flags &= ~Flags::OUTPUT;
                     }
                     state = State::INOUT_START;
@@ -603,7 +604,7 @@ DtuAccelStream::tick()
             state = State::FETCH_MSG;
         }
         // can we answer a pending output request?
-        else if (ctx.outReqAddr && !(ctx.flags & Flags::BUFBLOCKED))
+        else if (ctx.outReqAddr && ctx.used != 0b11)
         {
             ctx.flags &= ~Flags::FETCHED;
             state = State::FETCH_MSG;

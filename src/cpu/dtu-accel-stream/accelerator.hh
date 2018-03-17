@@ -160,12 +160,12 @@ class DtuAccelStream : public DtuAccel
         COMP        = 0x40,
         COMPDONE    = 0x80,
         FETCHED     = 0x100,
-        BUFBLOCKED  = 0x200,
     };
 
     struct
     {
-        uint64_t flags;
+        uint32_t flags;
+        uint32_t used;
         uint64_t compTime;
         uint64_t msgAddr;
         uint64_t inReqAddr;
