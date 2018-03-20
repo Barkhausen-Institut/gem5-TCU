@@ -82,7 +82,6 @@ class M3Loader
 
         uint64_t lambda;
         uint32_t pager_sess;
-        uint32_t pager_sgate;
         uint32_t pager_rgate;
         uint32_t mounts_len;
         uint64_t mounts;
