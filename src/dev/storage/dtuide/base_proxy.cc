@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2018, Lukas Landgraf
  * Copyright (c) 2016, Nils Asmussen
  * Copyright (c) 2015, Christian Menard
  * All rights reserved.
