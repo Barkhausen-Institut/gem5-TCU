@@ -5,4 +5,5 @@ from Connector import BaseConnector
 class PCIConnector(BaseConnector):
     cxx_header = 'dev/storage/dtuide/pci_connector.hh'
     type = 'PCIConnector'
+
     base_proxy = Param.BaseProxy('Proxy to be connected to')

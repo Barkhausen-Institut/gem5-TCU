@@ -19,10 +19,10 @@
  * other endpoints. */
 class BaseProxy : public MemObject
 {
-public:
+  public:
     class InterruptSM;
 
-private:
+  private:
 
     /* Constant to specify the id of the endpoint to send packets, so on the
      * PE associated with this proxy. */
@@ -74,52 +74,58 @@ private:
        proxy */
     class DtuSidePort : public SlavePort
     {
-        private:
-            BaseProxy& baseproxy;
-            AddrRangeList addrRangeList;
-        public:
-            DtuSidePort(const std::string& _name, BaseProxy* _baseproxy,
+        BaseProxy& baseproxy;
+        AddrRangeList addrRangeList;
+
+      public:
+
+        DtuSidePort(const std::string& _name, BaseProxy* _baseproxy,
                     std::vector<AddrRange> _ranges)
-                : SlavePort(_name, _baseproxy), baseproxy(*_baseproxy),
-                  addrRangeList(_ranges.begin(), _ranges.end())
-                {}
-        protected:
-            /**
-             * This function is called if this port receives a request from
-             * the corresponding master port.
-             */
-            bool recvTimingReq(PacketPtr pkt) override;
+            : SlavePort(_name, _baseproxy), baseproxy(*_baseproxy),
+              addrRangeList(_ranges.begin(), _ranges.end())
+            {}
 
-            /**
-             * Function to retry response to packets if sending them failed.
-             */
-            void recvRespRetry() override;
+      protected:
 
-            /**
-             * Is called if the master port tries to send a packet atomically.
-             * Not supported.
-             */
-            Tick recvAtomic(PacketPtr ptr) override;
+        /**
+         * This function is called if this port receives a request from
+         * the corresponding master port.
+         */
+        bool recvTimingReq(PacketPtr pkt) override;
 
-            /**
-             * Receive packet in a functional manner.
-             */
-            void recvFunctional(PacketPtr ptr) override;
+        /**
+         * Function to retry response to packets if sending them failed.
+         */
+        void recvRespRetry() override;
 
-            AddrRangeList getAddrRanges() const override;
+        /**
+         * Is called if the master port tries to send a packet atomically.
+         * Not supported.
+         */
+        Tick recvAtomic(PacketPtr ptr) override;
+
+        /**
+         * Receive packet in a functional manner.
+         */
+        void recvFunctional(PacketPtr ptr) override;
+
+        AddrRangeList getAddrRanges() const override;
     };
 
     /* Device side port to trigger actions at the pci host and the ide
      * controller. */
     class DeviceSidePort : public MasterPort
     {
-      private:
         BaseProxy& baseproxy;
+
       public:
+
         DeviceSidePort(const std::string& _name, BaseProxy* _baseproxy)
             : MasterPort(_name, _baseproxy), baseproxy(*_baseproxy)
         { }
+
       protected:
+
         bool recvTimingResp(PacketPtr pkt) override;
 
         void recvReqRetry() override;
@@ -129,14 +135,16 @@ private:
      * the target ep. */
     class InterruptPort : public MasterPort
     {
-      private:
         BaseProxy& baseproxy;
+
       public:
+
         InterruptPort(const std::string& name, BaseProxy* proxy)
            : MasterPort(name, proxy), baseproxy(*proxy)
         { }
 
       protected:
+
         bool recvTimingResp(PacketPtr pkt) override;
 
         void recvReqRetry() override;
@@ -151,7 +159,7 @@ private:
      * Create a packet.
      */
     PacketPtr createPacket(Addr paddr, const void *data, size_t size,
-        MemCmd cmd);
+                           MemCmd cmd);
 
     /**
      * Create a packet for dtu registers.
@@ -163,7 +171,7 @@ private:
      * commands by the dtu.
      */
     PacketPtr createDtuCmdPkt(Dtu::Command::Opcode cmd, unsigned epid,
-        uint64_t data, uint64_t size, uint64_t off);
+                              uint64_t data, uint64_t size, uint64_t off);
 
     /**
      * Forward packet via the dtu port as a response
@@ -242,9 +250,9 @@ private:
 
     EventWrapper<BaseProxy, &BaseProxy::sendMemResponse> memRespEvent;
 
-    InterruptSM * interruptSM;
+    InterruptSM *interruptSM;
 
-    PCIConnector * con;
+    PCIConnector *con;
 
   public:
 
@@ -342,7 +350,7 @@ private:
 
         State getState();
 
-       private:
+      private:
 
         PacketPtr cur_pkt;
         BaseProxy * proxy;

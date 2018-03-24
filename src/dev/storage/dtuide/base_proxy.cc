@@ -49,14 +49,14 @@ const unsigned BaseProxy::RESPOND_ADDR       = 0x10000001;
 const unsigned BaseProxy::ACK_ADDR           = 0x100000FF;
 
 static const char * names[] = {
-            "IDLE",
-            "SEND",
-            "SEND_COMMAND",
-            "WAIT",
-            "FETCH",
-            "READ_ADDR",
-            "ACK"
-        };
+    "IDLE",
+    "SEND",
+    "SEND_COMMAND",
+    "WAIT",
+    "FETCH",
+    "READ_ADDR",
+    "ACK"
+};
 
 BaseProxy::BaseProxy(const BaseProxyParams *p)
   : MemObject(p),
@@ -94,9 +94,7 @@ BaseProxy::init()
     MemObject::init();
 
     if (dtu_port.isConnected())
-    {
         dtu_port.sendRangeChange();
-    }
 }
 
 BaseMasterPort &
@@ -122,21 +120,19 @@ BaseProxy::getSlavePort(const std::string& if_name, PortID idx)
         return MemObject::getSlavePort(if_name, idx);
 }
 
-
-
 PacketPtr
 BaseProxy::createPacket(Addr paddr,
-                       size_t size,
-                       MemCmd cmd = MemCmd::WriteReq)
+                        size_t size,
+                        MemCmd cmd = MemCmd::WriteReq)
 {
     return createPacket(paddr, new uint8_t[size], size, cmd);
 }
 
 PacketPtr
 BaseProxy::createPacket(Addr paddr,
-                       const void *data,
-                       size_t size,
-                       MemCmd cmd = MemCmd::WriteReq)
+                        const void *data,
+                        size_t size,
+                        MemCmd cmd = MemCmd::WriteReq)
 {
     Request::Flags flags;
 
@@ -151,8 +147,8 @@ BaseProxy::createPacket(Addr paddr,
 
 PacketPtr
 BaseProxy::createDtuRegPkt(Addr reg,
-                          RegFile::reg_t value,
-                          MemCmd cmd = MemCmd::WriteReq)
+                           RegFile::reg_t value,
+                           MemCmd cmd = MemCmd::WriteReq)
 {
     auto pkt = createPacket(reg_base + reg, sizeof(RegFile::reg_t), cmd);
     *pkt->getPtr<RegFile::reg_t>() = value;
@@ -198,7 +194,8 @@ BaseProxy::forwardToDevice(PacketPtr pkt)
 {
     DPRINTF(BaseProxy, "Sending packet IDE addr 0x%x\n", pkt->getAddr());
 
-    if (!dev_port.sendTimingReq(pkt)) {
+    if (!dev_port.sendTimingReq(pkt))
+    {
         recvPacketList->push_back(pkt);
         this->recvRetry();
     }
@@ -208,28 +205,24 @@ BaseProxy::forwardToDevice(PacketPtr pkt)
 bool
 BaseProxy::forwardFromDevice(PacketPtr pkt)
 {
+    DPRINTF(BaseProxy, "Sending packet DTU addr 0x%x\n", pkt->getAddr());
 
-    DPRINTF(BaseProxy,
-        "Sending packet DTU addr 0x%x\n", pkt->getAddr());
-
-    if (!dtu_port.sendTimingResp(pkt)) {
+    if (!dtu_port.sendTimingResp(pkt))
+    {
         respPacketList->push_back(pkt);
         this->respRetry();
     }
-
     return true;
 }
 
 bool
 BaseProxy::DeviceSidePort::recvTimingResp(PacketPtr pkt)
 {
-    if (baseproxy.forwardFromDevice(pkt)) {
+    if (baseproxy.forwardFromDevice(pkt))
         return true;
-    }
-    else {
-        panic("Not handled!");
-        return false;
-    }
+
+    panic("Not handled!");
+    return false;
 }
 
 void
@@ -254,16 +247,19 @@ BaseProxy::InterruptPort::recvTimingResp(PacketPtr pkt)
 bool
 BaseProxy::DtuSidePort::recvTimingReq(PacketPtr pkt)
 {
-    DPRINTFS(BaseProxy, (&baseproxy), "Forwarding packet with address 0x%x\n",
-        pkt->getAddr());
+    DPRINTFS(BaseProxy, (&baseproxy),
+             "Forwarding packet with address 0x%x\n",
+             pkt->getAddr());
 
     /* This address range is designated for interaction with the state
      * machine. */
-    if (pkt->getAddr() >= 0x10000000 && pkt->getAddr() <= 0x100000FF) {
+    if (pkt->getAddr() >= 0x10000000 && pkt->getAddr() <= 0x100000FF)
+    {
         baseproxy.handleIntResp(pkt);
         return true;
     }
-    else {
+    else
+    {
         return baseproxy.forwardToDevice(pkt);
     }
 }
@@ -284,8 +280,8 @@ void
 BaseProxy::DtuSidePort::recvFunctional(PacketPtr pkt)
 {
     DPRINTFS(BaseProxy, (&baseproxy),
-        "Functionally forwarding packet with address 0x%x\n",
-        pkt->getAddr());
+             "Functionally forwarding packet with address 0x%x\n",
+             pkt->getAddr());
 
     if (pkt->getAddr() < 0xFF)
         baseproxy.dev_port.sendFunctional(pkt);
@@ -302,10 +298,12 @@ void
 BaseProxy::recvRetry()
 {
     assert(!recvPacketList->empty());
-    while (recvPacketList->empty()) {
-    //TODO: handle race conditions if multiple
+    while (recvPacketList->empty())
+    {
+        //TODO: handle race conditions if multiple
         //threads want to retry message.
-        if (dev_port.sendTimingReq(*(recvPacketList->begin()))) {
+        if (dev_port.sendTimingReq(*(recvPacketList->begin())))
+        {
             recvPacketList->pop_front();
             return;
         }
@@ -316,8 +314,11 @@ void
 BaseProxy::respRetry()
 {
     assert(!respPacketList->empty());
-    while (respPacketList->empty()) { //TODO: race conditions?
-        if (dtu_port.sendTimingResp(*(respPacketList->begin()))) {
+    while (respPacketList->empty())
+    {
+        //TODO: race conditions?
+        if (dtu_port.sendTimingResp(*(respPacketList->begin())))
+        {
             respPacketList->pop_front();
             return;
         }
@@ -329,7 +330,8 @@ BaseProxy::handleIntResp(PacketPtr pkt)
 {
     uint32_t data;
 
-    switch(pkt->getAddr()) {
+    switch(pkt->getAddr())
+    {
         case PREP_PACKET_ADDR: //deprecated
             pkt->makeResponse();
             data = 0xFF; // bogus
@@ -337,6 +339,7 @@ BaseProxy::handleIntResp(PacketPtr pkt)
             respPacketList->push_back(pkt);
             schedule(memRespEvent, curTick());
             break;
+
         case RESPOND_ADDR:
             data = 0xFFFF; //bogus
             intAnswered = false;
@@ -350,22 +353,23 @@ BaseProxy::handleIntResp(PacketPtr pkt)
             respPacketList->push_back(pkt);
             schedule(memRespEvent, curTick());
             break;
+
         case ACK_ADDR:
             intAnswered = true;
             pkt->makeResponse();
             respPacketList->push_back(pkt);
             schedule(memRespEvent, curTick());
             break;
+
         default:
             panic("Answer for address 0x%x not implemented\n", pkt->getAddr());
     }
-
 }
 
 bool
 BaseProxy::sendToDtu(PacketPtr pkt)
 {
-    assert(pkt!=nullptr);
+    assert(pkt != nullptr);
 
     if (atomic)
     {
@@ -390,13 +394,16 @@ BaseProxy::tick()
     DPRINTF(BaseProxy, "[%s] tick\n", interruptSM->getStateName());
     PacketPtr pkt = interruptSM->tick();
 
-    if (pkt != nullptr && !interruptSM->isIdle()) {
-        DPRINTF(BaseProxy, "Sending pkt with addr 0x%x to DTU sided port\n",
-            pkt->getAddr());
+    if (pkt != nullptr && !interruptSM->isIdle())
+    {
+        DPRINTF(BaseProxy,
+                "Sending pkt with addr 0x%x to DTU sided port\n",
+                pkt->getAddr());
         sendToDtu(pkt);
     }
-    else if (pkt == nullptr && !interruptSM->isIdle()) {
-    // only schedule tick if no packet needs to be handled
+    else if (pkt == nullptr && !interruptSM->isIdle())
+    {
+        // only schedule tick if no packet needs to be handled
         schedule(tickEvent, curTick());
     }
 }
@@ -408,9 +415,8 @@ BaseProxy::sendMemResponse()
     DPRINTF(BaseProxy, "Sending mem response asynchronously\n");
     while (!respPacketList->empty())
     {
-        if (dtu_port.sendTimingResp(respPacketList->front())) {
+        if (dtu_port.sendTimingResp(respPacketList->front()))
             respPacketList->pop_front();
-        }
     }
 
     DPRINTF(BaseProxy, "Response sent\n");
@@ -420,7 +426,7 @@ void
 BaseProxy::completeRequest(PacketPtr pkt)
 {
     DPRINTF(BaseProxy, "[%s] Completing request\n",
-        interruptSM->getStateName());
+            interruptSM->getStateName());
 
     interruptSM->handleMemResp(pkt);
     freePacket(pkt);
@@ -488,7 +494,6 @@ BaseProxy::clearPciInt(int line)
 {
     DPRINTF(BaseProxy, "Trying to clear PCI interrupt on line %d\n", line);
     interruptSM->clearInterrupt();
-
 }
 
 void
@@ -554,7 +559,8 @@ BaseProxy::InterruptSM::tick()
     {
         case State::IDLE:
         {
-            if (interruptPending) {
+            if (interruptPending)
+            {
                 interruptPending = false;
                 state = SEND_COMMAND;
             }
@@ -562,18 +568,20 @@ BaseProxy::InterruptSM::tick()
         }
         case State::SEND: //deprecated
         {
-            pkt = proxy->createDtuRegPkt(PREP_PACKET_ADDR, //addr
-                                  0xFFFF, //data
-                                  MemCmd::WriteReq);
+            pkt = proxy->createDtuRegPkt(PREP_PACKET_ADDR,  // addr
+                                         0xFFFF,            // data
+                                         MemCmd::WriteReq);
             break;
         }
         case State::SEND_COMMAND:
+        {
             pkt = proxy->createDtuCmdPkt(Dtu::Command::SEND,
-                                  EP_SEND,
-                                  RESPOND_ADDR, // addr
-                                  sizeof(uint32_t), //msg size
-                                  EP_REPLY); // reply EP
+                                         EP_SEND,
+                                         RESPOND_ADDR,      // addr
+                                         sizeof(uint32_t),  // msg size
+                                         EP_REPLY);         // reply EP
             break;
+        }
         case State::WAIT: // wait for answering interrupt
         {
             Addr regAddr = proxy->getRegAddr(CmdReg::COMMAND);
@@ -595,12 +603,11 @@ BaseProxy::InterruptSM::tick()
         }
         case State::ACK:
         {
-            pkt = proxy->createDtuCmdPkt(
-                Dtu::Command::ACK_MSG,
-                EP_REPLY,
-                0,
-                0,
-                replyAddr);
+            pkt = proxy->createDtuCmdPkt(Dtu::Command::ACK_MSG,
+                                         EP_REPLY,
+                                         0,
+                                         0,
+                                         replyAddr);
             break;
         }
         default:
@@ -613,11 +620,11 @@ BaseProxy::InterruptSM::tick()
 bool
 BaseProxy::InterruptSM::handleMemResp(PacketPtr pkt)
 {
-
     RegFile::reg_t reg;
     const RegFile::reg_t *regs;
 
-    switch(state) {
+    switch(state)
+    {
         case IDLE:
             panic("handleMemResp should not be called during IDLE");
         case SEND:
@@ -628,8 +635,9 @@ BaseProxy::InterruptSM::handleMemResp(PacketPtr pkt)
             break;
         case WAIT:
             reg = *pkt->getConstPtr<RegFile::reg_t>();
-            if ((reg & 0xF) == 0) {// check if the remote VPE has updated
-                                  // the register yet
+            if ((reg & 0xF) == 0)
+            {
+                // check if the remote VPE has updated the register yet
                 state = FETCH;
             }
             break;
@@ -638,11 +646,13 @@ BaseProxy::InterruptSM::handleMemResp(PacketPtr pkt)
             break;
         case READ_ADDR:
             regs = pkt->getConstPtr<RegFile::reg_t>();
-            if (regs[0]) {
+            if (regs[0])
+            {
                 replyAddr = regs[0];
                 state = ACK;
             }
-            else {
+            else
+            {
                 state = FETCH;
             }
             break;

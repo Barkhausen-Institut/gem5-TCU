@@ -4,8 +4,6 @@
 #include "mem/dtu/connector/base.hh"
 #include "params/PCIConnector.hh"
 
-//#include "sim/system.hh"
-
 class PCIConnector : public BaseConnector
 {
   public:
