@@ -50,6 +50,7 @@ static const char *syscallNames[] = {
     "CREATE_VPE",
     "ACTIVATE",
     "VPE_CTRL",
+    "VPE_WAIT",
     "DERIVE_MEM",
     "DELEGATE",
     "OBTAIN",
