@@ -254,7 +254,7 @@ BaseProxy::InterruptPort::recvTimingResp(PacketPtr pkt)
 bool
 BaseProxy::DtuSidePort::recvTimingReq(PacketPtr pkt)
 {
-    DPRINTF(BaseProxy, "Forwarding packet with address 0x%x\n",
+    DPRINTFS(BaseProxy, (&baseproxy), "Forwarding packet with address 0x%x\n",
         pkt->getAddr());
 
     /* This address range is designated for interaction with the state
@@ -283,7 +283,7 @@ BaseProxy::DtuSidePort::recvAtomic(PacketPtr pkt)
 void
 BaseProxy::DtuSidePort::recvFunctional(PacketPtr pkt)
 {
-    DPRINTF(BaseProxy,
+    DPRINTFS(BaseProxy, (&baseproxy),
         "Functionally forwarding packet with address 0x%x\n",
         pkt->getAddr());
 
@@ -294,7 +294,7 @@ BaseProxy::DtuSidePort::recvFunctional(PacketPtr pkt)
 AddrRangeList
 BaseProxy::DtuSidePort::getAddrRanges() const
 {
-    DPRINTF(BaseProxy,"Getting address ranges...\n");
+    DPRINTFS(BaseProxy, (&baseproxy), "Getting address ranges...\n");
     return addrRangeList;
 }
 
