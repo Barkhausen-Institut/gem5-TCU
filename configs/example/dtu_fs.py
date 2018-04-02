@@ -336,6 +336,16 @@ def createPE(noc, options, no, systemType, l1size, l2size, spmsize, dtupos, memP
 
     return pe
 
+def connectToMem(pe, dport, iport=None, l1size=None, dtupos=0):
+    if not l1size is None and dtupos > 0:
+        if not iport is None:
+            pe.l1icache.cpu_side = iport
+        pe.l1dcache.cpu_side = dport
+    else:
+        if not iport is None:
+            pe.dtu.icache_slave_port = iport
+        pe.dtu.dcache_slave_port = dport
+
 def createCorePE(noc, options, no, cmdline, memPE, l1size=None, l2size=None,
                  dtupos=0, mmu=False, spmsize='8MB'):
     CPUClass = CpuConfig.get(options.cpu_type)
@@ -360,16 +370,12 @@ def createCorePE(noc, options, no, cmdline, memPE, l1size=None, l2size=None,
     pe.cpu = CPUClass()
     pe.cpu.cpu_id = 0
 
-    # connect CPU to caches
-    if not l1size is None and dtupos > 0:
-        pe.l1icache.cpu_side = pe.cpu.icache_port
-        pe.l1dcache.cpu_side = pe.cpu.dcache_port
+    connectToMem(pe, pe.cpu.dcache_port, pe.cpu.icache_port, l1size, dtupos)
 
+    # cache misses to MMIO region go to DTU
+    if not l1size is None and dtupos > 0:
         pe.dtu.dcache_slave_port = pe.xbar.master
         pe.dtu.slave_region = [pe.dtu.mmio_region]
-    else:
-        pe.dtu.icache_slave_port = pe.cpu.icache_port
-        pe.dtu.dcache_slave_port = pe.cpu.dcache_port
 
     # disable PT walker if MMU should be used
     if mmu:
@@ -611,7 +617,7 @@ def createAccelPE(noc, options, no, accel, memPE, l1size=None, l2size=None, spms
     pe.dtu.connector.accelerator = pe.accel
     pe.accel.id = no;
 
-    pe.dtu.dcache_slave_port = pe.accel.port
+    connectToMem(pe, pe.accel.port)
 
     print 'PE%02d: %s accelerator @ %s' % (no, accel, options.cpu_clock)
     printConfig(pe, 0)
@@ -691,9 +697,28 @@ def createAladdinPE(noc, options, accel, no, memPE, l1size=None, l2size=None, sp
         pe.accel.hdp.cacheAssoc = 2
     pe.accel.hdp.cache_port = pe.accel_xbar.slave
 
-    pe.dtu.dcache_slave_port = pe.accel_xbar.default
+    connectToMem(pe, pe.accel_xbar.default)
 
     print 'PE%02d: %s accelerator @ %s' % (no, accel[5:], options.cpu_clock)
+    printConfig(pe, 0)
+    print
+
+    return pe
+
+def createAbortTestPE(noc, options, no, memPE, l1size=None, l2size=None, spmsize='8MB'):
+    pe = createPE(
+        noc=noc, options=options, no=no, systemType=SpuSystem,
+        l1size=l1size, l2size=l2size, spmsize=spmsize, memPE=memPE,
+        dtupos=0
+    )
+    pe.dtu.connector = BaseConnector()
+
+    pe.cpu = DtuAbortTest()
+    pe.cpu.id = no;
+
+    connectToMem(pe, pe.cpu.port)
+
+    print 'PE%02d: aborttest core' % (no)
     printConfig(pe, 0)
     print
 
@@ -730,25 +755,6 @@ def createMemPE(noc, options, no, size, dram=True, content=None):
         pe.mem_file = content
 
     print 'PE%02d: %s' % (no, content)
-    printConfig(pe, 0)
-    print
-
-    return pe
-
-def createAbortTestPE(noc, options, no, memPE, l1size=None, l2size=None, spmsize='8MB'):
-    pe = createPE(
-        noc=noc, options=options, no=no, systemType=SpuSystem,
-        l1size=l1size, l2size=l2size, spmsize=spmsize, memPE=memPE,
-        dtupos=0
-    )
-    pe.dtu.connector = BaseConnector()
-
-    pe.cpu = DtuAbortTest()
-    pe.cpu.id = no;
-
-    pe.dtu.dcache_slave_port = pe.cpu.port
-
-    print 'PE%02d: aborttest core' % (no)
     printConfig(pe, 0)
     print
 
