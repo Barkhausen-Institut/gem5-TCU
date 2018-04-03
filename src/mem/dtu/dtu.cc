@@ -694,8 +694,6 @@ Dtu::sendMemRequest(PacketPtr pkt,
     senderState->mid = pkt->req->masterId();
     senderState->type = type;
 
-    regWatchRange(pkt, virt);
-
     // ensure that this packet has our master id (not the id of a master in
     // a different PE)
     pkt->req->setMasterId(masterId);
@@ -985,8 +983,6 @@ Dtu::completeMemRequest(PacketPtr pkt)
             break;
     }
 
-    checkWatchRange(pkt);
-
     delete senderState;
     freeRequest(pkt);
 }
@@ -1065,8 +1061,6 @@ Dtu::handleCpuRequest(PacketPtr pkt,
     }
     else
     {
-        regWatchRange(pkt, virt);
-
         intMemReqs++;
 
         MemTranslation *trans = nullptr;

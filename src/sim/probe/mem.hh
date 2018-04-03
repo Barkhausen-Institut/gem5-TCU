@@ -54,16 +54,20 @@ namespace ProbePoints {
 struct PacketInfo {
     MemCmd cmd;
     Addr addr;
+    Addr virt;
     uint32_t size;
     Request::FlagsType flags;
     Addr pc;
+    const void *data;
 
     explicit PacketInfo(const PacketPtr& pkt) :
         cmd(pkt->cmd),
         addr(pkt->getAddr()),
+        virt(pkt->req->hasVaddr() ? pkt->req->getVaddr() : -1),
         size(pkt->getSize()),
         flags(pkt->req->getFlags()),
-        pc(pkt->req->hasPC() ? pkt->req->getPC() : 0)  { }
+        pc(pkt->req->hasPC() ? pkt->req->getPC() : 0),
+        data(pkt->getConstPtr<void>())  { }
 };
 
 /**

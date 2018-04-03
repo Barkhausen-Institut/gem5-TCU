@@ -151,6 +151,9 @@ def getOptions():
 
     (options, args) = parser.parse_args()
 
+    options.dot_config = ''
+    options.mem_watches = {}
+
     if args:
         print "Error: script doesn't take any positional arguments"
         sys.exit(1)
@@ -204,6 +207,45 @@ def printConfig(pe, dtupos):
             except:
                 print '      imem =%d KiB' % (int(pe.spm.range.end + 1) / 1024)
                 print '      Comp =Core -> DTU -> SPM'
+
+def interpose(pe, options, name, port):
+    if options.mem_watches.has_key(int(pe.core_id)):
+        watch = options.mem_watches[int(pe.core_id)]
+        mon = CommMonitor()
+        mon.trace = MemWatchProbe(probe_name="PktResponse", ranges=watch)
+        mon.slave = port
+        setattr(pe, name, mon)
+        return mon.master
+    return port
+
+def connectDtuToMem(pe, options, l1size, dtupos):
+    dport = interpose(pe, options, 'dtudmon', pe.dtu.dcache_master_port)
+    if l1size is None or dtupos == 0:
+        iport = interpose(pe, options, 'dtuimon', pe.dtu.icache_master_port)
+
+    if not l1size is None:
+        if dtupos == 0:
+            pe.l1icache.cpu_side = iport
+            pe.l1dcache.cpu_side = dport
+        else:
+            pe.iocache.cpu_side = dport
+    else:
+        pe.xbar.slave = iport
+        pe.xbar.slave = dport
+
+def connectCuToMem(pe, options, dport, iport=None, l1size=None, dtupos=0):
+    dport = interpose(pe, options, 'cu_dmon', dport)
+    if not iport is None:
+        iport = interpose(pe, options, 'cu_imon', iport)
+
+    if not l1size is None and dtupos > 0:
+        if not iport is None:
+            pe.l1icache.cpu_side = iport
+        pe.l1dcache.cpu_side = dport
+    else:
+        if not iport is None:
+            pe.dtu.icache_slave_port = iport
+        pe.dtu.dcache_slave_port = dport
 
 def createPE(noc, options, no, systemType, l1size, l2size, spmsize, dtupos, memPE):
     CPUClass = CpuConfig.get(options.cpu_type)
@@ -282,16 +324,11 @@ def createPE(noc, options, no, systemType, l1size, l2size, spmsize, dtupos, memP
             pe.l1icache.mem_side = pe.xbar.slave
             pe.l1dcache.mem_side = pe.xbar.slave
 
-        # connect DTU and caches
-        if dtupos == 0:
-            pe.l1icache.cpu_side = pe.dtu.icache_master_port
-            pe.l1dcache.cpu_side = pe.dtu.dcache_master_port
-        else:
+        if dtupos > 0:
             pe.iocache = L1_DCache(size='8kB')
             pe.iocache.tag_latency = 4
             pe.iocache.data_latency = 4
             pe.iocache.response_latency = 4
-            pe.iocache.cpu_side = pe.dtu.dcache_master_port
             pe.dtu.caches.append(pe.iocache)
             if not l2size is None and dtupos == 1:
                 pe.iocache.mem_side = pe.tol2bus.slave
@@ -328,23 +365,11 @@ def createPE(noc, options, no, systemType, l1size, l2size, spmsize, dtupos, memP
         pe.dtu.pt_walker = False
         pe.dtu.cpu_to_cache_latency = 0
 
-        # the DTU sends requests to SPM/mem via xbar
-        pe.dtu.dcache_master_port = pe.xbar.slave
-        pe.dtu.icache_master_port = pe.xbar.slave
+    connectDtuToMem(pe, options, l1size, dtupos)
 
     pe.system_port = pe.xbar.slave
 
     return pe
-
-def connectToMem(pe, dport, iport=None, l1size=None, dtupos=0):
-    if not l1size is None and dtupos > 0:
-        if not iport is None:
-            pe.l1icache.cpu_side = iport
-        pe.l1dcache.cpu_side = dport
-    else:
-        if not iport is None:
-            pe.dtu.icache_slave_port = iport
-        pe.dtu.dcache_slave_port = dport
 
 def createCorePE(noc, options, no, cmdline, memPE, l1size=None, l2size=None,
                  dtupos=0, mmu=False, spmsize='8MB'):
@@ -370,7 +395,10 @@ def createCorePE(noc, options, no, cmdline, memPE, l1size=None, l2size=None,
     pe.cpu = CPUClass()
     pe.cpu.cpu_id = 0
 
-    connectToMem(pe, pe.cpu.dcache_port, pe.cpu.icache_port, l1size, dtupos)
+    connectCuToMem(pe, options,
+                   pe.cpu.dcache_port,
+                   pe.cpu.icache_port,
+                   l1size, dtupos)
 
     # cache misses to MMIO region go to DTU
     if not l1size is None and dtupos > 0:
@@ -617,7 +645,7 @@ def createAccelPE(noc, options, no, accel, memPE, l1size=None, l2size=None, spms
     pe.dtu.connector.accelerator = pe.accel
     pe.accel.id = no;
 
-    connectToMem(pe, pe.accel.port)
+    connectCuToMem(pe, options, pe.accel.port)
 
     print 'PE%02d: %s accelerator @ %s' % (no, accel, options.cpu_clock)
     printConfig(pe, 0)
@@ -697,7 +725,7 @@ def createAladdinPE(noc, options, accel, no, memPE, l1size=None, l2size=None, sp
         pe.accel.hdp.cacheAssoc = 2
     pe.accel.hdp.cache_port = pe.accel_xbar.slave
 
-    connectToMem(pe, pe.accel_xbar.default)
+    connectCuToMem(pe, options, pe.accel_xbar.default)
 
     print 'PE%02d: %s accelerator @ %s' % (no, accel[5:], options.cpu_clock)
     printConfig(pe, 0)
@@ -716,7 +744,7 @@ def createAbortTestPE(noc, options, no, memPE, l1size=None, l2size=None, spmsize
     pe.cpu = DtuAbortTest()
     pe.cpu.id = no;
 
-    connectToMem(pe, pe.cpu.port)
+    connectCuToMem(pe, options, pe.cpu.port)
 
     print 'PE%02d: aborttest core' % (no)
     printConfig(pe, 0)
