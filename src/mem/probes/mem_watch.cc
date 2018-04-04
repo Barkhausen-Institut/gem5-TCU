@@ -41,18 +41,16 @@ MemWatchProbe::MemWatchProbe(MemWatchProbeParams *p)
 void
 MemWatchProbe::handleRequest(const ProbePoints::PacketInfo &pkt_info)
 {
-    // ignore the request if we don't know the virtual address
-    if(pkt_info.virt == -1)
-        return;
-
-    AddrRange pkt_range(pkt_info.virt, pkt_info.virt + pkt_info.size - 1);
+    auto addr = pkt_info.virt == -1 ? pkt_info.addr : pkt_info.virt;
+    AddrRange pkt_range(addr, addr + pkt_info.size - 1);
     for(auto &&range : ranges)
     {
         if (range.intersects(pkt_range))
         {
             Trace::getDebugLogger()->dprintf(curTick(), name(),
-                "%s access to %p..%p (watching %p..%p):\n",
+                "%s access to %s memory %p..%p (watching %p..%p):\n",
                 pkt_info.cmd.isRead() ? "rd" : "wr",
+                pkt_info.virt == -1 ? "physical" : "virtual",
                 pkt_range.start(), pkt_range.end(),
                 range.start(), range.end());
             Trace::getDebugLogger()->dump(
