@@ -459,79 +459,12 @@ def createCorePE(noc, options, no, cmdline, memPE, l1size=None, l2size=None,
 
     return pe
 
-def createPersistIdePEBase(noc, options, no, memPE, l1size=None, l2size=None,
-                           cache_size=None, spmsize=None, img0=None, img1=None):
-
-    PCI_Addressing_Base             = 0x0
-    PCI_End                         = 0xFFFFFFFFFFFFFFFF
-
-    # The format of CONFIG_ADDRESS is the following:
-    #
-    # 0x80000000 | bus << 16 | device << 11 | function <<  8 | offset
-
-    conf_size = "16MB"
-    systemType = SpuSystem
-
-    CPUClass = CpuConfig.get(options.cpu_type)
-
-    # each PE is represented by it's own subsystem
-    pe = systemType(mem_mode=CPUClass.memory_mode())
-    pe.core_id = no
-
-    pe.voltage_domain = VoltageDomain(voltage=options.sys_voltage)
-    pe.clk_domain = SrcClockDomain(clock=options.sys_clock,
-                                   voltage_domain=pe.voltage_domain)
-
-    # TODO set latencies
-    pe.xbar = NoncoherentXBar(forward_latency=0,
-                              frontend_latency=0,
-                              response_latency=1,
-                              width=16)
-
-    pe.pseudo_mem_ops = False
-
-    pe.dtu = Dtu()
-    pe.dtu.core_id = no
-
-    pe.dtu.num_endpoints = 16
-
-    pe.dtu.icache_master_port = pe.xbar.slave
-    pe.dtu.dcache_master_port = pe.xbar.slave
-
-    pe.dtu.noc_master_port = noc.slave
-    pe.dtu.noc_slave_port  = noc.master
-
-    pe.dtu.coherent = options.coherent
-
-    pe.memory_pe = memPE
-    pe.memory_offset = pe_offset + (pe_size * no)
-    pe.memory_size = pe_size
-
-    # for memory PEs or PEs with SPM, we do not need a buffer. for the sake of an easy implementation
-    # we just make the buffer very large and the block size as well, so that we can read a packet
-    # from SPM/DRAM into the buffer and send it from there. Since that costs no simulated time,
-    # it is the same as having no buffer.
-    if systemType == MemSystem or l1size is None:
-        pe.dtu.block_size = pe.dtu.max_noc_packet_size
-        pe.dtu.buf_size = pe.dtu.max_noc_packet_size
-        # disable the TLB
-        pe.dtu.tlb_entries = 0
-        pe.dtu.cpu_to_cache_latency = 0
-
-    pe.system_port = pe.xbar.slave
-    if hasattr(pe, 'noc_master_port'):
-        pe.noc_master_port = noc.slave
-
-    #end of create PE
-
-    # create disks
-    disks = []
-    for img in [img0, img1]:
-        if img is not None:
-            disk = CowIdeDisk(driveID='master')
-            disk.childImage(img)
-            disks.append(disk)
-
+def createStoragePE(noc, options, no, memPE, img0=None, img1=None):
+    pe = createPE(
+        noc=noc, options=options, no=no, systemType=SpuSystem,
+        l1size=None, l2size=None, spmsize=None, memPE=memPE,
+        dtupos=0
+    )
     pe.dtu.connector = PCIConnector()
 
     pe.proxy = BaseProxy.BaseProxy()
@@ -542,6 +475,7 @@ def createPersistIdePEBase(noc, options, no, memPE, l1size=None, l2size=None,
 
     pe.iobus = IOXBar()
     pe.bridge = Bridge(delay='50ns')
+    pe.bridge.master = pe.iobus.slave
 
     pe.platform = DtuPlatform()
     pe.platform.intrctrl = IntrControl()
@@ -551,59 +485,49 @@ def createPersistIdePEBase(noc, options, no, memPE, l1size=None, l2size=None,
     pe.proxy.dtu_port = pe.xbar.master
     pe.proxy.int_port = pe.dtu.dcache_slave_port
 
-    pe.bridge.master = pe.iobus.slave
+    IO_address_space_base           = 0x20000000
+    PCI_Addressing_Base             = 0x0
+    PCI_End                         = 0xFFFFFFFFFFFFFFFF
 
-    IO_address_space_base = 0x20000000
-    pci_config_address_space_base = 0x30000000
-    interrupts_address_space_base = 0xa000000000000000
+    # TODO DMA space still missing
+    pe.bridge.ranges = [ AddrRange(0, Addr.max) ]
+    pe.proxy.ranges  = [ AddrRange(PCI_Addressing_Base, PCI_End) ]
 
-    pe.bridge.ranges = \
-    [ # DMA space still missing
-        AddrRange(0,
-                  Addr.max)
-    ]
+    # create disks
+    disks = []
+    for img in [img0, img1]:
+        if img is not None:
+            disk = CowIdeDisk(driveID='master')
+            disk.childImage(img)
+            disks.append(disk)
 
-    pe.proxy.ranges = \
-         [
-            AddrRange(PCI_Addressing_Base, # Insert proper address space here
-                PCI_End)
-         ]
-
-    pe.ide_controller = IdeController(disks=disks,
+    pe.idectrl = IdeController(disks=disks,
         pci_func=0, pci_dev=0, pci_bus=0)
-    pe.ide_controller.BAR0 = 0x1f0
-    pe.ide_controller.BAR0LegacyIO = True
-    pe.ide_controller.BAR1 = 0x3f4
-    pe.ide_controller.BAR1Size = '3B'
-    pe.ide_controller.BAR1LegacyIO = True
-    pe.ide_controller.BAR2 = 0x170
-    pe.ide_controller.BAR2LegacyIO = True
-    pe.ide_controller.BAR3 = 0x374
-    pe.ide_controller.BAR3Size = '3B'
-    pe.ide_controller.BAR3LegacyIO = True
-    pe.ide_controller.BAR4 = 1
-    #pe.ide_controller.BAR4Size = '16B'
-    pe.ide_controller.Command = 1
-    pe.ide_controller.io_shift = 0
-    pe.ide_controller.InterruptPin = 1
-    pe.ide_controller.InterruptLine = 14
-    pe.ide_controller.LegacyIOBase = IO_address_space_base
+    pe.idectrl.BAR0 = 0x1f0
+    pe.idectrl.BAR0LegacyIO = True
+    pe.idectrl.BAR1 = 0x3f4
+    pe.idectrl.BAR1Size = '3B'
+    pe.idectrl.BAR1LegacyIO = True
+    pe.idectrl.BAR2 = 0x170
+    pe.idectrl.BAR2LegacyIO = True
+    pe.idectrl.BAR3 = 0x374
+    pe.idectrl.BAR3Size = '3B'
+    pe.idectrl.BAR3LegacyIO = True
+    pe.idectrl.BAR4 = 1
+    #pe.idectrl.BAR4Size = '16B'
+    pe.idectrl.Command = 1
+    pe.idectrl.io_shift = 0
+    pe.idectrl.InterruptPin = 1
+    pe.idectrl.InterruptLine = 14
+    pe.idectrl.LegacyIOBase = IO_address_space_base
 
-    pe.ide_controller.ctrl_offset = 0
+    pe.idectrl.ctrl_offset = 0
     pe.behind_pci = IsaFake(pio_addr=0x20000cf8, pio_size=8)
-
-    return pe
-
-def createPersistIdePE(noc, options, no, memPE, l1size=None, l2size=None,
-                       cache_size=None, spmsize='64kB', img0=None, img1=None):
-
-    pe = createPersistIdePEBase(noc, options, no, memPE, l1size,
-        l2size, cache_size, spmsize, img0, img1)
 
     def attachIO(pe, bus):
         pe.pci_host.pio = bus.default
-        pe.ide_controller.pio = bus.master
-        pe.ide_controller.dma = bus.slave
+        pe.idectrl.pio = bus.master
+        pe.idectrl.dma = bus.slave
         pe.behind_pci.pio = bus.master
 
     pe.pci_host = PcPciHost()
@@ -869,7 +793,7 @@ def runSimulation(root, options, pes):
             else:
                 size |= 1 << 3 # x86
 
-            if hasattr(pe, 'ide_controller'):
+            if hasattr(pe, 'idectrl'):
                 size = int(pe.proxy.size)
                 size |= 11 << 3
         pemems.append(size)
