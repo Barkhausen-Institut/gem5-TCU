@@ -483,7 +483,8 @@ def createStoragePE(noc, options, no, memPE, img0=None, img1=None):
 
     pe.proxy.dev_port = pe.bridge.slave
     pe.proxy.dtu_port = pe.xbar.master
-    pe.proxy.int_port = pe.dtu.dcache_slave_port
+
+    connectCuToMem(pe, options, pe.proxy.int_port)
 
     IO_address_space_base           = 0x20000000
     PCI_Addressing_Base             = 0x0
