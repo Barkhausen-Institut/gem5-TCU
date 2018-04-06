@@ -63,6 +63,7 @@ class RemoteGDB : public BaseRemoteGDB
 {
   protected:
     bool acc(Addr addr, size_t len);
+    bool checkBpLen(size_t len) { return len <= sizeof(MachInst); }
 
     class AArch32GdbRegCache : public BaseGdbRegCache
     {
