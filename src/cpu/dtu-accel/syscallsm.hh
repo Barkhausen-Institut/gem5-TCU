@@ -44,7 +44,6 @@ class SyscallSM
         // capability creations
         CREATE_SRV,
         CREATE_SESS,
-        CREATE_SESS_AT,
         CREATE_RGATE,
         CREATE_SGATE,
         CREATE_MGATE,
@@ -56,6 +55,7 @@ class SyscallSM
         VPE_CTRL,
         VPE_WAIT,
         DERIVE_MEM,
+        OPEN_SESS,
 
         // capability exchange
         DELEGATE,
