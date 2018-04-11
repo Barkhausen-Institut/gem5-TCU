@@ -94,9 +94,8 @@ DtuAccelStream::DtuAccelStream(const DtuAccelStreamParams *p)
                   static_cast<size_t>(State::EXIT) + 1), "Missmatch");
 
     rdwr_msg.sys.opcode = SyscallSM::Operation::FORWARD_MSG;
-    rdwr_msg.sys.rgate_sel = 0xFFFF;
+    rdwr_msg.sys.rgate_sel = CAP_RECV;
     rdwr_msg.sys.len = sizeof(rdwr_msg.msg);
-    rdwr_msg.sys.rlabel = 0;
     rdwr_msg.sys.event = 0;
 
     logic->setAccelerator(this);
@@ -194,7 +193,10 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                 {
                     auto err = static_cast<Dtu::Error>((long)cmd.error);
                     if (err == Dtu::Error::VPE_GONE)
+                    {
+                        ctx.flags |= Flags::WAIT;
                         state = State::INOUT_SEND_ERROR;
+                    }
                     else
                     {
                         if (err == Dtu::Error::NONE)
@@ -711,6 +713,7 @@ DtuAccelStream::tick()
         case State::INOUT_SEND_ERROR:
         {
             rdwr_msg.sys.sgate_sel = (ctx.flags & Flags::OUTPUT) ? CAP_OUT : CAP_IN;
+            rdwr_msg.sys.rlabel = (ctx.flags & Flags::OUTPUT) ? LBL_OUT_REPLY : LBL_IN_REPLY;
             pkt = createPacket(MSG_ADDR, sizeof(rdwr_msg), MemCmd::WriteReq);
             memcpy(pkt->getPtr<void>(), &rdwr_msg, sizeof(rdwr_msg));
             break;
@@ -886,6 +889,7 @@ DtuAccelStream::tick()
         case State::SUBMIT_SEND_ERROR:
         {
             rdwr_msg.sys.sgate_sel = CAP_OUT;
+            rdwr_msg.sys.rlabel = LBL_OUT_REPLY;
             pkt = createPacket(MSG_ADDR, sizeof(rdwr_msg), MemCmd::WriteReq);
             memcpy(pkt->getPtr<void>(), &rdwr_msg, sizeof(rdwr_msg));
             break;
