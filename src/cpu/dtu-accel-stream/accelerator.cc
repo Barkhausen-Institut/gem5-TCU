@@ -605,14 +605,14 @@ DtuAccelStream::tick()
 
     if (state == State::IDLE)
     {
-        if (ctx.flags & Flags::COMPDONE)
+        if (!(ctx.flags & Flags::WAIT) && ctx.flags & Flags::COMPDONE)
         {
             state = State::INOUT_START;
             ctx.flags &= ~Flags::COMPDONE;
         }
         else if (ctx.flags & Flags::COMP)
             state = State::FETCH_MSG;
-        else if (ctx.flags & Flags::TRANSFER)
+        else if (!(ctx.flags & Flags::WAIT) && ctx.flags & Flags::TRANSFER)
         {
             state = State::INOUT_START;
             ctx.flags &= ~Flags::TRANSFER;
