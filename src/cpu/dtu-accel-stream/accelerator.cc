@@ -791,7 +791,7 @@ DtuAccelStream::tick()
             }
             else
             {
-                ctx.lastSize = std::min(bufSize / 2, ctx.inLen - ctx.inPos);
+                ctx.lastSize = std::min(bufSize / 8, ctx.inLen - ctx.inPos);
                 pkt = createDtuCmdPkt(Dtu::Command::READ,
                                       EP_IN_MEM,
                                       BUF_ADDR,
