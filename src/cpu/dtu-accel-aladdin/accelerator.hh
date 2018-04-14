@@ -44,7 +44,7 @@ class DtuAccelAladdin : public DtuAccel
     static const unsigned EP_RECV       = 7;
     static const unsigned EP_CTX        = 8;
     static const unsigned EP_DATA       = 9;
-    static const unsigned CAP_RBUF      = 2;
+    static const unsigned CAP_RBUF      = 64;
 
     static const size_t MSG_SIZE        = 256;
     static const Addr BUF_ADDR          = 0x8000;
