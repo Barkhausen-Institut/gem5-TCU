@@ -201,9 +201,17 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                     {
                         if (err == Dtu::Error::NONE)
                             ctx.flags |= Flags::WAIT;
-                        // ignore other errors
-                        yield.start();
-                        state = State::IDLE;
+                        if (err == Dtu::Error::INV_EP)
+                        {
+                            ctx.flags = Flags::EXIT;
+                            state = State::EXIT;
+                        }
+                        else
+                        {
+                            // ignore other errors
+                            yield.start();
+                            state = State::IDLE;
+                        }
                     }
                 }
                 break;
