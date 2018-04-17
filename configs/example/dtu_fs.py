@@ -203,7 +203,8 @@ def printConfig(pe, dtupos):
         except:
             try:
                 print '      imem =%d KiB' % (int(pe.mem_ctrl.range.end + 1) / 1024)
-                print '      Comp =DTU -> DRAM'
+                name = 'SPM' if type(pe.mem_ctrl).__name__ == 'Scratchpad' else 'DRAM'
+                print '      Comp =DTU -> %s' % (name)
             except:
                 print '      imem =%d KiB' % (int(pe.spm.range.end + 1) / 1024)
                 print '      Comp =Core -> DTU -> SPM'
