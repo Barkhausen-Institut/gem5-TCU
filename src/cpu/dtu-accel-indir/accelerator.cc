@@ -160,14 +160,21 @@ DtuAccelInDir::completeRequest(PacketPtr pkt)
                     reinterpret_cast<const uint64_t*>(
                         pkt_data + sizeof(MessageHeader));
 
-                DPRINTF(DtuAccelInDir, "  arg0=%#llx arg1=%#llx\n",
-                    args[0], args[1]);
+                DPRINTF(DtuAccelInDir, "  op=%d arg0=%#llx arg1=%#llx\n",
+                    args[0], args[1], args[2]);
 
-                dataSize = args[0];
-                size_t blocks = (dataSize + BLOCK_SIZE - 1) / BLOCK_SIZE;
-                size_t compTime = args[1];
-                delay = Cycles(blocks * compTime);
-                state = State::WRITE_DATA;
+                dataSize = args[1];
+                reply.msg.count = dataSize;
+
+                if (static_cast<Operation>(args[0]) == Operation::COMPUTE)
+                {
+                    size_t blocks = (dataSize + BLOCK_SIZE - 1) / BLOCK_SIZE;
+                    size_t compTime = args[2];
+                    delay = Cycles(blocks * compTime);
+                    state = State::STORE_REPLY;
+                }
+                else
+                    state = State::WRITE_DATA;
                 break;
             }
 
@@ -181,10 +188,7 @@ DtuAccelInDir::completeRequest(PacketPtr pkt)
                 Dtu::Command::Bits cmd =
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
                 if (cmd.opcode == 0)
-                {
-                    reply.msg.count = dataSize;
                     state = State::STORE_REPLY;
-                }
                 break;
             }
 

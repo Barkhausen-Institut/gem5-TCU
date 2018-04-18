@@ -106,7 +106,14 @@ class DtuAccelInDir : public DtuAccel
     Addr msgAddr;
     Addr dataSize;
 
-    struct Context {
+    enum Operation
+    {
+        COMPUTE,
+        FORWARD,
+    };
+
+    struct Context
+    {
         uint64_t dummy;
     } PACKED;
 
