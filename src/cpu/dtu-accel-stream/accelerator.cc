@@ -371,6 +371,9 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                         if (args[1] != 0)
                         {
                             ctx.flags |= Flags::SEEN_SUBMIT;
+                            // don't wait for the input reply; we won't get any
+                            if(!(ctx.flags & Flags::OUTPUT))
+                                ctx.flags &= ~Flags::WAIT;
                             ctx.commitOff = 0;
                             ctx.commitLen = args[1] == NO_SUBMIT ? 0 : args[1];
                         }
