@@ -102,10 +102,13 @@ SyscallSM::handleMemResp(PacketPtr pkt)
         }
         case State::SYSC_WAIT:
         {
-            RegFile::reg_t reg = *pkt->getConstPtr<RegFile::reg_t>();
-            if ((reg & 0xF) == 0)
+            auto data = pkt->getConstPtr<RegFile::reg_t>();
+            Dtu::Command::Bits cmd =
+                *reinterpret_cast<const RegFile::reg_t*>(data);
+            if (cmd.opcode == 0)
             {
-                if (!waitForReply)
+                auto err = static_cast<Dtu::Error>((long)cmd.error);
+                if (!waitForReply || err != Dtu::Error::NONE)
                     return true;
                 state = State::SYSC_FETCH;
             }
