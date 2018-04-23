@@ -285,9 +285,10 @@ MessageUnit::finishMsgSend(Dtu::Error error, unsigned epid)
     if (error == Dtu::Error::VPE_GONE)
         ep.vpeId = Dtu::INVALID_VPE_ID;
 
-    // undo the credit reduction on errors except for VPE_GONE
+    // undo the credit reduction on errors except for {VPE_GONE,MISS_CREDITS}
     if (ep.curcrd != Dtu::CREDITS_UNLIM &&
-        error != Dtu::Error::NONE && error != Dtu::Error::VPE_GONE)
+        error != Dtu::Error::NONE && error != Dtu::Error::VPE_GONE &&
+        error != Dtu::Error::MISS_CREDITS)
     {
         ep.curcrd += ep.maxMsgSize;
         assert(ep.curcrd <= ep.maxcrd);
