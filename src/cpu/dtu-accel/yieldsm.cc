@@ -65,9 +65,9 @@ YieldSM::tick()
         }
         case State::YLD_REPORT:
         {
-            syscall.opcode = 10;   /* VPE_CTRL */
+            syscall.opcode = SyscallSM::VPE_CTRL;
             syscall.vpe_sel = 0;   /* self */
-            syscall.op = 2;        /* VCTRL_YIELD */
+            syscall.op = SyscallSM::VCTRL_YIELD;
             syscall.arg = 0;       /* unused */
 
             pkt = accel->createPacket(
