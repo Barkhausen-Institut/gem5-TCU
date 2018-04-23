@@ -151,16 +151,15 @@ class DtuAccelStream : public DtuAccel
 
     enum Flags
     {
-        INTRPT      = 0x1,
-        OUTPUT      = 0x2,
-        WAIT        = 0x4,
-        SEEN_EOF    = 0x8,
-        SEEN_SUBMIT = 0x10,
-        EXIT        = 0x20,
-        COMP        = 0x40,
-        COMPDONE    = 0x80,
-        FETCHED     = 0x100,
-        TRANSFER    = 0x200,
+        OUTPUT      = 0x1,
+        WAIT        = 0x2,
+        SEEN_EOF    = 0x4,
+        SEEN_SUBMIT = 0x8,
+        EXIT        = 0x10,
+        COMP        = 0x20,
+        COMPDONE    = 0x40,
+        FETCHED     = 0x80,
+        TRANSFER    = 0x100,
     };
 
     struct

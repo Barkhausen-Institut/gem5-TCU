@@ -158,19 +158,9 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
             {
                 if(ctxsw.handleMemResp(pkt))
                 {
-                    // if we didn't perform a context switch, go back to our
-                    // previous state
-                    if ((ctx.flags & Flags::INTRPT) && !ctxSwPerformed)
-                    {
-                        state = State::READ_DATA;
-                        ctx.flags &= ~Flags::INTRPT;
-                    }
-                    else
-                    {
-                        ctx.flags &= ~Flags::FETCHED;
-                        state = (ctx.flags & Flags::WAIT) ? State::FETCH_MSG
-                                                          : State::INOUT_START;
-                    }
+                    ctx.flags &= ~Flags::FETCHED;
+                    state = (ctx.flags & Flags::WAIT) ? State::FETCH_MSG
+                                                      : State::INOUT_START;
                 }
                 break;
             }
@@ -601,17 +591,8 @@ DtuAccelStream::tick()
     // after a context switch, continue at then position we left off
     if (ctxSwPerformed)
     {
-        if (ctx.flags & Flags::INTRPT)
-            state = State::READ_DATA;
-        else if (ctx.flags & Flags::WAIT)
-        {
-            ctx.flags &= ~Flags::FETCHED;
-            state = State::FETCH_MSG;
-        }
-        else
-            state = State::INOUT_START;
+        state = State::INOUT_START;
         ctxSwPerformed = false;
-        ctx.flags &= ~Flags::INTRPT;
     }
 
     if (state == State::IDLE)
@@ -647,8 +628,14 @@ DtuAccelStream::tick()
 
     if (state == State::INOUT_START)
     {
+        if (irqPending)
+        {
+            irqPending = false;
+            state = State::CTXSW;
+        }
         // if we waked up because of some message, just ack it
-        if (ctx.flags & Flags::EXIT)
+        // alternatively, if we are already waiting for a response, just check
+        else if (ctx.flags & (Flags::EXIT | Flags::WAIT))
             state = State::FETCH_MSG;
         else if (!(ctx.flags & Flags::OUTPUT))
         {
@@ -765,13 +752,7 @@ DtuAccelStream::tick()
 
         case State::FETCH_MSG:
         {
-            if (irqPending)
-            {
-                irqPending = false;
-                state = State::CTXSW;
-                schedule(tickEvent, clockEdge(Cycles(1)));
-            }
-            else if (!(ctx.flags & Flags::FETCHED))
+            if (!(ctx.flags & Flags::FETCHED))
             {
                 Addr regAddr = getRegAddr(CmdReg::COMMAND);
                 uint64_t value = Dtu::Command::FETCH_MSG | (EP_RECV << 4);
@@ -793,23 +774,13 @@ DtuAccelStream::tick()
 
         case State::READ_DATA:
         {
-            if (irqPending)
-            {
-                irqPending = false;
-                ctx.flags |= Flags::INTRPT;
-                state = State::CTXSW;
-                schedule(tickEvent, clockEdge(Cycles(1)));
-            }
-            else
-            {
-                ctx.lastSize = std::min(bufSize / 8, ctx.inLen - ctx.inPos);
-                pkt = createDtuCmdPkt(Dtu::Command::READ,
-                                      EP_IN_MEM,
-                                      BUF_ADDR,
-                                      ctx.lastSize,
-                                      ctx.inOff + ctx.inPos);
-                ctx.inPos += ctx.lastSize;
-            }
+            ctx.lastSize = std::min(bufSize / 8, ctx.inLen - ctx.inPos);
+            pkt = createDtuCmdPkt(Dtu::Command::READ,
+                                  EP_IN_MEM,
+                                  BUF_ADDR,
+                                  ctx.lastSize,
+                                  ctx.inOff + ctx.inPos);
+            ctx.inPos += ctx.lastSize;
             break;
         }
         case State::READ_DATA_WAIT:
