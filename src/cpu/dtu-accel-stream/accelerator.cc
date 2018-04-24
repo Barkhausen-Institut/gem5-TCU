@@ -591,7 +591,14 @@ DtuAccelStream::tick()
     // after a context switch, continue at then position we left off
     if (ctxSwPerformed)
     {
-        state = State::INOUT_START;
+        if (ctx.flags & Flags::INSYSC)
+        {
+            ctx.flags &= ~Flags::INSYSC;
+            sysc.start(0, true, true);
+            state = State::SYSCALL;
+        }
+        else
+            state = State::INOUT_START;
         ctxSwPerformed = false;
     }
 
@@ -624,6 +631,13 @@ DtuAccelStream::tick()
         // if we're waiting for input and have seen a submit, give up waiting
         else if ((ctx.flags & (Flags::SEEN_SUBMIT | Flags::OUTPUT)) == Flags::SEEN_SUBMIT)
             state = State::INOUT_START;
+    }
+
+    if (state == State::SYSCALL && irqPending && sysc.isWaiting())
+    {
+        irqPending = false;
+        ctx.flags |= Flags::INSYSC;
+        state = State::CTXSW;
     }
 
     if (state == State::INOUT_START)

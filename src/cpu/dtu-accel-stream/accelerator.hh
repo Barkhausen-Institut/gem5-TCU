@@ -160,6 +160,7 @@ class DtuAccelStream : public DtuAccel
         COMPDONE    = 0x40,
         FETCHED     = 0x80,
         TRANSFER    = 0x100,
+        INSYSC      = 0x200,
     };
 
     struct

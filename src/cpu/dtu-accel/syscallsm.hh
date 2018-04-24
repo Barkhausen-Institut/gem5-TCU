@@ -95,12 +95,14 @@ class SyscallSM
 
     std::string stateName() const;
 
+    bool isWaiting() const { return state == SYSC_FETCH; }
+
     bool hasStateChanged() const { return stateChanged; }
 
-    void start(Addr size, bool wait = true)
+    void start(Addr size, bool wait = true, bool resume = false)
     {
         syscallSize = size;
-        state = SYSC_SEND;
+        state = resume ? SYSC_FETCH : SYSC_SEND;
         waitForReply = wait;
     }
 
