@@ -400,6 +400,9 @@ MessageUnit::ackMessage(unsigned epId, Addr msgAddr)
 
     ep.setOccupied(msgidx, false);
 
+    // reset header
+    dtu.regs().setHeader(ep.header + msgidx, RegAccess::DTU, ReplyHeader());
+
     DPRINTFS(DtuBuf, (&dtu),
         "EP%u: acked msg at index %d\n",
         epId, msgidx);
