@@ -484,6 +484,13 @@ RegFile::setHeader(size_t idx, RegAccess access, const ReplyHeader &hd)
     printHeaderAccess(idx, false, access);
 }
 
+void
+RegFile::resetHeader()
+{
+    for(auto &h : header)
+        h = ReplyHeader();
+}
+
 RegFile::Result
 RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
 {

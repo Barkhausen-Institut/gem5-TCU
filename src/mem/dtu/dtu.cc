@@ -606,6 +606,8 @@ Dtu::reset()
     if (tlb())
         tlb()->clear();
 
+    regs().resetHeader();
+
     // since we did a reset & suspend, restart the sleep
     sleepStart = curCycle();
 

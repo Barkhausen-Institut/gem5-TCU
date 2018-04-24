@@ -310,6 +310,8 @@ class RegFile
 
     void setHeader(size_t idx, RegAccess access, const ReplyHeader &hd);
 
+    void resetHeader();
+
     /// returns which command registers have been written
     Result handleRequest(PacketPtr pkt, bool isCpuRequest);
 
