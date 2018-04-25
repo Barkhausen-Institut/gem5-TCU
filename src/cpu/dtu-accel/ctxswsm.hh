@@ -75,6 +75,7 @@ class AccelCtxSwSM
     bool stateChanged;
     Addr offset;
     bool ctxSwPending;
+    bool switched;
 };
 
 #endif /* __CPU_DTU_ACCEL_CTXSWSM_HH__ */

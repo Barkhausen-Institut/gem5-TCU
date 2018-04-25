@@ -32,7 +32,7 @@
 AccelCtxSwSM::AccelCtxSwSM(DtuAccel *_accel)
     : ctxSize(_accel->contextSize()), accel(_accel),
       state(CHECK), stateChanged(),
-      offset(), ctxSwPending()
+      offset(), ctxSwPending(), switched()
 {
 }
 
@@ -245,6 +245,7 @@ AccelCtxSwSM::handleMemResp(PacketPtr pkt)
             if (val & DtuAccel::RCTMuxCtrl::RESTORE)
             {
                 offset = 0;
+                switched = true;
                 state = State::RESTORE;
             }
             else if (val & DtuAccel::RCTMuxCtrl::STORE)
@@ -296,8 +297,12 @@ AccelCtxSwSM::handleMemResp(PacketPtr pkt)
         case State::RESTORE_DONE:
         {
             ctxSwPending = false;
+            if (switched)
+            {
+                accel->setSwitched();
+                switched = false;
+            }
             state = State::CHECK;
-            accel->setSwitched();
             return true;
         }
     }

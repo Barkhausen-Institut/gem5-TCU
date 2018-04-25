@@ -608,6 +608,8 @@ Dtu::reset()
 
     regs().resetHeader();
 
+    connector->reset(0);
+
     // since we did a reset & suspend, restart the sleep
     sleepStart = curCycle();
 

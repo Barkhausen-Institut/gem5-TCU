@@ -158,9 +158,8 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
             {
                 if(ctxsw.handleMemResp(pkt))
                 {
+                    ctxSwPerformed = true;
                     ctx.flags &= ~Flags::FETCHED;
-                    state = (ctx.flags & Flags::WAIT) ? State::FETCH_MSG
-                                                      : State::INOUT_START;
                 }
                 break;
             }
@@ -568,9 +567,7 @@ DtuAccelStream::reset()
 
     yield.start(false);
     state = State::IDLE;
-
-    if (!memPending && !tickEvent.scheduled())
-        schedule(tickEvent, clockEdge(Cycles(1)));
+    memset(&ctx, 0, sizeof(ctx));
 }
 
 void
@@ -592,7 +589,12 @@ DtuAccelStream::tick()
     // after a context switch, continue at then position we left off
     if (ctxSwPerformed)
     {
-        if (ctx.flags & Flags::INSYSC)
+        ctxSwPerformed = false;
+
+        // not started yet? just idle
+        if (!(ctx.flags & Flags::STARTED))
+            state = State::IDLE;
+        else if (ctx.flags & Flags::INSYSC)
         {
             ctx.flags &= ~Flags::INSYSC;
             syscNext = static_cast<State>(ctx.nextSysc);
@@ -601,7 +603,6 @@ DtuAccelStream::tick()
         }
         else
             state = State::INOUT_START;
-        ctxSwPerformed = false;
     }
 
     if (state == State::IDLE)

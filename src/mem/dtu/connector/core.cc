@@ -68,7 +68,7 @@ CoreConnector::suspend()
 void
 CoreConnector::reset(Addr addr)
 {
-    if (system->threadContexts.size() == 0)
+    if (system->threadContexts.size() == 0 || addr == 0)
         return;
 
     DPRINTF(DtuConnector, "Setting PC to %p\n", addr);

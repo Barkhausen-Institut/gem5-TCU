@@ -84,7 +84,7 @@ class DtuAccelStream : public DtuAccel
     size_t stateSize() const override { return bufSize; }
     size_t contextSize() const override { return sizeof(ctx); }
     void *context() override { return &ctx; }
-    void setSwitched() override { ctxSwPerformed = true; }
+    void setSwitched() override { ctx.flags |= Flags::STARTED; }
 
   private:
 
@@ -161,6 +161,7 @@ class DtuAccelStream : public DtuAccel
         FETCHED     = 0x80,
         TRANSFER    = 0x100,
         INSYSC      = 0x200,
+        STARTED     = 0x400,
     };
 
     struct
