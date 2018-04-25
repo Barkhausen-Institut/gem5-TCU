@@ -260,6 +260,12 @@ DtuAccelAladdin::interrupt()
 }
 
 void
+DtuAccelAladdin::wakeup()
+{
+    sysc.retryFetch();
+}
+
+void
 DtuAccelAladdin::reset()
 {
     irqPending = false;

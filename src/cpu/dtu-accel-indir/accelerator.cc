@@ -240,6 +240,12 @@ DtuAccelInDir::completeRequest(PacketPtr pkt)
 }
 
 void
+DtuAccelInDir::wakeup()
+{
+    sysc.retryFetch();
+}
+
+void
 DtuAccelInDir::interrupt()
 {
     irqPending = true;

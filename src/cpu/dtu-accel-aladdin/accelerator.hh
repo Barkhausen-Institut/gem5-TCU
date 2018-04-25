@@ -52,6 +52,8 @@ class DtuAccelAladdin : public DtuAccel
   public:
     DtuAccelAladdin(const DtuAccelAladdinParams *p);
 
+    void wakeup() override;
+
     void interrupt() override;
 
     void reset() override;

@@ -540,6 +540,7 @@ void
 DtuAccelStream::wakeup()
 {
     ctx.flags &= ~Flags::FETCHED;
+    sysc.retryFetch();
 
     if (!memPending && !tickEvent.scheduled())
         schedule(tickEvent, clockEdge(Cycles(1)));

@@ -63,6 +63,9 @@ SyscallSM::tick()
         }
         case State::SYSC_FETCH:
         {
+            if (fetched)
+                return nullptr;
+
             Addr regAddr = accel->getRegAddr(CmdReg::COMMAND);
             uint64_t value = Dtu::Command::FETCH_MSG | (DtuAccel::EP_SYSR << 4);
             pkt = accel->createDtuRegPkt(regAddr, value, MemCmd::WriteReq);
@@ -128,7 +131,10 @@ SyscallSM::handleMemResp(PacketPtr pkt)
                 state = State::SYSC_ACK;
             }
             else
+            {
+                fetched = true;
                 state = State::SYSC_FETCH;
+            }
             break;
         }
         case State::SYSC_ACK:

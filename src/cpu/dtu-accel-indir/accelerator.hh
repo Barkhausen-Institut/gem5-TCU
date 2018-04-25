@@ -53,6 +53,8 @@ class DtuAccelInDir : public DtuAccel
   public:
     DtuAccelInDir(const DtuAccelInDirParams *p);
 
+    void wakeup() override;
+
     void interrupt() override;
 
     void reset() override;

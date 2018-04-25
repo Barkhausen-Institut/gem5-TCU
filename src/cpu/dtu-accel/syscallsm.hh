@@ -90,7 +90,7 @@ class SyscallSM
     };
 
     explicit SyscallSM(DtuAccel *_accel)
-        : accel(_accel), state(), stateChanged(), waitForReply(),
+        : accel(_accel), state(), stateChanged(), waitForReply(), fetched(),
           replyAddr(), syscallSize() {}
 
     std::string stateName() const;
@@ -99,10 +99,13 @@ class SyscallSM
 
     bool hasStateChanged() const { return stateChanged; }
 
+    void retryFetch() { fetched = false; }
+
     void start(Addr size, bool wait = true, bool resume = false)
     {
         syscallSize = size;
         state = resume ? SYSC_FETCH : SYSC_SEND;
+        fetched = false;
         waitForReply = wait;
     }
 
@@ -116,6 +119,7 @@ class SyscallSM
     State state;
     bool stateChanged;
     bool waitForReply;
+    bool fetched;
     Addr replyAddr;
     Addr syscallSize;
 };
