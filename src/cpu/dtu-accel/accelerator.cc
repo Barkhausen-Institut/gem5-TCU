@@ -37,7 +37,7 @@
 #include <iomanip>
 
 const unsigned DtuAccel::EP_SYSS       = 0;
-const unsigned DtuAccel::EP_SYSR       = 2;
+const unsigned DtuAccel::EP_SYSR       = 1;
 
 const Addr DtuAccel::RCTMUX_YIELD      = 0x5ff0;
 const Addr DtuAccel::RCTMUX_FLAGS      = 0x5ff8;
