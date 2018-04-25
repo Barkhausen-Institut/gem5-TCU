@@ -183,6 +183,7 @@ class DtuAccelStream : public DtuAccel
         uint64_t outPos;
         uint64_t outLen;
         uint64_t lastSize;
+        uint64_t nextSysc;
     } M5_ATTR_PACKED ctx;
 
     struct

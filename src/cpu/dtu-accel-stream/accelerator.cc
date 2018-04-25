@@ -595,6 +595,7 @@ DtuAccelStream::tick()
         if (ctx.flags & Flags::INSYSC)
         {
             ctx.flags &= ~Flags::INSYSC;
+            syscNext = static_cast<State>(ctx.nextSysc);
             sysc.start(0, true, true);
             state = State::SYSCALL;
         }
@@ -638,6 +639,7 @@ DtuAccelStream::tick()
     {
         irqPending = false;
         ctx.flags |= Flags::INSYSC;
+        ctx.nextSysc = static_cast<uint64_t>(syscNext);
         state = State::CTXSW;
     }
 
