@@ -75,8 +75,8 @@ class DtuAccel : public MemObject
     virtual Addr bufferAddr() const = 0;
 
     virtual int contextEp() const = 0;
-    virtual size_t stateSize() const = 0;
-    virtual size_t contextSize() const = 0;
+    virtual size_t stateSize(bool saving) const = 0;
+    virtual size_t contextSize(bool saving) const = 0;
     virtual void *context() = 0;
     virtual void setSwitched() = 0;
 

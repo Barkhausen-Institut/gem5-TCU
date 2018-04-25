@@ -81,8 +81,14 @@ class DtuAccelStream : public DtuAccel
     Addr sendMsgAddr() const override { return MSG_ADDR; }
     Addr bufferAddr() const override { return BUF_ADDR; }
     int contextEp() const override { return EP_CTX; }
-    size_t stateSize() const override { return bufSize; }
-    size_t contextSize() const override { return sizeof(ctx); }
+    size_t stateSize(bool saving) const override
+    {
+        return !saving || (ctx.flags & Flags::STARTED) ? bufSize : 0;
+    }
+    size_t contextSize(bool saving) const override
+    {
+        return !saving || (ctx.flags & Flags::STARTED) ? sizeof(ctx) : 0;
+    }
     void *context() override { return &ctx; }
     void setSwitched() override { ctx.flags |= Flags::STARTED; }
 

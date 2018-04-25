@@ -69,7 +69,6 @@ class AccelCtxSwSM
 
    private:
 
-    size_t ctxSize;
     DtuAccel *accel;
     State state;
     bool stateChanged;

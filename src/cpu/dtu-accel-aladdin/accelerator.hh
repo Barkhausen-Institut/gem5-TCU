@@ -63,8 +63,8 @@ class DtuAccelAladdin : public DtuAccel
     Addr sendMsgAddr() const override { return BUF_ADDR; }
     Addr bufferAddr() const override { return BUF_ADDR; }
     int contextEp() const override { return EP_CTX; }
-    size_t stateSize() const override { return 0; }
-    size_t contextSize() const override { return sizeof(ctx); }
+    size_t stateSize(bool) const override { return 0; }
+    size_t contextSize(bool) const override { return sizeof(ctx); }
     void *context() override { return &ctx; }
     void setSwitched() override { ctxSwPerformed = true; }
 

@@ -30,7 +30,7 @@
 #include "cpu/dtu-accel/ctxswsm.hh"
 
 AccelCtxSwSM::AccelCtxSwSM(DtuAccel *_accel)
-    : ctxSize(_accel->contextSize()), accel(_accel),
+    : accel(_accel),
       state(CHECK), stateChanged(),
       offset(), ctxSwPending(), switched()
 {
@@ -76,10 +76,10 @@ AccelCtxSwSM::tick()
         }
         case State::SAVE_WRITE:
         {
-            size_t rem = ctxSize - offset;
+            size_t rem = accel->contextSize(true) - offset;
             size_t size = std::min(accel->chunkSize, rem);
             pkt = accel->createPacket(
-                (accel->bufferAddr() - ctxSize) + offset,
+                (accel->bufferAddr() - accel->contextSize(true)) + offset,
                 size,
                 MemCmd::WriteReq
             );
@@ -88,12 +88,12 @@ AccelCtxSwSM::tick()
         }
         case State::SAVE_SEND:
         {
-            size_t rem = ctxSize + accel->stateSize() - offset;
+            size_t rem = accel->contextSize(true) + accel->stateSize(true) - offset;
             size_t size = std::min(accel->maxDataSize, rem);
             pkt = accel->createDtuCmdPkt(
                 Dtu::Command::WRITE,
                 accel->contextEp(),
-                (accel->bufferAddr() - ctxSize) + offset,
+                (accel->bufferAddr() - accel->contextSize(true)) + offset,
                 size,
                 offset
             );
@@ -134,12 +134,12 @@ AccelCtxSwSM::tick()
 
         case State::RESTORE:
         {
-            size_t rem = ctxSize + accel->stateSize() - offset;
+            size_t rem = accel->contextSize(false) + accel->stateSize(false) - offset;
             size_t size = std::min(accel->maxDataSize, rem);
             pkt = accel->createDtuCmdPkt(
                 Dtu::Command::READ,
                 accel->contextEp(),
-                (accel->bufferAddr() - ctxSize) + offset,
+                (accel->bufferAddr() - accel->contextSize(false)) + offset,
                 size,
                 offset
             );
@@ -154,10 +154,10 @@ AccelCtxSwSM::tick()
         }
         case State::RESTORE_READ:
         {
-            size_t rem = ctxSize - offset;
+            size_t rem = accel->contextSize(false) - offset;
             size_t size = std::min(accel->chunkSize, rem);
             pkt = accel->createPacket(
-                (accel->bufferAddr() - ctxSize) + offset,
+                (accel->bufferAddr() - accel->contextSize(false)) + offset,
                 size,
                 MemCmd::ReadReq
             );
@@ -194,13 +194,16 @@ AccelCtxSwSM::handleMemResp(PacketPtr pkt)
         case State::SAVE:
         {
             offset = 0;
-            state = State::SAVE_WRITE;
+            if (accel->contextSize(true) > 0)
+                state = State::SAVE_WRITE;
+            else
+                state = State::SAVE_DONE;
             break;
         }
         case State::SAVE_WRITE:
         {
             offset += pkt->getSize();
-            if (offset == ctxSize)
+            if (offset == accel->contextSize(true))
             {
                 offset = 0;
                 state = State::SAVE_SEND;
@@ -220,7 +223,8 @@ AccelCtxSwSM::handleMemResp(PacketPtr pkt)
             {
                 // don't continue on errors here; maybe we don't have the
                 // memory EP yet.
-                if (cmd.error != 0 || offset == ctxSize + accel->stateSize())
+                if (cmd.error != 0 ||
+                    offset == accel->contextSize(true) + accel->stateSize(true))
                     state = State::SAVE_DONE;
                 else
                     state = State::SAVE_SEND;
@@ -273,7 +277,7 @@ AccelCtxSwSM::handleMemResp(PacketPtr pkt)
                 *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
             if (cmd.opcode == 0)
             {
-                if (offset == ctxSize + accel->stateSize())
+                if (offset == accel->contextSize(false) + accel->stateSize(false))
                 {
                     offset = 0;
                     state = State::RESTORE_READ;
@@ -290,7 +294,7 @@ AccelCtxSwSM::handleMemResp(PacketPtr pkt)
                    pkt->getSize());
 
             offset += pkt->getSize();
-            if (offset == ctxSize)
+            if (offset == accel->contextSize(false))
                 state = State::RESTORE_DONE;
             break;
         }

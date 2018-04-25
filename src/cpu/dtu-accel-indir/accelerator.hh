@@ -62,8 +62,8 @@ class DtuAccelInDir : public DtuAccel
     Addr sendMsgAddr() const override { return MSG_ADDR; }
     Addr bufferAddr() const override { return BUF_ADDR; }
     int contextEp() const override { return 0; }
-    size_t stateSize() const override { return 0; }
-    size_t contextSize() const override { return sizeof(Context); }
+    size_t stateSize(bool) const override { return 0; }
+    size_t contextSize(bool) const override { return sizeof(Context); }
     void *context() override { return &ctx; }
     void setSwitched() override {}
 
