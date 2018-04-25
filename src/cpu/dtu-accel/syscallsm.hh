@@ -48,6 +48,7 @@ class SyscallSM
         CREATE_SGATE,
         CREATE_MGATE,
         CREATE_MAP,
+        CREATE_VPEGRP,
         CREATE_VPE,
 
         // capability operations
