@@ -635,7 +635,8 @@ DtuAccelStream::tick()
             state = State::INOUT_START;
     }
 
-    if (state == State::SYSCALL && irqPending && sysc.isWaiting())
+    if (state == State::SYSCALL && irqPending &&
+        sysc.isWaiting() && !(ctx.flags & Flags::COMP))
     {
         irqPending = false;
         ctx.flags |= Flags::INSYSC;
