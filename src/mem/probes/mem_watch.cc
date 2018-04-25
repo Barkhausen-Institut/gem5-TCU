@@ -53,8 +53,11 @@ MemWatchProbe::handleRequest(const ProbePoints::PacketInfo &pkt_info)
                 pkt_info.virt == -1 ? "physical" : "virtual",
                 pkt_range.start(), pkt_range.end(),
                 range.start(), range.end());
-            Trace::getDebugLogger()->dump(
-                curTick(), name(), pkt_info.data, pkt_info.size);
+            if (pkt_info.data)
+            {
+                Trace::getDebugLogger()->dump(
+                    curTick(), name(), pkt_info.data, pkt_info.size);
+            }
         }
     }
 }

@@ -58,7 +58,7 @@ struct PacketInfo {
     uint32_t size;
     Request::FlagsType flags;
     Addr pc;
-    const void *data;
+    uint8_t *data;
 
     explicit PacketInfo(const PacketPtr& pkt) :
         cmd(pkt->cmd),
@@ -67,7 +67,19 @@ struct PacketInfo {
         size(pkt->getSize()),
         flags(pkt->req->getFlags()),
         pc(pkt->req->hasPC() ? pkt->req->getPC() : 0),
-        data(pkt->getConstPtr<void>())  { }
+        data()
+    {
+        if (size <= 64)
+        {
+            data = new uint8_t[size];
+            memcpy(data, pkt->getConstPtr<uint8_t>(), size);
+        }
+    }
+
+    ~PacketInfo()
+    {
+        delete data;
+    }
 };
 
 /**
