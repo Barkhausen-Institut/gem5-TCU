@@ -408,7 +408,7 @@ DtuAccelAladdin::tick()
                 "val", "cols", "rowDelimiters", "vec", "out"
             };
             static const char *fft_arrays[] = {
-                "work_x", "work_y"
+                "in_x", "in_y", "out_x", "out_y"
             };
 
             const char **names = nullptr;
