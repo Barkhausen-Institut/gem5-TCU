@@ -265,9 +265,7 @@ DtuAccelInDir::reset()
 
     yield.start(false);
     state = State::IDLE;
-
-    if (!memPending && !tickEvent.scheduled())
-        schedule(tickEvent, clockEdge(Cycles(1)));
+    memset(&ctx, 0, sizeof(ctx));
 }
 
 void
