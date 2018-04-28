@@ -48,7 +48,7 @@ class DtuAccelInDir : public DtuAccel
     static const size_t MSG_SIZE        = 64;
     static const Addr MSG_ADDR          = 0x2000;
     static const Addr BUF_ADDR          = 0x8000;
-    static const size_t BLOCK_SIZE      = 2048;
+    static const size_t BLOCK_SIZE      = 1024;
 
   public:
     DtuAccelInDir(const DtuAccelInDirParams *p);

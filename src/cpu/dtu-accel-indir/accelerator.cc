@@ -168,9 +168,8 @@ DtuAccelInDir::completeRequest(PacketPtr pkt)
 
                 if (static_cast<Operation>(args[0]) == Operation::COMPUTE)
                 {
-                    size_t blocks = (dataSize + BLOCK_SIZE - 1) / BLOCK_SIZE;
                     size_t compTime = args[2];
-                    delay = Cycles(blocks * compTime);
+                    delay = Cycles((compTime * dataSize) / BLOCK_SIZE);
                     state = State::STORE_REPLY;
                 }
                 else

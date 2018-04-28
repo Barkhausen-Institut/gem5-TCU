@@ -52,8 +52,8 @@ class DtuAccelStreamAlgoFFT : public DtuAccelStreamAlgo
         // 732 cycles for the FFT function. we have two loops in FFT2D with
         // 16 iterations each. we unroll both 4 times, leading to
         // (4 + 4) * 732 = 5856.
-        const Cycles BLOCK_TIME      = time != 0 ? time : Cycles(5856);
-        const size_t BLOCK_SIZE      = 2048;
+        const Cycles BLOCK_TIME      = time != 0 ? time : Cycles(5856 / 2);
+        const size_t BLOCK_SIZE      = 1024;
 
         return Cycles((BLOCK_TIME * len) / BLOCK_SIZE);
     }
