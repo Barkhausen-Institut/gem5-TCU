@@ -616,23 +616,24 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
                     sizeof(reg_t) * numEpRegs * dtu.numEndpoints;
                 Addr headIdx = headAddr / sizeof(ReplyHeader);
 
-                if(headIdx < header.size() &&
-                   pkt->getSize() - offset >= sizeof(ReplyHeader))
+                if(headIdx < header.size())
                 {
+                    size_t off = headAddr % sizeof(ReplyHeader);
                     if(pkt->isRead())
                     {
                         const ReplyHeader &hd = getHeader(headIdx, access);
-                        memcpy(data + offset / sizeof(reg_t), &hd, sizeof(hd));
+                        memcpy(data + offset / sizeof(reg_t),
+                               (char*)&hd + off,
+                               sizeof(reg_t));
                     }
                     else if(!isCpuRequest || isPriv)
                     {
-                        ReplyHeader hd;
-                        memcpy(&hd, data + offset / sizeof(reg_t), sizeof(hd));
+                        ReplyHeader hd = header[headIdx];
+                        memcpy((char*)&hd + off,
+                               data + offset / sizeof(reg_t),
+                               sizeof(reg_t));
                         setHeader(headIdx, access, hd);
                     }
-
-                    // we copy 2 regs at once
-                    offset += sizeof(reg_t);
                 }
             }
         }
