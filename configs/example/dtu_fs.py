@@ -558,13 +558,13 @@ def createAccelPE(noc, options, no, accel, memPE, l1size=None, l2size=None, spms
         pe.accel.logic = AccelLogic()
         pe.accel.logic.algorithm = 0
         pe.accel.logic.port = pe.xbar.slave
-        pe.accel.buf_size = "8kB"
+        pe.accel.buf_size = "4kB"
     elif accel == 'toupper':
         pe.accel = DtuAccelStream()
         pe.accel.logic = AccelLogic()
         pe.accel.logic.algorithm = 1
         pe.accel.logic.port = pe.xbar.slave
-        pe.accel.buf_size = "8kB"
+        pe.accel.buf_size = "4kB"
     else:
         print 'Accelerator "%s" does not exist' % (accel)
         sys.exit(1)

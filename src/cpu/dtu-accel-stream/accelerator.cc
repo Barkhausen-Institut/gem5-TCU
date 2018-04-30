@@ -793,7 +793,7 @@ DtuAccelStream::tick()
 
         case State::READ_DATA:
         {
-            ctx.lastSize = std::min(bufSize / 8, ctx.inLen - ctx.inPos);
+            ctx.lastSize = std::min(bufSize / 4, ctx.inLen - ctx.inPos);
             pkt = createDtuCmdPkt(Dtu::Command::READ,
                                   EP_IN_MEM,
                                   BUF_ADDR,
