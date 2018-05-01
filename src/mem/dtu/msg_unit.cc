@@ -410,14 +410,24 @@ MessageUnit::ackMessage(unsigned epId, Addr msgAddr)
     dtu.regs().setRecvEp(epId, ep);
 }
 
-void
+Dtu::Error
 MessageUnit::finishMsgReceive(unsigned epId,
                               Addr msgAddr,
                               const MessageHeader *header,
-                              Dtu::Error error)
+                              Dtu::Error error,
+                              uint xferFlags)
 {
     RecvEp ep = dtu.regs().getRecvEp(epId);
     int idx = (msgAddr - ep.bufAddr) / ep.msgSize;
+
+    // if the user did an abort while we were receiving a message, make sure that it doesn't succeed
+    if (!(xferFlags & XferUnit::XferFlags::PRIV) && dtu.regs().hasFeature(Features::COM_DISABLED))
+    {
+        DPRINTFS(Dtu, (&dtu), "EP%u: received message, but communication has been disabled\n", epId);
+        wrongVPE++;
+
+        error = Dtu::Error::VPE_GONE;
+    }
 
     if (error == Dtu::Error::NONE)
     {
@@ -436,7 +446,7 @@ MessageUnit::finishMsgReceive(unsigned epId,
         if (ep.msgCount == ep.size)
         {
             warn("EP%u: Buffer full!\n", epId);
-            return;
+            return error;
         }
 
         ep.msgCount++;
@@ -450,6 +460,8 @@ MessageUnit::finishMsgReceive(unsigned epId,
 
     if (error == Dtu::Error::NONE)
         dtu.wakeupCore();
+
+    return error;
 }
 
 Dtu::Error
@@ -558,7 +570,7 @@ MessageUnit::ReceiveTransferEvent::transferDone(Dtu::Error result)
     MessageHeader* header = pkt->getPtr<MessageHeader>();
     NocAddr addr(pkt->getAddr());
 
-    msgUnit->finishMsgReceive(addr.offset, msgAddr, header, result);
+    result = msgUnit->finishMsgReceive(addr.offset, msgAddr, header, result, flags());
 
     MemoryUnit::ReceiveTransferEvent::transferDone(result);
 }

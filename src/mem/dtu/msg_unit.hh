@@ -131,10 +131,11 @@ class MessageUnit
     /**
      * Finishes a message receive
      */
-    void finishMsgReceive(unsigned epId,
-                          Addr msgAddr,
-                          const MessageHeader *header,
-                          Dtu::Error error);
+    Dtu::Error finishMsgReceive(unsigned epId,
+                                Addr msgAddr,
+                                const MessageHeader *header,
+                                Dtu::Error error,
+                                uint xferFlags);
 
   private:
     int allocSlot(size_t msgSize, unsigned epid, RecvEp &ep);
