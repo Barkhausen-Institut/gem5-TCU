@@ -166,9 +166,9 @@ def getCacheStr(cache):
     )
 
 def printConfig(pe, dtupos):
-    print '      DTU  =bufsz:%d B, blocksz:%d B, count:%d, tlb:%d, walker:%d' % \
-        (pe.dtu.buf_size.value, pe.dtu.block_size.value, pe.dtu.buf_count,
-         pe.dtu.tlb_entries, 1 if pe.dtu.pt_walker else 0)
+    print '      DTU  =eps:%d, bufsz:%d B, blocksz:%d B, count:%d, tlb:%d, walker:%d' % \
+        (pe.dtu.num_endpoints, pe.dtu.buf_size.value, pe.dtu.block_size.value,
+         pe.dtu.buf_count, pe.dtu.tlb_entries, 1 if pe.dtu.pt_walker else 0)
 
     try:
         cc = "coherent" if pe.dtu.coherent else "non-coherent"
