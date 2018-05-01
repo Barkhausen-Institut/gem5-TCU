@@ -578,7 +578,14 @@ Dtu::wakeupCore()
     if (getCommand().opcode == Command::SLEEP)
         scheduleFinishOp(Cycles(1));
     else
+    {
+        // something needs the CU's attention, so remember that we were not idling
+        RegFile::reg_t val = regs().get(DtuReg::FEATURES);
+        val &= ~static_cast<RegFile::reg_t>(Features::IRQ_WAKEUP);
+        regs().set(DtuReg::FEATURES, val);
+
         connector->wakeup();
+    }
 }
 
 Cycles
