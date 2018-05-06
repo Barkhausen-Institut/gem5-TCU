@@ -53,6 +53,7 @@ class SyscallSM
 
         // capability operations
         ACTIVATE,
+        SRV_CTRL,
         VPE_CTRL,
         VPE_WAIT,
         DERIVE_MEM,
