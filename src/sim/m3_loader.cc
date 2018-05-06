@@ -224,6 +224,7 @@ M3Loader::initState(System &sys, DTUMemory &dtumem, MasterPort &noc)
     // write arguments to state area and determine boot modules
     const char *cmd = commandLine.c_str();
     const char *begin = cmd;
+    bool seen_dashes = false;
     size_t i = 0;
     while (*cmd)
     {
@@ -241,7 +242,12 @@ M3Loader::initState(System &sys, DTUMemory &dtumem, MasterPort &noc)
                 }
                 else if (modOffset)
                 {
-                    if (strncmp(begin, "--", 2) == 0)
+                    if(!seen_dashes)
+                    {
+                        if (strncmp(begin, "--", 2) == 0)
+                            seen_dashes = true;
+                    }
+                    else if (strncmp(begin, "--", 2) == 0)
                     {
                         mods.push_back(std::make_pair(prog, argstr));
                         prog = "";
