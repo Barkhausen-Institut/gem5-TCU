@@ -263,6 +263,9 @@ void
 DtuAccelAladdin::wakeup()
 {
     sysc.retryFetch();
+
+    if (!memPending && !tickEvent.scheduled())
+        schedule(tickEvent, clockEdge(Cycles(1)));
 }
 
 void
