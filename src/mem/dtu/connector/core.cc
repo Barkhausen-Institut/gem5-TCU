@@ -73,10 +73,16 @@ CoreConnector::reset(Addr entry, Addr rootpt)
 
     DPRINTF(DtuConnector, "Setting PC=%p, rootpt=%p\n", entry, rootpt);
 
-    system->threadContexts[0]->pcState(entry);
+    auto ctx = system->threadContexts[0];
+    ctx->pcState(entry);
 #if THE_ISA == X86_ISA
     if (rootpt != 0)
-        system->threadContexts[0]->setMiscReg(X86ISA::MISCREG_CR3, rootpt);
+    {
+        ctx->setMiscReg(X86ISA::MISCREG_CR3, rootpt);
+        // disable interrupts
+        Addr flags = ctx->readMiscReg(X86ISA::MISCREG_RFLAGS);
+        ctx->setMiscReg(X86ISA::MISCREG_RFLAGS, flags & ~(Addr)0x200);
+    }
 #endif
 }
 
