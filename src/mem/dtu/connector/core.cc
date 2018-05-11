@@ -66,14 +66,18 @@ CoreConnector::suspend()
 }
 
 void
-CoreConnector::reset(Addr addr)
+CoreConnector::reset(Addr entry, Addr rootpt)
 {
-    if (system->threadContexts.size() == 0 || addr == 0)
+    if (system->threadContexts.size() == 0)
         return;
 
-    DPRINTF(DtuConnector, "Setting PC to %p\n", addr);
+    DPRINTF(DtuConnector, "Setting PC=%p, rootpt=%p\n", entry, rootpt);
 
-    system->threadContexts[0]->pcState(addr);
+    system->threadContexts[0]->pcState(entry);
+#if THE_ISA == X86_ISA
+    if (rootpt != 0)
+        system->threadContexts[0]->setMiscReg(X86ISA::MISCREG_CR3, rootpt);
+#endif
 }
 
 CoreConnector*

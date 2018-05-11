@@ -53,7 +53,7 @@ DtuAccelConnector::setIrq()
 }
 
 void
-DtuAccelConnector::reset(Addr addr)
+DtuAccelConnector::reset(Addr, Addr)
 {
     DPRINTF(DtuConnector, "Resetting accelerator\n");
     acc->reset();

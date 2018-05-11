@@ -214,7 +214,7 @@ class Dtu : public BaseDtu
 
     void wakeupCore();
 
-    Cycles reset();
+    Cycles reset(Addr entry);
 
     void setIrq();
 

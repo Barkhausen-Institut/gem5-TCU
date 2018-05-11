@@ -487,8 +487,6 @@ Dtu::executeExternCommand(PacketPtr pkt)
         case ExternCommand::IDLE:
             break;
         case ExternCommand::WAKEUP_CORE:
-            if (cmd.arg != 0)
-                connector->reset(cmd.arg);
             wakeupCore();
             break;
         case ExternCommand::INV_EP:
@@ -504,7 +502,7 @@ Dtu::executeExternCommand(PacketPtr pkt)
                 tlb()->clear();
             break;
         case ExternCommand::RESET:
-            delay += reset();
+            delay += reset(cmd.arg);
             break;
         case ExternCommand::ACK_MSG:
         {
@@ -589,7 +587,7 @@ Dtu::wakeupCore()
 }
 
 Cycles
-Dtu::reset()
+Dtu::reset(Addr entry)
 {
     Cycles delay(0);
     if(!coherent)
@@ -615,7 +613,8 @@ Dtu::reset()
 
     regs().resetHeader();
 
-    connector->reset(0);
+    Addr rootpt = ptUnit ? 0 : nocToPhys(regs().get(DtuReg::ROOT_PT));
+    connector->reset(entry, rootpt);
 
     // since we did a reset & suspend, restart the sleep
     sleepStart = curCycle();

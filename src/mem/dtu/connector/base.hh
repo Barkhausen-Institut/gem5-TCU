@@ -45,7 +45,7 @@ class BaseConnector : public MemObject
     virtual void wakeup() {};
     virtual void suspend() {};
 
-    virtual void reset(Addr addr) {};
+    virtual void reset(Addr entry, Addr rootpt) {};
 
     virtual void setIrq() {};
 

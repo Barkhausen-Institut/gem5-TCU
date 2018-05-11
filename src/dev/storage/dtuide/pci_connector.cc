@@ -47,7 +47,7 @@ PCIConnector::setIrq()
 }
 
 void
-PCIConnector::reset(Addr addr)
+PCIConnector::reset(Addr, Addr)
 {
     DPRINTF(PCIConnector, "Resetting accelerator\n");
     proxy->reset();

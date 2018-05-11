@@ -41,7 +41,7 @@ class PCIConnector : public BaseConnector
 
     void setIrq() override;
 
-    void reset(Addr addr) override;
+    void reset(Addr entry, Addr rootpt) override;
 
     void wakeup() override;
 
