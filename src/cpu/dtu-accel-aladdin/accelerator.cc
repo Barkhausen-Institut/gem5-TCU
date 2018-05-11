@@ -249,12 +249,12 @@ DtuAccelAladdin::interrupt()
     if (ctxsw.isWaiting())
     {
         ctxsw.restart();
-        if (!tickEvent.scheduled())
+        if (!memPending && !tickEvent.scheduled())
             schedule(tickEvent, clockEdge(Cycles(1)));
     }
     else if(state == State::COMPUTE)
     {
-        if (!tickEvent.scheduled())
+        if (!memPending && !tickEvent.scheduled())
             schedule(tickEvent, clockEdge(Cycles(1)));
     }
 }
@@ -288,7 +288,7 @@ DtuAccelAladdin::signalFinished(size_t off)
     if (ctx.iteration == ctx.msg.iterations)
         state = State::STORE_REPLY;
 
-    if (!tickEvent.scheduled())
+    if (!memPending && !tickEvent.scheduled())
         schedule(tickEvent, clockEdge(Cycles(1)));
 }
 
