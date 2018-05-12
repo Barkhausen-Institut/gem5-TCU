@@ -71,6 +71,7 @@ static const char *extCmdNames[] =
     "INV_TLB",
     "RESET",
     "ACK_MSG",
+    "FLUSH_CACHE",
 };
 
 // cmdId = 0 is reserved for "no command"
@@ -502,7 +503,10 @@ Dtu::executeExternCommand(PacketPtr pkt)
                 tlb()->clear();
             break;
         case ExternCommand::RESET:
-            delay += reset(cmd.arg);
+            delay += reset(cmd.arg & 0x0FFFFFFFFFFFFFFF, !!(cmd.arg >> 60));
+            break;
+        case ExternCommand::FLUSH_CACHE:
+            delay += flushInvalCaches(false);
             break;
         case ExternCommand::ACK_MSG:
         {
@@ -587,19 +591,9 @@ Dtu::wakeupCore()
 }
 
 Cycles
-Dtu::reset(Addr entry)
+Dtu::reset(Addr entry, bool flushInval)
 {
-    Cycles delay(0);
-    if(!coherent)
-    {
-        for (auto &c : caches)
-        {
-            // no writeback necessary
-            c->memWriteback();
-            c->memInvalidate();
-            delay += Cycles(c->getBlockCount() / cacheBlocksPerCycle);
-        }
-    }
+    Cycles delay = flushInval ? flushInvalCaches(true) : Cycles(0);
 
     // hard-abort everything
     xferUnit->abortTransfers(
@@ -620,6 +614,23 @@ Dtu::reset(Addr entry)
     sleepStart = curCycle();
 
     resets++;
+    return delay;
+}
+
+Cycles
+Dtu::flushInvalCaches(bool invalidate)
+{
+    Cycles delay(0);
+    if(!coherent)
+    {
+        for (auto &c : caches)
+        {
+            c->memWriteback();
+            if (invalidate)
+                c->memInvalidate();
+            delay += Cycles(c->getBlockCount() / cacheBlocksPerCycle);
+        }
+    }
     return delay;
 }
 

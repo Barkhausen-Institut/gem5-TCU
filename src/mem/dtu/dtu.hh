@@ -183,6 +183,7 @@ class Dtu : public BaseDtu
             INV_TLB         = 4,
             RESET           = 5,
             ACK_MSG         = 6,
+            FLUSH_CACHE     = 7,
         };
 
         Opcode opcode;
@@ -214,7 +215,9 @@ class Dtu : public BaseDtu
 
     void wakeupCore();
 
-    Cycles reset(Addr entry);
+    Cycles reset(Addr entry, bool flushInval);
+
+    Cycles flushInvalCaches(bool invalidate);
 
     void setIrq();
 
