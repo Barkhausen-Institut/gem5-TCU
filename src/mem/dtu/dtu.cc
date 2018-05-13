@@ -911,6 +911,8 @@ Dtu::abortTranslate(size_t id, PtUnit::Translation *trans)
         ptUnit->abortTranslate(trans);
     else
     {
+        if (coreXlates[id].ongoing)
+            regs().set(ReqReg::XLATE_REQ, 0);
         coreXlates[id].trans = NULL;
         coreXlates[id].ongoing = false;
         cmdXferBuf = id;
