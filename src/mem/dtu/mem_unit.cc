@@ -303,6 +303,7 @@ MemoryUnit::WriteTransferEvent::transferDone(Dtu::Error result)
                 pktType = Dtu::NocPacketType::WRITE_REQ;
 
             uint rflags = xferToNocFlags(flags());
+            dtu().setCommandSent();
             dtu().sendNocRequest(pktType, pkt, vpeId, rflags, delay);
         }
     }

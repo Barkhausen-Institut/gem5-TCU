@@ -250,6 +250,8 @@ class Dtu : public BaseDtu
 
     void sendNocResponse(PacketPtr pkt);
 
+    void setCommandSent() { cmdSent = true; }
+
     Addr physToNoc(Addr phys) const;
     Addr nocToPhys(Addr noc) const;
 
@@ -430,6 +432,7 @@ class Dtu : public BaseDtu
     uint64_t cmdId;
     uint abortCmd;
     size_t cmdXferBuf;
+    bool cmdSent;
 
     std::list<MemTranslation*> xlates;
 

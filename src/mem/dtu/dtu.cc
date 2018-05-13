@@ -261,6 +261,7 @@ Dtu::executeCommand(PacketPtr pkt)
 
     cmdPkt = pkt;
     cmdId = nextCmdId++;
+    cmdSent = false;
     commands[static_cast<size_t>(cmd.opcode)]++;
 
     assert(cmd.epid < numEndpoints);
@@ -375,10 +376,14 @@ Dtu::abortCommand()
         cmdId = 0;
         err = Error::ABORT;
     }
+    // message sends are aborted, if they haven't been sent yet
+    else if (!cmdSent && (cmd.opcode == Command::SEND || cmd.opcode == Command::REPLY))
+        err = Error::ABORT;
 
     if (cmd.opcode == Command::IDLE ||
         cmd.opcode == Command::READ ||
-        cmd.opcode == Command::WRITE)
+        cmd.opcode == Command::WRITE ||
+        !cmdSent)
         scheduleFinishOp(Cycles(1), err);
 }
 
