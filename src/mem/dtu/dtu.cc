@@ -58,7 +58,6 @@ static const char *cmdNames[] =
     "FETCH_MSG",
     "ACK_MSG",
     "SLEEP",
-    "CLEAR_IRQ",
     "PRINT",
 };
 
@@ -292,10 +291,6 @@ Dtu::executeCommand(PacketPtr pkt)
         case Command::SLEEP:
             if (!startSleep(cmd.arg))
                 finishCommand(Error::NONE);
-            break;
-        case Command::CLEAR_IRQ:
-            clearIrq();
-            finishCommand(Error::NONE);
             break;
         case Command::PRINT:
         {
@@ -1350,6 +1345,8 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
                 schedule(completeTranslateEvent, when);
             else if (result & RegFile::WROTE_EXT_REQ)
                 setIrq();
+            if (result & RegFile::WROTE_CLEAR_IRQ)
+                clearIrq();
         }
         else
             schedule(new ExecExternCmdEvent(*this, pkt), when);
@@ -1366,6 +1363,8 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
             completeTranslate();
         if (result & RegFile::WROTE_EXT_REQ)
             setIrq();
+        if (result & RegFile::WROTE_CLEAR_IRQ)
+            clearIrq();
     }
 }
 

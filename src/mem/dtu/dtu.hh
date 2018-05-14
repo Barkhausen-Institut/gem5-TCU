@@ -145,8 +145,7 @@ class Dtu : public BaseDtu
             FETCH_MSG       = 5,
             ACK_MSG         = 6,
             SLEEP           = 7,
-            CLEAR_IRQ       = 8,
-            PRINT           = 9,
+            PRINT           = 8,
         };
 
         enum

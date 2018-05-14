@@ -48,6 +48,7 @@ const char *RegFile::dtuRegNames[] = {
     "IDLE_TIME",
     "MSG_CNT",
     "EXT_CMD",
+    "CLEAR_IRQ",
 };
 
 const char *RegFile::reqRegNames[] = {
@@ -535,6 +536,8 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
 
             if (pkt->isRead())
                 data[offset / sizeof(reg_t)] = get(reg, access);
+            else if (pkt->isWrite() && isCpuRequest && reg == DtuReg::CLEAR_IRQ)
+                res |= WROTE_CLEAR_IRQ;
             // master registers can't be set by the CPU
             else if (pkt->isWrite() && !isCpuRequest && reg != DtuReg::MSG_CNT)
             {

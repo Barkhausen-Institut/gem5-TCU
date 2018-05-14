@@ -47,6 +47,7 @@ enum class DtuReg : Addr
     IDLE_TIME,
     MSG_CNT,
     EXT_CMD,
+    CLEAR_IRQ,
 };
 
 enum class Features
@@ -57,7 +58,7 @@ enum class Features
     IRQ_WAKEUP      = 1 << 3,
 };
 
-constexpr unsigned numDtuRegs = 8;
+constexpr unsigned numDtuRegs = 9;
 
 // registers for external requests and DTU requests
 enum class ReqReg : Addr
@@ -262,6 +263,7 @@ class RegFile
         WROTE_ABORT     = 4,
         WROTE_XLATE     = 8,
         WROTE_EXT_REQ   = 16,
+        WROTE_CLEAR_IRQ = 32,
     };
 
     RegFile(Dtu &dtu, const std::string& name, unsigned numEndpoints,
