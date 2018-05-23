@@ -27,23 +27,25 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
-#ifndef __CPU_DTU_ACCEL_STREAM_ALGORITHM_TOUPPER_HH__
-#define __CPU_DTU_ACCEL_STREAM_ALGORITHM_TOUPPER_HH__
+#ifndef __CPU_DTU_ACCEL_STREAM_ALGORITHM_ROT13_HH__
+#define __CPU_DTU_ACCEL_STREAM_ALGORITHM_ROT13_HH__
 
 #include "cpu/dtu-accel-stream/algorithm.hh"
 
-class DtuAccelStreamAlgoToUpper : public DtuAccelStreamAlgo
+class DtuAccelStreamAlgoROT13 : public DtuAccelStreamAlgo
 {
   public:
 
-    const char *name() const override { return "ToUpper"; }
+    const char *name() const override { return "ROT13"; }
 
     size_t execute(uint8_t *dst, const uint8_t *src, size_t len) override
     {
         for (size_t i = 0; i < len; ++i)
         {
             if (src[i] >= 'a' && src[i] <= 'z')
-                dst[i] = src[i] + ('A' - 'a');
+                dst[i] = 'a' + ((src[i] - 'a') + 13) % 26;
+            else if (src[i] >= 'A' && src[i] <= 'Z')
+                dst[i] = 'A' + ((src[i] - 'A') + 13) % 26;
             else
                 dst[i] = src[i];
         }
@@ -59,4 +61,4 @@ class DtuAccelStreamAlgoToUpper : public DtuAccelStreamAlgo
     }
 };
 
-#endif // __CPU_DTU_ACCEL_STREAM_ALGORITHM_TOUPPER_HH__
+#endif // __CPU_DTU_ACCEL_STREAM_ALGORITHM_ROT13_HH__

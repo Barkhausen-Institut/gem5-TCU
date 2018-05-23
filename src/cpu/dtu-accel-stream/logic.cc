@@ -31,7 +31,7 @@
 #include "debug/DtuAccelStreamState.hh"
 #include "cpu/dtu-accel-stream/accelerator.hh"
 #include "cpu/dtu-accel-stream/algorithm_fft.hh"
-#include "cpu/dtu-accel-stream/algorithm_toupper.hh"
+#include "cpu/dtu-accel-stream/algorithm_rot13.hh"
 #include "cpu/dtu-accel-stream/logic.hh"
 
 AccelLogic::AccelLogic(const AccelLogicParams *p)
@@ -42,7 +42,7 @@ AccelLogic::AccelLogic(const AccelLogicParams *p)
     if (p->algorithm == 0)
         algo = new DtuAccelStreamAlgoFFT();
     else if(p->algorithm == 1)
-        algo = new DtuAccelStreamAlgoToUpper();
+        algo = new DtuAccelStreamAlgoROT13();
     else
         panic("Unknown algorithm %d\n", p->algorithm);
 }

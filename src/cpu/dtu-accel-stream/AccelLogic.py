@@ -35,4 +35,4 @@ class AccelLogic(MemObject):
     cxx_header = "cpu/dtu-accel-stream/logic.hh"
 
     port = MasterPort("Port to the DTU and Scratch-Pad-Memory")
-    algorithm = Param.Int(0, "The algorithm to use (0 = fft, 1 = toupper)")
+    algorithm = Param.Int(0, "The algorithm to use (0 = fft, 1 = rot13)")

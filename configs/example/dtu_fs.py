@@ -559,7 +559,7 @@ def createAccelPE(noc, options, no, accel, memPE, l1size=None, l2size=None, spms
         pe.accel.logic.algorithm = 0
         pe.accel.logic.port = pe.xbar.slave
         pe.accel.buf_size = "4kB"
-    elif accel == 'toupper':
+    elif accel == 'rot13':
         pe.accel = DtuAccelStream()
         pe.accel.logic = AccelLogic()
         pe.accel.logic.algorithm = 1
@@ -789,7 +789,7 @@ def runSimulation(root, options, pes):
                 elif int(pe.accel.logic.algorithm) == 0:
                     size |= 5 << 3 # fft accelerator
                 elif int(pe.accel.logic.algorithm) == 1:
-                    size |= 6 << 3 # toupper accelerator
+                    size |= 6 << 3 # rot13 accelerator
             elif options.isa == 'arm':
                 size |= 2 << 3 # arm
             else:
