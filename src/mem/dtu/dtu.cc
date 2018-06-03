@@ -352,7 +352,7 @@ Dtu::abortCommand()
 
     // if no command was running, let the SW wait until the currently received
     // messages are finished
-    Error err;
+    Error err = static_cast<Error>(static_cast<uint>(cmd.error));
     if (cmd.opcode == Command::IDLE)
     {
         if (abortCmd & Command::ABORT_VPE)
@@ -363,7 +363,6 @@ Dtu::abortCommand()
         // all done
         else
             abortCmd = 0;
-        err = Error::NONE;
     }
     // reads/writes are aborted immediately
     else if(cmd.opcode == Command::READ || cmd.opcode == Command::WRITE)
