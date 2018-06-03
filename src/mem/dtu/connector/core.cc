@@ -77,12 +77,10 @@ CoreConnector::reset(Addr entry, Addr rootpt)
     ctx->pcState(entry);
 #if THE_ISA == X86_ISA
     if (rootpt != 0)
-    {
         ctx->setMiscReg(X86ISA::MISCREG_CR3, rootpt);
-        // disable interrupts
-        Addr flags = ctx->readMiscReg(X86ISA::MISCREG_RFLAGS);
-        ctx->setMiscReg(X86ISA::MISCREG_RFLAGS, flags & ~(Addr)0x200);
-    }
+    // disable interrupts
+    Addr flags = ctx->readMiscReg(X86ISA::MISCREG_RFLAGS);
+    ctx->setMiscReg(X86ISA::MISCREG_RFLAGS, flags & ~(Addr)0x200);
 #endif
 }
 
