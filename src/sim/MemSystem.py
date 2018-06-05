@@ -35,3 +35,4 @@ class MemSystem(System):
     core_id = Param.Unsigned("The core id")
 
     mem_file = Param.String("", "The file to load into memory")
+    mem_file_num = Param.Unsigned(1, "The number of times to load the file into memory")

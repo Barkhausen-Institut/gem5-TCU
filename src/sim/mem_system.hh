@@ -41,6 +41,7 @@ class MemSystem : public System
   protected:
     unsigned coreId;
     std::string memFile;
+    size_t memFileNum;
 
   public:
     typedef MemSystemParams Params;

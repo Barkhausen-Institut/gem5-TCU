@@ -76,7 +76,7 @@ IO_address_space_base           = 0xff20000000000000
 interrupts_address_space_base   = 0xff40000000000000
 APIC_range_size                 = 1 << 12;
 
-base_offset                     = 256 * 1024 * 1024
+base_offset                     = 1024 * 1024 * 1024
 mod_offset                      = base_offset
 mod_size                        = 16 * 1024 * 1024
 pe_offset                       = mod_offset + mod_size
@@ -678,7 +678,7 @@ def createAbortTestPE(noc, options, no, memPE, l1size=None, l2size=None, spmsize
 
     return pe
 
-def createMemPE(noc, options, no, size, dram=True, content=None):
+def createMemPE(noc, options, no, size, dram=True, image=None, imageNum=0):
     pe = createPE(
         noc=noc, options=options, no=no, systemType=MemSystem,
         l1size=None, l2size=None, spmsize=None, memPE=0,
@@ -701,14 +701,15 @@ def createMemPE(noc, options, no, size, dram=True, content=None):
         pe.mem_ctrl.cpu_port = pe.xbar.master
     pe.mem_ctrl.range = MemorySize(size).value
 
-    if not content is None:
-        if os.stat(content).st_size > base_offset:
-            print 'File "%s" is too large for memory layout (%u vs %u)' \
-              % (content, os.stat(content).st_size, base_offset)
+    if not image is None:
+        if os.stat(image).st_size * imageNum > base_offset:
+            print 'File "%s" is too large for memory layout (%u x %u vs %u)' \
+              % (image, imageNum, os.stat(image).st_size, base_offset)
             sys.exit(1)
-        pe.mem_file = content
+        pe.mem_file = image
+        pe.mem_file_num = imageNum
 
-    print 'PE%02d: %s' % (no, content)
+    print 'PE%02d: %s x %d' % (no, image, imageNum)
     printConfig(pe, 0)
     print
 

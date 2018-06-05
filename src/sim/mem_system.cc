@@ -35,7 +35,8 @@
 MemSystem::MemSystem(Params *p)
     : System(p),
       coreId(p->core_id),
-      memFile(p->mem_file)
+      memFile(p->mem_file),
+      memFileNum(p->mem_file_num)
 {
 }
 
@@ -48,7 +49,7 @@ MemSystem::initState()
 {
     System::initState();
 
-    if(!memFile.empty())
+    if(!memFile.empty() && memFileNum > 0)
     {
         FILE *f = fopen(memFile.c_str(), "r");
         if(!f)
@@ -66,7 +67,9 @@ MemSystem::initState()
             size_t amount = std::min(rem, BUF_SIZE);
             if(fread(data, 1, amount, f) != amount)
                 panic("Unable to read '%s'", memFile.c_str());
-            physProxy.writeBlob(off, data, amount);
+
+            for(size_t i = 0; i < memFileNum; ++i)
+                physProxy.writeBlob(i * sz + off, data, amount);
 
             off += amount;
             rem -= amount;
