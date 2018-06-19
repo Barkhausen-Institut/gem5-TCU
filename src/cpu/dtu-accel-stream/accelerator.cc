@@ -65,10 +65,10 @@ static const char *stateNames[] =
 
     "SYSCALL",
 
-    "SUBMIT_START",
-    "SUBMIT_SEND",
-    "SUBMIT_SEND_WAIT",
-    "SUBMIT_SEND_ERROR",
+    "COMMIT_START",
+    "COMMIT_SEND",
+    "COMMIT_SEND_WAIT",
+    "COMMIT_SEND_ERROR",
 
     "EXIT_ACK",
     "EXIT",
@@ -280,7 +280,7 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                         if (ctx.inLen == 0)
                         {
                             ctx.flags |= Flags::SEEN_EOF;
-                            state = State::SUBMIT_START;
+                            state = State::COMMIT_START;
                         }
                         else
                             state = State::INOUT_ACK;
@@ -350,21 +350,20 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                         {
                             DPRINTF(
                                 DtuAccelStream,
-                                "MSG: received output request(submit=%#llx);"
+                                "MSG: received output request(commit=%#llx);"
                                 " state: (inMask=%#02x)\n",
                                 args[1], ctx.inMask
                             );
                         }
 
-                        // submit != 0 implies EOF
-                        if (args[1] != 0)
+                        if(args[0] == static_cast<RegFile::reg_t>(Command::COMMIT))
                         {
-                            ctx.flags |= Flags::SEEN_SUBMIT;
+                            ctx.flags |= Flags::SEEN_COMMIT;
                             // don't wait for the input reply; we won't get any
                             if(!(ctx.flags & Flags::OUTPUT))
                                 ctx.flags &= ~Flags::WAIT;
                             ctx.commitOff = 0;
-                            ctx.commitLen = args[1] == NO_SUBMIT ? 0 : args[1];
+                            ctx.commitLen = args[1] == NO_COMMIT ? 0 : args[1];
                         }
 
                         if (ctx.inMask != 0b11)
@@ -475,17 +474,17 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                 break;
             }
 
-            case State::SUBMIT_START:
+            case State::COMMIT_START:
             {
-                state = State::SUBMIT_SEND;
+                state = State::COMMIT_SEND;
                 break;
             }
-            case State::SUBMIT_SEND:
+            case State::COMMIT_SEND:
             {
-                state = State::SUBMIT_SEND_WAIT;
+                state = State::COMMIT_SEND_WAIT;
                 break;
             }
-            case State::SUBMIT_SEND_WAIT:
+            case State::COMMIT_SEND_WAIT:
             {
                 Dtu::Command::Bits cmd =
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
@@ -493,13 +492,13 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                 {
                     auto err = static_cast<Dtu::Error>((long)cmd.error);
                     if (err == Dtu::Error::VPE_GONE)
-                        state = State::SUBMIT_SEND_ERROR;
+                        state = State::COMMIT_SEND_ERROR;
                     else
                         state = State::EXIT_ACK;
                 }
                 break;
             }
-            case State::SUBMIT_SEND_ERROR:
+            case State::COMMIT_SEND_ERROR:
             {
                 sysc.start(sizeof(rdwr_msg));
                 syscNext = State::EXIT_ACK;
@@ -631,8 +630,8 @@ DtuAccelStream::tick()
             ctx.flags &= ~Flags::FETCHED;
             state = State::FETCH_MSG;
         }
-        // if we're waiting for input and have seen a submit, give up waiting
-        else if ((ctx.flags & (Flags::SEEN_SUBMIT | Flags::OUTPUT)) == Flags::SEEN_SUBMIT)
+        // if we're waiting for input and have seen a commit, give up waiting
+        else if ((ctx.flags & (Flags::SEEN_COMMIT | Flags::OUTPUT)) == Flags::SEEN_COMMIT)
             state = State::INOUT_START;
     }
 
@@ -667,19 +666,19 @@ DtuAccelStream::tick()
             // can we still read?
             else if (ctx.inPos < ctx.inLen)
                 state = State::READ_DATA;
-            // have seen submit? take that as input
-            else if (ctx.flags & Flags::SEEN_SUBMIT)
+            // have seen commit? take that as input
+            else if (ctx.flags & Flags::SEEN_COMMIT)
             {
                 ctx.inOff = ctx.commitOff;
                 ctx.inLen = ctx.commitLen;
                 ctx.inPos = 0;
-                ctx.flags &= ~Flags::SEEN_SUBMIT;
+                ctx.flags &= ~Flags::SEEN_COMMIT;
                 ctx.flags |= Flags::SEEN_EOF;
                 state = State::READ_DATA;
             }
-            // if we've seen EOF, submit and exit
+            // if we've seen EOF, commit and exit
             else if (ctx.flags & Flags::SEEN_EOF)
-                state = State::SUBMIT_START;
+                state = State::COMMIT_START;
         }
         else
         {
@@ -716,14 +715,14 @@ DtuAccelStream::tick()
         case State::INOUT_START:
         {
             rdwr_msg.msg.cmd = static_cast<uint64_t>(
-                (ctx.flags & Flags::OUTPUT) ? Command::WRITE : Command::READ
+                (ctx.flags & Flags::OUTPUT) ? Command::NEXT_OUT : Command::NEXT_IN
             );
-            rdwr_msg.msg.submit = 0;
+            rdwr_msg.msg.commit = 0;
 
             DPRINTF(DtuAccelStream,
-                    "MSG: sending %s request(submit=%#llx)\n",
+                    "MSG: sending %s request(commit=%#llx)\n",
                     (ctx.flags & Flags::OUTPUT) ? "output" : "input",
-                    rdwr_msg.msg.submit);
+                    rdwr_msg.msg.commit);
 
             pkt = createPacket(BUF_ADDR + bufSize,
                                sizeof(rdwr_msg.msg),
@@ -876,14 +875,14 @@ DtuAccelStream::tick()
             break;
         }
 
-        case State::SUBMIT_START:
+        case State::COMMIT_START:
         {
-            rdwr_msg.msg.cmd = static_cast<uint64_t>(Command::WRITE);
-            rdwr_msg.msg.submit = ctx.outPos ? ctx.outPos : NO_SUBMIT;
+            rdwr_msg.msg.cmd = static_cast<uint64_t>(Command::COMMIT);
+            rdwr_msg.msg.commit = ctx.outPos ? ctx.outPos : NO_COMMIT;
 
             DPRINTF(DtuAccelStream,
-                    "MSG: sending output request(submit=%#llx)\n",
-                    rdwr_msg.msg.submit);
+                    "MSG: sending commit request(nbytes=%#llx)\n",
+                    rdwr_msg.msg.commit);
 
             pkt = createPacket(BUF_ADDR + bufSize,
                                sizeof(rdwr_msg.msg),
@@ -893,7 +892,7 @@ DtuAccelStream::tick()
                    sizeof(rdwr_msg.msg));
             break;
         }
-        case State::SUBMIT_SEND:
+        case State::COMMIT_SEND:
         {
             pkt = createDtuCmdPkt(
                 Dtu::Command::SEND,
@@ -905,13 +904,13 @@ DtuAccelStream::tick()
             );
             break;
         }
-        case State::SUBMIT_SEND_WAIT:
+        case State::COMMIT_SEND_WAIT:
         {
             Addr regAddr = getRegAddr(CmdReg::COMMAND);
             pkt = createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }
-        case State::SUBMIT_SEND_ERROR:
+        case State::COMMIT_SEND_ERROR:
         {
             rdwr_msg.sys.sgate_sel = CAP_OUT;
             rdwr_msg.sys.rlabel = LBL_OUT_REPLY;

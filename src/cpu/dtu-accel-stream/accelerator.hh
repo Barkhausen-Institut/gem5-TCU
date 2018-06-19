@@ -65,7 +65,7 @@ class DtuAccelStream : public DtuAccel
 
     static const size_t MSG_SIZE        = 64;
 
-    static const uint64_t NO_SUBMIT     = 0xFFFFFFFFFFFFFFFF;
+    static const uint64_t NO_COMMIT     = 0xFFFFFFFFFFFFFFFF;
 
   public:
     DtuAccelStream(const DtuAccelStreamParams *p);
@@ -128,10 +128,10 @@ class DtuAccelStream : public DtuAccel
 
         SYSCALL,
 
-        SUBMIT_START,
-        SUBMIT_SEND,
-        SUBMIT_SEND_WAIT,
-        SUBMIT_SEND_ERROR,
+        COMMIT_START,
+        COMMIT_SEND,
+        COMMIT_SEND_WAIT,
+        COMMIT_SEND_ERROR,
 
         EXIT_ACK,
         EXIT,
@@ -141,8 +141,9 @@ class DtuAccelStream : public DtuAccel
     {
         STAT,
         SEEK,
-        READ,
-        WRITE,
+        NEXT_IN,
+        NEXT_OUT,
+        COMMIT,
     };
 
     std::string getStateName() const;
@@ -160,7 +161,7 @@ class DtuAccelStream : public DtuAccel
         OUTPUT      = 0x1,
         WAIT        = 0x2,
         SEEN_EOF    = 0x4,
-        SEEN_SUBMIT = 0x8,
+        SEEN_COMMIT = 0x8,
         EXIT        = 0x10,
         COMP        = 0x20,
         COMPDONE    = 0x40,
@@ -207,7 +208,7 @@ class DtuAccelStream : public DtuAccel
         struct
         {
             uint64_t cmd;
-            uint64_t submit;
+            uint64_t commit;
         } M5_ATTR_PACKED msg;
     } M5_ATTR_PACKED rdwr_msg;
 
