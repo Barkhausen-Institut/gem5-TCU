@@ -58,11 +58,6 @@ DtuPciHost::~DtuPciHost()
 {
 }
 
-void
-DtuPciHost::init()
-{
-}
-
 Tick
 DtuPciHost::read(PacketPtr pkt)
 {

@@ -52,8 +52,6 @@ class DtuPciHost : public PciHost
     DtuPciHost(const DtuPciHostParams* p);
     virtual ~DtuPciHost();
 
-    void init() override;
-
   public: // PioDevice
     Tick read(PacketPtr pkt) override;
     Tick write(PacketPtr pkt) override;

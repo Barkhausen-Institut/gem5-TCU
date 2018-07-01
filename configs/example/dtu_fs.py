@@ -454,40 +454,46 @@ def createCorePE(noc, options, no, cmdline, memPE, l1size=None, l2size=None,
 
     return pe
 
-def createStoragePE(noc, options, no, memPE, img0=None, img1=None):
+def createDevicePE(noc, options, no, memPE):
     pe = createPE(
         noc=noc, options=options, no=no, systemType=SpuSystem,
         l1size=None, l2size=None, spmsize=None, memPE=memPE,
         dtupos=0
     )
-    pe.dtu.connector = PCIConnector()
+    pe.dtu.connector = BaseConnector()
 
-    pe.proxy = BaseProxy.BaseProxy()
+    # the proxy sits between the device and the DTU to translate interrupts
+    # and DMA to the DTU's mechanisms
+    pe.proxy = DtuPciProxy()
     pe.proxy.id = no
-    pe.proxy.size = '16kB'
+    pe.proxy.clk_domain = SrcClockDomain(clock=options.sys_clock,
+                                         voltage_domain=pe.voltage_domain)
 
-    pe.dtu.connector.base_proxy = pe.proxy
+    connectCuToMem(pe, options, pe.proxy.dtu_master_port)
+    pe.proxy.dtu_slave_port = pe.xbar.master
 
+    # for the PCI config space
+    pe.pci_host = DtuPciHost()
+    pe.pci_host.pci_proxy = pe.proxy
+    pe.pci_host.conf_base = 0xf000000
+    pe.pci_host.conf_size = 0x1000000
+
+    # use bridges to simulate the latency to the I/O devices
     pe.iobus = IOXBar()
-    pe.bridge = Bridge(delay='50ns')
-    pe.bridge.master = pe.iobus.slave
+    # I/O bridge for requests from the host to the device
+    pe.iobridge = Bridge(delay='50ns')
+    pe.iobridge.master = pe.iobus.slave
+    pe.proxy.pio_port = pe.iobridge.slave
+    pe.pci_host.pio = pe.iobus.master
 
-    pe.platform = DtuPlatform()
-    pe.platform.intrctrl = IntrControl()
-    pe.platform.idedtuproxy = pe.proxy
+    # DMA bridge for requests from the device to the host
+    pe.dmabridge = Bridge(delay='50ns')
+    pe.dmabridge.master = pe.proxy.dma_port
 
-    pe.proxy.dev_port = pe.bridge.slave
-    pe.proxy.dtu_port = pe.xbar.master
+    return pe
 
-    connectCuToMem(pe, options, pe.proxy.int_port)
-
-    IO_address_space_base           = 0x20000000
-    PCI_Addressing_Base             = 0x0
-    PCI_End                         = 0xFFFFFFFFFFFFFFFF
-
-    # TODO DMA space still missing
-    pe.bridge.ranges = [ AddrRange(0, Addr.max) ]
-    pe.proxy.ranges  = [ AddrRange(PCI_Addressing_Base, PCI_End) ]
+def createStoragePE(noc, options, no, memPE, img0=None, img1=None):
+    pe = createDevicePE(noc, options, no, memPE)
 
     # create disks
     disks = []
@@ -515,48 +521,20 @@ def createStoragePE(noc, options, no, memPE, img0=None, img1=None):
     pe.idectrl.io_shift = 0
     pe.idectrl.InterruptPin = 1
     pe.idectrl.InterruptLine = 14
-    pe.idectrl.LegacyIOBase = IO_address_space_base
-
     pe.idectrl.ctrl_offset = 0
-    pe.behind_pci = IsaFake(pio_addr=0x20000cf8, pio_size=8)
 
-    def attachIO(pe, bus):
-        pe.pci_host.pio = bus.default
-        pe.idectrl.pio = bus.master
-        pe.idectrl.dma = bus.slave
-        pe.behind_pci.pio = bus.master
-
-    pe.pci_host = PcPciHost()
-    pe.pci_host.platform = pe.platform
-    # still possible, also less fiddling
-    attachIO(pe, pe.iobus)
+    pe.idectrl.pio = pe.iobus.default
+    pe.idectrl.dma = pe.dmabridge.slave
 
     print 'pe%02d: %s' % (no, img0)
     printConfig(pe, 0)
-    print '      imem =%d KiB' % (int(pe.proxy.size) / 1024)
     print '      Comp =DTU -> Proxy -> IDE'
     print
 
     return pe
 
 def createEtherPE(noc, options, no, memPE):
-    pe = createPE(
-        noc=noc, options=options, no=no, systemType=SpuSystem,
-        l1size=None, l2size=None, spmsize=None, memPE=memPE, dtupos=0
-    )
-    pe.dtu.connector = BaseConnector()
-
-    pe.proxy = DtuPciProxy()
-    pe.proxy.id = no
-    pe.proxy.clk_domain = SrcClockDomain(clock=options.sys_clock,
-                                         voltage_domain=pe.voltage_domain)
-
-    connectCuToMem(pe, options, pe.proxy.dtu_master_port)
-    pe.proxy.dtu_slave_port = pe.xbar.master
-
-    pe.pci_host = DtuPciHost()
-    pe.pci_host.pci_proxy = pe.proxy
-    pe.pci_host.conf_base = 0
+    pe = createDevicePE(noc, options, no, memPE)
 
     pe.nic = IGbE_e1000()
     pe.nic.clk_domain = SrcClockDomain(clock=options.sys_clock,
@@ -567,8 +545,8 @@ def createEtherPE(noc, options, no, memPE):
     pe.nic.pci_dev = 0
     pe.nic.pci_func = 0
 
-    pe.nic.pio = pe.proxy.pio_port
-    pe.nic.dma = pe.proxy.dma_port
+    pe.nic.pio = pe.iobus.default
+    pe.nic.dma = pe.dmabridge.slave
 
     print 'PE%02d: IGbE_e1000' % (no)
     printConfig(pe, 0)
@@ -842,8 +820,7 @@ def runSimulation(root, options, pes):
                 size |= 1 << 3 # x86
 
             if hasattr(pe, 'idectrl'):
-                size = int(pe.proxy.size)
-                size |= 11 << 3
+                size = 11 << 3
             elif hasattr(pe, 'nic'):
                 size = 12 << 3
         pemems.append(size)
