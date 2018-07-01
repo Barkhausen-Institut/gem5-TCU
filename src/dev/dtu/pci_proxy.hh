@@ -68,8 +68,6 @@ class DtuPciProxy : public MemObject
     static Addr encodePciAddress(PciBusAddr const& busAddr, Addr offset);
     PacketPtr createPciConfigPacket(PciBusAddr busAddr, Addr offset,
         const void* data, size_t size, MemCmd cmd);
-    PacketPtr createDeviceRegPacket(
-        Addr offset, const void* data, size_t size, MemCmd cmd);
 
     bool findDevice();
 
@@ -260,8 +258,6 @@ class DtuPciProxy : public MemObject
     Addr dtuRegBase;
 
     PciBusAddr deviceBusAddr;
-    Addr deviceRegBaseAddress;
-    Addr deviceRegSize;
 
     EventWrapper<DtuPciProxy, &DtuPciProxy::tick> tickEvent;
     CommandSM cmdSM;

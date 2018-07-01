@@ -146,21 +146,6 @@ DtuPciProxy::createPciConfigPacket(
     return pkt;
 }
 
-PacketPtr
-DtuPciProxy::createDeviceRegPacket(
-    Addr offset, const void* data, size_t size, MemCmd cmd)
-{
-    Request::Flags flags;
-
-    Addr addr = pciHost->memAddr(deviceBusAddr, deviceRegBaseAddress + offset);
-    auto req = new Request(addr, size, flags, masterId);
-
-    auto pkt = new Packet(req, cmd);
-    pkt->dataDynamic(data);
-
-    return pkt;
-}
-
 DtuPciProxy::DtuPciProxy(const DtuPciProxyParams* p)
     : MemObject(p),
       dtuMasterPort(name() + ".dtu_master_port", this),
@@ -171,8 +156,6 @@ DtuPciProxy::DtuPciProxy(const DtuPciProxyParams* p)
       id(p->id),
       dtuRegBase(p->dtu_regfile_base_addr),
       deviceBusAddr(0, 0, 0),
-      deviceRegBaseAddress(0),
-      deviceRegSize(0),
       tickEvent(this),
       cmdSM(this),
       cmdRunning(false),
@@ -208,25 +191,6 @@ void
 DtuPciProxy::init()
 {
     fatal_if(!findDevice(), "Failed to find a device to proxy.");
-
-    // TODO: map the other base address registers and support io ports
-    uint32_t tmp = 0xFFFFFFFF;
-    pciHost->write(createPciConfigPacket(
-        deviceBusAddr, PCI0_BASE_ADDR0, &tmp, 4, MemCmd::WriteReq));
-
-    pciHost->read(createPciConfigPacket(
-        deviceBusAddr, PCI0_BASE_ADDR0, &tmp, 4, MemCmd::ReadReq));
-    deviceRegSize = ~(tmp & 0xFFFFFFF0) + 1;
-    assert(REG_ADDR + deviceRegSize <= INT_ADDR);
-
-    deviceRegBaseAddress = 2 * deviceRegSize;
-    tmp = (2 * deviceRegSize) & ~mask(4);
-    pciHost->write(createPciConfigPacket(
-        deviceBusAddr, PCI0_BASE_ADDR0, &tmp, 4, MemCmd::WriteReq));
-
-    DPRINTF(DtuPciProxyDevMem,
-        "Mapped device memory to address %llx (BAR0, size: %llx)\n",
-        deviceRegBaseAddress, deviceRegSize);
 
     dtuSlavePort.sendRangeChange();
     dmaPort.sendRangeChange();
@@ -328,16 +292,13 @@ void
 DtuPciProxy::forwardAccessToDeviceMem(PacketPtr pkt)
 {
     assert(pkt->getAddr() >= REG_ADDR);
-    assert(pkt->getAddr() < REG_ADDR + deviceRegSize);
-
     Addr offset = pkt->getAddr() - REG_ADDR;
-    Addr deviceAddress = deviceRegBaseAddress + offset;
 
     DPRINTF(DtuPciProxyDevMem,
         "Forward %s access at %llx (%llu) to device memory at %llx\n",
         pkt->isWrite() ? "write" : "read", pkt->getAddr(), pkt->getSize(),
-        deviceAddress);
-    pkt->setAddr(pciHost->memAddr(deviceBusAddr, deviceAddress));
+        offset);
+    pkt->setAddr(pciHost->memAddr(deviceBusAddr, offset));
 
     pioPort.schedTimingReq(pkt, clockEdge(Cycles(1)));
 }
