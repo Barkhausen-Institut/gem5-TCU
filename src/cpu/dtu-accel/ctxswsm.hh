@@ -40,6 +40,7 @@ class AccelCtxSwSM
     enum State
     {
         SAVE,
+        SAVE_ABORT,
         SAVE_WRITE,
         SAVE_SEND,
         SAVE_WAIT,

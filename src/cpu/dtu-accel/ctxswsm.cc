@@ -42,6 +42,7 @@ AccelCtxSwSM::stateName() const
     const char *names[] =
     {
         "SAVE",
+        "SAVE_ABORT",
         "SAVE_WRITE",
         "SAVE_SEND",
         "SAVE_WAIT",
@@ -72,6 +73,12 @@ AccelCtxSwSM::tick()
             Addr regAddr = accel->getRegAddr(CmdReg::ABORT);
             uint64_t value = Dtu::Command::ABORT_VPE;
             pkt = accel->createDtuRegPkt(regAddr, value, MemCmd::WriteReq);
+            break;
+        }
+        case State::SAVE_ABORT:
+        {
+            Addr regAddr = accel->getRegAddr(CmdReg::COMMAND);
+            pkt = accel->createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }
         case State::SAVE_WRITE:
@@ -193,11 +200,21 @@ AccelCtxSwSM::handleMemResp(PacketPtr pkt)
 
         case State::SAVE:
         {
-            offset = 0;
-            if (accel->contextSize(true) > 0)
-                state = State::SAVE_WRITE;
-            else
-                state = State::SAVE_DONE;
+            state = State::SAVE_ABORT;
+            break;
+        }
+        case State::SAVE_ABORT:
+        {
+            Dtu::Command::Bits cmd =
+                *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
+            if (cmd.opcode == 0)
+            {
+                offset = 0;
+                if (accel->contextSize(true) > 0)
+                    state = State::SAVE_WRITE;
+                else
+                    state = State::SAVE_DONE;
+            }
             break;
         }
         case State::SAVE_WRITE:
