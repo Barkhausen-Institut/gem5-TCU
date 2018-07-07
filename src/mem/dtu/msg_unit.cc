@@ -401,6 +401,11 @@ MessageUnit::ackMessage(unsigned epId, Addr msgAddr)
     assert(ep.isOccupied(msgidx));
 
     ep.setOccupied(msgidx, false);
+    if (ep.isUnread(msgidx))
+    {
+        ep.setUnread(msgidx, false);
+        ep.msgCount--;
+    }
 
     // reset header
     dtu.regs().setHeader(ep.header + msgidx, RegAccess::DTU, ReplyHeader());
