@@ -81,7 +81,6 @@ DtuAccelStream::DtuAccelStream(const DtuAccelStreamParams *p)
     state(State::IDLE),
     lastState(State::FETCH_MSG), // something different
     lastFlags(),
-    bufOff(),
     ctx(),
     bufSize(p->buf_size),
     sysc(this),
@@ -403,8 +402,8 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
                 if (cmd.opcode == 0)
                 {
-                    bufOff = (cmd.error != 0) ? ctx.inOff : 0;
-                    logic->start(bufOff, ctx.lastSize, Cycles(ctx.compTime));
+                    ctx.bufOff = (cmd.error != 0) ? ctx.inOff : 0;
+                    logic->start(ctx.bufOff, ctx.lastSize, Cycles(ctx.compTime));
                     ctx.flags |= Flags::COMP;
                     state = State::FETCH_MSG;
                 }
@@ -813,11 +812,11 @@ DtuAccelStream::tick()
             size_t amount = std::min(ctx.lastSize, ctx.outLen - ctx.outPos);
             pkt = createDtuCmdPkt(Dtu::Command::WRITE,
                                   EP_OUT_MEM,
-                                  BUF_ADDR + bufOff,
+                                  BUF_ADDR + ctx.bufOff,
                                   amount,
                                   ctx.outOff + ctx.outPos);
 
-            bufOff += amount;
+            ctx.bufOff += amount;
             ctx.lastSize -= amount;
             ctx.outPos += amount;
             break;

@@ -154,7 +154,6 @@ class DtuAccelStream : public DtuAccel
     State state;
     State lastState;
     uint16_t lastFlags;
-    Addr bufOff;
 
     enum Flags
     {
@@ -173,7 +172,8 @@ class DtuAccelStream : public DtuAccel
 
     struct
     {
-        uint32_t flags;
+        uint16_t bufOff;
+        uint16_t flags;
         uint32_t inMask : 2,
                  outMask : 2,
                  : 28;
