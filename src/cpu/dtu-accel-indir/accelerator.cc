@@ -255,7 +255,7 @@ DtuAccelInDir::interrupt()
     if (ctxsw.isWaiting())
     {
         ctxsw.restart();
-        if (!tickEvent.scheduled())
+        if (!memPending && !tickEvent.scheduled())
             schedule(tickEvent, clockEdge(Cycles(1)));
     }
 }
