@@ -102,6 +102,7 @@ class DtuAccelAladdin : public DtuAccel
         } M5_ATTR_PACKED arrays[8];
         uint64_t array_count;
         uint64_t iterations;
+        uint64_t repeats;
     } M5_ATTR_PACKED;
 
     std::string getStateName() const;
@@ -113,15 +114,17 @@ class DtuAccelAladdin : public DtuAccel
     State state;
     State lastState;
 
+    // needs to be cacheline-aligned
     struct Context
     {
         uint64_t msgAddr;
         uint64_t msgOff;
         InvokeMessage msg;
+        uint64_t repetition;
         uint64_t iteration;
         uint64_t interrupted;
         uint64_t trace_off;
-        char _pad[8];
+        char _pad[56];
     } M5_ATTR_PACKED ctx;
 
     struct

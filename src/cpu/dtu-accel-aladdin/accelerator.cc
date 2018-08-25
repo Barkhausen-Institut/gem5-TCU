@@ -192,6 +192,7 @@ DtuAccelAladdin::completeRequest(PacketPtr pkt)
                     }
                     DPRINTFR(DtuAccelAladdin, "  ])\n");
 
+                    ctx.repetition = 0;
                     ctx.iteration = 0;
                     ctx.interrupted = false;
                     state = State::COMPUTE;
@@ -299,7 +300,15 @@ DtuAccelAladdin::signalFinished(size_t off)
 
     assert(state == State::COMPUTE);
     if (ctx.iteration == ctx.msg.iterations)
-        state = State::STORE_REPLY;
+    {
+        if (++ctx.repetition == ctx.msg.repeats)
+            state = State::STORE_REPLY;
+        else
+        {
+            ctx.trace_off = 0;
+            ctx.iteration = 0;
+        }
+    }
 
     if (!memPending && !tickEvent.scheduled())
         schedule(tickEvent, clockEdge(Cycles(1)));
@@ -438,6 +447,10 @@ DtuAccelAladdin::tick()
                 names = fft_arrays;
             else
                 fatal("Unknown accelerator id %d", accelId);
+
+            DPRINTF(DtuAccelAladdin,
+                "Invoking accelerator at %llu/%llu, off=%llu, rep=%llu/%llu\n",
+                ctx.iteration, ctx.msg.iterations, ctx.trace_off, ctx.repetition, ctx.msg.repeats);
 
             for (uint64_t i = 0; i < ctx.msg.array_count; ++i)
                 addArray(names[i], ctx.msg.arrays[i].addr, ctx.msg.arrays[i].size);
