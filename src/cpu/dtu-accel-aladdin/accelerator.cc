@@ -128,7 +128,15 @@ DtuAccelAladdin::completeRequest(PacketPtr pkt)
             case State::CTXSW:
             {
                 if(ctxsw.handleMemResp(pkt))
-                    state = State::FETCH_MSG;
+                {
+                    if(!ctxSwPerformed && ctx.interrupted)
+                    {
+                        ctx.interrupted = false;
+                        state = State::COMPUTE;
+                    }
+                    else
+                        state = State::FETCH_MSG;
+                }
                 break;
             }
 
@@ -252,20 +260,25 @@ DtuAccelAladdin::interrupt()
         if (!memPending && !tickEvent.scheduled())
             schedule(tickEvent, clockEdge(Cycles(1)));
     }
-    else if(state == State::COMPUTE)
-    {
-        if (!memPending && !tickEvent.scheduled())
-            schedule(tickEvent, clockEdge(Cycles(1)));
-    }
+    // don't interrupt the accelerator logic; this seems to cause trouble in Aladdin
+    // else if(state == State::COMPUTE)
+    // {
+    //     if (!memPending && !tickEvent.scheduled())
+    //         schedule(tickEvent, clockEdge(Cycles(1)));
+    // }
 }
 
 void
 DtuAccelAladdin::wakeup()
 {
-    sysc.retryFetch();
+    // don't interrupt the accelerator logic
+    if (state != State::COMPUTE)
+    {
+        sysc.retryFetch();
 
-    if (!memPending && !tickEvent.scheduled())
-        schedule(tickEvent, clockEdge(Cycles(1)));
+        if (!memPending && !tickEvent.scheduled())
+            schedule(tickEvent, clockEdge(Cycles(1)));
+    }
 }
 
 void
