@@ -80,7 +80,7 @@ base_offset                     = 2048 * 1024 * 1024
 mod_offset                      = base_offset
 mod_size                        = 16 * 1024 * 1024
 pe_offset                       = mod_offset + mod_size
-pe_size                         = 8 * 1024 * 1024
+pe_size                         = 16 * 1024 * 1024
 
 class PcPciHost(GenericPciHost):
     conf_base = 0x30000000
