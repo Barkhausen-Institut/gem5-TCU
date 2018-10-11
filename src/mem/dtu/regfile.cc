@@ -284,9 +284,9 @@ RegFile::getRecvEp(unsigned epId, bool print) const
     ep.rdPos        = (r0 >> 54) & 0x3F;
     ep.wrPos        = (r0 >> 48) & 0x3F;
     ep.msgSize      = (r0 >> 32) & 0xFFFF;
-    ep.size         = (r0 >> 16) & 0xFFFF;
-    ep.header       = (r0 >>  5) & 0x7FF;
-    ep.msgCount     = (r0 >>  0) & 0x1F;
+    ep.size         = (r0 >> 26) & 0x3F;
+    ep.header       = (r0 >>  6) & 0xFFFFF;
+    ep.msgCount     = (r0 >>  0) & 0x3F;
 
     ep.bufAddr      = r1;
 
@@ -303,17 +303,17 @@ void
 RegFile::setRecvEp(unsigned epId, const RecvEp &ep)
 {
     set(epId, 0, (static_cast<reg_t>(EpType::RECEIVE) << 61) |
-                 (static_cast<reg_t>(ep.rdPos) << 54) |
-                 (static_cast<reg_t>(ep.wrPos) << 48) |
-                 (static_cast<reg_t>(ep.msgSize) << 32) |
-                 (ep.size << 16) |
-                 (ep.header << 5) |
-                 (ep.msgCount << 0));
+                 (static_cast<reg_t>(ep.rdPos)        << 54) |
+                 (static_cast<reg_t>(ep.wrPos)        << 48) |
+                 (static_cast<reg_t>(ep.msgSize)      << 32) |
+                 (static_cast<reg_t>(ep.size)         << 26) |
+                 (static_cast<reg_t>(ep.header)       << 6) |
+                 (static_cast<reg_t>(ep.msgCount)     << 0));
 
     set(epId, 1, ep.bufAddr);
 
-    set(epId, 2, (static_cast<reg_t>(ep.unread) << 32) |
-                 ep.occupied);
+    set(epId, 2, (static_cast<reg_t>(ep.unread)       << 32) |
+                 (static_cast<reg_t>(ep.occupied)     << 0));
 
     ep.print(*this, epId, false, RegAccess::DTU);
 }
@@ -461,8 +461,8 @@ RegFile::set(unsigned epId, size_t idx, reg_t value)
     bool newrecv = static_cast<EpType>(value >> 61) == EpType::RECEIVE;
     if (idx == 0 && (newrecv || oldrecv))
     {
-        reg_t oldcnt = oldrecv ? (epRegs[epId][idx] & 0x1F) : 0;
-        reg_t newcnt = newrecv ? (value & 0x1F) : 0;
+        reg_t oldcnt = oldrecv ? (epRegs[epId][idx] & 0x3F) : 0;
+        reg_t newcnt = newrecv ? (value & 0x3F) : 0;
 
         reg_t diff = newcnt - oldcnt;
         reg_t old = dtuRegs[static_cast<Addr>(DtuReg::MSG_CNT)];

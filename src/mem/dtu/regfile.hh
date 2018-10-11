@@ -86,7 +86,7 @@ constexpr unsigned numCmdRegs = 5;
 // Ep Registers:
 //
 // 0. TYPE[3] (for all)
-//    receive: BUF_RD_POS[6] | BUF_WR_POS[6] | BUF_MSG_SIZE[16] | BUF_SIZE[16] | BUF_HEADER[11] BUF_MSG_CNT[5]
+//    receive: BUF_RD_POS[6] | BUF_WR_POS[6] | BUF_MSG_SIZE[16] | BUF_SIZE[6] | BUF_HEADER[20] BUF_MSG_CNT[6]
 //    send:    VPE_ID[32] | MAX_MSG_SIZE[16]
 //    mem:     REQ_MEM_SIZE[61]
 // 1. receive: BUF_ADDR[64]
