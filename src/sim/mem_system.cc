@@ -65,8 +65,9 @@ MemSystem::initState()
         while (rem > 0)
         {
             size_t amount = std::min(rem, BUF_SIZE);
-            if(fread(data, 1, amount, f) != amount)
-                panic("Unable to read '%s'", memFile.c_str());
+            size_t res;
+            if((res = fread(data, 1, amount, f)) != amount)
+                panic("Unable to read '%s': %lu (expected %lu)", memFile.c_str(), res, amount);
 
             for(size_t i = 0; i < memFileNum; ++i)
                 physProxy.writeBlob(i * sz + off, data, amount);
