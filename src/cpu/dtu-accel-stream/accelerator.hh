@@ -174,10 +174,9 @@ class DtuAccelStream : public DtuAccel
     {
         uint16_t bufOff;
         uint16_t flags;
-        uint32_t inMask : 2,
-                 outMask : 2,
-                 : 28;
-        uint32_t outMaskLen[2];
+        uint32_t inAvail : 1,
+                 outAvail : 1,
+                 : 30;
         uint64_t compTime;
         uint64_t msgAddr;
         uint64_t inReqAddr;
@@ -192,6 +191,8 @@ class DtuAccelStream : public DtuAccel
         uint64_t outLen;
         uint64_t lastSize;
         uint64_t nextSysc;
+        // padding
+        uint64_t : 64;
     } M5_ATTR_PACKED ctx;
 
     struct

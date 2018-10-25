@@ -124,8 +124,8 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
         (state == State::SYSCALL && sysc.hasStateChanged()) ||
         (state == State::IDLE && yield.hasStateChanged()))
     {
-        DPRINTF(DtuAccelStreamState, "[%s:%#02x:in=%#02x,out=%#02x] Got response from memory\n",
-            getStateName().c_str(), ctx.flags, ctx.inMask, ctx.outMask);
+        DPRINTF(DtuAccelStreamState, "[%s:%#02x:in=%d,out=%d] Got response from memory\n",
+            getStateName().c_str(), ctx.flags, ctx.inAvail, ctx.outAvail);
         lastState = state;
         lastFlags = ctx.flags;
     }
@@ -239,10 +239,16 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                     else
                         state = State::READ_MSG;
                 }
-                else if (ctx.inReqAddr || ctx.outReqAddr)
+                else if (ctx.inReqAddr && ctx.outAvail == 1)
                 {
                     ctx.flags |= Flags::FETCHED;
-                    ctx.msgAddr = ctx.inReqAddr ? ctx.inReqAddr : ctx.outReqAddr;
+                    ctx.msgAddr = ctx.inReqAddr;
+                    state = State::READ_MSG;
+                }
+                else if (ctx.outReqAddr && ctx.inAvail == 0)
+                {
+                    ctx.flags |= Flags::FETCHED;
+                    ctx.msgAddr = ctx.outReqAddr;
                     state = State::READ_MSG;
                 }
                 else
@@ -308,27 +314,17 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                         {
                             DPRINTF(
                                 DtuAccelStream,
-                                "MSG: received input request();"
-                                " state: (outMask=%#02x)\n",
-                                ctx.outMask
+                                "MSG: received input request(); state: (out=%d)\n",
+                                ctx.outAvail
                             );
                         }
 
-                        if (ctx.outMask != 0b00)
+                        if (ctx.outAvail == 1)
                         {
                             reply.msg.err = 0;
-                            if (ctx.outMask & 0b01)
-                            {
-                                reply.msg.off = 0;
-                                reply.msg.len = ctx.outMaskLen[0];
-                                ctx.outMask &= ~0b01;
-                            }
-                            else
-                            {
-                                reply.msg.off = bufSize / 2;
-                                reply.msg.len = ctx.outMaskLen[1];
-                                ctx.outMask &= ~0b10;
-                            }
+                            reply.msg.off = 0;
+                            reply.msg.len = ctx.outLen;
+                            ctx.outAvail = 0;
                             replyAddr = ctx.msgAddr;
                             replyNext = State::IDLE;
                             state = State::REPLY_STORE;
@@ -349,9 +345,8 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                         {
                             DPRINTF(
                                 DtuAccelStream,
-                                "MSG: received output request(commit=%#llx);"
-                                " state: (inMask=%#02x)\n",
-                                args[1], ctx.inMask
+                                "MSG: received output request(commit=%#llx); state: (in=%d)\n",
+                                args[1], ctx.inAvail
                             );
                         }
 
@@ -365,14 +360,14 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                             ctx.commitLen = args[1] == NO_COMMIT ? 0 : args[1];
                         }
 
-                        if (ctx.inMask != 0b11)
+                        if (ctx.inAvail == 0)
                         {
                             reply.msg.err = 0;
-                            reply.msg.off = !(ctx.inMask & 0b01) ? 0x0 : bufSize / 2;
-                            reply.msg.len = bufSize / 2;
+                            reply.msg.off = 0;
+                            reply.msg.len = bufSize;
                             replyAddr = ctx.msgAddr;
                             replyNext = State::IDLE;
-                            ctx.inMask |= !(ctx.inMask & 0b01) ? 0b01 : 0b10;
+                            ctx.inAvail = 1;
                             state = State::REPLY_STORE;
                             ctx.outReqAddr = 0;
                         }
@@ -424,12 +419,9 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                     if (ctx.lastSize == 0)
                     {
                         if (ctx.inPos == ctx.inLen)
-                            ctx.inMask &= ~((ctx.inOff == 0) ? 0b01 : 0b10);
+                            ctx.inAvail = 0;
                         if (ctx.outPos == ctx.outLen)
-                        {
-                            ctx.outMaskLen[ctx.outOff == 0 ? 0 : 1] = ctx.outLen;
-                            ctx.outMask |= ctx.outOff == 0 ? 0b01 : 0b10;
-                        }
+                            ctx.outAvail = 1;
                         ctx.flags &= ~Flags::OUTPUT;
                     }
                     state = State::INOUT_START;
@@ -605,26 +597,26 @@ DtuAccelStream::tick()
 
     if (state == State::IDLE)
     {
-        if (!(ctx.flags & Flags::WAIT) && ctx.flags & Flags::COMPDONE)
+        if (!(ctx.flags & Flags::WAIT) && (ctx.flags & Flags::COMPDONE))
         {
             state = State::INOUT_START;
             ctx.flags &= ~Flags::COMPDONE;
         }
         else if (ctx.flags & Flags::COMP)
             state = State::FETCH_MSG;
-        else if (!(ctx.flags & Flags::WAIT) && ctx.flags & Flags::TRANSFER)
+        else if (!(ctx.flags & Flags::WAIT) && (ctx.flags & Flags::TRANSFER))
         {
             state = State::INOUT_START;
             ctx.flags &= ~Flags::TRANSFER;
         }
         // can we answer a pending input request?
-        else if (ctx.inReqAddr && ctx.outMask != 0b00)
+        else if (ctx.inReqAddr && ctx.outAvail == 1)
         {
             ctx.flags &= ~Flags::FETCHED;
             state = State::FETCH_MSG;
         }
         // can we answer a pending output request?
-        else if (ctx.outReqAddr && ctx.inMask != 0b11)
+        else if (ctx.outReqAddr && ctx.inAvail == 0)
         {
             ctx.flags &= ~Flags::FETCHED;
             state = State::FETCH_MSG;
@@ -691,8 +683,8 @@ DtuAccelStream::tick()
         (state == State::SYSCALL && sysc.hasStateChanged()) ||
         (state == State::IDLE && yield.hasStateChanged()))
     {
-        DPRINTF(DtuAccelStreamState, "[%s:%#02x:in=%#02x,out=%#02x] tick\n",
-            getStateName().c_str(), ctx.flags, ctx.inMask, ctx.outMask);
+        DPRINTF(DtuAccelStreamState, "[%s:%#02x:in=%d,out=%d] tick\n",
+            getStateName().c_str(), ctx.flags, ctx.inAvail, ctx.outAvail);
         lastState = state;
         lastFlags = ctx.flags;
     }
@@ -791,7 +783,7 @@ DtuAccelStream::tick()
 
         case State::READ_DATA:
         {
-            ctx.lastSize = std::min(bufSize / 4, ctx.inLen - ctx.inPos);
+            ctx.lastSize = std::min(bufSize, ctx.inLen - ctx.inPos);
             pkt = createDtuCmdPkt(Dtu::Command::READ,
                                   EP_IN_MEM,
                                   BUF_ADDR,
