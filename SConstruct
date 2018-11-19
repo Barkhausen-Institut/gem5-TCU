@@ -753,8 +753,7 @@ if main['GCC']:
     # to avoid performance penalties on certain AMD chips. Older
     # assemblers detect this as an error, "Error: expecting string
     # instruction after `rep'"
-    as_version_raw = readCommand([main['AS'], '-v', '/dev/null',
-                                  '-o', '/dev/null'],
+    as_version_raw = readCommand([main['AS'], '-v', '/dev/null'],
                                  exception=False).split()
 
     # version strings may contain extra distro-specific
