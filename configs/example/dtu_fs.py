@@ -573,16 +573,14 @@ def createAccelPE(noc, options, no, accel, memPE, l1size=None, l2size=None, spms
 
     if accel == 'indir':
         pe.accel = DtuAccelInDir()
-    elif accel == 'fft':
+    elif accel == 'fft' or accel == 'rot13':
+        algos = {
+            'fft'    : 0,
+            'rot13'  : 1,
+        }
         pe.accel = DtuAccelStream()
         pe.accel.logic = AccelLogic()
-        pe.accel.logic.algorithm = 0
-        pe.accel.logic.port = pe.xbar.slave
-        pe.accel.buf_size = "4kB"
-    elif accel == 'rot13':
-        pe.accel = DtuAccelStream()
-        pe.accel.logic = AccelLogic()
-        pe.accel.logic.algorithm = 1
+        pe.accel.logic.algorithm = algos.get(accel)
         pe.accel.logic.port = pe.xbar.slave
         pe.accel.buf_size = "4kB"
     else:
