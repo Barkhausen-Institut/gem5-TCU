@@ -499,8 +499,8 @@ def createStoragePE(noc, options, no, memPE, img0=None, img1=None):
     disks = []
     for img in [img0, img1]:
         if img is not None:
-            disk = CowIdeDisk(driveID='master')
-            disk.childImage(img)
+            disk = IdeDisk(driveID='master')
+            disk.image = RawDiskImage(image_file = img)
             disks.append(disk)
 
     pe.idectrl = IdeController(disks=disks,
@@ -516,7 +516,6 @@ def createStoragePE(noc, options, no, memPE, img0=None, img1=None):
     pe.idectrl.BAR3Size = '3B'
     pe.idectrl.BAR3LegacyIO = True
     pe.idectrl.BAR4 = 1
-    #pe.idectrl.BAR4Size = '16B'
     pe.idectrl.Command = 1
     pe.idectrl.io_shift = 0
     pe.idectrl.InterruptPin = 1
