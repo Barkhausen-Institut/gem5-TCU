@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2013 ARM Limited
  * Copyright (c) 2014-2015 Sven Karlsson
+ * Copyright (c) 2018 TU Dresden
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -12,7 +13,7 @@
  * unmodified and in its entirety in all distributions of the software,
  * modified or unmodified, in source code or in binary form.
  *
- * Copyright (c) 2016 The University of Virginia
+ * Copyright (c) 2016-2017 The University of Virginia
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,6 +42,7 @@
  * Authors: Andreas Hansson
  *          Sven Karlsson
  *          Alec Roelke
+ *          Robert Scheffel
  */
 
 #ifndef __ARCH_RISCV_UTILITY_HH__
@@ -48,8 +50,12 @@
 
 #include <cmath>
 #include <cstdint>
+#include <sstream>
+#include <string>
 
+#include "arch/riscv/registers.hh"
 #include "base/types.hh"
+#include "cpu/reg_class.hh"
 #include "cpu/static_inst.hh"
 #include "cpu/thread_context.hh"
 
@@ -113,6 +119,7 @@ getArgument(ThreadContext *tc, int &number, uint16_t size, bool fp)
 
 inline void startupCPU(ThreadContext *tc, int cpuId)
 {
+    tc->activate();
 }
 
 inline void
@@ -124,6 +131,35 @@ copyRegs(ThreadContext *src, ThreadContext *dest)
 
     // Lastly copy PC/NPC
     dest->pcState(src->pcState());
+}
+
+inline std::string
+registerName(RegId reg)
+{
+    if (reg.isIntReg()) {
+        if (reg.index() >= NumIntArchRegs) {
+            /*
+             * This should only happen if a instruction is being speculatively
+             * executed along a not-taken branch, and if that instruction's
+             * width was incorrectly predecoded (i.e., it was predecoded as a
+             * full instruction rather than a compressed one or vice versa).
+             * It also should only happen if a debug flag is on that prints
+             * disassembly information, so rather than panic the incorrect
+             * value is printed for debugging help.
+             */
+            std::stringstream str;
+            str << "?? (x" << reg.index() << ')';
+            return str.str();
+        }
+        return IntRegNames[reg.index()];
+    } else {
+        if (reg.index() >= NumFloatRegs) {
+            std::stringstream str;
+            str << "?? (f" << reg.index() << ')';
+            return str.str();
+        }
+        return FloatRegNames[reg.index()];
+    }
 }
 
 inline void
@@ -150,11 +186,10 @@ getExecutingAsid(ThreadContext *tc)
     return 0;
 }
 
-inline void
-initCPU(ThreadContext *, int cpuId)
-{
-    panic("initCPU not implemented for Riscv.\n");
-}
+/**
+ * init Cpu function
+ */
+void initCPU(ThreadContext *tc, int cpuId);
 
 } // namespace RiscvISA
 

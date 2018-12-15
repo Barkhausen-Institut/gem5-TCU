@@ -34,7 +34,6 @@
 #include "mem/dtu/dtu.hh"
 #include "mem/dtu/regfile.hh"
 #include "sim/dtu_memory.hh"
-#include "base/misc.hh"
 
 // start at 0x4000, because it is 1:1 mapped and we use the first 4 for PTs
 static const Addr TEMP_ADDR         = DtuTlb::PAGE_SIZE * 4;
@@ -129,7 +128,7 @@ DtuAbortTest::DtuAbortTest(const DtuAbortTestParams *p)
     system(p->system),
     // TODO parameterize
     reg_base(0xF0000000),
-    masterId(p->system->getMasterId(name())),
+    masterId(p->system->getMasterId(this, name())),
     atomic(p->system->isAtomicMode()),
     retryPkt(nullptr)
 {
@@ -194,7 +193,7 @@ DtuAbortTest::createPacket(Addr paddr,
 {
     Request::Flags flags;
 
-    auto req = new Request(paddr, size, flags, masterId);
+    auto req = std::make_shared<Request>(paddr, size, flags, masterId);
     req->setContext(id);
 
     auto pkt = new Packet(req, cmd);
@@ -247,7 +246,7 @@ DtuAbortTest::createCommandPkt(Dtu::Command::Opcode cmd,
 void
 DtuAbortTest::completeRequest(PacketPtr pkt)
 {
-    Request* req = pkt->req;
+    RequestPtr req = pkt->req;
 
     DPRINTF(DtuAbortTest, "[%s:%d,%s:%d] Got response from memory\n",
         stateNames[static_cast<size_t>(state)],
@@ -351,8 +350,6 @@ DtuAbortTest::completeRequest(PacketPtr pkt)
                 break;
         }
     }
-
-    delete pkt->req;
 
     // the packet will delete the data
     delete pkt;
@@ -575,7 +572,7 @@ DtuAbortTest::tick()
 
         case State::STOP:
         {
-            exit_message(::Logger::get(::Logger::INFO), 1, "Test done");
+            exit_message(::Logger::getInfo(), "Test done");
             break;
         }
     }

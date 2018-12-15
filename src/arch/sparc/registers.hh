@@ -32,6 +32,7 @@
 #ifndef __ARCH_SPARC_REGISTERS_HH__
 #define __ARCH_SPARC_REGISTERS_HH__
 
+#include "arch/generic/vec_reg.hh"
 #include "arch/sparc/generated/max_inst_regs.hh"
 #include "arch/sparc/miscregs.hh"
 #include "arch/sparc/sparc_traits.hh"
@@ -46,20 +47,20 @@ using SparcISAInst::MaxMiscDestRegs;
 
 typedef uint64_t IntReg;
 typedef uint64_t MiscReg;
-typedef float FloatReg;
-typedef uint32_t FloatRegBits;
+typedef double FloatReg;
+typedef uint64_t FloatRegBits;
 
 // dummy typedef since we don't have CC regs
 typedef uint8_t CCReg;
 
-typedef union
-{
-    IntReg intReg;
-    FloatReg fpreg;
-    MiscReg ctrlreg;
-} AnyReg;
-
-typedef uint16_t RegIndex;
+// dummy typedefs since we don't have vector regs
+constexpr unsigned NumVecElemPerVecReg = 2;
+using VecElem = uint32_t;
+using VecReg = ::VecRegT<VecElem, NumVecElemPerVecReg, false>;
+using ConstVecReg = ::VecRegT<VecElem, NumVecElemPerVecReg, true>;
+using VecRegContainer = VecReg::Container;
+// This has to be one to prevent warnings that are treated as errors
+constexpr unsigned NumVecRegs = 1;
 
 // semantically meaningful register indices
 const int ZeroReg = 0;      // architecturally meaningful
@@ -77,14 +78,6 @@ const int NumIntRegs = (MaxGL + 1) * 8 + NWindows * 16 + NumMicroIntRegs;
 const int NumCCRegs = 0;
 
 const int TotalNumRegs = NumIntRegs + NumFloatRegs + NumMiscRegs;
-
-// These enumerate all the registers for dependence tracking.
-enum DependenceTags {
-    FP_Reg_Base = NumIntRegs,
-    CC_Reg_Base = FP_Reg_Base + NumFloatRegs,
-    Misc_Reg_Base = CC_Reg_Base + NumCCRegs, // NumCCRegs == 0
-    Max_Reg_Index = Misc_Reg_Base + NumMiscRegs,
-};
 
 } // namespace SparcISA
 

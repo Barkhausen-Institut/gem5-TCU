@@ -51,7 +51,7 @@
 #include <stack>
 
 #include "arch/registers.hh"
-#include "base/misc.hh"
+#include "base/logging.hh"
 #include "base/trace.hh"
 #include "debug/LLSC.hh"
 #include "mem/packet.hh"
@@ -82,7 +82,7 @@ handleLockedSnoop(XC *xc, PacketPtr pkt, Addr cacheBlockMask)
 
 
 template <class XC> inline void
-handleLockedRead(XC *xc, Request *req)
+handleLockedRead(XC *xc, const RequestPtr &req)
 {
     locked_addrs.push(req->getPaddr() & ~0xF);
     DPRINTF(LLSC, "[cid:%d]: Reserved address %x.\n",
@@ -94,7 +94,7 @@ handleLockedSnoopHit(XC *xc)
 {}
 
 template <class XC> inline bool
-handleLockedWrite(XC *xc, Request *req, Addr cacheBlockMask)
+handleLockedWrite(XC *xc, const RequestPtr &req, Addr cacheBlockMask)
 {
     // Normally RISC-V uses zero to indicate success and nonzero to indicate
     // failure (right now only 1 is reserved), but in gem5 zero indicates
@@ -124,6 +124,13 @@ handleLockedWrite(XC *xc, Request *req, Addr cacheBlockMask)
         req->setExtraData(2);
     }
     return true;
+}
+
+template <class XC>
+inline void
+globalClearExclusive(XC *xc)
+{
+    xc->getCpuPtr()->wakeup(xc->threadId());
 }
 
 } // namespace RiscvISA

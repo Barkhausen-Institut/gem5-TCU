@@ -90,7 +90,7 @@ std::string DtuAccelAladdin::getStateName() const
 void
 DtuAccelAladdin::completeRequest(PacketPtr pkt)
 {
-    Request* req = pkt->req;
+    RequestPtr req = pkt->req;
 
     if (state != lastState ||
         (state == State::CTXSW && ctxsw.hasStateChanged()) ||

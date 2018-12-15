@@ -60,8 +60,6 @@ class VfpMacroRegRegOp : public VfpMacroOp
             nextIdxs(_dest, _op1);
         }
     }
-
-    %(BasicExecPanic)s
 };
 
 template <class VfpOp>
@@ -96,8 +94,6 @@ class VfpMacroRegImmOp : public VfpMacroOp
             nextIdxs(_dest);
         }
     }
-
-    %(BasicExecPanic)s
 };
 
 template <class VfpOp>
@@ -132,8 +128,6 @@ class VfpMacroRegRegImmOp : public VfpMacroOp
             nextIdxs(_dest, _op1);
         }
     }
-
-    %(BasicExecPanic)s
 };
 
 template <class VfpOp>
@@ -168,8 +162,6 @@ class VfpMacroRegRegRegOp : public VfpMacroOp
             nextIdxs(_dest, _op1, _op2);
         }
     }
-
-    %(BasicExecPanic)s
 };
 
 template <class VfpOp>
@@ -224,7 +216,7 @@ let {{
     if (!inSecureState(scr, cpsr) && (cpsr.mode != MODE_HYP)) {
         HCR hcr = Hcr;
         bool hypTrap = false;
-        switch(xc->tcBase()->flattenMiscIndex(op1)) {
+        switch(xc->tcBase()->flattenRegId(RegId(MiscRegClass, op1)).index()) {
           case MISCREG_FPSID:
             hypTrap = hcr.tid0;
             break;

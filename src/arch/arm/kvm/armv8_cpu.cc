@@ -114,6 +114,12 @@ const std::vector<ArmV8KvmCPU::MiscRegInfo> ArmV8KvmCPU::miscRegMap = {
     MiscRegInfo(INT_REG(fp_regs.fpcr), MISCREG_FPCR, "FPCR"),
 };
 
+const std::set<MiscRegIndex> ArmV8KvmCPU::deviceRegSet = {
+    MISCREG_CNTV_CTL_EL0,
+    MISCREG_CNTV_CVAL_EL0,
+    MISCREG_CNTKCTL_EL1,
+};
+
 const std::vector<ArmV8KvmCPU::MiscRegInfo> ArmV8KvmCPU::miscRegIdMap = {
     MiscRegInfo(SYS_MPIDR_EL1, MISCREG_MPIDR_EL1, "MPIDR(EL1)"),
 };
@@ -254,7 +260,17 @@ ArmV8KvmCPU::updateKvmState()
     }
 
     for (const auto &ri : getSysRegMap()) {
-        const uint64_t value(tc->readMiscReg(ri.idx));
+        uint64_t value;
+        if (ri.is_device) {
+            // This system register is backed by a device. This means
+            // we need to lock the device event queue.
+            EventQueue::ScopedMigration migrate(deviceEventQueue());
+
+            value = tc->readMiscReg(ri.idx);
+        } else {
+            value = tc->readMiscReg(ri.idx);
+        }
+
         DPRINTF(KvmContext, "  %s := 0x%x\n", ri.name, value);
         setOneReg(ri.kvm, value);
     }
@@ -317,7 +333,15 @@ ArmV8KvmCPU::updateThreadContext()
     for (const auto &ri : getSysRegMap()) {
         const auto value(getOneRegU64(ri.kvm));
         DPRINTF(KvmContext, "  %s := 0x%x\n", ri.name, value);
-        tc->setMiscRegNoEffect(ri.idx, value);
+        if (ri.is_device) {
+            // This system register is backed by a device. This means
+            // we need to lock the device event queue.
+            EventQueue::ScopedMigration migrate(deviceEventQueue());
+
+            tc->setMiscReg(ri.idx, value);
+        } else {
+            tc->setMiscRegNoEffect(ri.idx, value);
+        }
     }
 
     PCState pc(getOneRegU64(INT_REG(regs.pc)));
@@ -366,7 +390,8 @@ ArmV8KvmCPU::getSysRegMap() const
         // Only add implemented registers that we are going to be able
         // to write.
         if (implemented && writeable)
-            sysRegMap.emplace_back(reg, idx, miscRegName[idx]);
+            sysRegMap.emplace_back(reg, idx, miscRegName[idx],
+                deviceRegSet.find(idx) != deviceRegSet.end());
     }
 
     return sysRegMap;

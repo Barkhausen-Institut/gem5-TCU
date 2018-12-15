@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011,2013 ARM Limited
+ * Copyright (c) 2011,2013,2016 ARM Limited
  * Copyright (c) 2013 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
@@ -48,19 +48,20 @@
 
 #include <array>
 #include <bitset>
+#include <deque>
 #include <list>
 #include <string>
-#include <queue>
 
 #include "arch/generic/tlb.hh"
 #include "arch/utility.hh"
 #include "base/trace.hh"
 #include "config/the_isa.hh"
 #include "cpu/checker/cpu.hh"
-#include "cpu/o3/comm.hh"
 #include "cpu/exec_context.hh"
 #include "cpu/exetrace.hh"
+#include "cpu/inst_res.hh"
 #include "cpu/inst_seq.hh"
+#include "cpu/o3/comm.hh"
 #include "cpu/op_class.hh"
 #include "cpu/static_inst.hh"
 #include "cpu/translation.hh"
@@ -81,9 +82,7 @@ class BaseDynInst : public ExecContext, public RefCounted
     // Typedef for the CPU.
     typedef typename Impl::CPUType ImplCPU;
     typedef typename ImplCPU::ImplState ImplState;
-
-    // Logical register index type.
-    typedef TheISA::RegIndex RegIndex;
+    using VecRegContainer = TheISA::VecRegContainer;
 
     // The DynInstPtr type.
     typedef typename Impl::DynInstPtr DynInstPtr;
@@ -95,15 +94,6 @@ class BaseDynInst : public ExecContext, public RefCounted
     enum {
         MaxInstSrcRegs = TheISA::MaxInstSrcRegs,        /// Max source regs
         MaxInstDestRegs = TheISA::MaxInstDestRegs       /// Max dest regs
-    };
-
-    union Result {
-        uint64_t integer;
-        double dbl;
-        void set(uint64_t i) { integer = i; }
-        void set(double d) { dbl = d; }
-        void get(uint64_t& i) { i = integer; }
-        void get(double& d) { d = dbl; }
     };
 
   protected:
@@ -134,6 +124,7 @@ class BaseDynInst : public ExecContext, public RefCounted
     };
 
     enum Flags {
+        NotAnInst,
         TranslationStarted,
         TranslationCompleted,
         PossibleLoadViolation,
@@ -142,10 +133,6 @@ class BaseDynInst : public ExecContext, public RefCounted
         RecordResult,
         Predicate,
         PredTaken,
-        /** Whether or not the effective address calculation is completed.
-         *  @todo: Consider if this is necessary or not.
-         */
-        EACalcDone,
         IsStrictlyOrdered,
         ReqMade,
         MemOpDone,
@@ -177,7 +164,7 @@ class BaseDynInst : public ExecContext, public RefCounted
     /** The result of the instruction; assumes an instruction can have many
      *  destination registers.
      */
-    std::queue<Result> instResult;
+    std::queue<InstResult> instResult;
 
     /** PC state for this instruction. */
     TheISA::PCState pc;
@@ -255,32 +242,26 @@ class BaseDynInst : public ExecContext, public RefCounted
     // Need a copy of main request pointer to verify on writes.
     RequestPtr reqToVerify;
 
-  private:
-    /** Instruction effective address.
-     *  @todo: Consider if this is necessary or not.
-     */
-    Addr instEffAddr;
-
   protected:
     /** Flattened register index of the destination registers of this
      *  instruction.
      */
-    std::array<TheISA::RegIndex, TheISA::MaxInstDestRegs> _flatDestRegIdx;
+    std::array<RegId, TheISA::MaxInstDestRegs> _flatDestRegIdx;
 
     /** Physical register index of the destination registers of this
      *  instruction.
      */
-    std::array<PhysRegIndex, TheISA::MaxInstDestRegs> _destRegIdx;
+    std::array<PhysRegIdPtr, TheISA::MaxInstDestRegs> _destRegIdx;
 
     /** Physical register index of the source registers of this
      *  instruction.
      */
-    std::array<PhysRegIndex, TheISA::MaxInstSrcRegs> _srcRegIdx;
+    std::array<PhysRegIdPtr, TheISA::MaxInstSrcRegs> _srcRegIdx;
 
     /** Physical register index of the previous producers of the
      *  architected destinations.
      */
-    std::array<PhysRegIndex, TheISA::MaxInstDestRegs> _prevDestRegIdx;
+    std::array<PhysRegIdPtr, TheISA::MaxInstDestRegs> _prevDestRegIdx;
 
 
   public:
@@ -293,6 +274,9 @@ class BaseDynInst : public ExecContext, public RefCounted
     /** Whether or not the memory operation is done. */
     bool memOpDone() const { return instFlags[MemOpDone]; }
     void memOpDone(bool f) { instFlags[MemOpDone] = f; }
+
+    bool notAnInst() const { return instFlags[NotAnInst]; }
+    void setNotAnInst() { instFlags[NotAnInst] = true; }
 
 
     ////////////////////////////////////////////
@@ -320,12 +304,12 @@ class BaseDynInst : public ExecContext, public RefCounted
                    Request::Flags flags, uint64_t *res);
 
     /** Splits a request in two if it crosses a dcache block. */
-    void splitRequest(RequestPtr req, RequestPtr &sreqLow,
+    void splitRequest(const RequestPtr &req, RequestPtr &sreqLow,
                       RequestPtr &sreqHigh);
 
     /** Initiate a DTB address translation. */
-    void initiateTranslation(RequestPtr req, RequestPtr sreqLow,
-                             RequestPtr sreqHigh, uint64_t *res,
+    void initiateTranslation(const RequestPtr &req, const RequestPtr &sreqLow,
+                             const RequestPtr &sreqHigh, uint64_t *res,
                              BaseTLB::Mode mode);
 
     /** Finish a DTB address translation. */
@@ -371,13 +355,13 @@ class BaseDynInst : public ExecContext, public RefCounted
     /** Returns the physical register index of the i'th destination
      *  register.
      */
-    PhysRegIndex renamedDestRegIdx(int idx) const
+    PhysRegIdPtr renamedDestRegIdx(int idx) const
     {
         return _destRegIdx[idx];
     }
 
     /** Returns the physical register index of the i'th source register. */
-    PhysRegIndex renamedSrcRegIdx(int idx) const
+    PhysRegIdPtr renamedSrcRegIdx(int idx) const
     {
         assert(TheISA::MaxInstSrcRegs > idx);
         return _srcRegIdx[idx];
@@ -386,7 +370,7 @@ class BaseDynInst : public ExecContext, public RefCounted
     /** Returns the flattened register index of the i'th destination
      *  register.
      */
-    TheISA::RegIndex flattenedDestRegIdx(int idx) const
+    const RegId& flattenedDestRegIdx(int idx) const
     {
         return _flatDestRegIdx[idx];
     }
@@ -394,7 +378,7 @@ class BaseDynInst : public ExecContext, public RefCounted
     /** Returns the physical register index of the previous physical register
      *  that remapped to the same logical register index.
      */
-    PhysRegIndex prevDestRegIdx(int idx) const
+    PhysRegIdPtr prevDestRegIdx(int idx) const
     {
         return _prevDestRegIdx[idx];
     }
@@ -403,8 +387,8 @@ class BaseDynInst : public ExecContext, public RefCounted
      *  the previous physical register that the logical register mapped to.
      */
     void renameDestReg(int idx,
-                       PhysRegIndex renamed_dest,
-                       PhysRegIndex previous_rename)
+                       PhysRegIdPtr renamed_dest,
+                       PhysRegIdPtr previous_rename)
     {
         _destRegIdx[idx] = renamed_dest;
         _prevDestRegIdx[idx] = previous_rename;
@@ -414,7 +398,7 @@ class BaseDynInst : public ExecContext, public RefCounted
      *  has/will produce that logical register's result.
      *  @todo: add in whether or not the source register is ready.
      */
-    void renameSrcReg(int idx, PhysRegIndex renamed_src)
+    void renameSrcReg(int idx, PhysRegIdPtr renamed_src)
     {
         _srcRegIdx[idx] = renamed_src;
     }
@@ -422,7 +406,7 @@ class BaseDynInst : public ExecContext, public RefCounted
     /** Flattens a destination architectural register index into a logical
      * index.
      */
-    void flattenDestReg(int idx, TheISA::RegIndex flattened_dest)
+    void flattenDestReg(int idx, const RegId& flattened_dest)
     {
         _flatDestRegIdx[idx] = flattened_dest;
     }
@@ -521,12 +505,14 @@ class BaseDynInst : public ExecContext, public RefCounted
     bool isMemRef()       const { return staticInst->isMemRef(); }
     bool isLoad()         const { return staticInst->isLoad(); }
     bool isStore()        const { return staticInst->isStore(); }
+    bool isAtomic()       const { return staticInst->isAtomic(); }
     bool isStoreConditional() const
     { return staticInst->isStoreConditional(); }
     bool isInstPrefetch() const { return staticInst->isInstPrefetch(); }
     bool isDataPrefetch() const { return staticInst->isDataPrefetch(); }
     bool isInteger()      const { return staticInst->isInteger(); }
     bool isFloating()     const { return staticInst->isFloating(); }
+    bool isVector()       const { return staticInst->isVector(); }
     bool isControl()      const { return staticInst->isControl(); }
     bool isCall()         const { return staticInst->isCall(); }
     bool isReturn()       const { return staticInst->isReturn(); }
@@ -602,63 +588,102 @@ class BaseDynInst : public ExecContext, public RefCounted
     int8_t numFPDestRegs()  const { return staticInst->numFPDestRegs(); }
     int8_t numIntDestRegs() const { return staticInst->numIntDestRegs(); }
     int8_t numCCDestRegs() const { return staticInst->numCCDestRegs(); }
+    int8_t numVecDestRegs() const { return staticInst->numVecDestRegs(); }
+    int8_t numVecElemDestRegs() const {
+        return staticInst->numVecElemDestRegs();
+    }
 
     /** Returns the logical register index of the i'th destination register. */
-    RegIndex destRegIdx(int i) const { return staticInst->destRegIdx(i); }
+    const RegId& destRegIdx(int i) const { return staticInst->destRegIdx(i); }
 
     /** Returns the logical register index of the i'th source register. */
-    RegIndex srcRegIdx(int i) const { return staticInst->srcRegIdx(i); }
+    const RegId& srcRegIdx(int i) const { return staticInst->srcRegIdx(i); }
 
-    /** Pops a result off the instResult queue */
-    template <class T>
-    void popResult(T& t)
+    /** Return the size of the instResult queue. */
+    uint8_t resultSize() { return instResult.size(); }
+
+    /** Pops a result off the instResult queue.
+     * If the result stack is empty, return the default value.
+     * */
+    InstResult popResult(InstResult dflt = InstResult())
     {
         if (!instResult.empty()) {
-            instResult.front().get(t);
+            InstResult t = instResult.front();
             instResult.pop();
+            return t;
         }
+        return dflt;
     }
 
-    /** Read the most recent result stored by this instruction */
-    template <class T>
-    void readResult(T& t)
-    {
-        instResult.back().get(t);
-    }
-
-    /** Pushes a result onto the instResult queue */
-    template <class T>
-    void setResult(T t)
+    /** Pushes a result onto the instResult queue. */
+    /** @{ */
+    /** Scalar result. */
+    template<typename T>
+    void setScalarResult(T&& t)
     {
         if (instFlags[RecordResult]) {
-            Result instRes;
-            instRes.set(t);
-            instResult.push(instRes);
+            instResult.push(InstResult(std::forward<T>(t),
+                        InstResult::ResultType::Scalar));
         }
     }
+
+    /** Full vector result. */
+    template<typename T>
+    void setVecResult(T&& t)
+    {
+        if (instFlags[RecordResult]) {
+            instResult.push(InstResult(std::forward<T>(t),
+                        InstResult::ResultType::VecReg));
+        }
+    }
+
+    /** Vector element result. */
+    template<typename T>
+    void setVecElemResult(T&& t)
+    {
+        if (instFlags[RecordResult]) {
+            instResult.push(InstResult(std::forward<T>(t),
+                        InstResult::ResultType::VecElem));
+        }
+    }
+    /** @} */
 
     /** Records an integer register being set to a value. */
     void setIntRegOperand(const StaticInst *si, int idx, IntReg val)
     {
-        setResult<uint64_t>(val);
+        setScalarResult(val);
     }
 
     /** Records a CC register being set to a value. */
     void setCCRegOperand(const StaticInst *si, int idx, CCReg val)
     {
-        setResult<uint64_t>(val);
+        setScalarResult(val);
     }
 
     /** Records an fp register being set to a value. */
     void setFloatRegOperand(const StaticInst *si, int idx, FloatReg val)
     {
-        setResult<double>(val);
+        setScalarResult(val);
+    }
+
+    /** Record a vector register being set to a value */
+    void setVecRegOperand(const StaticInst *si, int idx,
+            const VecRegContainer& val)
+    {
+        setVecResult(val);
     }
 
     /** Records an fp register being set to an integer value. */
-    void setFloatRegOperandBits(const StaticInst *si, int idx, FloatRegBits val)
+    void
+    setFloatRegOperandBits(const StaticInst *si, int idx, FloatRegBits val)
     {
-        setResult<uint64_t>(val);
+        setScalarResult(val);
+    }
+
+    /** Record a vector register being set to a value */
+    void setVecElemOperand(const StaticInst *si, int idx, const VecElem val)
+    {
+        setVecElemResult(val);
     }
 
     /** Records that one of the source registers is ready. */
@@ -802,7 +827,7 @@ class BaseDynInst : public ExecContext, public RefCounted
     /**Read the micro PC of this instruction. */
     Addr microPC() const { return pc.microPC(); }
 
-    bool readPredicate()
+    bool readPredicate() const
     {
         return instFlags[Predicate];
     }
@@ -829,23 +854,14 @@ class BaseDynInst : public ExecContext, public RefCounted
     ThreadContext *tcBase() { return thread->getTC(); }
 
   public:
-    /** Sets the effective address. */
-    void setEA(Addr ea) { instEffAddr = ea; instFlags[EACalcDone] = true; }
-
-    /** Returns the effective address. */
-    Addr getEA() const { return instEffAddr; }
-
-    /** Returns whether or not the eff. addr. calculation has been completed. */
-    bool doneEACalc() { return instFlags[EACalcDone]; }
-
     /** Returns whether or not the eff. addr. source registers are ready. */
-    bool eaSrcsReady();
+    bool eaSrcsReady() const;
 
     /** Is this instruction's memory access strictly ordered? */
     bool strictlyOrdered() const { return instFlags[IsStrictlyOrdered]; }
 
     /** Has this instruction generated a memory request. */
-    bool hasRequest() { return instFlags[ReqMade]; }
+    bool hasRequest() const { return instFlags[ReqMade]; }
 
     /** Returns iterator to this instruction in the list of all insts. */
     ListIt &getInstListIt() { return instListIt; }
@@ -878,17 +894,18 @@ BaseDynInst<Impl>::initiateMemRead(Addr addr, unsigned size,
                                    Request::Flags flags)
 {
     instFlags[ReqMade] = true;
-    Request *req = NULL;
-    Request *sreqLow = NULL;
-    Request *sreqHigh = NULL;
+    RequestPtr req = NULL;
+    RequestPtr sreqLow = NULL;
+    RequestPtr sreqHigh = NULL;
 
     if (instFlags[ReqMade] && translationStarted()) {
         req = savedReq;
         sreqLow = savedSreqLow;
         sreqHigh = savedSreqHigh;
     } else {
-        req = new Request(asid, addr, size, flags, masterId(), this->pc.instAddr(),
-                          thread->contextId());
+        req = std::make_shared<Request>(
+            asid, addr, size, flags, masterId(),
+            this->pc.instAddr(), thread->contextId());
 
         req->taskId(cpu->taskId());
 
@@ -906,10 +923,7 @@ BaseDynInst<Impl>::initiateMemRead(Addr addr, unsigned size,
             instFlags[EffAddrValid] = true;
 
             if (cpu->checker) {
-                if (reqToVerify != NULL) {
-                    delete reqToVerify;
-                }
-                reqToVerify = new Request(*req);
+                reqToVerify = std::make_shared<Request>(*req);
             }
             fault = cpu->read(req, sreqLow, sreqHigh, lqIdx);
         } else {
@@ -934,17 +948,18 @@ BaseDynInst<Impl>::writeMem(uint8_t *data, unsigned size, Addr addr,
         traceData->setMem(addr, size, flags);
 
     instFlags[ReqMade] = true;
-    Request *req = NULL;
-    Request *sreqLow = NULL;
-    Request *sreqHigh = NULL;
+    RequestPtr req = NULL;
+    RequestPtr sreqLow = NULL;
+    RequestPtr sreqHigh = NULL;
 
     if (instFlags[ReqMade] && translationStarted()) {
         req = savedReq;
         sreqLow = savedSreqLow;
         sreqHigh = savedSreqHigh;
     } else {
-        req = new Request(asid, addr, size, flags, masterId(), this->pc.instAddr(),
-                          thread->contextId());
+        req = std::make_shared<Request>(
+            asid, addr, size, flags, masterId(),
+            this->pc.instAddr(), thread->contextId());
 
         req->taskId(cpu->taskId());
 
@@ -961,10 +976,7 @@ BaseDynInst<Impl>::writeMem(uint8_t *data, unsigned size, Addr addr,
         instFlags[EffAddrValid] = true;
 
         if (cpu->checker) {
-            if (reqToVerify != NULL) {
-                delete reqToVerify;
-            }
-            reqToVerify = new Request(*req);
+            reqToVerify = std::make_shared<Request>(*req);
         }
         fault = cpu->write(req, sreqLow, sreqHigh, data, sqIdx);
     }
@@ -974,7 +986,7 @@ BaseDynInst<Impl>::writeMem(uint8_t *data, unsigned size, Addr addr,
 
 template<class Impl>
 inline void
-BaseDynInst<Impl>::splitRequest(RequestPtr req, RequestPtr &sreqLow,
+BaseDynInst<Impl>::splitRequest(const RequestPtr &req, RequestPtr &sreqLow,
                                 RequestPtr &sreqHigh)
 {
     // Check to see if the request crosses the next level block boundary.
@@ -991,8 +1003,10 @@ BaseDynInst<Impl>::splitRequest(RequestPtr req, RequestPtr &sreqLow,
 
 template<class Impl>
 inline void
-BaseDynInst<Impl>::initiateTranslation(RequestPtr req, RequestPtr sreqLow,
-                                       RequestPtr sreqHigh, uint64_t *res,
+BaseDynInst<Impl>::initiateTranslation(const RequestPtr &req,
+                                       const RequestPtr &sreqLow,
+                                       const RequestPtr &sreqHigh,
+                                       uint64_t *res,
                                        BaseTLB::Mode mode)
 {
     translationStarted(true);

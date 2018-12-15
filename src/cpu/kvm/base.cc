@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015 ARM Limited
+ * Copyright (c) 2012, 2015, 2017 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -74,7 +74,8 @@ BaseKvmCPU::BaseKvmCPU(BaseKvmCPUParams *params)
       vcpuID(vm.allocVCPUID()), vcpuFD(-1), vcpuMMapSize(0),
       _kvmRun(NULL), mmioRing(NULL),
       pageSize(sysconf(_SC_PAGE_SIZE)),
-      tickEvent(*this),
+      tickEvent([this]{ tick(); }, "BaseKvmCPU tick",
+                false, Event::CPU_Tick_Pri),
       activeInstPeriod(0),
       perfControlledByTimer(params->usePerfOverflow),
       hostFactor(params->hostFactor),
@@ -180,7 +181,6 @@ BaseKvmCPU::KVMCpuPort::submitIO(PacketPtr pkt)
 {
     if (cpu->system->isAtomicMode()) {
         Tick delay = sendAtomic(pkt);
-        delete pkt->req;
         delete pkt;
         return delay;
     } else {
@@ -199,7 +199,6 @@ BaseKvmCPU::KVMCpuPort::recvTimingResp(PacketPtr pkt)
 {
     DPRINTF(KvmIO, "KVM: Finished timing request\n");
 
-    delete pkt->req;
     delete pkt;
     activeMMIOReqs--;
 
@@ -357,6 +356,13 @@ BaseKvmCPU::drain()
         return DrainState::Drained;
 
     DPRINTF(Drain, "BaseKvmCPU::drain\n");
+
+    // The event queue won't be locked when calling drain since that's
+    // not done from an event. Lock the event queue here to make sure
+    // that scoped migrations continue to work if we need to
+    // synchronize the thread context.
+    std::lock_guard<EventQueue> lock(*this->eventQueue());
+
     switch (_status) {
       case Running:
         // The base KVM code is normally ready when it is in the
@@ -375,7 +381,7 @@ BaseKvmCPU::drain()
             deschedule(tickEvent);
         _status = Idle;
 
-        /** FALLTHROUGH */
+        M5_FALLTHROUGH;
       case Idle:
         // Idle, no need to drain
         assert(!tickEvent.scheduled());
@@ -576,6 +582,7 @@ BaseKvmCPU::haltContext(ThreadID thread_num)
 {
     // for now, these are equivalent
     suspendContext(thread_num);
+    updateCycleCounters(BaseCPU::CPU_STATE_SLEEP);
 }
 
 ThreadContext *
@@ -1110,8 +1117,9 @@ BaseKvmCPU::doMMIOAccess(Addr paddr, void *data, int size, bool write)
     ThreadContext *tc(thread->getTC());
     syncThreadContext();
 
-    RequestPtr mmio_req = new Request(paddr, size, Request::UNCACHEABLE,
-                                      dataMasterId());
+    RequestPtr mmio_req = std::make_shared<Request>(
+        paddr, size, Request::UNCACHEABLE, dataMasterId());
+
     mmio_req->setContext(tc->contextId());
     // Some architectures do need to massage physical addresses a bit
     // before they are inserted into the memory system. This enables
@@ -1135,14 +1143,12 @@ BaseKvmCPU::doMMIOAccess(Addr paddr, void *data, int size, bool write)
                              TheISA::handleIprWrite(tc, pkt) :
                              TheISA::handleIprRead(tc, pkt));
         threadContextDirty = true;
-        delete pkt->req;
         delete pkt;
         return clockPeriod() * ipr_delay;
     } else {
-        // Temporarily lock and migrate to the event queue of the
-        // VM. This queue is assumed to "own" all devices we need to
-        // access if running in multi-core mode.
-        EventQueue::ScopedMigration migrate(vm.eventQueue());
+        // Temporarily lock and migrate to the device event queue to
+        // prevent races in multi-core mode.
+        EventQueue::ScopedMigration migrate(deviceEventQueue());
 
         return dataPort.submitIO(pkt);
     }

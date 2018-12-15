@@ -58,6 +58,7 @@ struct PacketInfo {
     uint32_t size;
     Request::FlagsType flags;
     Addr pc;
+    MasterID master;
     uint8_t *data;
 
     explicit PacketInfo(const PacketPtr& pkt) :
@@ -67,6 +68,7 @@ struct PacketInfo {
         size(pkt->getSize()),
         flags(pkt->req->getFlags()),
         pc(pkt->req->hasPC() ? pkt->req->getPC() : 0),
+        master(pkt->req->masterId()),
         data()
     {
         if (size <= 64)

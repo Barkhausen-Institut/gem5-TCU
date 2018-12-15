@@ -76,7 +76,7 @@ DtuTest::DtuTest(const DtuTestParams *p)
   : MemObject(p),
     tickEvent(this),
     port("port", this),
-    masterId(p->system->getMasterId(name())),
+    masterId(p->system->getMasterId(this, name())),
     atomic(p->system->isAtomicMode()),
     retryPkt(nullptr)
 {
@@ -128,7 +128,7 @@ DtuTest::sendPkt(PacketPtr pkt)
 void
 DtuTest::completeRequest(PacketPtr pkt)
 {
-    Request* req = pkt->req;
+    RequestPtr req = pkt->req;
 
     DPRINTF(DtuTestAccess, "Completing %s at address %x %s\n",
                            pkt->isWrite() ? "write" : "read",
@@ -199,8 +199,6 @@ DtuTest::completeRequest(PacketPtr pkt)
         }
     }
 
-    delete pkt->req;
-
     // the packet will delete the data
     delete pkt;
 
@@ -230,7 +228,7 @@ DtuTest::createDtuRegisterPkt(Addr reg,
 
     Request::Flags flags;
 
-    auto req = new Request(paddr, sizeof(RegFile::reg_t), flags, masterId);
+    auto req = std::make_shared<Request>(paddr, sizeof(RegFile::reg_t), flags, masterId);
     req->setContext(id);
 
     auto pkt = new Packet(req, cmd);
@@ -260,7 +258,7 @@ DtuTest::tick()
         Addr paddr = counter;
         Request::Flags flags;
 
-        auto req = new Request(paddr, 1, flags, masterId);
+        auto req = std::make_shared<Request>(paddr, 1, flags, masterId);
         req->setContext(id);
 
         pkt = new Packet(req, MemCmd::WriteReq);
@@ -380,7 +378,7 @@ DtuTest::tick()
         Addr paddr = counter;
         Request::Flags flags;
 
-        auto req = new Request(paddr, 1, flags, masterId);
+        auto req = std::make_shared<Request>(paddr, 1, flags, masterId);
         req->setContext(id);
 
         pkt = new Packet(req, MemCmd::ReadReq);

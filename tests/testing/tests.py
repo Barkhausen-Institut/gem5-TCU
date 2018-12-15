@@ -102,6 +102,7 @@ arch_configs = {
         'realview-minor-dual',
         'realview-switcheroo-atomic',
         'realview-switcheroo-timing',
+        'realview-switcheroo-noncaching-timing',
         'realview-switcheroo-o3',
         'realview-switcheroo-full',
         'realview64-simple-atomic',
@@ -156,6 +157,7 @@ generic_configs = (
     'memtest-filter',
     'tgen-simple-mem',
     'tgen-dram-ctrl',
+    'dram-lowp',
 
     'learning-gem5-p1-simple',
     'learning-gem5-p1-two-level',

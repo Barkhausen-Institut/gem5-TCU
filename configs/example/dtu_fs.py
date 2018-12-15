@@ -438,6 +438,7 @@ def createCorePE(noc, options, no, cmdline, memPE, l1size=None, l2size=None,
                   interrupts_address_space_base - 1)
         ]
 
+    pe.cpu.createThreads()
     pe.cpu.createInterruptController()
 
     if options.isa == 'x86_64':
@@ -767,7 +768,7 @@ def createRoot(options):
     # UART and terminal
     root.platform.com_1 = Uart8250()
     root.platform.com_1.pio_addr = IO_address_space_base + 0x3f8
-    root.platform.com_1.terminal = Terminal()
+    root.platform.com_1.device = Terminal()
     root.platform.com_1.pio = root.noc.master
 
     return root

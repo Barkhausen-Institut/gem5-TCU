@@ -14,9 +14,9 @@
  * this list of conditions and the following disclaimer in the documentation
  * and/or other materials provided with the distribution.
  *
- * 3. Neither the name of the copyright holder nor the names of its contributors
- * may be used to endorse or promote products derived from this software
- * without specific prior written permission.
+ * 3. Neither the name of the copyright holder nor the names of its
+ * contributors may be used to endorse or promote products derived from this
+ * software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -30,10 +30,10 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- * Author: Sooraj Puthoor
+ * Authors: Sooraj Puthoor
  */
 
-#include "base/misc.hh"
+#include "base/logging.hh"
 #include "base/str.hh"
 #include "config/the_isa.hh"
 
@@ -70,7 +70,7 @@ RubyGPUCoalescerParams::create()
 }
 
 HSAScope
-reqScopeToHSAScope(Request* req)
+reqScopeToHSAScope(const RequestPtr &req)
 {
     HSAScope accessScope = HSAScope_UNSPECIFIED;
     if (req->isScoped()) {
@@ -90,7 +90,7 @@ reqScopeToHSAScope(Request* req)
 }
 
 HSASegment
-reqSegmentToHSASegment(Request* req)
+reqSegmentToHSASegment(const RequestPtr &req)
 {
     HSASegment accessSegment = HSASegment_GLOBAL;
 
@@ -116,7 +116,10 @@ reqSegmentToHSASegment(Request* req)
 }
 
 GPUCoalescer::GPUCoalescer(const Params *p)
-    : RubyPort(p), issueEvent(this), deadlockCheckEvent(this)
+    : RubyPort(p),
+      issueEvent([this]{ completeIssue(); }, "Issue coalesced request",
+                 false, Event::Progress_Event_Pri),
+      deadlockCheckEvent([this]{ wakeup(); }, "GPUCoalescer deadlock check")
 {
     m_store_waiting_on_load_cycles = 0;
     m_store_waiting_on_store_cycles = 0;
@@ -637,10 +640,8 @@ GPUCoalescer::hitCallback(GPUCoalescerRequest* srequest,
                 (type == RubyRequestType_RMW_Read) ||
                 (type == RubyRequestType_Locked_RMW_Read) ||
                 (type == RubyRequestType_Load_Linked)) {
-                memcpy(pkt->getPtr<uint8_t>(),
-                       data.getData(getOffset(request_address),
-                                    pkt->getSize()),
-                       pkt->getSize());
+                pkt->setData(
+                    data.getData(getOffset(request_address), pkt->getSize()));
             } else {
                 data.setData(pkt->getPtr<uint8_t>(),
                              getOffset(request_address), pkt->getSize());
@@ -996,11 +997,6 @@ GPUCoalescer::recordRequestType(SequencerRequestType requestType) {
             SequencerRequestType_to_string(requestType));
 }
 
-GPUCoalescer::IssueEvent::IssueEvent(GPUCoalescer* _seq)
-    : Event(Progress_Event_Pri), seq(_seq)
-{
-}
-
 
 void
 GPUCoalescer::completeIssue()
@@ -1039,18 +1035,6 @@ GPUCoalescer::completeIssue()
         kernelCallback(newKernelEnds[i]);
     }
     newKernelEnds.clear();
-}
-
-void
-GPUCoalescer::IssueEvent::process()
-{
-    seq->completeIssue();
-}
-
-const char *
-GPUCoalescer::IssueEvent::description() const
-{
-    return "Issue coalesced request";
 }
 
 void
@@ -1111,10 +1095,8 @@ GPUCoalescer::atomicCallback(Addr address,
         if (pkt->getPtr<uint8_t>() &&
             srequest->m_type != RubyRequestType_ATOMIC_NO_RETURN) {
             /* atomics are done in memory, and return the data *before* the atomic op... */
-            memcpy(pkt->getPtr<uint8_t>(),
-                   data.getData(getOffset(request_address),
-                                pkt->getSize()),
-                   pkt->getSize());
+            pkt->setData(
+                data.getData(getOffset(request_address), pkt->getSize()));
         } else {
             DPRINTF(MemoryAccess,
                     "WARNING.  Data not transfered from Ruby to M5 for type " \

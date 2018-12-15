@@ -106,9 +106,9 @@ class DtuPciProxy : public MemObject
             reqPacketQueue.schedSendTiming(pkt, when);
         }
 
-        bool checkFunctional(PacketPtr pkt)
+        bool trySatisfyFunctional(PacketPtr pkt)
         {
-            return reqPacketQueue.checkFunctional(pkt);
+            return reqPacketQueue.trySatisfyFunctional(pkt);
         }
 
       protected:
@@ -160,9 +160,9 @@ class DtuPciProxy : public MemObject
             reqPacketQueue.schedSendTiming(pkt, when);
         }
 
-        bool checkFunctional(PacketPtr pkt)
+        bool trySatisfyFunctional(PacketPtr pkt)
         {
-            return reqPacketQueue.checkFunctional(pkt);
+            return reqPacketQueue.trySatisfyFunctional(pkt);
         }
 
       protected:

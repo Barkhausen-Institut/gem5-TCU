@@ -543,28 +543,36 @@ class EventQueue
      * example, be useful when performing IO across thread event
      * queues when timing is not crucial (e.g., during fast
      * forwarding).
+     *
+     * ScopedMigration does nothing if both eqs are the same
      */
     class ScopedMigration
     {
       public:
-        ScopedMigration(EventQueue *_new_eq)
-            :  new_eq(*_new_eq), old_eq(*curEventQueue())
+        ScopedMigration(EventQueue *_new_eq, bool _doMigrate = true)
+            :new_eq(*_new_eq), old_eq(*curEventQueue()),
+             doMigrate((&new_eq != &old_eq)&&_doMigrate)
         {
-            old_eq.unlock();
-            new_eq.lock();
-            curEventQueue(&new_eq);
+            if (doMigrate){
+                old_eq.unlock();
+                new_eq.lock();
+                curEventQueue(&new_eq);
+            }
         }
 
         ~ScopedMigration()
         {
-            new_eq.unlock();
-            old_eq.lock();
-            curEventQueue(&old_eq);
+            if (doMigrate){
+                new_eq.unlock();
+                old_eq.lock();
+                curEventQueue(&old_eq);
+            }
         }
 
       private:
         EventQueue &new_eq;
         EventQueue &old_eq;
+        bool doMigrate;
     };
 
     /**
@@ -703,7 +711,11 @@ class EventQueue
      */
     void checkpointReschedule(Event *event);
 
-    virtual ~EventQueue() { }
+    virtual ~EventQueue()
+    {
+        while (!empty())
+            deschedule(getHead());
+    }
 };
 
 void dumpMainQueue();

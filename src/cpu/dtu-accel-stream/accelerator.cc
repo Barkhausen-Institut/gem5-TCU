@@ -117,7 +117,7 @@ std::string DtuAccelStream::getStateName() const
 void
 DtuAccelStream::completeRequest(PacketPtr pkt)
 {
-    Request* req = pkt->req;
+    RequestPtr req = pkt->req;
 
     if (ctx.flags != lastFlags || state != lastState ||
         (state == State::CTXSW && ctxsw.hasStateChanged()) ||

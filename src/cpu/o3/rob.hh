@@ -60,8 +60,6 @@ struct DerivO3CPUParams;
 template <class Impl>
 class ROB
 {
-  protected:
-    typedef TheISA::RegIndex RegIndex;
   public:
     //Typedefs from the Impl.
     typedef typename Impl::O3CPU O3CPU;
@@ -116,7 +114,7 @@ class ROB
      *  ROB for the new instruction.
      *  @param inst The instruction being inserted into the ROB.
      */
-    void insertInst(DynInstPtr &inst);
+    void insertInst(const DynInstPtr &inst);
 
     /** Returns pointer to the head instruction within the ROB.  There is
      *  no guarantee as to the return value if the ROB is empty.
@@ -128,7 +126,7 @@ class ROB
      *  the ROB.
      *  @return Pointer to the DynInst that is at the head of the ROB.
      */
-    DynInstPtr readHeadInst(ThreadID tid);
+    const DynInstPtr &readHeadInst(ThreadID tid);
 
     /** Returns a pointer to the instruction with the given sequence if it is
      *  in the ROB.

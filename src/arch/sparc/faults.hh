@@ -57,13 +57,19 @@ class SparcFaultBase : public FaultBase
         SH = -1,
         ShouldntHappen = SH
     };
+    using PrivilegeLevelSpec = std::array<PrivilegeLevel, NumLevels>;
     struct FaultVals
     {
         const FaultName name;
         const TrapType trapType;
         const FaultPriority priority;
-        const PrivilegeLevel nextPrivilegeLevel[NumLevels];
+        const PrivilegeLevelSpec nextPrivilegeLevel;
         FaultStat count;
+        FaultVals(const FaultName& name_, const TrapType& trapType_,
+                const FaultPriority& priority_, const PrivilegeLevelSpec& il)
+            : name(name_), trapType(trapType_), priority(priority_),
+            nextPrivilegeLevel(il)
+        {}
     };
     void invoke(ThreadContext * tc, const StaticInstPtr &inst =
                 StaticInst::nullStaticInstPtr);
@@ -122,6 +128,7 @@ class PrivilegedOpcode : public SparcFault<PrivilegedOpcode> {};
 // class UnimplementedSTD : public SparcFault<UnimplementedSTD> {};
 
 class FpDisabled : public SparcFault<FpDisabled> {};
+class VecDisabled : public SparcFault<VecDisabled> {};
 
 class FpExceptionIEEE754 : public SparcFault<FpExceptionIEEE754> {};
 
@@ -293,6 +300,7 @@ template<> SparcFaultBase::FaultVals SparcFault<InstructionAccessError>::vals;
 template<> SparcFaultBase::FaultVals SparcFault<IllegalInstruction>::vals;
 template<> SparcFaultBase::FaultVals SparcFault<PrivilegedOpcode>::vals;
 template<> SparcFaultBase::FaultVals SparcFault<FpDisabled>::vals;
+template<> SparcFaultBase::FaultVals SparcFault<VecDisabled>::vals;
 template<> SparcFaultBase::FaultVals SparcFault<FpExceptionIEEE754>::vals;
 template<> SparcFaultBase::FaultVals SparcFault<FpExceptionOther>::vals;
 template<> SparcFaultBase::FaultVals SparcFault<TagOverflow>::vals;

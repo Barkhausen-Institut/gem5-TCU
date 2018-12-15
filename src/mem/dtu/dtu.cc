@@ -79,7 +79,7 @@ uint64_t Dtu::nextCmdId = 2;
 
 Dtu::Dtu(DtuParams* p)
   : BaseDtu(p),
-    masterId(p->system->getMasterId(name())),
+    masterId(p->system->getMasterId(this, name())),
     system(p->system),
     regFile(*this, name() + ".regFile", p->num_endpoints, p->num_header),
     connector(p->connector),
@@ -225,7 +225,7 @@ Dtu::generateRequest(Addr paddr, Addr size, MemCmd cmd)
 {
     Request::Flags flags;
 
-    auto req = new Request(paddr, size, flags, masterId);
+    auto req = std::make_shared<Request>(paddr, size, flags, masterId);
 
     auto pkt = new Packet(req, cmd);
 
@@ -241,7 +241,6 @@ Dtu::generateRequest(Addr paddr, Addr size, MemCmd cmd)
 void
 Dtu::freeRequest(PacketPtr pkt)
 {
-    delete pkt->req;
     delete pkt;
 }
 

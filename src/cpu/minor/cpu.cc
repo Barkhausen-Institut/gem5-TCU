@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2014 ARM Limited
+ * Copyright (c) 2012-2014, 2017 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -183,9 +183,6 @@ MinorCPU::startup()
 
     BaseCPU::startup();
 
-    for (auto i = threads.begin(); i != threads.end(); i ++)
-        (*i)->startup();
-
     for (ThreadID tid = 0; tid < numThreads; tid++) {
         threads[tid]->startup();
         pipeline->wakeupFetch(tid);
@@ -195,6 +192,9 @@ MinorCPU::startup()
 DrainState
 MinorCPU::drain()
 {
+    // Deschedule any power gating event (if any)
+    deschedulePowerGatingEvent();
+
     if (switchedOut()) {
         DPRINTF(Drain, "Minor CPU switched out, draining not needed.\n");
         return DrainState::Drained;
@@ -240,10 +240,14 @@ MinorCPU::drainResume()
             "'timing' mode.\n");
     }
 
-    for (ThreadID tid = 0; tid < numThreads; tid++)
+    for (ThreadID tid = 0; tid < numThreads; tid++){
         wakeup(tid);
+    }
 
     pipeline->drainResume();
+
+    // Reschedule any power gating event (if any)
+    schedulePowerGatingEvent();
 }
 
 void

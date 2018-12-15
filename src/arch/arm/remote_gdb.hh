@@ -1,7 +1,7 @@
 /*
  * Copyright 2015 LabWare
  * Copyright 2014 Google, Inc.
- * Copyright (c) 2013 ARM Limited
+ * Copyright (c) 2013, 2016 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -51,6 +51,7 @@
 #include <algorithm>
 
 #include "arch/arm/utility.hh"
+#include "base/compiler.hh"
 #include "base/remote_gdb.hh"
 
 class System;
@@ -74,7 +75,7 @@ class RemoteGDB : public BaseRemoteGDB
           uint32_t fpr[8*3];
           uint32_t fpscr;
           uint32_t cpsr;
-        } r;
+        } M5_ATTR_PACKED r;
       public:
         char *data() const { return (char *)&r; }
         size_t size() const { return sizeof(r); }
@@ -95,9 +96,9 @@ class RemoteGDB : public BaseRemoteGDB
           uint64_t x[31];
           uint64_t spx;
           uint64_t pc;
-          uint64_t cpsr;
-          uint32_t v[32*4];
-        } r;
+          uint32_t cpsr;
+          VecElem v[NumVecV8ArchRegs * NumVecElemPerVecReg];
+        } M5_ATTR_PACKED r;
       public:
         char *data() const { return (char *)&r; }
         size_t size() const { return sizeof(r); }
@@ -114,7 +115,7 @@ class RemoteGDB : public BaseRemoteGDB
     AArch64GdbRegCache regCache64;
 
   public:
-    RemoteGDB(System *_system, ThreadContext *tc);
+    RemoteGDB(System *_system, ThreadContext *tc, int _port);
     BaseGdbRegCache *gdbRegs();
 };
 } // namespace ArmISA

@@ -113,8 +113,8 @@ M3Loader::writeArg(System &sys, Addr &args, size_t &i, Addr argv, const char *cm
 void
 M3Loader::writeRemote(MasterPort &noc, Addr dest, const uint8_t *data, size_t size)
 {
-    Request req(dest, size, 0, Request::funcMasterId);
-    Packet pkt(&req, MemCmd::WriteReq);
+    RequestPtr req = std::make_shared<Request>(dest, size, 0, Request::funcMasterId);
+    Packet pkt(req, MemCmd::WriteReq);
     pkt.dataStaticConst(data);
 
     auto senderState = new Dtu::NocSenderState();

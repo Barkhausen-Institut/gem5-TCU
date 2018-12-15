@@ -1,6 +1,6 @@
 /*
  * Copyright 2014 Google, Inc.
- * Copyright (c) 2012-2013,2015 ARM Limited
+ * Copyright (c) 2012-2013,2015,2017-2018 ARM Limited
  * All rights reserved.
  *
  * The license below extends only to copyright in the software and shall
@@ -46,7 +46,6 @@
 #include "arch/locked_mem.hh"
 #include "arch/mmapped_ipr.hh"
 #include "arch/utility.hh"
-#include "base/bigint.hh"
 #include "base/output.hh"
 #include "config/the_isa.hh"
 #include "cpu/exetrace.hh"
@@ -64,45 +63,33 @@
 using namespace std;
 using namespace TheISA;
 
-AtomicSimpleCPU::TickEvent::TickEvent(AtomicSimpleCPU *c)
-    : Event(CPU_Tick_Pri), cpu(c)
-{
-}
-
-
-void
-AtomicSimpleCPU::TickEvent::process()
-{
-    cpu->tick();
-}
-
-const char *
-AtomicSimpleCPU::TickEvent::description() const
-{
-    return "AtomicSimpleCPU tick";
-}
-
 void
 AtomicSimpleCPU::init()
 {
     BaseSimpleCPU::init();
 
     int cid = threadContexts[0]->contextId();
-    ifetch_req.setContext(cid);
-    data_read_req.setContext(cid);
-    data_write_req.setContext(cid);
+    ifetch_req->setContext(cid);
+    data_read_req->setContext(cid);
+    data_write_req->setContext(cid);
 }
 
 AtomicSimpleCPU::AtomicSimpleCPU(AtomicSimpleCPUParams *p)
-    : BaseSimpleCPU(p), tickEvent(this), width(p->width), locked(false),
+    : BaseSimpleCPU(p),
+      tickEvent([this]{ tick(); }, "AtomicSimpleCPU tick",
+                false, Event::CPU_Tick_Pri),
+      width(p->width), locked(false),
       simulate_data_stalls(p->simulate_data_stalls),
       simulate_inst_stalls(p->simulate_inst_stalls),
       icachePort(name() + ".icache_port", this),
       dcachePort(name() + ".dcache_port", this),
-      fastmem(p->fastmem), dcache_access(false), dcache_latency(0),
+      dcache_access(false), dcache_latency(0),
       ppCommit(nullptr)
 {
     _status = Idle;
+    ifetch_req = std::make_shared<Request>();
+    data_read_req = std::make_shared<Request>();
+    data_write_req = std::make_shared<Request>();
 }
 
 
@@ -116,6 +103,9 @@ AtomicSimpleCPU::~AtomicSimpleCPU()
 DrainState
 AtomicSimpleCPU::drain()
 {
+    // Deschedule any power gating event (if any)
+    deschedulePowerGatingEvent();
+
     if (switchedOut())
         return DrainState::Drained;
 
@@ -178,6 +168,9 @@ AtomicSimpleCPU::drainResume()
             threadInfo[tid]->notIdleFraction = 0;
         }
     }
+
+    // Reschedule any power gating event (if any)
+    schedulePowerGatingEvent();
 }
 
 bool
@@ -237,7 +230,6 @@ AtomicSimpleCPU::activateContext(ThreadID thread_num)
     Cycles delta = ticksToCycles(threadInfo[thread_num]->thread->lastActivate -
                                  threadInfo[thread_num]->thread->lastSuspend);
     numCycles += delta;
-    ppCycles->notify(delta);
 
     if (!tickEvent.scheduled()) {
         //Make sure ticks are still on multiples of cycles
@@ -279,6 +271,11 @@ AtomicSimpleCPU::suspendContext(ThreadID thread_num)
     BaseCPU::suspendContext(thread_num);
 }
 
+Tick
+AtomicSimpleCPU::sendPacket(MasterPort &port, const PacketPtr &pkt)
+{
+    return port.sendAtomic(pkt);
+}
 
 Tick
 AtomicSimpleCPU::AtomicCPUDPort::recvAtomicSnoop(PacketPtr pkt)
@@ -342,7 +339,7 @@ AtomicSimpleCPU::readMem(Addr addr, uint8_t * data, unsigned size,
     SimpleThread* thread = t_info.thread;
 
     // use the CPU's statically allocated read request and packet objects
-    Request *req = &data_read_req;
+    const RequestPtr &req = data_read_req;
 
     if (traceData)
         traceData->setMem(addr, size, flags);
@@ -372,13 +369,10 @@ AtomicSimpleCPU::readMem(Addr addr, uint8_t * data, unsigned size,
             Packet pkt(req, Packet::makeReadCmd(req));
             pkt.dataStatic(data);
 
-            if (req->isMmappedIpr())
+            if (req->isMmappedIpr()) {
                 dcache_latency += TheISA::handleIprRead(thread->getTC(), &pkt);
-            else {
-                if (fastmem && system->isMemAddr(pkt.getAddr()))
-                    system->getPhysMem().access(&pkt);
-                else
-                    dcache_latency += dcachePort.sendAtomic(&pkt);
+            } else {
+                dcache_latency += sendPacket(dcachePort, &pkt);
             }
             dcache_access = true;
 
@@ -440,13 +434,13 @@ AtomicSimpleCPU::writeMem(uint8_t *data, unsigned size, Addr addr,
 
     if (data == NULL) {
         assert(size <= 64);
-        assert(flags & Request::CACHE_BLOCK_ZERO);
+        assert(flags & Request::STORE_NO_DATA);
         // This must be a cache block cleaning request
         data = zero_array;
     }
 
     // use the CPU's statically allocated write request and packet objects
-    Request *req = &data_write_req;
+    const RequestPtr &req = data_write_req;
 
     if (traceData)
         traceData->setMem(addr, size, flags);
@@ -472,14 +466,11 @@ AtomicSimpleCPU::writeMem(uint8_t *data, unsigned size, Addr addr,
 
         // Now do the access.
         if (fault == NoFault) {
-            MemCmd cmd = MemCmd::WriteReq; // default
             bool do_access = true;  // flag to suppress cache access
 
             if (req->isLLSC()) {
-                cmd = MemCmd::StoreCondReq;
                 do_access = TheISA::handleLockedWrite(thread, req, dcachePort.cacheBlockMask);
             } else if (req->isSwap()) {
-                cmd = MemCmd::SwapReq;
                 if (req->isCondSwap()) {
                     assert(res);
                     req->setExtraData(*res);
@@ -487,17 +478,14 @@ AtomicSimpleCPU::writeMem(uint8_t *data, unsigned size, Addr addr,
             }
 
             if (do_access && !req->getFlags().isSet(Request::NO_ACCESS)) {
-                Packet pkt = Packet(req, cmd);
+                Packet pkt(req, Packet::makeWriteCmd(req));
                 pkt.dataStatic(data);
 
                 if (req->isMmappedIpr()) {
                     dcache_latency +=
                         TheISA::handleIprWrite(thread->getTC(), &pkt);
                 } else {
-                    if (fastmem && system->isMemAddr(pkt.getAddr()))
-                        system->getPhysMem().access(&pkt);
-                    else
-                        dcache_latency += dcachePort.sendAtomic(&pkt);
+                    dcache_latency += sendPacket(dcachePort, &pkt);
 
                     // Notify other threads on this CPU of write
                     threadSnoop(&pkt, curThread);
@@ -559,9 +547,9 @@ AtomicSimpleCPU::tick()
     if (numThreads > 1) {
         ContextID cid = threadContexts[curThread]->contextId();
 
-        ifetch_req.setContext(cid);
-        data_read_req.setContext(cid);
-        data_write_req.setContext(cid);
+        ifetch_req->setContext(cid);
+        data_read_req->setContext(cid);
+        data_write_req->setContext(cid);
     }
 
     SimpleExecContext& t_info = *threadInfo[curThread];
@@ -571,7 +559,7 @@ AtomicSimpleCPU::tick()
 
     for (int i = 0; i < width || locked; ++i) {
         numCycles++;
-        ppCycles->notify(1);
+        updateCycleCounters(BaseCPU::CPU_STATE_ON);
 
         if (!curStaticInst || !curStaticInst->isDelayedCommit()) {
             checkForInterrupts();
@@ -591,9 +579,9 @@ AtomicSimpleCPU::tick()
         bool needToFetch = !isRomMicroPC(pcState.microPC()) &&
                            !curMacroStaticInst;
         if (needToFetch) {
-            ifetch_req.taskId(taskId());
-            setupFetchRequest(&ifetch_req);
-            fault = thread->itb->translateAtomic(&ifetch_req, thread->getTC(),
+            ifetch_req->taskId(taskId());
+            setupFetchRequest(ifetch_req);
+            fault = thread->itb->translateAtomic(ifetch_req, thread->getTC(),
                                                  BaseTLB::Execute);
         }
 
@@ -611,13 +599,10 @@ AtomicSimpleCPU::tick()
                 //if (decoder.needMoreBytes())
                 //{
                     icache_access = true;
-                    Packet ifetch_pkt = Packet(&ifetch_req, MemCmd::ReadReq);
+                    Packet ifetch_pkt = Packet(ifetch_req, MemCmd::ReadReq);
                     ifetch_pkt.dataStatic(&inst);
 
-                    if (fastmem && system->isMemAddr(ifetch_pkt.getAddr()))
-                        system->getPhysMem().access(&ifetch_pkt);
-                    else
-                        icache_latency = icachePort.sendAtomic(&ifetch_pkt);
+                    icache_latency = sendPacket(icachePort, &ifetch_pkt);
 
                     assert(!ifetch_pkt.isError());
 
@@ -642,7 +627,8 @@ AtomicSimpleCPU::tick()
                     traceData = NULL;
                 }
 
-                if (dynamic_pointer_cast<SyscallRetryFault>(fault)) {
+                if (fault != NoFault &&
+                    dynamic_pointer_cast<SyscallRetryFault>(fault)) {
                     // Retry execution of system calls after a delay.
                     // Prevents immediate re-execution since conditions which
                     // caused the retry are unlikely to change every tick.

@@ -1,6 +1,6 @@
 /*
  * Copyright 2014 Google, Inc.
- * Copyright (c) 2010-2014 ARM Limited
+ * Copyright (c) 2010-2014, 2017 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -49,8 +49,9 @@
 #include <string>
 
 #include "arch/utility.hh"
-#include "base/loader/symtab.hh"
 #include "base/cp_annotate.hh"
+#include "base/loader/symtab.hh"
+#include "base/logging.hh"
 #include "config/the_isa.hh"
 #include "cpu/checker/cpu.hh"
 #include "cpu/o3/commit.hh"
@@ -71,26 +72,12 @@
 using namespace std;
 
 template <class Impl>
-DefaultCommit<Impl>::TrapEvent::TrapEvent(DefaultCommit<Impl> *_commit,
-                                          ThreadID _tid)
-    : Event(CPU_Tick_Pri, AutoDelete), commit(_commit), tid(_tid)
-{
-}
-
-template <class Impl>
 void
-DefaultCommit<Impl>::TrapEvent::process()
+DefaultCommit<Impl>::processTrapEvent(ThreadID tid)
 {
     // This will get reset by commit if it was switched out at the
     // time of this event processing.
-    commit->trapSquash[tid] = true;
-}
-
-template <class Impl>
-const char *
-DefaultCommit<Impl>::TrapEvent::description() const
-{
-    return "Trap";
+    trapSquash[tid] = true;
 }
 
 template <class Impl>
@@ -141,21 +128,23 @@ DefaultCommit<Impl>::DefaultCommit(O3CPU *_cpu, DerivO3CPUParams *params)
 
         DPRINTF(Commit,"Commit Policy set to Oldest Ready.");
     } else {
-        assert(0 && "Invalid SMT Commit Policy. Options Are: {Aggressive,"
-               "RoundRobin,OldestReady}");
+        panic("Invalid SMT commit policy. Options are: Aggressive, "
+               "RoundRobin, OldestReady");
     }
 
-    for (ThreadID tid = 0; tid < numThreads; tid++) {
+    for (ThreadID tid = 0; tid < Impl::MaxThreads; tid++) {
         commitStatus[tid] = Idle;
         changedROBNumEntries[tid] = false;
-        checkEmptyROB[tid] = false;
-        trapInFlight[tid] = false;
-        committedStores[tid] = false;
         trapSquash[tid] = false;
         tcSquash[tid] = false;
+        squashAfterInst[tid] = nullptr;
         pc[tid].set(0);
+        youngestSeqNum[tid] = 0;
         lastCommitedSeqNum[tid] = 0;
-        squashAfterInst[tid] = NULL;
+        trapInFlight[tid] = false;
+        committedStores[tid] = false;
+        checkEmptyROB[tid] = false;
+        renameMap[tid] = nullptr;
     }
     interrupt = NoFault;
 }
@@ -257,6 +246,13 @@ DefaultCommit<Impl>::regStats()
         .init(cpu->numThreads)
         .name(name() + ".fp_insts")
         .desc("Number of committed floating point instructions.")
+        .flags(total)
+        ;
+
+    statComVector
+        .init(cpu->numThreads)
+        .name(name() + ".vec_insts")
+        .desc("Number of committed Vector instructions.")
         .flags(total)
         ;
 
@@ -530,7 +526,9 @@ DefaultCommit<Impl>::generateTrapEvent(ThreadID tid, Fault inst_fault)
 {
     DPRINTF(Commit, "Generating trap event for [tid:%i]\n", tid);
 
-    TrapEvent *trap = new TrapEvent(this, tid);
+    EventFunctionWrapper *trap = new EventFunctionWrapper(
+        [this, tid]{ processTrapEvent(tid); },
+        "Trap", true, Event::CPU_Tick_Pri);
 
     Cycles latency = dynamic_pointer_cast<SyscallRetryFault>(inst_fault) ?
                      cpu->syscallRetryLatency : trapLatency;
@@ -641,7 +639,7 @@ DefaultCommit<Impl>::squashFromSquashAfter(ThreadID tid)
 
 template <class Impl>
 void
-DefaultCommit<Impl>::squashAfter(ThreadID tid, DynInstPtr &head_inst)
+DefaultCommit<Impl>::squashAfter(ThreadID tid, const DynInstPtr &head_inst)
 {
     DPRINTF(Commit, "Executing squash after for [tid:%i] inst [sn:%lli]\n",
             tid, head_inst->seqNum);
@@ -701,14 +699,14 @@ DefaultCommit<Impl>::tick()
             // will be active.
             _nextStatus = Active;
 
-            DynInstPtr inst = rob->readHeadInst(tid);
+            const DynInstPtr &inst M5_VAR_USED = rob->readHeadInst(tid);
 
             DPRINTF(Commit,"[tid:%i]: Instruction [sn:%lli] PC %s is head of"
                     " ROB and ready to commit\n",
                     tid, inst->seqNum, inst->pcState());
 
         } else if (!rob->isEmpty(tid)) {
-            DynInstPtr inst = rob->readHeadInst(tid);
+            const DynInstPtr &inst = rob->readHeadInst(tid);
 
             ppCommitStall->notify(inst);
 
@@ -1049,6 +1047,12 @@ DefaultCommit<Impl>::commitInsts()
                                              (!(pc[0].instAddr() & 0x3)));
                 }
 
+                // at this point store conditionals should either have
+                // been completed or predicated false
+                assert(!head_inst->isStoreConditional() ||
+                       head_inst->isCompleted() ||
+                       !head_inst->readPredicate());
+
                 // Updates misc. registers.
                 head_inst->updateMiscRegs();
 
@@ -1135,7 +1139,7 @@ DefaultCommit<Impl>::commitInsts()
 
 template <class Impl>
 bool
-DefaultCommit<Impl>::commitHead(DynInstPtr &head_inst, unsigned inst_num)
+DefaultCommit<Impl>::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
 {
     assert(head_inst);
 
@@ -1224,7 +1228,10 @@ DefaultCommit<Impl>::commitHead(DynInstPtr &head_inst, unsigned inst_num)
         // needed to update the state as soon as possible.  This
         // prevents external agents from changing any specific state
         // that the trap need.
-        cpu->trap(inst_fault, tid, head_inst->staticInst);
+        cpu->trap(inst_fault, tid,
+                  head_inst->notAnInst() ?
+                      StaticInst::nullStaticInstPtr :
+                      head_inst->staticInst);
 
         // Exit state update mode to avoid accidental updating.
         thread[tid]->noSquashFromTC = false;
@@ -1313,9 +1320,7 @@ DefaultCommit<Impl>::getInsts()
     int insts_to_process = std::min((int)renameWidth, fromRename->size);
 
     for (int inst_num = 0; inst_num < insts_to_process; ++inst_num) {
-        DynInstPtr inst;
-
-        inst = fromRename->insts[inst_num];
+        const DynInstPtr &inst = fromRename->insts[inst_num];
         ThreadID tid = inst->threadNumber;
 
         if (!inst->isSquashed() &&
@@ -1362,7 +1367,7 @@ DefaultCommit<Impl>::markCompletedInsts()
 
 template <class Impl>
 void
-DefaultCommit<Impl>::updateComInstStats(DynInstPtr &inst)
+DefaultCommit<Impl>::updateComInstStats(const DynInstPtr &inst)
 {
     ThreadID tid = inst->threadNumber;
 
@@ -1404,6 +1409,9 @@ DefaultCommit<Impl>::updateComInstStats(DynInstPtr &inst)
     // Floating Point Instruction
     if (inst->isFloating())
         statComFloating[tid]++;
+    // Vector Instruction
+    if (inst->isVector())
+        statComVector[tid]++;
 
     // Function Calls
     if (inst->isCall())
@@ -1500,7 +1508,7 @@ DefaultCommit<Impl>::oldestReady()
 
             if (rob->isHeadReady(tid)) {
 
-                DynInstPtr head_inst = rob->readHeadInst(tid);
+                const DynInstPtr &head_inst = rob->readHeadInst(tid);
 
                 if (first) {
                     oldest = tid;

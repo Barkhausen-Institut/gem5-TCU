@@ -96,7 +96,7 @@ DtuAccel::DtuAccel(const DtuAccelParams *p)
     chunkSize(system->cacheLineSize()),
     maxDataSize(p->max_data_size),
     port("port", this),
-    masterId(system->getMasterId(name())),
+    masterId(system->getMasterId(this, name())),
     id(p->id),
     atomic(system->isAtomicMode()),
     reg_base(p->regfile_base_addr),
@@ -163,7 +163,7 @@ DtuAccel::createPacket(Addr paddr,
 {
     Request::Flags flags;
 
-    auto req = new Request(paddr, size, flags, masterId);
+    auto req = std::make_shared<Request>(paddr, size, flags, masterId);
     req->setContext(id);
 
     auto pkt = new Packet(req, cmd);
@@ -217,7 +217,6 @@ DtuAccel::createDtuCmdPkt(Dtu::Command::Opcode cmd,
 void
 DtuAccel::freePacket(PacketPtr pkt)
 {
-    delete pkt->req;
     // the packet will delete the data
     delete pkt;
 }

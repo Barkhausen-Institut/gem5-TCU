@@ -1,6 +1,6 @@
 
 /*
- * Copyright (c) 2010-2014 ARM Limited
+ * Copyright (c) 2010-2014, 2017 ARM Limited
  * Copyright (c) 2013 Advanced Micro Devices, Inc.
  * All rights reserved
  *
@@ -61,8 +61,8 @@
 #include "mem/request.hh"
 
 template<class Impl>
-LSQUnit<Impl>::WritebackEvent::WritebackEvent(DynInstPtr &_inst, PacketPtr _pkt,
-                                              LSQUnit *lsq_ptr)
+LSQUnit<Impl>::WritebackEvent::WritebackEvent(const DynInstPtr &_inst,
+        PacketPtr _pkt, LSQUnit *lsq_ptr)
     : Event(Default_Pri, AutoDelete),
       inst(_inst), pkt(_pkt), lsqPtr(lsq_ptr)
 {
@@ -79,7 +79,6 @@ LSQUnit<Impl>::WritebackEvent::process()
     if (pkt->senderState)
         delete pkt->senderState;
 
-    delete pkt->req;
     delete pkt;
 }
 
@@ -116,6 +115,9 @@ LSQUnit<Impl>::completeDataAccess(PacketPtr pkt)
     assert(!cpu->switchedOut());
     if (!inst->isSquashed()) {
         if (!state->noWB) {
+            // Only loads and store conditionals perform the writeback
+            // after receving the response from the memory
+            assert(inst->isLoad() || inst->isStoreConditional());
             if (!TheISA::HasUnalignedMemAcc || !state->isSplit ||
                 !state->isLoad) {
                 writeback(inst, pkt);
@@ -130,7 +132,6 @@ LSQUnit<Impl>::completeDataAccess(PacketPtr pkt)
     }
 
     if (TheISA::HasUnalignedMemAcc && state->isSplit && state->isLoad) {
-        delete state->mainPkt->req;
         delete state->mainPkt;
     }
 
@@ -141,8 +142,10 @@ LSQUnit<Impl>::completeDataAccess(PacketPtr pkt)
 }
 
 template <class Impl>
-LSQUnit<Impl>::LSQUnit()
-    : loads(0), stores(0), storesToWB(0), cacheBlockMask(0), stalled(false),
+LSQUnit<Impl>::LSQUnit(uint32_t lqEntries, uint32_t sqEntries)
+    : lsqID(-1), storeQueue(sqEntries+1), loadQueue(lqEntries+1),
+      LQEntries(lqEntries+1), SQEntries(sqEntries+1),
+      loads(0), stores(0), storesToWB(0), cacheBlockMask(0), stalled(false),
       isStoreBlocked(false), storeInFlight(false), hasPendingPkt(false),
       pendingPkt(nullptr)
 {
@@ -151,28 +154,16 @@ LSQUnit<Impl>::LSQUnit()
 template<class Impl>
 void
 LSQUnit<Impl>::init(O3CPU *cpu_ptr, IEW *iew_ptr, DerivO3CPUParams *params,
-        LSQ *lsq_ptr, unsigned maxLQEntries, unsigned maxSQEntries,
-        unsigned id)
+        LSQ *lsq_ptr, unsigned id)
 {
+    lsqID = id;
+
     cpu = cpu_ptr;
     iewStage = iew_ptr;
 
     lsq = lsq_ptr;
 
-    lsqID = id;
-
-    DPRINTF(LSQUnit, "Creating LSQUnit%i object.\n",id);
-
-    // Add 1 for the sentinel entry (they are circular queues).
-    LQEntries = maxLQEntries + 1;
-    SQEntries = maxSQEntries + 1;
-
-    //Due to uint8_t index in LSQSenderState
-    assert(LQEntries <= 256);
-    assert(SQEntries <= 256);
-
-    loadQueue.resize(LQEntries);
-    storeQueue.resize(SQEntries);
+    DPRINTF(LSQUnit, "Creating LSQUnit%i object.\n",lsqID);
 
     depCheckShift = params->LSQDepCheckShift;
     checkLoads = params->LSQCheckLoads;
@@ -338,7 +329,7 @@ LSQUnit<Impl>::resizeSQ(unsigned size)
 
 template <class Impl>
 void
-LSQUnit<Impl>::insert(DynInstPtr &inst)
+LSQUnit<Impl>::insert(const DynInstPtr &inst)
 {
     assert(inst->isMemRef());
 
@@ -355,7 +346,7 @@ LSQUnit<Impl>::insert(DynInstPtr &inst)
 
 template <class Impl>
 void
-LSQUnit<Impl>::insertLoad(DynInstPtr &load_inst)
+LSQUnit<Impl>::insertLoad(const DynInstPtr &load_inst)
 {
     assert((loadTail + 1) % LQEntries != loadHead);
     assert(loads < LQEntries);
@@ -380,7 +371,7 @@ LSQUnit<Impl>::insertLoad(DynInstPtr &load_inst)
 
 template <class Impl>
 void
-LSQUnit<Impl>::insertStore(DynInstPtr &store_inst)
+LSQUnit<Impl>::insertStore(const DynInstPtr &store_inst)
 {
     // Make sure it is not full before inserting an instruction.
     assert((storeTail + 1) % SQEntries != storeHead);
@@ -524,7 +515,7 @@ LSQUnit<Impl>::checkSnoop(PacketPtr pkt)
 
 template <class Impl>
 Fault
-LSQUnit<Impl>::checkViolations(int load_idx, DynInstPtr &inst)
+LSQUnit<Impl>::checkViolations(int load_idx, const DynInstPtr &inst)
 {
     Addr inst_eff_addr1 = inst->effAddr >> depCheckShift;
     Addr inst_eff_addr2 = (inst->effAddr + inst->effSize - 1) >> depCheckShift;
@@ -604,7 +595,7 @@ LSQUnit<Impl>::checkViolations(int load_idx, DynInstPtr &inst)
 
 template <class Impl>
 Fault
-LSQUnit<Impl>::executeLoad(DynInstPtr &inst)
+LSQUnit<Impl>::executeLoad(const DynInstPtr &inst)
 {
     using namespace TheISA;
     // Execute a specific load.
@@ -653,7 +644,7 @@ LSQUnit<Impl>::executeLoad(DynInstPtr &inst)
 
 template <class Impl>
 Fault
-LSQUnit<Impl>::executeStore(DynInstPtr &store_inst)
+LSQUnit<Impl>::executeStore(const DynInstPtr &store_inst)
 {
     using namespace TheISA;
     // Make sure that a store exists.
@@ -676,17 +667,17 @@ LSQUnit<Impl>::executeStore(DynInstPtr &store_inst)
         store_fault == NoFault)
         return store_fault;
 
-    if (!store_inst->readPredicate())
+    if (!store_inst->readPredicate()) {
+        DPRINTF(LSQUnit, "Store [sn:%lli] not executed from predication\n",
+                store_inst->seqNum);
         store_inst->forwardOldRegs();
+        return store_fault;
+    }
 
     if (storeQueue[store_idx].size == 0) {
         DPRINTF(LSQUnit,"Fault on Store PC %s, [sn:%lli], Size = 0\n",
                 store_inst->pcState(), store_inst->seqNum);
 
-        return store_fault;
-    } else if (!store_inst->readPredicate()) {
-        DPRINTF(LSQUnit, "Store [sn:%lli] not executed from predication\n",
-                store_inst->seqNum);
         return store_fault;
     }
 
@@ -828,9 +819,9 @@ LSQUnit<Impl>::writebackStores()
 
         DynInstPtr inst = storeQueue[storeWBIdx].inst;
 
-        Request *req = storeQueue[storeWBIdx].req;
-        RequestPtr sreqLow = storeQueue[storeWBIdx].sreqLow;
-        RequestPtr sreqHigh = storeQueue[storeWBIdx].sreqHigh;
+        RequestPtr &req = storeQueue[storeWBIdx].req;
+        const RequestPtr &sreqLow = storeQueue[storeWBIdx].sreqLow;
+        const RequestPtr &sreqHigh = storeQueue[storeWBIdx].sreqHigh;
 
         storeQueue[storeWBIdx].committed = true;
 
@@ -871,7 +862,6 @@ LSQUnit<Impl>::writebackStores()
             state->outstanding = 2;
 
             // Can delete the main request now.
-            delete req;
             req = sreqLow;
         }
 
@@ -898,12 +888,6 @@ LSQUnit<Impl>::writebackStores()
                         inst->seqNum);
                 WritebackEvent *wb = new WritebackEvent(inst, data_pkt, this);
                 cpu->schedule(wb, curTick() + 1);
-                if (cpu->checker) {
-                    // Make sure to set the LLSC data for verification
-                    // if checker is loaded
-                    inst->reqToVerify->setExtraData(0);
-                    inst->completeAcc(data_pkt);
-                }
                 completeStore(storeWBIdx);
                 incrStIdx(storeWBIdx);
                 continue;
@@ -926,11 +910,8 @@ LSQUnit<Impl>::writebackStores()
                 assert(snd_data_pkt->req->isMmappedIpr());
                 TheISA::handleIprWrite(thread, snd_data_pkt);
                 delete snd_data_pkt;
-                delete sreqLow;
-                delete sreqHigh;
             }
             delete state;
-            delete req;
             completeStore(storeWBIdx);
             incrStIdx(storeWBIdx);
         } else if (!sendStore(data_pkt)) {
@@ -1064,16 +1045,12 @@ LSQUnit<Impl>::squash(const InstSeqNum &squashed_num)
         // Must delete request now that it wasn't handed off to
         // memory.  This is quite ugly.  @todo: Figure out the proper
         // place to really handle request deletes.
-        delete storeQueue[store_idx].req;
+        storeQueue[store_idx].req.reset();
         if (TheISA::HasUnalignedMemAcc && storeQueue[store_idx].isSplit) {
-            delete storeQueue[store_idx].sreqLow;
-            delete storeQueue[store_idx].sreqHigh;
-
-            storeQueue[store_idx].sreqLow = NULL;
-            storeQueue[store_idx].sreqHigh = NULL;
+            storeQueue[store_idx].sreqLow.reset();
+            storeQueue[store_idx].sreqHigh.reset();
         }
 
-        storeQueue[store_idx].req = NULL;
         --stores;
 
         // Inefficient!
@@ -1118,7 +1095,7 @@ LSQUnit<Impl>::storePostSend(PacketPtr pkt)
 
 template <class Impl>
 void
-LSQUnit<Impl>::writeback(DynInstPtr &inst, PacketPtr pkt)
+LSQUnit<Impl>::writeback(const DynInstPtr &inst, PacketPtr pkt)
 {
     iewStage->wakeCPU();
 
@@ -1211,7 +1188,11 @@ LSQUnit<Impl>::completeStore(int store_idx)
     // Tell the checker we've completed this instruction.  Some stores
     // may get reported twice to the checker, but the checker can
     // handle that case.
-    if (cpu->checker) {
+
+    // Store conditionals cannot be sent to the checker yet, they have
+    // to update the misc registers first which should take place
+    // when they commit
+    if (cpu->checker && !storeQueue[store_idx].inst->isStoreConditional()) {
         cpu->checker->verify(storeQueue[store_idx].inst);
     }
 }

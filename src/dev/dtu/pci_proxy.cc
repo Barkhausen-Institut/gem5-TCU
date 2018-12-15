@@ -57,7 +57,7 @@ DtuPciProxy::createPacket(
 {
     Request::Flags flags;
 
-    auto req = new Request(paddr, size, flags, masterId);
+    auto req = std::make_shared<Request>(paddr, size, flags, masterId);
     req->setContext(id);
 
     auto pkt = new Packet(req, cmd);
@@ -69,7 +69,6 @@ DtuPciProxy::createPacket(
 void
 DtuPciProxy::freePacket(PacketPtr pkt)
 {
-    delete pkt->req;
     // the packet will delete the data
     delete pkt;
 }
@@ -138,7 +137,7 @@ DtuPciProxy::createPciConfigPacket(
     Request::Flags flags;
 
     Addr addr = encodePciAddress(busAddr, offset);
-    auto req = new Request(addr, size, flags, masterId);
+    auto req = std::make_shared<Request>(addr, size, flags, masterId);
 
     auto pkt = new Packet(req, cmd);
     pkt->dataStatic(data);
@@ -152,7 +151,7 @@ DtuPciProxy::DtuPciProxy(const DtuPciProxyParams* p)
       dtuSlavePort(name() + ".dtu_slave_port", this),
       pioPort(name() + ".pio_port", this),
       dmaPort(name() + ".dma_port", this),
-      masterId(p->system->getMasterId(name())),
+      masterId(p->system->getMasterId(this, name())),
       id(p->id),
       dtuRegBase(p->dtu_regfile_base_addr),
       deviceBusAddr(0, 0, 0),
@@ -445,7 +444,7 @@ DtuPciProxy::CommandSM::tick()
 void
 DtuPciProxy::CommandSM::handleMemResp(PacketPtr pkt)
 {
-    Request* req = pkt->req;
+    RequestPtr req = pkt->req;
 
     Cycles delay(1);
     if (pkt->isError()) {
