@@ -82,6 +82,8 @@ CoreConnector::reset(Addr entry, Addr rootpt)
     Addr flags = ctx->readMiscReg(X86ISA::MISCREG_RFLAGS);
     ctx->setMiscReg(X86ISA::MISCREG_RFLAGS, flags & ~(Addr)0x200);
 #endif
+
+    suspend();
 }
 
 CoreConnector*
