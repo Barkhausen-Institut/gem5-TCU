@@ -727,6 +727,15 @@ TimingSimpleCPU::completeIfetch(PacketPtr pkt)
     // received a response from the icache: execute the received
     // instruction
     assert(!pkt || !pkt->isError());
+
+    // ignore the instruction if we have reset & suspended the CPU
+    if (_status == Idle) {
+        // we won't receive another icache response; just start running again
+        _lastStatus = BaseSimpleCPU::Running;
+        delete pkt;
+        return;
+    }
+
     assert(_status == IcacheWaitResponse);
 
     _status = BaseSimpleCPU::Running;
@@ -812,6 +821,14 @@ TimingSimpleCPU::IcachePort::recvReqRetry()
     // we shouldn't get a retry unless we have a packet that we're
     // waiting to transmit
     assert(cpu->ifetch_pkt != NULL);
+
+    if (cpu->_status == Idle) {
+        delete cpu->ifetch_pkt;
+        cpu->ifetch_pkt = NULL;
+        cpu->_lastStatus = BaseSimpleCPU::Running;
+        return;
+    }
+
     assert(cpu->_status == IcacheRetry);
     PacketPtr tmp = cpu->ifetch_pkt;
     if (sendTimingReq(tmp)) {
@@ -826,6 +843,13 @@ TimingSimpleCPU::completeDataAccess(PacketPtr pkt)
     // received a response from the dcache: complete the load or store
     // instruction
     assert(!pkt->isError());
+
+    if (_status == Idle) {
+        _lastStatus = BaseSimpleCPU::Running;
+        delete pkt;
+        return;
+    }
+
     assert(_status == DcacheWaitResponse || _status == DTBWaitResponse ||
            pkt->req->getFlags().isSet(Request::NO_ACCESS));
 
@@ -952,6 +976,14 @@ TimingSimpleCPU::DcachePort::recvReqRetry()
     // we shouldn't get a retry unless we have a packet that we're
     // waiting to transmit
     assert(cpu->dcache_pkt != NULL);
+
+    if (cpu->_status == Idle) {
+        delete cpu->dcache_pkt;
+        cpu->dcache_pkt = NULL;
+        cpu->_lastStatus = BaseSimpleCPU::Running;
+        return;
+    }
+
     assert(cpu->_status == DcacheRetry);
     PacketPtr tmp = cpu->dcache_pkt;
     if (tmp->senderState) {
