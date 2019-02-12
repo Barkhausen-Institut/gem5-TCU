@@ -45,7 +45,7 @@ enum class DtuReg : Addr
     VPE_ID,
     CUR_TIME,
     IDLE_TIME,
-    MSG_CNT,
+    EVENTS,
     EXT_CMD,
     CLEAR_IRQ,
     CLOCK,
@@ -111,6 +111,13 @@ enum class RegAccess
     CPU,
     DTU,
     NOC
+};
+
+enum class EventType
+{
+    MSG_RECV,
+    CRD_RECV,
+    EP_INVAL,
 };
 
 class RegFile;
@@ -275,7 +282,16 @@ class RegFile
         return get(DtuReg::FEATURES) & static_cast<reg_t>(feature);
     }
 
-    bool invalidate(unsigned epId);
+    bool invalidate(unsigned epId, bool force);
+
+    bool hasEvents() const
+    {
+        return get(DtuReg::EVENTS) != 0;
+    }
+
+    void setEvent(EventType ev);
+
+    bool ackEvents(reg_t old);
 
     reg_t get(DtuReg reg, RegAccess access = RegAccess::DTU) const;
 
@@ -288,6 +304,8 @@ class RegFile
     reg_t get(CmdReg reg, RegAccess access = RegAccess::DTU) const;
 
     void set(CmdReg reg, reg_t value, RegAccess access = RegAccess::DTU);
+
+    void updateMsgCnt();
 
     DataReg getDataReg() const
     {

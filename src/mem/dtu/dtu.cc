@@ -57,6 +57,7 @@ static const char *cmdNames[] =
     "WRITE",
     "FETCH_MSG",
     "ACK_MSG",
+    "ACK_EVENTS",
     "SLEEP",
     "PRINT",
 };
@@ -287,6 +288,10 @@ Dtu::executeCommand(PacketPtr pkt)
             msgUnit->ackMessage(cmd.epid, cmd.arg);
             finishCommand(Error::NONE);
             break;
+        case Command::ACK_EVENTS:
+            regs().ackEvents(cmd.arg);
+            finishCommand(Error::NONE);
+            break;
         case Command::SLEEP:
             if (!startSleep(cmd.arg))
                 finishCommand(Error::NONE);
@@ -489,9 +494,17 @@ Dtu::executeExternCommand(PacketPtr pkt)
             wakeupCore();
             break;
         case ExternCommand::INV_EP:
-            if (!regs().invalidate(cmd.arg))
+        {
+            unsigned epid = cmd.arg & ((1 << 8) - 1);
+            bool force = !!(cmd.arg & (1 << 8));
+            if (!regs().invalidate(epid, force))
                 result = Error::MISS_CREDITS;
+            else {
+                regs().setEvent(EventType::EP_INVAL);
+                wakeupCore();
+            }
             break;
+        }
         case ExternCommand::INV_PAGE:
             if (tlb())
                 tlb()->remove(cmd.arg);
@@ -537,7 +550,7 @@ Dtu::executeExternCommand(PacketPtr pkt)
 bool
 Dtu::startSleep(uint64_t cycles)
 {
-    if ((regFile.get(DtuReg::MSG_CNT) & 0xFFFF) > 0)
+    if (regFile.hasEvents())
         return false;
     if (regFile.get(ReqReg::EXT_REQ) != 0)
         return false;

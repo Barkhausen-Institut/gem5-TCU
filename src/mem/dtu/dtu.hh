@@ -144,8 +144,9 @@ class Dtu : public BaseDtu
             WRITE           = 4,
             FETCH_MSG       = 5,
             ACK_MSG         = 6,
-            SLEEP           = 7,
-            PRINT           = 8,
+            ACK_EVENTS      = 7,
+            SLEEP           = 8,
+            PRINT           = 9,
         };
 
         enum

@@ -46,7 +46,7 @@ const char *RegFile::dtuRegNames[] = {
     "VPE_ID",
     "CUR_TIME",
     "IDLE_TIME",
-    "MSG_CNT",
+    "EVENTS",
     "EXT_CMD",
     "CLEAR_IRQ",
     "CLOCK",
@@ -115,9 +115,9 @@ RegFile::RegFile(Dtu &_dtu, const std::string& name, unsigned _numEndpoints,
 }
 
 bool
-RegFile::invalidate(unsigned epId)
+RegFile::invalidate(unsigned epId, bool force)
 {
-    if (getEpType(epId) == EpType::SEND)
+    if (!force && getEpType(epId) == EpType::SEND)
     {
         SendEp sep = getSendEp(epId);
         if (sep.curcrd != sep.maxcrd)
@@ -128,6 +128,27 @@ RegFile::invalidate(unsigned epId)
         epRegs[epId][i] = 0;
 
     return true;
+}
+
+void
+RegFile::setEvent(EventType ev)
+{
+    reg_t old = dtuRegs[static_cast<size_t>(DtuReg::EVENTS)];
+    set(DtuReg::EVENTS,
+        old | static_cast<reg_t>(1) << static_cast<reg_t>(ev),
+        RegAccess::DTU);
+}
+
+bool
+RegFile::ackEvents(reg_t old)
+{
+    if (get(DtuReg::EVENTS, RegAccess::DTU) == old)
+    {
+        dtuRegs[static_cast<size_t>(DtuReg::EVENTS)] = 0;
+        updateMsgCnt();
+        return true;
+    }
+    return false;
 }
 
 RegFile::reg_t
@@ -456,20 +477,31 @@ RegFile::get(unsigned epId, size_t idx) const
 void
 RegFile::set(unsigned epId, size_t idx, reg_t value)
 {
-    // update global message count
     bool oldrecv = getEpType(epId) == EpType::RECEIVE;
     bool newrecv = static_cast<EpType>(value >> 61) == EpType::RECEIVE;
-    if (idx == 0 && (newrecv || oldrecv))
-    {
-        reg_t oldcnt = oldrecv ? (epRegs[epId][idx] & 0x3F) : 0;
-        reg_t newcnt = newrecv ? (value & 0x3F) : 0;
-
-        reg_t diff = newcnt - oldcnt;
-        reg_t old = dtuRegs[static_cast<Addr>(DtuReg::MSG_CNT)];
-        set(DtuReg::MSG_CNT, old + diff);
-    }
 
     epRegs[epId][idx] = value;
+
+    // update global message count, if it was a receive EP or got a receive EP
+    if (idx == 0 && (newrecv || oldrecv))
+        updateMsgCnt();
+}
+
+void
+RegFile::updateMsgCnt()
+{
+    bool hasMsgs = false;
+    for (size_t i = 0; i < dtu.numEndpoints; ++i) {
+        if (getEpType(i) == EpType::RECEIVE && (get(i, 0) & 0x3F) > 0) {
+            hasMsgs = true;
+            break;
+        }
+    }
+
+    reg_t other = dtuRegs[static_cast<size_t>(DtuReg::EVENTS)];
+    other &= ~static_cast<reg_t>(1);
+    reg_t msgs = (hasMsgs ? 1 : 0) << static_cast<reg_t>(EventType::MSG_RECV);
+    set(DtuReg::EVENTS, other | msgs);
 }
 
 const ReplyHeader &
@@ -542,7 +574,7 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
             else if (pkt->isWrite() && isCpuRequest && reg == DtuReg::CLEAR_IRQ)
                 res |= WROTE_CLEAR_IRQ;
             // master registers can't be set by the CPU
-            else if (pkt->isWrite() && !isCpuRequest && reg != DtuReg::MSG_CNT)
+            else if (pkt->isWrite() && !isCpuRequest)
             {
                 if (reg == DtuReg::EXT_CMD)
                     res |= WROTE_EXT_CMD;
