@@ -60,7 +60,8 @@ YieldSM::tick()
         case State::YLD_WAIT:
         {
             yieldStart = accel->curCycle();
-            pkt = accel->createDtuCmdPkt(Dtu::Command::SLEEP, 0, 0, 0, report);
+            pkt = accel->createDtuCmdPkt(Dtu::Command::SLEEP,
+                                         0, 0, 0, (1ULL << 63) | report);
             break;
         }
         case State::YLD_REPORT:
@@ -83,7 +84,8 @@ YieldSM::tick()
         }
         case State::YLD_SLEEP:
         {
-            pkt = accel->createDtuCmdPkt(Dtu::Command::SLEEP, 0, 0, 0, 0);
+            pkt = accel->createDtuCmdPkt(Dtu::Command::SLEEP,
+                                         0, 0, 0, 1ULL << 63);
             break;
         }
     }

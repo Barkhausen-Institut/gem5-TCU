@@ -209,7 +209,7 @@ class Dtu : public BaseDtu
 
     void printLine(Addr addr, Addr size);
 
-    bool startSleep(uint64_t cycles);
+    bool startSleep(uint64_t cycles, bool ack);
 
     void stopSleep();
 
