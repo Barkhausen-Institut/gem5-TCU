@@ -362,6 +362,8 @@ class TimingSimpleCPU : public BaseSimpleCPU
      * @returns true if the CPU is drained, false otherwise.
      */
     bool tryCompleteDrain();
+
+    void reset();
 };
 
 #endif // __CPU_SIMPLE_TIMING_HH__

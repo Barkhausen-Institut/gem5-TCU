@@ -255,6 +255,20 @@ TimingSimpleCPU::suspendContext(ThreadID thread_num)
     BaseCPU::suspendContext(thread_num);
 }
 
+void
+TimingSimpleCPU::reset()
+{
+    // reset instruction
+    curStaticInst = nullptr;
+    curMacroStaticInst = nullptr;
+    // reset decoder state
+    SimpleExecContext &t_info = *threadInfo[curThread];
+    SimpleThread* thread = t_info.thread;
+    thread->decoder.reset();
+    // start fetching a new instruction afterwards
+    _lastStatus = BaseSimpleCPU::Running;
+}
+
 bool
 TimingSimpleCPU::handleReadPacket(PacketPtr pkt)
 {
@@ -573,6 +587,12 @@ TimingSimpleCPU::threadSnoop(PacketPtr pkt, ThreadID sender)
 void
 TimingSimpleCPU::finishTranslation(WholeTranslationState *state)
 {
+    if (_status == Idle) {
+        reset();
+        delete state;
+        return;
+    }
+
     _status = BaseSimpleCPU::Running;
 
     if (state->getFault() != NoFault) {
@@ -731,7 +751,7 @@ TimingSimpleCPU::completeIfetch(PacketPtr pkt)
     // ignore the instruction if we have reset & suspended the CPU
     if (_status == Idle) {
         // we won't receive another icache response; just start running again
-        _lastStatus = BaseSimpleCPU::Running;
+        reset();
         delete pkt;
         return;
     }
@@ -825,7 +845,7 @@ TimingSimpleCPU::IcachePort::recvReqRetry()
     if (cpu->_status == Idle) {
         delete cpu->ifetch_pkt;
         cpu->ifetch_pkt = NULL;
-        cpu->_lastStatus = BaseSimpleCPU::Running;
+        cpu->reset();
         return;
     }
 
@@ -845,7 +865,7 @@ TimingSimpleCPU::completeDataAccess(PacketPtr pkt)
     assert(!pkt->isError());
 
     if (_status == Idle) {
-        _lastStatus = BaseSimpleCPU::Running;
+        reset();
         delete pkt;
         return;
     }
@@ -980,7 +1000,7 @@ TimingSimpleCPU::DcachePort::recvReqRetry()
     if (cpu->_status == Idle) {
         delete cpu->dcache_pkt;
         cpu->dcache_pkt = NULL;
-        cpu->_lastStatus = BaseSimpleCPU::Running;
+        cpu->reset();
         return;
     }
 
