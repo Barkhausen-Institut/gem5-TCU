@@ -40,8 +40,6 @@
 class M3Loader
 {
   protected:
-    static const size_t MAX_MODS        = 64;
-    static const size_t MAX_PES         = 64;
     static const size_t RT_SIZE         = 0x2000;
     static const uintptr_t RT_START     = 0x6000;
     static const size_t STACK_SIZE      = 0x8000;
@@ -50,9 +48,10 @@ class M3Loader
 
     struct BootModule
     {
-        char name[256];
         uint64_t addr;
         uint64_t size;
+        uint64_t namelen;
+        char name[];
     } M5_ATTR_PACKED;
 
     struct KernelEnv
@@ -64,9 +63,9 @@ class M3Loader
             TYPE_MEM     = 2,
         };
 
-        uint64_t mods[MAX_MODS];
+        uint64_t mod_count;
+        uint64_t mod_size;
         uint64_t pe_count;
-        uint32_t pes[MAX_PES];
     } M5_ATTR_PACKED;
 
     struct StartEnv

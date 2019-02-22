@@ -96,12 +96,14 @@ M3Loader::isKernelArg(const std::string &arg)
 }
 
 void
-M3Loader::writeArg(System &sys, Addr &args, size_t &i, Addr argv, const char *cmd, const char *begin)
+M3Loader::writeArg(System &sys, Addr &args, size_t &i, Addr argv,
+                   const char *cmd, const char *begin)
 {
     const char zero[] = {0};
     // write argument pointer
     uint64_t argvPtr = args;
-    sys.physProxy.writeBlob(argv + i * sizeof(uint64_t), (uint8_t*)&argvPtr, sizeof(argvPtr));
+    sys.physProxy.writeBlob(argv + i * sizeof(uint64_t),
+                            (uint8_t*)&argvPtr, sizeof(argvPtr));
     // write argument
     sys.physProxy.writeBlob(args, (uint8_t*)begin, cmd - begin);
     args += cmd - begin;
@@ -111,9 +113,10 @@ M3Loader::writeArg(System &sys, Addr &args, size_t &i, Addr argv, const char *cm
 }
 
 void
-M3Loader::writeRemote(MasterPort &noc, Addr dest, const uint8_t *data, size_t size)
+M3Loader::writeRemote(MasterPort &noc, Addr dest,
+                      const uint8_t *data, size_t size)
 {
-    RequestPtr req = std::make_shared<Request>(dest, size, 0, Request::funcMasterId);
+    auto req = std::make_shared<Request>(dest, size, 0, Request::funcMasterId);
     Packet pkt(req, MemCmd::WriteReq);
     pkt.dataStaticConst(data);
 
@@ -129,7 +132,8 @@ M3Loader::writeRemote(MasterPort &noc, Addr dest, const uint8_t *data, size_t si
 }
 
 Addr
-M3Loader::loadModule(MasterPort &noc, const std::string &path, const std::string &name, Addr addr)
+M3Loader::loadModule(MasterPort &noc, const std::string &path,
+                     const std::string &name, Addr addr)
 {
     std::string filename = path + "/" + name;
     FILE *f = fopen(filename.c_str(), "r");
@@ -208,12 +212,6 @@ M3Loader::initState(System &sys, DTUMemory &dtumem, MasterPort &noc)
     {
         panic("Command line \"%s\" is longer than %d characters.\n",
                 commandLine, RT_START + RT_SIZE - args - 1);
-    }
-
-    if (pes.size() > MAX_PES)
-    {
-        const size_t max = MAX_PES;
-        panic("Too many PEs (%u vs. %u)", pes.size(), max);
     }
 
     std::string kernelPath;
@@ -297,13 +295,11 @@ M3Loader::initState(System &sys, DTUMemory &dtumem, MasterPort &noc)
     // modules for the kernel
     if (modOffset)
     {
-        KernelEnv kenv;
-
         // rctmux is always needed
         mods.push_back(std::make_pair("rctmux", ""));
 
-        if (mods.size() > MAX_MODS)
-            panic("Too many modules");
+        uint8_t *modarray = nullptr;
+        size_t modarraysize = 0;
 
         i = 0;
         Addr addr = NocAddr(dtumem.memPe, modOffset).getAddr();
@@ -311,51 +307,58 @@ M3Loader::initState(System &sys, DTUMemory &dtumem, MasterPort &noc)
         {
             Addr size = loadModule(noc, kernelPath, mod.first, addr);
 
-            // construct module info
-            BootModule bmod;
+            // extend module array
             size_t cmdlen = mod.first.length() + mod.second.length() + 1;
-            if (cmdlen >= sizeof(bmod.name))
-                panic("Module name too long: %s", mod.first.c_str());
-            strcpy(bmod.name, mod.first.c_str());
+            modarraysize += cmdlen + sizeof(BootModule);
+            modarray = reinterpret_cast<uint8_t*>(
+                realloc(modarray, modarraysize));
+
+            // construct module info
+            BootModule *bmod = reinterpret_cast<BootModule*>(
+                modarray + modarraysize - (cmdlen + sizeof(BootModule)));
+            bmod->namelen = cmdlen;
+            bmod->addr = addr;
+            bmod->size = size;
+            strcpy(bmod->name, mod.first.c_str());
             if (!mod.second.empty())
             {
-                strcat(bmod.name, " ");
-                strcat(bmod.name, mod.second.c_str());
+                strcat(bmod->name, " ");
+                strcat(bmod->name, mod.second.c_str());
             }
-            bmod.addr = addr;
-            bmod.size = size;
 
             inform("Loaded '%s' to %p .. %p",
-                bmod.name, bmod.addr, bmod.addr + bmod.size);
-
-            // store pointer to area module info and info itself
-            kenv.mods[i] = roundUp(addr + size, sizeof(uint64_t));
-            writeRemote(noc, kenv.mods[i],
-                reinterpret_cast<uint8_t*>(&bmod), sizeof(bmod));
+                bmod->name, bmod->addr, bmod->addr + bmod->size);
 
             // to next
-            addr = kenv.mods[i] + sizeof(bmod);
-            addr += DtuTlb::PAGE_SIZE - 1;
+            addr += size + DtuTlb::PAGE_SIZE - 1;
             addr &= ~static_cast<Addr>(DtuTlb::PAGE_SIZE - 1);
             i++;
         }
 
-        // termination
-        kenv.mods[i] = 0;
-
-        // build PE array
-        kenv.pe_count = pes.size();
-        memset(kenv.pes, 0, sizeof(kenv.pes));
-        for (size_t i = 0; i < pes.size(); ++i)
-            kenv.pes[i] = pes[i];
-
-        // the kernel needs to PE info in its env
-        env.pe = kenv.pes[coreId];
-
         // write kenv
         env.kenv = addr;
-        writeRemote(noc, env.kenv, reinterpret_cast<uint8_t*>(&kenv), sizeof(kenv));
+        KernelEnv kenv;
+        kenv.mod_count = mods.size();
+        kenv.mod_size = modarraysize;
+        kenv.pe_count  = pes.size();
+        writeRemote(noc, addr, reinterpret_cast<uint8_t*>(&kenv),
+                    sizeof(kenv));
         addr += sizeof(kenv);
+
+        // write modules to memory
+        writeRemote(noc, addr, reinterpret_cast<uint8_t*>(modarray),
+                    modarraysize);
+        free(modarray);
+        addr += modarraysize;
+
+        // write PEs to memory
+        uint32_t *kpes = new uint32_t[pes.size()]();
+        for (size_t i = 0; i < pes.size(); ++i)
+            kpes[i] = pes[i];
+        writeRemote(noc, addr, reinterpret_cast<uint8_t*>(kpes),
+                    pes.size() * sizeof(uint32_t));
+        delete[] kpes;
+        addr += pes.size() * sizeof(uint32_t);
 
         // check size
         Addr end = NocAddr(dtumem.memPe, modOffset + modSize).getAddr();
@@ -365,6 +368,9 @@ M3Loader::initState(System &sys, DTUMemory &dtumem, MasterPort &noc)
                 modSize, addr - NocAddr(dtumem.memPe, modOffset).getAddr());
         }
     }
+
+    // the kernel needs the PE info in its env
+    env.pe = pes[coreId];
 
     // write env
     sys.physProxy.writeBlob(
