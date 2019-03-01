@@ -121,7 +121,6 @@ class M3Loader
     void initState(System &sys, DTUMemory &dtumem, MasterPort &noc);
 
   private:
-    bool isKernelArg(const std::string &arg);
     void mapMemory(System &sys, DTUMemory &dtumem);
     size_t getArgc() const;
     void writeArg(System &sys, Addr &args, size_t &i, Addr argv, const char *cmd, const char *begin);

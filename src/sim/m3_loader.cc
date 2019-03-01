@@ -81,20 +81,6 @@ M3Loader::getArgc() const
     return argc;
 }
 
-bool
-M3Loader::isKernelArg(const std::string &arg)
-{
-    if (arg == "daemon")
-        return true;
-    if (arg == "muxable")
-        return true;
-    if (arg.find("requires=") == 0)
-        return true;
-    if (arg.find("core=") == 0)
-        return true;
-    return false;
-}
-
 void
 M3Loader::writeArg(System &sys, Addr &args, size_t &i, Addr argv,
                    const char *cmd, const char *begin)
@@ -256,12 +242,9 @@ M3Loader::initState(System &sys, DTUMemory &dtumem, MasterPort &noc)
                     else
                     {
                         std::string arg(begin, cmd - begin);
-                        if (!isKernelArg(arg))
-                        {
-                            if (!argstr.empty())
-                                argstr += ' ';
-                            argstr += arg;
-                        }
+                        if (!argstr.empty())
+                            argstr += ' ';
+                        argstr += arg;
                     }
                 }
 
@@ -279,12 +262,9 @@ M3Loader::initState(System &sys, DTUMemory &dtumem, MasterPort &noc)
         else
         {
             std::string arg(begin, cmd - begin);
-            if (!isKernelArg(arg))
-            {
-                if (!argstr.empty())
-                    argstr += ' ';
-                argstr += arg;
-            }
+            if (!argstr.empty())
+                argstr += ' ';
+            argstr += arg;
         }
 
         mods.push_back(std::make_pair(prog, argstr));
