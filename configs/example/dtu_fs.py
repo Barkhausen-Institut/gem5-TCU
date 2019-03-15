@@ -78,7 +78,7 @@ APIC_range_size                 = 1 << 12;
 
 base_offset                     = 2048 * 1024 * 1024
 mod_offset                      = base_offset
-mod_size                        = 16 * 1024 * 1024
+mod_size                        = 32 * 1024 * 1024
 pe_offset                       = mod_offset + mod_size
 pe_size                         = 16 * 1024 * 1024
 
@@ -437,6 +437,14 @@ def createCorePE(noc, options, no, cmdline, memPE, l1size=None, l2size=None,
         AddrRange(IO_address_space_base,
                   interrupts_address_space_base - 1)
         ]
+
+    # if not l1size is None:
+    #     # connect legacy devices
+    #     pe.pc = Pc()
+    #     pe.intrctrl = IntrControl()
+    #     pe.iobus = IOXBar()
+    #     pe.xbar.master = pe.iobus.slave
+    #     pe.pc.attachIO(pe.iobus)
 
     pe.cpu.createThreads()
     pe.cpu.createInterruptController()
