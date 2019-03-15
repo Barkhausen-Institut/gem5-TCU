@@ -45,6 +45,7 @@ class M3Loader
     static const size_t STACK_SIZE      = 0x8000;
     static const uintptr_t STACK_AREA   = RT_START + RT_SIZE + 0x1000;
     static const size_t HEAP_SIZE       = 0x4000;
+    static const size_t MAX_MEMS        = 4;
 
     struct BootModule
     {
@@ -66,6 +67,7 @@ class M3Loader
         uint64_t mod_count;
         uint64_t mod_size;
         uint64_t pe_count;
+        uint64_t mems[MAX_MEMS];
     } M5_ATTR_PACKED;
 
     struct StartEnv

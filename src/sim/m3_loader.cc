@@ -321,6 +321,8 @@ M3Loader::initState(System &sys, DTUMemory &dtumem, MasterPort &noc)
         kenv.mod_count = mods.size();
         kenv.mod_size = modarraysize;
         kenv.pe_count  = pes.size();
+        for (size_t i = 0; i < MAX_MEMS; ++i)
+            kenv.mems[i] = 0;
         writeRemote(noc, addr, reinterpret_cast<uint8_t*>(&kenv),
                     sizeof(kenv));
         addr += sizeof(kenv);
