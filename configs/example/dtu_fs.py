@@ -261,7 +261,7 @@ def createPE(noc, options, no, systemType, l1size, l2size, spmsize, dtupos, memP
     # we want to use the instructions, not the memory based pseudo operations
     pe.pseudo_mem_ops = False
 
-    pe.dtu = Dtu()
+    pe.dtu = Dtu(max_noc_packet_size='2kB', buf_size='2kB')
     pe.dtu.core_id = no
 
     pe.dtu.coherent = options.coherent
