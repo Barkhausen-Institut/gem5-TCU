@@ -283,6 +283,9 @@ void
 MessageUnit::finishMsgSend(Dtu::Error error, unsigned epid)
 {
     SendEp ep = dtu.regs().getSendEp(epid);
+    // don't do anything if the EP is invalid
+    if (ep.maxMsgSize == 0)
+        return;
 
     if (error == Dtu::Error::VPE_GONE)
         ep.vpeId = Dtu::INVALID_VPE_ID;
