@@ -288,7 +288,9 @@ M3Loader::initState(System &sys, DTUMemory &dtumem, MasterPort &noc)
             Addr size = loadModule(noc, kernelPath, mod.first, addr);
 
             // extend module array
-            size_t cmdlen = mod.first.length() + mod.second.length() + 1;
+            size_t cmdlen = mod.first.length() + 1;
+            if (!mod.second.empty())
+                cmdlen += mod.second.length() + 1;
             modarraysize += cmdlen + sizeof(BootModule);
             modarray = reinterpret_cast<uint8_t*>(
                 realloc(modarray, modarraysize));
