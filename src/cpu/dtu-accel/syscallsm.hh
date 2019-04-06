@@ -46,18 +46,15 @@ class SyscallSM
         CREATE_SESS,
         CREATE_RGATE,
         CREATE_SGATE,
-        CREATE_MGATE,
         CREATE_MAP,
         CREATE_VPEGRP,
         CREATE_VPE,
 
         // capability operations
         ACTIVATE,
-        SRV_CTRL,
         VPE_CTRL,
         VPE_WAIT,
         DERIVE_MEM,
-        OPEN_SESS,
 
         // capability exchange
         DELEGATE,
