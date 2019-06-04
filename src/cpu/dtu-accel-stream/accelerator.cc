@@ -350,7 +350,8 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                             );
                         }
 
-                        if(args[0] == static_cast<RegFile::reg_t>(Command::COMMIT))
+                        if(!(ctx.flags & Flags::SEEN_EOF) &&
+                           args[0] == static_cast<RegFile::reg_t>(Command::COMMIT))
                         {
                             ctx.flags |= Flags::SEEN_COMMIT;
                             // don't wait for the input reply; we won't get any
