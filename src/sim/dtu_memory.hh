@@ -40,28 +40,38 @@ class DTUMemory
     SimObject *obj;
 
     PortProxy &physp;
-    unsigned nextFrame;
+    uint nextFrame;
     const Addr rootPTOffset;
 
   public:
 
-    const unsigned memPe;
+    enum VMType
+    {
+        CORE = 1,
+        DTU  = 2,
+    };
+
+    typedef uint64_t pte_t;
+
+    const uint memPe;
     const Addr memOffset;
     const Addr memSize;
+    const uint vmType;
 
     DTUMemory(SimObject *obj,
-              unsigned memPe,
+              uint memPe,
               Addr memOffset,
               Addr memSize,
               PortProxy &phys,
-              unsigned firstFree);
+              uint firstFree,
+              uint vmType);
 
-    bool hasMem(unsigned pe) const
+    bool hasMem(uint pe) const
     {
         return (pedesc(pe) & 0x7) != 1;
     }
 
-    virtual uint32_t pedesc(unsigned pe) const = 0;
+    virtual uint32_t pedesc(uint pe) const = 0;
 
     NocAddr getPhys(Addr offset) const
     {
@@ -73,9 +83,15 @@ class DTUMemory
         return getPhys(rootPTOffset);
     }
 
-    void initMemory();
-    void mapPage(Addr virt, Addr phys, uint access);
-    void mapSegment(Addr start, Addr size, unsigned perm);
+    void initMemory(System &sys);
+    void mapPage(Addr virt, NocAddr noc, uint access);
+    void mapPages(Addr virt, NocAddr noc, Addr size, uint access);
+    void mapSegment(Addr start, Addr size, uint access)
+    {
+        mapPages(start, NocAddr(memPe, memOffset + start), size, access);
+    }
+
+    pte_t convertPTE(pte_t pte) const;
 };
 
 #endif

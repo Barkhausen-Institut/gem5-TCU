@@ -402,11 +402,6 @@ def createCorePE(noc, options, no, cmdline, memPE, l1size=None, l2size=None,
 
     # disable PT walker if MMU should be used
     if mmu:
-        # for the kernel, we disable all translations in the DTU, letting him
-        # run with physical addresses.
-        # TODO that is actually not necessary. the kernel could have a PF handler
-        if no == 0:
-            pe.dtu.tlb_entries = 0
         pe.dtu.pt_walker = False
 
     if "kernel" in cmdline:

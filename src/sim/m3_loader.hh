@@ -103,16 +103,16 @@ class M3Loader
     std::string commandLine;
 
   public:
-    static const unsigned RES_PAGES;
+    static const uint RES_PAGES;
 
-    const unsigned coreId;
+    const uint coreId;
     const Addr modOffset;
     const Addr modSize;
 
   public:
     M3Loader(const std::vector<Addr> &pes,
              const std::string &cmdline,
-             unsigned coreId,
+             uint coreId,
              Addr modOffset,
              Addr modSize);
 
@@ -126,9 +126,12 @@ class M3Loader
   private:
     void mapMemory(System &sys, DTUMemory &dtumem);
     size_t getArgc() const;
-    void writeArg(System &sys, Addr &args, size_t &i, Addr argv, const char *cmd, const char *begin);
-    void writeRemote(MasterPort &noc, Addr dest, const uint8_t *data, size_t size);
-    Addr loadModule(MasterPort &noc, const std::string &path, const std::string &name, Addr addr);
+    void writeArg(System &sys, Addr &args, size_t &i, Addr argv,
+                  const char *cmd, const char *begin);
+    void writeRemote(MasterPort &noc, Addr dest,
+                     const uint8_t *data, size_t size);
+    Addr loadModule(MasterPort &noc, const std::string &path,
+                    const std::string &name, Addr addr);
 };
 
 #endif

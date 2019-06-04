@@ -41,7 +41,8 @@ M3X86System::NoCMasterPort::NoCMasterPort(M3X86System &_sys)
 M3X86System::M3X86System(Params *p)
     : X86System(p),
       DTUMemory(this, p->memory_pe, p->memory_offset, p->memory_size,
-                physProxy, M3Loader::RES_PAGES),
+                physProxy, M3Loader::RES_PAGES,
+                (p->pes[p->core_id] >> 7) & 0x3),
       nocPort(*this),
       loader(p->pes, p->boot_osflags, p->core_id, p->mod_offset, p->mod_size)
 {

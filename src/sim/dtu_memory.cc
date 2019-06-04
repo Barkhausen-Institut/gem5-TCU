@@ -34,11 +34,12 @@
 #include "debug/DtuPtes.hh"
 
 DTUMemory::DTUMemory(SimObject *obj,
-                     unsigned memPe,
+                     uint memPe,
                      Addr memOffset,
                      Addr memSize,
                      PortProxy &phys,
-                     unsigned firstFree)
+                     uint firstFree,
+                     uint vmType)
     : obj(obj),
       physp(phys),
       // don't reuse root pt
@@ -46,32 +47,41 @@ DTUMemory::DTUMemory(SimObject *obj,
       rootPTOffset(firstFree * DtuTlb::PAGE_SIZE),
       memPe(memPe),
       memOffset(memOffset),
-      memSize(memSize)
+      memSize(memSize),
+      vmType(vmType)
 {
 }
 
 void
-DTUMemory::initMemory()
+DTUMemory::initMemory(System &sys)
 {
     // clear root pt
     physp.memsetBlob(getRootPt().getAddr(), 0, DtuTlb::PAGE_SIZE);
 
     // let the last entry in the root pt point to the root pt itself
-    PtUnit::PageTableEntry entry = 0;
-    entry.base = getRootPt().getAddr() >> DtuTlb::PAGE_BITS;
+    pte_t entry = getRootPt().getAddr() & ~static_cast<pte_t>(DtuTlb::PAGE_MASK);
     // not internally accessible
-    entry.lixwr = DtuTlb::RWX;
+    entry |= DtuTlb::RWX;
+    entry = convertPTE(entry);
     size_t off = 0x10 * sizeof(entry);
     DPRINTFS(DtuPtes, obj,
         "Creating recursive level %d PTE @ %#018x: %#018x\n",
         DtuTlb::LEVEL_CNT - 1, getRootPt().getAddr() + off, entry);
     physp.write(getRootPt().getAddr() + off, entry);
+
+#if THE_ISA == X86_ISA
+    if (vmType == CORE)
+    {
+        // set root PT
+        auto ctx = sys.threadContexts[0];
+        ctx->setMiscReg(X86ISA::MISCREG_CR3, convertPTE(getRootPt().getAddr()));
+    }
+#endif
 }
 
 void
-DTUMemory::mapPage(Addr virt, Addr phys, uint access)
+DTUMemory::mapPage(Addr virt, NocAddr noc, uint access)
 {
-    typedef PtUnit::PageTableEntry pte_t;
     Addr ptAddr = getRootPt().getAddr();
     for (int i = DtuTlb::LEVEL_CNT - 1; i >= 0; --i)
     {
@@ -80,43 +90,80 @@ DTUMemory::mapPage(Addr virt, Addr phys, uint access)
 
         Addr pteAddr = ptAddr + (idx << DtuTlb::PTE_BITS);
         pte_t entry = physp.read<pte_t>(pteAddr);
-        assert(i > 0 || entry.lixwr == 0);
-        if(!entry.lixwr)
+        assert(i > 0 || (entry & DtuTlb::PAGE_MASK) == 0);
+        if(!(entry & DtuTlb::PAGE_MASK))
         {
             // determine phys address
-            Addr offset;
+            NocAddr addr;
             if (i == 0)
-                offset = memOffset + phys;
+                addr = noc;
             else
-                offset = memOffset + (nextFrame++ << DtuTlb::PAGE_BITS);
-            NocAddr addr(memPe, offset);
+            {
+                Addr offset = memOffset + (nextFrame++ << DtuTlb::PAGE_BITS);
+                addr = NocAddr(memPe, offset);
+            }
 
             // clear pagetables
             if (i > 0)
                 physp.memsetBlob(addr.getAddr(), 0, DtuTlb::PAGE_SIZE);
 
             // insert entry
-            entry.base = addr.getAddr() >> DtuTlb::PAGE_BITS;
-            entry.lixwr = i == 0 ? static_cast<DtuTlb::Flag>(access) : DtuTlb::RWX;
+            entry = addr.getAddr() & ~static_cast<pte_t>(DtuTlb::PAGE_MASK);
+            entry |= i == 0 ? static_cast<DtuTlb::Flag>(access) : DtuTlb::IRWX;
+            pte_t pte = convertPTE(entry);
             DPRINTFS(DtuPtes, obj,
                 "Creating level %d PTE for virt=%#018x @ %#018x: %#018x\n",
-                i, virt, pteAddr, entry);
-            physp.write(pteAddr, entry);
+                i, virt, pteAddr, pte);
+            physp.write(pteAddr, pte);
         }
 
-        ptAddr = entry.base << DtuTlb::PAGE_BITS;
+        ptAddr = entry & ~static_cast<pte_t>(DtuTlb::PAGE_MASK);
     }
 }
 
 void
-DTUMemory::mapSegment(Addr start, Addr size, unsigned perm)
+DTUMemory::mapPages(Addr virt, NocAddr noc, Addr size, uint access)
 {
-    Addr virt = start;
     size_t count = divCeil(size, DtuTlb::PAGE_SIZE);
     for(size_t i = 0; i < count; ++i)
     {
-        mapPage(virt, virt, perm);
+        mapPage(virt, noc, access);
 
         virt += DtuTlb::PAGE_SIZE;
+        noc.offset += DtuTlb::PAGE_SIZE;
     }
+}
+
+DTUMemory::pte_t
+DTUMemory::convertPTE(pte_t pte) const
+{
+    if(vmType == DTU || pte == 0)
+        return pte;
+
+    // the current implementation is based on some equal properties of MMU
+    /// and DTU paging
+    static_assert(sizeof(pte_t) == 8,
+        "MMU and DTU PTEs incompatible");
+    static_assert(DtuTlb::LEVEL_CNT == 4,
+        "MMU and DTU PTEs incompatible: levels != 4");
+    static_assert(DtuTlb::PAGE_SIZE == 4096,
+        "MMU and DTU PTEs incompatible: pagesize != 4k");
+    static_assert(DtuTlb::LEVEL_BITS == 9,
+        "MMU and DTU PTEs incompatible: level bits != 9");
+
+    pte_t res = pte & ~static_cast<pte_t>(DtuTlb::PAGE_MASK);
+    // translate NoC address to physical address
+    res = (res & ~0xFF00000000000000ULL) | ((res & 0xFF00000000000000ULL) >> 16);
+
+    if(pte & DtuTlb::RWX)
+        res |= 0x1;
+    if(pte & DtuTlb::WRITE)
+        res |= 0x2;
+    if(pte & DtuTlb::INTERN)
+        res |= 0x4;
+    if(pte & DtuTlb::LARGE)
+        res |= 0x80;
+    if(~pte & DtuTlb::EXEC)
+        res |= 1ULL << 63;
+    return res;
 }

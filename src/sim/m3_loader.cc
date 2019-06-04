@@ -143,7 +143,7 @@ M3Loader::loadModule(MasterPort &noc, const std::string &path,
 void
 M3Loader::mapMemory(System &sys, DTUMemory &dtumem)
 {
-    dtumem.initMemory();
+    dtumem.initMemory(sys);
     // TODO check whether the size of idle fits before the RT_SPACE
 
     // program segments
@@ -157,6 +157,11 @@ M3Loader::mapMemory(System &sys, DTUMemory &dtumem)
     // idle doesn't need that stuff
     if (modOffset)
     {
+        // map the vectors on ARM
+#if THE_ISA == ARM_ISA
+        dtumem.mapSegment(0, 8 * 4, DtuTlb::INTERN | DtuTlb::RWX);
+#endif
+
         // initial heap
         Addr bssEnd = roundUp(sys.kernel->bssBase() + sys.kernel->bssSize(),
             DtuTlb::PAGE_SIZE);
@@ -166,6 +171,10 @@ M3Loader::mapMemory(System &sys, DTUMemory &dtumem)
         dtumem.mapSegment(RT_START, RT_SIZE, DtuTlb::INTERN | DtuTlb::RW);
         dtumem.mapSegment(STACK_AREA, STACK_SIZE, DtuTlb::INTERN | DtuTlb::RW);
     }
+
+    // DTU's MMIO area
+    dtumem.mapPages(0xF0000000, NocAddr(0xF0000000),
+                    DtuTlb::PAGE_SIZE * 2, DtuTlb::INTERN | DtuTlb::RW);
 }
 
 void
