@@ -49,12 +49,16 @@ class SyscallSM
         CREATE_MAP,
         CREATE_VPEGRP,
         CREATE_VPE,
+        CREATE_SEM,
 
         // capability operations
         ACTIVATE,
         VPE_CTRL,
         VPE_WAIT,
         DERIVE_MEM,
+        DERIVE_KMEM,
+        KMEM_QUOTA,
+        SEM_CTRL,
 
         // capability exchange
         DELEGATE,
