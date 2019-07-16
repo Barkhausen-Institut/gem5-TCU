@@ -188,7 +188,7 @@ class BaseDtu : public MemObject
       public:
 
         CacheSlavePort(T &_port, BaseDtu& _dtu, bool _icache)
-          : DtuSlavePort(_dtu.name() + ".icache_slave_port", _dtu),
+          : DtuSlavePort(_dtu.name() + (_icache ? ".icache_slave_port" : ".dcache_slave_port"), _dtu),
             port(_port), icache(_icache)
         { }
 
