@@ -89,6 +89,7 @@ class DtuTlb
         INTERN  = 8,
         LARGE   = 16,
         INVALID = 32,
+        UNCACHE = 64,
         RW      = READ | WRITE,
         RX      = READ | EXEC,
         RWX     = RW | EXEC,

@@ -161,6 +161,8 @@ DTUMemory::convertPTE(pte_t pte) const
         res |= 0x2;
     if(pte & DtuTlb::INTERN)
         res |= 0x4;
+    if(pte & DtuTlb::UNCACHE)
+        res |= 0x10;
     if(pte & DtuTlb::LARGE)
         res |= 0x80;
     if(~pte & DtuTlb::EXEC)
