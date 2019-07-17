@@ -76,6 +76,7 @@ class Dtu : public BaseDtu
         NO_MAPPING          = 5,
         INV_EP              = 6,
         ABORT               = 7,
+        REPLY_DISABLED      = 8,
     };
 
     enum class NocPacketType

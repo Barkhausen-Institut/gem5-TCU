@@ -104,8 +104,14 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
         int msgidx = ep.msgToIdx(cmd.arg);
         auto hd = dtu.regs().getHeader(ep.header + msgidx, RegAccess::DTU);
 
+        if (!(hd.flags & Dtu::REPLY_ENABLED))
+        {
+            DPRINTFS(Dtu, (&dtu),
+                "EP%u: double reply for msg %p?\n", epid, cmd.arg);
+            dtu.scheduleFinishOp(Cycles(1), Dtu::Error::REPLY_DISABLED);
+        }
+
         // now that we have the header, fill the info struct
-        assert(hd.flags & Dtu::REPLY_ENABLED);
         hd.flags &= ~Dtu::REPLY_ENABLED;
         dtu.regs().setHeader(ep.header + msgidx, RegAccess::DTU, hd);
 
