@@ -126,7 +126,7 @@ class MessageUnit
     /**
      * Acknowledges the message @ <msgAddr>
      */
-    void ackMessage(unsigned epId, Addr msgAddr);
+    Dtu::Error ackMessage(unsigned epId, Addr msgAddr);
 
     /**
      * Finishes a message receive

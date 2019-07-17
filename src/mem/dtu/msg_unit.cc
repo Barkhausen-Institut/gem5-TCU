@@ -400,14 +400,14 @@ found:
     return i;
 }
 
-void
+Dtu::Error
 MessageUnit::ackMessage(unsigned epId, Addr msgAddr)
 {
     RecvEp ep = dtu.regs().getRecvEp(epId);
 
     int msgidx = ep.msgToIdx(msgAddr);
-    assert(msgidx != RecvEp::MAX_MSGS);
-    assert(ep.isOccupied(msgidx));
+    if (msgidx == RecvEp::MAX_MSGS || !ep.isOccupied(msgidx))
+        return Dtu::Error::INV_MSG;
 
     ep.setOccupied(msgidx, false);
     if (ep.isUnread(msgidx))
@@ -424,6 +424,7 @@ MessageUnit::ackMessage(unsigned epId, Addr msgAddr)
         epId, msgidx);
 
     dtu.regs().setRecvEp(epId, ep);
+    return Dtu::Error::NONE;
 }
 
 Dtu::Error

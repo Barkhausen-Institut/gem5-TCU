@@ -285,8 +285,7 @@ Dtu::executeCommand(PacketPtr pkt)
             finishCommand(Error::NONE);
             break;
         case Command::ACK_MSG:
-            msgUnit->ackMessage(cmd.epid, cmd.arg);
-            finishCommand(Error::NONE);
+            finishCommand(msgUnit->ackMessage(cmd.epid, cmd.arg));
             break;
         case Command::ACK_EVENTS:
             regs().ackEvents(cmd.arg);
@@ -522,7 +521,7 @@ Dtu::executeExternCommand(PacketPtr pkt)
         case ExternCommand::ACK_MSG:
         {
             unsigned epid = cmd.arg & ((1 << 8) - 1);
-            msgUnit->ackMessage(epid, cmd.arg >> 8);
+            result = msgUnit->ackMessage(epid, cmd.arg >> 8);
             break;
         }
         default:
