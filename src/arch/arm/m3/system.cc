@@ -53,12 +53,12 @@ uint32_t M3ArmSystem::pedesc(unsigned pe) const
     return loader.pe_attr()[pe];
 }
 
-BaseMasterPort&
-M3ArmSystem::getMasterPort(const std::string &if_name, PortID idx)
+Port&
+M3ArmSystem::getPort(const std::string &if_name, PortID idx)
 {
     if (if_name == "noc_master_port")
         return nocPort;
-    return System::getMasterPort(if_name, idx);
+    return System::getPort(if_name, idx);
 }
 
 void

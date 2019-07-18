@@ -97,7 +97,7 @@ DRAMCtrl::DRAMCtrl(const DRAMCtrlParams* p) :
     backendLatency(p->static_backend_latency),
     nextBurstAt(0), prevArrival(0),
     nextReqTime(0), activeRank(0), timeStampOffset(0),
-    lastStatsResetTick(0)
+    lastStatsResetTick(0), enableDRAMPowerdown(p->enable_dram_powerdown)
 {
     // sanity check the ranks since we rely on bit slicing for the
     // address decoding
@@ -303,8 +303,8 @@ DRAMCtrl::writeQueueFull(unsigned int neededEntries) const
 }
 
 DRAMCtrl::DRAMPacket*
-DRAMCtrl::decodeAddr(PacketPtr pkt, Addr dramPktAddr, unsigned size,
-                       bool isRead)
+DRAMCtrl::decodeAddr(const PacketPtr pkt, Addr dramPktAddr, unsigned size,
+                     bool isRead) const
 {
     // decode the address based on the address mapping scheme, with
     // Ro, Ra, Co, Ba and Ch denoting row, rank, column, bank and
@@ -644,21 +644,7 @@ DRAMCtrl::recvTimingReq(PacketPtr pkt)
     qosSchedule( { &readQueue, &writeQueue }, burstSize, pkt);
 
     // check local buffers and do not accept if full
-    if (pkt->isRead()) {
-        assert(size != 0);
-        if (readQueueFull(dram_pkt_count)) {
-            DPRINTF(DRAM, "Read queue full, not accepting\n");
-            // remember that we have to retry this port
-            retryRdReq = true;
-            numRdRetry++;
-            return false;
-        } else {
-            addToReadQueue(pkt, dram_pkt_count);
-            readReqs++;
-            bytesReadSys += size;
-        }
-    } else {
-        assert(pkt->isWrite());
+    if (pkt->isWrite()) {
         assert(size != 0);
         if (writeQueueFull(dram_pkt_count)) {
             DPRINTF(DRAM, "Write queue full, not accepting\n");
@@ -670,6 +656,20 @@ DRAMCtrl::recvTimingReq(PacketPtr pkt)
             addToWriteQueue(pkt, dram_pkt_count);
             writeReqs++;
             bytesWrittenSys += size;
+        }
+    } else {
+        assert(pkt->isRead());
+        assert(size != 0);
+        if (readQueueFull(dram_pkt_count)) {
+            DPRINTF(DRAM, "Read queue full, not accepting\n");
+            // remember that we have to retry this port
+            retryRdReq = true;
+            numRdRetry++;
+            return false;
+        } else {
+            addToReadQueue(pkt, dram_pkt_count);
+            readReqs++;
+            bytesReadSys += size;
         }
     }
 
@@ -705,7 +705,7 @@ DRAMCtrl::processRespondEvent()
     // track if this is the last packet before idling
     // and that there are no outstanding commands to this rank
     if (dram_pkt->rankRef.isQueueEmpty() &&
-        dram_pkt->rankRef.outstandingEvents == 0) {
+        dram_pkt->rankRef.outstandingEvents == 0 && enableDRAMPowerdown) {
         // verify that there are no events scheduled
         assert(!dram_pkt->rankRef.activateEvent.scheduled());
         assert(!dram_pkt->rankRef.prechargeEvent.scheduled());
@@ -938,7 +938,7 @@ DRAMCtrl::accessAndRespond(PacketPtr pkt, Tick static_latency)
 
         // queue the packet in the response queue to be sent out after
         // the static latency has passed
-        port.schedTimingResp(pkt, response_time, true);
+        port.schedTimingResp(pkt, response_time);
     } else {
         // @todo the packet is going to be deleted, and the DRAMPacket
         // is still having a pointer to it
@@ -1856,7 +1856,8 @@ DRAMCtrl::Rank::processPrechargeEvent()
     if (numBanksActive == 0) {
         // no reads to this rank in the Q and no pending
         // RD/WR or refresh commands
-        if (isQueueEmpty() && outstandingEvents == 0) {
+        if (isQueueEmpty() && outstandingEvents == 0 &&
+            memory.enableDRAMPowerdown) {
             // should still be in ACT state since bank still open
             assert(pwrState == PWR_ACT);
 
@@ -2057,7 +2058,7 @@ DRAMCtrl::Rank::processRefreshEvent()
 
             // Force PRE power-down if there are no outstanding commands
             // in Q after refresh.
-            } else if (isQueueEmpty()) {
+            } else if (isQueueEmpty() && memory.enableDRAMPowerdown) {
                 // still have refresh event outstanding but there should
                 // be no other events outstanding
                 assert(outstandingEvents == 1);
@@ -2328,7 +2329,8 @@ DRAMCtrl::Rank::processPowerEvent()
         // will issue refresh immediately upon entry
         if (pwrStatePostRefresh == PWR_PRE_PDN && isQueueEmpty() &&
            (memory.drainState() != DrainState::Draining) &&
-           (memory.drainState() != DrainState::Drained)) {
+           (memory.drainState() != DrainState::Drained) &&
+           memory.enableDRAMPowerdown) {
             DPRINTF(DRAMState, "Rank %d bypassing refresh and transitioning "
                     "to self refresh at %11u tick\n", rank, curTick());
             powerDownSleep(PWR_SREF, curTick());
@@ -2845,11 +2847,11 @@ DRAMCtrl::recvFunctional(PacketPtr pkt)
     functionalAccess(pkt);
 }
 
-BaseSlavePort&
-DRAMCtrl::getSlavePort(const string &if_name, PortID idx)
+Port &
+DRAMCtrl::getPort(const string &if_name, PortID idx)
 {
     if (if_name != "port") {
-        return MemObject::getSlavePort(if_name, idx);
+        return QoS::MemCtrl::getPort(if_name, idx);
     } else {
         return port;
     }
@@ -2924,7 +2926,7 @@ DRAMCtrl::drainResume()
 }
 
 DRAMCtrl::MemoryPort::MemoryPort(const std::string& name, DRAMCtrl& _memory)
-    : QueuedSlavePort(name, &_memory, queue), queue(_memory, *this),
+    : QueuedSlavePort(name, &_memory, queue), queue(_memory, *this, true),
       memory(_memory)
 { }
 

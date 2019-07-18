@@ -64,16 +64,17 @@
 #include "debug/CachePort.hh"
 #include "enums/Clusivity.hh"
 #include "mem/cache/cache_blk.hh"
+#include "mem/cache/compressors/base.hh"
 #include "mem/cache/mshr_queue.hh"
 #include "mem/cache/tags/base.hh"
 #include "mem/cache/write_queue.hh"
 #include "mem/cache/write_queue_entry.hh"
-#include "mem/mem_object.hh"
 #include "mem/packet.hh"
 #include "mem/packet_queue.hh"
 #include "mem/qport.hh"
 #include "mem/request.hh"
 #include "params/WriteAllocator.hh"
+#include "sim/clocked_object.hh"
 #include "sim/eventq.hh"
 #include "sim/probe/probe.hh"
 #include "sim/serialize.hh"
@@ -91,7 +92,7 @@ struct BaseCacheParams;
 /**
  * A basic cache interface. Implements some common functions for speed.
  */
-class BaseCache : public MemObject
+class BaseCache : public ClockedObject
 {
   protected:
     /**
@@ -189,10 +190,12 @@ class BaseCache : public MemObject
          * send out, and if so simply stall any requests, and schedule
          * a send event at the same time as the next snoop response is
          * being sent out.
+         *
+         * @param pkt The packet to check for conflicts against.
          */
-        bool checkConflictingSnoop(Addr addr)
+        bool checkConflictingSnoop(const PacketPtr pkt)
         {
-            if (snoopRespQueue.hasAddr(addr)) {
+            if (snoopRespQueue.checkConflict(pkt, cache.blkSize)) {
                 DPRINTF(CachePort, "Waiting for snoop response to be "
                         "sent\n");
                 Tick when = snoopRespQueue.deferredPacketReadyTime();
@@ -322,6 +325,9 @@ class BaseCache : public MemObject
     /** Tag and data Storage */
     BaseTags *tags;
 
+    /** Compression method being used. */
+    BaseCacheCompressor* compressor;
+
     /** Prefetcher */
     BasePrefetcher *prefetcher;
 
@@ -330,6 +336,9 @@ class BaseCache : public MemObject
 
     /** To probe when a cache miss occurs */
     ProbePointArg<PacketPtr> *ppMiss;
+
+    /** To probe when a cache fill occurs */
+    ProbePointArg<PacketPtr> *ppFill;
 
     /**
      * The writeAllocator drive optimizations for streaming writes.
@@ -419,14 +428,25 @@ class BaseCache : public MemObject
     Addr regenerateBlkAddr(CacheBlk* blk);
 
     /**
+     * Calculate latency of accesses that only touch the tag array.
+     * @sa calculateAccessLatency
+     *
+     * @param delay The delay until the packet's metadata is present.
+     * @param lookup_lat Latency of the respective tag lookup.
+     * @return The number of ticks that pass due to a tag-only access.
+     */
+    Cycles calculateTagOnlyLatency(const uint32_t delay,
+                                   const Cycles lookup_lat) const;
+    /**
      * Calculate access latency in ticks given a tag lookup latency, and
      * whether access was a hit or miss.
      *
      * @param blk The cache block that was accessed.
+     * @param delay The delay until the packet's metadata is present.
      * @param lookup_lat Latency of the respective tag lookup.
      * @return The number of ticks that pass due to a block access.
      */
-    Cycles calculateAccessLatency(const CacheBlk* blk,
+    Cycles calculateAccessLatency(const CacheBlk* blk, const uint32_t delay,
                                   const Cycles lookup_lat) const;
 
     /**
@@ -638,6 +658,33 @@ class BaseCache : public MemObject
      * between, we create this event with a higher priority.
      */
     EventFunctionWrapper writebackTempBlockAtomicEvent;
+
+    /**
+     * When a block is overwriten, its compression information must be updated,
+     * and it may need to be recompressed. If the compression size changes, the
+     * block may either become smaller, in which case there is no side effect,
+     * or bigger (data expansion; fat write), in which case the block might not
+     * fit in its current location anymore. If that happens, there are usually
+     * two options to be taken:
+     *
+     * - The co-allocated blocks must be evicted to make room for this block.
+     *   Simpler, but ignores replacement data.
+     * - The block itself is moved elsewhere (used in policies where the CF
+     *   determines the location of the block).
+     *
+     * This implementation uses the first approach.
+     *
+     * Notice that this is only called for writebacks, which means that L1
+     * caches (which see regular Writes), do not support compression.
+     * @sa CompressedTags
+     *
+     * @param blk The block to be overwriten.
+     * @param data A pointer to the data to be compressed (blk's new data).
+     * @param writebacks List for any writebacks that need to be performed.
+     * @return Whether operation is successful or not.
+     */
+    bool updateCompressionData(CacheBlk *blk, const uint64_t* data,
+                               PacketList &writebacks);
 
     /**
      * Perform any necessary updates to the block and perform any data
@@ -971,15 +1018,6 @@ protected:
     /** Total cycle latency of overall MSHR misses. */
     Stats::Formula overallMshrUncacheableLatency;
 
-#if 0
-    /** The total number of MSHR accesses per command and thread. */
-    Stats::Formula mshrAccesses[MemCmd::NUM_MEM_CMDS];
-    /** The total number of demand MSHR accesses. */
-    Stats::Formula demandMshrAccesses;
-    /** The total number of MSHR accesses. */
-    Stats::Formula overallMshrAccesses;
-#endif
-
     /** The miss rate in the MSHRs pre command and thread. */
     Stats::Formula mshrMissRate[MemCmd::NUM_MEM_CMDS];
     /** The demand miss rate in the MSHRs. */
@@ -1002,6 +1040,9 @@ protected:
     /** Number of replacements of valid blocks. */
     Stats::Scalar replacements;
 
+    /** Number of data expansions. */
+    Stats::Scalar dataExpansions;
+
     /**
      * @}
      */
@@ -1020,10 +1061,8 @@ protected:
 
     void init() override;
 
-    BaseMasterPort &getMasterPort(const std::string &if_name,
-                                  PortID idx = InvalidPortID) override;
-    BaseSlavePort &getSlavePort(const std::string &if_name,
-                                PortID idx = InvalidPortID) override;
+    Port &getPort(const std::string &if_name,
+                  PortID idx=InvalidPortID) override;
 
     /**
      * Query block size of a cache.
@@ -1061,6 +1100,15 @@ protected:
         assert(pkt->isWrite() || pkt->cmd == MemCmd::CleanEvict);
 
         Addr blk_addr = pkt->getBlockAddr(blkSize);
+
+        // If using compression, on evictions the block is decompressed and
+        // the operation's latency is added to the payload delay. Consume
+        // that payload delay here, meaning that the data is always stored
+        // uncompressed in the writebuffer
+        if (compressor) {
+            time += pkt->payloadDelay;
+            pkt->payloadDelay = 0;
+        }
 
         WriteQueueEntry *wq_entry =
             writeBuffer.findMatch(blk_addr, pkt->isSecure());
@@ -1136,6 +1184,15 @@ protected:
 
     bool inCache(Addr addr, bool is_secure) const {
         return tags->findBlock(addr, is_secure);
+    }
+
+    bool hasBeenPrefetched(Addr addr, bool is_secure) const {
+        CacheBlk *block = tags->findBlock(addr, is_secure);
+        if (block) {
+            return block->wasPrefetched();
+        } else {
+            return false;
+        }
     }
 
     bool inMissQueue(Addr addr, bool is_secure) const {

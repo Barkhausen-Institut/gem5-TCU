@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2013, 2016-2018 ARM Limited
+ * Copyright (c) 2010-2013, 2016-2019 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -150,7 +150,7 @@ TLB::finalizePhysical(const RequestPtr &req,
 
 TlbEntry*
 TLB::lookup(Addr va, uint16_t asn, uint8_t vmid, bool hyp, bool secure,
-            bool functional, bool ignore_asn, uint8_t target_el)
+            bool functional, bool ignore_asn, ExceptionLevel target_el)
 {
 
     TlbEntry *retval = NULL;
@@ -236,7 +236,8 @@ TLB::printTlb() const
 }
 
 void
-TLB::flushAllSecurity(bool secure_lookup, uint8_t target_el, bool ignore_el)
+TLB::flushAllSecurity(bool secure_lookup, ExceptionLevel target_el,
+                      bool ignore_el)
 {
     DPRINTF(TLB, "Flushing all TLB entries (%s lookup)\n",
             (secure_lookup ? "secure" : "non-secure"));
@@ -244,9 +245,11 @@ TLB::flushAllSecurity(bool secure_lookup, uint8_t target_el, bool ignore_el)
     TlbEntry *te;
     while (x < size) {
         te = &table[x];
+        const bool el_match = ignore_el ?
+            true : te->checkELMatch(target_el);
+
         if (te->valid && secure_lookup == !te->nstid &&
-            (te->vmid == vmid || secure_lookup) &&
-            checkELMatch(target_el, te->el, ignore_el)) {
+            (te->vmid == vmid || secure_lookup) && el_match) {
 
             DPRINTF(TLB, " -  %s\n", te->print());
             te->valid = false;
@@ -260,21 +263,25 @@ TLB::flushAllSecurity(bool secure_lookup, uint8_t target_el, bool ignore_el)
     // If there's a second stage TLB (and we're not it) then flush it as well
     // if we're currently in hyp mode
     if (!isStage2 && isHyp) {
-        stage2Tlb->flushAllSecurity(secure_lookup, true);
+        stage2Tlb->flushAllSecurity(secure_lookup, EL1, true);
     }
 }
 
 void
-TLB::flushAllNs(bool hyp, uint8_t target_el, bool ignore_el)
+TLB::flushAllNs(ExceptionLevel target_el, bool ignore_el)
 {
+    bool hyp = target_el == EL2;
+
     DPRINTF(TLB, "Flushing all NS TLB entries (%s lookup)\n",
             (hyp ? "hyp" : "non-hyp"));
     int x = 0;
     TlbEntry *te;
     while (x < size) {
         te = &table[x];
-        if (te->valid && te->nstid && te->isHyp == hyp &&
-            checkELMatch(target_el, te->el, ignore_el)) {
+        const bool el_match = ignore_el ?
+            true : te->checkELMatch(target_el);
+
+        if (te->valid && te->nstid && te->isHyp == hyp && el_match) {
 
             DPRINTF(TLB, " -  %s\n", te->print());
             flushedEntries++;
@@ -287,22 +294,23 @@ TLB::flushAllNs(bool hyp, uint8_t target_el, bool ignore_el)
 
     // If there's a second stage TLB (and we're not it) then flush it as well
     if (!isStage2 && !hyp) {
-        stage2Tlb->flushAllNs(false, true);
+        stage2Tlb->flushAllNs(EL1, true);
     }
 }
 
 void
-TLB::flushMvaAsid(Addr mva, uint64_t asn, bool secure_lookup, uint8_t target_el)
+TLB::flushMvaAsid(Addr mva, uint64_t asn, bool secure_lookup,
+                  ExceptionLevel target_el)
 {
     DPRINTF(TLB, "Flushing TLB entries with mva: %#x, asid: %#x "
             "(%s lookup)\n", mva, asn, (secure_lookup ?
             "secure" : "non-secure"));
-    _flushMva(mva, asn, secure_lookup, false, false, target_el);
+    _flushMva(mva, asn, secure_lookup, false, target_el);
     flushTlbMvaAsid++;
 }
 
 void
-TLB::flushAsid(uint64_t asn, bool secure_lookup, uint8_t target_el)
+TLB::flushAsid(uint64_t asn, bool secure_lookup, ExceptionLevel target_el)
 {
     DPRINTF(TLB, "Flushing TLB entries with asid: %#x (%s lookup)\n", asn,
             (secure_lookup ? "secure" : "non-secure"));
@@ -314,7 +322,7 @@ TLB::flushAsid(uint64_t asn, bool secure_lookup, uint8_t target_el)
         te = &table[x];
         if (te->valid && te->asid == asn && secure_lookup == !te->nstid &&
             (te->vmid == vmid || secure_lookup) &&
-            checkELMatch(target_el, te->el, false)) {
+            te->checkELMatch(target_el)) {
 
             te->valid = false;
             DPRINTF(TLB, " -  %s\n", te->print());
@@ -326,21 +334,24 @@ TLB::flushAsid(uint64_t asn, bool secure_lookup, uint8_t target_el)
 }
 
 void
-TLB::flushMva(Addr mva, bool secure_lookup, bool hyp, uint8_t target_el)
+TLB::flushMva(Addr mva, bool secure_lookup, ExceptionLevel target_el)
 {
     DPRINTF(TLB, "Flushing TLB entries with mva: %#x (%s lookup)\n", mva,
             (secure_lookup ? "secure" : "non-secure"));
-    _flushMva(mva, 0xbeef, secure_lookup, hyp, true, target_el);
+    _flushMva(mva, 0xbeef, secure_lookup, true, target_el);
     flushTlbMva++;
 }
 
 void
-TLB::_flushMva(Addr mva, uint64_t asn, bool secure_lookup, bool hyp,
-               bool ignore_asn, uint8_t target_el)
+TLB::_flushMva(Addr mva, uint64_t asn, bool secure_lookup,
+               bool ignore_asn, ExceptionLevel target_el)
 {
     TlbEntry *te;
     // D5.7.2: Sign-extend address to 64 bits
     mva = sext<56>(mva);
+
+    bool hyp = target_el == EL2;
+
     te = lookup(mva, asn, vmid, hyp, secure_lookup, false, ignore_asn,
                 target_el);
     while (te != NULL) {
@@ -355,24 +366,10 @@ TLB::_flushMva(Addr mva, uint64_t asn, bool secure_lookup, bool hyp,
 }
 
 void
-TLB::flushIpaVmid(Addr ipa, bool secure_lookup, bool hyp, uint8_t target_el)
+TLB::flushIpaVmid(Addr ipa, bool secure_lookup, ExceptionLevel target_el)
 {
     assert(!isStage2);
-    stage2Tlb->_flushMva(ipa, 0xbeef, secure_lookup, hyp, true, target_el);
-}
-
-bool
-TLB::checkELMatch(uint8_t target_el, uint8_t tentry_el, bool ignore_el)
-{
-    bool elMatch = true;
-    if (!ignore_el) {
-        if (target_el == 2 || target_el == 3) {
-            elMatch = (tentry_el  == target_el);
-        } else {
-            elMatch = (tentry_el == 0) || (tentry_el  == 1);
-        }
-    }
-    return elMatch;
+    stage2Tlb->_flushMva(ipa, 0xbeef, secure_lookup, true, target_el);
 }
 
 void
@@ -581,7 +578,7 @@ TLB::translateSe(const RequestPtr &req, ThreadContext *tc, Mode mode,
     bool is_write = (mode == Write);
 
     if (!is_fetch) {
-        assert(flags & MustBeOne);
+        assert(flags & MustBeOne || req->isPrefetch());
         if (sctlr.a || !(flags & AllowUnaligned)) {
             if (vaddr & mask(flags & AlignmentMask)) {
                 // LPAE is always disabled in SE mode
@@ -1033,7 +1030,7 @@ TLB::translateFs(const RequestPtr &req, ThreadContext *tc, Mode mode,
         req->setFlags(Request::STRICT_ORDER);
     }
     if (!is_fetch) {
-        assert(flags & MustBeOne);
+        assert(flags & MustBeOne || req->isPrefetch());
         if (sctlr.a || !(flags & AllowUnaligned)) {
             if (vaddr & mask(flags & AlignmentMask)) {
                 alignFaults++;
@@ -1243,10 +1240,10 @@ TLB::translateComplete(const RequestPtr &req, ThreadContext *tc,
     return fault;
 }
 
-BaseMasterPort*
-TLB::getMasterPort()
+Port *
+TLB::getTableWalkerPort()
 {
-    return &stage2Mmu->getPort();
+    return &stage2Mmu->getDMAPort();
 }
 
 void
@@ -1303,7 +1300,8 @@ TLB::updateMiscReg(ThreadContext *tc, ArmTranslationType tranType)
         isPriv = aarch64EL != EL0;
         if (haveVirtualization) {
             vmid           = bits(tc->readMiscReg(MISCREG_VTTBR_EL2), 55, 48);
-            isHyp  =  tranType & HypMode;
+            isHyp = aarch64EL == EL2;
+            isHyp |= tranType & HypMode;
             isHyp &= (tranType & S1S2NsTran) == 0;
             isHyp &= (tranType & S1CTran)    == 0;
             // Work out if we should skip the first stage of translation and go
@@ -1412,6 +1410,11 @@ TLB::getTE(TlbEntry **te, const RequestPtr &req, ThreadContext *tc, Mode mode,
         Translation *translation, bool timing, bool functional,
         bool is_secure, TLB::ArmTranslationType tranType)
 {
+    // In a 2-stage system, the IPA->PA translation can be started via this
+    // call so make sure the miscRegs are correct.
+    if (isStage2) {
+        updateMiscReg(tc, tranType);
+    }
     bool is_fetch = (mode == Execute);
     bool is_write = (mode == Write);
 

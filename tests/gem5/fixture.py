@@ -55,6 +55,10 @@ class TempdirFixture(Fixture):
         if self.path is not None:
             shutil.rmtree(self.path)
 
+    def skip_cleanup(self):
+        # Set path to none so it's not deleted
+        self.path = None
+
 
 class SConsFixture(Fixture):
     '''
@@ -65,11 +69,12 @@ class SConsFixture(Fixture):
     :param directory: The directory which scons will -C (cd) into before
         executing. If None is provided, will choose the config base_dir.
     '''
-    def __init__(self, directory=None, target_class=None):
+    def __init__(self, directory=None, target_class=None, options=[]):
         self.directory = directory if directory else config.base_dir
         self.target_class = target_class if target_class else SConsTarget
         self.threads = config.threads
         self.targets = set()
+        self.options = options
         super(SConsFixture, self).__init__()
 
     def setup(self, testitem):
@@ -97,9 +102,9 @@ class SConsFixture(Fixture):
                     "You may want to run with only a single ISA"
                     "(--isa=), use --skip-build, or use 'rerun'.")
 
-
-
         command.extend(self.targets)
+        if self.options:
+            command.extend(self.options)
         log_call(log.test_log, command)
 
 
@@ -139,9 +144,27 @@ class SConsTarget(Fixture):
         return Fixture.schedule_finalized(self, schedule)
 
 class Gem5Fixture(SConsTarget):
-    def __init__(self, isa, variant):
-        target = joinpath(isa.upper(), 'gem5.%s' % variant)
-        super(Gem5Fixture, self).__init__(target)
+    other_invocations = {} # stores scons invocations other than the default
+
+    def __init__(self, isa, variant, protocol=None):
+        if protocol:
+            # When specifying an non-default protocol, we have to make a
+            # separate scons invocation with specific parameters. However, if
+            # more than one tests needs the same target, we need to make sure
+            # that we don't call scons too many times.
+            target_dir = isa.upper()+'-'+protocol
+            target = joinpath(target_dir, 'gem5.%s' % variant)
+            if target_dir in self.other_invocations.keys():
+                invocation = self.other_invocations[target_dir]
+            else:
+                options = ['PROTOCOL='+protocol, '--default='+isa.upper()]
+                invocation = SConsFixture(options=options)
+                globalfixture(invocation)
+                Gem5Fixture.other_invocations[target_dir] = invocation
+        else:
+            target = joinpath(isa.upper(), 'gem5.%s' % variant)
+            invocation = None # use default
+        super(Gem5Fixture, self).__init__(target, invocation=invocation)
 
         self.name = constants.gem5_binary_fixture_name
         self.path = self.target
@@ -217,19 +240,33 @@ class DownloadedProgram(Fixture):
     urlbase = "http://gem5.org/dist/current/"
 
     def __init__(self, path, program, **kwargs):
+        """
+        path: string
+            The path to the directory containing the binary relative to
+            $GEM5_BASE/tests
+        program: string
+            The name of the binary file
+        """
         super(DownloadedProgram, self).__init__("download-" + program,
                                                 build_once=True, **kwargs)
 
-        self.program_dir = joinpath('test-progs', path)
-        self.path = joinpath(self.program_dir, program)
-
-        self.url = self.urlbase + self.path
+        self.program_dir = path
+        relative_path = joinpath(self.program_dir, program)
+        self.url = self.urlbase + relative_path
+        self.path = os.path.realpath(
+                        joinpath(absdirpath(__file__), '../', relative_path)
+                    )
 
     def _download(self):
         import urllib
+        import errno
         log.test_log.debug("Downloading " + self.url + " to " + self.path)
         if not os.path.exists(self.program_dir):
-            os.makedirs(self.program_dir)
+            try:
+                os.makedirs(self.program_dir)
+            except OSError as e:
+                if e.errno != errno.EEXIST:
+                    raise
         urllib.urlretrieve(self.url, self.path)
 
     def _getremotetime(self):

@@ -40,13 +40,13 @@ X86Connector::X86Connector(const X86ConnectorParams *p)
 {
 }
 
-BaseMasterPort&
-X86Connector::getMasterPort(const std::string &if_name, PortID idx)
+Port&
+X86Connector::getPort(const std::string &if_name, PortID idx)
 {
     if (if_name == "irq_master_port")
         return irqPort;
     else
-        return MemObject::getMasterPort(if_name, idx);
+        return SimObject::getPort(if_name, idx);
 }
 
 bool

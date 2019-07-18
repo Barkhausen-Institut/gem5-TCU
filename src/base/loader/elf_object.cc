@@ -112,7 +112,7 @@ ElfObject::tryFile(const std::string &fname, size_t len, uint8_t *data,
                ehdr.e_ident[EI_CLASS] == ELFCLASS64) {
         arch = Arm64;
     } else if (ehdr.e_machine == EM_RISCV) {
-        arch = Riscv;
+        arch = (ehdr.e_ident[EI_CLASS] == ELFCLASS64) ? Riscv64 : Riscv32;
     } else if (ehdr.e_machine == EM_PPC &&
                ehdr.e_ident[EI_CLASS] == ELFCLASS32) {
         arch = Power;
@@ -498,7 +498,8 @@ ElfObject::loadWeakSymbols(SymbolTable *symtab, Addr base, Addr offset,
 }
 
 bool
-ElfObject::loadSections(PortProxy& mem_proxy, Addr addr_mask, Addr offset)
+ElfObject::loadSections(const PortProxy& mem_proxy, Addr addr_mask,
+                        Addr offset)
 {
     if (!ObjectFile::loadSections(mem_proxy, addr_mask, offset))
         return false;

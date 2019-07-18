@@ -51,8 +51,8 @@ Scratchpad::init()
         dtuPort.sendRangeChange();
 }
 
-BaseSlavePort &
-Scratchpad::getSlavePort(const std::string &if_name, PortID idx)
+Port &
+Scratchpad::getPort(const std::string &if_name, PortID idx)
 {
     if (if_name == "cpu_port") {
         return cpuPort;
@@ -61,7 +61,7 @@ Scratchpad::getSlavePort(const std::string &if_name, PortID idx)
         return dtuPort;
     }
     else {
-        return MemObject::getSlavePort(if_name, idx);
+        return SimObject::getPort(if_name, idx);
     }
 }
 

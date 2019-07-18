@@ -245,9 +245,8 @@ void
 NoncoherentCache::serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt,
                                      CacheBlk *blk)
 {
-    MSHR::Target *initial_tgt = mshr->getTarget();
     // First offset for critical word first calculations
-    const int initial_offset = initial_tgt->pkt->getOffset(blkSize);
+    const int initial_offset = mshr->getTarget()->pkt->getOffset(blkSize);
 
     MSHR::TargetList targets = mshr->extractServiceableTargets(pkt);
     for (auto &target: targets) {
@@ -288,7 +287,7 @@ NoncoherentCache::serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt,
 
             // Reset the bus additional time as it is now accounted for
             tgt_pkt->headerDelay = tgt_pkt->payloadDelay = 0;
-            cpuSidePort.schedTimingResp(tgt_pkt, completion_time, true);
+            cpuSidePort.schedTimingResp(tgt_pkt, completion_time);
             break;
 
           case MSHR::Target::FromPrefetcher:

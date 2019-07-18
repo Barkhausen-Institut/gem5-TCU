@@ -74,8 +74,8 @@ class Scratchpad : public AbstractMemory
 
     void init() override;
 
-    BaseSlavePort& getSlavePort(const std::string& if_name,
-                                PortID idx = InvalidPortID) override;
+    Port& getPort(const std::string& if_name,
+                  PortID idx = InvalidPortID) override;
 };
 
 #endif // __SCRATCHPAD_HH_

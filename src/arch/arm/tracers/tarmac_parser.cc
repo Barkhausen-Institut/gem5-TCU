@@ -57,7 +57,7 @@
 #include "sim/sim_exit.hh"
 
 using namespace std;
-using namespace TheISA;
+using namespace ArmISA;
 
 namespace Trace {
 
@@ -647,35 +647,35 @@ TarmacParserRecord::TarmacParserRecordEvent::process()
             break;
           case REG_S:
             if (instRecord.isetstate == ISET_A64)
-                value_lo = thread->readFloatRegBits(it->index * 4);
+                value_lo = thread->readFloatReg(it->index * 4);
             else
-                value_lo = thread->readFloatRegBits(it->index);
+                value_lo = thread->readFloatReg(it->index);
             break;
           case REG_D:
             if (instRecord.isetstate == ISET_A64)
-                value_lo = thread->readFloatRegBits(it->index * 4) |
-                    (uint64_t) thread->readFloatRegBits(it->index * 4 + 1) <<
+                value_lo = thread->readFloatReg(it->index * 4) |
+                    (uint64_t) thread->readFloatReg(it->index * 4 + 1) <<
                     32;
             else
-                value_lo = thread->readFloatRegBits(it->index * 2) |
-                    (uint64_t) thread->readFloatRegBits(it->index * 2 + 1) <<
+                value_lo = thread->readFloatReg(it->index * 2) |
+                    (uint64_t) thread->readFloatReg(it->index * 2 + 1) <<
                     32;
             break;
           case REG_Q:
             check_value_hi = true;
             if (instRecord.isetstate == ISET_A64) {
-                value_lo = thread->readFloatRegBits(it->index * 4) |
-                    (uint64_t) thread->readFloatRegBits(it->index * 4 + 1) <<
+                value_lo = thread->readFloatReg(it->index * 4) |
+                    (uint64_t) thread->readFloatReg(it->index * 4 + 1) <<
                     32;
-                value_hi = thread->readFloatRegBits(it->index * 4 + 2) |
-                    (uint64_t) thread->readFloatRegBits(it->index * 4 + 3) <<
+                value_hi = thread->readFloatReg(it->index * 4 + 2) |
+                    (uint64_t) thread->readFloatReg(it->index * 4 + 3) <<
                     32;
             } else {
-                value_lo = thread->readFloatRegBits(it->index * 2) |
-                    (uint64_t) thread->readFloatRegBits(it->index * 2 + 1) <<
+                value_lo = thread->readFloatReg(it->index * 2) |
+                    (uint64_t) thread->readFloatReg(it->index * 2 + 1) <<
                     32;
-                value_hi = thread->readFloatRegBits(it->index * 2 + 2) |
-                    (uint64_t) thread->readFloatRegBits(it->index * 2 + 3) <<
+                value_hi = thread->readFloatReg(it->index * 2 + 2) |
+                    (uint64_t) thread->readFloatReg(it->index * 2 + 3) <<
                     32;
             }
             break;
@@ -743,7 +743,7 @@ TarmacParserRecord::TarmacParserRecordEvent::description() const
 
 void
 TarmacParserRecord::printMismatchHeader(const StaticInstPtr staticInst,
-                                        TheISA::PCState pc)
+                                        ArmISA::PCState pc)
 {
     ostream &outs = Trace::output();
     outs << "\nMismatch between gem5 and TARMAC trace @ " << dec << curTick()
@@ -776,8 +776,8 @@ TarmacParserRecord::dump()
     // By default TARMAC splits memory accesses into 4-byte chunks (see
     // 'loadstore-display-width' option in TARMAC plugin)
     uint32_t written_data = 0;
-    unsigned mem_flags = TheISA::TLB::MustBeOne | 3 |
-        TheISA::TLB::AllowUnaligned;
+    unsigned mem_flags = ArmISA::TLB::MustBeOne | 3 |
+        ArmISA::TLB::AllowUnaligned;
 
     ISetState isetstate;
 
@@ -1051,7 +1051,7 @@ TarmacParserRecord::readMemNoEffect(Addr addr, uint8_t *data, unsigned size,
                                     unsigned flags)
 {
     const RequestPtr &req = memReq;
-    TheISA::TLB* dtb = static_cast<TLB*>(thread->getDTBPtr());
+    ArmISA::TLB* dtb = static_cast<TLB*>(thread->getDTBPtr());
 
     req->setVirt(0, addr, size, flags, thread->pcState().instAddr(),
                  Request::funcMasterId);

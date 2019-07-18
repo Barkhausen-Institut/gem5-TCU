@@ -64,8 +64,8 @@ class AccelLogic : public MemObject
 
     explicit AccelLogic(const AccelLogicParams *p);
 
-    BaseMasterPort& getMasterPort(const std::string &if_name,
-                                  PortID idx = InvalidPortID) override;
+    Port& getPort(const std::string &if_name,
+                  PortID idx = InvalidPortID) override;
 
     void setAccelerator(DtuAccelStream *_accel) {
         accel = _accel;

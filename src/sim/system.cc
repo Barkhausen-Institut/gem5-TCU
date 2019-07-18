@@ -70,6 +70,7 @@
 #include "sim/byteswap.hh"
 #include "sim/debug.hh"
 #include "sim/full_system.hh"
+#include "sim/redirect_path.hh"
 
 #include "aladdin/gem5/Gem5Datapath.h"
 #include "debug/Aladdin.hh"
@@ -91,7 +92,7 @@ vector<System *> System::systemList;
 int System::numSystemsRunning = 0;
 
 System::System(Params *p)
-    : MemObject(p), _systemPort("system_port", this),
+    : SimObject(p), _systemPort("system_port", this),
       multiThread(p->multi_thread),
       pagePtr(0),
       init_param(p->init_param),
@@ -116,8 +117,10 @@ System::System(Params *p)
       rgdb_wait(p->rgdb_wait),
       _params(p),
       totalNumInsts(0),
-      instEventQueue("system instruction-based event queue")
+      instEventQueue("system instruction-based event queue"),
+      redirectPaths(p->redirect_paths)
 {
+
     // add self to global system list
     systemList.push_back(this);
 
@@ -339,8 +342,8 @@ System::init()
         panic("System port on %s is not connected.\n", name());
 }
 
-BaseMasterPort&
-System::getMasterPort(const std::string &if_name, PortID idx)
+Port &
+System::getPort(const std::string &if_name, PortID idx)
 {
     // no need to distinguish at the moment (besides checking)
     return _systemPort;
@@ -412,7 +415,8 @@ System::numRunningContexts()
         threadContexts.cbegin(),
         threadContexts.cend(),
         [] (ThreadContext* tc) {
-            return tc->status() != ThreadContext::Halted;
+            return ((tc->status() != ThreadContext::Halted) &&
+                    (tc->status() != ThreadContext::Halting));
         }
     );
 }
@@ -564,7 +568,7 @@ System::unserialize(CheckpointIn &cp)
 void
 System::regStats()
 {
-    MemObject::regStats();
+    SimObject::regStats();
 
     for (uint32_t j = 0; j < numWorkIds ; j++) {
         workItemStats[j] = new Stats::Histogram();

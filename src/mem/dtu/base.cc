@@ -386,8 +386,8 @@ BaseDtu::sendDummyResponse(DtuSlavePort &port, PacketPtr pkt, bool functional)
     }
 }
 
-BaseMasterPort&
-BaseDtu::getMasterPort(const std::string &if_name, PortID idx)
+Port&
+BaseDtu::getPort(const std::string &if_name, PortID idx)
 {
     if (if_name == "icache_master_port")
         return icacheMasterPort;
@@ -395,14 +395,7 @@ BaseDtu::getMasterPort(const std::string &if_name, PortID idx)
         return dcacheMasterPort;
     else if (if_name == "noc_master_port")
         return nocMasterPort;
-    else
-        return MemObject::getMasterPort(if_name, idx);
-}
-
-BaseSlavePort&
-BaseDtu::getSlavePort(const std::string &if_name, PortID idx)
-{
-    if (if_name == "icache_slave_port")
+    else if (if_name == "icache_slave_port")
         return icacheSlavePort;
     else if (if_name == "dcache_slave_port")
         return dcacheSlavePort;
@@ -411,7 +404,7 @@ BaseDtu::getSlavePort(const std::string &if_name, PortID idx)
     else if (if_name == "cache_mem_slave_port")
         return cacheMemSlavePort;
     else
-        return MemObject::getSlavePort(if_name, idx);
+        return SimObject::getPort(if_name, idx);
 }
 
 void

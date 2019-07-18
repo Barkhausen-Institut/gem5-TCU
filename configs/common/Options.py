@@ -38,15 +38,19 @@
 #
 # Authors: Lisa Hsu
 
+from __future__ import print_function
+from __future__ import absolute_import
+
 import m5
 from m5.defines import buildEnv
 from m5.objects import *
-from common.Benchmarks import *
 
-from common import CpuConfig
-from common import BPConfig
-from common import MemConfig
-from common import PlatformConfig
+from .Benchmarks import *
+from . import CpuConfig
+from . import BPConfig
+from . import HWPConfig
+from . import MemConfig
+from . import PlatformConfig
 
 def _listCpuTypes(option, opt, value, parser):
     CpuConfig.print_cpu_list()
@@ -54,6 +58,14 @@ def _listCpuTypes(option, opt, value, parser):
 
 def _listBPTypes(option, opt, value, parser):
     BPConfig.print_bp_list()
+    sys.exit(0)
+
+def _listHWPTypes(option, opt, value, parser):
+    HWPConfig.print_hwp_list()
+    sys.exit(0)
+
+def _listIndirectBPTypes(option, opt, value, parser):
+    BPConfig.print_indirect_bp_list()
     sys.exit(0)
 
 def _listMemTypes(option, opt, value, parser):
@@ -92,6 +104,8 @@ def addNoISAOptions(parser):
     parser.add_option("--mem-size", action="store", type="string",
                       default="512MB",
                       help="Specify the physical memory size (single memory)")
+    parser.add_option("--enable-dram-powerdown", action="store_true",
+                       help="Enable low-power states in DRAMCtrl")
 
 
     parser.add_option("--memchecker", action="store_true")
@@ -154,12 +168,42 @@ def addCommonOptions(parser):
     parser.add_option("--list-bp-types",
                       action="callback", callback=_listBPTypes,
                       help="List available branch predictor types")
+    parser.add_option("--list-indirect-bp-types",
+                      action="callback", callback=_listIndirectBPTypes,
+                      help="List available indirect branch predictor types")
     parser.add_option("--bp-type", type="choice", default=None,
                       choices=BPConfig.bp_names(),
                       help = """
                       type of branch predictor to run with
                       (if not set, use the default branch predictor of
                       the selected CPU)""")
+    parser.add_option("--indirect-bp-type", type="choice",
+                      default="SimpleIndirectPredictor",
+                      choices=BPConfig.indirect_bp_names(),
+                      help = "type of indirect branch predictor to run with")
+    parser.add_option("--list-hwp-types",
+                      action="callback", callback=_listHWPTypes,
+                      help="List available hardware prefetcher types")
+    parser.add_option("--l1i-hwp-type", type="choice", default=None,
+                      choices=HWPConfig.hwp_names(),
+                      help = """
+                      type of hardware prefetcher to use with the L1
+                      instruction cache.
+                      (if not set, use the default prefetcher of
+                      the selected cache)""")
+    parser.add_option("--l1d-hwp-type", type="choice", default=None,
+                      choices=HWPConfig.hwp_names(),
+                      help = """
+                      type of hardware prefetcher to use with the L1
+                      data cache.
+                      (if not set, use the default prefetcher of
+                      the selected cache)""")
+    parser.add_option("--l2-hwp-type", type="choice", default=None,
+                      choices=HWPConfig.hwp_names(),
+                      help = """
+                      type of hardware prefetcher to use with the L2 cache.
+                      (if not set, use the default prefetcher of
+                      the selected cache)""")
     parser.add_option("--checker", action="store_true");
     parser.add_option("--cpu-clock", action="store", type="string",
                       default='2GHz',
@@ -328,9 +372,22 @@ def addSEOptions(parser):
                       help="Redirect stdout to a file.")
     parser.add_option("--errout", default="",
                       help="Redirect stderr to a file.")
+    parser.add_option("--chroot", action="store", type="string", default="/",
+                      help="The chroot option allows a user to alter the "    \
+                           "search path for processes running in SE mode. "   \
+                           "Normally, the search path would begin at the "    \
+                           "root of the filesystem (i.e. /). With chroot, "   \
+                           "a user can force the process to begin looking at" \
+                           "some other location (i.e. /home/user/rand_dir)."  \
+                           "The intended use is to trick sophisticated "      \
+                           "software which queries the __HOST__ filesystem "  \
+                           "for information or functionality. Instead of "    \
+                           "finding files on the __HOST__ filesystem, the "   \
+                           "process will find the user's replacment files.")
+
 
 def addFSOptions(parser):
-    from FSConfig import os_types
+    from .FSConfig import os_types
 
     # Simulation options
     parser.add_option("--timesync", action="store_true",
@@ -339,8 +396,9 @@ def addFSOptions(parser):
     # System options
     parser.add_option("--kernel", action="store", type="string")
     parser.add_option("--os-type", action="store", type="choice",
-            choices=os_types[buildEnv['TARGET_ISA']], default="linux",
-            help="Specifies type of OS to boot")
+                      choices=os_types[str(buildEnv['TARGET_ISA'])],
+                      default="linux",
+                      help="Specifies type of OS to boot")
     parser.add_option("--script", action="store", type="string")
     parser.add_option("--frame-capture", action="store_true",
             help="Stores changed frame buffers from the VNC server to compressed "\
@@ -363,8 +421,6 @@ def addFSOptions(parser):
         parser.add_option("--enable-context-switch-stats-dump", \
                 action="store_true", help="Enable stats dump at context "\
                 "switches and dump tasks file (required for Streamline)")
-        parser.add_option("--generate-dtb", action="store_true", default=False,
-                    help="Automatically generate a dtb file")
 
     # Benchmark options
     parser.add_option("--dual", action="store_true",

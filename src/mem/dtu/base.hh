@@ -238,9 +238,7 @@ class BaseDtu : public MemObject
 
     void init() override;
 
-    BaseSlavePort& getSlavePort(const std::string &n, PortID idx) override;
-
-    BaseMasterPort& getMasterPort(const std::string &n, PortID idx) override;
+    Port& getPort(const std::string &n, PortID idx) override;
 
     void schedNocResponse(PacketPtr pkt, Tick when);
 

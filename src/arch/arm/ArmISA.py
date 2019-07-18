@@ -1,4 +1,4 @@
-# Copyright (c) 2012-2013, 2015-2016, 2018 ARM Limited
+# Copyright (c) 2012-2013, 2015-2018 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -40,8 +40,9 @@ from m5.params import *
 from m5.proxy import *
 from m5.SimObject import SimObject
 
-from ArmPMU import ArmPMU
-from ISACommon import VecRegRenameMode
+from m5.objects.ArmPMU import ArmPMU
+from m5.objects.ArmSystem import SveVectorLength
+from m5.objects.ISACommon import VecRegRenameMode
 
 # Enum for DecoderFlavour
 class DecoderFlavour(Enum): vals = ['Generic']
@@ -87,10 +88,6 @@ class ArmISA(SimObject):
     id_aa64afr1_el1 = Param.UInt64(0x0000000000000000,
         "AArch64 Auxiliary Feature Register 1")
 
-    # Initial vector register rename mode
-    vecRegRenameMode = Param.VecRegRenameMode('Full',
-        "Initial rename mode for vecregs")
-
     # 1 CTX CMPs | 2 WRPs | 2 BRPs | !PMU | !Trace | Debug v8-A
     id_aa64dfr0_el1 = Param.UInt64(0x0000000000101006,
         "AArch64 Debug Feature Register 0")
@@ -119,3 +116,8 @@ class ArmISA(SimObject):
     # It is rather executed as a NOP.
     impdef_nop = Param.Bool(False,
         "Any access to a MISCREG_IMPDEF_UNIMPL register is executed as NOP")
+
+    # This is required because in SE mode a generic System SimObject is
+    # allocated, instead of an ArmSystem
+    sve_vl_se = Param.SveVectorLength(1,
+        "SVE vector length in quadwords (128-bit), SE-mode only")

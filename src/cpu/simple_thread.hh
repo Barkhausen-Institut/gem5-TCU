@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012, 2016 ARM Limited
+ * Copyright (c) 2011-2012, 2016-2018 ARM Limited
  * Copyright (c) 2013 Advanced Micro Devices, Inc.
  * All rights reserved
  *
@@ -58,6 +58,7 @@
 #include "debug/CCRegs.hh"
 #include "debug/FloatRegs.hh"
 #include "debug/IntRegs.hh"
+#include "debug/VecPredRegs.hh"
 #include "debug/VecRegs.hh"
 #include "mem/page_table.hh"
 #include "mem/request.hh"
@@ -73,18 +74,14 @@ class CheckerCPU;
 class FunctionProfile;
 class ProfileNode;
 
-namespace TheISA {
-    namespace Kernel {
-        class Statistics;
-    }
+namespace Kernel {
+    class Statistics;
 }
 
 /**
  * The SimpleThread object provides a combination of the ThreadState
  * object and the ThreadContext interface. It implements the
- * ThreadContext interface so that a ProxyThreadContext class can be
- * made using SimpleThread as the template parameter (see
- * thread_context.hh). It adds to the ThreadState object by adding all
+ * ThreadContext interface and adds to the ThreadState object by adding all
  * the objects needed for simple functional execution, including a
  * simple architectural register file, and pointers to the ITB and DTB
  * in full system mode. For CPU models that do not need more advanced
@@ -95,28 +92,23 @@ namespace TheISA {
  * examples.
  */
 
-class SimpleThread : public ThreadState
+class SimpleThread : public ThreadState, public ThreadContext
 {
   protected:
     typedef TheISA::MachInst MachInst;
-    typedef TheISA::MiscReg MiscReg;
-    typedef TheISA::FloatReg FloatReg;
-    typedef TheISA::FloatRegBits FloatRegBits;
-    typedef TheISA::CCReg CCReg;
     using VecRegContainer = TheISA::VecRegContainer;
     using VecElem = TheISA::VecElem;
+    using VecPredRegContainer = TheISA::VecPredRegContainer;
   public:
     typedef ThreadContext::Status Status;
 
   protected:
-    union {
-        FloatReg f[TheISA::NumFloatRegs];
-        FloatRegBits i[TheISA::NumFloatRegs];
-    } floatRegs;
-    TheISA::IntReg intRegs[TheISA::NumIntRegs];
+    RegVal floatRegs[TheISA::NumFloatRegs];
+    RegVal intRegs[TheISA::NumIntRegs];
     VecRegContainer vecRegs[TheISA::NumVecRegs];
+    VecPredRegContainer vecPredRegs[TheISA::NumVecPredRegs];
 #ifdef ISA_HAS_CC_REGS
-    TheISA::CCReg ccRegs[TheISA::NumCCRegs];
+    RegVal ccRegs[TheISA::NumCCRegs];
 #endif
     TheISA::ISA *const isa;    // one "instance" of the current ISA.
 
@@ -127,13 +119,14 @@ class SimpleThread : public ThreadState
     /** Did this instruction execute or is it predicated false */
     bool predicate;
 
+    /** True if the memory access should be skipped for this instruction */
+    bool memAccPredicate;
+
   public:
     std::string name() const
     {
-        return csprintf("%s.[tid:%i]", baseCpu->name(), tc->threadId());
+        return csprintf("%s.[tid:%i]", baseCpu->name(), threadId());
     }
-
-    ProxyThreadContext<SimpleThread> *tc;
 
     System *system;
 
@@ -152,11 +145,11 @@ class SimpleThread : public ThreadState
                  Process *_process, BaseTLB *_itb, BaseTLB *_dtb,
                  TheISA::ISA *_isa);
 
-    virtual ~SimpleThread();
+    virtual ~SimpleThread() {}
 
-    virtual void takeOverFrom(ThreadContext *oldContext);
+    void takeOverFrom(ThreadContext *oldContext) override;
 
-    void regStats(const std::string &name);
+    void regStats(const std::string &name) override;
 
     void copyState(ThreadContext *oldContext);
 
@@ -173,7 +166,7 @@ class SimpleThread : public ThreadState
      *  when a ThreadContext must be passed to objects outside of the
      *  CPU.
      */
-    ThreadContext *getTC() { return tc; }
+    ThreadContext *getTC() { return this; }
 
     void demapPage(Addr vaddr, uint64_t asn)
     {
@@ -191,27 +184,49 @@ class SimpleThread : public ThreadState
         dtb->demapPage(vaddr, asn);
     }
 
-    void dumpFuncProfile();
-
-    Fault hwrei();
-
-    bool simPalCheck(int palFunc);
+    void dumpFuncProfile() override;
 
     /*******************************************
      * ThreadContext interface functions.
      ******************************************/
 
-    BaseCPU *getCpuPtr() { return baseCpu; }
+    BaseCPU *getCpuPtr() override { return baseCpu; }
 
-    BaseTLB *getITBPtr() { return itb; }
+    int cpuId() const override { return ThreadState::cpuId(); }
+    uint32_t socketId() const override { return ThreadState::socketId(); }
+    int threadId() const override { return ThreadState::threadId(); }
+    void setThreadId(int id) override { ThreadState::setThreadId(id); }
+    ContextID contextId() const override { return ThreadState::contextId(); }
+    void setContextId(ContextID id) override { ThreadState::setContextId(id); }
 
-    BaseTLB *getDTBPtr() { return dtb; }
+    BaseTLB *getITBPtr() override { return itb; }
 
-    CheckerCPU *getCheckerCpuPtr() { return NULL; }
+    BaseTLB *getDTBPtr() override { return dtb; }
 
-    TheISA::Decoder *getDecoderPtr() { return &decoder; }
+    CheckerCPU *getCheckerCpuPtr() override { return NULL; }
 
-    System *getSystemPtr() { return system; }
+    TheISA::ISA *getIsaPtr() override { return isa; }
+
+    TheISA::Decoder *getDecoderPtr() override { return &decoder; }
+
+    System *getSystemPtr() override { return system; }
+
+    Kernel::Statistics *
+    getKernelStats() override
+    {
+        return ThreadState::getKernelStats();
+    }
+
+    PortProxy &getPhysProxy() override { return ThreadState::getPhysProxy(); }
+    PortProxy &getVirtProxy() override { return ThreadState::getVirtProxy(); }
+
+    void initMemProxies(ThreadContext *tc) override
+    {
+        ThreadState::initMemProxies(tc);
+    }
+
+    Process *getProcessPtr() override { return ThreadState::getProcessPtr(); }
+    void setProcessPtr(Process *p) override { ThreadState::setProcessPtr(p); }
 
     SymbolTable *getSymTab() {
         if(FullSystem)
@@ -219,28 +234,51 @@ class SimpleThread : public ThreadState
         return getProcessPtr()->symtab;
     }
 
-    Status status() const { return _status; }
+    Status status() const override { return _status; }
 
-    void setStatus(Status newStatus) { _status = newStatus; }
+    void setStatus(Status newStatus) override { _status = newStatus; }
 
     /// Set the status to Active.
-    void activate();
+    void activate() override;
 
     /// Set the status to Suspended.
-    void suspend();
+    void suspend() override;
 
     /// Set the status to Halted.
-    void halt();
+    void halt() override;
 
-    void copyArchRegs(ThreadContext *tc);
+    EndQuiesceEvent *
+    getQuiesceEvent() override
+    {
+        return ThreadState::getQuiesceEvent();
+    }
 
-    void clearArchRegs()
+    Tick
+    readLastActivate() override
+    {
+        return ThreadState::readLastActivate();
+    }
+    Tick
+    readLastSuspend() override
+    {
+        return ThreadState::readLastSuspend();
+    }
+
+    void profileClear() override { ThreadState::profileClear(); }
+    void profileSample() override { ThreadState::profileSample(); }
+
+    void copyArchRegs(ThreadContext *tc) override;
+
+    void clearArchRegs() override
     {
         _pcState = 0;
         memset(intRegs, 0, sizeof(intRegs));
-        memset(floatRegs.i, 0, sizeof(floatRegs.i));
+        memset(floatRegs, 0, sizeof(floatRegs));
         for (int i = 0; i < TheISA::NumVecRegs; i++) {
             vecRegs[i].zero();
+        }
+        for (int i = 0; i < TheISA::NumVecPredRegs; i++) {
+            vecPredRegs[i].reset();
         }
 #ifdef ISA_HAS_CC_REGS
         memset(ccRegs, 0, sizeof(ccRegs));
@@ -251,7 +289,8 @@ class SimpleThread : public ThreadState
     //
     // New accessors for new decoder.
     //
-    uint64_t readIntReg(int reg_idx)
+    RegVal
+    readIntReg(RegIndex reg_idx) const override
     {
         int flatIndex = isa->flattenIntIndex(reg_idx);
         assert(flatIndex < TheISA::NumIntRegs);
@@ -261,45 +300,36 @@ class SimpleThread : public ThreadState
         return regVal;
     }
 
-    FloatReg readFloatReg(int reg_idx)
+    RegVal
+    readFloatReg(RegIndex reg_idx) const override
     {
         int flatIndex = isa->flattenFloatIndex(reg_idx);
         assert(flatIndex < TheISA::NumFloatRegs);
-        FloatReg regVal(readFloatRegFlat(flatIndex));
-        DPRINTF(FloatRegs, "Reading float reg %d (%d) as %f, %#x.\n",
-                reg_idx, flatIndex, regVal, floatRegs.i[flatIndex]);
-        return regVal;
-    }
-
-    FloatRegBits readFloatRegBits(int reg_idx)
-    {
-        int flatIndex = isa->flattenFloatIndex(reg_idx);
-        assert(flatIndex < TheISA::NumFloatRegs);
-        FloatRegBits regVal(readFloatRegBitsFlat(flatIndex));
-        DPRINTF(FloatRegs, "Reading float reg %d (%d) bits as %#x, %f.\n",
-                reg_idx, flatIndex, regVal, floatRegs.f[flatIndex]);
+        RegVal regVal(readFloatRegFlat(flatIndex));
+        DPRINTF(FloatRegs, "Reading float reg %d (%d) bits as %#x.\n",
+                reg_idx, flatIndex, regVal);
         return regVal;
     }
 
     const VecRegContainer&
-    readVecReg(const RegId& reg) const
+    readVecReg(const RegId& reg) const override
     {
         int flatIndex = isa->flattenVecIndex(reg.index());
         assert(flatIndex < TheISA::NumVecRegs);
         const VecRegContainer& regVal = readVecRegFlat(flatIndex);
         DPRINTF(VecRegs, "Reading vector reg %d (%d) as %s.\n",
-                reg.index(), flatIndex, regVal.as<TheISA::VecElem>().print());
+                reg.index(), flatIndex, regVal.print());
         return regVal;
     }
 
     VecRegContainer&
-    getWritableVecReg(const RegId& reg)
+    getWritableVecReg(const RegId& reg) override
     {
         int flatIndex = isa->flattenVecIndex(reg.index());
         assert(flatIndex < TheISA::NumVecRegs);
         VecRegContainer& regVal = getWritableVecRegFlat(flatIndex);
         DPRINTF(VecRegs, "Reading vector reg %d (%d) as %s for modify.\n",
-                reg.index(), flatIndex, regVal.as<TheISA::VecElem>().print());
+                reg.index(), flatIndex, regVal.print());
         return regVal;
     }
 
@@ -320,27 +350,36 @@ class SimpleThread : public ThreadState
 
     /** Reads source vector 8bit operand. */
     virtual ConstVecLane8
-    readVec8BitLaneReg(const RegId& reg) const
-    { return readVecLane<uint8_t>(reg); }
+    readVec8BitLaneReg(const RegId &reg) const override
+    {
+        return readVecLane<uint8_t>(reg);
+    }
 
     /** Reads source vector 16bit operand. */
     virtual ConstVecLane16
-    readVec16BitLaneReg(const RegId& reg) const
-    { return readVecLane<uint16_t>(reg); }
+    readVec16BitLaneReg(const RegId &reg) const override
+    {
+        return readVecLane<uint16_t>(reg);
+    }
 
     /** Reads source vector 32bit operand. */
     virtual ConstVecLane32
-    readVec32BitLaneReg(const RegId& reg) const
-    { return readVecLane<uint32_t>(reg); }
+    readVec32BitLaneReg(const RegId &reg) const override
+    {
+        return readVecLane<uint32_t>(reg);
+    }
 
     /** Reads source vector 64bit operand. */
     virtual ConstVecLane64
-    readVec64BitLaneReg(const RegId& reg) const
-    { return readVecLane<uint64_t>(reg); }
+    readVec64BitLaneReg(const RegId &reg) const override
+    {
+        return readVecLane<uint64_t>(reg);
+    }
 
     /** Write a lane of the destination vector register. */
     template <typename LD>
-    void setVecLaneT(const RegId& reg, const LD& val)
+    void
+    setVecLaneT(const RegId &reg, const LD &val)
     {
         int flatIndex = isa->flattenVecIndex(reg.index());
         assert(flatIndex < TheISA::NumVecRegs);
@@ -348,21 +387,33 @@ class SimpleThread : public ThreadState
         DPRINTF(VecRegs, "Reading vector lane %d (%d)[%d] to %lx.\n",
                 reg.index(), flatIndex, reg.elemIndex(), val);
     }
-    virtual void setVecLane(const RegId& reg,
-            const LaneData<LaneSize::Byte>& val)
-    { return setVecLaneT(reg, val); }
-    virtual void setVecLane(const RegId& reg,
-            const LaneData<LaneSize::TwoByte>& val)
-    { return setVecLaneT(reg, val); }
-    virtual void setVecLane(const RegId& reg,
-            const LaneData<LaneSize::FourByte>& val)
-    { return setVecLaneT(reg, val); }
-    virtual void setVecLane(const RegId& reg,
-            const LaneData<LaneSize::EightByte>& val)
-    { return setVecLaneT(reg, val); }
+    virtual void
+    setVecLane(const RegId &reg, const LaneData<LaneSize::Byte> &val) override
+    {
+        return setVecLaneT(reg, val);
+    }
+    virtual void
+    setVecLane(const RegId &reg,
+               const LaneData<LaneSize::TwoByte> &val) override
+    {
+        return setVecLaneT(reg, val);
+    }
+    virtual void
+    setVecLane(const RegId &reg,
+               const LaneData<LaneSize::FourByte> &val) override
+    {
+        return setVecLaneT(reg, val);
+    }
+    virtual void
+    setVecLane(const RegId &reg,
+               const LaneData<LaneSize::EightByte> &val) override
+    {
+        return setVecLaneT(reg, val);
+    }
     /** @} */
 
-    const VecElem& readVecElem(const RegId& reg) const
+    const VecElem &
+    readVecElem(const RegId &reg) const override
     {
         int flatIndex = isa->flattenVecElemIndex(reg.index());
         assert(flatIndex < TheISA::NumVecRegs);
@@ -372,8 +423,31 @@ class SimpleThread : public ThreadState
         return regVal;
     }
 
+    const VecPredRegContainer &
+    readVecPredReg(const RegId &reg) const override
+    {
+        int flatIndex = isa->flattenVecPredIndex(reg.index());
+        assert(flatIndex < TheISA::NumVecPredRegs);
+        const VecPredRegContainer& regVal = readVecPredRegFlat(flatIndex);
+        DPRINTF(VecPredRegs, "Reading predicate reg %d (%d) as %s.\n",
+                reg.index(), flatIndex, regVal.print());
+        return regVal;
+    }
 
-    CCReg readCCReg(int reg_idx)
+    VecPredRegContainer &
+    getWritableVecPredReg(const RegId &reg) override
+    {
+        int flatIndex = isa->flattenVecPredIndex(reg.index());
+        assert(flatIndex < TheISA::NumVecPredRegs);
+        VecPredRegContainer& regVal = getWritableVecPredRegFlat(flatIndex);
+        DPRINTF(VecPredRegs,
+                "Reading predicate reg %d (%d) as %s for modify.\n",
+                reg.index(), flatIndex, regVal.print());
+        return regVal;
+    }
+
+    RegVal
+    readCCReg(RegIndex reg_idx) const override
     {
 #ifdef ISA_HAS_CC_REGS
         int flatIndex = isa->flattenCCIndex(reg_idx);
@@ -389,7 +463,8 @@ class SimpleThread : public ThreadState
 #endif
     }
 
-    void setIntReg(int reg_idx, uint64_t val)
+    void
+    setIntReg(RegIndex reg_idx, RegVal val) override
     {
         int flatIndex = isa->flattenIntIndex(reg_idx);
         assert(flatIndex < TheISA::NumIntRegs);
@@ -398,28 +473,21 @@ class SimpleThread : public ThreadState
         setIntRegFlat(flatIndex, val);
     }
 
-    void setFloatReg(int reg_idx, FloatReg val)
-    {
-        int flatIndex = isa->flattenFloatIndex(reg_idx);
-        assert(flatIndex < TheISA::NumFloatRegs);
-        setFloatRegFlat(flatIndex, val);
-        DPRINTF(FloatRegs, "Setting float reg %d (%d) to %f, %#x.\n",
-                reg_idx, flatIndex, val, floatRegs.i[flatIndex]);
-    }
-
-    void setFloatRegBits(int reg_idx, FloatRegBits val)
+    void
+    setFloatReg(RegIndex reg_idx, RegVal val) override
     {
         int flatIndex = isa->flattenFloatIndex(reg_idx);
         assert(flatIndex < TheISA::NumFloatRegs);
         // XXX: Fix array out of bounds compiler error for gem5.fast
         // when checkercpu enabled
         if (flatIndex < TheISA::NumFloatRegs)
-            setFloatRegBitsFlat(flatIndex, val);
-        DPRINTF(FloatRegs, "Setting float reg %d (%d) bits to %#x, %#f.\n",
-                reg_idx, flatIndex, val, floatRegs.f[flatIndex]);
+            setFloatRegFlat(flatIndex, val);
+        DPRINTF(FloatRegs, "Setting float reg %d (%d) bits to %#x.\n",
+                reg_idx, flatIndex, val);
     }
 
-    void setVecReg(const RegId& reg, const VecRegContainer& val)
+    void
+    setVecReg(const RegId &reg, const VecRegContainer &val) override
     {
         int flatIndex = isa->flattenVecIndex(reg.index());
         assert(flatIndex < TheISA::NumVecRegs);
@@ -428,7 +496,8 @@ class SimpleThread : public ThreadState
                 reg.index(), flatIndex, val.print());
     }
 
-    void setVecElem(const RegId& reg, const VecElem& val)
+    void
+    setVecElem(const RegId &reg, const VecElem &val) override
     {
         int flatIndex = isa->flattenVecElemIndex(reg.index());
         assert(flatIndex < TheISA::NumVecRegs);
@@ -437,7 +506,18 @@ class SimpleThread : public ThreadState
                 " %#x.\n", reg.elemIndex(), reg.index(), flatIndex, val);
     }
 
-    void setCCReg(int reg_idx, CCReg val)
+    void
+    setVecPredReg(const RegId &reg, const VecPredRegContainer &val) override
+    {
+        int flatIndex = isa->flattenVecPredIndex(reg.index());
+        assert(flatIndex < TheISA::NumVecPredRegs);
+        setVecPredRegFlat(flatIndex, val);
+        DPRINTF(VecPredRegs, "Setting predicate reg %d (%d) to %s.\n",
+                reg.index(), flatIndex, val.print());
+    }
+
+    void
+    setCCReg(RegIndex reg_idx, RegVal val) override
     {
 #ifdef ISA_HAS_CC_REGS
         int flatIndex = isa->flattenCCIndex(reg_idx);
@@ -450,157 +530,179 @@ class SimpleThread : public ThreadState
 #endif
     }
 
-    TheISA::PCState
-    pcState()
-    {
-        return _pcState;
-    }
+    TheISA::PCState pcState() const override { return _pcState; }
+    void pcState(const TheISA::PCState &val) override { _pcState = val; }
 
     void
-    pcState(const TheISA::PCState &val)
+    pcStateNoRecord(const TheISA::PCState &val) override
     {
         _pcState = val;
     }
 
-    void
-    pcStateNoRecord(const TheISA::PCState &val)
-    {
-        _pcState = val;
-    }
+    Addr instAddr() const override  { return _pcState.instAddr(); }
+    Addr nextInstAddr() const override { return _pcState.nextInstAddr(); }
+    MicroPC microPC() const override { return _pcState.microPC(); }
+    bool readPredicate() const { return predicate; }
+    void setPredicate(bool val) { predicate = val; }
 
-    Addr
-    instAddr()
-    {
-        return _pcState.instAddr();
-    }
-
-    Addr
-    nextInstAddr()
-    {
-        return _pcState.nextInstAddr();
-    }
-
-    void
-    setNPC(Addr val)
-    {
-        _pcState.setNPC(val);
-    }
-
-    MicroPC
-    microPC()
-    {
-        return _pcState.microPC();
-    }
-
-    bool readPredicate()
-    {
-        return predicate;
-    }
-
-    void setPredicate(bool val)
-    {
-        predicate = val;
-    }
-
-    MiscReg
-    readMiscRegNoEffect(int misc_reg, ThreadID tid = 0) const
+    RegVal
+    readMiscRegNoEffect(RegIndex misc_reg) const override
     {
         return isa->readMiscRegNoEffect(misc_reg);
     }
 
-    MiscReg
-    readMiscReg(int misc_reg, ThreadID tid = 0)
+    RegVal
+    readMiscReg(RegIndex misc_reg) override
     {
-        return isa->readMiscReg(misc_reg, tc);
+        return isa->readMiscReg(misc_reg, this);
     }
 
     void
-    setMiscRegNoEffect(int misc_reg, const MiscReg &val, ThreadID tid = 0)
+    setMiscRegNoEffect(RegIndex misc_reg, RegVal val) override
     {
         return isa->setMiscRegNoEffect(misc_reg, val);
     }
 
     void
-    setMiscReg(int misc_reg, const MiscReg &val, ThreadID tid = 0)
+    setMiscReg(RegIndex misc_reg, RegVal val) override
     {
-        return isa->setMiscReg(misc_reg, val, tc);
+        return isa->setMiscReg(misc_reg, val, this);
     }
 
     RegId
-    flattenRegId(const RegId& regId) const
+    flattenRegId(const RegId& regId) const override
     {
         return isa->flattenRegId(regId);
     }
 
-    unsigned readStCondFailures() { return storeCondFailures; }
+    unsigned readStCondFailures() const override { return storeCondFailures; }
 
-    void setStCondFailures(unsigned sc_failures)
-    { storeCondFailures = sc_failures; }
-
-    void syscall(int64_t callnum, Fault *fault)
+    bool
+    readMemAccPredicate()
     {
-        process->syscall(callnum, tc, fault);
+        return memAccPredicate;
     }
 
-    uint64_t readIntRegFlat(int idx) { return intRegs[idx]; }
-    void setIntRegFlat(int idx, uint64_t val) { intRegs[idx] = val; }
-
-    FloatReg readFloatRegFlat(int idx) { return floatRegs.f[idx]; }
-    void setFloatRegFlat(int idx, FloatReg val) { floatRegs.f[idx] = val; }
-
-    FloatRegBits readFloatRegBitsFlat(int idx) { return floatRegs.i[idx]; }
-    void setFloatRegBitsFlat(int idx, FloatRegBits val) {
-        floatRegs.i[idx] = val;
+    void
+    setMemAccPredicate(bool val)
+    {
+        memAccPredicate = val;
     }
 
-    const VecRegContainer& readVecRegFlat(const RegIndex& reg) const
+    void
+    setStCondFailures(unsigned sc_failures) override
+    {
+        storeCondFailures = sc_failures;
+    }
+
+    Counter
+    readFuncExeInst() const override
+    {
+        return ThreadState::readFuncExeInst();
+    }
+
+    void
+    syscall(int64_t callnum, Fault *fault) override
+    {
+        process->syscall(callnum, this, fault);
+    }
+
+    RegVal readIntRegFlat(RegIndex idx) const override { return intRegs[idx]; }
+    void
+    setIntRegFlat(RegIndex idx, RegVal val) override
+    {
+        intRegs[idx] = val;
+    }
+
+    RegVal
+    readFloatRegFlat(RegIndex idx) const override
+    {
+        return floatRegs[idx];
+    }
+    void
+    setFloatRegFlat(RegIndex idx, RegVal val) override
+    {
+        floatRegs[idx] = val;
+    }
+
+    const VecRegContainer &
+    readVecRegFlat(RegIndex reg) const override
     {
         return vecRegs[reg];
     }
 
-    VecRegContainer& getWritableVecRegFlat(const RegIndex& reg)
+    VecRegContainer &
+    getWritableVecRegFlat(RegIndex reg) override
     {
         return vecRegs[reg];
     }
 
-    void setVecRegFlat(const RegIndex& reg, const VecRegContainer& val)
+    void
+    setVecRegFlat(RegIndex reg, const VecRegContainer &val) override
     {
         vecRegs[reg] = val;
     }
 
     template <typename T>
-    VecLaneT<T, true> readVecLaneFlat(const RegIndex& reg, int lId) const
+    VecLaneT<T, true>
+    readVecLaneFlat(RegIndex reg, int lId) const
     {
         return vecRegs[reg].laneView<T>(lId);
     }
 
     template <typename LD>
-    void setVecLaneFlat(const RegIndex& reg, int lId, const LD& val)
+    void
+    setVecLaneFlat(RegIndex reg, int lId, const LD &val)
     {
         vecRegs[reg].laneView<typename LD::UnderlyingType>(lId) = val;
     }
 
-    const VecElem& readVecElemFlat(const RegIndex& reg,
-                                   const ElemIndex& elemIndex) const
+    const VecElem &
+    readVecElemFlat(RegIndex reg, const ElemIndex &elemIndex) const override
     {
         return vecRegs[reg].as<TheISA::VecElem>()[elemIndex];
     }
 
-    void setVecElemFlat(const RegIndex& reg, const ElemIndex& elemIndex,
-                        const VecElem val)
+    void
+    setVecElemFlat(RegIndex reg, const ElemIndex &elemIndex,
+                   const VecElem &val) override
     {
         vecRegs[reg].as<TheISA::VecElem>()[elemIndex] = val;
     }
 
-#ifdef ISA_HAS_CC_REGS
-    CCReg readCCRegFlat(int idx) { return ccRegs[idx]; }
-    void setCCRegFlat(int idx, CCReg val) { ccRegs[idx] = val; }
-#else
-    CCReg readCCRegFlat(int idx)
-    { panic("readCCRegFlat w/no CC regs!\n"); }
+    const VecPredRegContainer &
+    readVecPredRegFlat(RegIndex reg) const override
+    {
+        return vecPredRegs[reg];
+    }
 
-    void setCCRegFlat(int idx, CCReg val)
-    { panic("setCCRegFlat w/no CC regs!\n"); }
+    VecPredRegContainer &
+    getWritableVecPredRegFlat(RegIndex reg) override
+    {
+        return vecPredRegs[reg];
+    }
+
+    void
+    setVecPredRegFlat(RegIndex reg, const VecPredRegContainer &val) override
+    {
+        vecPredRegs[reg] = val;
+    }
+
+#ifdef ISA_HAS_CC_REGS
+    RegVal readCCRegFlat(RegIndex idx) const override { return ccRegs[idx]; }
+    void setCCRegFlat(RegIndex idx, RegVal val) override { ccRegs[idx] = val; }
+#else
+    RegVal
+    readCCRegFlat(RegIndex idx) const override
+    {
+        panic("readCCRegFlat w/no CC regs!\n");
+    }
+
+    void
+    setCCRegFlat(RegIndex idx, RegVal val) override
+    {
+        panic("setCCRegFlat w/no CC regs!\n");
+    }
 #endif
 };
 

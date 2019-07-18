@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2013, 2015 ARM Limited
+ * Copyright (c) 2012-2013, 2015, 2018 ARM Limited
  * Copyright (c) 2016 Google Inc.
  * Copyright (c) 2017, Centre National de la Recherche Scientifique
  * All rights reserved.
@@ -49,7 +49,7 @@
 #include "sim/stats.hh"
 
 CommMonitor::CommMonitor(Params* params)
-    : MemObject(params),
+    : SimObject(params),
       masterPort(name() + "-master", *this),
       slavePort(name() + "-slave", *this),
       samplePeriodicEvent([this]{ samplePeriodic(); }, name()),
@@ -83,23 +83,15 @@ CommMonitor::regProbePoints()
     ppPktResp.reset(new ProbePoints::Packet(getProbeManager(), "PktResponse"));
 }
 
-BaseMasterPort&
-CommMonitor::getMasterPort(const std::string& if_name, PortID idx)
+Port &
+CommMonitor::getPort(const std::string &if_name, PortID idx)
 {
     if (if_name == "master") {
         return masterPort;
-    } else {
-        return MemObject::getMasterPort(if_name, idx);
-    }
-}
-
-BaseSlavePort&
-CommMonitor::getSlavePort(const std::string& if_name, PortID idx)
-{
-    if (if_name == "slave") {
+    } else if (if_name == "slave") {
         return slavePort;
     } else {
-        return MemObject::getSlavePort(if_name, idx);
+        return SimObject::getPort(if_name, idx);
     }
 }
 
@@ -228,7 +220,8 @@ CommMonitor::recvAtomic(PacketPtr pkt)
     if (expects_response)
         stats.updateRespStats(req_pkt_info, delay, true);
 
-    assert(pkt->isResponse());
+    // Some packets, such as WritebackDirty, don't need response.
+    assert(pkt->isResponse() || !expects_response);
     ProbePoints::PacketInfo resp_pkt_info(pkt);
     ppPktResp->notify(resp_pkt_info);
     return delay;
@@ -374,6 +367,12 @@ CommMonitor::recvRespRetry()
     masterPort.sendRetryResp();
 }
 
+bool
+CommMonitor::tryTiming(PacketPtr pkt)
+{
+    return masterPort.tryTiming(pkt);
+}
+
 void
 CommMonitor::recvRangeChange()
 {
@@ -383,7 +382,7 @@ CommMonitor::recvRangeChange()
 void
 CommMonitor::regStats()
 {
-    MemObject::regStats();
+    SimObject::regStats();
 
     // Initialise all the monitor stats
     using namespace Stats;

@@ -41,8 +41,8 @@ class DtuAbortTest : public MemObject
   public:
     DtuAbortTest(const DtuAbortTestParams *p);
 
-    BaseMasterPort& getMasterPort(const std::string &if_name,
-                                  PortID idx = InvalidPortID) override;
+    Port& getPort(const std::string &if_name,
+                  PortID idx = InvalidPortID) override;
 
   protected:
 

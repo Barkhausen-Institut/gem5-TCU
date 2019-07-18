@@ -49,8 +49,8 @@ class DtuAccel : public MemObject
 
     DtuAccel(const DtuAccelParams *p);
 
-    BaseMasterPort& getMasterPort(const std::string &if_name,
-                                  PortID idx = InvalidPortID) override;
+    Port& getPort(const std::string &if_name,
+                  PortID idx = InvalidPortID) override;
 
     void setConnector(BaseConnector *con)
     {

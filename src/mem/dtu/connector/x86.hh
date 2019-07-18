@@ -64,7 +64,7 @@ class X86Connector : public CoreConnector
 
     X86Connector(const X86ConnectorParams *p);
 
-    BaseMasterPort& getMasterPort(const std::string &n, PortID idx) override;
+    Port& getPort(const std::string &n, PortID idx) override;
 
     void setIrq() override;
 

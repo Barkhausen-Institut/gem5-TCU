@@ -43,6 +43,7 @@
 # "m5 test.py"
 
 from __future__ import print_function
+from __future__ import absolute_import
 
 import optparse
 import sys
@@ -63,6 +64,7 @@ from common import CacheConfig
 from common import CpuConfig
 from common import BPConfig
 from common import MemConfig
+from common.FileSystemConfig import config_filesystem
 from common.Caches import *
 from common.cpu2000 import *
 
@@ -171,7 +173,7 @@ if options.smt and options.num_cpus > 1:
     fatal("You cannot use SMT with multiple CPUs!")
 
 np = options.num_cpus
-system = System(cpu = [CPUClass(cpu_id=i) for i in xrange(np)],
+system = System(cpu = [CPUClass(cpu_id=i) for i in range(np)],
                 mem_mode = test_mem_mode,
                 mem_ranges = [AddrRange(options.mem_size)],
                 cache_line_size = options.cacheline_size)
@@ -215,12 +217,12 @@ if CpuConfig.is_kvm_cpu(CPUClass) or CpuConfig.is_kvm_cpu(FutureClass):
 
 # Sanity check
 if options.simpoint_profile:
-    if not CpuConfig.is_atomic_cpu(CPUClass):
+    if not CpuConfig.is_noncaching_cpu(CPUClass):
         fatal("SimPoint/BPProbe should be done with an atomic cpu")
     if np > 1:
         fatal("SimPoint generation not supported with more than one CPUs")
 
-for i in xrange(np):
+for i in range(np):
     if options.smt:
         system.cpu[i].workload = multiprocesses
     elif len(multiprocesses) == 1:
@@ -238,6 +240,10 @@ for i in xrange(np):
         bpClass = BPConfig.get(options.bp_type)
         system.cpu[i].branchPred = bpClass()
 
+    if options.indirect_bp_type:
+        indirectBPClass = BPConfig.get_indirect(options.indirect_bp_type)
+        system.cpu[i].branchPred.indirectBranchPred = indirectBPClass()
+
     system.cpu[i].createThreads()
 
 if options.ruby:
@@ -246,7 +252,7 @@ if options.ruby:
 
     system.ruby.clk_domain = SrcClockDomain(clock = options.ruby_clock,
                                         voltage_domain = system.voltage_domain)
-    for i in xrange(np):
+    for i in range(np):
         ruby_port = system.ruby._cpu_ports[i]
 
         # Create the interrupt controller and connect its ports to Ruby
@@ -269,6 +275,7 @@ else:
     system.system_port = system.membus.slave
     CacheConfig.config_cache(options, system)
     MemConfig.config_mem(options, system)
+    config_filesystem(system, options)
 
 root = Root(full_system = False, system = system)
 Simulation.run(options, root, system, FutureClass)

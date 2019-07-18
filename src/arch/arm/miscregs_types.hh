@@ -201,6 +201,7 @@ namespace ArmISA
         Bitfield<10> tfp;  // AArch64
         Bitfield<9>  tcp9;
         Bitfield<8>  tcp8;
+        Bitfield<8>  tz;  // SVE
         Bitfield<7>  tcp7;
         Bitfield<6>  tcp6;
         Bitfield<5>  tcp5;
@@ -375,6 +376,7 @@ namespace ArmISA
         Bitfield<13, 12> cp6;
         Bitfield<15, 14> cp7;
         Bitfield<17, 16> cp8;
+        Bitfield<17, 16> zen;  // SVE
         Bitfield<19, 18> cp9;
         Bitfield<21, 20> cp10;
         Bitfield<21, 20> fpen;  // AArch64
@@ -460,6 +462,7 @@ namespace ArmISA
         Bitfield<5> pd1;
         // Long-descriptor translation table format
         Bitfield<2, 0> t0sz;
+        Bitfield<6> t2e;
         Bitfield<7> epd0;
         Bitfield<9, 8> irgn0;
         Bitfield<11, 10> orgn0;
@@ -481,6 +484,8 @@ namespace ArmISA
         // TCR_EL2/3 (AArch64)
         Bitfield<18, 16> ps;
         Bitfield<20> tbi;
+        Bitfield<41> hpd0;
+        Bitfield<42> hpd1;
     EndBitUnion(TTBCR)
 
     // Fields of TCR_EL{1,2,3} (mostly overlapping)
@@ -505,6 +510,10 @@ namespace ArmISA
         Bitfield<36> as; // EL1
         Bitfield<37> tbi0; // EL1
         Bitfield<38> tbi1; // EL1
+        Bitfield<39> ha;
+        Bitfield<40> hd;
+        Bitfield<41> hpd0;
+        Bitfield<42> hpd1;
     EndBitUnion(TCR)
 
     BitUnion32(HTCR)
@@ -512,6 +521,7 @@ namespace ArmISA
         Bitfield<9, 8> irgn0;
         Bitfield<11, 10> orgn0;
         Bitfield<13, 12> sh0;
+        Bitfield<24> hpd;
     EndBitUnion(HTCR)
 
     BitUnion32(VTCR_t)
@@ -524,6 +534,8 @@ namespace ArmISA
         Bitfield<13, 12> sh0;
         Bitfield<15, 14> tg0;
         Bitfield<18, 16> ps; // Only defined for VTCR_EL2
+        Bitfield<21> ha;     // Only defined for VTCR_EL2
+        Bitfield<22> hd;     // Only defined for VTCR_EL2
     EndBitUnion(VTCR_t)
 
     BitUnion32(PRRR)
@@ -626,8 +638,16 @@ namespace ArmISA
         Bitfield<20> tta;
         Bitfield<13, 12> res1_13_12_el2;
         Bitfield<10> tfp;
-        Bitfield<9, 0> res1_9_0_el2;
+        Bitfield<9> res1_9_el2;
+        Bitfield<8> res1_8_el2;
+        Bitfield<8> ez;  // SVE (CPTR_EL3)
+        Bitfield<8> tz;  // SVE (CPTR_EL2)
+        Bitfield<7, 0> res1_7_0_el2;
    EndBitUnion(CPTR)
+
+    BitUnion64(ZCR)
+        Bitfield<3, 0> len;
+    EndBitUnion(ZCR)
 
 }
 

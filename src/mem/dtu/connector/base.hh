@@ -31,6 +31,7 @@
 #define __MEM_DTU_BASE_CONNECTOR__
 
 #include "params/BaseConnector.hh"
+#include "mem/mem_object.hh"
 #include "sim/system.hh"
 
 class BaseConnector : public MemObject

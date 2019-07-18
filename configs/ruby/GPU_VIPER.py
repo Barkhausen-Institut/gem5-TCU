@@ -429,7 +429,7 @@ def create_system(options, full_system, system, dma_devices, bootmem,
         mainCluster = Cluster(intBW=crossbar_bw)
     else:
         mainCluster = Cluster(intBW=8) # 16 GB/s
-    for i in xrange(options.num_dirs):
+    for i in range(options.num_dirs):
 
         dir_cntrl = DirCntrl(noTCCdir = True, TCC_select_num_bits = TCC_bits)
         dir_cntrl.create(options, ruby_system, system)
@@ -467,7 +467,7 @@ def create_system(options, full_system, system, dma_devices, bootmem,
         cpuCluster = Cluster(extBW = crossbar_bw, intBW = crossbar_bw)
     else:
         cpuCluster = Cluster(extBW = 8, intBW = 8) # 16 GB/s
-    for i in xrange((options.num_cpus + 1) / 2):
+    for i in range((options.num_cpus + 1) // 2):
 
         cp_cntrl = CPCntrl()
         cp_cntrl.create(options, ruby_system, system)
@@ -499,12 +499,64 @@ def create_system(options, full_system, system, dma_devices, bootmem,
 
         cpuCluster.add(cp_cntrl)
 
+    # Register CPUs and caches for each CorePair and directory (SE mode only)
+    if not full_system:
+        for i in xrange((options.num_cpus + 1) // 2):
+            FileSystemConfig.register_cpu(physical_package_id = 0,
+                                          core_siblings = \
+                                            xrange(options.num_cpus),
+                                          core_id = i*2,
+                                          thread_siblings = [])
+
+            FileSystemConfig.register_cpu(physical_package_id = 0,
+                                          core_siblings = \
+                                            xrange(options.num_cpus),
+                                          core_id = i*2+1,
+                                          thread_siblings = [])
+
+            FileSystemConfig.register_cache(level = 0,
+                                            idu_type = 'Instruction',
+                                            size = options.l1i_size,
+                                            line_size = options.cacheline_size,
+                                            assoc = options.l1i_assoc,
+                                            cpus = [i*2, i*2+1])
+
+            FileSystemConfig.register_cache(level = 0,
+                                            idu_type = 'Data',
+                                            size = options.l1d_size,
+                                            line_size = options.cacheline_size,
+                                            assoc = options.l1d_assoc,
+                                            cpus = [i*2])
+
+            FileSystemConfig.register_cache(level = 0,
+                                            idu_type = 'Data',
+                                            size = options.l1d_size,
+                                            line_size = options.cacheline_size,
+                                            assoc = options.l1d_assoc,
+                                            cpus = [i*2+1])
+
+            FileSystemConfig.register_cache(level = 1,
+                                            idu_type = 'Unified',
+                                            size = options.l2_size,
+                                            line_size = options.cacheline_size,
+                                            assoc = options.l2_assoc,
+                                            cpus = [i*2, i*2+1])
+
+        for i in range(options.num_dirs):
+            FileSystemConfig.register_cache(level = 2,
+                                            idu_type = 'Unified',
+                                            size = options.l3_size,
+                                            line_size = options.cacheline_size,
+                                            assoc = options.l3_assoc,
+                                            cpus = [n for n in
+                                                xrange(options.num_cpus)])
+
     gpuCluster = None
     if hasattr(options, 'bw_scalor') and options.bw_scalor > 0:
       gpuCluster = Cluster(extBW = crossbar_bw, intBW = crossbar_bw)
     else:
       gpuCluster = Cluster(extBW = 8, intBW = 8) # 16 GB/s
-    for i in xrange(options.num_compute_units):
+    for i in range(options.num_compute_units):
 
         tcp_cntrl = TCPCntrl(TCC_select_num_bits = TCC_bits,
                              issue_latency = 1,
@@ -543,7 +595,7 @@ def create_system(options, full_system, system, dma_devices, bootmem,
 
         gpuCluster.add(tcp_cntrl)
 
-    for i in xrange(options.num_sqc):
+    for i in range(options.num_sqc):
 
         sqc_cntrl = SQCCntrl(TCC_select_num_bits = TCC_bits)
         sqc_cntrl.create(options, ruby_system, system)
@@ -569,7 +621,7 @@ def create_system(options, full_system, system, dma_devices, bootmem,
         # SQC also in GPU cluster
         gpuCluster.add(sqc_cntrl)
 
-    for i in xrange(options.num_cp):
+    for i in range(options.num_cp):
 
         tcp_ID = options.num_compute_units + i
         sqc_ID = options.num_sqc + i
@@ -623,7 +675,7 @@ def create_system(options, full_system, system, dma_devices, bootmem,
         # SQC also in GPU cluster
         gpuCluster.add(sqc_cntrl)
 
-    for i in xrange(options.num_tccs):
+    for i in range(options.num_tccs):
 
         tcc_cntrl = TCCCntrl(l2_response_latency = options.TCC_latency)
         tcc_cntrl.create(options, ruby_system, system)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2012, 2015, 2017 ARM Limited
+ * Copyright (c) 2010-2012, 2015, 2017, 2018 ARM Limited
  * Copyright (c) 2013 Advanced Micro Devices, Inc.
  * All rights reserved
  *
@@ -43,7 +43,6 @@
 
 #include "cpu/simple/base.hh"
 
-#include "arch/kernel_stats.hh"
 #include "arch/stacktrace.hh"
 #include "arch/utility.hh"
 #include "arch/vtophys.hh"
@@ -70,7 +69,6 @@
 #include "debug/Decode.hh"
 #include "debug/Fetch.hh"
 #include "debug/Quiesce.hh"
-#include "mem/mem_object.hh"
 #include "mem/packet.hh"
 #include "mem/request.hh"
 #include "params/BaseSimpleCPU.hh"
@@ -175,12 +173,12 @@ BaseSimpleCPU::countInst()
     if (!curStaticInst->isMicroop() || curStaticInst->isLastMicroop()) {
         t_info.numInst++;
         t_info.numInsts++;
+
+        system->totalNumInsts++;
+        t_info.thread->funcExeInst++;
     }
     t_info.numOp++;
     t_info.numOps++;
-
-    system->totalNumInsts++;
-    t_info.thread->funcExeInst++;
 }
 
 Counter
@@ -493,8 +491,12 @@ BaseSimpleCPU::preExecute()
     // maintain $r0 semantics
     thread->setIntReg(ZeroReg, 0);
 #if THE_ISA == ALPHA_ISA
-    thread->setFloatReg(ZeroReg, 0.0);
+    thread->setFloatReg(ZeroReg, 0);
 #endif // ALPHA_ISA
+
+    // resets predicates
+    t_info.setPredicate(true);
+    t_info.setMemAccPredicate(true);
 
     // check for instruction-count-based events
     comInstEventQueue[curThread]->serviceEvents(t_info.numInst);
@@ -644,7 +646,7 @@ BaseSimpleCPU::postExecute()
         t_info.numLoadInsts++;
     }
 
-    if (curStaticInst->isStore()){
+    if (curStaticInst->isStore() || curStaticInst->isAtomic()){
         t_info.numStoreInsts++;
     }
     /* End power model statistics */
@@ -661,7 +663,7 @@ BaseSimpleCPU::postExecute()
     }
 
     // Call CPU instruction commit probes
-    probeInstCommit(curStaticInst);
+    probeInstCommit(curStaticInst, instAddr);
 }
 
 void

@@ -54,6 +54,7 @@
 #include "sim/system.hh"
 
 class GenericTimer;
+class BaseGic;
 class ThreadContext;
 
 class ArmSystem : public System
@@ -97,6 +98,7 @@ class ArmSystem : public System
      * Pointer to the Generic Timer wrapper.
      */
     GenericTimer *_genericTimer;
+    BaseGic *_gic;
 
     /**
      * Reset address (ARMv8)
@@ -119,6 +121,14 @@ class ArmSystem : public System
      * True if ASID is 16 bits in AArch64 (ARMv8)
      */
     const bool _haveLargeAsid64;
+
+    /**
+     * True if SVE is implemented (ARMv8)
+     */
+    const bool _haveSVE;
+
+    /** SVE vector length at reset, in quadwords */
+    const unsigned _sveVL;
 
     /**
      * Range for memory-mapped m5 pseudo ops. The range will be
@@ -192,8 +202,17 @@ class ArmSystem : public System
         _genericTimer = generic_timer;
     }
 
+    /** Sets the pointer to the GIC. */
+    void setGIC(BaseGic *gic)
+    {
+        _gic = gic;
+    }
+
     /** Get a pointer to the system's generic timer model */
     GenericTimer *getGenericTimer() const { return _genericTimer; }
+
+    /** Get a pointer to the system's GIC */
+    BaseGic *getGIC() const { return _gic; }
 
     /** Returns true if the register width of the highest implemented exception
      * level is 64 bits (ARMv8) */
@@ -215,6 +234,12 @@ class ArmSystem : public System
 
     /** Returns true if ASID is 16 bits in AArch64 (ARMv8) */
     bool haveLargeAsid64() const { return _haveLargeAsid64; }
+
+    /** Returns true if SVE is implemented (ARMv8) */
+    bool haveSVE() const { return _haveSVE; }
+
+    /** Returns the SVE vector length at reset, in quadwords */
+    unsigned sveVL() const { return _sveVL; }
 
     /** Returns the supported physical address range in bits if the highest
      * implemented exception level is 64 bits (ARMv8) */

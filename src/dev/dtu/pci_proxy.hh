@@ -45,11 +45,8 @@ class DtuPciProxy : public MemObject
 
     void setPciHost(DtuPciHost* pciHost) { this->pciHost = pciHost; }
 
-    BaseMasterPort& getMasterPort(
-        const std::string& if_name, PortID idx = InvalidPortID) override;
-
-    BaseSlavePort& getSlavePort(
-        const std::string& if_name, PortID idx = InvalidPortID) override;
+    Port& getPort(const std::string& if_name,
+                  PortID idx = InvalidPortID) override;
 
     void signalInterrupt();
 

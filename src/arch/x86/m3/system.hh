@@ -69,8 +69,8 @@ class M3X86System : public X86System, public DTUMemory
 
     uint32_t pedesc(unsigned pe) const override;
 
-    BaseMasterPort& getMasterPort(const std::string &if_name,
-                                  PortID idx = InvalidPortID) override;
+    Port& getPort(const std::string &if_name,
+                  PortID idx = InvalidPortID) override;
 
     void initState();
 

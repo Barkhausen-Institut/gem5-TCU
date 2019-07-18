@@ -44,10 +44,10 @@
 #ifndef __DEV_IO_DEVICE_HH__
 #define __DEV_IO_DEVICE_HH__
 
-#include "mem/mem_object.hh"
 #include "mem/tport.hh"
 #include "params/BasicPioDevice.hh"
 #include "params/PioDevice.hh"
+#include "sim/clocked_object.hh"
 
 class PioDevice;
 class System;
@@ -81,7 +81,7 @@ class PioPort : public SimpleTimingPort
  * mode we are in, etc is handled by the PioPort so the device doesn't have to
  * bother.
  */
-class PioDevice : public MemObject
+class PioDevice : public ClockedObject
 {
   protected:
     System *sys;
@@ -123,10 +123,10 @@ class PioDevice : public MemObject
         return dynamic_cast<const Params *>(_params);
     }
 
-    virtual void init();
+    void init() override;
 
-    virtual BaseSlavePort &getSlavePort(const std::string &if_name,
-                                        PortID idx = InvalidPortID);
+    Port &getPort(const std::string &if_name,
+            PortID idx=InvalidPortID) override;
 
     friend class PioPort;
 

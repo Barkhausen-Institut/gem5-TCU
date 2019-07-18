@@ -46,8 +46,8 @@
 
 from m5.params import *
 from m5.proxy import *
-from AbstractMemory import *
-from QoSMemCtrl import *
+from m5.objects.AbstractMemory import *
+from m5.objects.QoSMemCtrl import *
 
 # Enum for memory scheduling algorithms, currently First-Come
 # First-Served and a First-Row Hit then First-Come First-Served
@@ -134,6 +134,10 @@ class DRAMCtrl(QoSMemCtrl):
     # construction is a single channel and multiple controllers have
     # to be instantiated for a multi-channel configuration
     channels = Param.Unsigned(1, "Number of channels")
+
+    # Enable DRAM powerdown states if True. This is False by default due to
+    # performance being lower when enabled
+    enable_dram_powerdown = Param.Bool(False, "Enable powerdown states")
 
     # For power modelling we need to know if the DRAM has a DLL or not
     dll = Param.Bool(True, "DRAM has DLL or not")

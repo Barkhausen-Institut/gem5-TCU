@@ -37,11 +37,12 @@
 #          Glenn Bergmans
 
 from m5.params import *
+from m5.options import *
 from m5.SimObject import *
 from m5.util.fdthelper import *
 
-from System import System
-from ArmSemihosting import ArmSemihosting
+from m5.objects.System import System
+from m5.objects.ArmSemihosting import ArmSemihosting
 
 class ArmMachineType(Enum):
     map = {
@@ -50,6 +51,8 @@ class ArmMachineType(Enum):
         'VExpress_EMM64' : 2272,
         'DTOnly' : -1,
     }
+
+class SveVectorLength(UInt8): min = 1; max = 16
 
 class ArmSystem(System):
     type = 'ArmSystem'
@@ -79,6 +82,10 @@ class ArmSystem(System):
         "Supported physical address range in bits when using AArch64 (ARMv8)")
     have_large_asid_64 = Param.Bool(False,
         "True if ASID is 16 bits in AArch64 (ARMv8)")
+    have_sve = Param.Bool(True,
+        "True if SVE is implemented (ARMv8)")
+    sve_vl = Param.SveVectorLength(1,
+        "SVE vector length in quadwords (128-bit)")
 
     semihosting = Param.ArmSemihosting(NULL,
         "Enable support for the Arm semihosting by settings this parameter")
@@ -137,6 +144,19 @@ class GenericArmSystem(ArmSystem):
                                     "guest kernel panics")
     panic_on_oops = Param.Bool(False, "Trigger a gem5 panic if the " \
                                    "guest kernel oopses")
+
+    def generateDtb(self, outdir, filename):
+        """
+        Autogenerate DTB. Arguments are the folder where the DTB
+        will be stored, and the name of the DTB file.
+        """
+        state = FdtState(addr_cells=2, size_cells=2, cpu_cells=1)
+        rootNode = self.generateDeviceTree(state)
+
+        fdt = Fdt()
+        fdt.add_rootnode(rootNode)
+        dtb_filename = os.path.join(outdir, filename)
+        self.dtb_filename = fdt.writeDtbFile(dtb_filename)
 
 class LinuxArmSystem(GenericArmSystem):
     type = 'LinuxArmSystem'

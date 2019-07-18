@@ -52,9 +52,8 @@ SectorTags::SectorTags(const SectorTagsParams *p)
       sequentialAccess(p->sequential_access),
       replacementPolicy(p->replacement_policy),
       numBlocksPerSector(p->num_blocks_per_sector),
-      numSectors(numBlocks / p->num_blocks_per_sector), blks(numBlocks),
-      secBlks(numSectors), sectorShift(floorLog2(blkSize)),
-      sectorMask(numBlocksPerSector - 1)
+      numSectors(numBlocks / numBlocksPerSector),
+      sectorShift(floorLog2(blkSize)), sectorMask(numBlocksPerSector - 1)
 {
     // Check parameters
     fatal_if(blkSize < 4 || !isPowerOf2(blkSize),
@@ -66,6 +65,10 @@ SectorTags::SectorTags(const SectorTagsParams *p)
 void
 SectorTags::tagsInit()
 {
+    // Create blocks and sector blocks
+    blks = std::vector<SectorSubBlk>(numBlocks);
+    secBlks = std::vector<SectorBlk>(numSectors);
+
     // Initialize all blocks
     unsigned blk_index = 0;       // index into blks array
     for (unsigned sec_blk_index = 0; sec_blk_index < numSectors;
@@ -167,9 +170,7 @@ SectorTags::accessBlock(Addr addr, bool is_secure, Cycles &lat)
 }
 
 void
-SectorTags::insertBlock(const Addr addr, const bool is_secure,
-                        const int src_master_ID, const uint32_t task_ID,
-                        CacheBlk *blk)
+SectorTags::insertBlock(const PacketPtr pkt, CacheBlk *blk)
 {
     // Get block's sector
     SectorSubBlk* sub_blk = static_cast<SectorSubBlk*>(blk);
@@ -189,7 +190,7 @@ SectorTags::insertBlock(const Addr addr, const bool is_secure,
     }
 
     // Do common block insertion functionality
-    BaseTags::insertBlock(addr, is_secure, src_master_ID, task_ID, blk);
+    BaseTags::insertBlock(pkt, blk);
 }
 
 CacheBlk*
@@ -220,7 +221,7 @@ SectorTags::findBlock(Addr addr, bool is_secure) const
 }
 
 CacheBlk*
-SectorTags::findVictim(Addr addr, const bool is_secure,
+SectorTags::findVictim(Addr addr, const bool is_secure, const std::size_t size,
                        std::vector<CacheBlk*>& evict_blks) const
 {
     // Get possible entries to be victimized

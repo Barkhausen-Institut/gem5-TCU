@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2011, 2014, 2016 ARM Limited
+ * Copyright (c) 2010-2011, 2014, 2016-2017 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -47,6 +47,8 @@
 #include "arch/arm/generated/max_inst_regs.hh"
 #include "arch/arm/intregs.hh"
 #include "arch/arm/miscregs.hh"
+#include "arch/arm/types.hh"
+#include "arch/generic/vec_pred_reg.hh"
 #include "arch/generic/vec_reg.hh"
 
 namespace ArmISA {
@@ -59,24 +61,19 @@ const int MaxInstSrcRegs = ArmISAInst::MaxInstDestRegs +
 using ArmISAInst::MaxInstDestRegs;
 using ArmISAInst::MaxMiscDestRegs;
 
-typedef uint64_t IntReg;
-
-// floating point register file entry type
-typedef uint32_t FloatRegBits;
-typedef float FloatReg;
-
 // Number of VecElem per Vector Register, computed based on the vector length
-constexpr unsigned NumVecElemPerVecReg = 4;
+constexpr unsigned NumVecElemPerVecReg = MaxSveVecLenInWords;
+
 using VecElem = uint32_t;
 using VecReg = ::VecRegT<VecElem, NumVecElemPerVecReg, false>;
 using ConstVecReg = ::VecRegT<VecElem, NumVecElemPerVecReg, true>;
 using VecRegContainer = VecReg::Container;
 
-// cop-0/cop-1 system control register
-typedef uint64_t MiscReg;
-
-// condition code register; must be at least 32 bits for FpCondCodes
-typedef uint64_t CCReg;
+using VecPredReg = ::VecPredRegT<VecElem, NumVecElemPerVecReg,
+                                 VecPredRegHasPackedRepr, false>;
+using ConstVecPredReg = ::VecPredRegT<VecElem, NumVecElemPerVecReg,
+                                      VecPredRegHasPackedRepr, true>;
+using VecPredRegContainer = VecPredReg::Container;
 
 // Constants Related to the number of registers
 const int NumIntArchRegs = NUM_ARCH_INTREGS;
@@ -91,12 +88,16 @@ const int NumVecSpecialRegs = 8;
 const int NumIntRegs = NUM_INTREGS;
 const int NumFloatRegs = NumFloatV8ArchRegs + NumFloatSpecialRegs;
 const int NumVecRegs = NumVecV8ArchRegs + NumVecSpecialRegs;
+const int VECREG_UREG0 = 32;
+const int NumVecPredRegs = 17;  // P0-P15, FFR
+const int PREDREG_FFR = 16;
 const int NumCCRegs = NUM_CCREGS;
 const int NumMiscRegs = NUM_MISCREGS;
 
 #define ISA_HAS_CC_REGS
 
-const int TotalNumRegs = NumIntRegs + NumFloatRegs + NumVecRegs + NumMiscRegs;
+const int TotalNumRegs = NumIntRegs + NumFloatRegs + NumVecRegs +
+    NumVecPredRegs + NumMiscRegs;
 
 // semantically meaningful register indices
 const int ReturnValueReg = 0;

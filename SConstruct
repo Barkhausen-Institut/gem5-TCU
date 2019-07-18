@@ -1,6 +1,6 @@
 # -*- mode:python -*-
 
-# Copyright (c) 2013, 2015-2017 ARM Limited
+# Copyright (c) 2013, 2015-2017, 2019 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -92,10 +92,12 @@ from os import mkdir, environ
 from os.path import abspath, basename, dirname, expanduser, normpath
 from os.path import exists,  isdir, isfile
 from os.path import join as joinpath, split as splitpath
+from re import match
 
 # SCons includes
 import SCons
 import SCons.Node
+import SCons.Node.FS
 
 from m5.util import compareVersions, readCommand
 
@@ -214,6 +216,19 @@ def makePathListAbsolute(path_list, root=GetLaunchDir()):
     return [abspath(joinpath(root, expanduser(str(p))))
             for p in path_list]
 
+def find_first_prog(prog_names):
+    """Find the absolute path to the first existing binary in prog_names"""
+
+    if not isinstance(prog_names, (list, tuple)):
+        prog_names = [ prog_names ]
+
+    for p in prog_names:
+        p = main.WhereIs(p)
+        if p is not None:
+            return p
+
+    return None
+
 # Each target must have 'build' in the interior of the path; the
 # directory below this will determine the build parameters.  For
 # example, for target 'foo/bar/build/ALPHA_SE/arch/alpha/blah.do' we
@@ -275,6 +290,10 @@ global_vars = Variables(global_vars_file, args=ARGUMENTS)
 global_vars.AddVariables(
     ('CC', 'C compiler', environ.get('CC', main['CC'])),
     ('CXX', 'C++ compiler', environ.get('CXX', main['CXX'])),
+    ('CCFLAGS_EXTRA', 'Extra C and C++ compiler flags', ''),
+    ('LDFLAGS_EXTRA', 'Extra linker flags', ''),
+    ('PYTHON_CONFIG', 'Python config binary to use',
+     [ 'python2.7-config', 'python-config' ]),
     ('PROTOC', 'protoc tool', environ.get('PROTOC', 'protoc')),
     ('BATCH', 'Use batch pool for build and tests', False),
     ('BATCH_CMD', 'Batch pool submission command name', 'qdo'),
@@ -702,18 +721,21 @@ if main['USE_PYTHON']:
     # we add them explicitly below. If you want to link in an alternate
     # version of python, see above for instructions on how to invoke
     # scons with the appropriate PATH set.
-    #
-    # First we check if python2-config exists, else we use python-config
-    python_config = readCommand(['which', 'python2-config'],
-                                exception='').strip()
-    if not os.path.exists(python_config):
-        python_config = readCommand(['which', 'python-config'],
-                                    exception='').strip()
+
+    python_config = find_first_prog(main['PYTHON_CONFIG'])
+    if python_config is None:
+        print("Error: can't find a suitable python-config, tried %s" % \
+              main['PYTHON_CONFIG'])
+        Exit(1)
+
+    print("Info: Using Python config: %s" % (python_config, ))
     py_includes = readCommand([python_config, '--includes'],
                               exception='').split()
+    py_includes = filter(lambda s: match(r'.*\/include\/.*',s), py_includes)
     # Strip the -I from the include folders before adding them to the
     # CPPPATH
-    main.Append(CPPPATH=map(lambda inc: inc[2:], py_includes))
+    py_includes = map(lambda s: s[2:] if s.startswith('-I') else s, py_includes)
+    main.Append(CPPPATH=py_includes)
 
     # Read the linker flags and split them into libraries and other link
     # flags. The libraries are added later through the call the CheckLib.
@@ -994,14 +1016,17 @@ sticky_vars.AddVariables(
     EnumVariable('PROTOCOL', 'Coherence protocol for Ruby', 'None',
                   all_protocols),
     EnumVariable('BACKTRACE_IMPL', 'Post-mortem dump implementation',
-                 backtrace_impls[-1], backtrace_impls)
+                 backtrace_impls[-1], backtrace_impls),
+    ('NUMBER_BITS_PER_SET', 'Max elements in set (default 64)',
+                 64),
     )
 
 # These variables get exported to #defines in config/*.hh (see src/SConscript).
 export_vars += ['USE_FENV', 'SS_COMPATIBLE_FP', 'TARGET_ISA', 'TARGET_GPU_ISA',
                 'CP_ANNOTATE', 'USE_POSIX_CLOCK', 'USE_KVM', 'USE_TUNTAP',
                 'PROTOCOL', 'HAVE_PROTOBUF', 'HAVE_VALGRIND',
-                'HAVE_PERF_ATTR_EXCLUDE_HOST', 'USE_PNG']
+                'HAVE_PERF_ATTR_EXCLUDE_HOST', 'USE_PNG',
+                'NUMBER_BITS_PER_SET']
 
 ###################################################
 #
@@ -1072,6 +1097,29 @@ partial_shared_builder = Builder(action=SCons.Defaults.ShLinkAction,
 main.Append(BUILDERS = { 'PartialShared' : partial_shared_builder,
                          'PartialStatic' : partial_static_builder })
 
+def add_local_rpath(env, *targets):
+    '''Set up an RPATH for a library which lives in the build directory.
+
+    The construction environment variable BIN_RPATH_PREFIX should be set to
+    the relative path of the build directory starting from the location of the
+    binary.'''
+    for target in targets:
+        target = env.Entry(target)
+        if not isinstance(target, SCons.Node.FS.Dir):
+            target = target.dir
+        relpath = os.path.relpath(target.abspath, env['BUILDDIR'])
+        components = [
+            '\\$$ORIGIN',
+            '${BIN_RPATH_PREFIX}',
+            relpath
+        ]
+        env.Append(RPATH=[env.Literal(os.path.join(*components))])
+
+if sys.platform != "darwin":
+    main.Append(LINKFLAGS=Split('-z origin'))
+
+main.AddMethod(add_local_rpath, 'AddLocalRPATH')
+
 # builds in ext are shared across all configs in the build root.
 ext_dir = abspath(joinpath(str(main.root), 'ext'))
 ext_build_dirs = []
@@ -1081,6 +1129,9 @@ for root, dirs, files in os.walk(ext_dir):
         ext_build_dirs.append(build_dir)
         main.SConscript(joinpath(root, 'SConscript'),
                         variant_dir=joinpath(build_root, build_dir))
+
+gdb_xml_dir = joinpath(ext_dir, 'gdb-xml')
+Export('gdb_xml_dir')
 
 main.Prepend(CPPPATH=Dir('ext/pybind11/include/'))
 
@@ -1238,6 +1289,9 @@ for variant_path in variant_paths:
 
     if env['USE_SSE2']:
         env.Append(CCFLAGS=['-msse2'])
+
+    env.Append(CCFLAGS='$CCFLAGS_EXTRA')
+    env.Append(LINKFLAGS='$LDFLAGS_EXTRA')
 
     # The src/SConscript file sets up the build rules in 'env' according
     # to the configured variables.  It returns a list of environments,

@@ -183,13 +183,13 @@ AccelLogic::CpuPort::recvReqRetry()
     logic.recvRetry();
 }
 
-BaseMasterPort &
-AccelLogic::getMasterPort(const std::string& if_name, PortID idx)
+Port &
+AccelLogic::getPort(const std::string& if_name, PortID idx)
 {
     if (if_name == "port")
         return port;
     else
-        return MemObject::getMasterPort(if_name, idx);
+        return SimObject::getPort(if_name, idx);
 }
 
 bool

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2013, 2015 ARM Limited
+ * Copyright (c) 2012-2013, 2015, 2018 ARM Limited
  * Copyright (c) 2016 Google Inc.
  * Copyright (c) 2017, Centre National de la Recherche Scientifique
  * All rights reserved.
@@ -46,12 +46,13 @@
 #define __MEM_COMM_MONITOR_HH__
 
 #include "base/statistics.hh"
-#include "mem/mem_object.hh"
+#include "mem/port.hh"
 #include "params/CommMonitor.hh"
 #include "sim/probe/mem.hh"
+#include "sim/sim_object.hh"
 
 /**
- * The communication monitor is a MemObject which can monitor statistics of
+ * The communication monitor is a SimObject which can monitor statistics of
  * the communication happening between two ports in the memory system.
  *
  * Currently the following stats are implemented: Histograms of read/write
@@ -61,7 +62,7 @@
  * to capture the number of accesses to an address over time ("heat map").
  * All stats can be disabled from Python.
  */
-class CommMonitor : public MemObject
+class CommMonitor : public SimObject
 {
 
   public: // Construction & SimObject interfaces
@@ -83,12 +84,9 @@ class CommMonitor : public MemObject
     void startup() override;
     void regProbePoints() override;
 
-  public: // MemObject interfaces
-    BaseMasterPort& getMasterPort(const std::string& if_name,
-                                  PortID idx = InvalidPortID) override;
-
-    BaseSlavePort& getSlavePort(const std::string& if_name,
-                                PortID idx = InvalidPortID) override;
+  public: // SimObject interfaces
+    Port &getPort(const std::string &if_name,
+                  PortID idx=InvalidPortID) override;
 
   private:
 
@@ -232,6 +230,11 @@ class CommMonitor : public MemObject
             mon.recvRespRetry();
         }
 
+        bool tryTiming(PacketPtr pkt)
+        {
+            return mon.tryTiming(pkt);
+        }
+
       private:
 
         CommMonitor& mon;
@@ -268,6 +271,8 @@ class CommMonitor : public MemObject
     void recvRespRetry();
 
     void recvRangeChange();
+
+    bool tryTiming(PacketPtr pkt);
 
     /** Stats declarations, all in a struct for convenience. */
     struct MonitorStats

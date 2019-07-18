@@ -839,8 +839,8 @@ class DRAMCtrl : public QoS::MemCtrl
      * @param isRead Is the request for a read or a write to DRAM
      * @return A DRAMPacket pointer with the decoded information
      */
-    DRAMPacket* decodeAddr(PacketPtr pkt, Addr dramPktAddr, unsigned int size,
-                           bool isRead);
+    DRAMPacket* decodeAddr(const PacketPtr pkt, Addr dramPktAddr,
+                           unsigned int size, bool isRead) const;
 
     /**
      * The memory schduler/arbiter - picks which request needs to
@@ -1140,6 +1140,9 @@ class DRAMCtrl : public QoS::MemCtrl
     /** The time when stats were last reset used to calculate average power */
     Tick lastStatsResetTick;
 
+    /** Enable or disable DRAM powerdown states. */
+    bool enableDRAMPowerdown;
+
     /**
      * Upstream caches need this packet until true is returned, so
      * hold it for deletion until a subsequent call
@@ -1176,8 +1179,8 @@ class DRAMCtrl : public QoS::MemCtrl
 
     DrainState drain() override;
 
-    virtual BaseSlavePort& getSlavePort(const std::string& if_name,
-                                        PortID idx = InvalidPortID) override;
+    Port &getPort(const std::string &if_name,
+                  PortID idx=InvalidPortID) override;
 
     virtual void init() override;
     virtual void startup() override;

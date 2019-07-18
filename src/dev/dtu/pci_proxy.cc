@@ -164,26 +164,19 @@ DtuPciProxy::DtuPciProxy(const DtuPciProxyParams* p)
 {
 }
 
-BaseMasterPort&
-DtuPciProxy::getMasterPort(const std::string& if_name, PortID idx)
+Port&
+DtuPciProxy::getPort(const std::string& if_name, PortID idx)
 {
     if (if_name == "dtu_master_port")
         return dtuMasterPort;
     else if (if_name == "pio_port")
         return pioPort;
-    else
-        return MemObject::getMasterPort(if_name, idx);
-}
-
-BaseSlavePort&
-DtuPciProxy::getSlavePort(const std::string& if_name, PortID idx)
-{
-    if (if_name == "dtu_slave_port")
+    else if (if_name == "dtu_slave_port")
         return dtuSlavePort;
     else if (if_name == "dma_port")
         return dmaPort;
     else
-        return MemObject::getSlavePort(if_name, idx);
+        return SimObject::getPort(if_name, idx);
 }
 
 void
