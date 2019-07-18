@@ -400,7 +400,7 @@ RecvEp::print(const RegFile &rf,
         "%s%s EP%u%14s: Recv[buf=%p msz=%#x bsz=%#x hd=%u msgs=%u occ=%#010x unr=%#010x rd=%u wr=%u]\n",
         regAccessName(access), read ? "<-" : "->",
         epId, "",
-        bufAddr, msgSize, size, header, msgCount,
+        bufAddr, 1 << msgSize, 1 << size, header, msgCount,
         occupied, unread, rdPos, wrPos);
 }
 

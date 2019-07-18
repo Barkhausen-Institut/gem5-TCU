@@ -335,7 +335,7 @@ MessageUnit::fetchMessage(unsigned epid)
         return 0;
 
     int i;
-    for (i = ep.rdPos; i < ep.size; ++i)
+    for (i = ep.rdPos; i < (1 << ep.size); ++i)
     {
         if (ep.isUnread(i))
             goto found;
@@ -362,20 +362,20 @@ found:
 
     dtu.regs().setRecvEp(epid, ep);
 
-    return ep.bufAddr + i * ep.msgSize;
+    return ep.bufAddr + (i << ep.msgSize);
 }
 
 int
 MessageUnit::allocSlot(size_t msgSize, unsigned epid, RecvEp &ep)
 {
     // the RecvEp might be invalid
-    if (ep.size == 0)
-        return 0;
+    if (ep.bufAddr == 0)
+        return -1;
 
-    assert(msgSize <= ep.msgSize);
+    assert(msgSize <= (1 << ep.msgSize));
 
     int i;
-    for (i = ep.wrPos; i < ep.size; ++i)
+    for (i = ep.wrPos; i < (1 << ep.size); ++i)
     {
         if (!ep.isOccupied(i))
             goto found;
@@ -386,7 +386,7 @@ MessageUnit::allocSlot(size_t msgSize, unsigned epid, RecvEp &ep)
             goto found;
     }
 
-    return ep.size;
+    return -1;
 
 found:
     ep.setOccupied(i, true);
@@ -435,7 +435,7 @@ MessageUnit::finishMsgReceive(unsigned epId,
                               uint xferFlags)
 {
     RecvEp ep = dtu.regs().getRecvEp(epId);
-    int idx = (msgAddr - ep.bufAddr) / ep.msgSize;
+    int idx = (msgAddr - ep.bufAddr) >> ep.msgSize;
 
     // if the user did an abort while we were receiving a message, make sure that it doesn't succeed
     if (!(xferFlags & XferUnit::XferFlags::PRIV) && dtu.regs().hasFeature(Features::COM_DISABLED))
@@ -460,7 +460,7 @@ MessageUnit::finishMsgReceive(unsigned epId,
             "EP%u: increment message count to %u\n",
             epId, ep.msgCount + 1);
 
-        if (ep.msgCount == ep.size)
+        if (ep.msgCount == (1 << ep.size))
         {
             warn("EP%u: Buffer full!\n", epId);
             return error;
@@ -556,7 +556,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId, uint flags)
     RecvEp ep = dtu.regs().getRecvEp(epId);
 
     int msgidx = allocSlot(pkt->getSize(), epId, ep);
-    if (msgidx == ep.size)
+    if (msgidx == -1)
     {
         DPRINTFS(Dtu, (&dtu),
             "EP%u: ignoring message: no space left\n",
@@ -577,7 +577,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId, uint flags)
     uint rflags = XferUnit::XferFlags::MSGRECV | XferUnit::XferFlags::NOPF;
     if (flags & Dtu::NocFlags::PRIV)
         rflags |= XferUnit::XferFlags::PRIV;
-    Addr localAddr = ep.bufAddr + msgidx * ep.msgSize;
+    Addr localAddr = ep.bufAddr + (msgidx << ep.msgSize);
 
     auto *ev = new ReceiveTransferEvent(this, localAddr, rflags, pkt);
     dtu.startTransfer(ev, delay);

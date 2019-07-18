@@ -153,7 +153,7 @@ struct RecvEp
     {
         if (msgSize == 0)
             return MAX_MSGS;
-        int idx = (msg - bufAddr) / msgSize;
+        int idx = (msg - bufAddr) >> msgSize;
         return (idx >= 0 && idx < MAX_MSGS) ? idx : MAX_MSGS;
     }
 
