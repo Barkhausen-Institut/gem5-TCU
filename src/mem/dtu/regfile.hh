@@ -98,6 +98,9 @@ constexpr unsigned numCmdRegs = 5;
 //
 constexpr unsigned numEpRegs = 3;
 
+// buffer for prints (32 * 8 bytes)
+constexpr unsigned numBufRegs = 32;
+
 enum class EpType
 {
     INVALID,
@@ -333,6 +336,8 @@ class RegFile
 
     void resetHeader();
 
+    const char *getBuffer(size_t bytes);
+
     /// returns which command registers have been written
     Result handleRequest(PacketPtr pkt, bool isCpuRequest);
 
@@ -365,6 +370,8 @@ class RegFile
     std::vector<std::vector<reg_t>> epRegs;
 
     std::vector<ReplyHeader> header;
+
+    std::vector<reg_t> bufRegs;
 
     const unsigned numEndpoints;
 

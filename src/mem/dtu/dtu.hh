@@ -209,7 +209,7 @@ class Dtu : public BaseDtu
     PacketPtr generateRequest(Addr addr, Addr size, MemCmd cmd);
     void freeRequest(PacketPtr pkt);
 
-    void printLine(Addr addr, Addr size);
+    void printLine(Addr len);
 
     bool startSleep(uint64_t cycles, bool ack);
 

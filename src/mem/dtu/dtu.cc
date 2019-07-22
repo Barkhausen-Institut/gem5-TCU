@@ -297,8 +297,7 @@ Dtu::executeCommand(PacketPtr pkt)
             break;
         case Command::PRINT:
         {
-            const DataReg data = regs().getDataReg();
-            printLine(data.addr, data.size);
+            printLine(cmd.arg);
             finishCommand(Error::NONE);
         }
         break;
@@ -672,48 +671,9 @@ Dtu::clearIrq()
 }
 
 void
-Dtu::printLine(Addr addr, Addr size)
+Dtu::printLine(Addr len)
 {
-    char buffer[256];
-    size_t pos = 0;
-    size_t rem = std::min(sizeof(buffer) - 1, size);
-    while (rem > 0)
-    {
-        size_t off = addr & (system->cacheLineSize() - 1);
-        size_t amount = std::min(rem, system->cacheLineSize() - off);
-
-
-        NocAddr phys(addr);
-        if(tlb() && ptUnit)
-        {
-            DtuTlb::Result res = tlb()->lookup(addr, DtuTlb::READ, &phys);
-            assert(res != DtuTlb::PAGEFAULT);
-            assert(res != DtuTlb::NOMAP);
-
-            if(res == DtuTlb::MISS)
-            {
-                int xlate = ptUnit->translateFunctional(addr, DtuTlb::READ, &phys);
-                assert(xlate == 1);
-            }
-        }
-
-        auto pkt = generateRequest(phys.getAddr(), amount, MemCmd::ReadReq);
-        dcacheMasterPort.sendFunctional(pkt);
-
-        for(size_t i = 0; i < amount; ++i)
-        {
-            // ignore newlines. we have our own at the end
-            if(pkt->getPtr<char>()[i] != '\n')
-                buffer[pos++] = pkt->getPtr<char>()[i];
-        }
-
-        freeRequest(pkt);
-
-        rem -= amount;
-        addr += amount;
-    }
-    buffer[pos] = '\0';
-
+    const char *buffer = regs().getBuffer(len);
     DPRINTF(Dtu, "PRINT: %s\n", buffer);
 }
 

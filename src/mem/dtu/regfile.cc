@@ -100,6 +100,7 @@ RegFile::RegFile(Dtu &_dtu, const std::string& name, unsigned _numEndpoints,
       cmdRegs(numCmdRegs, 0),
       epRegs(_numEndpoints),
       header(_numHeader, ReplyHeader()),
+      bufRegs(numBufRegs * sizeof(reg_t), 0),
       numEndpoints(_numEndpoints),
       _name(name)
 {
@@ -527,6 +528,16 @@ RegFile::resetHeader()
         h = ReplyHeader();
 }
 
+const char *
+RegFile::getBuffer(size_t bytes)
+{
+    static char tmp[256];
+    assert(bytes + 1 < sizeof(tmp));
+    memcpy(tmp, bufRegs.data(), bytes);
+    tmp[bytes] = '\0';
+    return tmp;
+}
+
 RegFile::Result
 RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
 {
@@ -671,6 +682,20 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
                                data + offset / sizeof(reg_t),
                                sizeof(reg_t));
                         setHeader(headIdx, access, hd);
+                    }
+                }
+                // buf register
+                else
+                {
+                    Addr bufAddr = headAddr - header.size() * sizeof(ReplyHeader);
+                    size_t idx = bufAddr / sizeof(reg_t);
+
+                    if (idx < bufRegs.size())
+                    {
+                        if(pkt->isRead())
+                            data[offset / sizeof(reg_t)] = bufRegs[idx];
+                        else
+                            bufRegs[idx] = data[offset / sizeof(reg_t)];
                     }
                 }
             }
