@@ -48,12 +48,14 @@ M3Loader::M3Loader(const std::vector<Addr> &pes,
                    const std::string &cmdline,
                    unsigned coreId,
                    Addr modOffset,
-                   Addr modSize)
+                   Addr modSize,
+                   Addr peSize)
     : pes(pes),
       commandLine(cmdline),
       coreId(coreId),
       modOffset(modOffset),
-      modSize(modSize)
+      modSize(modSize),
+      peSize(peSize)
 {
 }
 
@@ -332,8 +334,21 @@ M3Loader::initState(System &sys, DTUMemory &dtumem, MasterPort &noc)
         kenv.mod_count = mods.size();
         kenv.mod_size = modarraysize;
         kenv.pe_count  = pes.size();
-        for (size_t i = 0; i < MAX_MEMS; ++i)
-            kenv.mems[i] = 0;
+        kenv.mems[0] = pes[dtumem.memPe] & ~static_cast<Addr>(0xFFF);
+        if (kenv.mems[0] < modOffset + modSize + pes.size() * peSize)
+            panic("Not enough DRAM for modules and PEs");
+        kenv.mems[0] -= modOffset + modSize + pes.size() * peSize;
+
+        size_t j = 1;
+        for (size_t i = 0; i < pes.size(); ++i) {
+            if (i != dtumem.memPe && (pes[i] & 0x7) == 2) {
+                if (j >= MAX_MEMS)
+                    panic("Too many memory PEs");
+                kenv.mems[j++] = pes[i] & ~static_cast<Addr>(0xFFF);
+            }
+        }
+        for (; j < MAX_MEMS; ++j)
+            kenv.mems[j] = 0;
         writeRemote(noc, addr, reinterpret_cast<uint8_t*>(&kenv),
                     sizeof(kenv));
         addr += sizeof(kenv);

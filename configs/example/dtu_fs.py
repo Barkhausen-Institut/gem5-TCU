@@ -407,6 +407,7 @@ def createCorePE(noc, options, no, cmdline, memPE, l1size=None, l2size=None,
     if "kernel" in cmdline:
         pe.mod_offset = mod_offset
         pe.mod_size = mod_size
+        pe.pe_size = pe_size
 
     # Command line
     pe.kernel = cmdline.split(' ')[0]

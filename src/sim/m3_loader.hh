@@ -108,13 +108,15 @@ class M3Loader
     const uint coreId;
     const Addr modOffset;
     const Addr modSize;
+    const Addr peSize;
 
   public:
     M3Loader(const std::vector<Addr> &pes,
              const std::string &cmdline,
              uint coreId,
              Addr modOffset,
-             Addr modSize);
+             Addr modSize,
+             Addr peSize);
 
     const std::vector<Addr> &pe_attr() const
     {

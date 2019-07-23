@@ -40,6 +40,7 @@ class M3ArmSystem(ArmSystem):
 
     mod_offset = Param.Addr(0, "The offset of the boot modules (only for kernel PE)")
     mod_size = Param.Addr(0, "The max. size of the boot modules (only for kernel PE)")
+    pe_size = Param.Addr(0, "The size of the reserved memory region for each PE (only for kernel PE)")
 
     pes = VectorParam.Addr([], "All PEs in the system with their type and mem size")
 

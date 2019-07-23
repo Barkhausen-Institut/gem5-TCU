@@ -44,7 +44,8 @@ M3ArmSystem::M3ArmSystem(Params *p)
                 physProxy, M3Loader::RES_PAGES,
                 (p->pes[p->core_id] >> 7) & 0x3),
       nocPort(*this),
-      loader(p->pes, p->boot_osflags, p->core_id, p->mod_offset, p->mod_size)
+      loader(p->pes, p->boot_osflags, p->core_id,
+             p->mod_offset, p->mod_size, p->pe_size)
 {
 }
 
