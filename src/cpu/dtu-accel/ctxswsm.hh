@@ -39,20 +39,9 @@ class AccelCtxSwSM
 
     enum State
     {
-        SAVE,
-        SAVE_ABORT,
-        SAVE_WRITE,
-        SAVE_SEND,
-        SAVE_WAIT,
-        SAVE_DONE,
-        WAIT,
-
         CHECK,
         FLAGS,
-        RESTORE,
-        RESTORE_WAIT,
-        RESTORE_READ,
-        RESTORE_DONE,
+        DONE,
     };
 
     explicit AccelCtxSwSM(DtuAccel *_accel);
@@ -61,7 +50,6 @@ class AccelCtxSwSM
 
     bool hasStateChanged() const { return stateChanged; }
 
-    bool isWaiting() const { return state == WAIT; }
     void restart() { state = CHECK; }
 
     PacketPtr tick();
@@ -73,8 +61,6 @@ class AccelCtxSwSM
     DtuAccel *accel;
     State state;
     bool stateChanged;
-    Addr offset;
-    bool ctxSwPending;
     bool switched;
 };
 

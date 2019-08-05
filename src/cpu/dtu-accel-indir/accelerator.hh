@@ -61,10 +61,6 @@ class DtuAccelInDir : public DtuAccel
 
     Addr sendMsgAddr() const override { return MSG_ADDR; }
     Addr bufferAddr() const override { return BUF_ADDR; }
-    int contextEp() const override { return 0; }
-    size_t stateSize(bool) const override { return 0; }
-    size_t contextSize(bool) const override { return sizeof(Context); }
-    void *context() override { return &ctx; }
     void setSwitched() override {}
 
   private:
@@ -88,11 +84,8 @@ class DtuAccelInDir : public DtuAccel
         STORE_REPLY,
         SEND_REPLY,
         REPLY_WAIT,
-        REPLY_ERROR,
 
         CTXSW,
-
-        SYSCALL,
     };
 
     std::string getStateName() const;
@@ -136,8 +129,6 @@ class DtuAccelInDir : public DtuAccel
     } M5_ATTR_PACKED reply;
 
     Context ctx;
-    SyscallSM sysc;
-    State syscNext;
     YieldSM yield;
     AccelCtxSwSM ctxsw;
 };

@@ -47,11 +47,8 @@ static const char *stateNames[] =
     "STORE_REPLY",
     "SEND_REPLY",
     "REPLY_WAIT",
-    "REPLY_ERROR",
 
     "CTXSW",
-
-    "SYSCALL",
 };
 
 DtuAccelAladdin::DtuAccelAladdin(const DtuAccelAladdinParams *p)
@@ -63,26 +60,19 @@ DtuAccelAladdin::DtuAccelAladdin(const DtuAccelAladdinParams *p)
     lastState(State::CTXSW),    // something different
     ctx(),
     accelId(p->accel_id),
-    sysc(this),
-    yield(this, &sysc),
+    yield(this),
     ctxsw(this),
     ctxSwPerformed()
 {
     static_assert((sizeof(stateNames) / sizeof(stateNames[0]) ==
-                  static_cast<size_t>(State::SYSCALL) + 1), "Missmatch");
-
-    yield.start();
+                  static_cast<size_t>(State::CTXSW) + 1), "Missmatch");
 }
 
 std::string DtuAccelAladdin::getStateName() const
 {
     std::ostringstream os;
     os << stateNames[static_cast<size_t>(state)];
-    if (state == State::IDLE)
-        os << ":" << yield.stateName();
-    else if (state == State::SYSCALL)
-        os << ":" << sysc.stateName();
-    else if (state == State::CTXSW)
+    if (state == State::CTXSW)
         os << ":" << ctxsw.stateName();
     return os.str();
 }
@@ -93,9 +83,7 @@ DtuAccelAladdin::completeRequest(PacketPtr pkt)
     RequestPtr req = pkt->req;
 
     if (state != lastState ||
-        (state == State::CTXSW && ctxsw.hasStateChanged()) ||
-        (state == State::SYSCALL && sysc.hasStateChanged()) ||
-        (state == State::IDLE && yield.hasStateChanged()))
+        (state == State::CTXSW && ctxsw.hasStateChanged()))
     {
         DPRINTF(DtuAccelAladdinState, "[%s] Got response from memory\n",
             getStateName().c_str());
@@ -157,7 +145,6 @@ DtuAccelAladdin::completeRequest(PacketPtr pkt)
                 }
                 else
                 {
-                    yield.start();
                     state = State::IDLE;
                 }
                 break;
@@ -218,26 +205,7 @@ DtuAccelAladdin::completeRequest(PacketPtr pkt)
                 Dtu::Command::Bits cmd =
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
                 if (cmd.opcode == 0)
-                {
-                    if (cmd.error == 0)
-                        state = State::CTXSW;
-                    else
-                        state = State::REPLY_ERROR;
-                }
-                break;
-            }
-            case State::REPLY_ERROR:
-            {
-                sysc.start(sizeof(reply));
-                syscNext = State::CTXSW;
-                state = State::SYSCALL;
-                break;
-            }
-
-            case State::SYSCALL:
-            {
-                if(sysc.handleMemResp(pkt))
-                    state = syscNext;
+                    state = State::CTXSW;
                 break;
             }
         }
@@ -255,12 +223,6 @@ DtuAccelAladdin::interrupt()
 {
     irqPending = true;
 
-    if (ctxsw.isWaiting())
-    {
-        ctxsw.restart();
-        if (!memPending && !tickEvent.scheduled())
-            schedule(tickEvent, clockEdge(Cycles(1)));
-    }
     // don't interrupt the accelerator logic; this seems to cause trouble in Aladdin
     // else if(state == State::COMPUTE)
     // {
@@ -275,8 +237,6 @@ DtuAccelAladdin::wakeup()
     // don't interrupt the accelerator logic
     if (state != State::COMPUTE)
     {
-        sysc.retryFetch();
-
         if (!memPending && !tickEvent.scheduled())
             schedule(tickEvent, clockEdge(Cycles(1)));
     }
@@ -287,7 +247,6 @@ DtuAccelAladdin::reset()
 {
     irqPending = false;
 
-    yield.start(false);
     state = State::IDLE;
     memset(&ctx, 0, sizeof(ctx));
 }
@@ -335,7 +294,6 @@ DtuAccelAladdin::tick()
 
     if (state != lastState ||
         (state == State::CTXSW && ctxsw.hasStateChanged()) ||
-        (state == State::SYSCALL && sysc.hasStateChanged()) ||
         (state == State::IDLE && yield.hasStateChanged()))
     {
         DPRINTF(DtuAccelAladdinState, "[%s] tick\n",
@@ -462,10 +420,11 @@ DtuAccelAladdin::tick()
 
         case State::STORE_REPLY:
         {
+            reply.res = 0;
             pkt = createPacket(BUF_ADDR,
-                               sizeof(reply.msg),
+                               sizeof(reply),
                                MemCmd::WriteReq);
-            memcpy(pkt->getPtr<uint8_t>(), (char*)&reply.msg, sizeof(reply.msg));
+            memcpy(pkt->getPtr<uint8_t>(), (char*)&reply, sizeof(reply));
             break;
         }
         case State::SEND_REPLY:
@@ -473,7 +432,7 @@ DtuAccelAladdin::tick()
             pkt = createDtuCmdPkt(Dtu::Command::REPLY,
                                   EP_RECV,
                                   BUF_ADDR,
-                                  sizeof(reply.msg),
+                                  sizeof(reply),
                                   ctx.msgAddr);
             break;
         }
@@ -481,25 +440,6 @@ DtuAccelAladdin::tick()
         {
             Addr regAddr = getRegAddr(CmdReg::COMMAND);
             pkt = createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
-            break;
-        }
-        case State::REPLY_ERROR:
-        {
-            reply.sys.opcode = SyscallSM::Operation::FORWARD_REPLY;
-            reply.sys.cap = CAP_RBUF;
-            reply.sys.msgaddr = ctx.msgAddr;
-            reply.sys.event = 0;
-            reply.sys.len = sizeof(reply.msg);
-            reply.sys.event = 0;
-
-            pkt = createPacket(BUF_ADDR, sizeof(reply), MemCmd::WriteReq);
-            memcpy(pkt->getPtr<void>(), &reply, sizeof(reply));
-            break;
-        }
-
-        case State::SYSCALL:
-        {
-            pkt = sysc.tick();
             break;
         }
     }

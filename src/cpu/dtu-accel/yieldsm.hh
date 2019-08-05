@@ -36,48 +36,20 @@
 
 class YieldSM
 {
-    struct Syscall
-    {
-        uint64_t opcode;
-        uint64_t vpe_sel;
-        uint64_t op;
-        uint64_t arg;
-    } M5_ATTR_PACKED;
-
   public:
 
-    enum State
-    {
-        YLD_CHECK,
-        YLD_WAIT,
-        YLD_REPORT,
-        YLD_SYSCALL,
-        YLD_SLEEP,
-    };
-
-    explicit YieldSM(DtuAccel *_accel, SyscallSM *_syscsm)
-        : accel(_accel), syscsm(_syscsm), state(), stateChanged() {}
+    explicit YieldSM(DtuAccel *_accel)
+        : accel(_accel) {}
 
     std::string stateName() const;
 
-    bool hasStateChanged() const { return stateChanged; }
-
-    void start(bool check = true)
-    {
-        state = check ? YLD_CHECK : YLD_SLEEP;
-    }
+    bool hasStateChanged() const { return false; }
 
     PacketPtr tick();
 
     bool handleMemResp(PacketPtr pkt);
 
     DtuAccel *accel;
-    SyscallSM *syscsm;
-    Syscall syscall;
-    uint64_t report;
-    Cycles yieldStart;
-    State state;
-    bool stateChanged;
 };
 
 #endif /* __CPU_DTU_ACCEL_YIELDSM_HH__ */

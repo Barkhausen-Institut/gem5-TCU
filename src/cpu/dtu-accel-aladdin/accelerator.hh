@@ -42,8 +42,7 @@
 class DtuAccelAladdin : public DtuAccel
 {
     static const unsigned EP_RECV       = 7;
-    static const unsigned EP_CTX        = 8;
-    static const unsigned EP_DATA       = 9;
+    static const unsigned EP_DATA       = 8;
     static const unsigned CAP_RBUF      = 64;
 
     static const size_t MSG_SIZE        = 256;
@@ -62,10 +61,6 @@ class DtuAccelAladdin : public DtuAccel
 
     Addr sendMsgAddr() const override { return BUF_ADDR; }
     Addr bufferAddr() const override { return BUF_ADDR; }
-    int contextEp() const override { return EP_CTX; }
-    size_t stateSize(bool) const override { return 0; }
-    size_t contextSize(bool) const override { return sizeof(ctx); }
-    void *context() override { return &ctx; }
     void setSwitched() override { ctxSwPerformed = true; }
 
   private:
@@ -86,11 +81,8 @@ class DtuAccelAladdin : public DtuAccel
         STORE_REPLY,
         SEND_REPLY,
         REPLY_WAIT,
-        REPLY_ERROR,
 
         CTXSW,
-
-        SYSCALL,
     };
 
     struct InvokeMessage
@@ -129,24 +121,11 @@ class DtuAccelAladdin : public DtuAccel
 
     struct
     {
-        struct
-        {
-            uint64_t opcode;
-            uint64_t cap;
-            uint64_t msgaddr;
-            uint64_t len;
-            uint64_t event;
-        } M5_ATTR_PACKED sys;
-        struct
-        {
-            uint64_t res;
-        } M5_ATTR_PACKED msg;
+        uint64_t res;
     } M5_ATTR_PACKED reply;
 
     unsigned accelId;
 
-    SyscallSM sysc;
-    State syscNext;
     YieldSM yield;
     AccelCtxSwSM ctxsw;
     bool ctxSwPerformed;

@@ -52,7 +52,6 @@ class DtuAccelStream : public DtuAccel
     static const unsigned EP_IN_MEM     = 7;
     static const unsigned EP_OUT_SEND   = 8;
     static const unsigned EP_OUT_MEM    = 9;
-    static const unsigned EP_CTX        = 10;
 
     static const unsigned CAP_IN       = 64;
     static const unsigned CAP_OUT      = 65;
@@ -80,17 +79,10 @@ class DtuAccelStream : public DtuAccel
 
     Addr sendMsgAddr() const override { return MSG_ADDR; }
     Addr bufferAddr() const override { return BUF_ADDR; }
-    int contextEp() const override { return EP_CTX; }
-    size_t stateSize(bool saving) const override
-    {
-        return !saving || (ctx.flags & Flags::STARTED) ? bufSize : 0;
+    void setSwitched() override {
+        memset(&ctx, 0, sizeof(ctx));
+        ctx.flags |= Flags::STARTED;
     }
-    size_t contextSize(bool saving) const override
-    {
-        return !saving || (ctx.flags & Flags::STARTED) ? sizeof(ctx) : 0;
-    }
-    void *context() override { return &ctx; }
-    void setSwitched() override { ctx.flags |= Flags::STARTED; }
 
   private:
 
@@ -110,7 +102,6 @@ class DtuAccelStream : public DtuAccel
         INOUT_START,
         INOUT_SEND,
         INOUT_SEND_WAIT,
-        INOUT_SEND_ERROR,
         INOUT_ACK,
 
         READ_DATA,
@@ -122,7 +113,6 @@ class DtuAccelStream : public DtuAccel
         REPLY_STORE,
         REPLY_SEND,
         REPLY_WAIT,
-        REPLY_ERROR,
 
         CTXSW,
 
@@ -131,7 +121,6 @@ class DtuAccelStream : public DtuAccel
         COMMIT_START,
         COMMIT_SEND,
         COMMIT_SEND_WAIT,
-        COMMIT_SEND_ERROR,
 
         EXIT_ACK,
         EXIT,
@@ -197,20 +186,8 @@ class DtuAccelStream : public DtuAccel
 
     struct
     {
-        struct
-        {
-            uint64_t opcode;
-            uint64_t sgate_sel;
-            uint64_t rgate_sel;
-            uint64_t len;
-            uint64_t rlabel;
-            uint64_t event;
-        } M5_ATTR_PACKED sys;
-        struct
-        {
-            uint64_t cmd;
-            uint64_t commit;
-        } M5_ATTR_PACKED msg;
+        uint64_t cmd;
+        uint64_t commit;
     } M5_ATTR_PACKED rdwr_msg;
 
     struct
@@ -223,20 +200,9 @@ class DtuAccelStream : public DtuAccel
 
     struct
     {
-        struct
-        {
-            uint64_t opcode;
-            uint64_t rgate_sel;
-            uint64_t msgaddr;
-            uint64_t len;
-            uint64_t event;
-        } M5_ATTR_PACKED sys;
-        struct
-        {
-            uint64_t err;
-            uint64_t off;
-            uint64_t len;
-        } M5_ATTR_PACKED msg;
+        uint64_t err;
+        uint64_t off;
+        uint64_t len;
     } M5_ATTR_PACKED reply;
 
     size_t bufSize;

@@ -73,11 +73,6 @@ class DtuAccel : public MemObject
 
     virtual Addr sendMsgAddr() const = 0;
     virtual Addr bufferAddr() const = 0;
-
-    virtual int contextEp() const = 0;
-    virtual size_t stateSize(bool saving) const = 0;
-    virtual size_t contextSize(bool saving) const = 0;
-    virtual void *context() = 0;
     virtual void setSwitched() = 0;
 
     class CpuPort : public MasterPort

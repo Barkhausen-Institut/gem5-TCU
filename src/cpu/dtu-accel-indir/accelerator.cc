@@ -50,11 +50,8 @@ static const char *stateNames[] =
     "STORE_REPLY",
     "SEND_REPLY",
     "REPLY_WAIT",
-    "REPLY_ERROR",
 
     "CTXSW",
-
-    "SYSCALL",
 };
 
 DtuAccelInDir::DtuAccelInDir(const DtuAccelInDirParams *p)
@@ -66,24 +63,18 @@ DtuAccelInDir::DtuAccelInDir(const DtuAccelInDirParams *p)
     lastState(State::CTXSW),    // something different
     msgAddr(),
     ctx(),
-    sysc(this),
-    yield(this, &sysc),
+    yield(this),
     ctxsw(this)
 {
     static_assert((sizeof(stateNames) / sizeof(stateNames[0]) ==
-                  static_cast<size_t>(State::SYSCALL) + 1), "Missmatch");
-    yield.start();
+                  static_cast<size_t>(State::CTXSW) + 1), "Missmatch");
 }
 
 std::string DtuAccelInDir::getStateName() const
 {
     std::ostringstream os;
     os << stateNames[static_cast<size_t>(state)];
-    if (state == State::IDLE)
-        os << ":" << yield.stateName();
-    else if (state == State::SYSCALL)
-        os << ":" << sysc.stateName();
-    else if (state == State::CTXSW)
+    if (state == State::CTXSW)
         os << ":" << ctxsw.stateName();
     return os.str();
 }
@@ -94,9 +85,7 @@ DtuAccelInDir::completeRequest(PacketPtr pkt)
     RequestPtr req = pkt->req;
 
     if (state != lastState ||
-        (state == State::CTXSW && ctxsw.hasStateChanged()) ||
-        (state == State::SYSCALL && sysc.hasStateChanged()) ||
-        (state == State::IDLE && yield.hasStateChanged()))
+        (state == State::CTXSW && ctxsw.hasStateChanged()))
     {
         DPRINTF(DtuAccelInDirState, "[%s] Got response from memory\n",
             getStateName().c_str());
@@ -149,7 +138,6 @@ DtuAccelInDir::completeRequest(PacketPtr pkt)
                 }
                 else
                 {
-                    yield.start();
                     state = State::IDLE;
                 }
                 break;
@@ -206,26 +194,7 @@ DtuAccelInDir::completeRequest(PacketPtr pkt)
                 Dtu::Command::Bits cmd =
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
                 if (cmd.opcode == 0)
-                {
-                    if (cmd.error == 0)
-                        state = State::CTXSW;
-                    else
-                        state = State::REPLY_ERROR;
-                }
-                break;
-            }
-            case State::REPLY_ERROR:
-            {
-                sysc.start(sizeof(reply));
-                syscNext = State::CTXSW;
-                state = State::SYSCALL;
-                break;
-            }
-
-            case State::SYSCALL:
-            {
-                if(sysc.handleMemResp(pkt))
-                    state = syscNext;
+                    state = State::CTXSW;
                 break;
             }
         }
@@ -241,8 +210,6 @@ DtuAccelInDir::completeRequest(PacketPtr pkt)
 void
 DtuAccelInDir::wakeup()
 {
-    sysc.retryFetch();
-
     if (!memPending && !tickEvent.scheduled())
         schedule(tickEvent, clockEdge(Cycles(1)));
 }
@@ -251,13 +218,6 @@ void
 DtuAccelInDir::interrupt()
 {
     irqPending = true;
-
-    if (ctxsw.isWaiting())
-    {
-        ctxsw.restart();
-        if (!memPending && !tickEvent.scheduled())
-            schedule(tickEvent, clockEdge(Cycles(1)));
-    }
 }
 
 void
@@ -265,7 +225,6 @@ DtuAccelInDir::reset()
 {
     irqPending = false;
 
-    yield.start(false);
     state = State::IDLE;
     memset(&ctx, 0, sizeof(ctx));
 }
@@ -277,7 +236,6 @@ DtuAccelInDir::tick()
 
     if (state != lastState ||
         (state == State::CTXSW && ctxsw.hasStateChanged()) ||
-        (state == State::SYSCALL && sysc.hasStateChanged()) ||
         (state == State::IDLE && yield.hasStateChanged()))
     {
         DPRINTF(DtuAccelInDirState, "[%s] tick\n",
@@ -364,25 +322,6 @@ DtuAccelInDir::tick()
         {
             Addr regAddr = getRegAddr(CmdReg::COMMAND);
             pkt = createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
-            break;
-        }
-        case State::REPLY_ERROR:
-        {
-            reply.sys.opcode = SyscallSM::Operation::FORWARD_REPLY;
-            reply.sys.cap = CAP_RBUF;
-            reply.sys.msgaddr = msgAddr;
-            reply.sys.event = 0;
-            reply.sys.len = sizeof(reply.msg);
-            reply.sys.event = 0;
-
-            pkt = createPacket(MSG_ADDR, sizeof(reply), MemCmd::WriteReq);
-            memcpy(pkt->getPtr<void>(), &reply, sizeof(reply));
-            break;
-        }
-
-        case State::SYSCALL:
-        {
-            pkt = sysc.tick();
             break;
         }
     }
