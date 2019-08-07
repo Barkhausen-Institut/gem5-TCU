@@ -334,6 +334,8 @@ M3Loader::initState(System &sys, DTUMemory &dtumem, MasterPort &noc)
         kenv.mod_count = mods.size();
         kenv.mod_size = modarraysize;
         kenv.pe_count  = pes.size();
+        kenv.pe_mem_base = NocAddr(dtumem.memPe, modOffset + modSize).getAddr();
+        kenv.pe_mem_size = peSize;
         kenv.mems[0] = pes[dtumem.memPe] & ~static_cast<Addr>(0xFFF);
         if (kenv.mems[0] < modOffset + modSize + pes.size() * peSize)
             panic("Not enough DRAM for modules and PEs");
