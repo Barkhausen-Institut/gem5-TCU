@@ -199,12 +199,25 @@ PtUnit::describeAccess(uint access)
 }
 
 bool
+PtUnit::canSendPF() const
+{
+    if (!dtu.regs().hasFeature(Features::PAGEFAULTS))
+        return false;
+
+    int pfep = dtu.regs().get(DtuReg::PF_EP) & 0xFF;
+    if (pfep >= dtu.numEndpoints)
+        return false;
+
+    return dtu.regs().getSendEp(pfep).maxMsgSize != 0;
+}
+
+bool
 PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, uint access)
 {
     if (!ev->trans->causePagefault())
         return false;
 
-    if (!dtu.regs().hasFeature(Features::PAGEFAULTS))
+    if (!canSendPF())
     {
         DPRINTFS(DtuPf, (&dtu),
             "Pagefault (%llu: %s @ %p), but pagefault sending is disabled\n",
@@ -214,18 +227,8 @@ PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, uint access)
         return false;
     }
 
-    int pfep = ev->toKernel ? Dtu::SYSCALL_EP
-                            : (dtu.regs().get(DtuReg::PF_EP) & 0xFF);
-    assert(pfep < dtu.numEndpoints);
+    int pfep = dtu.regs().get(DtuReg::PF_EP) & 0xFF;
     SendEp ep = dtu.regs().getSendEp(pfep);
-
-    // fall back to syscall EP, if the PF ep is invalid
-    if(ep.maxMsgSize == 0)
-    {
-        ev->toKernel = true;
-        pfep = Dtu::SYSCALL_EP;
-        ep = dtu.regs().getSendEp(pfep);
-    }
 
     size_t size = sizeof(MessageHeader) + sizeof(PagefaultMessage);
     assert(size <= ep.maxMsgSize);
@@ -307,20 +310,9 @@ PtUnit::sendingPfFailed(PacketPtr pkt, int error)
 
     if (ev)
     {
-        DPRINTFS(DtuPf, (&dtu),
-            "Sending Pagefault (%llu: %s @ %p) failed (%d); notifying kernel\n",
+        // TODO don't panic, but notify software
+        panic("Sending Pagefault (%llu: %s @ %p) failed (%d)\n",
             id, describeAccess(ev->access), ev->virt, error);
-
-        if (error == static_cast<int>(Dtu::Error::VPE_GONE))
-        {
-            ev->toKernel = true;
-            dtu.schedule(ev, dtu.clockEdge(Cycles(1)));
-        }
-        else
-        {
-            panic("Unable to resolve pagefault (%llu: %s @ %p)",
-                id, describeAccess(ev->access), ev->virt);
-        }
     }
 }
 
@@ -396,7 +388,6 @@ PtUnit::finishPagefault(PacketPtr pkt)
             id, describeAccess(ev->access), ev->virt);
 
         // retry the translation
-        ev->toKernel = false;
         ev->forceWalk = true;
         dtu.schedule(ev, dtu.clockEdge(Cycles(1)));
     }
@@ -504,7 +495,6 @@ PtUnit::startTranslate(Addr virt, uint access, Translation *trans)
     event->access = access;
     event->trans = trans;
     event->ptAddr = dtu.regs().get(DtuReg::ROOT_PT);
-    event->toKernel = false;
     trans->_event = event;
     translations.push_back(event);
 

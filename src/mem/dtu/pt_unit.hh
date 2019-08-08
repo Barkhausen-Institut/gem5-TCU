@@ -104,13 +104,11 @@ class PtUnit
         Addr ptAddr;
         uint access;
         Translation* trans;
-        bool toKernel;
         bool forceWalk;
 
         TranslateEvent(PtUnit& _unit)
             : unit(_unit), id(nextId++), startCycle(), pfStartCycle(),
-              level(), virt(), ptAddr(), access(), trans(), toKernel(),
-              forceWalk()
+              level(), virt(), ptAddr(), access(), trans(), forceWalk()
         {}
 
         void process() override;
@@ -165,6 +163,8 @@ class PtUnit
     void nextPagefault(TranslateEvent *ev);
 
     PacketPtr createPacket(Addr virt, Addr ptAddr, int level);
+
+    bool canSendPF() const;
 
     bool sendPagefaultMsg(TranslateEvent *ev, Addr virt, uint access);
 
