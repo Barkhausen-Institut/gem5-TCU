@@ -157,8 +157,8 @@ PtUnit::TranslateEvent::finish(bool success, const NocAddr &addr)
     setFlags(AutoDelete);
 
     auto it = std::find(unit.translations.begin(), unit.translations.end(), this);
-    assert(it != unit.translations.end());
-    unit.translations.erase(it);
+    if (it != unit.translations.end())
+        unit.translations.erase(it);
 
     unit.nextPagefault(this);
 
