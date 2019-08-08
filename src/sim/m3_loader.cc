@@ -287,7 +287,7 @@ M3Loader::initState(System &sys, DTUMemory &dtumem, MasterPort &noc)
     if (modOffset)
     {
         // rctmux is always needed
-        mods.push_back(std::make_pair("rctmux", ""));
+        mods.push_back(std::make_pair("dtumux", ""));
 
         uint8_t *modarray = nullptr;
         size_t modarraysize = 0;
