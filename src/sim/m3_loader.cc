@@ -41,9 +41,6 @@
 
 #include <libgen.h>
 
-const unsigned M3Loader::RES_PAGES =
-    (STACK_AREA + STACK_SIZE) >> DtuTlb::PAGE_BITS;
-
 M3Loader::M3Loader(const std::vector<Addr> &pes,
                    const std::string &cmdline,
                    unsigned coreId,
@@ -170,7 +167,7 @@ M3Loader::mapMemory(System &sys, DTUMemory &dtumem)
         dtumem.mapSegment(bssEnd, HEAP_SIZE, DtuTlb::INTERN | DtuTlb::RW);
 
         // state and stack
-        dtumem.mapSegment(RT_START, RT_SIZE, DtuTlb::INTERN | DtuTlb::RW);
+        dtumem.mapSegment(ENV_START, ENV_SIZE, DtuTlb::INTERN | DtuTlb::RW);
         dtumem.mapSegment(STACK_AREA, STACK_SIZE, DtuTlb::INTERN | DtuTlb::RW);
     }
 
@@ -190,7 +187,7 @@ M3Loader::initState(System &sys, DTUMemory &dtumem, MasterPort &noc)
     memset(&env, 0, sizeof(env));
     env.coreid = coreId;
     env.argc = getArgc();
-    Addr argv = RT_START + sizeof(env);
+    Addr argv = ENV_START + sizeof(env);
     // the kernel gets the kernel env behind the normal env
     if (modOffset)
         argv += sizeof(KernelEnv);
@@ -205,10 +202,10 @@ M3Loader::initState(System &sys, DTUMemory &dtumem, MasterPort &noc)
         env.heapsize = 0;
 
     // check if there is enough space
-    if (commandLine.length() + 1 > RT_START + RT_SIZE - args)
+    if (commandLine.length() + 1 > ENV_START + ENV_SIZE - args)
     {
         panic("Command line \"%s\" is longer than %d characters.\n",
-                commandLine, RT_START + RT_SIZE - args - 1);
+                commandLine, ENV_START + ENV_SIZE - args - 1);
     }
 
     std::string kernelPath;
@@ -384,5 +381,5 @@ M3Loader::initState(System &sys, DTUMemory &dtumem, MasterPort &noc)
 
     // write env
     sys.physProxy.writeBlob(
-        RT_START, reinterpret_cast<uint8_t*>(&env), sizeof(env));
+        ENV_START, reinterpret_cast<uint8_t*>(&env), sizeof(env));
 }

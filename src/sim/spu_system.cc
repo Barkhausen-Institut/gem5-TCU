@@ -34,7 +34,7 @@
 SpuSystem::SpuSystem(Params *p)
     : System(p),
       DTUMemory(this, p->memory_pe, p->memory_offset, p->memory_size,
-                physProxy, 1, (p->pes[p->core_id] >> 7) & 0x3),
+                physProxy, (p->pes[p->core_id] >> 7) & 0x3),
       pes(p->pes),
       coreId(p->core_id)
 {

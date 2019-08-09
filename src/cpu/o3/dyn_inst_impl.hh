@@ -75,7 +75,7 @@ template <class Impl>BaseO3DynInst<Impl>::~BaseO3DynInst()
         if (fetch != -1) {
             Tick val;
             // Print info needed by the pipeline activity viewer.
-            DPRINTFR(O3PipeView, "O3PipeView:fetch:%llu:0x%08llx:%d:%llu:%s\n",
+            DPRINTFS(O3PipeView, this->getCpuPtr(), "O3PipeView:fetch:%llu:0x%08llx:%d:%llu:%s\n",
                      fetch,
                      this->instAddr(),
                      this->microPC(),
@@ -83,19 +83,19 @@ template <class Impl>BaseO3DynInst<Impl>::~BaseO3DynInst()
                      this->staticInst->disassemble(this->instAddr()));
 
             val = (this->decodeTick == -1) ? 0 : fetch + this->decodeTick;
-            DPRINTFR(O3PipeView, "O3PipeView:decode:%llu\n", val);
+            DPRINTFS(O3PipeView, this->getCpuPtr(), "O3PipeView:decode:%llu\n", val);
             val = (this->renameTick == -1) ? 0 : fetch + this->renameTick;
-            DPRINTFR(O3PipeView, "O3PipeView:rename:%llu\n", val);
+            DPRINTFS(O3PipeView, this->getCpuPtr(), "O3PipeView:rename:%llu\n", val);
             val = (this->dispatchTick == -1) ? 0 : fetch + this->dispatchTick;
-            DPRINTFR(O3PipeView, "O3PipeView:dispatch:%llu\n", val);
+            DPRINTFS(O3PipeView, this->getCpuPtr(), "O3PipeView:dispatch:%llu\n", val);
             val = (this->issueTick == -1) ? 0 : fetch + this->issueTick;
-            DPRINTFR(O3PipeView, "O3PipeView:issue:%llu\n", val);
+            DPRINTFS(O3PipeView, this->getCpuPtr(), "O3PipeView:issue:%llu\n", val);
             val = (this->completeTick == -1) ? 0 : fetch + this->completeTick;
-            DPRINTFR(O3PipeView, "O3PipeView:complete:%llu\n", val);
+            DPRINTFS(O3PipeView, this->getCpuPtr(), "O3PipeView:complete:%llu\n", val);
             val = (this->commitTick == -1) ? 0 : fetch + this->commitTick;
 
             Tick valS = (this->storeTick == -1) ? 0 : fetch + this->storeTick;
-            DPRINTFR(O3PipeView, "O3PipeView:retire:%llu:store:%llu\n", val, valS);
+            DPRINTFS(O3PipeView, this->getCpuPtr(), "O3PipeView:retire:%llu:store:%llu\n", val, valS);
         }
     }
 #endif

@@ -42,8 +42,6 @@
 
 class M3ArmSystem : public ArmSystem, public DTUMemory
 {
-    static const unsigned RES_PAGES;
-
     class NoCMasterPort : public QueuedMasterPort
     {
       protected:

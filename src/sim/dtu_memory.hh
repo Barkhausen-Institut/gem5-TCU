@@ -63,7 +63,6 @@ class DTUMemory
               Addr memOffset,
               Addr memSize,
               PortProxy &phys,
-              uint firstFree,
               uint vmType);
 
     bool hasMem(uint pe) const
