@@ -283,8 +283,8 @@ M3Loader::initState(System &sys, DTUMemory &dtumem, MasterPort &noc)
     // modules for the kernel
     if (modOffset)
     {
-        // rctmux is always needed
-        mods.push_back(std::make_pair("dtumux", ""));
+        // PEMux is always needed
+        mods.push_back(std::make_pair("pemux", ""));
 
         uint8_t *modarray = nullptr;
         size_t modarraysize = 0;

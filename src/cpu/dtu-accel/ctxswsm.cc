@@ -66,16 +66,16 @@ AccelCtxSwSM::tick()
         case State::FLAGS:
         {
             pkt = accel->createPacket(
-                DtuAccel::RCTMUX_FLAGS, sizeof(uint64_t), MemCmd::ReadReq
+                DtuAccel::PEMUX_FLAGS, sizeof(uint64_t), MemCmd::ReadReq
             );
             break;
         }
         case State::DONE:
         {
             pkt = accel->createPacket(
-                DtuAccel::RCTMUX_FLAGS, sizeof(uint64_t), MemCmd::WriteReq
+                DtuAccel::PEMUX_FLAGS, sizeof(uint64_t), MemCmd::WriteReq
             );
-            *pkt->getPtr<uint64_t>() = DtuAccel::RCTMuxCtrl::SIGNAL;
+            *pkt->getPtr<uint64_t>() = DtuAccel::PEMuxCtrl::SIGNAL;
             break;
         }
     }
@@ -98,9 +98,9 @@ AccelCtxSwSM::handleMemResp(PacketPtr pkt)
         case State::FLAGS:
         {
             uint64_t val = *pkt->getConstPtr<uint64_t>();
-            if (val & DtuAccel::RCTMuxCtrl::RESTORE)
+            if (val & DtuAccel::PEMuxCtrl::RESTORE)
                 switched = true;
-            if (val & DtuAccel::RCTMuxCtrl::WAITING)
+            if (val & DtuAccel::PEMuxCtrl::WAITING)
                 state = State::DONE;
             else
             {

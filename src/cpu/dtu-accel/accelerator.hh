@@ -44,8 +44,8 @@ class DtuAccel : public MemObject
     static const unsigned EP_SYSS;
     static const unsigned EP_SYSR;
 
-    static const Addr RCTMUX_YIELD;
-    static const Addr RCTMUX_FLAGS;
+    static const Addr PEMUX_YIELD;
+    static const Addr PEMUX_FLAGS;
 
     DtuAccel(const DtuAccelParams *p);
 
@@ -89,13 +89,12 @@ class DtuAccel : public MemObject
         void recvReqRetry() override;
     };
 
-    enum RCTMuxCtrl
+    enum PEMuxCtrl
     {
         NONE        = 0,
-        STORE       = 1 << 0, // store operation required
-        RESTORE     = 1 << 1, // restore operation required
-        WAITING     = 1 << 2, // set by the kernel if a signal is required
-        SIGNAL      = 1 << 3, // used to signal completion to the kernel
+        RESTORE     = 1 << 0, // restore operation required
+        WAITING     = 1 << 1, // set by the kernel if a signal is required
+        SIGNAL      = 1 << 2, // used to signal completion to the kernel
     };
 
     PacketPtr createPacket(Addr paddr, size_t size, MemCmd cmd);
