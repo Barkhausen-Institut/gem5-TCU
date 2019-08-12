@@ -97,7 +97,6 @@ class M3Loader
         uint64_t eps;
         uint64_t caps;
         uint64_t backend;
-        uint64_t isr64_handler;
     } M5_ATTR_PACKED;
 
     std::vector<Addr> pes;
