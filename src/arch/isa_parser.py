@@ -204,6 +204,16 @@ class Template(object):
                     pcWbStr = ''
                 else:
                     op_wb_str = op_desc.op_wb + op_wb_str
+
+            # TODO hack to show values of ARM's ldr2_uop correctly
+            if d.class_name == 'MicroLdr2Uop':
+                ops = d.operands.items
+                op_wb_str += '\n'
+                op_wb_str += 'if (traceData) { traceData->setData('
+                op_wb_str += '(uint64_t)' + ops[5].base_name + ' |'
+                op_wb_str += '(uint64_t)' + ops[6].base_name + ' << 32'
+                op_wb_str += '); }'
+
             myDict['op_wb'] = op_wb_str
 
         elif isinstance(d, dict):
