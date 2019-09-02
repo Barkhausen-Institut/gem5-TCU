@@ -531,8 +531,8 @@ RegFile::resetHeader()
 const char *
 RegFile::getBuffer(size_t bytes)
 {
-    static char tmp[256];
-    assert(bytes + 1 < sizeof(tmp));
+    static char tmp[256 + 1];
+    assert(bytes + 1 <= sizeof(tmp));
     memcpy(tmp, bufRegs.data(), bytes);
     tmp[bytes] = '\0';
     return tmp;
