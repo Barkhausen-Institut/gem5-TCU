@@ -98,7 +98,7 @@ MemoryUnit::startRead(const Dtu::Command::Bits& cmd)
 
     if(!(ep.flags & Dtu::MemoryFlags::READ))
     {
-        dtu.scheduleFinishOp(Cycles(1), Dtu::Error::INV_EP);
+        dtu.scheduleFinishOp(Cycles(1), Dtu::Error::NO_PERM);
         return;
     }
 
@@ -119,9 +119,11 @@ MemoryUnit::startRead(const Dtu::Command::Bits& cmd)
         return;
     }
 
-    // TODO error handling
-    assert(size + offset >= size);
-    assert(size + offset <= ep.remoteSize);
+    if(size + offset < size || size + offset > ep.remoteSize)
+    {
+        dtu.scheduleFinishOp(Cycles(1), Dtu::Error::INV_ARGS);
+        return;
+    }
 
     NocAddr nocAddr(ep.targetCore, ep.remoteAddr + offset);
 
@@ -235,7 +237,7 @@ MemoryUnit::startWrite(const Dtu::Command::Bits& cmd)
 
     if(!(ep.flags & Dtu::MemoryFlags::WRITE))
     {
-        dtu.scheduleFinishOp(Cycles(1), Dtu::Error::INV_EP);
+        dtu.scheduleFinishOp(Cycles(1), Dtu::Error::NO_PERM);
         return;
     }
 
@@ -256,10 +258,11 @@ MemoryUnit::startWrite(const Dtu::Command::Bits& cmd)
         return;
     }
 
-    // TODO error handling
-    assert(ep.flags & Dtu::MemoryFlags::WRITE);
-    assert(size + offset >= size);
-    assert(size + offset <= ep.remoteSize);
+    if(size + offset < size || size + offset > ep.remoteSize)
+    {
+        dtu.scheduleFinishOp(Cycles(1), Dtu::Error::INV_ARGS);
+        return;
+    }
 
     NocAddr dest(ep.targetCore, ep.remoteAddr + offset);
 

@@ -78,6 +78,8 @@ class Dtu : public BaseDtu
         ABORT               = 7,
         REPLY_DISABLED      = 8,
         INV_MSG             = 9,
+        INV_ARGS            = 10,
+        NO_PERM             = 11,
     };
 
     enum class NocPacketType
@@ -165,9 +167,9 @@ class Dtu : public BaseDtu
 
         BitUnion64(Bits)
             Bitfield<63, 16> arg;
-            Bitfield<15, 13> error;
-            Bitfield<12> flags;
-            Bitfield<11, 4> epid;
+            Bitfield<15, 12> error;
+            Bitfield<11> flags;
+            Bitfield<10, 4> epid;
             Bitfield<3, 0> opcode;
         EndBitUnion(Bits)
 
