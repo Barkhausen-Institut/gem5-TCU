@@ -207,7 +207,7 @@ MessageUnit::startXfer(const Dtu::Command::Bits& cmd)
         header->flags = Dtu::REPLY_ENABLED; // normal message
     header->flags |= info.flags;
 
-    if (cmd.opcode == Dtu::Command::SEND && dtu.regs().hasFeature(Features::PRIV))
+    if (cmd.opcode == Dtu::Command::SEND_BY && dtu.regs().hasFeature(Features::PRIV))
     {
         RegFile::reg_t sender = dtu.regs().get(CmdReg::OFFSET);
         header->senderCoreId = sender & 0xFF;

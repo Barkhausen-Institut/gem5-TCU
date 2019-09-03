@@ -52,6 +52,7 @@ static const char *cmdNames[] =
 {
     "IDLE",
     "SEND",
+    "SEND_BY",
     "REPLY",
     "READ",
     "WRITE",
@@ -271,6 +272,7 @@ Dtu::executeCommand(PacketPtr pkt)
     switch (cmd.opcode)
     {
         case Command::SEND:
+        case Command::SEND_BY:
         case Command::REPLY:
             msgUnit->startTransmission(cmd);
             break;
@@ -306,7 +308,8 @@ Dtu::executeCommand(PacketPtr pkt)
             panic("Invalid opcode %#x\n", static_cast<RegFile::reg_t>(cmd.opcode));
     }
 
-    if(cmd.opcode == Command::SEND || cmd.opcode == Command::REPLY ||
+    if(cmd.opcode == Command::SEND || cmd.opcode == Command::SEND_BY ||
+       cmd.opcode == Command::REPLY ||
        cmd.opcode == Command::READ || cmd.opcode == Command::WRITE)
     {
         schedCpuResponse(cmdPkt, clockEdge(Cycles(1)));
@@ -373,8 +376,12 @@ Dtu::abortCommand()
         err = Error::ABORT;
     }
     // message sends are aborted, if they haven't been sent yet
-    else if (!cmdSent && (cmd.opcode == Command::SEND || cmd.opcode == Command::REPLY))
+    else if (!cmdSent && (cmd.opcode == Command::SEND ||
+                          cmd.opcode == Command::SEND_BY ||
+                          cmd.opcode == Command::REPLY))
+    {
         err = Error::ABORT;
+    }
 
     if (cmd.opcode == Command::IDLE ||
         cmd.opcode == Command::READ ||
@@ -424,7 +431,7 @@ Dtu::finishCommand(Error error)
         abortCmd = 0;
     }
 
-    if (cmd.opcode == Command::SEND)
+    if (cmd.opcode == Command::SEND || cmd.opcode == Command::SEND_BY)
         msgUnit->finishMsgSend(error, cmd.epid);
     else if (cmd.opcode == Command::REPLY)
         msgUnit->finishMsgReply(error, cmd.epid, cmd.arg);

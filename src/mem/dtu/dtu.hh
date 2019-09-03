@@ -143,14 +143,15 @@ class Dtu : public BaseDtu
         {
             IDLE            = 0,
             SEND            = 1,
-            REPLY           = 2,
-            READ            = 3,
-            WRITE           = 4,
-            FETCH_MSG       = 5,
-            ACK_MSG         = 6,
-            ACK_EVENTS      = 7,
-            SLEEP           = 8,
-            PRINT           = 9,
+            SEND_BY         = 2,
+            REPLY           = 3,
+            READ            = 4,
+            WRITE           = 5,
+            FETCH_MSG       = 6,
+            ACK_MSG         = 7,
+            ACK_EVENTS      = 8,
+            SLEEP           = 9,
+            PRINT           = 10,
         };
 
         enum
