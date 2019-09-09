@@ -148,7 +148,6 @@ MemoryUnit::startRead(const Dtu::Command::Bits& cmd)
 
         dtu.sendNocRequest(Dtu::NocPacketType::READ_REQ,
                            pkt,
-                           ep.vpeId,
                            flags,
                            dtu.commandToNocRequestLatency);
     }
@@ -268,7 +267,7 @@ MemoryUnit::startWrite(const Dtu::Command::Bits& cmd)
 
     uint flags = cmdToXferFlags(cmd.flags);
     auto xfer = new WriteTransferEvent(
-        data.addr, size, flags, dest, ep.vpeId);
+        data.addr, size, flags, dest);
     dtu.startTransfer(xfer, Cycles(0));
 }
 
@@ -307,7 +306,7 @@ MemoryUnit::WriteTransferEvent::transferDone(Dtu::Error result)
 
             uint rflags = xferToNocFlags(flags());
             dtu().setCommandSent();
-            dtu().sendNocRequest(pktType, pkt, vpeId, rflags, delay);
+            dtu().sendNocRequest(pktType, pkt, rflags, delay);
         }
     }
 }
@@ -337,7 +336,7 @@ MemoryUnit::recvFunctionalFromNoc(PacketPtr pkt)
 }
 
 Dtu::Error
-MemoryUnit::recvFromNoc(PacketPtr pkt, uint vpeId, uint flags)
+MemoryUnit::recvFromNoc(PacketPtr pkt, uint flags)
 {
     NocAddr addr(pkt->getAddr());
 
@@ -350,24 +349,6 @@ MemoryUnit::recvFromNoc(PacketPtr pkt, uint vpeId, uint flags)
         dtu.printPacket(pkt);
 
     receivedBytes.sample(pkt->getSize());
-
-    uint16_t ourVpeId = dtu.regs().get(DtuReg::VPE_ID);
-    if (vpeId != ourVpeId ||
-        (!(flags & Dtu::NocFlags::PRIV) &&
-         dtu.regs().hasFeature(Features::COM_DISABLED)))
-    {
-        DPRINTFS(Dtu, (&dtu),
-            "Received memory request for VPE %u, but VPE %u is running with"
-            " communication %sabled\n",
-            vpeId,
-            ourVpeId,
-            dtu.regs().hasFeature(Features::COM_DISABLED) ? "dis" : "en");
-
-        wrongVPE++;
-
-        dtu.sendNocResponse(pkt);
-        return Dtu::Error::VPE_GONE;
-    }
 
     if (dtu.mmioRegion.contains(addr.offset))
     {
@@ -421,11 +402,7 @@ MemoryUnit::ReceiveTransferEvent::transferDone(Dtu::Error result)
 
         // set result
         auto state = dynamic_cast<Dtu::NocSenderState*>(pkt->senderState);
-        if (result != Dtu::Error::NONE &&
-            dtu().regs().hasFeature(Features::COM_DISABLED))
-            state->result = Dtu::Error::VPE_GONE;
-        else
-            state->result = result;
+        state->result = result;
 
         Cycles delay = dtu().transferToNocLatency;
         dtu().schedNocResponse(pkt, dtu().clockEdge(delay));

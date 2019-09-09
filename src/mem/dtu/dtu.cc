@@ -52,7 +52,6 @@ static const char *cmdNames[] =
 {
     "IDLE",
     "SEND",
-    "SEND_BY",
     "REPLY",
     "READ",
     "WRITE",
@@ -92,7 +91,6 @@ Dtu::Dtu(DtuParams* p)
     ptUnit(p->pt_walker ? new PtUnit(*this) : NULL),
     abortCommandEvent(*this),
     completeTranslateEvent(*this),
-    sleepStart(0),
     cmdPkt(),
     cmdFinish(),
     cmdId(0),
@@ -136,8 +134,6 @@ Dtu::Dtu(DtuParams* p)
     // memory PEs don't participate in cache coherence
     else
         coherent = false;
-
-    regs().set(DtuReg::VPE_ID, INVALID_VPE_ID);
 }
 
 Dtu::~Dtu()
@@ -272,7 +268,6 @@ Dtu::executeCommand(PacketPtr pkt)
     switch (cmd.opcode)
     {
         case Command::SEND:
-        case Command::SEND_BY:
         case Command::REPLY:
             msgUnit->startTransmission(cmd);
             break;
@@ -308,8 +303,7 @@ Dtu::executeCommand(PacketPtr pkt)
             panic("Invalid opcode %#x\n", static_cast<RegFile::reg_t>(cmd.opcode));
     }
 
-    if(cmd.opcode == Command::SEND || cmd.opcode == Command::SEND_BY ||
-       cmd.opcode == Command::REPLY ||
+    if(cmd.opcode == Command::SEND || cmd.opcode == Command::REPLY ||
        cmd.opcode == Command::READ || cmd.opcode == Command::WRITE)
     {
         schedCpuResponse(cmdPkt, clockEdge(Cycles(1)));
@@ -323,35 +317,15 @@ Dtu::abortCommand()
     Command::Bits cmd = getCommand();
     abortCmd = regs().get(CmdReg::ABORT);
 
-    if ((abortCmd & Command::ABORT_CMD) && cmd.opcode != Command::IDLE)
+    if (cmd.opcode != Command::IDLE)
     {
         DPRINTF(DtuCmd, "Aborting command %s with EP=%u, flags=%#x (id=%llu)\n",
                 cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epid,
                 cmd.flags, cmdId);
     }
 
-    if (abortCmd & Command::ABORT_VPE)
-    {
-        DPRINTF(DtuCmd, "Disabling communication and aborting PFs\n");
-
-        RegFile::reg_t val = regs().get(DtuReg::FEATURES);
-        val |= static_cast<RegFile::reg_t>(Features::COM_DISABLED);
-        regs().set(DtuReg::FEATURES, val);
-
-        if (ptUnit)
-            ptUnit->abortAll();
-    }
-
     cmdXferBuf = -1;
-    uint types = 0;
-    if (abortCmd & Command::ABORT_CMD)
-        types |= XferUnit::ABORT_LOCAL;
-    if (abortCmd & Command::ABORT_VPE)
-    {
-        types |= XferUnit::ABORT_REMOTE;
-        cmdXferBuf = -1;
-    }
-    xferUnit->abortTransfers(types);
+    xferUnit->abortTransfers(XferUnit::ABORT_LOCAL);
 
     regs().set(CmdReg::ABORT, cmdXferBuf);
 
@@ -359,16 +333,7 @@ Dtu::abortCommand()
     // messages are finished
     Error err = static_cast<Error>(static_cast<uint>(cmd.error));
     if (cmd.opcode == Command::IDLE)
-    {
-        if (abortCmd & Command::ABORT_VPE)
-        {
-            regs().set(CmdReg::COMMAND, Command::PRINT);
-            cmdId = 1;
-        }
-        // all done
-        else
-            abortCmd = 0;
-    }
+        abortCmd = 0;
     // reads/writes are aborted immediately
     else if(cmd.opcode == Command::READ || cmd.opcode == Command::WRITE)
     {
@@ -377,7 +342,6 @@ Dtu::abortCommand()
     }
     // message sends are aborted, if they haven't been sent yet
     else if (!cmdSent && (cmd.opcode == Command::SEND ||
-                          cmd.opcode == Command::SEND_BY ||
                           cmd.opcode == Command::REPLY))
     {
         err = Error::ABORT;
@@ -416,12 +380,7 @@ Dtu::finishCommand(Error error)
     if (abortCmd)
     {
         // try to abort everything
-        uint types = 0;
-        if (abortCmd & Command::ABORT_CMD)
-            types |= XferUnit::ABORT_LOCAL;
-        if (abortCmd & Command::ABORT_VPE)
-            types |= XferUnit::ABORT_REMOTE;
-        if (!xferUnit->abortTransfers(types))
+        if (!xferUnit->abortTransfers(XferUnit::ABORT_LOCAL))
         {
             // okay, retry later
             scheduleFinishOp(Cycles(1), error);
@@ -431,11 +390,11 @@ Dtu::finishCommand(Error error)
         abortCmd = 0;
     }
 
-    if (cmd.opcode == Command::SEND || cmd.opcode == Command::SEND_BY)
+    if (cmd.opcode == Command::SEND)
         msgUnit->finishMsgSend(error, cmd.epid);
     else if (cmd.opcode == Command::REPLY)
         msgUnit->finishMsgReply(error, cmd.epid, cmd.arg);
-    else if (error == Error::NONE && !abortCmd &&
+    else if (error == Error::NONE &&
              (cmd.opcode == Command::READ || cmd.opcode == Command::WRITE))
     {
         const DataReg data = regs().getDataReg();
@@ -566,9 +525,6 @@ Dtu::startSleep(uint64_t cycles, bool ack)
     if (regFile.get(ReqReg::XLATE_REQ) != 0)
         return false;
 
-    // remember when we started
-    sleepStart = curCycle();
-
     DPRINTF(Dtu, "Suspending CU\n");
     connector->suspend();
 
@@ -580,18 +536,7 @@ Dtu::startSleep(uint64_t cycles, bool ack)
 void
 Dtu::stopSleep()
 {
-    if (sleepStart != 0)
-    {
-        // increase idle time in status register
-        RegFile::reg_t counter = regFile.get(DtuReg::IDLE_TIME);
-        counter += curCycle() - sleepStart;
-        regFile.set(DtuReg::IDLE_TIME, counter);
-
-        sleepStart = Cycles(0);
-
-        DPRINTF(Dtu, "Waking up CU\n");
-        connector->wakeup();
-    }
+    connector->wakeup();
 }
 
 void
@@ -600,14 +545,7 @@ Dtu::wakeupCore()
     if (getCommand().opcode == Command::SLEEP)
         scheduleFinishOp(Cycles(1));
     else
-    {
-        // something needs the CU's attention, so remember that we were not idling
-        RegFile::reg_t val = regs().get(DtuReg::FEATURES);
-        val &= ~static_cast<RegFile::reg_t>(Features::IRQ_WAKEUP);
-        regs().set(DtuReg::FEATURES, val);
-
         connector->wakeup();
-    }
 }
 
 Cycles
@@ -616,8 +554,7 @@ Dtu::reset(Addr entry, bool flushInval)
     Cycles delay = flushInval ? flushInvalCaches(true) : Cycles(0);
 
     // hard-abort everything
-    xferUnit->abortTransfers(
-        XferUnit::ABORT_LOCAL | XferUnit::ABORT_REMOTE | XferUnit::ABORT_MSGS);
+    xferUnit->abortTransfers(XferUnit::ABORT_LOCAL | XferUnit::ABORT_MSGS);
 
     if(ptUnit)
         ptUnit->abortAll();
@@ -629,9 +566,6 @@ Dtu::reset(Addr entry, bool flushInval)
 
     Addr rootpt = ptUnit ? 0 : nocToPhys(regs().get(DtuReg::ROOT_PT));
     connector->reset(entry, rootpt);
-
-    // since we did a reset & suspend, restart the sleep
-    sleepStart = curCycle();
 
     resets++;
     return delay;
@@ -657,13 +591,6 @@ Dtu::flushInvalCaches(bool invalidate)
 void
 Dtu::setIrq()
 {
-    RegFile::reg_t val = regs().get(DtuReg::FEATURES);
-    if (getCommand().opcode == Command::SLEEP)
-        val |= static_cast<RegFile::reg_t>(Features::IRQ_WAKEUP);
-    else
-        val &= ~static_cast<RegFile::reg_t>(Features::IRQ_WAKEUP);
-    regs().set(DtuReg::FEATURES, val);
-
     wakeupCore();
 
     connector->setIrq();
@@ -716,7 +643,6 @@ Dtu::sendMemRequest(PacketPtr pkt,
 void
 Dtu::sendNocRequest(NocPacketType type,
                     PacketPtr pkt,
-                    uint vpeId,
                     uint flags,
                     Cycles delay,
                     bool functional)
@@ -724,7 +650,6 @@ Dtu::sendNocRequest(NocPacketType type,
     auto senderState = new NocSenderState();
     senderState->packetType = type;
     senderState->result = Error::NONE;
-    senderState->vpeId = vpeId;
     senderState->flags = flags;
     if (regFile.hasFeature(Features::PRIV))
         senderState->flags |= NocFlags::PRIV;
@@ -1014,7 +939,7 @@ Dtu::handleNocRequest(PacketPtr pkt)
         {
             nocMsgRecvs++;
             uint flags = senderState->flags;
-            res = msgUnit->recvFromNoc(pkt, senderState->vpeId, flags);
+            res = msgUnit->recvFromNoc(pkt, flags);
             break;
         }
         case NocPacketType::READ_REQ:
@@ -1026,7 +951,7 @@ Dtu::handleNocRequest(PacketPtr pkt)
             else if (senderState->packetType == NocPacketType::WRITE_REQ)
                 nocWriteRecvs++;
             uint flags = senderState->flags;
-            res = memUnit->recvFromNoc(pkt, senderState->vpeId, flags);
+            res = memUnit->recvFromNoc(pkt, flags);
             break;
         }
         case NocPacketType::CACHE_MEM_REQ_FUNC:
@@ -1209,7 +1134,6 @@ Dtu::handleCacheMemRequest(PacketPtr pkt, bool functional)
     // this does always target a memory PE, so vpeId is invalid
     sendNocRequest(type,
                    pkt,
-                   INVALID_VPE_ID,
                    NocFlags::NONE,
                    Cycles(1),
                    functional);

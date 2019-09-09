@@ -293,7 +293,6 @@ PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, uint access)
     dtu.printPacket(pkt);
     dtu.sendNocRequest(Dtu::NocPacketType::PAGEFAULT,
                        pkt,
-                       ep.vpeId,
                        Dtu::NocFlags::NOPF,
                        delay);
 

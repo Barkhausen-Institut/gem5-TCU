@@ -116,7 +116,6 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
         dtu.regs().setHeader(ep.header + msgidx, RegAccess::DTU, hd);
 
         info.targetCoreId = hd.senderCoreId;
-        info.targetVpeId  = hd.senderVpeId;
         info.targetEpId   = hd.replyEpId;  // send message to the reply EP
         info.replyEpId    = hd.senderEpId; // and grant credits to the sender
 
@@ -167,7 +166,6 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
 
         // fill the info struct and start the transfer
         info.targetCoreId = ep.targetCore;
-        info.targetVpeId  = ep.vpeId;
         info.targetEpId   = ep.targetEp;
         info.label        = ep.label;
         info.replyLabel   = dtu.regs().get(CmdReg::REPLY_LABEL);
@@ -207,36 +205,22 @@ MessageUnit::startXfer(const Dtu::Command::Bits& cmd)
         header->flags = Dtu::REPLY_ENABLED; // normal message
     header->flags |= info.flags;
 
-    if (cmd.opcode == Dtu::Command::SEND_BY && dtu.regs().hasFeature(Features::PRIV))
-    {
-        RegFile::reg_t sender = dtu.regs().get(CmdReg::OFFSET);
-        header->senderCoreId = sender & 0xFF;
-        header->senderVpeId = (sender >> 8) & 0xFFFF;
-        header->senderEpId = (sender >> 24) & 0xFF;
-        header->replyEpId = (sender >> 32) & 0xFF;
-        if(sender >> 40)
-            header->flags = Dtu::REPLY_FLAG | Dtu::GRANT_CREDITS_FLAG | info.flags;
-    }
-    else
-    {
-        header->senderCoreId = dtu.coreId;
-        header->senderVpeId  = dtu.regs().get(DtuReg::VPE_ID);
-        header->senderEpId   = info.unlimcred ? dtu.numEndpoints : cmd.epid;
-        header->replyEpId    = info.replyEpId;
-    }
+    header->senderCoreId = dtu.coreId;
+    header->senderEpId   = info.unlimcred ? dtu.numEndpoints : cmd.epid;
+    header->replyEpId    = info.replyEpId;
     header->length       = data.size;
     header->label        = info.label;
     header->replyLabel   = info.replyLabel;
 
     DPRINTFS(Dtu, (&dtu),
-        "  src: pe=%u vpe=%u ep=%u rpep=%u rplbl=%#018lx flags=%#x%s\n",
-        header->senderCoreId, header->senderVpeId, header->senderEpId,
+        "  src: pe=%u ep=%u rpep=%u rplbl=%#018lx flags=%#x%s\n",
+        header->senderCoreId, header->senderEpId,
         header->replyEpId, info.replyLabel, header->flags,
         header->senderCoreId != dtu.coreId ? " (on behalf)" : "");
 
     DPRINTFS(Dtu, (&dtu),
-        "  dst: pe=%u vpe=%u ep=%u lbl=%#018lx\n",
-        info.targetCoreId, info.targetVpeId, info.targetEpId, info.label);
+        "  dst: pe=%u ep=%u lbl=%#018lx\n",
+        info.targetCoreId, info.targetEpId, info.label);
 
     assert(data.size + sizeof(MessageHeader) <= dtu.maxNocPacketSize);
 
@@ -245,7 +229,7 @@ MessageUnit::startXfer(const Dtu::Command::Bits& cmd)
 
     // start the transfer of the payload
     auto *ev = new SendTransferEvent(
-        data.addr, data.size, flags, nocAddr, info.targetVpeId, header);
+        data.addr, data.size, flags, nocAddr, header);
     dtu.startTransfer(ev, dtu.startMsgTransferDelay);
 
     info.ready = false;
@@ -292,9 +276,6 @@ MessageUnit::finishMsgSend(Dtu::Error error, unsigned epid)
     // don't do anything if the EP is invalid
     if (ep.maxMsgSize == 0)
         return;
-
-    if (error == Dtu::Error::VPE_GONE)
-        ep.vpeId = Dtu::INVALID_VPE_ID;
 
     // undo the credit reduction on errors except for {VPE_GONE,MISS_CREDITS}
     if (ep.curcrd != Dtu::CREDITS_UNLIM &&
@@ -437,15 +418,6 @@ MessageUnit::finishMsgReceive(unsigned epId,
     RecvEp ep = dtu.regs().getRecvEp(epId);
     int idx = (msgAddr - ep.bufAddr) >> ep.msgSize;
 
-    // if the user did an abort while we were receiving a message, make sure that it doesn't succeed
-    if (!(xferFlags & XferUnit::XferFlags::PRIV) && dtu.regs().hasFeature(Features::COM_DISABLED))
-    {
-        DPRINTFS(Dtu, (&dtu), "EP%u: received message, but communication has been disabled\n", epId);
-        wrongVPE++;
-
-        error = Dtu::Error::VPE_GONE;
-    }
-
     if (error == Dtu::Error::NONE)
     {
         // Note that replyEpId is the Id of *our* sending EP
@@ -478,14 +450,17 @@ MessageUnit::finishMsgReceive(unsigned epId,
     if (error == Dtu::Error::NONE)
     {
         dtu.regs().setEvent(EventType::MSG_RECV);
-        dtu.wakeupCore();
+        if (dtu.regs().hasFeature(Features::IRQ_ON_MSG))
+            dtu.setIrq();
+        else
+            dtu.wakeupCore();
     }
 
     return error;
 }
 
 Dtu::Error
-MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId, uint flags)
+MessageUnit::recvFromNoc(PacketPtr pkt, uint flags)
 {
     assert(pkt->isWrite());
     assert(pkt->hasData());
@@ -522,22 +497,6 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint vpeId, uint flags)
         uint64_t *words = reinterpret_cast<uint64_t*>(header + 1);
         for(size_t i = 0; i < header->length / sizeof(uint64_t); ++i)
             DPRINTFS(DtuMsgs, (&dtu), "    word%2lu: %#018x\n", i, words[i]);
-    }
-
-    uint16_t ourVpeId = dtu.regs().get(DtuReg::VPE_ID);
-    if (vpeId != ourVpeId ||
-        (!(flags & Dtu::NocFlags::PRIV) &&
-         dtu.regs().hasFeature(Features::COM_DISABLED)))
-    {
-        DPRINTFS(Dtu, (&dtu),
-            "EP%u: received message for VPE %u, but VPE %u is running"
-            " with communication %sabled\n",
-            epId, vpeId, ourVpeId,
-            dtu.regs().hasFeature(Features::COM_DISABLED) ? "dis" : "en");
-        wrongVPE++;
-
-        dtu.sendNocResponse(pkt);
-        return Dtu::Error::VPE_GONE;
     }
 
     // support credit receives without storing reply messages

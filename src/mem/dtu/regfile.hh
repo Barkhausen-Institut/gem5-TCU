@@ -42,9 +42,7 @@ enum class DtuReg : Addr
     FEATURES,
     ROOT_PT,
     PF_EP,
-    VPE_ID,
     CUR_TIME,
-    IDLE_TIME,
     EVENTS,
     EXT_CMD,
     CLEAR_IRQ,
@@ -55,11 +53,10 @@ enum class Features
 {
     PRIV            = 1 << 0,
     PAGEFAULTS      = 1 << 1,
-    COM_DISABLED    = 1 << 2,
-    IRQ_WAKEUP      = 1 << 3,
+    IRQ_ON_MSG      = 1 << 2,
 };
 
-constexpr unsigned numDtuRegs = 10;
+constexpr unsigned numDtuRegs = 8;
 
 // registers for external requests and DTU requests
 enum class ReqReg : Addr
@@ -87,14 +84,14 @@ constexpr unsigned numCmdRegs = 5;
 //
 // 0. TYPE[3] (for all)
 //    receive: BUF_RD_POS[6] | BUF_WR_POS[6] | BUF_MSG_SIZE[16] | BUF_SIZE[6] | BUF_HEADER[20] BUF_MSG_CNT[6]
-//    send:    VPE_ID[32] | MAX_MSG_SIZE[16]
+//    send:    MAX_MSG_SIZE[16]
 //    mem:     REQ_MEM_SIZE[61]
 // 1. receive: BUF_ADDR[64]
 //    send:    TGT_COREID[8] | TGT_EPID[8] | MAXCRD[16] | CURCRD[16]
 //    mem:     REQ_MEM_ADDR[64]
 // 2. receive: BUF_UNREAD[32] | BUF_OCCUPIED[32]
 //    send:    LABEL[64]
-//    mem:     VPE_ID[32] | REQ_COREID[8] | FLAGS[4]
+//    mem:     REQ_COREID[8] | FLAGS[4]
 //
 constexpr unsigned numEpRegs = 3;
 
@@ -127,7 +124,7 @@ class RegFile;
 
 struct SendEp
 {
-    SendEp() : vpeId(), targetCore(), targetEp(), maxMsgSize(), maxcrd(),
+    SendEp() : targetCore(), targetEp(), maxMsgSize(), maxcrd(),
                curcrd(), label()
     {}
 
@@ -136,7 +133,6 @@ struct SendEp
                bool read,
                RegAccess access) const;
 
-    uint32_t vpeId;
     uint8_t targetCore;
     uint8_t targetEp;
     uint16_t maxMsgSize;
@@ -202,7 +198,7 @@ struct RecvEp
 
 struct MemEp
 {
-    MemEp() : vpeId(), remoteAddr(), remoteSize(), targetCore(), flags()
+    MemEp() : remoteAddr(), remoteSize(), targetCore(), flags()
     {}
 
     void print(const RegFile &rf,
@@ -210,7 +206,6 @@ struct MemEp
                bool read,
                RegAccess access) const;
 
-    uint32_t vpeId;
     uint64_t remoteAddr;
     uint64_t remoteSize;
     uint8_t targetCore;
@@ -245,7 +240,7 @@ struct ReplyHeader
     // for a reply this is the enpoint that receives credits
     uint8_t replyEpId;
     uint16_t length;
-    uint16_t senderVpeId;
+    uint16_t : 16;
 
     // should be large enough for pointers.
     uint64_t replyLabel;

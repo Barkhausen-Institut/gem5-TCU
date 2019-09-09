@@ -127,7 +127,6 @@ class Dtu : public BaseDtu
     struct NocSenderState : public Packet::SenderState
     {
         Error result;
-        uint vpeId;
         NocPacketType packetType;
         uint64_t cmdId;
         uint flags;
@@ -143,21 +142,14 @@ class Dtu : public BaseDtu
         {
             IDLE            = 0,
             SEND            = 1,
-            SEND_BY         = 2,
-            REPLY           = 3,
-            READ            = 4,
-            WRITE           = 5,
-            FETCH_MSG       = 6,
-            ACK_MSG         = 7,
-            ACK_EVENTS      = 8,
-            SLEEP           = 9,
-            PRINT           = 10,
-        };
-
-        enum
-        {
-            ABORT_VPE       = 1,
-            ABORT_CMD       = 2,
+            REPLY           = 2,
+            READ            = 3,
+            WRITE           = 4,
+            FETCH_MSG       = 5,
+            ACK_MSG         = 6,
+            ACK_EVENTS      = 7,
+            SLEEP           = 8,
+            PRINT           = 9,
         };
 
         enum Flags
@@ -248,7 +240,6 @@ class Dtu : public BaseDtu
 
     void sendNocRequest(NocPacketType type,
                         PacketPtr pkt,
-                        uint vpeId,
                         uint flags,
                         Cycles delay,
                         bool functional = false);
@@ -431,7 +422,6 @@ class Dtu : public BaseDtu
         bool ongoing;
     };
 
-    Cycles sleepStart;
     PacketPtr cmdPkt;
     FinishCommandEvent *cmdFinish;
     uint64_t cmdId;

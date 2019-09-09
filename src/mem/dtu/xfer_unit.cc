@@ -395,9 +395,7 @@ XferUnit::abortTransfers(uint types)
         if (!ev)
             continue;
 
-        // only unprivileged remote transfers are aborted
-        bool abort = ev->isRemote() && (types & ABORT_REMOTE) && !(ev->flags() & XferFlags::PRIV);
-        abort |= !ev->isRemote() && (types & ABORT_LOCAL);
+        bool abort = !ev->isRemote() && (types & ABORT_LOCAL);
         // received messages are only aborted on reset
         abort &= !(ev->flags() & XferFlags::MSGRECV) || (types & ABORT_MSGS);
 

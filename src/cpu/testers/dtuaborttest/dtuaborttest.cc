@@ -489,7 +489,7 @@ DtuAbortTest::tick()
                 {
                     Addr regAddr = getRegAddr(CmdReg::ABORT);
                     pkt = createDtuRegisterPkt(regAddr,
-                                               Dtu::Command::ABORT_CMD,
+                                               1,
                                                MemCmd::WriteReq);
                     abortStart = curTick();
                     break;

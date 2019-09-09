@@ -44,7 +44,6 @@ class MessageUnit
         bool unlimcred;
         uint8_t flags;
         unsigned targetCoreId;
-        uint16_t targetVpeId;
         unsigned targetEpId;
         unsigned replyEpId;
         uint64_t label;
@@ -61,9 +60,8 @@ class MessageUnit
                           size_t size,
                           uint flags,
                           NocAddr dest,
-                          uint vpeId,
                           MessageHeader *_header)
-            : WriteTransferEvent(local, size, flags, dest, vpeId),
+            : WriteTransferEvent(local, size, flags, dest),
               header(_header)
         {}
 
@@ -101,7 +99,7 @@ class MessageUnit
     /**
      * Received a message from NoC -> Mem request
      */
-    Dtu::Error recvFromNoc(PacketPtr pkt, uint vpeId, uint flags);
+    Dtu::Error recvFromNoc(PacketPtr pkt, uint flags);
 
     /**
      * Finishes the reply-on-message command

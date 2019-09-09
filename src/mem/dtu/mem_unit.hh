@@ -102,18 +102,15 @@ class MemoryUnit
       protected:
 
         NocAddr dest;
-        uint vpeId;
 
       public:
 
         WriteTransferEvent(Addr local,
                            size_t size,
                            uint flags,
-                           NocAddr _dest,
-                           uint _vpeId)
+                           NocAddr _dest)
             : TransferEvent(Dtu::TransferType::LOCAL_READ, local, size, flags),
-              dest(_dest),
-              vpeId(_vpeId)
+              dest(_dest)
         {}
 
         void transferStart() override {};
@@ -175,7 +172,7 @@ class MemoryUnit
     /**
      * Received read/write request from NoC -> Mem/regfile request
      */
-    Dtu::Error recvFromNoc(PacketPtr pkt, uint vpeId, uint flags);
+    Dtu::Error recvFromNoc(PacketPtr pkt, uint flags);
 
   private:
 

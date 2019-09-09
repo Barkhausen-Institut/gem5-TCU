@@ -43,9 +43,7 @@ const char *RegFile::dtuRegNames[] = {
     "FEATURES",
     "ROOT_PT",
     "PF_EP",
-    "VPE_ID",
     "CUR_TIME",
-    "IDLE_TIME",
     "EVENTS",
     "EXT_CMD",
     "CLEAR_IRQ",
@@ -254,7 +252,6 @@ RegFile::getSendEp(unsigned epId, bool print) const
     const reg_t r1  = regs[1];
     const reg_t r2  = regs[2];
 
-    ep.vpeId        = (r0 >> 16) & 0xFFFFFFFF;
     ep.maxMsgSize   = r0 & 0xFFFF;
 
     ep.targetCore   = (r1 >> 40) & 0xFF;
@@ -273,9 +270,7 @@ RegFile::getSendEp(unsigned epId, bool print) const
 void
 RegFile::setSendEp(unsigned epId, const SendEp &ep)
 {
-    set(epId, 0, (static_cast<reg_t>(EpType::SEND) << 61) |
-                 (ep.vpeId << 16) |
-                 ep.maxMsgSize);
+    set(epId, 0, (static_cast<reg_t>(EpType::SEND) << 61) | ep.maxMsgSize);
 
     set(epId, 1, (static_cast<reg_t>(ep.targetCore) << 40) |
                  (static_cast<reg_t>(ep.targetEp) << 32) |
@@ -360,7 +355,6 @@ RegFile::getMemEp(unsigned epId, bool print) const
 
     ep.remoteAddr   = r1;
 
-    ep.vpeId        = (r2 >> 12) & 0xFFFFFFFF;
     ep.targetCore   = (r2 >> 4) & 0xFF;
     ep.flags        = (r2 >> 0) & 0x7;
 
@@ -380,10 +374,10 @@ SendEp::print(const RegFile &rf,
         return;
 
     DPRINTFNS(rf.name(),
-        "%s%s EP%u%14s: Send[vpe=%u pe=%u ep=%u maxcrd=%#x curcrd=%#x max=%#x lbl=%#llx]\n",
+        "%s%s EP%u%14s: Send[pe=%u ep=%u maxcrd=%#x curcrd=%#x max=%#x lbl=%#llx]\n",
         regAccessName(access), read ? "<-" : "->",
         epId, "",
-        vpeId, targetCore, targetEp,
+        targetCore, targetEp,
         maxcrd, curcrd, maxMsgSize,
         label);
 }
@@ -415,10 +409,10 @@ MemEp::print(const RegFile &rf,
         return;
 
     DPRINTFNS(rf.name(),
-        "%s%s EP%u%14s: Mem[vpe=%u pe=%u addr=%#llx size=%#llx flags=%#x]\n",
+        "%s%s EP%u%14s: Mem[pe=%u addr=%#llx size=%#llx flags=%#x]\n",
         regAccessName(access), read ? "<-" : "->",
         epId, "",
-        vpeId, targetCore,
+        targetCore,
         remoteAddr, remoteSize,
         flags);
 }
@@ -461,11 +455,11 @@ RegFile::printHeaderAccess(size_t idx, bool read, RegAccess access) const
         return;
 
     const ReplyHeader &hd = header[idx];
-    DPRINTFN("%s%s HD%lu%14s: fl=%#x sdpe=%u sdvpe=%u sdep=%u rpep=%u rplbl=%#llx\n",
+    DPRINTFN("%s%s HD%lu%14s: fl=%#x sdpe=%u sdep=%u rpep=%u rplbl=%#llx\n",
              regAccessName(access), read ? "<-" : "->",
              idx, "",
              hd.flags,
-             hd.senderCoreId, hd.senderVpeId, hd.senderEpId,
+             hd.senderCoreId, hd.senderEpId,
              hd.replyEpId, hd.replyLabel);
 }
 

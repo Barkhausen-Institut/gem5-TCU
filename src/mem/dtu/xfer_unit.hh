@@ -53,8 +53,7 @@ class XferUnit
     enum AbortType
     {
         ABORT_LOCAL     = 1,
-        ABORT_REMOTE    = 2,
-        ABORT_MSGS      = 4,
+        ABORT_MSGS      = 2,
     };
 
     class TransferEvent;
