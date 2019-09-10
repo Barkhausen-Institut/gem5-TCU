@@ -409,6 +409,22 @@ MessageUnit::ackMessage(unsigned epId, Addr msgAddr)
 }
 
 Dtu::Error
+MessageUnit::invalidateReply(unsigned repId, unsigned peId, unsigned sepId)
+{
+    RecvEp ep = dtu.regs().getRecvEp(repId);
+    if (ep.bufAddr == 0)
+        return Dtu::Error::INV_EP;
+
+    for (int i = 0; i < (1 << ep.size); ++i)
+    {
+        auto hd = dtu.regs().getHeader(ep.header + i, RegAccess::DTU);
+        if (hd.senderCoreId == peId && hd.senderEpId == sepId)
+            dtu.regs().setHeader(ep.header + i, RegAccess::DTU, ReplyHeader());
+    }
+    return Dtu::Error::NONE;
+}
+
+Dtu::Error
 MessageUnit::finishMsgReceive(unsigned epId,
                               Addr msgAddr,
                               const MessageHeader *header,

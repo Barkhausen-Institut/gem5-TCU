@@ -69,6 +69,7 @@ static const char *extCmdNames[] =
     "INV_EP",
     "INV_PAGE",
     "INV_TLB",
+    "INV_REPLY",
     "RESET",
     "ACK_MSG",
     "FLUSH_CACHE",
@@ -434,8 +435,8 @@ Dtu::getExternCommand()
     auto reg = regFile.get(DtuReg::EXT_CMD);
 
     ExternCommand cmd;
-    cmd.opcode = static_cast<ExternCommand::Opcode>(reg & 0x7);
-    cmd.arg = reg >> 3;
+    cmd.opcode = static_cast<ExternCommand::Opcode>(reg & 0xF);
+    cmd.arg = reg >> 4;
     return cmd;
 }
 
@@ -477,8 +478,16 @@ Dtu::executeExternCommand(PacketPtr pkt)
             if (tlb())
                 tlb()->clear();
             break;
+        case ExternCommand::INV_REPLY:
+        {
+            unsigned repid = cmd.arg & 0xFF;
+            unsigned peid = (cmd.arg >> 8) & 0xFF;
+            unsigned sepid = (cmd.arg >> 16) & 0xFF;
+            result = msgUnit->invalidateReply(repid, peid, sepid);
+            break;
+        }
         case ExternCommand::RESET:
-            delay += reset(cmd.arg & 0x0FFFFFFFFFFFFFFF, !!(cmd.arg >> 60));
+            delay += reset(cmd.arg & 0x07FFFFFFFFFFFFFF, !!(cmd.arg >> 59));
             break;
         case ExternCommand::FLUSH_CACHE:
             delay += flushInvalCaches(false);

@@ -127,6 +127,12 @@ class MessageUnit
     Dtu::Error ackMessage(unsigned epId, Addr msgAddr);
 
     /**
+     * Invalidates all reply header for receive EP <repId> that have been sent
+     * from PE <peId> and send EP <sepId>.
+     */
+    Dtu::Error invalidateReply(unsigned repId, unsigned peId, unsigned sepId);
+
+    /**
      * Finishes a message receive
      */
     Dtu::Error finishMsgReceive(unsigned epId,
