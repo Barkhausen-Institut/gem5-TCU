@@ -109,6 +109,7 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
             DPRINTFS(Dtu, (&dtu),
                 "EP%u: double reply for msg %p?\n", epid, cmd.arg);
             dtu.scheduleFinishOp(Cycles(1), Dtu::Error::REPLY_DISABLED);
+            return;
         }
 
         // now that we have the header, fill the info struct
