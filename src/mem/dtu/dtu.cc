@@ -71,7 +71,6 @@ static const char *extCmdNames[] =
     "INV_TLB",
     "INV_REPLY",
     "RESET",
-    "ACK_MSG",
     "FLUSH_CACHE",
 };
 
@@ -492,12 +491,6 @@ Dtu::executeExternCommand(PacketPtr pkt)
         case ExternCommand::FLUSH_CACHE:
             delay += flushInvalCaches(false);
             break;
-        case ExternCommand::ACK_MSG:
-        {
-            unsigned epid = cmd.arg & ((1 << 8) - 1);
-            result = msgUnit->ackMessage(epid, cmd.arg >> 8);
-            break;
-        }
         default:
             // TODO error handling
             panic("Invalid opcode %#x\n", static_cast<RegFile::reg_t>(cmd.opcode));

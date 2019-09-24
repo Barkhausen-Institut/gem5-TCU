@@ -180,8 +180,7 @@ class Dtu : public BaseDtu
             INV_TLB         = 4,
             INV_REPLY       = 5,
             RESET           = 6,
-            ACK_MSG         = 7,
-            FLUSH_CACHE     = 8,
+            FLUSH_CACHE     = 7,
         };
 
         Opcode opcode;
