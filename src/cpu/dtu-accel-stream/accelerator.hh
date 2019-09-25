@@ -47,11 +47,11 @@ class DtuAccelStream : public DtuAccel
     static const Addr MSG_ADDR          = 0x2000;
     static const Addr BUF_ADDR          = 0x8000;
 
-    static const unsigned EP_RECV       = 5;
-    static const unsigned EP_IN_SEND    = 6;
-    static const unsigned EP_IN_MEM     = 7;
-    static const unsigned EP_OUT_SEND   = 8;
-    static const unsigned EP_OUT_MEM    = 9;
+    static const unsigned EP_RECV       = 6;
+    static const unsigned EP_IN_SEND    = 7;
+    static const unsigned EP_IN_MEM     = 8;
+    static const unsigned EP_OUT_SEND   = 9;
+    static const unsigned EP_OUT_MEM    = 10;
 
     static const unsigned CAP_IN       = 64;
     static const unsigned CAP_OUT      = 65;
