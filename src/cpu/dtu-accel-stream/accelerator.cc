@@ -850,7 +850,7 @@ DtuAccelStream::tick()
         {
             exit_msg.opcode = SyscallSM::Operation::VPE_CTRL;
             exit_msg.op = SyscallSM::VPEOp::VCTRL_STOP;
-            exit_msg.vpe_sel = 0;
+            exit_msg.vpe_sel = SyscallSM::VPE_SEL;
             exit_msg.arg = 0;
 
             pkt = createPacket(MSG_ADDR, sizeof(exit_msg), MemCmd::WriteReq);

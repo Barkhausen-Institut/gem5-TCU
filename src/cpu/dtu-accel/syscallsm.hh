@@ -46,6 +46,7 @@ class SyscallSM
         CREATE_MAP,
         CREATE_VPE,
         CREATE_SEM,
+        ALLOC_EP,
 
         // capability operations
         ACTIVATE,
@@ -53,6 +54,7 @@ class SyscallSM
         VPE_WAIT,
         DERIVE_MEM,
         DERIVE_KMEM,
+        DERIVE_PE,
         KMEM_QUOTA,
         SEM_CTRL,
 
@@ -81,6 +83,8 @@ class SyscallSM
         SYSC_READ_ADDR,
         SYSC_ACK,
     };
+
+    static const uint64_t VPE_SEL = 1;
 
     explicit SyscallSM(DtuAccel *_accel)
         : accel(_accel), state(), stateChanged(), waitForReply(), fetched(),
