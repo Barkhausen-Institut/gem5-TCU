@@ -41,8 +41,8 @@
 
 class DtuAccelInDir : public DtuAccel
 {
-    static const unsigned EP_RECV       = 8;
-    static const unsigned EP_OUT        = 9;
+    static const unsigned EP_RECV       = 9;
+    static const unsigned EP_OUT        = 10;
     static const unsigned CAP_RBUF      = 64;
 
     static const size_t MSG_SIZE        = 64;
