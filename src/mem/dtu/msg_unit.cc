@@ -386,6 +386,8 @@ Dtu::Error
 MessageUnit::ackMessage(unsigned epId, Addr msgAddr)
 {
     RecvEp ep = dtu.regs().getRecvEp(epId);
+    if (ep.bufAddr == 0)
+        return Dtu::Error::INV_EP;
 
     int msgidx = ep.msgToIdx(msgAddr);
     if (msgidx == RecvEp::MAX_MSGS || !ep.isOccupied(msgidx))
@@ -433,6 +435,9 @@ MessageUnit::finishMsgReceive(unsigned epId,
                               uint xferFlags)
 {
     RecvEp ep = dtu.regs().getRecvEp(epId);
+    if (ep.bufAddr == 0)
+        return Dtu::Error::INV_EP;
+
     int idx = (msgAddr - ep.bufAddr) >> ep.msgSize;
 
     if (error == Dtu::Error::NONE)
