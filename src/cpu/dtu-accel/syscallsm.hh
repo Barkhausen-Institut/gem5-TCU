@@ -84,7 +84,7 @@ class SyscallSM
         SYSC_ACK,
     };
 
-    static const uint64_t VPE_SEL = 1;
+    static const uint64_t VPE_SEL = 2;
 
     explicit SyscallSM(DtuAccel *_accel)
         : accel(_accel), state(), stateChanged(), waitForReply(), fetched(),
