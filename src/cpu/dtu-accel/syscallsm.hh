@@ -56,6 +56,7 @@ class SyscallSM
         DERIVE_KMEM,
         DERIVE_PE,
         KMEM_QUOTA,
+        PE_QUOTA,
         SEM_CTRL,
 
         // capability exchange
