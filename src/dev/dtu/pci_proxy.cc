@@ -38,8 +38,8 @@
 #include "dev/pci/pcireg.h"
 #include "sim/system.hh"
 
-const unsigned DtuPciProxy::EP_INT = 7;
-const unsigned DtuPciProxy::EP_DMA = 8;
+const unsigned DtuPciProxy::EP_INT = 9;
+const unsigned DtuPciProxy::EP_DMA = 10;
 const Addr DtuPciProxy::REG_ADDR = 0x4000;
 const Addr DtuPciProxy::INT_ADDR = 0x10000000;
 const Addr DtuPciProxy::DMA_ADDR = 0x20000000;
