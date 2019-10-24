@@ -577,9 +577,9 @@ def createAccelPE(noc, options, no, accel, memPE, l1size=None, l2size=None, spms
 
     if accel == 'indir':
         pe.accel = DtuAccelInDir()
-    elif accel == 'fft' or accel == 'rot13':
+    elif accel == 'copy' or accel == 'rot13':
         algos = {
-            'fft'    : 0,
+            'copy'   : 0,
             'rot13'  : 1,
         }
         pe.accel = DtuAccelStream()
@@ -813,7 +813,7 @@ def runSimulation(root, options, pes):
                 elif type(pe.accel).__name__ == 'DtuAccelInDir':
                     size |= 4 << 3 # indir accelerator
                 elif int(pe.accel.logic.algorithm) == 0:
-                    size |= 5 << 3 # fft accelerator
+                    size |= 5 << 3 # copy accelerator
                 elif int(pe.accel.logic.algorithm) == 1:
                     size |= 6 << 3 # rot13 accelerator
             elif options.isa == 'arm':

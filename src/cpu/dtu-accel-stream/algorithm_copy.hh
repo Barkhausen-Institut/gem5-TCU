@@ -27,36 +27,28 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
-#ifndef __CPU_DTU_ACCEL_STREAM_ALGORITHM_FFT_HH__
-#define __CPU_DTU_ACCEL_STREAM_ALGORITHM_FFT_HH__
+#ifndef __CPU_DTU_ACCEL_STREAM_ALGORITHM_COPY_HH__
+#define __CPU_DTU_ACCEL_STREAM_ALGORITHM_COPY_HH__
 
 #include "cpu/dtu-accel-stream/algorithm.hh"
 
-class DtuAccelStreamAlgoFFT : public DtuAccelStreamAlgo
+class DtuAccelStreamAlgoCopy : public DtuAccelStreamAlgo
 {
   public:
 
-    const char *name() const override { return "FFT"; }
+    const char *name() const override { return "COPY"; }
 
     size_t execute(uint8_t *dst, const uint8_t *src, size_t len) override
     {
-        // only pretend to do fft
         memcpy(dst, src, len);
         return len;
     }
 
     Cycles getDelay(Cycles time, size_t len) override
     {
-        // the time for one 2048 block for 2D-FFT; determined by ALADDIN and
-        // picking the sweet spot between area, power and performance.
-        // 732 cycles for the FFT function. we have two loops in FFT2D with
-        // 16 iterations each. we unroll both 4 times, leading to
-        // (4 + 4) * 732 = 5856.
-        const Cycles BLOCK_TIME      = time != 0 ? time : Cycles(5856 / 2);
         const size_t BLOCK_SIZE      = 1024;
-
-        return Cycles((BLOCK_TIME * len) / BLOCK_SIZE);
+        return Cycles((time * len) / BLOCK_SIZE);
     }
 };
 
-#endif // __CPU_DTU_ACCEL_STREAM_ALGORITHM_FFT_HH__
+#endif // __CPU_DTU_ACCEL_STREAM_ALGORITHM_COPY_HH__
