@@ -90,14 +90,12 @@ static const char *regAccessName(RegAccess access)
     return "DTU";
 }
 
-RegFile::RegFile(Dtu &_dtu, const std::string& name, unsigned _numEndpoints,
-                 unsigned _numHeader)
+RegFile::RegFile(Dtu &_dtu, const std::string& name, unsigned _numEndpoints)
     : dtu(_dtu),
       dtuRegs(numDtuRegs, 0),
       reqRegs(numReqRegs, 0),
       cmdRegs(numCmdRegs, 0),
       epRegs(_numEndpoints),
-      header(_numHeader, ReplyHeader()),
       bufRegs(numBufRegs * sizeof(reg_t), 0),
       numEndpoints(_numEndpoints),
       _name(name)
@@ -255,6 +253,8 @@ RegFile::getSendEp(unsigned epId, bool print) const
     const reg_t r2  = regs[2];
 
     ep.maxMsgSize   = r0 & 0xFFFF;
+    ep.crdEp        = (r0 >> 16) & 0xFF;
+    ep.flags        = (r0 >> 24) & 0x3;
 
     ep.targetCore   = (r1 >> 40) & 0xFF;
     ep.targetEp     = (r1 >> 32) & 0xFF;
@@ -272,7 +272,10 @@ RegFile::getSendEp(unsigned epId, bool print) const
 void
 RegFile::setSendEp(unsigned epId, const SendEp &ep)
 {
-    set(epId, 0, (static_cast<reg_t>(EpType::SEND) << 61) | ep.maxMsgSize);
+    set(epId, 0, (static_cast<reg_t>(EpType::SEND) << 61) |
+                 (static_cast<reg_t>(ep.flags) << 24) |
+                 (static_cast<reg_t>(ep.crdEp) << 16) |
+                  ep.maxMsgSize);
 
     set(epId, 1, (static_cast<reg_t>(ep.targetCore) << 40) |
                  (static_cast<reg_t>(ep.targetEp) << 32) |
@@ -304,7 +307,7 @@ RegFile::getRecvEp(unsigned epId, bool print) const
     ep.wrPos        = (r0 >> 48) & 0x3F;
     ep.msgSize      = (r0 >> 32) & 0xFFFF;
     ep.size         = (r0 >> 26) & 0x3F;
-    ep.header       = (r0 >>  6) & 0xFFFFF;
+    ep.replyEps     = (r0 >>  6) & 0xFFFFF;
     ep.msgCount     = (r0 >>  0) & 0x3F;
 
     ep.bufAddr      = r1;
@@ -326,7 +329,7 @@ RegFile::setRecvEp(unsigned epId, const RecvEp &ep)
                  (static_cast<reg_t>(ep.wrPos)        << 48) |
                  (static_cast<reg_t>(ep.msgSize)      << 32) |
                  (static_cast<reg_t>(ep.size)         << 26) |
-                 (static_cast<reg_t>(ep.header)       << 6) |
+                 (static_cast<reg_t>(ep.replyEps)     << 6) |
                  (static_cast<reg_t>(ep.msgCount)     << 0));
 
     set(epId, 1, ep.bufAddr);
@@ -376,12 +379,12 @@ SendEp::print(const RegFile &rf,
         return;
 
     DPRINTFNS(rf.name(),
-        "%s%s EP%u%14s: Send[pe=%u ep=%u maxcrd=%#x curcrd=%#x max=%#x lbl=%#llx]\n",
+        "%s%s EP%u%14s: Send[pe=%u ep=%u crdep=%u maxcrd=%#x curcrd=%#x max=%#x lbl=%#llx fl=%#lx]\n",
         regAccessName(access), read ? "<-" : "->",
         epId, "",
-        targetCore, targetEp,
+        targetCore, targetEp, crdEp,
         maxcrd, curcrd, maxMsgSize,
-        label);
+        label, flags);
 }
 
 void
@@ -394,10 +397,10 @@ RecvEp::print(const RegFile &rf,
         return;
 
     DPRINTFNS(rf.name(),
-        "%s%s EP%u%14s: Recv[buf=%p msz=%#x bsz=%#x hd=%u msgs=%u occ=%#010x unr=%#010x rd=%u wr=%u]\n",
+        "%s%s EP%u%14s: Recv[buf=%p msz=%#x bsz=%#x rpl=%u msgs=%u occ=%#010x unr=%#010x rd=%u wr=%u]\n",
         regAccessName(access), read ? "<-" : "->",
         epId, "",
-        bufAddr, 1 << msgSize, 1 << size, header, msgCount,
+        bufAddr, 1 << msgSize, 1 << size, replyEps, msgCount,
         occupied, unread, rdPos, wrPos);
 }
 
@@ -450,21 +453,6 @@ RegFile::printEpAccess(unsigned epId, bool read, bool cpu) const
     }
 }
 
-void
-RegFile::printHeaderAccess(size_t idx, bool read, RegAccess access) const
-{
-    if(!isTraceEnabled(read))
-        return;
-
-    const ReplyHeader &hd = header[idx];
-    DPRINTFN("%s%s HD%lu%14s: fl=%#x sdpe=%u sdep=%u rpep=%u rplbl=%#llx\n",
-             regAccessName(access), read ? "<-" : "->",
-             idx, "",
-             hd.flags,
-             hd.senderCoreId, hd.senderEpId,
-             hd.replyEpId, hd.replyLabel);
-}
-
 RegFile::reg_t
 RegFile::get(unsigned epId, size_t idx) const
 {
@@ -499,29 +487,6 @@ RegFile::updateMsgCnt()
     other &= ~static_cast<reg_t>(1);
     reg_t msgs = (hasMsgs ? 1 : 0) << static_cast<reg_t>(EventType::MSG_RECV);
     set(DtuReg::EVENTS, other | msgs);
-}
-
-const ReplyHeader &
-RegFile::getHeader(size_t idx, RegAccess access) const
-{
-    printHeaderAccess(idx, true, access);
-
-    return header[idx];
-}
-
-void
-RegFile::setHeader(size_t idx, RegAccess access, const ReplyHeader &hd)
-{
-    header[idx] = hd;
-
-    printHeaderAccess(idx, false, access);
-}
-
-void
-RegFile::resetHeader()
-{
-    for(auto &h : header)
-        h = ReplyHeader();
 }
 
 const char *
@@ -654,45 +619,19 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
                 else
                     assert(false);
             }
-            // header
+            // buf register
             else
             {
-                Addr headAddr = epAddr -
+                Addr bufAddr = epAddr -
                     sizeof(reg_t) * numEpRegs * dtu.numEndpoints;
-                Addr headIdx = headAddr / sizeof(ReplyHeader);
+                size_t idx = bufAddr / sizeof(reg_t);
 
-                if(headIdx < header.size())
+                if (idx < bufRegs.size())
                 {
-                    size_t off = headAddr % sizeof(ReplyHeader);
                     if(pkt->isRead())
-                    {
-                        const ReplyHeader &hd = getHeader(headIdx, access);
-                        memcpy(data + offset / sizeof(reg_t),
-                               (char*)&hd + off,
-                               sizeof(reg_t));
-                    }
-                    else if(!isCpuRequest || isPriv)
-                    {
-                        ReplyHeader hd = header[headIdx];
-                        memcpy((char*)&hd + off,
-                               data + offset / sizeof(reg_t),
-                               sizeof(reg_t));
-                        setHeader(headIdx, access, hd);
-                    }
-                }
-                // buf register
-                else
-                {
-                    Addr bufAddr = headAddr - header.size() * sizeof(ReplyHeader);
-                    size_t idx = bufAddr / sizeof(reg_t);
-
-                    if (idx < bufRegs.size())
-                    {
-                        if(pkt->isRead())
-                            data[offset / sizeof(reg_t)] = bufRegs[idx];
-                        else
-                            bufRegs[idx] = data[offset / sizeof(reg_t)];
-                    }
+                        data[offset / sizeof(reg_t)] = bufRegs[idx];
+                    else
+                        bufRegs[idx] = data[offset / sizeof(reg_t)];
                 }
             }
         }

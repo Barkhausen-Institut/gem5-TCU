@@ -227,8 +227,10 @@ PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, uint access)
         return false;
     }
 
-    int pfep = dtu.regs().get(DtuReg::PF_EP) & 0xFF;
-    SendEp ep = dtu.regs().getSendEp(pfep);
+    int eps = dtu.regs().get(DtuReg::PF_EP);
+    int pfsep = eps & 0xFF;
+    int pfrep = (eps >> 8) & 0xFF;
+    SendEp ep = dtu.regs().getSendEp(pfsep);
 
     size_t size = sizeof(MessageHeader) + sizeof(PagefaultMessage);
     assert(size <= ep.maxMsgSize);
@@ -258,11 +260,14 @@ PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, uint access)
     header.length = sizeof(PagefaultMessage);
     header.flags = Dtu::PAGEFAULT | Dtu::REPLY_ENABLED;
     header.label = ep.label;
-    header.senderEpId = pfep;
+    header.senderEpId = pfsep;
     header.senderCoreId = dtu.coreId;
     header.replyLabel = ev->id;
-    // not used
-    header.replyEpId = 0;
+    if (pfrep != 0xFF)
+        header.replyCrd = 1 << dtu.regs().getRecvEp(pfrep).msgSize;
+    else
+        header.replyCrd = sizeof(MessageHeader) + sizeof(uint64_t);
+    header.replyEpId = pfrep;
 
     memcpy(pkt->getPtr<uint8_t>(),
            &header,
@@ -279,12 +284,12 @@ PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, uint access)
 
     DPRINTFS(Dtu, (&dtu),
              "\e[1m[sd -> %u]\e[0m with EP%u for Pagefault (%llu: %s @ %p)\n",
-             ep.targetCore, pfep, ev->id, describeAccess(access), virt);
+             ep.targetCore, pfsep, ev->id, describeAccess(access), virt);
 
     DPRINTFS(Dtu, (&dtu),
-        "  header: flags=%#x tgtEP=%u lbl=%#018lx rpLbl=%#018lx rpEP=%u\n",
+        "  header: flags=%#x tgtEP=%u lbl=%#018lx rpep=%u rplbl=%#018lx rpcrd=%u\n",
         header.flags, ep.targetEp, header.label,
-        header.replyLabel, header.replyEpId);
+        header.replyEpId, header.replyLabel, header.replyCrd);
 
     // send the packet
     Cycles delay = dtu.transferToNocLatency;

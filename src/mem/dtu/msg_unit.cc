@@ -97,83 +97,82 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
 {
     unsigned epid = cmd.epid;
 
-    // if we want to reply, request the header first
+    // if we want to reply, load the reply EP first
     if (cmd.opcode == Dtu::Command::REPLY)
     {
         RecvEp ep = dtu.regs().getRecvEp(epid);
         int msgidx = ep.msgToIdx(cmd.arg);
-        auto hd = dtu.regs().getHeader(ep.header + msgidx, RegAccess::DTU);
 
-        if (!(hd.flags & Dtu::REPLY_ENABLED))
+        epid = ep.replyEps + msgidx;
+
+        SendEp sep = dtu.regs().getSendEp(epid);
+
+        if (sep.maxMsgSize == 0 || !(sep.flags & SendEp::FL_REPLY))
         {
             DPRINTFS(Dtu, (&dtu),
-                "EP%u: double reply for msg %p?\n", epid, cmd.arg);
-            dtu.scheduleFinishOp(Cycles(1), Dtu::Error::REPLY_DISABLED);
-            return;
-        }
-
-        // now that we have the header, fill the info struct
-        hd.flags &= ~Dtu::REPLY_ENABLED;
-        dtu.regs().setHeader(ep.header + msgidx, RegAccess::DTU, hd);
-
-        info.targetCoreId = hd.senderCoreId;
-        info.targetEpId   = hd.replyEpId;  // send message to the reply EP
-        info.replyEpId    = hd.senderEpId; // and grant credits to the sender
-
-        // the receiver of the reply should get the label that he has set
-        info.label        = hd.replyLabel;
-        // replies don't have replies. so, we don't need that
-        info.replyLabel   = 0;
-        // the pagefault flag is moved to the reply hd
-        info.flags        = hd.flags & Dtu::PAGEFAULT;
-        info.unlimcred    = false;
-        info.ready        = true;
-    }
-    else
-    {
-        // check if we have enough credits
-        const DataReg data = dtu.regs().getDataReg();
-        SendEp ep = dtu.regs().getSendEp(epid);
-
-        if (ep.maxMsgSize == 0)
-        {
-            DPRINTFS(Dtu, (&dtu), "EP%u: invalid EP\n", epid);
+                     "EP%u: invalid reply EP. Double reply for msg %p?\n",
+                     epid, cmd.arg);
             dtu.scheduleFinishOp(Cycles(1), Dtu::Error::INV_EP);
             return;
         }
 
-        if (ep.curcrd != Dtu::CREDITS_UNLIM)
+        // grant credits to the sender
+        info.replyEpId = sep.crdEp;
+        info.flags = Dtu::REPLY_FLAG | Dtu::GRANT_CREDITS_FLAG;
+        info.replyCrd = 0;
+
+        // the pagefault flag is moved to the reply hd
+        if (sep.flags & SendEp::FL_PF)
+            info.flags |= Dtu::PAGEFAULT;
+    }
+
+    // check if we have enough credits
+    const DataReg data = dtu.regs().getDataReg();
+    SendEp ep = dtu.regs().getSendEp(epid);
+
+    if (ep.maxMsgSize == 0)
+    {
+        DPRINTFS(Dtu, (&dtu), "EP%u: invalid EP\n", epid);
+        dtu.scheduleFinishOp(Cycles(1), Dtu::Error::INV_EP);
+        return;
+    }
+
+    if (ep.curcrd != Dtu::CREDITS_UNLIM)
+    {
+        if (ep.curcrd < ep.maxMsgSize)
         {
-            if (ep.curcrd < ep.maxMsgSize)
-            {
-                DPRINTFS(Dtu, (&dtu),
-                    "EP%u: not enough credits (%lu) to send message (%lu)\n",
-                    epid, ep.curcrd, ep.maxMsgSize);
-                dtu.scheduleFinishOp(Cycles(1), Dtu::Error::MISS_CREDITS);
-                return;
-            }
-
-            // pay the credits
-            ep.curcrd -= ep.maxMsgSize;
-
-            DPRINTFS(DtuCredits, (&dtu), "EP%u paid %u credits (%u left)\n",
-                     epid, ep.maxMsgSize, ep.curcrd);
-
-            dtu.regs().setSendEp(epid, ep);
+            DPRINTFS(Dtu, (&dtu),
+                "EP%u: not enough credits (%lu) to send message (%lu)\n",
+                epid, ep.curcrd, ep.maxMsgSize);
+            dtu.scheduleFinishOp(Cycles(1), Dtu::Error::MISS_CREDITS);
+            return;
         }
 
-        // TODO error handling
-        assert(data.size + sizeof(MessageHeader) <= ep.maxMsgSize);
+        // pay the credits
+        ep.curcrd -= ep.maxMsgSize;
 
-        // fill the info struct and start the transfer
-        info.targetCoreId = ep.targetCore;
-        info.targetEpId   = ep.targetEp;
-        info.label        = ep.label;
-        info.replyLabel   = dtu.regs().get(CmdReg::REPLY_LABEL);
+        DPRINTFS(DtuCredits, (&dtu), "EP%u paid %u credits (%u left)\n",
+                 epid, ep.maxMsgSize, ep.curcrd);
+
+        dtu.regs().setSendEp(epid, ep);
+    }
+
+    // TODO error handling
+    assert(data.size + sizeof(MessageHeader) <= ep.maxMsgSize);
+
+    // fill the info struct and start the transfer
+    info.targetCoreId = ep.targetCore;
+    info.targetEpId   = ep.targetEp;
+    info.label        = ep.label;
+    info.replyLabel   = dtu.regs().get(CmdReg::REPLY_LABEL);
+    info.unlimcred    = ep.curcrd == Dtu::CREDITS_UNLIM;
+    info.ready        = true;
+
+    if (cmd.opcode == Dtu::Command::SEND)
+    {
+        info.replyCrd     = 1 << dtu.regs().getRecvEp(cmd.arg).msgSize;
         info.replyEpId    = cmd.arg;
         info.flags        = 0;
-        info.unlimcred    = ep.curcrd == Dtu::CREDITS_UNLIM;
-        info.ready        = true;
     }
 
     startXfer(cmd);
@@ -212,11 +211,12 @@ MessageUnit::startXfer(const Dtu::Command::Bits& cmd)
     header->length       = data.size;
     header->label        = info.label;
     header->replyLabel   = info.replyLabel;
+    header->replyCrd     = info.replyCrd;
 
     DPRINTFS(Dtu, (&dtu),
-        "  src: pe=%u ep=%u rpep=%u rplbl=%#018lx flags=%#x%s\n",
+        "  src: pe=%u ep=%u rpep=%u rplbl=%#018lx rpcrd=%u flags=%#x%s\n",
         header->senderCoreId, header->senderEpId,
-        header->replyEpId, info.replyLabel, header->flags,
+        header->replyEpId, info.replyLabel, header->replyCrd, header->flags,
         header->senderCoreId != dtu.coreId ? " (on behalf)" : "");
 
     DPRINTFS(Dtu, (&dtu),
@@ -388,8 +388,8 @@ MessageUnit::ackMessage(unsigned epId, Addr msgAddr)
         ep.msgCount--;
     }
 
-    // reset header
-    dtu.regs().setHeader(ep.header + msgidx, RegAccess::DTU, ReplyHeader());
+    // invalidate reply EP
+    dtu.regs().invalidate(ep.replyEps + msgidx, true);
 
     DPRINTFS(DtuBuf, (&dtu),
         "EP%u: acked msg at index %d\n",
@@ -408,9 +408,9 @@ MessageUnit::invalidateReply(unsigned repId, unsigned peId, unsigned sepId)
 
     for (int i = 0; i < (1 << ep.size); ++i)
     {
-        auto hd = dtu.regs().getHeader(ep.header + i, RegAccess::DTU);
-        if (hd.senderCoreId == peId && hd.senderEpId == sepId)
-            dtu.regs().setHeader(ep.header + i, RegAccess::DTU, ReplyHeader());
+        auto sep = dtu.regs().getSendEp(ep.replyEps + i);
+        if (sep.targetCore == peId && sep.crdEp == sepId)
+            dtu.regs().invalidate(ep.replyEps + i, true);
     }
     return Dtu::Error::NONE;
 }
@@ -450,7 +450,20 @@ MessageUnit::finishMsgReceive(unsigned epId,
 
         ep.msgCount++;
         ep.setUnread(idx, true);
-        dtu.regs().setHeader(ep.header + idx, RegAccess::DTU, *header);
+
+        // install use-once reply EP
+        SendEp sep;
+        sep.targetCore = header->senderCoreId;
+        sep.targetEp = header->replyEpId;
+        sep.label = header->replyLabel;
+        sep.maxMsgSize = header->replyCrd;
+        sep.maxcrd = header->replyCrd;
+        sep.curcrd = header->replyCrd;
+        sep.crdEp = header->senderEpId;
+        sep.flags = SendEp::FL_REPLY;
+        if (header->flags & Dtu::PAGEFAULT)
+            sep.flags |= SendEp::FL_PF;
+        dtu.regs().setSendEp(ep.replyEps + idx, sep);
     }
     else
         ep.setOccupied(idx, false);

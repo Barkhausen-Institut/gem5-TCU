@@ -67,7 +67,6 @@ class Dtu(BaseDtu):
     cxx_header = "mem/dtu/dtu.hh"
     system = Param.System(Parent.any, "System we belong to")
     num_endpoints = Param.Unsigned(8, "Number of endpoints per DTU")
-    num_header = Param.Unsigned(128, "Number of header per DTU")
 
     connector = Param.BaseConnector("The connector to the CPU")
 

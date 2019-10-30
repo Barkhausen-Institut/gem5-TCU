@@ -82,7 +82,7 @@ Dtu::Dtu(DtuParams* p)
   : BaseDtu(p),
     masterId(p->system->getMasterId(this, name())),
     system(p->system),
-    regFile(*this, name() + ".regFile", p->num_endpoints, p->num_header),
+    regFile(*this, name() + ".regFile", p->num_endpoints),
     connector(p->connector),
     tlBuf(p->tlb_entries > 0 ? new DtuTlb(*this, p->tlb_entries) : NULL),
     msgUnit(new MessageUnit(*this)),
@@ -569,8 +569,6 @@ Dtu::reset(Addr entry, bool flushInval)
 
     if (tlb())
         tlb()->clear();
-
-    regs().resetHeader();
 
     Addr rootpt = ptUnit ? 0 : nocToPhys(regs().get(DtuReg::ROOT_PT));
     connector->reset(entry, rootpt);

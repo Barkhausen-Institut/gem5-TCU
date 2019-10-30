@@ -83,8 +83,8 @@ constexpr unsigned numCmdRegs = 5;
 // Ep Registers:
 //
 // 0. TYPE[3] (for all)
-//    receive: BUF_RD_POS[6] | BUF_WR_POS[6] | BUF_MSG_SIZE[16] | BUF_SIZE[6] | BUF_HEADER[20] BUF_MSG_CNT[6]
-//    send:    MAX_MSG_SIZE[16]
+//    receive: BUF_RD_POS[6] | BUF_WR_POS[6] | BUF_MSG_SIZE[16] | BUF_SIZE[6] | REPLY_EPS[20] | BUF_MSG_CNT[6]
+//    send:    FLAGS[2] | CRD_EP[8] | MAX_MSG_SIZE[16]
 //    mem:     REQ_MEM_SIZE[61]
 // 1. receive: BUF_ADDR[64]
 //    send:    TGT_COREID[8] | TGT_EPID[8] | MAXCRD[16] | CURCRD[16]
@@ -124,8 +124,11 @@ class RegFile;
 
 struct SendEp
 {
-    SendEp() : targetCore(), targetEp(), maxMsgSize(), maxcrd(),
-               curcrd(), label()
+    static const uint8_t FL_REPLY   = 1;
+    static const uint8_t FL_PF      = 2;
+
+    SendEp() : flags(), targetCore(), targetEp(), crdEp(), maxMsgSize(),
+               maxcrd(), curcrd(), label()
     {}
 
     void print(const RegFile &rf,
@@ -133,8 +136,10 @@ struct SendEp
                bool read,
                RegAccess access) const;
 
+    uint8_t flags;
     uint8_t targetCore;
     uint8_t targetEp;
+    uint8_t crdEp;
     uint16_t maxMsgSize;
     uint16_t maxcrd;
     uint16_t curcrd;
@@ -145,7 +150,8 @@ struct RecvEp
 {
     static const size_t MAX_MSGS    = 32;
 
-    RecvEp() : bufAddr(), msgSize(), size(), msgCount(), occupied(), unread()
+    RecvEp() : rdPos(), wrPos(), bufAddr(), msgSize(), size(), replyEps(),
+               msgCount(), occupied(), unread()
     {}
 
     int msgToIdx(Addr msg) const
@@ -190,7 +196,7 @@ struct RecvEp
     uint64_t bufAddr;
     uint16_t msgSize;
     uint16_t size;
-    uint16_t header;
+    uint32_t replyEps;
     uint8_t msgCount;
     uint32_t occupied;
     uint32_t unread;
@@ -230,24 +236,20 @@ struct DataReg
     uint16_t size;
 };
 
-struct ReplyHeader
+struct MessageHeader
 {
      // if bit 0 is set its a reply, if bit 1 is set we grant credits
     uint8_t flags;
     uint8_t senderCoreId;
     uint8_t senderEpId;
-     // for a normal message this is the reply epId
+    // for a normal message this is the reply epId
     // for a reply this is the enpoint that receives credits
     uint8_t replyEpId;
     uint16_t length;
-    uint16_t : 16;
+    uint16_t replyCrd;
 
     // should be large enough for pointers.
     uint64_t replyLabel;
-} M5_ATTR_PACKED;
-
-struct MessageHeader : public ReplyHeader
-{
     uint64_t label;
 } M5_ATTR_PACKED;
 
@@ -272,8 +274,7 @@ class RegFile
         WROTE_CLEAR_IRQ = 32,
     };
 
-    RegFile(Dtu &dtu, const std::string& name, unsigned numEndpoints,
-            unsigned _numHeader);
+    RegFile(Dtu &dtu, const std::string& name, unsigned numEndpoints);
 
     bool hasFeature(Features feature) const
     {
@@ -325,12 +326,6 @@ class RegFile
 
     MemEp getMemEp(unsigned epId, bool print = true) const;
 
-    const ReplyHeader &getHeader(size_t idx, RegAccess access) const;
-
-    void setHeader(size_t idx, RegAccess access, const ReplyHeader &hd);
-
-    void resetHeader();
-
     const char *getBuffer(size_t bytes);
 
     /// returns which command registers have been written
@@ -348,8 +343,6 @@ class RegFile
 
     void printEpAccess(unsigned epId, bool read, bool cpu) const;
 
-    void printHeaderAccess(size_t idx, bool read, RegAccess access) const;
-
     Addr getSize() const;
 
   private:
@@ -363,8 +356,6 @@ class RegFile
     std::vector<reg_t> cmdRegs;
 
     std::vector<std::vector<reg_t>> epRegs;
-
-    std::vector<ReplyHeader> header;
 
     std::vector<reg_t> bufRegs;
 
