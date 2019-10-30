@@ -252,14 +252,14 @@ RegFile::getSendEp(unsigned epId, bool print) const
     const reg_t r1  = regs[1];
     const reg_t r2  = regs[2];
 
-    ep.maxMsgSize   = r0 & 0xFFFF;
-    ep.crdEp        = (r0 >> 16) & 0xFF;
-    ep.flags        = (r0 >> 24) & 0x3;
+    ep.flags        = (r0 >> 26) & 0x3;
+    ep.crdEp        = (r0 >> 18) & 0xFF;
+    ep.maxMsgSize   = (r0 >> 12) & 0x3F;
+    ep.maxcrd       = (r0 >>  6) & 0x3F;
+    ep.curcrd       = (r0 >>  0) & 0x3F;
 
-    ep.targetCore   = (r1 >> 40) & 0xFF;
-    ep.targetEp     = (r1 >> 32) & 0xFF;
-    ep.maxcrd       = (r1 >> 16) & 0xFFFF;
-    ep.curcrd       = (r1 >>  0) & 0xFFFF;
+    ep.targetCore   = (r1 >>  8) & 0xFF;
+    ep.targetEp     = (r1 >>  0) & 0xFF;
 
     ep.label        = r2;
 
@@ -273,14 +273,14 @@ void
 RegFile::setSendEp(unsigned epId, const SendEp &ep)
 {
     set(epId, 0, (static_cast<reg_t>(EpType::SEND) << 61) |
-                 (static_cast<reg_t>(ep.flags) << 24) |
-                 (static_cast<reg_t>(ep.crdEp) << 16) |
-                  ep.maxMsgSize);
+                 (static_cast<reg_t>(ep.flags)      << 26) |
+                 (static_cast<reg_t>(ep.crdEp)      << 18) |
+                 (static_cast<reg_t>(ep.maxMsgSize) << 12) |
+                 (static_cast<reg_t>(ep.maxcrd)     << 6) |
+                 (static_cast<reg_t>(ep.curcrd)     << 0));
 
-    set(epId, 1, (static_cast<reg_t>(ep.targetCore) << 40) |
-                 (static_cast<reg_t>(ep.targetEp) << 32) |
-                 ((static_cast<reg_t>(ep.maxcrd) & 0xFFFF) << 16) |
-                 ((static_cast<reg_t>(ep.curcrd) & 0xFFFF) << 0));
+    set(epId, 1, (static_cast<reg_t>(ep.targetCore) << 8) |
+                 (static_cast<reg_t>(ep.targetEp)   << 0));
 
     set(epId, 2, ep.label);
 
@@ -379,11 +379,11 @@ SendEp::print(const RegFile &rf,
         return;
 
     DPRINTFNS(rf.name(),
-        "%s%s EP%u%14s: Send[pe=%u ep=%u crdep=%u maxcrd=%#x curcrd=%#x max=%#x lbl=%#llx fl=%#lx]\n",
+        "%s%s EP%u%14s: Send[pe=%u ep=%u crdep=%u maxcrd=%u curcrd=%u max=%#x lbl=%#llx fl=%#lx]\n",
         regAccessName(access), read ? "<-" : "->",
         epId, "",
         targetCore, targetEp, crdEp,
-        maxcrd, curcrd, maxMsgSize,
+        maxcrd, curcrd, 1 << maxMsgSize,
         label, flags);
 }
 

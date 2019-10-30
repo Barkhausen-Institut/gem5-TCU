@@ -48,7 +48,7 @@ class MessageUnit
         unsigned replyEpId;
         uint64_t label;
         uint64_t replyLabel;
-        unsigned replyCrd;
+        unsigned replySize;
     };
 
     class SendTransferEvent : public MemoryUnit::WriteTransferEvent

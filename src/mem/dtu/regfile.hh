@@ -84,10 +84,10 @@ constexpr unsigned numCmdRegs = 5;
 //
 // 0. TYPE[3] (for all)
 //    receive: BUF_RD_POS[6] | BUF_WR_POS[6] | BUF_MSG_SIZE[16] | BUF_SIZE[6] | REPLY_EPS[20] | BUF_MSG_CNT[6]
-//    send:    FLAGS[2] | CRD_EP[8] | MAX_MSG_SIZE[16]
+//    send:    FLAGS[2] | CRD_EP[8] | MAX_MSG_SIZE[6] | MAXCRD[6] | CURCRD[6]
 //    mem:     REQ_MEM_SIZE[61]
 // 1. receive: BUF_ADDR[64]
-//    send:    TGT_COREID[8] | TGT_EPID[8] | MAXCRD[16] | CURCRD[16]
+//    send:    TGT_COREID[8] | TGT_EPID[8]
 //    mem:     REQ_MEM_ADDR[64]
 // 2. receive: BUF_UNREAD[32] | BUF_OCCUPIED[32]
 //    send:    LABEL[64]
@@ -127,8 +127,8 @@ struct SendEp
     static const uint8_t FL_REPLY   = 1;
     static const uint8_t FL_PF      = 2;
 
-    SendEp() : flags(), targetCore(), targetEp(), crdEp(), maxMsgSize(),
-               maxcrd(), curcrd(), label()
+    SendEp() : flags(), targetCore(), targetEp(), crdEp(), maxcrd(), curcrd(),
+               maxMsgSize(), label()
     {}
 
     void print(const RegFile &rf,
@@ -140,9 +140,9 @@ struct SendEp
     uint8_t targetCore;
     uint8_t targetEp;
     uint8_t crdEp;
-    uint16_t maxMsgSize;
-    uint16_t maxcrd;
-    uint16_t curcrd;
+    uint8_t maxcrd;
+    uint8_t curcrd;
+    uint8_t maxMsgSize;
     uint64_t label;
 };
 
@@ -246,7 +246,7 @@ struct MessageHeader
     // for a reply this is the enpoint that receives credits
     uint8_t replyEpId;
     uint16_t length;
-    uint16_t replyCrd;
+    uint16_t replySize;
 
     // should be large enough for pointers.
     uint64_t replyLabel;

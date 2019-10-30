@@ -119,7 +119,7 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
         // grant credits to the sender
         info.replyEpId = sep.crdEp;
         info.flags = Dtu::REPLY_FLAG | Dtu::GRANT_CREDITS_FLAG;
-        info.replyCrd = 0;
+        info.replySize = 0;
 
         // the pagefault flag is moved to the reply hd
         if (sep.flags & SendEp::FL_PF)
@@ -139,26 +139,24 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
 
     if (ep.curcrd != Dtu::CREDITS_UNLIM)
     {
-        if (ep.curcrd < ep.maxMsgSize)
+        if (ep.curcrd == 0)
         {
-            DPRINTFS(Dtu, (&dtu),
-                "EP%u: not enough credits (%lu) to send message (%lu)\n",
-                epid, ep.curcrd, ep.maxMsgSize);
+            DPRINTFS(Dtu, (&dtu), "EP%u: no credits to send message\n", epid);
             dtu.scheduleFinishOp(Cycles(1), Dtu::Error::MISS_CREDITS);
             return;
         }
 
         // pay the credits
-        ep.curcrd -= ep.maxMsgSize;
+        ep.curcrd--;
 
-        DPRINTFS(DtuCredits, (&dtu), "EP%u paid %u credits (%u left)\n",
-                 epid, ep.maxMsgSize, ep.curcrd);
+        DPRINTFS(DtuCredits, (&dtu), "EP%u paid 1 credit (%u left)\n",
+                 epid, ep.curcrd);
 
         dtu.regs().setSendEp(epid, ep);
     }
 
     // TODO error handling
-    assert(data.size + sizeof(MessageHeader) <= ep.maxMsgSize);
+    assert(data.size + sizeof(MessageHeader) <= (1 << ep.maxMsgSize));
 
     // fill the info struct and start the transfer
     info.targetCoreId = ep.targetCore;
@@ -170,7 +168,7 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
 
     if (cmd.opcode == Dtu::Command::SEND)
     {
-        info.replyCrd     = 1 << dtu.regs().getRecvEp(cmd.arg).msgSize;
+        info.replySize    = dtu.regs().getRecvEp(cmd.arg).msgSize;
         info.replyEpId    = cmd.arg;
         info.flags        = 0;
     }
@@ -211,12 +209,12 @@ MessageUnit::startXfer(const Dtu::Command::Bits& cmd)
     header->length       = data.size;
     header->label        = info.label;
     header->replyLabel   = info.replyLabel;
-    header->replyCrd     = info.replyCrd;
+    header->replySize    = info.replySize;
 
     DPRINTFS(Dtu, (&dtu),
-        "  src: pe=%u ep=%u rpep=%u rplbl=%#018lx rpcrd=%u flags=%#x%s\n",
-        header->senderCoreId, header->senderEpId,
-        header->replyEpId, info.replyLabel, header->replyCrd, header->flags,
+        "  src: pe=%u ep=%u rpep=%u rplbl=%#018lx rpsize=%#x flags=%#x%s\n",
+        header->senderCoreId, header->senderEpId, header->replyEpId,
+        header->replyLabel, 1 << header->replySize, header->flags,
         header->senderCoreId != dtu.coreId ? " (on behalf)" : "");
 
     DPRINTFS(Dtu, (&dtu),
@@ -271,7 +269,7 @@ MessageUnit::finishMsgSend(Dtu::Error error, unsigned epid)
     if (ep.curcrd != Dtu::CREDITS_UNLIM &&
         error != Dtu::Error::NONE && error != Dtu::Error::MISS_CREDITS)
     {
-        ep.curcrd += ep.maxMsgSize;
+        ep.curcrd++;
         assert(ep.curcrd <= ep.maxcrd);
     }
 
@@ -285,12 +283,12 @@ MessageUnit::recvCredits(unsigned epid)
 
     if (ep.curcrd != Dtu::CREDITS_UNLIM)
     {
-        ep.curcrd += ep.maxMsgSize;
+        ep.curcrd++;
         assert(ep.curcrd <= ep.maxcrd);
 
         DPRINTFS(DtuCredits, (&dtu),
-            "EP%u received %u credits (%u in total)\n",
-            epid, ep.maxMsgSize, ep.curcrd);
+            "EP%u received 1 credit (%u in total)\n",
+            epid, ep.curcrd);
 
         dtu.regs().setSendEp(epid, ep);
     }
@@ -456,9 +454,8 @@ MessageUnit::finishMsgReceive(unsigned epId,
         sep.targetCore = header->senderCoreId;
         sep.targetEp = header->replyEpId;
         sep.label = header->replyLabel;
-        sep.maxMsgSize = header->replyCrd;
-        sep.maxcrd = header->replyCrd;
-        sep.curcrd = header->replyCrd;
+        sep.maxMsgSize = header->replySize;
+        sep.maxcrd = sep.curcrd = 1;
         sep.crdEp = header->senderEpId;
         sep.flags = SendEp::FL_REPLY;
         if (header->flags & Dtu::PAGEFAULT)
