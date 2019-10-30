@@ -63,7 +63,6 @@ class Dtu : public BaseDtu
         GRANT_CREDITS_FLAG  = (1 << 1),
         REPLY_ENABLED       = (1 << 2),
         PAGEFAULT           = (1 << 3),
-        REPLY_FAILED        = (1 << 4),
     };
 
     enum class Error

@@ -256,18 +256,7 @@ MessageUnit::SendTransferEvent::transferStart()
 void
 MessageUnit::finishMsgReply(Dtu::Error error, unsigned epid, Addr msgAddr)
 {
-    if (error == Dtu::Error::VPE_GONE)
-    {
-        RecvEp ep = dtu.regs().getRecvEp(epid);
-        int msgidx = ep.msgToIdx(msgAddr);
-
-        ReplyHeader hd = dtu.regs().getHeader(ep.header + msgidx, RegAccess::DTU);
-        hd.flags |= Dtu::REPLY_FAILED;
-        dtu.regs().setHeader(ep.header + msgidx, RegAccess::DTU, hd);
-    }
-    // on VPE_GONE, the kernel wants to reply later; so don't free the slot
-    else
-        ackMessage(epid, msgAddr);
+    ackMessage(epid, msgAddr);
 }
 
 void
@@ -278,10 +267,9 @@ MessageUnit::finishMsgSend(Dtu::Error error, unsigned epid)
     if (ep.maxMsgSize == 0)
         return;
 
-    // undo the credit reduction on errors except for {VPE_GONE,MISS_CREDITS}
+    // undo the credit reduction on errors except for MISS_CREDITS
     if (ep.curcrd != Dtu::CREDITS_UNLIM &&
-        error != Dtu::Error::NONE && error != Dtu::Error::VPE_GONE &&
-        error != Dtu::Error::MISS_CREDITS)
+        error != Dtu::Error::NONE && error != Dtu::Error::MISS_CREDITS)
     {
         ep.curcrd += ep.maxMsgSize;
         assert(ep.curcrd <= ep.maxcrd);
