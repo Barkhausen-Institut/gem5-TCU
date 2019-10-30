@@ -126,6 +126,8 @@ RegFile::invalidate(unsigned epId, bool force)
     for (int i = 0; i < numEpRegs; ++i)
         epRegs[epId][i] = 0;
 
+    printEpAccess(epId, false, false);
+
     return true;
 }
 

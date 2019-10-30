@@ -450,6 +450,9 @@ Dtu::executeExternCommand(PacketPtr pkt)
 
     Error result = Error::NONE;
 
+    DPRINTF(DtuCmd, "Executing extern command %s with arg=%p\n",
+            extCmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg);
+
     switch (cmd.opcode)
     {
         case ExternCommand::IDLE:
@@ -504,9 +507,12 @@ Dtu::executeExternCommand(PacketPtr pkt)
         schedNocResponse(pkt, clockEdge(delay));
     }
 
-    DPRINTF(DtuCmd, "Executing extern command %s with arg=%p -> %u\n",
-            extCmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg,
-            (unsigned)result);
+    if (result != Error::NONE)
+    {
+        DPRINTF(DtuCmd, "Extern command %s failed (%u)\n",
+                extCmdNames[static_cast<size_t>(cmd.opcode)],
+                (unsigned)result);
+    }
 
     // set external command back to IDLE
     regFile.set(DtuReg::EXT_CMD,
