@@ -92,7 +92,6 @@ class M3Loader
         uint64_t rbufcur;
         uint64_t rbufend;
         uint64_t rmng_sel;
-        uint64_t eps;
         uint64_t caps;
         uint64_t backend;
     } M5_ATTR_PACKED;
