@@ -103,6 +103,15 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
         RecvEp ep = dtu.regs().getRecvEp(epid);
         int msgidx = ep.msgToIdx(cmd.arg);
 
+        if (ep.replyEps == dtu.numEndpoints)
+        {
+            DPRINTFS(Dtu, (&dtu),
+                     "EP%u: no reply EPs, cannot reply on msg %p\n",
+                     epid, cmd.arg);
+            dtu.scheduleFinishOp(Cycles(1), Dtu::Error::INV_EP);
+            return;
+        }
+
         epid = ep.replyEps + msgidx;
 
         SendEp sep = dtu.regs().getSendEp(epid);
@@ -386,8 +395,11 @@ MessageUnit::ackMessage(unsigned epId, Addr msgAddr)
         ep.msgCount--;
     }
 
-    // invalidate reply EP
-    dtu.regs().invalidate(ep.replyEps + msgidx, true);
+    if (ep.replyEps != dtu.numEndpoints)
+    {
+        // invalidate reply EP
+        dtu.regs().invalidate(ep.replyEps + msgidx, true);
+    }
 
     DPRINTFS(DtuBuf, (&dtu),
         "EP%u: acked msg at index %d\n",
@@ -401,7 +413,7 @@ Dtu::Error
 MessageUnit::invalidateReply(unsigned repId, unsigned peId, unsigned sepId)
 {
     RecvEp ep = dtu.regs().getRecvEp(repId);
-    if (ep.bufAddr == 0)
+    if (ep.bufAddr == 0 || ep.replyEps == dtu.numEndpoints)
         return Dtu::Error::INV_EP;
 
     for (int i = 0; i < (1 << ep.size); ++i)
@@ -449,18 +461,23 @@ MessageUnit::finishMsgReceive(unsigned epId,
         ep.msgCount++;
         ep.setUnread(idx, true);
 
-        // install use-once reply EP
-        SendEp sep;
-        sep.targetCore = header->senderCoreId;
-        sep.targetEp = header->replyEpId;
-        sep.label = header->replyLabel;
-        sep.maxMsgSize = header->replySize;
-        sep.maxcrd = sep.curcrd = 1;
-        sep.crdEp = header->senderEpId;
-        sep.flags = SendEp::FL_REPLY;
-        if (header->flags & Dtu::PAGEFAULT)
-            sep.flags |= SendEp::FL_PF;
-        dtu.regs().setSendEp(ep.replyEps + idx, sep);
+        if (!(header->flags & Dtu::REPLY_FLAG))
+        {
+            assert(ep.replyEps != dtu.numEndpoints);
+
+            // install use-once reply EP
+            SendEp sep;
+            sep.targetCore = header->senderCoreId;
+            sep.targetEp = header->replyEpId;
+            sep.label = header->replyLabel;
+            sep.maxMsgSize = header->replySize;
+            sep.maxcrd = sep.curcrd = 1;
+            sep.crdEp = header->senderEpId;
+            sep.flags = SendEp::FL_REPLY;
+            if (header->flags & Dtu::PAGEFAULT)
+                sep.flags |= SendEp::FL_PF;
+            dtu.regs().setSendEp(ep.replyEps + idx, sep);
+        }
     }
     else
         ep.setOccupied(idx, false);
