@@ -33,7 +33,7 @@ PacketPtr
 YieldSM::tick()
 {
     return accel->createDtuCmdPkt(Dtu::Command::SLEEP,
-                                  0, 0, 0, 1ULL << 63);
+                                  0, 0, 0, 1ULL << 40);
 }
 
 bool

@@ -289,7 +289,7 @@ Dtu::executeCommand(PacketPtr pkt)
             finishCommand(Error::NONE);
             break;
         case Command::SLEEP:
-            if (!startSleep(cmd.arg, !!(cmd.arg >> 60)))
+            if (!startSleep(cmd.arg, !!(cmd.arg >> 40)))
                 finishCommand(Error::NONE);
             break;
         case Command::PRINT:
