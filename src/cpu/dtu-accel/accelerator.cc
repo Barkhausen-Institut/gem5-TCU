@@ -36,8 +36,8 @@
 
 #include <iomanip>
 
-const unsigned DtuAccel::EP_SYSS       = 3;
-const unsigned DtuAccel::EP_SYSR       = 4;
+const unsigned DtuAccel::EP_SYSS       = 4;
+const unsigned DtuAccel::EP_SYSR       = 5;
 
 const Addr DtuAccel::PEMUX_YIELD      = 0x100000;
 const Addr DtuAccel::PEMUX_FLAGS      = 0x100008;
