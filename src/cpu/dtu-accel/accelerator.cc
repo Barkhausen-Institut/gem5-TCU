@@ -51,7 +51,7 @@ DtuAccel::getRegAddr(DtuReg reg)
 Addr
 DtuAccel::getRegAddr(ReqReg reg)
 {
-    return DtuTlb::PAGE_SIZE + static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
+    return DtuTlb::PAGE_SIZE * 2 + static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
 }
 
 Addr

@@ -553,9 +553,9 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
                 set(reg, data[offset / sizeof(reg_t)], access);
             }
         }
-        else if (regAddr >= DtuTlb::PAGE_SIZE)
+        else if (regAddr >= DtuTlb::PAGE_SIZE * 2)
         {
-            Addr reqAddr = regAddr - DtuTlb::PAGE_SIZE;
+            Addr reqAddr = regAddr - DtuTlb::PAGE_SIZE * 2;
 
             if (reqAddr < sizeof(reg_t) * numReqRegs)
             {
@@ -649,5 +649,5 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
 Addr
 RegFile::getSize() const
 {
-    return DtuTlb::PAGE_SIZE + sizeof(reg_t) * numReqRegs;
+    return DtuTlb::PAGE_SIZE * 2 + sizeof(reg_t) * numReqRegs;
 }

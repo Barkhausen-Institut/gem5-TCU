@@ -173,7 +173,7 @@ M3Loader::mapMemory(System &sys, DTUMemory &dtumem)
 
     // DTU's MMIO area
     dtumem.mapPages(0xF0000000, NocAddr(0xF0000000),
-                    DtuTlb::PAGE_SIZE * 2, DtuTlb::INTERN | DtuTlb::RW | DtuTlb::UNCACHE);
+                    DtuTlb::PAGE_SIZE * 3, DtuTlb::INTERN | DtuTlb::RW | DtuTlb::UNCACHE);
 }
 
 void
