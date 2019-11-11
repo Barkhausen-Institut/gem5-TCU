@@ -53,7 +53,6 @@ enum class Features
 {
     PRIV            = 1 << 0,
     PAGEFAULTS      = 1 << 1,
-    IRQ_ON_MSG      = 1 << 2,
 };
 
 constexpr unsigned numDtuRegs = 8;
@@ -64,9 +63,10 @@ enum class ReqReg : Addr
     EXT_REQ,
     XLATE_REQ,
     XLATE_RESP,
+    VPE_ID,
 };
 
-constexpr unsigned numReqRegs = 3;
+constexpr unsigned numReqRegs = 4;
 
 // registers to issue a command
 enum class CmdReg : Addr
@@ -82,16 +82,16 @@ constexpr unsigned numCmdRegs = 5;
 
 // Ep Registers:
 //
-// 0. TYPE[3] (for all)
-//    receive: BUF_RD_POS[6] | BUF_WR_POS[6] | BUF_MSG_SIZE[16] | BUF_SIZE[6] | REPLY_EPS[20] | BUF_MSG_CNT[6]
+// 0. VPEID[16] | TYPE[3] (for all)
+//    receive: BUF_RD_POS[6] | BUF_WR_POS[6] | BUF_MSG_SIZE[6] | BUF_SIZE[6] | REPLY_EPS[8] | BUF_MSG_CNT[6]
 //    send:    FLAGS[2] | CRD_EP[8] | MAX_MSG_SIZE[6] | MAXCRD[6] | CURCRD[6]
-//    mem:     REQ_MEM_SIZE[61]
+//    mem:     REQ_COREID[8] | FLAGS[4]
 // 1. receive: BUF_ADDR[64]
 //    send:    TGT_COREID[8] | TGT_EPID[8]
 //    mem:     REQ_MEM_ADDR[64]
 // 2. receive: BUF_UNREAD[32] | BUF_OCCUPIED[32]
 //    send:    LABEL[64]
-//    mem:     REQ_COREID[8] | FLAGS[4]
+//    mem:     REQ_MEM_SIZE[64]
 //
 constexpr unsigned numEpRegs = 3;
 
@@ -122,12 +122,19 @@ enum class EventType
 
 class RegFile;
 
-struct SendEp
+struct Ep
+{
+    Ep() : vpe() {}
+
+    uint16_t vpe;
+};
+
+struct SendEp : public Ep
 {
     static const uint8_t FL_REPLY   = 1;
     static const uint8_t FL_PF      = 2;
 
-    SendEp() : flags(), targetCore(), targetEp(), crdEp(), maxcrd(), curcrd(),
+    SendEp() : Ep(), flags(), targetCore(), targetEp(), crdEp(), maxcrd(), curcrd(),
                maxMsgSize(), label()
     {}
 
@@ -146,11 +153,11 @@ struct SendEp
     uint64_t label;
 };
 
-struct RecvEp
+struct RecvEp : public Ep
 {
     static const size_t MAX_MSGS    = 32;
 
-    RecvEp() : rdPos(), wrPos(), bufAddr(), msgSize(), size(), replyEps(),
+    RecvEp() : Ep(), rdPos(), wrPos(), bufAddr(), msgSize(), size(), replyEps(),
                msgCount(), occupied(), unread()
     {}
 
@@ -202,9 +209,9 @@ struct RecvEp
     uint32_t unread;
 };
 
-struct MemEp
+struct MemEp : public Ep
 {
-    MemEp() : remoteAddr(), remoteSize(), targetCore(), flags()
+    MemEp() : Ep(), remoteAddr(), remoteSize(), targetCore(), flags()
     {}
 
     void print(const RegFile &rf,

@@ -54,6 +54,7 @@ const char *RegFile::reqRegNames[] = {
     "EXT_REQ",
     "XLATE_REQ",
     "XLATE_RESP",
+    "VPE_ID",
 };
 
 const char *RegFile::cmdRegNames[] = {
@@ -103,6 +104,7 @@ RegFile::RegFile(Dtu &_dtu, const std::string& name, unsigned _numEndpoints)
     // at boot, all PEs are privileged
     reg_t feat = static_cast<reg_t>(Features::PRIV);
     set(DtuReg::FEATURES, feat);
+    set(ReqReg::VPE_ID, Dtu::INVALID_VPE_ID);
 
     for (int epid = 0; epid < numEndpoints; epid++)
     {
@@ -233,7 +235,7 @@ EpType
 RegFile::getEpType(unsigned epId) const
 {
     const std::vector<reg_t> &regs = epRegs[epId];
-    return static_cast<EpType>(regs[0] >> 61);
+    return static_cast<EpType>(regs[0] & 0x7);
 }
 
 SendEp
@@ -252,11 +254,12 @@ RegFile::getSendEp(unsigned epId, bool print) const
     const reg_t r1  = regs[1];
     const reg_t r2  = regs[2];
 
-    ep.flags        = (r0 >> 26) & 0x3;
-    ep.crdEp        = (r0 >> 18) & 0xFF;
-    ep.maxMsgSize   = (r0 >> 12) & 0x3F;
-    ep.maxcrd       = (r0 >>  6) & 0x3F;
-    ep.curcrd       = (r0 >>  0) & 0x3F;
+    ep.flags        = (r0 >> 45) & 0x3;
+    ep.crdEp        = (r0 >> 37) & 0xFF;
+    ep.maxMsgSize   = (r0 >> 31) & 0x3F;
+    ep.maxcrd       = (r0 >> 25) & 0x3F;
+    ep.curcrd       = (r0 >> 19) & 0x3F;
+    ep.vpe          = (r0 >> 3) & 0xFFFF;
 
     ep.targetCore   = (r1 >>  8) & 0xFF;
     ep.targetEp     = (r1 >>  0) & 0xFF;
@@ -272,12 +275,13 @@ RegFile::getSendEp(unsigned epId, bool print) const
 void
 RegFile::setSendEp(unsigned epId, const SendEp &ep)
 {
-    set(epId, 0, (static_cast<reg_t>(EpType::SEND) << 61) |
-                 (static_cast<reg_t>(ep.flags)      << 26) |
-                 (static_cast<reg_t>(ep.crdEp)      << 18) |
-                 (static_cast<reg_t>(ep.maxMsgSize) << 12) |
-                 (static_cast<reg_t>(ep.maxcrd)     << 6) |
-                 (static_cast<reg_t>(ep.curcrd)     << 0));
+    set(epId, 0, (static_cast<reg_t>(ep.flags)      << 45) |
+                 (static_cast<reg_t>(ep.crdEp)      << 37) |
+                 (static_cast<reg_t>(ep.maxMsgSize) << 31) |
+                 (static_cast<reg_t>(ep.maxcrd)     << 25) |
+                 (static_cast<reg_t>(ep.curcrd)     << 19) |
+                 (static_cast<reg_t>(ep.vpe)        << 3) |
+                 (static_cast<reg_t>(EpType::SEND)  << 0));
 
     set(epId, 1, (static_cast<reg_t>(ep.targetCore) << 8) |
                  (static_cast<reg_t>(ep.targetEp)   << 0));
@@ -303,12 +307,13 @@ RegFile::getRecvEp(unsigned epId, bool print) const
     const reg_t r1  = regs[1];
     const reg_t r2  = regs[2];
 
-    ep.rdPos        = (r0 >> 54) & 0x3F;
-    ep.wrPos        = (r0 >> 48) & 0x3F;
-    ep.msgSize      = (r0 >> 32) & 0xFFFF;
-    ep.size         = (r0 >> 26) & 0x3F;
-    ep.replyEps     = (r0 >>  6) & 0xFFFFF;
-    ep.msgCount     = (r0 >>  0) & 0x3F;
+    ep.rdPos        = (r0 >> 51) & 0x3F;
+    ep.wrPos        = (r0 >> 45) & 0x3F;
+    ep.msgSize      = (r0 >> 39) & 0x3F;
+    ep.size         = (r0 >> 33) & 0x3F;
+    ep.replyEps     = (r0 >> 25) & 0xFF;
+    ep.msgCount     = (r0 >> 19) & 0x3F;
+    ep.vpe          = (r0 >>  3) & 0xFFFF;
 
     ep.bufAddr      = r1;
 
@@ -324,13 +329,14 @@ RegFile::getRecvEp(unsigned epId, bool print) const
 void
 RegFile::setRecvEp(unsigned epId, const RecvEp &ep)
 {
-    set(epId, 0, (static_cast<reg_t>(EpType::RECEIVE) << 61) |
-                 (static_cast<reg_t>(ep.rdPos)        << 54) |
-                 (static_cast<reg_t>(ep.wrPos)        << 48) |
-                 (static_cast<reg_t>(ep.msgSize)      << 32) |
-                 (static_cast<reg_t>(ep.size)         << 26) |
-                 (static_cast<reg_t>(ep.replyEps)     << 6) |
-                 (static_cast<reg_t>(ep.msgCount)     << 0));
+    set(epId, 0, (static_cast<reg_t>(ep.rdPos)        << 51) |
+                 (static_cast<reg_t>(ep.wrPos)        << 45) |
+                 (static_cast<reg_t>(ep.msgSize)      << 39) |
+                 (static_cast<reg_t>(ep.size)         << 33) |
+                 (static_cast<reg_t>(ep.replyEps)     << 25) |
+                 (static_cast<reg_t>(ep.msgCount)     << 19) |
+                 (static_cast<reg_t>(ep.vpe)          << 3) |
+                 (static_cast<reg_t>(EpType::RECEIVE) << 0));
 
     set(epId, 1, ep.bufAddr);
 
@@ -356,12 +362,13 @@ RegFile::getMemEp(unsigned epId, bool print) const
     const reg_t r1  = regs[1];
     const reg_t r2  = regs[2];
 
-    ep.remoteSize   = r0 & 0x1FFFFFFFFFFFFFFF;
+    ep.targetCore   = (r0 >> 23) & 0xFF;
+    ep.flags        = (r0 >> 19) & 0x7;
+    ep.vpe          = (r0 >> 3) & 0xFFFF;
 
     ep.remoteAddr   = r1;
 
-    ep.targetCore   = (r2 >> 4) & 0xFF;
-    ep.flags        = (r2 >> 0) & 0x7;
+    ep.remoteSize   = r2;
 
     if (print)
         ep.print(*this, epId, true, RegAccess::DTU);
@@ -379,9 +386,9 @@ SendEp::print(const RegFile &rf,
         return;
 
     DPRINTFNS(rf.name(),
-        "%s%s EP%u%14s: Send[pe=%u ep=%u crdep=%u maxcrd=%u curcrd=%u max=%#x lbl=%#llx fl=%#lx]\n",
+        "%s%s EP%u%14s: Send[vpe=%u, pe=%u ep=%u crdep=%u maxcrd=%u curcrd=%u max=%#x lbl=%#llx fl=%#lx]\n",
         regAccessName(access), read ? "<-" : "->",
-        epId, "",
+        epId, "", vpe,
         targetCore, targetEp, crdEp,
         maxcrd, curcrd, 1 << maxMsgSize,
         label, flags);
@@ -397,9 +404,9 @@ RecvEp::print(const RegFile &rf,
         return;
 
     DPRINTFNS(rf.name(),
-        "%s%s EP%u%14s: Recv[buf=%p msz=%#x bsz=%#x rpl=%u msgs=%u occ=%#010x unr=%#010x rd=%u wr=%u]\n",
+        "%s%s EP%u%14s: Recv[vpe=%u, buf=%p msz=%#x bsz=%#x rpl=%u msgs=%u occ=%#010x unr=%#010x rd=%u wr=%u]\n",
         regAccessName(access), read ? "<-" : "->",
-        epId, "",
+        epId, "", vpe,
         bufAddr, 1 << msgSize, 1 << size, replyEps, msgCount,
         occupied, unread, rdPos, wrPos);
 }
@@ -414,9 +421,9 @@ MemEp::print(const RegFile &rf,
         return;
 
     DPRINTFNS(rf.name(),
-        "%s%s EP%u%14s: Mem[pe=%u addr=%#llx size=%#llx flags=%#x]\n",
+        "%s%s EP%u%14s: Mem[vpe=%u, pe=%u addr=%#llx size=%#llx flags=%#x]\n",
         regAccessName(access), read ? "<-" : "->",
-        epId, "",
+        epId, "", vpe,
         targetCore,
         remoteAddr, remoteSize,
         flags);
@@ -463,7 +470,7 @@ void
 RegFile::set(unsigned epId, size_t idx, reg_t value)
 {
     bool oldrecv = getEpType(epId) == EpType::RECEIVE;
-    bool newrecv = static_cast<EpType>(value >> 61) == EpType::RECEIVE;
+    bool newrecv = static_cast<EpType>(value & 0x7) == EpType::RECEIVE;
 
     epRegs[epId][idx] = value;
 
@@ -477,7 +484,7 @@ RegFile::updateMsgCnt()
 {
     bool hasMsgs = false;
     for (size_t i = 0; i < dtu.numEndpoints; ++i) {
-        if (getEpType(i) == EpType::RECEIVE && (get(i, 0) & 0x3F) > 0) {
+        if (getEpType(i) == EpType::RECEIVE && ((get(i, 0) >> 19) & 0x3F) > 0) {
             hasMsgs = true;
             break;
         }
@@ -569,7 +576,7 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
                     if (reg == ReqReg::XLATE_REQ || reg == ReqReg::XLATE_RESP)
                         res |= WROTE_XLATE;
                     // it only triggers an IRQ if the value is non-zero
-                    else if (data[offset / sizeof(reg_t)] != 0)
+                    else if (reg == ReqReg::EXT_REQ && data[offset / sizeof(reg_t)] != 0)
                         res |= WROTE_EXT_REQ;
                     set(reg, data[offset / sizeof(reg_t)], access);
                 }

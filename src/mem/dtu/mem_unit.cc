@@ -96,7 +96,13 @@ MemoryUnit::startRead(const Dtu::Command::Bits& cmd)
 {
     MemEp ep = dtu.regs().getMemEp(cmd.epid);
 
-    if(!(ep.flags & Dtu::MemoryFlags::READ))
+    if(ep.flags == 0 || ep.vpe != dtu.regs().get(ReqReg::VPE_ID))
+    {
+        dtu.scheduleFinishOp(Cycles(1), Dtu::Error::INV_EP);
+        return;
+    }
+
+    if(!(ep.flags & Dtu::MemoryFlags::READ) || (ep.vpe != dtu.regs().get(ReqReg::VPE_ID)))
     {
         dtu.scheduleFinishOp(Cycles(1), Dtu::Error::NO_PERM);
         return;
@@ -233,6 +239,12 @@ void
 MemoryUnit::startWrite(const Dtu::Command::Bits& cmd)
 {
     MemEp ep = dtu.regs().getMemEp(cmd.epid);
+
+    if(ep.flags == 0 || ep.vpe != dtu.regs().get(ReqReg::VPE_ID))
+    {
+        dtu.scheduleFinishOp(Cycles(1), Dtu::Error::INV_EP);
+        return;
+    }
 
     if(!(ep.flags & Dtu::MemoryFlags::WRITE))
     {
