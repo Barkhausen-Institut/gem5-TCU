@@ -44,9 +44,6 @@ class DtuAccel : public MemObject
     static const unsigned EP_SYSS;
     static const unsigned EP_SYSR;
 
-    static const Addr PEMUX_YIELD;
-    static const Addr PEMUX_FLAGS;
-
     DtuAccel(const DtuAccelParams *p);
 
     Port& getPort(const std::string &if_name,

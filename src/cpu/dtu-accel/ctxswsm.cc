@@ -31,7 +31,7 @@
 
 AccelCtxSwSM::AccelCtxSwSM(DtuAccel *_accel)
     : accel(_accel),
-      state(CHECK), stateChanged(), switched()
+      state(SET_VPE), stateChanged(), switched(), vpe_id(IDLE_VPE)
 {
 }
 
@@ -40,8 +40,13 @@ AccelCtxSwSM::stateName() const
 {
     const char *names[] =
     {
-        "CHECK",
-        "FLAGS",
+        "SET_VPE",
+        "FETCH_MSG",
+        "READ_MSG_ADDR",
+        "READ_MSG",
+        "STORE_REPLY",
+        "SEND_REPLY",
+        "REPLY_WAIT",
         "DONE",
     };
     return names[static_cast<size_t>(state)];
@@ -54,28 +59,63 @@ AccelCtxSwSM::tick()
 
     switch(state)
     {
-        case State::CHECK:
+        case State::SET_VPE:
         {
-            Addr regAddr = accel->getRegAddr(ReqReg::EXT_REQ);
             pkt = accel->createDtuRegPkt(
-                regAddr, sizeof(uint64_t), MemCmd::WriteReq
+                accel->getRegAddr(ReqReg::VPE_ID), sizeof(uint64_t), MemCmd::WriteReq
             );
-            *pkt->getPtr<uint64_t>() = 0;
+            *pkt->getPtr<uint64_t>() = OUR_VPE;
             break;
         }
-        case State::FLAGS:
+
+        case State::FETCH_MSG:
         {
-            pkt = accel->createPacket(
-                DtuAccel::PEMUX_FLAGS, sizeof(uint64_t), MemCmd::ReadReq
-            );
+            Addr regAddr = accel->getRegAddr(CmdReg::COMMAND);
+            uint64_t value = Dtu::Command::FETCH_MSG | (EP_RECV << 4);
+            pkt = accel->createDtuRegPkt(regAddr, value, MemCmd::WriteReq);
             break;
         }
+        case State::READ_MSG_ADDR:
+        {
+            Addr regAddr = accel->getRegAddr(CmdReg::OFFSET);
+            pkt = accel->createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
+            break;
+        }
+        case State::READ_MSG:
+        {
+            pkt = accel->createPacket(msgAddr, MSG_SIZE, MemCmd::ReadReq);
+            break;
+        }
+
+        case State::STORE_REPLY:
+        {
+            reply.res = 0;
+            pkt = accel->createPacket(msgAddr, sizeof(reply), MemCmd::WriteReq);
+            memcpy(pkt->getPtr<uint8_t>(), (char*)&reply, sizeof(reply));
+            break;
+        }
+        case State::SEND_REPLY:
+        {
+            pkt = accel->createDtuCmdPkt(Dtu::Command::REPLY,
+                                         EP_RECV,
+                                         msgAddr,
+                                         sizeof(reply),
+                                         msgAddr);
+            break;
+        }
+        case State::REPLY_WAIT:
+        {
+            Addr regAddr = accel->getRegAddr(CmdReg::COMMAND);
+            pkt = accel->createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
+            break;
+        }
+
         case State::DONE:
         {
-            pkt = accel->createPacket(
-                DtuAccel::PEMUX_FLAGS, sizeof(uint64_t), MemCmd::WriteReq
+            pkt = accel->createDtuRegPkt(
+                accel->getRegAddr(ReqReg::VPE_ID), sizeof(uint64_t), MemCmd::WriteReq
             );
-            *pkt->getPtr<uint64_t>() = DtuAccel::PEMuxCtrl::SIGNAL;
+            *pkt->getPtr<uint64_t>() = vpe_id;
             break;
         }
     }
@@ -90,25 +130,62 @@ AccelCtxSwSM::handleMemResp(PacketPtr pkt)
 
     switch(state)
     {
-        case State::CHECK:
+        case State::SET_VPE:
         {
-            state = State::FLAGS;
+            state = State::FETCH_MSG;
             break;
         }
-        case State::FLAGS:
+
+        case State::FETCH_MSG:
         {
-            uint64_t val = *pkt->getConstPtr<uint64_t>();
-            if (val & DtuAccel::PEMuxCtrl::RESTORE)
-                switched = true;
-            if (val & DtuAccel::PEMuxCtrl::WAITING)
-                state = State::DONE;
-            else
+            state = State::READ_MSG_ADDR;
+            break;
+        }
+        case State::READ_MSG_ADDR:
+        {
+            const RegFile::reg_t *regs = pkt->getConstPtr<RegFile::reg_t>();
+            if(regs[0])
             {
-                state = State::CHECK;
-                return true;
+                msgAddr = regs[0];
+                state = State::READ_MSG;
             }
+            else
+                state = State::DONE;
             break;
         }
+        case State::READ_MSG:
+        {
+            const uint64_t *args =
+                reinterpret_cast<const uint64_t*>(pkt->getConstPtr<uint8_t>() + sizeof(MessageHeader));
+
+            vpe_id = args[2];
+            if (args[3] == Operation::START)
+                switched = true;
+            else if (args[3] == Operation::STOP)
+                vpe_id = IDLE_VPE;
+            state = State::STORE_REPLY;
+            break;
+        }
+
+        case State::STORE_REPLY:
+        {
+            state = State::SEND_REPLY;
+            break;
+        }
+        case State::SEND_REPLY:
+        {
+            state = State::REPLY_WAIT;
+            break;
+        }
+        case State::REPLY_WAIT:
+        {
+            Dtu::Command::Bits cmd =
+                *reinterpret_cast<const RegFile::reg_t*>(pkt->getConstPtr<uint8_t>());
+            if (cmd.opcode == 0)
+                state = State::DONE;
+            break;
+        }
+
         case State::DONE:
         {
             if (switched)
@@ -116,7 +193,7 @@ AccelCtxSwSM::handleMemResp(PacketPtr pkt)
                 accel->setSwitched();
                 switched = false;
             }
-            state = State::CHECK;
+            state = State::SET_VPE;
             return true;
         }
     }

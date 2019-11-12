@@ -35,14 +35,40 @@
 
 class AccelCtxSwSM
 {
-  public:
+    static const uint64_t OUR_VPE   = 0xFFFF;
+    static const uint64_t IDLE_VPE  = 0xFFFE;
+
+    static const unsigned EP_RECV   = 2;
+    static const size_t MSG_SIZE    = 64;
+
+    enum Operation
+    {
+        INIT,
+        START,
+        STOP,
+    };
 
     enum State
     {
-        CHECK,
-        FLAGS,
+        SET_VPE,
+
+        FETCH_MSG,
+        READ_MSG_ADDR,
+        READ_MSG,
+
+        STORE_REPLY,
+        SEND_REPLY,
+        REPLY_WAIT,
+
         DONE,
     };
+
+    struct
+    {
+        uint64_t res;
+    } M5_ATTR_PACKED reply;
+
+  public:
 
     explicit AccelCtxSwSM(DtuAccel *_accel);
 
@@ -50,7 +76,7 @@ class AccelCtxSwSM
 
     bool hasStateChanged() const { return stateChanged; }
 
-    void restart() { state = CHECK; }
+    void restart() { state = SET_VPE; }
 
     PacketPtr tick();
 
@@ -62,6 +88,8 @@ class AccelCtxSwSM
     State state;
     bool stateChanged;
     bool switched;
+    Addr msgAddr;
+    uint64_t vpe_id;
 };
 
 #endif /* __CPU_DTU_ACCEL_CTXSWSM_HH__ */
