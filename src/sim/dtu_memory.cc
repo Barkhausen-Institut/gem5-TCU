@@ -42,8 +42,9 @@ DTUMemory::DTUMemory(SimObject *obj,
     : obj(obj),
       physp(phys),
       // don't reuse root pt
-      nextFrame(1),
-      rootPTOffset(0),
+      nextFrame(2),
+      // don't use the first one, because ARM's vector table will be stored there
+      rootPTOffset(DtuTlb::PAGE_SIZE),
       memPe(memPe),
       memOffset(memOffset),
       memSize(memSize),
