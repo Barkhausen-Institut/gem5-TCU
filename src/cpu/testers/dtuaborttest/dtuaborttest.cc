@@ -515,14 +515,14 @@ DtuAbortTest::tick()
                                        MemCmd::WriteReq);
 
                     RegFile::reg_t cmd = DATA_ADDR << 3;
-                    cmd += static_cast<RegFile::reg_t>(Dtu::ExternCommand::INV_TLB);
+                    cmd += static_cast<RegFile::reg_t>(Dtu::PrivCommand::INV_TLB);
                     *pkt->getPtr<RegFile::reg_t>() = cmd;
                     break;
                 }
 
                 case SubState::INVLPG_CMD:
                 {
-                    Addr off = reg_base + getRegAddr(DtuReg::EXT_CMD);
+                    Addr off = reg_base + getRegAddr(ReqReg::PRIV_CMD);
                     pkt = createCommandPkt(Dtu::Command::WRITE,
                                            EP_MEM,
                                            TEMP_ADDR,

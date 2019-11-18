@@ -44,7 +44,6 @@ enum class DtuReg : Addr
     PF_EP,
     CUR_TIME,
     EVENTS,
-    EXT_CMD,
     CLEAR_IRQ,
     CLOCK,
 };
@@ -55,7 +54,7 @@ enum class Features
     PAGEFAULTS      = 1 << 1,
 };
 
-constexpr unsigned numDtuRegs = 8;
+constexpr unsigned numDtuRegs = 7;
 
 // registers for external requests and DTU requests
 enum class ReqReg : Addr
@@ -63,10 +62,11 @@ enum class ReqReg : Addr
     EXT_REQ,
     XLATE_REQ,
     XLATE_RESP,
+    PRIV_CMD,
     VPE_ID,
 };
 
-constexpr unsigned numReqRegs = 4;
+constexpr unsigned numReqRegs = 5;
 
 // registers to issue a command
 enum class CmdReg : Addr
@@ -274,7 +274,7 @@ class RegFile
     {
         WROTE_NONE      = 0,
         WROTE_CMD       = 1,
-        WROTE_EXT_CMD   = 2,
+        WROTE_PRIV_CMD  = 2,
         WROTE_ABORT     = 4,
         WROTE_XLATE     = 8,
         WROTE_EXT_REQ   = 16,

@@ -45,7 +45,6 @@ const char *RegFile::dtuRegNames[] = {
     "PF_EP",
     "CUR_TIME",
     "EVENTS",
-    "EXT_CMD",
     "CLEAR_IRQ",
     "CLOCK",
 };
@@ -54,6 +53,7 @@ const char *RegFile::reqRegNames[] = {
     "EXT_REQ",
     "XLATE_REQ",
     "XLATE_RESP",
+    "PRIV_CMD",
     "VPE_ID",
 };
 
@@ -554,11 +554,7 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
                 res |= WROTE_CLEAR_IRQ;
             // master registers can't be set by the CPU
             else if (pkt->isWrite() && !isCpuRequest)
-            {
-                if (reg == DtuReg::EXT_CMD)
-                    res |= WROTE_EXT_CMD;
                 set(reg, data[offset / sizeof(reg_t)], access);
-            }
         }
         else if (regAddr >= DtuTlb::PAGE_SIZE * 2)
         {
@@ -578,6 +574,8 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
                     // it only triggers an IRQ if the value is non-zero
                     else if (reg == ReqReg::EXT_REQ && data[offset / sizeof(reg_t)] != 0)
                         res |= WROTE_EXT_REQ;
+                    else if (reg == ReqReg::PRIV_CMD)
+                        res |= WROTE_PRIV_CMD;
                     set(reg, data[offset / sizeof(reg_t)], access);
                 }
             }

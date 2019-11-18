@@ -168,7 +168,7 @@ class Dtu : public BaseDtu
         Bits value;
     };
 
-    struct ExternCommand
+    struct PrivCommand
     {
         enum Opcode
         {
@@ -273,9 +273,9 @@ class Dtu : public BaseDtu
 
     void abortCommand();
 
-    ExternCommand getExternCommand();
+    PrivCommand getPrivCommand();
 
-    void executeExternCommand(PacketPtr pkt);
+    void executePrivCommand(PacketPtr pkt);
 
     void finishCommand(Error error);
 
@@ -354,21 +354,21 @@ class Dtu : public BaseDtu
         const char* description() const override { return "ExecCmdEvent"; }
     };
 
-    struct ExecExternCmdEvent : public DtuEvent
+    struct ExecPrivCmdEvent : public DtuEvent
     {
         PacketPtr pkt;
 
-        ExecExternCmdEvent(Dtu& _dtu, PacketPtr _pkt)
+        ExecPrivCmdEvent(Dtu& _dtu, PacketPtr _pkt)
             : DtuEvent(_dtu), pkt(_pkt)
         {}
 
         void process() override
         {
-            dtu.executeExternCommand(pkt);
+            dtu.executePrivCommand(pkt);
             setFlags(AutoDelete);
         }
 
-        const char* description() const override { return "ExecExternCmdEvent"; }
+        const char* description() const override { return "ExecPrivCmdEvent"; }
     };
 
     struct FinishCommandEvent : public DtuEvent
@@ -482,7 +482,7 @@ class Dtu : public BaseDtu
 
     // commands
     Stats::Vector commands;
-    Stats::Vector extCommands;
+    Stats::Vector privCommands;
 
     static uint64_t nextCmdId;
 

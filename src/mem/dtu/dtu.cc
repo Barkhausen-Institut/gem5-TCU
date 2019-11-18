@@ -62,7 +62,7 @@ static const char *cmdNames[] =
     "PRINT",
 };
 
-static const char *extCmdNames[] =
+static const char *privCmdNames[] =
 {
     "IDLE",
     "INV_EP",
@@ -183,13 +183,13 @@ Dtu::regStats()
     for (size_t i = 0; i < sizeof(cmdNames) / sizeof(cmdNames[0]); ++i)
         commands.subname(i, cmdNames[i]);
 
-    extCommands
-        .init(sizeof(extCmdNames) / sizeof(extCmdNames[0]))
-        .name(name() + ".extCommands")
-        .desc("The executed external commands")
+    privCommands
+        .init(sizeof(privCmdNames) / sizeof(privCmdNames[0]))
+        .name(name() + ".privCommands")
+        .desc("The executed privileged commands")
         .flags(Stats::total | Stats::nozero);
-    for (size_t i = 0; i < sizeof(extCmdNames) / sizeof(extCmdNames[0]); ++i)
-        extCommands.subname(i, extCmdNames[i]);
+    for (size_t i = 0; i < sizeof(privCmdNames) / sizeof(privCmdNames[0]); ++i)
+        privCommands.subname(i, privCmdNames[i]);
 
     xlateReqs
         .name(name() + ".xlateReqs")
@@ -427,36 +427,36 @@ Dtu::finishCommand(Error error)
     cmdId = 0;
 }
 
-Dtu::ExternCommand
-Dtu::getExternCommand()
+Dtu::PrivCommand
+Dtu::getPrivCommand()
 {
-    auto reg = regFile.get(DtuReg::EXT_CMD);
+    auto reg = regFile.get(ReqReg::PRIV_CMD);
 
-    ExternCommand cmd;
-    cmd.opcode = static_cast<ExternCommand::Opcode>(reg & 0xF);
+    PrivCommand cmd;
+    cmd.opcode = static_cast<PrivCommand::Opcode>(reg & 0xF);
     cmd.arg = reg >> 4;
     return cmd;
 }
 
 void
-Dtu::executeExternCommand(PacketPtr pkt)
+Dtu::executePrivCommand(PacketPtr pkt)
 {
-    ExternCommand cmd = getExternCommand();
+    PrivCommand cmd = getPrivCommand();
 
-    extCommands[static_cast<size_t>(cmd.opcode)]++;
+    privCommands[static_cast<size_t>(cmd.opcode)]++;
 
     Cycles delay(1);
 
     Error result = Error::NONE;
 
-    DPRINTF(DtuCmd, "Executing extern command %s with arg=%p\n",
-            extCmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg);
+    DPRINTF(DtuCmd, "Executing privileged command %s with arg=%p\n",
+            privCmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg);
 
     switch (cmd.opcode)
     {
-        case ExternCommand::IDLE:
+        case PrivCommand::IDLE:
             break;
-        case ExternCommand::INV_EP:
+        case PrivCommand::INV_EP:
         {
             unsigned epid = cmd.arg & ((1 << 8) - 1);
             bool force = !!(cmd.arg & (1 << 8));
@@ -468,15 +468,15 @@ Dtu::executeExternCommand(PacketPtr pkt)
             }
             break;
         }
-        case ExternCommand::INV_PAGE:
+        case PrivCommand::INV_PAGE:
             if (tlb())
                 tlb()->remove(cmd.arg);
             break;
-        case ExternCommand::INV_TLB:
+        case PrivCommand::INV_TLB:
             if (tlb())
                 tlb()->clear();
             break;
-        case ExternCommand::INV_REPLY:
+        case PrivCommand::INV_REPLY:
         {
             unsigned repid = cmd.arg & 0xFF;
             unsigned peid = (cmd.arg >> 8) & 0xFF;
@@ -484,10 +484,10 @@ Dtu::executeExternCommand(PacketPtr pkt)
             result = msgUnit->invalidateReply(repid, peid, sepid);
             break;
         }
-        case ExternCommand::RESET:
+        case PrivCommand::RESET:
             delay += reset(cmd.arg & 0x07FFFFFFFFFFFFFF, !!(cmd.arg >> 59));
             break;
-        case ExternCommand::FLUSH_CACHE:
+        case PrivCommand::FLUSH_CACHE:
             delay += flushInvalCaches(false);
             break;
         default:
@@ -505,14 +505,14 @@ Dtu::executeExternCommand(PacketPtr pkt)
 
     if (result != Error::NONE)
     {
-        DPRINTF(DtuCmd, "Extern command %s failed (%u)\n",
-                extCmdNames[static_cast<size_t>(cmd.opcode)],
+        DPRINTF(DtuCmd, "Privileged command %s failed (%u)\n",
+                privCmdNames[static_cast<size_t>(cmd.opcode)],
                 (unsigned)result);
     }
 
-    // set external command back to IDLE
-    regFile.set(DtuReg::EXT_CMD,
-        static_cast<RegFile::reg_t>(ExternCommand::IDLE));
+    // set privileged command back to IDLE
+    regFile.set(ReqReg::PRIV_CMD,
+        static_cast<RegFile::reg_t>(PrivCommand::IDLE));
 }
 
 bool
@@ -1234,7 +1234,7 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
         if (!isCpuRequest)
             schedNocRequestFinished(clockEdge(Cycles(1)));
 
-        if (~result & RegFile::WROTE_EXT_CMD)
+        if (~result & RegFile::WROTE_PRIV_CMD)
         {
             pkt->headerDelay = 0;
             pkt->payloadDelay = 0;
@@ -1256,14 +1256,14 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
                 clearIrq();
         }
         else
-            schedule(new ExecExternCmdEvent(*this, pkt), when);
+            schedule(new ExecPrivCmdEvent(*this, pkt), when);
     }
     else
     {
         if (result & RegFile::WROTE_CMD)
             executeCommand(NULL);
-        if (result & RegFile::WROTE_EXT_CMD)
-            executeExternCommand(NULL);
+        if (result & RegFile::WROTE_PRIV_CMD)
+            executePrivCommand(NULL);
         if (result & RegFile::WROTE_ABORT)
             abortCommand();
         if (result & RegFile::WROTE_XLATE)
