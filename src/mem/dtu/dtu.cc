@@ -65,7 +65,6 @@ static const char *cmdNames[] =
 static const char *extCmdNames[] =
 {
     "IDLE",
-    "WAKEUP_CORE",
     "INV_EP",
     "INV_PAGE",
     "INV_TLB",
@@ -456,9 +455,6 @@ Dtu::executeExternCommand(PacketPtr pkt)
     switch (cmd.opcode)
     {
         case ExternCommand::IDLE:
-            break;
-        case ExternCommand::WAKEUP_CORE:
-            wakeupCore();
             break;
         case ExternCommand::INV_EP:
         {
