@@ -50,8 +50,8 @@ const char *RegFile::dtuRegNames[] = {
 
 const char *RegFile::privRegNames[] = {
     "EXT_REQ",
-    "XLATE_REQ",
-    "XLATE_RESP",
+    "CORE_REQ",
+    "CORE_RESP",
     "PRIV_CMD",
     "CUR_VPE",
     "OLD_VPE",
@@ -104,7 +104,7 @@ RegFile::RegFile(Dtu &_dtu, const std::string& name, unsigned _numEndpoints)
     // at boot, all PEs are privileged
     reg_t feat = static_cast<reg_t>(Features::PRIV);
     set(DtuReg::FEATURES, feat);
-    set(PrivReg::CUR_VPE, Dtu::INVALID_VPE_ID);
+    set(PrivReg::CUR_VPE, static_cast<reg_t>(Dtu::INVALID_VPE_ID) << 19);
 
     for (int epid = 0; epid < numEndpoints; epid++)
     {
@@ -128,16 +128,40 @@ RegFile::invalidate(unsigned epId, bool force)
 
     printEpAccess(epId, false, false);
 
+    if (getEpType(epId) == EpType::RECEIVE)
+    {
+        reg_t msgs = (get(epId, 0) >> 19) & 0x3F;
+        reg_t cur_vpe = privRegs[static_cast<size_t>(PrivReg::CUR_VPE)];
+        cur_vpe -= msgs << 3;
+        set(PrivReg::CUR_VPE, cur_vpe);
+    }
+
     return true;
+}
+
+void
+RegFile::add_msg()
+{
+    reg_t cur_vpe = privRegs[static_cast<size_t>(PrivReg::CUR_VPE)];
+    cur_vpe += 1 << 3;
+    set(PrivReg::CUR_VPE, cur_vpe);
+}
+
+void
+RegFile::rem_msg()
+{
+    reg_t cur_vpe = privRegs[static_cast<size_t>(PrivReg::CUR_VPE)];
+    cur_vpe -= 1 << 3;
+    set(PrivReg::CUR_VPE, cur_vpe);
 }
 
 RegFile::reg_t
 RegFile::fetchEvents()
 {
     reg_t old = get(PrivReg::CUR_VPE, RegAccess::DTU);
-    if ((old & 0xFFFE0000) != 0)
-        set(PrivReg::CUR_VPE, old & 0x1FFFF);
-    return old >> 16;
+    if ((old & 0x7) != 0)
+        set(PrivReg::CUR_VPE, old & ~static_cast<reg_t>(0x7));
+    return old & 0x7;
 }
 
 void
@@ -145,7 +169,7 @@ RegFile::setEvent(EventType ev)
 {
     reg_t old = privRegs[static_cast<size_t>(PrivReg::CUR_VPE)];
     set(PrivReg::CUR_VPE,
-        old | static_cast<reg_t>(1) << (16 + static_cast<reg_t>(ev)),
+        old | static_cast<reg_t>(1) << static_cast<reg_t>(ev),
         RegAccess::DTU);
 }
 
@@ -466,31 +490,7 @@ RegFile::get(unsigned epId, size_t idx) const
 void
 RegFile::set(unsigned epId, size_t idx, reg_t value)
 {
-    bool oldrecv = getEpType(epId) == EpType::RECEIVE;
-    bool newrecv = static_cast<EpType>(value & 0x7) == EpType::RECEIVE;
-
     epRegs[epId][idx] = value;
-
-    // update global message count, if it was a receive EP or got a receive EP
-    if (idx == 0 && (newrecv || oldrecv))
-        updateMsgCnt();
-}
-
-void
-RegFile::updateMsgCnt()
-{
-    bool hasMsgs = false;
-    for (size_t i = 0; i < dtu.numEndpoints; ++i) {
-        if (getEpType(i) == EpType::RECEIVE && ((get(i, 0) >> 19) & 0x3F) > 0) {
-            hasMsgs = true;
-            break;
-        }
-    }
-
-    reg_t other = privRegs[static_cast<size_t>(PrivReg::CUR_VPE)];
-    other &= ~(static_cast<reg_t>(1) << 16);
-    reg_t msgs = (hasMsgs ? 1 : 0) << static_cast<reg_t>(EventType::MSG_RECV);
-    set(PrivReg::CUR_VPE, other | (msgs << 16));
 }
 
 const char *
@@ -566,7 +566,7 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
                 // privileged registers can only be set if we're privileged
                 else if (pkt->isWrite())
                 {
-                    if (reg == PrivReg::XLATE_REQ || reg == PrivReg::XLATE_RESP)
+                    if (reg == PrivReg::CORE_REQ || reg == PrivReg::CORE_RESP)
                         res |= WROTE_XLATE;
                     // it only triggers an IRQ if the value is non-zero
                     else if (reg == PrivReg::EXT_REQ && data[offset / sizeof(reg_t)] != 0)

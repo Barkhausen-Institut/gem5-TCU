@@ -204,7 +204,7 @@ class BaseDtu : public MemObject
 
         bool handleRequest(PacketPtr pkt, bool *, bool functional) override
         {
-            bool res = dtu.handleCpuRequest(pkt, *this, port, icache, functional);
+            bool res = dtu.handleCoreMemRequest(pkt, *this, port, icache, functional);
             if (!res)
                 dtu.sendDummyResponse(*this, pkt, functional);
             return true;
@@ -264,11 +264,11 @@ class BaseDtu : public MemObject
 
     virtual void handleNocRequest(PacketPtr pkt) = 0;
 
-    virtual bool handleCpuRequest(PacketPtr pkt,
-                                  DtuSlavePort &sport,
-                                  DtuMasterPort &mport,
-                                  bool icache,
-                                  bool functional) = 0;
+    virtual bool handleCoreMemRequest(PacketPtr pkt,
+                                      DtuSlavePort &sport,
+                                      DtuMasterPort &mport,
+                                      bool icache,
+                                      bool functional) = 0;
 
     virtual bool handleCacheMemRequest(PacketPtr pkt, bool functional) = 0;
 

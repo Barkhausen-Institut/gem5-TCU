@@ -66,7 +66,7 @@ class MessageUnit
               header(_header)
         {}
 
-        void transferStart() override;
+        bool transferStart() override;
     };
 
     class ReceiveTransferEvent : public MemoryUnit::ReceiveTransferEvent
@@ -81,11 +81,12 @@ class MessageUnit
                              uint flags,
                              PacketPtr pkt)
             : MemoryUnit::ReceiveTransferEvent(
-                Dtu::TransferType::REMOTE_WRITE, local, flags, pkt),
+                XferUnit::TransferType::REMOTE_WRITE, local, flags, pkt),
               msgUnit(_msgUnit), msgAddr(local)
         {}
 
-        void transferDone(Dtu::Error result) override;
+        bool transferStart() override;
+        void transferDone(DtuError result) override;
     };
 
     MessageUnit(Dtu &_dtu) : dtu(_dtu), info() {}
@@ -100,17 +101,17 @@ class MessageUnit
     /**
      * Received a message from NoC -> Mem request
      */
-    Dtu::Error recvFromNoc(PacketPtr pkt, uint flags);
+    DtuError recvFromNoc(PacketPtr pkt, uint flags);
 
     /**
      * Finishes the reply-on-message command
      */
-    void finishMsgReply(Dtu::Error error, unsigned epid, Addr msgAddr);
+    void finishMsgReply(DtuError error, unsigned epid, Addr msgAddr);
 
     /**
      * Finishes the send-message command
      */
-    void finishMsgSend(Dtu::Error error, unsigned epid);
+    void finishMsgSend(DtuError error, unsigned epid);
 
     /**
      * Receives credits again
@@ -125,21 +126,21 @@ class MessageUnit
     /**
      * Acknowledges the message @ <msgAddr>
      */
-    Dtu::Error ackMessage(unsigned epId, Addr msgAddr);
+    DtuError ackMessage(unsigned epId, Addr msgAddr);
 
     /**
      * Invalidates all reply header for receive EP <repId> that have been sent
      * from PE <peId> and send EP <sepId>.
      */
-    Dtu::Error invalidateReply(unsigned repId, unsigned peId, unsigned sepId);
+    DtuError invalidateReply(unsigned repId, unsigned peId, unsigned sepId);
 
     /**
      * Finishes a message receive
      */
-    Dtu::Error finishMsgReceive(unsigned epId,
+    DtuError finishMsgReceive(unsigned epId,
                                 Addr msgAddr,
                                 const MessageHeader *header,
-                                Dtu::Error error,
+                                DtuError error,
                                 uint xferFlags);
 
   private:

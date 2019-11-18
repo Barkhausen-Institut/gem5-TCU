@@ -31,11 +31,14 @@
 #ifndef __MEM_DTU_XFER_UNIT_HH__
 #define __MEM_DTU_XFER_UNIT_HH__
 
-#include "mem/dtu/dtu.hh"
 #include "mem/dtu/noc_addr.hh"
+#include "mem/dtu/pt_unit.hh"
+#include "mem/dtu/error.hh"
 
 #include <list>
 #include <vector>
+
+class Dtu;
 
 class XferUnit
 {
@@ -98,6 +101,18 @@ class XferUnit
 
   public:
 
+    enum class TransferType
+    {
+        // we are reading stuff out of our local memory and send it
+        LOCAL_READ,
+        // we received the read resp. from somebody and write it to local mem
+        LOCAL_WRITE,
+        // we received something and write it to our local memory
+        REMOTE_WRITE,
+        // we should send something from our local memory to somebody else
+        REMOTE_READ
+    };
+
     class TransferEvent : public Event
     {
         friend class XferUnit;
@@ -110,17 +125,17 @@ class XferUnit
 
         uint64_t id;
         Cycles startCycle;
-        Dtu::TransferType type;
+        TransferType type;
         Addr local;
         size_t remaining;
         uint xferFlags;
-        Dtu::Error result;
+        DtuError result;
         Translation *trans;
         int freeSlots;
 
       public:
 
-        TransferEvent(Dtu::TransferType _type,
+        TransferEvent(TransferType _type,
                       Addr _local,
                       size_t _size,
                       uint _flags = 0)
@@ -132,12 +147,14 @@ class XferUnit
               local(_local),
               remaining(_size),
               xferFlags(_flags),
-              result(Dtu::Error::NONE),
+              result(DtuError::NONE),
               trans(),
               freeSlots()
         {}
 
         Dtu &dtu() { return xfer->dtu; }
+
+        int bufId() const { return buf->id; }
 
         uint flags() const { return xferFlags; }
 
@@ -151,11 +168,15 @@ class XferUnit
 
         const char* description() const override { return "TransferEvent"; }
 
-        const std::string name() const override { return xfer->dtu.name(); }
+        const std::string name() const override;
 
-        virtual void transferStart() = 0;
+        Translation *translation() { return trans; }
 
-        virtual void transferDone(Dtu::Error result) = 0;
+        virtual bool transferStart() = 0;
+
+        virtual void transferDone(DtuError result) = 0;
+
+        void start();
 
       private:
 
@@ -168,8 +189,8 @@ class XferUnit
 
         bool isWrite() const
         {
-            return type == Dtu::TransferType::REMOTE_WRITE ||
-                   type == Dtu::TransferType::LOCAL_WRITE;
+            return type == TransferType::REMOTE_WRITE ||
+                   type == TransferType::LOCAL_WRITE;
         }
         bool isRead() const
         {
@@ -177,8 +198,8 @@ class XferUnit
         }
         bool isRemote() const
         {
-            return type == Dtu::TransferType::REMOTE_READ ||
-                   type == Dtu::TransferType::REMOTE_WRITE;
+            return type == TransferType::REMOTE_READ ||
+                   type == TransferType::REMOTE_WRITE;
         }
 
         void process() override;
@@ -187,7 +208,7 @@ class XferUnit
 
         void translateDone(bool success, const NocAddr &phys);
 
-        void abort(Dtu::Error error);
+        void abort(DtuError error);
 
         static uint64_t nextId;
     };

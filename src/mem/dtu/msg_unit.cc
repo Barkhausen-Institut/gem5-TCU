@@ -106,7 +106,7 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
         if(ep.bufAddr == 0 || ep.vpe != dtu.regs().getVPE())
         {
             DPRINTFS(Dtu, (&dtu), "EP%u: invalid EP\n", epid);
-            dtu.scheduleFinishOp(Cycles(1), Dtu::Error::INV_EP);
+            dtu.scheduleFinishOp(Cycles(1), DtuError::INV_EP);
             return;
         }
 
@@ -115,7 +115,7 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
             DPRINTFS(Dtu, (&dtu),
                      "EP%u: no reply EPs, cannot reply on msg %p\n",
                      epid, cmd.arg);
-            dtu.scheduleFinishOp(Cycles(1), Dtu::Error::INV_EP);
+            dtu.scheduleFinishOp(Cycles(1), DtuError::INV_EP);
             return;
         }
 
@@ -128,7 +128,7 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
             DPRINTFS(Dtu, (&dtu),
                      "EP%u: invalid reply EP. Double reply for msg %p?\n",
                      epid, cmd.arg);
-            dtu.scheduleFinishOp(Cycles(1), Dtu::Error::INV_EP);
+            dtu.scheduleFinishOp(Cycles(1), DtuError::INV_EP);
             return;
         }
 
@@ -156,7 +156,7 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
         (cmd.opcode == Dtu::Command::SEND && rep.vpe != dtu.regs().getVPE()))
     {
         DPRINTFS(Dtu, (&dtu), "EP%u: invalid EP\n", epid);
-        dtu.scheduleFinishOp(Cycles(1), Dtu::Error::INV_EP);
+        dtu.scheduleFinishOp(Cycles(1), DtuError::INV_EP);
         return;
     }
 
@@ -165,7 +165,7 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
         if (ep.curcrd == 0)
         {
             DPRINTFS(Dtu, (&dtu), "EP%u: no credits to send message\n", epid);
-            dtu.scheduleFinishOp(Cycles(1), Dtu::Error::MISS_CREDITS);
+            dtu.scheduleFinishOp(Cycles(1), DtuError::MISS_CREDITS);
             return;
         }
 
@@ -257,7 +257,7 @@ MessageUnit::startXfer(const Dtu::Command::Bits& cmd)
     info.ready = false;
 }
 
-void
+bool
 MessageUnit::SendTransferEvent::transferStart()
 {
     assert(header);
@@ -272,16 +272,17 @@ MessageUnit::SendTransferEvent::transferStart()
 
     delete header;
     header = nullptr;
+    return true;
 }
 
 void
-MessageUnit::finishMsgReply(Dtu::Error error, unsigned epid, Addr msgAddr)
+MessageUnit::finishMsgReply(DtuError error, unsigned epid, Addr msgAddr)
 {
     ackMessage(epid, msgAddr);
 }
 
 void
-MessageUnit::finishMsgSend(Dtu::Error error, unsigned epid)
+MessageUnit::finishMsgSend(DtuError error, unsigned epid)
 {
     SendEp ep = dtu.regs().getSendEp(epid);
     // don't do anything if the EP is invalid
@@ -290,7 +291,7 @@ MessageUnit::finishMsgSend(Dtu::Error error, unsigned epid)
 
     // undo the credit reduction on errors except for MISS_CREDITS
     if (ep.curcrd != Dtu::CREDITS_UNLIM &&
-        error != Dtu::Error::NONE && error != Dtu::Error::MISS_CREDITS)
+        error != DtuError::NONE && error != DtuError::MISS_CREDITS)
     {
         ep.curcrd++;
         assert(ep.curcrd <= ep.maxcrd);
@@ -352,6 +353,7 @@ found:
         epid, i, ep.msgCount);
 
     dtu.regs().setRecvEp(epid, ep);
+    dtu.regs().rem_msg();
 
     return ep.bufAddr + (i << ep.msgSize);
 }
@@ -391,16 +393,16 @@ found:
     return i;
 }
 
-Dtu::Error
+DtuError
 MessageUnit::ackMessage(unsigned epId, Addr msgAddr)
 {
     RecvEp ep = dtu.regs().getRecvEp(epId);
     if (ep.bufAddr == 0 || ep.vpe != dtu.regs().getVPE())
-        return Dtu::Error::INV_EP;
+        return DtuError::INV_EP;
 
     int msgidx = ep.msgToIdx(msgAddr);
     if (msgidx == RecvEp::MAX_MSGS || !ep.isOccupied(msgidx))
-        return Dtu::Error::INV_MSG;
+        return DtuError::INV_MSG;
 
     ep.setOccupied(msgidx, false);
     if (ep.isUnread(msgidx))
@@ -420,15 +422,15 @@ MessageUnit::ackMessage(unsigned epId, Addr msgAddr)
         epId, msgidx);
 
     dtu.regs().setRecvEp(epId, ep);
-    return Dtu::Error::NONE;
+    return DtuError::NONE;
 }
 
-Dtu::Error
+DtuError
 MessageUnit::invalidateReply(unsigned repId, unsigned peId, unsigned sepId)
 {
     RecvEp ep = dtu.regs().getRecvEp(repId);
     if (ep.bufAddr == 0 || ep.replyEps == dtu.numEndpoints)
-        return Dtu::Error::INV_EP;
+        return DtuError::INV_EP;
 
     for (int i = 0; i < (1 << ep.size); ++i)
     {
@@ -436,23 +438,23 @@ MessageUnit::invalidateReply(unsigned repId, unsigned peId, unsigned sepId)
         if (sep.targetCore == peId && sep.crdEp == sepId)
             dtu.regs().invalidate(ep.replyEps + i, true);
     }
-    return Dtu::Error::NONE;
+    return DtuError::NONE;
 }
 
-Dtu::Error
+DtuError
 MessageUnit::finishMsgReceive(unsigned epId,
                               Addr msgAddr,
                               const MessageHeader *header,
-                              Dtu::Error error,
+                              DtuError error,
                               uint xferFlags)
 {
     RecvEp ep = dtu.regs().getRecvEp(epId);
     if (ep.bufAddr == 0)
-        return Dtu::Error::INV_EP;
+        return DtuError::INV_EP;
 
     int idx = (msgAddr - ep.bufAddr) >> ep.msgSize;
 
-    if (error == Dtu::Error::NONE)
+    if (error == DtuError::NONE)
     {
         // Note that replyEpId is the Id of *our* sending EP
         if (header->flags & Dtu::REPLY_FLAG &&
@@ -499,19 +501,16 @@ MessageUnit::finishMsgReceive(unsigned epId,
 
     dtu.regs().setRecvEp(epId, ep);
 
-    if (error == Dtu::Error::NONE)
+    if (error == DtuError::NONE && ep.vpe == dtu.regs().getVPE())
     {
-        dtu.regs().setEvent(EventType::MSG_RECV);
-        if (ep.vpe != dtu.regs().getVPE())
-            dtu.setIrq();
-        else
-            dtu.wakeupCore();
+        dtu.regs().add_msg();
+        dtu.wakeupCore();
     }
 
     return error;
 }
 
-Dtu::Error
+DtuError
 MessageUnit::recvFromNoc(PacketPtr pkt, uint flags)
 {
     assert(pkt->isWrite());
@@ -525,7 +524,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint flags)
     if ((header->flags & pfResp) == pfResp)
     {
         dtu.handlePFResp(pkt);
-        return Dtu::Error::NONE;
+        return DtuError::NONE;
     }
 
     NocAddr addr(pkt->getAddr());
@@ -561,7 +560,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint flags)
         dtu.sendNocResponse(pkt);
         dtu.regs().setEvent(EventType::CRD_RECV);
         dtu.wakeupCore();
-        return Dtu::Error::NONE;
+        return DtuError::NONE;
     }
 
     RecvEp ep = dtu.regs().getRecvEp(epId);
@@ -575,7 +574,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint flags)
         noSpace++;
 
         dtu.sendNocResponse(pkt);
-        return Dtu::Error::NO_RING_SPACE;
+        return DtuError::NO_RING_SPACE;
     }
 
     // the message is transferred piece by piece; we can start as soon as
@@ -593,11 +592,33 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint flags)
     auto *ev = new ReceiveTransferEvent(this, localAddr, rflags, pkt);
     dtu.startTransfer(ev, delay);
 
-    return Dtu::Error::NONE;
+    return DtuError::NONE;
+}
+
+bool
+MessageUnit::ReceiveTransferEvent::transferStart()
+{
+    MemoryUnit::ReceiveTransferEvent::transferStart();
+
+    NocAddr addr(pkt->getAddr());
+    unsigned epId = addr.offset;
+    RecvEp ep = dtu().regs().getRecvEp(epId);
+    // ignore the error here
+    if (ep.bufAddr == 0)
+        return true;
+
+    // notify SW if we received a message for a different VPE
+    if (ep.vpe != dtu().regs().getVPE())
+    {
+        dtu().startForeignReceive(bufId(), epId, ep.vpe, this);
+        return false;
+    }
+
+    return true;
 }
 
 void
-MessageUnit::ReceiveTransferEvent::transferDone(Dtu::Error result)
+MessageUnit::ReceiveTransferEvent::transferDone(DtuError result)
 {
     MessageHeader* header = pkt->getPtr<MessageHeader>();
     NocAddr addr(pkt->getAddr());

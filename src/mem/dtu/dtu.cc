@@ -37,8 +37,7 @@
 #include "debug/DtuPackets.hh"
 #include "debug/DtuSysCalls.hh"
 #include "debug/DtuMem.hh"
-#include "debug/DtuCpuReq.hh"
-#include "debug/DtuXlate.hh"
+#include "debug/DtuCoreMemAcc.hh"
 #include "mem/dtu/dtu.hh"
 #include "mem/dtu/msg_unit.hh"
 #include "mem/dtu/mem_unit.hh"
@@ -90,16 +89,14 @@ Dtu::Dtu(DtuParams* p)
     memUnit(new MemoryUnit(*this)),
     xferUnit(new XferUnit(*this, p->block_size, p->buf_count, p->buf_size)),
     ptUnit(p->pt_walker ? new PtUnit(*this) : NULL),
+    coreReqs(*this, p->buf_count),
     abortCommandEvent(*this),
-    completeTranslateEvent(*this),
+    completeCoreReqEvent(coreReqs),
     cmdPkt(),
     cmdFinish(),
     cmdId(0),
     abortCmd(0),
     cmdXferBuf(0),
-    xlates(),
-    coreXlates(new CoreTranslation[p->buf_count + 1]()),
-    coreXlateSlots(p->buf_count + 1),
     memPe(),
     memOffset(),
     atomicMode(p->system->isAtomicMode()),
@@ -193,20 +190,11 @@ Dtu::regStats()
     for (size_t i = 0; i < sizeof(privCmdNames) / sizeof(privCmdNames[0]); ++i)
         privCommands.subname(i, privCmdNames[i]);
 
-    xlateReqs
-        .name(name() + ".xlateReqs")
-        .desc("Number of translate requests to the core");
-    xlateDelays
-        .name(name() + ".xlateDelays")
-        .desc("Number of delayed translate requests to the core");
-    xlateFails
-        .name(name() + ".xlateFails")
-        .desc("Number of failed translate requests to the core");
-
     if (tlb())
         tlb()->regStats();
     if (ptUnit)
         ptUnit->regStats();
+    coreReqs.regStats();
     xferUnit->regStats();
     memUnit->regStats();
     msgUnit->regStats();
@@ -280,27 +268,27 @@ Dtu::executeCommand(PacketPtr pkt)
             break;
         case Command::FETCH_MSG:
             regs().set(CmdReg::OFFSET, msgUnit->fetchMessage(cmd.epid));
-            finishCommand(Error::NONE);
+            finishCommand(DtuError::NONE);
             break;
         case Command::FETCH_EVENTS:
             regs().set(CmdReg::OFFSET, regs().fetchEvents());
-            finishCommand(Error::NONE);
+            finishCommand(DtuError::NONE);
             break;
         case Command::SET_EVENT:
             regs().setEvent(EventType::USER);
-            finishCommand(Error::NONE);
+            finishCommand(DtuError::NONE);
             break;
         case Command::ACK_MSG:
             finishCommand(msgUnit->ackMessage(cmd.epid, cmd.arg));
             break;
         case Command::SLEEP:
             if (!startSleep(cmd.arg, !!(cmd.arg >> 40)))
-                finishCommand(Error::NONE);
+                finishCommand(DtuError::NONE);
             break;
         case Command::PRINT:
         {
             printLine(cmd.arg);
-            finishCommand(Error::NONE);
+            finishCommand(DtuError::NONE);
         }
         break;
         default:
@@ -336,20 +324,20 @@ Dtu::abortCommand()
 
     // if no command was running, let the SW wait until the currently received
     // messages are finished
-    Error err = static_cast<Error>(static_cast<uint>(cmd.error));
+    DtuError err = static_cast<DtuError>(static_cast<uint>(cmd.error));
     if (cmd.opcode == Command::IDLE)
         abortCmd = 0;
     // reads/writes are aborted immediately
     else if(cmd.opcode == Command::READ || cmd.opcode == Command::WRITE)
     {
         cmdId = 0;
-        err = Error::ABORT;
+        err = DtuError::ABORT;
     }
     // message sends are aborted, if they haven't been sent yet
     else if (!cmdSent && (cmd.opcode == Command::SEND ||
                           cmd.opcode == Command::REPLY))
     {
-        err = Error::ABORT;
+        err = DtuError::ABORT;
     }
 
     if (cmd.opcode == Command::IDLE ||
@@ -360,7 +348,7 @@ Dtu::abortCommand()
 }
 
 void
-Dtu::scheduleFinishOp(Cycles delay, Error error)
+Dtu::scheduleFinishOp(Cycles delay, DtuError error)
 {
     if (getCommand().opcode != Command::IDLE)
     {
@@ -376,7 +364,7 @@ Dtu::scheduleFinishOp(Cycles delay, Error error)
 }
 
 void
-Dtu::finishCommand(Error error)
+Dtu::finishCommand(DtuError error)
 {
     Command::Bits cmd = getCommand();
 
@@ -399,7 +387,7 @@ Dtu::finishCommand(Error error)
         msgUnit->finishMsgSend(error, cmd.epid);
     else if (cmd.opcode == Command::REPLY)
         msgUnit->finishMsgReply(error, cmd.epid, cmd.arg);
-    else if (error == Error::NONE &&
+    else if (error == DtuError::NONE &&
              (cmd.opcode == Command::READ || cmd.opcode == Command::WRITE))
     {
         const DataReg data = regs().getDataReg();
@@ -453,7 +441,7 @@ Dtu::executePrivCommand(PacketPtr pkt)
 
     Cycles delay(1);
 
-    Error result = Error::NONE;
+    DtuError result = DtuError::NONE;
 
     DPRINTF(DtuCmd, "Executing privileged command %s with arg=%p\n",
             privCmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg);
@@ -467,7 +455,7 @@ Dtu::executePrivCommand(PacketPtr pkt)
             unsigned epid = cmd.arg & ((1 << 8) - 1);
             bool force = !!(cmd.arg & (1 << 8));
             if (!regs().invalidate(epid, force))
-                result = Error::MISS_CREDITS;
+                result = DtuError::MISS_CREDITS;
             else {
                 regs().setEvent(EventType::EP_INVAL);
                 wakeupCore();
@@ -500,7 +488,7 @@ Dtu::executePrivCommand(PacketPtr pkt)
         {
             RegFile::reg_t old = regs().get(PrivReg::CUR_VPE);
             regs().set(PrivReg::OLD_VPE, old);
-            regs().set(PrivReg::CUR_VPE, cmd.arg & 0xFFFFFFFF);
+            regs().set(PrivReg::CUR_VPE, cmd.arg & 0x7FFFFFFFF);
             break;
         }
         default:
@@ -522,7 +510,7 @@ Dtu::executePrivCommand(PacketPtr pkt)
         }
     }
 
-    if (result != Error::NONE)
+    if (result != DtuError::NONE)
     {
         DPRINTF(DtuCmd, "Privileged command %s failed (%u)\n",
                 privCmdNames[static_cast<size_t>(cmd.opcode)],
@@ -541,11 +529,11 @@ Dtu::startSleep(uint64_t cycles, bool ack)
     if (ack)
         regFile.fetchEvents();
 
-    if (regFile.hasEvents())
+    if (regFile.hasEvents() || regFile.messages() > 0)
         return false;
     if (regFile.get(PrivReg::EXT_REQ) != 0)
         return false;
-    if (regFile.get(PrivReg::XLATE_REQ) != 0)
+    if (regFile.get(PrivReg::CORE_REQ) != 0)
         return false;
 
     DPRINTF(Dtu, "Suspending CU\n");
@@ -670,7 +658,7 @@ Dtu::sendNocRequest(NocPacketType type,
 {
     auto senderState = new NocSenderState();
     senderState->packetType = type;
-    senderState->result = Error::NONE;
+    senderState->result = DtuError::NONE;
     senderState->flags = flags;
     if (regFile.hasFeature(Features::PRIV))
         senderState->flags |= NocFlags::PRIV;
@@ -747,83 +735,16 @@ Dtu::startTranslate(size_t id,
     if (ptUnit)
         ptUnit->startTranslate(virt, access, trans);
     else
-    {
-        if (coreXlates[id].trans)
-            return;
-
-        coreXlates[id].trans = trans;
-        coreXlates[id].virt = virt;
-        coreXlates[id].access = access;
-        coreXlates[id].ongoing = false;
-
-        DPRINTF(DtuXlate, "Translation[%lu] = %p:%#x\n",
-            id, virt, access);
-        xlateReqs++;
-
-        if(regs().get(PrivReg::XLATE_REQ) == 0)
-        {
-            const Addr mask = DtuTlb::PAGE_MASK;
-            const Addr virtPage = coreXlates[id].virt & ~mask;
-            regs().set(PrivReg::XLATE_REQ,
-                virtPage | coreXlates[id].access | (id << 5));
-            coreXlates[id].ongoing = true;
-
-            DPRINTF(DtuXlate, "Translation[%lu] started\n", id);
-            setIrq();
-        }
-        else
-            xlateDelays++;
-    }
+        coreReqs.startTranslate(id, virt, access, trans);
 }
 
 void
-Dtu::completeTranslate()
+Dtu::startForeignReceive(size_t id,
+                         unsigned epId,
+                         unsigned vpeId,
+                         XferUnit::TransferEvent *event)
 {
-    RegFile::reg_t resp = regs().get(PrivReg::XLATE_RESP);
-    if (resp)
-    {
-        size_t id = (resp >> 5) & 0x7;
-        Addr mask = (resp & DtuTlb::LARGE) ? DtuTlb::LPAGE_MASK
-                                           : DtuTlb::PAGE_MASK;
-        assert(coreXlates[id].trans);
-        assert(coreXlates[id].ongoing);
-        DPRINTF(DtuXlate, "Translation[%lu] done\n", id);
-
-        NocAddr phys((resp & ~mask) | (coreXlates[id].virt & mask));
-        uint flags = resp & (DtuTlb::IRWX | DtuTlb::LARGE);
-        if (flags == 0)
-        {
-            coreXlates[id].trans->finished(false, phys);
-            xlateFails++;
-        }
-        else
-        {
-            tlb()->insert(coreXlates[id].virt, phys, flags);
-            coreXlates[id].trans->finished(true, phys);
-        }
-
-        coreXlates[id].trans = nullptr;
-        regs().set(PrivReg::XLATE_RESP, 0);
-    }
-
-    if (regs().get(PrivReg::XLATE_REQ) == 0)
-    {
-        for (size_t id = 0; id < coreXlateSlots; ++id)
-        {
-            if (coreXlates[id].trans && !coreXlates[id].ongoing)
-            {
-                const Addr mask = DtuTlb::PAGE_MASK;
-                const Addr virtPage = coreXlates[id].virt & ~mask;
-                regs().set(PrivReg::XLATE_REQ,
-                    virtPage | coreXlates[id].access | (id << 5));
-                coreXlates[id].ongoing = true;
-                DPRINTF(DtuXlate, "Translation[%lu] started\n", id);
-
-                setIrq();
-                break;
-            }
-        }
-    }
+    coreReqs.startForeignReceive(id, epId, vpeId, event);
 }
 
 void
@@ -833,10 +754,7 @@ Dtu::abortTranslate(size_t id, PtUnit::Translation *trans)
         ptUnit->abortTranslate(trans);
     else
     {
-        if (coreXlates[id].ongoing)
-            regs().set(PrivReg::XLATE_REQ, 0);
-        coreXlates[id].trans = NULL;
-        coreXlates[id].ongoing = false;
+        coreReqs.abortReq(id);
         cmdXferBuf = id;
     }
 }
@@ -855,7 +773,7 @@ Dtu::completeNocRequest(PacketPtr pkt)
     if (senderState->packetType == NocPacketType::CACHE_MEM_REQ)
     {
         // as these target memory PEs, there can't be any error
-        assert(senderState->result == Error::NONE);
+        assert(senderState->result == DtuError::NONE);
 
         NocAddr noc(pkt->getAddr());
         DPRINTF(DtuMem,
@@ -886,7 +804,7 @@ Dtu::completeNocRequest(PacketPtr pkt)
     }
     else if (senderState->packetType == NocPacketType::PAGEFAULT)
     {
-        if (senderState->result != Error::NONE)
+        if (senderState->result != DtuError::NONE)
             ptUnit->sendingPfFailed(pkt, static_cast<int>(senderState->result));
     }
     else if (senderState->packetType != NocPacketType::CACHE_MEM_REQ_FUNC)
@@ -951,7 +869,7 @@ Dtu::handleNocRequest(PacketPtr pkt)
 
     auto senderState = dynamic_cast<NocSenderState*>(pkt->senderState);
 
-    Error res = Error::NONE;
+    DtuError res = DtuError::NONE;
 
     switch (senderState->packetType)
     {
@@ -986,17 +904,17 @@ Dtu::handleNocRequest(PacketPtr pkt)
 }
 
 bool
-Dtu::handleCpuRequest(PacketPtr pkt,
-                      DtuSlavePort &sport,
-                      DtuMasterPort &mport,
-                      bool icache,
-                      bool functional)
+Dtu::handleCoreMemRequest(PacketPtr pkt,
+                          DtuSlavePort &sport,
+                          DtuMasterPort &mport,
+                          bool icache,
+                          bool functional)
 {
     bool res = true;
     bool delayed = false;
     Addr virt = pkt->getAddr();
 
-    DPRINTF(DtuCpuReq, "%s access for %#lx: start\n",
+    DPRINTF(DtuCoreMemAcc, "%s access for %#lx: start\n",
         pkt->cmdString(), virt);
 
     if (mmioRegion.contains(virt))
@@ -1055,7 +973,7 @@ Dtu::handleCpuRequest(PacketPtr pkt,
 
     if (!delayed)
     {
-        DPRINTF(DtuCpuReq, "%s access for %#lx: finished\n",
+        DPRINTF(DtuCoreMemAcc, "%s access for %#lx: finished\n",
             pkt->cmdString(), virt);
     }
 
@@ -1063,7 +981,7 @@ Dtu::handleCpuRequest(PacketPtr pkt,
 }
 
 void
-Dtu::completeCpuRequests()
+Dtu::completeCoreMemReqs()
 {
     while (!xlates.empty())
     {
@@ -1071,7 +989,7 @@ Dtu::completeCpuRequests()
         if (!xlt->complete)
             break;
 
-        DPRINTF(DtuCpuReq, "%s access for %#lx: finished (success=%d, phys=%#lx)\n",
+        DPRINTF(DtuCoreMemAcc, "%s access for %#lx: finished (success=%d, phys=%#lx)\n",
             xlt->pkt->cmdString(), xlt->pkt->getAddr(),
             xlt->success, xlt->phys.getAddr());
 
@@ -1268,7 +1186,7 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
             else if (result & RegFile::WROTE_ABORT)
                 schedule(abortCommandEvent, when);
             else if (result & RegFile::WROTE_XLATE)
-                schedule(completeTranslateEvent, when);
+                schedule(completeCoreReqEvent, when);
             else if (result & RegFile::WROTE_EXT_REQ)
                 setIrq();
             if (result & RegFile::WROTE_CLEAR_IRQ)
@@ -1286,7 +1204,7 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
         if (result & RegFile::WROTE_ABORT)
             abortCommand();
         if (result & RegFile::WROTE_XLATE)
-            completeTranslate();
+            coreReqs.completeReqs();
         if (result & RegFile::WROTE_EXT_REQ)
             setIrq();
         if (result & RegFile::WROTE_CLEAR_IRQ)
@@ -1301,7 +1219,7 @@ Dtu::MemTranslation::finished(bool _success, const NocAddr &_phys)
     success = _success;
     phys = _phys;
 
-    dtu.completeCpuRequests();
+    dtu.completeCoreMemReqs();
 }
 
 Dtu*

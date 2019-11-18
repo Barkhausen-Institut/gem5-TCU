@@ -98,13 +98,13 @@ MemoryUnit::startRead(const Dtu::Command::Bits& cmd)
 
     if(ep.flags == 0 || ep.vpe != dtu.regs().getVPE())
     {
-        dtu.scheduleFinishOp(Cycles(1), Dtu::Error::INV_EP);
+        dtu.scheduleFinishOp(Cycles(1), DtuError::INV_EP);
         return;
     }
 
     if(!(ep.flags & Dtu::MemoryFlags::READ) || (ep.vpe != dtu.regs().getVPE()))
     {
-        dtu.scheduleFinishOp(Cycles(1), Dtu::Error::NO_PERM);
+        dtu.scheduleFinishOp(Cycles(1), DtuError::NO_PERM);
         return;
     }
 
@@ -121,13 +121,13 @@ MemoryUnit::startRead(const Dtu::Command::Bits& cmd)
 
     if(size == 0)
     {
-        dtu.scheduleFinishOp(Cycles(1), Dtu::Error::NONE);
+        dtu.scheduleFinishOp(Cycles(1), DtuError::NONE);
         return;
     }
 
     if(size + offset < size || size + offset > ep.remoteSize)
     {
-        dtu.scheduleFinishOp(Cycles(1), Dtu::Error::INV_ARGS);
+        dtu.scheduleFinishOp(Cycles(1), DtuError::INV_ARGS);
         return;
     }
 
@@ -160,11 +160,11 @@ MemoryUnit::startRead(const Dtu::Command::Bits& cmd)
 }
 
 void
-MemoryUnit::LocalReadTransferEvent::transferDone(Dtu::Error result)
+MemoryUnit::LocalReadTransferEvent::transferDone(DtuError result)
 {
     Cycles delay(1);
 
-    if (result != Dtu::Error::NONE)
+    if (result != DtuError::NONE)
     {
         dtu().scheduleFinishOp(delay, result);
         return;
@@ -178,24 +178,25 @@ MemoryUnit::LocalReadTransferEvent::transferDone(Dtu::Error result)
     dtu().startTransfer(xfer, delay);
 }
 
-void
+bool
 MemoryUnit::LocalWriteTransferEvent::transferStart()
 {
     memcpy(data(), tmp, tmpSize);
     delete[] tmp;
+    return true;
 }
 
 void
-MemoryUnit::LocalWriteTransferEvent::transferDone(Dtu::Error result)
+MemoryUnit::LocalWriteTransferEvent::transferDone(DtuError result)
 {
-    if (result == Dtu::Error::NONE)
+    if (result == DtuError::NONE)
         finishReadWrite(dtu(), tmpSize);
 
     dtu().scheduleFinishOp(Cycles(1), result);
 }
 
 void
-MemoryUnit::readComplete(const Dtu::Command::Bits& cmd, PacketPtr pkt, Dtu::Error error)
+MemoryUnit::readComplete(const Dtu::Command::Bits& cmd, PacketPtr pkt, DtuError error)
 {
     dtu.printPacket(pkt);
 
@@ -205,7 +206,7 @@ MemoryUnit::readComplete(const Dtu::Command::Bits& cmd, PacketPtr pkt, Dtu::Erro
     // delay here
     Cycles delay = dtu.ticksToCycles(pkt->headerDelay);
 
-    if (error != Dtu::Error::NONE)
+    if (error != DtuError::NONE)
     {
         dtu.scheduleFinishOp(delay, error);
         return;
@@ -216,18 +217,19 @@ MemoryUnit::readComplete(const Dtu::Command::Bits& cmd, PacketPtr pkt, Dtu::Erro
     dtu.startTransfer(xfer, delay);
 }
 
-void
+bool
 MemoryUnit::ReadTransferEvent::transferStart()
 {
     // here is also no additional delay, because we are doing that in
     // parallel and are already paying for it at other places
     memcpy(data(), pkt->getPtr<uint8_t>(), pkt->getSize());
+    return true;
 }
 
 void
-MemoryUnit::ReadTransferEvent::transferDone(Dtu::Error result)
+MemoryUnit::ReadTransferEvent::transferDone(DtuError result)
 {
-    if (result == Dtu::Error::NONE)
+    if (result == DtuError::NONE)
         finishReadWrite(dtu(), pkt->getSize());
 
     dtu().scheduleFinishOp(Cycles(1), result);
@@ -242,13 +244,13 @@ MemoryUnit::startWrite(const Dtu::Command::Bits& cmd)
 
     if(ep.flags == 0 || ep.vpe != dtu.regs().getVPE())
     {
-        dtu.scheduleFinishOp(Cycles(1), Dtu::Error::INV_EP);
+        dtu.scheduleFinishOp(Cycles(1), DtuError::INV_EP);
         return;
     }
 
     if(!(ep.flags & Dtu::MemoryFlags::WRITE))
     {
-        dtu.scheduleFinishOp(Cycles(1), Dtu::Error::NO_PERM);
+        dtu.scheduleFinishOp(Cycles(1), DtuError::NO_PERM);
         return;
     }
 
@@ -265,13 +267,13 @@ MemoryUnit::startWrite(const Dtu::Command::Bits& cmd)
 
     if(size == 0)
     {
-        dtu.scheduleFinishOp(Cycles(1), Dtu::Error::NONE);
+        dtu.scheduleFinishOp(Cycles(1), DtuError::NONE);
         return;
     }
 
     if(size + offset < size || size + offset > ep.remoteSize)
     {
-        dtu.scheduleFinishOp(Cycles(1), Dtu::Error::INV_ARGS);
+        dtu.scheduleFinishOp(Cycles(1), DtuError::INV_ARGS);
         return;
     }
 
@@ -284,9 +286,9 @@ MemoryUnit::startWrite(const Dtu::Command::Bits& cmd)
 }
 
 void
-MemoryUnit::WriteTransferEvent::transferDone(Dtu::Error result)
+MemoryUnit::WriteTransferEvent::transferDone(DtuError result)
 {
-    if (result != Dtu::Error::NONE)
+    if (result != DtuError::NONE)
     {
         dtu().scheduleFinishOp(Cycles(1), result);
     }
@@ -324,9 +326,9 @@ MemoryUnit::WriteTransferEvent::transferDone(Dtu::Error result)
 }
 
 void
-MemoryUnit::writeComplete(const Dtu::Command::Bits& cmd, PacketPtr pkt, Dtu::Error error)
+MemoryUnit::writeComplete(const Dtu::Command::Bits& cmd, PacketPtr pkt, DtuError error)
 {
-    if (cmd.opcode == Dtu::Command::WRITE && error == Dtu::Error::NONE)
+    if (cmd.opcode == Dtu::Command::WRITE && error == DtuError::NONE)
         finishReadWrite(dtu, pkt->getSize());
 
     // we don't need to pay the payload delay here because the message
@@ -347,7 +349,7 @@ MemoryUnit::recvFunctionalFromNoc(PacketPtr pkt)
     dtu.sendFunctionalMemRequest(pkt);
 }
 
-Dtu::Error
+DtuError
 MemoryUnit::recvFromNoc(PacketPtr pkt, uint flags)
 {
     NocAddr addr(pkt->getAddr());
@@ -378,18 +380,18 @@ MemoryUnit::recvFromNoc(PacketPtr pkt, uint flags)
         Cycles delay = dtu.ticksToCycles(pkt->headerDelay);
         pkt->headerDelay = 0;
 
-        auto type = pkt->isWrite() ? Dtu::TransferType::REMOTE_WRITE
-                                   : Dtu::TransferType::REMOTE_READ;
+        auto type = pkt->isWrite() ? XferUnit::TransferType::REMOTE_WRITE
+                                   : XferUnit::TransferType::REMOTE_READ;
         uint xflags = nocToXferFlags(flags);
 
         auto *ev = new ReceiveTransferEvent(type, addr.offset, xflags, pkt);
         dtu.startTransfer(ev, delay);
     }
 
-    return Dtu::Error::NONE;
+    return DtuError::NONE;
 }
 
-void
+bool
 MemoryUnit::ReceiveTransferEvent::transferStart()
 {
     if (pkt->isWrite())
@@ -398,10 +400,11 @@ MemoryUnit::ReceiveTransferEvent::transferStart()
         // parallel and are already paying for it at other places
         memcpy(data(), pkt->getPtr<uint8_t>(), pkt->getSize());
     }
+    return true;
 }
 
 void
-MemoryUnit::ReceiveTransferEvent::transferDone(Dtu::Error result)
+MemoryUnit::ReceiveTransferEvent::transferDone(DtuError result)
 {
     // some requests from the cache (e.g. cleanEvict) do not need a
     // response

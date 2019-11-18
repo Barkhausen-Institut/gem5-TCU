@@ -45,16 +45,16 @@ class MemoryUnit
       public:
 
         LocalReadTransferEvent(Addr src, Addr _dest, size_t size, uint flags)
-            : TransferEvent(Dtu::TransferType::LOCAL_READ,
+            : TransferEvent(XferUnit::TransferType::LOCAL_READ,
                             src,
                             size,
                             flags),
               dest(_dest)
         {}
 
-        void transferStart() override {}
+        bool transferStart() override { return true; }
 
-        void transferDone(Dtu::Error result) override;
+        void transferDone(DtuError result) override;
     };
 
     class LocalWriteTransferEvent : public XferUnit::TransferEvent
@@ -65,7 +65,7 @@ class MemoryUnit
       public:
 
         LocalWriteTransferEvent(Addr local, uint8_t *_tmp, size_t _size, uint flags)
-            : TransferEvent(Dtu::TransferType::LOCAL_WRITE,
+            : TransferEvent(XferUnit::TransferType::LOCAL_WRITE,
                             local,
                             _size,
                             flags),
@@ -73,9 +73,9 @@ class MemoryUnit
               tmpSize(_size)
         {}
 
-        void transferStart() override;
+        bool transferStart() override;
 
-        void transferDone(Dtu::Error result) override;
+        void transferDone(DtuError result) override;
     };
 
     class ReadTransferEvent : public XferUnit::TransferEvent
@@ -85,16 +85,16 @@ class MemoryUnit
       public:
 
         ReadTransferEvent(Addr local, uint flags, PacketPtr _pkt)
-            : TransferEvent(Dtu::TransferType::LOCAL_WRITE,
+            : TransferEvent(XferUnit::TransferType::LOCAL_WRITE,
                             local,
                             _pkt->getSize(),
                             flags),
               pkt(_pkt)
         {}
 
-        void transferStart() override;
+        bool transferStart() override;
 
-        void transferDone(Dtu::Error result) override;
+        void transferDone(DtuError result) override;
     };
 
     class WriteTransferEvent : public XferUnit::TransferEvent
@@ -109,13 +109,13 @@ class MemoryUnit
                            size_t size,
                            uint flags,
                            NocAddr _dest)
-            : TransferEvent(Dtu::TransferType::LOCAL_READ, local, size, flags),
+            : TransferEvent(XferUnit::TransferType::LOCAL_READ, local, size, flags),
               dest(_dest)
         {}
 
-        void transferStart() override {};
+        bool transferStart() override { return true; };
 
-        void transferDone(Dtu::Error result) override;
+        void transferDone(DtuError result) override;
     };
 
     class ReceiveTransferEvent : public XferUnit::TransferEvent
@@ -126,7 +126,7 @@ class MemoryUnit
 
       public:
 
-        ReceiveTransferEvent(Dtu::TransferType type,
+        ReceiveTransferEvent(XferUnit::TransferType type,
                              Addr local,
                              uint flags,
                              PacketPtr _pkt)
@@ -134,9 +134,9 @@ class MemoryUnit
               pkt(_pkt)
         {}
 
-        void transferStart() override;
+        bool transferStart() override;
 
-        void transferDone(Dtu::Error result) override;
+        void transferDone(DtuError result) override;
     };
 
     MemoryUnit(Dtu &_dtu) : dtu(_dtu) {}
@@ -156,12 +156,12 @@ class MemoryUnit
     /**
      * Read: response from remote DTU
      */
-    void readComplete(const Dtu::Command::Bits& cmd, PacketPtr pkt, Dtu::Error error);
+    void readComplete(const Dtu::Command::Bits& cmd, PacketPtr pkt, DtuError error);
 
     /**
      * Write: response from remote DTU
      */
-    void writeComplete(const Dtu::Command::Bits& cmd, PacketPtr pkt, Dtu::Error error);
+    void writeComplete(const Dtu::Command::Bits& cmd, PacketPtr pkt, DtuError error);
 
 
     /**
@@ -172,7 +172,7 @@ class MemoryUnit
     /**
      * Received read/write request from NoC -> Mem/regfile request
      */
-    Dtu::Error recvFromNoc(PacketPtr pkt, uint flags);
+    DtuError recvFromNoc(PacketPtr pkt, uint flags);
 
   private:
 

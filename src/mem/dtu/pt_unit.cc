@@ -379,7 +379,7 @@ PtUnit::finishPagefault(PacketPtr pkt)
             // if the pagefault handler tells us that there is no mapping, just
             // store an entry with flags=0. this way, we will remember that we
             // already tried to access there with no success
-            if (error == static_cast<int>(Dtu::Error::NO_MAPPING))
+            if (error == static_cast<int>(DtuError::NO_MAPPING))
                 mkTlbEntry(ev->virt, NocAddr(0), 0);
 
             ev->finish(false, NocAddr(0));

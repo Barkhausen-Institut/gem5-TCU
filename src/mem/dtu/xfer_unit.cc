@@ -33,6 +33,7 @@
 #include "debug/DtuPackets.hh"
 #include "debug/DtuSysCalls.hh"
 #include "debug/DtuXfers.hh"
+#include "mem/dtu/dtu.hh"
 #include "mem/dtu/xfer_unit.hh"
 
 uint64_t XferUnit::TransferEvent::nextId = 0;
@@ -149,8 +150,13 @@ XferUnit::TransferEvent::tryStart()
         return;
     }
 
-    transferStart();
+    if (transferStart())
+        start();
+}
 
+void
+XferUnit::TransferEvent::start()
+{
     DPRINTFS(DtuXfers, (&xfer->dtu),
         "buf%d: Starting %s transfer of %lu bytes @ %p [flags=%s]\n",
         buf->id,
@@ -160,6 +166,12 @@ XferUnit::TransferEvent::tryStart()
         decodeFlags(flags()));
 
     xfer->dtu.schedule(this, xfer->dtu.clockEdge(Cycles(1)));
+}
+
+const std::string
+XferUnit::TransferEvent::name() const
+{
+    return xfer->dtu.name();
 }
 
 void
@@ -190,7 +202,7 @@ XferUnit::TransferEvent::process()
             // report an error
             if (res == DtuTlb::PAGEFAULT && (flags() & XferFlags::NOPF))
             {
-                abort(Dtu::Error::PAGEFAULT);
+                abort(DtuError::PAGEFAULT);
                 return;
             }
 
@@ -209,14 +221,14 @@ XferUnit::TransferEvent::translateDone(bool success, const NocAddr &phys)
 {
     // if there was an error, we have aborted it on purpose
     // in this case, TransferEvent::abort() will do the rest
-    if (result != Dtu::Error::NONE)
+    if (result != DtuError::NONE)
         return;
 
     trans = NULL;
 
     if (!success)
     {
-        abort(Dtu::Error::PAGEFAULT);
+        abort(DtuError::PAGEFAULT);
         return;
     }
 
@@ -311,7 +323,7 @@ XferUnit::recvMemResponse(uint64_t evId, PacketPtr pkt)
     }
 
     // transfer done?
-    if (buf->event->result != Dtu::Error::NONE ||
+    if (buf->event->result != DtuError::NONE ||
         (buf->event->remaining == 0 &&
          buf->event->freeSlots == dtu.reqCount))
     {
@@ -341,7 +353,7 @@ XferUnit::recvMemResponse(uint64_t evId, PacketPtr pkt)
 }
 
 void
-XferUnit::TransferEvent::abort(Dtu::Error error)
+XferUnit::TransferEvent::abort(DtuError error)
 {
     DPRINTFS(DtuXfers, (&xfer->dtu),
         "buf%d: aborting transfer (%d)\n",
@@ -401,7 +413,7 @@ XferUnit::abortTransfers(uint types)
 
         if (abort)
         {
-            ev->abort(Dtu::Error::ABORT);
+            ev->abort(DtuError::ABORT);
             // by default, we auto-delete it, but in this case, we have to do
             // that manually since it's not the current event
             delete ev;

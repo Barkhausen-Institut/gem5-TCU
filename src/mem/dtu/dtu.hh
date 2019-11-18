@@ -36,6 +36,9 @@
 #include "mem/dtu/regfile.hh"
 #include "mem/dtu/noc_addr.hh"
 #include "mem/dtu/pt_unit.hh"
+#include "mem/dtu/xfer_unit.hh"
+#include "mem/dtu/core_reqs.hh"
+#include "mem/dtu/error.hh"
 #include "params/Dtu.hh"
 
 class MessageUnit;
@@ -65,22 +68,6 @@ class Dtu : public BaseDtu
         PAGEFAULT           = (1 << 3),
     };
 
-    enum class Error
-    {
-        NONE                = 0,
-        MISS_CREDITS        = 1,
-        NO_RING_SPACE       = 2,
-        VPE_GONE            = 3,
-        PAGEFAULT           = 4,
-        NO_MAPPING          = 5,
-        INV_EP              = 6,
-        ABORT               = 7,
-        REPLY_DISABLED      = 8,
-        INV_MSG             = 9,
-        INV_ARGS            = 10,
-        NO_PERM             = 11,
-    };
-
     enum class NocPacketType
     {
         MESSAGE,
@@ -89,18 +76,6 @@ class Dtu : public BaseDtu
         WRITE_REQ,
         CACHE_MEM_REQ_FUNC,
         CACHE_MEM_REQ,
-    };
-
-    enum class TransferType
-    {
-        // we are reading stuff out of our local memory and send it
-        LOCAL_READ,
-        // we received the read resp. from somebody and write it to local mem
-        LOCAL_WRITE,
-        // we received something and write it to our local memory
-        REMOTE_WRITE,
-        // we should send something from our local memory to somebody else
-        REMOTE_READ
     };
 
     enum class MemReqType
@@ -125,7 +100,7 @@ class Dtu : public BaseDtu
 
     struct NocSenderState : public Packet::SenderState
     {
-        Error result;
+        DtuError result;
         NocPacketType packetType;
         uint64_t cmdId;
         uint flags;
@@ -230,7 +205,7 @@ class Dtu : public BaseDtu
         dcacheMasterPort.sendFunctional(pkt);
     }
 
-    void scheduleFinishOp(Cycles delay, Error error = Error::NONE);
+    void scheduleFinishOp(Cycles delay, DtuError error = DtuError::NONE);
 
     void sendMemRequest(PacketPtr pkt,
                         Addr virt,
@@ -258,6 +233,11 @@ class Dtu : public BaseDtu
                         uint access,
                         PtUnit::Translation *trans);
 
+    void startForeignReceive(size_t id,
+                             unsigned epId,
+                             unsigned vpeId,
+                             XferUnit::TransferEvent *event);
+
     void abortTranslate(size_t id, PtUnit::Translation *trans);
 
     void handlePFResp(PacketPtr pkt);
@@ -279,23 +259,21 @@ class Dtu : public BaseDtu
 
     void executePrivCommand(PacketPtr pkt);
 
-    void finishCommand(Error error);
+    void finishCommand(DtuError error);
 
     void completeNocRequest(PacketPtr pkt) override;
 
     void completeMemRequest(PacketPtr pkt) override;
 
-    void completeCpuRequests();
-
-    void completeTranslate();
-
     void handleNocRequest(PacketPtr pkt) override;
 
-    bool handleCpuRequest(PacketPtr pkt,
-                          DtuSlavePort &sport,
-                          DtuMasterPort &mport,
-                          bool icache,
-                          bool functional) override;
+    bool handleCoreMemRequest(PacketPtr pkt,
+                              DtuSlavePort &sport,
+                              DtuMasterPort &mport,
+                              bool icache,
+                              bool functional) override;
+
+    void completeCoreMemReqs();
 
     bool handleCacheMemRequest(PacketPtr pkt, bool functional) override;
 
@@ -324,9 +302,11 @@ class Dtu : public BaseDtu
 
     PtUnit *ptUnit;
 
+    CoreRequests coreReqs;
+
     EventWrapper<Dtu, &Dtu::abortCommand> abortCommandEvent;
 
-    EventWrapper<Dtu, &Dtu::completeTranslate> completeTranslateEvent;
+    EventWrapper<CoreRequests, &CoreRequests::completeReqs> completeCoreReqEvent;
 
     struct DtuEvent : public Event
     {
@@ -375,9 +355,9 @@ class Dtu : public BaseDtu
 
     struct FinishCommandEvent : public DtuEvent
     {
-        Error error;
+        DtuError error;
 
-        FinishCommandEvent(Dtu& _dtu, Error _error = Error::NONE)
+        FinishCommandEvent(Dtu& _dtu, DtuError _error = DtuError::NONE)
             : DtuEvent(_dtu), error(_error)
         {}
 
@@ -414,14 +394,6 @@ class Dtu : public BaseDtu
         void finished(bool success, const NocAddr &phys) override;
     };
 
-    struct CoreTranslation
-    {
-        PtUnit::Translation *trans;
-        Addr virt;
-        uint access;
-        bool ongoing;
-    };
-
     PacketPtr cmdPkt;
     FinishCommandEvent *cmdFinish;
     uint64_t cmdId;
@@ -430,9 +402,6 @@ class Dtu : public BaseDtu
     bool cmdSent;
 
     std::list<MemTranslation*> xlates;
-
-    CoreTranslation *coreXlates;
-    size_t coreXlateSlots;
 
   public:
 
@@ -476,11 +445,6 @@ class Dtu : public BaseDtu
     Stats::Scalar extMemReqs;
     Stats::Scalar irqInjects;
     Stats::Scalar resets;
-
-    // core translations
-    Stats::Scalar xlateReqs;
-    Stats::Scalar xlateDelays;
-    Stats::Scalar xlateFails;
 
     // commands
     Stats::Vector commands;

@@ -110,8 +110,8 @@ SyscallSM::handleMemResp(PacketPtr pkt)
                 *reinterpret_cast<const RegFile::reg_t*>(data);
             if (cmd.opcode == 0)
             {
-                auto err = static_cast<Dtu::Error>((long)cmd.error);
-                if (!waitForReply || err != Dtu::Error::NONE)
+                auto err = static_cast<DtuError>((long)cmd.error);
+                if (!waitForReply || err != DtuError::NONE)
                     return true;
                 state = State::SYSC_FETCH;
             }

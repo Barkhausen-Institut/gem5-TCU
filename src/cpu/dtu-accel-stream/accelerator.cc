@@ -167,10 +167,10 @@ DtuAccelStream::completeRequest(PacketPtr pkt)
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
                 if (cmd.opcode == 0)
                 {
-                    auto err = static_cast<Dtu::Error>((long)cmd.error);
-                    if (err == Dtu::Error::NONE)
+                    auto err = static_cast<DtuError>((long)cmd.error);
+                    if (err == DtuError::NONE)
                         ctx.flags |= Flags::WAIT;
-                    if (err == Dtu::Error::INV_EP)
+                    if (err == DtuError::INV_EP)
                     {
                         ctx.flags = Flags::EXIT;
                         state = State::EXIT;

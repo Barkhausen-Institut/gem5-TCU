@@ -107,7 +107,7 @@ M3Loader::writeRemote(MasterPort &noc, Addr dest,
 
     auto senderState = new Dtu::NocSenderState();
     senderState->packetType = Dtu::NocPacketType::CACHE_MEM_REQ_FUNC;
-    senderState->result = Dtu::Error::NONE;
+    senderState->result = DtuError::NONE;
 
     pkt.pushSenderState(senderState);
 
