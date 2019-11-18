@@ -57,7 +57,7 @@ enum class Features
 constexpr unsigned numDtuRegs = 7;
 
 // registers for external requests and DTU requests
-enum class ReqReg : Addr
+enum class PrivReg : Addr
 {
     EXT_REQ,
     XLATE_REQ,
@@ -66,7 +66,7 @@ enum class ReqReg : Addr
     VPE_ID,
 };
 
-constexpr unsigned numReqRegs = 5;
+constexpr unsigned numPrivRegs = 5;
 
 // registers to issue a command
 enum class CmdReg : Addr
@@ -303,9 +303,9 @@ class RegFile
 
     void set(DtuReg reg, reg_t value, RegAccess access = RegAccess::DTU);
 
-    reg_t get(ReqReg reg, RegAccess access = RegAccess::DTU) const;
+    reg_t get(PrivReg reg, RegAccess access = RegAccess::DTU) const;
 
-    void set(ReqReg reg, reg_t value, RegAccess access = RegAccess::DTU);
+    void set(PrivReg reg, reg_t value, RegAccess access = RegAccess::DTU);
 
     reg_t get(CmdReg reg, RegAccess access = RegAccess::DTU) const;
 
@@ -358,7 +358,7 @@ class RegFile
 
     std::vector<reg_t> dtuRegs;
 
-    std::vector<reg_t> reqRegs;
+    std::vector<reg_t> privRegs;
 
     std::vector<reg_t> cmdRegs;
 
@@ -374,7 +374,7 @@ class RegFile
   private:
 
     static const char *dtuRegNames[];
-    static const char *reqRegNames[];
+    static const char *privRegNames[];
     static const char *cmdRegNames[];
     static const char *epTypeNames[];
 };

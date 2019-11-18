@@ -130,7 +130,7 @@ class DtuAbortTest : public MemObject
 
     static Addr getRegAddr(DtuReg reg);
 
-    static Addr getRegAddr(ReqReg reg);
+    static Addr getRegAddr(PrivReg reg);
 
     static Addr getRegAddr(CmdReg reg);
 

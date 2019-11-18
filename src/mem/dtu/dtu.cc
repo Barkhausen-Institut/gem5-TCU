@@ -430,7 +430,7 @@ Dtu::finishCommand(Error error)
 Dtu::PrivCommand
 Dtu::getPrivCommand()
 {
-    auto reg = regFile.get(ReqReg::PRIV_CMD);
+    auto reg = regFile.get(PrivReg::PRIV_CMD);
 
     PrivCommand cmd;
     cmd.opcode = static_cast<PrivCommand::Opcode>(reg & 0xF);
@@ -511,7 +511,7 @@ Dtu::executePrivCommand(PacketPtr pkt)
     }
 
     // set privileged command back to IDLE
-    regFile.set(ReqReg::PRIV_CMD,
+    regFile.set(PrivReg::PRIV_CMD,
         static_cast<RegFile::reg_t>(PrivCommand::IDLE));
 }
 
@@ -524,9 +524,9 @@ Dtu::startSleep(uint64_t cycles, bool ack)
 
     if (regFile.hasEvents())
         return false;
-    if (regFile.get(ReqReg::EXT_REQ) != 0)
+    if (regFile.get(PrivReg::EXT_REQ) != 0)
         return false;
-    if (regFile.get(ReqReg::XLATE_REQ) != 0)
+    if (regFile.get(PrivReg::XLATE_REQ) != 0)
         return false;
 
     DPRINTF(Dtu, "Suspending CU\n");
@@ -741,11 +741,11 @@ Dtu::startTranslate(size_t id,
             id, virt, access);
         xlateReqs++;
 
-        if(regs().get(ReqReg::XLATE_REQ) == 0)
+        if(regs().get(PrivReg::XLATE_REQ) == 0)
         {
             const Addr mask = DtuTlb::PAGE_MASK;
             const Addr virtPage = coreXlates[id].virt & ~mask;
-            regs().set(ReqReg::XLATE_REQ,
+            regs().set(PrivReg::XLATE_REQ,
                 virtPage | coreXlates[id].access | (id << 5));
             coreXlates[id].ongoing = true;
 
@@ -760,7 +760,7 @@ Dtu::startTranslate(size_t id,
 void
 Dtu::completeTranslate()
 {
-    RegFile::reg_t resp = regs().get(ReqReg::XLATE_RESP);
+    RegFile::reg_t resp = regs().get(PrivReg::XLATE_RESP);
     if (resp)
     {
         size_t id = (resp >> 5) & 0x7;
@@ -784,10 +784,10 @@ Dtu::completeTranslate()
         }
 
         coreXlates[id].trans = nullptr;
-        regs().set(ReqReg::XLATE_RESP, 0);
+        regs().set(PrivReg::XLATE_RESP, 0);
     }
 
-    if (regs().get(ReqReg::XLATE_REQ) == 0)
+    if (regs().get(PrivReg::XLATE_REQ) == 0)
     {
         for (size_t id = 0; id < coreXlateSlots; ++id)
         {
@@ -795,7 +795,7 @@ Dtu::completeTranslate()
             {
                 const Addr mask = DtuTlb::PAGE_MASK;
                 const Addr virtPage = coreXlates[id].virt & ~mask;
-                regs().set(ReqReg::XLATE_REQ,
+                regs().set(PrivReg::XLATE_REQ,
                     virtPage | coreXlates[id].access | (id << 5));
                 coreXlates[id].ongoing = true;
                 DPRINTF(DtuXlate, "Translation[%lu] started\n", id);
@@ -815,7 +815,7 @@ Dtu::abortTranslate(size_t id, PtUnit::Translation *trans)
     else
     {
         if (coreXlates[id].ongoing)
-            regs().set(ReqReg::XLATE_REQ, 0);
+            regs().set(PrivReg::XLATE_REQ, 0);
         coreXlates[id].trans = NULL;
         coreXlates[id].ongoing = false;
         cmdXferBuf = id;

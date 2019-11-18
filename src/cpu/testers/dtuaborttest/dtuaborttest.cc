@@ -76,7 +76,7 @@ DtuAbortTest::getRegAddr(DtuReg reg)
 }
 
 Addr
-DtuAbortTest::getRegAddr(ReqReg reg)
+DtuAbortTest::getRegAddr(PrivReg reg)
 {
     return DtuTlb::PAGE_SIZE + static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
 }
@@ -522,7 +522,7 @@ DtuAbortTest::tick()
 
                 case SubState::INVLPG_CMD:
                 {
-                    Addr off = reg_base + getRegAddr(ReqReg::PRIV_CMD);
+                    Addr off = reg_base + getRegAddr(PrivReg::PRIV_CMD);
                     pkt = createCommandPkt(Dtu::Command::WRITE,
                                            EP_MEM,
                                            TEMP_ADDR,

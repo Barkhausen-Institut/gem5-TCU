@@ -49,7 +49,7 @@ const char *RegFile::dtuRegNames[] = {
     "CLOCK",
 };
 
-const char *RegFile::reqRegNames[] = {
+const char *RegFile::privRegNames[] = {
     "EXT_REQ",
     "XLATE_REQ",
     "XLATE_RESP",
@@ -94,7 +94,7 @@ static const char *regAccessName(RegAccess access)
 RegFile::RegFile(Dtu &_dtu, const std::string& name, unsigned _numEndpoints)
     : dtu(_dtu),
       dtuRegs(numDtuRegs, 0),
-      reqRegs(numReqRegs, 0),
+      privRegs(numPrivRegs, 0),
       cmdRegs(numCmdRegs, 0),
       epRegs(_numEndpoints),
       bufRegs(numBufRegs * sizeof(reg_t), 0),
@@ -104,7 +104,7 @@ RegFile::RegFile(Dtu &_dtu, const std::string& name, unsigned _numEndpoints)
     // at boot, all PEs are privileged
     reg_t feat = static_cast<reg_t>(Features::PRIV);
     set(DtuReg::FEATURES, feat);
-    set(ReqReg::VPE_ID, Dtu::INVALID_VPE_ID);
+    set(PrivReg::VPE_ID, Dtu::INVALID_VPE_ID);
 
     for (int epid = 0; epid < numEndpoints; epid++)
     {
@@ -184,27 +184,27 @@ RegFile::set(DtuReg reg, reg_t value, RegAccess access)
 }
 
 RegFile::reg_t
-RegFile::get(ReqReg reg, RegAccess access) const
+RegFile::get(PrivReg reg, RegAccess access) const
 {
-    reg_t value = reqRegs[static_cast<Addr>(reg)];
+    reg_t value = privRegs[static_cast<Addr>(reg)];
 
     DPRINTF(DtuRegRead, "%s<- REQ[%-12s]: %#018x\n",
                         regAccessName(access),
-                        reqRegNames[static_cast<Addr>(reg)],
+                        privRegNames[static_cast<Addr>(reg)],
                         value);
 
     return value;
 }
 
 void
-RegFile::set(ReqReg reg, reg_t value, RegAccess access)
+RegFile::set(PrivReg reg, reg_t value, RegAccess access)
 {
     DPRINTF(DtuRegWrite, "%s-> REQ[%-12s]: %#018x\n",
                          regAccessName(access),
-                         reqRegNames[static_cast<Addr>(reg)],
+                         privRegNames[static_cast<Addr>(reg)],
                          value);
 
-    reqRegs[static_cast<Addr>(reg)] = value;
+    privRegs[static_cast<Addr>(reg)] = value;
 }
 
 RegFile::reg_t
@@ -560,21 +560,21 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
         {
             Addr reqAddr = regAddr - DtuTlb::PAGE_SIZE * 2;
 
-            if (reqAddr < sizeof(reg_t) * numReqRegs)
+            if (reqAddr < sizeof(reg_t) * numPrivRegs)
             {
-                auto reg = static_cast<ReqReg>(reqAddr / sizeof(reg_t));
+                auto reg = static_cast<PrivReg>(reqAddr / sizeof(reg_t));
 
                 if (pkt->isRead())
                     data[offset / sizeof(reg_t)] = get(reg, access);
                 // privileged registers can only be set if we're privileged
                 else if (pkt->isWrite())
                 {
-                    if (reg == ReqReg::XLATE_REQ || reg == ReqReg::XLATE_RESP)
+                    if (reg == PrivReg::XLATE_REQ || reg == PrivReg::XLATE_RESP)
                         res |= WROTE_XLATE;
                     // it only triggers an IRQ if the value is non-zero
-                    else if (reg == ReqReg::EXT_REQ && data[offset / sizeof(reg_t)] != 0)
+                    else if (reg == PrivReg::EXT_REQ && data[offset / sizeof(reg_t)] != 0)
                         res |= WROTE_EXT_REQ;
-                    else if (reg == ReqReg::PRIV_CMD)
+                    else if (reg == PrivReg::PRIV_CMD)
                         res |= WROTE_PRIV_CMD;
                     set(reg, data[offset / sizeof(reg_t)], access);
                 }
@@ -654,5 +654,5 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
 Addr
 RegFile::getSize() const
 {
-    return DtuTlb::PAGE_SIZE * 2 + sizeof(reg_t) * numReqRegs;
+    return DtuTlb::PAGE_SIZE * 2 + sizeof(reg_t) * numPrivRegs;
 }
