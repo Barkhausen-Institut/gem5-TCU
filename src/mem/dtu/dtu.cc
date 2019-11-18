@@ -56,8 +56,9 @@ static const char *cmdNames[] =
     "READ",
     "WRITE",
     "FETCH_MSG",
+    "FETCH_EVENTS",
+    "SET_EVENT",
     "ACK_MSG",
-    "ACK_EVENTS",
     "SLEEP",
     "PRINT",
 };
@@ -71,6 +72,7 @@ static const char *privCmdNames[] =
     "INV_REPLY",
     "RESET",
     "FLUSH_CACHE",
+    "XCHG_VPE",
 };
 
 // cmdId = 0 is reserved for "no command"
@@ -280,12 +282,16 @@ Dtu::executeCommand(PacketPtr pkt)
             regs().set(CmdReg::OFFSET, msgUnit->fetchMessage(cmd.epid));
             finishCommand(Error::NONE);
             break;
+        case Command::FETCH_EVENTS:
+            regs().set(CmdReg::OFFSET, regs().fetchEvents());
+            finishCommand(Error::NONE);
+            break;
+        case Command::SET_EVENT:
+            regs().setEvent(EventType::USER);
+            finishCommand(Error::NONE);
+            break;
         case Command::ACK_MSG:
             finishCommand(msgUnit->ackMessage(cmd.epid, cmd.arg));
-            break;
-        case Command::ACK_EVENTS:
-            regs().ackEvents(cmd.arg);
-            finishCommand(Error::NONE);
             break;
         case Command::SLEEP:
             if (!startSleep(cmd.arg, !!(cmd.arg >> 40)))
@@ -490,6 +496,13 @@ Dtu::executePrivCommand(PacketPtr pkt)
         case PrivCommand::FLUSH_CACHE:
             delay += flushInvalCaches(false);
             break;
+        case PrivCommand::XCHG_VPE:
+        {
+            RegFile::reg_t old = regs().get(PrivReg::CUR_VPE);
+            regs().set(PrivReg::OLD_VPE, old);
+            regs().set(PrivReg::CUR_VPE, cmd.arg & 0xFFFFFFFF);
+            break;
+        }
         default:
             // TODO error handling
             panic("Invalid opcode %#x\n", static_cast<RegFile::reg_t>(cmd.opcode));
@@ -498,9 +511,15 @@ Dtu::executePrivCommand(PacketPtr pkt)
     if (pkt)
     {
         auto senderState = dynamic_cast<NocSenderState*>(pkt->senderState);
-        assert(senderState != nullptr);
-        senderState->result = result;
-        schedNocResponse(pkt, clockEdge(delay));
+        if (senderState)
+        {
+            senderState->result = result;
+            schedNocResponse(pkt, clockEdge(delay));
+        }
+        else
+        {
+            schedCpuResponse(pkt, clockEdge(Cycles(1)));
+        }
     }
 
     if (result != Error::NONE)
@@ -520,7 +539,7 @@ Dtu::startSleep(uint64_t cycles, bool ack)
 {
     // just for accelerators and simplicity: ack all events
     if (ack)
-        regFile.ackEvents(regFile.get(DtuReg::EVENTS));
+        regFile.fetchEvents();
 
     if (regFile.hasEvents())
         return false;

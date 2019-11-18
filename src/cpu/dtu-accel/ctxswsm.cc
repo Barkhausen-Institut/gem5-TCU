@@ -62,7 +62,7 @@ AccelCtxSwSM::tick()
         case State::SET_VPE:
         {
             pkt = accel->createDtuRegPkt(
-                accel->getRegAddr(PrivReg::VPE_ID), sizeof(uint64_t), MemCmd::WriteReq
+                accel->getRegAddr(PrivReg::CUR_VPE), sizeof(uint64_t), MemCmd::WriteReq
             );
             *pkt->getPtr<uint64_t>() = OUR_VPE;
             break;
@@ -113,7 +113,7 @@ AccelCtxSwSM::tick()
         case State::DONE:
         {
             pkt = accel->createDtuRegPkt(
-                accel->getRegAddr(PrivReg::VPE_ID), sizeof(uint64_t), MemCmd::WriteReq
+                accel->getRegAddr(PrivReg::CUR_VPE), sizeof(uint64_t), MemCmd::WriteReq
             );
             *pkt->getPtr<uint64_t>() = vpe_id;
             break;

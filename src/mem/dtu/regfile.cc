@@ -44,7 +44,6 @@ const char *RegFile::dtuRegNames[] = {
     "ROOT_PT",
     "PF_EP",
     "CUR_TIME",
-    "EVENTS",
     "CLEAR_IRQ",
     "CLOCK",
 };
@@ -54,7 +53,8 @@ const char *RegFile::privRegNames[] = {
     "XLATE_REQ",
     "XLATE_RESP",
     "PRIV_CMD",
-    "VPE_ID",
+    "CUR_VPE",
+    "OLD_VPE",
 };
 
 const char *RegFile::cmdRegNames[] = {
@@ -104,7 +104,7 @@ RegFile::RegFile(Dtu &_dtu, const std::string& name, unsigned _numEndpoints)
     // at boot, all PEs are privileged
     reg_t feat = static_cast<reg_t>(Features::PRIV);
     set(DtuReg::FEATURES, feat);
-    set(PrivReg::VPE_ID, Dtu::INVALID_VPE_ID);
+    set(PrivReg::CUR_VPE, Dtu::INVALID_VPE_ID);
 
     for (int epid = 0; epid < numEndpoints; epid++)
     {
@@ -131,25 +131,22 @@ RegFile::invalidate(unsigned epId, bool force)
     return true;
 }
 
+RegFile::reg_t
+RegFile::fetchEvents()
+{
+    reg_t old = get(PrivReg::CUR_VPE, RegAccess::DTU);
+    if ((old & 0xFFFE0000) != 0)
+        set(PrivReg::CUR_VPE, old & 0x1FFFF);
+    return old >> 16;
+}
+
 void
 RegFile::setEvent(EventType ev)
 {
-    reg_t old = dtuRegs[static_cast<size_t>(DtuReg::EVENTS)];
-    set(DtuReg::EVENTS,
-        old | static_cast<reg_t>(1) << static_cast<reg_t>(ev),
+    reg_t old = privRegs[static_cast<size_t>(PrivReg::CUR_VPE)];
+    set(PrivReg::CUR_VPE,
+        old | static_cast<reg_t>(1) << (16 + static_cast<reg_t>(ev)),
         RegAccess::DTU);
-}
-
-bool
-RegFile::ackEvents(reg_t old)
-{
-    if (get(DtuReg::EVENTS, RegAccess::DTU) == old)
-    {
-        dtuRegs[static_cast<size_t>(DtuReg::EVENTS)] = 0;
-        updateMsgCnt();
-        return true;
-    }
-    return false;
 }
 
 RegFile::reg_t
@@ -188,7 +185,7 @@ RegFile::get(PrivReg reg, RegAccess access) const
 {
     reg_t value = privRegs[static_cast<Addr>(reg)];
 
-    DPRINTF(DtuRegRead, "%s<- REQ[%-12s]: %#018x\n",
+    DPRINTF(DtuRegRead, "%s<- PRI[%-12s]: %#018x\n",
                         regAccessName(access),
                         privRegNames[static_cast<Addr>(reg)],
                         value);
@@ -199,7 +196,7 @@ RegFile::get(PrivReg reg, RegAccess access) const
 void
 RegFile::set(PrivReg reg, reg_t value, RegAccess access)
 {
-    DPRINTF(DtuRegWrite, "%s-> REQ[%-12s]: %#018x\n",
+    DPRINTF(DtuRegWrite, "%s-> PRI[%-12s]: %#018x\n",
                          regAccessName(access),
                          privRegNames[static_cast<Addr>(reg)],
                          value);
@@ -490,10 +487,10 @@ RegFile::updateMsgCnt()
         }
     }
 
-    reg_t other = dtuRegs[static_cast<size_t>(DtuReg::EVENTS)];
-    other &= ~static_cast<reg_t>(1);
+    reg_t other = privRegs[static_cast<size_t>(PrivReg::CUR_VPE)];
+    other &= ~(static_cast<reg_t>(1) << 16);
     reg_t msgs = (hasMsgs ? 1 : 0) << static_cast<reg_t>(EventType::MSG_RECV);
-    set(DtuReg::EVENTS, other | msgs);
+    set(PrivReg::CUR_VPE, other | (msgs << 16));
 }
 
 const char *

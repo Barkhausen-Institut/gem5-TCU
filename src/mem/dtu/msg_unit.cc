@@ -103,7 +103,7 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
         RecvEp ep = dtu.regs().getRecvEp(epid);
         int msgidx = ep.msgToIdx(cmd.arg);
 
-        if(ep.bufAddr == 0 || ep.vpe != dtu.regs().get(PrivReg::VPE_ID))
+        if(ep.bufAddr == 0 || ep.vpe != dtu.regs().getVPE())
         {
             DPRINTFS(Dtu, (&dtu), "EP%u: invalid EP\n", epid);
             dtu.scheduleFinishOp(Cycles(1), Dtu::Error::INV_EP);
@@ -132,7 +132,7 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
             return;
         }
 
-        assert(sep.vpe == dtu.regs().get(PrivReg::VPE_ID));
+        assert(sep.vpe == dtu.regs().getVPE());
 
         // grant credits to the sender
         info.replyEpId = sep.crdEp;
@@ -152,8 +152,8 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
         rep = dtu.regs().getRecvEp(cmd.arg);
 
     if (ep.maxMsgSize == 0 ||
-        ep.vpe != dtu.regs().get(PrivReg::VPE_ID) ||
-        (cmd.opcode == Dtu::Command::SEND && rep.vpe != dtu.regs().get(PrivReg::VPE_ID)))
+        ep.vpe != dtu.regs().getVPE() ||
+        (cmd.opcode == Dtu::Command::SEND && rep.vpe != dtu.regs().getVPE()))
     {
         DPRINTFS(Dtu, (&dtu), "EP%u: invalid EP\n", epid);
         dtu.scheduleFinishOp(Cycles(1), Dtu::Error::INV_EP);
@@ -285,7 +285,7 @@ MessageUnit::finishMsgSend(Dtu::Error error, unsigned epid)
 {
     SendEp ep = dtu.regs().getSendEp(epid);
     // don't do anything if the EP is invalid
-    if (ep.maxMsgSize == 0 || ep.vpe != dtu.regs().get(PrivReg::VPE_ID))
+    if (ep.maxMsgSize == 0 || ep.vpe != dtu.regs().getVPE())
         return;
 
     // undo the credit reduction on errors except for MISS_CREDITS
@@ -322,7 +322,7 @@ MessageUnit::fetchMessage(unsigned epid)
 {
     RecvEp ep = dtu.regs().getRecvEp(epid);
 
-    if (ep.msgCount == 0 || ep.vpe != dtu.regs().get(PrivReg::VPE_ID))
+    if (ep.msgCount == 0 || ep.vpe != dtu.regs().getVPE())
         return 0;
 
     int i;
@@ -395,7 +395,7 @@ Dtu::Error
 MessageUnit::ackMessage(unsigned epId, Addr msgAddr)
 {
     RecvEp ep = dtu.regs().getRecvEp(epId);
-    if (ep.bufAddr == 0 || ep.vpe != dtu.regs().get(PrivReg::VPE_ID))
+    if (ep.bufAddr == 0 || ep.vpe != dtu.regs().getVPE())
         return Dtu::Error::INV_EP;
 
     int msgidx = ep.msgToIdx(msgAddr);
@@ -502,7 +502,7 @@ MessageUnit::finishMsgReceive(unsigned epId,
     if (error == Dtu::Error::NONE)
     {
         dtu.regs().setEvent(EventType::MSG_RECV);
-        if (ep.vpe != dtu.regs().get(PrivReg::VPE_ID))
+        if (ep.vpe != dtu.regs().getVPE())
             dtu.setIrq();
         else
             dtu.wakeupCore();

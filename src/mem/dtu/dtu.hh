@@ -145,10 +145,11 @@ class Dtu : public BaseDtu
             READ            = 3,
             WRITE           = 4,
             FETCH_MSG       = 5,
-            ACK_MSG         = 6,
-            ACK_EVENTS      = 7,
-            SLEEP           = 8,
-            PRINT           = 9,
+            FETCH_EVENTS    = 6,
+            SET_EVENT       = 7,
+            ACK_MSG         = 8,
+            SLEEP           = 9,
+            PRINT           = 10,
         };
 
         enum Flags
@@ -179,6 +180,7 @@ class Dtu : public BaseDtu
             INV_REPLY       = 4,
             RESET           = 5,
             FLUSH_CACHE     = 6,
+            XCHG_VPE        = 7,
         };
 
         Opcode opcode;

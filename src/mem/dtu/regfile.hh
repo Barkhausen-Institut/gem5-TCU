@@ -43,7 +43,6 @@ enum class DtuReg : Addr
     ROOT_PT,
     PF_EP,
     CUR_TIME,
-    EVENTS,
     CLEAR_IRQ,
     CLOCK,
 };
@@ -54,7 +53,7 @@ enum class Features
     PAGEFAULTS      = 1 << 1,
 };
 
-constexpr unsigned numDtuRegs = 7;
+constexpr unsigned numDtuRegs = 6;
 
 // registers for external requests and DTU requests
 enum class PrivReg : Addr
@@ -63,10 +62,11 @@ enum class PrivReg : Addr
     XLATE_REQ,
     XLATE_RESP,
     PRIV_CMD,
-    VPE_ID,
+    CUR_VPE,
+    OLD_VPE,
 };
 
-constexpr unsigned numPrivRegs = 5;
+constexpr unsigned numPrivRegs = 6;
 
 // registers to issue a command
 enum class CmdReg : Addr
@@ -118,6 +118,7 @@ enum class EventType
     MSG_RECV,
     CRD_RECV,
     EP_INVAL,
+    USER,
 };
 
 class RegFile;
@@ -292,12 +293,12 @@ class RegFile
 
     bool hasEvents() const
     {
-        return get(DtuReg::EVENTS) != 0;
+        return get(PrivReg::CUR_VPE) >> 16 != 0;
     }
 
-    void setEvent(EventType ev);
+    reg_t fetchEvents();
 
-    bool ackEvents(reg_t old);
+    void setEvent(EventType ev);
 
     reg_t get(DtuReg reg, RegAccess access = RegAccess::DTU) const;
 
@@ -310,6 +311,10 @@ class RegFile
     reg_t get(CmdReg reg, RegAccess access = RegAccess::DTU) const;
 
     void set(CmdReg reg, reg_t value, RegAccess access = RegAccess::DTU);
+
+    reg_t getVPE() const {
+        return get(PrivReg::CUR_VPE) & 0xFFFF;
+    }
 
     void updateMsgCnt();
 
