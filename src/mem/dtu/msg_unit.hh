@@ -73,6 +73,7 @@ class MessageUnit
     {
         MessageUnit *msgUnit;
         Addr msgAddr;
+        bool coreReq;
 
       public:
 
@@ -82,7 +83,7 @@ class MessageUnit
                              PacketPtr pkt)
             : MemoryUnit::ReceiveTransferEvent(
                 XferUnit::TransferType::REMOTE_WRITE, local, flags, pkt),
-              msgUnit(_msgUnit), msgAddr(local)
+              msgUnit(_msgUnit), msgAddr(local), coreReq()
         {}
 
         bool transferStart() override;
@@ -138,10 +139,11 @@ class MessageUnit
      * Finishes a message receive
      */
     DtuError finishMsgReceive(unsigned epId,
-                                Addr msgAddr,
-                                const MessageHeader *header,
-                                DtuError error,
-                                uint xferFlags);
+                              Addr msgAddr,
+                              const MessageHeader *header,
+                              DtuError error,
+                              uint xferFlags,
+                              bool addMsg);
 
   private:
     int allocSlot(size_t msgSize, unsigned epid, RecvEp &ep);
