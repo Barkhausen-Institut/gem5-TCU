@@ -31,7 +31,7 @@
 
 AccelCtxSwSM::AccelCtxSwSM(DtuAccel *_accel)
     : accel(_accel),
-      state(SET_VPE), stateChanged(), switched(), vpe_id(IDLE_VPE)
+      state(FETCH_MSG), stateChanged(), switched(), vpe_id(OUR_VPE)
 {
 }
 
@@ -40,14 +40,12 @@ AccelCtxSwSM::stateName() const
 {
     const char *names[] =
     {
-        "SET_VPE",
         "FETCH_MSG",
         "READ_MSG_ADDR",
         "READ_MSG",
         "STORE_REPLY",
         "SEND_REPLY",
         "REPLY_WAIT",
-        "DONE",
     };
     return names[static_cast<size_t>(state)];
 }
@@ -59,15 +57,6 @@ AccelCtxSwSM::tick()
 
     switch(state)
     {
-        case State::SET_VPE:
-        {
-            pkt = accel->createDtuRegPkt(
-                accel->getRegAddr(PrivReg::CUR_VPE), sizeof(uint64_t), MemCmd::WriteReq
-            );
-            *pkt->getPtr<uint64_t>() = OUR_VPE;
-            break;
-        }
-
         case State::FETCH_MSG:
         {
             Addr regAddr = accel->getRegAddr(CmdReg::COMMAND);
@@ -109,15 +98,6 @@ AccelCtxSwSM::tick()
             pkt = accel->createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }
-
-        case State::DONE:
-        {
-            pkt = accel->createDtuRegPkt(
-                accel->getRegAddr(PrivReg::CUR_VPE), sizeof(uint64_t), MemCmd::WriteReq
-            );
-            *pkt->getPtr<uint64_t>() = vpe_id;
-            break;
-        }
     }
 
     return pkt;
@@ -130,12 +110,6 @@ AccelCtxSwSM::handleMemResp(PacketPtr pkt)
 
     switch(state)
     {
-        case State::SET_VPE:
-        {
-            state = State::FETCH_MSG;
-            break;
-        }
-
         case State::FETCH_MSG:
         {
             state = State::READ_MSG_ADDR;
@@ -150,7 +124,10 @@ AccelCtxSwSM::handleMemResp(PacketPtr pkt)
                 state = State::READ_MSG;
             }
             else
-                state = State::DONE;
+            {
+                state = State::FETCH_MSG;
+                return true;
+            }
             break;
         }
         case State::READ_MSG:
@@ -162,7 +139,7 @@ AccelCtxSwSM::handleMemResp(PacketPtr pkt)
             if (args[3] == Operation::START)
                 switched = true;
             else if (args[3] == Operation::STOP)
-                vpe_id = IDLE_VPE;
+                vpe_id = OUR_VPE;
             state = State::STORE_REPLY;
             break;
         }
@@ -182,19 +159,16 @@ AccelCtxSwSM::handleMemResp(PacketPtr pkt)
             Dtu::Command::Bits cmd =
                 *reinterpret_cast<const RegFile::reg_t*>(pkt->getConstPtr<uint8_t>());
             if (cmd.opcode == 0)
-                state = State::DONE;
-            break;
-        }
-
-        case State::DONE:
-        {
-            if (switched)
             {
-                accel->setSwitched();
-                switched = false;
+                if (switched)
+                {
+                    accel->setSwitched();
+                    switched = false;
+                }
+                state = State::FETCH_MSG;
+                return true;
             }
-            state = State::SET_VPE;
-            return true;
+            break;
         }
     }
 

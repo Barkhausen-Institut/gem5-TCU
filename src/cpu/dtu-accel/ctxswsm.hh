@@ -36,7 +36,6 @@
 class AccelCtxSwSM
 {
     static const uint64_t OUR_VPE   = 0xFFFF;
-    static const uint64_t IDLE_VPE  = 0xFFFE;
 
     static const unsigned EP_RECV   = 2;
     static const size_t MSG_SIZE    = 64;
@@ -50,8 +49,6 @@ class AccelCtxSwSM
 
     enum State
     {
-        SET_VPE,
-
         FETCH_MSG,
         READ_MSG_ADDR,
         READ_MSG,
@@ -59,8 +56,6 @@ class AccelCtxSwSM
         STORE_REPLY,
         SEND_REPLY,
         REPLY_WAIT,
-
-        DONE,
     };
 
     struct
@@ -76,7 +71,7 @@ class AccelCtxSwSM
 
     bool hasStateChanged() const { return stateChanged; }
 
-    void restart() { state = SET_VPE; }
+    void restart() { state = FETCH_MSG; }
 
     PacketPtr tick();
 
