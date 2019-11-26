@@ -53,10 +53,6 @@ class DtuAccelStream : public DtuAccel
     static const unsigned EP_OUT_MEM    = 19;
     static const unsigned EP_RECV       = 20;
 
-    static const unsigned CAP_IN        = 64;
-    static const unsigned CAP_OUT       = 65;
-    static const unsigned CAP_RECV      = 66;
-
     static const uint64_t LBL_IN_REQ    = 1;
     static const uint64_t LBL_IN_REPLY  = 2;
     static const uint64_t LBL_OUT_REQ   = 3;

@@ -62,7 +62,6 @@ DtuAccelInDir::DtuAccelInDir(const DtuAccelInDirParams *p)
     state(State::IDLE),
     lastState(State::CTXSW),    // something different
     msgAddr(),
-    ctx(),
     yield(this),
     ctxsw(this)
 {
@@ -152,7 +151,7 @@ DtuAccelInDir::completeRequest(PacketPtr pkt)
                     args[0], args[1], args[2]);
 
                 dataSize = args[1];
-                reply.msg.count = dataSize;
+                reply.count = dataSize;
 
                 if (static_cast<Operation>(args[0]) == Operation::COMPUTE)
                 {
@@ -226,7 +225,6 @@ DtuAccelInDir::reset()
     irqPending = false;
 
     state = State::IDLE;
-    memset(&ctx, 0, sizeof(ctx));
 }
 
 void
@@ -304,9 +302,9 @@ DtuAccelInDir::tick()
         case State::STORE_REPLY:
         {
             pkt = createPacket(BUF_ADDR,
-                               sizeof(reply.msg),
+                               sizeof(reply),
                                MemCmd::WriteReq);
-            memcpy(pkt->getPtr<uint8_t>(), (char*)&reply.msg, sizeof(reply.msg));
+            memcpy(pkt->getPtr<uint8_t>(), (char*)&reply, sizeof(reply));
             break;
         }
         case State::SEND_REPLY:
@@ -314,7 +312,7 @@ DtuAccelInDir::tick()
             pkt = createDtuCmdPkt(Dtu::Command::REPLY,
                                   EP_RECV,
                                   BUF_ADDR,
-                                  sizeof(reply.msg),
+                                  sizeof(reply),
                                   msgAddr);
             break;
         }

@@ -43,7 +43,6 @@ class DtuAccelInDir : public DtuAccel
 {
     static const unsigned EP_OUT        = 16;
     static const unsigned EP_RECV       = 17;
-    static const unsigned CAP_RBUF      = 64;
 
     static const size_t MSG_SIZE        = 64;
     static const Addr MSG_ADDR          = 0x2000;
@@ -107,28 +106,11 @@ class DtuAccelInDir : public DtuAccel
         FORWARD,
     };
 
-    struct Context
-    {
-        uint64_t dummy;
-    } PACKED;
-
     struct
     {
-        struct
-        {
-            uint64_t opcode;
-            uint64_t cap;
-            uint64_t msgaddr;
-            uint64_t len;
-            uint64_t event;
-        } M5_ATTR_PACKED sys;
-        struct
-        {
-            uint64_t count;
-        } M5_ATTR_PACKED msg;
+        uint64_t count;
     } M5_ATTR_PACKED reply;
 
-    Context ctx;
     YieldSM yield;
     AccelCtxSwSM ctxsw;
 };
