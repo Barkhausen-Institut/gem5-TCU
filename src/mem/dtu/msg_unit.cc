@@ -32,37 +32,10 @@
 #include "debug/DtuBuf.hh"
 #include "debug/DtuCredits.hh"
 #include "debug/DtuPackets.hh"
-#include "debug/DtuSysCalls.hh"
 #include "debug/DtuMsgs.hh"
 #include "mem/dtu/msg_unit.hh"
 #include "mem/dtu/noc_addr.hh"
 #include "mem/dtu/xfer_unit.hh"
-
-static const char *syscallNames[] = {
-    "PAGEFAULT",
-    "CREATE_SRV",
-    "CREATE_SESS",
-    "CREATE_RGATE",
-    "CREATE_SGATE",
-    "CREATE_MGATE",
-    "CREATE_MAP",
-    "CREATE_VPEGRP",
-    "CREATE_VPE",
-    "ACTIVATE",
-    "SRV_CTRL",
-    "VPE_CTRL",
-    "VPE_WAIT",
-    "DERIVE_MEM",
-    "OPEN_SESS",
-    "DELEGATE",
-    "OBTAIN",
-    "EXCHANGE",
-    "REVOKE",
-    "FORWARD_MSG",
-    "FORWARD_MEM",
-    "FORWARD_REPLY",
-    "NOOP",
-};
 
 void
 MessageUnit::regStats()
@@ -525,14 +498,6 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint flags)
         "\e[1m[rv <- %u]\e[0m %lu bytes on EP%u\n",
         header->senderCoreId, header->length, epId);
     dtu.printPacket(pkt);
-
-    if (dtu.coreId == 0 && epId == 0 && DTRACE(DtuSysCalls))
-    {
-        const size_t total = (sizeof(syscallNames) / sizeof(syscallNames[0]));
-        size_t sysNo = pkt->getPtr<uint8_t>()[sizeof(*header) + 0];
-        DPRINTFS(DtuSysCalls, (&dtu), "  syscall: %s\n",
-            sysNo < total ? syscallNames[sysNo] : "Unknown");
-    }
 
     if (DTRACE(DtuMsgs))
     {

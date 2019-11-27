@@ -52,8 +52,6 @@ class Dtu : public BaseDtu
     static const uint16_t INVALID_VPE_ID    = 0xFFFF;
     static const size_t CREDITS_UNLIM       = 0x3F;
 
-    static const int SYSCALL_EP             = 0;
-
     enum MemoryFlags : uint8_t
     {
         READ                = (1 << 0),

@@ -35,7 +35,6 @@
 #include "debug/DtuBuf.hh"
 #include "debug/DtuCmd.hh"
 #include "debug/DtuPackets.hh"
-#include "debug/DtuSysCalls.hh"
 #include "debug/DtuMem.hh"
 #include "debug/DtuCoreMemAcc.hh"
 #include "mem/dtu/dtu.hh"
