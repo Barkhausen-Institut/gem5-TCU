@@ -34,6 +34,7 @@
 #include <vector>
 
 #include "base/types.hh"
+#include "base/bitfield.hh"
 #include "mem/packet.hh"
 
 // only writable by remote DTUs
@@ -84,7 +85,7 @@ constexpr unsigned numCmdRegs = 5;
 // Ep Registers:
 //
 // 0. VPEID[16] | TYPE[3] (for all)
-//    receive: BUF_RD_POS[6] | BUF_WR_POS[6] | BUF_MSG_SIZE[6] | BUF_SIZE[6] | REPLY_EPS[8] | BUF_MSG_CNT[6]
+//    receive: BUF_RD_POS[6] | BUF_WR_POS[6] | BUF_MSG_SIZE[6] | BUF_SIZE[6] | REPLY_EPS[8]
 //    send:    FLAGS[2] | CRD_EP[8] | MAX_MSG_SIZE[6] | MAXCRD[6] | CURCRD[6]
 //    mem:     REQ_COREID[8] | FLAGS[4]
 // 1. receive: BUF_ADDR[64]
@@ -159,8 +160,13 @@ struct RecvEp : public Ep
     static const size_t MAX_MSGS    = 32;
 
     RecvEp() : Ep(), rdPos(), wrPos(), bufAddr(), msgSize(), size(), replyEps(),
-               msgCount(), occupied(), unread()
+               occupied(), unread()
     {}
+
+    int unreadMsgs() const
+    {
+        return popCount(unread);
+    }
 
     int msgToIdx(Addr msg) const
     {
@@ -205,7 +211,6 @@ struct RecvEp : public Ep
     uint16_t msgSize;
     uint16_t size;
     uint32_t replyEps;
-    uint8_t msgCount;
     uint32_t occupied;
     uint32_t unread;
 };

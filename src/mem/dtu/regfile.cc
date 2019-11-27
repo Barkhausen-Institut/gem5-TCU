@@ -328,12 +328,11 @@ RegFile::getRecvEp(unsigned epId, bool print) const
     const reg_t r1  = regs[1];
     const reg_t r2  = regs[2];
 
-    ep.rdPos        = (r0 >> 51) & 0x3F;
-    ep.wrPos        = (r0 >> 45) & 0x3F;
-    ep.msgSize      = (r0 >> 39) & 0x3F;
-    ep.size         = (r0 >> 33) & 0x3F;
-    ep.replyEps     = (r0 >> 25) & 0xFF;
-    ep.msgCount     = (r0 >> 19) & 0x3F;
+    ep.rdPos        = (r0 >> 45) & 0x3F;
+    ep.wrPos        = (r0 >> 39) & 0x3F;
+    ep.msgSize      = (r0 >> 33) & 0x3F;
+    ep.size         = (r0 >> 27) & 0x3F;
+    ep.replyEps     = (r0 >> 19) & 0xFF;
     ep.vpe          = (r0 >>  3) & 0xFFFF;
 
     ep.bufAddr      = r1;
@@ -350,12 +349,11 @@ RegFile::getRecvEp(unsigned epId, bool print) const
 void
 RegFile::setRecvEp(unsigned epId, const RecvEp &ep)
 {
-    set(epId, 0, (static_cast<reg_t>(ep.rdPos)        << 51) |
-                 (static_cast<reg_t>(ep.wrPos)        << 45) |
-                 (static_cast<reg_t>(ep.msgSize)      << 39) |
-                 (static_cast<reg_t>(ep.size)         << 33) |
-                 (static_cast<reg_t>(ep.replyEps)     << 25) |
-                 (static_cast<reg_t>(ep.msgCount)     << 19) |
+    set(epId, 0, (static_cast<reg_t>(ep.rdPos)        << 45) |
+                 (static_cast<reg_t>(ep.wrPos)        << 39) |
+                 (static_cast<reg_t>(ep.msgSize)      << 33) |
+                 (static_cast<reg_t>(ep.size)         << 27) |
+                 (static_cast<reg_t>(ep.replyEps)     << 19) |
                  (static_cast<reg_t>(ep.vpe)          << 3) |
                  (static_cast<reg_t>(EpType::RECEIVE) << 0));
 
@@ -428,8 +426,8 @@ RecvEp::print(const RegFile &rf,
         "%s%s EP%u%14s: Recv[vpe=%u, buf=%p msz=%#x bsz=%#x rpl=%u msgs=%u occ=%#010x unr=%#010x rd=%u wr=%u]\n",
         regAccessName(access), read ? "<-" : "->",
         epId, "", vpe,
-        bufAddr, 1 << msgSize, 1 << size, replyEps, msgCount,
-        occupied, unread, rdPos, wrPos);
+        bufAddr, 1 << msgSize, 1 << size, replyEps,
+        unreadMsgs(), occupied, unread, rdPos, wrPos);
 }
 
 void

@@ -323,7 +323,7 @@ MessageUnit::fetchMessage(unsigned epid)
 {
     RecvEp ep = dtu.regs().getRecvEp(epid);
 
-    if (ep.msgCount == 0 || ep.vpe != dtu.regs().getVPE())
+    if (ep.unread == 0 || ep.vpe != dtu.regs().getVPE())
         return 0;
 
     int i;
@@ -345,12 +345,11 @@ found:
     assert(ep.isOccupied(i));
 
     ep.setUnread(i, false);
-    ep.msgCount--;
     ep.rdPos = i + 1;
 
     DPRINTFS(DtuBuf, (&dtu),
         "EP%u: fetched message at index %u (count=%u)\n",
-        epid, i, ep.msgCount);
+        epid, i, ep.unreadMsgs());
 
     dtu.regs().setRecvEp(epid, ep);
     dtu.regs().rem_msg();
@@ -406,10 +405,7 @@ MessageUnit::ackMessage(unsigned epId, Addr msgAddr)
 
     ep.setOccupied(msgidx, false);
     if (ep.isUnread(msgidx))
-    {
         ep.setUnread(msgidx, false);
-        ep.msgCount--;
-    }
 
     if (ep.replyEps != 0xFF)
     {
@@ -467,15 +463,8 @@ MessageUnit::finishMsgReceive(unsigned epId,
 
         DPRINTFS(DtuBuf, (&dtu),
             "EP%u: increment message count to %u\n",
-            epId, ep.msgCount + 1);
+            epId, ep.unreadMsgs() + 1);
 
-        if (ep.msgCount == (1 << ep.size))
-        {
-            warn("EP%u: Buffer full!\n", epId);
-            return error;
-        }
-
-        ep.msgCount++;
         ep.setUnread(idx, true);
 
         if (!(header->flags & Dtu::REPLY_FLAG))
