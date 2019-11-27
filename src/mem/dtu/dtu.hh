@@ -134,10 +134,10 @@ class Dtu : public BaseDtu
         };
 
         BitUnion64(Bits)
-            Bitfield<63, 16> arg;
-            Bitfield<15, 12> error;
-            Bitfield<11> flags;
-            Bitfield<10, 4> epid;
+            Bitfield<63, 17> arg;
+            Bitfield<16, 13> error;
+            Bitfield<12> flags;
+            Bitfield<11, 4> epid;
             Bitfield<3, 0> opcode;
         EndBitUnion(Bits)
 

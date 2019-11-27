@@ -128,7 +128,7 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
             DPRINTFS(Dtu, (&dtu),
                      "EP%u: invalid reply EP. Double reply for msg %p?\n",
                      epid, cmd.arg);
-            dtu.scheduleFinishOp(Cycles(1), DtuError::INV_EP);
+            dtu.scheduleFinishOp(Cycles(1), DtuError::INV_ARGS);
             return;
         }
 
