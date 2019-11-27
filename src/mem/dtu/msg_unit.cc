@@ -110,7 +110,7 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
             return;
         }
 
-        if (ep.replyEps == dtu.numEndpoints)
+        if (ep.replyEps == 0xFF)
         {
             DPRINTFS(Dtu, (&dtu),
                      "EP%u: no reply EPs, cannot reply on msg %p\n",
@@ -411,7 +411,7 @@ MessageUnit::ackMessage(unsigned epId, Addr msgAddr)
         ep.msgCount--;
     }
 
-    if (ep.replyEps != dtu.numEndpoints)
+    if (ep.replyEps != 0xFF)
     {
         // invalidate reply EP
         dtu.regs().invalidate(ep.replyEps + msgidx, true);
@@ -429,7 +429,7 @@ DtuError
 MessageUnit::invalidateReply(unsigned repId, unsigned peId, unsigned sepId)
 {
     RecvEp ep = dtu.regs().getRecvEp(repId);
-    if (ep.bufAddr == 0 || ep.replyEps == dtu.numEndpoints)
+    if (ep.bufAddr == 0 || ep.replyEps == 0xFF)
         return DtuError::INV_EP;
 
     for (int i = 0; i < (1 << ep.size); ++i)
@@ -480,7 +480,7 @@ MessageUnit::finishMsgReceive(unsigned epId,
 
         if (!(header->flags & Dtu::REPLY_FLAG))
         {
-            assert(ep.replyEps != dtu.numEndpoints);
+            assert(ep.replyEps != 0xFF);
 
             // install use-once reply EP
             SendEp sep;
