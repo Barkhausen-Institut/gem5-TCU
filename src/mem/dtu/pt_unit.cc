@@ -204,7 +204,7 @@ PtUnit::canSendPF() const
     if (!dtu.regs().hasFeature(Features::PAGEFAULTS))
         return false;
 
-    int pfep = dtu.regs().get(DtuReg::PF_EP) & 0xFF;
+    int pfep = dtu.regs().get(DtuReg::PF_EP) & 0xFFFF;
     if (pfep >= dtu.numEndpoints)
         return false;
 
@@ -228,8 +228,8 @@ PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, uint access)
     }
 
     int eps = dtu.regs().get(DtuReg::PF_EP);
-    int pfsep = eps & 0xFF;
-    int pfrep = (eps >> 8) & 0xFF;
+    int pfsep = eps & 0xFFFF;
+    int pfrep = (eps >> 16) & 0xFFFF;
     SendEp ep = dtu.regs().getSendEp(pfsep);
 
     size_t size = sizeof(MessageHeader) + sizeof(PagefaultMessage);
@@ -258,12 +258,12 @@ PtUnit::sendPagefaultMsg(TranslateEvent *ev, Addr virt, uint access)
     // build the message and put it in the packet
     MessageHeader header;
     header.length = sizeof(PagefaultMessage);
-    header.flags = Dtu::PAGEFAULT | Dtu::REPLY_ENABLED;
+    header.flags = Dtu::PAGEFAULT;
     header.label = ep.label;
     header.senderEpId = pfsep;
     header.senderCoreId = dtu.coreId;
     header.replyLabel = ev->id;
-    if (pfrep != 0xFF)
+    if (pfrep != 0xFFFF)
         header.replySize = dtu.regs().getRecvEp(pfrep).msgSize;
     else
         header.replySize = ceil(log2(sizeof(MessageHeader) + sizeof(uint64_t)));

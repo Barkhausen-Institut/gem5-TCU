@@ -61,9 +61,7 @@ class Dtu : public BaseDtu
     enum MessageFlags : uint8_t
     {
         REPLY_FLAG          = (1 << 0),
-        GRANT_CREDITS_FLAG  = (1 << 1),
-        REPLY_ENABLED       = (1 << 2),
-        PAGEFAULT           = (1 << 3),
+        PAGEFAULT           = (1 << 1),
     };
 
     enum class NocPacketType
@@ -132,10 +130,10 @@ class Dtu : public BaseDtu
         };
 
         BitUnion64(Bits)
-            Bitfield<63, 17> arg;
-            Bitfield<16, 13> error;
-            Bitfield<12> flags;
-            Bitfield<11, 4> epid;
+            Bitfield<56, 25> arg;
+            Bitfield<24, 21> error;
+            Bitfield<20> flags;
+            Bitfield<19, 4> epid;
             Bitfield<3, 0> opcode;
         EndBitUnion(Bits)
 

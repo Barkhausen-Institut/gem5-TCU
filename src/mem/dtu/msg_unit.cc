@@ -109,7 +109,7 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
 
         // grant credits to the sender
         info.replyEpId = sep.crdEp;
-        info.flags = Dtu::REPLY_FLAG | Dtu::GRANT_CREDITS_FLAG;
+        info.flags = Dtu::REPLY_FLAG;
         info.replySize = 0;
 
         // the pagefault flag is moved to the reply hd
@@ -194,9 +194,9 @@ MessageUnit::startXfer(const Dtu::Command::Bits& cmd)
     MessageHeader* header = new MessageHeader;
 
     if (cmd.opcode == Dtu::Command::REPLY)
-        header->flags = Dtu::REPLY_FLAG | Dtu::GRANT_CREDITS_FLAG;
+        header->flags = Dtu::REPLY_FLAG;
     else
-        header->flags = Dtu::REPLY_ENABLED; // normal message
+        header->flags = 0; // normal message
     header->flags |= info.flags;
 
     header->senderCoreId = dtu.coreId;
@@ -428,7 +428,6 @@ MessageUnit::finishMsgReceive(unsigned epId,
     {
         // Note that replyEpId is the Id of *our* sending EP
         if (header->flags & Dtu::REPLY_FLAG &&
-            header->flags & Dtu::GRANT_CREDITS_FLAG &&
             header->replyEpId < dtu.numEndpoints)
         {
             recvCredits(header->replyEpId);
@@ -509,7 +508,6 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint flags)
     // support credit receives without storing reply messages
     if (epId >= dtu.numEndpoints &&
         (header->flags & Dtu::REPLY_FLAG) &&
-        (header->flags & Dtu::GRANT_CREDITS_FLAG) &&
         header->replyEpId < dtu.numEndpoints)
     {
         recvCredits(header->replyEpId);

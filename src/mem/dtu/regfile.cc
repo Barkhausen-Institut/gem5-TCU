@@ -275,17 +275,17 @@ RegFile::getSendEp(unsigned epId, bool print) const
     const reg_t r1  = regs[1];
     const reg_t r2  = regs[2];
 
-    ep.flags        = (r0 >> 45) & 0x3;
-    ep.crdEp        = (r0 >> 37) & 0xFF;
+    ep.flags        = (r0 >> 53) & 0x3;
+    ep.crdEp        = (r0 >> 37) & 0xFFFF;
     ep.maxMsgSize   = (r0 >> 31) & 0x3F;
     ep.maxcrd       = (r0 >> 25) & 0x3F;
     ep.curcrd       = (r0 >> 19) & 0x3F;
     ep.vpe          = (r0 >> 3) & 0xFFFF;
 
-    ep.targetCore   = (r1 >>  8) & 0xFF;
-    ep.targetEp     = (r1 >>  0) & 0xFF;
+    ep.targetCore   = (r1 >>  16) & 0xFF;
+    ep.targetEp     = (r1 >>  0) & 0xFFFF;
 
-    ep.label        = r2;
+    ep.label        = r2 & 0xFFFFFFFF;
 
     if (print)
         ep.print(*this, epId, true, RegAccess::DTU);
@@ -296,7 +296,7 @@ RegFile::getSendEp(unsigned epId, bool print) const
 void
 RegFile::setSendEp(unsigned epId, const SendEp &ep)
 {
-    set(epId, 0, (static_cast<reg_t>(ep.flags)      << 45) |
+    set(epId, 0, (static_cast<reg_t>(ep.flags)      << 53) |
                  (static_cast<reg_t>(ep.crdEp)      << 37) |
                  (static_cast<reg_t>(ep.maxMsgSize) << 31) |
                  (static_cast<reg_t>(ep.maxcrd)     << 25) |
@@ -304,7 +304,7 @@ RegFile::setSendEp(unsigned epId, const SendEp &ep)
                  (static_cast<reg_t>(ep.vpe)        << 3) |
                  (static_cast<reg_t>(EpType::SEND)  << 0));
 
-    set(epId, 1, (static_cast<reg_t>(ep.targetCore) << 8) |
+    set(epId, 1, (static_cast<reg_t>(ep.targetCore) << 16) |
                  (static_cast<reg_t>(ep.targetEp)   << 0));
 
     set(epId, 2, ep.label);
@@ -328,14 +328,14 @@ RegFile::getRecvEp(unsigned epId, bool print) const
     const reg_t r1  = regs[1];
     const reg_t r2  = regs[2];
 
-    ep.rdPos        = (r0 >> 45) & 0x3F;
-    ep.wrPos        = (r0 >> 39) & 0x3F;
-    ep.msgSize      = (r0 >> 33) & 0x3F;
-    ep.size         = (r0 >> 27) & 0x3F;
-    ep.replyEps     = (r0 >> 19) & 0xFF;
+    ep.rdPos        = (r0 >> 53) & 0x3F;
+    ep.wrPos        = (r0 >> 47) & 0x3F;
+    ep.msgSize      = (r0 >> 41) & 0x3F;
+    ep.size         = (r0 >> 35) & 0x3F;
+    ep.replyEps     = (r0 >> 19) & 0xFFFF;
     ep.vpe          = (r0 >>  3) & 0xFFFF;
 
-    ep.bufAddr      = r1;
+    ep.bufAddr      = r1 & 0xFFFFFFFF;
 
     ep.occupied     = r2 & 0xFFFFFFFF;
     ep.unread       = r2 >> 32;
@@ -349,10 +349,10 @@ RegFile::getRecvEp(unsigned epId, bool print) const
 void
 RegFile::setRecvEp(unsigned epId, const RecvEp &ep)
 {
-    set(epId, 0, (static_cast<reg_t>(ep.rdPos)        << 45) |
-                 (static_cast<reg_t>(ep.wrPos)        << 39) |
-                 (static_cast<reg_t>(ep.msgSize)      << 33) |
-                 (static_cast<reg_t>(ep.size)         << 27) |
+    set(epId, 0, (static_cast<reg_t>(ep.rdPos)        << 53) |
+                 (static_cast<reg_t>(ep.wrPos)        << 47) |
+                 (static_cast<reg_t>(ep.msgSize)      << 41) |
+                 (static_cast<reg_t>(ep.size)         << 35) |
                  (static_cast<reg_t>(ep.replyEps)     << 19) |
                  (static_cast<reg_t>(ep.vpe)          << 3) |
                  (static_cast<reg_t>(EpType::RECEIVE) << 0));

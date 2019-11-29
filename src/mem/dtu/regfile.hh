@@ -85,14 +85,14 @@ constexpr unsigned numCmdRegs = 5;
 // Ep Registers:
 //
 // 0. VPEID[16] | TYPE[3] (for all)
-//    receive: BUF_RD_POS[6] | BUF_WR_POS[6] | BUF_MSG_SIZE[6] | BUF_SIZE[6] | REPLY_EPS[8]
-//    send:    FLAGS[2] | CRD_EP[8] | MAX_MSG_SIZE[6] | MAXCRD[6] | CURCRD[6]
+//    receive: BUF_RD_POS[6] | BUF_WR_POS[6] | BUF_MSG_SIZE[6] | BUF_SIZE[6] | REPLY_EPS[16]
+//    send:    FLAGS[2] | CRD_EP[16] | MAX_MSG_SIZE[6] | MAXCRD[6] | CURCRD[6]
 //    mem:     REQ_COREID[8] | FLAGS[4]
-// 1. receive: BUF_ADDR[64]
-//    send:    TGT_COREID[8] | TGT_EPID[8]
+// 1. receive: BUF_ADDR[32]
+//    send:    TGT_COREID[8] | TGT_EPID[16]
 //    mem:     REQ_MEM_ADDR[64]
 // 2. receive: BUF_UNREAD[32] | BUF_OCCUPIED[32]
-//    send:    LABEL[64]
+//    send:    LABEL[32]
 //    mem:     REQ_MEM_SIZE[64]
 //
 constexpr unsigned numEpRegs = 3;
@@ -147,12 +147,12 @@ struct SendEp : public Ep
 
     uint8_t flags;
     uint8_t targetCore;
-    uint8_t targetEp;
-    uint8_t crdEp;
+    uint16_t targetEp;
+    uint16_t crdEp;
     uint8_t maxcrd;
     uint8_t curcrd;
     uint8_t maxMsgSize;
-    uint64_t label;
+    uint32_t label;
 };
 
 struct RecvEp : public Ep
@@ -207,10 +207,10 @@ struct RecvEp : public Ep
 
     uint8_t rdPos;
     uint8_t wrPos;
-    uint64_t bufAddr;
+    uint32_t bufAddr;
     uint16_t msgSize;
     uint16_t size;
-    uint32_t replyEps;
+    uint16_t replyEps;
     uint32_t occupied;
     uint32_t unread;
 };
@@ -235,35 +235,34 @@ struct DataReg
 {
     DataReg() : addr(), size()
     {}
-    DataReg(uint64_t value) : addr(value & 0xFFFFFFFFFFFF), size(value >> 48)
+    DataReg(uint64_t value) : addr(value), size(value >> 32)
     {}
-    DataReg(uint64_t _addr, uint16_t _size) : addr(_addr), size(_size)
+    DataReg(uint32_t _addr, uint32_t _size) : addr(_addr), size(_size)
     {}
 
     uint64_t value() const
     {
-        return addr | (static_cast<uint64_t>(size) << 48);
+        return addr | (static_cast<uint64_t>(size) << 32);
     }
 
-    uint64_t addr;
-    uint16_t size;
+    uint32_t addr;
+    uint32_t size;
 };
 
 struct MessageHeader
 {
-     // if bit 0 is set its a reply, if bit 1 is set we grant credits
-    uint8_t flags;
+    uint8_t flags : 2,
+            replySize: 6;
     uint8_t senderCoreId;
-    uint8_t senderEpId;
+    uint16_t senderEpId;
     // for a normal message this is the reply epId
     // for a reply this is the enpoint that receives credits
-    uint8_t replyEpId;
+    uint16_t replyEpId;
     uint16_t length;
-    uint16_t replySize;
 
     // should be large enough for pointers.
-    uint64_t replyLabel;
-    uint64_t label;
+    uint32_t replyLabel;
+    uint32_t label;
 } M5_ATTR_PACKED;
 
 class Dtu;

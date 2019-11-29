@@ -562,8 +562,8 @@ DtuAbortTest::tick()
                     pkt = createPacket(RECV_ADDR, 1, MemCmd::WriteReq);
 
                     // re-enable replies for the message
-                    uint8_t *header = pkt->getPtr<uint8_t>();
-                    *header = Dtu::REPLY_ENABLED;
+                    // uint8_t *header = pkt->getPtr<uint8_t>();
+                    // *header = Dtu::REPLY_ENABLED;
                     break;
                 }
             }
