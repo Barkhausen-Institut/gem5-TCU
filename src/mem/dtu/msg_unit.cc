@@ -467,7 +467,7 @@ MessageUnit::finishMsgReceive(unsigned epId,
     {
         if (addMsg)
             dtu.regs().add_msg();
-        dtu.wakeupCore();
+        dtu.wakeupCore(false);
     }
 
     return error;
@@ -513,7 +513,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint flags)
         recvCredits(header->replyEpId);
         dtu.sendNocResponse(pkt);
         dtu.regs().setEvent(EventType::CRD_RECV);
-        dtu.wakeupCore();
+        dtu.wakeupCore(false);
         return DtuError::NONE;
     }
 

@@ -177,11 +177,11 @@ class Dtu : public BaseDtu
 
     void printLine(Addr len);
 
-    bool startSleep(uint64_t cycles, bool ack);
+    bool startSleep(uint64_t cycles, int wakeupEp, bool ack);
 
     void stopSleep();
 
-    void wakeupCore();
+    void wakeupCore(bool force);
 
     Cycles reset(Addr entry, bool flushInval);
 
@@ -256,6 +256,8 @@ class Dtu : public BaseDtu
     void executePrivCommand(PacketPtr pkt);
 
     void finishCommand(DtuError error);
+
+    bool has_message(int ep);
 
     void completeNocRequest(PacketPtr pkt) override;
 
@@ -396,6 +398,7 @@ class Dtu : public BaseDtu
     uint abortCmd;
     size_t cmdXferBuf;
     bool cmdSent;
+    int wakeupEp;
 
     std::list<MemTranslation*> xlates;
 

@@ -102,7 +102,7 @@ class DtuAccel : public MemObject
 
     PacketPtr createDtuCmdPkt(Dtu::Command::Opcode cmd, unsigned epid,
                               uint64_t data, uint64_t size, uint64_t arg,
-                              uint64_t reply_label = 0);
+                              uint64_t reply_label = 0, uint64_t offset = 0);
 
     void freePacket(PacketPtr pkt);
 

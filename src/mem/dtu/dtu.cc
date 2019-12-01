@@ -96,6 +96,8 @@ Dtu::Dtu(DtuParams* p)
     cmdId(0),
     abortCmd(0),
     cmdXferBuf(0),
+    cmdSent(),
+    wakeupEp(0xFFFF),
     memPe(),
     memOffset(),
     atomicMode(p->system->isAtomicMode()),
@@ -281,9 +283,15 @@ Dtu::executeCommand(PacketPtr pkt)
             finishCommand(msgUnit->ackMessage(cmd.epid, cmd.arg));
             break;
         case Command::SLEEP:
-            if (!startSleep(cmd.arg, !!(cmd.arg >> 40)))
+        {
+            RegFile::reg_t arg = regs().get(CmdReg::OFFSET);
+            Cycles sleepCycles = static_cast<Cycles>(arg & 0xFFFFFFFFFFF);
+            int ep = (arg >> 48) & 0xFFFF;
+            bool ackEvents = cmd.arg != 0;
+            if (!startSleep(sleepCycles, ep, ackEvents))
                 finishCommand(DtuError::NONE);
-            break;
+        }
+        break;
         case Command::PRINT:
         {
             printLine(cmd.arg);
@@ -457,7 +465,7 @@ Dtu::executePrivCommand(PacketPtr pkt)
                 result = DtuError::MISS_CREDITS;
             else {
                 regs().setEvent(EventType::EP_INVAL);
-                wakeupCore();
+                wakeupCore(false);
             }
             break;
         }
@@ -522,20 +530,28 @@ Dtu::executePrivCommand(PacketPtr pkt)
 }
 
 bool
-Dtu::startSleep(uint64_t cycles, bool ack)
+Dtu::has_message(int ep)
+{
+    return (ep == 0xFFFF && regFile.messages() > 0) ||
+           (ep != 0xFFFF && regFile.getRecvEp(ep).unread != 0);
+}
+
+bool
+Dtu::startSleep(uint64_t cycles, int ep, bool ack)
 {
     // just for accelerators and simplicity: ack all events
     if (ack)
         regFile.fetchEvents();
 
-    if (regFile.hasEvents() || regFile.messages() > 0)
+    if (regFile.hasEvents() || has_message(ep))
         return false;
     if (regFile.get(PrivReg::EXT_REQ) != 0)
         return false;
     if (regFile.get(PrivReg::CORE_REQ) != 0)
         return false;
 
-    DPRINTF(Dtu, "Suspending CU\n");
+    wakeupEp = ep;
+    DPRINTF(Dtu, "Suspending CU (waiting for EP %d)\n", wakeupEp);
     connector->suspend();
 
     if (cycles)
@@ -550,12 +566,15 @@ Dtu::stopSleep()
 }
 
 void
-Dtu::wakeupCore()
+Dtu::wakeupCore(bool force)
 {
-    if (getCommand().opcode == Command::SLEEP)
-        scheduleFinishOp(Cycles(1));
-    else
-        connector->wakeup();
+    if (force || regFile.hasEvents() || has_message(wakeupEp))
+    {
+        if (getCommand().opcode == Command::SLEEP)
+            scheduleFinishOp(Cycles(1));
+        else
+            connector->wakeup();
+    }
 }
 
 Cycles
@@ -599,7 +618,7 @@ Dtu::flushInvalCaches(bool invalidate)
 void
 Dtu::setIrq()
 {
-    wakeupCore();
+    wakeupCore(true);
 
     connector->setIrq();
 
