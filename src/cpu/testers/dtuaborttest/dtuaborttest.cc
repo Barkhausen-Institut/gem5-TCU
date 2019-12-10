@@ -224,7 +224,7 @@ DtuAbortTest::createCommandPkt(Dtu::Command::Opcode cmd,
     static_assert(static_cast<int>(CmdReg::COMMAND) == 0, "");
     static_assert(static_cast<int>(CmdReg::ABORT) == 1, "");
     static_assert(static_cast<int>(CmdReg::DATA) == 2, "");
-    static_assert(static_cast<int>(CmdReg::OFFSET) == 3, "");
+    static_assert(static_cast<int>(CmdReg::ARG1) == 3, "");
 
     auto pkt = createPacket(reg_base + getRegAddr(CmdReg::COMMAND),
                             sizeof(RegFile::reg_t) * 4,

@@ -61,8 +61,7 @@ const char *RegFile::cmdRegNames[] = {
     "COMMAND",
     "ABORT",
     "DATA",
-    "OFFSET",
-    "REPLY_LABEL",
+    "ARG1",
 };
 
 const char *RegFile::epTypeNames[] = {

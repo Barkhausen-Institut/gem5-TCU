@@ -76,11 +76,10 @@ enum class CmdReg : Addr
     COMMAND,
     ABORT,
     DATA,
-    OFFSET,
-    REPLY_LABEL,
+    ARG1,
 };
 
-constexpr unsigned numCmdRegs = 5;
+constexpr unsigned numCmdRegs = 4;
 
 // Ep Registers:
 //

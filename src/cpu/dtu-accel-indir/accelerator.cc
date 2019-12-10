@@ -273,7 +273,7 @@ DtuAccelInDir::tick()
         }
         case State::READ_MSG_ADDR:
         {
-            Addr regAddr = getRegAddr(CmdReg::OFFSET);
+            Addr regAddr = getRegAddr(CmdReg::ARG1);
             pkt = createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }

@@ -73,7 +73,7 @@ SyscallSM::tick()
         }
         case State::SYSC_READ_ADDR:
         {
-            Addr regAddr = accel->getRegAddr(CmdReg::OFFSET);
+            Addr regAddr = accel->getRegAddr(CmdReg::ARG1);
             pkt = accel->createDtuRegPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }

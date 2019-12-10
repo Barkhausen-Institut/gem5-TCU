@@ -60,10 +60,10 @@ finishReadWrite(Dtu &dtu, Addr size)
     data.addr += size;
     dtu.regs().setDataReg(data);
 
-    // change offset register
-    Addr offset = dtu.regs().get(CmdReg::OFFSET);
+    // change offset
+    Addr offset = dtu.regs().get(CmdReg::ARG1);
     offset += size;
-    dtu.regs().set(CmdReg::OFFSET, offset);
+    dtu.regs().set(CmdReg::ARG1, offset);
 }
 
 void
@@ -108,7 +108,7 @@ MemoryUnit::startRead(const Dtu::Command::Bits& cmd)
     }
 
     DataReg data = dtu.regs().getDataReg();
-    Addr offset = dtu.regs().get(CmdReg::OFFSET);
+    Addr offset = dtu.regs().get(CmdReg::ARG1);
     Addr size = std::min(static_cast<Addr>(data.size), dtu.maxNocPacketSize);
 
     readBytes.sample(size);
@@ -254,7 +254,7 @@ MemoryUnit::startWrite(const Dtu::Command::Bits& cmd)
     }
 
     DataReg data = dtu.regs().getDataReg();
-    Addr offset = dtu.regs().get(CmdReg::OFFSET);
+    Addr offset = dtu.regs().get(CmdReg::ARG1);
     Addr size = std::min(static_cast<Addr>(data.size), dtu.maxNocPacketSize);
 
     writtenBytes.sample(size);

@@ -158,7 +158,7 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
     info.targetCoreId = ep.targetCore;
     info.targetEpId   = ep.targetEp;
     info.label        = ep.label;
-    info.replyLabel   = dtu.regs().get(CmdReg::REPLY_LABEL);
+    info.replyLabel   = dtu.regs().get(CmdReg::ARG1);
     info.unlimcred    = ep.curcrd == Dtu::CREDITS_UNLIM;
     info.ready        = true;
 

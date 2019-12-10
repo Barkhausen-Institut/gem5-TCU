@@ -268,11 +268,11 @@ Dtu::executeCommand(PacketPtr pkt)
             memUnit->startWrite(cmd);
             break;
         case Command::FETCH_MSG:
-            regs().set(CmdReg::OFFSET, msgUnit->fetchMessage(cmd.epid));
+            regs().set(CmdReg::ARG1, msgUnit->fetchMessage(cmd.epid));
             finishCommand(DtuError::NONE);
             break;
         case Command::FETCH_EVENTS:
-            regs().set(CmdReg::OFFSET, regs().fetchEvents());
+            regs().set(CmdReg::ARG1, regs().fetchEvents());
             finishCommand(DtuError::NONE);
             break;
         case Command::SET_EVENT:
@@ -284,7 +284,7 @@ Dtu::executeCommand(PacketPtr pkt)
             break;
         case Command::SLEEP:
         {
-            RegFile::reg_t arg = regs().get(CmdReg::OFFSET);
+            RegFile::reg_t arg = regs().get(CmdReg::ARG1);
             Cycles sleepCycles = static_cast<Cycles>(arg & 0xFFFFFFFFFFF);
             int ep = (arg >> 48) & 0xFFFF;
             bool ackEvents = cmd.arg != 0;

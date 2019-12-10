@@ -185,17 +185,15 @@ DtuAccel::createDtuCmdPkt(Dtu::Command::Opcode cmd,
                           uint64_t data,
                           uint64_t size,
                           uint64_t arg,
-                          uint64_t reply_label,
                           uint64_t offset)
 {
     static_assert(static_cast<int>(CmdReg::COMMAND) == 0, "");
     static_assert(static_cast<int>(CmdReg::ABORT) == 1, "");
     static_assert(static_cast<int>(CmdReg::DATA) == 2, "");
-    static_assert(static_cast<int>(CmdReg::OFFSET) == 3, "");
-    static_assert(static_cast<int>(CmdReg::REPLY_LABEL) == 4, "");
+    static_assert(static_cast<int>(CmdReg::ARG1) == 3, "");
 
     auto pkt = createPacket(reg_base + getRegAddr(CmdReg::COMMAND),
-                            sizeof(RegFile::reg_t) * 5,
+                            sizeof(RegFile::reg_t) * 4,
                             MemCmd::WriteReq);
 
     Dtu::Command::Bits cmdreg = 0;
@@ -208,7 +206,6 @@ DtuAccel::createDtuCmdPkt(Dtu::Command::Opcode cmd,
     regs[1] = 0;
     regs[2] = DataReg(data, size).value();
     regs[3] = offset;
-    regs[4] = reply_label;
     return pkt;
 }
 
