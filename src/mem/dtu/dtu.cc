@@ -459,8 +459,8 @@ Dtu::executePrivCommand(PacketPtr pkt)
             break;
         case PrivCommand::INV_EP:
         {
-            unsigned epid = cmd.arg & ((1 << 8) - 1);
-            bool force = !!(cmd.arg & (1 << 8));
+            unsigned epid = cmd.arg & 0xFFFF;
+            bool force = !!(cmd.arg & (1 << 16));
             if (!regs().invalidate(epid, force))
                 result = DtuError::MISS_CREDITS;
             else {
@@ -479,9 +479,9 @@ Dtu::executePrivCommand(PacketPtr pkt)
             break;
         case PrivCommand::INV_REPLY:
         {
-            unsigned repid = cmd.arg & 0xFF;
-            unsigned peid = (cmd.arg >> 8) & 0xFF;
-            unsigned sepid = (cmd.arg >> 16) & 0xFF;
+            unsigned repid = cmd.arg & 0xFFFF;
+            unsigned peid = (cmd.arg >> 16) & 0xFF;
+            unsigned sepid = (cmd.arg >> 24) & 0xFFFF;
             result = msgUnit->invalidateReply(repid, peid, sepid);
             break;
         }
