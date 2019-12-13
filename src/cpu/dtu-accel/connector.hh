@@ -44,9 +44,7 @@ class DtuAccelConnector : public BaseConnector
 
     void setIrq() override;
 
-    void reset(Addr entry, Addr rootpt) override;
-
-    void signalFinished(size_t off);
+    void reset() override;
 
   private:
 

@@ -41,7 +41,6 @@
 #include "mem/dtu/msg_unit.hh"
 #include "mem/dtu/mem_unit.hh"
 #include "mem/dtu/xfer_unit.hh"
-#include "mem/dtu/pt_unit.hh"
 #include "mem/cache/cache.hh"
 #include "sim/dtu_memory.hh"
 #include "sim/system.hh"
@@ -87,7 +86,6 @@ Dtu::Dtu(DtuParams* p)
     msgUnit(new MessageUnit(*this)),
     memUnit(new MemoryUnit(*this)),
     xferUnit(new XferUnit(*this, p->block_size, p->buf_count, p->buf_size)),
-    ptUnit(p->pt_walker ? new PtUnit(*this) : NULL),
     coreReqs(*this, p->buf_count),
     abortCommandEvent(*this),
     completeCoreReqEvent(coreReqs),
@@ -127,8 +125,6 @@ Dtu::Dtu(DtuParams* p)
         memSize = sys->memSize;
         DPRINTF(Dtu, "Using memory range %p .. %p\n",
             memOffset, memOffset + memSize);
-
-        regs().set(DtuReg::ROOT_PT, sys->getRootPt().getAddr());
     }
     // memory PEs don't participate in cache coherence
     else
@@ -137,7 +133,6 @@ Dtu::Dtu(DtuParams* p)
 
 Dtu::~Dtu()
 {
-    delete ptUnit;
     delete xferUnit;
     delete memUnit;
     delete msgUnit;
@@ -193,8 +188,6 @@ Dtu::regStats()
 
     if (tlb())
         tlb()->regStats();
-    if (ptUnit)
-        ptUnit->regStats();
     coreReqs.regStats();
     xferUnit->regStats();
     memUnit->regStats();
@@ -486,7 +479,7 @@ Dtu::executePrivCommand(PacketPtr pkt)
             break;
         }
         case PrivCommand::RESET:
-            delay += reset(cmd.arg & 0x07FFFFFFFFFFFFFF, !!(cmd.arg >> 59));
+            delay += reset(!!(cmd.arg >> 59));
             break;
         case PrivCommand::FLUSH_CACHE:
             delay += flushInvalCaches(false);
@@ -578,21 +571,17 @@ Dtu::wakeupCore(bool force)
 }
 
 Cycles
-Dtu::reset(Addr entry, bool flushInval)
+Dtu::reset(bool flushInval)
 {
     Cycles delay = flushInval ? flushInvalCaches(true) : Cycles(0);
 
     // hard-abort everything
     xferUnit->abortTransfers(XferUnit::ABORT_LOCAL | XferUnit::ABORT_MSGS);
 
-    if(ptUnit)
-        ptUnit->abortAll();
-
     if (tlb())
         tlb()->clear();
 
-    Addr rootpt = ptUnit ? 0 : nocToPhys(regs().get(DtuReg::ROOT_PT));
-    connector->reset(entry, rootpt);
+    connector->reset();
 
     resets++;
     return delay;
@@ -642,13 +631,11 @@ void
 Dtu::sendMemRequest(PacketPtr pkt,
                     Addr virt,
                     Addr data,
-                    MemReqType type,
                     Cycles delay)
 {
     auto senderState = new MemSenderState();
     senderState->data = data;
     senderState->mid = pkt->req->masterId();
-    senderState->type = type;
 
     // ensure that this packet has our master id (not the id of a master in
     // a different PE)
@@ -722,19 +709,15 @@ Dtu::sendNocResponse(PacketPtr pkt)
 Addr
 Dtu::physToNoc(Addr phys) const
 {
-    Addr noc = phys;
-    if (!ptUnit)
-        noc = (noc & ~0x0000FF0000000000ULL) | ((noc & 0x0000FF0000000000ULL) << 16);
-    return noc;
+    return (phys & ~0x0000FF0000000000ULL) |
+          ((phys & 0x0000FF0000000000ULL) << 16);
 }
 
 Addr
 Dtu::nocToPhys(Addr noc) const
 {
-    Addr phys = noc;
-    if (!ptUnit)
-        phys = (phys & ~0xFF00000000000000ULL) | ((phys & 0xFF00000000000000ULL) >> 16);
-    return phys;
+    return (noc & ~0xFF00000000000000ULL) |
+          ((noc & 0xFF00000000000000ULL) >> 16);
 }
 
 void
@@ -748,12 +731,9 @@ void
 Dtu::startTranslate(size_t id,
                     Addr virt,
                     uint access,
-                    PtUnit::Translation *trans)
+                    XferUnit::Translation *trans)
 {
-    if (ptUnit)
-        ptUnit->startTranslate(virt, access, trans);
-    else
-        coreReqs.startTranslate(id, virt, access, trans);
+    coreReqs.startTranslate(id, virt, access, trans);
 }
 
 void
@@ -766,21 +746,10 @@ Dtu::startForeignReceive(size_t id,
 }
 
 void
-Dtu::abortTranslate(size_t id, PtUnit::Translation *trans)
+Dtu::abortTranslate(size_t id)
 {
-    if (ptUnit)
-        ptUnit->abortTranslate(trans);
-    else
-    {
-        coreReqs.abortReq(id);
-        cmdXferBuf = id;
-    }
-}
-
-void
-Dtu::handlePFResp(PacketPtr pkt)
-{
-    ptUnit->finishPagefault(pkt);
+    coreReqs.abortReq(id);
+    cmdXferBuf = id;
 }
 
 void
@@ -810,20 +779,12 @@ Dtu::completeNocRequest(PacketPtr pkt)
             pkt->popSenderState();
         }
 
-        if (!ptUnit)
-        {
-            // translate NoC address to physical address
-            Addr phys = nocToPhys(pkt->getAddr());
-            pkt->setAddr(phys);
-            pkt->req->setPaddr(phys);
-        }
+        // translate NoC address to physical address
+        Addr phys = nocToPhys(pkt->getAddr());
+        pkt->setAddr(phys);
+        pkt->req->setPaddr(phys);
 
         sendCacheMemResponse(pkt, true);
-    }
-    else if (senderState->packetType == NocPacketType::PAGEFAULT)
-    {
-        if (senderState->result != DtuError::NONE)
-            ptUnit->sendingPfFailed(pkt, static_cast<int>(senderState->result));
     }
     else if (senderState->packetType != NocPacketType::CACHE_MEM_REQ_FUNC)
     {
@@ -858,16 +819,7 @@ Dtu::completeMemRequest(PacketPtr pkt)
     // set the old master id again
     pkt->req->setMasterId(senderState->mid);
 
-    switch(senderState->type)
-    {
-        case MemReqType::TRANSFER:
-            xferUnit->recvMemResponse(senderState->data, pkt);
-            break;
-
-        case MemReqType::TRANSLATION:
-            ptUnit->recvFromMem(senderState->data, pkt);
-            break;
-    }
+    xferUnit->recvMemResponse(senderState->data, pkt);
 
     delete senderState;
     freeRequest(pkt);
@@ -892,7 +844,6 @@ Dtu::handleNocRequest(PacketPtr pkt)
     switch (senderState->packetType)
     {
         case NocPacketType::MESSAGE:
-        case NocPacketType::PAGEFAULT:
         {
             nocMsgRecvs++;
             uint flags = senderState->flags;
@@ -949,43 +900,16 @@ Dtu::handleCoreMemRequest(PacketPtr pkt,
     {
         intMemReqs++;
 
-        MemTranslation *trans = nullptr;
-        int tres = 1;
-        // CPU requests are only translated if we have a PT unit
-        if (ptUnit)
-        {
-            trans = new MemTranslation(*this, sport, mport, pkt);
-            tres = translate(trans, pkt, icache, functional);
-        }
-
-        if (tres == 1)
-        {
-            if (functional)
-                mport.sendFunctional(pkt);
-            else
-            {
-                Tick tick;
-                if (cpuToCacheLatency < Cycles(1))
-                    tick = curTick();
-                else
-                    tick = clockEdge(cpuToCacheLatency);
-                mport.schedTimingReq(pkt, tick);
-            }
-            delete trans;
-        }
-        else if (tres == -1)
-        {
-            res = false;
-            delete trans;
-        }
+        if (functional)
+            mport.sendFunctional(pkt);
         else
         {
-            delayed = true;
-            // remember that a translation is going on for that page.
-            // this way, subsequent requests to that page will be enqueued and
-            // thus sent to the cache in order.
-            tlb()->start_translate(virt);
-            xlates.push_back(trans);
+            Tick tick;
+            if (cpuToCacheLatency < Cycles(1))
+                tick = curTick();
+            else
+                tick = clockEdge(cpuToCacheLatency);
+            mport.schedTimingReq(pkt, tick);
         }
     }
 
@@ -996,39 +920,6 @@ Dtu::handleCoreMemRequest(PacketPtr pkt,
     }
 
     return res;
-}
-
-void
-Dtu::completeCoreMemReqs()
-{
-    while (!xlates.empty())
-    {
-        MemTranslation *xlt = xlates.front();
-        if (!xlt->complete)
-            break;
-
-        DPRINTF(DtuCoreMemAcc, "%s access for %#lx: finished (success=%d, phys=%#lx)\n",
-            xlt->pkt->cmdString(), xlt->pkt->getAddr(),
-            xlt->success, xlt->phys.getAddr());
-
-        // translation is done. if no other translation is in progress for that
-        // page, requests can hit the TLB again and can be sent directly to the
-        // cache.
-        tlb()->finish_translate(xlt->pkt->getAddr());
-
-        if (!xlt->success)
-            sendDummyResponse(xlt->sport, xlt->pkt, false);
-        else
-        {
-            xlt->pkt->setAddr(xlt->phys.getAddr());
-            xlt->pkt->req->setPaddr(xlt->phys.getAddr());
-
-            xlt->mport.schedTimingReq(xlt->pkt, curTick());
-        }
-
-        xlates.pop_front();
-        delete xlt;
-    }
 }
 
 bool
@@ -1050,12 +941,8 @@ Dtu::handleCacheMemRequest(PacketPtr pkt, bool functional)
     Addr physAddr = pkt->getAddr();
 
     // translate physical address to NoC address
-    Addr nocAddr = physAddr;
-    if (!ptUnit)
-    {
-        nocAddr = physToNoc(physAddr);
-        pkt->setAddr(nocAddr);
-    }
+    Addr nocAddr = physToNoc(physAddr);
+    pkt->setAddr(nocAddr);
 
     NocAddr noc(nocAddr);
     // special case: we check whether this is actually a NocAddr. this does
@@ -1101,60 +988,6 @@ Dtu::handleCacheMemRequest(PacketPtr pkt, bool functional)
         pkt->setAddr(physAddr);
 
     return true;
-}
-
-int
-Dtu::translate(PtUnit::Translation *trans,
-               PacketPtr pkt,
-               bool icache,
-               bool functional)
-{
-    assert(ptUnit);
-
-    uint access = DtuTlb::INTERN;
-    if (icache)
-        access |= DtuTlb::EXEC;
-    if (pkt->isRead())
-        access |= DtuTlb::READ;
-    if (pkt->isWrite())
-        access |= DtuTlb::WRITE;
-
-    NocAddr phys;
-    DtuTlb::Result res = tlb()->lookup(pkt->getAddr(), access, &phys);
-    switch(res)
-    {
-        case DtuTlb::HIT:
-            pkt->setAddr(phys.getAddr());
-            pkt->req->setPaddr(phys.getAddr());
-            return 1;
-
-        case DtuTlb::NOMAP:
-            // don't cause a pagefault again in this case
-            return -1;
-
-        default:
-            if (functional)
-            {
-                int xlres = 0;
-                if (res == DtuTlb::MISS)
-                {
-                    NocAddr phys;
-                    xlres = ptUnit->translateFunctional(pkt->getAddr(),
-                                                        access,
-                                                        &phys);
-                    if (xlres)
-                    {
-                        pkt->setAddr(phys.getAddr());
-                        pkt->req->setPaddr(phys.getAddr());
-                    }
-                }
-
-                return !xlres ? -1 : 1;
-            }
-
-            ptUnit->startTranslate(pkt->getAddr(), access, trans);
-            return 0;
-    }
 }
 
 void
@@ -1228,16 +1061,6 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
         if (result & RegFile::WROTE_CLEAR_IRQ)
             clearIrq();
     }
-}
-
-void
-Dtu::MemTranslation::finished(bool _success, const NocAddr &_phys)
-{
-    complete = true;
-    success = _success;
-    phys = _phys;
-
-    dtu.completeCoreMemReqs();
 }
 
 Dtu*

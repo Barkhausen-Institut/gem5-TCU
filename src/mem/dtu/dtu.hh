@@ -35,7 +35,6 @@
 #include "mem/dtu/base.hh"
 #include "mem/dtu/regfile.hh"
 #include "mem/dtu/noc_addr.hh"
-#include "mem/dtu/pt_unit.hh"
 #include "mem/dtu/xfer_unit.hh"
 #include "mem/dtu/core_reqs.hh"
 #include "mem/dtu/error.hh"
@@ -61,30 +60,21 @@ class Dtu : public BaseDtu
     enum MessageFlags : uint8_t
     {
         REPLY_FLAG          = (1 << 0),
-        PAGEFAULT           = (1 << 1),
     };
 
     enum class NocPacketType
     {
         MESSAGE,
-        PAGEFAULT,
         READ_REQ,
         WRITE_REQ,
         CACHE_MEM_REQ_FUNC,
         CACHE_MEM_REQ,
     };
 
-    enum class MemReqType
-    {
-        TRANSFER,
-        TRANSLATION,
-    };
-
     struct MemSenderState : public Packet::SenderState
     {
         Addr data;
         MasterID mid;
-        MemReqType type;
     };
 
     enum NocFlags
@@ -183,7 +173,7 @@ class Dtu : public BaseDtu
 
     void wakeupCore(bool force);
 
-    Cycles reset(Addr entry, bool flushInval);
+    Cycles reset(bool flushInval);
 
     Cycles flushInvalCaches(bool invalidate);
 
@@ -206,7 +196,6 @@ class Dtu : public BaseDtu
     void sendMemRequest(PacketPtr pkt,
                         Addr virt,
                         Addr data,
-                        MemReqType type,
                         Cycles delay);
 
     void sendNocRequest(NocPacketType type,
@@ -227,16 +216,14 @@ class Dtu : public BaseDtu
     void startTranslate(size_t id,
                         Addr virt,
                         uint access,
-                        PtUnit::Translation *trans);
+                        XferUnit::Translation *trans);
 
     void startForeignReceive(size_t id,
                              unsigned epId,
                              unsigned vpeId,
                              XferUnit::TransferEvent *event);
 
-    void abortTranslate(size_t id, PtUnit::Translation *trans);
-
-    void handlePFResp(PacketPtr pkt);
+    void abortTranslate(size_t id);
 
     void printPacket(PacketPtr pkt) const;
 
@@ -271,14 +258,7 @@ class Dtu : public BaseDtu
                               bool icache,
                               bool functional) override;
 
-    void completeCoreMemReqs();
-
     bool handleCacheMemRequest(PacketPtr pkt, bool functional) override;
-
-    int translate(PtUnit::Translation *trans,
-                  PacketPtr pkt,
-                  bool icache,
-                  bool functional) override;
 
   private:
 
@@ -297,8 +277,6 @@ class Dtu : public BaseDtu
     MemoryUnit *memUnit;
 
     XferUnit *xferUnit;
-
-    PtUnit *ptUnit;
 
     CoreRequests coreReqs;
 
@@ -368,30 +346,6 @@ class Dtu : public BaseDtu
         const char* description() const override { return "FinishCommandEvent"; }
     };
 
-    struct MemTranslation : PtUnit::Translation
-    {
-        Dtu& dtu;
-
-        DtuSlavePort& sport;
-        DtuMasterPort& mport;
-
-        PacketPtr pkt;
-
-        bool complete;
-        bool success;
-        NocAddr phys;
-
-        MemTranslation(Dtu &_dtu,
-                       DtuSlavePort& _sport,
-                       DtuMasterPort& _mport,
-                       PacketPtr _pkt)
-            : dtu(_dtu), sport(_sport), mport(_mport), pkt(_pkt),
-              complete(), success(), phys()
-        {}
-
-        void finished(bool success, const NocAddr &phys) override;
-    };
-
     PacketPtr cmdPkt;
     FinishCommandEvent *cmdFinish;
     uint64_t cmdId;
@@ -399,8 +353,6 @@ class Dtu : public BaseDtu
     size_t cmdXferBuf;
     bool cmdSent;
     int wakeupEp;
-
-    std::list<MemTranslation*> xlates;
 
   public:
 

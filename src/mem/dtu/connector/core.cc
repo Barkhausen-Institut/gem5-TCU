@@ -65,37 +65,6 @@ CoreConnector::suspend()
     }
 }
 
-void
-CoreConnector::reset(Addr entry, Addr rootpt)
-{
-    if (system->threadContexts.size() == 0)
-        return;
-
-    auto ctx = system->threadContexts[0];
-    if (entry != 0) {
-        DPRINTF(DtuConnector,
-            "Setting PC=%p, rootpt=%p, interrupts=disabled\n",
-            entry, rootpt);
-
-        ctx->pcState(entry);
-    }
-    else
-        DPRINTF(DtuConnector, "Setting rootpt=%p\n", rootpt);
-
-#if THE_ISA == X86_ISA
-    if (rootpt != 0)
-        ctx->setMiscReg(X86ISA::MISCREG_CR3, rootpt);
-    if (entry != 0) {
-        // disable interrupts
-        Addr flags = ctx->readMiscReg(X86ISA::MISCREG_RFLAGS);
-        ctx->setMiscReg(X86ISA::MISCREG_RFLAGS, flags & ~(Addr)0x200);
-    }
-#endif
-
-    if (entry != 0)
-        suspend();
-}
-
 CoreConnector*
 CoreConnectorParams::create()
 {

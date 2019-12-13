@@ -30,7 +30,6 @@
 #ifndef __MEM_DTU_CORE_REQS_HH__
 #define __MEM_DTU_CORE_REQS_HH__
 
-#include "mem/dtu/pt_unit.hh"
 #include "mem/dtu/regfile.hh"
 #include "mem/dtu/xfer_unit.hh"
 
@@ -72,7 +71,7 @@ class CoreRequests
         void start(size_t id) override;
         void complete(size_t id, RegFile::reg_t resp) override;
 
-        PtUnit::Translation *trans;
+        XferUnit::Translation *trans;
         Addr virt;
         uint access;
     };
@@ -99,7 +98,7 @@ class CoreRequests
     void startTranslate(size_t id,
                         Addr virt,
                         uint access,
-                        PtUnit::Translation *trans);
+                        XferUnit::Translation *trans);
 
     void startForeignReceive(size_t id,
                              unsigned epId,

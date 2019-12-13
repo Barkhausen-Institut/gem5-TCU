@@ -30,15 +30,13 @@
 #include "sim/dtu_memory.hh"
 #include "mem/port_proxy.hh"
 #include "mem/dtu/tlb.hh"
-#include "mem/dtu/pt_unit.hh"
 #include "debug/DtuPtes.hh"
 
 DTUMemory::DTUMemory(SimObject *obj,
                      uint memPe,
                      Addr memOffset,
                      Addr memSize,
-                     PortProxy &phys,
-                     uint vmType)
+                     PortProxy &phys)
     : obj(obj),
       physp(phys),
       // don't reuse root pt
@@ -47,8 +45,7 @@ DTUMemory::DTUMemory(SimObject *obj,
       rootPTOffset(DtuTlb::PAGE_SIZE),
       memPe(memPe),
       memOffset(memOffset),
-      memSize(memSize),
-      vmType(vmType)
+      memSize(memSize)
 {
 }
 
@@ -70,12 +67,9 @@ DTUMemory::initMemory(System &sys)
     physp.write(getRootPt().getAddr() + off, entry);
 
 #if THE_ISA == X86_ISA
-    if (vmType == CORE)
-    {
-        // set root PT
-        auto ctx = sys.threadContexts[0];
-        ctx->setMiscReg(X86ISA::MISCREG_CR3, convertPTE(getRootPt().getAddr()));
-    }
+    // set root PT
+    auto ctx = sys.threadContexts[0];
+    ctx->setMiscReg(X86ISA::MISCREG_CR3, convertPTE(getRootPt().getAddr()));
 #endif
 }
 
@@ -137,7 +131,7 @@ DTUMemory::mapPages(Addr virt, NocAddr noc, Addr size, uint access)
 DTUMemory::pte_t
 DTUMemory::convertPTE(pte_t pte) const
 {
-    if(vmType == DTU || pte == 0)
+    if(pte == 0)
         return pte;
 
     // the current implementation is based on some equal properties of MMU

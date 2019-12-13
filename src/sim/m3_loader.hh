@@ -46,6 +46,9 @@ class M3Loader
     static const uintptr_t STACK_AREA   = ENV_START + ENV_SIZE + 0x1000;
     static const size_t HEAP_SIZE       = 0x4000;
     static const size_t MAX_MEMS        = 4;
+    static const uintptr_t PEMUX_START  = 0x100000;
+    static const uintptr_t RBUF_BASE    = 0x3FC00000;
+    static const uintptr_t RBUF_SIZE    = 0x4000;
 
     struct BootModule
     {

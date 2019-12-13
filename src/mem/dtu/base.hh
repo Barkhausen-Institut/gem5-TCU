@@ -37,7 +37,6 @@
 #include "mem/qport.hh"
 #include "params/BaseDtu.hh"
 #include "mem/dtu/tlb.hh"
-#include "mem/dtu/pt_unit.hh"
 
 class BaseDtu : public MemObject
 {
@@ -271,11 +270,6 @@ class BaseDtu : public MemObject
                                       bool functional) = 0;
 
     virtual bool handleCacheMemRequest(PacketPtr pkt, bool functional) = 0;
-
-    virtual int translate(PtUnit::Translation *trans,
-                          PacketPtr pkt,
-                          bool icache,
-                          bool functional) = 0;
 
   protected:
 

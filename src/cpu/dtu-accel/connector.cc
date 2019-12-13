@@ -53,17 +53,10 @@ DtuAccelConnector::setIrq()
 }
 
 void
-DtuAccelConnector::reset(Addr, Addr)
+DtuAccelConnector::reset()
 {
     DPRINTF(DtuConnector, "Resetting accelerator\n");
     acc->reset();
-}
-
-void
-DtuAccelConnector::signalFinished(size_t off)
-{
-    DPRINTF(DtuConnector, "Signaling finish (off=%lu)\n", off);
-    acc->signalFinished(off);
 }
 
 DtuAccelConnector*

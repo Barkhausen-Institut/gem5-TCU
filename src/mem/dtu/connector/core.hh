@@ -44,8 +44,6 @@ class CoreConnector : public BaseConnector
 
     void suspend() override;
 
-    void reset(Addr entry, Addr rootpt) override;
-
   protected:
 
     System *system;

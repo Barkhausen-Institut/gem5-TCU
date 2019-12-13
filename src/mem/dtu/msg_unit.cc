@@ -111,10 +111,6 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
         info.replyEpId = sep.crdEp;
         info.flags = Dtu::REPLY_FLAG;
         info.replySize = 0;
-
-        // the pagefault flag is moved to the reply hd
-        if (sep.flags & SendEp::FL_PF)
-            info.flags |= Dtu::PAGEFAULT;
     }
 
     // check if we have enough credits
@@ -453,8 +449,6 @@ MessageUnit::finishMsgReceive(unsigned epId,
             sep.crdEp = header->senderEpId;
             sep.flags = SendEp::FL_REPLY;
             sep.vpe = ep.vpe;
-            if (header->flags & Dtu::PAGEFAULT)
-                sep.flags |= SendEp::FL_PF;
             dtu.regs().setSendEp(ep.replyEps + idx, sep);
         }
     }
@@ -482,13 +476,6 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint flags)
     MessageHeader* header = pkt->getPtr<MessageHeader>();
 
     receivedBytes.sample(header->length);
-
-    uint8_t pfResp = Dtu::REPLY_FLAG | Dtu::PAGEFAULT;
-    if ((header->flags & pfResp) == pfResp)
-    {
-        dtu.handlePFResp(pkt);
-        return DtuError::NONE;
-    }
 
     NocAddr addr(pkt->getAddr());
     unsigned epId = addr.offset;

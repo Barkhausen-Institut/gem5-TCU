@@ -110,7 +110,7 @@ XferUnit::regStats()
 void
 XferUnit::Translation::abort()
 {
-    event.xfer->dtu.abortTranslate(event.buf->id, this);
+    event.xfer->dtu.abortTranslate(event.buf->id);
 }
 
 bool
@@ -271,11 +271,7 @@ XferUnit::TransferEvent::translateDone(bool success, const NocAddr &phys)
             memcpy(pkt->getPtr<uint8_t>(), buf->bytes + buf->offset, reqSize);
         }
 
-        xfer->dtu.sendMemRequest(pkt,
-                                local,
-                                id | (buf->offset << 32),
-                                Dtu::MemReqType::TRANSFER,
-                                lat);
+        xfer->dtu.sendMemRequest(pkt, local, id | (buf->offset << 32), lat);
 
         // to next block
         local += reqSize;

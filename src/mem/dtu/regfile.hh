@@ -41,8 +41,6 @@
 enum class DtuReg : Addr
 {
     FEATURES,
-    ROOT_PT,
-    PF_EP,
     CUR_TIME,
     CLEAR_IRQ,
     CLOCK,
@@ -51,10 +49,9 @@ enum class DtuReg : Addr
 enum class Features
 {
     PRIV            = 1 << 0,
-    PAGEFAULTS      = 1 << 1,
 };
 
-constexpr unsigned numDtuRegs = 6;
+constexpr unsigned numDtuRegs = 4;
 
 // registers for external requests and DTU requests
 enum class PrivReg : Addr
@@ -133,7 +130,6 @@ struct Ep
 struct SendEp : public Ep
 {
     static const uint8_t FL_REPLY   = 1;
-    static const uint8_t FL_PF      = 2;
 
     SendEp() : Ep(), flags(), targetCore(), targetEp(), crdEp(), maxcrd(), curcrd(),
                maxMsgSize(), label()

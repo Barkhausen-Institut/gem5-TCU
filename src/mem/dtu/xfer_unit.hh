@@ -32,8 +32,10 @@
 #define __MEM_DTU_XFER_UNIT_HH__
 
 #include "mem/dtu/noc_addr.hh"
-#include "mem/dtu/pt_unit.hh"
 #include "mem/dtu/error.hh"
+#include "mem/packet.hh"
+#include "sim/eventq.hh"
+#include "sim/stats.hh"
 
 #include <list>
 #include <vector>
@@ -61,9 +63,7 @@ class XferUnit
 
     class TransferEvent;
 
-  private:
-
-    struct Translation : PtUnit::Translation
+    struct Translation
     {
         TransferEvent& event;
 
@@ -73,10 +73,12 @@ class XferUnit
 
         void abort();
 
-        bool causePagefault() override;
+        bool causePagefault();
 
-        void finished(bool success, const NocAddr &phys) override;
+        void finished(bool success, const NocAddr &phys);
     };
+
+  private:
 
     struct Buffer
     {

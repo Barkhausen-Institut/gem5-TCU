@@ -56,14 +56,12 @@ class DTUMemory
     const uint memPe;
     const Addr memOffset;
     const Addr memSize;
-    const uint vmType;
 
     DTUMemory(SimObject *obj,
               uint memPe,
               Addr memOffset,
               Addr memSize,
-              PortProxy &phys,
-              uint vmType);
+              PortProxy &phys);
 
     bool hasMem(uint pe) const
     {

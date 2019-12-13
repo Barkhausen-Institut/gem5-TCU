@@ -34,7 +34,6 @@
 #include "cpu/thread_context.hh"
 #include "debug/DtuTlb.hh"
 #include "mem/port_proxy.hh"
-#include "mem/dtu/pt_unit.hh"
 #include "mem/dtu/tlb.hh"
 #include "mem/dtu/dtu.hh"
 #include "sim/byteswap.hh"
@@ -169,6 +168,13 @@ M3Loader::mapMemory(System &sys, DTUMemory &dtumem)
         // state and stack
         dtumem.mapSegment(ENV_START, ENV_SIZE, DtuTlb::INTERN | DtuTlb::RW);
         dtumem.mapSegment(STACK_AREA, STACK_SIZE, DtuTlb::INTERN | DtuTlb::RW);
+    }
+    else
+    {
+        // TODO temporary
+        // map receive buffers for PEMux
+        auto noc = NocAddr(dtumem.memPe, dtumem.memOffset + PEMUX_START - RBUF_SIZE);
+        dtumem.mapPages(RBUF_BASE, noc, RBUF_SIZE, DtuTlb::INTERN | DtuTlb::RW);
     }
 
     // DTU's MMIO area

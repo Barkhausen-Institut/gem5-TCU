@@ -61,9 +61,9 @@ CoreRequests::regStats()
 
 void
 CoreRequests::startTranslate(size_t id,
-                    Addr virt,
-                    uint access,
-                    PtUnit::Translation *trans)
+                             Addr virt,
+                             uint access,
+                             XferUnit::Translation *trans)
 {
     if (reqs[id] != nullptr)
         return;

@@ -166,9 +166,9 @@ def getCacheStr(cache):
     )
 
 def printConfig(pe, dtupos):
-    print '      DTU  =eps:%d, bufsz:%d B, blocksz:%d B, count:%d, tlb:%d, walker:%d' % \
+    print '      DTU  =eps:%d, bufsz:%d B, blocksz:%d B, count:%d, tlb:%d' % \
         (pe.dtu.num_endpoints, pe.dtu.buf_size.value, pe.dtu.block_size.value,
-         pe.dtu.buf_count, pe.dtu.tlb_entries, 1 if pe.dtu.pt_walker else 0)
+         pe.dtu.buf_count, pe.dtu.tlb_entries)
 
     try:
         cc = "coherent" if pe.dtu.coherent else "non-coherent"
@@ -183,18 +183,17 @@ def printConfig(pe, dtupos):
         except:
             pass
 
-        dtustr = 'DTU+AT' if pe.dtu.pt_walker else 'DTU'
-        str = '      Comp =Core' + ('+AT' if not pe.dtu.pt_walker else '') + ' -> '
+        str = '      Comp =Core -> '
         if dtupos == 0:
-            str += dtustr + ' -> L1$'
+            str += 'DTU -> L1$'
         elif dtupos == 1:
-            str += 'L1$ -> ' + dtustr
+            str += 'L1$ -> DTU'
         else:
             str += 'L1$'
         if hasattr(pe, 'l2cache'):
             str += ' -> L2$'
         if dtupos == 2:
-            str += ' -> IO$ -> ' + dtustr
+            str += ' -> IO$ -> DTU'
         print str
     except:
         try:
@@ -355,9 +354,8 @@ def createPE(noc, options, no, systemType, l1size, l2size, spmsize, dtupos, memP
         pe.dtu.block_size = pe.dtu.max_noc_packet_size
         pe.dtu.buf_size = pe.dtu.max_noc_packet_size
 
-        # disable the TLB and PT walker
+        # disable the TLB
         pe.dtu.tlb_entries = 0
-        pe.dtu.pt_walker = False
         pe.dtu.cpu_to_cache_latency = 0
 
     connectDtuToMem(pe, options, l1size, dtupos)
@@ -367,14 +365,11 @@ def createPE(noc, options, no, systemType, l1size, l2size, spmsize, dtupos, memP
     return pe
 
 def createCorePE(noc, options, no, cmdline, memPE, l1size=None, l2size=None,
-                 dtupos=0, mmu=False, spmsize='8MB'):
+                 dtupos=0, spmsize='8MB'):
     CPUClass = CpuConfig.get(options.cpu_type)
 
     sysType = M3ArmSystem if options.isa == 'arm' else M3X86System
     con = ArmConnector if options.isa == 'arm' else X86Connector
-
-    # the DTU can't do address translation behind a cache
-    assert dtupos == 0 or mmu
 
     pe = createPE(
         noc=noc, options=options, no=no, systemType=sysType,
@@ -399,10 +394,6 @@ def createCorePE(noc, options, no, cmdline, memPE, l1size=None, l2size=None,
     if not l1size is None and dtupos > 0:
         pe.dtu.dcache_slave_port = pe.xbar.master
         pe.dtu.slave_region = [pe.dtu.mmio_region]
-
-    # disable PT walker if MMU should be used
-    if mmu:
-        pe.dtu.pt_walker = False
 
     if "kernel" in cmdline:
         pe.mod_offset = mod_offset
@@ -601,86 +592,6 @@ def createAccelPE(noc, options, no, accel, memPE, l1size=None, l2size=None, spms
 
     return pe
 
-def createAladdinPE(noc, options, accel, no, memPE, l1size=None, l2size=None, spmsize='64kB'):
-    pe = createPE(
-        noc=noc, options=options, no=no, systemType=SpuSystem,
-        l1size=l1size, l2size=l2size, spmsize=spmsize, memPE=memPE,
-        dtupos=0
-    )
-    pe.dtu.connector = DtuAccelConnector()
-
-    config = ConfigParser.SafeConfigParser()
-    config.read("hw/gem5/src/aladdin/integration-test/with-cpu/" + accel + "/gem5.cfg")
-
-    pe.accel = DtuAccelAladdin()
-    pe.accel.accel_id = config.getint(accel, "accelerator_id")
-    pe.dtu.connector.accelerator = pe.accel
-    pe.accel.id = no;
-
-    pe.accel_xbar = L2XBar()
-    pe.accel.port = pe.accel_xbar.slave
-
-    pe.accel.hdp = HybridDatapath(
-        clk_domain = pe.clk_domain,
-        benchName = accel,
-        # TODO: Ideally bench_name would change to output_prefix but that's a
-        # pretty big breaking change.
-        outputPrefix = config.get(accel, "bench_name"),
-        traceFileName = config.get(accel, "trace_file_name"),
-        configFileName = config.get(accel, "config_file_name"),
-        acceleratorName = "%s_datapath" % accel,
-        acceleratorId = config.getint(accel, "accelerator_id"),
-        cycleTime = 1,
-        useDb = False,
-        experimentName = config.get(accel, "experiment_name"),
-        enableStatsDump = False,
-        executeStandalone = False)
-    pe.accel.hdp.connector = pe.dtu.connector
-    # pe.accel.hdp.cacheLineFlushLatency = config.getint(accel, "cacheline_flush_latency")
-    # pe.accel.hdp.cacheLineInvalidateLatency = config.getint(accel, "cacheline_invalidate_latency")
-    pe.accel.hdp.dmaSetupOverhead = config.getint(accel, "dma_setup_overhead")
-    pe.accel.hdp.maxDmaRequests = config.getint(accel, "max_dma_requests")
-    pe.accel.hdp.numDmaChannels = config.getint(accel, "num_dma_channels")
-    pe.accel.hdp.dmaChunkSize = config.getint(accel, "dma_chunk_size")
-    pe.accel.hdp.pipelinedDma = config.getboolean(accel, "pipelined_dma")
-    pe.accel.hdp.ignoreCacheFlush = config.getboolean(accel, "ignore_cache_flush")
-    pe.accel.hdp.invalidateOnDmaStore = config.getboolean(accel, "invalidate_on_dma_store")
-    pe.accel.hdp.recordMemoryTrace = config.getboolean(accel, "record_memory_trace")
-    pe.accel.hdp.enableAcp = False
-    pe.accel.hdp.useAcpCache = True
-    pe.accel.hdp.useAladdinDebugger = False
-    memory_type = config.get(accel, 'memory_type').lower()
-    if memory_type == "cache":
-        pe.accel.hdp.cacheSize = config.get(accel, "cache_size")
-        pe.accel.hdp.cacheBandwidth = config.get(accel, "cache_bandwidth")
-        pe.accel.hdp.cacheQueueSize = config.get(accel, "cache_queue_size")
-        pe.accel.hdp.cacheAssoc = config.getint(accel, "cache_assoc")
-        pe.accel.hdp.cacheHitLatency = config.getint(accel, "cache_hit_latency")
-        pe.accel.hdp.cacheLineSize = 64
-        pe.accel.hdp.cactiCacheConfig = config.get(accel, "cacti_cache_config")
-        pe.accel.hdp.tlbEntries = config.getint(accel, "tlb_entries")
-        pe.accel.hdp.tlbAssoc = config.getint(accel, "tlb_assoc")
-        pe.accel.hdp.tlbHitLatency = 0
-        pe.accel.hdp.tlbMissLatency = 0
-        pe.accel.hdp.tlbCactiConfig = config.get(accel, "cacti_tlb_config")
-        pe.accel.hdp.tlbPageBytes = config.getint(accel, "tlb_page_size")
-        pe.accel.hdp.numOutStandingWalks = config.getint(accel, "tlb_max_outstanding_walks")
-        pe.accel.hdp.tlbBandwidth = config.getint(accel, "tlb_bandwidth")
-    elif memory_type == "spad" and options.ruby:
-        # If the memory_type is spad, Aladdin will initiate a 1-way cache for every
-        # datapath, though this cache will not be used in simulation.
-        # Since Ruby doesn't support 1-way cache, so set the assoc to 2.
-        pe.accel.hdp.cacheAssoc = 2
-    pe.accel.hdp.cache_port = pe.accel_xbar.slave
-
-    connectCuToMem(pe, options, pe.accel_xbar.default)
-
-    print 'PE%02d: %s accelerator @ %s' % (no, accel[5:], options.cpu_clock)
-    printConfig(pe, 0)
-    print
-
-    return pe
-
 def createAbortTestPE(noc, options, no, memPE, l1size=None, l2size=None, spmsize='8MB'):
     pe = createPE(
         noc=noc, options=options, no=no, systemType=SpuSystem,
@@ -792,25 +703,9 @@ def runSimulation(root, options, pes):
                 assert size % 4096 == 0, "Memory size not page aligned"
             else:
                 size |= 1 # emem
-                if not pe.dtu.pt_walker:
-                    size |= 1 << 7 # mmu
-                else:
-                    size |= 2 << 7 # dtuvm
 
             if hasattr(pe, 'accel'):
-                if type(pe.accel).__name__ == 'DtuAccelAladdin':
-                    # ALADDIN accelerator
-                    if pe.accel.hdp.benchName == 'test_stencil':
-                        size |= 7 << 3
-                    elif pe.accel.hdp.benchName == 'test_md':
-                        size |= 8 << 3
-                    elif pe.accel.hdp.benchName == 'test_spmv':
-                        size |= 9 << 3
-                    elif pe.accel.hdp.benchName == 'test_fft':
-                        size |= 10 << 3
-                    else:
-                        assert(False);
-                elif type(pe.accel).__name__ == 'DtuAccelInDir':
+                if type(pe.accel).__name__ == 'DtuAccelInDir':
                     size |= 4 << 3 # indir accelerator
                 elif int(pe.accel.logic.algorithm) == 0:
                     size |= 5 << 3 # copy accelerator
@@ -822,9 +717,9 @@ def runSimulation(root, options, pes):
                 size |= 1 << 3 # x86
 
             if hasattr(pe, 'idectrl'):
-                size = 11 << 3
+                size = 7 << 3
             elif hasattr(pe, 'nic'):
-                size = 12 << 3
+                size = 8 << 3
         pemems.append(size)
 
     # give that to the PEs
