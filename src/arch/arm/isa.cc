@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2018 ARM Limited
+ * Copyright (c) 2010-2019 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -39,6 +39,9 @@
  */
 
 #include "arch/arm/isa.hh"
+
+#include "arch/arm/faults.hh"
+#include "arch/arm/interrupts.hh"
 #include "arch/arm/pmu.hh"
 #include "arch/arm/system.hh"
 #include "arch/arm/tlb.hh"
@@ -91,7 +94,9 @@ ISA::ISA(Params *p)
         haveLargeAsid64 = system->haveLargeAsid64();
         physAddrRange = system->physAddrRange();
         haveSVE = system->haveSVE();
+        havePAN = system->havePAN();
         sveVL = system->sveVL();
+        haveLSE = system->haveLSE();
     } else {
         highestELIs64 = true; // ArmSystem::highestELIs64 does the same
         haveSecurity = haveLPAE = haveVirtualization = false;
@@ -99,7 +104,9 @@ ISA::ISA(Params *p)
         haveLargeAsid64 = false;
         physAddrRange = 32;  // dummy value
         haveSVE = true;
+        havePAN = false;
         sveVL = p->sve_vl_se;
+        haveLSE = true;
     }
 
     // Initial rename mode depends on highestEL
@@ -312,9 +319,20 @@ void
 ISA::initID32(const ArmISAParams *p)
 {
     // Initialize configurable default values
-    miscRegs[MISCREG_MIDR] = p->midr;
-    miscRegs[MISCREG_MIDR_EL1] = p->midr;
-    miscRegs[MISCREG_VPIDR] = p->midr;
+
+    uint32_t midr;
+    if (p->midr != 0x0)
+        midr = p->midr;
+    else if (highestELIs64)
+        // Cortex-A57 TRM r0p0 MIDR
+        midr = 0x410fd070;
+    else
+        // Cortex-A15 TRM r0p0 MIDR
+        midr = 0x410fc0f0;
+
+    miscRegs[MISCREG_MIDR] = midr;
+    miscRegs[MISCREG_MIDR_EL1] = midr;
+    miscRegs[MISCREG_VPIDR] = midr;
 
     miscRegs[MISCREG_ID_ISAR0] = p->id_isar0;
     miscRegs[MISCREG_ID_ISAR1] = p->id_isar1;
@@ -391,6 +409,14 @@ ISA::initID64(const ArmISAParams *p)
     miscRegs[MISCREG_ID_AA64ISAR0_EL1] = insertBits(
         miscRegs[MISCREG_ID_AA64ISAR0_EL1], 19, 4,
         haveCrypto ? 0x1112 : 0x0);
+    // LSE
+    miscRegs[MISCREG_ID_AA64ISAR0_EL1] = insertBits(
+        miscRegs[MISCREG_ID_AA64ISAR0_EL1], 23, 20,
+        haveLSE ? 0x2 : 0x0);
+    // PAN
+    miscRegs[MISCREG_ID_AA64MMFR1_EL1] = insertBits(
+        miscRegs[MISCREG_ID_AA64MMFR1_EL1], 23, 20,
+        havePAN ? 0x1 : 0x0);
 }
 
 void
@@ -464,12 +490,10 @@ ISA::readMiscReg(int misc_reg, ThreadContext *tc)
 
     switch (unflattenMiscReg(misc_reg)) {
       case MISCREG_HCR:
-        {
+      case MISCREG_HCR2:
             if (!haveVirtualization)
                 return 0;
-            else
-                return readMiscRegNoEffect(MISCREG_HCR);
-        }
+            break;
       case MISCREG_CPACR:
         {
             const uint32_t ones = (uint32_t)(-1);
@@ -640,6 +664,10 @@ ISA::readMiscReg(int misc_reg, ThreadContext *tc)
         {
             return miscRegs[MISCREG_CPSR] & 0xc;
         }
+      case MISCREG_PAN:
+        {
+            return miscRegs[MISCREG_CPSR] & 0x400000;
+        }
       case MISCREG_L2CTLR:
         {
             // mostly unimplemented, just set NumCPUs field from sim and return
@@ -656,15 +684,23 @@ ISA::readMiscReg(int misc_reg, ThreadContext *tc)
       case MISCREG_DBGDSCRint:
         return 0;
       case MISCREG_ISR:
-        return tc->getCpuPtr()->getInterruptController(tc->threadId())->getISR(
-            readMiscRegNoEffect(MISCREG_HCR),
-            readMiscRegNoEffect(MISCREG_CPSR),
-            readMiscRegNoEffect(MISCREG_SCR));
+        {
+            auto ic = dynamic_cast<ArmISA::Interrupts *>(
+                    tc->getCpuPtr()->getInterruptController(tc->threadId()));
+            return ic->getISR(
+                readMiscRegNoEffect(MISCREG_HCR),
+                readMiscRegNoEffect(MISCREG_CPSR),
+                readMiscRegNoEffect(MISCREG_SCR));
+        }
       case MISCREG_ISR_EL1:
-        return tc->getCpuPtr()->getInterruptController(tc->threadId())->getISR(
-            readMiscRegNoEffect(MISCREG_HCR_EL2),
-            readMiscRegNoEffect(MISCREG_CPSR),
-            readMiscRegNoEffect(MISCREG_SCR_EL3));
+        {
+            auto ic = dynamic_cast<ArmISA::Interrupts *>(
+                    tc->getCpuPtr()->getInterruptController(tc->threadId()));
+            return ic->getISR(
+                readMiscRegNoEffect(MISCREG_HCR_EL2),
+                readMiscRegNoEffect(MISCREG_CPSR),
+                readMiscRegNoEffect(MISCREG_SCR_EL3));
+        }
       case MISCREG_DCZID_EL0:
         return 0x04;  // DC ZVA clear 64-byte chunks
       case MISCREG_HCPTR:
@@ -721,6 +757,7 @@ ISA::readMiscReg(int misc_reg, ThreadContext *tc)
       case MISCREG_CNTVOFF_EL2 ... MISCREG_CNTPS_CVAL_EL1:
         return getGenericTimer(tc).readMiscReg(misc_reg);
 
+      case MISCREG_ICC_AP0R0 ... MISCREG_ICH_LRC15:
       case MISCREG_ICC_PMR_EL1 ... MISCREG_ICC_IGRPEN1_EL3:
       case MISCREG_ICH_AP0R0_EL2 ... MISCREG_ICH_LR15_EL2:
         return getGICv3CPUInterface(tc).readMiscReg(misc_reg);
@@ -771,6 +808,10 @@ ISA::setMiscReg(int misc_reg, RegVal val, ThreadContext *tc)
         CPSR cpsr = val;
         if (old_mode != cpsr.mode || cpsr.il != old_cpsr.il) {
             getITBPtr(tc)->invalidateMiscReg();
+            getDTBPtr(tc)->invalidateMiscReg();
+        }
+
+        if (cpsr.pan != old_cpsr.pan) {
             getDTBPtr(tc)->invalidateMiscReg();
         }
 
@@ -996,11 +1037,10 @@ ISA::setMiscReg(int misc_reg, RegVal val, ThreadContext *tc)
             }
             break;
           case MISCREG_HCR:
-            {
+          case MISCREG_HCR2:
                 if (!haveVirtualization)
                     return;
-            }
-            break;
+                break;
           case MISCREG_IFSR:
             {
                 // ARM ARM (ARM DDI 0406C.b) B4.1.96
@@ -1880,6 +1920,17 @@ ISA::setMiscReg(int misc_reg, RegVal val, ThreadContext *tc)
                 misc_reg = MISCREG_CPSR;
             }
             break;
+          case MISCREG_PAN:
+            {
+                // PAN is affecting data accesses
+                getDTBPtr(tc)->invalidateMiscReg();
+
+                CPSR cpsr = miscRegs[MISCREG_CPSR];
+                cpsr.pan = (uint8_t) ((CPSR) newVal).pan;
+                newVal = cpsr;
+                misc_reg = MISCREG_CPSR;
+            }
+            break;
           case MISCREG_AT_S1E1R_Xt:
           case MISCREG_AT_S1E1W_Xt:
           case MISCREG_AT_S1E0R_Xt:
@@ -2020,9 +2071,13 @@ ISA::setMiscReg(int misc_reg, RegVal val, ThreadContext *tc)
           case MISCREG_SPSR_EL3:
           case MISCREG_SPSR_EL2:
           case MISCREG_SPSR_EL1:
-            // Force bits 23:21 to 0
-            newVal = val & ~(0x7 << 21);
-            break;
+            {
+                RegVal spsr_mask = havePAN ?
+                    ~(0x5 << 21) : ~(0x7 << 21);
+
+                newVal = val & spsr_mask;
+                break;
+            }
           case MISCREG_L2CTLR:
             warn("miscreg L2CTLR (%s) written with %#x. ignored...\n",
                  miscRegName[misc_reg], uint32_t(val));
@@ -2038,6 +2093,7 @@ ISA::setMiscReg(int misc_reg, RegVal val, ThreadContext *tc)
           case MISCREG_CNTVOFF_EL2 ... MISCREG_CNTPS_CVAL_EL1:
             getGenericTimer(tc).setMiscReg(misc_reg, newVal);
             break;
+          case MISCREG_ICC_AP0R0 ... MISCREG_ICH_LRC15:
           case MISCREG_ICC_PMR_EL1 ... MISCREG_ICC_IGRPEN1_EL3:
           case MISCREG_ICH_AP0R0_EL2 ... MISCREG_ICH_LR15_EL2:
             getGICv3CPUInterface(tc).setMiscReg(misc_reg, newVal);

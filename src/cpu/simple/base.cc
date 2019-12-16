@@ -144,7 +144,8 @@ BaseSimpleCPU::checkPcEventQueue()
     Addr oldpc, pc = threadInfo[curThread]->thread->instAddr();
     do {
         oldpc = pc;
-        system->pcEventQueue.service(threadContexts[curThread]);
+        threadInfo[curThread]->thread->pcEventQueue.service(
+                oldpc, threadContexts[curThread]);
         pc = threadInfo[curThread]->thread->instAddr();
     } while (oldpc != pc);
 }
@@ -499,12 +500,9 @@ BaseSimpleCPU::preExecute()
     t_info.setMemAccPredicate(true);
 
     // check for instruction-count-based events
-    comInstEventQueue[curThread]->serviceEvents(t_info.numInst);
-    system->instEventQueue.serviceEvents(system->totalNumInsts);
+    thread->comInstEventQueue.serviceEvents(t_info.numInst);
 
     // decode the instruction
-    inst = gtoh(inst);
-
     TheISA::PCState pcState = thread->pcState();
 
     if (isRomMicroPC(pcState.microPC())) {
@@ -601,7 +599,6 @@ BaseSimpleCPU::postExecute()
 
     if (curStaticInst->isLoad()) {
         ++t_info.numLoad;
-        comLoadEventQueue[curThread]->serviceEvents(t_info.numLoad);
     }
 
     if (CPA::available()) {

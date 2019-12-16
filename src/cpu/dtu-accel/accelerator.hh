@@ -37,7 +37,7 @@
 #include "mem/dtu/dtu.hh"
 #include "sim/system.hh"
 
-class DtuAccel : public MemObject
+class DtuAccel : public ClockedObject
 {
   public:
 

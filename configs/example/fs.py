@@ -62,9 +62,9 @@ from common.SysPaths import *
 from common.Benchmarks import *
 from common import Simulation
 from common import CacheConfig
-from common import MemConfig
 from common import CpuConfig
-from common import BPConfig
+from common import MemConfig
+from common import ObjectList
 from common.Caches import *
 from common import Options
 
@@ -92,14 +92,19 @@ def build_test_system(np):
         test_sys = makeLinuxX86System(test_mem_mode, np, bm[0], options.ruby,
                                       cmdline=cmdline)
     elif buildEnv['TARGET_ISA'] == "arm":
-        test_sys = makeArmSystem(test_mem_mode, options.machine_type, np,
-                                 bm[0], options.dtb_filename,
-                                 bare_metal=options.bare_metal,
-                                 cmdline=cmdline,
-                                 external_memory=
-                                   options.external_memory_system,
-                                 ruby=options.ruby,
-                                 security=options.enable_security_extensions)
+        test_sys = makeArmSystem(
+            test_mem_mode,
+            options.machine_type,
+            np,
+            bm[0],
+            options.dtb_filename,
+            bare_metal=options.bare_metal,
+            cmdline=cmdline,
+            external_memory=options.external_memory_system,
+            ruby=options.ruby,
+            security=options.enable_security_extensions,
+            vio_9p=options.vio_9p,
+        )
         if options.enable_context_switch_stats_dump:
             test_sys.enable_context_switch_stats_dump = True
     else:
@@ -144,11 +149,12 @@ def build_test_system(np):
     test_sys.cpu = [TestCPUClass(clk_domain=test_sys.cpu_clk_domain, cpu_id=i)
                     for i in range(np)]
 
-    if CpuConfig.is_kvm_cpu(TestCPUClass) or CpuConfig.is_kvm_cpu(FutureClass):
+    if ObjectList.is_kvm_cpu(TestCPUClass) or \
+        ObjectList.is_kvm_cpu(FutureClass):
         test_sys.kvm_vm = KvmVM()
 
     if options.ruby:
-        bootmem = getattr(test_sys, 'bootmem', None)
+        bootmem = getattr(test_sys, '_bootmem', None)
         Ruby.create_system(options, True, test_sys, test_sys.iobus,
                            test_sys._dma_ports, bootmem)
 
@@ -193,7 +199,7 @@ def build_test_system(np):
 
         # Sanity check
         if options.simpoint_profile:
-            if not CpuConfig.is_noncaching_cpu(TestCPUClass):
+            if not ObjectList.is_noncaching_cpu(TestCPUClass):
                 fatal("SimPoint generation should be done with atomic cpu")
             if np > 1:
                 fatal("SimPoint generation not supported with more than one CPUs")
@@ -203,14 +209,15 @@ def build_test_system(np):
                 test_sys.cpu[i].addSimPointProbe(options.simpoint_interval)
             if options.checker:
                 test_sys.cpu[i].addCheckerCpu()
-            if options.bp_type:
-                bpClass = BPConfig.get(options.bp_type)
-                test_sys.cpu[i].branchPred = bpClass()
-            if options.indirect_bp_type:
-                IndirectBPClass = \
-                    BPConfig.get_indirect(options.indirect_bp_type)
-                test_sys.cpu[i].branchPred.indirectBranchPred = \
-                    IndirectBPClass()
+            if not ObjectList.is_kvm_cpu(TestCPUClass):
+                if options.bp_type:
+                    bpClass = ObjectList.bp_list.get(options.bp_type)
+                    test_sys.cpu[i].branchPred = bpClass()
+                if options.indirect_bp_type:
+                    IndirectBPClass = ObjectList.indirect_bp_list.get(
+                        options.indirect_bp_type)
+                    test_sys.cpu[i].branchPred.indirectBranchPred = \
+                        IndirectBPClass()
             test_sys.cpu[i].createThreads()
 
         # If elastic tracing is enabled when not restoring from checkpoint and
@@ -278,7 +285,7 @@ def build_drive_system(np):
         print("Error: a kernel must be provided to run in full system mode")
         sys.exit(1)
 
-    if CpuConfig.is_kvm_cpu(DriveCPUClass):
+    if ObjectList.is_kvm_cpu(DriveCPUClass):
         drive_sys.kvm_vm = KvmVM()
 
     drive_sys.iobridge = Bridge(delay='50ns',

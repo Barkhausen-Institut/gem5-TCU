@@ -51,6 +51,7 @@
 #include "arch/types.hh"
 #include "base/types.hh"
 #include "config/the_isa.hh"
+#include "cpu/pc_event.hh"
 #include "cpu/reg_class.hh"
 
 // @todo: Figure out a more architecture independent way to obtain the ITB and
@@ -89,7 +90,7 @@ namespace Kernel {
  * interface; the ExecContext is a more implicit interface that must
  * be implemented so that the ISA can access whatever state it needs.
  */
-class ThreadContext
+class ThreadContext : public PCEventScope
 {
   protected:
     typedef TheISA::MachInst MachInst;
@@ -193,6 +194,10 @@ class ThreadContext
     virtual void regStats(const std::string &name) = 0;
 
     virtual EndQuiesceEvent *getQuiesceEvent() = 0;
+
+    virtual void scheduleInstCountEvent(Event *event, Tick count) = 0;
+    virtual void descheduleInstCountEvent(Event *event) = 0;
+    virtual Tick getCurrentInstCount() = 0;
 
     // Not necessarily the best location for these...
     // Having an extra function just to read these is obnoxious
@@ -305,7 +310,7 @@ class ThreadContext
     // Same with st cond failures.
     virtual Counter readFuncExeInst() const = 0;
 
-    virtual void syscall(int64_t callnum, Fault *fault) = 0;
+    virtual void syscall(Fault *fault) = 0;
 
     // This function exits the thread context in the CPU and returns
     // 1 if the CPU has no more active threads (meaning it's OK to exit);

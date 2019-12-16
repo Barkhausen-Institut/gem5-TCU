@@ -174,10 +174,10 @@ class AtomicSimpleCPU : public BaseSimpleCPU
   protected:
 
     /** Return a reference to the data port. */
-    MasterPort &getDataPort() override { return dcachePort; }
+    Port &getDataPort() override { return dcachePort; }
 
     /** Return a reference to the instruction port. */
-    MasterPort &getInstPort() override { return icachePort; }
+    Port &getInstPort() override { return icachePort; }
 
     /** Perform snoop for other cpu-local thread contexts. */
     void threadSnoop(PacketPtr pkt, ThreadID sender);
@@ -218,16 +218,16 @@ class AtomicSimpleCPU : public BaseSimpleCPU
 
     Fault readMem(Addr addr, uint8_t *data, unsigned size,
                   Request::Flags flags,
-                  const std::vector<bool>& byteEnable = std::vector<bool>())
+                  const std::vector<bool>& byte_enable = std::vector<bool>())
         override;
 
     Fault writeMem(uint8_t *data, unsigned size,
                    Addr addr, Request::Flags flags, uint64_t *res,
-                   const std::vector<bool>& byteEnable = std::vector<bool>())
+                   const std::vector<bool>& byte_enable = std::vector<bool>())
         override;
 
     Fault amoMem(Addr addr, uint8_t* data, unsigned size,
-                 Request::Flags flags, AtomicOpFunctor *amo_op) override;
+                 Request::Flags flags, AtomicOpFunctorPtr amo_op) override;
 
     void regProbePoints() override;
 

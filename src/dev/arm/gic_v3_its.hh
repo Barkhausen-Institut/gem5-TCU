@@ -114,6 +114,21 @@ class Gicv3Its : public BasicPioDevice
 
     static const uint32_t NUM_BASER_REGS = 8;
 
+    // We currently don't support two level ITS tables
+    // The indirect bit is RAZ/WI for implementations that only
+    // support flat tables.
+    static const uint64_t BASER_INDIRECT = 0x4000000000000000;
+    static const uint64_t BASER_TYPE = 0x0700000000000000;
+    static const uint64_t BASER_ESZ = 0x001F000000000000;
+    static const uint64_t BASER_SZ = 0x00000000000000FF;
+    static const uint64_t BASER_WMASK =
+        ~(BASER_INDIRECT | BASER_TYPE | BASER_ESZ);
+    static const uint64_t BASER_WMASK_UNIMPL =
+        ~(BASER_INDIRECT | BASER_TYPE | BASER_ESZ | BASER_SZ);
+
+    // GITS_CTLR.quiescent mask
+    static const uint32_t CTLR_QUIESCENT;
+
     enum : Addr
     {
         // Control frame
@@ -123,6 +138,7 @@ class Gicv3Its : public BasicPioDevice
         GITS_CBASER  = itsControl + 0x0080,
         GITS_CWRITER = itsControl + 0x0088,
         GITS_CREADR  = itsControl + 0x0090,
+        GITS_PIDR2 = itsControl + 0xffe8,
 
         // Translation frame
         GITS_TRANSLATER = itsTranslate + 0x0040
@@ -148,12 +164,16 @@ class Gicv3Its : public BasicPioDevice
 
     // Command read/write, (CREADR, CWRITER)
     BitUnion64(CRDWR)
+        Bitfield<63, 32> high;
+        Bitfield<31, 0> low;
         Bitfield<19, 5> offset;
         Bitfield<0> retry;
         Bitfield<0> stalled;
     EndBitUnion(CRDWR)
 
     BitUnion64(CBASER)
+        Bitfield<63, 32> high;
+        Bitfield<31, 0> low;
         Bitfield<63> valid;
         Bitfield<61, 59> innerCache;
         Bitfield<55, 53> outerCache;
@@ -176,6 +196,8 @@ class Gicv3Its : public BasicPioDevice
     EndBitUnion(BASER)
 
     BitUnion64(TYPER)
+        Bitfield<63, 32> high;
+        Bitfield<31, 0> low;
         Bitfield<37> vmovp;
         Bitfield<36> cil;
         Bitfield<35, 32> cidBits;
@@ -235,6 +257,7 @@ class Gicv3Its : public BasicPioDevice
     bool lpiOutOfRange(uint32_t intid) const;
 
   private: // Command
+    uint64_t maxCommands() const;
     void checkCommandQueue();
     void incrementReadPointer();
 

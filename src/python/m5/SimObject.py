@@ -1086,7 +1086,7 @@ class SimObject(object):
     abstract = True
 
     cxx_header = "sim/sim_object.hh"
-    cxx_extra_bases = [ "Drainable", "Serializable" ]
+    cxx_extra_bases = [ "Drainable", "Serializable", "Stats::Group" ]
     eventq_index = Param.UInt32(Parent.eventq_index, "Event Queue Index")
 
     cxx_exports = [
@@ -1094,8 +1094,6 @@ class SimObject(object):
         PyBindMethod("initState"),
         PyBindMethod("memInvalidate"),
         PyBindMethod("memWriteback"),
-        PyBindMethod("regStats"),
-        PyBindMethod("resetStats"),
         PyBindMethod("regProbePoints"),
         PyBindMethod("regProbeListeners"),
         PyBindMethod("startup"),
@@ -1414,6 +1412,13 @@ class SimObject(object):
         if ppath == 'root':
             return self._name
         return ppath + "." + self._name
+
+    def path_list(self):
+        if self._parent:
+            return self._parent.path_list() + [ self._name, ]
+        else:
+            # Don't include the root node
+            return []
 
     def __str__(self):
         return self.path()

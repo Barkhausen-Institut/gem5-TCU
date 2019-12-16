@@ -40,9 +40,8 @@ addToPath('../hw/gem5/configs')
 
 from common.FSConfig import *
 from common import Simulation
-from common import CpuConfig
 from common import CacheConfig
-from common import MemConfig
+from common import ObjectList
 from common.Caches import *
 from common import Options
 
@@ -90,21 +89,10 @@ class PcPciHost(GenericPciHost):
 
 # reads the options and returns them
 def getOptions():
-    def _listCpuTypes(option, opt, value, parser):
-        CpuConfig.print_cpu_list()
-        sys.exit(0)
-
-    def _listMemTypes(option, opt, value, parser):
-        MemConfig.print_mem_list()
-        sys.exit(0)
-
     parser = optparse.OptionParser()
 
-    parser.add_option("--list-cpu-types",
-                      action="callback", callback=_listCpuTypes,
-                      help="List available CPU types")
     parser.add_option("--cpu-type", type="choice", default="DerivO3CPU",
-                      choices=CpuConfig.cpu_names(),
+                      choices=ObjectList.cpu_list.get_names(),
                       help="type of cpu to run with")
 
     parser.add_option("--isa", type="choice", default="x86_64",
@@ -114,11 +102,8 @@ def getOptions():
     parser.add_option("-c", "--cmd", default="", type="string",
                       help="comma separated list of binaries")
 
-    parser.add_option("--list-mem-types",
-                      action="callback", callback=_listMemTypes,
-                     help="List available memory types")
     parser.add_option("--mem-type", type="choice", default="DDR3_1600_8x8",
-                      choices=MemConfig.mem_names(),
+                      choices=ObjectList.mem_list.get_names(),
                       help="type of memory to use")
     parser.add_option("--mem-channels", type="int", default=1,
                       help="number of memory channels")
@@ -197,7 +182,7 @@ def printConfig(pe, dtupos):
         print str
     except:
         try:
-            print '      imem =%d KiB' % (int(pe.spm.range.end + 1) / 1024)
+            print '      imem =%d KiB' % (int(pe.spm.range.end) / 1024)
             print '      Comp =Core -> DTU -> SPM'
         except:
             pass
@@ -242,7 +227,7 @@ def connectCuToMem(pe, options, dport, iport=None, l1size=None, dtupos=0):
         pe.dtu.dcache_slave_port = dport
 
 def createPE(noc, options, no, systemType, l1size, l2size, spmsize, dtupos, memPE):
-    CPUClass = CpuConfig.get(options.cpu_type)
+    CPUClass = ObjectList.cpu_list.get(options.cpu_type)
 
     # each PE is represented by it's own subsystem
     pe = systemType(mem_mode=CPUClass.memory_mode())
@@ -366,7 +351,7 @@ def createPE(noc, options, no, systemType, l1size, l2size, spmsize, dtupos, memP
 
 def createCorePE(noc, options, no, cmdline, memPE, l1size=None, l2size=None,
                  dtupos=0, spmsize='8MB'):
-    CPUClass = CpuConfig.get(options.cpu_type)
+    CPUClass = ObjectList.cpu_list.get(options.cpu_type)
 
     sysType = M3ArmSystem if options.isa == 'arm' else M3X86System
     con = ArmConnector if options.isa == 'arm' else X86Connector
@@ -644,7 +629,7 @@ def createMemPE(noc, options, no, size, dram=True, image=None, imageNum=0):
 
     print 'PE%02d: %s x %d' % (no, image, imageNum)
     printConfig(pe, 0)
-    print '      imem =%d KiB' % (int(pe.mem_ctrl.range.end + 1) / 1024)
+    print '      imem =%d KiB' % (int(pe.mem_ctrl.range.end) / 1024)
     name = 'SPM' if type(pe.mem_ctrl).__name__ == 'Scratchpad' else 'DRAM'
     print '      Comp =DTU -> %s' % (name)
     print
@@ -694,12 +679,12 @@ def runSimulation(root, options, pes):
     for pe in pes:
         size = 0
         if hasattr(pe, 'mem_ctrl'):
-            size = int(pe.mem_ctrl.range.end + 1)
+            size = int(pe.mem_ctrl.range.end)
             assert size % 4096 == 0, "Memory size not page aligned"
             size |= 2   # mem
         else:
             if hasattr(pe, 'spm'):
-                size = int(pe.spm.range.end + 1)
+                size = int(pe.spm.range.end)
                 assert size % 4096 == 0, "Memory size not page aligned"
             else:
                 size |= 1 # emem

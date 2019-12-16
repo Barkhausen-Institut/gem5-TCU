@@ -89,6 +89,24 @@ class CheckerThreadContext : public ThreadContext
     CheckerCPU *checkerCPU;
 
   public:
+    bool schedule(PCEvent *e) override { return actualTC->schedule(e); }
+    bool remove(PCEvent *e) override { return actualTC->remove(e); }
+
+    void
+    scheduleInstCountEvent(Event *event, Tick count) override
+    {
+        actualTC->scheduleInstCountEvent(event, count);
+    }
+    void
+    descheduleInstCountEvent(Event *event) override
+    {
+        actualTC->descheduleInstCountEvent(event);
+    }
+    Tick
+    getCurrentInstCount() override
+    {
+        return actualTC->getCurrentInstCount();
+    }
 
     BaseCPU *getCpuPtr() override { return actualTC->getCpuPtr(); }
 
@@ -168,9 +186,9 @@ class CheckerThreadContext : public ThreadContext
 
     /** Executes a syscall in SE mode. */
     void
-    syscall(int64_t callnum, Fault *fault) override
+    syscall(Fault *fault) override
     {
-        return actualTC->syscall(callnum, fault);
+        return actualTC->syscall(fault);
     }
 
     Status status() const override { return actualTC->status(); }

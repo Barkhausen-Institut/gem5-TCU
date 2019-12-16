@@ -56,7 +56,7 @@ MemWatchProbe::handleRequest(const ProbePoints::PacketInfo &pkt_info)
             if (pkt_info.data)
             {
                 Trace::getDebugLogger()->dump(
-                    curTick(), name(), pkt_info.data, pkt_info.size);
+                    curTick(), name(), pkt_info.data, pkt_info.size, "");
             }
         }
     }

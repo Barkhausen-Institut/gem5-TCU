@@ -35,7 +35,9 @@
 #include <sys/mman.h>
 #include <sys/param.h>
 #include <sys/syscall.h>
+#if !defined ( __GNU_LIBRARY__ )
 #include <sys/sysctl.h>
+#endif
 #include <sys/types.h>
 #include <utime.h>
 
@@ -56,7 +58,7 @@ using namespace ArmISA;
 namespace
 {
 
-class ArmFreebsdObjectFileLoader : public ObjectFile::Loader
+class ArmFreebsdObjectFileLoader : public Process::Loader
 {
   public:
     Process *
@@ -90,6 +92,7 @@ issetugidFunc(SyscallDesc *desc, int callnum, ThreadContext *tc)
     return 0;
 }
 
+#if !defined ( __GNU_LIBRARY__ )
 static SyscallReturn
 sysctlFunc(SyscallDesc *desc, int callnum, ThreadContext *tc)
 {
@@ -133,6 +136,7 @@ sysctlFunc(SyscallDesc *desc, int callnum, ThreadContext *tc)
 
     return (ret);
 }
+#endif
 
 static SyscallDesc syscallDescs32[] = {
     /*    0 */ SyscallDesc("unused#000", unimplementedFunc),
@@ -888,7 +892,11 @@ static SyscallDesc syscallDescs64[] = {
     /*  199 */ SyscallDesc("unused#199", unimplementedFunc),
     /*  200 */ SyscallDesc("unused#200", unimplementedFunc),
     /*  201 */ SyscallDesc("unused#201", unimplementedFunc),
+#if !defined ( __GNU_LIBRARY__ )
     /*  202 */ SyscallDesc("sysctl", sysctlFunc),
+#else
+    /*  202 */ SyscallDesc("sysctl", unimplementedFunc),
+#endif
     /*  203 */ SyscallDesc("unused#203", unimplementedFunc),
     /*  204 */ SyscallDesc("unused#204", unimplementedFunc),
     /*  205 */ SyscallDesc("unused#205", unimplementedFunc),
@@ -1308,4 +1316,16 @@ ArmFreebsdProcess64::initState()
 {
     ArmProcess64::initState();
     // The 64 bit equivalent of the comm page would be set up here.
+}
+
+void
+ArmFreebsdProcess32::syscall(ThreadContext *tc, Fault *fault)
+{
+    doSyscall(tc->readIntReg(INTREG_R7), tc, fault);
+}
+
+void
+ArmFreebsdProcess64::syscall(ThreadContext *tc, Fault *fault)
+{
+    doSyscall(tc->readIntReg(INTREG_X8), tc, fault);
 }

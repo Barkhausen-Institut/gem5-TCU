@@ -105,7 +105,8 @@ class CheckerCPU : public BaseCPU, public ExecContext
 
     void setDcachePort(MasterPort *dcache_port);
 
-    MasterPort &getDataPort() override
+    Port &
+    getDataPort() override
     {
         // the checker does not have ports on its own so return the
         // data port of the actual CPU core
@@ -113,7 +114,8 @@ class CheckerCPU : public BaseCPU, public ExecContext
         return *dcachePort;
     }
 
-    MasterPort &getInstPort() override
+    Port &
+    getInstPort() override
     {
         // the checker does not have ports on its own so return the
         // data port of the actual CPU core
@@ -554,16 +556,16 @@ class CheckerCPU : public BaseCPU, public ExecContext
 
     Fault readMem(Addr addr, uint8_t *data, unsigned size,
                   Request::Flags flags,
-                  const std::vector<bool>& byteEnable = std::vector<bool>())
+                  const std::vector<bool>& byte_enable = std::vector<bool>())
         override;
 
     Fault writeMem(uint8_t *data, unsigned size, Addr addr,
                    Request::Flags flags, uint64_t *res,
-                   const std::vector<bool>& byteEnable = std::vector<bool>())
+                   const std::vector<bool>& byte_enable = std::vector<bool>())
         override;
 
     Fault amoMem(Addr addr, uint8_t* data, unsigned size,
-                 Request::Flags flags, AtomicOpFunctor *amo_op) override
+                 Request::Flags flags, AtomicOpFunctorPtr amo_op) override
     {
         panic("AMO is not supported yet in CPU checker\n");
     }
@@ -579,7 +581,7 @@ class CheckerCPU : public BaseCPU, public ExecContext
     void wakeup(ThreadID tid) override { }
     // Assume that the normal CPU's call to syscall was successful.
     // The checker's state would have already been updated by the syscall.
-    void syscall(int64_t callnum, Fault *fault) override { }
+    void syscall(Fault *fault) override { }
 
     void
     handleError()

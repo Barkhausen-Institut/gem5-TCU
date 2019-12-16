@@ -175,8 +175,8 @@ class HardBreakpoint : public PCEvent
     int refcount;
 
   public:
-    HardBreakpoint(BaseRemoteGDB *_gdb, PCEventQueue *q, Addr pc)
-        : PCEvent(q, "HardBreakpoint Event", pc),
+    HardBreakpoint(BaseRemoteGDB *_gdb, PCEventScope *s, Addr pc)
+        : PCEvent(s, "HardBreakpoint Event", pc),
           gdb(_gdb), refcount(0)
     {
         DPRINTF(GDBMisc, "creating hardware breakpoint at %#x\n", evpc);
@@ -316,12 +316,6 @@ break_type(char c)
 #endif
 
 std::map<Addr, HardBreakpoint *> hardBreakMap;
-
-EventQueue *
-getComInstEventQueue(ThreadContext *tc)
-{
-    return tc->getCpuPtr()->comInstEventQueue[tc->threadId()];
-}
 
 }
 
@@ -717,7 +711,7 @@ BaseRemoteGDB::insertHardBreak(Addr addr, size_t len)
 
     HardBreakpoint *&bkpt = hardBreakMap[addr];
     if (bkpt == 0)
-        bkpt = new HardBreakpoint(this, &sys->pcEventQueue, addr);
+        bkpt = new HardBreakpoint(this, sys, addr);
 
     bkpt->refcount++;
 }
@@ -759,18 +753,17 @@ BaseRemoteGDB::setTempBreakpoint(Addr bkpt)
 void
 BaseRemoteGDB::scheduleInstCommitEvent(Event *ev, int delta)
 {
-    EventQueue *eq = getComInstEventQueue(tc);
     // Here "ticks" aren't simulator ticks which measure time, they're
     // instructions committed by the CPU.
     if (!ev->scheduled())
-    	eq->schedule(ev, eq->getCurTick() + delta);
+    	tc->scheduleInstCountEvent(ev, tc->getCurrentInstCount() + delta);
 }
 
 void
 BaseRemoteGDB::descheduleInstCommitEvent(Event *ev)
 {
     if (ev->scheduled())
-        getComInstEventQueue(tc)->deschedule(ev);
+        tc->descheduleInstCountEvent(ev);
 }
 
 std::map<char, BaseRemoteGDB::GdbCommand> BaseRemoteGDB::command_map = {

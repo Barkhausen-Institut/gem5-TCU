@@ -36,7 +36,7 @@
 #include "mem/mem_object.hh"
 #include "params/DtuPciProxy.hh"
 
-class DtuPciProxy : public MemObject
+class DtuPciProxy : public ClockedObject
 {
   public:
     DtuPciProxy(const DtuPciProxyParams* p);

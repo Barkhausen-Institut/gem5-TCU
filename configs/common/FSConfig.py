@@ -42,10 +42,11 @@
 from __future__ import print_function
 from __future__ import absolute_import
 
+import m5
 from m5.objects import *
 from m5.util import *
 from .Benchmarks import *
-from . import PlatformConfig
+from . import ObjectList
 
 # Populate to reflect supported os types per target ISA
 os_types = { 'alpha' : [ 'linux' ],
@@ -70,6 +71,19 @@ class CowIdeDisk(IdeDisk):
 class MemBus(SystemXBar):
     badaddr_responder = BadAddr()
     default = Self.badaddr_responder.pio
+
+def attach_9p(parent, bus):
+    viopci = PciVirtIO()
+    viopci.vio = VirtIO9PDiod()
+    viodir = os.path.join(m5.options.outdir, '9p')
+    viopci.vio.root = os.path.join(viodir, 'share')
+    viopci.vio.socketPath = os.path.join(viodir, 'socket')
+    if not os.path.exists(viopci.vio.root):
+        os.makedirs(viopci.vio.root)
+    if os.path.exists(viopci.vio.socketPath):
+        os.remove(viopci.vio.socketPath)
+    parent.viopci = viopci
+    parent.attachPciDevice(viopci, bus)
 
 def fillInCmdline(mdesc, template, **kwargs):
     kwargs.setdefault('disk', mdesc.disk())
@@ -206,7 +220,8 @@ def makeSparcSystem(mem_mode, mdesc=None, cmdline=None):
 
 def makeArmSystem(mem_mode, machine_type, num_cpus=1, mdesc=None,
                   dtb_filename=None, bare_metal=False, cmdline=None,
-                  external_memory="", ruby=False, security=False):
+                  external_memory="", ruby=False, security=False,
+                  vio_9p=None):
     assert machine_type
 
     pci_devices = []
@@ -231,11 +246,12 @@ def makeArmSystem(mem_mode, machine_type, num_cpus=1, mdesc=None,
 
     self.mem_mode = mem_mode
 
-    platform_class = PlatformConfig.get(machine_type)
+    platform_class = ObjectList.platform_list.get(machine_type)
     # Resolve the real platform name, the original machine_type
     # variable might have been an alias.
     machine_type = platform_class.__name__
     self.realview = platform_class()
+    self._bootmem = self.realview.bootmem
 
     if isinstance(self.realview, VExpress_EMM64):
         if os.path.split(mdesc.disk())[-1] == 'linux-aarch32-ael.img':
@@ -296,17 +312,7 @@ def makeArmSystem(mem_mode, machine_type, num_cpus=1, mdesc=None,
                       'lpj=19988480 norandmaps rw loglevel=8 ' + \
                       'mem=%(mem)s root=%(rootdev)s'
 
-        # When using external memory, gem5 writes the boot loader to nvmem
-        # and then SST will read from it, but SST can only get to nvmem from
-        # iobus, as gem5's membus is only used for initialization and
-        # SST doesn't use it.  Attaching nvmem to iobus solves this issue.
-        # During initialization, system_port -> membus -> iobus -> nvmem.
-        if external_memory:
-            self.realview.setupBootLoader(self.iobus,  self, binary)
-        elif ruby:
-            self.realview.setupBootLoader(None, self, binary)
-        else:
-            self.realview.setupBootLoader(self.membus, self, binary)
+        self.realview.setupBootLoader(self, binary)
 
         if hasattr(self.realview.gic, 'cpu_addr'):
             self.gic_cpu_addr = self.realview.gic.cpu_addr
@@ -365,15 +371,16 @@ def makeArmSystem(mem_mode, machine_type, num_cpus=1, mdesc=None,
         self.realview.attachIO(self.iobus)
     elif ruby:
         self._dma_ports = [ ]
-        self.realview.attachOnChipIO(self.iobus, dma_ports=self._dma_ports)
+        self._mem_ports = [ ]
+        self.realview.attachOnChipIO(self.iobus,
+            dma_ports=self._dma_ports, mem_ports=self._mem_ports)
         self.realview.attachIO(self.iobus, dma_ports=self._dma_ports)
     else:
         self.realview.attachOnChipIO(self.membus, self.bridge)
         # Attach off-chip devices
         self.realview.attachIO(self.iobus)
 
-    for dev_id, dev in enumerate(pci_devices):
-        dev.pci_bus, dev.pci_dev, dev.pci_func = (0, dev_id + 1, 0)
+    for dev in pci_devices:
         self.realview.attachPciDevice(
             dev, self.iobus,
             dma_ports=self._dma_ports if ruby else None)
@@ -381,6 +388,9 @@ def makeArmSystem(mem_mode, machine_type, num_cpus=1, mdesc=None,
     self.intrctrl = IntrControl()
     self.terminal = Terminal()
     self.vncserver = VncServer()
+
+    if vio_9p:
+        attach_9p(self.realview, self.iobus)
 
     if not ruby:
         self.system_port = self.membus.slave

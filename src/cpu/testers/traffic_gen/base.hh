@@ -47,6 +47,7 @@
 #include <unordered_map>
 
 #include "base/statistics.hh"
+#include "enums/AddrMap.hh"
 #include "mem/qport.hh"
 #include "sim/clocked_object.hh"
 
@@ -190,51 +191,55 @@ class BaseTrafficGen : public ClockedObject
     /** Event for scheduling updates */
     EventFunctionWrapper updateEvent;
 
-    /** Count the number of dropped requests. */
-    Stats::Scalar numSuppressed;
-
-  private: // Stats
-    /** Count the number of generated packets. */
-    Stats::Scalar numPackets;
-
-    /** Count the number of retries. */
-    Stats::Scalar numRetries;
-
-    /** Count the time incurred from back-pressure. */
-    Stats::Scalar retryTicks;
-
+  protected: // Stats
     /** Reqs waiting for response **/
     std::unordered_map<RequestPtr,Tick> waitingResp;
 
-    /** Count the number of bytes read. */
-    Stats::Scalar bytesRead;
+    struct StatGroup : public Stats::Group {
+        StatGroup(Stats::Group *parent);
 
-    /** Count the number of bytes written. */
-    Stats::Scalar bytesWritten;
+        /** Count the number of dropped requests. */
+        Stats::Scalar numSuppressed;
 
-    /** Total num of ticks read reqs took to complete  */
-    Stats::Scalar totalReadLatency;
+        /** Count the number of generated packets. */
+        Stats::Scalar numPackets;
 
-    /** Total num of ticks write reqs took to complete  */
-    Stats::Scalar totalWriteLatency;
+        /** Count the number of retries. */
+        Stats::Scalar numRetries;
 
-    /** Count the number reads. */
-    Stats::Scalar totalReads;
+        /** Count the time incurred from back-pressure. */
+        Stats::Scalar retryTicks;
 
-    /** Count the number writes. */
-    Stats::Scalar totalWrites;
+        /** Count the number of bytes read. */
+        Stats::Scalar bytesRead;
 
-    /** Avg num of ticks each read req took to complete  */
-    Stats::Formula avgReadLatency;
+        /** Count the number of bytes written. */
+        Stats::Scalar bytesWritten;
 
-    /** Avg num of ticks each write reqs took to complete  */
-    Stats::Formula avgWriteLatency;
+        /** Total num of ticks read reqs took to complete  */
+        Stats::Scalar totalReadLatency;
 
-    /** Read bandwidth in bytes/s  */
-    Stats::Formula readBW;
+        /** Total num of ticks write reqs took to complete  */
+        Stats::Scalar totalWriteLatency;
 
-    /** Write bandwidth in bytes/s  */
-    Stats::Formula writeBW;
+        /** Count the number reads. */
+        Stats::Scalar totalReads;
+
+        /** Count the number writes. */
+        Stats::Scalar totalWrites;
+
+        /** Avg num of ticks each read req took to complete  */
+        Stats::Formula avgReadLatency;
+
+        /** Avg num of ticks each write reqs took to complete  */
+        Stats::Formula avgWriteLatency;
+
+        /** Read bandwidth in bytes/s  */
+        Stats::Formula readBW;
+
+        /** Write bandwidth in bytes/s  */
+        Stats::Formula writeBW;
+    } stats;
 
   public:
     BaseTrafficGen(const BaseTrafficGenParams* p);
@@ -250,9 +255,6 @@ class BaseTrafficGen : public ClockedObject
 
     void serialize(CheckpointOut &cp) const override;
     void unserialize(CheckpointIn &cp) override;
-
-    /** Register statistics */
-    void regStats() override;
 
   public: // Generator factory methods
     std::shared_ptr<BaseGen> createIdle(Tick duration);
@@ -277,7 +279,7 @@ class BaseTrafficGen : public ClockedObject
         uint8_t read_percent, Addr data_limit,
         unsigned int num_seq_pkts, unsigned int page_size,
         unsigned int nbr_of_banks_DRAM, unsigned int nbr_of_banks_util,
-        unsigned int addr_mapping,
+        Enums::AddrMap addr_mapping,
         unsigned int nbr_of_ranks);
 
     std::shared_ptr<BaseGen> createDramRot(
@@ -287,7 +289,7 @@ class BaseTrafficGen : public ClockedObject
         uint8_t read_percent, Addr data_limit,
         unsigned int num_seq_pkts, unsigned int page_size,
         unsigned int nbr_of_banks_DRAM, unsigned int nbr_of_banks_util,
-        unsigned int addr_mapping,
+        Enums::AddrMap addr_mapping,
         unsigned int nbr_of_ranks,
         unsigned int max_seq_count_per_rank);
 

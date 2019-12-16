@@ -51,7 +51,7 @@ using namespace MipsISA;
 namespace
 {
 
-class MipsLinuxObjectFileLoader : public ObjectFile::Loader
+class MipsLinuxObjectFileLoader : public Process::Loader
 {
   public:
     Process *
@@ -146,7 +146,7 @@ sys_setsysinfoFunc(SyscallDesc *desc, int callnum, ThreadContext *tc)
             // I don't think this exactly matches the HW FPCR
             fpcr.copyIn(tc->getVirtProxy());
             DPRINTFR(SyscallVerbose, "sys_setsysinfo(SSI_IEEE_FP_CONTROL): "
-                   " setting FPCR to 0x%x\n", gtoh(*(uint64_t*)fpcr));
+                   " setting FPCR to 0x%x\n", letoh(*(uint64_t*)fpcr));
             return 0;
         }
       default:
@@ -509,7 +509,8 @@ MipsLinuxProcess::getDesc(int callnum)
     return &syscallDescs[m5_sys_idx];
 }
 
-
-
-
-
+void
+MipsLinuxProcess::syscall(ThreadContext *tc, Fault *fault)
+{
+    doSyscall(tc->readIntReg(2), tc, fault);
+}

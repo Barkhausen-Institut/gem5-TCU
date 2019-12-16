@@ -56,8 +56,7 @@ PowerProcess::PowerProcess(ProcessParams *params, ObjectFile *objFile)
 {
     fatal_if(params->useArchPT, "Arch page tables not implemented.");
     // Set up break point (Top of Heap)
-    Addr brk_point = objFile->dataBase() + objFile->dataSize() +
-                     objFile->bssSize();
+    Addr brk_point = image.maxAddr();
     brk_point = roundUp(brk_point, PageBytes);
 
     Addr stack_base = 0xbf000000L;
@@ -96,11 +95,9 @@ PowerProcess::argsInit(int intSize, int pageSize)
     //We want 16 byte alignment
     uint64_t align = 16;
 
-    // Patch the ld_bias for dynamic executables.
-    updateBias();
-
     // load object file into target memory
-    objFile->loadSections(initVirtMem);
+    image.write(initVirtMem);
+    interpImage.write(initVirtMem);
 
     //Setup the auxilliary vectors. These will already have endian conversion.
     //Auxilliary vectors are loaded only for elf formatted executables.
@@ -229,7 +226,7 @@ PowerProcess::argsInit(int intSize, int pageSize)
 
     // figure out argc
     uint32_t argc = argv.size();
-    uint32_t guestArgc = PowerISA::htog(argc);
+    uint32_t guestArgc = htobe(argc);
 
     //Write out the sentry void *
     uint32_t sentry_NULL = 0;
@@ -257,8 +254,10 @@ PowerProcess::argsInit(int intSize, int pageSize)
     initVirtMem.write(auxv_array_end, zero);
     auxv_array_end += sizeof(zero);
 
-    copyStringArray(envp, envp_array_base, env_data_base, initVirtMem);
-    copyStringArray(argv, argv_array_base, arg_data_base, initVirtMem);
+    copyStringArray(envp, envp_array_base, env_data_base,
+                    BigEndianByteOrder, initVirtMem);
+    copyStringArray(argv, argv_array_base, arg_data_base,
+                    BigEndianByteOrder, initVirtMem);
 
     initVirtMem.writeBlob(argc_base, &guestArgc, intSize);
 
@@ -278,13 +277,6 @@ PowerProcess::getSyscallArg(ThreadContext *tc, int &i)
 {
     assert(i < 5);
     return tc->readIntReg(ArgumentReg0 + i++);
-}
-
-void
-PowerProcess::setSyscallArg(ThreadContext *tc, int i, RegVal val)
-{
-    assert(i < 5);
-    tc->setIntReg(ArgumentReg0 + i, val);
 }
 
 void

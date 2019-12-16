@@ -146,7 +146,7 @@ DtuPciProxy::createPciConfigPacket(
 }
 
 DtuPciProxy::DtuPciProxy(const DtuPciProxyParams* p)
-    : MemObject(p),
+    : ClockedObject(p),
       dtuMasterPort(name() + ".dtu_master_port", this),
       dtuSlavePort(name() + ".dtu_slave_port", this),
       pioPort(name() + ".pio_port", this),

@@ -54,7 +54,7 @@
 #if THE_ISA == NULL_ISA
 #include "arch/null/cpu_dummy.hh"
 #else
-#include "arch/interrupts.hh"
+#include "arch/generic/interrupts.hh"
 #include "arch/isa_traits.hh"
 #include "arch/microcode_rom.hh"
 #include "base/statistics.hh"
@@ -158,7 +158,18 @@ class BaseCPU : public ClockedObject
      *
      * @return a reference to the data port
      */
-    virtual MasterPort &getDataPort() = 0;
+    virtual Port &getDataPort() = 0;
+
+    /**
+     * Returns a sendFunctional delegate for use with port proxies.
+     */
+    virtual PortProxy::SendFunctionalFunc
+    getSendFunctional()
+    {
+        auto port = dynamic_cast<MasterPort *>(&getDataPort());
+        assert(port);
+        return [port](PacketPtr pkt)->void { port->sendFunctional(pkt); };
+    }
 
     /**
      * Purely virtual method that returns a reference to the instruction
@@ -166,7 +177,7 @@ class BaseCPU : public ClockedObject
      *
      * @return a reference to the instruction port
      */
-    virtual MasterPort &getInstPort() = 0;
+    virtual Port &getInstPort() = 0;
 
     /** Reads this CPU's ID. */
     int cpuId() const { return _cpuId; }
@@ -208,10 +219,10 @@ class BaseCPU : public ClockedObject
     TheISA::MicrocodeRom microcodeRom;
 
   protected:
-    std::vector<TheISA::Interrupts*> interrupts;
+    std::vector<BaseInterrupts*> interrupts;
 
   public:
-    TheISA::Interrupts *
+    BaseInterrupts *
     getInterruptController(ThreadID tid)
     {
         if (interrupts.empty())
@@ -372,20 +383,6 @@ class BaseCPU : public ClockedObject
      */
     ThreadID numThreads;
 
-    /**
-     * Vector of per-thread instruction-based event queues.  Used for
-     * scheduling events based on number of instructions committed by
-     * a particular thread.
-     */
-    EventQueue **comInstEventQueue;
-
-    /**
-     * Vector of per-thread load-based event queues.  Used for
-     * scheduling events based on number of loads committed by
-     *a particular thread.
-     */
-    EventQueue **comLoadEventQueue;
-
     System *system;
 
     /**
@@ -451,21 +448,6 @@ class BaseCPU : public ClockedObject
      * @param cause Cause to signal in the exit event.
      */
     void scheduleInstStop(ThreadID tid, Counter insts, const char *cause);
-
-    /**
-     * Schedule an event that exits the simulation loops after a
-     * predefined number of load operations.
-     *
-     * This method is usually called from the configuration script to
-     * get an exit event some time in the future. It is typically used
-     * when the script wants to simulate for a specific number of
-     * loads rather than ticks.
-     *
-     * @param tid Thread monitor.
-     * @param loads Number of load instructions into the future.
-     * @param cause Cause to signal in the exit event.
-     */
-    void scheduleLoadStop(ThreadID tid, Counter loads, const char *cause);
 
     /**
      * Get the number of instructions executed by the specified thread

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2012-2018 ARM Limited
+ * Copyright (c) 2010, 2012-2019 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -134,8 +134,9 @@ TableWalker::WalkerState::WalkerState() :
     sctlr(0), scr(0), cpsr(0), tcr(0),
     htcr(0), hcr(0), vtcr(0),
     isWrite(false), isFetch(false), isSecure(false),
+    isUncacheable(false),
     secureLookup(false), rwTable(false), userTable(false), xnTable(false),
-    pxnTable(false), stage2Req(false),
+    pxnTable(false), hpd(false), stage2Req(false),
     stage2Tran(nullptr), timing(false), functional(false),
     mode(BaseTLB::Read), tranType(TLB::NormalTran), l2Desc(l1Desc),
     delayed(false), tableWalker(nullptr)
@@ -455,8 +456,18 @@ TableWalker::processWalk()
 {
     Addr ttbr = 0;
 
+    // For short descriptors, translation configs are held in
+    // TTBR1.
+    RegVal ttbr1 = currState->tc->readMiscReg(snsBankedIndex(
+        MISCREG_TTBR1, currState->tc, !currState->isSecure));
+
+    const auto irgn0_mask = 0x1;
+    const auto irgn1_mask = 0x40;
+    currState->isUncacheable = (ttbr1 & (irgn0_mask | irgn1_mask)) == 0;
+
     // If translation isn't enabled, we shouldn't be here
     assert(currState->sctlr.m || isStage2);
+    const bool is_atomic = currState->req->isAtomic();
 
     DPRINTF(TLB, "Beginning table walk for address %#x, TTBCR: %#x, bits:%#x\n",
             currState->vaddr_tainted, currState->ttbcr, mbits(currState->vaddr, 31,
@@ -478,7 +489,8 @@ TableWalker::processWalk()
             else
                 return std::make_shared<DataAbort>(
                     currState->vaddr_tainted,
-                    TlbEntry::DomainType::NoAccess, currState->isWrite,
+                    TlbEntry::DomainType::NoAccess,
+                    is_atomic ? false : currState->isWrite,
                     ArmFault::TranslationLL + L1, isStage2,
                     ArmFault::VmsaTran);
         }
@@ -497,12 +509,12 @@ TableWalker::processWalk()
             else
                 return std::make_shared<DataAbort>(
                     currState->vaddr_tainted,
-                    TlbEntry::DomainType::NoAccess, currState->isWrite,
+                    TlbEntry::DomainType::NoAccess,
+                    is_atomic ? false : currState->isWrite,
                     ArmFault::TranslationLL + L1, isStage2,
                     ArmFault::VmsaTran);
         }
-        ttbr = currState->tc->readMiscReg(snsBankedIndex(
-            MISCREG_TTBR1, currState->tc, !currState->isSecure));
+        ttbr = ttbr1;
         currState->ttbcr.n = 0;
     }
 
@@ -529,7 +541,7 @@ TableWalker::processWalk()
     }
 
     Request::Flags flag = Request::PT_WALK;
-    if (currState->sctlr.c == 0) {
+    if (currState->sctlr.c == 0 || currState->isUncacheable) {
         flag.set(Request::UNCACHEABLE);
     }
 
@@ -571,10 +583,12 @@ TableWalker::processWalkLPAE()
         ttbr = currState->tc->readMiscReg(MISCREG_VTTBR);
         tsz  = sext<4>(currState->vtcr.t0sz);
         start_lookup_level = currState->vtcr.sl0 ? L1 : L2;
+        currState->isUncacheable = currState->vtcr.irgn0 == 0;
     } else if (currState->isHyp) {
         DPRINTF(TLB, " - Selecting HTTBR (long-desc.)\n");
         ttbr = currState->tc->readMiscReg(MISCREG_HTTBR);
         tsz  = currState->htcr.t0sz;
+        currState->isUncacheable = currState->htcr.irgn0 == 0;
     } else {
         assert(longDescFormatInUse(currState->tc));
 
@@ -590,6 +604,8 @@ TableWalker::processWalkLPAE()
             ttbr1_min = (1ULL << 32) - (1ULL << (32 - currState->ttbcr.t1sz));
         else
             ttbr1_min = (1ULL << (32 - currState->ttbcr.t0sz));
+
+        const bool is_atomic = currState->req->isAtomic();
 
         // The following code snippet selects the appropriate translation table base
         // address (TTBR0 or TTBR1) and the appropriate starting lookup level
@@ -609,7 +625,7 @@ TableWalker::processWalkLPAE()
                     return std::make_shared<DataAbort>(
                         currState->vaddr_tainted,
                         TlbEntry::DomainType::NoAccess,
-                        currState->isWrite,
+                        is_atomic ? false : currState->isWrite,
                         ArmFault::TranslationLL + L1,
                         isStage2,
                         ArmFault::LpaeTran);
@@ -617,6 +633,7 @@ TableWalker::processWalkLPAE()
             ttbr = currState->tc->readMiscReg(snsBankedIndex(
                 MISCREG_TTBR0, currState->tc, !currState->isSecure));
             tsz = currState->ttbcr.t0sz;
+            currState->isUncacheable = currState->ttbcr.irgn0 == 0;
             if (ttbr0_max < (1ULL << 30))  // Upper limit < 1 GB
                 start_lookup_level = L2;
         } else if (currState->vaddr >= ttbr1_min) {
@@ -633,7 +650,7 @@ TableWalker::processWalkLPAE()
                     return std::make_shared<DataAbort>(
                         currState->vaddr_tainted,
                         TlbEntry::DomainType::NoAccess,
-                        currState->isWrite,
+                        is_atomic ? false : currState->isWrite,
                         ArmFault::TranslationLL + L1,
                         isStage2,
                         ArmFault::LpaeTran);
@@ -641,7 +658,9 @@ TableWalker::processWalkLPAE()
             ttbr = currState->tc->readMiscReg(snsBankedIndex(
                 MISCREG_TTBR1, currState->tc, !currState->isSecure));
             tsz = currState->ttbcr.t1sz;
-            if (ttbr1_min >= (1ULL << 31) + (1ULL << 30))  // Lower limit >= 3 GB
+            currState->isUncacheable = currState->ttbcr.irgn1 == 0;
+            // Lower limit >= 3 GB
+            if (ttbr1_min >= (1ULL << 31) + (1ULL << 30))
                 start_lookup_level = L2;
         } else {
             // Out of boundaries -> translation fault
@@ -655,7 +674,8 @@ TableWalker::processWalkLPAE()
                 return std::make_shared<DataAbort>(
                     currState->vaddr_tainted,
                     TlbEntry::DomainType::NoAccess,
-                    currState->isWrite, ArmFault::TranslationLL + L1,
+                    is_atomic ? false : currState->isWrite,
+                    ArmFault::TranslationLL + L1,
                     isStage2, ArmFault::LpaeTran);
         }
 
@@ -693,7 +713,7 @@ TableWalker::processWalkLPAE()
         return f;
     }
 
-    if (currState->sctlr.c == 0) {
+    if (currState->sctlr.c == 0 || currState->isUncacheable) {
         flag.set(Request::UNCACHEABLE);
     }
 
@@ -775,6 +795,7 @@ TableWalker::processWalkAArch64()
             panic_if(start_lookup_level == MAX_LOOKUP_LEVELS,
                      "Cannot discern lookup level from vtcr.{sl0,tg0}");
             ps = currState->vtcr.ps;
+            currState->isUncacheable = currState->vtcr.irgn0 == 0;
         } else {
             switch (bits(currState->vaddr, 63,48)) {
               case 0:
@@ -782,6 +803,8 @@ TableWalker::processWalkAArch64()
                 ttbr = currState->tc->readMiscReg(MISCREG_TTBR0_EL1);
                 tsz = adjustTableSizeAArch64(64 - currState->tcr.t0sz);
                 tg = GrainMap_tg0[currState->tcr.tg0];
+                currState->hpd = currState->tcr.hpd0;
+                currState->isUncacheable = currState->tcr.irgn0 == 0;
                 if (bits(currState->vaddr, 63, tsz) != 0x0 ||
                     currState->tcr.epd0)
                   fault = true;
@@ -791,6 +814,8 @@ TableWalker::processWalkAArch64()
                 ttbr = currState->tc->readMiscReg(MISCREG_TTBR1_EL1);
                 tsz = adjustTableSizeAArch64(64 - currState->tcr.t1sz);
                 tg = GrainMap_tg1[currState->tcr.tg1];
+                currState->hpd = currState->tcr.hpd1;
+                currState->isUncacheable = currState->tcr.irgn1 == 0;
                 if (bits(currState->vaddr, 63, tsz) != mask(64-tsz) ||
                     currState->tcr.epd1)
                   fault = true;
@@ -809,6 +834,9 @@ TableWalker::processWalkAArch64()
             ttbr = currState->tc->readMiscReg(MISCREG_TTBR0_EL2);
             tsz = adjustTableSizeAArch64(64 - currState->tcr.t0sz);
             tg = GrainMap_tg0[currState->tcr.tg0];
+            currState->hpd = currState->hcr.e2h ?
+                currState->tcr.hpd0 : currState->tcr.hpd;
+            currState->isUncacheable = currState->tcr.irgn0 == 0;
             break;
 
           case 0xffff:
@@ -816,6 +844,8 @@ TableWalker::processWalkAArch64()
             ttbr = currState->tc->readMiscReg(MISCREG_TTBR1_EL2);
             tsz = adjustTableSizeAArch64(64 - currState->tcr.t1sz);
             tg = GrainMap_tg1[currState->tcr.tg1];
+            currState->hpd = currState->tcr.hpd1;
+            currState->isUncacheable = currState->tcr.irgn1 == 0;
             if (bits(currState->vaddr, 63, tsz) != mask(64-tsz) ||
                 currState->tcr.epd1 || !currState->hcr.e2h)
               fault = true;
@@ -834,6 +864,8 @@ TableWalker::processWalkAArch64()
                 ttbr = currState->tc->readMiscReg(MISCREG_TTBR0_EL3);
                 tsz = adjustTableSizeAArch64(64 - currState->tcr.t0sz);
                 tg = GrainMap_tg0[currState->tcr.tg0];
+                currState->hpd = currState->tcr.hpd;
+                currState->isUncacheable = currState->tcr.irgn0 == 0;
                 break;
             default:
                 // invalid addr if top two bytes are not all 0s
@@ -842,6 +874,8 @@ TableWalker::processWalkAArch64()
         ps = currState->tcr.ps;
         break;
     }
+
+    const bool is_atomic = currState->req->isAtomic();
 
     if (fault) {
         Fault f;
@@ -854,7 +888,7 @@ TableWalker::processWalkAArch64()
             f = std::make_shared<DataAbort>(
                 currState->vaddr_tainted,
                 TlbEntry::DomainType::NoAccess,
-                currState->isWrite,
+                is_atomic ? false : currState->isWrite,
                 ArmFault::TranslationLL + L0,
                 isStage2, ArmFault::LpaeTran);
 
@@ -940,7 +974,7 @@ TableWalker::processWalkAArch64()
             f = std::make_shared<DataAbort>(
                 currState->vaddr_tainted,
                 TlbEntry::DomainType::NoAccess,
-                currState->isWrite,
+                is_atomic ? false : currState->isWrite,
                 ArmFault::AddressSizeLL + start_lookup_level,
                 isStage2,
                 ArmFault::LpaeTran);
@@ -980,7 +1014,7 @@ TableWalker::processWalkAArch64()
     }
 
     Request::Flags flag = Request::PT_WALK;
-    if (currState->sctlr.c == 0) {
+    if (currState->sctlr.c == 0 || currState->isUncacheable) {
         flag.set(Request::UNCACHEABLE);
     }
 
@@ -1452,6 +1486,8 @@ TableWalker::doL1Descriptor()
             currState->vaddr_tainted, currState->l1Desc.data);
     TlbEntry te;
 
+    const bool is_atomic = currState->req->isAtomic();
+
     switch (currState->l1Desc.type()) {
       case L1Descriptor::Ignore:
       case L1Descriptor::Reserved:
@@ -1472,7 +1508,7 @@ TableWalker::doL1Descriptor()
                 std::make_shared<DataAbort>(
                     currState->vaddr_tainted,
                     TlbEntry::DomainType::NoAccess,
-                    currState->isWrite,
+                    is_atomic ? false : currState->isWrite,
                     ArmFault::TranslationLL + L1, isStage2,
                     ArmFault::VmsaTran);
         return;
@@ -1486,7 +1522,7 @@ TableWalker::doL1Descriptor()
             currState->fault = std::make_shared<DataAbort>(
                 currState->vaddr_tainted,
                 currState->l1Desc.domain(),
-                currState->isWrite,
+                is_atomic ? false : currState->isWrite,
                 ArmFault::AccessFlagLL + L1,
                 isStage2,
                 ArmFault::VmsaTran);
@@ -1517,6 +1553,11 @@ TableWalker::doL1Descriptor()
             }
 
             Request::Flags flag = Request::PT_WALK;
+
+            if (currState->sctlr.c == 0 || currState->isUncacheable) {
+                flag.set(Request::UNCACHEABLE);
+            }
+
             if (currState->isSecure)
                 flag.set(Request::SECURE);
 
@@ -1533,6 +1574,26 @@ TableWalker::doL1Descriptor()
         }
       default:
         panic("A new type in a 2 bit field?\n");
+    }
+}
+
+Fault
+TableWalker::generateLongDescFault(ArmFault::FaultSource src)
+{
+    if (currState->isFetch) {
+        return std::make_shared<PrefetchAbort>(
+            currState->vaddr_tainted,
+            src + currState->longDesc.lookupLevel,
+            isStage2,
+            ArmFault::LpaeTran);
+    } else {
+        return std::make_shared<DataAbort>(
+            currState->vaddr_tainted,
+            TlbEntry::DomainType::NoAccess,
+            currState->req->isAtomic() ? false : currState->isWrite,
+            src + currState->longDesc.lookupLevel,
+            isStage2,
+            ArmFault::LpaeTran);
     }
 }
 
@@ -1573,65 +1634,41 @@ TableWalker::doLongDescriptor()
 
     switch (currState->longDesc.type()) {
       case LongDescriptor::Invalid:
+        DPRINTF(TLB, "L%d descriptor Invalid, causing fault type %d\n",
+                currState->longDesc.lookupLevel,
+                ArmFault::TranslationLL + currState->longDesc.lookupLevel);
+
+        currState->fault = generateLongDescFault(ArmFault::TranslationLL);
         if (!currState->timing) {
             currState->tc = NULL;
             currState->req = NULL;
         }
-
-        DPRINTF(TLB, "L%d descriptor Invalid, causing fault type %d\n",
-                currState->longDesc.lookupLevel,
-                ArmFault::TranslationLL + currState->longDesc.lookupLevel);
-        if (currState->isFetch)
-            currState->fault = std::make_shared<PrefetchAbort>(
-                currState->vaddr_tainted,
-                ArmFault::TranslationLL + currState->longDesc.lookupLevel,
-                isStage2,
-                ArmFault::LpaeTran);
-        else
-            currState->fault = std::make_shared<DataAbort>(
-                currState->vaddr_tainted,
-                TlbEntry::DomainType::NoAccess,
-                currState->isWrite,
-                ArmFault::TranslationLL + currState->longDesc.lookupLevel,
-                isStage2,
-                ArmFault::LpaeTran);
         return;
+
       case LongDescriptor::Block:
       case LongDescriptor::Page:
         {
-            bool fault = false;
-            bool aff = false;
+            auto fault_source = ArmFault::FaultSourceInvalid;
             // Check for address size fault
             if (checkAddrSizeFaultAArch64(
                     mbits(currState->longDesc.data, MaxPhysAddrRange - 1,
                           currState->longDesc.offsetBits()),
                     currState->physAddrRange)) {
-                fault = true;
+
                 DPRINTF(TLB, "L%d descriptor causing Address Size Fault\n",
                         currState->longDesc.lookupLevel);
+                fault_source = ArmFault::AddressSizeLL;
+
             // Check for access fault
             } else if (currState->longDesc.af() == 0) {
-                fault = true;
+
                 DPRINTF(TLB, "L%d descriptor causing Access Fault\n",
                         currState->longDesc.lookupLevel);
-                aff = true;
+                fault_source = ArmFault::AccessFlagLL;
             }
-            if (fault) {
-                if (currState->isFetch)
-                    currState->fault = std::make_shared<PrefetchAbort>(
-                        currState->vaddr_tainted,
-                        (aff ? ArmFault::AccessFlagLL : ArmFault::AddressSizeLL) +
-                        currState->longDesc.lookupLevel,
-                        isStage2,
-                        ArmFault::LpaeTran);
-                else
-                    currState->fault = std::make_shared<DataAbort>(
-                        currState->vaddr_tainted,
-                        TlbEntry::DomainType::NoAccess, currState->isWrite,
-                        (aff ? ArmFault::AccessFlagLL : ArmFault::AddressSizeLL) +
-                        currState->longDesc.lookupLevel,
-                        isStage2,
-                        ArmFault::LpaeTran);
+
+            if (fault_source != ArmFault::FaultSourceInvalid) {
+                currState->fault = generateLongDescFault(fault_source);
             } else {
                 insertTableEntry(currState->longDesc, true);
             }
@@ -1643,13 +1680,13 @@ TableWalker::doLongDescriptor()
             currState->secureLookup = currState->secureLookup &&
                 currState->longDesc.secureTable();
             currState->rwTable = currState->rwTable &&
-                currState->longDesc.rwTable();
+                (currState->longDesc.rwTable() || currState->hpd);
             currState->userTable = currState->userTable &&
-                currState->longDesc.userTable();
+                (currState->longDesc.userTable() || currState->hpd);
             currState->xnTable = currState->xnTable ||
-                currState->longDesc.xnTable();
+                (currState->longDesc.xnTable() && !currState->hpd);
             currState->pxnTable = currState->pxnTable ||
-                currState->longDesc.pxnTable();
+                (currState->longDesc.pxnTable() && !currState->hpd);
 
             // Set up next level lookup
             Addr next_desc_addr = currState->longDesc.nextDescAddr(
@@ -1666,21 +1703,9 @@ TableWalker::doLongDescriptor()
                     next_desc_addr, currState->physAddrRange)) {
                 DPRINTF(TLB, "L%d descriptor causing Address Size Fault\n",
                         currState->longDesc.lookupLevel);
-                if (currState->isFetch)
-                    currState->fault = std::make_shared<PrefetchAbort>(
-                        currState->vaddr_tainted,
-                        ArmFault::AddressSizeLL
-                        + currState->longDesc.lookupLevel,
-                        isStage2,
-                        ArmFault::LpaeTran);
-                else
-                    currState->fault = std::make_shared<DataAbort>(
-                        currState->vaddr_tainted,
-                        TlbEntry::DomainType::NoAccess, currState->isWrite,
-                        ArmFault::AddressSizeLL
-                        + currState->longDesc.lookupLevel,
-                        isStage2,
-                        ArmFault::LpaeTran);
+
+                currState->fault = generateLongDescFault(
+                    ArmFault::AddressSizeLL);
                 return;
             }
 
@@ -1700,6 +1725,10 @@ TableWalker::doLongDescriptor()
             Request::Flags flag = Request::PT_WALK;
             if (currState->secureLookup)
                 flag.set(Request::SECURE);
+
+            if (currState->sctlr.c == 0 || currState->isUncacheable) {
+                flag.set(Request::UNCACHEABLE);
+            }
 
             LookupLevel L = currState->longDesc.lookupLevel =
                 (LookupLevel) (currState->longDesc.lookupLevel + 1);
@@ -1744,6 +1773,8 @@ TableWalker::doL2Descriptor()
             currState->vaddr_tainted, currState->l2Desc.data);
     TlbEntry te;
 
+    const bool is_atomic = currState->req->isAtomic();
+
     if (currState->l2Desc.invalid()) {
         DPRINTF(TLB, "L2 descriptor invalid, causing fault\n");
         if (!currState->timing) {
@@ -1759,7 +1790,8 @@ TableWalker::doL2Descriptor()
         else
             currState->fault = std::make_shared<DataAbort>(
                 currState->vaddr_tainted, currState->l1Desc.domain(),
-                currState->isWrite, ArmFault::TranslationLL + L2,
+                is_atomic ? false : currState->isWrite,
+                ArmFault::TranslationLL + L2,
                 isStage2,
                 ArmFault::VmsaTran);
         return;
@@ -1774,7 +1806,8 @@ TableWalker::doL2Descriptor()
 
         currState->fault = std::make_shared<DataAbort>(
             currState->vaddr_tainted,
-            TlbEntry::DomainType::NoAccess, currState->isWrite,
+            TlbEntry::DomainType::NoAccess,
+            is_atomic ? false : currState->isWrite,
             ArmFault::AccessFlagLL + L2, isStage2,
             ArmFault::VmsaTran);
     }

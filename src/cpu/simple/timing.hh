@@ -266,10 +266,10 @@ class TimingSimpleCPU : public BaseSimpleCPU
   protected:
 
      /** Return a reference to the data port. */
-    MasterPort &getDataPort() override { return dcachePort; }
+    Port &getDataPort() override { return dcachePort; }
 
     /** Return a reference to the instruction port. */
-    MasterPort &getInstPort() override { return icachePort; }
+    Port &getInstPort() override { return icachePort; }
 
   public:
 
@@ -286,16 +286,16 @@ class TimingSimpleCPU : public BaseSimpleCPU
 
     Fault initiateMemRead(Addr addr, unsigned size,
             Request::Flags flags,
-            const std::vector<bool>& byteEnable =std::vector<bool>())
+            const std::vector<bool>& byte_enable =std::vector<bool>())
         override;
 
     Fault writeMem(uint8_t *data, unsigned size,
                    Addr addr, Request::Flags flags, uint64_t *res,
-                   const std::vector<bool>& byteEnable = std::vector<bool>())
+                   const std::vector<bool>& byte_enable = std::vector<bool>())
         override;
 
     Fault initiateMemAMO(Addr addr, unsigned size, Request::Flags flags,
-                         AtomicOpFunctor *amo_op) override;
+                         AtomicOpFunctorPtr amo_op) override;
 
     void fetch();
     void sendFetch(const Fault &fault,

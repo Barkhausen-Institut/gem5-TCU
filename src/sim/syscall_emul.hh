@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2013, 2015 ARM Limited
+ * Copyright (c) 2012-2013, 2015, 2019 ARM Limited
  * Copyright (c) 2015 Advanced Micro Devices, Inc.
  * All rights reserved
  *
@@ -127,9 +127,12 @@ SyscallReturn unimplementedFunc(SyscallDesc *desc, int num, ThreadContext *tc);
 
 /// Handler for unimplemented syscalls that we never intend to
 /// implement (signal handling, etc.) and should not affect the correct
-/// behavior of the program.  Print a warning only if the appropriate
-/// trace flag is enabled.  Return success to the target program.
+/// behavior of the program.  Prints a warning.  Return success to the target
+/// program.
 SyscallReturn ignoreFunc(SyscallDesc *desc, int num, ThreadContext *tc);
+/// Like above, but only prints a warning once per syscall desc it's used with.
+SyscallReturn
+ignoreWarnOnceFunc(SyscallDesc *desc, int num, ThreadContext *tc);
 
 // Target fallocateFunc() handler.
 SyscallReturn fallocateFunc(SyscallDesc *desc, int num, ThreadContext *tc);
@@ -171,8 +174,8 @@ SyscallReturn gethostnameFunc(SyscallDesc *desc, int num, ThreadContext *tc);
 SyscallReturn getcwdFunc(SyscallDesc *desc, int num, ThreadContext *tc);
 
 /// Target readlink() handler.
-SyscallReturn readlinkFunc(SyscallDesc *desc, int num, ThreadContext *tc,
-                           int index = 0);
+SyscallReturn readlinkImpl(SyscallDesc *desc, int num, ThreadContext *tc,
+                           int index);
 SyscallReturn readlinkFunc(SyscallDesc *desc, int num, ThreadContext *tc);
 
 /// Target unlink() handler.
@@ -226,6 +229,9 @@ SyscallReturn gettidFunc(SyscallDesc *desc, int num, ThreadContext *tc);
 /// Target chown() handler.
 SyscallReturn chownFunc(SyscallDesc *desc, int num, ThreadContext *tc);
 
+/// Target getpgrpFunc() handler.
+SyscallReturn getpgrpFunc(SyscallDesc *desc, int num, ThreadContext *tc);
+
 /// Target setpgid() handler.
 SyscallReturn setpgidFunc(SyscallDesc *desc, int num, ThreadContext *tc);
 
@@ -252,7 +258,10 @@ SyscallReturn pipeFunc(SyscallDesc *desc, int num, ThreadContext *tc);
 
 /// Internal pipe() handler.
 SyscallReturn pipeImpl(SyscallDesc *desc, int num, ThreadContext *tc,
-                       bool pseudoPipe);
+                       bool pseudo_pipe, bool is_pipe2=false);
+
+/// Target pipe() handler.
+SyscallReturn pipe2Func(SyscallDesc *desc, int num, ThreadContext *tc);
 
 /// Target getpid() handler.
 SyscallReturn getpidFunc(SyscallDesc *desc, int num, ThreadContext *tc);
@@ -307,9 +316,9 @@ SyscallReturn geteuidFunc(SyscallDesc *desc, int num, ThreadContext *tc);
 SyscallReturn getegidFunc(SyscallDesc *desc, int num, ThreadContext *tc);
 
 /// Target access() handler
-SyscallReturn accessFunc(SyscallDesc *desc, int num, ThreadContext *tc);
-SyscallReturn accessFunc(SyscallDesc *desc, int num, ThreadContext *tc,
+SyscallReturn accessImpl(SyscallDesc *desc, int num, ThreadContext *tc,
                          int index);
+SyscallReturn accessFunc(SyscallDesc *desc, int num, ThreadContext *tc);
 
 // Target getsockopt() handler.
 SyscallReturn getsockoptFunc(SyscallDesc *desc, int num, ThreadContext *tc);
@@ -362,7 +371,7 @@ futexFunc(SyscallDesc *desc, int callnum, ThreadContext *tc)
         if (val != mem_val)
             return -OS::TGT_EWOULDBLOCK;
 
-        if (OS::TGT_FUTEX_WAIT) {
+        if (OS::TGT_FUTEX_WAIT == op) {
             futex_map.suspend(uaddr, process->tgid(), tc);
         } else {
             futex_map.suspend_bitset(uaddr, process->tgid(), tc, val3);
@@ -532,67 +541,65 @@ getElapsedTimeNano(T1 &sec, T2 &nsec)
 
 template <typename target_stat, typename host_stat>
 void
-convertStatBuf(target_stat &tgt, host_stat *host, bool fakeTTY = false)
+convertStatBuf(target_stat &tgt, host_stat *host,
+               ByteOrder bo, bool fakeTTY=false)
 {
-    using namespace TheISA;
-
     if (fakeTTY)
         tgt->st_dev = 0xA;
     else
         tgt->st_dev = host->st_dev;
-    tgt->st_dev = TheISA::htog(tgt->st_dev);
+    tgt->st_dev = htog(tgt->st_dev, bo);
     tgt->st_ino = host->st_ino;
-    tgt->st_ino = TheISA::htog(tgt->st_ino);
+    tgt->st_ino = htog(tgt->st_ino, bo);
     tgt->st_mode = host->st_mode;
     if (fakeTTY) {
         // Claim to be a character device
         tgt->st_mode &= ~S_IFMT;    // Clear S_IFMT
         tgt->st_mode |= S_IFCHR;    // Set S_IFCHR
     }
-    tgt->st_mode = TheISA::htog(tgt->st_mode);
+    tgt->st_mode = htog(tgt->st_mode, bo);
     tgt->st_nlink = host->st_nlink;
-    tgt->st_nlink = TheISA::htog(tgt->st_nlink);
+    tgt->st_nlink = htog(tgt->st_nlink, bo);
     tgt->st_uid = host->st_uid;
-    tgt->st_uid = TheISA::htog(tgt->st_uid);
+    tgt->st_uid = htog(tgt->st_uid, bo);
     tgt->st_gid = host->st_gid;
-    tgt->st_gid = TheISA::htog(tgt->st_gid);
+    tgt->st_gid = htog(tgt->st_gid, bo);
     if (fakeTTY)
         tgt->st_rdev = 0x880d;
     else
         tgt->st_rdev = host->st_rdev;
-    tgt->st_rdev = TheISA::htog(tgt->st_rdev);
+    tgt->st_rdev = htog(tgt->st_rdev, bo);
     tgt->st_size = host->st_size;
-    tgt->st_size = TheISA::htog(tgt->st_size);
+    tgt->st_size = htog(tgt->st_size, bo);
     tgt->st_atimeX = host->st_atime;
-    tgt->st_atimeX = TheISA::htog(tgt->st_atimeX);
+    tgt->st_atimeX = htog(tgt->st_atimeX, bo);
     tgt->st_mtimeX = host->st_mtime;
-    tgt->st_mtimeX = TheISA::htog(tgt->st_mtimeX);
+    tgt->st_mtimeX = htog(tgt->st_mtimeX, bo);
     tgt->st_ctimeX = host->st_ctime;
-    tgt->st_ctimeX = TheISA::htog(tgt->st_ctimeX);
+    tgt->st_ctimeX = htog(tgt->st_ctimeX, bo);
     // Force the block size to be 8KB. This helps to ensure buffered io works
     // consistently across different hosts.
     tgt->st_blksize = 0x2000;
-    tgt->st_blksize = TheISA::htog(tgt->st_blksize);
+    tgt->st_blksize = htog(tgt->st_blksize, bo);
     tgt->st_blocks = host->st_blocks;
-    tgt->st_blocks = TheISA::htog(tgt->st_blocks);
+    tgt->st_blocks = htog(tgt->st_blocks, bo);
 }
 
 // Same for stat64
 
 template <typename target_stat, typename host_stat64>
 void
-convertStat64Buf(target_stat &tgt, host_stat64 *host, bool fakeTTY = false)
+convertStat64Buf(target_stat &tgt, host_stat64 *host,
+                 ByteOrder bo, bool fakeTTY=false)
 {
-    using namespace TheISA;
-
-    convertStatBuf<target_stat, host_stat64>(tgt, host, fakeTTY);
+    convertStatBuf<target_stat, host_stat64>(tgt, host, bo, fakeTTY);
 #if defined(STAT_HAVE_NSEC)
     tgt->st_atime_nsec = host->st_atime_nsec;
-    tgt->st_atime_nsec = TheISA::htog(tgt->st_atime_nsec);
+    tgt->st_atime_nsec = htog(tgt->st_atime_nsec, bo);
     tgt->st_mtime_nsec = host->st_mtime_nsec;
-    tgt->st_mtime_nsec = TheISA::htog(tgt->st_mtime_nsec);
+    tgt->st_mtime_nsec = htog(tgt->st_mtime_nsec, bo);
     tgt->st_ctime_nsec = host->st_ctime_nsec;
-    tgt->st_ctime_nsec = TheISA::htog(tgt->st_ctime_nsec);
+    tgt->st_ctime_nsec = htog(tgt->st_ctime_nsec, bo);
 #else
     tgt->st_atime_nsec = 0;
     tgt->st_mtime_nsec = 0;
@@ -608,7 +615,7 @@ copyOutStatBuf(PortProxy &mem, Addr addr,
 {
     typedef TypedBufferArg<typename OS::tgt_stat> tgt_stat_buf;
     tgt_stat_buf tgt(addr);
-    convertStatBuf<tgt_stat_buf, hst_stat>(tgt, host, fakeTTY);
+    convertStatBuf<tgt_stat_buf, hst_stat>(tgt, host, OS::byteOrder, fakeTTY);
     tgt.copyOut(mem);
 }
 
@@ -619,7 +626,8 @@ copyOutStat64Buf(PortProxy &mem, Addr addr,
 {
     typedef TypedBufferArg<typename OS::tgt_stat64> tgt_stat_buf;
     tgt_stat_buf tgt(addr);
-    convertStat64Buf<tgt_stat_buf, hst_stat64>(tgt, host, fakeTTY);
+    convertStat64Buf<tgt_stat_buf, hst_stat64>(
+            tgt, host, OS::byteOrder, fakeTTY);
     tgt.copyOut(mem);
 }
 
@@ -630,27 +638,29 @@ copyOutStatfsBuf(PortProxy &mem, Addr addr,
 {
     TypedBufferArg<typename OS::tgt_statfs> tgt(addr);
 
-    tgt->f_type = TheISA::htog(host->f_type);
+    const ByteOrder bo = OS::byteOrder;
+
+    tgt->f_type = htog(host->f_type, bo);
 #if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
-    tgt->f_bsize = TheISA::htog(host->f_iosize);
+    tgt->f_bsize = htog(host->f_iosize, bo);
 #else
-    tgt->f_bsize = TheISA::htog(host->f_bsize);
+    tgt->f_bsize = htog(host->f_bsize, bo);
 #endif
-    tgt->f_blocks = TheISA::htog(host->f_blocks);
-    tgt->f_bfree = TheISA::htog(host->f_bfree);
-    tgt->f_bavail = TheISA::htog(host->f_bavail);
-    tgt->f_files = TheISA::htog(host->f_files);
-    tgt->f_ffree = TheISA::htog(host->f_ffree);
+    tgt->f_blocks = htog(host->f_blocks, bo);
+    tgt->f_bfree = htog(host->f_bfree, bo);
+    tgt->f_bavail = htog(host->f_bavail, bo);
+    tgt->f_files = htog(host->f_files, bo);
+    tgt->f_ffree = htog(host->f_ffree, bo);
     memcpy(&tgt->f_fsid, &host->f_fsid, sizeof(host->f_fsid));
 #if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
-    tgt->f_namelen = TheISA::htog(host->f_namemax);
-    tgt->f_frsize = TheISA::htog(host->f_bsize);
+    tgt->f_namelen = htog(host->f_namemax, bo);
+    tgt->f_frsize = htog(host->f_bsize, bo);
 #elif defined(__APPLE__)
     tgt->f_namelen = 0;
     tgt->f_frsize = 0;
 #else
-    tgt->f_namelen = TheISA::htog(host->f_namelen);
-    tgt->f_frsize = TheISA::htog(host->f_frsize);
+    tgt->f_namelen = htog(host->f_namelen, bo);
+    tgt->f_frsize = htog(host->f_frsize, bo);
 #endif
 #if defined(__linux__)
     memcpy(&tgt->f_spare, &host->f_spare, sizeof(host->f_spare));
@@ -946,7 +956,7 @@ faccessatFunc(SyscallDesc *desc, int callnum, ThreadContext *tc)
     int dirfd = process->getSyscallArg(tc, index);
     if (dirfd != OS::TGT_AT_FDCWD)
         warn("faccessat: first argument not AT_FDCWD; unlikely to work");
-    return accessFunc(desc, callnum, tc, 1);
+    return accessImpl(desc, callnum, tc, 1);
 }
 
 /// Target readlinkat() handler
@@ -959,7 +969,7 @@ readlinkatFunc(SyscallDesc *desc, int callnum, ThreadContext *tc)
     int dirfd = process->getSyscallArg(tc, index);
     if (dirfd != OS::TGT_AT_FDCWD)
         warn("openat: first argument not AT_FDCWD; unlikely to work");
-    return readlinkFunc(desc, callnum, tc, 1);
+    return readlinkImpl(desc, callnum, tc, 1);
 }
 
 /// Target renameat() handler.
@@ -1338,7 +1348,7 @@ fstat64Func(SyscallDesc *desc, int callnum, ThreadContext *tc)
     int tgt_fd = p->getSyscallArg(tc, index);
     Addr bufPtr = p->getSyscallArg(tc, index);
 
-    auto ffdp = std::dynamic_pointer_cast<FileFDEntry>((*p->fds)[tgt_fd]);
+    auto ffdp = std::dynamic_pointer_cast<HBFDEntry>((*p->fds)[tgt_fd]);
     if (!ffdp)
         return -EBADF;
     int sim_fd = ffdp->getSimFD();
@@ -1556,7 +1566,9 @@ cloneFunc(SyscallDesc *desc, int callnum, ThreadContext *tc)
     pp->useArchPT = p->useArchPT;
     pp->kvmInSE = p->kvmInSE;
     Process *cp = pp->create();
-    delete pp;
+    // TODO: there is no way to know when the Process SimObject is done with
+    // the params pointer. Both the params pointer (pp) and the process
+    // pointer (cp) are normally managed in python and are never cleaned up.
 
     Process *owner = ctc->getProcessPtr();
     ctc->setProcessPtr(cp);
@@ -1671,7 +1683,7 @@ readvFunc(SyscallDesc *desc, int callnum, ThreadContext *tc)
     for (size_t i = 0; i < count; ++i) {
         prox.readBlob(tiov_base + (i * sizeof(typename OS::tgt_iovec)),
                       &tiov[i], sizeof(typename OS::tgt_iovec));
-        hiov[i].iov_len = TheISA::gtoh(tiov[i].iov_len);
+        hiov[i].iov_len = gtoh(tiov[i].iov_len, OS::byteOrder);
         hiov[i].iov_base = new char [hiov[i].iov_len];
     }
 
@@ -1680,7 +1692,7 @@ readvFunc(SyscallDesc *desc, int callnum, ThreadContext *tc)
 
     for (size_t i = 0; i < count; ++i) {
         if (result != -1) {
-            prox.writeBlob(TheISA::htog(tiov[i].iov_base),
+            prox.writeBlob(htog(tiov[i].iov_base, OS::byteOrder),
                            hiov[i].iov_base, hiov[i].iov_len);
         }
         delete [] (char *)hiov[i].iov_base;
@@ -1712,9 +1724,9 @@ writevFunc(SyscallDesc *desc, int callnum, ThreadContext *tc)
 
         prox.readBlob(tiov_base + i*sizeof(typename OS::tgt_iovec),
                       &tiov, sizeof(typename OS::tgt_iovec));
-        hiov[i].iov_len = TheISA::gtoh(tiov.iov_len);
+        hiov[i].iov_len = gtoh(tiov.iov_len, OS::byteOrder);
         hiov[i].iov_base = new char [hiov[i].iov_len];
-        prox.readBlob(TheISA::gtoh(tiov.iov_base), hiov[i].iov_base,
+        prox.readBlob(gtoh(tiov.iov_base, OS::byteOrder), hiov[i].iov_base,
                       hiov[i].iov_len);
     }
 
@@ -1878,22 +1890,17 @@ mmapImpl(SyscallDesc *desc, int num, ThreadContext *tc, bool is_mmap2)
         // executing inside the loader by checking the program counter value.
         // XXX: with multiprogrammed workloads or multi-node configurations,
         // this will not work since there is a single global symbol table.
-        ObjectFile *interpreter = p->getInterpreter();
-        if (interpreter) {
-            Addr text_start = interpreter->textBase();
-            Addr text_end = text_start + interpreter->textSize();
+        if (p->interpImage.contains(tc->pcState().instAddr())) {
+            std::shared_ptr<FDEntry> fdep = (*p->fds)[tgt_fd];
+            auto ffdp = std::dynamic_pointer_cast<FileFDEntry>(fdep);
+            auto process = tc->getProcessPtr();
+            ObjectFile *lib = createObjectFile(
+                process->checkPathRedirect(
+                    ffdp->getFileName()));
 
-            Addr pc = tc->pcState().pc();
-
-            if (pc >= text_start && pc < text_end) {
-                std::shared_ptr<FDEntry> fdep = (*p->fds)[tgt_fd];
-                auto ffdp = std::dynamic_pointer_cast<FileFDEntry>(fdep);
-                ObjectFile *lib = createObjectFile(ffdp->getFileName());
-
-                if (lib) {
-                    lib->loadAllSymbols(debugSymbolTable,
-                                        lib->textBase(), start);
-                }
+            if (lib) {
+                lib->loadAllSymbols(debugSymbolTable,
+                                    lib->buildImage().minAddr(), start);
             }
         }
 
@@ -1955,19 +1962,26 @@ getrlimitFunc(SyscallDesc *desc, int callnum, ThreadContext *tc)
     unsigned resource = process->getSyscallArg(tc, index);
     TypedBufferArg<typename OS::rlimit> rlp(process->getSyscallArg(tc, index));
 
+    const ByteOrder bo = OS::byteOrder;
     switch (resource) {
       case OS::TGT_RLIMIT_STACK:
         // max stack size in bytes: make up a number (8MB for now)
         rlp->rlim_cur = rlp->rlim_max = 8 * 1024 * 1024;
-        rlp->rlim_cur = TheISA::htog(rlp->rlim_cur);
-        rlp->rlim_max = TheISA::htog(rlp->rlim_max);
+        rlp->rlim_cur = htog(rlp->rlim_cur, bo);
+        rlp->rlim_max = htog(rlp->rlim_max, bo);
         break;
 
       case OS::TGT_RLIMIT_DATA:
         // max data segment size in bytes: make up a number
         rlp->rlim_cur = rlp->rlim_max = 256 * 1024 * 1024;
-        rlp->rlim_cur = TheISA::htog(rlp->rlim_cur);
-        rlp->rlim_max = TheISA::htog(rlp->rlim_max);
+        rlp->rlim_cur = htog(rlp->rlim_cur, bo);
+        rlp->rlim_max = htog(rlp->rlim_max, bo);
+        break;
+
+      case OS::TGT_RLIMIT_NPROC:
+        rlp->rlim_cur = rlp->rlim_max = tc->getSystemPtr()->numContexts();
+        rlp->rlim_cur = htog(rlp->rlim_cur, bo);
+        rlp->rlim_max = htog(rlp->rlim_max, bo);
         break;
 
       default:
@@ -1996,21 +2010,22 @@ prlimitFunc(SyscallDesc *desc, int callnum, ThreadContext *tc)
     if (n != 0)
         warn("prlimit: ignoring new rlimit");
     Addr o = process->getSyscallArg(tc, index);
-    if (o != 0)
-    {
+    if (o != 0) {
+
+        const ByteOrder bo = OS::byteOrder;
         TypedBufferArg<typename OS::rlimit> rlp(o);
         switch (resource) {
           case OS::TGT_RLIMIT_STACK:
             // max stack size in bytes: make up a number (8MB for now)
             rlp->rlim_cur = rlp->rlim_max = 8 * 1024 * 1024;
-            rlp->rlim_cur = TheISA::htog(rlp->rlim_cur);
-            rlp->rlim_max = TheISA::htog(rlp->rlim_max);
+            rlp->rlim_cur = htog(rlp->rlim_cur, bo);
+            rlp->rlim_max = htog(rlp->rlim_max, bo);
             break;
           case OS::TGT_RLIMIT_DATA:
             // max data segment size in bytes: make up a number
             rlp->rlim_cur = rlp->rlim_max = 256*1024*1024;
-            rlp->rlim_cur = TheISA::htog(rlp->rlim_cur);
-            rlp->rlim_max = TheISA::htog(rlp->rlim_max);
+            rlp->rlim_cur = htog(rlp->rlim_cur, bo);
+            rlp->rlim_max = htog(rlp->rlim_max, bo);
             break;
           default:
             warn("prlimit: unimplemented resource %d", resource);
@@ -2034,8 +2049,8 @@ clock_gettimeFunc(SyscallDesc *desc, int num, ThreadContext *tc)
 
     getElapsedTimeNano(tp->tv_sec, tp->tv_nsec);
     tp->tv_sec += seconds_since_epoch;
-    tp->tv_sec = TheISA::htog(tp->tv_sec);
-    tp->tv_nsec = TheISA::htog(tp->tv_nsec);
+    tp->tv_sec = htog(tp->tv_sec, OS::byteOrder);
+    tp->tv_nsec = htog(tp->tv_nsec, OS::byteOrder);
 
     tp.copyOut(tc->getVirtProxy());
 
@@ -2071,8 +2086,8 @@ gettimeofdayFunc(SyscallDesc *desc, int callnum, ThreadContext *tc)
 
     getElapsedTimeMicro(tp->tv_sec, tp->tv_usec);
     tp->tv_sec += seconds_since_epoch;
-    tp->tv_sec = TheISA::htog(tp->tv_sec);
-    tp->tv_usec = TheISA::htog(tp->tv_usec);
+    tp->tv_sec = htog(tp->tv_sec, OS::byteOrder);
+    tp->tv_usec = htog(tp->tv_usec, OS::byteOrder);
 
     tp.copyOut(tc->getVirtProxy());
 
@@ -2100,8 +2115,8 @@ utimesFunc(SyscallDesc *desc, int callnum, ThreadContext *tc)
 
     struct timeval hostTimeval[2];
     for (int i = 0; i < 2; ++i) {
-        hostTimeval[i].tv_sec = TheISA::gtoh((*tp)[i].tv_sec);
-        hostTimeval[i].tv_usec = TheISA::gtoh((*tp)[i].tv_usec);
+        hostTimeval[i].tv_sec = gtoh((*tp)[i].tv_sec, OS::byteOrder);
+        hostTimeval[i].tv_usec = gtoh((*tp)[i].tv_usec, OS::byteOrder);
     }
 
     // Adjust path for cwd and redirection
@@ -2119,7 +2134,6 @@ template <class OS>
 SyscallReturn
 execveFunc(SyscallDesc *desc, int callnum, ThreadContext *tc)
 {
-    desc->setFlags(0);
     auto p = tc->getProcessPtr();
 
     int index = 0;
@@ -2203,8 +2217,7 @@ execveFunc(SyscallDesc *desc, int callnum, ThreadContext *tc)
     TheISA::PCState pcState = tc->pcState();
     tc->setNPC(pcState.instAddr());
 
-    desc->setFlags(SyscallDesc::SuppressReturnValue);
-    return 0;
+    return SyscallReturn();
 }
 
 /// Target getrusage() function.
@@ -2239,8 +2252,8 @@ getrusageFunc(SyscallDesc *desc, int callnum, ThreadContext *tc)
     switch (who) {
       case OS::TGT_RUSAGE_SELF:
         getElapsedTimeMicro(rup->ru_utime.tv_sec, rup->ru_utime.tv_usec);
-        rup->ru_utime.tv_sec = TheISA::htog(rup->ru_utime.tv_sec);
-        rup->ru_utime.tv_usec = TheISA::htog(rup->ru_utime.tv_usec);
+        rup->ru_utime.tv_sec = htog(rup->ru_utime.tv_sec, OS::byteOrder);
+        rup->ru_utime.tv_usec = htog(rup->ru_utime.tv_usec, OS::byteOrder);
         break;
 
       case OS::TGT_RUSAGE_CHILDREN:
@@ -2276,7 +2289,7 @@ timesFunc(SyscallDesc *desc, int callnum, ThreadContext *tc)
     bufp->tms_cstime = 0;
 
     // Convert to host endianness
-    bufp->tms_utime = TheISA::htog(bufp->tms_utime);
+    bufp->tms_utime = htog(bufp->tms_utime, OS::byteOrder);
 
     // Write back
     bufp.copyOut(tc->getVirtProxy());
@@ -2299,7 +2312,7 @@ timeFunc(SyscallDesc *desc, int callnum, ThreadContext *tc)
     Addr taddr = (Addr)process->getSyscallArg(tc, index);
     if (taddr != 0) {
         typename OS::time_t t = sec;
-        t = TheISA::htog(t);
+        t = htog(t, OS::byteOrder);
         PortProxy &p = tc->getVirtProxy();
         p.writeBlob(taddr, &t, (int)sizeof(typename OS::time_t));
     }

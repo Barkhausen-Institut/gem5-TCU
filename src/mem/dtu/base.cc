@@ -296,7 +296,7 @@ BaseDtu::CacheMemSlavePort::getAddrRanges() const
 }
 
 BaseDtu::BaseDtu(BaseDtuParams* p)
-  : MemObject(p),
+  : ClockedObject(p),
     nocMasterPort(*this),
     nocSlavePort(*this),
     icacheMasterPort(*this),
@@ -316,7 +316,7 @@ BaseDtu::BaseDtu(BaseDtuParams* p)
 void
 BaseDtu::init()
 {
-    MemObject::init();
+    ClockedObject::init();
 
     assert(nocMasterPort.isConnected());
     assert(nocSlavePort.isConnected());

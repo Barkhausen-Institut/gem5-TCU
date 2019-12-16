@@ -37,7 +37,7 @@
 
 class DtuAccelStream;
 
-class AccelLogic : public MemObject
+class AccelLogic : public ClockedObject
 {
     class CpuPort : public MasterPort
     {

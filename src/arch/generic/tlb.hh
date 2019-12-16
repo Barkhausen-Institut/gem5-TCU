@@ -48,7 +48,6 @@
 #include "sim/sim_object.hh"
 
 class ThreadContext;
-class BaseMasterPort;
 
 class BaseTLB : public SimObject
 {
@@ -140,26 +139,6 @@ class BaseTLB : public SimObject
     virtual Port* getTableWalkerPort() { return NULL; }
 
     void memInvalidate() { flushAll(); }
-};
-
-class GenericTLB : public BaseTLB
-{
-  protected:
-    GenericTLB(const Params *p)
-        : BaseTLB(p)
-    {}
-
-  public:
-    void demapPage(Addr vaddr, uint64_t asn) override;
-
-    Fault translateAtomic(
-        const RequestPtr &req, ThreadContext *tc, Mode mode) override;
-    void translateTiming(
-        const RequestPtr &req, ThreadContext *tc,
-        Translation *translation, Mode mode) override;
-
-    Fault finalizePhysical(
-        const RequestPtr &req, ThreadContext *tc, Mode mode) const override;
 };
 
 #endif // __ARCH_GENERIC_TLB_HH__

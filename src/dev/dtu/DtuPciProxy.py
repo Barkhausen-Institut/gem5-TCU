@@ -25,7 +25,7 @@
 # of the authors and should not be interpreted as representing official policies,
 # either expressed or implied, of the FreeBSD Project.
 
-from MemObject import MemObject
+from ClockedObject import ClockedObject
 from m5.params import *
 from m5.proxy import *
 from PciHost import *
@@ -46,7 +46,7 @@ class DtuPciHost(PciHost):
     pci_dma_base = Param.Addr(0, "Base address for DMA memory accesses")
 
 
-class DtuPciProxy(MemObject):
+class DtuPciProxy(ClockedObject):
     type = 'DtuPciProxy'
     cxx_header = "dev/dtu/pci_proxy.hh"
 

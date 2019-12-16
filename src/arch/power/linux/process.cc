@@ -51,7 +51,7 @@ using namespace PowerISA;
 namespace
 {
 
-class PowerLinuxObjectFileLoader : public ObjectFile::Loader
+class PowerLinuxObjectFileLoader : public Process::Loader
 {
   public:
     Process *
@@ -468,6 +468,12 @@ PowerLinuxProcess::initState()
     PowerProcess::initState();
 }
 
+void
+PowerLinuxProcess::syscall(ThreadContext *tc, Fault *fault)
+{
+    doSyscall(tc->readIntReg(0), tc, fault);
+}
+
 RegVal
 PowerLinuxProcess::getSyscallArg(ThreadContext *tc, int &i)
 {
@@ -475,13 +481,4 @@ PowerLinuxProcess::getSyscallArg(ThreadContext *tc, int &i)
     // This limit may need to be increased even further.
     assert(i < 6);
     return tc->readIntReg(ArgumentReg0 + i++);
-}
-
-void
-PowerLinuxProcess::setSyscallArg(ThreadContext *tc, int i, RegVal val)
-{
-    // Linux apparently allows more parameter than the ABI says it should.
-    // This limit may need to be increased even further.
-    assert(i < 6);
-    tc->setIntReg(ArgumentReg0 + i, val);
 }

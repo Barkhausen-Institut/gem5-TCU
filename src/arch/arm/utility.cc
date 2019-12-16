@@ -192,6 +192,15 @@ copyRegs(ThreadContext *src, ThreadContext *dest)
     dynamic_cast<TLB *>(dest->getDTBPtr())->invalidateMiscReg();
 }
 
+void
+sendEvent(ThreadContext *tc)
+{
+    if (tc->readMiscReg(MISCREG_SEV_MAILBOX) == 0) {
+        // Post Interrupt and wake cpu if needed
+        tc->getCpuPtr()->postInterrupt(tc->threadId(), INT_SEV, 0);
+    }
+}
+
 bool
 inSecureState(ThreadContext *tc)
 {
@@ -225,9 +234,7 @@ longDescFormatInUse(ThreadContext *tc)
 RegVal
 readMPIDR(ArmSystem *arm_sys, ThreadContext *tc)
 {
-    CPSR cpsr = tc->readMiscReg(MISCREG_CPSR);
-    const ExceptionLevel current_el =
-        opModeToEL((OperatingMode) (uint8_t) cpsr.mode);
+    const ExceptionLevel current_el = currEL(tc);
 
     const bool is_secure = isSecureBelowEL3(tc);
 
@@ -341,7 +348,7 @@ ELUsingAArch32K(ThreadContext *tc, ExceptionLevel el)
             // EL0 controlled by PSTATE
             CPSR cpsr = tc->readMiscReg(MISCREG_CPSR);
 
-            known = (cpsr.el == EL0);
+            known = (currEL(tc) == EL0);
             aarch32 = (cpsr.width == 1);
         } else {
             known = true;
@@ -356,7 +363,7 @@ ELUsingAArch32K(ThreadContext *tc, ExceptionLevel el)
 bool
 isBigEndian64(ThreadContext *tc)
 {
-    switch (opModeToEL(currOpMode(tc))) {
+    switch (currEL(tc)) {
       case EL3:
         return ((SCTLR) tc->readMiscReg(MISCREG_SCTLR_EL3)).ee;
       case EL2:
@@ -820,7 +827,7 @@ decodeMrsMsrBankedReg(uint8_t sysM, bool r, bool &isIntReg, int &regIdx,
 bool
 SPAlignmentCheckEnabled(ThreadContext* tc)
 {
-    switch (opModeToEL(currOpMode(tc))) {
+    switch (currEL(tc)) {
       case EL3:
         return ((SCTLR) tc->readMiscReg(MISCREG_SCTLR_EL3)).sa;
       case EL2:

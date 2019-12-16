@@ -87,16 +87,20 @@ SMMUTranslationProcess::SMMUTranslationProcess(const std::string &name,
     // Decrease number of pending translation slots on the slave interface
     assert(ifc.xlateSlotsRemaining > 0);
     ifc.xlateSlotsRemaining--;
+
+    ifc.pendingMemAccesses++;
     reinit();
 }
 
 SMMUTranslationProcess::~SMMUTranslationProcess()
 {
     // Increase number of pending translation slots on the slave interface
-    ifc.xlateSlotsRemaining++;
-    // If no more SMMU translations are pending (all slots available),
+    assert(ifc.pendingMemAccesses > 0);
+    ifc.pendingMemAccesses--;
+
+    // If no more SMMU memory accesses are pending,
     // signal SMMU Slave Interface as drained
-    if (ifc.xlateSlotsRemaining == ifc.params()->xlate_slots) {
+    if (ifc.pendingMemAccesses == 0) {
         ifc.signalDrainDone();
     }
 }
@@ -155,8 +159,7 @@ SMMUTranslationProcess::main(Yield &yield)
 
     recvTick = curTick();
 
-
-    if (!(smmu.regs.cr0 & 0x1)) {
+    if (!(smmu.regs.cr0 & CR0_SMMUEN_MASK)) {
         // SMMU disabled
         doDelay(yield, Cycles(1));
         completeTransaction(yield, bypass(request.addr));
@@ -223,7 +226,10 @@ SMMUTranslationProcess::main(Yield &yield)
         hazardIdRelease();
 
         if (tr.fault != FAULT_NONE)
-            panic("fault\n");
+            panic("Translation Fault (addr=%#x, size=%#x, sid=%d, ssid=%d, "
+                    "isWrite=%d, isPrefetch=%d, isAtsRequest=%d)\n",
+                    request.addr, request.size, request.sid, request.ssid,
+                    request.isWrite, request.isPrefetch, request.isAtsRequest);
 
         completeTransaction(yield, tr);
     }
@@ -532,6 +538,9 @@ SMMUTranslationProcess::configCacheLookup(Yield &yield, TranslContext &tc)
     tc.stage1TranslGranule = e->stage1_tg;
     tc.stage2TranslGranule = e->stage2_tg;
 
+    tc.t0sz = e->t0sz;
+    tc.s2t0sz = e->s2t0sz;
+
     return true;
 }
 
@@ -555,6 +564,8 @@ SMMUTranslationProcess::configCacheUpdate(Yield &yield,
     e.vmid = tc.vmid;
     e.stage1_tg = tc.stage1TranslGranule;
     e.stage2_tg = tc.stage2TranslGranule;
+    e.t0sz = tc.t0sz;
+    e.s2t0sz = tc.s2t0sz;
 
     doSemaphoreDown(yield, smmu.configSem);
 
@@ -605,10 +616,12 @@ SMMUTranslationProcess::findConfig(Yield &yield,
         tc.httb = ste.dw3.s2ttb << STE_S2TTB_SHIFT;
         tc.vmid = ste.dw2.s2vmid;
         tc.stage2TranslGranule = ste.dw2.s2tg;
+        tc.s2t0sz = ste.dw2.s2t0sz;
     } else {
         tc.httb = 0xdeadbeef;
         tc.vmid = 0;
         tc.stage2TranslGranule = TRANS_GRANULE_INVALID;
+        tc.s2t0sz = 0;
     }
 
 
@@ -621,11 +634,13 @@ SMMUTranslationProcess::findConfig(Yield &yield,
         tc.ttb1 = cd.dw2.ttb1 << CD_TTB_SHIFT;
         tc.asid = cd.dw0.asid;
         tc.stage1TranslGranule = cd.dw0.tg0;
+        tc.t0sz = cd.dw0.t0sz;
     } else {
         tc.ttb0 = 0xcafebabe;
         tc.ttb1 = 0xcafed00d;
         tc.asid = 0;
         tc.stage1TranslGranule = TRANS_GRANULE_INVALID;
+        tc.t0sz = 0;
     }
 
     return true;
@@ -791,7 +806,7 @@ SMMUTranslationProcess::walkStage1And2(Yield &yield, Addr addr,
         tr = combineTranslations(tr, s2tr);
     }
 
-    walkCacheUpdate(yield, addr, tr.addrMask, tr.addr,
+    walkCacheUpdate(yield, addr, tr.addrMask, walkPtr,
                     1, level, true, tr.writable);
 
     return tr;
@@ -875,7 +890,7 @@ SMMUTranslationProcess::translateStage1And2(Yield &yield, Addr addr)
     // Level here is actually (level+1) so we can count down
     // to 0 using unsigned int.
     for (level = pt_ops->lastLevel() + 1;
-        level > pt_ops->firstLevel();
+        level > pt_ops->firstLevel(context.t0sz);
         level--)
     {
         walkCacheLookup(yield, walk_ep, addr,
@@ -908,7 +923,8 @@ SMMUTranslationProcess::translateStage1And2(Yield &yield, Addr addr)
             table_addr = s2tr.addr;
         }
 
-        tr = walkStage1And2(yield, addr, pt_ops, pt_ops->firstLevel(),
+        tr = walkStage1And2(yield, addr, pt_ops,
+                            pt_ops->firstLevel(context.t0sz),
                             table_addr);
     }
 
@@ -949,13 +965,13 @@ SMMUTranslationProcess::translateStage2(Yield &yield, Addr addr, bool final_tr)
     }
 
     const WalkCache::Entry *walk_ep = NULL;
-    unsigned level = pt_ops->firstLevel();
+    unsigned level = pt_ops->firstLevel(context.s2t0sz);
 
     if (final_tr || smmu.walkCacheNonfinalEnable) {
         // Level here is actually (level+1) so we can count down
         // to 0 using unsigned int.
         for (level = pt_ops->lastLevel() + 1;
-            level > pt_ops->firstLevel();
+            level > pt_ops->firstLevel(context.s2t0sz);
             level--)
         {
             walkCacheLookup(yield, walk_ep, addr,
@@ -981,7 +997,8 @@ SMMUTranslationProcess::translateStage2(Yield &yield, Addr addr, bool final_tr)
                             level + 1, walk_ep->pa);
         }
     } else {
-        tr = walkStage2(yield, addr, final_tr, pt_ops, pt_ops->firstLevel(),
+        tr = walkStage2(yield, addr, final_tr, pt_ops,
+                        pt_ops->firstLevel(context.s2t0sz),
                         context.httb);
     }
 
@@ -1222,6 +1239,7 @@ SMMUTranslationProcess::completeTransaction(Yield &yield,
 
 
     smmu.translationTimeDist.sample(curTick() - recvTick);
+    ifc.xlateSlotsRemaining++;
     if (!request.isAtsRequest && request.isWrite)
         ifc.wrBufSlotsRemaining +=
             (request.size + (ifc.portWidth-1)) / ifc.portWidth;
@@ -1269,6 +1287,8 @@ SMMUTranslationProcess::completeTransaction(Yield &yield,
 void
 SMMUTranslationProcess::completePrefetch(Yield &yield)
 {
+    ifc.xlateSlotsRemaining++;
+
     SMMUAction a;
     a.type = ACTION_TERMINATE;
     a.pkt = NULL;

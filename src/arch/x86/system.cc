@@ -48,7 +48,6 @@
 #include "cpu/thread_context.hh"
 #include "params/X86System.hh"
 
-using namespace LittleEndianGuest;
 using namespace X86ISA;
 
 X86System::X86System(Params *p) :
@@ -224,25 +223,25 @@ X86System::initState()
     // Page Map Level 4
 
     // read/write, user, not present
-    uint64_t pml4e = X86ISA::htog(0x6);
+    uint64_t pml4e = htole<uint64_t>(0x6);
     for (int offset = 0; offset < (1 << PML4Bits) * 8; offset += 8) {
         physProxy.writeBlob(PageMapLevel4 + offset, (&pml4e), 8);
     }
     // Point to the only PDPT
-    pml4e = X86ISA::htog(0x7 | PageDirPtrTable);
+    pml4e = htole<uint64_t>(0x7 | PageDirPtrTable);
     physProxy.writeBlob(PageMapLevel4, (&pml4e), 8);
 
     // Page Directory Pointer Table
 
     // read/write, user, not present
-    uint64_t pdpe = X86ISA::htog(0x6);
+    uint64_t pdpe = htole<uint64_t>(0x6);
     for (int offset = 0; offset < (1 << PDPTBits) * 8; offset += 8)
         physProxy.writeBlob(PageDirPtrTable + offset, &pdpe, 8);
     // Point to the PDTs
     for (int table = 0; table < NumPDTs; table++) {
-        pdpe = X86ISA::htog(0x7 | PageDirTable[table]);
+        pdpe = htole<uint64_t>(0x7 | PageDirTable[table]);
         if (table == NumPDTs - 1)
-            pdpe |= X86ISA::htog(1 << 4);
+            pdpe |= htole<uint64_t>(1 << 4);
         physProxy.writeBlob(PageDirPtrTable + table * 8, &pdpe, 8);
     }
 
@@ -253,9 +252,9 @@ X86System::initState()
     for (int table = 0; table < NumPDTs; table++) {
         for (int offset = 0; offset < (1 << PDTBits) * 8; offset += 8) {
             // read/write, user, present, 4MB
-            uint64_t pdte = X86ISA::htog(0x87 | base);
+            uint64_t pdte = htole(0x87 | base);
             if (table == NumPDTs - 1)
-                pdte |= X86ISA::htog(1 << 4);
+                pdte |= htole<uint64_t>(1 << 4);
             physProxy.writeBlob(PageDirTable[table] + offset, &pdte, 8);
             base += pageSize;
         }

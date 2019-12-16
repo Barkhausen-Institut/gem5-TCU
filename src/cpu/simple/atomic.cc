@@ -1,6 +1,6 @@
 /*
  * Copyright 2014 Google, Inc.
- * Copyright (c) 2012-2013,2015,2017-2018 ARM Limited
+ * Copyright (c) 2012-2013,2015,2017-2019 ARM Limited
  * All rights reserved.
  *
  * The license below extends only to copyright in the software and shall
@@ -362,6 +362,7 @@ AtomicSimpleCPU::genMemFragmentRequest(const RequestPtr& req, Addr frag_addr,
     } else {
         req->setVirt(0, frag_addr, frag_size, flags, dataMasterId(),
                      inst_addr);
+        req->setByteEnable(std::vector<bool>());
     }
 
     return predicate;
@@ -370,7 +371,7 @@ AtomicSimpleCPU::genMemFragmentRequest(const RequestPtr& req, Addr frag_addr,
 Fault
 AtomicSimpleCPU::readMem(Addr addr, uint8_t * data, unsigned size,
                          Request::Flags flags,
-                         const std::vector<bool>& byteEnable)
+                         const std::vector<bool>& byte_enable)
 {
     SimpleExecContext& t_info = *threadInfo[curThread];
     SimpleThread* thread = t_info.thread;
@@ -393,7 +394,7 @@ AtomicSimpleCPU::readMem(Addr addr, uint8_t * data, unsigned size,
 
     while (1) {
         predicate = genMemFragmentRequest(req, frag_addr, size, flags,
-                                          byteEnable, frag_size, size_left);
+                                          byte_enable, frag_size, size_left);
 
         // translate to physical address
         if (predicate) {
@@ -452,7 +453,7 @@ AtomicSimpleCPU::readMem(Addr addr, uint8_t * data, unsigned size,
 Fault
 AtomicSimpleCPU::writeMem(uint8_t *data, unsigned size, Addr addr,
                           Request::Flags flags, uint64_t *res,
-                          const std::vector<bool>& byteEnable)
+                          const std::vector<bool>& byte_enable)
 {
     SimpleExecContext& t_info = *threadInfo[curThread];
     SimpleThread* thread = t_info.thread;
@@ -484,7 +485,7 @@ AtomicSimpleCPU::writeMem(uint8_t *data, unsigned size, Addr addr,
 
     while (1) {
         predicate = genMemFragmentRequest(req, frag_addr, size, flags,
-                                          byteEnable, frag_size, size_left);
+                                          byte_enable, frag_size, size_left);
 
         // translate to physical address
         if (predicate)
@@ -540,7 +541,7 @@ AtomicSimpleCPU::writeMem(uint8_t *data, unsigned size, Addr addr,
         if (fault != NoFault || size_left == 0)
         {
             if (req->isLockedRMW() && fault == NoFault) {
-                assert(byteEnable.empty());
+                assert(!req->isMasked());
                 locked = false;
             }
 
@@ -565,7 +566,7 @@ AtomicSimpleCPU::writeMem(uint8_t *data, unsigned size, Addr addr,
 
 Fault
 AtomicSimpleCPU::amoMem(Addr addr, uint8_t* data, unsigned size,
-                        Request::Flags flags, AtomicOpFunctor *amo_op)
+                        Request::Flags flags, AtomicOpFunctorPtr amo_op)
 {
     SimpleExecContext& t_info = *threadInfo[curThread];
     SimpleThread* thread = t_info.thread;
@@ -595,7 +596,7 @@ AtomicSimpleCPU::amoMem(Addr addr, uint8_t* data, unsigned size,
 
     req->taskId(taskId());
     req->setVirt(0, addr, size, flags, dataMasterId(),
-                 thread->pcState().instAddr(), amo_op);
+                 thread->pcState().instAddr(), std::move(amo_op));
 
     // translate to physical address
     Fault fault = thread->dtb->translateAtomic(req, thread->getTC(),

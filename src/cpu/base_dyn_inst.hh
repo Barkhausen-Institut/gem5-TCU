@@ -221,7 +221,7 @@ class BaseDynInst : public ExecContext, public RefCounted
     short asid;
 
     /** The size of the request */
-    uint8_t effSize;
+    unsigned effSize;
 
     /** Pointer to the data for the memory access. */
     uint8_t *memData;
@@ -304,14 +304,14 @@ class BaseDynInst : public ExecContext, public RefCounted
     }
 
     Fault initiateMemRead(Addr addr, unsigned size, Request::Flags flags,
-            const std::vector<bool>& byteEnable = std::vector<bool>());
+            const std::vector<bool>& byte_enable = std::vector<bool>());
 
     Fault writeMem(uint8_t *data, unsigned size, Addr addr,
                    Request::Flags flags, uint64_t *res,
-                   const std::vector<bool>& byteEnable = std::vector<bool>());
+                   const std::vector<bool>& byte_enable = std::vector<bool>());
 
     Fault initiateMemAMO(Addr addr, unsigned size, Request::Flags flags,
-                         AtomicOpFunctor *amo_op);
+                         AtomicOpFunctorPtr amo_op);
 
     /** True if the DTB address translation has started. */
     bool translationStarted() const { return instFlags[TranslationStarted]; }
@@ -963,30 +963,33 @@ template<class Impl>
 Fault
 BaseDynInst<Impl>::initiateMemRead(Addr addr, unsigned size,
                                    Request::Flags flags,
-                                   const std::vector<bool>& byteEnable)
+                                   const std::vector<bool>& byte_enable)
 {
+    assert(byte_enable.empty() || byte_enable.size() == size);
     return cpu->pushRequest(
             dynamic_cast<typename DynInstPtr::PtrType>(this),
             /* ld */ true, nullptr, size, addr, flags, nullptr, nullptr,
-            byteEnable);
+            byte_enable);
 }
 
 template<class Impl>
 Fault
 BaseDynInst<Impl>::writeMem(uint8_t *data, unsigned size, Addr addr,
                             Request::Flags flags, uint64_t *res,
-                            const std::vector<bool>& byteEnable)
+                            const std::vector<bool>& byte_enable)
 {
+    assert(byte_enable.empty() || byte_enable.size() == size);
     return cpu->pushRequest(
             dynamic_cast<typename DynInstPtr::PtrType>(this),
-            /* st */ false, data, size, addr, flags, res, nullptr, byteEnable);
+            /* st */ false, data, size, addr, flags, res, nullptr,
+            byte_enable);
 }
 
 template<class Impl>
 Fault
 BaseDynInst<Impl>::initiateMemAMO(Addr addr, unsigned size,
                                   Request::Flags flags,
-                                  AtomicOpFunctor *amo_op)
+                                  AtomicOpFunctorPtr amo_op)
 {
     // atomic memory instructions do not have data to be written to memory yet
     // since the atomic operations will be executed directly in cache/memory.
@@ -995,7 +998,8 @@ BaseDynInst<Impl>::initiateMemAMO(Addr addr, unsigned size,
     // memory
     return cpu->pushRequest(
             dynamic_cast<typename DynInstPtr::PtrType>(this),
-            /* atomic */ false, nullptr, size, addr, flags, nullptr, amo_op);
+            /* atomic */ false, nullptr, size, addr, flags, nullptr,
+            std::move(amo_op));
 }
 
 #endif // __CPU_BASE_DYN_INST_HH__

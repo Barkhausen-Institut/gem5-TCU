@@ -145,12 +145,11 @@ M3Loader::mapMemory(System &sys, DTUMemory &dtumem)
     // TODO check whether the size of idle fits before the RT_SPACE
 
     // program segments
-    dtumem.mapSegment(sys.kernel->textBase(), sys.kernel->textSize(),
-        DtuTlb::INTERN | DtuTlb::RX);
-    dtumem.mapSegment(sys.kernel->dataBase(), sys.kernel->dataSize(),
-        DtuTlb::INTERN | DtuTlb::RW);
-    dtumem.mapSegment(sys.kernel->bssBase(), sys.kernel->bssSize(),
-        DtuTlb::INTERN | DtuTlb::RW);
+    for(auto &seg : sys.kernelImage.segments())
+    {
+        auto access = seg.name == "text" ? DtuTlb::RX : DtuTlb::RW;
+        dtumem.mapSegment(seg.base, seg.size, DtuTlb::INTERN | access);
+    }
 
     // idle doesn't need that stuff
     if (modOffset)
@@ -161,8 +160,7 @@ M3Loader::mapMemory(System &sys, DTUMemory &dtumem)
 #endif
 
         // initial heap
-        Addr bssEnd = roundUp(sys.kernel->bssBase() + sys.kernel->bssSize(),
-            DtuTlb::PAGE_SIZE);
+        Addr bssEnd = roundUp(sys.kernelImage.maxAddr(), DtuTlb::PAGE_SIZE);
         dtumem.mapSegment(bssEnd, HEAP_SIZE, DtuTlb::INTERN | DtuTlb::RW);
 
         // state and stack

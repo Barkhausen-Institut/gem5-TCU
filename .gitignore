@@ -21,8 +21,10 @@ m5out
 /util/tap/m5tap
 /util/term/m5term
 /system/arm/dt/*.dtb
+/system/arm/dt/.gen
 /system/arm/simple_bootloader/*.o
 /system/arm/simple_bootloader/boot.arm
 /system/arm/simple_bootloader/boot_emm.arm
+/system/arm/aarch64_bootloader/*.o
 /system/arm/aarch64_bootloader/boot_emm.arm64
 /system/arm/aarch64_bootloader/boot_emm_v2.arm64

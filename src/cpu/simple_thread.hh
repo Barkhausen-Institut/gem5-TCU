@@ -45,6 +45,8 @@
 #ifndef __CPU_SIMPLE_THREAD_HH__
 #define __CPU_SIMPLE_THREAD_HH__
 
+#include <array>
+
 #include "arch/decoder.hh"
 #include "arch/generic/tlb.hh"
 #include "arch/isa.hh"
@@ -64,6 +66,7 @@
 #include "mem/request.hh"
 #include "sim/byteswap.hh"
 #include "sim/eventq.hh"
+#include "sim/full_system.hh"
 #include "sim/process.hh"
 #include "sim/serialize.hh"
 #include "sim/system.hh"
@@ -103,13 +106,11 @@ class SimpleThread : public ThreadState, public ThreadContext
     typedef ThreadContext::Status Status;
 
   protected:
-    RegVal floatRegs[TheISA::NumFloatRegs];
-    RegVal intRegs[TheISA::NumIntRegs];
-    VecRegContainer vecRegs[TheISA::NumVecRegs];
-    VecPredRegContainer vecPredRegs[TheISA::NumVecPredRegs];
-#ifdef ISA_HAS_CC_REGS
-    RegVal ccRegs[TheISA::NumCCRegs];
-#endif
+    std::array<RegVal, TheISA::NumFloatRegs> floatRegs;
+    std::array<RegVal, TheISA::NumIntRegs> intRegs;
+    std::array<VecRegContainer, TheISA::NumVecRegs> vecRegs;
+    std::array<VecPredRegContainer, TheISA::NumVecPredRegs> vecPredRegs;
+    std::array<RegVal, TheISA::NumCCRegs> ccRegs;
     TheISA::ISA *const isa;    // one "instance" of the current ISA.
 
     TheISA::PCState _pcState;
@@ -127,6 +128,13 @@ class SimpleThread : public ThreadState, public ThreadContext
     {
         return csprintf("%s.[tid:%i]", baseCpu->name(), threadId());
     }
+
+    PCEventQueue pcEventQueue;
+    /**
+     * An instruction-based event queue. Used for scheduling events based on
+     * number of instructions committed.
+     */
+    EventQueue comInstEventQueue;
 
     System *system;
 
@@ -189,6 +197,25 @@ class SimpleThread : public ThreadState, public ThreadContext
     /*******************************************
      * ThreadContext interface functions.
      ******************************************/
+
+    bool schedule(PCEvent *e) override { return pcEventQueue.schedule(e); }
+    bool remove(PCEvent *e) override { return pcEventQueue.remove(e); }
+
+    void
+    scheduleInstCountEvent(Event *event, Tick count) override
+    {
+        comInstEventQueue.schedule(event, count);
+    }
+    void
+    descheduleInstCountEvent(Event *event) override
+    {
+        comInstEventQueue.deschedule(event);
+    }
+    Tick
+    getCurrentInstCount() override
+    {
+        return comInstEventQueue.getCurTick();
+    }
 
     BaseCPU *getCpuPtr() override { return baseCpu; }
 
@@ -269,20 +296,17 @@ class SimpleThread : public ThreadState, public ThreadContext
 
     void copyArchRegs(ThreadContext *tc) override;
 
-    void clearArchRegs() override
+    void
+    clearArchRegs() override
     {
         _pcState = 0;
-        memset(intRegs, 0, sizeof(intRegs));
-        memset(floatRegs, 0, sizeof(floatRegs));
-        for (int i = 0; i < TheISA::NumVecRegs; i++) {
-            vecRegs[i].zero();
-        }
-        for (int i = 0; i < TheISA::NumVecPredRegs; i++) {
-            vecPredRegs[i].reset();
-        }
-#ifdef ISA_HAS_CC_REGS
-        memset(ccRegs, 0, sizeof(ccRegs));
-#endif
+        intRegs.fill(0);
+        floatRegs.fill(0);
+        for (auto &vec_reg: vecRegs)
+            vec_reg.zero();
+        for (auto &pred_reg: vecPredRegs)
+            pred_reg.reset();
+        ccRegs.fill(0);
         isa->clear();
     }
 
@@ -449,7 +473,6 @@ class SimpleThread : public ThreadState, public ThreadContext
     RegVal
     readCCReg(RegIndex reg_idx) const override
     {
-#ifdef ISA_HAS_CC_REGS
         int flatIndex = isa->flattenCCIndex(reg_idx);
         assert(0 <= flatIndex);
         assert(flatIndex < TheISA::NumCCRegs);
@@ -457,10 +480,6 @@ class SimpleThread : public ThreadState, public ThreadContext
         DPRINTF(CCRegs, "Reading CC reg %d (%d) as %#x.\n",
                 reg_idx, flatIndex, regVal);
         return regVal;
-#else
-        panic("Tried to read a CC register.");
-        return 0;
-#endif
     }
 
     void
@@ -519,15 +538,11 @@ class SimpleThread : public ThreadState, public ThreadContext
     void
     setCCReg(RegIndex reg_idx, RegVal val) override
     {
-#ifdef ISA_HAS_CC_REGS
         int flatIndex = isa->flattenCCIndex(reg_idx);
         assert(flatIndex < TheISA::NumCCRegs);
         DPRINTF(CCRegs, "Setting CC reg %d (%d) to %#x.\n",
                 reg_idx, flatIndex, val);
         setCCRegFlat(flatIndex, val);
-#else
-        panic("Tried to set a CC register.");
-#endif
     }
 
     TheISA::PCState pcState() const override { return _pcState; }
@@ -602,9 +617,9 @@ class SimpleThread : public ThreadState, public ThreadContext
     }
 
     void
-    syscall(int64_t callnum, Fault *fault) override
+    syscall(Fault *fault) override
     {
-        process->syscall(callnum, this, fault);
+        process->syscall(this, fault);
     }
 
     RegVal readIntRegFlat(RegIndex idx) const override { return intRegs[idx]; }
@@ -688,22 +703,8 @@ class SimpleThread : public ThreadState, public ThreadContext
         vecPredRegs[reg] = val;
     }
 
-#ifdef ISA_HAS_CC_REGS
     RegVal readCCRegFlat(RegIndex idx) const override { return ccRegs[idx]; }
     void setCCRegFlat(RegIndex idx, RegVal val) override { ccRegs[idx] = val; }
-#else
-    RegVal
-    readCCRegFlat(RegIndex idx) const override
-    {
-        panic("readCCRegFlat w/no CC regs!\n");
-    }
-
-    void
-    setCCRegFlat(RegIndex idx, RegVal val) override
-    {
-        panic("setCCRegFlat w/no CC regs!\n");
-    }
-#endif
 };
 
 

@@ -236,7 +236,7 @@ class ExecContext {
      */
     virtual Fault readMem(Addr addr, uint8_t *data, unsigned int size,
             Request::Flags flags,
-            const std::vector<bool>& byteEnable = std::vector<bool>())
+            const std::vector<bool>& byte_enable = std::vector<bool>())
     {
         panic("ExecContext::readMem() should be overridden\n");
     }
@@ -250,7 +250,7 @@ class ExecContext {
      */
     virtual Fault initiateMemRead(Addr addr, unsigned int size,
             Request::Flags flags,
-            const std::vector<bool>& byteEnable = std::vector<bool>())
+            const std::vector<bool>& byte_enable = std::vector<bool>())
     {
         panic("ExecContext::initiateMemRead() should be overridden\n");
     }
@@ -261,7 +261,7 @@ class ExecContext {
      */
     virtual Fault writeMem(uint8_t *data, unsigned int size, Addr addr,
                            Request::Flags flags, uint64_t *res,
-                           const std::vector<bool>& byteEnable =
+                           const std::vector<bool>& byte_enable =
                                std::vector<bool>()) = 0;
 
     /**
@@ -270,7 +270,7 @@ class ExecContext {
      */
     virtual Fault amoMem(Addr addr, uint8_t *data, unsigned int size,
                          Request::Flags flags,
-                         AtomicOpFunctor *amo_op)
+                         AtomicOpFunctorPtr amo_op)
     {
         panic("ExecContext::amoMem() should be overridden\n");
     }
@@ -281,7 +281,7 @@ class ExecContext {
      */
     virtual Fault initiateMemAMO(Addr addr, unsigned int size,
                                  Request::Flags flags,
-                                 AtomicOpFunctor *amo_op)
+                                 AtomicOpFunctorPtr amo_op)
     {
         panic("ExecContext::initiateMemAMO() should be overridden\n");
     }
@@ -304,9 +304,9 @@ class ExecContext {
      */
 
     /**
-     * Executes a syscall specified by the callnum.
+     * Executes a syscall.
      */
-    virtual void syscall(int64_t callnum, Fault *fault) = 0;
+    virtual void syscall(Fault *fault) = 0;
 
     /** @} */
 

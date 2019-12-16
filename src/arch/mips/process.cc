@@ -65,8 +65,7 @@ MipsProcess::MipsProcess(ProcessParams *params, ObjectFile *objFile)
     Addr next_thread_stack_base = stack_base - max_stack_size;
 
     // Set up break point (Top of Heap)
-    Addr brk_point = objFile->dataBase() + objFile->dataSize() +
-                     objFile->bssSize();
+    Addr brk_point = image.maxAddr();
     brk_point = roundUp(brk_point, PageBytes);
 
     // Set up region for mmaps.  Start it 1GB above the top of the heap.
@@ -89,12 +88,6 @@ void
 MipsProcess::argsInit(int pageSize)
 {
     int intSize = sizeof(IntType);
-
-    // Patch the ld_bias for dynamic executables.
-    updateBias();
-
-    // load object file into target memory
-    objFile->loadSections(initVirtMem);
 
     std::vector<AuxVector<IntType>> auxv;
 
@@ -168,13 +161,15 @@ MipsProcess::argsInit(int pageSize)
     // write contents to stack
     IntType argc = argv.size();
 
-    argc = htog((IntType)argc);
+    argc = htole((IntType)argc);
 
     initVirtMem.writeBlob(memState->getStackMin(), &argc, intSize);
 
-    copyStringArray(argv, argv_array_base, arg_data_base, initVirtMem);
+    copyStringArray(argv, argv_array_base, arg_data_base,
+                    LittleEndianByteOrder, initVirtMem);
 
-    copyStringArray(envp, envp_array_base, env_data_base, initVirtMem);
+    copyStringArray(envp, envp_array_base, env_data_base,
+                    LittleEndianByteOrder, initVirtMem);
 
     // Copy the aux vector
     Addr auxv_array_end = auxv_array_base;
@@ -190,8 +185,8 @@ MipsProcess::argsInit(int pageSize)
 
     ThreadContext *tc = system->getThreadContext(contextIds[0]);
 
-    setSyscallArg(tc, 0, argc);
-    setSyscallArg(tc, 1, argv_array_base);
+    tc->setIntReg(FirstArgumentReg, argc);
+    tc->setIntReg(FirstArgumentReg + 1, argv_array_base);
     tc->setIntReg(StackPointerReg, memState->getStackMin());
 
     tc->pcState(getStartPC());
@@ -203,13 +198,6 @@ MipsProcess::getSyscallArg(ThreadContext *tc, int &i)
 {
     assert(i < 6);
     return tc->readIntReg(FirstArgumentReg + i++);
-}
-
-void
-MipsProcess::setSyscallArg(ThreadContext *tc, int i, RegVal val)
-{
-    assert(i < 6);
-    tc->setIntReg(FirstArgumentReg + i, val);
 }
 
 void

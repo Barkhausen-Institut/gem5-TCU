@@ -437,42 +437,44 @@ class SimpleExecContext : public ExecContext {
     Fault
     readMem(Addr addr, uint8_t *data, unsigned int size,
             Request::Flags flags,
-            const std::vector<bool>& byteEnable = std::vector<bool>())
+            const std::vector<bool>& byte_enable = std::vector<bool>())
         override
     {
-        return cpu->readMem(addr, data, size, flags, byteEnable);
+        assert(byte_enable.empty() || byte_enable.size() == size);
+        return cpu->readMem(addr, data, size, flags, byte_enable);
     }
 
     Fault
     initiateMemRead(Addr addr, unsigned int size,
                     Request::Flags flags,
-                    const std::vector<bool>& byteEnable = std::vector<bool>())
+                    const std::vector<bool>& byte_enable = std::vector<bool>())
         override
     {
-        return cpu->initiateMemRead(addr, size, flags, byteEnable);
+        assert(byte_enable.empty() || byte_enable.size() == size);
+        return cpu->initiateMemRead(addr, size, flags, byte_enable);
     }
 
     Fault
     writeMem(uint8_t *data, unsigned int size, Addr addr,
              Request::Flags flags, uint64_t *res,
-             const std::vector<bool>& byteEnable = std::vector<bool>())
+             const std::vector<bool>& byte_enable = std::vector<bool>())
         override
     {
-        assert(byteEnable.empty() || byteEnable.size() == size);
-        return cpu->writeMem(data, size, addr, flags, res, byteEnable);
+        assert(byte_enable.empty() || byte_enable.size() == size);
+        return cpu->writeMem(data, size, addr, flags, res, byte_enable);
     }
 
     Fault amoMem(Addr addr, uint8_t *data, unsigned int size,
-                 Request::Flags flags, AtomicOpFunctor *amo_op) override
+                 Request::Flags flags, AtomicOpFunctorPtr amo_op) override
     {
-        return cpu->amoMem(addr, data, size, flags, amo_op);
+        return cpu->amoMem(addr, data, size, flags, std::move(amo_op));
     }
 
     Fault initiateMemAMO(Addr addr, unsigned int size,
                          Request::Flags flags,
-                         AtomicOpFunctor *amo_op) override
+                         AtomicOpFunctorPtr amo_op) override
     {
-        return cpu->initiateMemAMO(addr, size, flags, amo_op);
+        return cpu->initiateMemAMO(addr, size, flags, std::move(amo_op));
     }
 
     /**
@@ -497,12 +499,9 @@ class SimpleExecContext : public ExecContext {
      * Executes a syscall specified by the callnum.
      */
     void
-    syscall(int64_t callnum, Fault *fault) override
+    syscall(Fault *fault) override
     {
-        if (FullSystem)
-            panic("Syscall emulation isn't available in FS mode.");
-
-        thread->syscall(callnum, fault);
+        thread->syscall(fault);
     }
 
     /** Returns a pointer to the ThreadContext. */

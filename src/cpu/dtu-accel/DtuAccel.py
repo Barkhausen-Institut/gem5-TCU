@@ -25,12 +25,12 @@
 # of the authors and should not be interpreted as representing official policies,
 # either expressed or implied, of the FreeBSD Project.
 
-from MemObject import MemObject
+from ClockedObject import ClockedObject
 from Connector import BaseConnector
 from m5.params import *
 from m5.proxy import *
 
-class DtuAccel(MemObject):
+class DtuAccel(ClockedObject):
     type = 'DtuAccel'
     abstract = True
     cxx_header = "cpu/dtu-accel/accelerator.hh"

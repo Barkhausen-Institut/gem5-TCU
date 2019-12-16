@@ -114,7 +114,6 @@ System::System(Params *p)
       rgdb_wait(p->rgdb_wait),
       _params(p),
       totalNumInsts(0),
-      instEventQueue("system instruction-based event queue"),
       redirectPaths(p->redirect_paths)
 {
 
@@ -157,9 +156,11 @@ System::System(Params *p)
             if (kernel == NULL)
                 fatal("Could not load kernel file %s", params()->kernel);
 
+            kernelImage = kernel->buildImage();
+
             // setup entry points
-            kernelStart = kernel->textBase();
-            kernelEnd = kernel->bssBase() + kernel->bssSize();
+            kernelStart = kernelImage.minAddr();
+            kernelEnd = kernelImage.maxAddr();
             kernelEntry = kernel->entryPoint();
 
             // If load_addr_mask is set to 0x0, then auto-calculate
@@ -169,6 +170,10 @@ System::System(Params *p)
                 Addr shift_amt = findMsbSet(kernelEnd - kernelStart) + 1;
                 loadAddrMask = ((Addr)1 << shift_amt) - 1;
             }
+
+            kernelImage.move([this](Addr a) {
+                return (a & loadAddrMask) + loadAddrOffset;
+            });
 
             // load symbols
             if (!kernel->loadGlobalSymbols(kernelSymtab))
@@ -254,6 +259,8 @@ System::registerThreadContext(ThreadContext *tc, ContextID assigned)
              "Cannot have two CPUs with the same id (%d)\n", id);
 
     threadContexts[id] = tc;
+    for (auto *e: liveEvents)
+        tc->schedule(e);
 
 #if THE_ISA != NULL_ISA
     int port = getRemoteGDBPort();
@@ -281,6 +288,26 @@ System::registerThreadContext(ThreadContext *tc, ContextID assigned)
     return id;
 }
 
+bool
+System::schedule(PCEvent *event)
+{
+    bool all = true;
+    liveEvents.push_back(event);
+    for (auto *tc: threadContexts)
+        all = tc->schedule(event) && all;
+    return all;
+}
+
+bool
+System::remove(PCEvent *event)
+{
+    bool all = true;
+    liveEvents.remove(event);
+    for (auto *tc: threadContexts)
+        all = tc->remove(event) && all;
+    return all;
+}
+
 int
 System::numRunningContexts()
 {
@@ -305,27 +332,24 @@ System::initState()
         /**
          * Load the kernel code into memory
          */
+        auto mapper = [this](Addr a) {
+            return (a & loadAddrMask) + loadAddrOffset;
+        };
         if (params()->kernel != "")  {
             if (params()->kernel_addr_check) {
                 // Validate kernel mapping before loading binary
-                if (!(isMemAddr((kernelStart & loadAddrMask) +
-                                loadAddrOffset) &&
-                      isMemAddr((kernelEnd & loadAddrMask) +
-                                loadAddrOffset))) {
+                if (!isMemAddr(mapper(kernelStart)) ||
+                        !isMemAddr(mapper(kernelEnd))) {
                     fatal("Kernel is mapped to invalid location (not memory). "
                           "kernelStart 0x(%x) - kernelEnd 0x(%x) %#x:%#x\n",
-                          kernelStart,
-                          kernelEnd, (kernelStart & loadAddrMask) +
-                          loadAddrOffset,
-                          (kernelEnd & loadAddrMask) + loadAddrOffset);
+                          kernelStart, kernelEnd,
+                          mapper(kernelStart), mapper(kernelEnd));
                 }
             }
             // Load program sections into memory
-            kernel->loadSections(physProxy, loadAddrMask, loadAddrOffset);
-            for (const auto &extra_kernel : kernelExtras) {
-                extra_kernel->loadSections(physProxy, loadAddrMask,
-                                           loadAddrOffset);
-            }
+            kernelImage.write(physProxy);
+            for (const auto &extra_kernel : kernelExtras)
+                extra_kernel->buildImage().move(mapper).write(physProxy);
 
             DPRINTF(Loader, "Kernel start = %#x\n", kernelStart);
             DPRINTF(Loader, "Kernel end   = %#x\n", kernelEnd);
@@ -343,6 +367,10 @@ System::replaceThreadContext(ThreadContext *tc, ContextID context_id)
               context_id, threadContexts.size());
     }
 
+    for (auto *e: liveEvents) {
+        threadContexts[context_id]->remove(e);
+        tc->schedule(e);
+    }
     threadContexts[context_id] = tc;
     if (context_id < remoteGDB.size())
         remoteGDB[context_id]->replaceThreadContext(tc);
@@ -374,7 +402,7 @@ System::allocPhysPages(int npages)
 
     Addr next_return_addr = pagePtr << PageShift;
 
-    AddrRange m5opRange(0xffff0000, 0xffffffff);
+    AddrRange m5opRange(0xffff0000, 0x100000000);
     if (m5opRange.contains(next_return_addr)) {
         warn("Reached m5ops MMIO region\n");
         return_addr = 0xffffffff;

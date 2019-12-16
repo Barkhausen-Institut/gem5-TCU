@@ -91,7 +91,7 @@ X86Connector::setIrq()
 
     DPRINTF(DtuConnector, "Injecting IRQ %u\n", message.vector);
 
-    PacketPtr pkt = X86ISA::buildIntRequest(APIC_ID, message);
+    PacketPtr pkt = X86ISA::buildIntTriggerPacket(APIC_ID, message);
     irqPort.sendPacket(pkt);
 }
 

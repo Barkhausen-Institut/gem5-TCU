@@ -136,8 +136,7 @@ X86_64Process::X86_64Process(ProcessParams *params, ObjectFile *objFile,
     vsyscallPage.vtimeOffset = 0x400;
     vsyscallPage.vgettimeofdayOffset = 0x0;
 
-    Addr brk_point = roundUp(objFile->dataBase() + objFile->dataSize() +
-                             objFile->bssSize(), PageBytes);
+    Addr brk_point = roundUp(image.maxAddr(), PageBytes);
     Addr stack_base = 0x7FFFFFFFF000ULL;
     Addr max_stack_size = 8 * 1024 * 1024;
     Addr next_thread_stack_base = stack_base - max_stack_size;
@@ -145,19 +144,6 @@ X86_64Process::X86_64Process(ProcessParams *params, ObjectFile *objFile,
 
     memState = make_shared<MemState>(brk_point, stack_base, max_stack_size,
                                      next_thread_stack_base, mmap_end);
-}
-
-void
-I386Process::syscall(int64_t callnum, ThreadContext *tc, Fault *fault)
-{
-    PCState pc = tc->pcState();
-    Addr eip = pc.pc();
-    if (eip >= vsyscallPage.base &&
-            eip < vsyscallPage.base + vsyscallPage.size) {
-        pc.npc(vsyscallPage.base + vsyscallPage.vsysexitOffset);
-        tc->pcState(pc);
-    }
-    X86Process::syscall(callnum, tc, fault);
 }
 
 
@@ -176,8 +162,7 @@ I386Process::I386Process(ProcessParams *params, ObjectFile *objFile,
     vsyscallPage.vsyscallOffset = 0x400;
     vsyscallPage.vsysexitOffset = 0x410;
 
-    Addr brk_point = roundUp(objFile->dataBase() + objFile->dataSize() +
-                             objFile->bssSize(), PageBytes);
+    Addr brk_point = roundUp(image.maxAddr(), PageBytes);
     Addr stack_base = _gdtStart;
     Addr max_stack_size = 8 * 1024 * 1024;
     Addr next_thread_stack_base = stack_base - max_stack_size;
@@ -772,12 +757,6 @@ X86Process::argsInit(int pageSize,
     // We want 16 byte alignment
     uint64_t align = 16;
 
-    // Patch the ld_bias for dynamic executables.
-    updateBias();
-
-    // load object file into target memory
-    objFile->loadSections(initVirtMem);
-
     enum X86CpuFeature {
         X86_OnboardFPU = 1 << 0,
         X86_VirtualModeExtensions = 1 << 1,
@@ -994,7 +973,7 @@ X86Process::argsInit(int pageSize,
 
     // figure out argc
     IntType argc = argv.size();
-    IntType guestArgc = X86ISA::htog(argc);
+    IntType guestArgc = htole(argc);
 
     // Write out the sentry void *
     IntType sentry_NULL = 0;
@@ -1025,8 +1004,10 @@ X86Process::argsInit(int pageSize,
 
     initVirtMem.writeString(aux_data_base, platform.c_str());
 
-    copyStringArray(envp, envp_array_base, env_data_base, initVirtMem);
-    copyStringArray(argv, argv_array_base, arg_data_base, initVirtMem);
+    copyStringArray(envp, envp_array_base, env_data_base,
+                    LittleEndianByteOrder, initVirtMem);
+    copyStringArray(argv, argv_array_base, arg_data_base,
+                    LittleEndianByteOrder, initVirtMem);
 
     initVirtMem.writeBlob(argc_base, &guestArgc, intSize);
 
@@ -1075,13 +1056,6 @@ X86_64Process::getSyscallArg(ThreadContext *tc, int &i)
 }
 
 void
-X86_64Process::setSyscallArg(ThreadContext *tc, int i, RegVal val)
-{
-    assert(i < NumArgumentRegs);
-    return tc->setIntReg(ArgumentReg[i], val);
-}
-
-void
 X86_64Process::clone(ThreadContext *old_tc, ThreadContext *new_tc,
                      Process *p, RegVal flags)
 {
@@ -1105,13 +1079,6 @@ I386Process::getSyscallArg(ThreadContext *tc, int &i, int width)
     if (width == 64)
         retVal |= ((uint64_t)tc->readIntReg(ArgumentReg[i++]) << 32);
     return retVal;
-}
-
-void
-I386Process::setSyscallArg(ThreadContext *tc, int i, RegVal val)
-{
-    assert(i < NumArgumentRegs);
-    return tc->setIntReg(ArgumentReg[i], val);
 }
 
 void

@@ -46,7 +46,7 @@ using namespace SparcISA;
 namespace
 {
 
-class SparcSolarisObjectFileLoader : public ObjectFile::Loader
+class SparcSolarisObjectFileLoader : public Process::Loader
 {
   public:
     Process *
@@ -367,4 +367,10 @@ SparcSolarisProcess::getDesc(int callnum)
     if (callnum < 0 || callnum >= Num_Syscall_Descs)
         return NULL;
     return &syscallDescs[callnum];
+}
+
+void
+SparcSolarisProcess::syscall(ThreadContext *tc, Fault *fault)
+{
+    doSyscall(tc->readIntReg(1), tc, fault);
 }

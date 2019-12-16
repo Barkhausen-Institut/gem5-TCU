@@ -75,6 +75,33 @@ class O3ThreadContext : public ThreadContext
    /** Pointer to the CPU. */
     O3CPU *cpu;
 
+    bool
+    schedule(PCEvent *e) override
+    {
+        return thread->pcEventQueue.schedule(e);
+    }
+    bool
+    remove(PCEvent *e) override
+    {
+        return thread->pcEventQueue.remove(e);
+    }
+
+    void
+    scheduleInstCountEvent(Event *event, Tick count) override
+    {
+        thread->comInstEventQueue.schedule(event, count);
+    }
+    void
+    descheduleInstCountEvent(Event *event) override
+    {
+        thread->comInstEventQueue.deschedule(event);
+    }
+    Tick
+    getCurrentInstCount() override
+    {
+        return thread->comInstEventQueue.getCurTick();
+    }
+
     /** Pointer to the thread state that this TC corrseponds to. */
     O3ThreadState<Impl> *thread;
 
@@ -427,9 +454,9 @@ class O3ThreadContext : public ThreadContext
 
     /** Executes a syscall in SE mode. */
     void
-    syscall(int64_t callnum, Fault *fault) override
+    syscall(Fault *fault) override
     {
-        return cpu->syscall(callnum, thread->threadId(), fault);
+        return cpu->syscall(thread->threadId(), fault);
     }
 
     /** Reads the funcExeInst counter. */

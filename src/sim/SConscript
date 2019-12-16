@@ -83,6 +83,8 @@ Source('spu_system.cc')
 Source('dtu_memory.cc')
 Source('m3_loader.cc')
 
+GTest('byteswap.test', 'byteswap.test.cc', '../base/types.cc')
+
 if env['TARGET_ISA'] != 'null':
     SimObject('InstTracer.py')
     SimObject('Process.py')

@@ -75,8 +75,7 @@ ArmProcess32::ArmProcess32(ProcessParams *params, ObjectFile *objFile,
                            ObjectFile::Arch _arch)
     : ArmProcess(params, objFile, _arch)
 {
-    Addr brk_point = roundUp(objFile->dataBase() + objFile->dataSize() +
-                             objFile->bssSize(), PageBytes);
+    Addr brk_point = roundUp(image.maxAddr(), PageBytes);
     Addr stack_base = 0xbf000000L;
     Addr max_stack_size = 8 * 1024 * 1024;
     Addr next_thread_stack_base = stack_base - max_stack_size;
@@ -90,8 +89,7 @@ ArmProcess64::ArmProcess64(ProcessParams *params, ObjectFile *objFile,
                            ObjectFile::Arch _arch)
     : ArmProcess(params, objFile, _arch)
 {
-    Addr brk_point = roundUp(objFile->dataBase() + objFile->dataSize() +
-                             objFile->bssSize(), PageBytes);
+    Addr brk_point = roundUp(image.maxAddr(), PageBytes);
     Addr stack_base = 0x7fffff0000L;
     Addr max_stack_size = 8 * 1024 * 1024;
     Addr next_thread_stack_base = stack_base - max_stack_size;
@@ -268,12 +266,6 @@ ArmProcess::argsInit(int pageSize, IntRegIndex spIndex)
     //We want 16 byte alignment
     uint64_t align = 16;
 
-    // Patch the ld_bias for dynamic executables.
-    updateBias();
-
-    // load object file into target memory
-    objFile->loadSections(initVirtMem);
-
     //Setup the auxilliary vectors. These will already have endian conversion.
     //Auxilliary vectors are loaded only for elf formatted executables.
     ElfObject * elfObject = dynamic_cast<ElfObject *>(objFile);
@@ -411,7 +403,7 @@ ArmProcess::argsInit(int pageSize, IntRegIndex spIndex)
 
     // figure out argc
     IntType argc = argv.size();
-    IntType guestArgc = ArmISA::htog(argc);
+    IntType guestArgc = htole(argc);
 
     //Write out the sentry void *
     IntType sentry_NULL = 0;
@@ -442,8 +434,10 @@ ArmProcess::argsInit(int pageSize, IntRegIndex spIndex)
     initVirtMem.write(auxv_array_end, zero);
     auxv_array_end += sizeof(zero);
 
-    copyStringArray(envp, envp_array_base, env_data_base, initVirtMem);
-    copyStringArray(argv, argv_array_base, arg_data_base, initVirtMem);
+    copyStringArray(envp, envp_array_base, env_data_base,
+                    LittleEndianByteOrder, initVirtMem);
+    copyStringArray(argv, argv_array_base, arg_data_base,
+                    LittleEndianByteOrder, initVirtMem);
 
     initVirtMem.writeBlob(argc_base, &guestArgc, intSize);
 
@@ -516,21 +510,6 @@ RegVal
 ArmProcess64::getSyscallArg(ThreadContext *tc, int &i, int width)
 {
     return getSyscallArg(tc, i);
-}
-
-
-void
-ArmProcess32::setSyscallArg(ThreadContext *tc, int i, RegVal val)
-{
-    assert(i < 6);
-    tc->setIntReg(ArgumentReg0 + i, val);
-}
-
-void
-ArmProcess64::setSyscallArg(ThreadContext *tc, int i, RegVal val)
-{
-    assert(i < 8);
-    tc->setIntReg(ArgumentReg0 + i, val);
 }
 
 void

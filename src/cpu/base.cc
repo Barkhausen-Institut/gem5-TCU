@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012,2016-2017 ARM Limited
+ * Copyright (c) 2011-2012,2016-2017, 2019 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -63,6 +63,7 @@
 #include "cpu/thread_context.hh"
 #include "debug/Mwait.hh"
 #include "debug/SyscallVerbose.hh"
+#include "debug/Thread.hh"
 #include "mem/page_table.hh"
 #include "params/BaseCPU.hh"
 #include "sim/clocked_object.hh"
@@ -156,72 +157,6 @@ BaseCPU::BaseCPU(Params *p, bool is_checker)
     if (numThreads > maxThreadsPerCPU)
         maxThreadsPerCPU = numThreads;
 
-    // allocate per-thread instruction-based event queues
-    comInstEventQueue = new EventQueue *[numThreads];
-    for (ThreadID tid = 0; tid < numThreads; ++tid)
-        comInstEventQueue[tid] =
-            new EventQueue("instruction-based event queue");
-
-    //
-    // set up instruction-count-based termination events, if any
-    //
-    if (p->max_insts_any_thread != 0) {
-        const char *cause = "a thread reached the max instruction count";
-        for (ThreadID tid = 0; tid < numThreads; ++tid)
-            scheduleInstStop(tid, p->max_insts_any_thread, cause);
-    }
-
-    // Set up instruction-count-based termination events for SimPoints
-    // Typically, there are more than one action points.
-    // Simulation.py is responsible to take the necessary actions upon
-    // exitting the simulation loop.
-    if (!p->simpoint_start_insts.empty()) {
-        const char *cause = "simpoint starting point found";
-        for (size_t i = 0; i < p->simpoint_start_insts.size(); ++i)
-            scheduleInstStop(0, p->simpoint_start_insts[i], cause);
-    }
-
-    if (p->max_insts_all_threads != 0) {
-        const char *cause = "all threads reached the max instruction count";
-
-        // allocate & initialize shared downcounter: each event will
-        // decrement this when triggered; simulation will terminate
-        // when counter reaches 0
-        int *counter = new int;
-        *counter = numThreads;
-        for (ThreadID tid = 0; tid < numThreads; ++tid) {
-            Event *event = new CountedExitEvent(cause, *counter);
-            comInstEventQueue[tid]->schedule(event, p->max_insts_all_threads);
-        }
-    }
-
-    // allocate per-thread load-based event queues
-    comLoadEventQueue = new EventQueue *[numThreads];
-    for (ThreadID tid = 0; tid < numThreads; ++tid)
-        comLoadEventQueue[tid] = new EventQueue("load-based event queue");
-
-    //
-    // set up instruction-count-based termination events, if any
-    //
-    if (p->max_loads_any_thread != 0) {
-        const char *cause = "a thread reached the max load count";
-        for (ThreadID tid = 0; tid < numThreads; ++tid)
-            scheduleLoadStop(tid, p->max_loads_any_thread, cause);
-    }
-
-    if (p->max_loads_all_threads != 0) {
-        const char *cause = "all threads reached the max load count";
-        // allocate & initialize shared downcounter: each event will
-        // decrement this when triggered; simulation will terminate
-        // when counter reaches 0
-        int *counter = new int;
-        *counter = numThreads;
-        for (ThreadID tid = 0; tid < numThreads; ++tid) {
-            Event *event = new CountedExitEvent(cause, *counter);
-            comLoadEventQueue[tid]->schedule(event, p->max_loads_all_threads);
-        }
-    }
-
     functionTracingEnabled = false;
     if (p->function_trace) {
         const string fname = csprintf("ftrace.%s", name());
@@ -273,8 +208,6 @@ BaseCPU::enableFunctionTrace()
 BaseCPU::~BaseCPU()
 {
     delete profileEvent;
-    delete[] comLoadEventQueue;
-    delete[] comInstEventQueue;
 }
 
 void
@@ -347,6 +280,39 @@ BaseCPU::mwaitAtomic(ThreadID tid, ThreadContext *tc, BaseTLB *dtb)
 void
 BaseCPU::init()
 {
+    // Set up instruction-count-based termination events, if any. This needs
+    // to happen after threadContexts has been constructed.
+    if (params()->max_insts_any_thread != 0) {
+        const char *cause = "a thread reached the max instruction count";
+        for (ThreadID tid = 0; tid < numThreads; ++tid)
+            scheduleInstStop(tid, params()->max_insts_any_thread, cause);
+    }
+
+    // Set up instruction-count-based termination events for SimPoints
+    // Typically, there are more than one action points.
+    // Simulation.py is responsible to take the necessary actions upon
+    // exitting the simulation loop.
+    if (!params()->simpoint_start_insts.empty()) {
+        const char *cause = "simpoint starting point found";
+        for (size_t i = 0; i < params()->simpoint_start_insts.size(); ++i)
+            scheduleInstStop(0, params()->simpoint_start_insts[i], cause);
+    }
+
+    if (params()->max_insts_all_threads != 0) {
+        const char *cause = "all threads reached the max instruction count";
+
+        // allocate & initialize shared downcounter: each event will
+        // decrement this when triggered; simulation will terminate
+        // when counter reaches 0
+        int *counter = new int;
+        *counter = numThreads;
+        for (ThreadID tid = 0; tid < numThreads; ++tid) {
+            Event *event = new CountedExitEvent(cause, *counter);
+            threadContexts[tid]->scheduleInstCountEvent(
+                    event, params()->max_insts_all_threads);
+        }
+    }
+
     if (!params()->switched_out) {
         registerThreadContexts();
 
@@ -524,6 +490,8 @@ BaseCPU::findContext(ThreadContext *tc)
 void
 BaseCPU::activateContext(ThreadID thread_num)
 {
+    DPRINTF(Thread, "activate contextId %d\n",
+            threadContexts[thread_num]->contextId());
     // Squash enter power gating event while cpu gets activated
     if (enterPwrGatingEvent.scheduled())
         deschedule(enterPwrGatingEvent);
@@ -536,6 +504,8 @@ BaseCPU::activateContext(ThreadID thread_num)
 void
 BaseCPU::suspendContext(ThreadID thread_num)
 {
+    DPRINTF(Thread, "suspend contextId %d\n",
+            threadContexts[thread_num]->contextId());
     // Check if all threads are suspended
     for (auto t : threadContexts) {
         if (t->status() != ThreadContext::Suspended) {
@@ -628,24 +598,10 @@ BaseCPU::takeOverFrom(BaseCPU *oldCPU)
         Port *new_dtb_port = newTC->getDTBPtr()->getTableWalkerPort();
 
         // Move over any table walker ports if they exist
-        if (new_itb_port) {
-            assert(!new_itb_port->isConnected());
-            assert(old_itb_port);
-            assert(old_itb_port->isConnected());
-            auto &slavePort =
-                dynamic_cast<BaseMasterPort *>(old_itb_port)->getSlavePort();
-            old_itb_port->unbind();
-            new_itb_port->bind(slavePort);
-        }
-        if (new_dtb_port) {
-            assert(!new_dtb_port->isConnected());
-            assert(old_dtb_port);
-            assert(old_dtb_port->isConnected());
-            auto &slavePort =
-                dynamic_cast<BaseMasterPort *>(old_dtb_port)->getSlavePort();
-            old_dtb_port->unbind();
-            new_dtb_port->bind(slavePort);
-        }
+        if (new_itb_port)
+            new_itb_port->takeOverFrom(old_itb_port);
+        if (new_dtb_port)
+            new_dtb_port->takeOverFrom(old_dtb_port);
         newTC->getITBPtr()->takeOverFrom(oldTC->getITBPtr());
         newTC->getDTBPtr()->takeOverFrom(oldTC->getDTBPtr());
 
@@ -667,26 +623,10 @@ BaseCPU::takeOverFrom(BaseCPU *oldCPU)
             newChecker->getDTBPtr()->takeOverFrom(oldChecker->getDTBPtr());
 
             // Move over any table walker ports if they exist for checker
-            if (new_checker_itb_port) {
-                assert(!new_checker_itb_port->isConnected());
-                assert(old_checker_itb_port);
-                assert(old_checker_itb_port->isConnected());
-                auto &slavePort =
-                    dynamic_cast<BaseMasterPort *>(old_checker_itb_port)->
-                    getSlavePort();
-                old_checker_itb_port->unbind();
-                new_checker_itb_port->bind(slavePort);
-            }
-            if (new_checker_dtb_port) {
-                assert(!new_checker_dtb_port->isConnected());
-                assert(old_checker_dtb_port);
-                assert(old_checker_dtb_port->isConnected());
-                auto &slavePort =
-                    dynamic_cast<BaseMasterPort *>(old_checker_dtb_port)->
-                    getSlavePort();
-                old_checker_dtb_port->unbind();
-                new_checker_dtb_port->bind(slavePort);
-            }
+            if (new_checker_itb_port)
+                new_checker_itb_port->takeOverFrom(old_checker_itb_port);
+            if (new_checker_dtb_port)
+                new_checker_dtb_port->takeOverFrom(old_checker_dtb_port);
         }
     }
 
@@ -708,19 +648,8 @@ BaseCPU::takeOverFrom(BaseCPU *oldCPU)
     // ports are dangling while the old CPU has its ports connected
     // already. Unbind the old CPU and then bind the ports of the one
     // we are switching to.
-    assert(!getInstPort().isConnected());
-    assert(oldCPU->getInstPort().isConnected());
-    auto &inst_peer_port =
-        dynamic_cast<BaseMasterPort &>(oldCPU->getInstPort()).getSlavePort();
-    oldCPU->getInstPort().unbind();
-    getInstPort().bind(inst_peer_port);
-
-    assert(!getDataPort().isConnected());
-    assert(oldCPU->getDataPort().isConnected());
-    auto &data_peer_port =
-        dynamic_cast<BaseMasterPort &>(oldCPU->getDataPort()).getSlavePort();
-    oldCPU->getDataPort().unbind();
-    getDataPort().bind(data_peer_port);
+    getInstPort().takeOverFrom(&oldCPU->getInstPort());
+    getDataPort().takeOverFrom(&oldCPU->getDataPort());
 }
 
 void
@@ -791,16 +720,16 @@ BaseCPU::unserialize(CheckpointIn &cp)
 void
 BaseCPU::scheduleInstStop(ThreadID tid, Counter insts, const char *cause)
 {
-    const Tick now(comInstEventQueue[tid]->getCurTick());
+    const Tick now(getCurrentInstCount(tid));
     Event *event(new LocalSimLoopExitEvent(cause, 0));
 
-    comInstEventQueue[tid]->schedule(event, now + insts);
+    threadContexts[tid]->scheduleInstCountEvent(event, now + insts);
 }
 
-uint64_t
+Tick
 BaseCPU::getCurrentInstCount(ThreadID tid)
 {
-    return Tick(comInstEventQueue[tid]->getCurTick());
+    return threadContexts[tid]->getCurrentInstCount();
 }
 
 AddressMonitor::AddressMonitor() {
@@ -820,15 +749,6 @@ bool AddressMonitor::doMonitor(PacketPtr pkt) {
         }
     }
     return false;
-}
-
-void
-BaseCPU::scheduleLoadStop(ThreadID tid, Counter loads, const char *cause)
-{
-    const Tick now(comLoadEventQueue[tid]->getCurTick());
-    Event *event(new LocalSimLoopExitEvent(cause, 0));
-
-    comLoadEventQueue[tid]->schedule(event, now + loads);
 }
 
 

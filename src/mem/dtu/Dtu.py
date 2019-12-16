@@ -26,12 +26,12 @@
 # of the authors and should not be interpreted as representing official policies,
 # either expressed or implied, of the FreeBSD Project.
 
-from MemObject import MemObject
+from ClockedObject import ClockedObject
 from Connector import BaseConnector
 from m5.params import *
 from m5.proxy import *
 
-class BaseDtu(MemObject):
+class BaseDtu(ClockedObject):
     type = 'BaseDtu'
     abstract = True
     cxx_header = "mem/dtu/base.hh"

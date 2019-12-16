@@ -25,11 +25,11 @@
 # of the authors and should not be interpreted as representing official policies,
 # either expressed or implied, of the FreeBSD Project.
 
-from MemObject import MemObject
+from ClockedObject import ClockedObject
 from m5.params import *
 from m5.proxy import *
 
-class DtuAbortTest(MemObject):
+class DtuAbortTest(ClockedObject):
     type = 'DtuAbortTest'
     cxx_header = "cpu/testers/dtuaborttest/dtuaborttest.hh"
     port = MasterPort("Port to the DTU and Scratch-Pad-Memory")

@@ -34,12 +34,12 @@
 #include "mem/mem_object.hh"
 #include "sim/system.hh"
 
-class BaseConnector : public MemObject
+class BaseConnector : public ClockedObject
 {
   public:
 
     BaseConnector(const BaseConnectorParams *p)
-      : MemObject(p)
+      : ClockedObject(p)
     { }
 
     // wakeup and suspend are only used to improve simulation speed.

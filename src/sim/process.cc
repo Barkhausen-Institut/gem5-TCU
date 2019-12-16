@@ -75,6 +75,37 @@
 using namespace std;
 using namespace TheISA;
 
+namespace
+{
+
+typedef std::vector<Process::Loader *> LoaderList;
+
+LoaderList &
+process_loaders()
+{
+    static LoaderList loaders;
+    return loaders;
+}
+
+} // anonymous namespace
+
+Process::Loader::Loader()
+{
+    process_loaders().emplace_back(this);
+}
+
+Process *
+Process::tryLoaders(ProcessParams *params, ObjectFile *obj_file)
+{
+    for (auto &loader: process_loaders()) {
+        Process *p = loader->load(params, obj_file);
+        if (p)
+            return p;
+    }
+
+    return nullptr;
+}
+
 static std::string
 normalize(std::string& directory)
 {
@@ -128,6 +159,8 @@ Process::Process(ProcessParams *params, EmulationPageTable *pTable,
 
     exitGroup = new bool();
     sigchld = new bool();
+
+    image = objFile->buildImage();
 
     symtab = new SymbolTable();
     if (!objFile->loadGlobalSymbols(symtab) ||
@@ -198,8 +231,8 @@ Process::clone(ThreadContext *otc, ThreadContext *ntc,
          * host file descriptors are also dup'd so that the flags for the
          * host file descriptor is independent of the other process.
          */
+        std::shared_ptr<FDArray> nfds = np->fds;
         for (int tgt_fd = 0; tgt_fd < fds->getSize(); tgt_fd++) {
-            std::shared_ptr<FDArray> nfds = np->fds;
             std::shared_ptr<FDEntry> this_fde = (*fds)[tgt_fd];
             if (!this_fde) {
                 nfds->setFDEntry(tgt_fd, nullptr);
@@ -270,6 +303,16 @@ Process::revokeThreadContext(int context_id)
 }
 
 void
+Process::init()
+{
+    // Patch the ld_bias for dynamic executables.
+    updateBias();
+
+    if (objFile->getInterpreter())
+        interpImage = objFile->getInterpreter()->buildImage();
+}
+
+void
 Process::initState()
 {
     if (contextIds.empty())
@@ -281,7 +324,11 @@ Process::initState()
     // mark this context as active so it will start ticking.
     tc->activate();
 
-    pTable->initState(tc);
+    pTable->initState();
+
+    // load object file into target memory
+    image.write(initVirtMem);
+    interpImage.write(initVirtMem);
 }
 
 DrainState
@@ -389,7 +436,7 @@ Process::map(Addr vaddr, Addr paddr, int size, bool cacheable)
 }
 
 void
-Process::syscall(int64_t callnum, ThreadContext *tc, Fault *fault)
+Process::doSyscall(int64_t callnum, ThreadContext *tc, Fault *fault)
 {
     numSyscalls++;
 
@@ -528,8 +575,6 @@ Process::absolutePath(const std::string &filename, bool host_filesystem)
 Process *
 ProcessParams::create()
 {
-    Process *process = nullptr;
-
     // If not specified, set the executable parameter equal to the
     // simulated system's zeroth command line parameter
     if (executable == "") {
@@ -537,9 +582,9 @@ ProcessParams::create()
     }
 
     ObjectFile *obj_file = createObjectFile(executable);
-    fatal_if(!obj_file, "Can't load object file %s", executable);
+    fatal_if(!obj_file, "Cannot load object file %s.", executable);
 
-    process = ObjectFile::tryLoaders(this, obj_file);
+    Process *process = Process::tryLoaders(this, obj_file);
     fatal_if(!process, "Unknown error creating process object.");
 
     return process;

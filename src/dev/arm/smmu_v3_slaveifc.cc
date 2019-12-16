@@ -46,7 +46,7 @@
 
 SMMUv3SlaveInterface::SMMUv3SlaveInterface(
     const SMMUv3SlaveInterfaceParams *p) :
-    MemObject(p),
+    ClockedObject(p),
     smmu(nullptr),
     microTLB(new SMMUTLB(p->utlb_entries,
                          p->utlb_assoc,
@@ -67,6 +67,7 @@ SMMUv3SlaveInterface::SMMUv3SlaveInterface(
     portWidth(p->port_width),
     wrBufSlotsRemaining(p->wrbuf_slots),
     xlateSlotsRemaining(p->xlate_slots),
+    pendingMemAccesses(0),
     prefetchEnable(p->prefetch_enable),
     prefetchReserveLastWay(
         p->prefetch_reserve_last_way),
@@ -80,8 +81,7 @@ void
 SMMUv3SlaveInterface::sendRange()
 {
     if (slavePort->isConnected()) {
-        inform("Slave port is connected to %d\n",
-                slavePort->getMasterPort().name());
+        inform("Slave port is connected to %s\n", slavePort->getPeer());
 
         slavePort->sendRangeChange();
     } else {
@@ -99,7 +99,7 @@ SMMUv3SlaveInterface::getPort(const std::string &name, PortID id)
     } else if (name == "ats_slave") {
         return atsSlavePort;
     } else {
-        return MemObject::getPort(name, id);
+        return ClockedObject::getPort(name, id);
     }
 }
 
@@ -124,8 +124,7 @@ Tick
 SMMUv3SlaveInterface::recvAtomic(PacketPtr pkt)
 {
     DPRINTF(SMMUv3, "[a] req from %s addr=%#x size=%#x\n",
-            slavePort->getMasterPort().name(),
-            pkt->getAddr(), pkt->getSize());
+            slavePort->getPeer(), pkt->getAddr(), pkt->getSize());
 
     std::string proc_name = csprintf("%s.port", name());
     SMMUTranslationProcess proc(proc_name, *smmu, *this);
@@ -141,8 +140,7 @@ bool
 SMMUv3SlaveInterface::recvTimingReq(PacketPtr pkt)
 {
     DPRINTF(SMMUv3, "[t] req from %s addr=%#x size=%#x\n",
-            slavePort->getMasterPort().name(),
-            pkt->getAddr(), pkt->getSize());
+            slavePort->getPeer(), pkt->getAddr(), pkt->getSize());
 
     // @todo: We need to pay for this and not just zero it out
     pkt->headerDelay = pkt->payloadDelay = 0;

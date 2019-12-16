@@ -117,7 +117,7 @@ DtuAbortTest::CpuPort::recvReqRetry()
 }
 
 DtuAbortTest::DtuAbortTest(const DtuAbortTestParams *p)
-  : MemObject(p),
+  : ClockedObject(p),
     tickEvent(this),
     port("port", this),
     state(State::INIT_MEM),

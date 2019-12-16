@@ -801,6 +801,7 @@ TLB::checkPermissions64(TlbEntry *te, const RequestPtr &req, Mode mode,
     bool is_fetch  = (mode == Execute);
     // Cache clean operations require read permissions to the specified VA
     bool is_write = !req->isCacheClean() && mode == Write;
+    bool is_atomic = req->isAtomic();
     bool is_priv M5_VAR_USED  = isPriv && !(flags & UserMode);
 
     updateMiscReg(tc, curTranType);
@@ -825,7 +826,8 @@ TLB::checkPermissions64(TlbEntry *te, const RequestPtr &req, Mode mode,
                 alignFaults++;
                 return std::make_shared<DataAbort>(
                     vaddr_tainted,
-                    TlbEntry::DomainType::NoAccess, is_write,
+                    TlbEntry::DomainType::NoAccess,
+                    is_atomic ? false : is_write,
                     ArmFault::AlignmentFault, isStage2,
                     ArmFault::LpaeTran);
             }
@@ -852,6 +854,12 @@ TLB::checkPermissions64(TlbEntry *te, const RequestPtr &req, Mode mode,
     bool r = !is_write && !is_fetch;
     bool w = is_write;
     bool x = is_fetch;
+
+    // grant_read is used for faults from an atomic instruction that
+    // both reads and writes from a memory location. From a ISS point
+    // of view they count as read if a read to that address would have
+    // generated the fault; they count as writes otherwise
+    bool grant_read = true;
     DPRINTF(TLBVerbose, "Checking permissions: ap:%d, xn:%d, pxn:%d, r:%d, "
                         "w:%d, x:%d\n", ap, xn, pxn, r, w, x);
 
@@ -861,18 +869,20 @@ TLB::checkPermissions64(TlbEntry *te, const RequestPtr &req, Mode mode,
         // The following permissions are described in ARM DDI 0487A.f
         // D4-1802
         uint8_t hap = 0x3 & te->hap;
+        grant_read = hap & 0x1;
         if (is_fetch) {
             // sctlr.wxn overrides the xn bit
             grant = !sctlr.wxn && !xn;
         } else if (is_write) {
             grant = hap & 0x2;
         } else { // is_read
-            grant = hap & 0x1;
+            grant = grant_read;
         }
     } else {
         switch (aarch64EL) {
           case EL0:
             {
+                grant_read = ap & 0x1;
                 uint8_t perm = (ap << 2)  | (xn << 1) | pxn;
                 switch (perm) {
                   case 0:
@@ -904,6 +914,12 @@ TLB::checkPermissions64(TlbEntry *te, const RequestPtr &req, Mode mode,
             break;
           case EL1:
             {
+                if (checkPAN(tc, ap, req, mode)) {
+                    grant = false;
+                    grant_read = false;
+                    break;
+                }
+
                 uint8_t perm = (ap << 2)  | (xn << 1) | pxn;
                 switch (perm) {
                   case 0:
@@ -938,6 +954,12 @@ TLB::checkPermissions64(TlbEntry *te, const RequestPtr &req, Mode mode,
             }
             break;
           case EL2:
+            if (hcr.e2h && checkPAN(tc, ap, req, mode)) {
+                grant = false;
+                grant_read = false;
+                break;
+            }
+            M5_FALLTHROUGH;
           case EL3:
             {
                 uint8_t perm = (ap & 0x2) | xn;
@@ -980,13 +1002,34 @@ TLB::checkPermissions64(TlbEntry *te, const RequestPtr &req, Mode mode,
             DPRINTF(TLB, "TLB Fault: Data abort on permission check. AP:%d "
                     "priv:%d write:%d\n", ap, is_priv, is_write);
             return std::make_shared<DataAbort>(
-                vaddr_tainted, te->domain, is_write,
+                vaddr_tainted, te->domain,
+                (is_atomic && !grant_read) ? false : is_write,
                 ArmFault::PermissionLL + te->lookupLevel,
                 isStage2, ArmFault::LpaeTran);
         }
     }
 
     return NoFault;
+}
+
+bool
+TLB::checkPAN(ThreadContext *tc, uint8_t ap, const RequestPtr &req, Mode mode)
+{
+    // The PAN bit has no effect on:
+    // 1) Instruction accesses.
+    // 2) Data Cache instructions other than DC ZVA
+    // 3) Address translation instructions, other than ATS1E1RP and
+    // ATS1E1WP when ARMv8.2-ATS1E1 is implemented. (Unimplemented in
+    // gem5)
+    // 4) Unprivileged instructions (Unimplemented in gem5)
+    AA64MMFR1 mmfr1 = tc->readMiscReg(MISCREG_ID_AA64MMFR1_EL1);
+    if (mmfr1.pan && cpsr.pan && (ap & 0x1) && mode != Execute &&
+        (!req->isCacheMaintenance() ||
+            (req->getFlags() & Request::CACHE_BLOCK_ZERO))) {
+        return true;
+    } else {
+        return false;
+    }
 }
 
 Fault
@@ -1398,7 +1441,7 @@ TLB::tranTypeEL(CPSR cpsr, ArmTranslationType type)
       case S1CTran:
       case S1S2NsTran:
       case HypMode:
-        return opModeToEL((OperatingMode)(uint8_t)cpsr.mode);
+        return currEL(cpsr);
 
       default:
         panic("Unknown translation mode!\n");

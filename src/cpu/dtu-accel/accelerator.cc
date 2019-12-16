@@ -87,7 +87,7 @@ DtuAccel::CpuPort::recvReqRetry()
 }
 
 DtuAccel::DtuAccel(const DtuAccelParams *p)
-  : MemObject(p),
+  : ClockedObject(p),
     system(p->system),
     tickEvent(this),
     chunkSize(system->cacheLineSize()),

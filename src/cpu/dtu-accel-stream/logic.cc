@@ -35,7 +35,7 @@
 #include "cpu/dtu-accel-stream/logic.hh"
 
 AccelLogic::AccelLogic(const AccelLogicParams *p)
-    : MemObject(p), tickEvent(this), port("port", this),
+    : ClockedObject(p), tickEvent(this), port("port", this),
       accel(), algo(), state(), stateChanged(),
       compTime(), opStart(), dataSize(), offset(), pos(), pullSize(), pullData()
 {

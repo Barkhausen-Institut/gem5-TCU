@@ -204,12 +204,6 @@ SparcProcess::argsInit(int pageSize)
     // maintain double word alignment of the stack pointer.
     uint64_t align = 16;
 
-    // Patch the ld_bias for dynamic executables.
-    updateBias();
-
-    // load object file into target memory
-    objFile->loadSections(initVirtMem);
-
     enum hardwareCaps
     {
         M5_HWCAP_SPARC_FLUSH = 1,
@@ -360,7 +354,7 @@ SparcProcess::argsInit(int pageSize)
 
     // figure out argc
     IntType argc = argv.size();
-    IntType guestArgc = SparcISA::htog(argc);
+    IntType guestArgc = htobe(argc);
 
     // Write out the sentry void *
     uint64_t sentry_NULL = 0;
@@ -381,8 +375,10 @@ SparcProcess::argsInit(int pageSize)
     initVirtMem.write(auxv_array_end, zero);
     auxv_array_end += sizeof(zero);
 
-    copyStringArray(envp, envp_array_base, env_data_base, initVirtMem);
-    copyStringArray(argv, argv_array_base, arg_data_base, initVirtMem);
+    copyStringArray(envp, envp_array_base, env_data_base,
+                    BigEndianByteOrder, initVirtMem);
+    copyStringArray(argv, argv_array_base, arg_data_base,
+                    BigEndianByteOrder, initVirtMem);
 
     initVirtMem.writeBlob(argc_base, &guestArgc, intSize);
 
@@ -450,7 +446,7 @@ void Sparc32Process::flushWindows(ThreadContext *tc)
             RegVal sp = tc->readIntReg(StackPointerReg);
             for (int index = 16; index < 32; index++) {
                 uint32_t regVal = tc->readIntReg(index);
-                regVal = htog(regVal);
+                regVal = htobe(regVal);
                 if (!tc->getVirtProxy().tryWriteBlob(
                         sp + (index - 16) * 4, (uint8_t *)&regVal, 4)) {
                     warn("Failed to save register to the stack when "
@@ -485,7 +481,7 @@ Sparc64Process::flushWindows(ThreadContext *tc)
             RegVal sp = tc->readIntReg(StackPointerReg);
             for (int index = 16; index < 32; index++) {
                 RegVal regVal = tc->readIntReg(index);
-                regVal = htog(regVal);
+                regVal = htobe(regVal);
                 if (!tc->getVirtProxy().tryWriteBlob(
                         sp + 2047 + (index - 16) * 8, (uint8_t *)&regVal, 8)) {
                     warn("Failed to save register to the stack when "
@@ -509,25 +505,11 @@ Sparc32Process::getSyscallArg(ThreadContext *tc, int &i)
     return bits(tc->readIntReg(FirstArgumentReg + i++), 31, 0);
 }
 
-void
-Sparc32Process::setSyscallArg(ThreadContext *tc, int i, RegVal val)
-{
-    assert(i < 6);
-    tc->setIntReg(FirstArgumentReg + i, bits(val, 31, 0));
-}
-
 RegVal
 Sparc64Process::getSyscallArg(ThreadContext *tc, int &i)
 {
     assert(i < 6);
     return tc->readIntReg(FirstArgumentReg + i++);
-}
-
-void
-Sparc64Process::setSyscallArg(ThreadContext *tc, int i, RegVal val)
-{
-    assert(i < 6);
-    tc->setIntReg(FirstArgumentReg + i, val);
 }
 
 void

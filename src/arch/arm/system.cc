@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2012-2013, 2015,2017-2018 ARM Limited
+ * Copyright (c) 2010, 2012-2013, 2015,2017-2019 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -48,7 +48,7 @@
 #include "base/loader/object_file.hh"
 #include "base/loader/symtab.hh"
 #include "cpu/thread_context.hh"
-#include "dev/arm/gic_v3.hh"
+#include "dev/arm/gic_v2.hh"
 #include "mem/fs_translating_port_proxy.hh"
 #include "mem/physical.hh"
 #include "sim/full_system.hh"
@@ -73,6 +73,8 @@ ArmSystem::ArmSystem(Params *p)
       _haveLargeAsid64(p->have_large_asid_64),
       _haveSVE(p->have_sve),
       _sveVL(p->sve_vl),
+      _haveLSE(p->have_lse),
+      _havePAN(p->have_pan),
       _m5opRange(p->m5ops_base ?
                  RangeSize(p->m5ops_base, 0x10000) :
                  AddrRange(1, 0)), // Create an empty range if disabled
@@ -140,8 +142,9 @@ ArmSystem::initState()
     const Params* p = params();
 
     if (bootldr) {
-        bool isGICv3System = dynamic_cast<Gicv3 *>(getGIC()) != nullptr;
-        bootldr->loadSections(physProxy);
+        bool is_gic_v2 =
+            getGIC()->supportsVersion(BaseGic::GicVersion::GIC_V2);
+        bootldr->buildImage().write(physProxy);
 
         inform("Using bootloader at address %#x\n", bootldr->entryPoint());
 
@@ -151,14 +154,14 @@ ArmSystem::initState()
         if (!p->flags_addr)
            fatal("flags_addr must be set with bootloader\n");
 
-        if (!p->gic_cpu_addr && !isGICv3System)
+        if (!p->gic_cpu_addr && is_gic_v2)
             fatal("gic_cpu_addr must be set with bootloader\n");
 
         for (int i = 0; i < threadContexts.size(); i++) {
             if (!_highestELIs64)
                 threadContexts[i]->setIntReg(3, (kernelEntry & loadAddrMask) +
                         loadAddrOffset);
-            if (!isGICv3System)
+            if (is_gic_v2)
                 threadContexts[i]->setIntReg(4, params()->gic_cpu_addr);
             threadContexts[i]->setIntReg(5, params()->flags_addr);
         }
@@ -170,6 +173,14 @@ ArmSystem::initState()
             threadContexts[0]->pcState((kernelEntry & loadAddrMask) +
                     loadAddrOffset);
     }
+}
+
+ArmSystem *
+ArmSystem::getArmSystem(System *sys)
+{
+    ArmSystem *a_sys = dynamic_cast<ArmSystem *>(sys);
+    assert(a_sys);
+    return a_sys;
 }
 
 ArmSystem*

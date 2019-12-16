@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2016 ARM Limited
+ * Copyright (c) 2010-2016, 2019 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -43,6 +43,7 @@
 
 #include <list>
 
+#include "arch/arm/faults.hh"
 #include "arch/arm/miscregs.hh"
 #include "arch/arm/system.hh"
 #include "arch/arm/tlb.hh"
@@ -755,6 +756,9 @@ class TableWalker : public ClockedObject
         /** If the access comes from the secure state. */
         bool isSecure;
 
+        /** True if table walks are uncacheable (for table descriptors) */
+        bool isUncacheable;
+
         /** Helper variables used to implement hierarchical access permissions
          * when the long-desc. format is used (LPAE only) */
         bool secureLookup;
@@ -762,6 +766,9 @@ class TableWalker : public ClockedObject
         bool userTable;
         bool xnTable;
         bool pxnTable;
+
+        /** Hierarchical access permission disable */
+        bool hpd;
 
         /** Flag indicating if a second stage of lookup is required */
         bool stage2Req;
@@ -944,6 +951,8 @@ class TableWalker : public ClockedObject
     bool fetchDescriptor(Addr descAddr, uint8_t *data, int numBytes,
         Request::Flags flags, int queueIndex, Event *event,
         void (TableWalker::*doDescriptor)());
+
+    Fault generateLongDescFault(ArmFault::FaultSource src);
 
     void insertTableEntry(DescriptorBase &descriptor, bool longDescriptor);
 

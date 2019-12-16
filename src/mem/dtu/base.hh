@@ -38,7 +38,7 @@
 #include "params/BaseDtu.hh"
 #include "mem/dtu/tlb.hh"
 
-class BaseDtu : public MemObject
+class BaseDtu : public ClockedObject
 {
   protected:
 

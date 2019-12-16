@@ -54,7 +54,7 @@ from os.path import basename, dirname, exists, isdir, isfile, join as joinpath
 
 import SCons
 
-from gem5_scons import Transform
+from gem5_scons import Transform, warning, error
 
 # This file defines how to build a particular configuration of gem5
 # based on variable settings in the 'env' build environment.
@@ -606,6 +606,7 @@ for extra_dir in extras_dir_list:
 
         if 'SConscript' in files:
             build_dir = joinpath(env['BUILDDIR'], root[prefix_len:])
+            Source.set_group(build_dir)
             SConscript(joinpath(root, 'SConscript'), variant_dir=build_dir)
 
 for opt in export_vars:
@@ -1006,22 +1007,21 @@ if env['USE_PYTHON']:
         Source(cc_file)
 
 # Build all protocol buffers if we have got protoc and protobuf available
-if env['HAVE_PROTOBUF']:
+if env['HAVE_PROTOC'] and env['HAVE_PROTOBUF']:
     for proto in ProtoBuf.all:
         # Use both the source and header as the target, and the .proto
         # file as the source. When executing the protoc compiler, also
         # specify the proto_path to avoid having the generated files
         # include the path.
         env.Command([proto.cc_file, proto.hh_file], proto.tnode,
-                    MakeAction('$PROTOC --cpp_out ${TARGET.dir} '
+                    MakeAction('${PROTOC} --cpp_out ${TARGET.dir} '
                                '--proto_path ${SOURCE.dir} $SOURCE',
                                Transform("PROTOC")))
 
         # Add the C++ source file
         Source(proto.cc_file, tags=proto.tags)
 elif ProtoBuf.all:
-    print('Got protobuf to build, but lacks support!')
-    Exit(1)
+    error('Got protobuf to build, but lacks support!')
 
 #
 # Handle debug flags
@@ -1334,8 +1334,7 @@ elif env['CLANG']:
     for target in ['opt', 'fast', 'prof', 'perf']:
         ccflags[target] += ['-O3']
 else:
-    print('Unknown compiler, please fix compiler options')
-    Exit(1)
+    error('Unknown compiler, please fix compiler options')
 
 
 # To speed things up, we only instantiate the build environments we

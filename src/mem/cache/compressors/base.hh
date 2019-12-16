@@ -54,6 +54,12 @@ struct BaseCacheCompressorParams;
 class BaseCacheCompressor : public SimObject {
   protected:
     /**
+     * This compressor must be able to access the protected functions of
+     * its sub-compressors.
+     */
+    friend class MultiCompressor;
+
+    /**
      * Forward declaration of compression data. Every new compressor must
      * create a new compression data based on it.
      */
@@ -63,6 +69,12 @@ class BaseCacheCompressor : public SimObject {
      * Uncompressed cache line size (in bytes).
      */
     const std::size_t blkSize;
+
+    /**
+     * Size in bytes at which a compression is classified as bad and therefore
+     * the compressed block is restored to its uncompressed format.
+     */
+    const std::size_t sizeThreshold;
 
     /**
      * @defgroup CompressionStats Compression specific statistics.

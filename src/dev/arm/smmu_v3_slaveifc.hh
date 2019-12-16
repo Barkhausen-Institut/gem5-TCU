@@ -47,14 +47,14 @@
 #include "dev/arm/smmu_v3_events.hh"
 #include "dev/arm/smmu_v3_ports.hh"
 #include "dev/arm/smmu_v3_proc.hh"
-#include "mem/mem_object.hh"
 #include "params/SMMUv3SlaveInterface.hh"
+#include "sim/clocked_object.hh"
 
 class SMMUTranslationProcess;
 class SMMUv3;
 class SMMUSlavePort;
 
-class SMMUv3SlaveInterface : public MemObject
+class SMMUv3SlaveInterface : public ClockedObject
 {
   protected:
     friend class SMMUTranslationProcess;
@@ -83,6 +83,7 @@ class SMMUv3SlaveInterface : public MemObject
 
     unsigned wrBufSlotsRemaining;
     unsigned xlateSlotsRemaining;
+    unsigned pendingMemAccesses;
 
     const bool prefetchEnable;
     const bool prefetchReserveLastWay;
@@ -116,7 +117,7 @@ class SMMUv3SlaveInterface : public MemObject
         SMMUv3SlaveInterface,
         &SMMUv3SlaveInterface::atsSendDeviceRetry> atsSendDeviceRetryEvent;
 
-    Port& getPort(const std::string &name, PortID id);
+    Port& getPort(const std::string &name, PortID id) override;
 
   public:
     SMMUv3SlaveInterface(const SMMUv3SlaveInterfaceParams *p);

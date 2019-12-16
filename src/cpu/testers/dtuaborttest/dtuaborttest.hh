@@ -36,7 +36,7 @@
 #include "mem/dtu/regfile.hh"
 #include "sim/system.hh"
 
-class DtuAbortTest : public MemObject
+class DtuAbortTest : public ClockedObject
 {
   public:
     DtuAbortTest(const DtuAbortTestParams *p);

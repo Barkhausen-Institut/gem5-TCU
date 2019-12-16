@@ -55,13 +55,19 @@
 #include "sim/system.hh"
 
 FSTranslatingPortProxy::FSTranslatingPortProxy(ThreadContext *tc)
-    : PortProxy(tc->getCpuPtr()->getDataPort(),
+    : PortProxy(tc->getCpuPtr()->getSendFunctional(),
                 tc->getSystemPtr()->cacheLineSize()), _tc(tc)
 {
 }
 
-FSTranslatingPortProxy::FSTranslatingPortProxy(MasterPort &port,
-                                               unsigned int cacheLineSize)
+FSTranslatingPortProxy::FSTranslatingPortProxy(
+        SendFunctionalFunc func, unsigned int cacheLineSize)
+    : PortProxy(func, cacheLineSize), _tc(NULL)
+{
+}
+
+FSTranslatingPortProxy::FSTranslatingPortProxy(
+        MasterPort &port, unsigned int cacheLineSize)
     : PortProxy(port, cacheLineSize), _tc(NULL)
 {
 }

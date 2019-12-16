@@ -58,7 +58,7 @@ using namespace X86ISA;
 namespace
 {
 
-class X86LinuxObjectFileLoader : public ObjectFile::Loader
+class X86LinuxObjectFileLoader : public Process::Loader
 {
   public:
     Process *
@@ -271,8 +271,8 @@ static SyscallDesc syscallDescs64[] = {
     /*  10 */ SyscallDesc("mprotect", ignoreFunc),
     /*  11 */ SyscallDesc("munmap", munmapFunc),
     /*  12 */ SyscallDesc("brk", brkFunc),
-    /*  13 */ SyscallDesc("rt_sigaction", ignoreFunc, SyscallDesc::WarnOnce),
-    /*  14 */ SyscallDesc("rt_sigprocmask", ignoreFunc, SyscallDesc::WarnOnce),
+    /*  13 */ SyscallDesc("rt_sigaction", ignoreWarnOnceFunc),
+    /*  14 */ SyscallDesc("rt_sigprocmask", ignoreWarnOnceFunc),
     /*  15 */ SyscallDesc("rt_sigreturn", unimplementedFunc),
     /*  16 */ SyscallDesc("ioctl", ioctlFunc<X86Linux64>),
     /*  17 */ SyscallDesc("pread64", unimplementedFunc),
@@ -293,7 +293,7 @@ static SyscallDesc syscallDescs64[] = {
     /*  32 */ SyscallDesc("dup", dupFunc),
     /*  33 */ SyscallDesc("dup2", dup2Func),
     /*  34 */ SyscallDesc("pause", unimplementedFunc),
-    /*  35 */ SyscallDesc("nanosleep", ignoreFunc, SyscallDesc::WarnOnce),
+    /*  35 */ SyscallDesc("nanosleep", ignoreWarnOnceFunc),
     /*  36 */ SyscallDesc("getitimer", unimplementedFunc),
     /*  37 */ SyscallDesc("alarm", unimplementedFunc),
     /*  38 */ SyscallDesc("setitimer", unimplementedFunc),
@@ -373,7 +373,7 @@ static SyscallDesc syscallDescs64[] = {
     /* 108 */ SyscallDesc("getegid", getegidFunc),
     /* 109 */ SyscallDesc("setpgid", setpgidFunc),
     /* 110 */ SyscallDesc("getppid", getppidFunc),
-    /* 111 */ SyscallDesc("getpgrp", unimplementedFunc),
+    /* 111 */ SyscallDesc("getpgrp", getpgrpFunc),
     /* 112 */ SyscallDesc("setsid", unimplementedFunc),
     /* 113 */ SyscallDesc("setreuid", unimplementedFunc),
     /* 114 */ SyscallDesc("setregid", unimplementedFunc),
@@ -483,7 +483,7 @@ static SyscallDesc syscallDescs64[] = {
     /* 218 */ SyscallDesc("set_tid_address", setTidAddressFunc),
     /* 219 */ SyscallDesc("restart_syscall", unimplementedFunc),
     /* 220 */ SyscallDesc("semtimedop", unimplementedFunc),
-    /* 221 */ SyscallDesc("fadvise64", unimplementedFunc),
+    /* 221 */ SyscallDesc("fadvise64", ignoreFunc),
     /* 222 */ SyscallDesc("timer_create", unimplementedFunc),
     /* 223 */ SyscallDesc("timer_settime", unimplementedFunc),
     /* 224 */ SyscallDesc("timer_gettime", unimplementedFunc),
@@ -555,7 +555,7 @@ static SyscallDesc syscallDescs64[] = {
     /* 290 */ SyscallDesc("eventfd2", eventfdFunc<X86Linux64>),
     /* 291 */ SyscallDesc("epoll_create1", unimplementedFunc),
     /* 292 */ SyscallDesc("dup3", unimplementedFunc),
-    /* 293 */ SyscallDesc("pipe2", unimplementedFunc),
+    /* 293 */ SyscallDesc("pipe2", pipe2Func),
     /* 294 */ SyscallDesc("inotify_init1", unimplementedFunc),
     /* 295 */ SyscallDesc("preadv", unimplementedFunc),
     /* 296 */ SyscallDesc("pwritev", unimplementedFunc),
@@ -584,8 +584,15 @@ X86_64LinuxProcess::X86_64LinuxProcess(ProcessParams * params,
                     sizeof(syscallDescs64) / sizeof(SyscallDesc))
 {}
 
-void X86_64LinuxProcess::clone(ThreadContext *old_tc, ThreadContext *new_tc,
-                               Process *process, RegVal flags)
+void
+X86_64LinuxProcess::syscall(ThreadContext *tc, Fault *fault)
+{
+    doSyscall(tc->readIntReg(INTREG_RAX), tc, fault);
+}
+
+void
+X86_64LinuxProcess::clone(ThreadContext *old_tc, ThreadContext *new_tc,
+                          Process *process, RegVal flags)
 {
     X86_64Process::clone(old_tc, new_tc, (X86_64Process*)process, flags);
 }
@@ -926,8 +933,22 @@ I386LinuxProcess::I386LinuxProcess(ProcessParams * params, ObjectFile *objFile)
                   sizeof(syscallDescs32) / sizeof(SyscallDesc))
 {}
 
-void I386LinuxProcess::clone(ThreadContext *old_tc, ThreadContext *new_tc,
-                             Process *process, RegVal flags)
+void
+I386LinuxProcess::syscall(ThreadContext *tc, Fault *fault)
+{
+    PCState pc = tc->pcState();
+    Addr eip = pc.pc();
+    if (eip >= vsyscallPage.base &&
+            eip < vsyscallPage.base + vsyscallPage.size) {
+        pc.npc(vsyscallPage.base + vsyscallPage.vsysexitOffset);
+        tc->pcState(pc);
+    }
+    doSyscall(tc->readIntReg(INTREG_RAX), tc, fault);
+}
+
+void
+I386LinuxProcess::clone(ThreadContext *old_tc, ThreadContext *new_tc,
+                        Process *process, RegVal flags)
 {
     I386Process::clone(old_tc, new_tc, (I386Process*)process, flags);
 }

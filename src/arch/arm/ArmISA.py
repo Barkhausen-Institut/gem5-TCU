@@ -1,4 +1,4 @@
-# Copyright (c) 2012-2013, 2015-2018 ARM Limited
+# Copyright (c) 2012-2013, 2015-2019 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -57,7 +57,11 @@ class ArmISA(SimObject):
     pmu = Param.ArmPMU(NULL, "Performance Monitoring Unit")
     decoderFlavour = Param.DecoderFlavour('Generic', "Decoder flavour specification")
 
-    midr = Param.UInt32(0x410fc0f0, "MIDR value")
+    # If no MIDR value is provided, 0x0 is treated by gem5 as follows:
+    # When 'highest_el_is_64' (AArch64 support) is:
+    #   True  -> Cortex-A57 TRM r0p0 MIDR is used
+    #   False -> Cortex-A15 TRM r0p0 MIDR is used
+    midr = Param.UInt32(0x0, "MIDR value")
 
     # See section B4.1.89 - B4.1.92 of the ARM ARM
     #  VMSAv7 support
@@ -105,8 +109,8 @@ class ArmISA(SimObject):
     # 4K | 64K | !16K | !BigEndEL0 | !SNSMem | !BigEnd | 8b ASID | 40b PA
     id_aa64mmfr0_el1 = Param.UInt64(0x0000000000f00002,
         "AArch64 Memory Model Feature Register 0")
-    # Reserved for future expansion
-    id_aa64mmfr1_el1 = Param.UInt64(0x0000000000000000,
+    # PAN | HPDS
+    id_aa64mmfr1_el1 = Param.UInt64(0x0000000000101000,
         "AArch64 Memory Model Feature Register 1")
     id_aa64mmfr2_el1 = Param.UInt64(0x0000000000000000,
         "AArch64 Memory Model Feature Register 2")
