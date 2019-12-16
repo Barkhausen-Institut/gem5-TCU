@@ -47,7 +47,6 @@ class DtuTlb
         Addr virt;
         NocAddr phys;
         uint flags;
-        uint xlates;
 
         uint lru_seq;
         Trie<Addr, Entry>::Handle handle;
@@ -77,7 +76,6 @@ class DtuTlb
         HIT,
         MISS,
         PAGEFAULT,
-        NOMAP
     };
 
     // note that these have to match with the bits in PTEs
@@ -88,8 +86,7 @@ class DtuTlb
         EXEC    = 4,
         INTERN  = 8,
         LARGE   = 16,
-        INVALID = 32,
-        UNCACHE = 64,
+        UNCACHE = 32,
         RW      = READ | WRITE,
         RX      = READ | EXEC,
         RWX     = RW | EXEC,
@@ -117,13 +114,9 @@ class DtuTlb
 
     void regStats();
 
-    Result lookup(Addr virt, uint access, NocAddr *phys, bool xlate = false);
+    Result lookup(Addr virt, uint access, NocAddr *phys);
 
     void insert(Addr virt, NocAddr phys, uint flags);
-
-    void start_translate(Addr virt);
-
-    void finish_translate(Addr virt);
 
     void remove(Addr virt);
 
@@ -131,7 +124,7 @@ class DtuTlb
 
   private:
 
-    DtuTlb::Result do_lookup(Addr virt, uint access, NocAddr *phys, bool xlate);
+    DtuTlb::Result do_lookup(Addr virt, uint access, NocAddr *phys);
 
     void evict();
 
@@ -145,7 +138,6 @@ class DtuTlb
     Stats::Scalar hits;
     Stats::Scalar misses;
     Stats::Scalar pagefaults;
-    Stats::Scalar noMapping;
     Stats::Formula accesses;
     Stats::Scalar inserts;
     Stats::Scalar evicts;

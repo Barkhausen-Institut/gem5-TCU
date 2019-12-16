@@ -36,14 +36,13 @@
 
 static const char *decode_access(uint access)
 {
-    static char buf[7];
-    buf[0] = (access & DtuTlb::INVALID) ? 'I' : '-';
-    buf[1] = (access & DtuTlb::LARGE) ? 'l' : '-';
-    buf[2] = (access & DtuTlb::INTERN) ? 'i' : '-';
-    buf[3] = (access & DtuTlb::READ) ? 'r' : '-';
-    buf[4] = (access & DtuTlb::WRITE) ? 'w' : '-';
-    buf[5] = (access & DtuTlb::EXEC) ? 'x' : '-';
-    buf[6] = '\0';
+    static char buf[6];
+    buf[0] = (access & DtuTlb::LARGE) ? 'l' : '-';
+    buf[1] = (access & DtuTlb::INTERN) ? 'i' : '-';
+    buf[2] = (access & DtuTlb::READ) ? 'r' : '-';
+    buf[3] = (access & DtuTlb::WRITE) ? 'w' : '-';
+    buf[4] = (access & DtuTlb::EXEC) ? 'x' : '-';
+    buf[5] = '\0';
     return buf;
 }
 
@@ -68,13 +67,10 @@ DtuTlb::regStats()
     pagefaults
         .name(dtu.name() + ".tlb.pagefaults")
         .desc("Number of TLB accesses that caused a pagefault");
-    noMapping
-        .name(dtu.name() + ".tlb.noMapping")
-        .desc("Number of TLB accesses that caused an ignored pagefault");
     accesses
         .name(dtu.name() + ".tlb.accesses")
         .desc("Number of total TLB accesses");
-    accesses = hits + misses + pagefaults + noMapping;
+    accesses = hits + misses + pagefaults;
     inserts
         .name(dtu.name() + ".tlb.inserts")
         .desc("Number of TLB inserts");
@@ -90,17 +86,16 @@ DtuTlb::regStats()
 }
 
 DtuTlb::Result
-DtuTlb::lookup(Addr virt, uint access, NocAddr *phys, bool xlate)
+DtuTlb::lookup(Addr virt, uint access, NocAddr *phys)
 {
     static const char *results[] =
     {
         "HIT",
         "MISS",
         "PAGEFAULT",
-        "NOMAP"
     };
 
-    DtuTlb::Result res = do_lookup(virt, access, phys, xlate);
+    DtuTlb::Result res = do_lookup(virt, access, phys);
 
     DPRINTFS(DtuTlbRead, (&dtu), "TLB lookup for %p %s -> %s (%p)\n",
             virt, decode_access(access), results[res], phys->getAddr());
@@ -109,33 +104,20 @@ DtuTlb::lookup(Addr virt, uint access, NocAddr *phys, bool xlate)
 }
 
 DtuTlb::Result
-DtuTlb::do_lookup(Addr virt, uint access, NocAddr *phys, bool xlate)
+DtuTlb::do_lookup(Addr virt, uint access, NocAddr *phys)
 {
     Entry *e = trie.lookup(virt);
-    if (!e || (e->flags & INVALID))
+    if (!e)
     {
         misses++;
         return MISS;
     }
 
-    if (e->flags == 0)
-    {
-        noMapping++;
-        return NOMAP;
-    }
-
+    assert(e->flags != 0);
     if ((e->flags & access) != access)
     {
         pagefaults++;
         return PAGEFAULT;
-    }
-
-    // if there is already a translation running, we need to do that as well
-    // to maintain ordering
-    if (e->xlates > 0 && !xlate)
-    {
-        misses++;
-        return MISS;
     }
 
     e->lru_seq = ++lru_seq;
@@ -153,7 +135,7 @@ DtuTlb::evict()
     Entry *minEntry = NULL;
     for (Entry &e : entries)
     {
-        if (e.lru_seq < min && e.xlates == 0)
+        if (e.lru_seq < min)
         {
             min = e.lru_seq;
             minEntry = &e;
@@ -170,6 +152,8 @@ DtuTlb::evict()
 void
 DtuTlb::insert(Addr virt, NocAddr phys, uint flags)
 {
+    assert(flags != 0);
+
     uint width = (flags & LARGE) ? (64 - (PAGE_BITS + LEVEL_BITS))
                                  : (64 - PAGE_BITS);
     Addr mask = (flags & LARGE) ? LPAGE_MASK : PAGE_MASK;
@@ -184,7 +168,6 @@ DtuTlb::insert(Addr virt, NocAddr phys, uint flags)
         e = free.back();
         e->virt = virt & ~mask;
         e->handle = trie.insert(e->virt, width, e);
-        e->xlates = 0;
         free.pop_back();
     }
     else if((e->flags & LARGE) != (flags & LARGE))
@@ -197,38 +180,9 @@ DtuTlb::insert(Addr virt, NocAddr phys, uint flags)
     e->phys = NocAddr(phys.getAddr() & ~mask);
     e->flags = flags;
 
-    DPRINTFS(DtuTlbWrite, (&dtu), "TLB insert for %p %s -> %p (%u xlates left)\n",
-            e->virt, decode_access(e->flags), e->phys.getAddr(), e->xlates);
+    DPRINTFS(DtuTlbWrite, (&dtu), "TLB insert for %p %s -> %p\n",
+            e->virt, decode_access(e->flags), e->phys.getAddr());
     inserts++;
-}
-
-void
-DtuTlb::start_translate(Addr virt)
-{
-    Entry *e = trie.lookup(virt);
-    if (!e)
-    {
-        insert(virt, NocAddr(0), IRWX | INVALID);
-        e = trie.lookup(virt);
-    }
-
-    e->xlates++;
-
-    DPRINTFS(DtuTlbWrite, (&dtu), "TLB xlate started for %p (%u xlates left)\n",
-            virt, e->xlates);
-}
-
-void
-DtuTlb::finish_translate(Addr virt)
-{
-    Entry *e = trie.lookup(virt);
-    if (!e)
-        return;
-
-    e->xlates--;
-
-    DPRINTFS(DtuTlbWrite, (&dtu), "TLB xlate done for %p (%u xlates left)\n",
-            virt, e->xlates);
 }
 
 void
@@ -239,12 +193,6 @@ DtuTlb::remove(Addr virt)
     {
         DPRINTFS(DtuTlbWrite, (&dtu), "TLB invalidate for %p %s -> %p\n",
                 virt, decode_access(e->flags), e->phys.getAddr());
-
-        if (e->xlates > 0)
-        {
-            e->flags |= INVALID;
-            return;
-        }
 
         trie.remove(e->handle);
         e->handle = NULL;

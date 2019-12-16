@@ -205,7 +205,6 @@ XferUnit::TransferEvent::process()
                 return;
             }
 
-            assert(res != DtuTlb::NOMAP);
             trans = new Translation(*this);
             xfer->dtu.startTranslate(buf->id, local, access, trans);
             return;
