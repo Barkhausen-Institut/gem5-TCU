@@ -35,15 +35,12 @@ enum class DtuError
     NONE                = 0,
     MISS_CREDITS        = 1,
     NO_RING_SPACE       = 2,
-    VPE_GONE            = 3,
-    PAGEFAULT           = 4,
-    NO_MAPPING          = 5,
-    INV_EP              = 6,
-    ABORT               = 7,
-    REPLY_DISABLED      = 8,
-    INV_MSG             = 9,
-    INV_ARGS            = 10,
-    NO_PERM             = 11,
+    PAGEFAULT           = 3,
+    INV_EP              = 4,
+    ABORT               = 5,
+    INV_MSG             = 6,
+    INV_ARGS            = 7,
+    NO_PERM             = 8,
 };
 
 #endif // __MEM_DTU_ERROR_HH__
