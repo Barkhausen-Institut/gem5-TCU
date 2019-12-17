@@ -100,24 +100,26 @@ DtuPciProxy::getRegAddr(CmdReg reg)
 
 PacketPtr
 DtuPciProxy::createDtuCmdPkt(Dtu::Command::Opcode cmd, unsigned epid,
-    uint64_t data, uint64_t size, uint64_t arg)
+    uint64_t data, uint64_t size, uint64_t arg0, uint64_t arg1)
 {
     static_assert(static_cast<int>(CmdReg::COMMAND) == 0, "");
     static_assert(static_cast<int>(CmdReg::ABORT) == 1, "");
     static_assert(static_cast<int>(CmdReg::DATA) == 2, "");
+    static_assert(static_cast<int>(CmdReg::ARG1) == 3, "");
 
     auto pkt = createPacket(dtuRegBase + getRegAddr(CmdReg::COMMAND),
-        sizeof(RegFile::reg_t) * 3, MemCmd::WriteReq);
+        sizeof(RegFile::reg_t) * 4, MemCmd::WriteReq);
 
     Dtu::Command::Bits cmdreg = 0;
     cmdreg.opcode = static_cast<RegFile::reg_t>(cmd);
     cmdreg.epid = epid;
-    cmdreg.arg = arg;
+    cmdreg.arg = arg0;
 
     RegFile::reg_t* regs = pkt->getPtr<RegFile::reg_t>();
     regs[0] = cmdreg;
     regs[1] = 0;
     regs[2] = DataReg(data, size).value();
+    regs[3] = arg1;
     return pkt;
 }
 
@@ -263,8 +265,9 @@ DtuPciProxy::sendInterruptCmd()
     DPRINTF(
         DtuPciProxyInt, "Send interrupt message using endpoint %u\n", EP_INT);
 
-    PacketPtr cmdPkt
-        = createDtuCmdPkt(Dtu::Command::SEND, EP_INT, INT_ADDR, 0x4, 0);
+    PacketPtr cmdPkt = createDtuCmdPkt(
+        Dtu::Command::SEND, EP_INT, INT_ADDR, 0x4, Dtu::INVALID_EP_ID, 0
+    );
     interruptPending = false;
     executeCommand(cmdPkt);
 }
@@ -342,7 +345,7 @@ DtuPciProxy::sendDmaCmd()
     auto cmd
         = pendingDmaReq->isRead() ? Dtu::Command::READ : Dtu::Command::WRITE;
     PacketPtr cmdPkt = createDtuCmdPkt(cmd, EP_DMA, DMA_ADDR,
-        pendingDmaReq->getSize(), pendingDmaReq->getAddr());
+        pendingDmaReq->getSize(), 0, pendingDmaReq->getAddr());
     executeCommand(cmdPkt);
 }
 

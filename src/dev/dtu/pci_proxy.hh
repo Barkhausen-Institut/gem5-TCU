@@ -61,7 +61,7 @@ class DtuPciProxy : public ClockedObject
 
     static Addr getRegAddr(CmdReg reg);
     PacketPtr createDtuCmdPkt(Dtu::Command::Opcode cmd, unsigned epid,
-        uint64_t data, uint64_t size, uint64_t arg);
+        uint64_t data, uint64_t size, uint64_t arg0, uint64_t arg1);
     static Addr encodePciAddress(PciBusAddr const& busAddr, Addr offset);
     PacketPtr createPciConfigPacket(PciBusAddr busAddr, Addr offset,
         const void* data, size_t size, MemCmd cmd);
