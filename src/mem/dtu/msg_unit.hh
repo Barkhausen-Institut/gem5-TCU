@@ -38,8 +38,6 @@ class MessageUnit
 {
   public:
 
-    static const uint16_t NO_REPLIES = 0xFFFF;
-
     struct MsgInfo
     {
         bool ready;

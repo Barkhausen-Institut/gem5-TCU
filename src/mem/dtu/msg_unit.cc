@@ -83,7 +83,7 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
             return;
         }
 
-        if (ep.replyEps == NO_REPLIES)
+        if (ep.replyEps == Dtu::INVALID_EP_ID)
         {
             DPRINTFS(Dtu, (&dtu),
                      "EP%u: no reply EPs, cannot reply on msg %p\n",
@@ -112,17 +112,31 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
         info.flags = Dtu::REPLY_FLAG;
         info.replySize = 0;
     }
+    else
+    {
+        info.flags = 0;
+        info.replyEpId = Dtu::INVALID_EP_ID;
+        info.replySize = 0;
+    }
 
     // check if we have enough credits
     const DataReg data = dtu.regs().getDataReg();
     SendEp ep = dtu.regs().getSendEp(epid);
-    RecvEp rep;
-    if (cmd.opcode == Dtu::Command::SEND)
-        rep = dtu.regs().getRecvEp(cmd.arg);
+    if (cmd.opcode == Dtu::Command::SEND && cmd.arg != Dtu::INVALID_EP_ID)
+    {
+        RecvEp rep = dtu.regs().getRecvEp(cmd.arg);
+        if (rep.bufAddr == 0 || rep.vpe != dtu.regs().getVPE())
+        {
+            DPRINTFS(Dtu, (&dtu), "EP%u: invalid reply EP\n", cmd.arg);
+            dtu.scheduleFinishOp(Cycles(1), DtuError::INV_EP);
+            return;
+        }
 
-    if (ep.maxMsgSize == 0 ||
-        ep.vpe != dtu.regs().getVPE() ||
-        (cmd.opcode == Dtu::Command::SEND && rep.vpe != dtu.regs().getVPE()))
+        info.replyEpId = cmd.arg;
+        info.replySize = rep.msgSize;
+    }
+
+    if (ep.maxMsgSize == 0 || ep.vpe != dtu.regs().getVPE())
     {
         DPRINTFS(Dtu, (&dtu), "EP%u: invalid EP\n", epid);
         dtu.scheduleFinishOp(Cycles(1), DtuError::INV_EP);
@@ -157,13 +171,6 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
     info.replyLabel   = dtu.regs().get(CmdReg::ARG1);
     info.unlimcred    = ep.curcrd == Dtu::CREDITS_UNLIM;
     info.ready        = true;
-
-    if (cmd.opcode == Dtu::Command::SEND)
-    {
-        info.replySize    = rep.msgSize;
-        info.replyEpId    = cmd.arg;
-        info.flags        = 0;
-    }
 
     startXfer(cmd);
 }
@@ -376,7 +383,7 @@ MessageUnit::ackMessage(unsigned epId, Addr msgAddr)
     if (ep.isUnread(msgidx))
         ep.setUnread(msgidx, false);
 
-    if (ep.replyEps != NO_REPLIES)
+    if (ep.replyEps != Dtu::INVALID_EP_ID)
     {
         // invalidate reply EP
         dtu.regs().invalidate(ep.replyEps + msgidx, true);
@@ -394,7 +401,7 @@ DtuError
 MessageUnit::invalidateReply(unsigned repId, unsigned peId, unsigned sepId)
 {
     RecvEp ep = dtu.regs().getRecvEp(repId);
-    if (ep.bufAddr == 0 || ep.replyEps == NO_REPLIES)
+    if (ep.bufAddr == 0 || ep.replyEps == Dtu::INVALID_EP_ID)
         return DtuError::INV_EP;
 
     for (int i = 0; i < (1 << ep.size); ++i)
@@ -435,9 +442,10 @@ MessageUnit::finishMsgReceive(unsigned epId,
 
         ep.setUnread(idx, true);
 
-        if (!(header->flags & Dtu::REPLY_FLAG))
+        if (!(header->flags & Dtu::REPLY_FLAG) &&
+            header->replyEpId != Dtu::INVALID_EP_ID)
         {
-            assert(ep.replyEps != NO_REPLIES);
+            assert(ep.replyEps != Dtu::INVALID_EP_ID);
 
             // install use-once reply EP
             SendEp sep;
