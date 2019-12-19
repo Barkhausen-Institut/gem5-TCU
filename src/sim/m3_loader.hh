@@ -58,6 +58,12 @@ class M3Loader
         char name[];
     } M5_ATTR_PACKED;
 
+    struct MemMod
+    {
+        uint64_t addr;
+        uint64_t size;
+    } M5_ATTR_PACKED;
+
     struct KernelEnv
     {
         enum
@@ -72,7 +78,7 @@ class M3Loader
         uint64_t pe_count;
         uint64_t pe_mem_base;
         uint64_t pe_mem_size;
-        uint64_t mems[MAX_MEMS];
+        MemMod mems[MAX_MEMS];
     } M5_ATTR_PACKED;
 
     struct StartEnv

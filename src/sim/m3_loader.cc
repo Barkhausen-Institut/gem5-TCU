@@ -337,21 +337,25 @@ M3Loader::initState(System &sys, DTUMemory &dtumem, MasterPort &noc)
         kenv.pe_count  = pes.size();
         kenv.pe_mem_base = NocAddr(dtumem.memPe, modOffset + modSize).getAddr();
         kenv.pe_mem_size = peSize;
-        kenv.mems[0] = pes[dtumem.memPe] & ~static_cast<Addr>(0xFFF);
-        if (kenv.mems[0] < modOffset + modSize + pes.size() * peSize)
+        auto avail_mem_start = modOffset + modSize + pes.size() * peSize;
+        kenv.mems[0].size = pes[dtumem.memPe] & ~static_cast<Addr>(0xFFF);
+        if (kenv.mems[0].size < avail_mem_start)
             panic("Not enough DRAM for modules and PEs");
-        kenv.mems[0] -= modOffset + modSize + pes.size() * peSize;
+        kenv.mems[0].addr = avail_mem_start;
+        kenv.mems[0].size -= avail_mem_start;
 
         size_t j = 1;
         for (size_t i = 0; i < pes.size(); ++i) {
             if (i != dtumem.memPe && (pes[i] & 0x7) == 2) {
                 if (j >= MAX_MEMS)
                     panic("Too many memory PEs");
-                kenv.mems[j++] = pes[i] & ~static_cast<Addr>(0xFFF);
+                kenv.mems[j].addr = 0;
+                kenv.mems[j].size = pes[i] & ~static_cast<Addr>(0xFFF);
+                j++;
             }
         }
         for (; j < MAX_MEMS; ++j)
-            kenv.mems[j] = 0;
+            kenv.mems[j] = {0, 0};
         writeRemote(noc, addr, reinterpret_cast<uint8_t*>(&kenv),
                     sizeof(kenv));
         addr += sizeof(kenv);
