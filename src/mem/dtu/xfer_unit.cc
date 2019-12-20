@@ -182,6 +182,12 @@ XferUnit::TransferEvent::process()
         return;
     }
 
+    if (remaining == 0)
+    {
+        xfer->continueTransfer(buf);
+        return;
+    }
+
     NocAddr phys(local);
     if (xfer->dtu.tlb() && !(flags() & NOXLATE))
     {
@@ -316,6 +322,12 @@ XferUnit::recvMemResponse(uint64_t evId, PacketPtr pkt)
         buf->event->freeSlots++;
     }
 
+    continueTransfer(buf);
+}
+
+void
+XferUnit::continueTransfer(Buffer *buf)
+{
     // transfer done?
     if (buf->event->result != DtuError::NONE ||
         (buf->event->remaining == 0 &&

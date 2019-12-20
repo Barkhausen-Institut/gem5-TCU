@@ -116,7 +116,7 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
     {
         info.flags = 0;
         info.replyEpId = Dtu::INVALID_EP_ID;
-        info.replySize = 0;
+        info.replySize = ceil(log2(sizeof(MessageHeader)));
     }
 
     // check if we have enough credits
@@ -442,8 +442,7 @@ MessageUnit::finishMsgReceive(unsigned epId,
 
         ep.setUnread(idx, true);
 
-        if (!(header->flags & Dtu::REPLY_FLAG) &&
-            header->replyEpId != Dtu::INVALID_EP_ID)
+        if (!(header->flags & Dtu::REPLY_FLAG))
         {
             assert(ep.replyEps != Dtu::INVALID_EP_ID);
 
@@ -501,7 +500,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint flags)
     }
 
     // support credit receives without storing reply messages
-    if (epId >= dtu.numEndpoints &&
+    if (epId == Dtu::INVALID_EP_ID &&
         (header->flags & Dtu::REPLY_FLAG) &&
         header->replyEpId < dtu.numEndpoints)
     {

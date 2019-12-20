@@ -229,6 +229,8 @@ class XferUnit
 
   private:
 
+    void continueTransfer(Buffer *buf);
+
     Buffer *getBuffer(uint64_t id);
 
     Buffer* allocateBuf(TransferEvent *event, uint flags);
