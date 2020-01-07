@@ -102,6 +102,9 @@ def getOptions():
     parser.add_option("-c", "--cmd", default="", type="string",
                       help="comma separated list of binaries")
 
+    parser.add_option("--mods", default="", type="string",
+                      help="comma separated list of boot modules")
+
     parser.add_option("--mem-type", type="choice", default="DDR3_1600_8x8",
                       choices=ObjectList.mem_list.get_names(),
                       help="type of memory to use")
@@ -711,6 +714,7 @@ def runSimulation(root, options, pes):
     for pe in pes:
         setattr(root, 'pe%02d' % pe.core_id, pe)
         try:
+            pe.mods = options.mods
             pe.pes = pemems
         except:
             pass

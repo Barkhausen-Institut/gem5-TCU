@@ -39,14 +39,17 @@
 #include "sim/byteswap.hh"
 
 #include <libgen.h>
+#include <sstream>
 
 M3Loader::M3Loader(const std::vector<Addr> &pes,
+                   const std::vector<std::string> &mods,
                    const std::string &cmdline,
                    unsigned coreId,
                    Addr modOffset,
                    Addr modSize,
                    Addr peSize)
     : pes(pes),
+      mods(mods),
       commandLine(cmdline),
       coreId(coreId),
       modOffset(modOffset),
@@ -116,10 +119,8 @@ M3Loader::writeRemote(MasterPort &noc, Addr dest,
 }
 
 Addr
-M3Loader::loadModule(MasterPort &noc, const std::string &path,
-                     const std::string &name, Addr addr)
+M3Loader::loadModule(MasterPort &noc, const std::string &filename, Addr addr)
 {
-    std::string filename = path + "/" + name;
     FILE *f = fopen(filename.c_str(), "r");
     if(!f)
         panic("Unable to open '%s' for reading", filename.c_str());
@@ -212,97 +213,44 @@ M3Loader::initState(System &sys, DTUMemory &dtumem, MasterPort &noc)
                 commandLine, ENV_START + ENV_SIZE - args - 1);
     }
 
-    std::string kernelPath;
-    std::string prog;
-    std::string argstr;
-    std::vector<std::pair<std::string,std::string>> mods;
-
-    // write arguments to state area and determine boot modules
+    // write arguments to state area
     const char *cmd = commandLine.c_str();
     const char *begin = cmd;
-    bool seen_dashes = false;
     size_t i = 0;
     while (*cmd)
     {
         if (isspace(*cmd))
         {
             if (cmd > begin)
-            {
-                // the first is the kernel; remember the path
-                if (i == 0)
-                {
-                    std::string path(begin, cmd - begin);
-                    char *copy = strdup(path.c_str());
-                    kernelPath = dirname(copy);
-                    free(copy);
-                }
-                else if (modOffset)
-                {
-                    if(!seen_dashes)
-                    {
-                        if (strncmp(begin, "--", 2) == 0)
-                            seen_dashes = true;
-                    }
-                    else if (strncmp(begin, "--", 2) == 0)
-                    {
-                        mods.push_back(std::make_pair(prog, argstr));
-                        prog = "";
-                        argstr = "";
-                    }
-                    else if (prog.empty())
-                        prog = std::string(begin, cmd - begin);
-                    else
-                    {
-                        std::string arg(begin, cmd - begin);
-                        if (!argstr.empty())
-                            argstr += ' ';
-                        argstr += arg;
-                    }
-                }
-
                 writeArg(sys, args, i, argv, cmd, begin);
-            }
             begin = cmd + 1;
         }
         cmd++;
     }
 
     if (cmd > begin)
-    {
-        if (prog.empty())
-            prog = std::string(begin, cmd - begin);
-        else
-        {
-            std::string arg(begin, cmd - begin);
-            if (!argstr.empty())
-                argstr += ' ';
-            argstr += arg;
-        }
-
-        mods.push_back(std::make_pair(prog, argstr));
-
         writeArg(sys, args, i, argv, cmd, begin);
-    }
 
     // modules for the kernel
     if (modOffset)
     {
-        // PEMux is always needed
-        mods.push_back(std::make_pair("pemux", ""));
-
         uint8_t *modarray = nullptr;
         size_t modarraysize = 0;
 
         i = 0;
         Addr addr = NocAddr(dtumem.memPe, modOffset).getAddr();
-        for (const std::pair<std::string, std::string> &mod : mods)
+        for (const std::string &mod : mods)
         {
-            Addr size = loadModule(noc, kernelPath, mod.first, addr);
+            Addr size = loadModule(noc, mod, addr);
+
+            // determine module name
+            char *tmp = new char[mod.length() + 1];
+            strcpy(tmp, mod.c_str());
+            std::string mod_name(basename(tmp));
+            delete[] tmp;
 
             // extend module array
-            size_t cmdlen = mod.first.length() + 1;
-            if (!mod.second.empty())
-                cmdlen += mod.second.length() + 1;
+            size_t cmdlen = mod_name.length() + 1;
             modarraysize += cmdlen + sizeof(BootModule);
             modarray = reinterpret_cast<uint8_t*>(
                 realloc(modarray, modarraysize));
@@ -313,12 +261,7 @@ M3Loader::initState(System &sys, DTUMemory &dtumem, MasterPort &noc)
             bmod->namelen = cmdlen;
             bmod->addr = addr;
             bmod->size = size;
-            strcpy(bmod->name, mod.first.c_str());
-            if (!mod.second.empty())
-            {
-                strcat(bmod->name, " ");
-                strcat(bmod->name, mod.second.c_str());
-            }
+            strcpy(bmod->name, mod_name.c_str());
 
             inform("Loaded '%s' to %p .. %p",
                 bmod->name, bmod->addr, bmod->addr + bmod->size);

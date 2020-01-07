@@ -42,6 +42,7 @@ class M3X86System(X86System):
     mod_size = Param.Addr(0, "The max. size of the boot modules (only for kernel PE)")
     pe_size = Param.Addr(0, "The size of the reserved memory region for each PE (only for kernel PE)")
 
+    mods = VectorParam.String([], "The boot modules")
     pes = VectorParam.Addr([], "All PEs in the system with their type and mem size")
 
     noc_master_port = MasterPort("Port that connects to the global NoC (only for initialization)")

@@ -106,6 +106,7 @@ class M3Loader
     } M5_ATTR_PACKED;
 
     std::vector<Addr> pes;
+    std::vector<std::string> mods;
     std::string commandLine;
 
   public:
@@ -116,6 +117,7 @@ class M3Loader
 
   public:
     M3Loader(const std::vector<Addr> &pes,
+             const std::vector<std::string> &mods,
              const std::string &cmdline,
              uint coreId,
              Addr modOffset,
@@ -136,8 +138,7 @@ class M3Loader
                   const char *cmd, const char *begin);
     void writeRemote(MasterPort &noc, Addr dest,
                      const uint8_t *data, size_t size);
-    Addr loadModule(MasterPort &noc, const std::string &path,
-                    const std::string &name, Addr addr);
+    Addr loadModule(MasterPort &noc, const std::string &filename, Addr addr);
 };
 
 #endif

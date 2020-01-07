@@ -34,6 +34,7 @@ class SpuSystem(System):
 
     core_id = Param.Unsigned("The core id")
 
+    mods = VectorParam.String([], "The boot modules")
     pes = VectorParam.Addr([], "All PEs in the system with their type and mem size")
 
     memory_pe = Param.Unsigned(0, "The memory PE to use")
