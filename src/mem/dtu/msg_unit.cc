@@ -143,6 +143,13 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
         return;
     }
 
+    if (data.size + sizeof(MessageHeader) > (1 << ep.maxMsgSize))
+    {
+        DPRINTFS(Dtu, (&dtu), "EP%u: message too large\n", epid);
+        dtu.scheduleFinishOp(Cycles(1), DtuError::INV_ARGS);
+        return;
+    }
+
     if (ep.curcrd != Dtu::CREDITS_UNLIM)
     {
         if (ep.curcrd == 0)
@@ -160,9 +167,6 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
 
         dtu.regs().setSendEp(epid, ep);
     }
-
-    // TODO error handling
-    assert(data.size + sizeof(MessageHeader) <= (1 << ep.maxMsgSize));
 
     // fill the info struct and start the transfer
     info.targetCoreId = ep.targetCore;
@@ -265,9 +269,8 @@ MessageUnit::finishMsgSend(DtuError error, unsigned epid)
     if (ep.maxMsgSize == 0 || ep.vpe != dtu.regs().getVPE())
         return;
 
-    // undo the credit reduction on errors except for MISS_CREDITS
-    if (ep.curcrd != Dtu::CREDITS_UNLIM &&
-        error != DtuError::NONE && error != DtuError::MISS_CREDITS)
+    // undo the credit reduction on receive errors
+    if (ep.curcrd != Dtu::CREDITS_UNLIM && error == DtuError::NO_RING_SPACE)
     {
         ep.curcrd++;
         assert(ep.curcrd <= ep.maxcrd);
