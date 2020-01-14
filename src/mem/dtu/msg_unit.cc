@@ -258,7 +258,8 @@ MessageUnit::SendTransferEvent::transferStart()
 void
 MessageUnit::finishMsgReply(DtuError error, unsigned epid, Addr msgAddr)
 {
-    ackMessage(epid, msgAddr);
+    if (error == DtuError::NONE)
+        ackMessage(epid, msgAddr);
 }
 
 void
