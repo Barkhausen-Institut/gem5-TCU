@@ -207,7 +207,7 @@ MessageUnit::startXfer(const Dtu::Command::Bits& cmd)
     header->flags |= info.flags;
 
     header->senderCoreId = dtu.coreId;
-    header->senderEpId   = info.unlimcred ? dtu.numEndpoints : cmd.epid;
+    header->senderEpId   = info.unlimcred ? Dtu::INVALID_EP_ID : cmd.epid;
     header->replyEpId    = info.replyEpId;
     header->length       = data.size;
     header->label        = info.label;
@@ -435,7 +435,7 @@ MessageUnit::finishMsgReceive(unsigned epId,
     {
         // Note that replyEpId is the Id of *our* sending EP
         if (header->flags & Dtu::REPLY_FLAG &&
-            header->replyEpId < dtu.numEndpoints)
+            header->replyEpId != Dtu::INVALID_EP_ID)
         {
             recvCredits(header->replyEpId);
         }
@@ -504,11 +504,10 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint flags)
     }
 
     // support credit receives without storing reply messages
-    if (epId == Dtu::INVALID_EP_ID &&
-        (header->flags & Dtu::REPLY_FLAG) &&
-        header->replyEpId < dtu.numEndpoints)
+    if (epId == Dtu::INVALID_EP_ID && (header->flags & Dtu::REPLY_FLAG))
     {
-        recvCredits(header->replyEpId);
+        if (header->replyEpId != Dtu::INVALID_EP_ID)
+            recvCredits(header->replyEpId);
         dtu.sendNocResponse(pkt);
         dtu.regs().setEvent(EventType::CRD_RECV);
         dtu.wakeupCore(false);
