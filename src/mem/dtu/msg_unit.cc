@@ -136,7 +136,8 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
         info.replySize = rep.msgSize;
     }
 
-    if (ep.maxMsgSize == 0 || ep.vpe != dtu.regs().getVPE())
+    if (ep.maxMsgSize == 0 || ep.vpe != dtu.regs().getVPE() ||
+        (cmd.opcode == Dtu::Command::SEND && ep.flags != 0))
     {
         DPRINTFS(Dtu, (&dtu), "EP%u: invalid EP\n", epid);
         dtu.scheduleFinishOp(Cycles(1), DtuError::INV_EP);
