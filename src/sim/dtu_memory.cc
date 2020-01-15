@@ -77,7 +77,8 @@ void
 DTUMemory::mapPage(Addr virt, NocAddr noc, uint access)
 {
     Addr ptAddr = getRootPt().getAddr();
-    for (int i = DtuTlb::LEVEL_CNT - 1; i >= 0; --i)
+    int last_level = (access & DtuTlb::LARGE) ? 1 : 0;
+    for (int i = DtuTlb::LEVEL_CNT - 1; i >= last_level; --i)
     {
         Addr idx = virt >> (DtuTlb::PAGE_BITS + i * DtuTlb::LEVEL_BITS);
         idx &= DtuTlb::LEVEL_MASK;
@@ -89,21 +90,20 @@ DTUMemory::mapPage(Addr virt, NocAddr noc, uint access)
         {
             // determine phys address
             NocAddr addr;
-            if (i == 0)
+            if (i == last_level)
                 addr = noc;
             else
             {
                 Addr offset = memOffset + (nextFrame++ << DtuTlb::PAGE_BITS);
                 addr = NocAddr(memPe, offset);
-            }
 
-            // clear pagetables
-            if (i > 0)
+                // clear pagetable
                 physp.memsetBlob(addr.getAddr(), 0, DtuTlb::PAGE_SIZE);
+            }
 
             // insert entry
             entry = addr.getAddr() & ~static_cast<pte_t>(DtuTlb::PAGE_MASK);
-            entry |= i == 0 ? static_cast<DtuTlb::Flag>(access) : DtuTlb::IRWX;
+            entry |= i == last_level ? static_cast<DtuTlb::Flag>(access) : DtuTlb::IRWX;
             pte_t pte = convertPTE(entry);
             DPRINTFS(DtuPtes, obj,
                 "Creating level %d PTE for virt=%#018x @ %#018x: %#018x\n",
@@ -119,12 +119,23 @@ void
 DTUMemory::mapPages(Addr virt, NocAddr noc, Addr size, uint access)
 {
     size_t count = divCeil(size, DtuTlb::PAGE_SIZE);
-    for(size_t i = 0; i < count; ++i)
+    size_t end = virt + count * DtuTlb::PAGE_SIZE;
+    while(virt < end)
     {
-        mapPage(virt, noc, access);
-
-        virt += DtuTlb::PAGE_SIZE;
-        noc.offset += DtuTlb::PAGE_SIZE;
+        if ((virt & DtuTlb::LPAGE_MASK) == 0 &&
+            (noc.getAddr() & DtuTlb::LPAGE_MASK) == 0 &&
+            end - virt >= DtuTlb::LPAGE_SIZE)
+        {
+            mapPage(virt, noc, access | DtuTlb::LARGE);
+            virt += DtuTlb::LPAGE_SIZE;
+            noc.offset += DtuTlb::LPAGE_SIZE;
+        }
+        else
+        {
+            mapPage(virt, noc, access);
+            virt += DtuTlb::PAGE_SIZE;
+            noc.offset += DtuTlb::PAGE_SIZE;
+        }
     }
 }
 
