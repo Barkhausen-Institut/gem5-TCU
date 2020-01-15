@@ -49,6 +49,7 @@ class M3Loader
     static const uintptr_t PEMUX_START  = 0x100000;
     static const uintptr_t RBUF_BASE    = 0x3FC00000;
     static const uintptr_t RBUF_SIZE    = 0x4000;
+    static const uintptr_t PE_MEM_BASE  = 0xE0000000;
 
     struct BootModule
     {

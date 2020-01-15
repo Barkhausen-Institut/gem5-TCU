@@ -176,6 +176,12 @@ M3Loader::mapMemory(System &sys, DTUMemory &dtumem)
         dtumem.mapPages(RBUF_BASE, noc, RBUF_SIZE, DtuTlb::INTERN | DtuTlb::RW);
     }
 
+    // map PE's own physical memory
+    {
+        auto noc = NocAddr(dtumem.memPe, dtumem.memOffset);
+        dtumem.mapPages(PE_MEM_BASE, noc, dtumem.memSize, DtuTlb::INTERN | DtuTlb::RW);
+    }
+
     // DTU's MMIO area
     dtumem.mapPages(0xF0000000, NocAddr(0xF0000000),
                     DtuTlb::PAGE_SIZE * 3, DtuTlb::INTERN | DtuTlb::RW | DtuTlb::UNCACHE);
