@@ -53,10 +53,9 @@ enum class Features
 
 constexpr unsigned numDtuRegs = 4;
 
-// registers for external requests and DTU requests
+// privileged registers (for kernel and PEMux)
 enum class PrivReg : Addr
 {
-    EXT_REQ,
     CORE_REQ,
     CORE_RESP,
     PRIV_CMD,
@@ -65,7 +64,7 @@ enum class PrivReg : Addr
     OLD_VPE,
 };
 
-constexpr unsigned numPrivRegs = 6;
+constexpr unsigned numPrivRegs = 5;
 
 // registers to issue a command
 enum class CmdReg : Addr
@@ -277,8 +276,7 @@ class RegFile
         WROTE_PRIV_CMD  = 2,
         WROTE_ABORT     = 4,
         WROTE_XLATE     = 8,
-        WROTE_EXT_REQ   = 16,
-        WROTE_CLEAR_IRQ = 32,
+        WROTE_CLEAR_IRQ = 16,
     };
 
     RegFile(Dtu &dtu, const std::string& name, unsigned numEndpoints);

@@ -538,8 +538,6 @@ Dtu::startSleep(uint64_t cycles, int ep, bool ack)
 
     if (regFile.hasEvents() || has_message(ep))
         return false;
-    if (regFile.get(PrivReg::EXT_REQ) != 0)
-        return false;
     if (regFile.get(PrivReg::CORE_REQ) != 0)
         return false;
 
@@ -1038,8 +1036,6 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
                 schedule(abortCommandEvent, when);
             else if (result & RegFile::WROTE_XLATE)
                 schedule(completeCoreReqEvent, when);
-            else if (result & RegFile::WROTE_EXT_REQ)
-                setIrq();
             if (result & RegFile::WROTE_CLEAR_IRQ)
                 clearIrq();
         }
@@ -1056,8 +1052,6 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
             abortCommand();
         if (result & RegFile::WROTE_XLATE)
             coreReqs.completeReqs();
-        if (result & RegFile::WROTE_EXT_REQ)
-            setIrq();
         if (result & RegFile::WROTE_CLEAR_IRQ)
             clearIrq();
     }

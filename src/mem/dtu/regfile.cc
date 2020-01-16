@@ -49,7 +49,6 @@ const char *RegFile::dtuRegNames[] = {
 };
 
 const char *RegFile::privRegNames[] = {
-    "EXT_REQ",
     "CORE_REQ",
     "CORE_RESP",
     "PRIV_CMD",
@@ -565,9 +564,6 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
                 {
                     if (reg == PrivReg::CORE_REQ || reg == PrivReg::CORE_RESP)
                         res |= WROTE_XLATE;
-                    // it only triggers an IRQ if the value is non-zero
-                    else if (reg == PrivReg::EXT_REQ && data[offset / sizeof(reg_t)] != 0)
-                        res |= WROTE_EXT_REQ;
                     else if (reg == PrivReg::PRIV_CMD)
                         res |= WROTE_PRIV_CMD;
                     set(reg, data[offset / sizeof(reg_t)], access);
