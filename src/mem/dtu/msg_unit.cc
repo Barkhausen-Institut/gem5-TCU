@@ -119,9 +119,10 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
         info.replySize = ceil(log2(sizeof(MessageHeader)));
     }
 
-    // check if we have enough credits
     const DataReg data = dtu.regs().getDataReg();
     SendEp ep = dtu.regs().getSendEp(epid);
+
+    // get info from reply EP
     if (cmd.opcode == Dtu::Command::SEND && cmd.arg != Dtu::INVALID_EP_ID)
     {
         RecvEp rep = dtu.regs().getRecvEp(cmd.arg);
@@ -136,6 +137,7 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
         info.replySize = rep.msgSize;
     }
 
+    // check if the send EP is valid
     if (ep.maxMsgSize == 0 || ep.vpe != dtu.regs().getVPE() ||
         (cmd.opcode == Dtu::Command::SEND && ep.flags != 0))
     {
@@ -144,6 +146,7 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
         return;
     }
 
+    // check message size
     if (data.size + sizeof(MessageHeader) > (1 << ep.maxMsgSize))
     {
         DPRINTFS(Dtu, (&dtu), "EP%u: message too large\n", epid);
@@ -151,6 +154,7 @@ MessageUnit::startTransmission(const Dtu::Command::Bits& cmd)
         return;
     }
 
+    // check if we have enough credits
     if (ep.curcrd != Dtu::CREDITS_UNLIM)
     {
         if (ep.curcrd == 0)
