@@ -447,10 +447,9 @@ MessageUnit::finishMsgReceive(unsigned epId,
 
         ep.setUnread(idx, true);
 
-        if (!(header->flags & Dtu::REPLY_FLAG))
+        if (!(header->flags & Dtu::REPLY_FLAG) &&
+            ep.replyEps != Dtu::INVALID_EP_ID)
         {
-            assert(ep.replyEps != Dtu::INVALID_EP_ID);
-
             // install use-once reply EP
             SendEp sep;
             sep.targetCore = header->senderCoreId;
