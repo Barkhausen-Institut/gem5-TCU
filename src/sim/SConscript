@@ -80,7 +80,7 @@ Source('clocked_object.cc')
 Source('mathexpr.cc')
 Source('mem_system.cc')
 Source('spu_system.cc')
-Source('dtu_memory.cc')
+Source('pe_memory.cc')
 Source('m3_loader.cc')
 
 GTest('byteswap.test', 'byteswap.test.cc', '../base/types.cc')

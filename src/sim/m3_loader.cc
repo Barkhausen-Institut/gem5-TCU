@@ -140,60 +140,8 @@ M3Loader::loadModule(MasterPort &noc, const std::string &filename, Addr addr)
 }
 
 void
-M3Loader::mapMemory(System &sys, DTUMemory &dtumem)
+M3Loader::initState(System &sys, PEMemory &mem, MasterPort &noc)
 {
-    dtumem.initMemory(sys);
-    // TODO check whether the size of idle fits before the RT_SPACE
-
-    // program segments
-    for(auto &seg : sys.kernelImage.segments())
-    {
-        auto access = seg.name == "text" ? DtuTlb::RX : DtuTlb::RW;
-        dtumem.mapSegment(seg.base, seg.size, DtuTlb::INTERN | access);
-    }
-
-    // idle doesn't need that stuff
-    if (modOffset)
-    {
-        // map the vectors on ARM
-#if THE_ISA == ARM_ISA
-        dtumem.mapSegment(0, 8 * 4, DtuTlb::INTERN | DtuTlb::RWX);
-#endif
-
-        // initial heap
-        Addr bssEnd = roundUp(sys.kernelImage.maxAddr(), DtuTlb::PAGE_SIZE);
-        dtumem.mapSegment(bssEnd, HEAP_SIZE, DtuTlb::INTERN | DtuTlb::RW);
-
-        // state and stack
-        dtumem.mapSegment(ENV_START, ENV_SIZE, DtuTlb::INTERN | DtuTlb::RW);
-        dtumem.mapSegment(STACK_AREA, STACK_SIZE, DtuTlb::INTERN | DtuTlb::RW);
-    }
-    else
-    {
-        // TODO temporary
-        // map receive buffers for PEMux
-        auto noc = NocAddr(dtumem.memPe, dtumem.memOffset + PEMUX_START - RBUF_SIZE);
-        dtumem.mapPages(RBUF_BASE, noc, RBUF_SIZE, DtuTlb::INTERN | DtuTlb::RW);
-    }
-
-    // map PE's own physical memory
-    {
-        auto noc = NocAddr(dtumem.memPe, dtumem.memOffset);
-        dtumem.mapPages(PE_MEM_BASE, noc, dtumem.memSize, DtuTlb::INTERN | DtuTlb::RW);
-    }
-
-    // DTU's MMIO area
-    dtumem.mapPages(0xF0000000, NocAddr(0xF0000000),
-                    DtuTlb::PAGE_SIZE * 3, DtuTlb::INTERN | DtuTlb::RW | DtuTlb::UNCACHE);
-}
-
-void
-M3Loader::initState(System &sys, DTUMemory &dtumem, MasterPort &noc)
-{
-    // external memory? then we use paging
-    if ((pes[coreId] & 0x7) == 1)
-        mapMemory(sys, dtumem);
-
     StartEnv env;
     memset(&env, 0, sizeof(env));
     env.coreid = coreId;
@@ -204,6 +152,10 @@ M3Loader::initState(System &sys, DTUMemory &dtumem, MasterPort &noc)
         argv += sizeof(KernelEnv);
     Addr args = argv + sizeof(uint64_t) * env.argc;
     env.argv = argv;
+
+    // pass the PE memory address and size to PEMux/kernel
+    env.pe_mem_base = mem.getPhys(0).getAddr();
+    env.pe_mem_size = mem.memSize;
 
     // with paging, the kernel gets an initial heap mapped
     if ((pes[coreId] & 0x7) == 1 || (pes[coreId] & 0x7) == 2)
@@ -244,7 +196,7 @@ M3Loader::initState(System &sys, DTUMemory &dtumem, MasterPort &noc)
         size_t modarraysize = 0;
 
         i = 0;
-        Addr addr = NocAddr(dtumem.memPe, modOffset).getAddr();
+        Addr addr = NocAddr(mem.memPe, modOffset).getAddr();
         for (const std::string &mod : mods)
         {
             Addr size = loadModule(noc, mod, addr);
@@ -284,10 +236,10 @@ M3Loader::initState(System &sys, DTUMemory &dtumem, MasterPort &noc)
         kenv.mod_count = mods.size();
         kenv.mod_size = modarraysize;
         kenv.pe_count  = pes.size();
-        kenv.pe_mem_base = NocAddr(dtumem.memPe, modOffset + modSize).getAddr();
+        kenv.pe_mem_base = NocAddr(mem.memPe, modOffset + modSize).getAddr();
         kenv.pe_mem_size = peSize;
         auto avail_mem_start = modOffset + modSize + pes.size() * peSize;
-        kenv.mems[0].size = pes[dtumem.memPe] & ~static_cast<Addr>(0xFFF);
+        kenv.mems[0].size = pes[mem.memPe] & ~static_cast<Addr>(0xFFF);
         if (kenv.mems[0].size < avail_mem_start)
             panic("Not enough DRAM for modules and PEs");
         kenv.mems[0].addr = avail_mem_start;
@@ -295,7 +247,7 @@ M3Loader::initState(System &sys, DTUMemory &dtumem, MasterPort &noc)
 
         size_t j = 1;
         for (size_t i = 0; i < pes.size(); ++i) {
-            if (i != dtumem.memPe && (pes[i] & 0x7) == 2) {
+            if (i != mem.memPe && (pes[i] & 0x7) == 2) {
                 if (j >= MAX_MEMS)
                     panic("Too many memory PEs");
                 kenv.mems[j].addr = 0;
@@ -325,11 +277,11 @@ M3Loader::initState(System &sys, DTUMemory &dtumem, MasterPort &noc)
         addr += pes.size() * sizeof(uint32_t);
 
         // check size
-        Addr end = NocAddr(dtumem.memPe, modOffset + modSize).getAddr();
+        Addr end = NocAddr(mem.memPe, modOffset + modSize).getAddr();
         if (addr > end)
         {
             panic("Modules are too large (have: %lu, need: %lu)",
-                modSize, addr - NocAddr(dtumem.memPe, modOffset).getAddr());
+                modSize, addr - NocAddr(mem.memPe, modOffset).getAddr());
         }
     }
 

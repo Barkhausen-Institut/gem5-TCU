@@ -87,6 +87,7 @@ class X86System : public System
   public:
 
     void initState();
+    void initStateAt(Addr phys);
 
   protected:
 

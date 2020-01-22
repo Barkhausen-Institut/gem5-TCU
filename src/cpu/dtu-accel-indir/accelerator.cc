@@ -32,7 +32,7 @@
 #include "debug/DtuAccelInDirState.hh"
 #include "mem/dtu/dtu.hh"
 #include "mem/dtu/regfile.hh"
-#include "sim/dtu_memory.hh"
+#include "sim/pe_memory.hh"
 
 #include <iomanip>
 

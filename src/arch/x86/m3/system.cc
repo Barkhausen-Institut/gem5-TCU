@@ -29,6 +29,7 @@
 
 #include "arch/x86/m3/system.hh"
 #include "params/M3X86System.hh"
+#include "mem/dtu/dtu.hh"
 
 #include <libgen.h>
 
@@ -40,7 +41,7 @@ M3X86System::NoCMasterPort::NoCMasterPort(M3X86System &_sys)
 
 M3X86System::M3X86System(Params *p)
     : X86System(p),
-      DTUMemory(this, p->memory_pe, p->memory_offset, p->memory_size,
+      PEMemory(this, p->memory_pe, p->memory_offset, p->memory_size,
                 physProxy),
       nocPort(*this),
       loader(p->pes, p->mods, p->boot_osflags, p->core_id,
@@ -64,7 +65,15 @@ M3X86System::getPort(const std::string &if_name, PortID idx)
 void
 M3X86System::initState()
 {
-    X86System::initState();
+    // virtual memory support?
+    if ((loader.pe_attr()[loader.coreId] & 0x7) == 1)
+    {
+        // map the first 3G to the memory of our own PE
+        Addr phys = Dtu::nocToPhys(NocAddr(memPe, memOffset).getAddr());
+        X86System::initStateAt(phys);
+    }
+    else
+        X86System::initStateAt(0);
 
     loader.initState(*this, *this, nocPort);
 }

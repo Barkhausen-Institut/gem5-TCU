@@ -33,31 +33,21 @@
 #include "sim/system.hh"
 #include "mem/dtu/noc_addr.hh"
 
-class DTUMemory
+class PEMemory
 {
   private:
 
     SimObject *obj;
 
     PortProxy &physp;
-    uint nextFrame;
-    const Addr rootPTOffset;
 
   public:
-
-    enum VMType
-    {
-        CORE = 1,
-        DTU  = 2,
-    };
-
-    typedef uint64_t pte_t;
 
     const uint memPe;
     const Addr memOffset;
     const Addr memSize;
 
-    DTUMemory(SimObject *obj,
+    PEMemory(SimObject *obj,
               uint memPe,
               Addr memOffset,
               Addr memSize,
@@ -74,21 +64,6 @@ class DTUMemory
     {
         return NocAddr(memPe, memOffset + offset);
     }
-
-    NocAddr getRootPt() const
-    {
-        return getPhys(rootPTOffset);
-    }
-
-    void initMemory(System &sys);
-    void mapPage(Addr virt, NocAddr noc, uint access);
-    void mapPages(Addr virt, NocAddr noc, Addr size, uint access);
-    void mapSegment(Addr start, Addr size, uint access)
-    {
-        mapPages(start, NocAddr(memPe, memOffset + start), size, access);
-    }
-
-    pte_t convertPTE(pte_t pte) const;
 };
 
 #endif

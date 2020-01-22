@@ -32,7 +32,7 @@
 #include "debug/DtuConnector.hh"
 #include "mem/dtu/dtu.hh"
 #include "mem/dtu/regfile.hh"
-#include "sim/dtu_memory.hh"
+#include "sim/pe_memory.hh"
 
 #include <iomanip>
 
@@ -100,7 +100,7 @@ DtuAccel::DtuAccel(const DtuAccelParams *p)
     retryPkt(nullptr),
     connector()
 {
-    DTUMemory *sys = dynamic_cast<DTUMemory*>(system);
+    PEMemory *sys = dynamic_cast<PEMemory*>(system);
     haveVM = !sys->hasMem(id);
     // if we don't have VM, we have an SPM, which supports larger chunks
     if (!haveVM)

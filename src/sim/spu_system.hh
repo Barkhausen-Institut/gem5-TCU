@@ -34,10 +34,10 @@
 #include <vector>
 
 #include "sim/system.hh"
-#include "sim/dtu_memory.hh"
+#include "sim/pe_memory.hh"
 #include "params/SpuSystem.hh"
 
-class SpuSystem : public System, public DTUMemory
+class SpuSystem : public System, public PEMemory
 {
   protected:
     std::vector<Addr> pes;
@@ -49,8 +49,6 @@ class SpuSystem : public System, public DTUMemory
     ~SpuSystem();
 
     uint32_t pedesc(unsigned pe) const override;
-
-    void initState();
 };
 
 #endif

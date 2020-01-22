@@ -33,7 +33,7 @@
 
 SpuSystem::SpuSystem(Params *p)
     : System(p),
-      DTUMemory(this, p->memory_pe, p->memory_offset, p->memory_size,
+      PEMemory(this, p->memory_pe, p->memory_offset, p->memory_size,
                 physProxy),
       pes(p->pes),
       coreId(p->core_id)
@@ -42,15 +42,6 @@ SpuSystem::SpuSystem(Params *p)
 
 SpuSystem::~SpuSystem()
 {
-}
-
-void
-SpuSystem::initState()
-{
-    System::initState();
-
-    if ((pes[coreId] & 0x7) == 1)
-        initMemory(*this);
 }
 
 uint32_t SpuSystem::pedesc(unsigned pe) const

@@ -33,7 +33,7 @@
 #include "debug/DtuAbortTestAccess.hh"
 #include "mem/dtu/dtu.hh"
 #include "mem/dtu/regfile.hh"
-#include "sim/dtu_memory.hh"
+#include "sim/pe_memory.hh"
 
 // start at 0x4000, because it is 1:1 mapped and we use the first 4 for PTs
 static const Addr TEMP_ADDR         = DtuTlb::PAGE_SIZE * 4;
@@ -376,11 +376,6 @@ DtuAbortTest::tick()
 
         case State::INIT_MEM:
         {
-            DTUMemory *sys = dynamic_cast<DTUMemory*>(system);
-            if (sys)
-            {
-                sys->mapSegment(0, RECV_ADDR + DtuTlb::PAGE_SIZE, DtuTlb::IRWX);
-            }
             state = State::INIT_MEM_EP;
             break;
         }

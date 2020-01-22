@@ -27,56 +27,19 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
-#ifndef __ARCH_M3_ARM_SYSTEM_HH__
-#define __ARCH_M3_ARM_SYSTEM_HH__
-
-#include <string>
-#include <vector>
-
-#include "arch/arm/system.hh"
-#include "params/M3ArmSystem.hh"
-#include "mem/qport.hh"
-#include "mem/dtu/noc_addr.hh"
 #include "sim/pe_memory.hh"
-#include "sim/m3_loader.hh"
+#include "mem/port_proxy.hh"
+#include "mem/dtu/tlb.hh"
 
-class M3ArmSystem : public ArmSystem, public PEMemory
+PEMemory::PEMemory(SimObject *obj,
+                   uint memPe,
+                   Addr memOffset,
+                   Addr memSize,
+                   PortProxy &phys)
+    : obj(obj),
+      physp(phys),
+      memPe(memPe),
+      memOffset(memOffset),
+      memSize(memSize)
 {
-    class NoCMasterPort : public QueuedMasterPort
-    {
-      protected:
-
-        ReqPacketQueue reqQueue;
-
-        SnoopRespPacketQueue snoopRespQueue;
-
-      public:
-
-        NoCMasterPort(M3ArmSystem &_sys);
-
-        bool recvTimingResp(PacketPtr) override
-        {
-            // unused
-            return true;
-        }
-    };
-
-    NoCMasterPort nocPort;
-
-  public:
-    typedef M3ArmSystemParams Params;
-    M3ArmSystem(Params *p);
-
-    uint32_t pedesc(unsigned pe) const override;
-
-    Port& getPort(const std::string &if_name,
-                  PortID idx = InvalidPortID) override;
-
-    void initState();
-
-  private:
-
-    M3Loader loader;
-};
-
-#endif
+}

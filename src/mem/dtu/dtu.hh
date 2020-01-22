@@ -209,8 +209,8 @@ class Dtu : public BaseDtu
 
     void setCommandSent() { cmdSent = true; }
 
-    Addr physToNoc(Addr phys) const;
-    Addr nocToPhys(Addr noc) const;
+    static Addr physToNoc(Addr phys);
+    static Addr nocToPhys(Addr noc);
 
     void startTransfer(void *event, Cycles delay);
 

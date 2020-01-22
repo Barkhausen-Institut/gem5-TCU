@@ -37,10 +37,10 @@
 #include "params/M3X86System.hh"
 #include "mem/qport.hh"
 #include "mem/dtu/noc_addr.hh"
-#include "sim/dtu_memory.hh"
+#include "sim/pe_memory.hh"
 #include "sim/m3_loader.hh"
 
-class M3X86System : public X86System, public DTUMemory
+class M3X86System : public X86System, public PEMemory
 {
     class NoCMasterPort : public QueuedMasterPort
     {

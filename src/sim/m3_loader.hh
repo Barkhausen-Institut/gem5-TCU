@@ -35,7 +35,7 @@
 
 #include "sim/system.hh"
 #include "mem/dtu/noc_addr.hh"
-#include "sim/dtu_memory.hh"
+#include "sim/pe_memory.hh"
 
 class M3Loader
 {
@@ -92,6 +92,8 @@ class M3Loader
         uint64_t entry;
         uint64_t heapsize;
         uint64_t kenv;
+        uint64_t pe_mem_base;
+        uint64_t pe_mem_size;
 
         uint64_t lambda;
         uint32_t pager_sess;
@@ -130,10 +132,9 @@ class M3Loader
         return pes;
     }
 
-    void initState(System &sys, DTUMemory &dtumem, MasterPort &noc);
+    void initState(System &sys, PEMemory &mem, MasterPort &noc);
 
   private:
-    void mapMemory(System &sys, DTUMemory &dtumem);
     size_t getArgc() const;
     void writeArg(System &sys, Addr &args, size_t &i, Addr argv,
                   const char *cmd, const char *begin);

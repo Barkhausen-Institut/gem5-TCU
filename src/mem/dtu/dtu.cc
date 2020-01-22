@@ -42,7 +42,7 @@
 #include "mem/dtu/mem_unit.hh"
 #include "mem/dtu/xfer_unit.hh"
 #include "mem/cache/cache.hh"
-#include "sim/dtu_memory.hh"
+#include "sim/pe_memory.hh"
 #include "sim/system.hh"
 
 static const char *cmdNames[] =
@@ -116,7 +116,7 @@ Dtu::Dtu(DtuParams* p)
 {
     assert(p->buf_size >= maxNocPacketSize);
 
-    DTUMemory *sys = dynamic_cast<DTUMemory*>(system);
+    PEMemory *sys = dynamic_cast<PEMemory*>(system);
     if (sys)
     {
         NocAddr phys = sys->getPhys(0);
@@ -197,7 +197,7 @@ Dtu::regStats()
 bool
 Dtu::isMemPE(unsigned pe) const
 {
-    DTUMemory *sys = dynamic_cast<DTUMemory*>(system);
+    PEMemory *sys = dynamic_cast<PEMemory*>(system);
     return !sys || sys->hasMem(pe);
 }
 
@@ -705,14 +705,14 @@ Dtu::sendNocResponse(PacketPtr pkt)
 }
 
 Addr
-Dtu::physToNoc(Addr phys) const
+Dtu::physToNoc(Addr phys)
 {
     return (phys & ~0x0000FF0000000000ULL) |
           ((phys & 0x0000FF0000000000ULL) << 16);
 }
 
 Addr
-Dtu::nocToPhys(Addr noc) const
+Dtu::nocToPhys(Addr noc)
 {
     return (noc & ~0xFF00000000000000ULL) |
           ((noc & 0xFF00000000000000ULL) >> 16);
