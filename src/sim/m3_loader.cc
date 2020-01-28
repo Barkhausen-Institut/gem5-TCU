@@ -154,7 +154,7 @@ M3Loader::initState(System &sys, PEMemory &mem, MasterPort &noc)
     env.argv = argv;
 
     // pass the PE memory address and size to PEMux/kernel
-    env.pe_mem_base = mem.getPhys(0).getAddr();
+    env.pe_mem_base = 0;
     env.pe_mem_size = mem.memSize;
 
     // with paging, the kernel gets an initial heap mapped

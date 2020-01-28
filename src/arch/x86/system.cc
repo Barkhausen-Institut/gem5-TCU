@@ -105,12 +105,6 @@ X86ISA::installSegDesc(ThreadContext *tc, SegmentRegIndex seg,
 void
 X86System::initState()
 {
-    initStateAt(0);
-}
-
-void
-X86System::initStateAt(Addr phys)
-{
     System::initState();
 
     if (!kernel)
@@ -130,11 +124,11 @@ X86System::initStateAt(Addr phys)
 
     const int NumPDTs = 4;
 
-    const Addr PageMapLevel4 = phys + 0x70000;
-    const Addr PageDirPtrTable = phys + 0x71000;
+    const Addr PageMapLevel4 = 0x70000;
+    const Addr PageDirPtrTable = 0x71000;
     const Addr PageDirTable[NumPDTs] =
-        {phys + 0x72000, phys + 0x73000, phys + 0x74000, phys + 0x75000};
-    const Addr GDTBase = phys + 0x76000;
+        {0x72000, 0x73000, 0x74000, 0x75000};
+    const Addr GDTBase = 0x76000;
 
     const int PML4Bits = 9;
     const int PDPTBits = 9;
@@ -213,7 +207,7 @@ X86System::initStateAt(Addr phys)
     installSegDesc(tc, SYS_SEGMENT_REG_TR, tssDesc, true);
 
     /*
-     * Map the first 3GB of memory to <phys>. In order to map this region
+     * Identity map the first 4GB of memory. In order to map this region
      * of memory in long mode, there needs to be one actual page map level
      * 4 entry which points to one page directory pointer table which
      * points to 4 different page directory tables which are full of two
@@ -253,18 +247,16 @@ X86System::initStateAt(Addr phys)
 
     // Page Directory Tables
 
+    Addr base = 0;
     const Addr pageSize = 2 << 20;
     for (int table = 0; table < NumPDTs; table++) {
-        // always map 3G..4G virt to 3G..4G phys
-        if (table == 3)
-            phys = 0xC0000000;
         for (int offset = 0; offset < (1 << PDTBits) * 8; offset += 8) {
             // read/write, user, present, 4MB
-            uint64_t pdte = htole(0x87 | phys);
+            uint64_t pdte = htole(0x87 | base);
             if (table == NumPDTs - 1)
                 pdte |= htole<uint64_t>(1 << 4);
             physProxy.writeBlob(PageDirTable[table] + offset, &pdte, 8);
-            phys += pageSize;
+            base += pageSize;
         }
     }
 

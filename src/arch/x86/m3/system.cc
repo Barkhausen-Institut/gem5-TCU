@@ -65,15 +65,7 @@ M3X86System::getPort(const std::string &if_name, PortID idx)
 void
 M3X86System::initState()
 {
-    // virtual memory support?
-    if ((loader.pe_attr()[loader.coreId] & 0x7) == 1)
-    {
-        // map the first 3G to the memory of our own PE
-        Addr phys = Dtu::nocToPhys(NocAddr(memPe, memOffset).getAddr());
-        X86System::initStateAt(phys);
-    }
-    else
-        X86System::initStateAt(0);
+    X86System::initState();
 
     loader.initState(*this, *this, nocPort);
 }
