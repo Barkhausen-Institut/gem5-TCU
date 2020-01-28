@@ -707,15 +707,29 @@ Dtu::sendNocResponse(PacketPtr pkt)
 Addr
 Dtu::physToNoc(Addr phys)
 {
+#if THE_ISA == X86_ISA
     return (phys & ~0x0000FF0000000000ULL) |
           ((phys & 0x0000FF0000000000ULL) << 16);
+#elif THE_ISA == ARM_ISA
+    return (phys & ~0x000000FF00000000ULL) |
+          ((phys & 0x000000FF00000000ULL) << 24);
+#else
+#   error "Unsupported ISA"
+#endif
 }
 
 Addr
 Dtu::nocToPhys(Addr noc)
 {
+#if THE_ISA == X86_ISA
     return (noc & ~0xFF00000000000000ULL) |
           ((noc & 0xFF00000000000000ULL) >> 16);
+#elif THE_ISA == ARM_ISA
+    return (noc & ~0xFF00000000000000ULL) |
+          ((noc & 0xFF00000000000000ULL) >> 24);
+#else
+#   error "Unsupported ISA"
+#endif
 }
 
 void
