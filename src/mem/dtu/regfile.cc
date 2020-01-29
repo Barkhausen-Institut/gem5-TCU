@@ -578,8 +578,8 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
 
             if (pkt->isRead())
                 data[offset / sizeof(reg_t)] = get(reg, access);
-            // the command register can't be written from the NoC
-            else if (pkt->isWrite() && (reg != CmdReg::COMMAND || isCpuRequest))
+            // the command registers can't be written from the NoC
+            else if (pkt->isWrite() && isCpuRequest)
             {
                 if (reg == CmdReg::COMMAND)
                     res |= WROTE_CMD;
