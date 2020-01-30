@@ -66,7 +66,7 @@ class MessageUnit
               header(_header)
         {}
 
-        bool transferStart() override;
+        void transferStart() override;
     };
 
     class ReceiveTransferEvent : public MemoryUnit::ReceiveTransferEvent
@@ -86,8 +86,7 @@ class MessageUnit
               msgUnit(_msgUnit), msgAddr(local), coreReq()
         {}
 
-        bool transferStart() override;
-        void transferDone(DtuError result) override;
+        bool transferDone(DtuError result) override;
     };
 
     MessageUnit(Dtu &_dtu) : dtu(_dtu), info() {}

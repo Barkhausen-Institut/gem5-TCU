@@ -158,7 +158,7 @@ MemoryUnit::startRead(const Dtu::Command::Bits& cmd)
     }
 }
 
-void
+bool
 MemoryUnit::LocalReadTransferEvent::transferDone(DtuError result)
 {
     Cycles delay(1);
@@ -166,7 +166,7 @@ MemoryUnit::LocalReadTransferEvent::transferDone(DtuError result)
     if (result != DtuError::NONE)
     {
         dtu().scheduleFinishOp(delay, result);
-        return;
+        return true;
     }
 
     uint wflags = flags() & ~XferUnit::NOXLATE;
@@ -175,23 +175,24 @@ MemoryUnit::LocalReadTransferEvent::transferDone(DtuError result)
 
     auto xfer = new LocalWriteTransferEvent(dest, tmp, size(), wflags);
     dtu().startTransfer(xfer, delay);
-}
-
-bool
-MemoryUnit::LocalWriteTransferEvent::transferStart()
-{
-    memcpy(data(), tmp, tmpSize);
-    delete[] tmp;
     return true;
 }
 
 void
+MemoryUnit::LocalWriteTransferEvent::transferStart()
+{
+    memcpy(data(), tmp, tmpSize);
+    delete[] tmp;
+}
+
+bool
 MemoryUnit::LocalWriteTransferEvent::transferDone(DtuError result)
 {
     if (result == DtuError::NONE)
         finishReadWrite(dtu(), tmpSize);
 
     dtu().scheduleFinishOp(Cycles(1), result);
+    return true;
 }
 
 void
@@ -216,16 +217,15 @@ MemoryUnit::readComplete(const Dtu::Command::Bits& cmd, PacketPtr pkt, DtuError 
     dtu.startTransfer(xfer, delay);
 }
 
-bool
+void
 MemoryUnit::ReadTransferEvent::transferStart()
 {
     // here is also no additional delay, because we are doing that in
     // parallel and are already paying for it at other places
     memcpy(data(), pkt->getPtr<uint8_t>(), pkt->getSize());
-    return true;
 }
 
-void
+bool
 MemoryUnit::ReadTransferEvent::transferDone(DtuError result)
 {
     if (result == DtuError::NONE)
@@ -234,6 +234,7 @@ MemoryUnit::ReadTransferEvent::transferDone(DtuError result)
     dtu().scheduleFinishOp(Cycles(1), result);
 
     dtu().freeRequest(pkt);
+    return true;
 }
 
 void
@@ -284,7 +285,7 @@ MemoryUnit::startWrite(const Dtu::Command::Bits& cmd)
     dtu.startTransfer(xfer, Cycles(0));
 }
 
-void
+bool
 MemoryUnit::WriteTransferEvent::transferDone(DtuError result)
 {
     if (result != DtuError::NONE)
@@ -322,6 +323,7 @@ MemoryUnit::WriteTransferEvent::transferDone(DtuError result)
             dtu().sendNocRequest(pktType, pkt, rflags, delay);
         }
     }
+    return true;
 }
 
 void
@@ -390,7 +392,7 @@ MemoryUnit::recvFromNoc(PacketPtr pkt, uint flags)
     return DtuError::NONE;
 }
 
-bool
+void
 MemoryUnit::ReceiveTransferEvent::transferStart()
 {
     if (pkt->isWrite())
@@ -399,10 +401,9 @@ MemoryUnit::ReceiveTransferEvent::transferStart()
         // parallel and are already paying for it at other places
         memcpy(data(), pkt->getPtr<uint8_t>(), pkt->getSize());
     }
-    return true;
 }
 
-void
+bool
 MemoryUnit::ReceiveTransferEvent::transferDone(DtuError result)
 {
     // some requests from the cache (e.g. cleanEvict) do not need a
@@ -421,4 +422,5 @@ MemoryUnit::ReceiveTransferEvent::transferDone(DtuError result)
         Cycles delay = dtu().transferToNocLatency;
         dtu().schedNocResponse(pkt, dtu().clockEdge(delay));
     }
+    return true;
 }

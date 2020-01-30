@@ -52,9 +52,9 @@ class MemoryUnit
               dest(_dest)
         {}
 
-        bool transferStart() override { return true; }
+        void transferStart() override {}
 
-        void transferDone(DtuError result) override;
+        bool transferDone(DtuError result) override;
     };
 
     class LocalWriteTransferEvent : public XferUnit::TransferEvent
@@ -73,9 +73,9 @@ class MemoryUnit
               tmpSize(_size)
         {}
 
-        bool transferStart() override;
+        void transferStart() override;
 
-        void transferDone(DtuError result) override;
+        bool transferDone(DtuError result) override;
     };
 
     class ReadTransferEvent : public XferUnit::TransferEvent
@@ -92,9 +92,9 @@ class MemoryUnit
               pkt(_pkt)
         {}
 
-        bool transferStart() override;
+        void transferStart() override;
 
-        void transferDone(DtuError result) override;
+        bool transferDone(DtuError result) override;
     };
 
     class WriteTransferEvent : public XferUnit::TransferEvent
@@ -113,9 +113,9 @@ class MemoryUnit
               dest(_dest)
         {}
 
-        bool transferStart() override { return true; };
+        void transferStart() override {}
 
-        void transferDone(DtuError result) override;
+        bool transferDone(DtuError result) override;
     };
 
     class ReceiveTransferEvent : public XferUnit::TransferEvent
@@ -134,9 +134,9 @@ class MemoryUnit
               pkt(_pkt)
         {}
 
-        bool transferStart() override;
+        void transferStart() override;
 
-        void transferDone(DtuError result) override;
+        bool transferDone(DtuError result) override;
     };
 
     MemoryUnit(Dtu &_dtu) : dtu(_dtu) {}

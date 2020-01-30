@@ -242,7 +242,7 @@ MessageUnit::startXfer(const Dtu::Command::Bits& cmd)
     info.ready = false;
 }
 
-bool
+void
 MessageUnit::SendTransferEvent::transferStart()
 {
     assert(header);
@@ -257,7 +257,6 @@ MessageUnit::SendTransferEvent::transferStart()
 
     delete header;
     header = nullptr;
-    return true;
 }
 
 void
@@ -472,10 +471,9 @@ MessageUnit::finishMsgReceive(unsigned epId,
 
     dtu.regs().setRecvEp(epId, ep);
 
-    if (error == DtuError::NONE && ep.vpe == dtu.regs().getVPE())
+    if (error == DtuError::NONE && addMsg)
     {
-        if (addMsg)
-            dtu.regs().add_msg();
+        dtu.regs().add_msg();
         dtu.wakeupCore(false);
     }
 
@@ -551,36 +549,24 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint flags)
 }
 
 bool
-MessageUnit::ReceiveTransferEvent::transferStart()
+MessageUnit::ReceiveTransferEvent::transferDone(DtuError result)
 {
-    MemoryUnit::ReceiveTransferEvent::transferStart();
-
+    MessageHeader* header = pkt->getPtr<MessageHeader>();
     NocAddr addr(pkt->getAddr());
-    unsigned epId = addr.offset;
-    RecvEp ep = dtu().regs().getRecvEp(epId);
-    // ignore the error here
-    if (ep.bufAddr == 0)
-        return true;
 
     // notify SW if we received a message for a different VPE
-    if (ep.vpe != dtu().regs().getVPE())
+    unsigned epId = addr.offset;
+    RecvEp ep = dtu().regs().getRecvEp(epId);
+    if(ep.vpe != dtu().regs().getVPE() && !coreReq)
     {
         coreReq = true;
         dtu().startForeignReceive(bufId(), epId, ep.vpe, this);
         return false;
     }
 
-    return true;
-}
-
-void
-MessageUnit::ReceiveTransferEvent::transferDone(DtuError result)
-{
-    MessageHeader* header = pkt->getPtr<MessageHeader>();
-    NocAddr addr(pkt->getAddr());
-
     result = msgUnit->finishMsgReceive(addr.offset, msgAddr, header,
                                        result, flags(), !coreReq);
 
     MemoryUnit::ReceiveTransferEvent::transferDone(result);
+    return true;
 }

@@ -149,8 +149,8 @@ XferUnit::TransferEvent::tryStart()
         return;
     }
 
-    if (transferStart())
-        start();
+    transferStart();
+    start();
 }
 
 void
@@ -333,7 +333,9 @@ XferUnit::continueTransfer(Buffer *buf)
         (buf->event->remaining == 0 &&
          buf->event->freeSlots == dtu.reqCount))
     {
-        buf->event->transferDone(buf->event->result);
+        // retry later if the transfer cannot be finished atm
+        if (!buf->event->transferDone(buf->event->result))
+            return;
 
         DPRINTFS(DtuXfers, (&dtu), "buf%d: Transfer done\n",
                  buf->id);

@@ -174,9 +174,9 @@ class XferUnit
 
         Translation *translation() { return trans; }
 
-        virtual bool transferStart() = 0;
+        virtual void transferStart() = 0;
 
-        virtual void transferDone(DtuError result) = 0;
+        virtual bool transferDone(DtuError result) = 0;
 
         void start();
 
