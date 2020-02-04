@@ -554,18 +554,21 @@ MessageUnit::ReceiveTransferEvent::transferDone(DtuError result)
     MessageHeader* header = pkt->getPtr<MessageHeader>();
     NocAddr addr(pkt->getAddr());
 
-    // notify SW if we received a message for a different VPE
     unsigned epId = addr.offset;
     RecvEp ep = dtu().regs().getRecvEp(epId);
-    if(ep.vpe != dtu().regs().getVPE() && !coreReq)
+    if (ep.bufAddr != 0)
     {
-        coreReq = true;
-        dtu().startForeignReceive(bufId(), epId, ep.vpe, this);
-        return false;
-    }
+        // notify SW if we received a message for a different VPE
+        if(ep.vpe != dtu().regs().getVPE() && !coreReq)
+        {
+            coreReq = true;
+            dtu().startForeignReceive(bufId(), epId, ep.vpe, this);
+            return false;
+        }
 
-    result = msgUnit->finishMsgReceive(addr.offset, msgAddr, header,
-                                       result, flags(), !coreReq);
+        result = msgUnit->finishMsgReceive(addr.offset, msgAddr, header,
+                                           result, flags(), !coreReq);
+    }
 
     MemoryUnit::ReceiveTransferEvent::transferDone(result);
     return true;
