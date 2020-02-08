@@ -398,8 +398,7 @@ def createCorePE(noc, options, no, cmdline, memPE, l1size=None, l2size=None,
     # if specified, let this PE wait for GDB
     if options.pausepe == no:
         print '      waiting for GDB'
-        # = 0, because for us, it's always the first context
-        pe.rgdb_wait = 0
+        pe.cpu.wait_for_remote_gdb = True
 
     print
 
