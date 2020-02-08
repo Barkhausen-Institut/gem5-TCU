@@ -1299,7 +1299,7 @@ def makeEnv(env, label, objsfx, strip=False, disable_partial=False, **kwargs):
 
 # Start out with the compiler flags common to all compilers,
 # i.e. they all use -g for opt and -g -pg for prof
-ccflags = {'debug' : [], 'opt' : ['-g'], 'fast' : [], 'prof' : ['-g', '-pg'],
+ccflags = {'debug' : [], 'opt' : [], 'fast' : [], 'prof' : ['-g', '-pg'],
            'perf' : ['-g']}
 
 # Start out with the linker flags common to all linkers, i.e. -pg for
