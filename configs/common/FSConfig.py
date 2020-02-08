@@ -53,6 +53,8 @@ os_types = { 'alpha' : [ 'linux' ],
              'mips'  : [ 'linux' ],
              'sparc' : [ 'linux' ],
              'x86'   : [ 'linux' ],
+             # TODO that's probably not true
+             'riscv' : [ 'linux' ],
              'arm'   : [ 'linux',
                          'android-gingerbread',
                          'android-ics',

@@ -96,7 +96,7 @@ def getOptions():
                       help="type of cpu to run with")
 
     parser.add_option("--isa", type="choice", default="x86_64",
-                      choices=['arm', 'x86_64'],
+                      choices=['arm', 'riscv', 'x86_64'],
                       help="The ISA to use")
 
     parser.add_option("-c", "--cmd", default="", type="string",
@@ -356,8 +356,15 @@ def createCorePE(noc, options, no, cmdline, memPE, l1size=None, l2size=None,
                  dtupos=0, spmsize='8MB'):
     CPUClass = ObjectList.cpu_list.get(options.cpu_type)
 
-    sysType = M3ArmSystem if options.isa == 'arm' else M3X86System
-    con = ArmConnector if options.isa == 'arm' else X86Connector
+    if options.isa == 'arm':
+        sysType = M3ArmSystem
+        con = ArmConnector
+    elif options.isa == 'riscv':
+        sysType = M3RiscvSystem
+        con = RiscvConnector
+    else:
+        sysType = M3X86System
+        con = X86Connector
 
     pe = createPE(
         noc=noc, options=options, no=no, systemType=sysType,
@@ -428,12 +435,13 @@ def createCorePE(noc, options, no, cmdline, memPE, l1size=None, l2size=None,
         pe.cpu.interrupts[0].int_slave = pe.dtu.connector.irq_master_port
         pe.cpu.interrupts[0].int_master = pe.xbar.slave
 
-    if not l2size is None:
-        pe.cpu.itb.walker.port = pe.tol2bus.slave
-        pe.cpu.dtb.walker.port = pe.tol2bus.slave
-    else:
-        pe.cpu.itb.walker.port = pe.xbar.slave
-        pe.cpu.dtb.walker.port = pe.xbar.slave
+    if options.isa != 'riscv':
+        if not l2size is None:
+            pe.cpu.itb.walker.port = pe.tol2bus.slave
+            pe.cpu.dtb.walker.port = pe.tol2bus.slave
+        else:
+            pe.cpu.itb.walker.port = pe.xbar.slave
+            pe.cpu.dtb.walker.port = pe.xbar.slave
 
     return pe
 
@@ -700,6 +708,8 @@ def runSimulation(root, options, pes):
                     size |= 6 << 3 # rot13 accelerator
             elif options.isa == 'arm':
                 size |= 2 << 3 # arm
+            elif options.isa == 'riscv':
+                size |= 3 << 3 # riscv
             else:
                 size |= 1 << 3 # x86
 

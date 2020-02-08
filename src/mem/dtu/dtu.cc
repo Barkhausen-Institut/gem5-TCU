@@ -713,6 +713,9 @@ Dtu::physToNoc(Addr phys)
 #elif THE_ISA == ARM_ISA
     return (phys & ~0x000000FF00000000ULL) |
           ((phys & 0x000000FF00000000ULL) << 24);
+#elif THE_ISA == RISCV_ISA
+    return (phys & ~0x00FF000000000000ULL) |
+          ((phys & 0x00FF000000000000ULL) << 8);
 #else
 #   error "Unsupported ISA"
 #endif
@@ -727,6 +730,9 @@ Dtu::nocToPhys(Addr noc)
 #elif THE_ISA == ARM_ISA
     return (noc & ~0xFF00000000000000ULL) |
           ((noc & 0xFF00000000000000ULL) >> 24);
+#elif THE_ISA == RISCV_ISA
+    return (noc & ~0xFF00000000000000ULL) |
+          ((noc & 0xFF00000000000000ULL) >> 8);
 #else
 #   error "Unsupported ISA"
 #endif
