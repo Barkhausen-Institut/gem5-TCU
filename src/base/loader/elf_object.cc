@@ -277,8 +277,12 @@ ElfObject::handleLoadableSegment(GElf_Phdr phdr, int seg_num)
 {
     auto name = std::to_string(seg_num);
 
-    image.addSegment({ name, phdr.p_paddr, imageData,
-                       phdr.p_offset, phdr.p_filesz });
+    if (phdr.p_filesz > 0)
+    {
+        image.addSegment({ name, phdr.p_paddr, imageData,
+                           phdr.p_offset, phdr.p_filesz });
+    }
+
     Addr uninitialized = phdr.p_memsz - phdr.p_filesz;
     if (uninitialized) {
         // There may be parts of a segment which aren't included in the
