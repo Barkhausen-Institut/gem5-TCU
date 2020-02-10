@@ -322,7 +322,7 @@ def createPE(noc, options, no, systemType, l1size, l2size, spmsize, dtupos, memP
         pe.kernel_addr_check = False
     elif not spmsize is None:
         pe.spm = Scratchpad(in_addr_map="true")
-        pe.spm.cpu_port = pe.xbar.master
+        pe.spm.cpu_port = pe.xbar.default
         pe.spm.range = spmsize
 
     if systemType != MemSystem:
