@@ -1,0 +1,3 @@
+bin/*
+dump/*
+src/riscv/test-summary.out
