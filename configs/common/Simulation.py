@@ -1,4 +1,5 @@
 # Copyright (c) 2012-2013 ARM Limited
+# Copyright (c) 2020 Barkhausen Institut
 # All rights reserved
 #
 # The license below extends only to copyright in the software and shall
@@ -730,3 +731,4 @@ def run(options, root, testsys, cpu_class):
 
     if exit_event.getCode() != 0:
         print("Simulated exit code not 0! Exit code is", exit_event.getCode())
+        sys.exit(exit_event.getCode())
