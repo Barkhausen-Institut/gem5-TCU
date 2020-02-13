@@ -45,6 +45,11 @@ vpath %.S $(src_dir)
 
 define compile_template
 
+$$($(1)_p_tests): $(1)-p-%: $(1)/%.S
+	mkdir -p $(bin_dir)
+	$$(RISCV_GCC) $(2) $$(RISCV_GCC_OPTS) -I$(src_dir)/../env/p -I$(src_dir)/macros/scalar -T$(src_dir)/../env/p/link.ld $$< -o $(bin_dir)/$$@
+$(1)_p_env_tests += $$($(1)_p_tests)
+
 $$($(1)_ps_tests): $(1)-ps-%: $(1)/%.S
 	mkdir -p $(bin_dir)
 	$$(RISCV_GCC) $(2) $$(RISCV_GCC_OPTS) -I$(src_dir)/../env/ps -I$(src_dir)/macros/scalar -I$(src_dir)/macros/mt -T$(src_dir)/../env/ps/link.ld $$< -o $(bin_dir)/$$@
@@ -73,12 +78,15 @@ $(eval $(call compile_template,rv64mi,-march=rv64g -mabi=lp64))
 $(eval $(call compile_template,rv64uamt,-march=rv64g -mabi=lp64))
 $(eval $(call compile_template,rv64samt,-march=rv64g -mabi=lp64))
 
+p_env_tests_dump = $(addsuffix .dump, $(p_env_tests))
 ps_env_tests_dump = $(addsuffix .dump, $(ps_env_tests))
 
 #------------------------------------------------------------
 # Targets
 
-all: 	ps
+all: 	p ps
+# build tests with p environment
+p:		$(p_env_tests_dump)
 # build tests with ps environment
 ps: 	$(ps_env_tests_dump)
 

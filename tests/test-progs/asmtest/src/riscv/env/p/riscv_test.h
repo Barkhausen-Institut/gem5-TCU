@@ -155,7 +155,13 @@ handle_exception:                                                       \
         /* some unhandlable exception occurred */                       \
   1:    ori TESTNUM, TESTNUM, 1337;                                     \
   write_tohost:                                                         \
-        sw TESTNUM, tohost, t5;                                         \
+        li a0, 0;                                                       \
+        mv a1, TESTNUM;                                                 \
+        li a2, 1;                                                       \
+        beq a1, a2, 1f;                                                 \
+        srl a1, a1, 1;                                                  \
+        .long 0x4400007B;                                               \
+  1:    .long 0x4200007B;                                               \
         j write_tohost;                                                 \
 reset_vector:                                                           \
         RISCV_MULTICORE_DISABLE;                                        \
