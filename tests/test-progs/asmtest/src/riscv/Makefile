@@ -55,6 +55,11 @@ $$($(1)_ps_tests): $(1)-ps-%: $(1)/%.S
 	$$(RISCV_GCC) $(2) $$(RISCV_GCC_OPTS) -I$(src_dir)/../env/ps -I$(src_dir)/macros/scalar -I$(src_dir)/macros/mt -T$(src_dir)/../env/ps/link.ld $$< -o $(bin_dir)/$$@
 $(1)_ps_env_tests += $$($(1)_ps_tests)
 
+$$($(1)_v_tests): $(1)-v-%: $(1)/%.S
+	mkdir -p $(bin_dir)
+	$$(RISCV_GCC) $(2) $$(RISCV_GCC_OPTS) -DENTROPY=0x$$(shell echo \$$@ | md5sum | cut -c 1-7) -std=gnu99 -O2 -I$(src_dir)/../env/v -I$(src_dir)/macros/scalar -T$(src_dir)/../env/v/link.ld $(src_dir)/../env/v/entry.S $(src_dir)/../env/v/*.c $$< -o $(bin_dir)/$$@
+$(1)_v_env_tests += $$($(1)_v_tests)
+
 $(1)_tests_dump = $$(addsuffix .dump, $$($(1)_tests))
 
 $(1): $$($(1)_tests_dump)
@@ -80,15 +85,18 @@ $(eval $(call compile_template,rv64samt,-march=rv64g -mabi=lp64))
 
 p_env_tests_dump = $(addsuffix .dump, $(p_env_tests))
 ps_env_tests_dump = $(addsuffix .dump, $(ps_env_tests))
+v_env_tests_dump = $(addsuffix .dump, $(v_env_tests))
 
 #------------------------------------------------------------
 # Targets
 
-all: 	p ps
+all: 	p ps v
 # build tests with p environment
 p:		$(p_env_tests_dump)
 # build tests with ps environment
 ps: 	$(ps_env_tests_dump)
+# build tests with v environment
+v:		$(v_env_tests_dump)
 
 #------------------------------------------------------------
 # Clean up

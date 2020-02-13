@@ -17,16 +17,6 @@
 void trap_entry();
 void pop_tf(trapframe_t*);
 
-volatile uint64_t tohost;
-volatile uint64_t fromhost;
-
-static void do_tohost(uint64_t tohost_value)
-{
-  while (tohost)
-    fromhost = 0;
-  tohost = tohost_value;
-}
-
 #define pa2kva(pa) ((void*)(pa) - DRAM_BASE - MEGAPAGE_SIZE)
 #define uva2kva(pa) ((void*)(pa) - MEGAPAGE_SIZE)
 
@@ -40,7 +30,13 @@ static uint64_t lfsr63(uint64_t x)
 
 static void cputchar(int x)
 {
-  do_tohost(0x0101000000000000 | (unsigned char)x);
+  static const char *fileAddr = "stdout";
+  char c = x;
+  register word_t a0 asm("a0") = (uintptr_t)(&c);
+  register word_t a1 asm("a1") = 1;
+  register word_t a2 asm("a2") = 0;
+  register word_t a3 asm("a3") = (uintptr_t)fileAddr;
+  asm volatile (".long 0x9E00007B" : : "r"(a0), "r"(a1), "r"(a2), "r"(a3));
 }
 
 static void cputstring(const char* s)
@@ -51,7 +47,12 @@ static void cputstring(const char* s)
 
 static void terminate(int code)
 {
-  do_tohost(code);
+  register word_t a0 asm("a0") = 0;
+  register word_t a1 asm("a1") = code >> 1;
+  if(code == 1)
+    asm volatile (".long 0x4200007B" : : "r"(a0));
+  else
+    asm volatile (".long 0x4400007B" : : "r"(a0), "r"(a1));
   while (1);
 }
 
