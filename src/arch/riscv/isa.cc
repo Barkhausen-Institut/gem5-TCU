@@ -47,8 +47,140 @@
 namespace RiscvISA
 {
 
+const char *MiscRegNames[] = {
+    "PRV",
+    "ISA",
+    "VENDORID",
+    "ARCHID",
+    "IMPID",
+    "HARTID",
+    "STATUS",
+    "IP",
+    "IE",
+    "CYCLE",
+    "TIME",
+    "INSTRET",
+    "HPMCOUNTER03",
+    "HPMCOUNTER04",
+    "HPMCOUNTER05",
+    "HPMCOUNTER06",
+    "HPMCOUNTER07",
+    "HPMCOUNTER08",
+    "HPMCOUNTER09",
+    "HPMCOUNTER10",
+    "HPMCOUNTER11",
+    "HPMCOUNTER12",
+    "HPMCOUNTER13",
+    "HPMCOUNTER14",
+    "HPMCOUNTER15",
+    "HPMCOUNTER16",
+    "HPMCOUNTER17",
+    "HPMCOUNTER18",
+    "HPMCOUNTER19",
+    "HPMCOUNTER20",
+    "HPMCOUNTER21",
+    "HPMCOUNTER22",
+    "HPMCOUNTER23",
+    "HPMCOUNTER24",
+    "HPMCOUNTER25",
+    "HPMCOUNTER26",
+    "HPMCOUNTER27",
+    "HPMCOUNTER28",
+    "HPMCOUNTER29",
+    "HPMCOUNTER30",
+    "HPMCOUNTER31",
+    "HPMEVENT03",
+    "HPMEVENT04",
+    "HPMEVENT05",
+    "HPMEVENT06",
+    "HPMEVENT07",
+    "HPMEVENT08",
+    "HPMEVENT09",
+    "HPMEVENT10",
+    "HPMEVENT11",
+    "HPMEVENT12",
+    "HPMEVENT13",
+    "HPMEVENT14",
+    "HPMEVENT15",
+    "HPMEVENT16",
+    "HPMEVENT17",
+    "HPMEVENT18",
+    "HPMEVENT19",
+    "HPMEVENT20",
+    "HPMEVENT21",
+    "HPMEVENT22",
+    "HPMEVENT23",
+    "HPMEVENT24",
+    "HPMEVENT25",
+    "HPMEVENT26",
+    "HPMEVENT27",
+    "HPMEVENT28",
+    "HPMEVENT29",
+    "HPMEVENT30",
+    "HPMEVENT31",
+    "TSELECT",
+    "TDATA1",
+    "TDATA2",
+    "TDATA3",
+    "DCSR",
+    "DPC",
+    "DSCRATCH",
+
+    "MEDELEG",
+    "MIDELEG",
+    "MTVEC",
+    "MCOUNTEREN",
+    "MSCRATCH",
+    "MEPC",
+    "MCAUSE",
+    "MTVAL",
+    "PMPCFG0",
+    // pmpcfg1 rv32 only
+    "PMPCFG2",
+    // pmpcfg3 rv32 only
+    "PMPADDR00",
+    "PMPADDR01",
+    "PMPADDR02",
+    "PMPADDR03",
+    "PMPADDR04",
+    "PMPADDR05",
+    "PMPADDR06",
+    "PMPADDR07",
+    "PMPADDR08",
+    "PMPADDR09",
+    "PMPADDR10",
+    "PMPADDR11",
+    "PMPADDR12",
+    "PMPADDR13",
+    "PMPADDR14",
+    "PMPADDR15",
+
+    "SEDELEG",
+    "SIDELEG",
+    "STVEC",
+    "SCOUNTEREN",
+    "SSCRATCH",
+    "SEPC",
+    "SCAUSE",
+    "STVAL",
+    "SATP",
+
+    "UTVEC",
+    "USCRATCH",
+    "UEPC",
+    "UCAUSE",
+    "UTVAL",
+    "FFLAGS",
+    "FRM",
+};
+
 ISA::ISA(Params *p) : BaseISA(p)
 {
+    static_assert(
+        sizeof(MiscRegNames) / sizeof(MiscRegNames[0]) == NumMiscRegs,
+        "MiscRegNames not in sync with NumMiscRegs"
+    );
+
     miscRegFile.resize(NumMiscRegs);
     clear();
 }
@@ -105,8 +237,8 @@ ISA::readMiscRegNoEffect(int misc_reg) const
         panic("Illegal CSR index %#x\n", misc_reg);
         return -1;
     }
-    DPRINTF(RiscvMisc, "Reading MiscReg %d: %#llx.\n", misc_reg,
-            miscRegFile[misc_reg]);
+    DPRINTF(RiscvMisc, "Reading MiscReg %s (%d): %#llx.\n",
+            MiscRegNames[misc_reg], misc_reg, miscRegFile[misc_reg]);
     return miscRegFile[misc_reg];
 }
 
@@ -180,7 +312,8 @@ ISA::setMiscRegNoEffect(int misc_reg, RegVal val)
         // Illegal CSR
         panic("Illegal CSR index %#x\n", misc_reg);
     }
-    DPRINTF(RiscvMisc, "Setting MiscReg %d to %#x.\n", misc_reg, val);
+    DPRINTF(RiscvMisc, "Setting MiscReg %s (%d) to %#x.\n",
+            MiscRegNames[misc_reg], misc_reg, val);
     miscRegFile[misc_reg] = val;
 }
 
