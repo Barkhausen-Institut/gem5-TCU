@@ -352,6 +352,15 @@ ISA::setMiscReg(int misc_reg, RegVal val, ThreadContext *tc)
                 setMiscRegNoEffect(misc_reg, new_val);
             }
             break;
+          case MISCREG_STATUS:
+            {
+                // these bits are hard-wired
+                RegVal cur = readMiscRegNoEffect(misc_reg);
+                val &= ~(STATUS_SXL_MASK | STATUS_UXL_MASK);
+                val |= cur & (STATUS_SXL_MASK | STATUS_UXL_MASK);
+                setMiscRegNoEffect(misc_reg, val);
+            }
+            break;
           default:
             setMiscRegNoEffect(misc_reg, val);
         }
