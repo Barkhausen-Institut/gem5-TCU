@@ -1,5 +1,6 @@
 # Copyright (c) 2008 The Hewlett-Packard Development Company
 # Copyright (c) 2018 Metempsy Technology Consulting
+# Copyright (c) 2020 Barkhausen Institut
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -26,7 +27,20 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from m5.params import *
+from m5.proxy import *
+
 from m5.SimObject import SimObject
+from m5.objects.ClockedObject import ClockedObject
+
+class BasePagetableWalker(ClockedObject):
+    type = 'BasePagetableWalker'
+    cxx_class = 'BaseWalker'
+    cxx_header = 'arch/generic/pagetable_walker.hh'
+    abstract = True
+    port = MasterPort("Port for the hardware table walker")
+    system = Param.System(Parent.any, "system object")
+    num_squash_per_cycle = Param.Unsigned(4,
+            "Number of outstanding walks that can be squashed per cycle")
 
 class BaseTLB(SimObject):
     type = 'BaseTLB'

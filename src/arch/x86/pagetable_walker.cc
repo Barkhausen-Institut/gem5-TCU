@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2012 ARM Limited
+ * Copyright (c) 2020 Barkhausen Institut
  * All rights reserved.
  *
  * The license below extends only to copyright in the software and shall
@@ -65,215 +66,68 @@
 
 namespace X86ISA {
 
-Fault
-Walker::start(ThreadContext * _tc, BaseTLB::Translation *_translation,
-              const RequestPtr &_req, BaseTLB::Mode _mode)
+BaseWalker::BaseWalkerState *
+Walker::createState(BaseWalker *walker, BaseTLB::Translation *translation,
+                    const RequestPtr &req, bool isFunctional)
 {
-    // TODO: in timing mode, instead of blocking when there are other
-    // outstanding requests, see if this request can be coalesced with
-    // another one (i.e. either coalesce or start walk)
-    WalkerState * newState = new WalkerState(this, _translation, _req);
-    newState->initState(_tc, _mode, sys->isTimingMode());
-    if (currStates.size()) {
-        assert(newState->isTiming());
-        DPRINTF(PageTableWalker, "Walks in progress: %d\n", currStates.size());
-        currStates.push_back(newState);
-        return NoFault;
-    } else {
-        currStates.push_back(newState);
-        Fault fault = newState->startWalk();
-        if (!newState->isTiming()) {
-            currStates.pop_front();
-            delete newState;
-        }
-        return fault;
-    }
+    return new WalkerState(walker, translation, req, isFunctional);
 }
 
 Fault
-Walker::startFunctional(ThreadContext * _tc, Addr &addr, unsigned &logBytes,
-              BaseTLB::Mode _mode)
+Walker::translateWithTLB(const RequestPtr &req, ThreadContext *tc,
+                         BaseTLB::Translation *translation,
+                         BaseTLB::Mode mode, bool &delayed)
 {
-    funcState.initState(_tc, _mode);
-    return funcState.startFunctional(addr, logBytes);
-}
-
-bool
-Walker::WalkerPort::recvTimingResp(PacketPtr pkt)
-{
-    return walker->recvTimingResp(pkt);
-}
-
-bool
-Walker::recvTimingResp(PacketPtr pkt)
-{
-    WalkerSenderState * senderState =
-        dynamic_cast<WalkerSenderState *>(pkt->popSenderState());
-    WalkerState * senderWalk = senderState->senderWalk;
-    bool walkComplete = senderWalk->recvPacket(pkt);
-    delete senderState;
-    if (walkComplete) {
-        std::list<WalkerState *>::iterator iter;
-        for (iter = currStates.begin(); iter != currStates.end(); iter++) {
-            WalkerState * walkerState = *(iter);
-            if (walkerState == senderWalk) {
-                iter = currStates.erase(iter);
-                break;
-            }
-        }
-        delete senderWalk;
-        // Since we block requests when another is outstanding, we
-        // need to check if there is a waiting request to be serviced
-        if (currStates.size() && !startWalkWrapperEvent.scheduled())
-            // delay sending any new requests until we are finished
-            // with the responses
-            schedule(startWalkWrapperEvent, clockEdge());
-    }
-    return true;
+    return tlb->translate(req, tc, NULL, mode, delayed, true);
 }
 
 void
-Walker::WalkerPort::recvReqRetry()
+Walker::WalkerState::setupWalk(Addr vaddr)
 {
-    walker->recvReqRetry();
-}
-
-void
-Walker::recvReqRetry()
-{
-    std::list<WalkerState *>::iterator iter;
-    for (iter = currStates.begin(); iter != currStates.end(); iter++) {
-        WalkerState * walkerState = *(iter);
-        if (walkerState->isRetrying()) {
-            walkerState->retry();
-        }
-    }
-}
-
-bool Walker::sendTiming(WalkerState* sendingState, PacketPtr pkt)
-{
-    WalkerSenderState* walker_state = new WalkerSenderState(sendingState);
-    pkt->pushSenderState(walker_state);
-    if (port.sendTimingReq(pkt)) {
-        return true;
+    VAddr addr = vaddr;
+    CR3 cr3 = tc->readMiscRegNoEffect(MISCREG_CR3);
+    // Check if we're in long mode or not
+    Efer efer = tc->readMiscRegNoEffect(MISCREG_EFER);
+    dataSize = 8;
+    Addr topAddr;
+    if (efer.lma) {
+        // Do long mode.
+        xlState = LongPML4;
+        topAddr = (cr3.longPdtb << 12) + addr.longl4 * dataSize;
+        enableNX = efer.nxe;
     } else {
-        // undo the adding of the sender state and delete it, as we
-        // will do it again the next time we attempt to send it
-        pkt->popSenderState();
-        delete walker_state;
-        return false;
-    }
-
-}
-
-Port &
-Walker::getPort(const std::string &if_name, PortID idx)
-{
-    if (if_name == "port")
-        return port;
-    else
-        return ClockedObject::getPort(if_name, idx);
-}
-
-void
-Walker::WalkerState::initState(ThreadContext * _tc,
-        BaseTLB::Mode _mode, bool _isTiming)
-{
-    assert(state == Ready);
-    started = false;
-    tc = _tc;
-    mode = _mode;
-    timing = _isTiming;
-}
-
-void
-Walker::startWalkWrapper()
-{
-    unsigned num_squashed = 0;
-    WalkerState *currState = currStates.front();
-    while ((num_squashed < numSquashable) && currState &&
-        currState->translation->squashed()) {
-        currStates.pop_front();
-        num_squashed++;
-
-        DPRINTF(PageTableWalker, "Squashing table walk for address %#x\n",
-            currState->req->getVaddr());
-
-        // finish the translation which will delete the translation object
-        currState->translation->finish(
-            std::make_shared<UnimpFault>("Squashed Inst"),
-            currState->req, currState->tc, currState->mode);
-
-        // delete the current request if there are no inflight packets.
-        // if there is something in flight, delete when the packets are
-        // received and inflight is zero.
-        if (currState->numInflight() == 0) {
-            delete currState;
+        // We're in some flavor of legacy mode.
+        CR4 cr4 = tc->readMiscRegNoEffect(MISCREG_CR4);
+        if (cr4.pae) {
+            // Do legacy PAE.
+            xlState = PAEPDP;
+            topAddr = (cr3.paePdtb << 5) + addr.pael3 * dataSize;
+            enableNX = efer.nxe;
         } else {
-            currState->squash();
+            dataSize = 4;
+            topAddr = (cr3.pdtb << 12) + addr.norml2 * dataSize;
+            if (cr4.pse) {
+                // Do legacy PSE.
+                xlState = PSEPD;
+            } else {
+                // Do legacy non PSE.
+                xlState = PD;
+            }
+            enableNX = false;
         }
-
-        // check the next translation request, if it exists
-        if (currStates.size())
-            currState = currStates.front();
-        else
-            currState = NULL;
     }
-    if (currState && !currState->wasStarted())
-        currState->startWalk();
-}
 
-Fault
-Walker::WalkerState::startWalk()
-{
-    Fault fault = NoFault;
-    assert(!started);
-    started = true;
-    setupWalk(req->getVaddr());
-    if (timing) {
-        nextState = state;
-        state = Waiting;
-        timingFault = NoFault;
-        sendPackets();
-    } else {
-        do {
-            walker->port.sendAtomic(read);
-            PacketPtr write = NULL;
-            fault = stepWalk(write);
-            assert(fault == NoFault || read == NULL);
-            state = nextState;
-            nextState = Ready;
-            if (write)
-                walker->port.sendAtomic(write);
-        } while (read);
-        state = Ready;
-        nextState = Waiting;
-    }
-    return fault;
-}
+    entry.vaddr = vaddr;
 
-Fault
-Walker::WalkerState::startFunctional(Addr &addr, unsigned &logBytes)
-{
-    Fault fault = NoFault;
-    assert(!started);
-    started = true;
-    setupWalk(addr);
+    Request::Flags flags = Request::PHYSICAL;
+    if (cr3.pcd)
+        flags.set(Request::UNCACHEABLE);
 
-    do {
-        walker->port.sendFunctional(read);
-        // On a functional access (page table lookup), writes should
-        // not happen so this pointer is ignored after stepWalk
-        PacketPtr write = NULL;
-        fault = stepWalk(write);
-        assert(fault == NoFault || read == NULL);
-        state = nextState;
-        nextState = Ready;
-    } while (read);
-    logBytes = entry.logBytes;
-    addr = entry.paddr;
+    RequestPtr request = std::make_shared<Request>(
+        topAddr, dataSize, flags, ourWalker()->masterId);
 
-    return fault;
+    read = new Packet(request, MemCmd::ReadReq);
+    read->allocate();
 }
 
 Fault
@@ -282,6 +136,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
     assert(state != Ready && state != Waiting);
     Fault fault = NoFault;
     write = NULL;
+    nextXlState = Idle;
     PageTableEntry pte;
     if (dataSize == 8)
         pte = read->getLE<uint64_t>();
@@ -294,7 +149,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
     bool doTLBInsert = false;
     bool doEndWalk = false;
     bool badNX = pte.nx && mode == BaseTLB::Execute && enableNX;
-    switch(state) {
+    switch(xlState) {
       case LongPML4:
         DPRINTF(PageTableWalker,
                 "Got long mode PML4 entry %#016x for %#016x.\n", (uint64_t)pte, vaddr);
@@ -309,7 +164,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
             break;
         }
         entry.noExec = pte.nx;
-        nextState = LongPDP;
+        nextXlState = LongPDP;
         break;
       case LongPDP:
         DPRINTF(PageTableWalker,
@@ -324,7 +179,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
             fault = pageFault(pte.p);
             break;
         }
-        nextState = LongPD;
+        nextXlState = LongPD;
         break;
       case LongPD:
         DPRINTF(PageTableWalker,
@@ -343,7 +198,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
             entry.logBytes = 12;
             nextRead =
                 ((uint64_t)pte & (mask(40) << 12)) + vaddr.longl1 * dataSize;
-            nextState = LongPTE;
+            nextXlState = LongPTE;
             break;
         } else {
             // 2 MB page
@@ -386,7 +241,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
             fault = pageFault(pte.p);
             break;
         }
-        nextState = PAEPD;
+        nextXlState = PAEPD;
         break;
       case PAEPD:
         DPRINTF(PageTableWalker,
@@ -404,7 +259,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
             // 4 KB page
             entry.logBytes = 12;
             nextRead = ((uint64_t)pte & (mask(40) << 12)) + vaddr.pael1 * dataSize;
-            nextState = PAEPTE;
+            nextXlState = PAEPTE;
             break;
         } else {
             // 2 MB page
@@ -455,7 +310,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
             entry.logBytes = 12;
             nextRead =
                 ((uint64_t)pte & (mask(20) << 12)) + vaddr.norml2 * dataSize;
-            nextState = PTE;
+            nextXlState = PTE;
             break;
         } else {
             // 4 MB page
@@ -484,7 +339,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
         // 4 KB page
         entry.logBytes = 12;
         nextRead = ((uint64_t)pte & (mask(20) << 12)) + vaddr.norml2 * dataSize;
-        nextState = PTE;
+        nextXlState = PTE;
         break;
       case PTE:
         DPRINTF(PageTableWalker,
@@ -509,10 +364,15 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
       default:
         panic("Unknown page table walker state %d!\n");
     }
+
+    if (nextXlState != Idle)
+        nextState = Translate;
+    xlState = nextXlState;
+
     if (doEndWalk) {
         if (doTLBInsert)
             if (!functional)
-                walker->tlb->insert(entry.vaddr, entry);
+                ourWalker()->tlb->insert(entry.vaddr, entry);
         endWalk();
     } else {
         PacketPtr oldRead = read;
@@ -520,7 +380,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
         Request::Flags flags = oldRead->req->getFlags();
         flags.set(Request::UNCACHEABLE, uncacheable);
         RequestPtr request = std::make_shared<Request>(
-            nextRead, oldRead->getSize(), flags, walker->masterId);
+            nextRead, oldRead->getSize(), flags, ourWalker()->masterId);
         read = new Packet(request, MemCmd::ReadReq);
         read->allocate();
         // If we need to write, adjust the read packet to write the modified
@@ -546,191 +406,10 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
 }
 
 void
-Walker::WalkerState::endWalk()
+Walker::WalkerState::finishFunctional(Addr &addr, unsigned &logBytes)
 {
-    nextState = Ready;
-    delete read;
-    read = NULL;
-}
-
-void
-Walker::WalkerState::setupWalk(Addr vaddr)
-{
-    VAddr addr = vaddr;
-    CR3 cr3 = tc->readMiscRegNoEffect(MISCREG_CR3);
-    // Check if we're in long mode or not
-    Efer efer = tc->readMiscRegNoEffect(MISCREG_EFER);
-    dataSize = 8;
-    Addr topAddr;
-    if (efer.lma) {
-        // Do long mode.
-        state = LongPML4;
-        topAddr = (cr3.longPdtb << 12) + addr.longl4 * dataSize;
-        enableNX = efer.nxe;
-    } else {
-        // We're in some flavor of legacy mode.
-        CR4 cr4 = tc->readMiscRegNoEffect(MISCREG_CR4);
-        if (cr4.pae) {
-            // Do legacy PAE.
-            state = PAEPDP;
-            topAddr = (cr3.paePdtb << 5) + addr.pael3 * dataSize;
-            enableNX = efer.nxe;
-        } else {
-            dataSize = 4;
-            topAddr = (cr3.pdtb << 12) + addr.norml2 * dataSize;
-            if (cr4.pse) {
-                // Do legacy PSE.
-                state = PSEPD;
-            } else {
-                // Do legacy non PSE.
-                state = PD;
-            }
-            enableNX = false;
-        }
-    }
-
-    nextState = Ready;
-    entry.vaddr = vaddr;
-
-    Request::Flags flags = Request::PHYSICAL;
-    if (cr3.pcd)
-        flags.set(Request::UNCACHEABLE);
-
-    RequestPtr request = std::make_shared<Request>(
-        topAddr, dataSize, flags, walker->masterId);
-
-    read = new Packet(request, MemCmd::ReadReq);
-    read->allocate();
-}
-
-bool
-Walker::WalkerState::recvPacket(PacketPtr pkt)
-{
-    assert(pkt->isResponse());
-    assert(inflight);
-    assert(state == Waiting);
-    inflight--;
-    if (squashed) {
-        // if were were squashed, return true once inflight is zero and
-        // this WalkerState will be freed there.
-        return (inflight == 0);
-    }
-    if (pkt->isRead()) {
-        // should not have a pending read it we also had one outstanding
-        assert(!read);
-
-        // @todo someone should pay for this
-        pkt->headerDelay = pkt->payloadDelay = 0;
-
-        state = nextState;
-        nextState = Ready;
-        PacketPtr write = NULL;
-        read = pkt;
-        timingFault = stepWalk(write);
-        state = Waiting;
-        assert(timingFault == NoFault || read == NULL);
-        if (write) {
-            writes.push_back(write);
-        }
-        sendPackets();
-    } else {
-        sendPackets();
-    }
-    if (inflight == 0 && read == NULL && writes.size() == 0) {
-        state = Ready;
-        nextState = Waiting;
-        if (timingFault == NoFault) {
-            /*
-             * Finish the translation. Now that we know the right entry is
-             * in the TLB, this should work with no memory accesses.
-             * There could be new faults unrelated to the table walk like
-             * permissions violations, so we'll need the return value as
-             * well.
-             */
-            bool delayedResponse;
-            Fault fault = walker->tlb->translate(req, tc, NULL, mode,
-                                                 delayedResponse, true);
-            assert(!delayedResponse);
-            // Let the CPU continue.
-            translation->finish(fault, req, tc, mode);
-        } else {
-            // There was a fault during the walk. Let the CPU know.
-            translation->finish(timingFault, req, tc, mode);
-        }
-        return true;
-    }
-
-    return false;
-}
-
-void
-Walker::WalkerState::sendPackets()
-{
-    //If we're already waiting for the port to become available, just return.
-    if (retrying)
-        return;
-
-    //Reads always have priority
-    if (read) {
-        PacketPtr pkt = read;
-        read = NULL;
-        inflight++;
-        if (!walker->sendTiming(this, pkt)) {
-            retrying = true;
-            read = pkt;
-            inflight--;
-            return;
-        }
-    }
-    //Send off as many of the writes as we can.
-    while (writes.size()) {
-        PacketPtr write = writes.back();
-        writes.pop_back();
-        inflight++;
-        if (!walker->sendTiming(this, write)) {
-            retrying = true;
-            writes.push_back(write);
-            inflight--;
-            return;
-        }
-    }
-}
-
-unsigned
-Walker::WalkerState::numInflight() const
-{
-    return inflight;
-}
-
-bool
-Walker::WalkerState::isRetrying()
-{
-    return retrying;
-}
-
-bool
-Walker::WalkerState::isTiming()
-{
-    return timing;
-}
-
-bool
-Walker::WalkerState::wasStarted()
-{
-    return started;
-}
-
-void
-Walker::WalkerState::squash()
-{
-    squashed = true;
-}
-
-void
-Walker::WalkerState::retry()
-{
-    retrying = false;
-    sendPackets();
+    logBytes = entry.logBytes;
+    addr = entry.paddr;
 }
 
 Fault

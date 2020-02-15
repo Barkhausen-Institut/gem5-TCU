@@ -41,6 +41,7 @@
 
 #include <vector>
 
+#include "arch/generic/pagetable_walker.hh"
 #include "arch/riscv/pagetable.hh"
 #include "arch/riscv/tlb.hh"
 #include "base/types.hh"
@@ -54,132 +55,39 @@ class ThreadContext;
 
 namespace RiscvISA
 {
-    class Walker : public ClockedObject
+    class Walker : public BaseWalker
     {
       protected:
-        // Port for accessing memory
-        class WalkerPort : public MasterPort
-        {
-          public:
-            WalkerPort(const std::string &_name, Walker * _walker) :
-                  MasterPort(_name, _walker), walker(_walker)
-            {}
-
-          protected:
-            Walker *walker;
-
-            bool recvTimingResp(PacketPtr pkt);
-            void recvReqRetry();
-        };
-
-        friend class WalkerPort;
-        WalkerPort port;
-
         // State to track each walk of the page table
-        class WalkerState
+        class WalkerState : public BaseWalkerState
         {
-          friend class Walker;
-          private:
-            enum State {
-                Ready,
-                Waiting,
-                Translate,
-            };
-
           protected:
-            Walker *walker;
-            ThreadContext *tc;
-            RequestPtr req;
-            State state;
-            State nextState;
             int level;
-            unsigned inflight;
             TlbEntry entry;
-            PacketPtr read;
-            std::vector<PacketPtr> writes;
-            Fault timingFault;
-            TLB::Translation * translation;
-            BaseTLB::Mode mode;
-            bool functional;
-            bool timing;
-            bool retrying;
-            bool started;
-            bool squashed;
           public:
-            WalkerState(Walker * _walker, BaseTLB::Translation *_translation,
+            WalkerState(BaseWalker * _walker,
+                        BaseTLB::Translation *_translation,
                         const RequestPtr &_req, bool _isFunctional = false) :
-                walker(_walker), req(_req), state(Ready),
-                nextState(Ready), level(0), inflight(0),
-                translation(_translation),
-                functional(_isFunctional), timing(false),
-                retrying(false), started(false), squashed(false)
+                BaseWalkerState(_walker, _translation, _req, _isFunctional),
+                level(0), entry()
             {
             }
-            void initState(ThreadContext * _tc, BaseTLB::Mode _mode,
-                           bool _isTiming = false);
-            Fault startWalk();
-            Fault startFunctional(Addr &addr, unsigned &logBytes);
-            bool recvPacket(PacketPtr pkt);
-            unsigned numInflight() const;
-            bool isRetrying();
-            bool wasStarted();
-            bool isTiming();
-            void retry();
-            void squash();
-            std::string name() const {return walker->name();}
 
-          private:
-            void setupWalk(Addr vaddr);
-            Fault stepWalk(PacketPtr &write);
-            void sendPackets();
-            void endWalk();
-            Fault pageFault(bool present);
+          protected:
+            Walker *ourWalker()
+            {
+                return static_cast<Walker*>(walker);
+            }
+
+            void setupWalk(Addr vaddr) override;
+            Fault stepWalk(PacketPtr &write) override;
+            void finishFunctional(Addr &addr, unsigned &logBytes) override;
+            Fault pageFault();
         };
 
-        friend class WalkerState;
-        // State for timing and atomic accesses (need multiple per walker in
-        // the case of multiple outstanding requests in timing mode)
-        std::list<WalkerState *> currStates;
-        // State for functional accesses (only need one of these per walker)
-        WalkerState funcState;
-
-        struct WalkerSenderState : public Packet::SenderState
-        {
-            WalkerState * senderWalk;
-            WalkerSenderState(WalkerState * _senderWalk) :
-                senderWalk(_senderWalk) {}
-        };
-
-      public:
-        // Kick off the state machine.
-        Fault start(ThreadContext * _tc, BaseTLB::Translation *translation,
-                const RequestPtr &req, BaseTLB::Mode mode);
-        Fault startFunctional(ThreadContext * _tc, Addr &addr,
-                unsigned &logBytes, BaseTLB::Mode mode);
-        Port &getPort(const std::string &if_name,
-                      PortID idx=InvalidPortID) override;
-
-      protected:
         // The TLB we're supposed to load.
         TLB * tlb;
-        System * sys;
         MasterID masterId;
-
-        // The number of outstanding walks that can be squashed per cycle.
-        unsigned numSquashable;
-
-        // Wrapper for checking for squashes before starting a translation.
-        void startWalkWrapper();
-
-        /**
-         * Event used to call startWalkWrapper.
-         **/
-        EventFunctionWrapper startWalkWrapperEvent;
-
-        // Functions for dealing with packets.
-        bool recvTimingResp(PacketPtr pkt);
-        void recvReqRetry();
-        bool sendTiming(WalkerState * sendingState, PacketPtr pkt);
 
       public:
 
@@ -187,6 +95,15 @@ namespace RiscvISA
         {
             tlb = _tlb;
         }
+
+        BaseWalkerState *createState(BaseWalker *walker,
+                                     BaseTLB::Translation *translation,
+                                     const RequestPtr &req,
+                                     bool isFunctional) override;
+
+        Fault translateWithTLB(const RequestPtr &req, ThreadContext *tc,
+                               BaseTLB::Translation *translation,
+                               BaseTLB::Mode mode, bool &delayed) override;
 
         typedef RiscvPagetableWalkerParams Params;
 
@@ -197,11 +114,8 @@ namespace RiscvISA
         }
 
         Walker(const Params *params) :
-            ClockedObject(params), port(name() + ".port", this),
-            funcState(this, NULL, NULL, true), tlb(NULL), sys(params->system),
-            masterId(sys->getMasterId(this)),
-            numSquashable(params->num_squash_per_cycle),
-            startWalkWrapperEvent([this]{ startWalkWrapper(); }, name())
+            BaseWalker(params), tlb(NULL),
+            masterId(params->system->getMasterId(this))
         {
         }
     };

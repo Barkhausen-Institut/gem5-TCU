@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2007 The Hewlett-Packard Development Company
+ * Copyright (c) 2020 Barkhausen Institut
  * All rights reserved.
  *
  * The license below extends only to copyright in the software and shall
@@ -40,6 +41,7 @@
 
 #include <vector>
 
+#include "arch/generic/pagetable_walker.hh"
 #include "arch/x86/pagetable.hh"
 #include "arch/x86/tlb.hh"
 #include "base/types.hh"
@@ -53,35 +55,16 @@ class ThreadContext;
 
 namespace X86ISA
 {
-    class Walker : public ClockedObject
+    class Walker : public BaseWalker
     {
       protected:
-        // Port for accessing memory
-        class WalkerPort : public MasterPort
-        {
-          public:
-            WalkerPort(const std::string &_name, Walker * _walker) :
-                  MasterPort(_name, _walker), walker(_walker)
-            {}
-
-          protected:
-            Walker *walker;
-
-            bool recvTimingResp(PacketPtr pkt);
-            void recvReqRetry();
-        };
-
-        friend class WalkerPort;
-        WalkerPort port;
-
         // State to track each walk of the page table
-        class WalkerState
+        class WalkerState : public BaseWalkerState
         {
           friend class Walker;
           private:
-            enum State {
-                Ready,
-                Waiting,
+            enum TranslateState {
+                Idle,
                 // Long mode
                 LongPML4, LongPDP, LongPD, LongPTE,
                 // PAE legacy mode
@@ -91,100 +74,36 @@ namespace X86ISA
             };
 
           protected:
-            Walker *walker;
-            ThreadContext *tc;
-            RequestPtr req;
-            State state;
-            State nextState;
+            TranslateState xlState;
+            TranslateState nextXlState;
             int dataSize;
             bool enableNX;
-            unsigned inflight;
             TlbEntry entry;
-            PacketPtr read;
-            std::vector<PacketPtr> writes;
-            Fault timingFault;
-            TLB::Translation * translation;
-            BaseTLB::Mode mode;
-            bool functional;
-            bool timing;
-            bool retrying;
-            bool started;
-            bool squashed;
           public:
-            WalkerState(Walker * _walker, BaseTLB::Translation *_translation,
+            WalkerState(BaseWalker * _walker,
+                        BaseTLB::Translation *_translation,
                         const RequestPtr &_req, bool _isFunctional = false) :
-                walker(_walker), req(_req), state(Ready),
-                nextState(Ready), inflight(0),
-                translation(_translation),
-                functional(_isFunctional), timing(false),
-                retrying(false), started(false), squashed(false)
+                BaseWalkerState(_walker, _translation, _req, _isFunctional),
+                xlState(Idle), nextXlState(Idle), dataSize(0), enableNX(),
+                entry()
             {
             }
-            void initState(ThreadContext * _tc, BaseTLB::Mode _mode,
-                           bool _isTiming = false);
-            Fault startWalk();
-            Fault startFunctional(Addr &addr, unsigned &logBytes);
-            bool recvPacket(PacketPtr pkt);
-            unsigned numInflight() const;
-            bool isRetrying();
-            bool wasStarted();
-            bool isTiming();
-            void retry();
-            void squash();
-            std::string name() const {return walker->name();}
 
-          private:
-            void setupWalk(Addr vaddr);
-            Fault stepWalk(PacketPtr &write);
-            void sendPackets();
-            void endWalk();
+          protected:
+            Walker *ourWalker()
+            {
+                return static_cast<Walker*>(walker);
+            }
+
+            void setupWalk(Addr vaddr) override;
+            Fault stepWalk(PacketPtr &write) override;
+            void finishFunctional(Addr &addr, unsigned &logBytes) override;
             Fault pageFault(bool present);
         };
 
-        friend class WalkerState;
-        // State for timing and atomic accesses (need multiple per walker in
-        // the case of multiple outstanding requests in timing mode)
-        std::list<WalkerState *> currStates;
-        // State for functional accesses (only need one of these per walker)
-        WalkerState funcState;
-
-        struct WalkerSenderState : public Packet::SenderState
-        {
-            WalkerState * senderWalk;
-            WalkerSenderState(WalkerState * _senderWalk) :
-                senderWalk(_senderWalk) {}
-        };
-
-      public:
-        // Kick off the state machine.
-        Fault start(ThreadContext * _tc, BaseTLB::Translation *translation,
-                const RequestPtr &req, BaseTLB::Mode mode);
-        Fault startFunctional(ThreadContext * _tc, Addr &addr,
-                unsigned &logBytes, BaseTLB::Mode mode);
-        Port &getPort(const std::string &if_name,
-                      PortID idx=InvalidPortID) override;
-
-      protected:
         // The TLB we're supposed to load.
         TLB * tlb;
-        System * sys;
         MasterID masterId;
-
-        // The number of outstanding walks that can be squashed per cycle.
-        unsigned numSquashable;
-
-        // Wrapper for checking for squashes before starting a translation.
-        void startWalkWrapper();
-
-        /**
-         * Event used to call startWalkWrapper.
-         **/
-        EventFunctionWrapper startWalkWrapperEvent;
-
-        // Functions for dealing with packets.
-        bool recvTimingResp(PacketPtr pkt);
-        void recvReqRetry();
-        bool sendTiming(WalkerState * sendingState, PacketPtr pkt);
 
       public:
 
@@ -192,6 +111,15 @@ namespace X86ISA
         {
             tlb = _tlb;
         }
+
+        BaseWalkerState *createState(BaseWalker *walker,
+                                     BaseTLB::Translation *translation,
+                                     const RequestPtr &req,
+                                     bool isFunctional) override;
+
+        Fault translateWithTLB(const RequestPtr &req, ThreadContext *tc,
+                               BaseTLB::Translation *translation,
+                               BaseTLB::Mode mode, bool &delayed) override;
 
         typedef X86PagetableWalkerParams Params;
 
@@ -202,13 +130,11 @@ namespace X86ISA
         }
 
         Walker(const Params *params) :
-            ClockedObject(params), port(name() + ".port", this),
-            funcState(this, NULL, NULL, true), tlb(NULL), sys(params->system),
-            masterId(sys->getMasterId(this)),
-            numSquashable(params->num_squash_per_cycle),
-            startWalkWrapperEvent([this]{ startWalkWrapper(); }, name())
+            BaseWalker(params), tlb(NULL),
+            masterId(params->system->getMasterId(this))
         {
         }
     };
 }
+
 #endif // __ARCH_X86_PAGE_TABLE_WALKER_HH__

@@ -76,7 +76,7 @@ TLB::TLB(const Params *p)
     walker->setTLB(this);
 }
 
-Walker *
+RiscvISA::Walker *
 TLB::getWalker()
 {
     return walker;

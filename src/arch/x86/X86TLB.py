@@ -1,4 +1,5 @@
 # Copyright (c) 2007 The Hewlett-Packard Development Company
+# Copyright (c) 2020 Barkhausen Institut
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -36,17 +37,13 @@
 from m5.params import *
 from m5.proxy import *
 
-from m5.objects.BaseTLB import BaseTLB
+from m5.objects.BaseTLB import BaseTLB, BasePagetableWalker
 from m5.objects.ClockedObject import ClockedObject
 
-class X86PagetableWalker(ClockedObject):
+class X86PagetableWalker(BasePagetableWalker):
     type = 'X86PagetableWalker'
     cxx_class = 'X86ISA::Walker'
     cxx_header = 'arch/x86/pagetable_walker.hh'
-    port = MasterPort("Port for the hardware table walker")
-    system = Param.System(Parent.any, "system object")
-    num_squash_per_cycle = Param.Unsigned(4,
-            "Number of outstanding walks that can be squashed per cycle")
 
 class X86TLB(BaseTLB):
     type = 'X86TLB'

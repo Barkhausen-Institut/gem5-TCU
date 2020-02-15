@@ -30,17 +30,12 @@
 from m5.params import *
 from m5.proxy import *
 
-from m5.objects.BaseTLB import BaseTLB
-from m5.objects.ClockedObject import ClockedObject
+from m5.objects.BaseTLB import BaseTLB, BasePagetableWalker
 
-class RiscvPagetableWalker(ClockedObject):
+class RiscvPagetableWalker(BasePagetableWalker):
     type = 'RiscvPagetableWalker'
     cxx_class = 'RiscvISA::Walker'
     cxx_header = 'arch/riscv/pagetable_walker.hh'
-    port = MasterPort("Port for the hardware table walker")
-    system = Param.System(Parent.any, "system object")
-    num_squash_per_cycle = Param.Unsigned(4,
-            "Number of outstanding walks that can be squashed per cycle")
 
 class RiscvTLB(BaseTLB):
     type = 'RiscvTLB'

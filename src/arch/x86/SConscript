@@ -1,6 +1,7 @@
 # -*- mode:python -*-
 
 # Copyright (c) 2007-2008 The Hewlett-Packard Development Company
+# Copyright (c) 2020 Barkhausen Institut
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -81,8 +82,6 @@ if env['TARGET_ISA'] == 'x86':
 
     DebugFlag('Faults', "Trace all faults/exceptions/traps")
     DebugFlag('LocalApic', "Local APIC debugging")
-    DebugFlag('PageTableWalker', \
-              "Page table walker state machine debugging")
     DebugFlag('Decoder', "Decoder debug output")
     DebugFlag('X86', "Generic X86 ISA debugging")
 
