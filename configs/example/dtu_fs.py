@@ -432,18 +432,17 @@ def createCorePE(noc, options, no, cmdline, memPE, l1size=None, l2size=None,
         pe.cpu.interrupts[0].int_slave = pe.dtu.connector.irq_master_port
         pe.cpu.interrupts[0].int_master = pe.xbar.slave
 
-    if options.isa != 'riscv':
-        pe.cpu.itb_walker_cache = PageTableWalkerCache()
-        pe.cpu.dtb_walker_cache = PageTableWalkerCache()
-        pe.cpu.itb.walker.port = pe.cpu.itb_walker_cache.cpu_side
-        pe.cpu.dtb.walker.port = pe.cpu.dtb_walker_cache.cpu_side
+    pe.cpu.itb_walker_cache = PageTableWalkerCache()
+    pe.cpu.dtb_walker_cache = PageTableWalkerCache()
+    pe.cpu.itb.walker.port = pe.cpu.itb_walker_cache.cpu_side
+    pe.cpu.dtb.walker.port = pe.cpu.dtb_walker_cache.cpu_side
 
-        if not l2size is None:
-            pe.cpu.itb_walker_cache.mem_side = pe.tol2bus.slave
-            pe.cpu.dtb_walker_cache.mem_side = pe.tol2bus.slave
-        else:
-            pe.cpu.itb_walker_cache.mem_side = pe.xbar.slave
-            pe.cpu.dtb_walker_cache.mem_side = pe.xbar.slave
+    if not l2size is None:
+        pe.cpu.itb_walker_cache.mem_side = pe.tol2bus.slave
+        pe.cpu.dtb_walker_cache.mem_side = pe.tol2bus.slave
+    else:
+        pe.cpu.itb_walker_cache.mem_side = pe.xbar.slave
+        pe.cpu.dtb_walker_cache.mem_side = pe.xbar.slave
 
     return pe
 
