@@ -1278,6 +1278,18 @@ DefaultIEW<Impl>::executeInsts()
                     instQueue.deferMemInst(inst);
                     continue;
                 }
+
+                // If the AMO had a fault then it may not have a mem req
+                if (fault != NoFault &&
+                    strcmp(fault->name(), "panic fault") != 0) {
+                    // If the instruction faulted, then we need to send it
+                    // along to commit without the instruction completing. Send
+                    // this instruction to commit, also make sure iew stage
+                    // realizes there is activity.
+                    inst->setExecuted();
+                    instToCommit(inst);
+                    activityThisCycle();
+                }
             } else if (inst->isLoad()) {
                 // Loads will mark themselves as executed, and their writeback
                 // event adds the instruction to the queue to commit
