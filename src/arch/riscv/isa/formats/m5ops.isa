@@ -1,0 +1,328 @@
+//
+// Copyright (c) 2010, 2012-2013 ARM Limited
+// Copyright (c) 2020 Barkhausen Institut
+// All rights reserved
+//
+// The license below extends only to copyright in the software and shall
+// not be construed as granting a license to any other intellectual
+// property including but not limited to intellectual property relating
+// to a hardware implementation of the functionality of the software
+// licensed hereunder.  You may use the software subject to the license
+// terms below provided that you ensure that this notice is replicated
+// unmodified and in its entirety in all distributions of the software,
+// modified or unmodified, in source code or in binary form.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are
+// met: redistributions of source code must retain the above copyright
+// notice, this list of conditions and the following disclaimer;
+// redistributions in binary form must reproduce the above copyright
+// notice, this list of conditions and the following disclaimer in the
+// documentation and/or other materials provided with the distribution;
+// neither the name of the copyright holders nor the names of its
+// contributors may be used to endorse or promote products derived from
+// this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+let {{
+    armCode = '''
+    PseudoInst::arm(xc->tcBase());
+    '''
+
+    armIop = InstObjParams("arm", "Arm", "PseudoOp",
+                           { "code": armCode },
+                           ["IsNonSpeculative"])
+    header_output += BasicDeclare.subst(armIop)
+    decoder_output += BasicConstructor.subst(armIop)
+    exec_output += BasicExecute.subst(armIop)
+
+    quiesceCode = '''
+    PseudoInst::quiesce(xc->tcBase());
+    '''
+
+    quiesceIop = InstObjParams("quiesce", "Quiesce", "PseudoOp",
+                               { "code": quiesceCode },
+                               ["IsNonSpeculative", "IsQuiesce"])
+    header_output += BasicDeclare.subst(quiesceIop)
+    decoder_output += BasicConstructor.subst(quiesceIop)
+    exec_output += BasicExecute.subst(quiesceIop)
+
+    quiesceNsCode = '''
+    PseudoInst::quiesceNs(xc->tcBase(), a0);
+    '''
+
+    quiesceNsIop = InstObjParams("quiesceNs", "QuiesceNs", "PseudoOp",
+                                 { "code": quiesceNsCode },
+                                 ["IsNonSpeculative", "IsQuiesce"])
+    header_output += BasicDeclare.subst(quiesceNsIop)
+    decoder_output += BasicConstructor.subst(quiesceNsIop)
+    exec_output += BasicExecute.subst(quiesceNsIop)
+
+    quiesceCyclesCode = '''
+    PseudoInst::quiesceCycles(xc->tcBase(), a0);
+    '''
+
+    quiesceCyclesIop = InstObjParams("quiesceCycles", "QuiesceCycles",
+                                     "PseudoOp",
+                                     { "code": quiesceCyclesCode },
+                                     ["IsNonSpeculative", "IsQuiesce",
+                                      "IsUnverifiable"])
+    header_output += BasicDeclare.subst(quiesceCyclesIop)
+    decoder_output += BasicConstructor.subst(quiesceCyclesIop)
+    exec_output += BasicExecute.subst(quiesceCyclesIop)
+
+    quiesceTimeCode = '''
+    a0 = PseudoInst::quiesceTime(xc->tcBase());
+    '''
+
+    quiesceTimeIop = InstObjParams("quiesceTime", "QuiesceTime", "PseudoOp",
+                                   { "code": quiesceTimeCode },
+                                   ["IsNonSpeculative", "IsUnverifiable"])
+    header_output += BasicDeclare.subst(quiesceTimeIop)
+    decoder_output += BasicConstructor.subst(quiesceTimeIop)
+    exec_output += BasicExecute.subst(quiesceTimeIop)
+
+    rpnsCode = '''
+    a0 = PseudoInst::rpns(xc->tcBase());
+    '''
+
+    rpnsIop = InstObjParams("rpns", "Rpns", "PseudoOp",
+                            { "code": rpnsCode },
+                            ["IsNonSpeculative", "IsUnverifiable"])
+    header_output += BasicDeclare.subst(rpnsIop)
+    decoder_output += BasicConstructor.subst(rpnsIop)
+    exec_output += BasicExecute.subst(rpnsIop)
+
+    wakeCpuCode = '''
+    PseudoInst::wakeCPU(xc->tcBase(), a0);
+    '''
+
+    wakeCPUIop = InstObjParams("wakeCPU", "WakeCPU", "PseudoOp",
+                               { "code": wakeCpuCode },
+                               ["IsNonSpeculative", "IsUnverifiable"])
+    header_output += BasicDeclare.subst(wakeCPUIop)
+    decoder_output += BasicConstructor.subst(wakeCPUIop)
+    exec_output += BasicExecute.subst(wakeCPUIop)
+
+    m5fail_code = '''
+        PseudoInst::m5fail(xc->tcBase(), a0, a1);
+    '''
+
+    m5failIop = InstObjParams("m5fail", "M5fail", "PseudoOp",
+                              { "code": m5fail_code },
+                              ["No_OpClass", "IsNonSpeculative"])
+    header_output += BasicDeclare.subst(m5failIop)
+    decoder_output += BasicConstructor.subst(m5failIop)
+    exec_output += BasicExecute.subst(m5failIop)
+
+    m5exit_code = '''
+        PseudoInst::m5exit(xc->tcBase(), a0);
+    '''
+
+    m5exitIop = InstObjParams("m5exit", "M5exit", "PseudoOp",
+                              { "code": m5exit_code },
+                              ["No_OpClass", "IsNonSpeculative"])
+    header_output += BasicDeclare.subst(m5exitIop)
+    decoder_output += BasicConstructor.subst(m5exitIop)
+    exec_output += BasicExecute.subst(m5exitIop)
+
+    loadsymbolCode = '''
+    PseudoInst::loadsymbol(xc->tcBase());
+    '''
+
+    loadsymbolIop = InstObjParams("loadsymbol", "Loadsymbol", "PseudoOp",
+                                  { "code": loadsymbolCode },
+                                  ["No_OpClass", "IsNonSpeculative"])
+    header_output += BasicDeclare.subst(loadsymbolIop)
+    decoder_output += BasicConstructor.subst(loadsymbolIop)
+    exec_output += BasicExecute.subst(loadsymbolIop)
+
+    initparamCode = '''
+    a0 = PseudoInst::initParam(xc->tcBase(), a0, a1);
+    '''
+
+    initparamIop = InstObjParams("initparam", "Initparam", "PseudoOp",
+                                 { "code": initparamCode },
+                                 ["IsNonSpeculative"])
+    header_output += BasicDeclare.subst(initparamIop)
+    decoder_output += BasicConstructor.subst(initparamIop)
+    exec_output += BasicExecute.subst(initparamIop)
+
+    resetstats_code = '''
+    PseudoInst::resetstats(xc->tcBase(), a0, a1);
+    '''
+
+    resetstatsIop = InstObjParams("resetstats", "Resetstats", "PseudoOp",
+                                  { "code": resetstats_code },
+                                  ["IsNonSpeculative"])
+    header_output += BasicDeclare.subst(resetstatsIop)
+    decoder_output += BasicConstructor.subst(resetstatsIop)
+    exec_output += BasicExecute.subst(resetstatsIop)
+
+    dumpstats_code = '''
+    PseudoInst::dumpstats(xc->tcBase(), a0, a1);
+    '''
+
+    dumpstatsIop = InstObjParams("dumpstats", "Dumpstats", "PseudoOp",
+                                 { "code": dumpstats_code },
+                                 ["IsNonSpeculative"])
+    header_output += BasicDeclare.subst(dumpstatsIop)
+    decoder_output += BasicConstructor.subst(dumpstatsIop)
+    exec_output += BasicExecute.subst(dumpstatsIop)
+
+    dumpresetstats_code = '''
+    PseudoInst::dumpresetstats(xc->tcBase(), a0, a1);
+    '''
+
+    dumpresetstatsIop = InstObjParams("dumpresetstats", "Dumpresetstats",
+                                      "PseudoOp",
+                                      { "code": dumpresetstats_code },
+                                      ["IsNonSpeculative"])
+    header_output += BasicDeclare.subst(dumpresetstatsIop)
+    decoder_output += BasicConstructor.subst(dumpresetstatsIop)
+    exec_output += BasicExecute.subst(dumpresetstatsIop)
+
+    m5checkpoint_code = '''
+    PseudoInst::m5checkpoint(xc->tcBase(), a0, a1);
+    '''
+
+    m5checkpointIop = InstObjParams("m5checkpoint", "M5checkpoint", "PseudoOp",
+                                    { "code": m5checkpoint_code },
+                                    ["IsNonSpeculative", "IsUnverifiable"])
+    header_output += BasicDeclare.subst(m5checkpointIop)
+    decoder_output += BasicConstructor.subst(m5checkpointIop)
+    exec_output += BasicExecute.subst(m5checkpointIop)
+
+    m5readfileCode = '''
+    a0 = PseudoInst::readfile(xc->tcBase(), a0, a1, a2);
+    '''
+
+    m5readfileIop = InstObjParams("m5readfile", "M5readfile", "PseudoOp",
+                                  { "code": m5readfileCode },
+                                  ["IsNonSpeculative", "IsUnverifiable"])
+    header_output += BasicDeclare.subst(m5readfileIop)
+    decoder_output += BasicConstructor.subst(m5readfileIop)
+    exec_output += BasicExecute.subst(m5readfileIop)
+
+    m5writefileCode = '''
+    a0 = PseudoInst::writefile(xc->tcBase(), a0, a1, a2, a3);
+    '''
+
+    m5writefileIop = InstObjParams("m5writefile", "M5writefile", "PseudoOp",
+                                   { "code": m5writefileCode },
+                                   ["IsNonSpeculative"])
+    header_output += BasicDeclare.subst(m5writefileIop)
+    decoder_output += BasicConstructor.subst(m5writefileIop)
+    exec_output += BasicExecute.subst(m5writefileIop)
+
+    m5breakCode = '''
+    PseudoInst::debugbreak(xc->tcBase());
+    '''
+
+    m5breakIop = InstObjParams("m5break", "M5break", "PseudoOp",
+                               { "code": m5breakCode },
+                               ["IsNonSpeculative"])
+    header_output += BasicDeclare.subst(m5breakIop)
+    decoder_output += BasicConstructor.subst(m5breakIop)
+    exec_output += BasicExecute.subst(m5breakIop)
+
+    m5switchcpuCode = '''
+    PseudoInst::switchcpu(xc->tcBase());
+    '''
+
+    m5switchcpuIop = InstObjParams("m5switchcpu", "M5switchcpu", "PseudoOp",
+                                   { "code": m5switchcpuCode },
+                                   ["IsNonSpeculative"])
+    header_output += BasicDeclare.subst(m5switchcpuIop)
+    decoder_output += BasicConstructor.subst(m5switchcpuIop)
+    exec_output += BasicExecute.subst(m5switchcpuIop)
+
+    m5addsymbolCode = '''
+    PseudoInst::addsymbol(xc->tcBase(), a0, a1);
+    '''
+
+    m5addsymbolIop = InstObjParams("m5addsymbol", "M5addsymbol", "PseudoOp",
+                                   { "code": m5addsymbolCode },
+                                   ["IsNonSpeculative"])
+    header_output += BasicDeclare.subst(m5addsymbolIop)
+    decoder_output += BasicConstructor.subst(m5addsymbolIop)
+    exec_output += BasicExecute.subst(m5addsymbolIop)
+
+    m5panicCode = '''panic("M5 panic instruction called at pc=%#x.",
+                     xc->pcState().pc());'''
+
+    m5panicIop = InstObjParams("m5panic", "M5panic", "PseudoOp",
+                               { "code": m5panicCode },
+                               ["IsNonSpeculative"])
+    header_output += BasicDeclare.subst(m5panicIop)
+    decoder_output += BasicConstructor.subst(m5panicIop)
+    exec_output += BasicExecute.subst(m5panicIop)
+
+    m5workbeginCode = '''
+    PseudoInst::workbegin(xc->tcBase(), a0, a1);
+    '''
+
+    m5workbeginIop = InstObjParams("m5workbegin", "M5workbegin", "PseudoOp",
+                                   { "code": m5workbeginCode },
+                                   ["IsNonSpeculative"])
+    header_output += BasicDeclare.subst(m5workbeginIop)
+    decoder_output += BasicConstructor.subst(m5workbeginIop)
+    exec_output += BasicExecute.subst(m5workbeginIop)
+
+    m5workendCode = '''
+    PseudoInst::workend(xc->tcBase(), a0, a1);
+    '''
+
+    m5workendIop = InstObjParams("m5workend", "M5workend", "PseudoOp",
+                                 { "code": m5workendCode },
+                                 ["IsNonSpeculative"])
+    header_output += BasicDeclare.subst(m5workendIop)
+    decoder_output += BasicConstructor.subst(m5workendIop)
+    exec_output += BasicExecute.subst(m5workendIop)
+}};
+
+def format M5ops() {{
+    decode_block = '''
+    {
+        const uint32_t m5func = bits(machInst, 31, 25);
+        switch(m5func) {
+            case M5OP_ARM: return new Arm(machInst);
+            case M5OP_QUIESCE: return new Quiesce(machInst);
+            case M5OP_QUIESCE_NS: return new QuiesceNs(machInst);
+            case M5OP_QUIESCE_CYCLE: return new QuiesceCycles(machInst);
+            case M5OP_QUIESCE_TIME: return new QuiesceTime(machInst);
+            case M5OP_RPNS: return new Rpns(machInst);
+            case M5OP_WAKE_CPU: return new WakeCPU(machInst);
+            case M5OP_EXIT: return new M5exit(machInst);
+            case M5OP_FAIL: return new M5fail(machInst);
+            case M5OP_LOAD_SYMBOL: return new Loadsymbol(machInst);
+            case M5OP_INIT_PARAM: return new Initparam(machInst);
+            case M5OP_RESET_STATS: return new Resetstats(machInst);
+            case M5OP_DUMP_STATS: return new Dumpstats(machInst);
+            case M5OP_DUMP_RESET_STATS: return new Dumpresetstats(machInst);
+            case M5OP_CHECKPOINT: return new M5checkpoint(machInst);
+            case M5OP_WRITE_FILE: return new M5writefile(machInst);
+            case M5OP_READ_FILE: return new M5readfile(machInst);
+            case M5OP_DEBUG_BREAK: return new M5break(machInst);
+            case M5OP_SWITCH_CPU: return new M5switchcpu(machInst);
+            case M5OP_ADD_SYMBOL: return new M5addsymbol(machInst);
+            case M5OP_PANIC: return new M5panic(machInst);
+            case M5OP_WORK_BEGIN: return new M5workbegin(machInst);
+            case M5OP_WORK_END: return new M5workend(machInst);
+            default: return new Unknown(machInst);
+        }
+   }
+   '''
+}};
