@@ -3,6 +3,7 @@
  * Copyright (c) 2007-2008 The Florida State University
  * Copyright (c) 2009 The University of Edinburgh
  * Copyright (c) 2014-2015 Sven Karlsson
+ * Copyright (c) 2020 Barkhausen Institut
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -39,19 +40,8 @@ class ThreadContext;
 
 namespace RiscvISA {
 
-inline Addr
-vtophys(Addr vaddr)
-{
-    fatal("VTOPHYS: Unimplemented on RISC-V\n");
-    return vaddr;
-}
-
-inline Addr
-vtophys(ThreadContext *tc, Addr vaddr)
-{
-    fatal("VTOPHYS: Unimplemented on RISC-V\n");
-    return vtophys(vaddr);
-}
+Addr vtophys(Addr vaddr);
+Addr vtophys(ThreadContext *tc, Addr vaddr);
 
 } // namespace RiscvISA
 
