@@ -33,8 +33,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Andreas Sandberg
  */
 
 #include "arch/arm/kvm/arm_cpu.hh"
@@ -318,10 +316,10 @@ ArmKvmCPU::onKvmExitHypercall()
     ThreadContext *tc(getContext(0));
     const uint32_t reg_ip(tc->readIntRegFlat(INTREG_R12));
     const uint8_t func((reg_ip >> 8) & 0xFF);
-    const uint8_t subfunc(reg_ip & 0xFF);
 
-    DPRINTF(Kvm, "KVM Hypercall: 0x%x/0x%x\n", func, subfunc);
-    const uint64_t ret(PseudoInst::pseudoInst(getContext(0), func, subfunc));
+    DPRINTF(Kvm, "KVM Hypercall: %#x/%#x\n", func, subfunc);
+    const uint64_t ret =
+        PseudoInst::pseudoInst<PseudoInstABI>(getContext(0), func);
 
     // Just set the return value using the KVM API instead of messing
     // with the context. We could have used the context, but that

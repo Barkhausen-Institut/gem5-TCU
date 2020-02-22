@@ -24,8 +24,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Ali Saidi
  */
 
 #ifndef __ARCH_SPARC_MMAPPED_IPR_HH__
@@ -37,7 +35,6 @@
  * ISA-specific helper functions for memory mapped IPR accesses.
  */
 
-#include "arch/generic/mmapped_ipr.hh"
 #include "arch/sparc/tlb.hh"
 #include "cpu/thread_context.hh"
 #include "mem/packet.hh"
@@ -48,19 +45,13 @@ namespace SparcISA
 inline Cycles
 handleIprRead(ThreadContext *xc, Packet *pkt)
 {
-    if (GenericISA::isGenericIprAccess(pkt))
-        return GenericISA::handleGenericIprRead(xc, pkt);
-    else
-        return dynamic_cast<TLB *>(xc->getDTBPtr())->doMmuRegRead(xc, pkt);
+    return dynamic_cast<TLB *>(xc->getDTBPtr())->doMmuRegRead(xc, pkt);
 }
 
 inline Cycles
 handleIprWrite(ThreadContext *xc, Packet *pkt)
 {
-    if (GenericISA::isGenericIprAccess(pkt))
-        return GenericISA::handleGenericIprWrite(xc, pkt);
-    else
-        return dynamic_cast<TLB *>(xc->getDTBPtr())->doMmuRegWrite(xc, pkt);
+    return dynamic_cast<TLB *>(xc->getDTBPtr())->doMmuRegWrite(xc, pkt);
 }
 
 

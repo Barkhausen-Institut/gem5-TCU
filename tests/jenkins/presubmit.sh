@@ -34,8 +34,6 @@
 # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-# Authors: Jason Lowe-Power
 
 set -e
 
@@ -47,4 +45,5 @@ cd git/jenkins-gem5-prod/tests
 # Build with 4 threads (i.e., pass -j4 to scons)
 # Run 4 tests in parallel
 # Look for tests in the gem5 subdirectory
-./main.py run -j4 -t4 gem5
+# Once complete, run the Google Tests
+./main.py run -j4 -t4 gem5 && scons -C .. build/NULL/unittests.opt

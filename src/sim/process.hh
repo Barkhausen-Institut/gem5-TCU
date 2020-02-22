@@ -25,10 +25,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Nathan Binkert
- *          Steve Reinhardt
- *          Brandon Potter
  */
 
 #ifndef __PROCESS_HH__
@@ -131,9 +127,6 @@ class Process : public SimObject
     {
         contextIds.push_back(context_id);
     }
-
-    // Find a free context to use
-    ThreadContext *findFreeContext();
 
     /**
      * After delegating a thread context to a child process

@@ -24,8 +24,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Gabe Black
  */
 
 #ifndef __ARCH_GENERIC_TYPES_HH__
@@ -222,7 +220,7 @@ class UPCState : public SimplePCState<MachInst>
         nupc(1);
     }
 
-    UPCState() : _upc(0), _nupc(0) {}
+    UPCState() : _upc(0), _nupc(1) {}
     UPCState(Addr val) : _upc(0), _nupc(0) { set(val); }
 
     bool

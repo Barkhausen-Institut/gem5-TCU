@@ -25,9 +25,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Nathan Binkert
-            Bobby R. Bruce
  */
 
 #include "base/match.hh"
@@ -109,7 +106,7 @@ std::vector<std::vector<std::string> >
 ObjectMatch::getExpressions()
 {
     std::vector<std::vector<std::string> > to_return;
-    for (const std::vector<std::string> expression : tokens) {
+    for (const auto &expression: tokens) {
         std::vector<std::string> to_add;
         to_add.insert(to_add.end(), expression.begin(), expression.end());
         to_return.push_back(to_add);

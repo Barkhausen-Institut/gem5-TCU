@@ -35,13 +35,12 @@
 # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-# Authors: Sean Wilson
-#          Nikos Nikoleris
 
 import os
 import tempfile
 import shutil
+import sys
+import socket
 import threading
 import urllib
 import urllib2
@@ -157,7 +156,7 @@ class SConsFixture(UniqueFixture):
         command.extend(self.targets)
         if self.options:
             command.extend(self.options)
-        log_call(log.test_log, command)
+        log_call(log.test_log, command, stderr=sys.stderr)
 
 class Gem5Fixture(SConsFixture):
     def __new__(cls, isa, variant, protocol=None):
@@ -281,7 +280,7 @@ class DownloadedProgram(UniqueFixture):
         import datetime, time
         import _strptime # Needed for python threading bug
 
-        u = urllib2.urlopen(self.url)
+        u = urllib2.urlopen(self.url, timeout=10)
         return time.mktime(datetime.datetime.strptime( \
                     u.info().getheaders("Last-Modified")[0],
                     "%a, %d %b %Y %X GMT").timetuple())
@@ -293,7 +292,7 @@ class DownloadedProgram(UniqueFixture):
         else:
             try:
                 t = self._getremotetime()
-            except urllib2.URLError:
+            except (urllib2.URLError, socket.timeout):
                 # Problem checking the server, use the old files.
                 log.test_log.debug("Could not contact server. Binaries may be old.")
                 return
@@ -319,7 +318,7 @@ class DownloadedArchive(DownloadedProgram):
         else:
             try:
                 t = self._getremotetime()
-            except urllib2.URLError:
+            except (urllib2.URLError, socket.timeout):
                 # Problem checking the server, use the old files.
                 log.test_log.debug("Could not contact server. "
                                    "Binaries may be old.")

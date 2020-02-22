@@ -1,6 +1,6 @@
 # -*- mode:python -*-
 
-# Copyright (c) 2013, 2015-2019 ARM Limited
+# Copyright (c) 2013, 2015-2020 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -39,9 +39,6 @@
 # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-# Authors: Steve Reinhardt
-#          Nathan Binkert
 
 ###################################################
 #
@@ -49,7 +46,7 @@
 #
 # While in this directory ('gem5'), just type 'scons' to build the default
 # configuration (see below), or type 'scons build/<CONFIG>/<binary>'
-# to build some other configuration (e.g., 'build/ALPHA/gem5.opt' for
+# to build some other configuration (e.g., 'build/X86/gem5.opt' for
 # the optimized full-system version).
 #
 # You can build gem5 in a different directory as long as there is a
@@ -61,15 +58,15 @@
 #
 #   The following two commands are equivalent.  The '-u' option tells
 #   scons to search up the directory tree for this SConstruct file.
-#   % cd <path-to-src>/gem5 ; scons build/ALPHA/gem5.debug
-#   % cd <path-to-src>/gem5/build/ALPHA; scons -u gem5.debug
+#   % cd <path-to-src>/gem5 ; scons build/X86/gem5.debug
+#   % cd <path-to-src>/gem5/build/X86; scons -u gem5.debug
 #
 #   The following two commands are equivalent and demonstrate building
 #   in a directory outside of the source tree.  The '-C' option tells
 #   scons to chdir to the specified directory to find this SConstruct
 #   file.
-#   % cd <path-to-src>/gem5 ; scons /local/foo/build/ALPHA/gem5.debug
-#   % cd /local/foo/build/ALPHA; scons -C <path-to-src>/gem5 gem5.debug
+#   % cd <path-to-src>/gem5 ; scons /local/foo/build/X86/gem5.debug
+#   % cd /local/foo/build/X86; scons -C <path-to-src>/gem5 gem5.debug
 #
 # You can use 'scons -H' to print scons options.  If you're in this
 # 'gem5' directory (or use -u or -C to tell scons where to find this
@@ -168,6 +165,8 @@ AddLocalOption('--with-ubsan', dest='with_ubsan', action='store_true',
                help='Build with Undefined Behavior Sanitizer if available')
 AddLocalOption('--with-asan', dest='with_asan', action='store_true',
                help='Build with Address Sanitizer if available')
+AddLocalOption('--with-systemc-tests', dest='with_systemc_tests',
+               action='store_true', help='Build systemc tests')
 
 from gem5_scons import Transform, error, warning
 
@@ -199,7 +198,7 @@ if not ('CC' in main_dict_keys and 'CXX' in main_dict_keys):
 ###################################################
 
 # Find default configuration & binary.
-Default(environ.get('M5_DEFAULT_BINARY', 'build/ALPHA/gem5.debug'))
+Default(environ.get('M5_DEFAULT_BINARY', 'build/ARM/gem5.debug'))
 
 # helper function: find last occurrence of element in list
 def rfind(l, elt, offs = -1):
@@ -230,8 +229,8 @@ def find_first_prog(prog_names):
 
 # Each target must have 'build' in the interior of the path; the
 # directory below this will determine the build parameters.  For
-# example, for target 'foo/bar/build/ALPHA_SE/arch/alpha/blah.do' we
-# recognize that ALPHA_SE specifies the configuration because it
+# example, for target 'foo/bar/build/X86/arch/x86/blah.do' we
+# recognize that X86 specifies the configuration because it
 # follow 'build' in the build path.
 
 # The funky assignment to "[:]" is needed to replace the list contents
@@ -277,7 +276,7 @@ main.SetOption('duplicate', 'soft-copy')
 
 #
 # Set up global sticky variables... these are common to an entire build
-# tree (not specific to a particular build like ALPHA_SE)
+# tree (not specific to a particular build like X86)
 #
 
 global_vars_file = joinpath(build_root, 'variables.global')
@@ -373,11 +372,12 @@ if main['GCC'] or main['CLANG']:
         main.Append(CCFLAGS=['-I/usr/local/include'])
         main.Append(CXXFLAGS=['-I/usr/local/include'])
 
+    main.Append(LINKFLAGS='-Wl,--as-needed')
     main['FILTER_PSHLINKFLAGS'] = lambda x: str(x).replace(' -shared', '')
     main['PSHLINKFLAGS'] = main.subst('${FILTER_PSHLINKFLAGS(SHLINKFLAGS)}')
     if GetOption('gold_linker'):
         main.Append(LINKFLAGS='-fuse-ld=gold')
-    main['PLINKFLAGS'] = main.subst('${LINKFLAGS}')
+    main['PLINKFLAGS'] = main.get('LINKFLAGS')
     shared_partial_flags = ['-r', '-nostdlib']
     main.Append(PSHLINKFLAGS=shared_partial_flags)
     main.Append(PLINKFLAGS=shared_partial_flags)
@@ -389,7 +389,7 @@ if main['GCC'] or main['CLANG']:
     #                      '-Wno-error=deprecated',
     #                     ])
 else:
-    error('\n'.join(
+    error('\n'.join((
           "Don't know what compiler options to use for your compiler.",
           "compiler: " + main['CXX'],
           "version: " + CXX_version.replace('\n', '<nl>') if
@@ -400,7 +400,7 @@ else:
           "",
           "If you are trying to use a compiler other than those listed",
           "above you will need to ease fix SConstruct and ",
-          "src/SConscript to support that compiler."))
+          "src/SConscript to support that compiler.")))
 
 if main['GCC']:
     # Check for a supported version of gcc. >= 4.8 is chosen for its
@@ -436,12 +436,6 @@ if main['GCC']:
             main.Append(PSHLINKFLAGS='-flinker-output=rel')
             main.Append(PLINKFLAGS='-flinker-output=rel')
 
-    # Make sure we warn if the user has requested to compile with the
-    # Undefined Benahvior Sanitizer and this version of gcc does not
-    # support it.
-    if GetOption('with_ubsan') and compareVersions(gcc_version, '4.9') < 0:
-        warning('UBSan is only supported using gcc 4.9 and later.')
-
     disable_lto = GetOption('no_lto')
     if not disable_lto and main.get('BROKEN_INCREMENTAL_LTO', False) and \
             not GetOption('force_lto'):
@@ -466,25 +460,6 @@ if main['GCC']:
 
     main.Append(TCMALLOC_CCFLAGS=['-fno-builtin-malloc', '-fno-builtin-calloc',
                                   '-fno-builtin-realloc', '-fno-builtin-free'])
-
-    # The address sanitizer is available for gcc >= 4.8
-    if GetOption('with_asan'):
-        if GetOption('with_ubsan') and \
-                compareVersions(main['GCC_VERSION'], '4.9') >= 0:
-            main.Append(CCFLAGS=['-fsanitize=address,undefined',
-                                 '-fno-omit-frame-pointer'],
-                        LINKFLAGS='-fsanitize=address,undefined')
-        else:
-            main.Append(CCFLAGS=['-fsanitize=address',
-                                 '-fno-omit-frame-pointer'],
-                        LINKFLAGS='-fsanitize=address')
-    # Only gcc >= 4.9 supports UBSan, so check both the version
-    # and the command-line option before adding the compiler and
-    # linker flags.
-    elif GetOption('with_ubsan') and \
-            compareVersions(main['GCC_VERSION'], '4.9') >= 0:
-        main.Append(CCFLAGS='-fsanitize=undefined')
-        main.Append(LINKFLAGS='-fsanitize=undefined')
 
 elif main['CLANG']:
     # Check for a supported version of clang, >= 3.1 is needed to
@@ -524,21 +499,27 @@ elif main['CLANG']:
     if sys.platform.startswith('freebsd'):
         main.Append(LIBS=['thr'])
 
-    # We require clang >= 3.1, so there is no need to check any
-    # versions here.
-    if GetOption('with_ubsan'):
-        if GetOption('with_asan'):
-            main.Append(CCFLAGS=['-fsanitize=address,undefined',
-                                 '-fno-omit-frame-pointer'],
-                       LINKFLAGS='-fsanitize=address,undefined')
-        else:
-            main.Append(CCFLAGS='-fsanitize=undefined',
-                        LINKFLAGS='-fsanitize=undefined')
-
-    elif GetOption('with_asan'):
-        main.Append(CCFLAGS=['-fsanitize=address',
+# Add sanitizers flags
+sanitizers=[]
+if GetOption('with_ubsan'):
+    # Only gcc >= 4.9 supports UBSan, so check both the version
+    # and the command-line option before adding the compiler and
+    # linker flags.
+    if not main['GCC'] or compareVersions(main['GCC_VERSION'], '4.9') >= 0:
+        sanitizers.append('undefined')
+if GetOption('with_asan'):
+    # Available for gcc >= 4.8 or llvm >= 3.1 both a requirement
+    # by the build system
+    sanitizers.append('address')
+if sanitizers:
+    sanitizers = ','.join(sanitizers)
+    if main['GCC'] or main['CLANG']:
+        main.Append(CCFLAGS=['-fsanitize=%s' % sanitizers,
                              '-fno-omit-frame-pointer'],
-                   LINKFLAGS='-fsanitize=address')
+                    LINKFLAGS='-fsanitize=%s' % sanitizers)
+    else:
+        warning("Don't know how to enable %s sanitizer(s) for your "
+                "compiler." % sanitizers)
 
 # Set up common yacc/bison flags (needed for Ruby)
 main['YACCFLAGS'] = '-d'
@@ -990,9 +971,6 @@ sticky_vars.AddVariables(
                  sorted(CpuModel.dict.keys())),
     BoolVariable('EFENCE', 'Link with Electric Fence malloc debugger',
                  False),
-    BoolVariable('SS_COMPATIBLE_FP',
-                 'Make floating-point results compatible with SimpleScalar',
-                 False),
     BoolVariable('USE_SSE2',
                  'Compile for SSE2 (-msse2) to get IEEE FP on x86 hosts',
                  False),
@@ -1017,9 +995,9 @@ sticky_vars.AddVariables(
     )
 
 # These variables get exported to #defines in config/*.hh (see src/SConscript).
-export_vars += ['USE_FENV', 'SS_COMPATIBLE_FP', 'TARGET_ISA', 'TARGET_GPU_ISA',
-                'CP_ANNOTATE', 'USE_POSIX_CLOCK', 'USE_KVM', 'USE_TUNTAP',
-                'PROTOCOL', 'HAVE_PROTOBUF', 'HAVE_VALGRIND',
+export_vars += ['USE_FENV', 'TARGET_ISA', 'TARGET_GPU_ISA', 'CP_ANNOTATE',
+                'USE_POSIX_CLOCK', 'USE_KVM', 'USE_TUNTAP', 'PROTOCOL',
+                'HAVE_PROTOBUF', 'HAVE_VALGRIND',
                 'HAVE_PERF_ATTR_EXCLUDE_HOST', 'USE_PNG',
                 'NUMBER_BITS_PER_SET', 'USE_HDF5']
 
@@ -1178,7 +1156,7 @@ for variant_path in variant_paths:
     env['BUILDDIR'] = variant_path
 
     # variant_dir is the tail component of build path, and is used to
-    # determine the build parameters (e.g., 'ALPHA_SE')
+    # determine the build parameters (e.g., 'X86')
     (build_root, variant_dir) = splitpath(variant_path)
 
     # Set env variables according to the build directory config.

@@ -37,11 +37,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Nathan Binkert
- *          Steve Reinhardt
- *          Ali Saidi
- *          Brandon Potter
  */
 
 #include "sim/process.hh"
@@ -277,16 +272,6 @@ Process::regStats()
         .name(name() + ".numSyscalls")
         .desc("Number of system calls")
         ;
-}
-
-ThreadContext *
-Process::findFreeContext()
-{
-    for (auto &it : system->threadContexts) {
-        if (ThreadContext::Halted == it->status())
-            return it;
-    }
-    return nullptr;
 }
 
 void

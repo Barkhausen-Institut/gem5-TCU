@@ -25,9 +25,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Stephen Hines
- *          Timothy M. Jones
  */
 
 #ifndef __POWER_LINUX_PROCESS_HH__
@@ -35,24 +32,26 @@
 
 #include "arch/power/process.hh"
 
+#include "sim/syscall_desc.hh"
+
 /// A process with emulated PPC/Linux syscalls.
 class PowerLinuxProcess : public PowerProcess
 {
   public:
     PowerLinuxProcess(ProcessParams * params, ObjectFile *objFile);
 
-    virtual SyscallDesc* getDesc(int callnum);
+    SyscallDesc *getDesc(int callnum) override;
 
-    void initState();
+    void initState() override;
 
     void syscall(ThreadContext *tc, Fault *fault) override;
 
-    RegVal getSyscallArg(ThreadContext *tc, int &i);
+    RegVal getSyscallArg(ThreadContext *tc, int &i) override;
     /// Explicitly import the otherwise hidden getSyscallArg
     using Process::getSyscallArg;
 
     /// Array of syscall descriptors, indexed by call number.
-    static SyscallDesc syscallDescs[];
+    static SyscallDescABI<DefaultSyscallABI> syscallDescs[];
 
     const int Num_Syscall_Descs;
 };

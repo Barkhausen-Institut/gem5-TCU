@@ -34,8 +34,6 @@
 // THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
-// Authors: Gabe Black
 
 output header {{
 
@@ -976,6 +974,24 @@ let {{
     header_output += FpRegRegOpDeclare.subst(vcvtSIntFpDIop);
     decoder_output += FpRegRegOpConstructor.subst(vcvtSIntFpDIop);
     exec_output += PredOpExecute.subst(vcvtSIntFpDIop);
+
+    vjcvtSFixedFpDCode = vfpEnabledCheckCode + '''
+        FPSCR fpscr = (FPSCR) FpscrExc;
+        VfpSavedState state = prepFpState(fpscr.rMode);
+        uint64_t cOp1 = ((uint64_t)FpOp1P0_uw | ((uint64_t)FpOp1P1_uw << 32));
+        uint8_t nz;
+        FpDest_uw = fplibFPToFixedJS(cOp1, fpscr, false, nz);
+        finishVfp(fpscr, state, fpscr.fz);
+        FpCondCodes = fpscr & FpCondCodesMask;
+        FpscrExc = fpscr;
+    '''
+    vjcvtSFixedFpDIop = InstObjParams("vjcvt", "VjcvtSFixedFpD", "FpRegRegOp",
+                                     { "code": vjcvtSFixedFpDCode,
+                                       "predicate_test": predicateTest,
+                                       "op_class": "SimdFloatCvtOp" }, [])
+    header_output += FpRegRegOpDeclare.subst(vjcvtSFixedFpDIop);
+    decoder_output += FpRegRegOpConstructor.subst(vjcvtSFixedFpDIop);
+    exec_output += PredOpExecute.subst(vjcvtSFixedFpDIop);
 
     vcvtFpUIntSRCode = vfpEnabledCheckCode + '''
         FPSCR fpscr = (FPSCR) FpscrExc;

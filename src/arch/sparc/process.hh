@@ -24,9 +24,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Gabe Black
- *          Ali Saidi
  */
 
 #ifndef __SPARC_PROCESS_HH__
@@ -54,7 +51,7 @@ class SparcProcess : public Process
     SparcProcess(ProcessParams * params, ObjectFile *objFile,
                  Addr _StackBias);
 
-    void initState();
+    void initState() override;
 
     template<class IntType>
     void argsInit(int pageSize);
@@ -68,7 +65,8 @@ class SparcProcess : public Process
     Addr readSpillStart() { return spillStart; }
 
     virtual void flushWindows(ThreadContext *tc) = 0;
-    void setSyscallReturn(ThreadContext *tc, SyscallReturn return_value);
+    void setSyscallReturn(ThreadContext *tc,
+            SyscallReturn return_value) override;
 };
 
 class Sparc32Process : public SparcProcess
@@ -100,15 +98,15 @@ class Sparc32Process : public SparcProcess
                                               mmap_end);
     }
 
-    void initState();
+    void initState() override;
 
   public:
 
     void argsInit(int intSize, int pageSize);
 
-    void flushWindows(ThreadContext *tc);
+    void flushWindows(ThreadContext *tc) override;
 
-    RegVal getSyscallArg(ThreadContext *tc, int &i);
+    RegVal getSyscallArg(ThreadContext *tc, int &i) override;
     /// Explicitly import the otherwise hidden getSyscallArg
     using Process::getSyscallArg;
 };
@@ -141,15 +139,15 @@ class Sparc64Process : public SparcProcess
                                               mmap_end);
     }
 
-    void initState();
+    void initState() override;
 
   public:
 
     void argsInit(int intSize, int pageSize);
 
-    void flushWindows(ThreadContext *tc);
+    void flushWindows(ThreadContext *tc) override;
 
-    RegVal getSyscallArg(ThreadContext *tc, int &i);
+    RegVal getSyscallArg(ThreadContext *tc, int &i) override;
     /// Explicitly import the otherwise hidden getSyscallArg
     using Process::getSyscallArg;
 };

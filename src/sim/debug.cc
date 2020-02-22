@@ -24,9 +24,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Nathan Binkert
- *          Steve Reinhardt
  */
 
 #include "sim/debug.hh"
@@ -94,14 +91,6 @@ void
 schedRelBreak(Tick delta)
 {
     schedBreak(curTick() + delta);
-}
-
-void
-breakAtKernelFunction(const char* funcName)
-{
-    System* curSystem = System::systemList[0];
-    curSystem->addKernelFuncEvent<BreakPCEvent>(funcName,
-                                                "GDB scheduled break", true);
 }
 
 ///

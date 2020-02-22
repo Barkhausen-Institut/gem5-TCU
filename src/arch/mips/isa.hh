@@ -24,8 +24,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Gabe Black
  */
 
 #ifndef __ARCH_MIPS_ISA_HH__
@@ -35,6 +33,7 @@
 #include <string>
 #include <vector>
 
+#include "arch/generic/isa.hh"
 #include "arch/mips/registers.hh"
 #include "arch/mips/types.hh"
 #include "cpu/reg_class.hh"
@@ -49,7 +48,7 @@ class ThreadContext;
 
 namespace MipsISA
 {
-    class ISA : public SimObject
+    class ISA : public BaseISA
     {
       public:
         // The MIPS name for this file is CP0 or Coprocessor 0
@@ -73,8 +72,12 @@ namespace MipsISA
         std::vector<BankType> bankType;
 
       public:
+        void clear(ThreadContext *tc) { clear(); }
+
+      protected:
         void clear();
 
+      public:
         void configCP();
 
         unsigned getVPENum(ThreadID tid) const;
@@ -132,7 +135,7 @@ namespace MipsISA
         void startup(ThreadContext *tc) {}
 
         /// Explicitly import the otherwise hidden startup
-        using SimObject::startup;
+        using BaseISA::startup;
 
         const Params *params() const;
 

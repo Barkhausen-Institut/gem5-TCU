@@ -24,8 +24,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Ali Saidi
  */
 
 #ifndef __SPARC_SOLARIS_PROCESS_HH__
@@ -34,6 +32,7 @@
 #include "arch/sparc/solaris/solaris.hh"
 #include "arch/sparc/process.hh"
 #include "sim/process.hh"
+#include "sim/syscall_desc.hh"
 
 namespace SparcISA {
 
@@ -44,7 +43,7 @@ class SparcSolarisProcess : public Sparc64Process
     /// Constructor.
     SparcSolarisProcess(ProcessParams * params, ObjectFile *objFile);
 
-    virtual SyscallDesc* getDesc(int callnum);
+    SyscallDesc *getDesc(int callnum) override;
 
     /// The target system's hostname.
     static const char *hostname;
@@ -52,7 +51,7 @@ class SparcSolarisProcess : public Sparc64Process
     void syscall(ThreadContext *tc, Fault *fault) override;
 
      /// Array of syscall descriptors, indexed by call number.
-    static SyscallDesc syscallDescs[];
+    static SyscallDescABI<DefaultSyscallABI> syscallDescs[];
 
     const int Num_Syscall_Descs;
 };

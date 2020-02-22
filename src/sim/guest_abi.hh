@@ -23,14 +23,14 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Gabe Black
  */
 
 #ifndef __SIM_GUEST_ABI_HH__
 #define __SIM_GUEST_ABI_HH__
 
 #include <functional>
+#include <memory>
+#include <sstream>
 #include <type_traits>
 
 class ThreadContext;
@@ -59,6 +59,32 @@ namespace GuestABI
  * std::enable_if style conditional specializations.
  */
 
+/*
+ * Position may need to be initialized based on the ThreadContext, for instance
+ * to find out where the stack pointer is initially.
+ */
+template <typename ABI, typename Enabled=void>
+struct PositionInitializer
+{
+    static typename ABI::Position
+    init(const ThreadContext *tc)
+    {
+        return typename ABI::Position();
+    }
+};
+
+template <typename ABI>
+struct PositionInitializer<ABI, typename std::enable_if<
+    std::is_constructible<typename ABI::Position, const ThreadContext *>::value
+    >::type>
+{
+    static typename ABI::Position
+    init(const ThreadContext *tc)
+    {
+        return typename ABI::Position(tc);
+    }
+};
+
 template <typename ABI, typename Ret, typename Enabled=void>
 struct Result
 {
@@ -72,7 +98,22 @@ struct Result
      * of this method which actually does something and is public.
      */
     static void store(ThreadContext *tc, const Ret &ret);
+
+    /*
+     * Adjust the position of arguments based on the return type, if necessary.
+     *
+     * This method can be excluded if no adjustment is necessary.
+     */
+    static void allocate(ThreadContext *tc, typename ABI::Position &position);
 };
+
+/*
+ * This partial specialization prevents having to special case 'void' when
+ * working with return types.
+ */
+template <typename ABI>
+struct Result<ABI, void>
+{};
 
 template <typename ABI, typename Arg, typename Enabled=void>
 struct Argument
@@ -86,6 +127,189 @@ struct Argument
      * the expected method signature.
      */
     static Arg get(ThreadContext *tc, typename ABI::Position &position);
+};
+
+
+/*
+ * This struct template provides a default allocate() method in case the
+ * Result template doesn't provide one. This is the default in cases where the
+ * return type doesn't affect how arguments are laid out.
+ */
+template <typename ABI, typename Ret, typename Enabled=void>
+struct ResultAllocator
+{
+    static void
+    allocate(ThreadContext *tc, typename ABI::Position &position)
+    {}
+};
+
+/*
+ * If the return type *does* affect how the arguments are laid out, the ABI
+ * can implement an allocate() method for the various return types, and this
+ * specialization will call into it.
+ */
+template <typename ABI, typename Ret>
+struct ResultAllocator<ABI, Ret, decltype((void)&Result<ABI, Ret>::allocate)>
+{
+    static void
+    allocate(ThreadContext *tc, typename ABI::Position &position)
+    {
+        Result<ABI, Ret>::allocate(tc, position);
+    }
+};
+
+
+/*
+ * These templates implement a variadic argument mechanism for guest ABI
+ * functions. A function might be written like this:
+ *
+ * void
+ * func(ThreadContext *tc, VarArgs<Addr, int> varargs)
+ * {
+ *     warn("Address = %#x, int = %d.",
+ *          varargs.get<Addr>(), varargs.get<int>());
+ * }
+ *
+ * where an object of type VarArgs<...> is its last argument. The types given
+ * to the template specify what types the function might need to retrieve from
+ * varargs. The varargs object will then have get<> methods for each of those
+ * types.
+ *
+ * Note that each get<> will happen live. If you modify values through the
+ * ThreadContext *tc and then run get<>(), you may alter one of your arguments.
+ * If you're going to use tc to modify state, it would be a good idea to use
+ * get<>() as soon as possible to avoid corrupting the functions arguments.
+ */
+
+// A recursive template which defines virtual functions to retrieve each of the
+// requested types. This provides the ABI agnostic interface the function uses.
+template <typename ...Types>
+class VarArgsBase;
+
+template <typename First, typename ...Types>
+class VarArgsBase<First, Types...> : public VarArgsBase<Types...>
+{
+  public:
+    // The virtual function takes a reference parameter so that the different
+    // _getImpl methods can co-exist through overloading.
+    virtual void _getImpl(First &) = 0;
+
+    // Make sure base class _getImpl-es aren't hidden by this one.
+    using VarArgsBase<Types...>::_getImpl;
+};
+
+// The base case of the recursion.
+template <>
+class VarArgsBase<>
+{
+  protected:
+    // This just gives the "using" statement in the non base case something to
+    // refer to.
+    void _getImpl();
+};
+
+
+// A recursive template which defines the ABI specific implementation of the
+// interface defined above.
+//
+// The types in Types are consumed one by one, and by
+// the time we get down to the base case we'd have lost track of the complete
+// set we need to know what interface to inherit. The Base parameter keeps
+// track of that through the recursion.
+template <typename ABI, typename Base, typename ...Types>
+class VarArgsImpl;
+
+template <typename ABI, typename Base, typename First, typename ...Types>
+class VarArgsImpl<ABI, Base, First, Types...> :
+    public VarArgsImpl<ABI, Base, Types...>
+{
+  protected:
+    // Bring forward the base class constructor.
+    using VarArgsImpl<ABI, Base, Types...>::VarArgsImpl;
+    // Make sure base class _getImpl-es don't get hidden by ours.
+    using VarArgsImpl<ABI, Base, Types...>::_getImpl;
+
+    // Implement a version of _getImple, using the ABI specialized version of
+    // the Argument class.
+    void
+    _getImpl(First &first) override
+    {
+        first = Argument<ABI, First>::get(this->tc, this->position);
+    }
+};
+
+// The base case of the recursion, which inherits from the interface class.
+template <typename ABI, typename Base>
+class VarArgsImpl<ABI, Base> : public Base
+{
+  protected:
+    // Declare state to pass to the Argument<>::get methods.
+    ThreadContext *tc;
+    typename ABI::Position position;
+
+    // Give the "using" statement in our subclass something to refer to.
+    void _getImpl();
+
+  public:
+    VarArgsImpl(ThreadContext *_tc, const typename ABI::Position &_pos) :
+        tc(_tc), position(_pos)
+    {}
+};
+
+// A wrapper which provides a nice interface to the virtual functions, and a
+// hook for the Argument template mechanism.
+template <typename ...Types>
+class VarArgs
+{
+  private:
+    // This points to the implementation which knows how to read arguments
+    // based on the ABI being used.
+    std::shared_ptr<VarArgsBase<Types...>> _ptr;
+
+  public:
+    VarArgs(VarArgsBase<Types...> *ptr) : _ptr(ptr) {}
+
+    // This template is a friendlier wrapper around the virtual functions the
+    // raw interface provides. This version lets you pick a type which it then
+    // returns, instead of having to pre-declare a variable to pass in.
+    template <typename Arg>
+    Arg
+    get()
+    {
+        Arg arg;
+        _ptr->_getImpl(arg);
+        return arg;
+    }
+};
+
+template <typename T>
+struct IsVarArgs : public std::false_type {};
+
+template <typename ...Types>
+struct IsVarArgs<VarArgs<Types...>> : public std::true_type {};
+
+template <typename ...Types>
+std::ostream &
+operator << (std::ostream &os, const VarArgs<Types...> &va)
+{
+    os << "...";
+    return os;
+}
+
+// The ABI independent hook which tells the GuestABI mechanism what to do with
+// a VarArgs argument. It constructs the underlying implementation which knows
+// about the ABI, and installs it in the VarArgs wrapper to give to the
+// function.
+template <typename ABI, typename ...Types>
+struct Argument<ABI, VarArgs<Types...>>
+{
+    static VarArgs<Types...>
+    get(ThreadContext *tc, typename ABI::Position &position)
+    {
+        using Base = VarArgsBase<Types...>;
+        using Impl = VarArgsImpl<ABI, Base, Types...>;
+        return VarArgs<Types...>(new Impl(tc, position));
+    }
 };
 
 
@@ -160,6 +384,44 @@ callFrom(ThreadContext *tc, typename ABI::Position &position,
     callFrom<ABI, Args...>(tc, position, partial);
 }
 
+
+
+/*
+ * These functions are like the ones above, except they print the arguments
+ * a target function would be called with instead of actually calling it.
+ */
+
+// With no arguments to print, add the closing parenthesis and return.
+template <typename ABI, typename Ret>
+static void
+dumpArgsFrom(int count, std::ostream &os, ThreadContext *tc,
+             typename ABI::Position &position)
+{
+    os << ")";
+}
+
+// Recursively gather arguments for target from tc until we get to the base
+// case above, and append those arguments to the string stream being
+// constructed.
+template <typename ABI, typename Ret, typename NextArg, typename ...Args>
+static void
+dumpArgsFrom(int count, std::ostream &os, ThreadContext *tc,
+             typename ABI::Position &position)
+{
+    // Either open the parenthesis or add a comma, depending on where we are
+    // in the argument list.
+    os << (count ? ", " : "(");
+
+    // Extract the next argument from the thread context.
+    NextArg next = Argument<ABI, NextArg>::get(tc, position);
+
+    // Add this argument to the list.
+    os << next;
+
+    // Recursively handle any remaining arguments.
+    dumpArgsFrom<ABI, Ret, Args...>(count + 1, os, tc, position);
+}
+
 } // namespace GuestABI
 
 
@@ -175,7 +437,8 @@ invokeSimcall(ThreadContext *tc,
 {
     // Default construct a Position to track consumed resources. Built in
     // types will be zero initialized.
-    auto position = typename ABI::Position();
+    auto position = GuestABI::PositionInitializer<ABI>::init(tc);
+    GuestABI::ResultAllocator<ABI, Ret>::allocate(tc, position);
     return GuestABI::callFrom<ABI, Ret, Args...>(tc, position, target);
 }
 
@@ -194,7 +457,7 @@ invokeSimcall(ThreadContext *tc,
 {
     // Default construct a Position to track consumed resources. Built in
     // types will be zero initialized.
-    auto position = typename ABI::Position();
+    auto position = GuestABI::PositionInitializer<ABI>::init(tc);
     GuestABI::callFrom<ABI, Args...>(tc, position, target);
 }
 
@@ -204,6 +467,35 @@ invokeSimcall(ThreadContext *tc, void (*target)(ThreadContext *, Args...))
 {
     invokeSimcall<ABI>(
             tc, std::function<void(ThreadContext *, Args...)>(target));
+}
+
+
+// These functions also wrap a simulator level function. Instead of running the
+// function, they return a string which shows what arguments the function would
+// be invoked with if it were called from the given context.
+
+template <typename ABI, typename Ret, typename ...Args>
+std::string
+dumpSimcall(std::string name, ThreadContext *tc,
+            std::function<Ret(ThreadContext *, Args...)> target=
+            std::function<Ret(ThreadContext *, Args...)>())
+{
+    auto position = GuestABI::PositionInitializer<ABI>::init(tc);
+    std::ostringstream ss;
+
+    GuestABI::ResultAllocator<ABI, Ret>::allocate(tc, position);
+    ss << name;
+    GuestABI::dumpArgsFrom<ABI, Ret, Args...>(0, ss, tc, position);
+    return ss.str();
+}
+
+template <typename ABI, typename Ret, typename ...Args>
+std::string
+dumpSimcall(std::string name, ThreadContext *tc,
+            Ret (*target)(ThreadContext *, Args...))
+{
+    return dumpSimcall<ABI>(
+            name, tc, std::function<Ret(ThreadContext *, Args...)>(target));
 }
 
 #endif // __SIM_GUEST_ABI_HH__

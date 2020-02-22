@@ -25,10 +25,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Gabe Black
- *          Korey Sewell
- *          Alec Roelke
  */
 
 #ifndef __RISCV_LINUX_PROCESS_HH__
@@ -39,6 +35,7 @@
 #include "arch/riscv/linux/linux.hh"
 #include "arch/riscv/process.hh"
 #include "sim/eventq.hh"
+#include "sim/syscall_desc.hh"
 
 /// A process with emulated Riscv/Linux syscalls.
 class RiscvLinuxProcess64 : public RiscvProcess64
@@ -47,7 +44,7 @@ class RiscvLinuxProcess64 : public RiscvProcess64
     /// Constructor.
     RiscvLinuxProcess64(ProcessParams * params, ObjectFile *objFile);
 
-    virtual SyscallDesc* getDesc(int callnum);
+    SyscallDesc* getDesc(int callnum) override;
 
     /// The target system's hostname.
     static const char *hostname;
@@ -58,7 +55,7 @@ class RiscvLinuxProcess64 : public RiscvProcess64
     void syscall(ThreadContext *tc, Fault *fault) override;
 
     /// Array of syscall descriptors, indexed by call number.
-    static std::map<int, SyscallDesc> syscallDescs;
+    static std::map<int, SyscallDescABI<DefaultSyscallABI>> syscallDescs;
 };
 
 class RiscvLinuxProcess32 : public RiscvProcess32
@@ -67,7 +64,7 @@ class RiscvLinuxProcess32 : public RiscvProcess32
     /// Constructor.
     RiscvLinuxProcess32(ProcessParams * params, ObjectFile *objFile);
 
-    virtual SyscallDesc* getDesc(int callnum);
+    SyscallDesc* getDesc(int callnum) override;
 
     /// The target system's hostname.
     static const char *hostname;
@@ -78,7 +75,7 @@ class RiscvLinuxProcess32 : public RiscvProcess32
     void syscall(ThreadContext *tc, Fault *fault) override;
 
     /// Array of syscall descriptors, indexed by call number.
-    static std::map<int, SyscallDesc> syscallDescs;
+    static std::map<int, SyscallDescABI<DefaultSyscallABI>> syscallDescs;
 };
 
 #endif // __RISCV_LINUX_PROCESS_HH__

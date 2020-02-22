@@ -1,4 +1,4 @@
-# Copyright (c) 2015 ARM Limited
+# Copyright (c) 2015, 2019 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -32,14 +32,13 @@
 # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-# Authors: Andreas Sandberg
 
 from m5.objects import *
 from arm_generic import *
 import checkpoint
 
-root = LinuxArmFSSystemUniprocessor(mem_mode='atomic',
+root = LinuxArmFSSystemUniprocessor(aarch64_kernel=False,
+                                    mem_mode='atomic',
                                     mem_class=SimpleMemory,
                                     cpu_class=AtomicSimpleCPU).create_root()
 

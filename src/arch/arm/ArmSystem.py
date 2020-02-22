@@ -32,9 +32,6 @@
 # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-# Authors: Ali Saidi
-#          Glenn Bergmans
 
 from m5.params import *
 from m5.options import *
@@ -92,10 +89,6 @@ class ArmSystem(System):
 
     semihosting = Param.ArmSemihosting(NULL,
         "Enable support for the Arm semihosting by settings this parameter")
-
-    m5ops_base = Param.Addr(0,
-        "Base of the 64KiB PA range used for memory-mapped m5ops. Set to 0 "
-        "to disable.")
 
     dtb_filename = Param.String("",
         "File that contains the Device Tree Blob. Don't use DTB if empty.")

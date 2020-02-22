@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2012-2019 ARM Limited
+ * Copyright (c) 2010, 2012-2020 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -36,8 +36,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Gabe Black
  */
 
 #ifndef __ARCH_ARM_ISA_HH__
@@ -49,11 +47,12 @@
 #include "arch/arm/system.hh"
 #include "arch/arm/tlb.hh"
 #include "arch/arm/types.hh"
+#include "arch/generic/isa.hh"
 #include "arch/generic/traits.hh"
 #include "debug/Checkpoint.hh"
+#include "enums/DecoderFlavor.hh"
 #include "enums/VecRegRenameMode.hh"
 #include "sim/sim_object.hh"
-#include "enums/DecoderFlavour.hh"
 
 struct ArmISAParams;
 struct DummyArmISADeviceParams;
@@ -63,14 +62,14 @@ class EventManager;
 
 namespace ArmISA
 {
-    class ISA : public SimObject
+    class ISA : public BaseISA
     {
       protected:
         // Parent system
         ArmSystem *system;
 
         // Micro Architecture
-        const Enums::DecoderFlavour _decoderFlavour;
+        const Enums::DecoderFlavor _decoderFlavor;
         const Enums::VecRegRenameMode _vecRegRenameMode;
 
         /** Dummy device for to handle non-existing ISA devices */
@@ -250,11 +249,26 @@ namespace ArmISA
                 privNonSecureRead(v);
                 return *this;
             }
+            chain hypE2HRead(bool v = true) const {
+                info[MISCREG_HYP_E2H_RD] = v;
+                return *this;
+            }
+            chain hypE2HWrite(bool v = true) const {
+                info[MISCREG_HYP_E2H_WR] = v;
+                return *this;
+            }
+            chain hypE2H(bool v = true) const {
+                hypE2HRead(v);
+                hypE2HWrite(v);
+                return *this;
+            }
             chain hypRead(bool v = true) const {
+                hypE2HRead(v);
                 info[MISCREG_HYP_RD] = v;
                 return *this;
             }
             chain hypWrite(bool v = true) const {
+                hypE2HWrite(v);
                 info[MISCREG_HYP_WR] = v;
                 return *this;
             }
@@ -263,19 +277,36 @@ namespace ArmISA
                 hypWrite(v);
                 return *this;
             }
+            chain monE2HRead(bool v = true) const {
+                info[MISCREG_MON_E2H_RD] = v;
+                return *this;
+            }
+            chain monE2HWrite(bool v = true) const {
+                info[MISCREG_MON_E2H_WR] = v;
+                return *this;
+            }
+            chain monE2H(bool v = true) const {
+                monE2HRead(v);
+                monE2HWrite(v);
+                return *this;
+            }
             chain monSecureRead(bool v = true) const {
+                monE2HRead(v);
                 info[MISCREG_MON_NS0_RD] = v;
                 return *this;
             }
             chain monSecureWrite(bool v = true) const {
+                monE2HWrite(v);
                 info[MISCREG_MON_NS0_WR] = v;
                 return *this;
             }
             chain monNonSecureRead(bool v = true) const {
+                monE2HRead(v);
                 info[MISCREG_MON_NS1_RD] = v;
                 return *this;
             }
             chain monNonSecureWrite(bool v = true) const {
+                monE2HWrite(v);
                 info[MISCREG_MON_NS1_WR] = v;
                 return *this;
             }
@@ -357,6 +388,7 @@ namespace ArmISA
                 user(0);
                 return *this;
             }
+            chain highest(ArmSystem *const sys) const;
             MiscRegLUTEntryInitializer(struct MiscRegLUTEntry &e,
                                        std::bitset<NUM_MISCREG_INFOS> &i)
               : entry(e),
@@ -431,9 +463,10 @@ namespace ArmISA
         }
 
       public:
-        void clear();
+        void clear(ThreadContext *tc);
 
       protected:
+        void clear();
         void clear32(const ArmISAParams *p, const SCTLR &sctlr_rst);
         void clear64(const ArmISAParams *p);
         void initID32(const ArmISAParams *p);
@@ -711,7 +744,7 @@ namespace ArmISA
 
         void startup(ThreadContext *tc);
 
-        Enums::DecoderFlavour decoderFlavour() const { return _decoderFlavour; }
+        Enums::DecoderFlavor decoderFlavor() const { return _decoderFlavor; }
 
         /** Getter for haveGICv3CPUInterface */
         bool haveGICv3CpuIfc() const
@@ -730,7 +763,7 @@ namespace ArmISA
         }
 
         /// Explicitly import the otherwise hidden startup
-        using SimObject::startup;
+        using BaseISA::startup;
 
         typedef ArmISAParams Params;
 
@@ -744,9 +777,11 @@ template<>
 struct RenameMode<ArmISA::ISA>
 {
     static Enums::VecRegRenameMode
-    init(const ArmISA::ISA* isa)
+    init(const BaseISA* isa)
     {
-        return isa->vecRegRenameMode();
+        auto arm_isa = dynamic_cast<const ArmISA::ISA *>(isa);
+        assert(arm_isa);
+        return arm_isa->vecRegRenameMode();
     }
 
     static Enums::VecRegRenameMode
@@ -760,7 +795,7 @@ struct RenameMode<ArmISA::ISA>
     }
 
     static bool
-    equalsInit(const ArmISA::ISA* isa1, const ArmISA::ISA* isa2)
+    equalsInit(const BaseISA* isa1, const BaseISA* isa2)
     {
         return init(isa1) == init(isa2);
     }

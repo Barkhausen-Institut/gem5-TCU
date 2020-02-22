@@ -25,8 +25,6 @@
 # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-# Authors: Nathan Binkert
 
 Import('*')
 
@@ -37,7 +35,6 @@ if env['BUILD_GPU']:
     SimObject('GPUCoalescer.py')
 SimObject('RubySystem.py')
 SimObject('Sequencer.py')
-SimObject('WeightedLRUReplacementPolicy.py')
 if env['BUILD_GPU']:
     SimObject('VIPERCoalescer.py')
 
@@ -51,4 +48,3 @@ Source('RubySystem.cc')
 Source('Sequencer.cc')
 if env['BUILD_GPU']:
     Source('VIPERCoalescer.cc')
-Source('WeightedLRUPolicy.cc')

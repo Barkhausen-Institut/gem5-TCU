@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2016, 2019 ARM Limited
+# Copyright (c) 2015-2016, 2019-2020 ARM Limited
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -23,8 +23,6 @@
 # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-# Authors: Andreas Sandberg
 
 CPP?=cpp
 DTC?=dtc
@@ -43,7 +41,9 @@ TARGET_PREFIX=\
 TARGETS=\
 	$(foreach prefix, $(TARGET_PREFIX), $(call CREATE_TARGET, $(prefix))) \
 	armv8_gem5_v1_big_little_2_2.dtb \
-	armv8_gem5_v1_big_little_2_4.dtb
+	armv8_gem5_v1_big_little_2_4.dtb \
+	armv8_gem5_v2_big_little_2_2.dtb \
+	armv8_gem5_v2_big_little_2_4.dtb
 
 VEXPRESS_GEM5_V1_DTSIS=\
 	platforms/vexpress_gem5_v1.dtsi \
@@ -74,6 +74,10 @@ all: $(TARGETS)
 .gen/armv8_gem5_v1_big_little%.dts: armv8_big_little.dts \
 	$(VEXPRESS_GEM5_V1_DTSIS)
 	$(call GEN_DTS,vexpress_gem5_v1.dtsi,$*)
+
+.gen/armv8_gem5_v2_big_little%.dts: armv8_big_little.dts \
+	$(VEXPRESS_GEM5_V2_DTSIS)
+	$(call GEN_DTS,vexpress_gem5_v2.dtsi,$*)
 
 %.dtb: .gen/%.dts
 	$(DTC) -I dts -O dtb -o $@ $<

@@ -25,8 +25,6 @@
 # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-# Authors: Daniel Carvalho
 
 # If your commit has been canceled because of this file, do not panic: a
 # copy of it has been stored in ./.git/COMMIT_EDITMSG
@@ -45,10 +43,19 @@ def _printErrorQuit(error_message):
             failure.
     """
     print(error_message)
-    print("""
-The commit has been canceled, but a copy of it can be found in
-.git/COMMIT_EDITMSG
 
+    print("The commit has been cancelled, but a copy of it can be found in "
+            + sys.argv[1] + " : ")
+
+    print("""
+--------------------------------------------------------------------------
+    """)
+    print(open(sys.argv[1], "r").read())
+    print("""
+--------------------------------------------------------------------------
+    """)
+
+    print("""
 The first line of a commit must contain one or more gem5 tags separated by
 commas (see MAINTAINERS for the possible tags), followed by a colon and a
 commit title. There must be no leading nor trailing whitespaces.
@@ -67,7 +74,6 @@ e.g.:
 
     The packet class...
 """)
-    print("A copy of your commit message can be found in " + sys.argv[1])
     sys.exit(1)
 
 def _validateTags(commit_header):
@@ -81,12 +87,13 @@ def _validateTags(commit_header):
     # List of valid tags
     # @todo this is error prone, and should be extracted automatically from
     #       a file
+
     valid_tags = ["arch", "arch-alpha", "arch-arm", "arch-hsail", "arch-mips",
         "arch-power", "arch-riscv", "arch-sparc", "arch-x86", "base",
         "configs", "cpu", "cpu-kvm", "cpu-minor", "cpu-o3", "cpu-simple",
-        "dev", "dev-arm", "dev-virtio", "ext", "gpu-compute", "learning-gem5",
-        "mem", "mem-cache", "mem-garnet", "mem-ruby", "misc", "python",
-        "scons", "sim", "sim-se", "sim-power", "stats", "system",
+        "dev", "dev-arm", "dev-virtio", "ext", "fastmodel", "gpu-compute",
+        "learning-gem5", "mem", "mem-cache", "mem-garnet", "mem-ruby", "misc",
+        "python", "scons", "sim", "sim-se", "sim-power", "stats", "system",
         "system-alpha", "system-arm", "systemc", "tests", "util", "RFC", "WIP"]
 
     tags = ''.join(commit_header.split(':')[0].split()).split(',')

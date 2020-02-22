@@ -34,9 +34,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Nikos Nikoleris
- *          Bobby R. Bruce
  */
 
 #include <gtest/gtest.h>
@@ -258,6 +255,30 @@ TEST(AddrRangeTest, isSubsetPartialSubset)
     AddrRange r2(0x26, 0xF0);
 
     EXPECT_FALSE(r1.isSubset(r2));
+    EXPECT_FALSE(r2.isSubset(r1));
+}
+
+TEST(AddrRangeTest, isSubsetInterleavedCompleteOverlap)
+{
+    AddrRange r1(0x00, 0x100, {0x40}, 0);
+    AddrRange r2(0x00, 0x40);
+
+    EXPECT_TRUE(r2.isSubset(r1));
+}
+
+TEST(AddrRangeTest, isSubsetInterleavedNoOverlap)
+{
+    AddrRange r1(0x00, 0x100, {0x40}, 1);
+    AddrRange r2(0x00, 0x40);
+
+    EXPECT_FALSE(r2.isSubset(r1));
+}
+
+TEST(AddrRangeTest, isSubsetInterleavedPartialOverlap)
+{
+    AddrRange r1(0x00, 0x100, {0x40}, 0);
+    AddrRange r2(0x10, 0x50);
+
     EXPECT_FALSE(r2.isSubset(r1));
 }
 

@@ -36,10 +36,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Ron Dreslinski
- *          Andreas Hansson
- *          William Wang
  */
 
 /**
@@ -92,12 +88,12 @@ class Port
      */
     Port(const std::string& _name, PortID _id);
 
+  public:
+
     /**
      * Virtual destructor due to inheritance.
      */
     virtual ~Port();
-
-  public:
 
     /** Return a reference to this port's peer. */
     Port &getPeer() { return *_peer; }

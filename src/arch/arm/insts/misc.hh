@@ -33,8 +33,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Gabe Black
  */
 
 #ifndef __ARCH_ARM_INSTS_MISC_HH__
@@ -173,6 +171,20 @@ class RegRegOp : public PredOp
     RegRegOp(const char *mnem, ExtMachInst _machInst, OpClass __opClass,
              IntRegIndex _dest, IntRegIndex _op1) :
         PredOp(mnem, _machInst, __opClass), dest(_dest), op1(_op1)
+    {}
+
+    std::string generateDisassembly(
+            Addr pc, const SymbolTable *symtab) const override;
+};
+
+class RegOp : public PredOp
+{
+  protected:
+    IntRegIndex dest;
+
+    RegOp(const char *mnem, ExtMachInst _machInst, OpClass __opClass,
+             IntRegIndex _dest) :
+        PredOp(mnem, _machInst, __opClass), dest(_dest)
     {}
 
     std::string generateDisassembly(

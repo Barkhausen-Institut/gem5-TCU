@@ -33,8 +33,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Gabe Black
  */
 
 #ifndef __X86_LINUX_PROCESS_HH__
@@ -56,7 +54,7 @@ class X86_64LinuxProcess : public X86_64Process
     X86_64LinuxProcess(ProcessParams * params, ObjectFile *objFile);
     void syscall(ThreadContext *tc, Fault *fault) override;
     void clone(ThreadContext *old_tc, ThreadContext *new_tc, Process *process,
-               RegVal flags);
+               RegVal flags) override;
 };
 
 class I386LinuxProcess : public I386Process
@@ -66,7 +64,7 @@ class I386LinuxProcess : public I386Process
     I386LinuxProcess(ProcessParams * params, ObjectFile *objFile);
     void syscall(ThreadContext *tc, Fault *fault) override;
     void clone(ThreadContext *old_tc, ThreadContext *new_tc, Process *process,
-               RegVal flags);
+               RegVal flags) override;
 };
 
 } // namespace X86ISA

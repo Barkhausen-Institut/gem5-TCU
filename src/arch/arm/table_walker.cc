@@ -33,9 +33,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Ali Saidi
- *          Giacomo Gabrielli
  */
 #include "arch/arm/table_walker.hh"
 
@@ -261,7 +258,8 @@ TableWalker::walk(const RequestPtr &_req, ThreadContext *_tc, uint16_t _asid,
     currState->vaddr_tainted = currState->req->getVaddr();
     if (currState->aarch64)
         currState->vaddr = purifyTaggedAddr(currState->vaddr_tainted,
-                                            currState->tc, currState->el);
+                                            currState->tc, currState->el,
+                                            currState->mode==TLB::Execute);
     else
         currState->vaddr = currState->vaddr_tainted;
 

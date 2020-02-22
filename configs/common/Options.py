@@ -35,8 +35,6 @@
 # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-# Authors: Lisa Hsu
 
 from __future__ import print_function
 from __future__ import absolute_import
@@ -183,8 +181,7 @@ def addCommonOptions(parser):
                       type of branch predictor to run with
                       (if not set, use the default branch predictor of
                       the selected CPU)""")
-    parser.add_option("--indirect-bp-type", type="choice",
-                      default="SimpleIndirectPredictor",
+    parser.add_option("--indirect-bp-type", type="choice", default=None,
                       choices=ObjectList.indirect_bp_list.get_names(),
                       help = "type of indirect branch predictor to run with")
     parser.add_option("--list-hwp-types",
@@ -435,7 +432,7 @@ def addFSOptions(parser):
                       help="List available platform types")
         parser.add_option("--machine-type", action="store", type="choice",
                 choices=ObjectList.platform_list.get_names(),
-                default="VExpress_EMM")
+                default="VExpress_GEM5_V1")
         parser.add_option("--dtb-filename", action="store", type="string",
               help="Specifies device tree blob file to use with device-tree-"\
               "enabled kernels")
@@ -445,6 +442,8 @@ def addFSOptions(parser):
                 action="store_true", help="Enable stats dump at context "\
                 "switches and dump tasks file (required for Streamline)")
         parser.add_option("--vio-9p", action="store_true", help=vio_9p_help)
+        parser.add_option("--bootloader", action='append',
+                help="executable file that runs before the --kernel")
 
     # Benchmark options
     parser.add_option("--dual", action="store_true",
@@ -460,10 +459,10 @@ def addFSOptions(parser):
                       "ethernet traffic")
 
     # Disk Image Options
-    parser.add_option("--disk-image", action="store", type="string", default=None,
-                      help="Path to the disk image to use.")
-    parser.add_option("--root-device", action="store", type="string", default=None,
-                      help="OS device name for root partition")
+    parser.add_option("--disk-image", action="append", type="string",
+            default=[], help="Path to the disk images to use.")
+    parser.add_option("--root-device", action="store", type="string",
+            default=None, help="OS device name for root partition")
 
     # Command line options
     parser.add_option("--command-line", action="store", type="string",

@@ -24,8 +24,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Javier Bueno
  */
 
  /**
@@ -86,12 +84,16 @@ class STeMSPrefetcher : public QueuedPrefetcher
         /** Sequence of accesses */
         std::vector<SequenceEntry> sequence;
 
-        ActiveGenerationTableEntry(int num_positions) : paddress(0), pc(0),
+        ActiveGenerationTableEntry(int num_positions)
+          : TaggedEntry(), paddress(0), pc(0),
             seqCounter(0), sequence(num_positions)
-        {}
-
-        void reset() override
         {
+        }
+
+        void
+        invalidate() override
+        {
+            TaggedEntry::invalidate();
             paddress = 0;
             pc = 0;
             seqCounter = 0;

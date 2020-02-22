@@ -23,15 +23,14 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Gabe Black
  */
 
 #ifndef __ARCH_ARM_FASTMODEL_CORTEXA76_CORETEX_A76_HH__
 #define __ARCH_ARM_FASTMODEL_CORTEXA76_CORETEX_A76_HH__
 
+#include "arch/arm/fastmodel/CortexA76/thread_context.hh"
 #include "arch/arm/fastmodel/amba_ports.hh"
-#include "arch/arm/fastmodel/arm/cpu.hh"
+#include "arch/arm/fastmodel/iris/cpu.hh"
 #include "params/FastModelCortexA76.hh"
 #include "params/FastModelCortexA76Cluster.hh"
 #include "scx/scx.h"
@@ -50,10 +49,11 @@ namespace FastModel
 // the work.
 class CortexA76Cluster;
 
-class CortexA76 : public ArmCPU
+class CortexA76 : public Iris::CPU<CortexA76TC>
 {
   protected:
     typedef FastModelCortexA76Params Params;
+    typedef Iris::CPU<CortexA76TC> Base;
     const Params &_params;
 
     CortexA76Cluster *cluster = nullptr;
@@ -62,7 +62,24 @@ class CortexA76 : public ArmCPU
     const Params &params() { return _params; }
 
   public:
-    CortexA76(Params &p) : ArmCPU(&p), _params(p) {}
+    CortexA76(Params &p) : Base(&p, scx::scx_get_iris_connection_interface()),
+        _params(p)
+    {}
+
+    void
+    clockPeriodUpdated() override
+    {
+        Base::clockPeriodUpdated();
+
+        // FIXME(b/139447397): this is a workaround since CNTFRQ_EL0 should not
+        // be modified after clock is changed in real hardwares. Remove or
+        // modify this after a more reasonable solution is found.
+        for (auto *tc : threadContexts) {
+            tc->setMiscRegNoEffect(ArmISA::MISCREG_CNTFRQ_EL0, frequency());
+        }
+    }
+
+    void initState() override;
 
     template <class T>
     void set_evs_param(const std::string &n, T val);

@@ -38,11 +38,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Andreas Hansson
- *          Sven Karlsson
- *          Alec Roelke
- *          Robert Scheffel
  */
 
 #ifndef __ARCH_RISCV_UTILITY_HH__
@@ -117,11 +112,6 @@ getArgument(ThreadContext *tc, int &number, uint16_t size, bool fp)
     return 0;
 }
 
-inline void startupCPU(ThreadContext *tc, int cpuId)
-{
-    tc->activate();
-}
-
 inline void
 copyRegs(ThreadContext *src, ThreadContext *dest)
 {
@@ -185,11 +175,6 @@ getExecutingAsid(ThreadContext *tc)
 {
     return 0;
 }
-
-/**
- * init Cpu function
- */
-void initCPU(ThreadContext *tc, int cpuId);
 
 } // namespace RiscvISA
 

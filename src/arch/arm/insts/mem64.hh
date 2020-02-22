@@ -33,9 +33,8 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Gabe Black
  */
+
 #ifndef __ARCH_ARM_MEM64_HH__
 #define __ARCH_ARM_MEM64_HH__
 
@@ -262,73 +261,6 @@ class MemoryLiteral64 : public Memory64
 
     std::string generateDisassembly(
             Addr pc, const SymbolTable *symtab) const override;
-};
-
-/**
- * A generic atomic op class
- */
-
-template<typename T>
-class AtomicGeneric2Op : public TypedAtomicOpFunctor<T>
-{
-  public:
-    AtomicGeneric2Op(T _a, std::function<void(T*,T)> _op)
-        : a(_a), op(_op)
-    {}
-    AtomicOpFunctor* clone() override
-    {
-        return new AtomicGeneric2Op<T>(*this);
-    }
-    void execute(T *b) override
-    {
-        op(b, a);
-    }
-  private:
-    T a;
-    std::function<void(T*,T)> op;
- };
-
-template<typename T>
-class AtomicGeneric3Op : public TypedAtomicOpFunctor<T>
-{
-  public:
-    AtomicGeneric3Op(T _a, T _c, std::function<void(T*, T, T)> _op)
-        : a(_a), c(_c), op(_op)
-    {}
-    AtomicOpFunctor* clone() override
-    {
-        return new AtomicGeneric3Op<T>(*this);
-    }
-    void execute(T *b) override
-    {
-        op(b, a, c);
-    }
-  private:
-    T a;
-    T c;
-    std::function<void(T*, T, T)> op;
-};
-
-template<typename T>
-class AtomicGenericPair3Op : public TypedAtomicOpFunctor<T>
-{
-  public:
-    AtomicGenericPair3Op(std::array<T, 2>& _a, std::array<T, 2> _c,
-           std::function<void(T*, std::array<T, 2>&, std::array<T, 2>)> _op)
-        : a(_a), c(_c), op(_op)
-    {}
-    AtomicOpFunctor* clone() override
-    {
-        return new AtomicGenericPair3Op<T>(*this);
-    }
-    void execute(T* b) override
-    {
-        op(b, a, c);
-    }
-  private:
-    std::array<T, 2> a;
-    std::array<T, 2> c;
-    std::function<void(T*, std::array<T, 2>&, std::array<T, 2>)> op;
 };
 
 }

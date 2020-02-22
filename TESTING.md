@@ -1,6 +1,3 @@
-:Authors: Jason Lowe-Power
-          Sean Wilson
-
 This file explains how to use gem5's updated testing infrastructure. Running
 tests before submitting a patch is *incredibly important* so unexpected bugs
 don't creep into gem5.
@@ -197,15 +194,22 @@ if the file causes an exception. This means there are no tests in that file
 
 ## Binary test applications
 
-The code for test binaries that are run in the gem5 guest during testing are
-found in `tests/test-progs`.
+The code for some test binaries that are run in the gem5 guest during
+testing can be found in `tests/test-progs`.
 There's one directory per test application.
 The source code is under the `source` directory.
 
 You may have a `bin` directory as well.
 The `bin` directory is automatically created when running the test case that
-uses the test binary. The binary is downloaded from the gem5 servers the first
+uses the test binary.
+This is not the case when a test is run via the --bin-path option.
+In that scenario a bin directory will be created in the selected path
+rather than in `tests/test-progs`.
+The binary is downloaded from the gem5 servers the first
 time it is referenced by a test.
+
+Some other tests (like Linux-boot) don't have sources inside gem5 and
+are simply downloaded from gem5 servers.
 
 ## Updating the test binaries
 

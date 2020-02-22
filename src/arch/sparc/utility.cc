@@ -24,9 +24,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Gabe Black
- *          Ali Saidi
  */
 
 #include "arch/sparc/utility.hh"
@@ -251,15 +248,6 @@ skipFunction(ThreadContext *tc)
     PCState newPC = tc->pcState();
     newPC.set(tc->readIntReg(ReturnAddressReg));
     tc->pcState(newPC);
-}
-
-
-void
-initCPU(ThreadContext *tc, int cpuId)
-{
-    static Fault por = std::make_shared<PowerOnReset>();
-    if (cpuId == 0)
-        por->invoke(tc);
 }
 
 } // namespace SPARC_ISA

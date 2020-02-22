@@ -38,10 +38,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Kevin Lim
- *          Korey Sewell
- *          Rick Strong
  */
 
 #include "cpu/o3/cpu.hh"
@@ -67,12 +63,6 @@
 #include "sim/process.hh"
 #include "sim/stat_control.hh"
 #include "sim/system.hh"
-
-#if THE_ISA == ALPHA_ISA
-#include "arch/alpha/osfpal.hh"
-#include "debug/Activity.hh"
-
-#endif
 
 struct BaseCPUParams;
 
@@ -220,21 +210,19 @@ FullO3CPU<Impl>::FullO3CPU(DerivO3CPUParams *params)
 
     // Setup the rename map for whichever stages need it.
     for (ThreadID tid = 0; tid < numThreads; tid++) {
-        isa[tid] = params->isa[tid];
+        isa[tid] = dynamic_cast<TheISA::ISA *>(params->isa[tid]);
+        assert(isa[tid]);
         assert(RenameMode<TheISA::ISA>::equalsInit(isa[tid], isa[0]));
 
         // Only Alpha has an FP zero register, so for other ISAs we
         // use an invalid FP register index to avoid special treatment
         // of any valid FP reg.
         RegIndex invalidFPReg = TheISA::NumFloatRegs + 1;
-        RegIndex fpZeroReg =
-            (THE_ISA == ALPHA_ISA) ? TheISA::ZeroReg : invalidFPReg;
 
-        commitRenameMap[tid].init(&regFile, TheISA::ZeroReg, fpZeroReg,
-                                  &freeList,
-                                  vecMode);
+        commitRenameMap[tid].init(&regFile, TheISA::ZeroReg, invalidFPReg,
+                                  &freeList, vecMode);
 
-        renameMap[tid].init(&regFile, TheISA::ZeroReg, fpZeroReg,
+        renameMap[tid].init(&regFile, TheISA::ZeroReg, invalidFPReg,
                             &freeList, vecMode);
     }
 
@@ -597,13 +585,6 @@ FullO3CPU<Impl>::init()
         thread[tid]->noSquashFromTC = true;
         // Initialise the ThreadContext's memory proxies
         thread[tid]->initMemProxies(thread[tid]->getTC());
-    }
-
-    if (FullSystem && !params()->switched_out) {
-        for (ThreadID tid = 0; tid < numThreads; tid++) {
-            ThreadContext *src_tc = threadContexts[tid];
-            TheISA::initCPU(src_tc, src_tc->contextId());
-        }
     }
 
     // Clear noSquashFromTC.

@@ -33,8 +33,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Andrew Bardsley
  */
 
 #include "cpu/minor/lsq.hh"
@@ -142,9 +140,17 @@ LSQ::LSQRequest::containsAddrRangeOf(
 LSQ::AddrRangeCoverage
 LSQ::LSQRequest::containsAddrRangeOf(LSQRequestPtr other_request)
 {
-    return containsAddrRangeOf(request->getPaddr(), request->getSize(),
+    AddrRangeCoverage ret = containsAddrRangeOf(
+        request->getPaddr(), request->getSize(),
         other_request->request->getPaddr(), other_request->request->getSize());
+    /* If there is a strobe mask then store data forwarding might not be
+     * correct. Instead of checking enablemant of every byte we just fall back
+     * to PartialAddrRangeCoverage to prohibit store data forwarding */
+    if (ret == FullAddrRangeCoverage && request->isMasked())
+        ret = PartialAddrRangeCoverage;
+    return ret;
 }
+
 
 bool
 LSQ::LSQRequest::isBarrier()

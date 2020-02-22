@@ -24,12 +24,11 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Ali Saidi
  */
 
 #include "arch/sparc/system.hh"
 
+#include "arch/sparc/faults.hh"
 #include "arch/vtophys.hh"
 #include "base/loader/object_file.hh"
 #include "base/loader/symtab.hh"
@@ -154,6 +153,14 @@ SparcSystem::initState()
 
     // @todo any fixup code over writing data in binaries on setting break
     // events on functions should happen here.
+
+    if (threadContexts.empty())
+        return;
+
+    // Other CPUs will get activated by IPIs.
+    auto *tc = threadContexts[0];
+    SparcISA::PowerOnReset().invoke(tc);
+    tc->activate();
 }
 
 SparcSystem::~SparcSystem()

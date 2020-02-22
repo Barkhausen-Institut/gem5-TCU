@@ -32,8 +32,6 @@
 # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-# Authors: Gabe Black
 
 from m5.params import *
 from m5.proxy import *
@@ -55,5 +53,6 @@ class X86TLB(BaseTLB):
     cxx_class = 'X86ISA::TLB'
     cxx_header = 'arch/x86/tlb.hh'
     size = Param.Unsigned(64, "TLB size")
+    system = Param.System(Parent.any, "system object")
     walker = Param.X86PagetableWalker(\
             X86PagetableWalker(), "page table walker")

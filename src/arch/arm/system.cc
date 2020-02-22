@@ -36,14 +36,13 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Ali Saidi
  */
 
 #include "arch/arm/system.hh"
 
 #include <iostream>
 
+#include "arch/arm/faults.hh"
 #include "arch/arm/semihosting.hh"
 #include "base/loader/object_file.hh"
 #include "base/loader/symtab.hh"
@@ -75,9 +74,6 @@ ArmSystem::ArmSystem(Params *p)
       _sveVL(p->sve_vl),
       _haveLSE(p->have_lse),
       _havePAN(p->have_pan),
-      _m5opRange(p->m5ops_base ?
-                 RangeSize(p->m5ops_base, 0x10000) :
-                 AddrRange(1, 0)), // Create an empty range if disabled
       semihosting(p->semihosting),
       multiProc(p->multi_proc)
 {
@@ -138,6 +134,15 @@ ArmSystem::initState()
 
     // Call the initialisation of the super class
     System::initState();
+
+    // Reset CP15?? What does that mean -- ali
+
+    // FPEXC.EN = 0
+
+    for (auto *tc: threadContexts) {
+        Reset().invoke(tc);
+        tc->activate();
+    }
 
     const Params* p = params();
 

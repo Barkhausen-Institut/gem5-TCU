@@ -36,8 +36,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Jairo Balart
  */
 
 #include "dev/arm/gic_v3_redistributor.hh"
@@ -579,6 +577,9 @@ Gicv3Redistributor::write(Addr addr, uint64_t data, size_t size,
 
         break;
 
+      case GICR_ICFGR0: // SGI Configuration Register
+        // WI
+        return;
       case GICR_ICFGR1: { // PPI Configuration Register
           int first_intid = Gicv3::SGI_MAX;
 

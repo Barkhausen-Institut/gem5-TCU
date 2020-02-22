@@ -23,8 +23,6 @@
 # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-# Authors: Daniel Carvalho
 
 from m5.params import *
 from m5.proxy import *
@@ -96,3 +94,8 @@ class TreePLRURP(BaseReplacementPolicy):
     cxx_class = 'TreePLRURP'
     cxx_header = "mem/cache/replacement_policies/tree_plru_rp.hh"
     num_leaves = Param.Int(Parent.assoc, "Number of leaves in each tree")
+
+class WeightedLRURP(BaseReplacementPolicy):
+    type = "WeightedLRURP"
+    cxx_class = "WeightedLRUPolicy"
+    cxx_header = "mem/cache/replacement_policies/weighted_lru_rp.hh"

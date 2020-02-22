@@ -37,10 +37,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Steve Reinhardt
- *          Kevin Lim
- *          Brandon Potter
  */
 
 #ifndef __SIM_SYSCALL_DESC_HH__
@@ -50,12 +46,12 @@
 #include <string>
 
 #include "base/types.hh"
+#include "cpu/thread_context.hh"
 #include "sim/guest_abi.hh"
+#include "sim/process.hh"
 #include "sim/syscall_return.hh"
 
-class Process;
 class SyscallDesc;
-class ThreadContext;
 
 SyscallReturn unimplementedFunc(SyscallDesc *desc, int num,
                                 ThreadContext *tc);
@@ -153,5 +149,51 @@ class SyscallDescABI : public SyscallDesc
 
     using SyscallDesc::SyscallDesc;
 };
+
+struct DefaultSyscallABI
+{
+    using Position = int;
+};
+
+namespace GuestABI
+{
+
+template <>
+struct Result<DefaultSyscallABI, SyscallReturn>
+{
+    static void
+    store(ThreadContext *tc, const SyscallReturn &ret)
+    {
+        auto *process = tc->getProcessPtr();
+        process->setSyscallReturn(tc, ret);
+    }
+};
+
+template <typename Arg>
+struct Argument<DefaultSyscallABI, Arg,
+    typename std::enable_if<std::is_integral<Arg>::value>::type>
+{
+    static Arg
+    get(ThreadContext *tc, DefaultSyscallABI::Position &position)
+    {
+        auto *process = tc->getProcessPtr();
+        return process->getSyscallArg(tc, position);
+    }
+};
+
+template <typename Arg>
+struct Argument<DefaultSyscallABI, Arg,
+    typename std::enable_if<std::is_pointer<Arg>::value>::type>
+{
+    static Arg
+    get(ThreadContext *tc, DefaultSyscallABI::Position &position)
+    {
+        auto *process = tc->getProcessPtr();
+        RegVal reg = process->getSyscallArg(tc, position);
+        return (Arg)(uintptr_t)(reg);
+    }
+};
+
+} // namespace GuestABI
 
 #endif // __SIM_SYSCALL_DESC_HH__

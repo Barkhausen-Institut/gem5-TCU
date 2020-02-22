@@ -37,11 +37,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Ali Saidi
- *          Gabe Black
- *          Giacomo Gabrielli
- *          Thomas Grocutt
  */
 
 #ifndef __ARM_FAULTS_HH__
@@ -571,6 +566,7 @@ class SPAlignmentFault : public ArmFaultVals<SPAlignmentFault>
 {
   public:
     SPAlignmentFault();
+    bool routeToHyp(ThreadContext *tc) const override;
 };
 
 /// System error (AArch64 only)

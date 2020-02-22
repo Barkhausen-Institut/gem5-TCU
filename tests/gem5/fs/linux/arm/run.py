@@ -1,4 +1,4 @@
-# Copyright (c) 2012, 2019 ARM Limited
+# Copyright (c) 2012, 2019-2020 ARM Limited
 # All rights reserved
 #
 # The license below extends only to copyright in the software and shall
@@ -35,9 +35,6 @@
 # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-# Authors: Steve Reinhardt
-#          Nikos Nikoleris
 
 from __future__ import print_function
 
@@ -59,7 +56,7 @@ def run_test(root):
     print('Exiting @ tick', m5.curTick(), 'because', exit_event.getCause())
 
 config = sys.argv[1]
-os.environ['M5_PATH'] = os.path.dirname(__file__)
+os.environ['M5_PATH'] = sys.argv[2]
 
 # path setup
 gem5_root = joinpath(os.path.dirname(__file__), '..', '..', '..', '..', '..')

@@ -37,10 +37,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Ron Dreslinski
- *          Steve Reinhardt
- *          Ali Saidi
  */
 
 /**
@@ -55,6 +51,7 @@
 #include <cassert>
 #include <climits>
 
+#include "base/amo.hh"
 #include "base/flags.hh"
 #include "base/logging.hh"
 #include "base/types.hh"
@@ -170,12 +167,6 @@ class Request
           * launch or completion.
           */
         KERNEL                      = 0x00001000,
-
-        /**
-         * The request should be handled by the generic IPR code (only
-         * valid together with MMAPPED_IPR)
-         */
-        GENERIC_IPR                 = 0x08000000,
 
         /** The request targets the secure memory space. */
         SECURE                      = 0x10000000,

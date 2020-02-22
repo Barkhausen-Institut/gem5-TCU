@@ -36,8 +36,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Stephen Hines
  */
 
 #ifndef __ARCH_ARM_TYPES_HH__
@@ -620,6 +618,7 @@ namespace ArmISA
         EC_TRAPPED_HCPTR           = 0x7,
         EC_TRAPPED_SIMD_FP         = 0x7,   // AArch64 alias
         EC_TRAPPED_CP10_MRC_VMRS   = 0x8,
+        EC_TRAPPED_PAC             = 0x9,
         EC_TRAPPED_BXJ             = 0xA,
         EC_TRAPPED_CP14_MCRR_MRRC  = 0xC,
         EC_ILLEGAL_INST            = 0xE,

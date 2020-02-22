@@ -36,9 +36,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Steve Reinhardt
- *          Ali Saidi
  */
 
 #include "base/loader/elf_object.hh"
@@ -199,11 +196,6 @@ ElfObject::determineArch()
         fatal("The binary you're trying to load is compiled for 64-bit "
               "Power. M5\n only supports 32-bit Power. Please "
               "recompile your binary.\n");
-    } else if (eclass == ELFCLASS64) {
-        // Since we don't know how to check for alpha right now, we'll
-        // just assume if it wasn't something else and it's 64 bit, that's
-        // what it must be.
-        arch = Alpha;
     } else {
         warn("Unknown architecture: %d\n", emach);
     }

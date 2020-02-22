@@ -24,8 +24,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Javier Bueno
  */
 
  /**
@@ -89,12 +87,15 @@ class AccessMapPatternMatching : public ClockedObject
         /** vector containing the state of the cachelines in this zone */
         std::vector<AccessMapState> states;
 
-        AccessMapEntry(size_t num_entries) : states(num_entries, AM_INIT)
-        {}
-
-        /** Reset the entries to their initial values */
-        void reset() override
+        AccessMapEntry(size_t num_entries)
+          : TaggedEntry(), states(num_entries, AM_INIT)
         {
+        }
+
+        void
+        invalidate() override
+        {
+            TaggedEntry::invalidate();
             for (auto &entry : states) {
                 entry = AM_INIT;
             }

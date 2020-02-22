@@ -36,12 +36,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Erik Hallnor
- *          Steve Reinhardt
- *          Ron Dreslinski
- *          Andreas Hansson
- *          Nikos Nikoleris
  */
 
 /**
@@ -708,6 +702,18 @@ class BaseCache : public ClockedObject
      * @param blk The block that should potentially be dropped
      */
     void maintainClusivity(bool from_cache, CacheBlk *blk);
+
+    /**
+     * Try to evict the given blocks. If any of them is a transient eviction,
+     * that is, the block is present in the MSHR queue all evictions are
+     * cancelled since handling such cases has not been implemented.
+     *
+     * @param evict_blks Blocks marked for eviction.
+     * @param writebacks List for any writebacks that need to be performed.
+     * @return False if any of the evicted blocks is in transient state.
+     */
+    bool handleEvictions(std::vector<CacheBlk*> &evict_blks,
+        PacketList &writebacks);
 
     /**
      * Handle a fill operation caused by a received packet.

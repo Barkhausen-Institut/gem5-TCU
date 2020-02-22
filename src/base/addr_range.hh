@@ -36,10 +36,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Nathan Binkert
- *          Steve Reinhardt
- *          Andreas Hansson
  */
 
 #ifndef __BASE_ADDR_RANGE_HH__
@@ -390,7 +386,7 @@ class AddrRange
         // whether it would fit in a continuous segment of the input
         // addr range.
         if (r.interleaved()) {
-            return r.contains(_start) && r.contains(_end) &&
+            return r.contains(_start) && r.contains(_end - 1) &&
                 size() <= r.granularity();
         } else {
             return _start >= r._start && _end <= r._end;

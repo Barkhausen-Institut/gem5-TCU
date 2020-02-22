@@ -24,8 +24,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Korey Sewell
  */
 
 #include "arch/mips/utility.hh"
@@ -216,27 +214,6 @@ isSnan(void *val_ptr, int size)
         panic("Type unsupported. Size mismatch\n");
     }
 }
-
-template <class CPU>
-void
-zeroRegisters(CPU *cpu)
-{
-    // Insure ISA semantics
-    // (no longer very clean due to the change in setIntReg() in the
-    // cpu model.  Consider changing later.)
-    cpu->thread->setIntReg(ZeroReg, 0);
-    cpu->thread->setFloatReg(ZeroReg, 0);
-}
-
-void
-startupCPU(ThreadContext *tc, int cpuId)
-{
-    tc->activate();
-}
-
-void
-initCPU(ThreadContext *tc, int cpuId)
-{}
 
 void
 copyRegs(ThreadContext *src, ThreadContext *dest)

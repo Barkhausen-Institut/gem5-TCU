@@ -22,13 +22,17 @@
 # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-# Authors: Gabe Black
 
 from m5.params import *
 from m5.proxy import *
 
 from m5.objects.BaseCPU import BaseCPU
+from m5.objects.BaseTLB import BaseTLB
+
+class IrisTLB(BaseTLB):
+    type = 'IrisTLB'
+    cxx_class = 'Iris::TLB'
+    cxx_header = 'arch/arm/fastmodel/iris/tlb.hh'
 
 class IrisBaseCPU(BaseCPU):
     type = 'IrisBaseCPU'
@@ -53,3 +57,6 @@ class IrisBaseCPU(BaseCPU):
             "Fast model exported virtual subsystem holding cores")
     thread_paths = VectorParam.String(
             "Sub-paths to elements in the EVS which support a thread context")
+
+    dtb = IrisTLB()
+    itb = IrisTLB()

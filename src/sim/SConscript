@@ -25,8 +25,6 @@
 # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-# Authors: Nathan Binkert
 
 Import('*')
 
@@ -84,6 +82,7 @@ Source('pe_memory.cc')
 Source('m3_loader.cc')
 
 GTest('byteswap.test', 'byteswap.test.cc', '../base/types.cc')
+GTest('guest_abi.test', 'guest_abi.test.cc')
 
 if env['TARGET_ISA'] != 'null':
     SimObject('InstTracer.py')

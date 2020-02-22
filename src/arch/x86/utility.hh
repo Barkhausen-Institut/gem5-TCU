@@ -33,8 +33,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Gabe Black
  */
 
 #ifndef __ARCH_X86_UTILITY_HH__
@@ -68,17 +66,6 @@ namespace X86ISA
             return m5reg.cpl == 3;
         }
     }
-
-    /**
-     * Function to insure ISA semantics about 0 registers.
-     * @param tc The thread context.
-     */
-    template <class TC>
-    void zeroRegisters(TC *tc);
-
-    void initCPU(ThreadContext *tc, int cpuId);
-
-    void startupCPU(ThreadContext *tc, int cpuId);
 
     void copyRegs(ThreadContext *src, ThreadContext *dest);
 

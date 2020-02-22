@@ -245,9 +245,6 @@ def createPE(noc, options, no, systemType, l1size, l2size, spmsize, dtupos, memP
         pe.xbar = L2XBar()
     pe.xbar.point_of_coherency = True
 
-    # we want to use the instructions, not the memory based pseudo operations
-    pe.pseudo_mem_ops = False
-
     pe.dtu = Dtu(max_noc_packet_size='2kB', buf_size='2kB')
     pe.dtu.core_id = no
 
@@ -436,12 +433,17 @@ def createCorePE(noc, options, no, cmdline, memPE, l1size=None, l2size=None,
         pe.cpu.interrupts[0].int_master = pe.xbar.slave
 
     if options.isa != 'riscv':
+        pe.cpu.itb_walker_cache = PageTableWalkerCache()
+        pe.cpu.dtb_walker_cache = PageTableWalkerCache()
+        pe.cpu.itb.walker.port = pe.cpu.itb_walker_cache.cpu_side
+        pe.cpu.dtb.walker.port = pe.cpu.dtb_walker_cache.cpu_side
+
         if not l2size is None:
-            pe.cpu.itb.walker.port = pe.tol2bus.slave
-            pe.cpu.dtb.walker.port = pe.tol2bus.slave
+            pe.cpu.itb_walker_cache.mem_side = pe.tol2bus.slave
+            pe.cpu.dtb_walker_cache.mem_side = pe.tol2bus.slave
         else:
-            pe.cpu.itb.walker.port = pe.xbar.slave
-            pe.cpu.dtb.walker.port = pe.xbar.slave
+            pe.cpu.itb_walker_cache.mem_side = pe.xbar.slave
+            pe.cpu.dtb_walker_cache.mem_side = pe.xbar.slave
 
     return pe
 

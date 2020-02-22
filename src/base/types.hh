@@ -24,8 +24,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Nathan Binkert
  */
 
 /**
@@ -243,23 +241,6 @@ typedef std::shared_ptr<FaultBase> Fault;
 // Rather than creating a shared_ptr instance and assigning it nullptr,
 // we just create an alias.
 constexpr decltype(nullptr) NoFault = nullptr;
-
-struct AtomicOpFunctor
-{
-    virtual void operator()(uint8_t *p) = 0;
-    virtual AtomicOpFunctor* clone() = 0;
-    virtual ~AtomicOpFunctor() {}
-};
-
-template <class T>
-struct TypedAtomicOpFunctor : public AtomicOpFunctor
-{
-    void operator()(uint8_t *p) { execute((T *)p); }
-    virtual AtomicOpFunctor* clone() = 0;
-    virtual void execute(T * p) = 0;
-};
-
-typedef std::unique_ptr<AtomicOpFunctor> AtomicOpFunctorPtr;
 
 enum ByteOrder {
     BigEndianByteOrder,

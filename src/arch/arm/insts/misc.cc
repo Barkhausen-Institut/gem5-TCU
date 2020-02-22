@@ -34,8 +34,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Gabe Black
  */
 
 #include "arch/arm/insts/misc.hh"
@@ -200,6 +198,14 @@ RegRegOp::generateDisassembly(Addr pc, const SymbolTable *symtab) const
     return ss.str();
 }
 
+std::string
+RegOp::generateDisassembly(Addr pc, const SymbolTable *symtab) const
+{
+    std::stringstream ss;
+    printMnemonic(ss);
+    printIntReg(ss, dest);
+    return ss.str();
+}
 std::string
 RegRegRegImmOp::generateDisassembly(Addr pc, const SymbolTable *symtab) const
 {

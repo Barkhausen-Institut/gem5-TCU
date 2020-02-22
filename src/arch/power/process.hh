@@ -25,9 +25,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Stephen Hines
- *          Timothy M. Jones
  */
 
 #ifndef __POWER_PROCESS_HH__
@@ -46,14 +43,15 @@ class PowerProcess : public Process
   protected:
     PowerProcess(ProcessParams * params, ObjectFile *objFile);
 
-    void initState();
+    void initState() override;
 
   public:
     void argsInit(int intSize, int pageSize);
-    RegVal getSyscallArg(ThreadContext *tc, int &i);
+    RegVal getSyscallArg(ThreadContext *tc, int &i) override;
     /// Explicitly import the otherwise hidden getSyscallArg
     using Process::getSyscallArg;
-    void setSyscallReturn(ThreadContext *tc, SyscallReturn return_value);
+    void setSyscallReturn(ThreadContext *tc,
+            SyscallReturn return_value) override;
 };
 
 #endif // __POWER_PROCESS_HH__

@@ -1,4 +1,4 @@
-# Copyright (c) 2017 ARM Limited
+# Copyright (c) 2017, 2019 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -36,9 +36,6 @@
 # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-# Authors: Nathan Binkert
-#          Rick Strong
 
 from m5.SimObject import *
 from m5.defines import buildEnv
@@ -107,7 +104,9 @@ class System(SimObject):
     kernel = Param.String("", "file that contains the kernel code")
     kernel_addr_check = Param.Bool(True,
         "whether to address check on kernel (disable for baremetal)")
-    kernel_extras = VectorParam.String([],"Additional object files to load")
+    kernel_extras = VectorParam.String([], "Additional object files to load")
+    kernel_extras_addrs = VectorParam.Addr([],
+        "Load addresses for additional object files")
     readfile = Param.String("", "file to read startup script from")
     symbolfile = Param.String("", "file to get the symbols from")
     load_addr_mask = Param.UInt64(0xffffffffffffffff,
@@ -123,11 +122,12 @@ class System(SimObject):
     # Provide list of domains that need to be controlled by the handler
     dvfs_handler = DVFSHandler()
 
-    # Setting rgdb_wait to a positive integer waits for a remote debugger to
-    # connect to that context ID before continuing.
-    rgdb_wait = Param.Int(-1, "The context-id that should on remote gdb")
-
-    pseudo_mem_ops = Param.Bool(True, "Enable memory mapped pseudo instr.?")
+    # SE mode doesn't use the ISA System subclasses, and so we need to set an
+    # ISA specific value in this class directly.
+    m5ops_base = Param.Addr(
+        0xffff0000 if buildEnv['TARGET_ISA'] == 'x86' else 0,
+        "Base of the 64KiB PA range used for memory-mapped m5ops. Set to 0 "
+        "to disable.")
 
     if buildEnv['USE_KVM']:
         kvm_vm = Param.KvmVM(NULL, 'KVM VM (i.e., shared memory domain)')

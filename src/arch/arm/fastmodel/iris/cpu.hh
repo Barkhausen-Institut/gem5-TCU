@@ -23,8 +23,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Gabe Black
  */
 
 #ifndef __ARCH_ARM_FASTMODEL_IRIS_CPU_HH__
@@ -116,6 +114,10 @@ class BaseCPU : public ::BaseCPU
         periodAttribute->value = clockPeriod();
         clockEvent->notify();
     }
+
+    void init() override;
+
+    void serializeThread(CheckpointOut &cp, ThreadID tid) const override;
 };
 
 // This class specializes the one above and sets up ThreadContexts based on

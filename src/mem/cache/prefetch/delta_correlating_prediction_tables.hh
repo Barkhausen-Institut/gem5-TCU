@@ -24,8 +24,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Javier Bueno
  */
 
 #ifndef __MEM_CACHE_PREFETCH_DELTA_CORRELATING_PREDICTION_TABLES_HH_
@@ -75,12 +73,12 @@ class DeltaCorrelatingPredictionTables : public SimObject
          * Constructor
          * @param num_deltas number of deltas stored in the entry
          */
-        DCPTEntry(unsigned int num_deltas) : lastAddress(0), deltaPointer(0),
-            deltas(num_deltas)
-        {}
+        DCPTEntry(unsigned int num_deltas)
+          : TaggedEntry(), lastAddress(0), deltaPointer(0), deltas(num_deltas)
+        {
+        }
 
-        /** Reset callback called when invalidating the entry */
-        void reset() override;
+        void invalidate() override;
 
         /**
          * Adds an address to the entry, if the entry already existed, a delta

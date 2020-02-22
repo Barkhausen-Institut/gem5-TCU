@@ -36,8 +36,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Ali Saidi
  */
 
 #ifndef __ARCH_ARM_SYSTEM_HH__
@@ -137,12 +135,6 @@ class ArmSystem : public System
 
     /** True if Priviledge Access Never is implemented */
     const unsigned _havePAN;
-
-    /**
-     * Range for memory-mapped m5 pseudo ops. The range will be
-     * invalid/empty if disabled.
-     */
-    const AddrRange _m5opRange;
 
     /**
      * True if the Semihosting interface is enabled.
@@ -274,12 +266,6 @@ class ArmSystem : public System
     {
         return mask(physAddrRange());
     }
-
-    /**
-     * Range used by memory-mapped m5 pseudo-ops if enabled. Returns
-     * an invalid/empty range if disabled.
-     */
-    const AddrRange &m5opRange() const { return _m5opRange; }
 
     /** Is Arm Semihosting support enabled? */
     bool haveSemihosting() const { return semihosting != nullptr; }

@@ -35,8 +35,6 @@
 # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-# Authors: Steve Reinhardt
 
 # Simple test script
 #
@@ -143,10 +141,7 @@ if options.bench:
 
     for app in apps:
         try:
-            if buildEnv['TARGET_ISA'] == 'alpha':
-                exec("workload = %s('alpha', 'tru64', '%s')" % (
-                        app, options.spec_input))
-            elif buildEnv['TARGET_ISA'] == 'arm':
+            if buildEnv['TARGET_ISA'] == 'arm':
                 exec("workload = %s('arm_%s', 'linux', '%s')" % (
                         app, options.arm_iset, options.spec_input))
             else:

@@ -25,9 +25,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Ali Saidi
- *          Stephen Hines
  */
 
 #ifndef __ARCH_ARM_MMAPPED_IPR_HH__
@@ -39,14 +36,44 @@
  * ISA-specific helper functions for memory mapped IPR accesses.
  */
 
-#include "arch/generic/mmapped_ipr.hh"
+#include "base/types.hh"
+#include "mem/packet.hh"
+#include "mem/packet_access.hh"
+#include "sim/pseudo_inst.hh"
+#include "sim/system.hh"
 
 class ThreadContext;
 
 namespace ArmISA
 {
-    using GenericISA::handleIprRead;
-    using GenericISA::handleIprWrite;
+
+inline Cycles
+handleIprRead(ThreadContext *tc, Packet *pkt)
+{
+    Addr addr = pkt->getAddr();
+    auto m5opRange = tc->getSystemPtr()->m5opRange();
+    if (m5opRange.contains(addr)) {
+        uint8_t func;
+        PseudoInst::decodeAddrOffset(addr - m5opRange.start(), func);
+        uint64_t ret = PseudoInst::pseudoInst<PseudoInstABI>(tc, func);
+        pkt->setLE(ret);
+    }
+    return Cycles(1);
+}
+
+inline Cycles
+handleIprWrite(ThreadContext *tc, Packet *pkt)
+{
+    Addr addr = pkt->getAddr();
+    auto m5opRange = tc->getSystemPtr()->m5opRange();
+    if (m5opRange.contains(addr)) {
+        uint8_t func;
+        PseudoInst::decodeAddrOffset(addr - m5opRange.start(), func);
+        PseudoInst::pseudoInst<PseudoInstABI>(tc, func);
+    }
+    return Cycles(1);
+}
+
 } // namespace ArmISA
 
 #endif

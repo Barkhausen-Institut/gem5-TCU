@@ -24,8 +24,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Gabe Black
  */
 
 #include "arch/mips/isa.hh"
@@ -89,8 +87,8 @@ ISA::miscRegNames[NumMiscRegs] =
     "LLFlag"
 };
 
-ISA::ISA(Params *p)
-    : SimObject(p), numThreads(p->num_threads), numVpes(p->num_vpes)
+ISA::ISA(Params *p) : BaseISA(p), numThreads(p->num_threads),
+    numVpes(p->num_vpes)
 {
     miscRegFile.resize(NumMiscRegs);
     bankType.resize(NumMiscRegs);

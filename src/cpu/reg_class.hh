@@ -36,10 +36,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Steve Reinhardt
- *          Nathanael Premillieu
- *          Rekai Gonzalez
  */
 
 #ifndef __CPU__REG_CLASS_HH__
@@ -140,9 +136,7 @@ class RegId {
 
     inline bool isZeroReg() const
     {
-        return ((regClass == IntRegClass && regIdx == TheISA::ZeroReg) ||
-               (THE_ISA == ALPHA_ISA && regClass == FloatRegClass &&
-                regIdx == TheISA::ZeroReg));
+        return regClass == IntRegClass && regIdx == TheISA::ZeroReg;
     }
 
     /** @return true if it is an integer physical register. */

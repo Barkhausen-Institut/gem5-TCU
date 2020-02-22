@@ -24,12 +24,11 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Robert Scheffel
  */
 
 #include "arch/riscv/bare_metal/system.hh"
 
+#include "arch/riscv/faults.hh"
 #include "base/loader/object_file.hh"
 
 BareMetalRiscvSystem::BareMetalRiscvSystem(Params *p)
@@ -53,6 +52,11 @@ BareMetalRiscvSystem::initState()
 {
     // Call the initialisation of the super class
     RiscvSystem::initState();
+
+    for (auto *tc: threadContexts) {
+        RiscvISA::Reset().invoke(tc);
+        tc->activate();
+    }
 
     // load program sections into memory
     if (!bootloader->buildImage().write(physProxy)) {

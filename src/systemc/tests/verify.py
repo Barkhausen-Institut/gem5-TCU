@@ -24,8 +24,6 @@
 # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-# Authors: Gabe Black
 
 from __future__ import print_function
 
@@ -57,7 +55,7 @@ json_rel_path = os.path.join(tests_rel_path, 'tests.json')
 
 
 def scons(*args):
-    args = ['scons'] + list(args)
+    args = ['scons', '--with-systemc-tests'] + list(args)
     subprocess.check_call(args)
 
 

@@ -37,9 +37,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Kevin Lim
- *          Geoffrey Blake
  */
 
 #ifndef __CPU_CHECKER_CPU_IMPL_HH__
@@ -207,9 +204,6 @@ Checker<Impl>::verify(const DynInstPtr &completed_inst)
 
         // maintain $r0 semantics
         thread->setIntReg(ZeroReg, 0);
-#if THE_ISA == ALPHA_ISA
-        thread->setFloatReg(ZeroReg, 0);
-#endif
 
         // Check if any recent PC changes match up with anything we
         // expect to happen.  This is mostly to check if traps or

@@ -34,9 +34,6 @@
 // THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
-// Authors: Giacomo Gabrielli
-//          Mbou Eyole
 
 let {{
 
@@ -3388,11 +3385,11 @@ let {{
     threeRegScrambleInstX("zip2", "Zip2QX", "SimdAluOp", unsignedTypes, 4,
                           zipCode % "eCount / 2")
 
-    for decoderFlavour, type_dict in decoders.iteritems():
+    for decoderFlavor, type_dict in decoders.iteritems():
         header_output += '''
-        class %(decoder_flavour)sDecoder {
+        class %(decoder_flavor)sDecoder {
         public:
-        ''' % { "decoder_flavour" : decoderFlavour }
+        ''' % { "decoder_flavor" : decoderFlavor }
         for type,name in type_dict.iteritems():
             header_output += '''
             template<typename Elem> using %(type)s = %(new_name)s<Elem>;''' % {

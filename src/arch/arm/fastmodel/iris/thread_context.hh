@@ -23,12 +23,14 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Gabe Black
  */
 
 #ifndef __ARCH_ARM_FASTMODEL_IRIS_THREAD_CONTEXT_HH__
 #define __ARCH_ARM_FASTMODEL_IRIS_THREAD_CONTEXT_HH__
+
+#include <list>
+#include <map>
+#include <memory>
 
 #include "cpu/base.hh"
 #include "cpu/thread_context.hh"
@@ -59,9 +61,14 @@ class ThreadContext : public ::ThreadContext
     ::BaseTLB *_itb;
 
     std::string _irisPath;
-    iris::InstanceId _instId;
+    iris::InstanceId _instId = iris::IRIS_UINT64_MAX;
 
-    Status _status;
+    // Temporary holding places for the vector reg accessors to return.
+    // These are not updated live, only when requested.
+    mutable std::vector<ArmISA::VecRegContainer> vecRegs;
+    mutable std::vector<ArmISA::VecPredRegContainer> vecPredRegs;
+
+    Status _status = Active;
 
     virtual void initFromIrisInstance(const ResourceMap &resources);
 
@@ -72,7 +79,22 @@ class ThreadContext : public ::ThreadContext
 
 
     ResourceIds miscRegIds;
-    ResourceIds intRegIds;
+    ResourceIds intReg32Ids;
+    ResourceIds intReg64Ids;
+    ResourceIds flattenedIntIds;
+    ResourceIds ccRegIds;
+
+    iris::ResourceId pcRscId = iris::IRIS_UINT64_MAX;
+    iris::ResourceId icountRscId;
+
+    ResourceIds vecRegIds;
+    ResourceIds vecPredRegIds;
+
+    std::vector<iris::MemorySpaceInfo> memorySpaces;
+    std::vector<iris::MemorySupportedAddressTranslationResult> translations;
+
+    std::unique_ptr<PortProxy> virtProxy = nullptr;
+    std::unique_ptr<PortProxy> physProxy = nullptr;
 
 
     // A queue to keep track of instruction count based events.
@@ -81,6 +103,36 @@ class ThreadContext : public ::ThreadContext
     // step count is correct even after IRIS resets it for us, and also handles
     // events which are supposed to happen at the current instruction count.
     void maintainStepping();
+
+
+    using BpId = uint64_t;
+    struct BpInfo
+    {
+        Addr pc;
+        std::vector<BpId> ids;
+        using EventList = std::list<PCEvent *>;
+        std::shared_ptr<EventList> events;
+
+        BpInfo(Addr _pc) : pc(_pc), events(new EventList) {}
+
+        bool empty() const { return events->empty(); }
+        bool validIds() const { return !ids.empty(); }
+        void clearIds() { ids.clear(); }
+    };
+
+    using BpInfoPtr = std::unique_ptr<BpInfo>;
+    using BpInfoMap = std::map<Addr, BpInfoPtr>;
+    using BpInfoIt = BpInfoMap::iterator;
+
+    BpInfoMap bps;
+
+    BpInfoIt getOrAllocBp(Addr pc);
+
+    void installBp(BpInfoIt it);
+    void uninstallBp(BpInfoIt it);
+    void delBp(BpInfoIt it);
+
+    virtual const std::vector<iris::MemorySpaceId> &getBpSpaceIds() const = 0;
 
 
     iris::IrisErrorCode instanceRegistryChanged(
@@ -92,14 +144,21 @@ class ThreadContext : public ::ThreadContext
     iris::IrisErrorCode simulationTimeEvent(
             uint64_t esId, const iris::IrisValueMap &fields, uint64_t time,
             uint64_t sInstId, bool syncEc, std::string &error_message_out);
+    iris::IrisErrorCode breakpointHit(
+            uint64_t esId, const iris::IrisValueMap &fields, uint64_t time,
+            uint64_t sInstId, bool syncEc, std::string &error_message_out);
 
     iris::EventStreamId regEventStreamId;
     iris::EventStreamId initEventStreamId;
     iris::EventStreamId timeEventStreamId;
+    iris::EventStreamId breakpointEventStreamId;
 
     mutable iris::IrisInstance client;
     iris::IrisCppAdapter &call() const { return client.irisCall(); }
     iris::IrisCppAdapter &noThrow() const { return client.irisCallNoThrow(); }
+
+    bool translateAddress(Addr &paddr, iris::MemorySpaceId p_space,
+                          Addr vaddr, iris::MemorySpaceId v_space);
 
   public:
     ThreadContext(::BaseCPU *cpu, int id, System *system,
@@ -108,8 +167,10 @@ class ThreadContext : public ::ThreadContext
                   const std::string &iris_path);
     virtual ~ThreadContext();
 
-    bool schedule(PCEvent *e) override { return false; }
-    bool remove(PCEvent *e) override { return false; }
+    virtual bool translateAddress(Addr &paddr, Addr vaddr) = 0;
+
+    bool schedule(PCEvent *e) override;
+    bool remove(PCEvent *e) override;
 
     void scheduleInstCountEvent(Event *event, Tick count) override;
     void descheduleInstCountEvent(Event *event) override;
@@ -135,12 +196,8 @@ class ThreadContext : public ::ThreadContext
     {
         return _dtb;
     }
-    CheckerCPU *
-    getCheckerCpuPtr() override
-    {
-        panic("%s not implemented.", __FUNCTION__);
-    }
-    TheISA::Decoder *
+    CheckerCPU *getCheckerCpuPtr() override { return nullptr; }
+    ArmISA::Decoder *
     getDecoderPtr() override
     {
         panic("%s not implemented.", __FUNCTION__);
@@ -148,26 +205,22 @@ class ThreadContext : public ::ThreadContext
 
     System *getSystemPtr() override { return _cpu->system; }
 
+    BaseISA *
+    getIsaPtr() override
+    {
+        panic("%s not implemented.", __FUNCTION__);
+    }
+
     Kernel::Statistics *
     getKernelStats() override
     {
         panic("%s not implemented.", __FUNCTION__);
     }
-    PortProxy &
-    getPhysProxy() override
-    {
-        panic("%s not implemented.", __FUNCTION__);
-    }
-    PortProxy &
-    getVirtProxy() override
-    {
-        panic("%s not implemented.", __FUNCTION__);
-    }
-    void
-    initMemProxies(::ThreadContext *tc) override
-    {
-        panic("%s not implemented.", __FUNCTION__);
-    }
+
+    PortProxy &getPhysProxy() override { return *physProxy; }
+    PortProxy &getVirtProxy() override { return *virtProxy; }
+    void initMemProxies(::ThreadContext *tc) override;
+
     Process *
     getProcessPtr() override
     {
@@ -237,7 +290,7 @@ class ThreadContext : public ::ThreadContext
     void
     clearArchRegs() override
     {
-        panic("%s not implemented.", __FUNCTION__);
+        warn("Ignoring clearArchRegs()");
     }
 
     //
@@ -251,11 +304,7 @@ class ThreadContext : public ::ThreadContext
         panic("%s not implemented.", __FUNCTION__);
     }
 
-    const VecRegContainer &
-    readVecReg(const RegId &reg) const override
-    {
-        panic("%s not implemented.", __FUNCTION__);
-    }
+    const VecRegContainer &readVecReg(const RegId &reg) const override;
     VecRegContainer &
     getWritableVecReg(const RegId &reg) override
     {
@@ -324,11 +373,7 @@ class ThreadContext : public ::ThreadContext
         panic("%s not implemented.", __FUNCTION__);
     }
 
-    const VecPredRegContainer &
-    readVecPredReg(const RegId &reg) const override
-    {
-        panic("%s not implemented.", __FUNCTION__);
-    }
+    const VecPredRegContainer &readVecPredReg(const RegId &reg) const override;
     VecPredRegContainer &
     getWritableVecPredReg(const RegId &reg) override
     {
@@ -338,7 +383,7 @@ class ThreadContext : public ::ThreadContext
     RegVal
     readCCReg(RegIndex reg_idx) const override
     {
-        panic("%s not implemented.", __FUNCTION__);
+        return readCCRegFlat(reg_idx);
     }
 
     void setIntReg(RegIndex reg_idx, RegVal val) override;
@@ -371,11 +416,16 @@ class ThreadContext : public ::ThreadContext
     void
     setCCReg(RegIndex reg_idx, RegVal val) override
     {
-        panic("%s not implemented.", __FUNCTION__);
+        setCCRegFlat(reg_idx, val);
     }
 
-    void pcStateNoRecord(const TheISA::PCState &val) override { pcState(val); }
+    void pcStateNoRecord(const ArmISA::PCState &val) override { pcState(val); }
     MicroPC microPC() const override { return 0; }
+
+    ArmISA::PCState pcState() const override;
+    void pcState(const ArmISA::PCState &val) override;
+    Addr instAddr() const override;
+    Addr nextInstAddr() const override;
 
     RegVal readMiscRegNoEffect(RegIndex misc_reg) const override;
     RegVal
@@ -436,16 +486,8 @@ class ThreadContext : public ::ThreadContext
      * serialization code to access all registers.
      */
 
-    uint64_t
-    readIntRegFlat(RegIndex idx) const override
-    {
-        panic("%s not implemented.", __FUNCTION__);
-    }
-    void
-    setIntRegFlat(RegIndex idx, uint64_t val) override
-    {
-        panic("%s not implemented.", __FUNCTION__);
-    }
+    RegVal readIntRegFlat(RegIndex idx) const override;
+    void setIntRegFlat(RegIndex idx, uint64_t val) override;
 
     RegVal
     readFloatRegFlat(RegIndex idx) const override
@@ -458,11 +500,7 @@ class ThreadContext : public ::ThreadContext
         panic("%s not implemented.", __FUNCTION__);
     }
 
-    const VecRegContainer &
-    readVecRegFlat(RegIndex idx) const override
-    {
-        panic("%s not implemented.", __FUNCTION__);
-    }
+    const VecRegContainer &readVecRegFlat(RegIndex idx) const override;
     VecRegContainer &
     getWritableVecRegFlat(RegIndex idx) override
     {
@@ -486,11 +524,7 @@ class ThreadContext : public ::ThreadContext
         panic("%s not implemented.", __FUNCTION__);
     }
 
-    const VecPredRegContainer &
-    readVecPredRegFlat(RegIndex idx) const override
-    {
-        panic("%s not implemented.", __FUNCTION__);
-    }
+    const VecPredRegContainer &readVecPredRegFlat(RegIndex idx) const override;
     VecPredRegContainer &
     getWritableVecPredRegFlat(RegIndex idx) override
     {
@@ -502,16 +536,8 @@ class ThreadContext : public ::ThreadContext
         panic("%s not implemented.", __FUNCTION__);
     }
 
-    RegVal
-    readCCRegFlat(RegIndex idx) const override
-    {
-        panic("%s not implemented.", __FUNCTION__);
-    }
-    void
-    setCCRegFlat(RegIndex idx, RegVal val) override
-    {
-        panic("%s not implemented.", __FUNCTION__);
-    }
+    RegVal readCCRegFlat(RegIndex idx) const override;
+    void setCCRegFlat(RegIndex idx, RegVal val) override;
     /** @} */
 
 };

@@ -37,14 +37,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Erik Hallnor
- *          Dave Greene
- *          Nathan Binkert
- *          Steve Reinhardt
- *          Ron Dreslinski
- *          Andreas Sandberg
- *          Nikos Nikoleris
  */
 
 /**
@@ -756,7 +748,14 @@ Cache::serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt, CacheBlk *blk)
                 assert(blk->isWritable());
             }
 
-            if (blk && blk->isValid() && !mshr->isForward) {
+            // Here we decide whether we will satisfy the target using
+            // data from the block or from the response. We use the
+            // block data to satisfy the request when the block is
+            // present and valid and in addition the response in not
+            // forwarding data to the cache above (we didn't fill
+            // either); otherwise we use the packet data.
+            if (blk && blk->isValid() &&
+                (!mshr->isForward || !pkt->hasData())) {
                 satisfyRequest(tgt_pkt, blk, true, mshr->hasPostDowngrade());
 
                 // How many bytes past the first request is this one
@@ -791,15 +790,15 @@ Cache::serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt, CacheBlk *blk)
                     pkt->payloadDelay;
                 tgt_pkt->req->setExtraData(0);
             } else {
-                // We are about to send a response to a cache above
-                // that asked for an invalidation; we need to
-                // invalidate our copy immediately as the most
-                // up-to-date copy of the block will now be in the
-                // cache above. It will also prevent this cache from
-                // responding (if the block was previously dirty) to
-                // snoops as they should snoop the caches above where
-                // they will get the response from.
                 if (is_invalidate && blk && blk->isValid()) {
+                    // We are about to send a response to a cache above
+                    // that asked for an invalidation; we need to
+                    // invalidate our copy immediately as the most
+                    // up-to-date copy of the block will now be in the
+                    // cache above. It will also prevent this cache from
+                    // responding (if the block was previously dirty) to
+                    // snoops as they should snoop the caches above where
+                    // they will get the response from.
                     invalidateBlock(blk);
                 }
                 // not a cache fill, just forwarding response
@@ -807,12 +806,22 @@ Cache::serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt, CacheBlk *blk)
                 // from lower level cahces/memory to the core.
                 completion_time += clockEdge(responseLatency) +
                     pkt->payloadDelay;
-                if (pkt->isRead() && !is_error) {
-                    // sanity check
-                    assert(pkt->matchAddr(tgt_pkt));
-                    assert(pkt->getSize() >= tgt_pkt->getSize());
+                if (!is_error) {
+                    if (pkt->isRead()) {
+                        // sanity check
+                        assert(pkt->matchAddr(tgt_pkt));
+                        assert(pkt->getSize() >= tgt_pkt->getSize());
 
-                    tgt_pkt->setData(pkt->getConstPtr<uint8_t>());
+                        tgt_pkt->setData(pkt->getConstPtr<uint8_t>());
+                    } else {
+                        // MSHR targets can read data either from the
+                        // block or the response pkt. If we can't get data
+                        // from the block (i.e., invalid or has old data)
+                        // or the response (did not bring in any data)
+                        // then make sure that the target didn't expect
+                        // any.
+                        assert(!tgt_pkt->hasRespData());
+                    }
                 }
 
                 // this response did not allocate here and therefore

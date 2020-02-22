@@ -23,13 +23,13 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Gabe Black
  */
 
 #include "arch/arm/fastmodel/iris/cpu.hh"
 
 #include "arch/arm/fastmodel/iris/thread_context.hh"
+#include "scx/scx.h"
+#include "sim/serialize.hh"
 
 namespace Iris
 {
@@ -60,6 +60,12 @@ BaseCPU::BaseCPU(BaseCPUParams *params, sc_core::sc_module *_evs) :
     panic_if(base && !sendFunctional,
             "The EVS send functional attribute is not of type "
             "sc_attribute<PortProxy::SendFunctionalFunc>.");
+
+    // Make sure fast model knows we're using debugging mechanisms to control
+    // the simulation, and it shouldn't shut down if simulation time stops
+    // for some reason. Despite the misleading name, this doesn't start a CADI
+    // server because it's first parameter is false.
+    scx::scx_start_cadi_server(false, false, true);
 }
 
 BaseCPU::~BaseCPU()
@@ -76,6 +82,20 @@ BaseCPU::totalInsts() const
     for (auto *tc: threadContexts)
         count += tc->getCurrentInstCount();
     return count;
+}
+
+void
+BaseCPU::init()
+{
+    ::BaseCPU::init();
+    for (auto *tc: threadContexts)
+        tc->initMemProxies(tc);
+}
+
+void
+BaseCPU::serializeThread(CheckpointOut &cp, ThreadID tid) const
+{
+    ::serialize(*threadContexts[tid], cp);
 }
 
 } // namespace Iris

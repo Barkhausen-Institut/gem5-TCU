@@ -27,6 +27,7 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
+#include "arch/riscv/faults.hh"
 #include "arch/riscv/m3/system.hh"
 #include "params/M3RiscvSystem.hh"
 
@@ -68,6 +69,11 @@ M3RiscvSystem::initState()
     RiscvSystem::initState();
 
     loader.initState(*this, *this, nocPort);
+
+    for (auto *tc: threadContexts) {
+        RiscvISA::Reset().invoke(tc);
+        tc->activate();
+    }
 }
 
 M3RiscvSystem *

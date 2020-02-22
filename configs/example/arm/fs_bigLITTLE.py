@@ -32,9 +32,6 @@
 # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-# Authors: Gabor Dozsa
-#          Andreas Sandberg
 
 # This is an example configuration script for full system simulation of
 # a generic ARM bigLITTLE system.
@@ -117,7 +114,7 @@ class Ex5LittleCluster(devices.CpuCluster):
                                          cpu_voltage, *cpu_config)
 
 def createSystem(caches, kernel, bootscript, machine_type="VExpress_GEM5",
-                 disks=[],  mem_size=default_mem_size):
+                 disks=[],  mem_size=default_mem_size, bootloader=None):
     platform = ObjectList.platform_list.get(machine_type)
     m5.util.inform("Simulated platform: %s", platform.__name__)
 
@@ -144,7 +141,7 @@ def createSystem(caches, kernel, bootscript, machine_type="VExpress_GEM5",
         for dev in sys.pci_vio_block:
             sys.attach_pci(dev)
 
-    sys.realview.setupBootLoader(sys, SysPaths.binary)
+    sys.realview.setupBootLoader(sys, SysPaths.binary, bootloader)
 
     return sys
 
@@ -203,6 +200,8 @@ def addOptions(parser):
                         help="System memory size")
     parser.add_argument("--kernel-cmd", type=str, default=None,
                         help="Custom Linux kernel command")
+    parser.add_argument("--bootloader", action="append",
+                        help="executable file that runs before the --kernel")
     parser.add_argument("-P", "--param", action="append", default=[],
         help="Set a SimObject parameter relative to the root node. "
              "An extended Python multi range slicing syntax can be used "
@@ -239,7 +238,8 @@ def build(options):
                           options.bootscript,
                           options.machine_type,
                           disks=disks,
-                          mem_size=options.mem_size)
+                          mem_size=options.mem_size,
+                          bootloader=options.bootloader)
 
     root.system = system
     if options.kernel_cmd:

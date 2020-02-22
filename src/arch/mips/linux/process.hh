@@ -24,9 +24,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Gabe Black
- *          Korey Sewell
  */
 
 #ifndef __MIPS_LINUX_PROCESS_HH__
@@ -35,6 +32,7 @@
 #include "arch/mips/linux/linux.hh"
 #include "arch/mips/process.hh"
 #include "sim/eventq.hh"
+#include "sim/syscall_desc.hh"
 
 /// A process with emulated Mips/Linux syscalls.
 class MipsLinuxProcess : public MipsProcess
@@ -43,7 +41,7 @@ class MipsLinuxProcess : public MipsProcess
     /// Constructor.
     MipsLinuxProcess(ProcessParams * params, ObjectFile *objFile);
 
-    virtual SyscallDesc* getDesc(int callnum);
+    SyscallDesc* getDesc(int callnum) override;
 
     /// The target system's hostname.
     static const char *hostname;
@@ -54,7 +52,7 @@ class MipsLinuxProcess : public MipsProcess
     void syscall(ThreadContext *tc, Fault *fault) override;
 
     /// Array of syscall descriptors, indexed by call number.
-    static SyscallDesc syscallDescs[];
+    static SyscallDescABI<DefaultSyscallABI> syscallDescs[];
     const int Num_Syscall_Descs;
 };
 

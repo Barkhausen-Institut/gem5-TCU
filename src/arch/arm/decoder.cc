@@ -36,8 +36,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Gabe Black
  */
 
 #include "arch/arm/decoder.hh"
@@ -55,8 +53,7 @@ namespace ArmISA
 GenericISA::BasicDecodeCache Decoder::defaultCache;
 
 Decoder::Decoder(ISA* isa)
-    : data(0), fpscrLen(0), fpscrStride(0),
-      decoderFlavour(isa->decoderFlavour())
+    : data(0), fpscrLen(0), fpscrStride(0), decoderFlavor(isa->decoderFlavor())
 {
     reset();
 

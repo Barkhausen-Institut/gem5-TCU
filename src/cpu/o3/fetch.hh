@@ -36,9 +36,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Kevin Lim
- *          Korey Sewell
  */
 
 #ifndef __CPU_O3_FETCH_HH__
@@ -325,7 +322,7 @@ class DefaultFetch
     bool
     checkInterrupt(Addr pc)
     {
-        return (interruptPending && (THE_ISA != ALPHA_ISA || !(pc & 0x3)));
+        return interruptPending;
     }
 
     /** Squashes a specific thread and resets the PC. */

@@ -37,8 +37,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Kevin Lim
  */
 
 #ifndef __CPU_THREAD_CONTEXT_HH__
@@ -47,6 +45,7 @@
 #include <iostream>
 #include <string>
 
+#include "arch/generic/isa.hh"
 #include "arch/registers.hh"
 #include "arch/types.hh"
 #include "base/types.hh"
@@ -144,7 +143,7 @@ class ThreadContext : public PCEventScope
 
     virtual CheckerCPU *getCheckerCpuPtr() = 0;
 
-    virtual TheISA::ISA *getIsaPtr() = 0;
+    virtual BaseISA *getIsaPtr() = 0;
 
     virtual TheISA::Decoder *getDecoderPtr() = 0;
 

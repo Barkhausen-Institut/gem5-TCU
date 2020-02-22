@@ -33,8 +33,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Bobby R. Bruce
  */
 
 #include <gtest/gtest.h>
@@ -117,9 +115,9 @@ TEST(AtomicioTest, AtomicWrite)
 
     EXPECT_EQ(file_contents.size(), size);
 
-    char c;
+    int c;
     for (unsigned int i = 0; (c = fgetc(file)) != EOF; i++) {
-        EXPECT_EQ(file_contents[i], c);
+        EXPECT_EQ(file_contents[i], (unsigned char)c);
     }
 
     fclose(file);

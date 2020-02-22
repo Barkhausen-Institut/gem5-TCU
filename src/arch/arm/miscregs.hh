@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2019 ARM Limited
+ * Copyright (c) 2010-2020 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -36,10 +36,8 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Gabe Black
- *          Giacomo Gabrielli
  */
+
 #ifndef __ARCH_ARM_MISCREGS_HH__
 #define __ARCH_ARM_MISCREGS_HH__
 
@@ -675,6 +673,18 @@ namespace ArmISA
 
         MISCREG_ID_AA64MMFR2_EL1,
 
+        //PAuth Key Regsiters
+        MISCREG_APDAKeyHi_EL1,
+        MISCREG_APDAKeyLo_EL1,
+        MISCREG_APDBKeyHi_EL1,
+        MISCREG_APDBKeyLo_EL1,
+        MISCREG_APGAKeyHi_EL1,
+        MISCREG_APGAKeyLo_EL1,
+        MISCREG_APIAKeyHi_EL1,
+        MISCREG_APIAKeyLo_EL1,
+        MISCREG_APIBKeyHi_EL1,
+        MISCREG_APIBKeyLo_EL1,
+
         // GICv3, CPU interface
         MISCREG_ICC_PMR_EL1,
         MISCREG_ICC_IAR0_EL1,
@@ -971,12 +981,18 @@ namespace ArmISA
         // Hypervisor mode
         MISCREG_HYP_RD,
         MISCREG_HYP_WR,
+        // Hypervisor mode, HCR_EL2.E2H == 1
+        MISCREG_HYP_E2H_RD,
+        MISCREG_HYP_E2H_WR,
         // Monitor mode, SCR.NS == 0
         MISCREG_MON_NS0_RD,
         MISCREG_MON_NS0_WR,
         // Monitor mode, SCR.NS == 1
         MISCREG_MON_NS1_RD,
         MISCREG_MON_NS1_WR,
+        // Monitor mode, HCR_EL2.E2H == 1
+        MISCREG_MON_E2H_RD,
+        MISCREG_MON_E2H_WR,
 
         NUM_MISCREG_INFOS
     };
@@ -1619,6 +1635,16 @@ namespace ArmISA
         "cnthv_tval_el2",
         "id_aa64mmfr2_el1",
 
+        "apdakeyhi_el1",
+        "apdakeylo_el1",
+        "apdbkeyhi_el1",
+        "apdbkeylo_el1",
+        "apgakeyhi_el1",
+        "apgakeylo_el1",
+        "apiakeyhi_el1",
+        "apiakeylo_el1",
+        "apibkeyhi_el1",
+        "apibkeylo_el1",
         // GICv3, CPU interface
         "icc_pmr_el1",
         "icc_iar0_el1",
@@ -1927,11 +1953,11 @@ namespace ArmISA
                                              CPSR cpsr);
 
     // Checks read access permissions to AArch64 system registers
-    bool canReadAArch64SysReg(MiscRegIndex reg, SCR scr, CPSR cpsr,
+    bool canReadAArch64SysReg(MiscRegIndex reg, HCR hcr, SCR scr, CPSR cpsr,
                               ThreadContext *tc);
 
     // Checks write access permissions to AArch64 system registers
-    bool canWriteAArch64SysReg(MiscRegIndex reg, SCR scr, CPSR cpsr,
+    bool canWriteAArch64SysReg(MiscRegIndex reg, HCR hcr, SCR scr, CPSR cpsr,
                                ThreadContext *tc);
 
     // Uses just the scr.ns bit to pre flatten the misc regs. This is useful

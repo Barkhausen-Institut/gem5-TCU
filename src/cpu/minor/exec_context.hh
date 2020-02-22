@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2014, 2016-2018 ARM Limited
+ * Copyright (c) 2011-2014, 2016-2018, 2020 ARM Limited
  * Copyright (c) 2013 Advanced Micro Devices, Inc.
  * All rights reserved
  *
@@ -37,11 +37,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Steve Reinhardt
- *          Dave Greene
- *          Nathan Binkert
- *          Andrew Bardsley
  */
 
 /**
@@ -99,9 +94,6 @@ class ExecContext : public ::ExecContext
         setPredicate(inst->readPredicate());
         setMemAccPredicate(inst->readMemAccPredicate());
         thread.setIntReg(TheISA::ZeroReg, 0);
-#if THE_ISA == ALPHA_ISA
-        thread.setFloatReg(TheISA::ZeroReg, 0);
-#endif
     }
 
     ~ExecContext()
@@ -393,7 +385,7 @@ class ExecContext : public ::ExecContext
         thread.syscall(fault);
     }
 
-    ThreadContext *tcBase() override { return thread.getTC(); }
+    ThreadContext *tcBase() const override { return thread.getTC(); }
 
     /* @todo, should make stCondFailures persistent somewhere */
     unsigned int readStCondFailures() const override { return 0; }

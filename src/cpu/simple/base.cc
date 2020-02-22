@@ -37,8 +37,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Steve Reinhardt
  */
 
 #include "cpu/simple/base.hh"
@@ -130,11 +128,6 @@ BaseSimpleCPU::init()
     for (auto tc : threadContexts) {
         // Initialise the ThreadContext's memory proxies
         tc->initMemProxies(tc);
-
-        if (FullSystem && !params()->switched_out) {
-            // initialize CPU, including PC
-            TheISA::initCPU(tc, tc->contextId());
-        }
     }
 }
 
@@ -491,9 +484,6 @@ BaseSimpleCPU::preExecute()
 
     // maintain $r0 semantics
     thread->setIntReg(ZeroReg, 0);
-#if THE_ISA == ALPHA_ISA
-    thread->setFloatReg(ZeroReg, 0);
-#endif // ALPHA_ISA
 
     // resets predicates
     t_info.setPredicate(true);

@@ -37,9 +37,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Kevin Lim
- *          Korey Sewell
  */
 
 #ifndef __CPU_O3_FETCH_IMPL_HH__
@@ -142,7 +139,8 @@ DefaultFetch<Impl>::DefaultFetch(O3CPU *_cpu, DerivO3CPUParams *params)
     branchPred = params->branchPred;
 
     for (ThreadID tid = 0; tid < numThreads; tid++) {
-        decoder[tid] = new TheISA::Decoder(params->isa[tid]);
+        decoder[tid] = new TheISA::Decoder(
+                dynamic_cast<TheISA::ISA *>(params->isa[tid]));
         // Create space to buffer the cache line data,
         // which may not hold the entire cache line.
         fetchBuffer[tid] = new uint8_t[fetchBufferSize];

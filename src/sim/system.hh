@@ -37,11 +37,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Steve Reinhardt
- *          Lisa Hsu
- *          Nathan Binkert
- *          Rick Strong
  */
 
 #ifndef __SYSTEM_HH__
@@ -190,17 +185,20 @@ class System : public SimObject, public PCEventScope
     unsigned int cacheLineSize() const { return _cacheLineSize; }
 
     std::vector<ThreadContext *> threadContexts;
+    ThreadContext *findFreeContext();
+
+    ThreadContext *
+    getThreadContext(ContextID tid) const
+    {
+        return threadContexts[tid];
+    }
+
     const bool multiThread;
 
     using SimObject::schedule;
 
     bool schedule(PCEvent *event) override;
     bool remove(PCEvent *event) override;
-
-    ThreadContext *getThreadContext(ContextID tid) const
-    {
-        return threadContexts[tid];
-    }
 
     unsigned numContexts() const { return threadContexts.size(); }
 
@@ -249,9 +247,6 @@ class System : public SimObject, public PCEventScope
      * loadAddrMask.
      */
     Addr loadAddrOffset;
-
-    /** Are the memory mapped pseudo operations enabled? */
-    bool pseudoMemOps;
 
   public:
     /**
@@ -574,6 +569,12 @@ class System : public SimObject, public PCEventScope
   protected:
     Params *_params;
 
+    /**
+     * Range for memory-mapped m5 pseudo ops. The range will be
+     * invalid/empty if disabled.
+     */
+    const AddrRange _m5opRange;
+
   public:
     System(Params *p);
     ~System();
@@ -581,6 +582,12 @@ class System : public SimObject, public PCEventScope
     void initState() override;
 
     const Params *params() const { return (const Params *)_params; }
+
+    /**
+     * Range used by memory-mapped m5 pseudo-ops if enabled. Returns
+     * an invalid/empty range if disabled.
+     */
+    const AddrRange &m5opRange() const { return _m5opRange; }
 
   public:
 
@@ -614,8 +621,6 @@ class System : public SimObject, public PCEventScope
     void unserialize(CheckpointIn &cp) override;
 
     void drainResume() override;
-
-    bool hasPseudoMemOps() const { return pseudoMemOps; }
 
   public:
     Counter totalNumInsts;

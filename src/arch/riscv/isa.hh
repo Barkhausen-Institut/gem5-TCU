@@ -28,11 +28,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Gabe Black
- *          Timothy M. Jones
- *          Sven Karlsson
- *          Alec Roelke
  */
 
 #ifndef __ARCH_RISCV_ISA_HH__
@@ -41,6 +36,7 @@
 #include <map>
 #include <string>
 
+#include "arch/generic/isa.hh"
 #include "arch/riscv/registers.hh"
 #include "arch/riscv/types.hh"
 #include "base/bitfield.hh"
@@ -62,7 +58,7 @@ enum PrivilegeMode {
     PRV_M = 3
 };
 
-class ISA : public SimObject
+class ISA : public BaseISA
 {
   protected:
     std::vector<RegVal> miscRegFile;
@@ -72,8 +68,12 @@ class ISA : public SimObject
   public:
     typedef RiscvISAParams Params;
 
+    void clear(ThreadContext *tc) { clear(); }
+
+  protected:
     void clear();
 
+  public:
     RegVal readMiscRegNoEffect(int misc_reg) const;
     RegVal readMiscReg(int misc_reg, ThreadContext *tc);
     void setMiscRegNoEffect(int misc_reg, RegVal val);
@@ -91,7 +91,7 @@ class ISA : public SimObject
     void startup(ThreadContext *tc) {}
 
     /// Explicitly import the otherwise hidden startup
-    using SimObject::startup;
+    using BaseISA::startup;
 
     const Params *params() const;
 

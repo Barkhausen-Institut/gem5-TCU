@@ -36,11 +36,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Steve Reinhardt
- *          Lisa Hsu
- *          Nathan Binkert
- *          Steve Raasch
  */
 
 #include "cpu/exetrace.hh"
@@ -190,7 +185,8 @@ Trace::ExeTracerRecord::traceInst(const StaticInstPtr &inst, bool ran)
     outs << endl;
 
     Trace::getDebugLogger()->dprintf_flag(
-        when, thread->getCpuPtr()->name(), "ExecEnable", outs.str().c_str());
+        when, thread->getCpuPtr()->name(), "ExecEnable", "%s",
+        outs.str().c_str());
 }
 
 void

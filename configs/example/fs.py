@@ -37,9 +37,6 @@
 # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-# Authors: Ali Saidi
-#          Brad Beckmann
 
 from __future__ import print_function
 from __future__ import absolute_import
@@ -81,10 +78,7 @@ def cmd_line_template():
 
 def build_test_system(np):
     cmdline = cmd_line_template()
-    if buildEnv['TARGET_ISA'] == "alpha":
-        test_sys = makeLinuxAlphaSystem(test_mem_mode, bm[0], options.ruby,
-                                        cmdline=cmdline)
-    elif buildEnv['TARGET_ISA'] == "mips":
+    if buildEnv['TARGET_ISA'] == "mips":
         test_sys = makeLinuxMipsSystem(test_mem_mode, bm[0], cmdline=cmdline)
     elif buildEnv['TARGET_ISA'] == "sparc":
         test_sys = makeSparcSystem(test_mem_mode, bm[0], cmdline=cmdline)
@@ -104,6 +98,7 @@ def build_test_system(np):
             ruby=options.ruby,
             security=options.enable_security_extensions,
             vio_9p=options.vio_9p,
+            bootloader=options.bootloader,
         )
         if options.enable_context_switch_stats_dump:
             test_sys.enable_context_switch_stats_dump = True
@@ -130,9 +125,6 @@ def build_test_system(np):
 
     if options.kernel is not None:
         test_sys.kernel = binary(options.kernel)
-    else:
-        print("Error: a kernel must be provided to run in full system mode")
-        sys.exit(1)
 
     if options.script is not None:
         test_sys.readfile = options.script
@@ -245,10 +237,7 @@ def build_drive_system(np):
     DriveMemClass = SimpleMemory
 
     cmdline = cmd_line_template()
-    if buildEnv['TARGET_ISA'] == 'alpha':
-        drive_sys = makeLinuxAlphaSystem(drive_mem_mode, bm[1],
-                                         cmdline=cmdline)
-    elif buildEnv['TARGET_ISA'] == 'mips':
+    if buildEnv['TARGET_ISA'] == 'mips':
         drive_sys = makeLinuxMipsSystem(drive_mem_mode, bm[1], cmdline=cmdline)
     elif buildEnv['TARGET_ISA'] == 'sparc':
         drive_sys = makeSparcSystem(drive_mem_mode, bm[1], cmdline=cmdline)
@@ -281,9 +270,6 @@ def build_drive_system(np):
     drive_sys.cpu.connectAllPorts(drive_sys.membus)
     if options.kernel is not None:
         drive_sys.kernel = binary(options.kernel)
-    else:
-        print("Error: a kernel must be provided to run in full system mode")
-        sys.exit(1)
 
     if ObjectList.is_kvm_cpu(DriveCPUClass):
         drive_sys.kvm_vm = KvmVM()
@@ -334,12 +320,12 @@ if options.benchmark:
         sys.exit(1)
 else:
     if options.dual:
-        bm = [SysConfig(disk=options.disk_image, rootdev=options.root_device,
+        bm = [SysConfig(disks=options.disk_image, rootdev=options.root_device,
                         mem=options.mem_size, os_type=options.os_type),
-              SysConfig(disk=options.disk_image, rootdev=options.root_device,
+              SysConfig(disks=options.disk_image, rootdev=options.root_device,
                         mem=options.mem_size, os_type=options.os_type)]
     else:
-        bm = [SysConfig(disk=options.disk_image, rootdev=options.root_device,
+        bm = [SysConfig(disks=options.disk_image, rootdev=options.root_device,
                         mem=options.mem_size, os_type=options.os_type)]
 
 np = options.num_cpus

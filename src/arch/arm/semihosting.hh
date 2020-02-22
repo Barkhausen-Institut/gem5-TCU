@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 ARM Limited
+ * Copyright (c) 2018, 2019 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -33,9 +33,8 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Andreas Sandberg
  */
+
 #ifndef __ARCH_ARM_SEMIHOSTING_HH__
 #define __ARCH_ARM_SEMIHOSTING_HH__
 
@@ -243,6 +242,7 @@ class ArmSemihosting : public SimObject
         FILE *file;
     };
 
+    std::string filesRootDir;
     std::vector<std::unique_ptr<FileBase>> files;
     FILE *stdin;
     FILE *stdout;

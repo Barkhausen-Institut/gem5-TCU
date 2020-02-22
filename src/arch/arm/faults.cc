@@ -37,11 +37,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Ali Saidi
- *          Gabe Black
- *          Giacomo Gabrielli
- *          Thomas Grocutt
  */
 
 #include "arch/arm/faults.hh"
@@ -693,7 +688,7 @@ ArmFault::invoke64(ThreadContext *tc, const StaticInstPtr &inst)
     ArmStaticInst *arm_inst M5_VAR_USED = instrAnnotate(inst);
 
     // Set PC to start of exception handler
-    Addr new_pc = purifyTaggedAddr(vec_address, tc, toEL);
+    Addr new_pc = purifyTaggedAddr(vec_address, tc, toEL, true);
     DPRINTF(Faults, "Invoking Fault (AArch64 target EL):%s cpsr:%#x PC:%#x "
             "elr:%#x newVec: %#x %s\n", name(), cpsr, curr_pc, ret_addr,
             new_pc, arm_inst ? csprintf("inst: %#x", arm_inst->encoding()) :
@@ -1540,6 +1535,14 @@ PCAlignmentFault::routeToHyp(ThreadContext *tc) const
 
 SPAlignmentFault::SPAlignmentFault()
 {}
+
+bool
+SPAlignmentFault::routeToHyp(ThreadContext *tc) const
+{
+    assert(from64);
+    HCR hcr  = tc->readMiscRegNoEffect(MISCREG_HCR_EL2);
+    return EL2Enabled(tc) && hcr.tge==1;
+}
 
 SystemError::SystemError()
 {}

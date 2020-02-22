@@ -33,9 +33,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Gabe Black
- *          Giacomo Travaglini
  */
 
 #ifndef __ARCH_ARM_INSTS_MISC64_HH__
@@ -133,13 +130,16 @@ class MiscRegOp64 : public ArmStaticInst
                ExceptionLevel el, uint32_t immediate) const;
   private:
     bool checkEL1Trap(ThreadContext *tc, const MiscRegIndex misc_reg,
-                      ExceptionLevel el) const;
+                      ExceptionLevel el, ExceptionClass &ec,
+                      uint32_t &immediate) const;
 
     bool checkEL2Trap(ThreadContext *tc, const MiscRegIndex misc_reg,
-                      ExceptionLevel el, bool *is_vfp_neon) const;
+                      ExceptionLevel el, ExceptionClass &ec,
+                      uint32_t &immediate) const;
 
     bool checkEL3Trap(ThreadContext *tc, const MiscRegIndex misc_reg,
-                      ExceptionLevel el, bool *is_vfp_neon) const;
+                      ExceptionLevel el, ExceptionClass &ec,
+                      uint32_t &immediate) const;
 
 };
 

@@ -23,14 +23,12 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Gabe Black
  */
 
 #include "arch/arm/fastmodel/CortexA76/evs.hh"
 
 #include "arch/arm/fastmodel/CortexA76/cortex_a76.hh"
-#include "arch/arm/fastmodel/arm/cpu.hh"
+#include "arch/arm/fastmodel/iris/cpu.hh"
 #include "base/logging.hh"
 #include "dev/arm/base_gic.hh"
 #include "sim/core.hh"

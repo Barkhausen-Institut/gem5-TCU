@@ -37,8 +37,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Stephen Hines
  */
 
 #include "arch/arm/insts/static_inst.hh"
@@ -1166,7 +1164,8 @@ ArmStaticInst::generalExceptionsToAArch64(ThreadContext *tc,
 unsigned
 ArmStaticInst::getCurSveVecLenInBits(ThreadContext *tc)
 {
-    return tc->getIsaPtr()->getCurSveVecLenInBits(tc);
+    auto *isa = static_cast<ArmISA::ISA *>(tc->getIsaPtr());
+    return isa->getCurSveVecLenInBits(tc);
 }
 
 }

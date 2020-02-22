@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2016-2018 ARM Limited
+ * Copyright (c) 2011, 2016-2018, 2020 ARM Limited
  * Copyright (c) 2013 Advanced Micro Devices, Inc.
  * All rights reserved
  *
@@ -37,8 +37,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Kevin Lim
  */
 
 #ifndef __CPU_CHECKER_CPU_HH__
@@ -595,7 +593,7 @@ class CheckerCPU : public BaseCPU, public ExecContext
 
     void dumpAndExit();
 
-    ThreadContext *tcBase() override { return tc; }
+    ThreadContext *tcBase() const override { return tc; }
     SimpleThread *threadBase() { return thread; }
 
     InstResult unverifiedResult;
