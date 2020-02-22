@@ -386,17 +386,9 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
         // If we need to write, adjust the read packet to write the modified
         // value back to memory.
         if (doWrite) {
-            // create a new request and packet, because the old one might have
-            // been changed by the cache (e.g., it could have set cacheResponding)
-            request = std::make_shared<Request>(oldRead->getAddr(),
-                                                oldRead->getSize(), flags,
-                                                walker->masterId);
-            write = new Packet(request, MemCmd::WriteReq);
-            write->allocate();
-            if(oldRead->hasSharers())
-                write->setHasSharers();
+            write = oldRead;
             write->setLE<uint64_t>(pte);
-            delete oldRead;
+            write->cmd = MemCmd::WriteReq;
         } else {
             write = NULL;
             delete oldRead;
