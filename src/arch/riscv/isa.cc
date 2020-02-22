@@ -288,6 +288,18 @@ ISA::readMiscReg(int misc_reg, ThreadContext *tc)
                     tc->getCpuPtr()->getInterruptController(tc->threadId()));
             return ic->readIE();
         }
+      case MISCREG_SEPC:
+      case MISCREG_MEPC:
+        {
+            auto misa = readMiscRegNoEffect(MISCREG_ISA);
+            RegVal val = readMiscRegNoEffect(misc_reg);
+            // epc[0] is always 0
+            val &= ~static_cast<Addr>(0x1);
+            // if compressed instructions are disabled, epc[1] is set to 0
+            if ((misa & ISA_EXT_C_MASK) == 0)
+                val &= ~static_cast<Addr>(0x2);
+            return val;
+        }
       default:
         // Try reading HPM counters
         // As a placeholder, all HPM counters are just cycle counters
@@ -350,6 +362,17 @@ ISA::setMiscReg(int misc_reg, RegVal val, ThreadContext *tc)
                     new_val.mode != AddrXlateMode::SV39)
                     new_val.mode = cur_val.mode;
                 setMiscRegNoEffect(misc_reg, new_val);
+            }
+            break;
+          case MISCREG_ISA:
+            {
+                auto cur_val = readMiscRegNoEffect(misc_reg);
+                // only allow to disable compressed instructions
+                // if the following instruction is 4-byte aligned
+                if ((val & ISA_EXT_C_MASK) == 0 &&
+                    (tc->pcState().npc() & 0x3) != 0)
+                    val |= cur_val & ISA_EXT_C_MASK;
+                setMiscRegNoEffect(misc_reg, val);
             }
             break;
           case MISCREG_STATUS:
