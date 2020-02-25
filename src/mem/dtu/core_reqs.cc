@@ -110,7 +110,7 @@ CoreRequests::XlateRequest::complete(size_t id, RegFile::reg_t resp)
                                        : DtuTlb::PAGE_MASK;
 
     NocAddr phys((resp & ~mask) | (virt & mask));
-    uint flags = resp & (DtuTlb::IRWX | DtuTlb::LARGE);
+    uint flags = resp & (DtuTlb::RWX | DtuTlb::LARGE);
     if (flags == 0)
     {
         trans->finished(false, phys);

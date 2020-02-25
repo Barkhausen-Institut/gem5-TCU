@@ -36,13 +36,12 @@
 
 static const char *decode_access(uint access)
 {
-    static char buf[6];
+    static char buf[5];
     buf[0] = (access & DtuTlb::LARGE) ? 'l' : '-';
-    buf[1] = (access & DtuTlb::INTERN) ? 'i' : '-';
-    buf[2] = (access & DtuTlb::READ) ? 'r' : '-';
-    buf[3] = (access & DtuTlb::WRITE) ? 'w' : '-';
-    buf[4] = (access & DtuTlb::EXEC) ? 'x' : '-';
-    buf[5] = '\0';
+    buf[1] = (access & DtuTlb::READ) ? 'r' : '-';
+    buf[2] = (access & DtuTlb::WRITE) ? 'w' : '-';
+    buf[3] = (access & DtuTlb::EXEC) ? 'x' : '-';
+    buf[4] = '\0';
     return buf;
 }
 

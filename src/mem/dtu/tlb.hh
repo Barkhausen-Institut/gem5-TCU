@@ -84,13 +84,10 @@ class DtuTlb
         READ    = 1,
         WRITE   = 2,
         EXEC    = 4,
-        INTERN  = 8,
-        LARGE   = 16,
-        UNCACHE = 32,
+        LARGE   = 8,
         RW      = READ | WRITE,
         RX      = READ | EXEC,
         RWX     = RW | EXEC,
-        IRWX    = INTERN | RWX
     };
 
     struct MissHandler
