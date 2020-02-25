@@ -45,6 +45,7 @@ class DtuTlb
     struct Entry
     {
         Addr virt;
+        uint16_t asid;
         NocAddr phys;
         uint flags;
 
@@ -111,17 +112,17 @@ class DtuTlb
 
     void regStats();
 
-    Result lookup(Addr virt, uint access, NocAddr *phys);
+    Result lookup(Addr virt, uint16_t asid, uint access, NocAddr *phys);
 
-    void insert(Addr virt, NocAddr phys, uint flags);
+    void insert(Addr virt, uint16_t asid, NocAddr phys, uint flags);
 
-    void remove(Addr virt);
+    void remove(Addr virt, uint16_t asid);
 
     void clear();
 
   private:
 
-    DtuTlb::Result do_lookup(Addr virt, uint access, NocAddr *phys);
+    Result do_lookup(Addr virt, uint16_t asid, uint access, NocAddr *phys);
 
     void evict();
 

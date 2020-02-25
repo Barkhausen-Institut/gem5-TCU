@@ -72,6 +72,7 @@ class CoreRequests
         void complete(size_t id, RegFile::reg_t resp) override;
 
         XferUnit::Translation *trans;
+        uint16_t asid;
         Addr virt;
         uint access;
     };
@@ -96,6 +97,7 @@ class CoreRequests
     void regStats();
 
     void startTranslate(size_t id,
+                        unsigned vpeId,
                         Addr virt,
                         uint access,
                         XferUnit::Translation *trans);

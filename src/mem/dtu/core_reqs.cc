@@ -61,6 +61,7 @@ CoreRequests::regStats()
 
 void
 CoreRequests::startTranslate(size_t id,
+                             unsigned vpeId,
                              Addr virt,
                              uint access,
                              XferUnit::Translation *trans)
@@ -71,12 +72,13 @@ CoreRequests::startTranslate(size_t id,
     auto req = new XlateRequest(*this);
     req->trans = trans;
     req->virt = virt;
+    req->asid = vpeId;
     req->access = access;
     reqs[id] = req;
 
     DPRINTFS(DtuCoreReqs, (&dtu),
-        "CoreRequest[%lu] = translate(addr=%p, acc=%#x)\n",
-        id, virt, access);
+        "CoreRequest[%lu] = translate(asid=%#x, addr=%p, acc=%#x)\n",
+        id, req->asid, virt, access);
     coreReqs++;
 
     if(dtu.regs().get(PrivReg::CORE_REQ) == 0)
@@ -97,7 +99,9 @@ CoreRequests::XlateRequest::start(size_t id)
 {
     const Addr mask = DtuTlb::PAGE_MASK;
     const Addr virtPage = virt & ~mask;
-    req.dtu.regs().set(PrivReg::CORE_REQ, virtPage | (access << 1) | (id << 5));
+    const Addr val = (static_cast<Addr>(asid) << 48) | virtPage |
+                     (access << 1) | (id << 5);
+    req.dtu.regs().set(PrivReg::CORE_REQ, val);
     waiting = false;
 
     Request::start(id);
@@ -118,7 +122,7 @@ CoreRequests::XlateRequest::complete(size_t id, RegFile::reg_t resp)
     }
     else
     {
-        req.dtu.tlb()->insert(virt, phys, flags);
+        req.dtu.tlb()->insert(virt, asid, phys, flags);
         trans->finished(true, phys);
     }
 }

@@ -132,6 +132,8 @@ XferUnit::TransferEvent::tryStart()
 {
     assert(buf == NULL);
 
+    // by default, virtual addresses refer to the running VPE
+    vpe = xfer->dtu.regs().getVPE();
     buf = xfer->allocateBuf(this, flags());
 
     // try again later, if there is no free buffer
@@ -196,7 +198,8 @@ XferUnit::TransferEvent::process()
         uint access = isWrite() && !(flags() & MSGRECV) ? DtuTlb::WRITE
                                                         : DtuTlb::READ;
 
-        DtuTlb::Result res = xfer->dtu.tlb()->lookup(local, access, &phys);
+        DtuTlb::Result res = xfer->dtu.tlb()->lookup(
+            local, vpe, access, &phys);
         if (res != DtuTlb::HIT)
         {
             if (res == DtuTlb::PAGEFAULT)
@@ -211,7 +214,7 @@ XferUnit::TransferEvent::process()
             }
 
             trans = new Translation(*this);
-            xfer->dtu.startTranslate(buf->id, local, access, trans);
+            xfer->dtu.startTranslate(buf->id, vpe, local, access, trans);
             return;
         }
     }

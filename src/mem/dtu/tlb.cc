@@ -45,6 +45,11 @@ static const char *decode_access(uint access)
     return buf;
 }
 
+static Addr build_key(uint16_t asid, Addr virt)
+{
+    return (static_cast<Addr>(asid) << 48) | virt;
+}
+
 DtuTlb::DtuTlb(Dtu &_dtu, size_t _num)
     : dtu(_dtu), trie(), entries(), free(), num(_num), lru_seq()
 {
@@ -85,7 +90,7 @@ DtuTlb::regStats()
 }
 
 DtuTlb::Result
-DtuTlb::lookup(Addr virt, uint access, NocAddr *phys)
+DtuTlb::lookup(Addr virt, uint16_t asid, uint access, NocAddr *phys)
 {
     static const char *results[] =
     {
@@ -94,18 +99,20 @@ DtuTlb::lookup(Addr virt, uint access, NocAddr *phys)
         "PAGEFAULT",
     };
 
-    DtuTlb::Result res = do_lookup(virt, access, phys);
+    DtuTlb::Result res = do_lookup(virt, asid, access, phys);
 
-    DPRINTFS(DtuTlbRead, (&dtu), "TLB lookup for %p %s -> %s (%p)\n",
-            virt, decode_access(access), results[res], phys->getAddr());
+    DPRINTFS(DtuTlbRead, (&dtu),
+             "TLB lookup for virt=%p asid=%#x perm=%s -> %s (%p)\n",
+             virt, asid, decode_access(access), results[res], phys->getAddr());
 
     return res;
 }
 
 DtuTlb::Result
-DtuTlb::do_lookup(Addr virt, uint access, NocAddr *phys)
+DtuTlb::do_lookup(Addr virt, uint16_t asid, uint access, NocAddr *phys)
 {
-    Entry *e = trie.lookup(virt);
+    assert((virt & 0xFFFF000000000000) == 0);
+    Entry *e = trie.lookup(build_key(asid, virt));
     if (!e)
     {
         misses++;
@@ -149,7 +156,7 @@ DtuTlb::evict()
 }
 
 void
-DtuTlb::insert(Addr virt, NocAddr phys, uint flags)
+DtuTlb::insert(Addr virt, uint16_t asid, NocAddr phys, uint flags)
 {
     assert(flags != 0);
 
@@ -157,7 +164,8 @@ DtuTlb::insert(Addr virt, NocAddr phys, uint flags)
                                  : (64 - PAGE_BITS);
     Addr mask = (flags & LARGE) ? LPAGE_MASK : PAGE_MASK;
 
-    Entry *e = trie.lookup(virt);
+    Addr key = build_key(asid, virt);
+    Entry *e = trie.lookup(key);
     if (!e)
     {
         if (free.empty())
@@ -165,33 +173,37 @@ DtuTlb::insert(Addr virt, NocAddr phys, uint flags)
 
         assert(!free.empty());
         e = free.back();
+        e->asid = asid;
         e->virt = virt & ~mask;
-        e->handle = trie.insert(e->virt, width, e);
+        e->handle = trie.insert(key, width, e);
         free.pop_back();
     }
     else if((e->flags & LARGE) != (flags & LARGE))
     {
-        trie.remove(virt);
+        trie.remove(key);
+        e->asid = asid;
         e->virt = virt & ~mask;
-        e->handle = trie.insert(e->virt, width, e);
+        e->handle = trie.insert(key, width, e);
     }
 
     e->phys = NocAddr(phys.getAddr() & ~mask);
     e->flags = flags;
 
-    DPRINTFS(DtuTlbWrite, (&dtu), "TLB insert for %p %s -> %p\n",
-            e->virt, decode_access(e->flags), e->phys.getAddr());
+    DPRINTFS(DtuTlbWrite, (&dtu),
+             "TLB insert for virt=%p asid=%#x perm=%s -> %p\n",
+             e->virt, e->asid, decode_access(e->flags), e->phys.getAddr());
     inserts++;
 }
 
 void
-DtuTlb::remove(Addr virt)
+DtuTlb::remove(Addr virt, uint16_t asid)
 {
-    Entry *e = trie.lookup(virt);
+    Entry *e = trie.lookup(build_key(asid, virt));
     if (e)
     {
-        DPRINTFS(DtuTlbWrite, (&dtu), "TLB invalidate for %p %s -> %p\n",
-                virt, decode_access(e->flags), e->phys.getAddr());
+        DPRINTFS(DtuTlbWrite, (&dtu),
+                 "TLB invalidate for virt=%p asid=%#x perm=%s -> %p\n",
+                 virt, asid, decode_access(e->flags), e->phys.getAddr());
 
         trie.remove(e->handle);
         e->handle = NULL;

@@ -548,13 +548,24 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint flags)
     return DtuError::NONE;
 }
 
+void
+MessageUnit::ReceiveTransferEvent::transferStart()
+{
+    unsigned epId = rep();
+    RecvEp ep = dtu().regs().getRecvEp(epId);
+    // the virtual address of the receive buffer belongs to the owner of the
+    // receive EP
+    vpeId(ep.vpe);
+
+    MemoryUnit::ReceiveTransferEvent::transferStart();
+}
+
 bool
 MessageUnit::ReceiveTransferEvent::transferDone(DtuError result)
 {
     MessageHeader* header = pkt->getPtr<MessageHeader>();
-    NocAddr addr(pkt->getAddr());
+    unsigned epId = rep();
 
-    unsigned epId = addr.offset;
     RecvEp ep = dtu().regs().getRecvEp(epId);
     if (ep.bufAddr != 0)
     {
@@ -566,7 +577,7 @@ MessageUnit::ReceiveTransferEvent::transferDone(DtuError result)
             return false;
         }
 
-        result = msgUnit->finishMsgReceive(addr.offset, msgAddr, header,
+        result = msgUnit->finishMsgReceive(epId, msgAddr, header,
                                            result, flags(), !coreReq);
     }
 

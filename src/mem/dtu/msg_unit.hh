@@ -86,6 +86,13 @@ class MessageUnit
               msgUnit(_msgUnit), msgAddr(local), coreReq()
         {}
 
+        unsigned rep() const
+        {
+            NocAddr addr(pkt->getAddr());
+            return addr.offset;
+        }
+
+        void transferStart() override;
         bool transferDone(DtuError result) override;
     };
 

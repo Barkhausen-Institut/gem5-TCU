@@ -464,7 +464,11 @@ Dtu::executePrivCommand(PacketPtr pkt)
         }
         case PrivCommand::INV_PAGE:
             if (tlb())
-                tlb()->remove(cmd.arg);
+            {
+                uint16_t asid = cmd.arg >> 44;
+                Addr virt = cmd.arg & 0xFFFFFFFFFFF;
+                tlb()->remove(virt, asid);
+            }
             break;
         case PrivCommand::INV_TLB:
             if (tlb())
@@ -747,11 +751,12 @@ Dtu::startTransfer(void *event, Cycles delay)
 
 void
 Dtu::startTranslate(size_t id,
+                    unsigned vpeId,
                     Addr virt,
                     uint access,
                     XferUnit::Translation *trans)
 {
-    coreReqs.startTranslate(id, virt, access, trans);
+    coreReqs.startTranslate(id, vpeId, virt, access, trans);
 }
 
 void

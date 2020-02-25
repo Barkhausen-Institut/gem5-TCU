@@ -215,6 +215,7 @@ class Dtu : public BaseDtu
     void startTransfer(void *event, Cycles delay);
 
     void startTranslate(size_t id,
+                        unsigned vpeId,
                         Addr virt,
                         uint access,
                         XferUnit::Translation *trans);
