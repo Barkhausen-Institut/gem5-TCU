@@ -303,11 +303,6 @@ XferUnit::recvMemResponse(uint64_t evId, PacketPtr pkt)
         return;
     }
 
-    DPRINTFS(DtuXfers, (&dtu),
-             "buf%d: Received mem response for %#lx (rem=%#lx, slots=%d/%d)\n",
-             buf->id, (Addr)(evId >> 32), buf->event->remaining,
-             buf->event->freeSlots + 1, dtu.reqCount);
-
     if (pkt)
     {
         if (buf->event->isRead())
@@ -323,6 +318,11 @@ XferUnit::recvMemResponse(uint64_t evId, PacketPtr pkt)
 
         buf->event->freeSlots++;
     }
+
+    DPRINTFS(DtuXfers, (&dtu),
+             "buf%d: Received mem response for %#lx (rem=%#lx, slots=%d/%d)\n",
+             buf->id, (Addr)(evId >> 32), buf->event->remaining,
+             buf->event->freeSlots, dtu.reqCount);
 
     continueTransfer(buf);
 }
