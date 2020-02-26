@@ -567,7 +567,7 @@ MessageUnit::ReceiveTransferEvent::transferDone(DtuError result)
     unsigned epId = rep();
 
     RecvEp ep = dtu().regs().getRecvEp(epId);
-    if (ep.bufAddr != 0)
+    if (result == DtuError::NONE && ep.bufAddr != 0)
     {
         // notify SW if we received a message for a different VPE
         if(ep.vpe != dtu().regs().getVPE() && !coreReq)
