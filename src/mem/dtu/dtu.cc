@@ -316,12 +316,8 @@ Dtu::executeCommand(PacketPtr pkt)
             panic("Invalid opcode %#x\n", static_cast<RegFile::reg_t>(cmd.opcode));
     }
 
-    if(cmd.opcode == Command::SEND || cmd.opcode == Command::REPLY ||
-       cmd.opcode == Command::READ || cmd.opcode == Command::WRITE)
-    {
-        schedCpuResponse(cmdPkt, clockEdge(Cycles(1)));
-        cmdPkt = nullptr;
-    }
+    if (cmdPkt && cmd.opcode != Command::SLEEP)
+        startSleep(0, INVALID_EP_ID, false);
 }
 
 void
@@ -421,7 +417,7 @@ Dtu::finishCommand(DtuError error)
         }
     }
 
-    if (cmd.opcode == Command::SLEEP)
+    if (cmdPkt || cmd.opcode == Command::SLEEP)
         stopSleep();
 
     DPRINTF(DtuCmd, "Finished command %s with EP=%u, flags=%#x (id=%llu) -> %u\n",
@@ -817,6 +813,15 @@ Dtu::startTranslate(size_t id,
                     uint access,
                     XferUnit::Translation *trans)
 {
+    // if a command is running, send the response now to finish its memory
+    // write instruction to the COMMAND register
+    if (cmdPkt)
+    {
+        stopSleep();
+        schedCpuResponse(cmdPkt, clockEdge(Cycles(1)));
+        cmdPkt = NULL;
+    }
+
     coreReqs.startTranslate(id, vpeId, virt, access, trans);
 }
 
@@ -826,6 +831,14 @@ Dtu::startForeignReceive(size_t id,
                          unsigned vpeId,
                          XferUnit::TransferEvent *event)
 {
+    // as above
+    if (cmdPkt)
+    {
+        stopSleep();
+        schedCpuResponse(cmdPkt, clockEdge(Cycles(1)));
+        cmdPkt = NULL;
+    }
+
     coreReqs.startForeignReceive(id, epId, vpeId, event);
 }
 
