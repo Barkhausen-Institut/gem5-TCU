@@ -41,8 +41,6 @@
 
 const char *RegFile::dtuRegNames[] = {
     "FEATURES",
-    "ROOT_PT",
-    "PF_EP",
     "CUR_TIME",
     "CLEAR_IRQ",
     "CLOCK",
@@ -99,6 +97,13 @@ RegFile::RegFile(Dtu &_dtu, const std::string& name, unsigned _numEndpoints)
       numEndpoints(_numEndpoints),
       _name(name)
 {
+    static_assert(sizeof(dtuRegNames) / sizeof(dtuRegNames[0]) ==
+        numDtuRegs, "dtuRegNames out of sync");
+    static_assert(sizeof(privRegNames) / sizeof(privRegNames[0]) ==
+        numPrivRegs, "privRegNames out of sync");
+    static_assert(sizeof(cmdRegNames) / sizeof(cmdRegNames[0]) ==
+        numCmdRegs, "cmdRegNames out of sync");
+
     // at boot, all PEs are privileged
     reg_t feat = static_cast<reg_t>(Features::PRIV);
     set(DtuReg::FEATURES, feat);

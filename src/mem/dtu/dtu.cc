@@ -114,6 +114,11 @@ Dtu::Dtu(DtuParams* p)
     transferToNocLatency(p->transfer_to_noc_latency),
     nocToTransferLatency(p->noc_to_transfer_latency)
 {
+    static_assert(sizeof(cmdNames) / sizeof(cmdNames[0]) ==
+        Command::PRINT + 1, "cmdNames out of sync");
+    static_assert(sizeof(privCmdNames) / sizeof(privCmdNames[0]) ==
+        PrivCommand::XCHG_VPE + 1, "privCmdNames out of sync");
+
     assert(p->buf_size >= maxNocPacketSize);
 
     PEMemory *sys = dynamic_cast<PEMemory*>(system);
