@@ -136,13 +136,24 @@ class Dtu : public BaseDtu
         enum Opcode
         {
             IDLE            = 0,
+            INV_PAGE        = 1,
+            INV_TLB         = 2,
+            XCHG_VPE        = 3,
+        };
+
+        Opcode opcode;
+        uint64_t arg;
+    };
+
+    struct ExtCommand
+    {
+        enum Opcode
+        {
+            IDLE            = 0,
             INV_EP          = 1,
-            INV_PAGE        = 2,
-            INV_TLB         = 3,
-            INV_REPLY       = 4,
-            RESET           = 5,
-            FLUSH_CACHE     = 6,
-            XCHG_VPE        = 7,
+            INV_REPLY       = 2,
+            RESET           = 3,
+            FLUSH_CACHE     = 4,
         };
 
         Opcode opcode;
@@ -244,6 +255,10 @@ class Dtu : public BaseDtu
 
     void executePrivCommand(PacketPtr pkt);
 
+    ExtCommand getExtCommand();
+
+    void executeExtCommand(PacketPtr pkt);
+
     void finishCommand(DtuError error);
 
     bool has_message(int ep);
@@ -331,6 +346,23 @@ class Dtu : public BaseDtu
         const char* description() const override { return "ExecPrivCmdEvent"; }
     };
 
+    struct ExecExtCmdEvent : public DtuEvent
+    {
+        PacketPtr pkt;
+
+        ExecExtCmdEvent(Dtu& _dtu, PacketPtr _pkt)
+            : DtuEvent(_dtu), pkt(_pkt)
+        {}
+
+        void process() override
+        {
+            dtu.executeExtCommand(pkt);
+            setFlags(AutoDelete);
+        }
+
+        const char* description() const override { return "ExecExtCmdEvent"; }
+    };
+
     struct FinishCommandEvent : public DtuEvent
     {
         DtuError error;
@@ -402,6 +434,7 @@ class Dtu : public BaseDtu
     // commands
     Stats::Vector commands;
     Stats::Vector privCommands;
+    Stats::Vector extCommands;
 
     static uint64_t nextCmdId;
 

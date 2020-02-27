@@ -59,12 +59,13 @@ enum class PrivReg : Addr
     CORE_REQ,
     CORE_RESP,
     PRIV_CMD,
+    EXT_CMD,
     // MSGS[16] | VPE_ID[16] | EVENTS[3]
     CUR_VPE,
     OLD_VPE,
 };
 
-constexpr unsigned numPrivRegs = 5;
+constexpr unsigned numPrivRegs = 6;
 
 // registers to issue a command
 enum class CmdReg : Addr
@@ -274,9 +275,10 @@ class RegFile
         WROTE_NONE      = 0,
         WROTE_CMD       = 1,
         WROTE_PRIV_CMD  = 2,
-        WROTE_ABORT     = 4,
-        WROTE_XLATE     = 8,
-        WROTE_CLEAR_IRQ = 16,
+        WROTE_EXT_CMD   = 4,
+        WROTE_ABORT     = 8,
+        WROTE_XLATE     = 16,
+        WROTE_CLEAR_IRQ = 32,
     };
 
     RegFile(Dtu &dtu, const std::string& name, unsigned numEndpoints);

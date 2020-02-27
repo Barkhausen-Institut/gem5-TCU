@@ -63,13 +63,18 @@ static const char *cmdNames[] =
 static const char *privCmdNames[] =
 {
     "IDLE",
-    "INV_EP",
     "INV_PAGE",
     "INV_TLB",
+    "XCHG_VPE",
+};
+
+static const char *extCmdNames[] =
+{
+    "IDLE",
+    "INV_EP",
     "INV_REPLY",
     "RESET",
     "FLUSH_CACHE",
-    "XCHG_VPE",
 };
 
 // cmdId = 0 is reserved for "no command"
@@ -118,6 +123,8 @@ Dtu::Dtu(DtuParams* p)
         Command::PRINT + 1, "cmdNames out of sync");
     static_assert(sizeof(privCmdNames) / sizeof(privCmdNames[0]) ==
         PrivCommand::XCHG_VPE + 1, "privCmdNames out of sync");
+    static_assert(sizeof(extCmdNames) / sizeof(extCmdNames[0]) ==
+        ExtCommand::FLUSH_CACHE + 1, "extCmdNames out of sync");
 
     assert(p->buf_size >= maxNocPacketSize);
 
@@ -190,6 +197,14 @@ Dtu::regStats()
         .flags(Stats::total | Stats::nozero);
     for (size_t i = 0; i < sizeof(privCmdNames) / sizeof(privCmdNames[0]); ++i)
         privCommands.subname(i, privCmdNames[i]);
+
+    extCommands
+        .init(sizeof(extCmdNames) / sizeof(extCmdNames[0]))
+        .name(name() + ".extCommands")
+        .desc("The executed external commands")
+        .flags(Stats::total | Stats::nozero);
+    for (size_t i = 0; i < sizeof(extCmdNames) / sizeof(extCmdNames[0]); ++i)
+        extCommands.subname(i, extCmdNames[i]);
 
     if (tlb())
         tlb()->regStats();
@@ -444,8 +459,6 @@ Dtu::executePrivCommand(PacketPtr pkt)
 
     privCommands[static_cast<size_t>(cmd.opcode)]++;
 
-    Cycles delay(1);
-
     DtuError result = DtuError::NONE;
 
     DPRINTF(DtuCmd, "Executing privileged command %s with arg=%p\n",
@@ -455,18 +468,6 @@ Dtu::executePrivCommand(PacketPtr pkt)
     {
         case PrivCommand::IDLE:
             break;
-        case PrivCommand::INV_EP:
-        {
-            unsigned epid = cmd.arg & 0xFFFF;
-            bool force = !!(cmd.arg & (1 << 16));
-            if (!regs().invalidate(epid, force))
-                result = DtuError::MISS_CREDITS;
-            else {
-                regs().setEvent(EventType::EP_INVAL);
-                wakeupCore(false);
-            }
-            break;
-        }
         case PrivCommand::INV_PAGE:
             if (tlb())
             {
@@ -478,20 +479,6 @@ Dtu::executePrivCommand(PacketPtr pkt)
         case PrivCommand::INV_TLB:
             if (tlb())
                 tlb()->clear();
-            break;
-        case PrivCommand::INV_REPLY:
-        {
-            unsigned repid = cmd.arg & 0xFFFF;
-            unsigned peid = (cmd.arg >> 16) & 0xFF;
-            unsigned sepid = (cmd.arg >> 24) & 0xFFFF;
-            result = msgUnit->invalidateReply(repid, peid, sepid);
-            break;
-        }
-        case PrivCommand::RESET:
-            delay += reset(!!(cmd.arg >> 59));
-            break;
-        case PrivCommand::FLUSH_CACHE:
-            delay += flushInvalCaches(false);
             break;
         case PrivCommand::XCHG_VPE:
         {
@@ -506,18 +493,7 @@ Dtu::executePrivCommand(PacketPtr pkt)
     }
 
     if (pkt)
-    {
-        auto senderState = dynamic_cast<NocSenderState*>(pkt->senderState);
-        if (senderState)
-        {
-            senderState->result = result;
-            schedNocResponse(pkt, clockEdge(delay));
-        }
-        else
-        {
-            schedCpuResponse(pkt, clockEdge(Cycles(1)));
-        }
-    }
+        schedCpuResponse(pkt, clockEdge(Cycles(1)));
 
     if (result != DtuError::NONE)
     {
@@ -529,6 +505,86 @@ Dtu::executePrivCommand(PacketPtr pkt)
     // set privileged command back to IDLE
     regFile.set(PrivReg::PRIV_CMD,
         static_cast<RegFile::reg_t>(PrivCommand::IDLE));
+}
+
+Dtu::ExtCommand
+Dtu::getExtCommand()
+{
+    auto reg = regFile.get(PrivReg::EXT_CMD);
+
+    ExtCommand cmd;
+    cmd.opcode = static_cast<ExtCommand::Opcode>(reg & 0xF);
+    cmd.arg = reg >> 4;
+    return cmd;
+}
+
+void
+Dtu::executeExtCommand(PacketPtr pkt)
+{
+    ExtCommand cmd = getExtCommand();
+
+    extCommands[static_cast<size_t>(cmd.opcode)]++;
+
+    Cycles delay(1);
+
+    DtuError result = DtuError::NONE;
+
+    DPRINTF(DtuCmd, "Executing external command %s with arg=%p\n",
+            extCmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg);
+
+    switch (cmd.opcode)
+    {
+        case ExtCommand::IDLE:
+            break;
+        case ExtCommand::INV_EP:
+        {
+            unsigned epid = cmd.arg & 0xFFFF;
+            bool force = !!(cmd.arg & (1 << 16));
+            if (!regs().invalidate(epid, force))
+                result = DtuError::MISS_CREDITS;
+            else {
+                regs().setEvent(EventType::EP_INVAL);
+                wakeupCore(false);
+            }
+            break;
+        }
+        case ExtCommand::INV_REPLY:
+        {
+            unsigned repid = cmd.arg & 0xFFFF;
+            unsigned peid = (cmd.arg >> 16) & 0xFF;
+            unsigned sepid = (cmd.arg >> 24) & 0xFFFF;
+            result = msgUnit->invalidateReply(repid, peid, sepid);
+            break;
+        }
+        case ExtCommand::RESET:
+            delay += reset(!!(cmd.arg >> 59));
+            break;
+        case ExtCommand::FLUSH_CACHE:
+            delay += flushInvalCaches(false);
+            break;
+        default:
+            // TODO error handling
+            panic("Invalid opcode %#x\n", static_cast<RegFile::reg_t>(cmd.opcode));
+    }
+
+    if (pkt)
+    {
+        auto senderState = dynamic_cast<NocSenderState*>(pkt->senderState);
+        assert(senderState);
+        senderState->result = result;
+        schedNocResponse(pkt, clockEdge(delay));
+    }
+
+    if (result != DtuError::NONE)
+    {
+        DPRINTF(DtuCmd, "External command %s failed (%u)\n",
+                extCmdNames[static_cast<size_t>(cmd.opcode)],
+                (unsigned)result);
+    }
+
+    // set external command back to IDLE
+    regFile.set(PrivReg::EXT_CMD,
+        static_cast<RegFile::reg_t>(ExtCommand::IDLE));
 }
 
 bool
@@ -1050,18 +1106,22 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
         if (!isCpuRequest)
             schedNocRequestFinished(clockEdge(Cycles(1)));
 
-        if (~result & RegFile::WROTE_PRIV_CMD)
+        if (~result & RegFile::WROTE_EXT_CMD)
         {
+            assert(isCpuRequest || result == RegFile::WROTE_NONE);
             pkt->headerDelay = 0;
             pkt->payloadDelay = 0;
 
-            if (isCpuRequest && (~result & RegFile::WROTE_CMD))
+            if (isCpuRequest &&
+                (result & (RegFile::WROTE_CMD | RegFile::WROTE_PRIV_CMD)) == 0)
                 schedCpuResponse(pkt, when);
             else if(!isCpuRequest)
                 schedNocResponse(pkt, when);
 
             if (result & RegFile::WROTE_CMD)
                 schedule(new ExecCmdEvent(*this, pkt), when);
+            else if (result & RegFile::WROTE_PRIV_CMD)
+                schedule(new ExecPrivCmdEvent(*this, pkt), when);
             else if (result & RegFile::WROTE_ABORT)
                 schedule(abortCommandEvent, when);
             else if (result & RegFile::WROTE_XLATE)
@@ -1070,7 +1130,7 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
                 clearIrq();
         }
         else
-            schedule(new ExecPrivCmdEvent(*this, pkt), when);
+            schedule(new ExecExtCmdEvent(*this, pkt), when);
     }
     else
     {
@@ -1078,6 +1138,8 @@ Dtu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
             executeCommand(NULL);
         if (result & RegFile::WROTE_PRIV_CMD)
             executePrivCommand(NULL);
+        if (result & RegFile::WROTE_EXT_CMD)
+            executeExtCommand(NULL);
         if (result & RegFile::WROTE_ABORT)
             abortCommand();
         if (result & RegFile::WROTE_XLATE)

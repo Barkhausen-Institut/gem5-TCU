@@ -50,6 +50,7 @@ const char *RegFile::privRegNames[] = {
     "CORE_REQ",
     "CORE_RESP",
     "PRIV_CMD",
+    "EXT_CMD",
     "CUR_VPE",
     "OLD_VPE",
 };
@@ -571,7 +572,11 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
                         res |= WROTE_XLATE;
                     else if (reg == PrivReg::PRIV_CMD)
                         res |= WROTE_PRIV_CMD;
-                    set(reg, data[offset / sizeof(reg_t)], access);
+                    // EXT_CMD can only be written externally
+                    else if (reg == PrivReg::EXT_CMD && !isCpuRequest)
+                        res |= WROTE_EXT_CMD;
+                    if (reg != PrivReg::EXT_CMD || !isCpuRequest)
+                        set(reg, data[offset / sizeof(reg_t)], access);
                 }
             }
         }
