@@ -455,8 +455,6 @@ Dtu::executePrivCommand(PacketPtr pkt)
 
     privCommands[static_cast<size_t>(cmd.opcode)]++;
 
-    DtuError result = DtuError::NONE;
-
     DPRINTF(DtuCmd, "Executing privileged command %s with arg=%p\n",
             privCmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg);
 
@@ -490,13 +488,6 @@ Dtu::executePrivCommand(PacketPtr pkt)
 
     if (pkt)
         schedCpuResponse(pkt, clockEdge(Cycles(1)));
-
-    if (result != DtuError::NONE)
-    {
-        DPRINTF(DtuCmd, "Privileged command %s failed (%u)\n",
-                privCmdNames[static_cast<size_t>(cmd.opcode)],
-                (unsigned)result);
-    }
 
     // set privileged command back to IDLE
     regFile.set(PrivReg::PRIV_CMD,
