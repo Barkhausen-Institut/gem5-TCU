@@ -35,6 +35,7 @@
 
 #include "base/types.hh"
 #include "base/bitfield.hh"
+#include "mem/dtu/error.hh"
 #include "mem/packet.hh"
 
 // only writable by remote DTUs
@@ -288,15 +289,15 @@ class RegFile
         return get(DtuReg::FEATURES) & static_cast<reg_t>(feature);
     }
 
-    bool invalidate(unsigned epId, bool force);
+    DtuError invalidate(unsigned epId, bool force, unsigned *unreadMask);
 
     void add_msg();
 
     void rem_msg();
 
-    reg_t messages() const
+    unsigned messages() const
     {
-        return ((get(PrivReg::CUR_VPE) >> 3) & 0xFFFF) != 0;
+        return (get(PrivReg::CUR_VPE) >> 3) & 0xFFFF;
     }
 
     bool hasEvents() const
@@ -364,6 +365,8 @@ class RegFile
     void printEpAccess(unsigned epId, bool read, bool cpu) const;
 
     Addr getSize() const;
+
+    unsigned countMsgs(unsigned vpeId);
 
   private:
 

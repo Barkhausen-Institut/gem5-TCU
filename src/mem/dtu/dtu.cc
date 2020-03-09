@@ -536,9 +536,11 @@ Dtu::executeExtCommand(PacketPtr pkt)
         {
             unsigned epid = cmd.arg & 0xFFFF;
             bool force = !!(cmd.arg & (1 << 16));
-            if (!regs().invalidate(epid, force))
-                result = DtuError::MISS_CREDITS;
-            else {
+            unsigned unreadMask;
+            result = regs().invalidate(epid, force, &unreadMask);
+            cmd.arg = unreadMask;
+            if (result == DtuError::NONE)
+            {
                 regs().setEvent(EventType::EP_INVAL);
                 wakeupCore(false);
             }
@@ -579,8 +581,8 @@ Dtu::executeExtCommand(PacketPtr pkt)
     }
 
     // set external command back to IDLE
-    regFile.set(PrivReg::EXT_CMD,
-        static_cast<RegFile::reg_t>(ExtCommand::IDLE));
+    cmd.opcode = ExtCommand::IDLE;
+    regFile.set(PrivReg::EXT_CMD, cmd.opcode | (cmd.arg << 4));
 }
 
 bool

@@ -105,26 +105,49 @@ RegFile::RegFile(Dtu &_dtu, const std::string& name, unsigned _numEndpoints)
     static_assert(sizeof(cmdRegNames) / sizeof(cmdRegNames[0]) ==
         numCmdRegs, "cmdRegNames out of sync");
 
-    // at boot, all PEs are privileged
-    reg_t feat = static_cast<reg_t>(Features::PRIV);
-    set(DtuReg::FEATURES, feat);
-    set(PrivReg::CUR_VPE, static_cast<reg_t>(Dtu::INVALID_VPE_ID) << 19);
-
     for (int epid = 0; epid < numEndpoints; epid++)
     {
         for (int i = 0; i < numEpRegs; i++)
             epRegs[epid].push_back(0);
     }
+
+    // at boot, all PEs are privileged
+    reg_t feat = static_cast<reg_t>(Features::PRIV);
+    set(DtuReg::FEATURES, feat);
+    set(PrivReg::CUR_VPE, static_cast<reg_t>(Dtu::INVALID_VPE_ID) << 19);
 }
 
-bool
-RegFile::invalidate(unsigned epId, bool force)
+unsigned
+RegFile::countMsgs(unsigned vpeId)
+{
+    unsigned count = 0;
+    for (int epid = 0; epid < numEndpoints; epid++)
+    {
+        if (getEpType(epid) == EpType::RECEIVE)
+        {
+            RecvEp rep = getRecvEp(epid);
+            if (rep.vpe == vpeId)
+                count += rep.unreadMsgs();
+        }
+    }
+    return count;
+}
+
+DtuError
+RegFile::invalidate(unsigned epId, bool force, unsigned *unreadMask)
 {
     if (!force && getEpType(epId) == EpType::SEND)
     {
         SendEp sep = getSendEp(epId);
         if (sep.curcrd != sep.maxcrd)
-            return false;
+            return DtuError::MISS_CREDITS;
+    }
+
+    *unreadMask = 0;
+    if (!force && getEpType(epId) == EpType::RECEIVE)
+    {
+        RecvEp rep = getRecvEp(epId);
+        *unreadMask = rep.unread;
     }
 
     for (int i = 0; i < numEpRegs; ++i)
@@ -132,15 +155,7 @@ RegFile::invalidate(unsigned epId, bool force)
 
     printEpAccess(epId, false, false);
 
-    if (getEpType(epId) == EpType::RECEIVE)
-    {
-        reg_t msgs = (get(epId, 0) >> 19) & 0x3F;
-        reg_t cur_vpe = privRegs[static_cast<size_t>(PrivReg::CUR_VPE)];
-        cur_vpe -= msgs << 3;
-        set(PrivReg::CUR_VPE, cur_vpe);
-    }
-
-    return true;
+    return DtuError::NONE;
 }
 
 void
@@ -149,6 +164,10 @@ RegFile::add_msg()
     reg_t cur_vpe = privRegs[static_cast<size_t>(PrivReg::CUR_VPE)];
     cur_vpe += 1 << 3;
     set(PrivReg::CUR_VPE, cur_vpe);
+    // since we're always invalidating receive EPs immediately and do NOT
+    // update the message count in the CUR_VPE reg, we might temporarily have
+    // less pending messages than CUR_VPE indicates.
+    assert(messages() >= countMsgs(getVPE()));
 }
 
 void
@@ -157,6 +176,7 @@ RegFile::rem_msg()
     reg_t cur_vpe = privRegs[static_cast<size_t>(PrivReg::CUR_VPE)];
     cur_vpe -= 1 << 3;
     set(PrivReg::CUR_VPE, cur_vpe);
+    assert(messages() >= countMsgs(getVPE()));
 }
 
 RegFile::reg_t

@@ -394,7 +394,8 @@ MessageUnit::ackMessage(unsigned epId, Addr msgAddr)
     if (ep.replyEps != Dtu::INVALID_EP_ID)
     {
         // invalidate reply EP
-        dtu.regs().invalidate(ep.replyEps + msgidx, true);
+        unsigned unread_mask;
+        dtu.regs().invalidate(ep.replyEps + msgidx, true, &unread_mask);
     }
 
     DPRINTFS(DtuBuf, (&dtu),
@@ -416,7 +417,10 @@ MessageUnit::invalidateReply(unsigned repId, unsigned peId, unsigned sepId)
     {
         auto sep = dtu.regs().getSendEp(ep.replyEps + i);
         if (sep.targetCore == peId && sep.crdEp == sepId)
-            dtu.regs().invalidate(ep.replyEps + i, true);
+        {
+            unsigned unread_mask;
+            dtu.regs().invalidate(ep.replyEps + i, true, &unread_mask);
+        }
     }
     return DtuError::NONE;
 }
