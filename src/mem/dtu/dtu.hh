@@ -157,6 +157,7 @@ class Dtu : public BaseDtu
         };
 
         Opcode opcode;
+        DtuError error;
         uint64_t arg;
     };
 

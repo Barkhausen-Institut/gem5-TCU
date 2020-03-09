@@ -501,7 +501,8 @@ Dtu::getExtCommand()
 
     ExtCommand cmd;
     cmd.opcode = static_cast<ExtCommand::Opcode>(reg & 0xF);
-    cmd.arg = reg >> 4;
+    cmd.error = DtuError::NONE;
+    cmd.arg = reg >> 8;
     return cmd;
 }
 
@@ -513,8 +514,6 @@ Dtu::executeExtCommand(PacketPtr pkt)
     extCommands[static_cast<size_t>(cmd.opcode)]++;
 
     Cycles delay(1);
-
-    DtuError result = DtuError::NONE;
 
     DPRINTF(DtuCmd, "Executing external command %s with arg=%p\n",
             extCmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg);
@@ -528,9 +527,9 @@ Dtu::executeExtCommand(PacketPtr pkt)
             unsigned epid = cmd.arg & 0xFFFF;
             bool force = !!(cmd.arg & (1 << 16));
             unsigned unreadMask;
-            result = regs().invalidate(epid, force, &unreadMask);
+            cmd.error = regs().invalidate(epid, force, &unreadMask);
             cmd.arg = unreadMask;
-            if (result == DtuError::NONE)
+            if (cmd.error == DtuError::NONE)
             {
                 regs().setEvent(EventType::EP_INVAL);
                 wakeupCore(false);
@@ -542,7 +541,7 @@ Dtu::executeExtCommand(PacketPtr pkt)
             unsigned repid = cmd.arg & 0xFFFF;
             unsigned peid = (cmd.arg >> 16) & 0xFF;
             unsigned sepid = (cmd.arg >> 24) & 0xFFFF;
-            result = msgUnit->invalidateReply(repid, peid, sepid);
+            cmd.error = msgUnit->invalidateReply(repid, peid, sepid);
             break;
         }
         case ExtCommand::RESET:
@@ -560,20 +559,21 @@ Dtu::executeExtCommand(PacketPtr pkt)
     {
         auto senderState = dynamic_cast<NocSenderState*>(pkt->senderState);
         assert(senderState);
-        senderState->result = result;
         schedNocResponse(pkt, clockEdge(delay));
     }
 
-    if (result != DtuError::NONE)
+    if (cmd.error != DtuError::NONE)
     {
         DPRINTF(DtuCmd, "External command %s failed (%u)\n",
                 extCmdNames[static_cast<size_t>(cmd.opcode)],
-                (unsigned)result);
+                (unsigned)cmd.error);
     }
 
     // set external command back to IDLE
     cmd.opcode = ExtCommand::IDLE;
-    regFile.set(PrivReg::EXT_CMD, cmd.opcode | (cmd.arg << 4));
+    regFile.set(PrivReg::EXT_CMD, cmd.opcode |
+                                  (static_cast<unsigned>(cmd.error) << 4) |
+                                  (cmd.arg << 8));
 }
 
 bool
