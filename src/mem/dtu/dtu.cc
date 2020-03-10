@@ -74,7 +74,6 @@ static const char *extCmdNames[] =
     "INV_EP",
     "INV_REPLY",
     "RESET",
-    "FLUSH_CACHE",
 };
 
 // cmdId = 0 is reserved for "no command"
@@ -124,7 +123,7 @@ Dtu::Dtu(DtuParams* p)
     static_assert(sizeof(privCmdNames) / sizeof(privCmdNames[0]) ==
         PrivCommand::XCHG_VPE + 1, "privCmdNames out of sync");
     static_assert(sizeof(extCmdNames) / sizeof(extCmdNames[0]) ==
-        ExtCommand::FLUSH_CACHE + 1, "extCmdNames out of sync");
+        ExtCommand::RESET + 1, "extCmdNames out of sync");
 
     assert(p->buf_size >= maxNocPacketSize);
 
@@ -546,9 +545,6 @@ Dtu::executeExtCommand(PacketPtr pkt)
         }
         case ExtCommand::RESET:
             delay += reset(cmd.arg != 0);
-            break;
-        case ExtCommand::FLUSH_CACHE:
-            delay += flushInvalCaches(false);
             break;
         default:
             // TODO error handling

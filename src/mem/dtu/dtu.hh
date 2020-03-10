@@ -153,7 +153,6 @@ class Dtu : public BaseDtu
             INV_EP          = 1,
             INV_REPLY       = 2,
             RESET           = 3,
-            FLUSH_CACHE     = 4,
         };
 
         Opcode opcode;
