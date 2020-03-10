@@ -545,7 +545,7 @@ Dtu::executeExtCommand(PacketPtr pkt)
             break;
         }
         case ExtCommand::RESET:
-            delay += reset(!!(cmd.arg >> 59));
+            delay += reset(cmd.arg != 0);
             break;
         case ExtCommand::FLUSH_CACHE:
             delay += flushInvalCaches(false);
