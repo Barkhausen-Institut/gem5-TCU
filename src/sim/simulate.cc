@@ -184,8 +184,8 @@ doSimLoop(EventQueue *eventq)
         // there should always be at least one event (the SimLoopExitEvent
         // we just scheduled) in the queue
         assert(!eventq->empty());
-        assert(curTick() <= eventq->nextTick() &&
-               "event scheduled in the past");
+        if(curTick() > eventq->nextTick())
+            warn("event scheduled in the past");
 
         if (async_event && testAndClearAsyncEvent()) {
             // Take the event queue lock in case any of the service

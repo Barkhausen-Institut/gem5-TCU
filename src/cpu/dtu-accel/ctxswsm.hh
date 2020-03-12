@@ -42,12 +42,14 @@ class AccelCtxSwSM
 
     enum Operation
     {
-        INIT,
         VPE_CTRL,
+        MAP,
+        REM_MSGS,
     };
 
     enum VPECtrl
     {
+        INIT,
         START,
         STOP,
     };
