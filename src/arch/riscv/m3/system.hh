@@ -36,7 +36,7 @@
 #include "arch/riscv/system.hh"
 #include "params/M3RiscvSystem.hh"
 #include "mem/qport.hh"
-#include "mem/dtu/noc_addr.hh"
+#include "mem/tcu/noc_addr.hh"
 #include "sim/pe_memory.hh"
 #include "sim/m3_loader.hh"
 

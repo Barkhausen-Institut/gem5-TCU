@@ -29,7 +29,7 @@
 
 #include "sim/pe_memory.hh"
 #include "mem/port_proxy.hh"
-#include "mem/dtu/tlb.hh"
+#include "mem/tcu/tlb.hh"
 
 PEMemory::PEMemory(SimObject *obj,
                    uint memPe,

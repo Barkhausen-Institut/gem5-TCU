@@ -29,7 +29,7 @@
 
 #include "sim/mem_system.hh"
 #include "mem/port_proxy.hh"
-#include "mem/dtu/tlb.hh"
+#include "mem/tcu/tlb.hh"
 #include "params/MemSystem.hh"
 
 MemSystem::MemSystem(Params *p)

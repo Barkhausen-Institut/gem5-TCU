@@ -57,7 +57,7 @@
 #include "cpu/base.hh"
 #include "cpu/quiesce_event.hh"
 #include "cpu/thread_context.hh"
-#include "debug/Dtu.hh"
+#include "debug/Tcu.hh"
 #include "debug/Loader.hh"
 #include "debug/Quiesce.hh"
 #include "debug/WorkItems.hh"
@@ -596,7 +596,7 @@ workend(ThreadContext *tc, uint64_t workid, uint64_t threadid)
 uint64_t
 getCycles(ThreadContext *tc, uint64_t msg)
 {
-    DPRINTFS(Dtu, tc->getCpuPtr(), "DEBUG %#x\n", msg);
+    DPRINTFS(Tcu, tc->getCpuPtr(), "DEBUG %#x\n", msg);
     return tc->getCpuPtr()->curCycle();
 }
 

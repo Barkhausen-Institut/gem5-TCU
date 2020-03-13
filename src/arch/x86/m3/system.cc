@@ -29,7 +29,7 @@
 
 #include "arch/x86/m3/system.hh"
 #include "params/M3X86System.hh"
-#include "mem/dtu/dtu.hh"
+#include "mem/tcu/tcu.hh"
 
 #include <libgen.h>
 

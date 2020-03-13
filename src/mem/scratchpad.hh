@@ -58,7 +58,7 @@ class Scratchpad : public AbstractMemory
 
     ScratchpadPort cpuPort;
 
-    ScratchpadPort dtuPort;
+    ScratchpadPort tcuPort;
 
     const Cycles latency;
 

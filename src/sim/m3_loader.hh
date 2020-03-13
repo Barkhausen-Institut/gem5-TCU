@@ -34,7 +34,7 @@
 #include <vector>
 
 #include "sim/system.hh"
-#include "mem/dtu/noc_addr.hh"
+#include "mem/tcu/noc_addr.hh"
 #include "sim/pe_memory.hh"
 
 class M3Loader

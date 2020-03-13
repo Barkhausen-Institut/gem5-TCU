@@ -36,7 +36,7 @@ class Scratchpad(AbstractMemory):
     range = 128 * 1024 # default size 128K
 
     cpu_port = SlavePort("Slave port CPU side")
-    dtu_port = SlavePort("Slave port DTU side")
+    tcu_port = SlavePort("Slave port TCU side")
 
     latency = Param.Cycles(1, "Request to response latency")
 

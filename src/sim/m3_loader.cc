@@ -32,10 +32,10 @@
 #include "base/trace.hh"
 #include "base/loader/object_file.hh"
 #include "cpu/thread_context.hh"
-#include "debug/DtuTlb.hh"
+#include "debug/TcuTlb.hh"
 #include "mem/port_proxy.hh"
-#include "mem/dtu/tlb.hh"
-#include "mem/dtu/dtu.hh"
+#include "mem/tcu/tlb.hh"
+#include "mem/tcu/tcu.hh"
 #include "sim/byteswap.hh"
 
 #include <libgen.h>
@@ -107,9 +107,9 @@ M3Loader::writeRemote(MasterPort &noc, Addr dest,
     Packet pkt(req, MemCmd::WriteReq);
     pkt.dataStaticConst(data);
 
-    auto senderState = new Dtu::NocSenderState();
-    senderState->packetType = Dtu::NocPacketType::CACHE_MEM_REQ_FUNC;
-    senderState->result = DtuError::NONE;
+    auto senderState = new Tcu::NocSenderState();
+    senderState->packetType = Tcu::NocPacketType::CACHE_MEM_REQ_FUNC;
+    senderState->result = TcuError::NONE;
 
     pkt.pushSenderState(senderState);
 
@@ -225,8 +225,8 @@ M3Loader::initState(System &sys, PEMemory &mem, MasterPort &noc)
                 bmod->name, bmod->addr, bmod->addr + bmod->size);
 
             // to next
-            addr += size + DtuTlb::PAGE_SIZE - 1;
-            addr &= ~static_cast<Addr>(DtuTlb::PAGE_SIZE - 1);
+            addr += size + TcuTlb::PAGE_SIZE - 1;
+            addr &= ~static_cast<Addr>(TcuTlb::PAGE_SIZE - 1);
             i++;
         }
 

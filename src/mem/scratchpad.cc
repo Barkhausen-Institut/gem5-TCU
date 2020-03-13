@@ -33,7 +33,7 @@
 Scratchpad::Scratchpad(const ScratchpadParams* p)
   : AbstractMemory(p),
     cpuPort(name() + ".cpu_port", *this),
-    dtuPort(name() + ".dtu_port", *this),
+    tcuPort(name() + ".tcu_port", *this),
     latency(p->latency),
     throughput(p->throughput)
 {
@@ -47,8 +47,8 @@ Scratchpad::init()
     assert(cpuPort.isConnected());
 
     cpuPort.sendRangeChange();
-    if (dtuPort.isConnected())
-        dtuPort.sendRangeChange();
+    if (tcuPort.isConnected())
+        tcuPort.sendRangeChange();
 }
 
 Port &
@@ -57,8 +57,8 @@ Scratchpad::getPort(const std::string &if_name, PortID idx)
     if (if_name == "cpu_port") {
         return cpuPort;
     }
-    else if (if_name == "dtu_port") {
-        return dtuPort;
+    else if (if_name == "tcu_port") {
+        return tcuPort;
     }
     else {
         return SimObject::getPort(if_name, idx);

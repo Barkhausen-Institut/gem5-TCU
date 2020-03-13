@@ -27,11 +27,11 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
-#ifndef __SIM_DTU_MEMORY_HH__
-#define __SIM_DTU_MEMORY_HH__
+#ifndef __SIM_TCU_MEMORY_HH__
+#define __SIM_TCU_MEMORY_HH__
 
 #include "sim/system.hh"
-#include "mem/dtu/noc_addr.hh"
+#include "mem/tcu/noc_addr.hh"
 
 class PEMemory
 {
