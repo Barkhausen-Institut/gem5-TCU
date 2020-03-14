@@ -70,6 +70,8 @@ MessageUnit::startTransmission(const Tcu::Command::Bits& cmd)
 {
     unsigned epid = cmd.epid;
 
+    info.sepId = Tcu::INVALID_EP_ID;
+
     // if we want to reply, load the reply EP first
     if (cmd.opcode == Tcu::Command::REPLY)
     {
@@ -180,6 +182,7 @@ MessageUnit::startTransmission(const Tcu::Command::Bits& cmd)
     info.replyLabel   = tcu.regs().get(CmdReg::ARG1);
     info.unlimcred    = ep.curcrd == Tcu::CREDITS_UNLIM;
     info.ready        = true;
+    info.sepId        = epid;
 
     startXfer(cmd);
 }
@@ -264,30 +267,25 @@ MessageUnit::finishMsgReply(TcuError error, unsigned epid, Addr msgAddr)
 {
     if (error == TcuError::NONE)
         ackMessage(epid, msgAddr);
+    // undo credit reduction
+    else if (info.sepId != Tcu::INVALID_EP_ID)
+        recvCredits(info.sepId);
 }
 
 void
 MessageUnit::finishMsgSend(TcuError error, unsigned epid)
 {
-    SendEp ep = tcu.regs().getSendEp(epid);
-    // don't do anything if the EP is invalid
-    if (ep.maxMsgSize == 0 || ep.vpe != tcu.regs().getVPE())
-        return;
-
-    // undo the credit reduction on receive errors
-    if (ep.curcrd != Tcu::CREDITS_UNLIM && error == TcuError::NO_RING_SPACE)
-    {
-        ep.curcrd++;
-        assert(ep.curcrd <= ep.maxcrd);
-    }
-
-    tcu.regs().setSendEp(epid, ep);
+    if (error != TcuError::NONE && info.sepId != Tcu::INVALID_EP_ID)
+        recvCredits(info.sepId);
 }
 
 void
 MessageUnit::recvCredits(unsigned epid)
 {
     SendEp ep = tcu.regs().getSendEp(epid);
+    // don't do anything if the EP is invalid
+    if (ep.maxMsgSize == 0)
+        return;
 
     if (ep.curcrd != Tcu::CREDITS_UNLIM)
     {

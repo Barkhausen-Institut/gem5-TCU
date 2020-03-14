@@ -40,6 +40,7 @@ class MessageUnit
 
     struct MsgInfo
     {
+        unsigned sepId;
         bool ready;
         bool unlimcred;
         uint8_t flags;
