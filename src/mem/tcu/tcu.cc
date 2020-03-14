@@ -54,7 +54,6 @@ static const char *cmdNames[] =
     "WRITE",
     "FETCH_MSG",
     "FETCH_EVENTS",
-    "SET_EVENT",
     "ACK_MSG",
     "SLEEP",
     "PRINT",
@@ -285,10 +284,6 @@ Tcu::executeCommand(PacketPtr pkt)
             break;
         case Command::FETCH_EVENTS:
             regs().set(CmdReg::ARG1, regs().fetchEvents());
-            finishCommand(TcuError::NONE);
-            break;
-        case Command::SET_EVENT:
-            regs().setEvent(EventType::USER);
             finishCommand(TcuError::NONE);
             break;
         case Command::ACK_MSG:
