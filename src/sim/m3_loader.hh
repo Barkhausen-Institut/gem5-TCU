@@ -82,31 +82,16 @@ class M3Loader
         MemMod mems[MAX_MEMS];
     } M5_ATTR_PACKED;
 
-    struct StartEnv
+    struct BootEnv
     {
-        uint64_t coreid;
-        uint32_t pe;
+        uint64_t pe_id;
+        uint32_t pe_desc;
         uint32_t argc;
         uint64_t argv;
-        uint64_t sp;
-        uint64_t entry;
-        uint64_t heapsize;
-        uint64_t kenv;
+        uint64_t heap_size;
         uint64_t pe_mem_base;
         uint64_t pe_mem_size;
-        uint64_t std_eps_start;
-
-        uint64_t lambda;
-        uint32_t pager_sess;
-        uint32_t mounts_len;
-        uint64_t mounts;
-        uint32_t fds_len;
-        uint64_t fds;
-        uint64_t rbufcur;
-        uint64_t rbufend;
-        uint64_t rmng_sel;
-        uint64_t caps;
-        uint64_t backend;
+        uint64_t kenv;
     } M5_ATTR_PACKED;
 
     std::vector<Addr> pes;

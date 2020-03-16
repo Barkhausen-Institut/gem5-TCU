@@ -142,9 +142,10 @@ M3Loader::loadModule(MasterPort &noc, const std::string &filename, Addr addr)
 void
 M3Loader::initState(System &sys, PEMemory &mem, MasterPort &noc)
 {
-    StartEnv env;
+    BootEnv env;
     memset(&env, 0, sizeof(env));
-    env.coreid = coreId;
+    env.pe_id = coreId;
+    env.pe_desc = pes[coreId];
     env.argc = getArgc();
     Addr argv = ENV_START + sizeof(env);
     // the kernel gets the kernel env behind the normal env
@@ -159,10 +160,10 @@ M3Loader::initState(System &sys, PEMemory &mem, MasterPort &noc)
 
     // with paging, the kernel gets an initial heap mapped
     if ((pes[coreId] & 0x7) == 1 || (pes[coreId] & 0x7) == 2)
-        env.heapsize = HEAP_SIZE;
+        env.heap_size = HEAP_SIZE;
     // otherwise, he should use all internal memory
     else
-        env.heapsize = 0;
+        env.heap_size = 0;
 
     // check if there is enough space
     if (commandLine.length() + 1 > ENV_START + ENV_SIZE - args)
@@ -284,9 +285,6 @@ M3Loader::initState(System &sys, PEMemory &mem, MasterPort &noc)
                 modSize, addr - NocAddr(mem.memPe, modOffset).getAddr());
         }
     }
-
-    // the kernel needs the PE info in its env
-    env.pe = pes[coreId];
 
     // write env
     sys.physProxy.writeBlob(
