@@ -100,7 +100,7 @@ CoreRequests::XlateRequest::start(size_t id)
     const Addr mask = TcuTlb::PAGE_MASK;
     const Addr virtPage = virt & ~mask;
     const Addr val = (static_cast<Addr>(asid) << 48) | virtPage |
-                     (access << 1) | (id << 5);
+                     (access << 1) | (id << 6);
     req.tcu.regs().set(PrivReg::CORE_REQ, val);
     waiting = false;
 
@@ -114,7 +114,7 @@ CoreRequests::XlateRequest::complete(size_t id, RegFile::reg_t resp)
                                        : TcuTlb::PAGE_MASK;
 
     NocAddr phys((resp & ~mask) | (virt & mask));
-    uint flags = resp & (TcuTlb::RWX | TcuTlb::LARGE);
+    uint flags = resp & (TcuTlb::RWX | TcuTlb::LARGE | TcuTlb::FIXED);
     if (flags == 0)
     {
         trans->finished(false, phys);
@@ -155,7 +155,7 @@ CoreRequests::startForeignReceive(size_t id,
 void
 CoreRequests::ForeignRecvRequest::start(size_t id)
 {
-    auto val = (epId << 28) | (vpeId << 12) | (id << 5) | 1;
+    auto val = (epId << 28) | (vpeId << 12) | (id << 6) | 1;
     req.tcu.regs().set(PrivReg::CORE_REQ, val);
     waiting = false;
 
@@ -174,7 +174,7 @@ CoreRequests::completeReqs()
     RegFile::reg_t resp = tcu.regs().get(PrivReg::CORE_RESP);
     if (resp)
     {
-        size_t id = (resp >> 5) & 0x7;
+        size_t id = (resp >> 6) & 0x7;
         assert(reqs[id] != nullptr);
         DPRINTFS(TcuCoreReqs, (&tcu), "CoreRequest[%lu] done\n", id);
 

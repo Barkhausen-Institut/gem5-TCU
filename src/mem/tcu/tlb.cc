@@ -36,12 +36,13 @@
 
 static const char *decode_access(uint access)
 {
-    static char buf[5];
+    static char buf[6];
     buf[0] = (access & TcuTlb::LARGE) ? 'l' : '-';
     buf[1] = (access & TcuTlb::READ) ? 'r' : '-';
     buf[2] = (access & TcuTlb::WRITE) ? 'w' : '-';
     buf[3] = (access & TcuTlb::EXEC) ? 'x' : '-';
-    buf[4] = '\0';
+    buf[4] = (access & TcuTlb::FIXED) ? 'f' : '-';
+    buf[5] = '\0';
     return buf;
 }
 
@@ -141,7 +142,7 @@ TcuTlb::evict()
     Entry *minEntry = NULL;
     for (Entry &e : entries)
     {
-        if (e.lru_seq < min)
+        if (e.lru_seq < min && !(e.flags & FIXED))
         {
             min = e.lru_seq;
             minEntry = &e;
@@ -219,7 +220,7 @@ TcuTlb::clear()
 
     for (size_t i = 0; i < num; ++i)
     {
-        if (entries[i].handle)
+        if (entries[i].handle && !(entries[i].flags & FIXED))
         {
             trie.remove(entries[i].handle);
             entries[i].handle = NULL;

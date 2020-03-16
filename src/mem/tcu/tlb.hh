@@ -86,6 +86,7 @@ class TcuTlb
         WRITE   = 2,
         EXEC    = 4,
         LARGE   = 8,
+        FIXED   = 16,
         RW      = READ | WRITE,
         RX      = READ | EXEC,
         RWX     = RW | EXEC,
