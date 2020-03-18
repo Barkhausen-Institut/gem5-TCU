@@ -118,7 +118,7 @@ RegFile::RegFile(Tcu &_tcu, const std::string& name, unsigned _numEndpoints)
 }
 
 unsigned
-RegFile::countMsgs(unsigned vpeId)
+RegFile::countMsgs(vpeid_t vpeId)
 {
     unsigned count = 0;
     for (int epid = 0; epid < numEndpoints; epid++)

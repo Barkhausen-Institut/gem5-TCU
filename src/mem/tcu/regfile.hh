@@ -97,6 +97,8 @@ constexpr unsigned numEpRegs = 3;
 // buffer for prints (32 * 8 bytes)
 constexpr unsigned numBufRegs = 32;
 
+typedef uint16_t vpeid_t;
+
 enum class EpType
 {
     INVALID,
@@ -366,7 +368,7 @@ class RegFile
 
     Addr getSize() const;
 
-    unsigned countMsgs(unsigned vpeId);
+    unsigned countMsgs(vpeid_t vpeId);
 
   private:
 

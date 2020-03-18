@@ -61,7 +61,7 @@ CoreRequests::regStats()
 
 void
 CoreRequests::startTranslate(size_t id,
-                             unsigned vpeId,
+                             vpeid_t vpeId,
                              Addr virt,
                              uint access,
                              XferUnit::Translation *trans)
@@ -130,7 +130,7 @@ CoreRequests::XlateRequest::complete(size_t id, RegFile::reg_t resp)
 void
 CoreRequests::startForeignReceive(size_t id,
                                   unsigned epId,
-                                  unsigned vpeId,
+                                  vpeid_t vpeId,
                                   XferUnit::TransferEvent *event)
 {
     if (reqs[id] != nullptr)

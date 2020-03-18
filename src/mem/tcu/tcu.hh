@@ -224,14 +224,14 @@ class Tcu : public BaseTcu
     void startTransfer(void *event, Cycles delay);
 
     void startTranslate(size_t id,
-                        unsigned vpeId,
+                        vpeid_t vpeId,
                         Addr virt,
                         uint access,
                         XferUnit::Translation *trans);
 
     void startForeignReceive(size_t id,
                              unsigned epId,
-                             unsigned vpeId,
+                             vpeid_t vpeId,
                              XferUnit::TransferEvent *event);
 
     void abortTranslate(size_t id);

@@ -127,7 +127,7 @@ class XferUnit
         uint64_t id;
         Cycles startCycle;
         TransferType type;
-        unsigned vpe;
+        vpeid_t vpe;
         Addr local;
         size_t remaining;
         uint xferFlags;
@@ -161,9 +161,9 @@ class XferUnit
 
         uint flags() const { return xferFlags; }
 
-        unsigned vpeId() const { return vpe; }
+        vpeid_t vpeId() const { return vpe; }
 
-        void vpeId(unsigned id) { vpe = id; }
+        void vpeId(uint16_t id) { vpe = id; }
 
         void *data() { return buf->bytes; }
 

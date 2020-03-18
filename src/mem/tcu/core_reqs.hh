@@ -87,7 +87,7 @@ class CoreRequests
 
         XferUnit::TransferEvent *event;
         unsigned epId;
-        unsigned vpeId;
+        vpeid_t vpeId;
     };
 
     explicit CoreRequests(Tcu &tcu, size_t bufCount);
@@ -97,14 +97,14 @@ class CoreRequests
     void regStats();
 
     void startTranslate(size_t id,
-                        unsigned vpeId,
+                        vpeid_t vpeId,
                         Addr virt,
                         uint access,
                         XferUnit::Translation *trans);
 
     void startForeignReceive(size_t id,
                              unsigned epId,
-                             unsigned vpeId,
+                             vpeid_t vpeId,
                              XferUnit::TransferEvent *event);
 
     void completeReqs();
