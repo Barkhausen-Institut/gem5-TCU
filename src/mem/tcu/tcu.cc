@@ -518,7 +518,7 @@ Tcu::executeExtCommand(PacketPtr pkt)
             break;
         case ExtCommand::INV_EP:
         {
-            unsigned epid = cmd.arg & 0xFFFF;
+            epid_t epid = cmd.arg & 0xFFFF;
             bool force = !!(cmd.arg & (1 << 16));
             unsigned unreadMask;
             cmd.error = regs().invalidate(epid, force, &unreadMask);
@@ -532,9 +532,9 @@ Tcu::executeExtCommand(PacketPtr pkt)
         }
         case ExtCommand::INV_REPLY:
         {
-            unsigned repid = cmd.arg & 0xFFFF;
+            epid_t repid = cmd.arg & 0xFFFF;
             unsigned peid = (cmd.arg >> 16) & 0xFF;
-            unsigned sepid = (cmd.arg >> 24) & 0xFFFF;
+            epid_t sepid = (cmd.arg >> 24) & 0xFFFF;
             cmd.error = msgUnit->invalidateReply(repid, peid, sepid);
             break;
         }
@@ -568,14 +568,14 @@ Tcu::executeExtCommand(PacketPtr pkt)
 }
 
 bool
-Tcu::has_message(int ep)
+Tcu::has_message(epid_t ep)
 {
     return (ep == 0xFFFF && regFile.messages() > 0) ||
            (ep != 0xFFFF && regFile.getRecvEp(ep).unread != 0);
 }
 
 bool
-Tcu::startSleep(uint64_t cycles, int ep, bool ack)
+Tcu::startSleep(uint64_t cycles, epid_t ep, bool ack)
 {
     // just for accelerators and simplicity: ack all events
     if (ack)
@@ -809,7 +809,7 @@ Tcu::startTranslate(size_t id,
 
 void
 Tcu::startForeignReceive(size_t id,
-                         unsigned epId,
+                         epid_t epId,
                          vpeid_t vpeId,
                          XferUnit::TransferEvent *event)
 {

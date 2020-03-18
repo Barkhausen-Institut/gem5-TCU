@@ -86,7 +86,7 @@ class CoreRequests
         void complete(size_t id, RegFile::reg_t resp) override;
 
         XferUnit::TransferEvent *event;
-        unsigned epId;
+        epid_t epId;
         vpeid_t vpeId;
     };
 
@@ -103,7 +103,7 @@ class CoreRequests
                         XferUnit::Translation *trans);
 
     void startForeignReceive(size_t id,
-                             unsigned epId,
+                             epid_t epId,
                              vpeid_t vpeId,
                              XferUnit::TransferEvent *event);
 

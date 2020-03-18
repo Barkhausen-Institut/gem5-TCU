@@ -98,6 +98,7 @@ constexpr unsigned numEpRegs = 3;
 constexpr unsigned numBufRegs = 32;
 
 typedef uint16_t vpeid_t;
+typedef uint16_t epid_t;
 
 enum class EpType
 {
@@ -139,7 +140,7 @@ struct SendEp : public Ep
     {}
 
     void print(const RegFile &rf,
-               unsigned epId,
+               epid_t epId,
                bool read,
                RegAccess access) const;
 
@@ -199,7 +200,7 @@ struct RecvEp : public Ep
     }
 
     void print(const RegFile &rf,
-               unsigned epId,
+               epid_t epId,
                bool read,
                RegAccess access) const;
 
@@ -219,7 +220,7 @@ struct MemEp : public Ep
     {}
 
     void print(const RegFile &rf,
-               unsigned epId,
+               epid_t epId,
                bool read,
                RegAccess access) const;
 
@@ -291,7 +292,7 @@ class RegFile
         return get(TcuReg::FEATURES) & static_cast<reg_t>(feature);
     }
 
-    TcuError invalidate(unsigned epId, bool force, unsigned *unreadMask);
+    TcuError invalidate(epid_t epId, bool force, unsigned *unreadMask);
 
     void add_msg();
 
@@ -339,15 +340,15 @@ class RegFile
         set(CmdReg::DATA, data.value());
     }
 
-    SendEp getSendEp(unsigned epId, bool print = true) const;
+    SendEp getSendEp(epid_t epId, bool print = true) const;
 
-    void setSendEp(unsigned epId, const SendEp &ep);
+    void setSendEp(epid_t epId, const SendEp &ep);
 
-    RecvEp getRecvEp(unsigned epId, bool print = true) const;
+    RecvEp getRecvEp(epid_t epId, bool print = true) const;
 
-    void setRecvEp(unsigned epId, const RecvEp &ep);
+    void setRecvEp(epid_t epId, const RecvEp &ep);
 
-    MemEp getMemEp(unsigned epId, bool print = true) const;
+    MemEp getMemEp(epid_t epId, bool print = true) const;
 
     const char *getBuffer(size_t bytes);
 
@@ -358,13 +359,13 @@ class RegFile
 
   private:
 
-    reg_t get(unsigned epId, size_t idx) const;
+    reg_t get(epid_t epId, size_t idx) const;
 
-    void set(unsigned epId, size_t idx, reg_t value);
+    void set(epid_t epId, size_t idx, reg_t value);
 
-    EpType getEpType(unsigned epId) const;
+    EpType getEpType(epid_t epId) const;
 
-    void printEpAccess(unsigned epId, bool read, bool cpu) const;
+    void printEpAccess(epid_t epId, bool read, bool cpu) const;
 
     Addr getSize() const;
 

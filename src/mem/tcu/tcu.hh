@@ -177,7 +177,7 @@ class Tcu : public BaseTcu
 
     void printLine(Addr len);
 
-    bool startSleep(uint64_t cycles, int wakeupEp, bool ack);
+    bool startSleep(uint64_t cycles, epid_t wakeupEp, bool ack);
 
     void stopSleep();
 
@@ -230,7 +230,7 @@ class Tcu : public BaseTcu
                         XferUnit::Translation *trans);
 
     void startForeignReceive(size_t id,
-                             unsigned epId,
+                             epid_t epId,
                              vpeid_t vpeId,
                              XferUnit::TransferEvent *event);
 
@@ -259,7 +259,7 @@ class Tcu : public BaseTcu
 
     void finishCommand(TcuError error);
 
-    bool has_message(int ep);
+    bool has_message(epid_t ep);
 
     void completeNocRequest(PacketPtr pkt) override;
 

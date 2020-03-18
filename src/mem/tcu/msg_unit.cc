@@ -68,7 +68,7 @@ MessageUnit::regStats()
 void
 MessageUnit::startTransmission(const Tcu::Command::Bits& cmd)
 {
-    unsigned epid = cmd.epid;
+    epid_t epid = cmd.epid;
 
     info.sepId = Tcu::INVALID_EP_ID;
 
@@ -263,7 +263,7 @@ MessageUnit::SendTransferEvent::transferStart()
 }
 
 void
-MessageUnit::finishMsgReply(TcuError error, unsigned epid, Addr msgAddr)
+MessageUnit::finishMsgReply(TcuError error, epid_t epid, Addr msgAddr)
 {
     if (error == TcuError::NONE)
         ackMessage(epid, msgAddr);
@@ -273,14 +273,14 @@ MessageUnit::finishMsgReply(TcuError error, unsigned epid, Addr msgAddr)
 }
 
 void
-MessageUnit::finishMsgSend(TcuError error, unsigned epid)
+MessageUnit::finishMsgSend(TcuError error, epid_t epid)
 {
     if (error != TcuError::NONE && info.sepId != Tcu::INVALID_EP_ID)
         recvCredits(info.sepId);
 }
 
 void
-MessageUnit::recvCredits(unsigned epid)
+MessageUnit::recvCredits(epid_t epid)
 {
     SendEp ep = tcu.regs().getSendEp(epid);
     // don't do anything if the EP is invalid
@@ -301,7 +301,7 @@ MessageUnit::recvCredits(unsigned epid)
 }
 
 Addr
-MessageUnit::fetchMessage(unsigned epid)
+MessageUnit::fetchMessage(epid_t epid)
 {
     RecvEp ep = tcu.regs().getRecvEp(epid);
 
@@ -340,7 +340,7 @@ found:
 }
 
 int
-MessageUnit::allocSlot(size_t msgSize, unsigned epid, RecvEp &ep)
+MessageUnit::allocSlot(size_t msgSize, epid_t epid, RecvEp &ep)
 {
     // the RecvEp might be invalid
     if (ep.bufAddr == 0)
@@ -375,7 +375,7 @@ found:
 }
 
 TcuError
-MessageUnit::ackMessage(unsigned epId, Addr msgAddr)
+MessageUnit::ackMessage(epid_t epId, Addr msgAddr)
 {
     RecvEp ep = tcu.regs().getRecvEp(epId);
     if (ep.bufAddr == 0 || ep.vpe != tcu.regs().getVPE())
@@ -405,13 +405,13 @@ MessageUnit::ackMessage(unsigned epId, Addr msgAddr)
 }
 
 TcuError
-MessageUnit::invalidateReply(unsigned repId, unsigned peId, unsigned sepId)
+MessageUnit::invalidateReply(epid_t repId, unsigned peId, epid_t sepId)
 {
     RecvEp ep = tcu.regs().getRecvEp(repId);
     if (ep.bufAddr == 0 || ep.replyEps == Tcu::INVALID_EP_ID)
         return TcuError::INV_EP;
 
-    for (int i = 0; i < (1 << ep.size); ++i)
+    for (epid_t i = 0; i < (1 << ep.size); ++i)
     {
         auto sep = tcu.regs().getSendEp(ep.replyEps + i);
         if (sep.targetCore == peId && sep.crdEp == sepId)
@@ -424,7 +424,7 @@ MessageUnit::invalidateReply(unsigned repId, unsigned peId, unsigned sepId)
 }
 
 TcuError
-MessageUnit::finishMsgReceive(unsigned epId,
+MessageUnit::finishMsgReceive(epid_t epId,
                               Addr msgAddr,
                               const MessageHeader *header,
                               TcuError error,
@@ -493,7 +493,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint flags)
     receivedBytes.sample(header->length);
 
     NocAddr addr(pkt->getAddr());
-    unsigned epId = addr.offset;
+    epid_t epId = addr.offset;
 
     DPRINTFS(Tcu, (&tcu),
         "\e[1m[rv <- %u]\e[0m %lu bytes on EP%u\n",
@@ -551,7 +551,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint flags)
 void
 MessageUnit::ReceiveTransferEvent::transferStart()
 {
-    unsigned epId = rep();
+    epid_t epId = rep();
     RecvEp ep = tcu().regs().getRecvEp(epId);
     // the virtual address of the receive buffer belongs to the owner of the
     // receive EP
@@ -564,7 +564,7 @@ bool
 MessageUnit::ReceiveTransferEvent::transferDone(TcuError result)
 {
     MessageHeader* header = pkt->getPtr<MessageHeader>();
-    unsigned epId = rep();
+    epid_t epId = rep();
 
     RecvEp ep = tcu().regs().getRecvEp(epId);
     if (result == TcuError::NONE && ep.bufAddr != 0)

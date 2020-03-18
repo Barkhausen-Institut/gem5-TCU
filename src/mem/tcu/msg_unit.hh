@@ -40,13 +40,13 @@ class MessageUnit
 
     struct MsgInfo
     {
-        unsigned sepId;
+        epid_t sepId;
         bool ready;
         bool unlimcred;
         uint8_t flags;
         unsigned targetCoreId;
-        unsigned targetEpId;
-        unsigned replyEpId;
+        epid_t targetEpId;
+        epid_t replyEpId;
         uint64_t label;
         uint64_t replyLabel;
         unsigned replySize;
@@ -87,7 +87,7 @@ class MessageUnit
               msgUnit(_msgUnit), msgAddr(local), coreReq()
         {}
 
-        unsigned rep() const
+        epid_t rep() const
         {
             NocAddr addr(pkt->getAddr());
             return addr.offset;
@@ -114,38 +114,38 @@ class MessageUnit
     /**
      * Finishes the reply-on-message command
      */
-    void finishMsgReply(TcuError error, unsigned epid, Addr msgAddr);
+    void finishMsgReply(TcuError error, epid_t epid, Addr msgAddr);
 
     /**
      * Finishes the send-message command
      */
-    void finishMsgSend(TcuError error, unsigned epid);
+    void finishMsgSend(TcuError error, epid_t epid);
 
     /**
      * Receives credits again
      */
-    void recvCredits(unsigned epid);
+    void recvCredits(epid_t epid);
 
     /**
      * Fetches the next message and returns the address or 0
      */
-    Addr fetchMessage(unsigned epid);
+    Addr fetchMessage(epid_t epid);
 
     /**
      * Acknowledges the message @ <msgAddr>
      */
-    TcuError ackMessage(unsigned epId, Addr msgAddr);
+    TcuError ackMessage(epid_t epId, Addr msgAddr);
 
     /**
      * Invalidates all reply header for receive EP <repId> that have been sent
      * from PE <peId> and send EP <sepId>.
      */
-    TcuError invalidateReply(unsigned repId, unsigned peId, unsigned sepId);
+    TcuError invalidateReply(epid_t repId, unsigned peId, epid_t sepId);
 
     /**
      * Finishes a message receive
      */
-    TcuError finishMsgReceive(unsigned epId,
+    TcuError finishMsgReceive(epid_t epId,
                               Addr msgAddr,
                               const MessageHeader *header,
                               TcuError error,
@@ -153,7 +153,7 @@ class MessageUnit
                               bool addMsg);
 
   private:
-    int allocSlot(size_t msgSize, unsigned epid, RecvEp &ep);
+    int allocSlot(size_t msgSize, epid_t epid, RecvEp &ep);
 
     void startXfer(const Tcu::Command::Bits& cmd);
 

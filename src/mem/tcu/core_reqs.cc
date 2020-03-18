@@ -129,7 +129,7 @@ CoreRequests::XlateRequest::complete(size_t id, RegFile::reg_t resp)
 
 void
 CoreRequests::startForeignReceive(size_t id,
-                                  unsigned epId,
+                                  epid_t epId,
                                   vpeid_t vpeId,
                                   XferUnit::TransferEvent *event)
 {

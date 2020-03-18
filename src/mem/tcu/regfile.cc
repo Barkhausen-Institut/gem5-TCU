@@ -105,7 +105,7 @@ RegFile::RegFile(Tcu &_tcu, const std::string& name, unsigned _numEndpoints)
     static_assert(sizeof(cmdRegNames) / sizeof(cmdRegNames[0]) ==
         numCmdRegs, "cmdRegNames out of sync");
 
-    for (int epid = 0; epid < numEndpoints; epid++)
+    for (epid_t epid = 0; epid < numEndpoints; epid++)
     {
         for (int i = 0; i < numEpRegs; i++)
             epRegs[epid].push_back(0);
@@ -121,7 +121,7 @@ unsigned
 RegFile::countMsgs(vpeid_t vpeId)
 {
     unsigned count = 0;
-    for (int epid = 0; epid < numEndpoints; epid++)
+    for (epid_t epid = 0; epid < numEndpoints; epid++)
     {
         if (getEpType(epid) == EpType::RECEIVE)
         {
@@ -134,7 +134,7 @@ RegFile::countMsgs(vpeid_t vpeId)
 }
 
 TcuError
-RegFile::invalidate(unsigned epId, bool force, unsigned *unreadMask)
+RegFile::invalidate(epid_t epId, bool force, unsigned *unreadMask)
 {
     if (!force && getEpType(epId) == EpType::SEND)
     {
@@ -277,14 +277,14 @@ RegFile::set(CmdReg reg, reg_t value, RegAccess access)
 }
 
 EpType
-RegFile::getEpType(unsigned epId) const
+RegFile::getEpType(epid_t epId) const
 {
     const std::vector<reg_t> &regs = epRegs[epId];
     return static_cast<EpType>(regs[0] & 0x7);
 }
 
 SendEp
-RegFile::getSendEp(unsigned epId, bool print) const
+RegFile::getSendEp(epid_t epId, bool print) const
 {
     SendEp ep;
     if (getEpType(epId) != EpType::SEND)
@@ -318,7 +318,7 @@ RegFile::getSendEp(unsigned epId, bool print) const
 }
 
 void
-RegFile::setSendEp(unsigned epId, const SendEp &ep)
+RegFile::setSendEp(epid_t epId, const SendEp &ep)
 {
     set(epId, 0, (static_cast<reg_t>(ep.flags)      << 53) |
                  (static_cast<reg_t>(ep.crdEp)      << 37) |
@@ -337,7 +337,7 @@ RegFile::setSendEp(unsigned epId, const SendEp &ep)
 }
 
 RecvEp
-RegFile::getRecvEp(unsigned epId, bool print) const
+RegFile::getRecvEp(epid_t epId, bool print) const
 {
     RecvEp ep;
     if (getEpType(epId) != EpType::RECEIVE)
@@ -371,7 +371,7 @@ RegFile::getRecvEp(unsigned epId, bool print) const
 }
 
 void
-RegFile::setRecvEp(unsigned epId, const RecvEp &ep)
+RegFile::setRecvEp(epid_t epId, const RecvEp &ep)
 {
     set(epId, 0, (static_cast<reg_t>(ep.rdPos)        << 53) |
                  (static_cast<reg_t>(ep.wrPos)        << 47) |
@@ -390,7 +390,7 @@ RegFile::setRecvEp(unsigned epId, const RecvEp &ep)
 }
 
 MemEp
-RegFile::getMemEp(unsigned epId, bool print) const
+RegFile::getMemEp(epid_t epId, bool print) const
 {
     MemEp ep;
     if (getEpType(epId) != EpType::MEMORY)
@@ -421,7 +421,7 @@ RegFile::getMemEp(unsigned epId, bool print) const
 
 void
 SendEp::print(const RegFile &rf,
-              unsigned epId,
+              epid_t epId,
               bool read,
               RegAccess access) const
 {
@@ -439,7 +439,7 @@ SendEp::print(const RegFile &rf,
 
 void
 RecvEp::print(const RegFile &rf,
-              unsigned epId,
+              epid_t epId,
               bool read,
               RegAccess access) const
 {
@@ -456,7 +456,7 @@ RecvEp::print(const RegFile &rf,
 
 void
 MemEp::print(const RegFile &rf,
-             unsigned epId,
+             epid_t epId,
              bool read,
              RegAccess access) const
 {
@@ -473,7 +473,7 @@ MemEp::print(const RegFile &rf,
 }
 
 void
-RegFile::printEpAccess(unsigned epId, bool read, bool cpu) const
+RegFile::printEpAccess(epid_t epId, bool read, bool cpu) const
 {
     if (isTraceEnabled(read))
     {
@@ -504,13 +504,13 @@ RegFile::printEpAccess(unsigned epId, bool read, bool cpu) const
 }
 
 RegFile::reg_t
-RegFile::get(unsigned epId, size_t idx) const
+RegFile::get(epid_t epId, size_t idx) const
 {
     return epRegs[epId][idx];
 }
 
 void
-RegFile::set(unsigned epId, size_t idx, reg_t value)
+RegFile::set(epid_t epId, size_t idx, reg_t value)
 {
     epRegs[epId][idx] = value;
 }
@@ -626,7 +626,7 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
             // endpoint address
             if (epAddr < sizeof(reg_t) * numEpRegs * tcu.numEndpoints)
             {
-                unsigned epId = epAddr / (sizeof(reg_t) * numEpRegs);
+                epid_t epId = epAddr / (sizeof(reg_t) * numEpRegs);
                 unsigned regNumber = (epAddr / sizeof(reg_t)) % numEpRegs;
 
                 if (lastEp != epId)
