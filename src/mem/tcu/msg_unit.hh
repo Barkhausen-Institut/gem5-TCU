@@ -63,7 +63,7 @@ class MessageUnit
                           uint flags,
                           NocAddr dest,
                           MessageHeader *_header)
-            : WriteTransferEvent(local, size, flags, dest),
+            : WriteTransferEvent(local, size, 0, flags, dest),
               header(_header)
         {}
 
@@ -80,10 +80,11 @@ class MessageUnit
 
         ReceiveTransferEvent(MessageUnit *_msgUnit,
                              Addr local,
+                             vpeid_t vpe,
                              uint flags,
                              PacketPtr pkt)
             : MemoryUnit::ReceiveTransferEvent(
-                XferUnit::TransferType::REMOTE_WRITE, local, flags, pkt),
+                XferUnit::TransferType::REMOTE_WRITE, local, vpe, flags, pkt),
               msgUnit(_msgUnit), msgAddr(local), coreReq()
         {}
 
@@ -93,7 +94,6 @@ class MessageUnit
             return addr.offset;
         }
 
-        void transferStart() override;
         bool transferDone(TcuError result) override;
     };
 

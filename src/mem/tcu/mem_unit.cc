@@ -153,6 +153,7 @@ MemoryUnit::startRead(const Tcu::Command::Bits& cmd)
 
         tcu.sendNocRequest(Tcu::NocPacketType::READ_REQ,
                            pkt,
+                           ep.targetVpe,
                            flags,
                            tcu.commandToNocRequestLatency);
     }
@@ -281,7 +282,7 @@ MemoryUnit::startWrite(const Tcu::Command::Bits& cmd)
 
     uint flags = cmdToXferFlags(cmd.flags);
     auto xfer = new WriteTransferEvent(
-        data.addr, size, flags, dest);
+        data.addr, size, ep.targetVpe, flags, dest);
     tcu.startTransfer(xfer, Cycles(0));
 }
 
@@ -320,7 +321,7 @@ MemoryUnit::WriteTransferEvent::transferDone(TcuError result)
 
             uint rflags = xferToNocFlags(flags());
             tcu().setCommandSent();
-            tcu().sendNocRequest(pktType, pkt, rflags, delay);
+            tcu().sendNocRequest(pktType, pkt, vpe, rflags, delay);
         }
     }
     return true;
@@ -351,14 +352,15 @@ MemoryUnit::recvFunctionalFromNoc(PacketPtr pkt)
 }
 
 TcuError
-MemoryUnit::recvFromNoc(PacketPtr pkt, uint flags)
+MemoryUnit::recvFromNoc(vpeid_t tvpe, PacketPtr pkt, uint flags)
 {
     NocAddr addr(pkt->getAddr());
 
-    DPRINTFS(Tcu, (&tcu), "\e[1m[%s <- ?]\e[0m %#018lx:%lu\n",
+    DPRINTFS(Tcu, (&tcu), "\e[1m[%s <- ?]\e[0m %#018lx:%lu (VPE %u)\n",
         pkt->isWrite() ? "wr" : "rd",
         addr.offset,
-        pkt->getSize());
+        pkt->getSize(),
+        tvpe);
 
     if (pkt->isWrite())
         tcu.printPacket(pkt);
@@ -385,7 +387,8 @@ MemoryUnit::recvFromNoc(PacketPtr pkt, uint flags)
                                    : XferUnit::TransferType::REMOTE_READ;
         uint xflags = nocToXferFlags(flags);
 
-        auto *ev = new ReceiveTransferEvent(type, addr.offset, xflags, pkt);
+        auto *ev = new ReceiveTransferEvent(
+            type, addr.offset, tvpe, xflags, pkt);
         tcu.startTransfer(ev, delay);
     }
 
@@ -395,6 +398,10 @@ MemoryUnit::recvFromNoc(PacketPtr pkt, uint flags)
 void
 MemoryUnit::ReceiveTransferEvent::transferStart()
 {
+    // the memory access refers to the VPE given by the NoC request, not
+    // necessarily the currently running VPE
+    vpeId(vpe);
+
     if (pkt->isWrite())
     {
         // here is also no additional delay, because we are doing that in

@@ -84,7 +84,7 @@ constexpr unsigned numCmdRegs = 4;
 // 0. VPEID[16] | TYPE[3] (for all)
 //    receive: BUF_RD_POS[6] | BUF_WR_POS[6] | BUF_MSG_SIZE[6] | BUF_SIZE[6] | REPLY_EPS[16]
 //    send:    FLAGS[2] | CRD_EP[16] | MAX_MSG_SIZE[6] | MAXCRD[6] | CURCRD[6]
-//    mem:     REQ_PEID[8] | FLAGS[4]
+//    mem:     TGT_VPE[16] | REQ_PEID[8] | FLAGS[4]
 // 1. receive: BUF_ADDR[32]
 //    send:    TGT_PEID[8] | TGT_EPID[16]
 //    mem:     REQ_MEM_ADDR[64]
@@ -217,7 +217,8 @@ struct RecvEp : public Ep
 
 struct MemEp : public Ep
 {
-    MemEp() : Ep(), remoteAddr(), remoteSize(), targetPe(), flags()
+    MemEp() : Ep(), remoteAddr(), remoteSize(), targetVpe(),
+              targetPe(), flags()
     {}
 
     void print(const RegFile &rf,
@@ -227,6 +228,7 @@ struct MemEp : public Ep
 
     uint64_t remoteAddr;
     uint64_t remoteSize;
+    uint16_t targetVpe;
     uint8_t targetPe;
     uint8_t flags;
 };

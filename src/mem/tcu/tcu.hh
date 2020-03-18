@@ -88,6 +88,7 @@ class Tcu : public BaseTcu
     {
         TcuError result;
         NocPacketType packetType;
+        vpeid_t tvpe;
         uint64_t cmdId;
         uint flags;
     };
@@ -210,6 +211,7 @@ class Tcu : public BaseTcu
 
     void sendNocRequest(NocPacketType type,
                         PacketPtr pkt,
+                        vpeid_t tvpe,
                         uint flags,
                         Cycles delay,
                         bool functional = false);

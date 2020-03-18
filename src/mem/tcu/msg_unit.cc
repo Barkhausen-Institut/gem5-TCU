@@ -542,22 +542,10 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint flags)
     uint rflags = XferUnit::XferFlags::MSGRECV | XferUnit::XferFlags::NOPF;
     Addr localAddr = ep.bufAddr + (msgidx << ep.msgSize);
 
-    auto *ev = new ReceiveTransferEvent(this, localAddr, rflags, pkt);
+    auto *ev = new ReceiveTransferEvent(this, localAddr, ep.vpe, rflags, pkt);
     tcu.startTransfer(ev, delay);
 
     return TcuError::NONE;
-}
-
-void
-MessageUnit::ReceiveTransferEvent::transferStart()
-{
-    epid_t epId = rep();
-    RecvEp ep = tcu().regs().getRecvEp(epId);
-    // the virtual address of the receive buffer belongs to the owner of the
-    // receive EP
-    vpeId(ep.vpe);
-
-    MemoryUnit::ReceiveTransferEvent::transferStart();
 }
 
 bool

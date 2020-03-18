@@ -405,6 +405,7 @@ RegFile::getMemEp(epid_t epId, bool print) const
     const reg_t r1  = regs[1];
     const reg_t r2  = regs[2];
 
+    ep.targetVpe    = (r0 >> 31) & 0xFFFF;
     ep.targetPe     = (r0 >> 23) & 0xFF;
     ep.flags        = (r0 >> 19) & 0x7;
     ep.vpe          = (r0 >> 3) & 0xFFFF;
@@ -464,10 +465,10 @@ MemEp::print(const RegFile &rf,
         return;
 
     DPRINTFNS(rf.name(),
-        "%s%s EP%u%14s: Mem[vpe=%u, pe=%u addr=%#llx size=%#llx flags=%#x]\n",
+        "%s%s EP%u%14s: Mem[vpe=%u, pe=%u tvpe=%u addr=%#llx size=%#llx flags=%#x]\n",
         regAccessName(access), read ? "<-" : "->",
         epId, "", vpe,
-        targetPe,
+        targetPe, targetVpe,
         remoteAddr, remoteSize,
         flags);
 }

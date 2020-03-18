@@ -700,6 +700,7 @@ Tcu::sendMemRequest(PacketPtr pkt,
 void
 Tcu::sendNocRequest(NocPacketType type,
                     PacketPtr pkt,
+                    vpeid_t tvpe,
                     uint flags,
                     Cycles delay,
                     bool functional)
@@ -709,6 +710,7 @@ Tcu::sendNocRequest(NocPacketType type,
     senderState->result = TcuError::NONE;
     senderState->flags = flags;
     senderState->cmdId = cmdId;
+    senderState->tvpe = tvpe;
 
     pkt->pushSenderState(senderState);
 
@@ -938,7 +940,7 @@ Tcu::handleNocRequest(PacketPtr pkt)
             else if (senderState->packetType == NocPacketType::WRITE_REQ)
                 nocWriteRecvs++;
             uint flags = senderState->flags;
-            res = memUnit->recvFromNoc(pkt, flags);
+            res = memUnit->recvFromNoc(senderState->tvpe, pkt, flags);
             break;
         }
         case NocPacketType::CACHE_MEM_REQ_FUNC:
@@ -1057,6 +1059,7 @@ Tcu::handleCacheMemRequest(PacketPtr pkt, bool functional)
     // this does always target a memory PE, so vpeId is invalid
     sendNocRequest(type,
                    pkt,
+                   INVALID_VPE_ID,
                    NocFlags::NONE,
                    Cycles(1),
                    functional);
