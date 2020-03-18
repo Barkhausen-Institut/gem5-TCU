@@ -82,7 +82,6 @@ class Tcu : public BaseTcu
     {
         NONE    = 0,
         NOPF    = 1,
-        PRIV    = 2,
     };
 
     struct NocSenderState : public Packet::SenderState

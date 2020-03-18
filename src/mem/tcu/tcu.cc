@@ -708,8 +708,6 @@ Tcu::sendNocRequest(NocPacketType type,
     senderState->packetType = type;
     senderState->result = TcuError::NONE;
     senderState->flags = flags;
-    if (regFile.hasFeature(Features::PRIV))
-        senderState->flags |= NocFlags::PRIV;
     senderState->cmdId = cmdId;
 
     pkt->pushSenderState(senderState);

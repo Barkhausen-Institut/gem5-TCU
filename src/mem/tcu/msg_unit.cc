@@ -540,8 +540,6 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint flags)
 
     // atm, message receives can never cause pagefaults
     uint rflags = XferUnit::XferFlags::MSGRECV | XferUnit::XferFlags::NOPF;
-    if (flags & Tcu::NocFlags::PRIV)
-        rflags |= XferUnit::XferFlags::PRIV;
     Addr localAddr = ep.bufAddr + (msgidx << ep.msgSize);
 
     auto *ev = new ReceiveTransferEvent(this, localAddr, rflags, pkt);

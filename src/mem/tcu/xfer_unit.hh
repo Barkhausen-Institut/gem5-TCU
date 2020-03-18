@@ -49,10 +49,9 @@ class XferUnit
     enum XferFlags
     {
         NOPF      = 1,
-        PRIV      = 2,
-        MESSAGE   = 4,
-        MSGRECV   = 8,
-        NOXLATE   = 16,
+        MESSAGE   = 2,
+        MSGRECV   = 4,
+        NOXLATE   = 8,
     };
 
     enum AbortType
