@@ -67,7 +67,7 @@ class M3ArmSystem : public ArmSystem, public PEMemory
     typedef M3ArmSystemParams Params;
     M3ArmSystem(Params *p);
 
-    uint32_t pedesc(unsigned pe) const override;
+    uint32_t pedesc(peid_t pe) const override;
 
     Port& getPort(const std::string &if_name,
                   PortID idx = InvalidPortID) override;

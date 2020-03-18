@@ -306,7 +306,7 @@ RegFile::getSendEp(epid_t epId, bool print) const
     ep.curcrd       = (r0 >> 19) & 0x3F;
     ep.vpe          = (r0 >> 3) & 0xFFFF;
 
-    ep.targetCore   = (r1 >>  16) & 0xFF;
+    ep.targetPe     = (r1 >>  16) & 0xFF;
     ep.targetEp     = (r1 >>  0) & 0xFFFF;
 
     ep.label        = r2 & 0xFFFFFFFF;
@@ -328,7 +328,7 @@ RegFile::setSendEp(epid_t epId, const SendEp &ep)
                  (static_cast<reg_t>(ep.vpe)        << 3) |
                  (static_cast<reg_t>(EpType::SEND)  << 0));
 
-    set(epId, 1, (static_cast<reg_t>(ep.targetCore) << 16) |
+    set(epId, 1, (static_cast<reg_t>(ep.targetPe) << 16) |
                  (static_cast<reg_t>(ep.targetEp)   << 0));
 
     set(epId, 2, ep.label);
@@ -405,7 +405,7 @@ RegFile::getMemEp(epid_t epId, bool print) const
     const reg_t r1  = regs[1];
     const reg_t r2  = regs[2];
 
-    ep.targetCore   = (r0 >> 23) & 0xFF;
+    ep.targetPe     = (r0 >> 23) & 0xFF;
     ep.flags        = (r0 >> 19) & 0x7;
     ep.vpe          = (r0 >> 3) & 0xFFFF;
 
@@ -432,7 +432,7 @@ SendEp::print(const RegFile &rf,
         "%s%s EP%u%14s: Send[vpe=%u, pe=%u ep=%u crdep=%u maxcrd=%u curcrd=%u max=%#x lbl=%#llx fl=%#lx]\n",
         regAccessName(access), read ? "<-" : "->",
         epId, "", vpe,
-        targetCore, targetEp, crdEp,
+        targetPe, targetEp, crdEp,
         maxcrd, curcrd, 1 << maxMsgSize,
         label, flags);
 }
@@ -467,7 +467,7 @@ MemEp::print(const RegFile &rf,
         "%s%s EP%u%14s: Mem[vpe=%u, pe=%u addr=%#llx size=%#llx flags=%#x]\n",
         regAccessName(access), read ? "<-" : "->",
         epId, "", vpe,
-        targetCore,
+        targetPe,
         remoteAddr, remoteSize,
         flags);
 }

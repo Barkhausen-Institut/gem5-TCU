@@ -36,7 +36,7 @@ SpuSystem::SpuSystem(Params *p)
       PEMemory(this, p->memory_pe, p->memory_offset, p->memory_size,
                 physProxy),
       pes(p->pes),
-      coreId(p->core_id)
+      peId(p->pe_id)
 {
 }
 
@@ -44,7 +44,7 @@ SpuSystem::~SpuSystem()
 {
 }
 
-uint32_t SpuSystem::pedesc(unsigned pe) const
+uint32_t SpuSystem::pedesc(peid_t pe) const
 {
     return pes[pe];
 }

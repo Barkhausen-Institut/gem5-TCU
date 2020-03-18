@@ -67,7 +67,7 @@ class M3X86System : public X86System, public PEMemory
     typedef M3X86SystemParams Params;
     M3X86System(Params *p);
 
-    uint32_t pedesc(unsigned pe) const override;
+    uint32_t pedesc(peid_t pe) const override;
 
     Port& getPort(const std::string &if_name,
                   PortID idx = InvalidPortID) override;

@@ -115,7 +115,7 @@ MemoryUnit::startRead(const Tcu::Command::Bits& cmd)
 
     DPRINTFS(Tcu, (&tcu),
         "\e[1m[rd -> %u]\e[0m at %#018lx+%#lx with EP%u into %#018lx:%lu\n",
-        ep.targetCore, ep.remoteAddr, offset,
+        ep.targetPe, ep.remoteAddr, offset,
         cmd.epid, data.addr, size);
 
     if(size == 0)
@@ -130,12 +130,12 @@ MemoryUnit::startRead(const Tcu::Command::Bits& cmd)
         return;
     }
 
-    NocAddr nocAddr(ep.targetCore, ep.remoteAddr + offset);
+    NocAddr nocAddr(ep.targetPe, ep.remoteAddr + offset);
 
     uint flags = cmdToNocFlags(cmd.flags);
 
     if (tcu.coherent && !tcu.mmioRegion.contains(nocAddr.offset) &&
-        tcu.isMemPE(nocAddr.coreId))
+        tcu.isMemPE(nocAddr.peId))
     {
         flags |= XferUnit::NOXLATE;
 
@@ -262,7 +262,7 @@ MemoryUnit::startWrite(const Tcu::Command::Bits& cmd)
 
     DPRINTFS(Tcu, (&tcu),
         "\e[1m[wr -> %u]\e[0m at %#018lx+%#lx with EP%u from %#018lx:%lu\n",
-        ep.targetCore, ep.remoteAddr, offset,
+        ep.targetPe, ep.remoteAddr, offset,
         cmd.epid, data.addr, size);
 
     if(size == 0)
@@ -277,7 +277,7 @@ MemoryUnit::startWrite(const Tcu::Command::Bits& cmd)
         return;
     }
 
-    NocAddr dest(ep.targetCore, ep.remoteAddr + offset);
+    NocAddr dest(ep.targetPe, ep.remoteAddr + offset);
 
     uint flags = cmdToXferFlags(cmd.flags);
     auto xfer = new WriteTransferEvent(
@@ -303,7 +303,7 @@ MemoryUnit::WriteTransferEvent::transferDone(TcuError result)
         tcu().printPacket(pkt);
 
         if (tcu().coherent && !tcu().mmioRegion.contains(dest.offset) &&
-            tcu().isMemPE(dest.coreId))
+            tcu().isMemPE(dest.peId))
         {
             uint rflags = (flags() & XferUnit::NOPF) | XferUnit::NOXLATE;
 

@@ -67,7 +67,7 @@ class M3RiscvSystem : public RiscvSystem, public PEMemory
     typedef M3RiscvSystemParams Params;
     M3RiscvSystem(Params *p);
 
-    uint32_t pedesc(unsigned pe) const override;
+    uint32_t pedesc(peid_t pe) const override;
 
     Port& getPort(const std::string &if_name,
                   PortID idx = InvalidPortID) override;

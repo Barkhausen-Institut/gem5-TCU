@@ -44,7 +44,7 @@ class MessageUnit
         bool ready;
         bool unlimcred;
         uint8_t flags;
-        unsigned targetCoreId;
+        peid_t targetPeId;
         epid_t targetEpId;
         epid_t replyEpId;
         uint64_t label;
@@ -140,7 +140,7 @@ class MessageUnit
      * Invalidates all reply header for receive EP <repId> that have been sent
      * from PE <peId> and send EP <sepId>.
      */
-    TcuError invalidateReply(epid_t repId, unsigned peId, epid_t sepId);
+    TcuError invalidateReply(epid_t repId, peid_t peId, epid_t sepId);
 
     /**
      * Finishes a message receive

@@ -43,22 +43,22 @@ class PEMemory
 
   public:
 
-    const uint memPe;
+    const peid_t memPe;
     const Addr memOffset;
     const Addr memSize;
 
     PEMemory(SimObject *obj,
-              uint memPe,
+              peid_t memPe,
               Addr memOffset,
               Addr memSize,
               PortProxy &phys);
 
-    bool hasMem(uint pe) const
+    bool hasMem(peid_t pe) const
     {
         return (pedesc(pe) & 0x7) != 1;
     }
 
-    virtual uint32_t pedesc(uint pe) const = 0;
+    virtual uint32_t pedesc(peid_t pe) const = 0;
 
     NocAddr getPhys(Addr offset) const
     {

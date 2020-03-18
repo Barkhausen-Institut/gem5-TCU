@@ -176,7 +176,7 @@ MessageUnit::startTransmission(const Tcu::Command::Bits& cmd)
     }
 
     // fill the info struct and start the transfer
-    info.targetCoreId = ep.targetCore;
+    info.targetPeId   = ep.targetPe;
     info.targetEpId   = ep.targetEp;
     info.label        = ep.label;
     info.replyLabel   = tcu.regs().get(CmdReg::ARG1);
@@ -201,7 +201,7 @@ MessageUnit::startXfer(const Tcu::Command::Bits& cmd)
 
     DPRINTFS(Tcu, (&tcu), "\e[1m[%s -> %u]\e[0m with EP%u of %#018lx:%lu\n",
              cmd.opcode == Tcu::Command::REPLY ? "rp" : "sd",
-             info.targetCoreId,
+             info.targetPeId,
              cmd.epid,
              data.addr,
              data.size);
@@ -214,7 +214,7 @@ MessageUnit::startXfer(const Tcu::Command::Bits& cmd)
         header->flags = 0; // normal message
     header->flags |= info.flags;
 
-    header->senderCoreId = tcu.coreId;
+    header->senderPeId   = tcu.peId;
     header->senderEpId   = info.unlimcred ? Tcu::INVALID_EP_ID : cmd.epid;
     header->replyEpId    = info.replyEpId;
     header->length       = data.size;
@@ -224,17 +224,17 @@ MessageUnit::startXfer(const Tcu::Command::Bits& cmd)
 
     DPRINTFS(Tcu, (&tcu),
         "  src: pe=%u ep=%u rpep=%u rplbl=%#018lx rpsize=%#x flags=%#x%s\n",
-        header->senderCoreId, header->senderEpId, header->replyEpId,
+        header->senderPeId, header->senderEpId, header->replyEpId,
         header->replyLabel, 1 << header->replySize, header->flags,
-        header->senderCoreId != tcu.coreId ? " (on behalf)" : "");
+        header->senderPeId != tcu.peId ? " (on behalf)" : "");
 
     DPRINTFS(Tcu, (&tcu),
         "  dst: pe=%u ep=%u lbl=%#018lx\n",
-        info.targetCoreId, info.targetEpId, info.label);
+        info.targetPeId, info.targetEpId, info.label);
 
     assert(data.size + sizeof(MessageHeader) <= tcu.maxNocPacketSize);
 
-    NocAddr nocAddr(info.targetCoreId, info.targetEpId);
+    NocAddr nocAddr(info.targetPeId, info.targetEpId);
     uint flags = XferUnit::MESSAGE;
 
     // start the transfer of the payload
@@ -405,7 +405,7 @@ MessageUnit::ackMessage(epid_t epId, Addr msgAddr)
 }
 
 TcuError
-MessageUnit::invalidateReply(epid_t repId, unsigned peId, epid_t sepId)
+MessageUnit::invalidateReply(epid_t repId, peid_t peId, epid_t sepId)
 {
     RecvEp ep = tcu.regs().getRecvEp(repId);
     if (ep.bufAddr == 0 || ep.replyEps == Tcu::INVALID_EP_ID)
@@ -414,7 +414,7 @@ MessageUnit::invalidateReply(epid_t repId, unsigned peId, epid_t sepId)
     for (epid_t i = 0; i < (1 << ep.size); ++i)
     {
         auto sep = tcu.regs().getSendEp(ep.replyEps + i);
-        if (sep.targetCore == peId && sep.crdEp == sepId)
+        if (sep.targetPe == peId && sep.crdEp == sepId)
         {
             unsigned unread_mask;
             tcu.regs().invalidate(ep.replyEps + i, true, &unread_mask);
@@ -457,7 +457,7 @@ MessageUnit::finishMsgReceive(epid_t epId,
         {
             // install use-once reply EP
             SendEp sep;
-            sep.targetCore = header->senderCoreId;
+            sep.targetPe = header->senderPeId;
             sep.targetEp = header->replyEpId;
             sep.label = header->replyLabel;
             sep.maxMsgSize = header->replySize;
@@ -497,7 +497,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint flags)
 
     DPRINTFS(Tcu, (&tcu),
         "\e[1m[rv <- %u]\e[0m %lu bytes on EP%u\n",
-        header->senderCoreId, header->length, epId);
+        header->senderPeId, header->length, epId);
     tcu.printPacket(pkt);
 
     if (DTRACE(TcuMsgs))

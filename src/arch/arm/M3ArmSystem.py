@@ -32,7 +32,7 @@ class M3ArmSystem(ArmSystem):
     type = 'M3ArmSystem'
     cxx_header = 'arch/arm/m3/system.hh'
 
-    core_id = Param.Unsigned("The core id")
+    pe_id = Param.Unsigned("The PE id")
 
     memory_pe = Param.Unsigned(0, "The memory PE to use")
     memory_offset = Param.Addr(0, "The offset in the memory PE")

@@ -34,7 +34,7 @@
 
 MemSystem::MemSystem(Params *p)
     : System(p),
-      coreId(p->core_id),
+      peId(p->pe_id),
       memFile(p->mem_file),
       memFileNum(p->mem_file_num)
 {

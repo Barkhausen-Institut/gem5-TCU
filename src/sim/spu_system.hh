@@ -41,14 +41,14 @@ class SpuSystem : public System, public PEMemory
 {
   protected:
     std::vector<Addr> pes;
-    unsigned coreId;
+    peid_t peId;
 
   public:
     typedef SpuSystemParams Params;
     SpuSystem(Params *p);
     ~SpuSystem();
 
-    uint32_t pedesc(unsigned pe) const override;
+    uint32_t pedesc(peid_t pe) const override;
 };
 
 #endif

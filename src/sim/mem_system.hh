@@ -33,13 +33,14 @@
 #include <string>
 #include <vector>
 
+#include "mem/tcu/regfile.hh"
 #include "sim/system.hh"
 #include "params/MemSystem.hh"
 
 class MemSystem : public System
 {
   protected:
-    unsigned coreId;
+    peid_t peId;
     std::string memFile;
     size_t memFileNum;
 

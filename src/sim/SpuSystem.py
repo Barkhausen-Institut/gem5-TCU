@@ -32,7 +32,7 @@ class SpuSystem(System):
     type = 'SpuSystem'
     cxx_header = 'sim/spu_system.hh'
 
-    core_id = Param.Unsigned("The core id")
+    pe_id = Param.Unsigned("The PE id")
 
     mods = VectorParam.String([], "The boot modules")
     pes = VectorParam.Addr([], "All PEs in the system with their type and mem size")

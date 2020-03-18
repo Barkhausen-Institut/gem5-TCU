@@ -299,7 +299,7 @@ class BaseTcu : public ClockedObject
 
   public:
 
-    const unsigned coreId;
+    const peid_t peId;
 
     const AddrRange mmioRegion;
 

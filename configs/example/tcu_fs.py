@@ -191,8 +191,8 @@ def printConfig(pe, tcupos):
             pass
 
 def interpose(pe, options, name, port):
-    if options.mem_watches.has_key(int(pe.core_id)):
-        watch = options.mem_watches[int(pe.core_id)]
+    if options.mem_watches.has_key(int(pe.pe_id)):
+        watch = options.mem_watches[int(pe.pe_id)]
         mon = CommMonitor()
         mon.trace = MemWatchProbe(probe_name="PktResponse", ranges=watch)
         mon.slave = port
@@ -237,7 +237,7 @@ def createPE(noc, options, no, systemType, l1size, l2size, spmsize, tcupos, memP
     pe.voltage_domain = VoltageDomain(voltage=options.sys_voltage)
     pe.clk_domain = SrcClockDomain(clock=options.cpu_clock,
                                    voltage_domain=pe.voltage_domain)
-    pe.core_id = no
+    pe.pe_id = no
 
     if not l2size is None:
         pe.xbar = SystemXBar()
@@ -246,7 +246,7 @@ def createPE(noc, options, no, systemType, l1size, l2size, spmsize, tcupos, memP
     pe.xbar.point_of_coherency = True
 
     pe.tcu = Tcu(max_noc_packet_size='2kB', buf_size='2kB')
-    pe.tcu.core_id = no
+    pe.tcu.pe_id = no
 
     pe.tcu.coherent = options.coherent
     pe.tcu.num_endpoints = 192
@@ -722,7 +722,7 @@ def runSimulation(root, options, pes):
 
     # give that to the PEs
     for pe in pes:
-        setattr(root, 'pe%02d' % pe.core_id, pe)
+        setattr(root, 'pe%02d' % pe.pe_id, pe)
         try:
             pe.mods = options.mods
             pe.pes = pemems

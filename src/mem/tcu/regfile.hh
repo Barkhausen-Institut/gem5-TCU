@@ -84,9 +84,9 @@ constexpr unsigned numCmdRegs = 4;
 // 0. VPEID[16] | TYPE[3] (for all)
 //    receive: BUF_RD_POS[6] | BUF_WR_POS[6] | BUF_MSG_SIZE[6] | BUF_SIZE[6] | REPLY_EPS[16]
 //    send:    FLAGS[2] | CRD_EP[16] | MAX_MSG_SIZE[6] | MAXCRD[6] | CURCRD[6]
-//    mem:     REQ_COREID[8] | FLAGS[4]
+//    mem:     REQ_PEID[8] | FLAGS[4]
 // 1. receive: BUF_ADDR[32]
-//    send:    TGT_COREID[8] | TGT_EPID[16]
+//    send:    TGT_PEID[8] | TGT_EPID[16]
 //    mem:     REQ_MEM_ADDR[64]
 // 2. receive: BUF_UNREAD[32] | BUF_OCCUPIED[32]
 //    send:    LABEL[32]
@@ -99,6 +99,7 @@ constexpr unsigned numBufRegs = 32;
 
 typedef uint16_t vpeid_t;
 typedef uint16_t epid_t;
+typedef uint8_t peid_t;
 
 enum class EpType
 {
@@ -135,7 +136,7 @@ struct SendEp : public Ep
 {
     static const uint8_t FL_REPLY   = 1;
 
-    SendEp() : Ep(), flags(), targetCore(), targetEp(), crdEp(), maxcrd(), curcrd(),
+    SendEp() : Ep(), flags(), targetPe(), targetEp(), crdEp(), maxcrd(), curcrd(),
                maxMsgSize(), label()
     {}
 
@@ -145,7 +146,7 @@ struct SendEp : public Ep
                RegAccess access) const;
 
     uint8_t flags;
-    uint8_t targetCore;
+    uint8_t targetPe;
     uint16_t targetEp;
     uint16_t crdEp;
     uint8_t maxcrd;
@@ -216,7 +217,7 @@ struct RecvEp : public Ep
 
 struct MemEp : public Ep
 {
-    MemEp() : Ep(), remoteAddr(), remoteSize(), targetCore(), flags()
+    MemEp() : Ep(), remoteAddr(), remoteSize(), targetPe(), flags()
     {}
 
     void print(const RegFile &rf,
@@ -226,7 +227,7 @@ struct MemEp : public Ep
 
     uint64_t remoteAddr;
     uint64_t remoteSize;
-    uint8_t targetCore;
+    uint8_t targetPe;
     uint8_t flags;
 };
 
@@ -252,7 +253,7 @@ struct MessageHeader
 {
     uint8_t flags : 2,
             replySize: 6;
-    uint8_t senderCoreId;
+    uint8_t senderPeId;
     uint16_t senderEpId;
     // for a normal message this is the reply epId
     // for a reply this is the enpoint that receives credits

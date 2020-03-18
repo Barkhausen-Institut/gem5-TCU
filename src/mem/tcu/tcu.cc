@@ -130,7 +130,7 @@ Tcu::Tcu(TcuParams* p)
     if (sys)
     {
         NocAddr phys = sys->getPhys(0);
-        memPe = phys.coreId;
+        memPe = phys.peId;
         memOffset = phys.offset;
         memSize = sys->memSize;
         DPRINTF(Tcu, "Using memory range %p .. %p\n",
@@ -533,7 +533,7 @@ Tcu::executeExtCommand(PacketPtr pkt)
         case ExtCommand::INV_REPLY:
         {
             epid_t repid = cmd.arg & 0xFFFF;
-            unsigned peid = (cmd.arg >> 16) & 0xFF;
+            peid_t peid = (cmd.arg >> 16) & 0xFF;
             epid_t sepid = (cmd.arg >> 24) & 0xFFFF;
             cmd.error = msgUnit->invalidateReply(repid, peid, sepid);
             break;
@@ -845,7 +845,7 @@ Tcu::completeNocRequest(PacketPtr pkt)
         DPRINTF(TcuMem,
             "Finished %s request of LLC for %u bytes @ %d:%#x\n",
             pkt->isRead() ? "read" : "write",
-            pkt->getSize(), noc.coreId, noc.offset);
+            pkt->getSize(), noc.peId, noc.offset);
 
         if(pkt->isRead())
             printPacket(pkt);
@@ -1032,7 +1032,7 @@ Tcu::handleCacheMemRequest(PacketPtr pkt, bool functional)
         if (noc.offset > memSize)
         {
             DPRINTF(TcuMem, "Ignoring %s request of LLC for %u bytes @ %d:%#x\n",
-                pkt->cmdString(), pkt->getSize(), noc.coreId, noc.offset);
+                pkt->cmdString(), pkt->getSize(), noc.peId, noc.offset);
             return false;
         }
 
@@ -1047,7 +1047,7 @@ Tcu::handleCacheMemRequest(PacketPtr pkt, bool functional)
 
     DPRINTF(TcuMem, "Handling %s request of LLC for %u bytes @ %d:%#x\n",
                     pkt->cmdString(),
-                    pkt->getSize(), noc.coreId, noc.offset);
+                    pkt->getSize(), noc.peId, noc.offset);
 
     if(pkt->isWrite())
         printPacket(pkt);

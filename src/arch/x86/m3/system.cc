@@ -44,12 +44,12 @@ M3X86System::M3X86System(Params *p)
       PEMemory(this, p->memory_pe, p->memory_offset, p->memory_size,
                 physProxy),
       nocPort(*this),
-      loader(p->pes, p->mods, p->boot_osflags, p->core_id,
+      loader(p->pes, p->mods, p->boot_osflags, p->pe_id,
              p->mod_offset, p->mod_size, p->pe_size)
 {
 }
 
-uint32_t M3X86System::pedesc(unsigned pe) const
+uint32_t M3X86System::pedesc(peid_t pe) const
 {
     return loader.pe_attr()[pe];
 }

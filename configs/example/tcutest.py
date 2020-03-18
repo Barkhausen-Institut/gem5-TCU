@@ -100,7 +100,7 @@ for i in range(0, options.num_pes):
     pe.scratchpad.cpu_port = pe.xbar.master
 
     pe.tcu = Tcu()
-    pe.tcu.core_id = i
+    pe.tcu.pe_id = i
     pe.tcu.spm_master_port = pe.scratchpad.tcu_port
     pe.tcu.cpu_slave_port = pe.xbar.master
 

@@ -54,7 +54,7 @@ class BaseTcu(ClockedObject):
 
     mmio_region = Param.AddrRange(AddrRange(0xF0000000, 0xF0002FFF), "MMIO region of the TCU")
 
-    core_id = Param.Unsigned("ID of the core this TCU belongs to")
+    pe_id = Param.Unsigned("ID of the PE this TCU belongs to")
 
     watch_range_start = Param.Addr(0x0, "The start address of the address range to watch")
     watch_range_end = Param.Addr(0x0, "The end address of the address range to watch (exclusive)")

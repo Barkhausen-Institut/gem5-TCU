@@ -32,7 +32,7 @@
 #include "mem/tcu/tlb.hh"
 
 PEMemory::PEMemory(SimObject *obj,
-                   uint memPe,
+                   peid_t memPe,
                    Addr memOffset,
                    Addr memSize,
                    PortProxy &phys)

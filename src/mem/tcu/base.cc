@@ -272,11 +272,11 @@ BaseTcu::NocSlavePort::getAddrRanges() const
 {
     AddrRangeList ranges;
 
-    Addr baseNocAddr = NocAddr(tcu.coreId, 0).getAddr();
-    Addr topNocAddr  = NocAddr(tcu.coreId + 1, 0).getAddr() - 1;
+    Addr baseNocAddr = NocAddr(tcu.peId, 0).getAddr();
+    Addr topNocAddr  = NocAddr(tcu.peId + 1, 0).getAddr() - 1;
 
     DPRINTF(TcuSlavePort, "Tcu %u covers %#x to %#x\n",
-                          tcu.coreId,
+                          tcu.peId,
                           baseNocAddr,
                           topNocAddr);
 
@@ -306,7 +306,7 @@ BaseTcu::BaseTcu(BaseTcuParams* p)
     cacheMemSlavePort(*this),
     caches(p->caches),
     nocReqFinishedEvent(*this),
-    coreId(p->core_id),
+    peId(p->pe_id),
     mmioRegion(p->mmio_region),
     slaveRegion(p->slave_region),
     coherent(p->coherent)
