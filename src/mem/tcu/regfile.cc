@@ -50,6 +50,7 @@ const char *RegFile::privRegNames[] = {
     "CORE_REQ",
     "CORE_RESP",
     "PRIV_CMD",
+    "PRIV_CMD_ARG",
     "EXT_CMD",
     "CUR_VPE",
     "OLD_VPE",

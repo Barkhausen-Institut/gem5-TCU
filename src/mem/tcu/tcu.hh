@@ -137,7 +137,8 @@ class Tcu : public BaseTcu
             IDLE            = 0,
             INV_PAGE        = 1,
             INV_TLB         = 2,
-            XCHG_VPE        = 3,
+            INS_TLB         = 3,
+            XCHG_VPE        = 4,
         };
 
         Opcode opcode;

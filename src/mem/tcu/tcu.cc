@@ -64,6 +64,7 @@ static const char *privCmdNames[] =
     "IDLE",
     "INV_PAGE",
     "INV_TLB",
+    "INS_TLB",
     "XCHG_VPE",
 };
 
@@ -467,6 +468,16 @@ Tcu::executePrivCommand(PacketPtr pkt)
         case PrivCommand::INV_TLB:
             if (tlb())
                 tlb()->clear();
+            break;
+        case PrivCommand::INS_TLB:
+            if (tlb())
+            {
+                uint16_t asid = cmd.arg >> 44;
+                Addr virt = cmd.arg & 0xFFFFFFFF000;
+                uint flags = cmd.arg & 0x1F;
+                Addr phys = regFile.get(PrivReg::PRIV_CMD_ARG);
+                tlb()->insert(virt, asid, NocAddr(phys), flags);
+            }
             break;
         case PrivCommand::XCHG_VPE:
         {

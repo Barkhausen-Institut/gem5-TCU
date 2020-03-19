@@ -60,13 +60,14 @@ enum class PrivReg : Addr
     CORE_REQ,
     CORE_RESP,
     PRIV_CMD,
+    PRIV_CMD_ARG,
     EXT_CMD,
     // MSGS[16] | VPE_ID[16] | EVENTS[3]
     CUR_VPE,
     OLD_VPE,
 };
 
-constexpr unsigned numPrivRegs = 6;
+constexpr unsigned numPrivRegs = 7;
 
 // registers to issue a command
 enum class CmdReg : Addr
