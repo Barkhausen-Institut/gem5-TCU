@@ -385,9 +385,13 @@ MessageUnit::ackMessage(epid_t epId, Addr msgAddr)
     if (msgidx == RecvEp::MAX_MSGS || !ep.isOccupied(msgidx))
         return TcuError::INV_MSG;
 
+    bool unread = false;
     ep.setOccupied(msgidx, false);
     if (ep.isUnread(msgidx))
+    {
         ep.setUnread(msgidx, false);
+        unread = true;
+    }
 
     if (ep.replyEps != Tcu::INVALID_EP_ID)
     {
@@ -401,6 +405,8 @@ MessageUnit::ackMessage(epid_t epId, Addr msgAddr)
         epId, msgidx);
 
     tcu.regs().setRecvEp(epId, ep);
+    if (unread)
+        tcu.regs().rem_msg();
     return TcuError::NONE;
 }
 
