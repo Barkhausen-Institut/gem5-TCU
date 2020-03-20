@@ -135,10 +135,10 @@ AccelCtxSwSM::handleMemResp(PacketPtr pkt)
             const uint64_t *args =
                 reinterpret_cast<const uint64_t*>(pkt->getConstPtr<uint8_t>() + sizeof(MessageHeader));
 
-            vpe_id = args[2];
-            if (args[0] == Operation::VPE_CTRL && args[3] == VPECtrl::START)
+            vpe_id = args[1];
+            if (args[0] == Operation::VPE_CTRL && args[2] == VPECtrl::START)
                 switched = true;
-            else if (args[0] == Operation::VPE_CTRL && args[3] == VPECtrl::STOP)
+            else if (args[0] == Operation::VPE_CTRL && args[2] == VPECtrl::STOP)
                 vpe_id = OUR_VPE;
             state = State::STORE_REPLY;
             break;
