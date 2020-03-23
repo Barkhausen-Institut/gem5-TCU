@@ -417,19 +417,19 @@ XferUnit::abortTransfers(uint types)
         if (!ev)
             continue;
 
-        bool abort = !ev->isRemote() && (types & ABORT_LOCAL);
-        // received messages are only aborted on reset
-        abort &= !(ev->flags() & XferFlags::MSGRECV) || (types & ABORT_MSGS);
-
-        if (abort)
+        if (!ev->isRemote() && (types & ABORT_LOCAL))
         {
-            ev->abort(TcuError::ABORT);
-            // by default, we auto-delete it, but in this case, we have to do
-            // that manually since it's not the current event
-            delete ev;
+            // received messages are only aborted on reset
+            if (!(ev->flags() & XferFlags::MSGRECV) || (types & ABORT_MSGS))
+            {
+                ev->abort(TcuError::ABORT);
+                // by default, we auto-delete it, but in this case, we have to do
+                // that manually since it's not the current event
+                delete ev;
+            }
+            else
+                rem = true;
         }
-        else
-            rem = true;
     }
 
     return !rem;
