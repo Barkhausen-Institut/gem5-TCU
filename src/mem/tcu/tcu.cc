@@ -66,6 +66,7 @@ static const char *privCmdNames[] =
     "INV_TLB",
     "INS_TLB",
     "XCHG_VPE",
+    "FLUSH_CACHE",
 };
 
 static const char *extCmdNames[] =
@@ -121,7 +122,7 @@ Tcu::Tcu(TcuParams* p)
     static_assert(sizeof(cmdNames) / sizeof(cmdNames[0]) ==
         Command::PRINT + 1, "cmdNames out of sync");
     static_assert(sizeof(privCmdNames) / sizeof(privCmdNames[0]) ==
-        PrivCommand::XCHG_VPE + 1, "privCmdNames out of sync");
+        PrivCommand::FLUSH_CACHE + 1, "privCmdNames out of sync");
     static_assert(sizeof(extCmdNames) / sizeof(extCmdNames[0]) ==
         ExtCommand::RESET + 1, "extCmdNames out of sync");
 
@@ -453,6 +454,8 @@ Tcu::executePrivCommand(PacketPtr pkt)
     DPRINTF(TcuCmd, "Executing privileged command %s with arg=%p\n",
             privCmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg);
 
+    Cycles delay(1);
+
     switch (cmd.opcode)
     {
         case PrivCommand::IDLE:
@@ -486,13 +489,16 @@ Tcu::executePrivCommand(PacketPtr pkt)
             regs().set(PrivReg::CUR_VPE, cmd.arg & 0x7FFFFFFFF);
             break;
         }
+        case PrivCommand::FLUSH_CACHE:
+            delay += flushInvalCaches(true);
+            break;
         default:
             // TODO error handling
             panic("Invalid opcode %#x\n", static_cast<RegFile::reg_t>(cmd.opcode));
     }
 
     if (pkt)
-        schedCpuResponse(pkt, clockEdge(Cycles(1)));
+        schedCpuResponse(pkt, clockEdge(delay));
 
     // set privileged command back to IDLE
     regFile.set(PrivReg::PRIV_CMD,
