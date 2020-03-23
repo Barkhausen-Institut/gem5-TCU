@@ -201,8 +201,15 @@ CoreRequests::completeReqs()
 void
 CoreRequests::abortReq(size_t id)
 {
-    if (reqs[id] && !reqs[id]->waiting)
-        tcu.regs().set(PrivReg::CORE_REQ, 0);
-    delete reqs[id];
-    reqs[id] = nullptr;
+    if (reqs[id])
+    {
+        DPRINTFS(TcuCoreReqs, (&tcu), "CoreRequest[%lu] aborted\n", id);
+        bool in_progress = !reqs[id]->waiting;
+        if (in_progress)
+            tcu.regs().set(PrivReg::CORE_REQ, 0);
+        delete reqs[id];
+        reqs[id] = nullptr;
+        if (in_progress)
+            completeReqs();
+    }
 }
