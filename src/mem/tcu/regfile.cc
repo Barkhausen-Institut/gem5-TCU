@@ -115,7 +115,7 @@ RegFile::RegFile(Tcu &_tcu, const std::string& name, unsigned _numEndpoints)
     // at boot, all PEs are privileged
     reg_t feat = static_cast<reg_t>(Features::PRIV);
     set(TcuReg::FEATURES, feat);
-    set(PrivReg::CUR_VPE, static_cast<reg_t>(Tcu::INVALID_VPE_ID) << 19);
+    set(PrivReg::CUR_VPE, static_cast<reg_t>(Tcu::INVALID_VPE_ID));
 }
 
 unsigned
@@ -164,7 +164,7 @@ void
 RegFile::add_msg()
 {
     reg_t cur_vpe = privRegs[static_cast<size_t>(PrivReg::CUR_VPE)];
-    cur_vpe += 1 << 3;
+    cur_vpe += 1 << 16;
     set(PrivReg::CUR_VPE, cur_vpe);
     // since we're always invalidating receive EPs immediately and do NOT
     // update the message count in the CUR_VPE reg, we might temporarily have
@@ -176,27 +176,9 @@ void
 RegFile::rem_msg()
 {
     reg_t cur_vpe = privRegs[static_cast<size_t>(PrivReg::CUR_VPE)];
-    cur_vpe -= 1 << 3;
+    cur_vpe -= 1 << 16;
     set(PrivReg::CUR_VPE, cur_vpe);
     assert(messages() >= countMsgs(getVPE()));
-}
-
-RegFile::reg_t
-RegFile::fetchEvents()
-{
-    reg_t old = get(PrivReg::CUR_VPE, RegAccess::TCU);
-    if ((old & 0x7) != 0)
-        set(PrivReg::CUR_VPE, old & ~static_cast<reg_t>(0x7));
-    return old & 0x7;
-}
-
-void
-RegFile::setEvent(EventType ev)
-{
-    reg_t old = privRegs[static_cast<size_t>(PrivReg::CUR_VPE)];
-    set(PrivReg::CUR_VPE,
-        old | static_cast<reg_t>(1) << static_cast<reg_t>(ev),
-        RegAccess::TCU);
 }
 
 RegFile::reg_t

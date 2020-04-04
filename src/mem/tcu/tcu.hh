@@ -107,10 +107,9 @@ class Tcu : public BaseTcu
             READ            = 3,
             WRITE           = 4,
             FETCH_MSG       = 5,
-            FETCH_EVENTS    = 6,
-            ACK_MSG         = 7,
-            SLEEP           = 8,
-            PRINT           = 9,
+            ACK_MSG         = 6,
+            SLEEP           = 7,
+            PRINT           = 8,
         };
 
         enum Flags
@@ -180,7 +179,7 @@ class Tcu : public BaseTcu
 
     void printLine(Addr len);
 
-    bool startSleep(uint64_t cycles, epid_t wakeupEp, bool ack);
+    bool startSleep(uint64_t cycles, epid_t wakeupEp);
 
     void stopSleep();
 

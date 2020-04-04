@@ -33,7 +33,7 @@ PacketPtr
 YieldSM::tick()
 {
     return accel->createTcuCmdPkt(Tcu::Command::SLEEP,
-                                  0, 0, 0, 1, 0xFFFF000000000000);
+                                  0, 0, 0, 0, 0xFFFF000000000000);
 }
 
 bool

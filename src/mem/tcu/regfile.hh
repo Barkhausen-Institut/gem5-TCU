@@ -62,7 +62,7 @@ enum class PrivReg : Addr
     PRIV_CMD,
     PRIV_CMD_ARG,
     EXT_CMD,
-    // MSGS[16] | VPE_ID[16] | EVENTS[3]
+    // MSGS[16] | VPE_ID[16]
     CUR_VPE,
     OLD_VPE,
 };
@@ -115,13 +115,6 @@ enum class RegAccess
     CPU,
     TCU,
     NOC
-};
-
-enum class EventType
-{
-    CRD_RECV,
-    EP_INVAL,
-    USER,
 };
 
 class RegFile;
@@ -304,17 +297,8 @@ class RegFile
 
     unsigned messages() const
     {
-        return (get(PrivReg::CUR_VPE) >> 3) & 0xFFFF;
+        return (get(PrivReg::CUR_VPE) >> 16) & 0xFFFF;
     }
-
-    bool hasEvents() const
-    {
-        return (get(PrivReg::CUR_VPE) & 0x7) != 0;
-    }
-
-    reg_t fetchEvents();
-
-    void setEvent(EventType ev);
 
     reg_t get(TcuReg reg, RegAccess access = RegAccess::TCU) const;
 
@@ -329,7 +313,7 @@ class RegFile
     void set(CmdReg reg, reg_t value, RegAccess access = RegAccess::TCU);
 
     reg_t getVPE() const {
-        return get(PrivReg::CUR_VPE) >> 19;
+        return get(PrivReg::CUR_VPE) & 0xFFFF;
     }
 
     void updateMsgCnt();

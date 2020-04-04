@@ -53,7 +53,6 @@ static const char *cmdNames[] =
     "READ",
     "WRITE",
     "FETCH_MSG",
-    "FETCH_EVENTS",
     "ACK_MSG",
     "SLEEP",
     "PRINT",
@@ -284,10 +283,6 @@ Tcu::executeCommand(PacketPtr pkt)
             regs().set(CmdReg::ARG1, msgUnit->fetchMessage(cmd.epid));
             finishCommand(TcuError::NONE);
             break;
-        case Command::FETCH_EVENTS:
-            regs().set(CmdReg::ARG1, regs().fetchEvents());
-            finishCommand(TcuError::NONE);
-            break;
         case Command::ACK_MSG:
             finishCommand(msgUnit->ackMessage(cmd.epid, cmd.arg));
             break;
@@ -296,8 +291,7 @@ Tcu::executeCommand(PacketPtr pkt)
             RegFile::reg_t arg = regs().get(CmdReg::ARG1);
             Cycles sleepCycles = static_cast<Cycles>(arg & 0xFFFFFFFFFFF);
             int ep = (arg >> 48) & 0xFFFF;
-            bool ackEvents = cmd.arg != 0;
-            if (!startSleep(sleepCycles, ep, ackEvents))
+            if (!startSleep(sleepCycles, ep))
                 finishCommand(TcuError::NONE);
         }
         break;
@@ -313,7 +307,7 @@ Tcu::executeCommand(PacketPtr pkt)
     }
 
     if (cmdPkt && cmd.opcode != Command::SLEEP)
-        startSleep(0, INVALID_EP_ID, false);
+        startSleep(0, INVALID_EP_ID);
 }
 
 void
@@ -486,7 +480,7 @@ Tcu::executePrivCommand(PacketPtr pkt)
         {
             RegFile::reg_t old = regs().get(PrivReg::CUR_VPE);
             regs().set(PrivReg::OLD_VPE, old);
-            regs().set(PrivReg::CUR_VPE, cmd.arg & 0x7FFFFFFFF);
+            regs().set(PrivReg::CUR_VPE, cmd.arg & 0xFFFFFFFF);
             break;
         }
         case PrivCommand::FLUSH_CACHE:
@@ -540,11 +534,6 @@ Tcu::executeExtCommand(PacketPtr pkt)
             unsigned unreadMask;
             cmd.error = regs().invalidate(epid, force, &unreadMask);
             cmd.arg = unreadMask;
-            if (cmd.error == TcuError::NONE)
-            {
-                regs().setEvent(EventType::EP_INVAL);
-                wakeupCore(false);
-            }
             break;
         }
         case ExtCommand::INV_REPLY:
@@ -592,13 +581,9 @@ Tcu::has_message(epid_t ep)
 }
 
 bool
-Tcu::startSleep(uint64_t cycles, epid_t ep, bool ack)
+Tcu::startSleep(uint64_t cycles, epid_t ep)
 {
-    // just for accelerators and simplicity: ack all events
-    if (ack)
-        regFile.fetchEvents();
-
-    if (regFile.hasEvents() || has_message(ep))
+    if (has_message(ep))
         return false;
     if (regFile.get(PrivReg::CORE_REQ) != 0)
         return false;
@@ -621,7 +606,7 @@ Tcu::stopSleep()
 void
 Tcu::wakeupCore(bool force)
 {
-    if (force || regFile.hasEvents() || has_message(wakeupEp))
+    if (force || has_message(wakeupEp))
     {
         if (getCommand().opcode == Command::SLEEP)
             scheduleFinishOp(Cycles(1));
