@@ -137,6 +137,8 @@ RegFile::countMsgs(vpeid_t vpeId)
 TcuError
 RegFile::invalidate(epid_t epId, bool force, unsigned *unreadMask)
 {
+    *unreadMask = 0;
+
     if (!force && getEpType(epId) == EpType::SEND)
     {
         SendEp sep = getSendEp(epId);
@@ -144,7 +146,6 @@ RegFile::invalidate(epid_t epId, bool force, unsigned *unreadMask)
             return TcuError::MISS_CREDITS;
     }
 
-    *unreadMask = 0;
     if (!force && getEpType(epId) == EpType::RECEIVE)
     {
         RecvEp rep = getRecvEp(epId);
