@@ -459,7 +459,8 @@ MessageUnit::finishMsgReceive(epid_t epId,
         ep.setUnread(idx, true);
 
         if (!(header->flags & Tcu::REPLY_FLAG) &&
-            ep.replyEps != Tcu::INVALID_EP_ID)
+            ep.replyEps != Tcu::INVALID_EP_ID &&
+            header->replyEpId != Tcu::INVALID_EP_ID)
         {
             // install use-once reply EP
             SendEp sep;
@@ -500,6 +501,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint flags)
 
     NocAddr addr(pkt->getAddr());
     epid_t epId = addr.offset;
+    assert(epId != Tcu::INVALID_EP_ID);
 
     DPRINTFS(Tcu, (&tcu),
         "\e[1m[rv <- %u]\e[0m %lu bytes on EP%u\n",
@@ -511,17 +513,6 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint flags)
         uint64_t *words = reinterpret_cast<uint64_t*>(header + 1);
         for(size_t i = 0; i < header->length / sizeof(uint64_t); ++i)
             DPRINTFS(TcuMsgs, (&tcu), "    word%2lu: %#018x\n", i, words[i]);
-    }
-
-    // support credit receives without storing reply messages
-    if (epId == Tcu::INVALID_EP_ID && (header->flags & Tcu::REPLY_FLAG))
-    {
-        if (header->replyEpId != Tcu::INVALID_EP_ID)
-            recvCredits(header->replyEpId);
-        tcu.sendNocResponse(pkt);
-        tcu.regs().setEvent(EventType::CRD_RECV);
-        tcu.wakeupCore(false);
-        return TcuError::NONE;
     }
 
     RecvEp ep = tcu.regs().getRecvEp(epId);
