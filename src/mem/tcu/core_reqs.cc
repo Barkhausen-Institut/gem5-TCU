@@ -155,7 +155,8 @@ CoreRequests::startForeignReceive(size_t id,
 void
 CoreRequests::ForeignRecvRequest::start(size_t id)
 {
-    auto val = (epId << 28) | (vpeId << 12) | (id << 6) | 1;
+    auto val = (static_cast<RegFile::reg_t>(epId) << 28) |
+                (vpeId << 12) | (id << 6) | 1;
     req.tcu.regs().set(PrivReg::CORE_REQ, val);
     waiting = false;
 
