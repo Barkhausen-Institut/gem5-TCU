@@ -45,6 +45,7 @@ enum class TcuReg : Addr
     CUR_TIME,
     CLEAR_IRQ,
     CLOCK,
+    PRINT,
 };
 
 enum class Features
@@ -52,7 +53,7 @@ enum class Features
     PRIV            = 1 << 0,
 };
 
-constexpr unsigned numTcuRegs = 4;
+constexpr unsigned numTcuRegs = 5;
 
 // privileged registers (for kernel and PEMux)
 enum class PrivReg : Addr
@@ -280,6 +281,7 @@ class RegFile
         WROTE_ABORT     = 8,
         WROTE_XLATE     = 16,
         WROTE_CLEAR_IRQ = 32,
+        WROTE_PRINT     = 64,
     };
 
     RegFile(Tcu &tcu, const std::string& name, unsigned numEndpoints);

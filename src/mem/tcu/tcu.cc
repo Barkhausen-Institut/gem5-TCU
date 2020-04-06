@@ -55,7 +55,6 @@ static const char *cmdNames[] =
     "FETCH_MSG",
     "ACK_MSG",
     "SLEEP",
-    "PRINT",
 };
 
 static const char *privCmdNames[] =
@@ -119,7 +118,7 @@ Tcu::Tcu(TcuParams* p)
     nocToTransferLatency(p->noc_to_transfer_latency)
 {
     static_assert(sizeof(cmdNames) / sizeof(cmdNames[0]) ==
-        Command::PRINT + 1, "cmdNames out of sync");
+        Command::SLEEP + 1, "cmdNames out of sync");
     static_assert(sizeof(privCmdNames) / sizeof(privCmdNames[0]) ==
         PrivCommand::FLUSH_CACHE + 1, "privCmdNames out of sync");
     static_assert(sizeof(extCmdNames) / sizeof(extCmdNames[0]) ==
@@ -293,12 +292,6 @@ Tcu::executeCommand(PacketPtr pkt)
             int ep = (arg >> 48) & 0xFFFF;
             if (!startSleep(sleepCycles, ep))
                 finishCommand(TcuError::NONE);
-        }
-        break;
-        case Command::PRINT:
-        {
-            printLine(cmd.arg);
-            finishCommand(TcuError::NONE);
         }
         break;
         default:
@@ -1126,6 +1119,8 @@ Tcu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
                 schedule(abortCommandEvent, when);
             else if (result & RegFile::WROTE_XLATE)
                 schedule(completeCoreReqEvent, when);
+            if (result & RegFile::WROTE_PRINT)
+                printLine(regs().get(TcuReg::PRINT));
             if (result & RegFile::WROTE_CLEAR_IRQ)
                 clearIrq();
         }
@@ -1144,6 +1139,8 @@ Tcu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
             abortCommand();
         if (result & RegFile::WROTE_XLATE)
             coreReqs.completeReqs();
+        if (result & RegFile::WROTE_PRINT)
+            printLine(regs().get(TcuReg::PRINT));
         if (result & RegFile::WROTE_CLEAR_IRQ)
             clearIrq();
     }

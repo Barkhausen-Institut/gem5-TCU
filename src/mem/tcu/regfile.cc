@@ -44,6 +44,7 @@ const char *RegFile::tcuRegNames[] = {
     "CUR_TIME",
     "CLEAR_IRQ",
     "CLOCK",
+    "PRINT",
 };
 
 const char *RegFile::privRegNames[] = {
@@ -556,6 +557,11 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
                 data[offset / sizeof(reg_t)] = get(reg, access);
             else if (pkt->isWrite() && isCpuRequest && reg == TcuReg::CLEAR_IRQ)
                 res |= WROTE_CLEAR_IRQ;
+            else if (pkt->isWrite() && isCpuRequest && reg == TcuReg::PRINT)
+            {
+                res |= WROTE_PRINT;
+                set(reg, data[offset / sizeof(reg_t)], access);
+            }
             // master registers can't be set by the CPU
             else if (pkt->isWrite() && !isCpuRequest)
                 set(reg, data[offset / sizeof(reg_t)], access);

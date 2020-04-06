@@ -109,7 +109,6 @@ class Tcu : public BaseTcu
             FETCH_MSG       = 5,
             ACK_MSG         = 6,
             SLEEP           = 7,
-            PRINT           = 8,
         };
 
         enum Flags
