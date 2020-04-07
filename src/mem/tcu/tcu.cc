@@ -357,8 +357,13 @@ Tcu::scheduleFinishOp(Cycles delay, TcuError error)
             delete cmdFinish;
         }
 
-        cmdFinish = new FinishCommandEvent(*this, error);
-        schedule(cmdFinish, clockEdge(delay));
+        if (delay == 0)
+            finishCommand(error);
+        else
+        {
+            cmdFinish = new FinishCommandEvent(*this, error);
+            schedule(cmdFinish, clockEdge(delay));
+        }
     }
 }
 
@@ -601,8 +606,10 @@ Tcu::wakeupCore(bool force)
 {
     if (force || has_message(wakeupEp))
     {
+        // better stop the command in this cycle to ensure that the core
+        // does not issue another command before we can finish the sleep.
         if (getCommand().opcode == Command::SLEEP)
-            scheduleFinishOp(Cycles(1));
+            scheduleFinishOp(Cycles(0));
         else
             connector->wakeup();
     }
