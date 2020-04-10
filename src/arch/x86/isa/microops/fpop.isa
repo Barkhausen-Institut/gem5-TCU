@@ -49,6 +49,7 @@ def template MicroFpOpExecute {{
             Fault fault = NoFault;
 
             DPRINTF(X86, "The data size is %d\n", dataSize);
+            %(fp_enable_check)s;
             %(op_decl)s;
             %(op_rd)s;
 

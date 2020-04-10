@@ -32,6 +32,7 @@ def template MediaOpExecute {{
         {
             Fault fault = NoFault;
 
+            %(fp_enable_check)s;
             %(op_decl)s;
             %(op_rd)s;
 

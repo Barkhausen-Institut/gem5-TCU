@@ -135,6 +135,18 @@ output exec {{
 
         return NoFault;
     }
+
+    static inline Fault
+    checkFpEnableFault(ExecContext *xc, const X86ISA::ExtMachInst &)
+    {
+        if (FullSystem) {
+            CR0 cr0 = xc->readMiscReg(MISCREG_CR0);
+            if (cr0.ts == 1) {
+                return std::make_shared<DeviceNotAvailable>();
+            }
+        }
+        return NoFault;
+    }
 }};
 
 
