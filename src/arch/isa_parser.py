@@ -1498,7 +1498,7 @@ class InstObjParams(object):
         # if 'IsVector' is set, add call to the Vector enable check
         # function (which should be provided by isa_desc via a declare)
         if 'IsFloating' in self.flags:
-            self.fp_enable_check = 'fault = checkFpEnableFault(xc);'
+            self.fp_enable_check = 'fault = checkFpEnableFault(xc, machInst);'
         elif 'IsVector' in self.flags:
             self.fp_enable_check = 'fault = checkVecEnableFault(xc);'
         else:

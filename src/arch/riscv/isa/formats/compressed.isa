@@ -137,6 +137,7 @@ def template CBasicExecute {{
     {
         Fault fault = NoFault;
 
+        %(fp_enable_check)s;
         %(op_decl)s;
         %(op_rd)s;
         if (fault == NoFault) {

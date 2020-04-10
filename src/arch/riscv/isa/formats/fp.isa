@@ -38,10 +38,7 @@ def template FloatExecute {{
     {
         Fault fault = NoFault;
 
-        STATUS status = xc->readMiscReg(MISCREG_STATUS);
-        if (status.fs == FSMode::OFF)
-            fault = make_shared<IllegalInstFault>("FPU is off", machInst);
-
+        %(fp_enable_check)s;
         %(op_decl)s;
         %(op_rd)s;
         if (fault == NoFault) {

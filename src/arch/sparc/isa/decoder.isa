@@ -341,7 +341,7 @@ decode OP default Unknown::unknown()
                 0x11: Priv::rdpic({{Rd = Pic;}}, {{Pcr<0:>}});
                 // 0x12 should cause an illegal instruction exception
                 0x13: NoPriv::rdgsr({{
-                       fault = checkFpEnableFault(xc);
+                       fault = checkFpEnableFault(xc, machInst);
                        if (fault)
                             return fault;
                        Rd = Gsr;
@@ -1236,11 +1236,11 @@ decode OP default Unknown::unknown()
         format Trap {
             0x20: Load::ldf({{Frds_uw = Mem_uw;}});
             0x21: decode RD {
-                0x0: Load::ldfsr({{fault = checkFpEnableFault(xc);
+                0x0: Load::ldfsr({{fault = checkFpEnableFault(xc, machInst);
                                      if (fault)
                                          return fault;
                                    Fsr = Mem_uw | Fsr<63:32>;}});
-                0x1: Load::ldxfsr({{fault = checkFpEnableFault(xc);
+                0x1: Load::ldxfsr({{fault = checkFpEnableFault(xc, machInst);
                                      if (fault)
                                          return fault;
                                     Fsr = Mem_udw;}});
@@ -1250,14 +1250,18 @@ decode OP default Unknown::unknown()
             0x23: Load::lddf({{Frd_udw = Mem_udw;}});
             0x24: Store::stf({{Mem_uw = Frds_uw;}});
             0x25: decode RD {
-                0x0: StoreFsr::stfsr({{fault = checkFpEnableFault(xc);
-                                       if (fault)
-                                           return fault;
-                                       Mem_uw = Fsr<31:0>;}});
-                0x1: StoreFsr::stxfsr({{fault = checkFpEnableFault(xc);
-                                        if (fault)
-                                            return fault;
-                                        Mem_udw = Fsr;}});
+                0x0: StoreFsr::stfsr({{
+                    fault = checkFpEnableFault(xc, machInst);
+                   if (fault)
+                       return fault;
+                   Mem_uw = Fsr<31:0>;
+                }});
+                0x1: StoreFsr::stxfsr({{
+                    fault = checkFpEnableFault(xc, machInst);
+                    if (fault)
+                        return fault;
+                    Mem_udw = Fsr;
+                }});
                 default: FailUnimpl::stfsrOther();
             }
             0x26: stqf({{fault = std::make_shared<FpDisabled>();}});

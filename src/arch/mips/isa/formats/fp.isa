@@ -88,7 +88,7 @@ output header {{
 }};
 
 output exec {{
-        inline Fault checkFpEnableFault(ExecContext *xc)
+        inline Fault checkFpEnableFault(ExecContext *xc, MachInst)
         {
             //@TODO: Implement correct CP0 checks to see if the CP1
             // unit is enable or not

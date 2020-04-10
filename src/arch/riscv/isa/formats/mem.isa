@@ -99,6 +99,7 @@ def template LoadExecute {{
         Addr EA;
         Fault fault = NoFault;
 
+        %(fp_enable_check)s;
         %(op_decl)s;
         %(op_rd)s;
         %(ea_code)s;
@@ -124,6 +125,7 @@ def template LoadInitiateAcc {{
         Addr EA;
         Fault fault = NoFault;
 
+        %(fp_enable_check)s;
         %(op_src_decl)s;
         %(op_rd)s;
         %(ea_code)s;
@@ -143,6 +145,7 @@ def template LoadCompleteAcc {{
     {
         Fault fault = NoFault;
 
+        %(fp_enable_check)s;
         %(op_decl)s;
         %(op_rd)s;
 
@@ -168,6 +171,7 @@ def template StoreExecute {{
         Addr EA;
         Fault fault = NoFault;
 
+        %(fp_enable_check)s;
         %(op_decl)s;
         %(op_rd)s;
         %(ea_code)s;
@@ -201,6 +205,7 @@ def template StoreInitiateAcc {{
         Addr EA;
         Fault fault = NoFault;
 
+        %(fp_enable_check)s;
         %(op_decl)s;
         %(op_rd)s;
         %(ea_code)s;
