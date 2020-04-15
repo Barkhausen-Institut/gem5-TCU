@@ -138,6 +138,7 @@ class Tcu : public BaseTcu
             INS_TLB         = 3,
             XCHG_VPE        = 4,
             FLUSH_CACHE     = 5,
+            SET_TIMER       = 6,
         };
 
         Opcode opcode;
@@ -188,9 +189,11 @@ class Tcu : public BaseTcu
 
     Cycles flushInvalCaches(bool invalidate);
 
-    void setIrq();
+    void setIrq(BaseConnector::IRQ irq);
 
-    void clearIrq();
+    void clearIrq(BaseConnector::IRQ irq);
+
+    void fireTimer();
 
     void forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest);
 
@@ -298,6 +301,8 @@ class Tcu : public BaseTcu
     CoreRequests coreReqs;
 
     EventWrapper<Tcu, &Tcu::abortCommand> abortCommandEvent;
+
+    EventWrapper<Tcu, &Tcu::fireTimer> fireTimerEvent;
 
     EventWrapper<CoreRequests, &CoreRequests::completeReqs> completeCoreReqEvent;
 

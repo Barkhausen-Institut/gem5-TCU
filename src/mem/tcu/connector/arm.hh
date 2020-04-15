@@ -40,9 +40,9 @@ class ArmConnector : public CoreConnector
 
     ArmConnector(const ArmConnectorParams *p);
 
-    void setIrq() override;
+    void setIrq(IRQ irq) override;
 
-    void clearIrq() override;
+    void clearIrq(IRQ irq) override;
 };
 
 #endif // __MEM_TCU_ARM_CONNECTOR__

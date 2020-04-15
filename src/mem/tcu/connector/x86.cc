@@ -77,7 +77,7 @@ X86Connector::IrqMasterPort::recvReqRetry()
 }
 
 void
-X86Connector::setIrq()
+X86Connector::setIrq(IRQ irq)
 {
     const int APIC_ID = 0;
 
@@ -87,7 +87,7 @@ X86Connector::setIrq()
     message.destMode = 0;   // physical
     message.trigger = 0;    // edge
     message.level = 0;      // unused?
-    message.vector = 0x40;
+    message.vector = 0x40 + irq;
 
     DPRINTF(TcuConnector, "Injecting IRQ %u\n", message.vector);
 

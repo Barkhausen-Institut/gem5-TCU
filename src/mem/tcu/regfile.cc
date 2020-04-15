@@ -553,7 +553,10 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
             if (pkt->isRead())
                 data[offset / sizeof(reg_t)] = get(reg, access);
             else if (pkt->isWrite() && isCpuRequest && reg == TcuReg::CLEAR_IRQ)
+            {
                 res |= WROTE_CLEAR_IRQ;
+                set(reg, data[offset / sizeof(reg_t)], access);
+            }
             else if (pkt->isWrite() && isCpuRequest && reg == TcuReg::PRINT)
             {
                 res |= WROTE_PRINT;

@@ -46,7 +46,7 @@ TcuAccelConnector::wakeup()
 }
 
 void
-TcuAccelConnector::setIrq()
+TcuAccelConnector::setIrq(IRQ)
 {
     DPRINTF(TcuConnector, "Sending interrupt signal to accelerator\n");
     acc->interrupt();

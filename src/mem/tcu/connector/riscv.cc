@@ -27,11 +27,19 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
+#include "arch/riscv/faults.hh"
+#include "cpu/simple/base.hh"
 #include "debug/TcuConnector.hh"
 #include "mem/tcu/connector/riscv.hh"
 #include "mem/tcu/tcu.hh"
-#include "cpu/simple/base.hh"
 #include "sim/process.hh"
+
+static int translate(RiscvConnector::IRQ irq)
+{
+    if (irq == RiscvConnector::CORE_REQ)
+        return RiscvISA::ExceptionCode::INT_EXT_SUPER;
+    return RiscvISA::ExceptionCode::INT_TIMER_SUPER;
+}
 
 RiscvConnector::RiscvConnector(const RiscvConnectorParams *p)
   : CoreConnector(p)
@@ -39,21 +47,23 @@ RiscvConnector::RiscvConnector(const RiscvConnectorParams *p)
 }
 
 void
-RiscvConnector::setIrq()
+RiscvConnector::setIrq(IRQ irq)
 {
-    DPRINTF(TcuConnector, "Injecting IRQ 9\n");
+    int int_num = translate(irq);
+    DPRINTF(TcuConnector, "Injecting IRQ %d\n", int_num);
 
     ThreadContext *tc = system->getThreadContext(0);
-    tc->getCpuPtr()->getInterruptController(0)->post(9, 0);
+    tc->getCpuPtr()->getInterruptController(0)->post(int_num, 0);
 }
 
 void
-RiscvConnector::clearIrq()
+RiscvConnector::clearIrq(IRQ irq)
 {
-    DPRINTF(TcuConnector, "Clearing IRQ 9\n");
+    int int_num = translate(irq);
+    DPRINTF(TcuConnector, "Clearing IRQ %d\n", int_num);
 
     ThreadContext *tc = system->getThreadContext(0);
-    tc->getCpuPtr()->getInterruptController(0)->clear(9, 0);
+    tc->getCpuPtr()->getInterruptController(0)->clear(int_num, 0);
 }
 
 RiscvConnector*

@@ -40,9 +40,9 @@ class RiscvConnector : public CoreConnector
 
     RiscvConnector(const RiscvConnectorParams *p);
 
-    void setIrq() override;
+    void setIrq(IRQ irq) override;
 
-    void clearIrq() override;
+    void clearIrq(IRQ irq) override;
 };
 
 #endif // __MEM_TCU_RISCV_CONNECTOR__

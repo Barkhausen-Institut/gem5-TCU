@@ -38,6 +38,12 @@ class BaseConnector : public ClockedObject
 {
   public:
 
+    enum IRQ
+    {
+        CORE_REQ,
+        TIMER,
+    };
+
     BaseConnector(const BaseConnectorParams *p)
       : ClockedObject(p)
     { }
@@ -48,9 +54,9 @@ class BaseConnector : public ClockedObject
 
     virtual void reset() {};
 
-    virtual void setIrq() {};
+    virtual void setIrq(IRQ) {};
 
-    virtual void clearIrq() {};
+    virtual void clearIrq(IRQ) {};
 };
 
 #endif // __MEM_TCU_BASE_CONNECTOR__

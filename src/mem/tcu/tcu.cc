@@ -65,6 +65,7 @@ static const char *privCmdNames[] =
     "INS_TLB",
     "XCHG_VPE",
     "FLUSH_CACHE",
+    "SET_TIMER",
 };
 
 static const char *extCmdNames[] =
@@ -91,6 +92,7 @@ Tcu::Tcu(TcuParams* p)
     xferUnit(new XferUnit(*this, p->block_size, p->buf_count, p->buf_size)),
     coreReqs(*this, p->buf_count),
     abortCommandEvent(*this),
+    fireTimerEvent(*this),
     completeCoreReqEvent(coreReqs),
     cmdPkt(),
     cmdFinish(),
@@ -120,7 +122,7 @@ Tcu::Tcu(TcuParams* p)
     static_assert(sizeof(cmdNames) / sizeof(cmdNames[0]) ==
         Command::SLEEP + 1, "cmdNames out of sync");
     static_assert(sizeof(privCmdNames) / sizeof(privCmdNames[0]) ==
-        PrivCommand::FLUSH_CACHE + 1, "privCmdNames out of sync");
+        PrivCommand::SET_TIMER + 1, "privCmdNames out of sync");
     static_assert(sizeof(extCmdNames) / sizeof(extCmdNames[0]) ==
         ExtCommand::RESET + 1, "extCmdNames out of sync");
 
@@ -482,6 +484,17 @@ Tcu::executePrivCommand(PacketPtr pkt)
         case PrivCommand::FLUSH_CACHE:
             delay += flushInvalCaches(true);
             break;
+        case PrivCommand::SET_TIMER:
+        {
+            if (fireTimerEvent.scheduled())
+                deschedule(&fireTimerEvent);
+            if (cmd.arg != 0)
+            {
+                Cycles sleep_time = ticksToCycles(cmd.arg * 1000);
+                schedule(&fireTimerEvent, clockEdge(sleep_time));
+            }
+            break;
+        }
         default:
             // TODO error handling
             panic("Invalid opcode %#x\n", static_cast<RegFile::reg_t>(cmd.opcode));
@@ -646,19 +659,25 @@ Tcu::flushInvalCaches(bool invalidate)
 }
 
 void
-Tcu::setIrq()
+Tcu::setIrq(BaseConnector::IRQ irq)
 {
     wakeupCore(true);
 
-    connector->setIrq();
+    connector->setIrq(irq);
 
     irqInjects++;
 }
 
 void
-Tcu::clearIrq()
+Tcu::clearIrq(BaseConnector::IRQ irq)
 {
-    connector->clearIrq();
+    connector->clearIrq(irq);
+}
+
+void
+Tcu::fireTimer()
+{
+    setIrq(BaseConnector::IRQ::TIMER);
 }
 
 void
@@ -1125,7 +1144,7 @@ Tcu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
             if (result & RegFile::WROTE_PRINT)
                 printLine(regs().get(TcuReg::PRINT));
             if (result & RegFile::WROTE_CLEAR_IRQ)
-                clearIrq();
+                clearIrq((BaseConnector::IRQ)regs().get(TcuReg::CLEAR_IRQ));
         }
         else
             schedule(new ExecExtCmdEvent(*this, pkt), when);
@@ -1145,7 +1164,7 @@ Tcu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
         if (result & RegFile::WROTE_PRINT)
             printLine(regs().get(TcuReg::PRINT));
         if (result & RegFile::WROTE_CLEAR_IRQ)
-            clearIrq();
+            clearIrq((BaseConnector::IRQ)regs().get(TcuReg::CLEAR_IRQ));
     }
 }
 
