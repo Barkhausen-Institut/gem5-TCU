@@ -287,10 +287,8 @@ Tcu::executeCommand(PacketPtr pkt)
             break;
         case Command::SLEEP:
         {
-            RegFile::reg_t arg = regs().get(CmdReg::ARG1);
-            Cycles sleepCycles = static_cast<Cycles>(arg & 0xFFFFFFFFFFF);
-            int ep = (arg >> 48) & 0xFFFF;
-            if (!startSleep(sleepCycles, ep))
+            int ep = cmd.arg & 0xFFFF;
+            if (!startSleep(ep))
                 finishCommand(TcuError::NONE);
         }
         break;
@@ -300,7 +298,7 @@ Tcu::executeCommand(PacketPtr pkt)
     }
 
     if (cmdPkt && cmd.opcode != Command::SLEEP)
-        startSleep(0, INVALID_EP_ID);
+        startSleep(INVALID_EP_ID);
 }
 
 void
@@ -579,7 +577,7 @@ Tcu::has_message(epid_t ep)
 }
 
 bool
-Tcu::startSleep(uint64_t cycles, epid_t ep)
+Tcu::startSleep(epid_t ep)
 {
     if (has_message(ep))
         return false;
@@ -590,8 +588,6 @@ Tcu::startSleep(uint64_t cycles, epid_t ep)
     DPRINTF(Tcu, "Suspending CU (waiting for EP %d)\n", wakeupEp);
     connector->suspend();
 
-    if (cycles)
-        scheduleFinishOp(Cycles(cycles));
     return true;
 }
 

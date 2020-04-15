@@ -178,7 +178,7 @@ class Tcu : public BaseTcu
 
     void printLine(Addr len);
 
-    bool startSleep(uint64_t cycles, epid_t wakeupEp);
+    bool startSleep(epid_t wakeupEp);
 
     void stopSleep();
 
