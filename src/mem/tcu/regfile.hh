@@ -44,7 +44,6 @@ enum class TcuReg : Addr
     FEATURES,
     CUR_TIME,
     CLEAR_IRQ,
-    CLOCK,
     PRINT,
 };
 
@@ -53,7 +52,7 @@ enum class Features
     PRIV            = 1 << 0,
 };
 
-constexpr unsigned numTcuRegs = 5;
+constexpr unsigned numTcuRegs = 4;
 
 // privileged registers (for kernel and PEMux)
 enum class PrivReg : Addr

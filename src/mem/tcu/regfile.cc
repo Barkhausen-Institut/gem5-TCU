@@ -43,7 +43,6 @@ const char *RegFile::tcuRegNames[] = {
     "FEATURES",
     "CUR_TIME",
     "CLEAR_IRQ",
-    "CLOCK",
     "PRINT",
 };
 
@@ -189,8 +188,6 @@ RegFile::get(TcuReg reg, RegAccess access) const
 
     if (reg == TcuReg::CUR_TIME)
         value = tcu.curCycle();
-    else if (reg == TcuReg::CLOCK)
-        value = tcu.frequency();
     else
         value = tcuRegs[static_cast<Addr>(reg)];
 
