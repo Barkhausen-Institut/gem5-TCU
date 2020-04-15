@@ -187,7 +187,7 @@ RegFile::get(TcuReg reg, RegAccess access) const
     reg_t value;
 
     if (reg == TcuReg::CUR_TIME)
-        value = tcu.curCycle();
+        value = curTick() / 1000;
     else
         value = tcuRegs[static_cast<Addr>(reg)];
 
