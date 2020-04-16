@@ -1817,14 +1817,21 @@ decode QUADRANT default Unknown::unknown() {
                             STATUS status = xc->readMiscReg(MISCREG_STATUS);
                             auto pm = (PrivilegeMode)xc->readMiscReg(
                                 MISCREG_PRV);
-                            if (pm == PRV_U ||
-                                (pm == PRV_S && status.tw == 1)) {
+                            if (status.tw == 1 &&
+                                (pm == PRV_U || pm == PRV_S)) {
                                 fault = make_shared<IllegalInstFault>(
-                                            "wfi in user mode or TW enabled",
+                                            "wfi with TW enabled",
                                             machInst);
+                            } else {
+                                ThreadContext *tc = xc->tcBase();
+                                auto tid = tc->threadId();
+                                auto cpu = tc->getCpuPtr();
+                                auto *ic = cpu->getInterruptController(tid);
+                                // don't suspend with pending interrupts
+                                if (!ic->checkInterrupts(tc))
+                                    tc->suspend();
                             }
-                            // don't do anything for now
-                        }}, No_OpClass);
+                        }}, IsSerializeAfter, IsNonSpeculative, No_OpClass);
                     }
                     0x9: sfence_vma({{
                         STATUS status = xc->readMiscReg(MISCREG_STATUS);
