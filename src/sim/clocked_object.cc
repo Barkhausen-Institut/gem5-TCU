@@ -89,9 +89,9 @@ ClockedObject::pwrState(Enums::PwrState p)
     // Any state change related stats would have been recorded on previous call
     // to the pwrState() function.
     if (prvEvalTick == curTick() && curTick() != 0) {
-       warn("ClockedObject %s: More than one power state change request "\
-             "encountered within the same simulation tick %d",
-             name(), prvEvalTick);
+       warn_once("ClockedObject %s: More than one power state change request "\
+                 "encountered within the same simulation tick %d",
+                 name(), prvEvalTick);
         _currPwrState = p;
         return;
     }
