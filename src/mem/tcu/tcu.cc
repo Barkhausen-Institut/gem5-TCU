@@ -664,6 +664,7 @@ Tcu::setIrq(BaseConnector::IRQ irq)
     wakeupCore(true);
 
     connector->setIrq(irq);
+    regs().set(TcuReg::CLEAR_IRQ, irq);
 
     irqInjects++;
 }
