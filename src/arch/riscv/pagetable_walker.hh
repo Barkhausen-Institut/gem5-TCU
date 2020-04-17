@@ -64,6 +64,10 @@ namespace RiscvISA
           protected:
             int level;
             TlbEntry entry;
+            SATP satp;
+            STATUS status;
+            PrivilegeMode pmode;
+
           public:
             WalkerState(BaseWalker * _walker,
                         BaseTLB::Translation *_translation,
@@ -82,6 +86,9 @@ namespace RiscvISA
             void setupWalk(Addr vaddr) override;
             Fault stepWalk(PacketPtr &write) override;
             void finishFunctional(Addr &addr, unsigned &logBytes) override;
+            Fault translateWithTLB(const RequestPtr &req, ThreadContext *tc,
+                                   BaseTLB::Translation *translation,
+                                   BaseTLB::Mode mode, bool &delayed) override;
             Fault pageFault();
         };
 
@@ -100,10 +107,6 @@ namespace RiscvISA
                                      BaseTLB::Translation *translation,
                                      const RequestPtr &req,
                                      bool isFunctional) override;
-
-        Fault translateWithTLB(const RequestPtr &req, ThreadContext *tc,
-                               BaseTLB::Translation *translation,
-                               BaseTLB::Mode mode, bool &delayed) override;
 
         typedef RiscvPagetableWalkerParams Params;
 

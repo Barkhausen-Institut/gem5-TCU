@@ -132,6 +132,13 @@ class BaseWalker : public ClockedObject
         virtual void endWalk();
         virtual void finishFunctional(Addr &addr, unsigned &logBytes) = 0;
 
+        // Performs a TLB lookup for the given translation, assuming that the
+        // TLB entry has been created before.
+        virtual Fault translateWithTLB(const RequestPtr &req,
+                                       ThreadContext *tc,
+                                       BaseTLB::Translation *translation,
+                                       BaseTLB::Mode mode, bool &delayed) = 0;
+
       private:
         void sendPackets();
     };
@@ -183,12 +190,6 @@ class BaseWalker : public ClockedObject
                                          BaseTLB::Translation *_translation,
                                          const RequestPtr &req,
                                          bool isFunctional) = 0;
-
-    // Performs a TLB lookup for the given translation, assuming that the TLB
-    // entry has been created before.
-    virtual Fault translateWithTLB(const RequestPtr &req, ThreadContext *tc,
-                                   BaseTLB::Translation *translation,
-                                   BaseTLB::Mode mode, bool &delayed) = 0;
 
   public:
 

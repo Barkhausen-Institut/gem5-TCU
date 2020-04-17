@@ -74,11 +74,15 @@ Walker::createState(BaseWalker *walker, BaseTLB::Translation *translation,
 }
 
 Fault
-Walker::translateWithTLB(const RequestPtr &req, ThreadContext *tc,
-                         BaseTLB::Translation *translation,
-                         BaseTLB::Mode mode, bool &delayed)
+Walker::WalkerState::translateWithTLB(const RequestPtr &req, ThreadContext *tc,
+                                      BaseTLB::Translation *translation,
+                                      BaseTLB::Mode mode, bool &delayed)
 {
-    return tlb->doTranslate(req, tc, NULL, mode, delayed);
+    Addr vaddr = req->getVaddr();
+    Addr paddr = ourWalker()->tlb->translateWithTLB(vaddr, satp.asid, mode);
+    req->setPaddr(paddr);
+    delayed = false;
+    return NoFault;
 }
 
 void
@@ -86,7 +90,10 @@ Walker::WalkerState::setupWalk(Addr vaddr)
 {
     vaddr &= ((static_cast<Addr>(1) << VADDR_BITS) - 1);
 
-    SATP satp = tc->readMiscReg(MISCREG_SATP);
+    // fetch these now in case they change during the walk
+    status = tc->readMiscReg(MISCREG_STATUS);
+    pmode = ourWalker()->tlb->getMemPriv(tc, mode);
+    satp = tc->readMiscReg(MISCREG_SATP);
     assert(satp.mode == AddrXlateMode::SV39);
 
     Addr shift = PageShift + LEVEL_BITS * 2;
@@ -135,8 +142,8 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
         if (pte.r || pte.x) {
             // step 5: leaf PTE
             doEndWalk = true;
-            fault = ourWalker()->tlb->checkPermissions(tc, entry.vaddr,
-                                                       mode, pte);
+            fault = ourWalker()->tlb->checkPermissions(status, pmode,
+                                                       entry.vaddr, mode, pte);
 
             // step 6
             if (fault == NoFault) {

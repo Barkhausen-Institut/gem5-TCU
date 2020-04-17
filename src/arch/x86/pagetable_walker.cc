@@ -74,11 +74,11 @@ Walker::createState(BaseWalker *walker, BaseTLB::Translation *translation,
 }
 
 Fault
-Walker::translateWithTLB(const RequestPtr &req, ThreadContext *tc,
-                         BaseTLB::Translation *translation,
-                         BaseTLB::Mode mode, bool &delayed)
+Walker::WalkerState::translateWithTLB(const RequestPtr &req, ThreadContext *tc,
+                                      BaseTLB::Translation *translation,
+                                      BaseTLB::Mode mode, bool &delayed)
 {
-    return tlb->translate(req, tc, NULL, mode, delayed, true);
+    return ourWalker()->tlb->translate(req, tc, NULL, mode, delayed, true);
 }
 
 void

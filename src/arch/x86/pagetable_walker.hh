@@ -98,6 +98,9 @@ namespace X86ISA
             void setupWalk(Addr vaddr) override;
             Fault stepWalk(PacketPtr &write) override;
             void finishFunctional(Addr &addr, unsigned &logBytes) override;
+            Fault translateWithTLB(const RequestPtr &req, ThreadContext *tc,
+                                   BaseTLB::Translation *translation,
+                                   BaseTLB::Mode mode, bool &delayed) override;
             Fault pageFault(bool present);
         };
 
@@ -116,10 +119,6 @@ namespace X86ISA
                                      BaseTLB::Translation *translation,
                                      const RequestPtr &req,
                                      bool isFunctional) override;
-
-        Fault translateWithTLB(const RequestPtr &req, ThreadContext *tc,
-                               BaseTLB::Translation *translation,
-                               BaseTLB::Mode mode, bool &delayed) override;
 
         typedef X86PagetableWalkerParams Params;
 

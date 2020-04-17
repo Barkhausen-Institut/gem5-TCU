@@ -332,8 +332,8 @@ BaseWalker::BaseWalkerState::recvPacket(PacketPtr pkt)
              * well.
              */
             bool delayedResponse;
-            Fault fault = walker->translateWithTLB(req, tc, NULL, mode,
-                                                   delayedResponse);
+            Fault fault = translateWithTLB(req, tc, NULL, mode,
+                                           delayedResponse);
             assert(!delayedResponse);
             // Let the CPU continue.
             translation->finish(fault, req, tc, mode);
