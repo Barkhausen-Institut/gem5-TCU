@@ -1,5 +1,6 @@
 // Copyright (c) 2007-2008 The Hewlett-Packard Development Company
 // Copyright (c) 2011 Mark D. Hill and David A. Wood
+// Copyright (c) 2020 Barkhausen Institut
 // All rights reserved.
 //
 // The license below extends only to copyright in the software and shall
@@ -104,7 +105,11 @@ output exec {{
     Fault
     MicroHalt::execute(ExecContext *xc, Trace::InstRecord * traceData) const
     {
-        xc->tcBase()->suspend();
+        ThreadContext *tc = xc->tcBase();
+        auto *ic = tc->getCpuPtr()->getInterruptController(tc->threadId());
+        // don't suspend with pending interrupts
+        if (!ic->checkInterrupts(tc))
+            xc->tcBase()->suspend();
         return NoFault;
     }
 }};
