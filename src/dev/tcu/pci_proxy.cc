@@ -515,8 +515,8 @@ AddrRangeList
 TcuPciProxy::TcuSlavePort::getAddrRanges() const
 {
     AddrRangeList ranges;
-    // MEMCAP_END = 0x3fc00000
-    ranges.push_back(AddrRange(0, 0x3fc00000));
+    // MEMCAP_END = 0xe0000000
+    ranges.push_back(AddrRange(0, 0xe0000000));
     return ranges;
 }
 

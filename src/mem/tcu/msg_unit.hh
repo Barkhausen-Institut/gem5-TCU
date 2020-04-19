@@ -114,7 +114,7 @@ class MessageUnit
     /**
      * Finishes the reply-on-message command
      */
-    void finishMsgReply(TcuError error, epid_t epid, Addr msgAddr);
+    void finishMsgReply(TcuError error, epid_t epid, Addr msgOff);
 
     /**
      * Finishes the send-message command
@@ -127,14 +127,14 @@ class MessageUnit
     void recvCredits(epid_t epid);
 
     /**
-     * Fetches the next message and returns the address or 0
+     * Fetches the next message and returns the message offset or 0
      */
     Addr fetchMessage(epid_t epid);
 
     /**
-     * Acknowledges the message @ <msgAddr>
+     * Acknowledges the message @ <msgOff> within the receive buffer
      */
-    TcuError ackMessage(epid_t epId, Addr msgAddr);
+    TcuError ackMessage(epid_t epId, Addr msgOff);
 
     /**
      * Invalidates all reply header for receive EP <repId> that have been sent

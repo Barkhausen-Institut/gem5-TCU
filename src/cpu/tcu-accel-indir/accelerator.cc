@@ -129,9 +129,9 @@ TcuAccelInDir::completeRequest(PacketPtr pkt)
             case State::READ_MSG_ADDR:
             {
                 const RegFile::reg_t *regs = pkt->getConstPtr<RegFile::reg_t>();
-                if(regs[0])
+                if(regs[0] != static_cast<RegFile::reg_t>(-1))
                 {
-                    msgAddr = regs[0];
+                    msgAddr = RBUF_ADDR + regs[0];
                     DPRINTF(TcuAccelInDir, "Received message @ %p\n", msgAddr);
                     state = State::READ_MSG;
                 }
@@ -313,7 +313,7 @@ TcuAccelInDir::tick()
                                   EP_RECV,
                                   BUF_ADDR,
                                   sizeof(reply),
-                                  msgAddr);
+                                  msgAddr - RBUF_ADDR);
             break;
         }
         case State::REPLY_WAIT:

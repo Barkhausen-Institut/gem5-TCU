@@ -83,7 +83,7 @@ SyscallSM::tick()
                                          TcuAccel::EP_SYSR,
                                          0,
                                          0,
-                                         replyAddr);
+                                         replyAddr - RBUF_ADDR);
             break;
         }
     }
@@ -125,9 +125,9 @@ SyscallSM::handleMemResp(PacketPtr pkt)
         case State::SYSC_READ_ADDR:
         {
             const RegFile::reg_t *regs = pkt->getConstPtr<RegFile::reg_t>();
-            if(regs[0])
+            if(regs[0] != static_cast<RegFile::reg_t>(-1))
             {
-                replyAddr = regs[0];
+                replyAddr = regs[0] + RBUF_ADDR;
                 state = State::SYSC_ACK;
             }
             else

@@ -46,6 +46,7 @@ class TcuAccelStream : public TcuAccel
 
     static const Addr MSG_ADDR          = 0x2000;
     static const Addr BUF_ADDR          = 0x8000;
+    static const Addr RBUF_ADDR         = 0x1FFF00;
 
     static const unsigned EP_IN_SEND    = 16;
     static const unsigned EP_IN_MEM     = 17;

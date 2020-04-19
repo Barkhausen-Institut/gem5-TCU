@@ -198,9 +198,9 @@ TcuAccelStream::completeRequest(PacketPtr pkt)
             case State::READ_MSG_ADDR:
             {
                 const RegFile::reg_t *regs = pkt->getConstPtr<RegFile::reg_t>();
-                if (regs[0])
+                if (regs[0] != static_cast<RegFile::reg_t>(-1))
                 {
-                    ctx.msgAddr = regs[0];
+                    ctx.msgAddr = regs[0] + RBUF_ADDR;
                     DPRINTF(TcuAccelStream,
                             "Received message @ %p\n", ctx.msgAddr);
                     if (ctx.flags & Flags::EXIT)
@@ -685,7 +685,7 @@ TcuAccelStream::tick()
                                   EP_RECV,
                                   0,
                                   0,
-                                  ctx.msgAddr);
+                                  ctx.msgAddr - RBUF_ADDR);
             break;
         }
 
@@ -768,7 +768,7 @@ TcuAccelStream::tick()
                                   EP_RECV,
                                   BUF_ADDR + bufSize,
                                   sizeof(reply),
-                                  replyAddr);
+                                  replyAddr - RBUF_ADDR);
             break;
         }
         case State::REPLY_WAIT:
@@ -829,7 +829,7 @@ TcuAccelStream::tick()
                                       EP_RECV,
                                       0,
                                       0,
-                                      addr);
+                                      addr - RBUF_ADDR);
                 break;
             }
 

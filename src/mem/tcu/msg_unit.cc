@@ -76,7 +76,7 @@ MessageUnit::startTransmission(const Tcu::Command::Bits& cmd)
     if (cmd.opcode == Tcu::Command::REPLY)
     {
         RecvEp ep = tcu.regs().getRecvEp(epid);
-        int msgidx = ep.msgToIdx(cmd.arg);
+        int msgidx = ep.offsetToIdx(cmd.arg);
 
         if(ep.bufAddr == 0 || ep.vpe != tcu.regs().getVPE())
         {
@@ -263,10 +263,10 @@ MessageUnit::SendTransferEvent::transferStart()
 }
 
 void
-MessageUnit::finishMsgReply(TcuError error, epid_t epid, Addr msgAddr)
+MessageUnit::finishMsgReply(TcuError error, epid_t epid, Addr msgOff)
 {
     if (error == TcuError::NONE)
-        ackMessage(epid, msgAddr);
+        ackMessage(epid, msgOff);
     // undo credit reduction
     else if (info.sepId != Tcu::INVALID_EP_ID)
         recvCredits(info.sepId);
@@ -306,7 +306,7 @@ MessageUnit::fetchMessage(epid_t epid)
     RecvEp ep = tcu.regs().getRecvEp(epid);
 
     if (ep.unread == 0 || ep.vpe != tcu.regs().getVPE())
-        return 0;
+        return -1;
 
     int i;
     for (i = ep.rdPos; i < (1 << ep.size); ++i)
@@ -336,7 +336,7 @@ found:
     tcu.regs().setRecvEp(epid, ep);
     tcu.regs().rem_msg();
 
-    return ep.bufAddr + (i << ep.msgSize);
+    return i << ep.msgSize;
 }
 
 int
@@ -375,13 +375,13 @@ found:
 }
 
 TcuError
-MessageUnit::ackMessage(epid_t epId, Addr msgAddr)
+MessageUnit::ackMessage(epid_t epId, Addr msgOff)
 {
     RecvEp ep = tcu.regs().getRecvEp(epId);
     if (ep.bufAddr == 0 || ep.vpe != tcu.regs().getVPE())
         return TcuError::INV_EP;
 
-    int msgidx = ep.msgToIdx(msgAddr);
+    int msgidx = ep.offsetToIdx(msgOff);
     if (msgidx == RecvEp::MAX_MSGS || !ep.isOccupied(msgidx))
         return TcuError::INV_MSG;
 

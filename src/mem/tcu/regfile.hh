@@ -162,11 +162,11 @@ struct RecvEp : public Ep
         return popCount(unread);
     }
 
-    int msgToIdx(Addr msg) const
+    int offsetToIdx(Addr off) const
     {
         if (msgSize == 0)
             return MAX_MSGS;
-        int idx = (msg - bufAddr) >> msgSize;
+        int idx = off >> msgSize;
         return (idx >= 0 && idx < MAX_MSGS) ? idx : MAX_MSGS;
     }
 
