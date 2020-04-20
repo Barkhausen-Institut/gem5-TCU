@@ -535,8 +535,9 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint flags)
     pkt->headerDelay = 0;
     delay += tcu.nocToTransferLatency;
 
-    // atm, message receives can never cause pagefaults
-    uint rflags = XferUnit::XferFlags::MSGRECV | XferUnit::XferFlags::NOPF;
+    uint rflags = XferUnit::XferFlags::MSGRECV;
+    // receive EPs use a physical address, thus NOPF and NOXLATE.
+    rflags |= XferUnit::XferFlags::NOPF | XferUnit::NOXLATE;
     Addr localAddr = ep.bufAddr + (msgidx << ep.msgSize);
 
     auto *ev = new ReceiveTransferEvent(this, localAddr, ep.vpe, rflags, pkt);

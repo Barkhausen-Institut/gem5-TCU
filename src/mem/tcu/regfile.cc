@@ -341,7 +341,7 @@ RegFile::getRecvEp(epid_t epId, bool print) const
     ep.replyEps     = (r0 >> 19) & 0xFFFF;
     ep.vpe          = (r0 >>  3) & 0xFFFF;
 
-    ep.bufAddr      = r1 & 0xFFFFFFFF;
+    ep.bufAddr      = r1;
 
     ep.occupied     = r2 & 0xFFFFFFFF;
     ep.unread       = r2 >> 32;

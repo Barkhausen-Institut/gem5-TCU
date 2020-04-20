@@ -86,7 +86,7 @@ constexpr unsigned numCmdRegs = 4;
 //    receive: BUF_RD_POS[6] | BUF_WR_POS[6] | BUF_MSG_SIZE[6] | BUF_SIZE[6] | REPLY_EPS[16]
 //    send:    FLAGS[2] | CRD_EP[16] | MAX_MSG_SIZE[6] | MAXCRD[6] | CURCRD[6]
 //    mem:     TGT_VPE[16] | REQ_PEID[8] | FLAGS[4]
-// 1. receive: BUF_ADDR[32]
+// 1. receive: BUF_ADDR[64]
 //    send:    TGT_PEID[8] | TGT_EPID[16]
 //    mem:     REQ_MEM_ADDR[64]
 // 2. receive: BUF_UNREAD[32] | BUF_OCCUPIED[32]
@@ -201,7 +201,7 @@ struct RecvEp : public Ep
 
     uint8_t rdPos;
     uint8_t wrPos;
-    uint32_t bufAddr;
+    uint64_t bufAddr;
     uint16_t msgSize;
     uint16_t size;
     uint16_t replyEps;
