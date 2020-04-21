@@ -307,6 +307,11 @@ MessageUnit::fetchMessage(epid_t epid)
 
     if (ep.unread == 0 || ep.vpe != tcu.regs().getVPE())
         return -1;
+    // check if the current VPE has unread messages at all. note that this is
+    // important in case it is out of sync with the receive EPs, i.e., if we
+    // have ongoing foreignRecv core requests.
+    if (tcu.regs().messages() == 0)
+        return -1;
 
     int i;
     for (i = ep.rdPos; i < (1 << ep.size); ++i)
