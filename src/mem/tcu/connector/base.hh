@@ -53,7 +53,8 @@ class BaseConnector : public ClockedObject
         _tcu()
     { }
 
-    void setTcu(Tcu *tcu) {
+    void setTcu(Tcu *tcu)
+    {
         _tcu = tcu;
     }
 
@@ -62,6 +63,11 @@ class BaseConnector : public ClockedObject
     virtual void suspend() {};
 
     virtual void reset() {};
+
+    bool havePendingIrq() const
+    {
+        return !_pending.empty();
+    }
 
     void setIrq(IRQ irq);
     void clearIrq(IRQ irq);

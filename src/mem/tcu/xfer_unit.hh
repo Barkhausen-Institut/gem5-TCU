@@ -133,6 +133,7 @@ class XferUnit
         uint xferFlags;
         TcuError result;
         Translation *trans;
+        size_t coreReq;
         int freeSlots;
 
       public:
@@ -152,6 +153,7 @@ class XferUnit
               xferFlags(_flags),
               result(TcuError::NONE),
               trans(),
+              coreReq(),
               freeSlots()
         {}
 
@@ -181,7 +183,7 @@ class XferUnit
 
         virtual void transferStart() = 0;
 
-        virtual bool transferDone(TcuError result) = 0;
+        virtual void transferDone(TcuError result) = 0;
 
         void start();
 

@@ -34,8 +34,7 @@
 
 CoreRequests::CoreRequests(Tcu &_tcu, size_t bufCount)
     : tcu(_tcu),
-      reqs(new Request*[bufCount + 1]()),
-      reqSlots(bufCount + 1)
+      reqs()
 {
 }
 
@@ -59,56 +58,91 @@ CoreRequests::regStats()
         .desc("Number of failed translate requests to the core");
 }
 
-void
-CoreRequests::startTranslate(size_t id,
+size_t
+CoreRequests::startTranslate(size_t xferId,
                              vpeid_t vpeId,
                              Addr virt,
                              uint access,
                              XferUnit::Translation *trans)
 {
-    if (reqs[id] != nullptr)
-        return;
+    size_t id = nextId();
 
-    auto req = new XlateRequest(*this);
+    auto req = new XlateRequest(id, *this);
+    req->xferId = xferId;
     req->trans = trans;
     req->virt = virt;
-    req->asid = vpeId;
+    req->vpeId = vpeId;
     req->access = access;
-    reqs[id] = req;
+    reqs.push_back(req);
 
     DPRINTFS(TcuCoreReqs, (&tcu),
-        "CoreRequest[%lu] = translate(asid=%#x, addr=%p, acc=%#x)\n",
-        id, req->asid, virt, access);
+        "CoreRequest[%lu]: translate(xfer=%lu, vpeId=%#x, addr=%p, acc=%#x)\n",
+        id, xferId, vpeId, virt, access);
     coreReqs++;
 
-    if(tcu.regs().get(PrivReg::CORE_REQ) == 0)
-        req->start(id);
+    if(reqs.size() == 1)
+        req->start();
     else
         coreDelays++;
+    return id;
+}
+
+size_t
+CoreRequests::startForeignReceive(epid_t epId,
+                                  vpeid_t vpeId)
+{
+    size_t id = nextId();
+
+    auto req = new ForeignRecvRequest(id, *this);
+    req->epId = epId;
+    req->vpeId = vpeId;
+    reqs.push_back(req);
+
+    DPRINTFS(TcuCoreReqs, (&tcu),
+        "CoreRequest[%lu] = recvForeign(ep=%u, vpe=%u)\n",
+        id, epId, vpeId);
+    coreReqs++;
+
+    if(reqs.size() == 1)
+        req->start();
+    else
+        coreDelays++;
+    return id;
 }
 
 void
-CoreRequests::Request::start(size_t id)
+CoreRequests::Request::start()
 {
     DPRINTFS(TcuCoreReqs, (&req.tcu), "CoreRequest[%lu] started\n", id);
     req.tcu.setIrq(BaseConnector::IRQ::CORE_REQ);
 }
 
 void
-CoreRequests::XlateRequest::start(size_t id)
+CoreRequests::XlateRequest::start()
 {
     const Addr mask = TcuTlb::PAGE_MASK;
     const Addr virtPage = virt & ~mask;
-    const Addr val = (static_cast<Addr>(asid) << 48) | virtPage |
-                     (access << 1) | (id << 6);
+    const Addr val = (static_cast<Addr>(vpeId) << 48) | virtPage |
+                     (access << 1) | (xferId << 6);
     req.tcu.regs().set(PrivReg::CORE_REQ, val);
     waiting = false;
 
-    Request::start(id);
+    Request::start();
 }
 
 void
-CoreRequests::XlateRequest::complete(size_t id, RegFile::reg_t resp)
+CoreRequests::ForeignRecvRequest::start()
+{
+    auto val = (static_cast<RegFile::reg_t>(epId) << 28) |
+               (vpeId << 12) | 1;
+    req.tcu.regs().set(PrivReg::CORE_REQ, val);
+    waiting = false;
+
+    Request::start();
+}
+
+void
+CoreRequests::XlateRequest::complete(RegFile::reg_t resp)
 {
     Addr mask = (resp & TcuTlb::LARGE) ? TcuTlb::LPAGE_MASK
                                        : TcuTlb::PAGE_MASK;
@@ -122,95 +156,77 @@ CoreRequests::XlateRequest::complete(size_t id, RegFile::reg_t resp)
     }
     else
     {
-        req.tcu.tlb()->insert(virt, asid, phys, flags);
+        req.tcu.tlb()->insert(virt, vpeId, phys, flags);
         trans->finished(true, phys);
     }
 }
 
 void
-CoreRequests::startForeignReceive(size_t id,
-                                  epid_t epId,
-                                  vpeid_t vpeId,
-                                  XferUnit::TransferEvent *event)
-{
-    if (reqs[id] != nullptr)
-        return;
-
-    auto req = new ForeignRecvRequest(*this);
-    req->event = event;
-    req->epId = epId;
-    req->vpeId = vpeId;
-    reqs[id] = req;
-
-    DPRINTFS(TcuCoreReqs, (&tcu), "CoreRequest[%lu] = recvForeign(ep=%u, vpe=%u)\n",
-        id, epId, vpeId);
-    coreReqs++;
-
-    if (tcu.regs().get(PrivReg::CORE_REQ) == 0)
-        req->start(id);
-    else
-        coreDelays++;
-}
-
-void
-CoreRequests::ForeignRecvRequest::start(size_t id)
-{
-    auto val = (static_cast<RegFile::reg_t>(epId) << 28) |
-                (vpeId << 12) | (id << 6) | 1;
-    req.tcu.regs().set(PrivReg::CORE_REQ, val);
-    waiting = false;
-
-    Request::start(id);
-}
-
-void
-CoreRequests::ForeignRecvRequest::complete(size_t, RegFile::reg_t)
-{
-    event->start();
-}
-
-void
 CoreRequests::completeReqs()
 {
-    RegFile::reg_t resp = tcu.regs().get(PrivReg::CORE_RESP);
+    RegFile::reg_t resp = tcu.regs().get(PrivReg::CORE_REQ);
     if (resp)
     {
-        size_t id = (resp >> 6) & 0x7;
-        assert(reqs[id] != nullptr);
-        DPRINTFS(TcuCoreReqs, (&tcu), "CoreRequest[%lu] done\n", id);
+        assert(!reqs.empty());
+        Request *req = reqs.front();
+        DPRINTFS(TcuCoreReqs, (&tcu), "CoreRequest[%lu] done\n", req->id);
+        reqs.pop_front();
 
-        reqs[id]->complete(id, resp);
-        delete reqs[id];
-        reqs[id] = nullptr;
+        req->complete(resp);
+        delete req;
 
-        tcu.regs().set(PrivReg::CORE_RESP, 0);
+        tcu.regs().set(PrivReg::CORE_REQ, 0);
     }
 
-    if (tcu.regs().get(PrivReg::CORE_REQ) == 0)
-    {
-        for (size_t id = 0; id < reqSlots; ++id)
-        {
-            if (reqs[id] && reqs[id]->waiting)
-            {
-                reqs[id]->start(id);
-                break;
-            }
-        }
-    }
+    startNextReq();
 }
 
 void
 CoreRequests::abortReq(size_t id)
 {
-    if (reqs[id])
+    for (auto r = reqs.begin(); r != reqs.end(); ++r)
     {
-        DPRINTFS(TcuCoreReqs, (&tcu), "CoreRequest[%lu] aborted\n", id);
-        bool in_progress = !reqs[id]->waiting;
-        if (in_progress)
-            tcu.regs().set(PrivReg::CORE_REQ, 0);
-        delete reqs[id];
-        reqs[id] = nullptr;
-        if (in_progress)
-            completeReqs();
+        if ((*r)->id == id)
+        {
+            DPRINTFS(TcuCoreReqs, (&tcu), "CoreRequest[%lu] aborted\n", id);
+            if (!(*r)->waiting)
+               tcu.regs().set(PrivReg::CORE_REQ, 0);
+           reqs.erase(r);
+           delete *r;
+           break;
+        }
+    }
+
+    startNextReq();
+}
+
+void
+CoreRequests::startNextReq()
+{
+    if (!reqs.empty())
+    {
+        Request *req = reqs.front();
+        req->start();
+    }
+}
+
+CoreRequests::Request *
+CoreRequests::getById(size_t id) const
+{
+    for (auto r : reqs)
+    {
+        if (r->id == id)
+            return r;
+    }
+    return nullptr;
+}
+
+size_t
+CoreRequests::nextId() const
+{
+    for (size_t id = 0; ; ++id)
+    {
+        if (getById(id) == nullptr)
+            return id;
     }
 }

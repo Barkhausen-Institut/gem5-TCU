@@ -110,7 +110,7 @@ XferUnit::regStats()
 void
 XferUnit::Translation::abort()
 {
-    event.xfer->tcu.abortTranslate(event.buf->id);
+    event.xfer->tcu.abortTranslate(event.buf->id, event.coreReq);
 }
 
 bool
@@ -214,7 +214,8 @@ XferUnit::TransferEvent::process()
             }
 
             trans = new Translation(*this);
-            xfer->tcu.startTranslate(buf->id, vpe, local, access, trans);
+            coreReq = xfer->tcu.startTranslate(buf->id, vpe,
+                                               local, access, trans);
             return;
         }
     }
@@ -335,9 +336,7 @@ XferUnit::continueTransfer(Buffer *buf)
         (buf->event->remaining == 0 &&
          buf->event->freeSlots == tcu.reqCount))
     {
-        // retry later if the transfer cannot be finished atm
-        if (!buf->event->transferDone(buf->event->result))
-            return;
+        buf->event->transferDone(buf->event->result);
 
         DPRINTFS(TcuXfers, (&tcu), "buf%d: Transfer done\n",
                  buf->id);

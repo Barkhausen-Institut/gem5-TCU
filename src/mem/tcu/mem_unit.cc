@@ -159,7 +159,7 @@ MemoryUnit::startRead(const Tcu::Command::Bits& cmd)
     }
 }
 
-bool
+void
 MemoryUnit::LocalReadTransferEvent::transferDone(TcuError result)
 {
     Cycles delay(1);
@@ -167,7 +167,7 @@ MemoryUnit::LocalReadTransferEvent::transferDone(TcuError result)
     if (result != TcuError::NONE)
     {
         tcu().scheduleFinishOp(delay, result);
-        return true;
+        return;
     }
 
     uint wflags = flags() & ~XferUnit::NOXLATE;
@@ -176,7 +176,6 @@ MemoryUnit::LocalReadTransferEvent::transferDone(TcuError result)
 
     auto xfer = new LocalWriteTransferEvent(dest, tmp, size(), wflags);
     tcu().startTransfer(xfer, delay);
-    return true;
 }
 
 void
@@ -186,14 +185,13 @@ MemoryUnit::LocalWriteTransferEvent::transferStart()
     delete[] tmp;
 }
 
-bool
+void
 MemoryUnit::LocalWriteTransferEvent::transferDone(TcuError result)
 {
     if (result == TcuError::NONE)
         finishReadWrite(tcu(), tmpSize);
 
     tcu().scheduleFinishOp(Cycles(1), result);
-    return true;
 }
 
 void
@@ -226,7 +224,7 @@ MemoryUnit::ReadTransferEvent::transferStart()
     memcpy(data(), pkt->getPtr<uint8_t>(), pkt->getSize());
 }
 
-bool
+void
 MemoryUnit::ReadTransferEvent::transferDone(TcuError result)
 {
     if (result == TcuError::NONE)
@@ -235,7 +233,6 @@ MemoryUnit::ReadTransferEvent::transferDone(TcuError result)
     tcu().scheduleFinishOp(Cycles(1), result);
 
     tcu().freeRequest(pkt);
-    return true;
 }
 
 void
@@ -286,7 +283,7 @@ MemoryUnit::startWrite(const Tcu::Command::Bits& cmd)
     tcu.startTransfer(xfer, Cycles(0));
 }
 
-bool
+void
 MemoryUnit::WriteTransferEvent::transferDone(TcuError result)
 {
     if (result != TcuError::NONE)
@@ -324,7 +321,6 @@ MemoryUnit::WriteTransferEvent::transferDone(TcuError result)
             tcu().sendNocRequest(pktType, pkt, vpe, rflags, delay);
         }
     }
-    return true;
 }
 
 void
@@ -410,7 +406,7 @@ MemoryUnit::ReceiveTransferEvent::transferStart()
     }
 }
 
-bool
+void
 MemoryUnit::ReceiveTransferEvent::transferDone(TcuError result)
 {
     // some requests from the cache (e.g. cleanEvict) do not need a
@@ -429,5 +425,4 @@ MemoryUnit::ReceiveTransferEvent::transferDone(TcuError result)
         Cycles delay = tcu().transferToNocLatency;
         tcu().schedNocResponse(pkt, tcu().clockEdge(delay));
     }
-    return true;
 }

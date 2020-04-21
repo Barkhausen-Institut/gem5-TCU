@@ -546,7 +546,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt, uint flags)
     return TcuError::NONE;
 }
 
-bool
+void
 MessageUnit::ReceiveTransferEvent::transferDone(TcuError result)
 {
     MessageHeader* header = pkt->getPtr<MessageHeader>();
@@ -555,18 +555,14 @@ MessageUnit::ReceiveTransferEvent::transferDone(TcuError result)
     RecvEp ep = tcu().regs().getRecvEp(epId);
     if (result == TcuError::NONE && ep.bufAddr != 0)
     {
-        // notify SW if we received a message for a different VPE
-        if(ep.vpe != tcu().regs().getVPE() && !coreReq)
-        {
-            coreReq = true;
-            tcu().startForeignReceive(bufId(), epId, ep.vpe, this);
-            return false;
-        }
-
+        bool foreign = ep.vpe != tcu().regs().getVPE();
         result = msgUnit->finishMsgReceive(epId, msgAddr, header,
-                                           result, flags(), !coreReq);
+                                           result, flags(), !foreign);
+
+        // notify SW if we received a message for a different VPE
+        if(foreign)
+            tcu().startForeignReceive(epId, ep.vpe);
     }
 
     MemoryUnit::ReceiveTransferEvent::transferDone(result);
-    return true;
 }

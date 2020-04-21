@@ -48,7 +48,6 @@ const char *RegFile::tcuRegNames[] = {
 
 const char *RegFile::privRegNames[] = {
     "CORE_REQ",
-    "CORE_RESP",
     "PRIV_CMD",
     "PRIV_CMD_ARG",
     "EXT_CMD",
@@ -118,22 +117,6 @@ RegFile::RegFile(Tcu &_tcu, const std::string& name, unsigned _numEndpoints)
     set(PrivReg::CUR_VPE, static_cast<reg_t>(Tcu::INVALID_VPE_ID));
 }
 
-unsigned
-RegFile::countMsgs(vpeid_t vpeId)
-{
-    unsigned count = 0;
-    for (epid_t epid = 0; epid < numEndpoints; epid++)
-    {
-        if (getEpType(epid) == EpType::RECEIVE)
-        {
-            RecvEp rep = getRecvEp(epid);
-            if (rep.vpe == vpeId)
-                count += rep.unreadMsgs();
-        }
-    }
-    return count;
-}
-
 TcuError
 RegFile::invalidate(epid_t epId, bool force, unsigned *unreadMask)
 {
@@ -166,10 +149,6 @@ RegFile::add_msg()
     reg_t cur_vpe = privRegs[static_cast<size_t>(PrivReg::CUR_VPE)];
     cur_vpe += 1 << 16;
     set(PrivReg::CUR_VPE, cur_vpe);
-    // since we're always invalidating receive EPs immediately and do NOT
-    // update the message count in the CUR_VPE reg, we might temporarily have
-    // less pending messages than CUR_VPE indicates.
-    assert(messages() >= countMsgs(getVPE()));
 }
 
 void
@@ -178,7 +157,6 @@ RegFile::rem_msg()
     reg_t cur_vpe = privRegs[static_cast<size_t>(PrivReg::CUR_VPE)];
     cur_vpe -= 1 << 16;
     set(PrivReg::CUR_VPE, cur_vpe);
-    assert(messages() >= countMsgs(getVPE()));
 }
 
 RegFile::reg_t
@@ -579,8 +557,8 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
                 // privileged registers can only be set if we're privileged
                 else if (pkt->isWrite())
                 {
-                    if (reg == PrivReg::CORE_REQ || reg == PrivReg::CORE_RESP)
-                        res |= WROTE_XLATE;
+                    if (reg == PrivReg::CORE_REQ)
+                        res |= WROTE_CORE_REQ;
                     else if (reg == PrivReg::PRIV_CMD)
                         res |= WROTE_PRIV_CMD;
                     // EXT_CMD can only be written externally

@@ -596,7 +596,7 @@ Tcu::startSleep(epid_t ep)
 {
     if (has_message(ep))
         return false;
-    if (regFile.get(PrivReg::CORE_REQ) != 0)
+    if (connector->havePendingIrq())
         return false;
 
     wakeupEp = ep;
@@ -809,8 +809,8 @@ Tcu::startTransfer(void *event, Cycles delay)
     xferUnit->startTransfer(ev, delay);
 }
 
-void
-Tcu::startTranslate(size_t id,
+size_t
+Tcu::startTranslate(size_t xferId,
                     vpeid_t vpeId,
                     Addr virt,
                     uint access,
@@ -825,14 +825,11 @@ Tcu::startTranslate(size_t id,
         cmdPkt = NULL;
     }
 
-    coreReqs.startTranslate(id, vpeId, virt, access, trans);
+    return coreReqs.startTranslate(xferId, vpeId, virt, access, trans);
 }
 
-void
-Tcu::startForeignReceive(size_t id,
-                         epid_t epId,
-                         vpeid_t vpeId,
-                         XferUnit::TransferEvent *event)
+size_t
+Tcu::startForeignReceive(epid_t epId, vpeid_t vpeId)
 {
     // as above
     if (cmdPkt)
@@ -842,14 +839,14 @@ Tcu::startForeignReceive(size_t id,
         cmdPkt = NULL;
     }
 
-    coreReqs.startForeignReceive(id, epId, vpeId, event);
+    return coreReqs.startForeignReceive(epId, vpeId);
 }
 
 void
-Tcu::abortTranslate(size_t id)
+Tcu::abortTranslate(size_t xferId, size_t reqId)
 {
-    coreReqs.abortReq(id);
-    cmdXferBuf = id;
+    coreReqs.abortReq(reqId);
+    cmdXferBuf = xferId;
 }
 
 void
@@ -1141,7 +1138,7 @@ Tcu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
                 schedule(new ExecPrivCmdEvent(*this, pkt), when);
             else if (result & RegFile::WROTE_ABORT)
                 schedule(abortCommandEvent, when);
-            else if (result & RegFile::WROTE_XLATE)
+            else if (result & RegFile::WROTE_CORE_REQ)
                 schedule(completeCoreReqEvent, when);
             if (result & RegFile::WROTE_PRINT)
                 printLine(regs().get(TcuReg::PRINT));
@@ -1161,7 +1158,7 @@ Tcu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
             executeExtCommand(NULL);
         if (result & RegFile::WROTE_ABORT)
             abortCommand();
-        if (result & RegFile::WROTE_XLATE)
+        if (result & RegFile::WROTE_CORE_REQ)
             coreReqs.completeReqs();
         if (result & RegFile::WROTE_PRINT)
             printLine(regs().get(TcuReg::PRINT));

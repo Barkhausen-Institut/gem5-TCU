@@ -228,18 +228,15 @@ class Tcu : public BaseTcu
 
     void startTransfer(void *event, Cycles delay);
 
-    void startTranslate(size_t id,
-                        vpeid_t vpeId,
-                        Addr virt,
-                        uint access,
-                        XferUnit::Translation *trans);
+    size_t startTranslate(size_t xferId,
+                          vpeid_t vpeId,
+                          Addr virt,
+                          uint access,
+                          XferUnit::Translation *trans);
 
-    void startForeignReceive(size_t id,
-                             epid_t epId,
-                             vpeid_t vpeId,
-                             XferUnit::TransferEvent *event);
+    size_t startForeignReceive(epid_t epId, vpeid_t vpeId);
 
-    void abortTranslate(size_t id);
+    void abortTranslate(size_t xferId, size_t reqId);
 
     void printPacket(PacketPtr pkt) const;
 

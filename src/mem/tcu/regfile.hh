@@ -58,7 +58,6 @@ constexpr unsigned numTcuRegs = 4;
 enum class PrivReg : Addr
 {
     CORE_REQ,
-    CORE_RESP,
     PRIV_CMD,
     PRIV_CMD_ARG,
     EXT_CMD,
@@ -67,7 +66,7 @@ enum class PrivReg : Addr
     OLD_VPE,
 };
 
-constexpr unsigned numPrivRegs = 7;
+constexpr unsigned numPrivRegs = 6;
 
 // registers to issue a command
 enum class CmdReg : Addr
@@ -278,7 +277,7 @@ class RegFile
         WROTE_PRIV_CMD  = 2,
         WROTE_EXT_CMD   = 4,
         WROTE_ABORT     = 8,
-        WROTE_XLATE     = 16,
+        WROTE_CORE_REQ  = 16,
         WROTE_CLEAR_IRQ = 32,
         WROTE_PRINT     = 64,
     };
@@ -357,8 +356,6 @@ class RegFile
     void printEpAccess(epid_t epId, bool read, bool cpu) const;
 
     Addr getSize() const;
-
-    unsigned countMsgs(vpeid_t vpeId);
 
   private:
 

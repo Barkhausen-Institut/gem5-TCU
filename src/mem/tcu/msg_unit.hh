@@ -74,7 +74,6 @@ class MessageUnit
     {
         MessageUnit *msgUnit;
         Addr msgAddr;
-        bool coreReq;
 
       public:
 
@@ -85,7 +84,7 @@ class MessageUnit
                              PacketPtr pkt)
             : MemoryUnit::ReceiveTransferEvent(
                 XferUnit::TransferType::REMOTE_WRITE, local, vpe, flags, pkt),
-              msgUnit(_msgUnit), msgAddr(local), coreReq()
+              msgUnit(_msgUnit), msgAddr(local)
         {}
 
         epid_t rep() const
@@ -94,7 +93,7 @@ class MessageUnit
             return addr.offset;
         }
 
-        bool transferDone(TcuError result) override;
+        void transferDone(TcuError result) override;
     };
 
     MessageUnit(Tcu &_tcu) : tcu(_tcu), info() {}

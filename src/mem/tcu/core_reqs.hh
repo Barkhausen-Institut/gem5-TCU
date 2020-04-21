@@ -33,6 +33,8 @@
 #include "mem/tcu/regfile.hh"
 #include "mem/tcu/xfer_unit.hh"
 
+#include <list>
+
 class Tcu;
 
 class CoreRequests
@@ -47,17 +49,19 @@ class CoreRequests
             FOREIGN_RECV,
         };
 
-        explicit Request(CoreRequests &_req, Type _type)
-            : req(_req),
+        explicit Request(size_t _id, CoreRequests &_req, Type _type)
+            : id(_id),
+              req(_req),
               type(_type),
               waiting(true)
         {}
         virtual ~Request() {
         }
 
-        virtual void start(size_t id);
-        virtual void complete(size_t id, RegFile::reg_t resp) = 0;
+        virtual void start();
+        virtual void complete(RegFile::reg_t resp) = 0;
 
+        size_t id;
         CoreRequests &req;
         Type type;
         bool waiting;
@@ -65,27 +69,27 @@ class CoreRequests
 
     struct XlateRequest : public Request
     {
-        explicit XlateRequest(CoreRequests &req)
-            : Request(req, TRANSLATE) {}
+        explicit XlateRequest(size_t id, CoreRequests &req)
+            : Request(id, req, TRANSLATE) {}
 
-        void start(size_t id) override;
-        void complete(size_t id, RegFile::reg_t resp) override;
+        void start() override;
+        void complete(RegFile::reg_t resp) override;
 
+        size_t xferId;
         XferUnit::Translation *trans;
-        uint16_t asid;
+        vpeid_t vpeId;
         Addr virt;
         uint access;
     };
 
     struct ForeignRecvRequest : public Request
     {
-        explicit ForeignRecvRequest(CoreRequests &req)
-            : Request(req, FOREIGN_RECV) {}
+        explicit ForeignRecvRequest(size_t id, CoreRequests &req)
+            : Request(id, req, FOREIGN_RECV) {}
 
-        void start(size_t id) override;
-        void complete(size_t id, RegFile::reg_t resp) override;
+        void start() override;
+        void complete(RegFile::reg_t) override {}
 
-        XferUnit::TransferEvent *event;
         epid_t epId;
         vpeid_t vpeId;
     };
@@ -96,16 +100,14 @@ class CoreRequests
 
     void regStats();
 
-    void startTranslate(size_t id,
-                        vpeid_t vpeId,
-                        Addr virt,
-                        uint access,
-                        XferUnit::Translation *trans);
+    size_t startTranslate(size_t xferId,
+                          vpeid_t vpeId,
+                          Addr virt,
+                          uint access,
+                          XferUnit::Translation *trans);
 
-    void startForeignReceive(size_t id,
-                             epid_t epId,
-                             vpeid_t vpeId,
-                             XferUnit::TransferEvent *event);
+    size_t startForeignReceive(epid_t epId,
+                               vpeid_t vpeId);
 
     void completeReqs();
 
@@ -113,9 +115,12 @@ class CoreRequests
 
   private:
 
+    void startNextReq();
+    Request *getById(size_t id) const;
+    size_t nextId() const;
+
     Tcu &tcu;
-    Request **reqs;
-    size_t reqSlots;
+    std::list<Request*> reqs;
 
     Stats::Scalar coreReqs;
     Stats::Scalar coreDelays;
