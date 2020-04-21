@@ -42,11 +42,11 @@ class TcuAccelConnector : public BaseConnector
 
     void wakeup() override;
 
-    void setIrq(IRQ irq) override;
-
     void reset() override;
 
   private:
+
+    void doSetIrq(IRQ irq) override;
 
     TcuAccel *acc;
 };

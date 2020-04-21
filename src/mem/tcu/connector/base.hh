@@ -34,6 +34,10 @@
 #include "mem/mem_object.hh"
 #include "sim/system.hh"
 
+#include <queue>
+
+class Tcu;
+
 class BaseConnector : public ClockedObject
 {
   public:
@@ -45,8 +49,13 @@ class BaseConnector : public ClockedObject
     };
 
     BaseConnector(const BaseConnectorParams *p)
-      : ClockedObject(p)
+      : ClockedObject(p),
+        _tcu()
     { }
+
+    void setTcu(Tcu *tcu) {
+        _tcu = tcu;
+    }
 
     // wakeup and suspend are only used to improve simulation speed.
     virtual void wakeup() {};
@@ -54,9 +63,17 @@ class BaseConnector : public ClockedObject
 
     virtual void reset() {};
 
-    virtual void setIrq(IRQ) {};
+    void setIrq(IRQ irq);
+    void clearIrq(IRQ irq);
 
-    virtual void clearIrq(IRQ) {};
+  private:
+
+    void startIrq(IRQ irq);
+    virtual void doSetIrq(IRQ) {};
+    virtual void doClearIrq(IRQ) {};
+
+    Tcu *_tcu;
+    std::queue<IRQ> _pending;
 };
 
 #endif // __MEM_TCU_BASE_CONNECTOR__

@@ -27,7 +27,40 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
+#include "debug/TcuConnector.hh"
 #include "mem/tcu/connector/base.hh"
+#include "mem/tcu/tcu.hh"
+
+void
+BaseConnector::setIrq(IRQ irq)
+{
+    _pending.push(irq);
+    if (_pending.size() == 1)
+        startIrq(irq);
+    else
+        DPRINTF(TcuConnector, "Delaying IRQ %d\n", irq);
+}
+
+void
+BaseConnector::clearIrq(IRQ irq)
+{
+    assert(irq == _pending.front());
+    doClearIrq(irq);
+
+    _pending.pop();
+    if (!_pending.empty())
+    {
+        DPRINTF(TcuConnector, "Starting delayed IRQ %d\n", _pending.front());
+        startIrq(_pending.front());
+    }
+}
+
+void
+BaseConnector::startIrq(IRQ irq)
+{
+    _tcu->regs().set(TcuReg::CLEAR_IRQ, irq);
+    doSetIrq(irq);
+}
 
 BaseConnector*
 BaseConnectorParams::create()

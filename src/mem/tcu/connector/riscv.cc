@@ -47,23 +47,23 @@ RiscvConnector::RiscvConnector(const RiscvConnectorParams *p)
 }
 
 void
-RiscvConnector::setIrq(IRQ irq)
+RiscvConnector::doSetIrq(IRQ irq)
 {
-    int int_num = translate(irq);
-    DPRINTF(TcuConnector, "Injecting IRQ %d\n", int_num);
+    int vector = translate(irq);
+    DPRINTF(TcuConnector, "Injecting IRQ %d (vector %d)\n", irq, vector);
 
     ThreadContext *tc = system->getThreadContext(0);
-    tc->getCpuPtr()->getInterruptController(0)->post(int_num, 0);
+    tc->getCpuPtr()->getInterruptController(0)->post(vector, 0);
 }
 
 void
-RiscvConnector::clearIrq(IRQ irq)
+RiscvConnector::doClearIrq(IRQ irq)
 {
-    int int_num = translate(irq);
-    DPRINTF(TcuConnector, "Clearing IRQ %d\n", int_num);
+    int vector = translate(irq);
+    DPRINTF(TcuConnector, "Clearing IRQ %d (vector %d)\n", irq, vector);
 
     ThreadContext *tc = system->getThreadContext(0);
-    tc->getCpuPtr()->getInterruptController(0)->clear(int_num, 0);
+    tc->getCpuPtr()->getInterruptController(0)->clear(vector, 0);
 }
 
 RiscvConnector*

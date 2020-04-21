@@ -39,18 +39,18 @@ ArmConnector::ArmConnector(const ArmConnectorParams *p)
 }
 
 void
-ArmConnector::setIrq(IRQ)
+ArmConnector::doSetIrq(IRQ irq)
 {
-    DPRINTF(TcuConnector, "Injecting IRQ 2\n");
+    DPRINTF(TcuConnector, "Injecting IRQ %d (vector 2)\n", irq);
 
     ThreadContext *tc = system->getThreadContext(0);
     tc->getCpuPtr()->getInterruptController(0)->post(2, 0);
 }
 
 void
-ArmConnector::clearIrq(IRQ)
+ArmConnector::doClearIrq(IRQ irq)
 {
-    DPRINTF(TcuConnector, "Clearing IRQ 2\n");
+    DPRINTF(TcuConnector, "Clearing IRQ %d (vector 2)\n", irq);
 
     ThreadContext *tc = system->getThreadContext(0);
     tc->getCpuPtr()->getInterruptController(0)->clear(2, 0);

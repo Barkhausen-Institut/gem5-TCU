@@ -128,6 +128,8 @@ Tcu::Tcu(TcuParams* p)
 
     assert(p->buf_size >= maxNocPacketSize);
 
+    connector->setTcu(this);
+
     PEMemory *sys = dynamic_cast<PEMemory*>(system);
     if (sys)
     {
@@ -664,7 +666,6 @@ Tcu::setIrq(BaseConnector::IRQ irq)
     wakeupCore(true);
 
     connector->setIrq(irq);
-    regs().set(TcuReg::CLEAR_IRQ, irq);
 
     irqInjects++;
 }

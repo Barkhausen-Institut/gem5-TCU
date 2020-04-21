@@ -66,9 +66,9 @@ class X86Connector : public CoreConnector
 
     Port& getPort(const std::string &n, PortID idx) override;
 
-    void setIrq(IRQ irq) override;
-
   private:
+
+    void doSetIrq(IRQ irq) override;
 
     IrqMasterPort irqPort;
 };
