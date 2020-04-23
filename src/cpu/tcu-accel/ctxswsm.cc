@@ -160,13 +160,14 @@ AccelCtxSwSM::handleMemResp(PacketPtr pkt)
                 *reinterpret_cast<const RegFile::reg_t*>(pkt->getConstPtr<uint8_t>());
             if (cmd.opcode == 0)
             {
+                bool res = switched;
                 if (switched)
                 {
                     accel->setSwitched();
                     switched = false;
                 }
                 state = State::FETCH_MSG;
-                return true;
+                return res;
             }
             break;
         }
