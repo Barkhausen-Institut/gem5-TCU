@@ -302,7 +302,15 @@ Tcu::executeCommand(PacketPtr pkt)
     }
 
     if (cmdPkt && cmd.opcode != Command::SLEEP)
-        startSleep(INVALID_EP_ID);
+    {
+        if (connector->canSuspendCmds())
+            startSleep(INVALID_EP_ID);
+        else
+        {
+            schedCpuResponse(cmdPkt, clockEdge(Cycles(1)));
+            cmdPkt = nullptr;
+        }
+    }
 }
 
 void

@@ -58,6 +58,11 @@ class BaseConnector : public ClockedObject
         _tcu = tcu;
     }
 
+    virtual bool canSuspendCmds()
+    {
+        return true;
+    }
+
     // wakeup and suspend are only used to improve simulation speed.
     virtual void wakeup() {};
     virtual void suspend() {};

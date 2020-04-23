@@ -40,6 +40,11 @@ class TcuAccelConnector : public BaseConnector
 
     TcuAccelConnector(const TcuAccelConnectorParams *p);
 
+    bool canSuspendCmds() override
+    {
+        return false;
+    }
+
     void wakeup() override;
 
     void reset() override;
