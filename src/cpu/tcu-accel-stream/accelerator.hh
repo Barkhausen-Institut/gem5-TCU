@@ -76,10 +76,7 @@ class TcuAccelStream : public TcuAccel
 
     Addr sendMsgAddr() const override { return MSG_ADDR; }
     Addr bufferAddr() const override { return BUF_ADDR; }
-    void setSwitched() override {
-        memset(&ctx, 0, sizeof(ctx));
-        ctx.flags |= Flags::STARTED;
-    }
+    void setSwitched() override { ctx.flags |= Flags::STARTED; }
 
   private:
 
