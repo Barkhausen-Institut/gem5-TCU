@@ -50,8 +50,6 @@ class BaseTcu(ClockedObject):
 
     caches = VectorParam.Cache([], "The caches that need to be flushed/invalidated")
 
-    coherent = Param.Bool(False, "Whether the TCU should keep the caches coherent")
-
     mmio_region = Param.AddrRange(AddrRange(0xF0000000, 0xF0002FFF), "MMIO region of the TCU")
 
     pe_id = Param.Unsigned("ID of the PE this TCU belongs to")

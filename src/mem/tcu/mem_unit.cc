@@ -134,48 +134,15 @@ MemoryUnit::startRead(const Tcu::Command::Bits& cmd)
 
     uint flags = cmdToNocFlags(cmd.flags);
 
-    if (tcu.coherent && !tcu.mmioRegion.contains(nocAddr.offset) &&
-        tcu.isMemPE(nocAddr.peId))
-    {
-        flags |= XferUnit::NOXLATE;
+    auto pkt = tcu.generateRequest(nocAddr.getAddr(),
+                                   size,
+                                   MemCmd::ReadReq);
 
-        auto xfer = new LocalReadTransferEvent(nocAddr.getAddr(),
-                                               data.addr,
-                                               size,
-                                               flags);
-        tcu.startTransfer(xfer, Cycles(1));
-    }
-    else
-    {
-        auto pkt = tcu.generateRequest(nocAddr.getAddr(),
-                                       size,
-                                       MemCmd::ReadReq);
-
-        tcu.sendNocRequest(Tcu::NocPacketType::READ_REQ,
-                           pkt,
-                           ep.targetVpe,
-                           flags,
-                           tcu.commandToNocRequestLatency);
-    }
-}
-
-void
-MemoryUnit::LocalReadTransferEvent::transferDone(TcuError result)
-{
-    Cycles delay(1);
-
-    if (result != TcuError::NONE)
-    {
-        tcu().scheduleFinishOp(delay, result);
-        return;
-    }
-
-    uint wflags = flags() & ~XferUnit::NOXLATE;
-    uint8_t *tmp = new uint8_t[size()];
-    memcpy(tmp, data(), size());
-
-    auto xfer = new LocalWriteTransferEvent(dest, tmp, size(), wflags);
-    tcu().startTransfer(xfer, delay);
+    tcu.sendNocRequest(Tcu::NocPacketType::READ_REQ,
+                       pkt,
+                       ep.targetVpe,
+                       flags,
+                       tcu.commandToNocRequestLatency);
 }
 
 void
@@ -300,26 +267,15 @@ MemoryUnit::WriteTransferEvent::transferDone(TcuError result)
         Cycles delay = tcu().transferToNocLatency;
         tcu().printPacket(pkt);
 
-        if (tcu().coherent && !tcu().mmioRegion.contains(dest.offset) &&
-            tcu().isMemPE(dest.peId))
-        {
-            uint rflags = (flags() & XferUnit::NOPF) | XferUnit::NOXLATE;
-
-            auto xfer = new ReadTransferEvent(dest.getAddr(), rflags, pkt);
-            tcu().startTransfer(xfer, delay);
-        }
+        Tcu::NocPacketType pktType;
+        if (flags() & XferUnit::MESSAGE)
+            pktType = Tcu::NocPacketType::MESSAGE;
         else
-        {
-            Tcu::NocPacketType pktType;
-            if (flags() & XferUnit::MESSAGE)
-                pktType = Tcu::NocPacketType::MESSAGE;
-            else
-                pktType = Tcu::NocPacketType::WRITE_REQ;
+            pktType = Tcu::NocPacketType::WRITE_REQ;
 
-            uint rflags = xferToNocFlags(flags());
-            tcu().setCommandSent();
-            tcu().sendNocRequest(pktType, pkt, vpe, rflags, delay);
-        }
+        uint rflags = xferToNocFlags(flags());
+        tcu().setCommandSent();
+        tcu().sendNocRequest(pktType, pkt, vpe, rflags, delay);
     }
 }
 

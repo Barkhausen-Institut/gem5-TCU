@@ -140,9 +140,6 @@ Tcu::Tcu(TcuParams* p)
         DPRINTF(Tcu, "Using memory range %p .. %p\n",
             memOffset, memOffset + memSize);
     }
-    // memory PEs don't participate in cache coherence
-    else
-        coherent = false;
 }
 
 Tcu::~Tcu()
@@ -655,15 +652,12 @@ Cycles
 Tcu::flushInvalCaches(bool invalidate)
 {
     Cycles delay(0);
-    if(!coherent)
+    for (auto &c : caches)
     {
-        for (auto &c : caches)
-        {
-            c->memWriteback();
-            if (invalidate)
-                c->memInvalidate();
-            delay += Cycles(c->getBlockCount() / cacheBlocksPerCycle);
-        }
+        c->memWriteback();
+        if (invalidate)
+            c->memInvalidate();
+        delay += Cycles(c->getBlockCount() / cacheBlocksPerCycle);
     }
     return delay;
 }

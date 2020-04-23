@@ -128,9 +128,6 @@ def getOptions():
                       default='2GHz',
                       help="Clock for blocks running at CPU speed")
 
-    parser.add_option("--coherent", action="store_true", default=False,
-                      help="Whether the caches should be kept coherent")
-
     parser.add_option("-m", "--maxtick", type="int", default=m5.MaxTick,
                       metavar="T",
                       help="Stop after T ticks")
@@ -159,7 +156,6 @@ def printConfig(pe, tcupos):
          pe.tcu.buf_count, pe.tcu.tlb_entries)
 
     try:
-        cc = "coherent" if pe.tcu.coherent else "non-coherent"
         print '      L1i$ =%s' % (getCacheStr(pe.l1icache))
         print '      L1d$ =%s' % (getCacheStr(pe.l1dcache))
         try:
@@ -248,7 +244,6 @@ def createPE(noc, options, no, systemType, l1size, l2size, spmsize, tcupos, memP
     pe.tcu = Tcu(max_noc_packet_size='2kB', buf_size='2kB')
     pe.tcu.pe_id = no
 
-    pe.tcu.coherent = options.coherent
     pe.tcu.num_endpoints = 192
     if tcupos > 0:
         pe.tcu.tlb_entries = 32
@@ -659,16 +654,7 @@ def createRoot(options):
 
     # All PEs are connected to a NoC (Network on Chip). In this case it's just
     # a simple XBar.
-    if options.coherent:
-        # A dummy system for the CoherentXBar
-        root.noc_system = System()
-
-        root.noc = SystemXBar(system=root.noc_system,
-                              point_of_coherency=False)
-
-        root.noc_system.system_port = root.noc.slave
-    else:
-        root.noc = IOXBar()
+    root.noc = IOXBar()
 
     # create a dummy platform and system for the UART
     root.platform = IOPlatform()

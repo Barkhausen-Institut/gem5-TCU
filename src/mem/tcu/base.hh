@@ -70,14 +70,6 @@ class BaseTcu : public ClockedObject
         { }
 
         void completeRequest(PacketPtr pkt) override;
-
-        void recvFunctionalSnoop(PacketPtr pkt) override;
-
-        void recvTimingSnoopReq(PacketPtr pkt) override;
-
-        void recvRetrySnoopResp() override;
-
-        bool isSnooping() const override { return tcu.coherent; }
     };
 
     class ICacheMasterPort : public TcuMasterPort
@@ -227,8 +219,6 @@ class BaseTcu : public ClockedObject
         bool handleRequest(PacketPtr pkt,
                            bool *busy,
                            bool functional) override;
-
-        bool recvTimingSnoopResp(PacketPtr pkt) override;
     };
 
   public:
@@ -304,8 +294,6 @@ class BaseTcu : public ClockedObject
     const AddrRange mmioRegion;
 
     const std::vector<AddrRange> slaveRegion;
-
-    bool coherent;
 
 };
 

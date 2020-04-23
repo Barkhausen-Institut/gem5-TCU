@@ -38,25 +38,6 @@ class MemoryUnit
 {
   public:
 
-    class LocalReadTransferEvent : public XferUnit::TransferEvent
-    {
-        Addr dest;
-
-      public:
-
-        LocalReadTransferEvent(Addr src, Addr _dest, size_t size, uint flags)
-            : TransferEvent(XferUnit::TransferType::LOCAL_READ,
-                            src,
-                            size,
-                            flags),
-              dest(_dest)
-        {}
-
-        void transferStart() override {}
-
-        void transferDone(TcuError result) override;
-    };
-
     class LocalWriteTransferEvent : public XferUnit::TransferEvent
     {
         uint8_t *tmp;

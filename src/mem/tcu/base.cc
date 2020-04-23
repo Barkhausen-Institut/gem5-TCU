@@ -62,33 +62,6 @@ BaseTcu::NocMasterPort::completeRequest(PacketPtr pkt)
     tcu.completeNocRequest(pkt);
 }
 
-void
-BaseTcu::NocMasterPort::recvFunctionalSnoop(PacketPtr pkt)
-{
-    if (tcu.cacheMemSlavePort.isConnected())
-        tcu.cacheMemSlavePort.sendFunctionalSnoop(pkt);
-}
-
-void
-BaseTcu::NocMasterPort::recvTimingSnoopReq(PacketPtr pkt)
-{
-    if (tcu.cacheMemSlavePort.isConnected())
-        tcu.cacheMemSlavePort.sendTimingSnoopReq(pkt);
-}
-
-void
-BaseTcu::NocMasterPort::recvRetrySnoopResp()
-{
-    if (tcu.cacheMemSlavePort.isConnected())
-        tcu.cacheMemSlavePort.sendRetrySnoopResp();
-}
-
-bool
-BaseTcu::CacheMemSlavePort::recvTimingSnoopResp(PacketPtr pkt)
-{
-    return tcu.nocMasterPort.sendTimingSnoopResp(pkt);
-}
-
 bool
 BaseTcu::ICacheMasterPort::recvTimingResp(PacketPtr pkt)
 {
@@ -308,8 +281,7 @@ BaseTcu::BaseTcu(BaseTcuParams* p)
     nocReqFinishedEvent(*this),
     peId(p->pe_id),
     mmioRegion(p->mmio_region),
-    slaveRegion(p->slave_region),
-    coherent(p->coherent)
+    slaveRegion(p->slave_region)
 {
 }
 
