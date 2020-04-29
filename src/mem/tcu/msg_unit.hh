@@ -108,7 +108,7 @@ class MessageUnit
     /**
      * Received a message from NoC -> Mem request
      */
-    TcuError recvFromNoc(PacketPtr pkt, uint flags);
+    TcuError recvFromNoc(PacketPtr pkt);
 
     /**
      * Finishes the reply-on-message command

@@ -157,7 +157,7 @@ class MemoryUnit
     /**
      * Received read/write request from NoC -> Mem/regfile request
      */
-    TcuError recvFromNoc(vpeid_t tvpe, PacketPtr pkt, uint flags);
+    TcuError recvFromNoc(vpeid_t tvpe, PacketPtr pkt);
 
   private:
 

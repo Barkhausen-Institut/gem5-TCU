@@ -263,9 +263,9 @@ Tcu::executeCommand(PacketPtr pkt)
     commands[static_cast<size_t>(cmd.opcode)]++;
 
     assert(cmd.epid < numEndpoints);
-    DPRINTF(TcuCmd, "Starting command %s with EP=%u, flags=%#x arg=%#lx (id=%llu)\n",
+    DPRINTF(TcuCmd, "Starting command %s with EP=%u, arg=%#lx (id=%llu)\n",
             cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epid,
-            cmd.flags, cmd.arg, cmdId);
+            cmd.arg, cmdId);
 
     switch (cmd.opcode)
     {
@@ -318,9 +318,8 @@ Tcu::abortCommand()
 
     if (cmd.opcode != Command::IDLE)
     {
-        DPRINTF(TcuCmd, "Aborting command %s with EP=%u, flags=%#x (id=%llu)\n",
-                cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epid,
-                cmd.flags, cmdId);
+        DPRINTF(TcuCmd, "Aborting command %s with EP=%u, (id=%llu)\n",
+                cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epid, cmdId);
     }
 
     cmdXferBuf = -1;
@@ -415,8 +414,8 @@ Tcu::finishCommand(TcuError error)
     if (cmdPkt || cmd.opcode == Command::SLEEP)
         stopSleep();
 
-    DPRINTF(TcuCmd, "Finished command %s with EP=%u, flags=%#x (id=%llu) -> %u\n",
-            cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epid, cmd.flags,
+    DPRINTF(TcuCmd, "Finished command %s with EP=%u, (id=%llu) -> %u\n",
+            cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epid,
             cmdId, static_cast<uint>(error));
 
     // let the SW know that the command is finished
@@ -722,14 +721,12 @@ void
 Tcu::sendNocRequest(NocPacketType type,
                     PacketPtr pkt,
                     vpeid_t tvpe,
-                    uint flags,
                     Cycles delay,
                     bool functional)
 {
     auto senderState = new NocSenderState();
     senderState->packetType = type;
     senderState->result = TcuError::NONE;
-    senderState->flags = flags;
     senderState->cmdId = cmdId;
     senderState->tvpe = tvpe;
 
@@ -945,8 +942,7 @@ Tcu::handleNocRequest(PacketPtr pkt)
         case NocPacketType::MESSAGE:
         {
             nocMsgRecvs++;
-            uint flags = senderState->flags;
-            res = msgUnit->recvFromNoc(pkt, flags);
+            res = msgUnit->recvFromNoc(pkt);
             break;
         }
         case NocPacketType::READ_REQ:
@@ -957,8 +953,7 @@ Tcu::handleNocRequest(PacketPtr pkt)
                 nocReadRecvs++;
             else if (senderState->packetType == NocPacketType::WRITE_REQ)
                 nocWriteRecvs++;
-            uint flags = senderState->flags;
-            res = memUnit->recvFromNoc(senderState->tvpe, pkt, flags);
+            res = memUnit->recvFromNoc(senderState->tvpe, pkt);
             break;
         }
         case NocPacketType::CACHE_MEM_REQ_FUNC:
@@ -1078,7 +1073,6 @@ Tcu::handleCacheMemRequest(PacketPtr pkt, bool functional)
     sendNocRequest(type,
                    pkt,
                    INVALID_VPE_ID,
-                   NocFlags::NONE,
                    Cycles(1),
                    functional);
 

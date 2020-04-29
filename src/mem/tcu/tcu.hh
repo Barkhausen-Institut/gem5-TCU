@@ -78,19 +78,12 @@ class Tcu : public BaseTcu
         MasterID mid;
     };
 
-    enum NocFlags
-    {
-        NONE    = 0,
-        NOPF    = 1,
-    };
-
     struct NocSenderState : public Packet::SenderState
     {
         TcuError result;
         NocPacketType packetType;
         vpeid_t tvpe;
         uint64_t cmdId;
-        uint flags;
     };
 
     struct InitSenderState : public Packet::SenderState
@@ -111,16 +104,9 @@ class Tcu : public BaseTcu
             SLEEP           = 7,
         };
 
-        enum Flags
-        {
-            NONE            = 0,
-            NOPF            = 1,
-        };
-
         BitUnion64(Bits)
-            Bitfield<56, 25> arg;
-            Bitfield<24, 21> error;
-            Bitfield<20> flags;
+            Bitfield<56, 24> arg;
+            Bitfield<23, 20> error;
             Bitfield<19, 4> epid;
             Bitfield<3, 0> opcode;
         EndBitUnion(Bits)
@@ -215,7 +201,6 @@ class Tcu : public BaseTcu
     void sendNocRequest(NocPacketType type,
                         PacketPtr pkt,
                         vpeid_t tvpe,
-                        uint flags,
                         Cycles delay,
                         bool functional = false);
 

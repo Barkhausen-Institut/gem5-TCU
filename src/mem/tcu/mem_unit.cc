@@ -35,22 +35,6 @@
 #include "mem/tcu/xfer_unit.hh"
 #include "mem/tcu/noc_addr.hh"
 
-static uint cmdToXferFlags(uint flags) {
-    return flags & 1;
-}
-
-static uint cmdToNocFlags(uint flags) {
-    return flags & 1;
-}
-
-static uint nocToXferFlags(uint flags) {
-    return flags & 3;
-}
-
-static uint xferToNocFlags(uint flags) {
-    return flags & 3;
-}
-
 static void
 finishReadWrite(Tcu &tcu, Addr size)
 {
@@ -132,8 +116,6 @@ MemoryUnit::startRead(const Tcu::Command::Bits& cmd)
 
     NocAddr nocAddr(ep.targetPe, ep.remoteAddr + offset);
 
-    uint flags = cmdToNocFlags(cmd.flags);
-
     auto pkt = tcu.generateRequest(nocAddr.getAddr(),
                                    size,
                                    MemCmd::ReadReq);
@@ -141,7 +123,6 @@ MemoryUnit::startRead(const Tcu::Command::Bits& cmd)
     tcu.sendNocRequest(Tcu::NocPacketType::READ_REQ,
                        pkt,
                        ep.targetVpe,
-                       flags,
                        tcu.commandToNocRequestLatency);
 }
 
@@ -178,8 +159,7 @@ MemoryUnit::readComplete(const Tcu::Command::Bits& cmd, PacketPtr pkt, TcuError 
         return;
     }
 
-    uint flags = cmdToXferFlags(cmd.flags);
-    auto xfer = new ReadTransferEvent(data.addr, flags, pkt);
+    auto xfer = new ReadTransferEvent(data.addr, 0, pkt);
     tcu.startTransfer(xfer, delay);
 }
 
@@ -244,9 +224,8 @@ MemoryUnit::startWrite(const Tcu::Command::Bits& cmd)
 
     NocAddr dest(ep.targetPe, ep.remoteAddr + offset);
 
-    uint flags = cmdToXferFlags(cmd.flags);
     auto xfer = new WriteTransferEvent(
-        data.addr, size, ep.targetVpe, flags, dest);
+        data.addr, size, ep.targetVpe, 0, dest);
     tcu.startTransfer(xfer, Cycles(0));
 }
 
@@ -273,9 +252,8 @@ MemoryUnit::WriteTransferEvent::transferDone(TcuError result)
         else
             pktType = Tcu::NocPacketType::WRITE_REQ;
 
-        uint rflags = xferToNocFlags(flags());
         tcu().setCommandSent();
-        tcu().sendNocRequest(pktType, pkt, vpe, rflags, delay);
+        tcu().sendNocRequest(pktType, pkt, vpe, delay);
     }
 }
 
@@ -304,7 +282,7 @@ MemoryUnit::recvFunctionalFromNoc(PacketPtr pkt)
 }
 
 TcuError
-MemoryUnit::recvFromNoc(vpeid_t tvpe, PacketPtr pkt, uint flags)
+MemoryUnit::recvFromNoc(vpeid_t tvpe, PacketPtr pkt)
 {
     NocAddr addr(pkt->getAddr());
 
@@ -337,7 +315,8 @@ MemoryUnit::recvFromNoc(vpeid_t tvpe, PacketPtr pkt, uint flags)
 
         auto type = pkt->isWrite() ? XferUnit::TransferType::REMOTE_WRITE
                                    : XferUnit::TransferType::REMOTE_READ;
-        uint xflags = nocToXferFlags(flags);
+        // we never allow pagefaults for remote accesses
+        uint xflags = XferUnit::NOPF;
 
         auto *ev = new ReceiveTransferEvent(
             type, addr.offset, tvpe, xflags, pkt);

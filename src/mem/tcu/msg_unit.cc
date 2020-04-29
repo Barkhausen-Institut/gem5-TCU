@@ -495,7 +495,7 @@ MessageUnit::finishMsgReceive(epid_t epId,
 }
 
 TcuError
-MessageUnit::recvFromNoc(PacketPtr pkt, uint flags)
+MessageUnit::recvFromNoc(PacketPtr pkt)
 {
     assert(pkt->isWrite());
     assert(pkt->hasData());
