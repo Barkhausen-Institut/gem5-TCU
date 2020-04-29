@@ -813,6 +813,7 @@ Tcu::startTranslate(size_t xferId,
                     vpeid_t vpeId,
                     Addr virt,
                     uint access,
+                    bool can_pf,
                     XferUnit::Translation *trans)
 {
     // if a command is running, send the response now to finish its memory
@@ -824,7 +825,7 @@ Tcu::startTranslate(size_t xferId,
         cmdPkt = NULL;
     }
 
-    return coreReqs.startTranslate(xferId, vpeId, virt, access, trans);
+    return coreReqs.startTranslate(xferId, vpeId, virt, access, can_pf, trans);
 }
 
 size_t

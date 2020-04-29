@@ -217,6 +217,7 @@ class Tcu : public BaseTcu
                           vpeid_t vpeId,
                           Addr virt,
                           uint access,
+                          bool can_pf,
                           XferUnit::Translation *trans);
 
     size_t startForeignReceive(epid_t epId, vpeid_t vpeId);

@@ -80,6 +80,7 @@ class CoreRequests
         vpeid_t vpeId;
         Addr virt;
         uint access;
+        bool can_pf;
     };
 
     struct ForeignRecvRequest : public Request
@@ -104,6 +105,7 @@ class CoreRequests
                           vpeid_t vpeId,
                           Addr virt,
                           uint access,
+                          bool can_pf,
                           XferUnit::Translation *trans);
 
     size_t startForeignReceive(epid_t epId,

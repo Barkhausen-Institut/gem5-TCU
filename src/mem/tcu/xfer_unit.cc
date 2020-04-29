@@ -207,15 +207,16 @@ XferUnit::TransferEvent::process()
 
             // if this is a pagefault and we are not allowed to cause one,
             // report an error
-            if (res == TcuTlb::PAGEFAULT && (flags() & XferFlags::NOPF))
+            bool can_pf = !(flags() & XferFlags::NOPF);
+            if (res == TcuTlb::PAGEFAULT && !can_pf)
             {
                 abort(TcuError::PAGEFAULT);
                 return;
             }
 
             trans = new Translation(*this);
-            coreReq = xfer->tcu.startTranslate(buf->id, vpe,
-                                               local, access, trans);
+            coreReq = xfer->tcu.startTranslate(buf->id, vpe, local, access,
+                                               can_pf, trans);
             return;
         }
     }
@@ -464,12 +465,7 @@ XferUnit::allocateBuf(TransferEvent *event, uint flags)
         }
     }
 
-    // the first buffer cannot cause pagefaults; thus we can only use it if for
-    // transfers which abort if a pagefault is caused
-    // this is required to resolve a deadlock due to additional transfers that
-    // handle a already running pagefault transfer.
-    size_t i = !tcu.tlb() || (flags & XferFlags::NOPF) ? 0 : 1;
-    for (; i < bufCount; ++i)
+    for (size_t i = 0; i < bufCount; ++i)
     {
         if (!bufs[i]->event)
         {
