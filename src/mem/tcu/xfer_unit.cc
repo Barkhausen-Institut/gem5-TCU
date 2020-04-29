@@ -450,21 +450,6 @@ XferUnit::getBuffer(uint64_t evId)
 XferUnit::Buffer*
 XferUnit::allocateBuf(TransferEvent *event, uint flags)
 {
-    // don't allow message receives in parallel. because otherwise we run into race conditions.
-    // e.g., we could overwrite unread messages because we can't increase the message counter when
-    // the receive starts (to not notify SW) and thus might start receiving without having space
-    // another problem is that we might finish receiving the second message before the first and
-    // then increase the message counter, so that the SW looks at the first message, which is not
-    // ready yet.
-    if (flags & XferFlags::MSGRECV)
-    {
-        for (size_t i = 0; i < bufCount; ++i)
-        {
-            if (bufs[i]->event && (bufs[i]->event->flags() & XferFlags::MSGRECV))
-                return NULL;
-        }
-    }
-
     for (size_t i = 0; i < bufCount; ++i)
     {
         if (!bufs[i]->event)
