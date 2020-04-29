@@ -215,7 +215,7 @@ XferUnit::TransferEvent::process()
             }
 
             trans = new Translation(*this);
-            coreReq = xfer->tcu.startTranslate(buf->id, vpe, local, access,
+            coreReq = xfer->tcu.startTranslate(vpe, local, access,
                                                can_pf, trans);
             return;
         }

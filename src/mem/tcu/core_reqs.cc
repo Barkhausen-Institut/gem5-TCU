@@ -59,8 +59,7 @@ CoreRequests::regStats()
 }
 
 size_t
-CoreRequests::startTranslate(size_t xferId,
-                             vpeid_t vpeId,
+CoreRequests::startTranslate(vpeid_t vpeId,
                              Addr virt,
                              uint access,
                              bool can_pf,
@@ -69,7 +68,6 @@ CoreRequests::startTranslate(size_t xferId,
     size_t id = nextId();
 
     auto req = new XlateRequest(id, *this);
-    req->xferId = xferId;
     req->trans = trans;
     req->virt = virt;
     req->vpeId = vpeId;
@@ -78,8 +76,8 @@ CoreRequests::startTranslate(size_t xferId,
     reqs.push_back(req);
 
     DPRINTFS(TcuCoreReqs, (&tcu),
-        "CoreRequest[%lu]: translate(xfer=%lu, vpeId=%#x, addr=%p, acc=%#x pf=%d)\n",
-        id, xferId, vpeId, virt, access, can_pf);
+        "CoreRequest[%lu]: translate(vpeId=%#x, addr=%p, acc=%#x pf=%d)\n",
+        id, vpeId, virt, access, can_pf);
     coreReqs++;
 
     if(reqs.size() == 1)
@@ -125,7 +123,7 @@ CoreRequests::XlateRequest::start()
     const Addr mask = TcuTlb::PAGE_MASK;
     const Addr virtPage = virt & ~mask;
     const Addr val = (static_cast<Addr>(vpeId) << 48) | virtPage |
-                     (access << 2) | (can_pf << 1) | (xferId << 6);
+                     (access << 2) | (can_pf << 1);
     req.tcu.regs().set(PrivReg::CORE_REQ, val);
     waiting = false;
 

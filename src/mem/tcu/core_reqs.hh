@@ -75,7 +75,6 @@ class CoreRequests
         void start() override;
         void complete(RegFile::reg_t resp) override;
 
-        size_t xferId;
         XferUnit::Translation *trans;
         vpeid_t vpeId;
         Addr virt;
@@ -101,8 +100,7 @@ class CoreRequests
 
     void regStats();
 
-    size_t startTranslate(size_t xferId,
-                          vpeid_t vpeId,
+    size_t startTranslate(vpeid_t vpeId,
                           Addr virt,
                           uint access,
                           bool can_pf,

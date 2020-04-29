@@ -809,8 +809,7 @@ Tcu::startTransfer(void *event, Cycles delay)
 }
 
 size_t
-Tcu::startTranslate(size_t xferId,
-                    vpeid_t vpeId,
+Tcu::startTranslate(vpeid_t vpeId,
                     Addr virt,
                     uint access,
                     bool can_pf,
@@ -825,7 +824,7 @@ Tcu::startTranslate(size_t xferId,
         cmdPkt = NULL;
     }
 
-    return coreReqs.startTranslate(xferId, vpeId, virt, access, can_pf, trans);
+    return coreReqs.startTranslate(vpeId, virt, access, can_pf, trans);
 }
 
 size_t

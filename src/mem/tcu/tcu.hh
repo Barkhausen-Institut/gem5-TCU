@@ -213,8 +213,7 @@ class Tcu : public BaseTcu
 
     void startTransfer(void *event, Cycles delay);
 
-    size_t startTranslate(size_t xferId,
-                          vpeid_t vpeId,
+    size_t startTranslate(vpeid_t vpeId,
                           Addr virt,
                           uint access,
                           bool can_pf,
