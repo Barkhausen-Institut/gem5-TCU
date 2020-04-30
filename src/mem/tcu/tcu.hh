@@ -116,8 +116,6 @@ class Tcu : public BaseTcu
             Bitfield<19, 4> epid;
             Bitfield<3, 0> opcode;
         EndBitUnion(Bits)
-
-        Bits value;
     };
 
     struct PrivCommand
@@ -134,8 +132,10 @@ class Tcu : public BaseTcu
             ABORT_CMD       = 7,
         };
 
-        Opcode opcode;
-        uint64_t arg;
+        BitUnion64(Bits)
+            Bitfield<64, 4> arg;
+            Bitfield<3, 0> opcode;
+        EndBitUnion(Bits)
     };
 
     struct ExtCommand
@@ -148,9 +148,11 @@ class Tcu : public BaseTcu
             RESET           = 3,
         };
 
-        Opcode opcode;
-        TcuError error;
-        uint64_t arg;
+        BitUnion64(Bits)
+            Bitfield<64, 8> arg;
+            Bitfield<7, 4> error;
+            Bitfield<3, 0> opcode;
+        EndBitUnion(Bits)
     };
 
   public:
@@ -246,13 +248,9 @@ class Tcu : public BaseTcu
 
     void abortCommand();
 
-    PrivCommand getPrivCommand();
-
     void executePrivCommand(PacketPtr pkt);
 
     void finishAbort();
-
-    ExtCommand getExtCommand();
 
     void executeExtCommand(PacketPtr pkt);
 

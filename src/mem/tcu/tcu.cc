@@ -413,21 +413,10 @@ Tcu::finishCommand(TcuError error)
     finishAbort();
 }
 
-Tcu::PrivCommand
-Tcu::getPrivCommand()
-{
-    auto reg = regFile.get(PrivReg::PRIV_CMD);
-
-    PrivCommand cmd;
-    cmd.opcode = static_cast<PrivCommand::Opcode>(reg & 0xF);
-    cmd.arg = reg >> 4;
-    return cmd;
-}
-
 void
 Tcu::executePrivCommand(PacketPtr pkt)
 {
-    PrivCommand cmd = getPrivCommand();
+    PrivCommand::Bits cmd = regFile.get(PrivReg::PRIV_CMD);
 
     privCommands[static_cast<size_t>(cmd.opcode)]++;
 
@@ -499,10 +488,11 @@ Tcu::executePrivCommand(PacketPtr pkt)
         schedCpuResponse(pkt, clockEdge(delay));
 
     // set privileged command back to IDLE
-    regFile.set(PrivReg::PRIV_CMD,
-        static_cast<RegFile::reg_t>(PrivCommand::IDLE));
+    cmd.arg = 0;
+    cmd.opcode = PrivCommand::IDLE;
+    regFile.set(PrivReg::PRIV_CMD, cmd);
 
-    DPRINTF(TcuCmd, "Finished privileged command %s with arg=0\n",
+    DPRINTF(TcuCmd, "Finished privileged command %s with res=0\n",
             privCmdNames[static_cast<size_t>(cmd.opcode)]);
 }
 
@@ -514,34 +504,24 @@ Tcu::finishAbort()
         schedCpuResponse(privCmdPkt, clockEdge(Cycles(1)));
         privCmdPkt = nullptr;
 
-        RegFile::reg_t arg = static_cast<RegFile::reg_t>(abort);
-        DPRINTF(TcuCmd, "Finished privileged command %s with arg=%d\n",
-                privCmdNames[static_cast<size_t>(getPrivCommand().opcode)],
-                arg);
+        PrivCommand::Bits cmd = regFile.get(PrivReg::PRIV_CMD);
+        cmd.arg = static_cast<RegFile::reg_t>(abort);
 
-        RegFile::reg_t cmd = arg << 4;
-        cmd |= static_cast<RegFile::reg_t>(PrivCommand::IDLE);
+        DPRINTF(TcuCmd, "Finished privileged command %s with res=%d\n",
+                privCmdNames[static_cast<size_t>(cmd.opcode)],
+                cmd.arg);
+
+        cmd.opcode = PrivCommand::IDLE;
         regFile.set(PrivReg::PRIV_CMD, cmd);
+
         abort = AbortType::NONE;
     }
-}
-
-Tcu::ExtCommand
-Tcu::getExtCommand()
-{
-    auto reg = regFile.get(PrivReg::EXT_CMD);
-
-    ExtCommand cmd;
-    cmd.opcode = static_cast<ExtCommand::Opcode>(reg & 0xF);
-    cmd.error = TcuError::NONE;
-    cmd.arg = reg >> 8;
-    return cmd;
 }
 
 void
 Tcu::executeExtCommand(PacketPtr pkt)
 {
-    ExtCommand cmd = getExtCommand();
+    ExtCommand::Bits cmd = regFile.get(PrivReg::EXT_CMD);
 
     extCommands[static_cast<size_t>(cmd.opcode)]++;
 
@@ -559,7 +539,8 @@ Tcu::executeExtCommand(PacketPtr pkt)
             epid_t epid = cmd.arg & 0xFFFF;
             bool force = !!(cmd.arg & (1 << 16));
             unsigned unreadMask;
-            cmd.error = regs().invalidate(epid, force, &unreadMask);
+            TcuError res = regs().invalidate(epid, force, &unreadMask);
+            cmd.error = static_cast<uint>(res);
             cmd.arg = unreadMask;
             break;
         }
@@ -568,7 +549,8 @@ Tcu::executeExtCommand(PacketPtr pkt)
             epid_t repid = cmd.arg & 0xFFFF;
             peid_t peid = (cmd.arg >> 16) & 0xFF;
             epid_t sepid = (cmd.arg >> 24) & 0xFFFF;
-            cmd.error = msgUnit->invalidateReply(repid, peid, sepid);
+            TcuError res = msgUnit->invalidateReply(repid, peid, sepid);
+            cmd.error = static_cast<uint>(res);
             break;
         }
         case ExtCommand::RESET:
@@ -586,18 +568,16 @@ Tcu::executeExtCommand(PacketPtr pkt)
         schedNocResponse(pkt, clockEdge(delay));
     }
 
-    if (cmd.error != TcuError::NONE)
+    if (cmd.error != static_cast<uint>(TcuError::NONE))
     {
         DPRINTF(TcuCmd, "External command %s failed (%u)\n",
                 extCmdNames[static_cast<size_t>(cmd.opcode)],
-                (unsigned)cmd.error);
+                static_cast<uint>(cmd.error));
     }
 
     // set external command back to IDLE
     cmd.opcode = ExtCommand::IDLE;
-    regFile.set(PrivReg::EXT_CMD, cmd.opcode |
-                                  (static_cast<unsigned>(cmd.error) << 4) |
-                                  (cmd.arg << 8));
+    regFile.set(PrivReg::EXT_CMD, cmd);
 }
 
 bool
