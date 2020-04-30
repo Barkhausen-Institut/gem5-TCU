@@ -77,15 +77,15 @@ MemoryUnit::regStats()
 void
 MemoryUnit::startRead(const Tcu::Command::Bits& cmd)
 {
-    MemEp ep = tcu.regs().getMemEp(cmd.epid);
+    MemEp *ep = tcu.regs().getMemEp(cmd.epid);
 
-    if(ep.flags == 0 || ep.vpe != tcu.regs().getVPE())
+    if(!ep || ep->r0.vpe != tcu.regs().getVPE())
     {
         tcu.scheduleFinishOp(Cycles(1), TcuError::INV_EP);
         return;
     }
 
-    if(!(ep.flags & Tcu::MemoryFlags::READ) || (ep.vpe != tcu.regs().getVPE()))
+    if(!(ep->r0.flags & Tcu::MemoryFlags::READ))
     {
         tcu.scheduleFinishOp(Cycles(1), TcuError::NO_PERM);
         return;
@@ -99,7 +99,7 @@ MemoryUnit::startRead(const Tcu::Command::Bits& cmd)
 
     DPRINTFS(Tcu, (&tcu),
         "\e[1m[rd -> %u]\e[0m at %#018lx+%#lx with EP%u into %#018lx:%lu\n",
-        ep.targetPe, ep.remoteAddr, offset,
+        ep->r0.targetPe, ep->r1.remoteAddr, offset,
         cmd.epid, data.addr, size);
 
     if(size == 0)
@@ -108,13 +108,13 @@ MemoryUnit::startRead(const Tcu::Command::Bits& cmd)
         return;
     }
 
-    if(size + offset < size || size + offset > ep.remoteSize)
+    if(size + offset < size || size + offset > ep->r2.remoteSize)
     {
         tcu.scheduleFinishOp(Cycles(1), TcuError::INV_ARGS);
         return;
     }
 
-    NocAddr nocAddr(ep.targetPe, ep.remoteAddr + offset);
+    NocAddr nocAddr(ep->r0.targetPe, ep->r1.remoteAddr + offset);
 
     auto pkt = tcu.generateRequest(nocAddr.getAddr(),
                                    size,
@@ -122,7 +122,7 @@ MemoryUnit::startRead(const Tcu::Command::Bits& cmd)
 
     tcu.sendNocRequest(Tcu::NocPacketType::READ_REQ,
                        pkt,
-                       ep.targetVpe,
+                       ep->r0.targetVpe,
                        tcu.commandToNocRequestLatency);
 }
 
@@ -185,15 +185,15 @@ MemoryUnit::ReadTransferEvent::transferDone(TcuError result)
 void
 MemoryUnit::startWrite(const Tcu::Command::Bits& cmd)
 {
-    MemEp ep = tcu.regs().getMemEp(cmd.epid);
+    MemEp *ep = tcu.regs().getMemEp(cmd.epid);
 
-    if(ep.flags == 0 || ep.vpe != tcu.regs().getVPE())
+    if(!ep || ep->r0.vpe != tcu.regs().getVPE())
     {
         tcu.scheduleFinishOp(Cycles(1), TcuError::INV_EP);
         return;
     }
 
-    if(!(ep.flags & Tcu::MemoryFlags::WRITE))
+    if(!(ep->r0.flags & Tcu::MemoryFlags::WRITE))
     {
         tcu.scheduleFinishOp(Cycles(1), TcuError::NO_PERM);
         return;
@@ -207,7 +207,7 @@ MemoryUnit::startWrite(const Tcu::Command::Bits& cmd)
 
     DPRINTFS(Tcu, (&tcu),
         "\e[1m[wr -> %u]\e[0m at %#018lx+%#lx with EP%u from %#018lx:%lu\n",
-        ep.targetPe, ep.remoteAddr, offset,
+        ep->r0.targetPe, ep->r1.remoteAddr, offset,
         cmd.epid, data.addr, size);
 
     if(size == 0)
@@ -216,16 +216,16 @@ MemoryUnit::startWrite(const Tcu::Command::Bits& cmd)
         return;
     }
 
-    if(size + offset < size || size + offset > ep.remoteSize)
+    if(size + offset < size || size + offset > ep->r2.remoteSize)
     {
         tcu.scheduleFinishOp(Cycles(1), TcuError::INV_ARGS);
         return;
     }
 
-    NocAddr dest(ep.targetPe, ep.remoteAddr + offset);
+    NocAddr dest(ep->r0.targetPe, ep->r1.remoteAddr + offset);
 
     auto xfer = new WriteTransferEvent(
-        data.addr, size, ep.targetVpe, 0, dest);
+        data.addr, size, ep->r0.targetVpe, 0, dest);
     tcu.startTransfer(xfer, Cycles(0));
 }
 

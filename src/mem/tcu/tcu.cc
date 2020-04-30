@@ -583,8 +583,16 @@ Tcu::executeExtCommand(PacketPtr pkt)
 bool
 Tcu::has_message(epid_t ep)
 {
-    return (ep == 0xFFFF && regFile.messages() > 0) ||
-           (ep != 0xFFFF && regFile.getRecvEp(ep).unread != 0);
+    if (ep == 0xFFFF && regFile.messages() > 0)
+        return true;
+
+    if (ep != 0xFFFF)
+    {
+        RecvEp *rep = regFile.getRecvEp(ep);
+        if (rep && rep->r2.unread != 0)
+            return true;
+    }
+    return false;
 }
 
 bool

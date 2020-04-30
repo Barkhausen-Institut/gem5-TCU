@@ -52,8 +52,6 @@ enum class Features
     PRIV            = 1 << 0,
 };
 
-constexpr unsigned numTcuRegs = 4;
-
 // privileged registers (for kernel and PEMux)
 enum class PrivReg : Addr
 {
@@ -66,8 +64,6 @@ enum class PrivReg : Addr
     OLD_VPE,
 };
 
-constexpr unsigned numPrivRegs = 6;
-
 // registers to issue a command
 enum class CmdReg : Addr
 {
@@ -76,23 +72,10 @@ enum class CmdReg : Addr
     ARG1,
 };
 
+constexpr unsigned numTcuRegs = 4;
+constexpr unsigned numPrivRegs = 6;
 constexpr unsigned numCmdRegs = 3;
-
-// Ep Registers:
-//
-// 0. VPEID[16] | TYPE[3] (for all)
-//    receive: BUF_RD_POS[6] | BUF_WR_POS[6] | BUF_MSG_SIZE[6] | BUF_SIZE[6] | REPLY_EPS[16]
-//    send:    FLAGS[2] | CRD_EP[16] | MAX_MSG_SIZE[6] | MAXCRD[6] | CURCRD[6]
-//    mem:     TGT_VPE[16] | REQ_PEID[8] | FLAGS[4]
-// 1. receive: BUF_ADDR[64]
-//    send:    TGT_PEID[8] | TGT_EPID[16]
-//    mem:     REQ_MEM_ADDR[64]
-// 2. receive: BUF_UNREAD[32] | BUF_OCCUPIED[32]
-//    send:    LABEL[32]
-//    mem:     REQ_MEM_SIZE[64]
-//
 constexpr unsigned numEpRegs = 3;
-
 // buffer for prints (32 * 8 bytes)
 constexpr unsigned numBufRegs = 32;
 
@@ -117,79 +100,78 @@ enum class RegAccess
 
 class RegFile;
 
-struct Ep
-{
-    Ep() : vpe() {}
-
-    uint16_t vpe;
-};
-
-struct SendEp : public Ep
+struct SendEp
 {
     static const uint8_t FL_REPLY   = 1;
-
-    SendEp() : Ep(), flags(), targetPe(), targetEp(), crdEp(), maxcrd(), curcrd(),
-               maxMsgSize(), label()
-    {}
 
     void print(const RegFile &rf,
                epid_t epId,
                bool read,
                RegAccess access) const;
 
-    uint8_t flags;
-    uint8_t targetPe;
-    uint16_t targetEp;
-    uint16_t crdEp;
-    uint8_t maxcrd;
-    uint8_t curcrd;
-    uint8_t maxMsgSize;
-    uint32_t label;
+    BitUnion64(R0)
+        Bitfield<55, 53> flags;
+        Bitfield<52, 37> crdEp;
+        Bitfield<36, 31> maxMsgSize;
+        Bitfield<30, 25> maxcrd;
+        Bitfield<24, 19> curcrd;
+        Bitfield<18, 3> vpe;
+        Bitfield<2, 0> type;
+    EndBitUnion(R0)
+
+    BitUnion64(R1)
+        Bitfield<23, 16> targetPe;
+        Bitfield<15, 0> targetEp;
+    EndBitUnion(R1)
+
+    BitUnion64(R2)
+        Bitfield<31, 0> label;
+    EndBitUnion(R2)
+
+    R0 r0;
+    R1 r1;
+    R2 r2;
 };
 
-struct RecvEp : public Ep
+struct RecvEp
 {
     static const size_t MAX_MSGS    = 32;
 
-    RecvEp() : Ep(), rdPos(), wrPos(), bufAddr(), msgSize(), size(), replyEps(),
-               occupied(), unread()
-    {}
-
     int unreadMsgs() const
     {
-        return popCount(unread);
+        return popCount(r2.unread);
     }
 
     int offsetToIdx(Addr off) const
     {
-        if (msgSize == 0)
+        if (r0.msgSize == 0)
             return MAX_MSGS;
-        int idx = off >> msgSize;
+        int idx = off >> r0.msgSize;
         return (idx >= 0 && idx < MAX_MSGS) ? idx : MAX_MSGS;
     }
 
     bool isUnread(int idx) const
     {
-        return unread & (static_cast<uint32_t>(1) << idx);
+        return r2.unread & (static_cast<uint32_t>(1) << idx);
     }
     void setUnread(int idx, bool unr)
     {
         if (unr)
-            unread |= static_cast<uint32_t>(1) << idx;
+            r2.unread = r2.unread | (static_cast<uint32_t>(1) << idx);
         else
-            unread &= ~(static_cast<uint32_t>(1) << idx);
+            r2.unread = r2.unread & ~(static_cast<uint32_t>(1) << idx);
     }
 
     bool isOccupied(int idx) const
     {
-        return occupied & (static_cast<uint32_t>(1) << idx);
+        return r2.occupied & (static_cast<uint32_t>(1) << idx);
     }
     void setOccupied(int idx, bool occ)
     {
         if (occ)
-            occupied |= static_cast<uint32_t>(1) << idx;
+            r2.occupied = r2.occupied | (static_cast<uint32_t>(1) << idx);
         else
-            occupied &= ~(static_cast<uint32_t>(1) << idx);
+            r2.occupied = r2.occupied & ~(static_cast<uint32_t>(1) << idx);
     }
 
     void print(const RegFile &rf,
@@ -197,32 +179,86 @@ struct RecvEp : public Ep
                bool read,
                RegAccess access) const;
 
-    uint8_t rdPos;
-    uint8_t wrPos;
-    uint64_t bufAddr;
-    uint16_t msgSize;
-    uint16_t size;
-    uint16_t replyEps;
-    uint32_t occupied;
-    uint32_t unread;
+    BitUnion64(R0)
+        Bitfield<58, 53> rdPos;
+        Bitfield<52, 47> wrPos;
+        Bitfield<46, 41> msgSize;
+        Bitfield<40, 35> size;
+        Bitfield<34, 19> replyEps;
+        Bitfield<18, 3> vpe;
+        Bitfield<2, 0> type;
+    EndBitUnion(R0)
+
+    BitUnion64(R1)
+        Bitfield<63, 0> bufAddr;
+    EndBitUnion(R1)
+
+    BitUnion64(R2)
+        Bitfield<63, 32> unread;
+        Bitfield<31, 0> occupied;
+    EndBitUnion(R2)
+
+    R0 r0;
+    R1 r1;
+    R2 r2;
 };
 
-struct MemEp : public Ep
+struct MemEp
 {
-    MemEp() : Ep(), remoteAddr(), remoteSize(), targetVpe(),
-              targetPe(), flags()
-    {}
-
     void print(const RegFile &rf,
                epid_t epId,
                bool read,
                RegAccess access) const;
 
-    uint64_t remoteAddr;
-    uint64_t remoteSize;
-    uint16_t targetVpe;
-    uint8_t targetPe;
-    uint8_t flags;
+    BitUnion64(R0)
+        Bitfield<46, 31> targetVpe;
+        Bitfield<30, 23> targetPe;
+        Bitfield<22, 19> flags;
+        Bitfield<18, 3> vpe;
+        Bitfield<2, 0> type;
+    EndBitUnion(R0)
+
+    BitUnion64(R1)
+        Bitfield<63, 0> remoteAddr;
+    EndBitUnion(R1)
+
+    BitUnion64(R2)
+        Bitfield<63, 0> remoteSize;
+    EndBitUnion(R2)
+
+    R0 r0;
+    R1 r1;
+    R2 r2;
+};
+
+struct InvalidEp
+{
+    void print(const RegFile &rf,
+               epid_t epId,
+               bool read,
+               RegAccess access) const;
+
+    EpType type() const
+    {
+        return static_cast<EpType>(r[0] & 0x7);
+    }
+
+    uint64_t r[3];
+};
+
+union Ep
+{
+    explicit Ep() : inval({0, 0, 0}) {}
+
+    EpType type() const
+    {
+        return inval.type();
+    }
+
+    InvalidEp inval;
+    SendEp send;
+    RecvEp recv;
+    MemEp mem;
 };
 
 struct DataReg
@@ -310,7 +346,8 @@ class RegFile
 
     void set(CmdReg reg, reg_t value, RegAccess access = RegAccess::TCU);
 
-    reg_t getVPE() const {
+    reg_t getVPE() const
+    {
         return get(PrivReg::CUR_VPE) & 0xFFFF;
     }
 
@@ -326,15 +363,15 @@ class RegFile
         set(CmdReg::DATA, data.value());
     }
 
-    SendEp getSendEp(epid_t epId, bool print = true) const;
+    Ep *getEp(epid_t epId) { return &eps.at(epId); }
 
-    void setSendEp(epid_t epId, const SendEp &ep);
+    SendEp *getSendEp(epid_t epId, bool print = true);
 
-    RecvEp getRecvEp(epid_t epId, bool print = true) const;
+    RecvEp *getRecvEp(epid_t epId, bool print = true);
 
-    void setRecvEp(epid_t epId, const RecvEp &ep);
+    MemEp *getMemEp(epid_t epId, bool print = true);
 
-    MemEp getMemEp(epid_t epId, bool print = true) const;
+    void updateEp(epid_t epId);
 
     const char *getBuffer(size_t bytes);
 
@@ -349,9 +386,9 @@ class RegFile
 
     void set(epid_t epId, size_t idx, reg_t value);
 
-    EpType getEpType(epid_t epId) const;
+    Ep *getEp(epid_t epId, EpType type, bool print);
 
-    void printEpAccess(epid_t epId, bool read, bool cpu) const;
+    void printEpAccess(epid_t epId, bool read, RegAccess access) const;
 
     Addr getSize() const;
 
@@ -365,7 +402,7 @@ class RegFile
 
     std::vector<reg_t> cmdRegs;
 
-    std::vector<std::vector<reg_t>> epRegs;
+    std::vector<Ep> eps;
 
     std::vector<reg_t> bufRegs;
 

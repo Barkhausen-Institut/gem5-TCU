@@ -152,7 +152,7 @@ class MessageUnit
                               bool addMsg);
 
   private:
-    int allocSlot(size_t msgSize, epid_t epid, RecvEp &ep);
+    int allocSlot(size_t msgSize, epid_t epid, RecvEp *ep);
 
     void startXfer(const Tcu::Command::Bits& cmd);
 
