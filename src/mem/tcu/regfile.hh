@@ -72,12 +72,11 @@ constexpr unsigned numPrivRegs = 6;
 enum class CmdReg : Addr
 {
     COMMAND,
-    ABORT,
     DATA,
     ARG1,
 };
 
-constexpr unsigned numCmdRegs = 4;
+constexpr unsigned numCmdRegs = 3;
 
 // Ep Registers:
 //
@@ -276,10 +275,9 @@ class RegFile
         WROTE_CMD       = 1,
         WROTE_PRIV_CMD  = 2,
         WROTE_EXT_CMD   = 4,
-        WROTE_ABORT     = 8,
-        WROTE_CORE_REQ  = 16,
-        WROTE_CLEAR_IRQ = 32,
-        WROTE_PRINT     = 64,
+        WROTE_CORE_REQ  = 8,
+        WROTE_CLEAR_IRQ = 16,
+        WROTE_PRINT     = 32,
     };
 
     RegFile(Tcu &tcu, const std::string& name, unsigned numEndpoints);

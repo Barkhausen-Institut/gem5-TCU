@@ -103,12 +103,11 @@ TcuPciProxy::createTcuCmdPkt(Tcu::Command::Opcode cmd, unsigned epid,
     uint64_t data, uint64_t size, uint64_t arg0, uint64_t arg1)
 {
     static_assert(static_cast<int>(CmdReg::COMMAND) == 0, "");
-    static_assert(static_cast<int>(CmdReg::ABORT) == 1, "");
-    static_assert(static_cast<int>(CmdReg::DATA) == 2, "");
-    static_assert(static_cast<int>(CmdReg::ARG1) == 3, "");
+    static_assert(static_cast<int>(CmdReg::DATA) == 1, "");
+    static_assert(static_cast<int>(CmdReg::ARG1) == 2, "");
 
     auto pkt = createPacket(tcuRegBase + getRegAddr(CmdReg::COMMAND),
-        sizeof(RegFile::reg_t) * 4, MemCmd::WriteReq);
+        sizeof(RegFile::reg_t) * 3, MemCmd::WriteReq);
 
     Tcu::Command::Bits cmdreg = 0;
     cmdreg.opcode = static_cast<RegFile::reg_t>(cmd);
@@ -117,9 +116,8 @@ TcuPciProxy::createTcuCmdPkt(Tcu::Command::Opcode cmd, unsigned epid,
 
     RegFile::reg_t* regs = pkt->getPtr<RegFile::reg_t>();
     regs[0] = cmdreg;
-    regs[1] = 0;
-    regs[2] = DataReg(data, size).value();
-    regs[3] = arg1;
+    regs[1] = DataReg(data, size).value();
+    regs[2] = arg1;
     return pkt;
 }
 

@@ -66,6 +66,7 @@ static const char *privCmdNames[] =
     "XCHG_VPE",
     "FLUSH_CACHE",
     "SET_TIMER",
+    "ABORT_CMD",
 };
 
 static const char *extCmdNames[] =
@@ -75,10 +76,6 @@ static const char *extCmdNames[] =
     "INV_REPLY",
     "RESET",
 };
-
-// cmdId = 0 is reserved for "no command"
-// cmdId = 1 is reserved for a dummy command (waiting for remote xfers)
-uint64_t Tcu::nextCmdId = 2;
 
 Tcu::Tcu(TcuParams* p)
   : BaseTcu(p),
@@ -91,15 +88,13 @@ Tcu::Tcu(TcuParams* p)
     memUnit(new MemoryUnit(*this)),
     xferUnit(new XferUnit(*this, p->block_size, p->buf_count, p->buf_size)),
     coreReqs(*this, p->buf_count),
-    abortCommandEvent(*this),
     fireTimerEvent(*this),
     completeCoreReqEvent(coreReqs),
     cmdPkt(),
+    privCmdPkt(),
     cmdFinish(),
-    cmdId(0),
-    abortCmd(0),
-    cmdXferBuf(0),
-    cmdSent(),
+    abort(),
+    cmdIsRemote(),
     wakeupEp(0xFFFF),
     memPe(),
     memOffset(),
@@ -122,7 +117,7 @@ Tcu::Tcu(TcuParams* p)
     static_assert(sizeof(cmdNames) / sizeof(cmdNames[0]) ==
         Command::SLEEP + 1, "cmdNames out of sync");
     static_assert(sizeof(privCmdNames) / sizeof(privCmdNames[0]) ==
-        PrivCommand::SET_TIMER + 1, "privCmdNames out of sync");
+        PrivCommand::ABORT_CMD + 1, "privCmdNames out of sync");
     static_assert(sizeof(extCmdNames) / sizeof(extCmdNames[0]) ==
         ExtCommand::RESET + 1, "extCmdNames out of sync");
 
@@ -255,17 +250,13 @@ Tcu::executeCommand(PacketPtr pkt)
         return;
     }
 
-    assert(cmdId == 0);
-
+    assert(cmdPkt == nullptr);
     cmdPkt = pkt;
-    cmdId = nextCmdId++;
-    cmdSent = false;
     commands[static_cast<size_t>(cmd.opcode)]++;
 
     assert(cmd.epid < numEndpoints);
-    DPRINTF(TcuCmd, "Starting command %s with EP=%u, arg=%#lx (id=%llu)\n",
-            cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epid,
-            cmd.arg, cmdId);
+    DPRINTF(TcuCmd, "Starting command %s with EP=%u, arg=%#lx\n",
+            cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epid, cmd.arg);
 
     switch (cmd.opcode)
     {
@@ -314,42 +305,45 @@ void
 Tcu::abortCommand()
 {
     Command::Bits cmd = getCommand();
-    abortCmd = regs().get(CmdReg::ABORT);
 
-    if (cmd.opcode != Command::IDLE)
+    // if we've already scheduled finishCommand, consider the command done
+    if (!cmdFinish && cmd.opcode != Command::IDLE)
     {
-        DPRINTF(TcuCmd, "Aborting command %s with EP=%u, (id=%llu)\n",
-                cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epid, cmdId);
+        // if we are waiting for a NoC response, just wait until we receive it.
+        // we deem this acceptable, because these remotely running transfers
+        // never cause page faults and thus complete in short amounts of time.
+        if (cmdIsRemote)
+        {
+            // SEND/REPLY needs to finish successfully as soon as we've sent
+            // out the message.
+            if (cmd.opcode != Command::SEND && cmd.opcode != Command::REPLY)
+                abort = AbortType::REMOTE;
+        }
+        // otherwise, abort it locally. this is done for all commands, because
+        // all can cause page faults locally.
+        else
+        {
+            abort = AbortType::LOCAL;
+
+            auto res = xferUnit->tryAbortCommand();
+            // if the current command used the xferUnit, we're done
+            if (res == XferUnit::AbortResult::ABORTED)
+                scheduleFinishOp(Cycles(1), TcuError::ABORT);
+        }
+
+        if (abort != AbortType::NONE)
+        {
+            DPRINTF(TcuCmd, "Aborting command %s with EP=%u\n",
+                    cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epid);
+        }
     }
-
-    cmdXferBuf = -1;
-    xferUnit->abortTransfers(XferUnit::ABORT_LOCAL);
-
-    regs().set(CmdReg::ABORT, cmdXferBuf);
-
-    // if no command was running, let the SW wait until the currently received
-    // messages are finished
-    TcuError err = static_cast<TcuError>(static_cast<uint>(cmd.error));
-    if (cmd.opcode == Command::IDLE)
-        abortCmd = 0;
-    // reads/writes are aborted immediately
-    else if(cmd.opcode == Command::READ || cmd.opcode == Command::WRITE)
+    else
     {
-        cmdId = 0;
-        err = TcuError::ABORT;
+        abort = AbortType::NONE;
+        // don't do that if we'll do that in finishCommand event anyway
+        if (!cmdFinish)
+            finishAbort();
     }
-    // message sends are aborted, if they haven't been sent yet
-    else if (!cmdSent && (cmd.opcode == Command::SEND ||
-                          cmd.opcode == Command::REPLY))
-    {
-        err = TcuError::ABORT;
-    }
-
-    if (cmd.opcode == Command::IDLE ||
-        cmd.opcode == Command::READ ||
-        cmd.opcode == Command::WRITE ||
-        !cmdSent)
-        scheduleFinishOp(Cycles(1), err);
 }
 
 void
@@ -380,19 +374,6 @@ Tcu::finishCommand(TcuError error)
 
     cmdFinish = NULL;
 
-    if (abortCmd)
-    {
-        // try to abort everything
-        if (!xferUnit->abortTransfers(XferUnit::ABORT_LOCAL))
-        {
-            // okay, retry later
-            scheduleFinishOp(Cycles(1), error);
-            return;
-        }
-
-        abortCmd = 0;
-    }
-
     if (cmd.opcode == Command::SEND)
         msgUnit->finishMsgSend(error, cmd.epid);
     else if (cmd.opcode == Command::REPLY)
@@ -414,9 +395,9 @@ Tcu::finishCommand(TcuError error)
     if (cmdPkt || cmd.opcode == Command::SLEEP)
         stopSleep();
 
-    DPRINTF(TcuCmd, "Finished command %s with EP=%u, (id=%llu) -> %u\n",
+    DPRINTF(TcuCmd, "Finished command %s with EP=%u -> %u\n",
             cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epid,
-            cmdId, static_cast<uint>(error));
+            static_cast<uint>(error));
 
     // let the SW know that the command is finished
     cmd = 0;
@@ -426,9 +407,10 @@ Tcu::finishCommand(TcuError error)
 
     if (cmdPkt)
         schedCpuResponse(cmdPkt, clockEdge(Cycles(1)));
-
     cmdPkt = NULL;
-    cmdId = 0;
+
+    // finish command abortion, if there is any
+    finishAbort();
 }
 
 Tcu::PrivCommand
@@ -501,6 +483,13 @@ Tcu::executePrivCommand(PacketPtr pkt)
             }
             break;
         }
+        case PrivCommand::ABORT_CMD:
+        {
+            privCmdPkt = pkt;
+            pkt = nullptr;
+            abortCommand();
+            return;
+        }
         default:
             // TODO error handling
             panic("Invalid opcode %#x\n", static_cast<RegFile::reg_t>(cmd.opcode));
@@ -512,6 +501,29 @@ Tcu::executePrivCommand(PacketPtr pkt)
     // set privileged command back to IDLE
     regFile.set(PrivReg::PRIV_CMD,
         static_cast<RegFile::reg_t>(PrivCommand::IDLE));
+
+    DPRINTF(TcuCmd, "Finished privileged command %s with arg=0\n",
+            privCmdNames[static_cast<size_t>(cmd.opcode)]);
+}
+
+void
+Tcu::finishAbort()
+{
+    if (privCmdPkt != nullptr)
+    {
+        schedCpuResponse(privCmdPkt, clockEdge(Cycles(1)));
+        privCmdPkt = nullptr;
+
+        RegFile::reg_t arg = static_cast<RegFile::reg_t>(abort);
+        DPRINTF(TcuCmd, "Finished privileged command %s with arg=%d\n",
+                privCmdNames[static_cast<size_t>(getPrivCommand().opcode)],
+                arg);
+
+        RegFile::reg_t cmd = arg << 4;
+        cmd |= static_cast<RegFile::reg_t>(PrivCommand::IDLE);
+        regFile.set(PrivReg::PRIV_CMD, cmd);
+        abort = AbortType::NONE;
+    }
 }
 
 Tcu::ExtCommand
@@ -635,9 +647,6 @@ Tcu::reset(bool flushInval)
 {
     Cycles delay = flushInval ? flushInvalCaches(true) : Cycles(0);
 
-    // hard-abort everything
-    xferUnit->abortTransfers(XferUnit::ABORT_LOCAL | XferUnit::ABORT_MSGS);
-
     if (tlb())
         tlb()->clear();
 
@@ -727,8 +736,11 @@ Tcu::sendNocRequest(NocPacketType type,
     auto senderState = new NocSenderState();
     senderState->packetType = type;
     senderState->result = TcuError::NONE;
-    senderState->cmdId = cmdId;
     senderState->tvpe = tvpe;
+
+    if (type == NocPacketType::MESSAGE || type == NocPacketType::READ_REQ ||
+        type == NocPacketType::WRITE_REQ)
+        cmdIsRemote = true;
 
     pkt->pushSenderState(senderState);
 
@@ -842,10 +854,9 @@ Tcu::startForeignReceive(epid_t epId, vpeid_t vpeId)
 }
 
 void
-Tcu::abortTranslate(size_t xferId, size_t reqId)
+Tcu::abortTranslate(size_t reqId)
 {
     coreReqs.abortReq(reqId);
-    cmdXferBuf = xferId;
 }
 
 void
@@ -884,8 +895,12 @@ Tcu::completeNocRequest(PacketPtr pkt)
     }
     else if (senderState->packetType != NocPacketType::CACHE_MEM_REQ_FUNC)
     {
-        // ignore responses for aborted commands
-        if (senderState->cmdId == cmdId)
+        cmdIsRemote = false;
+        // if the current command should be aborted, just ignore the packet
+        // and finish the command
+        if (abort != AbortType::NONE)
+            scheduleFinishOp(Cycles(1), TcuError::ABORT);
+        else
         {
             if (pkt->isWrite())
                 memUnit->writeComplete(getCommand(), pkt, senderState->result);
@@ -893,11 +908,6 @@ Tcu::completeNocRequest(PacketPtr pkt)
                 memUnit->readComplete(getCommand(), pkt, senderState->result);
             else
                 panic("unexpected packet type\n");
-        }
-        else
-        {
-            DPRINTF(Tcu,"Ignoring response for cmdId=%llu (current=%llu)\n",
-                    senderState->cmdId, cmdId);
         }
     }
 
@@ -1132,8 +1142,6 @@ Tcu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
                 schedule(new ExecCmdEvent(*this, pkt), when);
             else if (result & RegFile::WROTE_PRIV_CMD)
                 schedule(new ExecPrivCmdEvent(*this, pkt), when);
-            else if (result & RegFile::WROTE_ABORT)
-                schedule(abortCommandEvent, when);
             else if (result & RegFile::WROTE_CORE_REQ)
                 schedule(completeCoreReqEvent, when);
             if (result & RegFile::WROTE_PRINT)
@@ -1152,8 +1160,6 @@ Tcu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
             executePrivCommand(NULL);
         if (result & RegFile::WROTE_EXT_CMD)
             executeExtCommand(NULL);
-        if (result & RegFile::WROTE_ABORT)
-            abortCommand();
         if (result & RegFile::WROTE_CORE_REQ)
             coreReqs.completeReqs();
         if (result & RegFile::WROTE_PRINT)

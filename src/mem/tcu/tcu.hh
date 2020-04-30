@@ -63,6 +63,13 @@ class Tcu : public BaseTcu
         REPLY_FLAG          = (1 << 0),
     };
 
+    enum class AbortType
+    {
+        NONE,
+        LOCAL,
+        REMOTE,
+    };
+
     enum class NocPacketType
     {
         MESSAGE,
@@ -83,7 +90,6 @@ class Tcu : public BaseTcu
         TcuError result;
         NocPacketType packetType;
         vpeid_t tvpe;
-        uint64_t cmdId;
     };
 
     struct InitSenderState : public Packet::SenderState
@@ -125,6 +131,7 @@ class Tcu : public BaseTcu
             XCHG_VPE        = 4,
             FLUSH_CACHE     = 5,
             SET_TIMER       = 6,
+            ABORT_CMD       = 7,
         };
 
         Opcode opcode;
@@ -206,8 +213,6 @@ class Tcu : public BaseTcu
 
     void sendNocResponse(PacketPtr pkt);
 
-    void setCommandSent() { cmdSent = true; }
-
     static Addr physToNoc(Addr phys);
     static Addr nocToPhys(Addr noc);
 
@@ -221,7 +226,12 @@ class Tcu : public BaseTcu
 
     size_t startForeignReceive(epid_t epId, vpeid_t vpeId);
 
-    void abortTranslate(size_t xferId, size_t reqId);
+    void abortTranslate(size_t reqId);
+
+    bool isCommandAborting() const
+    {
+        return abort != AbortType::NONE;
+    }
 
     void printPacket(PacketPtr pkt) const;
 
@@ -239,6 +249,8 @@ class Tcu : public BaseTcu
     PrivCommand getPrivCommand();
 
     void executePrivCommand(PacketPtr pkt);
+
+    void finishAbort();
 
     ExtCommand getExtCommand();
 
@@ -281,8 +293,6 @@ class Tcu : public BaseTcu
     XferUnit *xferUnit;
 
     CoreRequests coreReqs;
-
-    EventWrapper<Tcu, &Tcu::abortCommand> abortCommandEvent;
 
     EventWrapper<Tcu, &Tcu::fireTimer> fireTimerEvent;
 
@@ -368,11 +378,10 @@ class Tcu : public BaseTcu
     };
 
     PacketPtr cmdPkt;
+    PacketPtr privCmdPkt;
     FinishCommandEvent *cmdFinish;
-    uint64_t cmdId;
-    uint abortCmd;
-    size_t cmdXferBuf;
-    bool cmdSent;
+    AbortType abort;
+    bool cmdIsRemote;
     int wakeupEp;
 
   public:
@@ -422,8 +431,6 @@ class Tcu : public BaseTcu
     Stats::Vector commands;
     Stats::Vector privCommands;
     Stats::Vector extCommands;
-
-    static uint64_t nextCmdId;
 
 };
 

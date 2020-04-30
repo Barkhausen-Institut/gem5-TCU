@@ -252,7 +252,6 @@ MemoryUnit::WriteTransferEvent::transferDone(TcuError result)
         else
             pktType = Tcu::NocPacketType::WRITE_REQ;
 
-        tcu().setCommandSent();
         tcu().sendNocRequest(pktType, pkt, vpe, delay);
     }
 }

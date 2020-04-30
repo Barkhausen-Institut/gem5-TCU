@@ -35,8 +35,6 @@
 #include "mem/tcu/tcu.hh"
 #include "mem/tcu/xfer_unit.hh"
 
-uint64_t XferUnit::TransferEvent::nextId = 0;
-
 static const char *decodeFlags(uint flags)
 {
     static char buf[5];
@@ -110,7 +108,7 @@ XferUnit::regStats()
 void
 XferUnit::Translation::abort()
 {
-    event.xfer->tcu.abortTranslate(event.buf->id, event.coreReq);
+    event.xfer->tcu.abortTranslate(event.coreReq);
 }
 
 bool
@@ -158,6 +156,15 @@ XferUnit::TransferEvent::tryStart()
 void
 XferUnit::TransferEvent::start()
 {
+    // workaround for race condition: if the abort request was issued right
+    // after we've created the transfer, but before we've allocated a buffer,
+    // we missed the abort. so, check for the abort here again.
+    if (!isRemote() && xfer->tcu.isCommandAborting())
+    {
+        abort(TcuError::ABORT);
+        return;
+    }
+
     DPRINTFS(TcuXfers, (&xfer->tcu),
         "buf%d: Starting %s transfer of %lu bytes @ %p [flags=%s]\n",
         buf->id,
@@ -280,7 +287,8 @@ XferUnit::TransferEvent::translateDone(bool success, const NocAddr &phys)
             memcpy(pkt->getPtr<uint8_t>(), buf->bytes + buf->offset, reqSize);
         }
 
-        xfer->tcu.sendMemRequest(pkt, local, id | (buf->offset << 32), lat);
+        xfer->tcu.sendMemRequest(pkt, local,
+                                 buf->id | (buf->offset << 32), lat);
 
         // to next block
         local += reqSize;
@@ -293,24 +301,16 @@ XferUnit::TransferEvent::translateDone(bool success, const NocAddr &phys)
 }
 
 void
-XferUnit::recvMemResponse(uint64_t evId, PacketPtr pkt)
+XferUnit::recvMemResponse(uint64_t id_off, PacketPtr pkt)
 {
-    Buffer *buf = getBuffer(evId & 0xFFFFFFFF);
-    // ignore responses for aborted transfers
-    if (!buf || !buf->event)
-    {
-        DPRINTFS(TcuXfers, (&tcu),
-                 "buf%d: Ignoring mem response (buf=%#lx, event=%#lx)\n",
-                 (evId & 0xFFFFFFFF), buf, buf ? buf->event : nullptr);
-        return;
-    }
+    Addr offset = id_off >> 32;
+    Buffer *buf = bufs[id_off & 0xFFFFFFFF];
+    assert(buf != nullptr);
 
     if (pkt)
     {
         if (buf->event->isRead())
         {
-            Addr offset = evId >> 32;
-
             assert(offset + pkt->getSize() <= bufSize);
 
             memcpy(buf->bytes + offset,
@@ -323,7 +323,7 @@ XferUnit::recvMemResponse(uint64_t evId, PacketPtr pkt)
 
     DPRINTFS(TcuXfers, (&tcu),
              "buf%d: Received mem response for %#lx (rem=%#lx, slots=%d/%d)\n",
-             buf->id, (Addr)(evId >> 32), buf->event->remaining,
+             buf->id, offset, buf->event->remaining,
              buf->event->freeSlots, tcu.reqCount);
 
     continueTransfer(buf);
@@ -332,10 +332,9 @@ XferUnit::recvMemResponse(uint64_t evId, PacketPtr pkt)
 void
 XferUnit::continueTransfer(Buffer *buf)
 {
-    // transfer done?
-    if (buf->event->result != TcuError::NONE ||
-        (buf->event->remaining == 0 &&
-         buf->event->freeSlots == tcu.reqCount))
+    // transfer done or aborted, but all memory responses received?
+    if (buf->event->freeSlots == tcu.reqCount &&
+        (buf->event->result != TcuError::NONE || buf->event->remaining == 0))
     {
         buf->event->transferDone(buf->event->result);
 
@@ -358,13 +357,21 @@ XferUnit::continueTransfer(Buffer *buf)
             tcu.schedule(ev, tcu.clockEdge(Cycles(1)));
         }
     }
-    else if(buf->event->remaining > 0)
+    // continue if there was no error and there is something left to transfer
+    else if(buf->event->result == TcuError::NONE && buf->event->remaining > 0)
         buf->event->process();
 }
 
-void
+XferUnit::AbortResult
 XferUnit::TransferEvent::abort(TcuError error)
 {
+    // if there are pending memory responses, mark it as aborted, but continue
+    if (buf->event->freeSlots != xfer->tcu.reqCount)
+    {
+        buf->event->result = error;
+        return AbortResult::WAITING;
+    }
+
     DPRINTFS(TcuXfers, (&xfer->tcu),
         "buf%d: aborting transfer (%d)\n",
         buf->id,
@@ -384,7 +391,8 @@ XferUnit::TransferEvent::abort(TcuError error)
         xfer->tcu.deschedule(this);
 
     buf->event->remaining = 0;
-    xfer->recvMemResponse(id, NULL);
+    xfer->recvMemResponse(buf->id, NULL);
+    return AbortResult::ABORTED;
 }
 
 void
@@ -406,45 +414,16 @@ XferUnit::startTransfer(TransferEvent *event, Cycles delay)
         tcu.schedNocRequestFinished(tcu.clockEdge(Cycles(1)));
 }
 
-bool
-XferUnit::abortTransfers(uint types)
+XferUnit::AbortResult
+XferUnit::tryAbortCommand()
 {
-    bool rem = false;
-
     for (size_t i = 0; i < bufCount; ++i)
     {
         auto ev = bufs[i]->event;
-        if (!ev)
-            continue;
-
-        if (!ev->isRemote() && (types & ABORT_LOCAL))
-        {
-            // received messages are only aborted on reset
-            if (!(ev->flags() & XferFlags::MSGRECV) || (types & ABORT_MSGS))
-            {
-                ev->abort(TcuError::ABORT);
-                // by default, we auto-delete it, but in this case, we have to do
-                // that manually since it's not the current event
-                delete ev;
-            }
-            else
-                rem = true;
-        }
+        if (ev && !ev->isRemote())
+            return ev->abort(TcuError::ABORT);
     }
-
-    return !rem;
-}
-
-XferUnit::Buffer *
-XferUnit::getBuffer(uint64_t evId)
-{
-    for (size_t i = 0; i < bufCount; ++i)
-    {
-        if (bufs[i]->event && bufs[i]->event->id == evId)
-            return bufs[i];
-    }
-
-    return NULL;
+    return AbortResult::NONE;
 }
 
 XferUnit::Buffer*

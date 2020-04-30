@@ -114,6 +114,13 @@ class XferUnit
         REMOTE_READ
     };
 
+    enum class AbortResult
+    {
+        NONE,
+        WAITING,
+        ABORTED,
+    };
+
     class TransferEvent : public Event
     {
         friend class XferUnit;
@@ -124,7 +131,6 @@ class XferUnit
 
         Buffer *buf;
 
-        uint64_t id;
         Cycles startCycle;
         TransferType type;
         vpeid_t vpe;
@@ -144,7 +150,6 @@ class XferUnit
                       uint _flags = 0)
             : xfer(),
               buf(),
-              id(nextId++),
               startCycle(),
               type(_type),
               vpe(),
@@ -217,9 +222,7 @@ class XferUnit
 
         void translateDone(bool success, const NocAddr &phys);
 
-        void abort(TcuError error);
-
-        static uint64_t nextId;
+        AbortResult abort(TcuError error);
     };
 
     XferUnit(Tcu &_tcu, size_t _blockSize, size_t _bufCount, size_t _bufSize);
@@ -230,15 +233,13 @@ class XferUnit
 
     void startTransfer(TransferEvent *event, Cycles delay);
 
-    bool abortTransfers(uint types);
+    AbortResult tryAbortCommand();
 
     void recvMemResponse(uint64_t evId, PacketPtr pkt);
 
   private:
 
     void continueTransfer(Buffer *buf);
-
-    Buffer *getBuffer(uint64_t id);
 
     Buffer* allocateBuf(TransferEvent *event, uint flags);
 

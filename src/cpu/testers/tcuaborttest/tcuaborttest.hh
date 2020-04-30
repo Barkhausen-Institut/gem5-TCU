@@ -82,18 +82,16 @@ class TcuAbortTest : public ClockedObject
     {
         START,
         ABORT,
-        WAIT,
-        INVLPG_DATA,
-        INVLPG_CMD,
-        INVLPG_WAIT,
-        REPAIR_REP,
-        REPAIR_MSG,
+        WAIT_ABORT,
+        WAIT_CMD,
     };
 
     State state;
     SubState substate;
     uint testNo;
     uint delay;
+    uint abortType;
+    uint abortTypes;
 
     Tick abortStart;
 
@@ -119,8 +117,8 @@ class TcuAbortTest : public ClockedObject
                                unsigned ep,
                                Addr data,
                                Addr size,
-                               Addr arg,
-                               Addr off = 0);
+                               Addr arg0,
+                               Addr arg1 = 0);
 
     bool sendPkt(PacketPtr pkt);
 

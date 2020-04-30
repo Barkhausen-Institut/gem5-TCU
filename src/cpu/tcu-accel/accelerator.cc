@@ -188,12 +188,11 @@ TcuAccel::createTcuCmdPkt(Tcu::Command::Opcode cmd,
                           uint64_t offset)
 {
     static_assert(static_cast<int>(CmdReg::COMMAND) == 0, "");
-    static_assert(static_cast<int>(CmdReg::ABORT) == 1, "");
-    static_assert(static_cast<int>(CmdReg::DATA) == 2, "");
-    static_assert(static_cast<int>(CmdReg::ARG1) == 3, "");
+    static_assert(static_cast<int>(CmdReg::DATA) == 1, "");
+    static_assert(static_cast<int>(CmdReg::ARG1) == 2, "");
 
     auto pkt = createPacket(reg_base + getRegAddr(CmdReg::COMMAND),
-                            sizeof(RegFile::reg_t) * 4,
+                            sizeof(RegFile::reg_t) * 3,
                             MemCmd::WriteReq);
 
     Tcu::Command::Bits cmdreg = 0;
@@ -203,9 +202,8 @@ TcuAccel::createTcuCmdPkt(Tcu::Command::Opcode cmd,
 
     RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
     regs[0] = cmdreg;
-    regs[1] = 0;
-    regs[2] = DataReg(data, size).value();
-    regs[3] = offset;
+    regs[1] = DataReg(data, size).value();
+    regs[2] = offset;
     return pkt;
 }
 

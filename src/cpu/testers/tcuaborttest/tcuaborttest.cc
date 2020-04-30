@@ -34,17 +34,16 @@
 #include "mem/tcu/tcu.hh"
 #include "mem/tcu/regfile.hh"
 #include "sim/pe_memory.hh"
+#include "sim/sim_exit.hh"
 
-// start at 0x4000, because it is 1:1 mapped and we use the first 4 for PTs
-static const Addr TEMP_ADDR         = TcuTlb::PAGE_SIZE * 4;
-static const Addr DATA_ADDR         = TcuTlb::PAGE_SIZE * 5;
-static const Addr DEST_ADDR         = TcuTlb::PAGE_SIZE * 6;
-static const Addr RECV_ADDR         = TcuTlb::PAGE_SIZE * 7;
+static const Addr DATA_ADDR         = 0x1000;
+static const Addr DEST_ADDR         = 0x2000;
+static const Addr RECV_ADDR         = 0x3000;
 static const unsigned EP_MEM        = 0;
 static const unsigned EP_SEND       = 1;
 static const unsigned EP_RECV       = 2;
+static const unsigned EP_REPLY      = 3;
 static const unsigned TEST_COUNT    = 4;
-static const Tick MAX_ABORT_TIME    = 30000;
 
 static const char *stateNames[] =
 {
@@ -61,12 +60,23 @@ static const char *substateNames[] =
 {
     "START",
     "ABORT",
-    "WAIT",
-    "INVLPG_DATA",
-    "INVLPG_CMD",
-    "INVLPG_WAIT",
-    "REPAIR_REP",
-    "REPAIR_MSG",
+    "WAIT_ABORT",
+    "WAIT_CMD",
+};
+
+static const char *testNames[] =
+{
+    "WRITE",
+    "READ",
+    "SEND",
+    "REPLY",
+};
+
+static const char *abortNames[] =
+{
+    "NONE",
+    "LOCAL",
+    "REMOTE",
 };
 
 Addr
@@ -78,7 +88,8 @@ TcuAbortTest::getRegAddr(TcuReg reg)
 Addr
 TcuAbortTest::getRegAddr(PrivReg reg)
 {
-    return TcuTlb::PAGE_SIZE + static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
+    return TcuTlb::PAGE_SIZE * 2 +
+           static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
 }
 
 Addr
@@ -123,7 +134,9 @@ TcuAbortTest::TcuAbortTest(const TcuAbortTestParams *p)
     state(State::INIT_MEM),
     substate(SubState::START),
     testNo(0),
-    delay(1),
+    delay(0),
+    abortType(),
+    abortTypes(),
     abortStart(0),
     system(p->system),
     // TODO parameterize
@@ -218,28 +231,26 @@ TcuAbortTest::createCommandPkt(Tcu::Command::Opcode cmd,
                                unsigned ep,
                                Addr data,
                                Addr size,
-                               Addr arg,
-                               Addr off)
+                               Addr arg0,
+                               Addr arg1)
 {
     static_assert(static_cast<int>(CmdReg::COMMAND) == 0, "");
-    static_assert(static_cast<int>(CmdReg::ABORT) == 1, "");
-    static_assert(static_cast<int>(CmdReg::DATA) == 2, "");
-    static_assert(static_cast<int>(CmdReg::ARG1) == 3, "");
+    static_assert(static_cast<int>(CmdReg::DATA) == 1, "");
+    static_assert(static_cast<int>(CmdReg::ARG1) == 2, "");
 
     auto pkt = createPacket(reg_base + getRegAddr(CmdReg::COMMAND),
-                            sizeof(RegFile::reg_t) * 4,
+                            sizeof(RegFile::reg_t) * 3,
                             MemCmd::WriteReq);
 
     Tcu::Command::Bits cmdreg = 0;
     cmdreg.opcode = static_cast<RegFile::reg_t>(cmd);
     cmdreg.epid = ep;
-    cmdreg.arg = arg;
+    cmdreg.arg = arg0;
 
     RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
     regs[0] = cmdreg;
-    regs[1] = 0;
-    regs[2] = DataReg(data, size).value();
-    regs[3] = off;
+    regs[1] = DataReg(data, size).value();
+    regs[2] = arg1;
     return pkt;
 }
 
@@ -294,56 +305,57 @@ TcuAbortTest::completeRequest(PacketPtr pkt)
                         schedDelay = Cycles(delay);
                         break;
                     case SubState::ABORT:
-                        substate = SubState::WAIT;
+                        substate = SubState::WAIT_ABORT;
                         break;
-                    case SubState::WAIT:
+                    case SubState::WAIT_ABORT:
                     {
                         RegFile::reg_t reg = *pkt->getPtr<RegFile::reg_t>();
                         if ((reg & 0xF) == 0)
                         {
-                            if ((reg >> 13) == 0)
+                            abortType = reg >> 4;
+                            DPRINTF(TcuAbortTest,
+                                    "Command aborted as %#x\n", abortType);
+                            abortTypes |= 1 << abortType;
+                            substate = SubState::WAIT_CMD;
+                        }
+                        break;
+                    }
+                    case SubState::WAIT_CMD:
+                    {
+                        RegFile::reg_t reg = *pkt->getPtr<RegFile::reg_t>();
+                        if ((reg & 0xF) == 0)
+                        {
+                            if (((reg >> 20) & 0xF) == 0)
                             {
+                                auto all = 1 << uint(Tcu::AbortType::NONE) |
+                                           1 << uint(Tcu::AbortType::LOCAL);
+                                // messages are not remote aborted
+                                if (testNo < 2)
+                                    all |= 1 << uint(Tcu::AbortType::REMOTE);
+                                if (abortTypes != all)
+                                {
+                                    inform("! %s:%d  saw aborts %#x"
+                                           ", expected %#x FAILED\n",
+                                           __FUNCTION__, __LINE__,
+                                           abortTypes, all);
+                                }
+
+                                abortTypes = 0;
+
                                 if (++testNo == TEST_COUNT)
                                     state = State::STOP;
                                 else
                                 {
                                     delay = 0;
-                                    substate = SubState::INVLPG_DATA;
+                                    substate = SubState::START;
                                 }
                             }
                             else
-                                substate = SubState::INVLPG_DATA;
-                        }
-                        break;
-                    }
-
-                    case SubState::INVLPG_DATA:
-                        substate = SubState::INVLPG_CMD;
-                        break;
-                    case SubState::INVLPG_CMD:
-                        substate = SubState::INVLPG_WAIT;
-                        break;
-                    case SubState::INVLPG_WAIT:
-                    {
-                        RegFile::reg_t reg = *pkt->getPtr<RegFile::reg_t>();
-                        if ((reg & 0xF) == 0)
-                        {
-                            delay++;
-                            if (testNo == 3)
-                                substate = SubState::REPAIR_REP;
-                            else
+                            {
+                                delay++;
                                 substate = SubState::START;
+                            }
                         }
-                        break;
-                    }
-                    case SubState::REPAIR_REP:
-                    {
-                        substate = SubState::REPAIR_MSG;
-                        break;
-                    }
-                    case SubState::REPAIR_MSG:
-                    {
-                        substate = SubState::START;
                         break;
                     }
                 }
@@ -387,12 +399,19 @@ TcuAbortTest::tick()
                                MemCmd::WriteReq);
 
             RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
-            regs[0] = (static_cast<RegFile::reg_t>(EpType::MEMORY) << 61) |
-                      0xFFFFFFFF;                   // size
-            regs[1] = 0x0;                          // base address
-            regs[2] = (Tcu::INVALID_VPE_ID << 12) | // vpe id
-                      (id << 4) |                   // core id
-                      (0x7 << 0);                   // access
+            regs[0] = static_cast<RegFile::reg_t>(EpType::MEMORY) |
+                      // our VPE
+                      static_cast<RegFile::reg_t>(Tcu::INVALID_VPE_ID) << 3 |
+                      // permissions
+                      static_cast<RegFile::reg_t>(0x3) << 19 |
+                      // target PE
+                      static_cast<RegFile::reg_t>(id) << 23 |
+                      // target VPE
+                      static_cast<RegFile::reg_t>(Tcu::INVALID_VPE_ID) << 31;
+                      // base address
+            regs[1] = 0x0;
+                      // size
+            regs[2] = 0xFFFFFFFFFFFFFFFF;
             break;
         }
 
@@ -403,14 +422,21 @@ TcuAbortTest::tick()
                                MemCmd::WriteReq);
 
             RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
-            regs[0] = (static_cast<RegFile::reg_t>(EpType::SEND) << 61) |
-                      (static_cast<RegFile::reg_t>(Tcu::INVALID_VPE_ID) << 16) |
-                      (256 << 0);                                               // max msg size
-            regs[1] = (static_cast<RegFile::reg_t>(id) << 40) |                 // target core
-                      (static_cast<RegFile::reg_t>(EP_RECV) << 32) |            // target EP
-                      (static_cast<RegFile::reg_t>(Tcu::CREDITS_UNLIM) << 16) | // max credits
-                      (Tcu::CREDITS_UNLIM << 0);                                // cur credits
-            regs[2] = 0;                                                        // label
+            regs[0] = static_cast<RegFile::reg_t>(EpType::SEND) |
+                      // our VPE
+                      static_cast<RegFile::reg_t>(Tcu::INVALID_VPE_ID) << 3 |
+                      // cur credits
+                      static_cast<RegFile::reg_t>(Tcu::CREDITS_UNLIM) << 19 |
+                      // max credits
+                      static_cast<RegFile::reg_t>(Tcu::CREDITS_UNLIM) << 25 |
+                      // message order
+                      static_cast<RegFile::reg_t>(10) << 31;
+                      // target PE
+            regs[1] = (static_cast<RegFile::reg_t>(id) << 16) |
+                      // target EP
+                      (static_cast<RegFile::reg_t>(EP_RECV) << 0);
+                      // label
+            regs[2] = 0;
             break;
         }
 
@@ -421,12 +447,19 @@ TcuAbortTest::tick()
                                MemCmd::WriteReq);
 
             RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
-            regs[0] = (static_cast<RegFile::reg_t>(EpType::RECEIVE) << 61) |
-                      (static_cast<RegFile::reg_t>(256) << 32) | // max msg size
-                      (4 << 16) |                   // size
-                      (0 << 0);                     // msg count
-            regs[1] = RECV_ADDR;                    // buf addr
-            regs[2] = 0;                            // occupied + unread
+            regs[0] = static_cast<RegFile::reg_t>(EpType::RECEIVE) |
+                      // our VPE
+                      static_cast<RegFile::reg_t>(Tcu::INVALID_VPE_ID) << 3 |
+                      // reply EPs
+                      static_cast<RegFile::reg_t>(EP_REPLY) << 19 |
+                      // buf size
+                      static_cast<RegFile::reg_t>(10) << 35 |
+                      // msg size
+                      static_cast<RegFile::reg_t>(10) << 41;
+                      // buf addr
+            regs[1] = RECV_ADDR;
+                      // occupied + unread
+            regs[2] = 0;
             break;
         }
 
@@ -436,12 +469,18 @@ TcuAbortTest::tick()
             {
                 case SubState::START:
                 {
+                    if (delay == 0)
+                    {
+                        inform("Testing \"abort %s\" in %s:%d\n",
+                            testNames[testNo], __FUNCTION__, __LINE__);
+                    }
+
                     if (testNo == 0)
                     {
                         pkt = createCommandPkt(Tcu::Command::WRITE,
                                                EP_MEM,
                                                DATA_ADDR,
-                                               system->cacheLineSize() * 2,
+                                               system->cacheLineSize() * 8,
                                                DEST_ADDR);
                     }
                     else if (testNo == 1)
@@ -449,116 +488,54 @@ TcuAbortTest::tick()
                         pkt = createCommandPkt(Tcu::Command::READ,
                                                EP_MEM,
                                                DATA_ADDR,
-                                               system->cacheLineSize() * 2,
+                                               system->cacheLineSize() * 8,
                                                DEST_ADDR);
                     }
                     else if (testNo == 2)
                     {
-                        // since we are privileged, we have to specify the
-                        // source of the message in OFFSET
-                        uint64_t off =
-                            (0 << 0) |                              // sender core
-                            (Tcu::INVALID_VPE_ID << 8) |            // sender VPE
-                            (EP_SEND << 24) |                       // sender EP
-                            (static_cast<uint64_t>(EP_RECV) << 32); // reply EP
-
                         pkt = createCommandPkt(Tcu::Command::SEND,
                                                EP_SEND,
                                                DATA_ADDR,
-                                               system->cacheLineSize() * 2,
+                                               system->cacheLineSize() * 8,
                                                EP_RECV,
-                                               off);
+                                               0);
                     }
                     else if (testNo == 3)
                     {
                         pkt = createCommandPkt(Tcu::Command::REPLY,
                                                EP_RECV,
                                                DATA_ADDR,
-                                               system->cacheLineSize() * 2,
-                                               RECV_ADDR);
+                                               system->cacheLineSize() * 8,
+                                               0);
                     }
                     break;
                 }
 
                 case SubState::ABORT:
                 {
-                    Addr regAddr = getRegAddr(CmdReg::ABORT);
+                    Addr regAddr = getRegAddr(PrivReg::PRIV_CMD);
                     pkt = createTcuRegisterPkt(regAddr,
-                                               1,
+                                               Tcu::PrivCommand::ABORT_CMD,
                                                MemCmd::WriteReq);
                     abortStart = curTick();
                     break;
                 }
 
-                case SubState::WAIT:
+                case SubState::WAIT_ABORT:
                 {
-                    Addr regAddr = getRegAddr(CmdReg::COMMAND);
+                    Addr regAddr = getRegAddr(PrivReg::PRIV_CMD);
                     pkt = createTcuRegisterPkt(regAddr, 0, MemCmd::ReadReq);
                     break;
                 }
 
-                case SubState::INVLPG_DATA:
+                case SubState::WAIT_CMD:
                 {
-                    if (curTick() - abortStart > MAX_ABORT_TIME)
-                    {
-                        warn("Abort %u of test %u took %lu ticks\n",
-                            delay, testNo, curTick() - abortStart);
-                    }
+                    inform("  Abort %u of %s took %lu ticks (%s)\n",
+                        delay, testNames[testNo], curTick() - abortStart,
+                        abortNames[abortType]);
 
-                    pkt = createPacket(TEMP_ADDR,
-                                       sizeof(RegFile::reg_t),
-                                       MemCmd::WriteReq);
-
-                    RegFile::reg_t cmd = DATA_ADDR << 3;
-                    cmd += static_cast<RegFile::reg_t>(Tcu::PrivCommand::INV_TLB);
-                    *pkt->getPtr<RegFile::reg_t>() = cmd;
-                    break;
-                }
-
-                case SubState::INVLPG_CMD:
-                {
-                    Addr off = reg_base + getRegAddr(PrivReg::PRIV_CMD);
-                    pkt = createCommandPkt(Tcu::Command::WRITE,
-                                           EP_MEM,
-                                           TEMP_ADDR,
-                                           sizeof(RegFile::reg_t),
-                                           off);
-                    break;
-                }
-
-                case SubState::INVLPG_WAIT:
-                {
                     Addr regAddr = getRegAddr(CmdReg::COMMAND);
                     pkt = createTcuRegisterPkt(regAddr, 0, MemCmd::ReadReq);
-                    break;
-                }
-
-                case SubState::REPAIR_REP:
-                {
-                    pkt = createPacket(reg_base + getRegAddr(0, EP_RECV),
-                                       sizeof(RegFile::reg_t) * numEpRegs,
-                                       MemCmd::WriteReq);
-
-                    // mark the message as occupied again, to be able to reply again
-                    // TODO actually, we need to FETCH the message first, which
-                    // would make it read; we simply set it read here
-                    RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
-                    regs[0] = (static_cast<RegFile::reg_t>(EpType::RECEIVE) << 61) |
-                              (static_cast<RegFile::reg_t>(256) << 32) | // max msg size
-                              (4 << 16) |                   // size
-                              (0 << 0);                     // msg count
-                    regs[1] = RECV_ADDR;                    // buf addr
-                    regs[2] = 0x0000000000000001;           // occupied + unread
-                    break;
-                }
-
-                case SubState::REPAIR_MSG:
-                {
-                    pkt = createPacket(RECV_ADDR, 1, MemCmd::WriteReq);
-
-                    // re-enable replies for the message
-                    // uint8_t *header = pkt->getPtr<uint8_t>();
-                    // *header = Tcu::REPLY_ENABLED;
                     break;
                 }
             }
@@ -567,8 +544,10 @@ TcuAbortTest::tick()
 
         case State::STOP:
         {
-            exit_message(::Logger::getInfo(), "Test done");
-            break;
+            Tick when = curTick() + SimClock::Int::ns;
+            inform("[kernel  @0] Shutting down\n");
+            exitSimLoop("All tests done", 0, when, 0, false);
+            return;
         }
     }
 
