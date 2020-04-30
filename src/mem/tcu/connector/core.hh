@@ -40,6 +40,11 @@ class CoreConnector : public BaseConnector
 
     CoreConnector(const CoreConnectorParams *p);
 
+    virtual bool canSuspendCmds()
+    {
+        return true;
+    }
+
     void wakeup() override;
 
     void suspend() override;
