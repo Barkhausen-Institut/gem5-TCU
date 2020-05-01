@@ -349,6 +349,26 @@ BitUnion64(VPEState)
     Bitfield<15, 0> id;
 EndBitUnion(VPEState)
 
+BitUnion64(XlateCoreReq)
+    Bitfield<0> type;
+    Bitfield<1> canPf;
+    Bitfield<3, 2> access;
+    Bitfield<47, 12> virt;
+    Bitfield<63, 48> vpe;
+EndBitUnion(XlateCoreReq)
+
+BitUnion64(XlateCoreResp)
+    Bitfield<4, 0> flags;
+    Bitfield<63, 12> smallPhys;
+    Bitfield<63, 21> largePhys;
+EndBitUnion(XlateCoreResp)
+
+BitUnion64(ForeignCoreReq)
+    Bitfield<0> type;
+    Bitfield<16, 1> ep;
+    Bitfield<63, 48> vpe;
+EndBitUnion(ForeignCoreReq)
+
 struct MessageHeader
 {
     uint8_t flags : 2,

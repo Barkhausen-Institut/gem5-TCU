@@ -62,7 +62,7 @@ size_t
 CoreRequests::startTranslate(vpeid_t vpeId,
                              Addr virt,
                              uint access,
-                             bool can_pf,
+                             bool canPf,
                              XferUnit::Translation *trans)
 {
     size_t id = nextId();
@@ -72,12 +72,12 @@ CoreRequests::startTranslate(vpeid_t vpeId,
     req->virt = virt;
     req->vpeId = vpeId;
     req->access = access;
-    req->can_pf = can_pf;
+    req->canPf = canPf;
     reqs.push_back(req);
 
     DPRINTFS(TcuCoreReqs, (&tcu),
         "CoreRequest[%lu]: translate(vpeId=%#x, addr=%p, acc=%#x pf=%d)\n",
-        id, vpeId, virt, access, can_pf);
+        id, vpeId, virt, access, canPf);
     coreReqs++;
 
     if(reqs.size() == 1)
@@ -120,11 +120,13 @@ CoreRequests::Request::start()
 void
 CoreRequests::XlateRequest::start()
 {
-    const Addr mask = TcuTlb::PAGE_MASK;
-    const Addr virtPage = virt & ~mask;
-    const Addr val = (static_cast<Addr>(vpeId) << 48) | virtPage |
-                     (access << 2) | (can_pf << 1);
-    req.tcu.regs().set(PrivReg::CORE_REQ, val);
+    XlateCoreReq xreq = 0;
+    xreq.type = type;
+    xreq.canPf = canPf;
+    xreq.virt = virt >> TcuTlb::PAGE_BITS;
+    xreq.vpe = vpeId;
+    xreq.access = access;
+    req.tcu.regs().set(PrivReg::CORE_REQ, xreq);
     waiting = false;
 
     Request::start();
@@ -133,9 +135,11 @@ CoreRequests::XlateRequest::start()
 void
 CoreRequests::ForeignRecvRequest::start()
 {
-    auto val = (static_cast<RegFile::reg_t>(epId) << 28) |
-               (vpeId << 12) | 1;
-    req.tcu.regs().set(PrivReg::CORE_REQ, val);
+    ForeignCoreReq freq = 0;
+    freq.type = type;
+    freq.ep = epId;
+    freq.vpe = vpeId;
+    req.tcu.regs().set(PrivReg::CORE_REQ, freq);
     waiting = false;
 
     Request::start();
@@ -144,11 +148,16 @@ CoreRequests::ForeignRecvRequest::start()
 void
 CoreRequests::XlateRequest::complete(RegFile::reg_t resp)
 {
-    Addr mask = (resp & TcuTlb::LARGE) ? TcuTlb::LPAGE_MASK
-                                       : TcuTlb::PAGE_MASK;
+    XlateCoreResp xresp(resp);
+    Addr base = (xresp.flags & TcuTlb::LARGE) ?
+                (xresp.largePhys << TcuTlb::LPAGE_BITS) :
+                (xresp.smallPhys << TcuTlb::PAGE_BITS);
+    Addr off = (xresp.flags & TcuTlb::LARGE) ?
+               (virt & TcuTlb::LPAGE_MASK) :
+               (virt & TcuTlb::PAGE_MASK);
 
-    NocAddr phys((resp & ~mask) | (virt & mask));
-    uint flags = resp & (TcuTlb::RWX | TcuTlb::LARGE | TcuTlb::FIXED);
+    NocAddr phys(base + off);
+    uint flags = xresp.flags & (TcuTlb::RWX | TcuTlb::LARGE | TcuTlb::FIXED);
     if (flags == 0)
     {
         trans->finished(false, phys);
