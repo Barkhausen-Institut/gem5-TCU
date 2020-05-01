@@ -390,20 +390,19 @@ TcuAbortTest::tick()
                                sizeof(RegFile::reg_t) * numEpRegs,
                                MemCmd::WriteReq);
 
+            MemEp ep = {0, 0, 0};
+            ep.r0.type = static_cast<RegFile::reg_t>(EpType::MEMORY);
+            ep.r0.vpe = Tcu::INVALID_VPE_ID;
+            ep.r0.flags = Tcu::MemoryFlags::READ | Tcu::MemoryFlags::WRITE;
+            ep.r0.targetPe = id;
+            ep.r0.targetVpe = Tcu::INVALID_VPE_ID;
+            ep.r1.remoteAddr = 0;
+            ep.r2.remoteSize = 0xFFFFFFFFFFFFFFFF;
+
             RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
-            regs[0] = static_cast<RegFile::reg_t>(EpType::MEMORY) |
-                      // our VPE
-                      static_cast<RegFile::reg_t>(Tcu::INVALID_VPE_ID) << 3 |
-                      // permissions
-                      static_cast<RegFile::reg_t>(0x3) << 19 |
-                      // target PE
-                      static_cast<RegFile::reg_t>(id) << 23 |
-                      // target VPE
-                      static_cast<RegFile::reg_t>(Tcu::INVALID_VPE_ID) << 31;
-                      // base address
-            regs[1] = 0x0;
-                      // size
-            regs[2] = 0xFFFFFFFFFFFFFFFF;
+            regs[0] = ep.r0;
+            regs[1] = ep.r1;
+            regs[2] = ep.r2;
             break;
         }
 
@@ -413,22 +412,20 @@ TcuAbortTest::tick()
                                sizeof(RegFile::reg_t) * numEpRegs,
                                MemCmd::WriteReq);
 
+            SendEp ep = {0, 0, 0};
+            ep.r0.type = static_cast<RegFile::reg_t>(EpType::SEND);
+            ep.r0.vpe = Tcu::INVALID_VPE_ID;
+            ep.r0.curcrd = Tcu::CREDITS_UNLIM;
+            ep.r0.maxcrd = Tcu::CREDITS_UNLIM;
+            ep.r0.maxMsgSize = 10;
+            ep.r1.targetPe = id;
+            ep.r1.targetEp = EP_RECV;
+            ep.r2.label = 0;
+
             RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
-            regs[0] = static_cast<RegFile::reg_t>(EpType::SEND) |
-                      // our VPE
-                      static_cast<RegFile::reg_t>(Tcu::INVALID_VPE_ID) << 3 |
-                      // cur credits
-                      static_cast<RegFile::reg_t>(Tcu::CREDITS_UNLIM) << 19 |
-                      // max credits
-                      static_cast<RegFile::reg_t>(Tcu::CREDITS_UNLIM) << 25 |
-                      // message order
-                      static_cast<RegFile::reg_t>(10) << 31;
-                      // target PE
-            regs[1] = (static_cast<RegFile::reg_t>(id) << 16) |
-                      // target EP
-                      (static_cast<RegFile::reg_t>(EP_RECV) << 0);
-                      // label
-            regs[2] = 0;
+            regs[0] = ep.r0;
+            regs[1] = ep.r1;
+            regs[2] = ep.r2;
             break;
         }
 
@@ -438,20 +435,20 @@ TcuAbortTest::tick()
                                sizeof(RegFile::reg_t) * numEpRegs,
                                MemCmd::WriteReq);
 
+            RecvEp ep = {0, 0, 0};
+            ep.r0.type = static_cast<RegFile::reg_t>(EpType::RECEIVE);
+            ep.r0.vpe = Tcu::INVALID_VPE_ID;
+            ep.r0.replyEps = EP_REPLY;
+            ep.r0.size = 10;
+            ep.r0.msgSize = 10;
+            ep.r1.bufAddr = RECV_ADDR;
+            ep.r2.unread = 0;
+            ep.r2.occupied = 0;
+
             RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
-            regs[0] = static_cast<RegFile::reg_t>(EpType::RECEIVE) |
-                      // our VPE
-                      static_cast<RegFile::reg_t>(Tcu::INVALID_VPE_ID) << 3 |
-                      // reply EPs
-                      static_cast<RegFile::reg_t>(EP_REPLY) << 19 |
-                      // buf size
-                      static_cast<RegFile::reg_t>(10) << 35 |
-                      // msg size
-                      static_cast<RegFile::reg_t>(10) << 41;
-                      // buf addr
-            regs[1] = RECV_ADDR;
-                      // occupied + unread
-            regs[2] = 0;
+            regs[0] = ep.r0;
+            regs[1] = ep.r1;
+            regs[2] = ep.r2;
             break;
         }
 
