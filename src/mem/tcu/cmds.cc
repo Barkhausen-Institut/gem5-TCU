@@ -177,9 +177,11 @@ TcuCommands::executeCommand(PacketPtr pkt)
             break;
         case CmdCommand::FETCH_MSG:
         {
-            Addr offset = tcu.msgUnit->fetchMessage(cmd.epid);
-            tcu.regs().set(CmdReg::ARG1, offset);
-            finishCommand(TcuError::NONE);
+            Addr offset;
+            TcuError res = tcu.msgUnit->fetchMessage(cmd.epid, &offset);
+            if (res == TcuError::NONE)
+                tcu.regs().set(CmdReg::ARG1, offset);
+            finishCommand(res);
         }
         break;
         case CmdCommand::ACK_MSG:

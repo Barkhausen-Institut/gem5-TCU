@@ -300,18 +300,21 @@ MessageUnit::recvCredits(epid_t epid)
     }
 }
 
-Addr
-MessageUnit::fetchMessage(epid_t epid)
+TcuError
+MessageUnit::fetchMessage(epid_t epid, Addr *msgOff)
 {
     RecvEp *ep = tcu.regs().getRecvEp(epid);
+    if (!ep || ep->r0.vpe != tcu.regs().getVPE())
+        return TcuError::INV_EP;
 
-    if (!ep || ep->r2.unread == 0 || ep->r0.vpe != tcu.regs().getVPE())
-        return -1;
     // check if the current VPE has unread messages at all. note that this is
     // important in case it is out of sync with the receive EPs, i.e., if we
     // have ongoing foreignRecv core requests.
-    if (tcu.regs().messages() == 0)
-        return -1;
+    if (ep->r2.unread == 0 || tcu.regs().messages() == 0)
+    {
+        *msgOff = -1;
+        return TcuError::NONE;
+    }
 
     int i;
     for (i = ep->r0.rdPos; i < (1 << ep->r0.size); ++i)
@@ -341,7 +344,8 @@ found:
     tcu.regs().updateEp(epid);
     tcu.regs().rem_msg();
 
-    return i << ep->r0.msgSize;
+    *msgOff = i << ep->r0.msgSize;
+    return TcuError::NONE;
 }
 
 int

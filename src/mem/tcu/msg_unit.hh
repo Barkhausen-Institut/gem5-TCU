@@ -126,9 +126,9 @@ class MessageUnit
     void recvCredits(epid_t epid);
 
     /**
-     * Fetches the next message and returns the message offset or 0
+     * Fetches the next message and sets *msgOff to the message offset or -1
      */
-    Addr fetchMessage(epid_t epid);
+    TcuError fetchMessage(epid_t epid, Addr *msgOff);
 
     /**
      * Acknowledges the message @ <msgOff> within the receive buffer
