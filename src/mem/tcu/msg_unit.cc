@@ -66,14 +66,14 @@ MessageUnit::regStats()
 }
 
 void
-MessageUnit::startTransmission(const Tcu::Command::Bits& cmd)
+MessageUnit::startTransmission(const CmdCommand::Bits& cmd)
 {
     epid_t epid = cmd.epid;
 
     info.sepId = Tcu::INVALID_EP_ID;
 
     // if we want to reply, load the reply EP first
-    if (cmd.opcode == Tcu::Command::REPLY)
+    if (cmd.opcode == CmdCommand::REPLY)
     {
         RecvEp *ep = tcu.regs().getRecvEp(epid);
 
@@ -121,11 +121,11 @@ MessageUnit::startTransmission(const Tcu::Command::Bits& cmd)
         info.replySize = ceil(log2(sizeof(MessageHeader)));
     }
 
-    const DataReg data = tcu.regs().getDataReg();
+    const CmdData::Bits data = tcu.regs().getData();
     SendEp *ep = tcu.regs().getSendEp(epid);
 
     // get info from reply EP
-    if (cmd.opcode == Tcu::Command::SEND && cmd.arg != Tcu::INVALID_EP_ID)
+    if (cmd.opcode == CmdCommand::SEND && cmd.arg != Tcu::INVALID_EP_ID)
     {
         RecvEp *rep = tcu.regs().getRecvEp(cmd.arg);
         if (!rep || rep->r0.vpe != tcu.regs().getVPE())
@@ -141,7 +141,7 @@ MessageUnit::startTransmission(const Tcu::Command::Bits& cmd)
 
     // check if the send EP is valid
     if (!ep || ep->r0.vpe != tcu.regs().getVPE() ||
-        (cmd.opcode == Tcu::Command::SEND && ep->r0.flags != 0))
+        (cmd.opcode == CmdCommand::SEND && ep->r0.flags != 0))
     {
         DPRINTFS(Tcu, (&tcu), "EP%u: invalid EP\n", epid);
         tcu.scheduleFinishOp(Cycles(1), TcuError::INV_EP);
@@ -188,19 +188,19 @@ MessageUnit::startTransmission(const Tcu::Command::Bits& cmd)
 }
 
 void
-MessageUnit::startXfer(const Tcu::Command::Bits& cmd)
+MessageUnit::startXfer(const CmdCommand::Bits& cmd)
 {
     assert(info.ready);
 
-    const DataReg data = tcu.regs().getDataReg();
+    const CmdData::Bits data = tcu.regs().getData();
 
-    if (cmd.opcode == Tcu::Command::REPLY)
+    if (cmd.opcode == CmdCommand::REPLY)
         repliedBytes.sample(data.size);
     else
         sentBytes.sample(data.size);
 
     DPRINTFS(Tcu, (&tcu), "\e[1m[%s -> %u]\e[0m with EP%u of %#018lx:%lu\n",
-             cmd.opcode == Tcu::Command::REPLY ? "rp" : "sd",
+             cmd.opcode == CmdCommand::REPLY ? "rp" : "sd",
              info.targetPeId,
              cmd.epid,
              data.addr,
@@ -208,7 +208,7 @@ MessageUnit::startXfer(const Tcu::Command::Bits& cmd)
 
     MessageHeader* header = new MessageHeader;
 
-    if (cmd.opcode == Tcu::Command::REPLY)
+    if (cmd.opcode == CmdCommand::REPLY)
         header->flags = Tcu::REPLY_FLAG;
     else
         header->flags = 0; // normal message

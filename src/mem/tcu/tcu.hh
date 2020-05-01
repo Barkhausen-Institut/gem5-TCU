@@ -96,65 +96,6 @@ class Tcu : public BaseTcu
     {
     };
 
-    struct Command
-    {
-        enum Opcode
-        {
-            IDLE            = 0,
-            SEND            = 1,
-            REPLY           = 2,
-            READ            = 3,
-            WRITE           = 4,
-            FETCH_MSG       = 5,
-            ACK_MSG         = 6,
-            SLEEP           = 7,
-        };
-
-        BitUnion64(Bits)
-            Bitfield<56, 24> arg;
-            Bitfield<23, 20> error;
-            Bitfield<19, 4> epid;
-            Bitfield<3, 0> opcode;
-        EndBitUnion(Bits)
-    };
-
-    struct PrivCommand
-    {
-        enum Opcode
-        {
-            IDLE            = 0,
-            INV_PAGE        = 1,
-            INV_TLB         = 2,
-            INS_TLB         = 3,
-            XCHG_VPE        = 4,
-            FLUSH_CACHE     = 5,
-            SET_TIMER       = 6,
-            ABORT_CMD       = 7,
-        };
-
-        BitUnion64(Bits)
-            Bitfield<64, 4> arg;
-            Bitfield<3, 0> opcode;
-        EndBitUnion(Bits)
-    };
-
-    struct ExtCommand
-    {
-        enum Opcode
-        {
-            IDLE            = 0,
-            INV_EP          = 1,
-            INV_REPLY       = 2,
-            RESET           = 3,
-        };
-
-        BitUnion64(Bits)
-            Bitfield<64, 8> arg;
-            Bitfield<7, 4> error;
-            Bitfield<3, 0> opcode;
-        EndBitUnion(Bits)
-    };
-
   public:
 
     Tcu(TcuParams* p);
@@ -238,11 +179,6 @@ class Tcu : public BaseTcu
     void printPacket(PacketPtr pkt) const;
 
   private:
-
-    Command::Bits getCommand()
-    {
-        return regFile.get(CmdReg::COMMAND);
-    }
 
     void executeCommand(PacketPtr pkt);
 

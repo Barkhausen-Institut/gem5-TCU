@@ -115,7 +115,7 @@ Tcu::Tcu(TcuParams* p)
     nocToTransferLatency(p->noc_to_transfer_latency)
 {
     static_assert(sizeof(cmdNames) / sizeof(cmdNames[0]) ==
-        Command::SLEEP + 1, "cmdNames out of sync");
+        CmdCommand::SLEEP + 1, "cmdNames out of sync");
     static_assert(sizeof(privCmdNames) / sizeof(privCmdNames[0]) ==
         PrivCommand::ABORT_CMD + 1, "privCmdNames out of sync");
     static_assert(sizeof(extCmdNames) / sizeof(extCmdNames[0]) ==
@@ -242,8 +242,8 @@ Tcu::freeRequest(PacketPtr pkt)
 void
 Tcu::executeCommand(PacketPtr pkt)
 {
-    Command::Bits cmd = getCommand();
-    if (cmd.opcode == Command::IDLE)
+    CmdCommand::Bits cmd = regs().getCommand();
+    if (cmd.opcode == CmdCommand::IDLE)
     {
         if (pkt)
             schedCpuResponse(pkt, clockEdge(Cycles(1)));
@@ -260,24 +260,24 @@ Tcu::executeCommand(PacketPtr pkt)
 
     switch (cmd.opcode)
     {
-        case Command::SEND:
-        case Command::REPLY:
+        case CmdCommand::SEND:
+        case CmdCommand::REPLY:
             msgUnit->startTransmission(cmd);
             break;
-        case Command::READ:
+        case CmdCommand::READ:
             memUnit->startRead(cmd);
             break;
-        case Command::WRITE:
+        case CmdCommand::WRITE:
             memUnit->startWrite(cmd);
             break;
-        case Command::FETCH_MSG:
+        case CmdCommand::FETCH_MSG:
             regs().set(CmdReg::ARG1, msgUnit->fetchMessage(cmd.epid));
             finishCommand(TcuError::NONE);
             break;
-        case Command::ACK_MSG:
+        case CmdCommand::ACK_MSG:
             finishCommand(msgUnit->ackMessage(cmd.epid, cmd.arg));
             break;
-        case Command::SLEEP:
+        case CmdCommand::SLEEP:
         {
             int ep = cmd.arg & 0xFFFF;
             if (!startSleep(ep))
@@ -289,7 +289,7 @@ Tcu::executeCommand(PacketPtr pkt)
             panic("Invalid opcode %#x\n", static_cast<RegFile::reg_t>(cmd.opcode));
     }
 
-    if (cmdPkt && cmd.opcode != Command::SLEEP)
+    if (cmdPkt && cmd.opcode != CmdCommand::SLEEP)
     {
         if (connector->canSuspendCmds())
             startSleep(INVALID_EP_ID);
@@ -304,10 +304,10 @@ Tcu::executeCommand(PacketPtr pkt)
 void
 Tcu::abortCommand()
 {
-    Command::Bits cmd = getCommand();
+    CmdCommand::Bits cmd = regs().getCommand();
 
     // if we've already scheduled finishCommand, consider the command done
-    if (!cmdFinish && cmd.opcode != Command::IDLE)
+    if (!cmdFinish && cmd.opcode != CmdCommand::IDLE)
     {
         // if we are waiting for a NoC response, just wait until we receive it.
         // we deem this acceptable, because these remotely running transfers
@@ -316,7 +316,8 @@ Tcu::abortCommand()
         {
             // SEND/REPLY needs to finish successfully as soon as we've sent
             // out the message.
-            if (cmd.opcode != Command::SEND && cmd.opcode != Command::REPLY)
+            if (cmd.opcode != CmdCommand::SEND &&
+                cmd.opcode != CmdCommand::REPLY)
                 abort = AbortType::REMOTE;
         }
         // otherwise, abort it locally. this is done for all commands, because
@@ -349,7 +350,7 @@ Tcu::abortCommand()
 void
 Tcu::scheduleFinishOp(Cycles delay, TcuError error)
 {
-    if (getCommand().opcode != Command::IDLE)
+    if (regs().getCommand().opcode != CmdCommand::IDLE)
     {
         if (cmdFinish)
         {
@@ -370,21 +371,21 @@ Tcu::scheduleFinishOp(Cycles delay, TcuError error)
 void
 Tcu::finishCommand(TcuError error)
 {
-    Command::Bits cmd = getCommand();
+    CmdCommand::Bits cmd = regs().getCommand();
 
     cmdFinish = NULL;
 
-    if (cmd.opcode == Command::SEND)
+    if (cmd.opcode == CmdCommand::SEND)
         msgUnit->finishMsgSend(error, cmd.epid);
-    else if (cmd.opcode == Command::REPLY)
+    else if (cmd.opcode == CmdCommand::REPLY)
         msgUnit->finishMsgReply(error, cmd.epid, cmd.arg);
     else if (error == TcuError::NONE &&
-             (cmd.opcode == Command::READ || cmd.opcode == Command::WRITE))
+             (cmd.opcode == CmdCommand::READ || cmd.opcode == CmdCommand::WRITE))
     {
-        const DataReg data = regs().getDataReg();
+        const CmdData::Bits data = regs().getData();
         if (data.size > 0)
         {
-            if (cmd.opcode == Command::READ)
+            if (cmd.opcode == CmdCommand::READ)
                 memUnit->startRead(cmd);
             else
                 memUnit->startWrite(cmd);
@@ -392,7 +393,7 @@ Tcu::finishCommand(TcuError error)
         }
     }
 
-    if (cmdPkt || cmd.opcode == Command::SLEEP)
+    if (cmdPkt || cmd.opcode == CmdCommand::SLEEP)
         stopSleep();
 
     DPRINTF(TcuCmd, "Finished command %s with EP=%u -> %u\n",
@@ -402,7 +403,7 @@ Tcu::finishCommand(TcuError error)
     // let the SW know that the command is finished
     cmd = 0;
     cmd.error = static_cast<unsigned>(error);
-    cmd.opcode = Command::IDLE;
+    cmd.opcode = CmdCommand::IDLE;
     regFile.set(CmdReg::COMMAND, cmd);
 
     if (cmdPkt)
@@ -623,7 +624,7 @@ Tcu::wakeupCore(bool force)
     {
         // better stop the command in this cycle to ensure that the core
         // does not issue another command before we can finish the sleep.
-        if (getCommand().opcode == Command::SLEEP)
+        if (regs().getCommand().opcode == CmdCommand::SLEEP)
             scheduleFinishOp(Cycles(0));
         else
             connector->wakeup();
@@ -890,10 +891,11 @@ Tcu::completeNocRequest(PacketPtr pkt)
             scheduleFinishOp(Cycles(1), TcuError::ABORT);
         else
         {
+            auto cmd = regs().getCommand();
             if (pkt->isWrite())
-                memUnit->writeComplete(getCommand(), pkt, senderState->result);
+                memUnit->writeComplete(cmd, pkt, senderState->result);
             else if (pkt->isRead())
-                memUnit->readComplete(getCommand(), pkt, senderState->result);
+                memUnit->readComplete(cmd, pkt, senderState->result);
             else
                 panic("unexpected packet type\n");
         }

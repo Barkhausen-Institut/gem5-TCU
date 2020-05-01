@@ -98,6 +98,90 @@ enum class RegAccess
     NOC
 };
 
+struct CmdCommand
+{
+    enum Opcode
+    {
+        IDLE            = 0,
+        SEND            = 1,
+        REPLY           = 2,
+        READ            = 3,
+        WRITE           = 4,
+        FETCH_MSG       = 5,
+        ACK_MSG         = 6,
+        SLEEP           = 7,
+    };
+
+    BitUnion64(Bits)
+        Bitfield<56, 24> arg;
+        Bitfield<23, 20> error;
+        Bitfield<19, 4> epid;
+        Bitfield<3, 0> opcode;
+    EndBitUnion(Bits)
+
+    static Bits create(Opcode op, epid_t ep, uint64_t arg = 0)
+    {
+        Bits cmd = 0;
+        cmd.opcode = op;
+        cmd.epid = ep;
+        cmd.arg = arg;
+        return cmd;
+    }
+};
+
+struct CmdData
+{
+    BitUnion64(Bits)
+        Bitfield<63, 32> size;
+        Bitfield<31, 0> addr;
+    EndBitUnion(Bits)
+
+    static Bits create(uint32_t addr, uint32_t size)
+    {
+        Bits data = 0;
+        data.addr = addr;
+        data.size = size;
+        return data;
+    }
+};
+
+struct PrivCommand
+{
+    enum Opcode
+    {
+        IDLE            = 0,
+        INV_PAGE        = 1,
+        INV_TLB         = 2,
+        INS_TLB         = 3,
+        XCHG_VPE        = 4,
+        FLUSH_CACHE     = 5,
+        SET_TIMER       = 6,
+        ABORT_CMD       = 7,
+    };
+
+    BitUnion64(Bits)
+        Bitfield<64, 4> arg;
+        Bitfield<3, 0> opcode;
+    EndBitUnion(Bits)
+};
+
+struct ExtCommand
+{
+    enum Opcode
+    {
+        IDLE            = 0,
+        INV_EP          = 1,
+        INV_REPLY       = 2,
+        RESET           = 3,
+    };
+
+    BitUnion64(Bits)
+        Bitfield<64, 8> arg;
+        Bitfield<7, 4> error;
+        Bitfield<3, 0> opcode;
+    EndBitUnion(Bits)
+};
+
 class RegFile;
 
 struct SendEp
@@ -261,24 +345,6 @@ union Ep
     MemEp mem;
 };
 
-struct DataReg
-{
-    DataReg() : addr(), size()
-    {}
-    DataReg(uint64_t value) : addr(value), size(value >> 32)
-    {}
-    DataReg(uint32_t _addr, uint32_t _size) : addr(_addr), size(_size)
-    {}
-
-    uint64_t value() const
-    {
-        return addr | (static_cast<uint64_t>(size) << 32);
-    }
-
-    uint32_t addr;
-    uint32_t size;
-};
-
 struct MessageHeader
 {
     uint8_t flags : 2,
@@ -334,6 +400,8 @@ class RegFile
         return (get(PrivReg::CUR_VPE) >> 16) & 0xFFFF;
     }
 
+    void updateMsgCnt();
+
     reg_t get(TcuReg reg, RegAccess access = RegAccess::TCU) const;
 
     void set(TcuReg reg, reg_t value, RegAccess access = RegAccess::TCU);
@@ -351,16 +419,19 @@ class RegFile
         return get(PrivReg::CUR_VPE) & 0xFFFF;
     }
 
-    void updateMsgCnt();
-
-    DataReg getDataReg() const
+    CmdCommand::Bits getCommand()
     {
-        return DataReg(get(CmdReg::DATA));
+        return get(CmdReg::COMMAND);
     }
 
-    void setDataReg(const DataReg &data)
+    CmdData::Bits getData() const
     {
-        set(CmdReg::DATA, data.value());
+        return CmdData::Bits(get(CmdReg::DATA));
+    }
+
+    void setData(const CmdData::Bits &data)
+    {
+        set(CmdReg::DATA, data);
     }
 
     Ep *getEp(epid_t epId) { return &eps.at(epId); }

@@ -99,8 +99,8 @@ TcuPciProxy::getRegAddr(CmdReg reg)
 }
 
 PacketPtr
-TcuPciProxy::createTcuCmdPkt(Tcu::Command::Opcode cmd, unsigned epid,
-    uint64_t data, uint64_t size, uint64_t arg0, uint64_t arg1)
+TcuPciProxy::createTcuCmdPkt(CmdCommand::Bits cmd, CmdData::Bits data,
+                             uint64_t arg1)
 {
     static_assert(static_cast<int>(CmdReg::COMMAND) == 0, "");
     static_assert(static_cast<int>(CmdReg::DATA) == 1, "");
@@ -109,14 +109,9 @@ TcuPciProxy::createTcuCmdPkt(Tcu::Command::Opcode cmd, unsigned epid,
     auto pkt = createPacket(tcuRegBase + getRegAddr(CmdReg::COMMAND),
         sizeof(RegFile::reg_t) * 3, MemCmd::WriteReq);
 
-    Tcu::Command::Bits cmdreg = 0;
-    cmdreg.opcode = static_cast<RegFile::reg_t>(cmd);
-    cmdreg.epid = epid;
-    cmdreg.arg = arg0;
-
     RegFile::reg_t* regs = pkt->getPtr<RegFile::reg_t>();
-    regs[0] = cmdreg;
-    regs[1] = DataReg(data, size).value();
+    regs[0] = cmd;
+    regs[1] = data;
     regs[2] = arg1;
     return pkt;
 }
@@ -264,7 +259,9 @@ TcuPciProxy::sendInterruptCmd()
         TcuPciProxyInt, "Send interrupt message using endpoint %u\n", EP_INT);
 
     PacketPtr cmdPkt = createTcuCmdPkt(
-        Tcu::Command::SEND, EP_INT, INT_ADDR, 0x4, Tcu::INVALID_EP_ID, 0
+        CmdCommand::create(CmdCommand::SEND, EP_INT, Tcu::INVALID_EP_ID),
+        CmdData::create(INT_ADDR, 0x4),
+        0
     );
     interruptPending = false;
     executeCommand(cmdPkt);
@@ -341,9 +338,12 @@ TcuPciProxy::sendDmaCmd()
     // TODO: Validate offset lies within the memory endpoint's boundaries
     // Translate to TCU read/write command
     auto cmd
-        = pendingDmaReq->isRead() ? Tcu::Command::READ : Tcu::Command::WRITE;
-    PacketPtr cmdPkt = createTcuCmdPkt(cmd, EP_DMA, DMA_ADDR,
-        pendingDmaReq->getSize(), 0, pendingDmaReq->getAddr());
+        = pendingDmaReq->isRead() ? CmdCommand::READ : CmdCommand::WRITE;
+    PacketPtr cmdPkt = createTcuCmdPkt(
+        CmdCommand::create(cmd, EP_DMA, 0),
+        CmdData::create(DMA_ADDR, pendingDmaReq->getSize()),
+        pendingDmaReq->getAddr()
+    );
     executeCommand(cmdPkt);
 }
 

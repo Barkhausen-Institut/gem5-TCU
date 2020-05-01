@@ -180,11 +180,7 @@ TcuAccel::createTcuRegPkt(Addr reg,
 }
 
 PacketPtr
-TcuAccel::createTcuCmdPkt(Tcu::Command::Opcode cmd,
-                          unsigned epid,
-                          uint64_t data,
-                          uint64_t size,
-                          uint64_t arg,
+TcuAccel::createTcuCmdPkt(CmdCommand::Bits cmd, CmdData::Bits data,
                           uint64_t offset)
 {
     static_assert(static_cast<int>(CmdReg::COMMAND) == 0, "");
@@ -195,14 +191,9 @@ TcuAccel::createTcuCmdPkt(Tcu::Command::Opcode cmd,
                             sizeof(RegFile::reg_t) * 3,
                             MemCmd::WriteReq);
 
-    Tcu::Command::Bits cmdreg = 0;
-    cmdreg.opcode = static_cast<RegFile::reg_t>(cmd);
-    cmdreg.epid = epid;
-    cmdreg.arg = arg;
-
     RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
-    regs[0] = cmdreg;
-    regs[1] = DataReg(data, size).value();
+    regs[0] = cmd;
+    regs[1] = data;
     regs[2] = offset;
     return pkt;
 }

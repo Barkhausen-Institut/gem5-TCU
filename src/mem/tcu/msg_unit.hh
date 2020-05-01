@@ -103,7 +103,7 @@ class MessageUnit
     /**
      * Start message transmission -> Mem request
      */
-    void startTransmission(const Tcu::Command::Bits& cmd);
+    void startTransmission(const CmdCommand::Bits& cmd);
 
     /**
      * Received a message from NoC -> Mem request
@@ -154,7 +154,7 @@ class MessageUnit
   private:
     int allocSlot(size_t msgSize, epid_t epid, RecvEp *ep);
 
-    void startXfer(const Tcu::Command::Bits& cmd);
+    void startXfer(const CmdCommand::Bits& cmd);
 
   private:
 

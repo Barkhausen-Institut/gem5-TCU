@@ -218,8 +218,8 @@ TcuAbortTest::createPacket(Addr paddr,
 
 PacketPtr
 TcuAbortTest::createTcuRegisterPkt(Addr reg,
-                                  RegFile::reg_t value,
-                                  MemCmd cmd = MemCmd::WriteReq)
+                                   RegFile::reg_t value,
+                                   MemCmd cmd = MemCmd::WriteReq)
 {
     auto pkt = createPacket(reg_base + reg, sizeof(RegFile::reg_t), cmd);
     *pkt->getPtr<RegFile::reg_t>() = value;
@@ -227,11 +227,8 @@ TcuAbortTest::createTcuRegisterPkt(Addr reg,
 }
 
 PacketPtr
-TcuAbortTest::createCommandPkt(Tcu::Command::Opcode cmd,
-                               unsigned ep,
-                               Addr data,
-                               Addr size,
-                               Addr arg0,
+TcuAbortTest::createCommandPkt(CmdCommand::Bits cmd,
+                               CmdData::Bits data,
                                Addr arg1)
 {
     static_assert(static_cast<int>(CmdReg::COMMAND) == 0, "");
@@ -242,14 +239,9 @@ TcuAbortTest::createCommandPkt(Tcu::Command::Opcode cmd,
                             sizeof(RegFile::reg_t) * 3,
                             MemCmd::WriteReq);
 
-    Tcu::Command::Bits cmdreg = 0;
-    cmdreg.opcode = static_cast<RegFile::reg_t>(cmd);
-    cmdreg.epid = ep;
-    cmdreg.arg = arg0;
-
     RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
-    regs[0] = cmdreg;
-    regs[1] = DataReg(data, size).value();
+    regs[0] = cmd;
+    regs[1] = data;
     regs[2] = arg1;
     return pkt;
 }
@@ -477,36 +469,38 @@ TcuAbortTest::tick()
 
                     if (testNo == 0)
                     {
-                        pkt = createCommandPkt(Tcu::Command::WRITE,
-                                               EP_MEM,
-                                               DATA_ADDR,
-                                               system->cacheLineSize() * 8,
-                                               DEST_ADDR);
+                        pkt = createCommandPkt(
+                            CmdCommand::create(CmdCommand::WRITE, EP_MEM,
+                                               DEST_ADDR),
+                            CmdData::create(DATA_ADDR,
+                                            system->cacheLineSize() * 8)
+                        );
                     }
                     else if (testNo == 1)
                     {
-                        pkt = createCommandPkt(Tcu::Command::READ,
-                                               EP_MEM,
-                                               DATA_ADDR,
-                                               system->cacheLineSize() * 8,
-                                               DEST_ADDR);
+                        pkt = createCommandPkt(
+                            CmdCommand::create(CmdCommand::READ, EP_MEM,
+                                               DEST_ADDR),
+                            CmdData::create(DATA_ADDR,
+                                            system->cacheLineSize() * 8)
+                        );
                     }
                     else if (testNo == 2)
                     {
-                        pkt = createCommandPkt(Tcu::Command::SEND,
-                                               EP_SEND,
-                                               DATA_ADDR,
-                                               system->cacheLineSize() * 8,
-                                               EP_RECV,
-                                               0);
+                        pkt = createCommandPkt(
+                            CmdCommand::create(CmdCommand::SEND, EP_SEND,
+                                               EP_RECV),
+                           CmdData::create(DATA_ADDR,
+                                           system->cacheLineSize() * 8)
+                        );
                     }
                     else if (testNo == 3)
                     {
-                        pkt = createCommandPkt(Tcu::Command::REPLY,
-                                               EP_RECV,
-                                               DATA_ADDR,
-                                               system->cacheLineSize() * 8,
-                                               0);
+                        pkt = createCommandPkt(
+                            CmdCommand::create(CmdCommand::REPLY, EP_RECV),
+                           CmdData::create(DATA_ADDR,
+                                           system->cacheLineSize() * 8)
+                        );
                     }
                     break;
                 }
@@ -515,7 +509,7 @@ TcuAbortTest::tick()
                 {
                     Addr regAddr = getRegAddr(PrivReg::PRIV_CMD);
                     pkt = createTcuRegisterPkt(regAddr,
-                                               Tcu::PrivCommand::ABORT_CMD,
+                                               PrivCommand::ABORT_CMD,
                                                MemCmd::WriteReq);
                     abortStart = curTick();
                     break;

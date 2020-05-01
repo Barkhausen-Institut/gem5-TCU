@@ -98,8 +98,7 @@ class TcuAccel : public ClockedObject
 
     PacketPtr createTcuRegPkt(Addr reg, RegFile::reg_t value, MemCmd cmd);
 
-    PacketPtr createTcuCmdPkt(Tcu::Command::Opcode cmd, unsigned epid,
-                              uint64_t data, uint64_t size, uint64_t arg,
+    PacketPtr createTcuCmdPkt(CmdCommand::Bits cmd, CmdData::Bits data,
                               uint64_t offset = 0);
 
     void freePacket(PacketPtr pkt);

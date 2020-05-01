@@ -163,7 +163,7 @@ TcuAccelStream::completeRequest(PacketPtr pkt)
             }
             case State::INOUT_SEND_WAIT:
             {
-                Tcu::Command::Bits cmd =
+                CmdCommand::Bits cmd =
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
                 if (cmd.opcode == 0)
                 {
@@ -363,7 +363,7 @@ TcuAccelStream::completeRequest(PacketPtr pkt)
             }
             case State::READ_DATA_WAIT:
             {
-                Tcu::Command::Bits cmd =
+                CmdCommand::Bits cmd =
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
                 if (cmd.opcode == 0)
                 {
@@ -382,7 +382,7 @@ TcuAccelStream::completeRequest(PacketPtr pkt)
             }
             case State::WRITE_DATA_WAIT:
             {
-                Tcu::Command::Bits cmd =
+                CmdCommand::Bits cmd =
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
                 if (cmd.opcode == 0)
                 {
@@ -411,7 +411,7 @@ TcuAccelStream::completeRequest(PacketPtr pkt)
             }
             case State::REPLY_WAIT:
             {
-                Tcu::Command::Bits cmd =
+                CmdCommand::Bits cmd =
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
                 if (cmd.opcode == 0)
                 {
@@ -439,7 +439,7 @@ TcuAccelStream::completeRequest(PacketPtr pkt)
             }
             case State::COMMIT_SEND_WAIT:
             {
-                Tcu::Command::Bits cmd =
+                CmdCommand::Bits cmd =
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
                 if (cmd.opcode == 0)
                     state = State::EXIT_ACK;
@@ -664,11 +664,12 @@ TcuAccelStream::tick()
         case State::INOUT_SEND:
         {
             pkt = createTcuCmdPkt(
-                Tcu::Command::SEND,
-                (ctx.flags & Flags::OUTPUT) ? EP_OUT_SEND : EP_IN_SEND,
-                BUF_ADDR + bufSize,
-                sizeof(rdwr_msg),
-                EP_RECV,
+                CmdCommand::create(
+                    CmdCommand::SEND,
+                    (ctx.flags & Flags::OUTPUT) ? EP_OUT_SEND : EP_IN_SEND,
+                    EP_RECV
+                ),
+                CmdData::create(BUF_ADDR + bufSize, sizeof(rdwr_msg)),
                 (ctx.flags & Flags::OUTPUT) ? LBL_OUT_REPLY : LBL_IN_REPLY
             );
             break;
@@ -681,11 +682,11 @@ TcuAccelStream::tick()
         }
         case State::INOUT_ACK:
         {
-            pkt = createTcuCmdPkt(Tcu::Command::ACK_MSG,
-                                  EP_RECV,
-                                  0,
-                                  0,
-                                  ctx.msgAddr - RBUF_ADDR);
+            pkt = createTcuCmdPkt(
+                CmdCommand::create(CmdCommand::ACK_MSG, EP_RECV,
+                                   ctx.msgAddr - RBUF_ADDR),
+                0
+            );
             break;
         }
 
@@ -693,9 +694,10 @@ TcuAccelStream::tick()
         {
             if (!(ctx.flags & Flags::FETCHED))
             {
-                Addr regAddr = getRegAddr(CmdReg::COMMAND);
-                uint64_t value = Tcu::Command::FETCH_MSG | (EP_RECV << 4);
-                pkt = createTcuRegPkt(regAddr, value, MemCmd::WriteReq);
+                pkt = createTcuCmdPkt(
+                    CmdCommand::create(CmdCommand::FETCH_MSG, EP_RECV),
+                    0
+                );
             }
             break;
         }
@@ -714,11 +716,11 @@ TcuAccelStream::tick()
         case State::READ_DATA:
         {
             ctx.lastSize = std::min(bufSize, ctx.inLen - ctx.inPos);
-            pkt = createTcuCmdPkt(Tcu::Command::READ,
-                                  EP_IN_MEM,
-                                  BUF_ADDR,
-                                  ctx.lastSize,
-                                  ctx.inOff + ctx.inPos);
+            pkt = createTcuCmdPkt(
+                CmdCommand::create(CmdCommand::READ, EP_IN_MEM,
+                                   ctx.inOff + ctx.inPos),
+                CmdData::create(BUF_ADDR, ctx.lastSize)
+            );
             ctx.inPos += ctx.lastSize;
             break;
         }
@@ -732,11 +734,11 @@ TcuAccelStream::tick()
         case State::WRITE_DATA:
         {
             size_t amount = std::min(ctx.lastSize, ctx.outLen - ctx.outPos);
-            pkt = createTcuCmdPkt(Tcu::Command::WRITE,
-                                  EP_OUT_MEM,
-                                  BUF_ADDR + ctx.bufOff,
-                                  amount,
-                                  ctx.outOff + ctx.outPos);
+            pkt = createTcuCmdPkt(
+                CmdCommand::create(CmdCommand::WRITE, EP_OUT_MEM,
+                                   ctx.outOff + ctx.outPos),
+                CmdData::create(BUF_ADDR + ctx.bufOff, amount)
+            );
 
             ctx.bufOff += amount;
             ctx.lastSize -= amount;
@@ -764,11 +766,11 @@ TcuAccelStream::tick()
         }
         case State::REPLY_SEND:
         {
-            pkt = createTcuCmdPkt(Tcu::Command::REPLY,
-                                  EP_RECV,
-                                  BUF_ADDR + bufSize,
-                                  sizeof(reply),
-                                  replyAddr - RBUF_ADDR);
+            pkt = createTcuCmdPkt(
+                CmdCommand::create(CmdCommand::REPLY, EP_RECV,
+                                   replyAddr - RBUF_ADDR),
+                CmdData::create(BUF_ADDR + bufSize, sizeof(reply))
+            );
             break;
         }
         case State::REPLY_WAIT:
@@ -804,11 +806,8 @@ TcuAccelStream::tick()
         case State::COMMIT_SEND:
         {
             pkt = createTcuCmdPkt(
-                Tcu::Command::SEND,
-                EP_OUT_SEND,
-                BUF_ADDR + bufSize,
-                sizeof(rdwr_msg),
-                EP_RECV,
+                CmdCommand::create(CmdCommand::SEND, EP_OUT_SEND, EP_RECV),
+                CmdData::create(BUF_ADDR + bufSize, sizeof(rdwr_msg)),
                 LBL_OUT_REPLY
             );
             break;
@@ -825,11 +824,11 @@ TcuAccelStream::tick()
             if (ctx.inReqAddr || ctx.outReqAddr)
             {
                 auto addr = ctx.inReqAddr ? ctx.inReqAddr : ctx.outReqAddr;
-                pkt = createTcuCmdPkt(Tcu::Command::ACK_MSG,
-                                      EP_RECV,
-                                      0,
-                                      0,
-                                      addr - RBUF_ADDR);
+                pkt = createTcuCmdPkt(
+                    CmdCommand::create(CmdCommand::ACK_MSG,
+                                       EP_RECV, addr - RBUF_ADDR),
+                    0
+                );
                 break;
             }
 

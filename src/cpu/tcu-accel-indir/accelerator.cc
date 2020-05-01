@@ -171,7 +171,7 @@ TcuAccelInDir::completeRequest(PacketPtr pkt)
             }
             case State::WRITE_DATA_WAIT:
             {
-                Tcu::Command::Bits cmd =
+                CmdCommand::Bits cmd =
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
                 if (cmd.opcode == 0)
                     state = State::STORE_REPLY;
@@ -190,7 +190,7 @@ TcuAccelInDir::completeRequest(PacketPtr pkt)
             }
             case State::REPLY_WAIT:
             {
-                Tcu::Command::Bits cmd =
+                CmdCommand::Bits cmd =
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
                 if (cmd.opcode == 0)
                     state = State::CTXSW;
@@ -265,9 +265,10 @@ TcuAccelInDir::tick()
             }
             else
             {
-                Addr regAddr = getRegAddr(CmdReg::COMMAND);
-                uint64_t value = Tcu::Command::FETCH_MSG | (EP_RECV << 4);
-                pkt = createTcuRegPkt(regAddr, value, MemCmd::WriteReq);
+                pkt = createTcuCmdPkt(
+                    CmdCommand::create(CmdCommand::FETCH_MSG, EP_RECV),
+                    0
+                );
             }
             break;
         }
@@ -285,11 +286,10 @@ TcuAccelInDir::tick()
 
         case State::WRITE_DATA:
         {
-            pkt = createTcuCmdPkt(Tcu::Command::WRITE,
-                                  EP_OUT,
-                                  BUF_ADDR,
-                                  dataSize,
-                                  0);
+            pkt = createTcuCmdPkt(
+                CmdCommand::create(CmdCommand::WRITE, EP_OUT),
+                CmdData::create(BUF_ADDR, dataSize)
+            );
             break;
         }
         case State::WRITE_DATA_WAIT:
@@ -309,11 +309,11 @@ TcuAccelInDir::tick()
         }
         case State::SEND_REPLY:
         {
-            pkt = createTcuCmdPkt(Tcu::Command::REPLY,
-                                  EP_RECV,
-                                  BUF_ADDR,
-                                  sizeof(reply),
-                                  msgAddr - RBUF_ADDR);
+            pkt = createTcuCmdPkt(
+                CmdCommand::create(CmdCommand::REPLY, EP_RECV,
+                                   msgAddr - RBUF_ADDR),
+                CmdData::create(BUF_ADDR, sizeof(reply))
+            );
             break;
         }
         case State::REPLY_WAIT:

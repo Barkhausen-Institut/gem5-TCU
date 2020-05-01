@@ -39,10 +39,10 @@ static void
 finishReadWrite(Tcu &tcu, Addr size)
 {
     // change data register accordingly
-    DataReg data = tcu.regs().getDataReg();
-    data.size -= size;
-    data.addr += size;
-    tcu.regs().setDataReg(data);
+    CmdData::Bits data = tcu.regs().getData();
+    data.size = data.size - size;
+    data.addr = data.addr + size;
+    tcu.regs().setData(data);
 
     // change offset
     Addr offset = tcu.regs().get(CmdReg::ARG1);
@@ -75,7 +75,7 @@ MemoryUnit::regStats()
 }
 
 void
-MemoryUnit::startRead(const Tcu::Command::Bits& cmd)
+MemoryUnit::startRead(const CmdCommand::Bits& cmd)
 {
     MemEp *ep = tcu.regs().getMemEp(cmd.epid);
 
@@ -91,7 +91,7 @@ MemoryUnit::startRead(const Tcu::Command::Bits& cmd)
         return;
     }
 
-    DataReg data = tcu.regs().getDataReg();
+    CmdData::Bits data = tcu.regs().getData();
     Addr offset = tcu.regs().get(CmdReg::ARG1);
     Addr size = std::min(static_cast<Addr>(data.size), tcu.maxNocPacketSize);
 
@@ -143,11 +143,11 @@ MemoryUnit::LocalWriteTransferEvent::transferDone(TcuError result)
 }
 
 void
-MemoryUnit::readComplete(const Tcu::Command::Bits& cmd, PacketPtr pkt, TcuError error)
+MemoryUnit::readComplete(const CmdCommand::Bits& cmd, PacketPtr pkt, TcuError error)
 {
     tcu.printPacket(pkt);
 
-    const DataReg data = tcu.regs().getDataReg();
+    const CmdData::Bits data = tcu.regs().getData();
 
     // since the transfer is done in steps, we can start after the header
     // delay here
@@ -183,7 +183,7 @@ MemoryUnit::ReadTransferEvent::transferDone(TcuError result)
 }
 
 void
-MemoryUnit::startWrite(const Tcu::Command::Bits& cmd)
+MemoryUnit::startWrite(const CmdCommand::Bits& cmd)
 {
     MemEp *ep = tcu.regs().getMemEp(cmd.epid);
 
@@ -199,7 +199,7 @@ MemoryUnit::startWrite(const Tcu::Command::Bits& cmd)
         return;
     }
 
-    DataReg data = tcu.regs().getDataReg();
+    CmdData::Bits data = tcu.regs().getData();
     Addr offset = tcu.regs().get(CmdReg::ARG1);
     Addr size = std::min(static_cast<Addr>(data.size), tcu.maxNocPacketSize);
 
@@ -257,9 +257,9 @@ MemoryUnit::WriteTransferEvent::transferDone(TcuError result)
 }
 
 void
-MemoryUnit::writeComplete(const Tcu::Command::Bits& cmd, PacketPtr pkt, TcuError error)
+MemoryUnit::writeComplete(const CmdCommand::Bits& cmd, PacketPtr pkt, TcuError error)
 {
-    if (cmd.opcode == Tcu::Command::WRITE && error == TcuError::NONE)
+    if (cmd.opcode == CmdCommand::WRITE && error == TcuError::NONE)
         finishReadWrite(tcu, pkt->getSize());
 
     // we don't need to pay the payload delay here because the message

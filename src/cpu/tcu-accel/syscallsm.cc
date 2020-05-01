@@ -48,11 +48,11 @@ SyscallSM::tick()
     {
         case State::SYSC_SEND:
         {
-            pkt = accel->createTcuCmdPkt(Tcu::Command::SEND,
-                                         TcuAccel::EP_SYSS,
-                                         accel->sendMsgAddr(),
-                                         syscallSize,
-                                         TcuAccel::EP_SYSR);
+            pkt = accel->createTcuCmdPkt(
+                CmdCommand::create(CmdCommand::SEND, TcuAccel::EP_SYSS,
+                                   TcuAccel::EP_SYSR),
+                CmdData::create(accel->sendMsgAddr(), syscallSize)
+            );
             break;
         }
         case State::SYSC_WAIT:
@@ -66,9 +66,10 @@ SyscallSM::tick()
             if (fetched)
                 return nullptr;
 
-            Addr regAddr = accel->getRegAddr(CmdReg::COMMAND);
-            uint64_t value = Tcu::Command::FETCH_MSG | (TcuAccel::EP_SYSR << 4);
-            pkt = accel->createTcuRegPkt(regAddr, value, MemCmd::WriteReq);
+            pkt = accel->createTcuCmdPkt(
+                CmdCommand::create(CmdCommand::FETCH_MSG, TcuAccel::EP_SYSR),
+                0
+            );
             break;
         }
         case State::SYSC_READ_ADDR:
@@ -79,11 +80,11 @@ SyscallSM::tick()
         }
         case State::SYSC_ACK:
         {
-            pkt = accel->createTcuCmdPkt(Tcu::Command::ACK_MSG,
-                                         TcuAccel::EP_SYSR,
-                                         0,
-                                         0,
-                                         replyAddr - RBUF_ADDR);
+            pkt = accel->createTcuCmdPkt(
+                CmdCommand::create(CmdCommand::ACK_MSG, TcuAccel::EP_SYSR,
+                                   replyAddr - RBUF_ADDR),
+                0
+            );
             break;
         }
     }
@@ -106,7 +107,7 @@ SyscallSM::handleMemResp(PacketPtr pkt)
         case State::SYSC_WAIT:
         {
             auto data = pkt->getConstPtr<RegFile::reg_t>();
-            Tcu::Command::Bits cmd =
+            CmdCommand::Bits cmd =
                 *reinterpret_cast<const RegFile::reg_t*>(data);
             if (cmd.opcode == 0)
             {

@@ -113,11 +113,8 @@ class TcuAbortTest : public ClockedObject
 
     PacketPtr createTcuRegisterPkt(Addr reg, RegFile::reg_t value, MemCmd cmd);
 
-    PacketPtr createCommandPkt(Tcu::Command::Opcode cmd,
-                               unsigned ep,
-                               Addr data,
-                               Addr size,
-                               Addr arg0,
+    PacketPtr createCommandPkt(CmdCommand::Bits cmd,
+                               CmdData::Bits data,
                                Addr arg1 = 0);
 
     bool sendPkt(PacketPtr pkt);

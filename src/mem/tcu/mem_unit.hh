@@ -45,11 +45,10 @@ class MemoryUnit
 
       public:
 
-        LocalWriteTransferEvent(Addr local, uint8_t *_tmp, size_t _size, uint flags)
+        LocalWriteTransferEvent(Addr local, uint8_t *_tmp,
+                                size_t _size, uint flags)
             : TransferEvent(XferUnit::TransferType::LOCAL_WRITE,
-                            local,
-                            _size,
-                            flags),
+                            local, _size, flags),
               tmp(_tmp),
               tmpSize(_size)
         {}
@@ -67,9 +66,7 @@ class MemoryUnit
 
         ReadTransferEvent(Addr local, uint flags, PacketPtr _pkt)
             : TransferEvent(XferUnit::TransferType::LOCAL_WRITE,
-                            local,
-                            _pkt->getSize(),
-                            flags),
+                            local, _pkt->getSize(), flags),
               pkt(_pkt)
         {}
 
@@ -92,7 +89,8 @@ class MemoryUnit
                            vpeid_t _vpe,
                            uint flags,
                            NocAddr _dest)
-            : TransferEvent(XferUnit::TransferType::LOCAL_READ, local, size, flags),
+            : TransferEvent(XferUnit::TransferType::LOCAL_READ,
+                            local, size, flags),
               dest(_dest), vpe(_vpe)
         {}
 
@@ -131,22 +129,24 @@ class MemoryUnit
     /**
      * Starts a read -> NoC request
      */
-    void startRead(const Tcu::Command::Bits& cmd);
+    void startRead(const CmdCommand::Bits& cmd);
 
     /**
      * Starts a write -> Mem request
      */
-    void startWrite(const Tcu::Command::Bits& cmd);
+    void startWrite(const CmdCommand::Bits& cmd);
 
     /**
      * Read: response from remote TCU
      */
-    void readComplete(const Tcu::Command::Bits& cmd, PacketPtr pkt, TcuError error);
+    void readComplete(const CmdCommand::Bits& cmd, PacketPtr pkt,
+                      TcuError error);
 
     /**
      * Write: response from remote TCU
      */
-    void writeComplete(const Tcu::Command::Bits& cmd, PacketPtr pkt, TcuError error);
+    void writeComplete(const CmdCommand::Bits& cmd, PacketPtr pkt,
+                       TcuError error);
 
 
     /**

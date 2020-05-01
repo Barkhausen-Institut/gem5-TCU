@@ -59,9 +59,10 @@ AccelCtxSwSM::tick()
     {
         case State::FETCH_MSG:
         {
-            Addr regAddr = accel->getRegAddr(CmdReg::COMMAND);
-            uint64_t value = Tcu::Command::FETCH_MSG | (EP_RECV << 4);
-            pkt = accel->createTcuRegPkt(regAddr, value, MemCmd::WriteReq);
+            pkt = accel->createTcuCmdPkt(
+                CmdCommand::create(CmdCommand::FETCH_MSG, EP_RECV),
+                0
+            );
             break;
         }
         case State::READ_MSG_ADDR:
@@ -85,11 +86,11 @@ AccelCtxSwSM::tick()
         }
         case State::SEND_REPLY:
         {
-            pkt = accel->createTcuCmdPkt(Tcu::Command::REPLY,
-                                         EP_RECV,
-                                         msgAddr,
-                                         sizeof(reply),
-                                         msgAddr - RBUF_ADDR);
+            pkt = accel->createTcuCmdPkt(
+                CmdCommand::create(CmdCommand::REPLY, EP_RECV,
+                                   msgAddr - RBUF_ADDR),
+                CmdData::create(msgAddr, sizeof(reply))
+            );
             break;
         }
         case State::REPLY_WAIT:
@@ -156,7 +157,7 @@ AccelCtxSwSM::handleMemResp(PacketPtr pkt)
         }
         case State::REPLY_WAIT:
         {
-            Tcu::Command::Bits cmd =
+            CmdCommand::Bits cmd =
                 *reinterpret_cast<const RegFile::reg_t*>(pkt->getConstPtr<uint8_t>());
             if (cmd.opcode == 0)
             {
