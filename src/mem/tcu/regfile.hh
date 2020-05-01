@@ -59,7 +59,6 @@ enum class PrivReg : Addr
     PRIV_CMD,
     PRIV_CMD_ARG,
     EXT_CMD,
-    // MSGS[16] | VPE_ID[16]
     CUR_VPE,
     OLD_VPE,
 };
@@ -345,6 +344,11 @@ union Ep
     MemEp mem;
 };
 
+BitUnion64(VPEState)
+    Bitfield<31, 16> msgs;
+    Bitfield<15, 0> id;
+EndBitUnion(VPEState)
+
 struct MessageHeader
 {
     uint8_t flags : 2,
@@ -395,9 +399,14 @@ class RegFile
 
     void rem_msg();
 
-    unsigned messages() const
+    VPEState getVPE(PrivReg reg) const
     {
-        return (get(PrivReg::CUR_VPE) >> 16) & 0xFFFF;
+        return get(reg);
+    }
+
+    VPEState getCurVPE() const
+    {
+        return getVPE(PrivReg::CUR_VPE);
     }
 
     void updateMsgCnt();
@@ -413,11 +422,6 @@ class RegFile
     reg_t get(CmdReg reg, RegAccess access = RegAccess::TCU) const;
 
     void set(CmdReg reg, reg_t value, RegAccess access = RegAccess::TCU);
-
-    reg_t getVPE() const
-    {
-        return get(PrivReg::CUR_VPE) & 0xFFFF;
-    }
 
     CmdCommand::Bits getCommand()
     {

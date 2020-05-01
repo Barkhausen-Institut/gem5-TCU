@@ -107,7 +107,13 @@ RegFile::RegFile(Tcu &_tcu, const std::string& name, unsigned _numEndpoints)
     // at boot, all PEs are privileged
     reg_t feat = static_cast<reg_t>(Features::PRIV);
     set(TcuReg::FEATURES, feat);
-    set(PrivReg::CUR_VPE, static_cast<reg_t>(Tcu::INVALID_VPE_ID));
+
+    // and no VPE is running (the id might stay invalid for PEs that don't
+    // support multiple VPEs though)
+    VPEState vpe = 0;
+    vpe.id = Tcu::INVALID_VPE_ID;
+    vpe.msgs = 0;
+    set(PrivReg::CUR_VPE, vpe);
 }
 
 TcuError
@@ -137,17 +143,17 @@ RegFile::invalidate(epid_t epId, bool force, unsigned *unreadMask)
 void
 RegFile::add_msg()
 {
-    reg_t cur_vpe = privRegs[static_cast<size_t>(PrivReg::CUR_VPE)];
-    cur_vpe += 1 << 16;
-    set(PrivReg::CUR_VPE, cur_vpe);
+    VPEState cur = getVPE(PrivReg::CUR_VPE);
+    cur.msgs = cur.msgs + 1;
+    set(PrivReg::CUR_VPE, cur);
 }
 
 void
 RegFile::rem_msg()
 {
-    reg_t cur_vpe = privRegs[static_cast<size_t>(PrivReg::CUR_VPE)];
-    cur_vpe -= 1 << 16;
-    set(PrivReg::CUR_VPE, cur_vpe);
+    VPEState cur = getVPE(PrivReg::CUR_VPE);
+    cur.msgs = cur.msgs - 1;
+    set(PrivReg::CUR_VPE, cur);
 }
 
 RegFile::reg_t

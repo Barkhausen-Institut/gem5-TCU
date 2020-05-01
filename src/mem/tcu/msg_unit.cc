@@ -77,7 +77,7 @@ MessageUnit::startTransmission(const CmdCommand::Bits& cmd)
     {
         RecvEp *ep = tcu.regs().getRecvEp(epid);
 
-        if(!ep || ep->r0.vpe != tcu.regs().getVPE())
+        if(!ep || ep->r0.vpe != tcu.regs().getCurVPE().id)
         {
             DPRINTFS(Tcu, (&tcu), "EP%u: invalid EP\n", epid);
             tcu.scheduleFinishOp(Cycles(1), TcuError::INV_EP);
@@ -107,7 +107,7 @@ MessageUnit::startTransmission(const CmdCommand::Bits& cmd)
             return;
         }
 
-        assert(sep->r0.vpe == tcu.regs().getVPE());
+        assert(sep->r0.vpe == tcu.regs().getCurVPE().id);
 
         // grant credits to the sender
         info.replyEpId = sep->r0.crdEp;
@@ -128,7 +128,7 @@ MessageUnit::startTransmission(const CmdCommand::Bits& cmd)
     if (cmd.opcode == CmdCommand::SEND && cmd.arg != Tcu::INVALID_EP_ID)
     {
         RecvEp *rep = tcu.regs().getRecvEp(cmd.arg);
-        if (!rep || rep->r0.vpe != tcu.regs().getVPE())
+        if (!rep || rep->r0.vpe != tcu.regs().getCurVPE().id)
         {
             DPRINTFS(Tcu, (&tcu), "EP%u: invalid reply EP\n", cmd.arg);
             tcu.scheduleFinishOp(Cycles(1), TcuError::INV_EP);
@@ -140,7 +140,7 @@ MessageUnit::startTransmission(const CmdCommand::Bits& cmd)
     }
 
     // check if the send EP is valid
-    if (!ep || ep->r0.vpe != tcu.regs().getVPE() ||
+    if (!ep || ep->r0.vpe != tcu.regs().getCurVPE().id ||
         (cmd.opcode == CmdCommand::SEND && ep->r0.flags != 0))
     {
         DPRINTFS(Tcu, (&tcu), "EP%u: invalid EP\n", epid);
@@ -304,13 +304,13 @@ TcuError
 MessageUnit::fetchMessage(epid_t epid, Addr *msgOff)
 {
     RecvEp *ep = tcu.regs().getRecvEp(epid);
-    if (!ep || ep->r0.vpe != tcu.regs().getVPE())
+    if (!ep || ep->r0.vpe != tcu.regs().getCurVPE().id)
         return TcuError::INV_EP;
 
     // check if the current VPE has unread messages at all. note that this is
     // important in case it is out of sync with the receive EPs, i.e., if we
     // have ongoing foreignRecv core requests.
-    if (ep->r2.unread == 0 || tcu.regs().messages() == 0)
+    if (ep->r2.unread == 0 || tcu.regs().getCurVPE().msgs == 0)
     {
         *msgOff = -1;
         return TcuError::NONE;
@@ -387,7 +387,7 @@ TcuError
 MessageUnit::ackMessage(epid_t epId, Addr msgOff)
 {
     RecvEp *ep = tcu.regs().getRecvEp(epId);
-    if (!ep || ep->r0.vpe != tcu.regs().getVPE())
+    if (!ep || ep->r0.vpe != tcu.regs().getCurVPE().id)
         return TcuError::INV_EP;
 
     int msgidx = ep->offsetToIdx(msgOff);
@@ -566,7 +566,7 @@ MessageUnit::ReceiveTransferEvent::transferDone(TcuError result)
     RecvEp *ep = tcu().regs().getRecvEp(epId);
     if (result == TcuError::NONE && ep != nullptr)
     {
-        bool foreign = ep->r0.vpe != tcu().regs().getVPE();
+        bool foreign = ep->r0.vpe != tcu().regs().getCurVPE().id;
         result = msgUnit->finishMsgReceive(epId, msgAddr, header,
                                            result, flags(), !foreign);
 

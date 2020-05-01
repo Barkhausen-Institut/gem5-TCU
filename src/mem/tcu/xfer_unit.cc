@@ -131,7 +131,7 @@ XferUnit::TransferEvent::tryStart()
     assert(buf == NULL);
 
     // by default, virtual addresses refer to the running VPE
-    vpe = xfer->tcu.regs().getVPE();
+    vpe = xfer->tcu.regs().getCurVPE().id;
     buf = xfer->allocateBuf(this, flags());
 
     // try again later, if there is no free buffer

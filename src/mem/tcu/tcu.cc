@@ -174,7 +174,7 @@ Tcu::freeRequest(PacketPtr pkt)
 bool
 Tcu::has_message(epid_t ep)
 {
-    if (ep == 0xFFFF && regs().messages() > 0)
+    if (ep == 0xFFFF && regs().getVPE(PrivReg::CUR_VPE).msgs > 0)
         return true;
 
     if (ep != 0xFFFF)

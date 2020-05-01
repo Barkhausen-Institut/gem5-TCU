@@ -79,7 +79,7 @@ MemoryUnit::startRead(const CmdCommand::Bits& cmd)
 {
     MemEp *ep = tcu.regs().getMemEp(cmd.epid);
 
-    if(!ep || ep->r0.vpe != tcu.regs().getVPE())
+    if(!ep || ep->r0.vpe != tcu.regs().getCurVPE().id)
     {
         tcu.scheduleFinishOp(Cycles(1), TcuError::INV_EP);
         return;
@@ -187,7 +187,7 @@ MemoryUnit::startWrite(const CmdCommand::Bits& cmd)
 {
     MemEp *ep = tcu.regs().getMemEp(cmd.epid);
 
-    if(!ep || ep->r0.vpe != tcu.regs().getVPE())
+    if(!ep || ep->r0.vpe != tcu.regs().getCurVPE().id)
     {
         tcu.scheduleFinishOp(Cycles(1), TcuError::INV_EP);
         return;
