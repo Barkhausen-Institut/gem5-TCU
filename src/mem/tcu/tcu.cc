@@ -174,12 +174,12 @@ Tcu::freeRequest(PacketPtr pkt)
 bool
 Tcu::has_message(epid_t ep)
 {
-    if (ep == 0xFFFF && regFile.messages() > 0)
+    if (ep == 0xFFFF && regs().messages() > 0)
         return true;
 
     if (ep != 0xFFFF)
     {
-        RecvEp *rep = regFile.getRecvEp(ep);
+        RecvEp *rep = regs().getRecvEp(ep);
         if (rep && rep->r2.unread != 0)
             return true;
     }
@@ -684,7 +684,7 @@ Tcu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
     // Strip the base address to handle requests based on the reg. addr. only.
     pkt->setAddr(oldAddr - mmioRegion.start());
 
-    RegFile::Result result = regFile.handleRequest(pkt, isCpuRequest);
+    RegFile::Result result = regs().handleRequest(pkt, isCpuRequest);
 
     regFileReqs++;
 
