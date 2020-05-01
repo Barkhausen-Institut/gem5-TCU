@@ -123,6 +123,8 @@ class TcuAbortTest : public ClockedObject
 
     void recvRetry();
 
+    void finishTest(bool success);
+
     static Addr getRegAddr(TcuReg reg);
 
     static Addr getRegAddr(PrivReg reg);

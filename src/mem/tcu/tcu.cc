@@ -32,8 +32,6 @@
 #include <sstream>
 
 #include "debug/Tcu.hh"
-#include "debug/TcuBuf.hh"
-#include "debug/TcuCmd.hh"
 #include "debug/TcuPackets.hh"
 #include "debug/TcuMem.hh"
 #include "debug/TcuCoreMemAcc.hh"
@@ -44,38 +42,6 @@
 #include "mem/cache/cache.hh"
 #include "sim/pe_memory.hh"
 #include "sim/system.hh"
-
-static const char *cmdNames[] =
-{
-    "IDLE",
-    "SEND",
-    "REPLY",
-    "READ",
-    "WRITE",
-    "FETCH_MSG",
-    "ACK_MSG",
-    "SLEEP",
-};
-
-static const char *privCmdNames[] =
-{
-    "IDLE",
-    "INV_PAGE",
-    "INV_TLB",
-    "INS_TLB",
-    "XCHG_VPE",
-    "FLUSH_CACHE",
-    "SET_TIMER",
-    "ABORT_CMD",
-};
-
-static const char *extCmdNames[] =
-{
-    "IDLE",
-    "INV_EP",
-    "INV_REPLY",
-    "RESET",
-};
 
 Tcu::Tcu(TcuParams* p)
   : BaseTcu(p),
@@ -88,13 +54,9 @@ Tcu::Tcu(TcuParams* p)
     memUnit(new MemoryUnit(*this)),
     xferUnit(new XferUnit(*this, p->block_size, p->buf_count, p->buf_size)),
     coreReqs(*this, p->buf_count),
+    cmds(*this),
     fireTimerEvent(*this),
     completeCoreReqEvent(coreReqs),
-    cmdPkt(),
-    privCmdPkt(),
-    cmdFinish(),
-    abort(),
-    cmdIsRemote(),
     wakeupEp(0xFFFF),
     memPe(),
     memOffset(),
@@ -114,13 +76,6 @@ Tcu::Tcu(TcuParams* p)
     transferToNocLatency(p->transfer_to_noc_latency),
     nocToTransferLatency(p->noc_to_transfer_latency)
 {
-    static_assert(sizeof(cmdNames) / sizeof(cmdNames[0]) ==
-        CmdCommand::SLEEP + 1, "cmdNames out of sync");
-    static_assert(sizeof(privCmdNames) / sizeof(privCmdNames[0]) ==
-        PrivCommand::ABORT_CMD + 1, "privCmdNames out of sync");
-    static_assert(sizeof(extCmdNames) / sizeof(extCmdNames[0]) ==
-        ExtCommand::RESET + 1, "extCmdNames out of sync");
-
     assert(p->buf_size >= maxNocPacketSize);
 
     connector->setTcu(this);
@@ -176,32 +131,9 @@ Tcu::regStats()
         .name(name() + ".resets")
         .desc("Number of resets");
 
-    commands
-        .init(sizeof(cmdNames) / sizeof(cmdNames[0]))
-        .name(name() + ".commands")
-        .desc("The executed commands")
-        .flags(Stats::total | Stats::nozero);
-    for (size_t i = 0; i < sizeof(cmdNames) / sizeof(cmdNames[0]); ++i)
-        commands.subname(i, cmdNames[i]);
-
-    privCommands
-        .init(sizeof(privCmdNames) / sizeof(privCmdNames[0]))
-        .name(name() + ".privCommands")
-        .desc("The executed privileged commands")
-        .flags(Stats::total | Stats::nozero);
-    for (size_t i = 0; i < sizeof(privCmdNames) / sizeof(privCmdNames[0]); ++i)
-        privCommands.subname(i, privCmdNames[i]);
-
-    extCommands
-        .init(sizeof(extCmdNames) / sizeof(extCmdNames[0]))
-        .name(name() + ".extCommands")
-        .desc("The executed external commands")
-        .flags(Stats::total | Stats::nozero);
-    for (size_t i = 0; i < sizeof(extCmdNames) / sizeof(extCmdNames[0]); ++i)
-        extCommands.subname(i, extCmdNames[i]);
-
     if (tlb())
         tlb()->regStats();
+    cmds.regStats();
     coreReqs.regStats();
     xferUnit->regStats();
     memUnit->regStats();
@@ -237,348 +169,6 @@ void
 Tcu::freeRequest(PacketPtr pkt)
 {
     delete pkt;
-}
-
-void
-Tcu::executeCommand(PacketPtr pkt)
-{
-    CmdCommand::Bits cmd = regs().getCommand();
-    if (cmd.opcode == CmdCommand::IDLE)
-    {
-        if (pkt)
-            schedCpuResponse(pkt, clockEdge(Cycles(1)));
-        return;
-    }
-
-    assert(cmdPkt == nullptr);
-    cmdPkt = pkt;
-    commands[static_cast<size_t>(cmd.opcode)]++;
-
-    assert(cmd.epid < numEndpoints);
-    DPRINTF(TcuCmd, "Starting command %s with EP=%u, arg=%#lx\n",
-            cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epid, cmd.arg);
-
-    switch (cmd.opcode)
-    {
-        case CmdCommand::SEND:
-        case CmdCommand::REPLY:
-            msgUnit->startTransmission(cmd);
-            break;
-        case CmdCommand::READ:
-            memUnit->startRead(cmd);
-            break;
-        case CmdCommand::WRITE:
-            memUnit->startWrite(cmd);
-            break;
-        case CmdCommand::FETCH_MSG:
-            regs().set(CmdReg::ARG1, msgUnit->fetchMessage(cmd.epid));
-            finishCommand(TcuError::NONE);
-            break;
-        case CmdCommand::ACK_MSG:
-            finishCommand(msgUnit->ackMessage(cmd.epid, cmd.arg));
-            break;
-        case CmdCommand::SLEEP:
-        {
-            int ep = cmd.arg & 0xFFFF;
-            if (!startSleep(ep))
-                finishCommand(TcuError::NONE);
-        }
-        break;
-        default:
-            // TODO error handling
-            panic("Invalid opcode %#x\n", static_cast<RegFile::reg_t>(cmd.opcode));
-    }
-
-    if (cmdPkt && cmd.opcode != CmdCommand::SLEEP)
-    {
-        if (connector->canSuspendCmds())
-            startSleep(INVALID_EP_ID);
-        else
-        {
-            schedCpuResponse(cmdPkt, clockEdge(Cycles(1)));
-            cmdPkt = nullptr;
-        }
-    }
-}
-
-void
-Tcu::abortCommand()
-{
-    CmdCommand::Bits cmd = regs().getCommand();
-
-    // if we've already scheduled finishCommand, consider the command done
-    if (!cmdFinish && cmd.opcode != CmdCommand::IDLE)
-    {
-        // if we are waiting for a NoC response, just wait until we receive it.
-        // we deem this acceptable, because these remotely running transfers
-        // never cause page faults and thus complete in short amounts of time.
-        if (cmdIsRemote)
-        {
-            // SEND/REPLY needs to finish successfully as soon as we've sent
-            // out the message.
-            if (cmd.opcode != CmdCommand::SEND &&
-                cmd.opcode != CmdCommand::REPLY)
-                abort = AbortType::REMOTE;
-        }
-        // otherwise, abort it locally. this is done for all commands, because
-        // all can cause page faults locally.
-        else
-        {
-            abort = AbortType::LOCAL;
-
-            auto res = xferUnit->tryAbortCommand();
-            // if the current command used the xferUnit, we're done
-            if (res == XferUnit::AbortResult::ABORTED)
-                scheduleFinishOp(Cycles(1), TcuError::ABORT);
-        }
-
-        if (abort != AbortType::NONE)
-        {
-            DPRINTF(TcuCmd, "Aborting command %s with EP=%u\n",
-                    cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epid);
-        }
-    }
-    else
-    {
-        abort = AbortType::NONE;
-        // don't do that if we'll do that in finishCommand event anyway
-        if (!cmdFinish)
-            finishAbort();
-    }
-}
-
-void
-Tcu::scheduleFinishOp(Cycles delay, TcuError error)
-{
-    if (regs().getCommand().opcode != CmdCommand::IDLE)
-    {
-        if (cmdFinish)
-        {
-            deschedule(cmdFinish);
-            delete cmdFinish;
-        }
-
-        if (delay == 0)
-            finishCommand(error);
-        else
-        {
-            cmdFinish = new FinishCommandEvent(*this, error);
-            schedule(cmdFinish, clockEdge(delay));
-        }
-    }
-}
-
-void
-Tcu::finishCommand(TcuError error)
-{
-    CmdCommand::Bits cmd = regs().getCommand();
-
-    cmdFinish = NULL;
-
-    if (cmd.opcode == CmdCommand::SEND)
-        msgUnit->finishMsgSend(error, cmd.epid);
-    else if (cmd.opcode == CmdCommand::REPLY)
-        msgUnit->finishMsgReply(error, cmd.epid, cmd.arg);
-    else if (error == TcuError::NONE &&
-             (cmd.opcode == CmdCommand::READ || cmd.opcode == CmdCommand::WRITE))
-    {
-        const CmdData::Bits data = regs().getData();
-        if (data.size > 0)
-        {
-            if (cmd.opcode == CmdCommand::READ)
-                memUnit->startRead(cmd);
-            else
-                memUnit->startWrite(cmd);
-            return;
-        }
-    }
-
-    if (cmdPkt || cmd.opcode == CmdCommand::SLEEP)
-        stopSleep();
-
-    DPRINTF(TcuCmd, "Finished command %s with EP=%u -> %u\n",
-            cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epid,
-            static_cast<uint>(error));
-
-    // let the SW know that the command is finished
-    cmd = 0;
-    cmd.error = static_cast<unsigned>(error);
-    cmd.opcode = CmdCommand::IDLE;
-    regFile.set(CmdReg::COMMAND, cmd);
-
-    if (cmdPkt)
-        schedCpuResponse(cmdPkt, clockEdge(Cycles(1)));
-    cmdPkt = NULL;
-
-    // finish command abortion, if there is any
-    finishAbort();
-}
-
-void
-Tcu::executePrivCommand(PacketPtr pkt)
-{
-    PrivCommand::Bits cmd = regFile.get(PrivReg::PRIV_CMD);
-
-    privCommands[static_cast<size_t>(cmd.opcode)]++;
-
-    DPRINTF(TcuCmd, "Executing privileged command %s with arg=%p\n",
-            privCmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg);
-
-    Cycles delay(1);
-
-    switch (cmd.opcode)
-    {
-        case PrivCommand::IDLE:
-            break;
-        case PrivCommand::INV_PAGE:
-            if (tlb())
-            {
-                uint16_t asid = cmd.arg >> 44;
-                Addr virt = cmd.arg & 0xFFFFFFFFFFF;
-                tlb()->remove(virt, asid);
-            }
-            break;
-        case PrivCommand::INV_TLB:
-            if (tlb())
-                tlb()->clear();
-            break;
-        case PrivCommand::INS_TLB:
-            if (tlb())
-            {
-                uint16_t asid = cmd.arg >> 44;
-                Addr virt = cmd.arg & 0xFFFFFFFF000;
-                uint flags = cmd.arg & 0x1F;
-                Addr phys = regFile.get(PrivReg::PRIV_CMD_ARG);
-                tlb()->insert(virt, asid, NocAddr(phys), flags);
-            }
-            break;
-        case PrivCommand::XCHG_VPE:
-        {
-            RegFile::reg_t old = regs().get(PrivReg::CUR_VPE);
-            regs().set(PrivReg::OLD_VPE, old);
-            regs().set(PrivReg::CUR_VPE, cmd.arg & 0xFFFFFFFF);
-            break;
-        }
-        case PrivCommand::FLUSH_CACHE:
-            delay += flushInvalCaches(true);
-            break;
-        case PrivCommand::SET_TIMER:
-        {
-            if (fireTimerEvent.scheduled())
-                deschedule(&fireTimerEvent);
-            if (cmd.arg != 0)
-            {
-                Cycles sleep_time = ticksToCycles(cmd.arg * 1000);
-                schedule(&fireTimerEvent, clockEdge(sleep_time));
-            }
-            break;
-        }
-        case PrivCommand::ABORT_CMD:
-        {
-            privCmdPkt = pkt;
-            pkt = nullptr;
-            abortCommand();
-            return;
-        }
-        default:
-            // TODO error handling
-            panic("Invalid opcode %#x\n", static_cast<RegFile::reg_t>(cmd.opcode));
-    }
-
-    if (pkt)
-        schedCpuResponse(pkt, clockEdge(delay));
-
-    // set privileged command back to IDLE
-    cmd.arg = 0;
-    cmd.opcode = PrivCommand::IDLE;
-    regFile.set(PrivReg::PRIV_CMD, cmd);
-
-    DPRINTF(TcuCmd, "Finished privileged command %s with res=0\n",
-            privCmdNames[static_cast<size_t>(cmd.opcode)]);
-}
-
-void
-Tcu::finishAbort()
-{
-    if (privCmdPkt != nullptr)
-    {
-        schedCpuResponse(privCmdPkt, clockEdge(Cycles(1)));
-        privCmdPkt = nullptr;
-
-        PrivCommand::Bits cmd = regFile.get(PrivReg::PRIV_CMD);
-        cmd.arg = static_cast<RegFile::reg_t>(abort);
-
-        DPRINTF(TcuCmd, "Finished privileged command %s with res=%d\n",
-                privCmdNames[static_cast<size_t>(cmd.opcode)],
-                cmd.arg);
-
-        cmd.opcode = PrivCommand::IDLE;
-        regFile.set(PrivReg::PRIV_CMD, cmd);
-
-        abort = AbortType::NONE;
-    }
-}
-
-void
-Tcu::executeExtCommand(PacketPtr pkt)
-{
-    ExtCommand::Bits cmd = regFile.get(PrivReg::EXT_CMD);
-
-    extCommands[static_cast<size_t>(cmd.opcode)]++;
-
-    Cycles delay(1);
-
-    DPRINTF(TcuCmd, "Executing external command %s with arg=%p\n",
-            extCmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg);
-
-    switch (cmd.opcode)
-    {
-        case ExtCommand::IDLE:
-            break;
-        case ExtCommand::INV_EP:
-        {
-            epid_t epid = cmd.arg & 0xFFFF;
-            bool force = !!(cmd.arg & (1 << 16));
-            unsigned unreadMask;
-            TcuError res = regs().invalidate(epid, force, &unreadMask);
-            cmd.error = static_cast<uint>(res);
-            cmd.arg = unreadMask;
-            break;
-        }
-        case ExtCommand::INV_REPLY:
-        {
-            epid_t repid = cmd.arg & 0xFFFF;
-            peid_t peid = (cmd.arg >> 16) & 0xFF;
-            epid_t sepid = (cmd.arg >> 24) & 0xFFFF;
-            TcuError res = msgUnit->invalidateReply(repid, peid, sepid);
-            cmd.error = static_cast<uint>(res);
-            break;
-        }
-        case ExtCommand::RESET:
-            delay += reset(cmd.arg != 0);
-            break;
-        default:
-            // TODO error handling
-            panic("Invalid opcode %#x\n", static_cast<RegFile::reg_t>(cmd.opcode));
-    }
-
-    if (pkt)
-    {
-        auto senderState = dynamic_cast<NocSenderState*>(pkt->senderState);
-        assert(senderState);
-        schedNocResponse(pkt, clockEdge(delay));
-    }
-
-    if (cmd.error != static_cast<uint>(TcuError::NONE))
-    {
-        DPRINTF(TcuCmd, "External command %s failed (%u)\n",
-                extCmdNames[static_cast<size_t>(cmd.opcode)],
-                static_cast<uint>(cmd.error));
-    }
-
-    // set external command back to IDLE
-    cmd.opcode = ExtCommand::IDLE;
-    regFile.set(PrivReg::EXT_CMD, cmd);
 }
 
 bool
@@ -682,6 +272,18 @@ Tcu::fireTimer()
 }
 
 void
+Tcu::restartTimer(uint64_t nanos)
+{
+    if (fireTimerEvent.scheduled())
+        deschedule(&fireTimerEvent);
+    if (nanos != 0)
+    {
+        Cycles sleep_time = ticksToCycles(nanos * 1000);
+        schedule(&fireTimerEvent, clockEdge(sleep_time));
+    }
+}
+
+void
 Tcu::printLine(Addr len)
 {
     const char *buffer = regs().getBuffer(len);
@@ -729,7 +331,7 @@ Tcu::sendNocRequest(NocPacketType type,
 
     if (type == NocPacketType::MESSAGE || type == NocPacketType::READ_REQ ||
         type == NocPacketType::WRITE_REQ)
-        cmdIsRemote = true;
+        cmds.setRemoteCommand(true);
 
     pkt->pushSenderState(senderState);
 
@@ -818,12 +420,7 @@ Tcu::startTranslate(vpeid_t vpeId,
 {
     // if a command is running, send the response now to finish its memory
     // write instruction to the COMMAND register
-    if (cmdPkt)
-    {
-        stopSleep();
-        schedCpuResponse(cmdPkt, clockEdge(Cycles(1)));
-        cmdPkt = NULL;
-    }
+    cmds.stopCommand();
 
     return coreReqs.startTranslate(vpeId, virt, access, can_pf, trans);
 }
@@ -832,12 +429,7 @@ size_t
 Tcu::startForeignReceive(epid_t epId, vpeid_t vpeId)
 {
     // as above
-    if (cmdPkt)
-    {
-        stopSleep();
-        schedCpuResponse(cmdPkt, clockEdge(Cycles(1)));
-        cmdPkt = NULL;
-    }
+    cmds.stopCommand();
 
     return coreReqs.startForeignReceive(epId, vpeId);
 }
@@ -884,10 +476,10 @@ Tcu::completeNocRequest(PacketPtr pkt)
     }
     else if (senderState->packetType != NocPacketType::CACHE_MEM_REQ_FUNC)
     {
-        cmdIsRemote = false;
+        cmds.setRemoteCommand(false);
         // if the current command should be aborted, just ignore the packet
         // and finish the command
-        if (abort != AbortType::NONE)
+        if (cmds.isCommandAborting())
             scheduleFinishOp(Cycles(1), TcuError::ABORT);
         else
         {
@@ -1099,64 +691,57 @@ Tcu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
     // restore old address
     pkt->setAddr(oldAddr);
 
-    if (!atomicMode)
+    /*
+     * We handle the request immediatly and do not care about timing. The
+     * delay is payed by scheduling the response at some point in the
+     * future. Additionaly a write operation on the command register needs
+     * to schedule an event that executes this command at a future tick.
+     */
+
+    Cycles transportDelay =
+        ticksToCycles(pkt->headerDelay + pkt->payloadDelay);
+
+    Tick when = clockEdge(transportDelay + registerAccessLatency);
+
+    if (!isCpuRequest)
+        schedNocRequestFinished(clockEdge(Cycles(1)));
+
+    if (~result & RegFile::WROTE_EXT_CMD)
     {
-        /*
-         * We handle the request immediatly and do not care about timing. The
-         * delay is payed by scheduling the response at some point in the
-         * future. Additionaly a write operation on the command register needs
-         * to schedule an event that executes this command at a future tick.
-         */
+        assert(isCpuRequest || result == RegFile::WROTE_NONE);
+        pkt->headerDelay = 0;
+        pkt->payloadDelay = 0;
 
-        Cycles transportDelay =
-            ticksToCycles(pkt->headerDelay + pkt->payloadDelay);
+        if (isCpuRequest &&
+            (result & (RegFile::WROTE_CMD | RegFile::WROTE_PRIV_CMD)) == 0)
+            schedCpuResponse(pkt, when);
+        else if(!isCpuRequest)
+            schedNocResponse(pkt, when);
 
-        Tick when = clockEdge(transportDelay + registerAccessLatency);
-
-        if (!isCpuRequest)
-            schedNocRequestFinished(clockEdge(Cycles(1)));
-
-        if (~result & RegFile::WROTE_EXT_CMD)
-        {
-            assert(isCpuRequest || result == RegFile::WROTE_NONE);
-            pkt->headerDelay = 0;
-            pkt->payloadDelay = 0;
-
-            if (isCpuRequest &&
-                (result & (RegFile::WROTE_CMD | RegFile::WROTE_PRIV_CMD)) == 0)
-                schedCpuResponse(pkt, when);
-            else if(!isCpuRequest)
-                schedNocResponse(pkt, when);
-
-            if (result & RegFile::WROTE_CMD)
-                schedule(new ExecCmdEvent(*this, pkt), when);
-            else if (result & RegFile::WROTE_PRIV_CMD)
-                schedule(new ExecPrivCmdEvent(*this, pkt), when);
-            else if (result & RegFile::WROTE_CORE_REQ)
-                schedule(completeCoreReqEvent, when);
-            if (result & RegFile::WROTE_PRINT)
-                printLine(regs().get(TcuReg::PRINT));
-            if (result & RegFile::WROTE_CLEAR_IRQ)
-                clearIrq((BaseConnector::IRQ)regs().get(TcuReg::CLEAR_IRQ));
-        }
-        else
-            schedule(new ExecExtCmdEvent(*this, pkt), when);
-    }
-    else
-    {
-        if (result & RegFile::WROTE_CMD)
-            executeCommand(NULL);
-        if (result & RegFile::WROTE_PRIV_CMD)
-            executePrivCommand(NULL);
-        if (result & RegFile::WROTE_EXT_CMD)
-            executeExtCommand(NULL);
         if (result & RegFile::WROTE_CORE_REQ)
-            coreReqs.completeReqs();
+            schedule(completeCoreReqEvent, when);
         if (result & RegFile::WROTE_PRINT)
             printLine(regs().get(TcuReg::PRINT));
         if (result & RegFile::WROTE_CLEAR_IRQ)
             clearIrq((BaseConnector::IRQ)regs().get(TcuReg::CLEAR_IRQ));
     }
+
+    cmds.startCommand(result, pkt, when);
+}
+
+void
+Tcu::sendFunctionalMemRequest(PacketPtr pkt)
+{
+    // set our master id (it might be from a different PE)
+    pkt->req->setMasterId(masterId);
+
+    dcacheMasterPort.sendFunctional(pkt);
+}
+
+void
+Tcu::scheduleFinishOp(Cycles delay, TcuError error)
+{
+    cmds.scheduleFinishOp(delay, error);
 }
 
 Tcu*

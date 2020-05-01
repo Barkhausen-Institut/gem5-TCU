@@ -33,6 +33,7 @@
 
 #include "mem/tcu/connector/base.hh"
 #include "mem/tcu/base.hh"
+#include "mem/tcu/cmds.hh"
 #include "mem/tcu/regfile.hh"
 #include "mem/tcu/noc_addr.hh"
 #include "mem/tcu/xfer_unit.hh"
@@ -46,6 +47,8 @@ class XferUnit;
 
 class Tcu : public BaseTcu
 {
+    friend class TcuCommands;
+
   public:
 
     static const uint16_t INVALID_VPE_ID    = 0xFFFF;
@@ -61,13 +64,6 @@ class Tcu : public BaseTcu
     enum MessageFlags : uint8_t
     {
         REPLY_FLAG          = (1 << 0),
-    };
-
-    enum class AbortType
-    {
-        NONE,
-        LOCAL,
-        REMOTE,
     };
 
     enum class NocPacketType
@@ -131,14 +127,15 @@ class Tcu : public BaseTcu
 
     void fireTimer();
 
+    void restartTimer(uint64_t nanos);
+
     void forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest);
 
-    void sendFunctionalMemRequest(PacketPtr pkt)
-    {
-        // set our master id (it might be from a different PE)
-        pkt->req->setMasterId(masterId);
+    void sendFunctionalMemRequest(PacketPtr pkt);
 
-        dcacheMasterPort.sendFunctional(pkt);
+    bool isCommandAborting() const
+    {
+        return cmds.isCommandAborting();
     }
 
     void scheduleFinishOp(Cycles delay, TcuError error = TcuError::NONE);
@@ -171,26 +168,9 @@ class Tcu : public BaseTcu
 
     void abortTranslate(size_t reqId);
 
-    bool isCommandAborting() const
-    {
-        return abort != AbortType::NONE;
-    }
-
     void printPacket(PacketPtr pkt) const;
 
   private:
-
-    void executeCommand(PacketPtr pkt);
-
-    void abortCommand();
-
-    void executePrivCommand(PacketPtr pkt);
-
-    void finishAbort();
-
-    void executeExtCommand(PacketPtr pkt);
-
-    void finishCommand(TcuError error);
 
     bool has_message(epid_t ep);
 
@@ -228,94 +208,12 @@ class Tcu : public BaseTcu
 
     CoreRequests coreReqs;
 
+    TcuCommands cmds;
+
     EventWrapper<Tcu, &Tcu::fireTimer> fireTimerEvent;
 
     EventWrapper<CoreRequests, &CoreRequests::completeReqs> completeCoreReqEvent;
 
-    struct TcuEvent : public Event
-    {
-        Tcu& tcu;
-
-        TcuEvent(Tcu& _tcu)
-            : tcu(_tcu)
-        {}
-
-        const std::string name() const override { return tcu.name(); }
-    };
-
-    struct ExecCmdEvent : public TcuEvent
-    {
-        PacketPtr pkt;
-
-        ExecCmdEvent(Tcu& _tcu, PacketPtr _pkt)
-            : TcuEvent(_tcu), pkt(_pkt)
-        {}
-
-        void process() override
-        {
-            tcu.executeCommand(pkt);
-            setFlags(AutoDelete);
-        }
-
-        const char* description() const override { return "ExecCmdEvent"; }
-    };
-
-    struct ExecPrivCmdEvent : public TcuEvent
-    {
-        PacketPtr pkt;
-
-        ExecPrivCmdEvent(Tcu& _tcu, PacketPtr _pkt)
-            : TcuEvent(_tcu), pkt(_pkt)
-        {}
-
-        void process() override
-        {
-            tcu.executePrivCommand(pkt);
-            setFlags(AutoDelete);
-        }
-
-        const char* description() const override { return "ExecPrivCmdEvent"; }
-    };
-
-    struct ExecExtCmdEvent : public TcuEvent
-    {
-        PacketPtr pkt;
-
-        ExecExtCmdEvent(Tcu& _tcu, PacketPtr _pkt)
-            : TcuEvent(_tcu), pkt(_pkt)
-        {}
-
-        void process() override
-        {
-            tcu.executeExtCommand(pkt);
-            setFlags(AutoDelete);
-        }
-
-        const char* description() const override { return "ExecExtCmdEvent"; }
-    };
-
-    struct FinishCommandEvent : public TcuEvent
-    {
-        TcuError error;
-
-        FinishCommandEvent(Tcu& _tcu, TcuError _error = TcuError::NONE)
-            : TcuEvent(_tcu), error(_error)
-        {}
-
-        void process() override
-        {
-            tcu.finishCommand(error);
-            setFlags(AutoDelete);
-        }
-
-        const char* description() const override { return "FinishCommandEvent"; }
-    };
-
-    PacketPtr cmdPkt;
-    PacketPtr privCmdPkt;
-    FinishCommandEvent *cmdFinish;
-    AbortType abort;
-    bool cmdIsRemote;
     int wakeupEp;
 
   public:
@@ -360,11 +258,6 @@ class Tcu : public BaseTcu
     Stats::Scalar extMemReqs;
     Stats::Scalar irqInjects;
     Stats::Scalar resets;
-
-    // commands
-    Stats::Vector commands;
-    Stats::Vector privCommands;
-    Stats::Vector extCommands;
 
 };
 

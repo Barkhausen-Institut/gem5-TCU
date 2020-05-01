@@ -44,6 +44,7 @@ elif env['TARGET_ISA'] == 'riscv':
     SimObject('connector/RiscvConnector.py')
 
 Source('base.cc')
+Source('cmds.cc')
 Source('core_reqs.cc')
 Source('tcu.cc')
 Source('mem_unit.cc')

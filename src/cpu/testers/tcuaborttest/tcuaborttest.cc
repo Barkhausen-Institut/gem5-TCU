@@ -316,38 +316,7 @@ TcuAbortTest::completeRequest(PacketPtr pkt)
                     {
                         RegFile::reg_t reg = *pkt->getPtr<RegFile::reg_t>();
                         if ((reg & 0xF) == 0)
-                        {
-                            if (((reg >> 20) & 0xF) == 0)
-                            {
-                                auto all = 1 << uint(Tcu::AbortType::NONE) |
-                                           1 << uint(Tcu::AbortType::LOCAL);
-                                // messages are not remote aborted
-                                if (testNo < 2)
-                                    all |= 1 << uint(Tcu::AbortType::REMOTE);
-                                if (abortTypes != all)
-                                {
-                                    inform("! %s:%d  saw aborts %#x"
-                                           ", expected %#x FAILED\n",
-                                           __FUNCTION__, __LINE__,
-                                           abortTypes, all);
-                                }
-
-                                abortTypes = 0;
-
-                                if (++testNo == TEST_COUNT)
-                                    state = State::STOP;
-                                else
-                                {
-                                    delay = 0;
-                                    substate = SubState::START;
-                                }
-                            }
-                            else
-                            {
-                                delay++;
-                                substate = SubState::START;
-                            }
-                        }
+                            finishTest(((reg >> 20) & 0xF) == 0);
                         break;
                     }
                 }
@@ -360,6 +329,39 @@ TcuAbortTest::completeRequest(PacketPtr pkt)
 
     // kick things into action again
     schedule(tickEvent, clockEdge(schedDelay));
+}
+
+void
+TcuAbortTest::finishTest(bool success)
+{
+    if (success)
+    {
+        auto all = 1 << uint(TcuCommands::AbortType::NONE) |
+                   1 << uint(TcuCommands::AbortType::LOCAL);
+        // messages are not remote aborted
+        if (testNo < 2)
+            all |= 1 << uint(TcuCommands::AbortType::REMOTE);
+        if (abortTypes != all)
+        {
+            inform("! %s:%d  saw aborts %#x, expected %#x FAILED\n",
+                   __FUNCTION__, __LINE__, abortTypes, all);
+        }
+
+        abortTypes = 0;
+
+        if (++testNo == TEST_COUNT)
+            state = State::STOP;
+        else
+        {
+            delay = 0;
+            substate = SubState::START;
+        }
+    }
+    else
+    {
+        delay++;
+        substate = SubState::START;
+    }
 }
 
 void
