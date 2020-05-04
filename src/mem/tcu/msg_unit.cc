@@ -98,7 +98,7 @@ MessageUnit::startTransmission(const CmdCommand::Bits& cmd)
 
         SendEp *sep = tcu.regs().getSendEp(epid);
 
-        if (!sep || !(sep->r0.flags & SendEp::FL_REPLY))
+        if (!sep || !sep->r0.reply)
         {
             DPRINTFS(Tcu, (&tcu),
                      "EP%u: invalid reply EP. Double reply for msg %p?\n",
@@ -141,7 +141,7 @@ MessageUnit::startTransmission(const CmdCommand::Bits& cmd)
 
     // check if the send EP is valid
     if (!ep || ep->r0.vpe != tcu.regs().getCurVPE().id ||
-        (cmd.opcode == CmdCommand::SEND && ep->r0.flags != 0))
+        (cmd.opcode == CmdCommand::SEND && ep->r0.reply))
     {
         DPRINTFS(Tcu, (&tcu), "EP%u: invalid EP\n", epid);
         tcu.scheduleFinishOp(Cycles(1), TcuError::INV_EP);
@@ -478,7 +478,7 @@ MessageUnit::finishMsgReceive(epid_t epId,
             sep->send.r0.maxMsgSize = header->replySize;
             sep->send.r0.maxcrd = sep->send.r0.curcrd = 1;
             sep->send.r0.crdEp = header->senderEpId;
-            sep->send.r0.flags = SendEp::FL_REPLY;
+            sep->send.r0.reply = 1;
             sep->send.r1.targetPe = header->senderPeId;
             sep->send.r1.targetEp = header->replyEpId;
             sep->send.r2.label = header->replyLabel;

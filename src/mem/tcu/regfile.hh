@@ -193,7 +193,7 @@ struct SendEp
                RegAccess access) const;
 
     BitUnion64(R0)
-        Bitfield<55, 53> flags;
+        Bitfield<53> reply;
         Bitfield<52, 37> crdEp;
         Bitfield<36, 31> maxMsgSize;
         Bitfield<30, 25> maxcrd;

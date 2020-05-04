@@ -309,12 +309,12 @@ SendEp::print(const RegFile &rf,
 {
     DPRINTFNS(rf.name(),
         "%s%s EP%u%14s: Send[vpe=%u, pe=%u ep=%u crdep=%u maxcrd=%u "
-                            "curcrd=%u max=%#x lbl=%#llx fl=%#lx]\n",
+                            "curcrd=%u max=%#x lbl=%#llx rpl=%d]\n",
         regAccessName(access), read ? "<-" : "->",
         epId, "", r0.vpe,
         r1.targetPe, r1.targetEp, r0.crdEp,
         r0.maxcrd, r0.curcrd, 1 << r0.maxMsgSize,
-        r2.label, r0.flags);
+        r2.label, r0.reply);
 }
 
 void
