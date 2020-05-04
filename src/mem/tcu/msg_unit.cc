@@ -179,7 +179,7 @@ MessageUnit::startTransmission(const CmdCommand::Bits& cmd)
     info.targetPeId   = ep->r1.targetPe;
     info.targetEpId   = ep->r1.targetEp;
     info.label        = ep->r2.label;
-    info.replyLabel   = tcu.regs().get(CmdReg::ARG1);
+    info.replyLabel   = tcu.regs().get(UnprivReg::ARG1);
     info.unlimcred    = ep->r0.curcrd == Tcu::CREDITS_UNLIM;
     info.ready        = true;
     info.sepId        = epid;

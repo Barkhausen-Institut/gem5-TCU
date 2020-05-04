@@ -180,7 +180,7 @@ TcuCommands::executeCommand(PacketPtr pkt)
             Addr offset;
             TcuError res = tcu.msgUnit->fetchMessage(cmd.epid, &offset);
             if (res == TcuError::NONE)
-                tcu.regs().set(CmdReg::ARG1, offset);
+                tcu.regs().set(UnprivReg::ARG1, offset);
             finishCommand(res);
         }
         break;
@@ -317,7 +317,7 @@ TcuCommands::finishCommand(TcuError error)
     cmd = 0;
     cmd.error = static_cast<unsigned>(error);
     cmd.opcode = CmdCommand::IDLE;
-    tcu.regs().set(CmdReg::COMMAND, cmd);
+    tcu.regs().set(UnprivReg::COMMAND, cmd);
 
     if (cmdPkt)
         tcu.schedCpuResponse(cmdPkt, tcu.clockEdge(Cycles(1)));
@@ -425,7 +425,7 @@ TcuCommands::finishAbort()
 void
 TcuCommands::executeExtCommand(PacketPtr pkt)
 {
-    ExtCommand::Bits cmd = tcu.regs().get(PrivReg::EXT_CMD);
+    ExtCommand::Bits cmd = tcu.regs().get(ExtReg::EXT_CMD);
 
     extCommands[static_cast<size_t>(cmd.opcode)]++;
 
@@ -477,5 +477,5 @@ TcuCommands::executeExtCommand(PacketPtr pkt)
 
     // set external command back to IDLE
     cmd.opcode = ExtCommand::IDLE;
-    tcu.regs().set(PrivReg::EXT_CMD, cmd);
+    tcu.regs().set(ExtReg::EXT_CMD, cmd);
 }

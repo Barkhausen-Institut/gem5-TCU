@@ -73,12 +73,6 @@ TcuPciProxy::freePacket(PacketPtr pkt)
     delete pkt;
 }
 
-Addr
-TcuPciProxy::getRegAddr(TcuReg reg)
-{
-    return static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
-}
-
 PacketPtr
 TcuPciProxy::createTcuRegPkt(
     Addr reg, RegFile::reg_t value, MemCmd cmd = MemCmd::WriteReq)
@@ -89,9 +83,9 @@ TcuPciProxy::createTcuRegPkt(
 }
 
 Addr
-TcuPciProxy::getRegAddr(CmdReg reg)
+TcuPciProxy::getRegAddr(UnprivReg reg)
 {
-    Addr result = sizeof(RegFile::reg_t) * numTcuRegs;
+    Addr result = sizeof(RegFile::reg_t) * numExtRegs;
 
     result += static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
 
@@ -102,11 +96,11 @@ PacketPtr
 TcuPciProxy::createTcuCmdPkt(CmdCommand::Bits cmd, CmdData::Bits data,
                              uint64_t arg1)
 {
-    static_assert(static_cast<int>(CmdReg::COMMAND) == 0, "");
-    static_assert(static_cast<int>(CmdReg::DATA) == 1, "");
-    static_assert(static_cast<int>(CmdReg::ARG1) == 2, "");
+    static_assert(static_cast<int>(UnprivReg::COMMAND) == 0, "");
+    static_assert(static_cast<int>(UnprivReg::DATA) == 1, "");
+    static_assert(static_cast<int>(UnprivReg::ARG1) == 2, "");
 
-    auto pkt = createPacket(tcuRegBase + getRegAddr(CmdReg::COMMAND),
+    auto pkt = createPacket(tcuRegBase + getRegAddr(UnprivReg::COMMAND),
         sizeof(RegFile::reg_t) * 3, MemCmd::WriteReq);
 
     RegFile::reg_t* regs = pkt->getPtr<RegFile::reg_t>();
@@ -423,7 +417,7 @@ TcuPciProxy::CommandSM::tick()
             break;
         }
         case State::CMD_WAIT: {
-            Addr regAddr = getRegAddr(CmdReg::COMMAND);
+            Addr regAddr = getRegAddr(UnprivReg::COMMAND);
             pkt = pciProxy->createTcuRegPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }

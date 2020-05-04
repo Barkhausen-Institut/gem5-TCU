@@ -56,10 +56,9 @@ class TcuPciProxy : public ClockedObject
         Addr paddr, const void* data, size_t size, MemCmd cmd);
     static void freePacket(PacketPtr pkt);
 
-    static Addr getRegAddr(TcuReg reg);
     PacketPtr createTcuRegPkt(Addr reg, RegFile::reg_t value, MemCmd cmd);
 
-    static Addr getRegAddr(CmdReg reg);
+    static Addr getRegAddr(UnprivReg reg);
     PacketPtr createTcuCmdPkt(CmdCommand::Bits cmd, CmdData::Bits data,
         uint64_t arg1);
     static Addr encodePciAddress(PciBusAddr const& busAddr, Addr offset);

@@ -45,9 +45,9 @@ finishReadWrite(Tcu &tcu, Addr size)
     tcu.regs().setData(data);
 
     // change offset
-    Addr offset = tcu.regs().get(CmdReg::ARG1);
+    Addr offset = tcu.regs().get(UnprivReg::ARG1);
     offset += size;
-    tcu.regs().set(CmdReg::ARG1, offset);
+    tcu.regs().set(UnprivReg::ARG1, offset);
 }
 
 void
@@ -92,7 +92,7 @@ MemoryUnit::startRead(const CmdCommand::Bits& cmd)
     }
 
     CmdData::Bits data = tcu.regs().getData();
-    Addr offset = tcu.regs().get(CmdReg::ARG1);
+    Addr offset = tcu.regs().get(UnprivReg::ARG1);
     Addr size = std::min(static_cast<Addr>(data.size), tcu.maxNocPacketSize);
 
     readBytes.sample(size);
@@ -200,7 +200,7 @@ MemoryUnit::startWrite(const CmdCommand::Bits& cmd)
     }
 
     CmdData::Bits data = tcu.regs().getData();
-    Addr offset = tcu.regs().get(CmdReg::ARG1);
+    Addr offset = tcu.regs().get(UnprivReg::ARG1);
     Addr size = std::min(static_cast<Addr>(data.size), tcu.maxNocPacketSize);
 
     writtenBytes.sample(size);

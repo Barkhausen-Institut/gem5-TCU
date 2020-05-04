@@ -39,26 +39,26 @@
     Trace::getDebugLogger()->dprintf(curTick(), name, __VA_ARGS__);     \
 } while (0)
 
-const char *RegFile::tcuRegNames[] = {
+const char *RegFile::extRegNames[] = {
     "FEATURES",
-    "CUR_TIME",
-    "CLEAR_IRQ",
-    "PRINT",
+    "EXT_CMD",
 };
 
 const char *RegFile::privRegNames[] = {
     "CORE_REQ",
     "PRIV_CMD",
     "PRIV_CMD_ARG",
-    "EXT_CMD",
     "CUR_VPE",
     "OLD_VPE",
+    "CLEAR_IRQ",
 };
 
-const char *RegFile::cmdRegNames[] = {
+const char *RegFile::unprivRegNames[] = {
     "COMMAND",
     "DATA",
     "ARG1",
+    "CUR_TIME",
+    "PRINT",
 };
 
 const char *RegFile::epTypeNames[] = {
@@ -89,24 +89,24 @@ static const char *regAccessName(RegAccess access)
 
 RegFile::RegFile(Tcu &_tcu, const std::string& name, unsigned _numEndpoints)
     : tcu(_tcu),
-      tcuRegs(numTcuRegs, 0),
+      extRegs(numExtRegs, 0),
       privRegs(numPrivRegs, 0),
-      cmdRegs(numCmdRegs, 0),
+      unprivRegs(numUnprivRegs, 0),
       eps(_numEndpoints, Ep()),
       bufRegs(numBufRegs * sizeof(reg_t), 0),
       numEndpoints(_numEndpoints),
       _name(name)
 {
-    static_assert(sizeof(tcuRegNames) / sizeof(tcuRegNames[0]) ==
-        numTcuRegs, "tcuRegNames out of sync");
+    static_assert(sizeof(extRegNames) / sizeof(extRegNames[0]) ==
+        numExtRegs, "extRegNames out of sync");
     static_assert(sizeof(privRegNames) / sizeof(privRegNames[0]) ==
         numPrivRegs, "privRegNames out of sync");
-    static_assert(sizeof(cmdRegNames) / sizeof(cmdRegNames[0]) ==
-        numCmdRegs, "cmdRegNames out of sync");
+    static_assert(sizeof(unprivRegNames) / sizeof(unprivRegNames[0]) ==
+        numUnprivRegs, "unprivRegNames out of sync");
 
     // at boot, all PEs are privileged
     reg_t feat = static_cast<reg_t>(Features::PRIV);
-    set(TcuReg::FEATURES, feat);
+    set(ExtReg::FEATURES, feat);
 
     // and no VPE is running (the id might stay invalid for PEs that don't
     // support multiple VPEs though)
@@ -157,32 +157,27 @@ RegFile::rem_msg()
 }
 
 RegFile::reg_t
-RegFile::get(TcuReg reg, RegAccess access) const
+RegFile::get(ExtReg reg, RegAccess access) const
 {
-    reg_t value;
-
-    if (reg == TcuReg::CUR_TIME)
-        value = curTick() / 1000;
-    else
-        value = tcuRegs[static_cast<Addr>(reg)];
+    reg_t value = extRegs[static_cast<Addr>(reg)];
 
     DPRINTF(TcuRegRead, "%s<- TCU[%-12s]: %#018x\n",
                         regAccessName(access),
-                        tcuRegNames[static_cast<Addr>(reg)],
+                        extRegNames[static_cast<Addr>(reg)],
                         value);
 
     return value;
 }
 
 void
-RegFile::set(TcuReg reg, reg_t value, RegAccess access)
+RegFile::set(ExtReg reg, reg_t value, RegAccess access)
 {
     DPRINTF(TcuRegWrite, "%s-> TCU[%-12s]: %#018x\n",
                          regAccessName(access),
-                         tcuRegNames[static_cast<Addr>(reg)],
+                         extRegNames[static_cast<Addr>(reg)],
                          value);
 
-    tcuRegs[static_cast<Addr>(reg)] = value;
+    extRegs[static_cast<Addr>(reg)] = value;
 }
 
 RegFile::reg_t
@@ -210,27 +205,32 @@ RegFile::set(PrivReg reg, reg_t value, RegAccess access)
 }
 
 RegFile::reg_t
-RegFile::get(CmdReg reg, RegAccess access) const
+RegFile::get(UnprivReg reg, RegAccess access) const
 {
-    reg_t value = cmdRegs[static_cast<Addr>(reg)];
+    reg_t value;
+
+    if (reg == UnprivReg::CUR_TIME)
+        value = curTick() / 1000;
+    else
+        value = unprivRegs[static_cast<Addr>(reg)];
 
     DPRINTF(TcuRegRead, "%s<- CMD[%-12s]: %#018x\n",
                         regAccessName(access),
-                        cmdRegNames[static_cast<Addr>(reg)],
+                        unprivRegNames[static_cast<Addr>(reg)],
                         value);
 
     return value;
 }
 
 void
-RegFile::set(CmdReg reg, reg_t value, RegAccess access)
+RegFile::set(UnprivReg reg, reg_t value, RegAccess access)
 {
     DPRINTF(TcuRegWrite, "%s-> CMD[%-12s]: %#018x\n",
                          regAccessName(access),
-                         cmdRegNames[static_cast<Addr>(reg)],
+                         unprivRegNames[static_cast<Addr>(reg)],
                          value);
 
-    cmdRegs[static_cast<Addr>(reg)] = value;
+    unprivRegs[static_cast<Addr>(reg)] = value;
 }
 
 SendEp*
@@ -419,26 +419,20 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
     {
         Addr regAddr = pktAddr + offset;
 
-        // master register
-        if (regAddr < sizeof(reg_t) * numTcuRegs)
+        // external registers
+        if (regAddr < sizeof(reg_t) * numExtRegs)
         {
-            auto reg = static_cast<TcuReg>(regAddr / sizeof(reg_t));
+            auto reg = static_cast<ExtReg>(regAddr / sizeof(reg_t));
 
             if (pkt->isRead())
                 data[offset / sizeof(reg_t)] = get(reg, access);
-            else if (pkt->isWrite() && isCpuRequest && reg == TcuReg::CLEAR_IRQ)
-            {
-                res |= WROTE_CLEAR_IRQ;
-                set(reg, data[offset / sizeof(reg_t)], access);
-            }
-            else if (pkt->isWrite() && isCpuRequest && reg == TcuReg::PRINT)
-            {
-                res |= WROTE_PRINT;
-                set(reg, data[offset / sizeof(reg_t)], access);
-            }
-            // master registers can't be set by the CPU
+            // external registers can't be set by the CPU
             else if (pkt->isWrite() && !isCpuRequest)
+            {
+                if (reg == ExtReg::EXT_CMD)
+                    res |= WROTE_EXT_CMD;
                 set(reg, data[offset / sizeof(reg_t)], access);
+            }
         }
         else if (regAddr >= TcuTlb::PAGE_SIZE * 2)
         {
@@ -450,40 +444,39 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
 
                 if (pkt->isRead())
                     data[offset / sizeof(reg_t)] = get(reg, access);
-                // privileged registers can only be set if we're privileged
                 else if (pkt->isWrite())
                 {
                     if (reg == PrivReg::CORE_REQ)
                         res |= WROTE_CORE_REQ;
                     else if (reg == PrivReg::PRIV_CMD)
                         res |= WROTE_PRIV_CMD;
-                    // EXT_CMD can only be written externally
-                    else if (reg == PrivReg::EXT_CMD && !isCpuRequest)
-                        res |= WROTE_EXT_CMD;
-                    if (reg != PrivReg::EXT_CMD || !isCpuRequest)
-                        set(reg, data[offset / sizeof(reg_t)], access);
+                    else if (reg == PrivReg::CLEAR_IRQ)
+                        res |= WROTE_CLEAR_IRQ;
+                    set(reg, data[offset / sizeof(reg_t)], access);
                 }
             }
         }
-        // cmd register
-        else if (regAddr < sizeof(reg_t) * (numTcuRegs + numCmdRegs))
+        // unprivileged register
+        else if (regAddr < sizeof(reg_t) * (numExtRegs + numUnprivRegs))
         {
-            size_t idx = regAddr / sizeof(reg_t) - numTcuRegs;
-            auto reg = static_cast<CmdReg>(idx);
+            size_t idx = regAddr / sizeof(reg_t) - numExtRegs;
+            auto reg = static_cast<UnprivReg>(idx);
 
             if (pkt->isRead())
                 data[offset / sizeof(reg_t)] = get(reg, access);
             // the command registers can't be written from the NoC
             else if (pkt->isWrite() && isCpuRequest)
             {
-                if (reg == CmdReg::COMMAND)
+                if(reg == UnprivReg::COMMAND)
                     res |= WROTE_CMD;
+                else if(reg == UnprivReg::PRINT)
+                    res |= WROTE_PRINT;
                 set(reg, data[offset / sizeof(reg_t)], access);
             }
         }
         else
         {
-            size_t nonEpRegs = numTcuRegs + numCmdRegs;
+            size_t nonEpRegs = numExtRegs + numUnprivRegs;
             Addr epAddr = regAddr - sizeof(reg_t) * nonEpRegs;
 
             // endpoint address
@@ -501,7 +494,7 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
 
                 if (pkt->isRead())
                     data[offset / sizeof(reg_t)] = get(epId, regNumber);
-                // writable only from remote and master TCUs
+                // writable only from remote and privileged TCUs
                 else if (!isCpuRequest || isPriv)
                     set(epId, regNumber, data[offset / sizeof(reg_t)]);
                 else

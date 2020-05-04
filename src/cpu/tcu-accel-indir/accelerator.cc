@@ -274,7 +274,7 @@ TcuAccelInDir::tick()
         }
         case State::READ_MSG_ADDR:
         {
-            Addr regAddr = getRegAddr(CmdReg::ARG1);
+            Addr regAddr = getRegAddr(UnprivReg::ARG1);
             pkt = createTcuRegPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }
@@ -294,7 +294,7 @@ TcuAccelInDir::tick()
         }
         case State::WRITE_DATA_WAIT:
         {
-            Addr regAddr = getRegAddr(CmdReg::COMMAND);
+            Addr regAddr = getRegAddr(UnprivReg::COMMAND);
             pkt = createTcuRegPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }
@@ -318,7 +318,7 @@ TcuAccelInDir::tick()
         }
         case State::REPLY_WAIT:
         {
-            Addr regAddr = getRegAddr(CmdReg::COMMAND);
+            Addr regAddr = getRegAddr(UnprivReg::COMMAND);
             pkt = createTcuRegPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }

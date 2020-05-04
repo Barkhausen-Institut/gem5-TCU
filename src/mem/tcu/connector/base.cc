@@ -58,7 +58,7 @@ BaseConnector::clearIrq(IRQ irq)
 void
 BaseConnector::startIrq(IRQ irq)
 {
-    _tcu->regs().set(TcuReg::CLEAR_IRQ, irq);
+    _tcu->regs().set(PrivReg::CLEAR_IRQ, irq);
     doSetIrq(irq);
 }
 

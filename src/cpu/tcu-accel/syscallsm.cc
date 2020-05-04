@@ -57,7 +57,7 @@ SyscallSM::tick()
         }
         case State::SYSC_WAIT:
         {
-            Addr regAddr = accel->getRegAddr(CmdReg::COMMAND);
+            Addr regAddr = accel->getRegAddr(UnprivReg::COMMAND);
             pkt = accel->createTcuRegPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }
@@ -74,7 +74,7 @@ SyscallSM::tick()
         }
         case State::SYSC_READ_ADDR:
         {
-            Addr regAddr = accel->getRegAddr(CmdReg::ARG1);
+            Addr regAddr = accel->getRegAddr(UnprivReg::ARG1);
             pkt = accel->createTcuRegPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }

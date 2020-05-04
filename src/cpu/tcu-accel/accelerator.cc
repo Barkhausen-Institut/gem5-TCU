@@ -40,21 +40,15 @@ const unsigned TcuAccel::EP_SYSS       = 4;
 const unsigned TcuAccel::EP_SYSR       = 5;
 
 Addr
-TcuAccel::getRegAddr(TcuReg reg)
-{
-    return static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
-}
-
-Addr
 TcuAccel::getRegAddr(PrivReg reg)
 {
     return TcuTlb::PAGE_SIZE * 2 + static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
 }
 
 Addr
-TcuAccel::getRegAddr(CmdReg reg)
+TcuAccel::getRegAddr(UnprivReg reg)
 {
-    Addr result = sizeof(RegFile::reg_t) * numTcuRegs;
+    Addr result = sizeof(RegFile::reg_t) * numExtRegs;
 
     result += static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
 
@@ -64,7 +58,7 @@ TcuAccel::getRegAddr(CmdReg reg)
 Addr
 TcuAccel::getRegAddr(unsigned reg, unsigned epid)
 {
-    Addr result = sizeof(RegFile::reg_t) * (numTcuRegs + numCmdRegs);
+    Addr result = sizeof(RegFile::reg_t) * (numExtRegs + numUnprivRegs);
 
     result += epid * numEpRegs * sizeof(RegFile::reg_t);
 
@@ -183,11 +177,11 @@ PacketPtr
 TcuAccel::createTcuCmdPkt(CmdCommand::Bits cmd, CmdData::Bits data,
                           uint64_t offset)
 {
-    static_assert(static_cast<int>(CmdReg::COMMAND) == 0, "");
-    static_assert(static_cast<int>(CmdReg::DATA) == 1, "");
-    static_assert(static_cast<int>(CmdReg::ARG1) == 2, "");
+    static_assert(static_cast<int>(UnprivReg::COMMAND) == 0, "");
+    static_assert(static_cast<int>(UnprivReg::DATA) == 1, "");
+    static_assert(static_cast<int>(UnprivReg::ARG1) == 2, "");
 
-    auto pkt = createPacket(reg_base + getRegAddr(CmdReg::COMMAND),
+    auto pkt = createPacket(reg_base + getRegAddr(UnprivReg::COMMAND),
                             sizeof(RegFile::reg_t) * 3,
                             MemCmd::WriteReq);
 

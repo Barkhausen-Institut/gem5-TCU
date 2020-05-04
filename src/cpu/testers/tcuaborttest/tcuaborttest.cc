@@ -80,12 +80,6 @@ static const char *abortNames[] =
 };
 
 Addr
-TcuAbortTest::getRegAddr(TcuReg reg)
-{
-    return static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
-}
-
-Addr
 TcuAbortTest::getRegAddr(PrivReg reg)
 {
     return TcuTlb::PAGE_SIZE * 2 +
@@ -93,9 +87,9 @@ TcuAbortTest::getRegAddr(PrivReg reg)
 }
 
 Addr
-TcuAbortTest::getRegAddr(CmdReg reg)
+TcuAbortTest::getRegAddr(UnprivReg reg)
 {
-    Addr result = sizeof(RegFile::reg_t) * numTcuRegs;
+    Addr result = sizeof(RegFile::reg_t) * numExtRegs;
 
     result += static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
 
@@ -105,7 +99,7 @@ TcuAbortTest::getRegAddr(CmdReg reg)
 Addr
 TcuAbortTest::getRegAddr(unsigned reg, unsigned epid)
 {
-    Addr result = sizeof(RegFile::reg_t) * (numTcuRegs + numCmdRegs);
+    Addr result = sizeof(RegFile::reg_t) * (numExtRegs + numUnprivRegs);
 
     result += epid * numEpRegs * sizeof(RegFile::reg_t);
 
@@ -231,11 +225,11 @@ TcuAbortTest::createCommandPkt(CmdCommand::Bits cmd,
                                CmdData::Bits data,
                                Addr arg1)
 {
-    static_assert(static_cast<int>(CmdReg::COMMAND) == 0, "");
-    static_assert(static_cast<int>(CmdReg::DATA) == 1, "");
-    static_assert(static_cast<int>(CmdReg::ARG1) == 2, "");
+    static_assert(static_cast<int>(UnprivReg::COMMAND) == 0, "");
+    static_assert(static_cast<int>(UnprivReg::DATA) == 1, "");
+    static_assert(static_cast<int>(UnprivReg::ARG1) == 2, "");
 
-    auto pkt = createPacket(reg_base + getRegAddr(CmdReg::COMMAND),
+    auto pkt = createPacket(reg_base + getRegAddr(UnprivReg::COMMAND),
                             sizeof(RegFile::reg_t) * 3,
                             MemCmd::WriteReq);
 
@@ -527,7 +521,7 @@ TcuAbortTest::tick()
                         delay, testNames[testNo], curTick() - abortStart,
                         abortNames[abortType]);
 
-                    Addr regAddr = getRegAddr(CmdReg::COMMAND);
+                    Addr regAddr = getRegAddr(UnprivReg::COMMAND);
                     pkt = createTcuRegisterPkt(regAddr, 0, MemCmd::ReadReq);
                     break;
                 }

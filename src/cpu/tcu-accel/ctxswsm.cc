@@ -67,7 +67,7 @@ AccelCtxSwSM::tick()
         }
         case State::READ_MSG_ADDR:
         {
-            Addr regAddr = accel->getRegAddr(CmdReg::ARG1);
+            Addr regAddr = accel->getRegAddr(UnprivReg::ARG1);
             pkt = accel->createTcuRegPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }
@@ -95,7 +95,7 @@ AccelCtxSwSM::tick()
         }
         case State::REPLY_WAIT:
         {
-            Addr regAddr = accel->getRegAddr(CmdReg::COMMAND);
+            Addr regAddr = accel->getRegAddr(UnprivReg::COMMAND);
             pkt = accel->createTcuRegPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }

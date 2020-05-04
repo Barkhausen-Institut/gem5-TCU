@@ -107,11 +107,9 @@ class TcuAccel : public ClockedObject
 
     void recvRetry();
 
-    static Addr getRegAddr(TcuReg reg);
-
     static Addr getRegAddr(PrivReg reg);
 
-    static Addr getRegAddr(CmdReg reg);
+    static Addr getRegAddr(UnprivReg reg);
 
     static Addr getRegAddr(unsigned reg, unsigned epid);
 

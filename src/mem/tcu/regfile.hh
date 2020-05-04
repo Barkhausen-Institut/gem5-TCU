@@ -38,13 +38,11 @@
 #include "mem/tcu/error.hh"
 #include "mem/packet.hh"
 
-// only writable by remote TCUs
-enum class TcuReg : Addr
+// external registers (only externally writable)
+enum class ExtReg : Addr
 {
     FEATURES,
-    CUR_TIME,
-    CLEAR_IRQ,
-    PRINT,
+    EXT_CMD,
 };
 
 enum class Features
@@ -52,28 +50,30 @@ enum class Features
     PRIV            = 1 << 0,
 };
 
-// privileged registers (for kernel and PEMux)
+// privileged registers (only writable by privileged software)
 enum class PrivReg : Addr
 {
     CORE_REQ,
     PRIV_CMD,
     PRIV_CMD_ARG,
-    EXT_CMD,
     CUR_VPE,
     OLD_VPE,
+    CLEAR_IRQ,
 };
 
-// registers to issue a command
-enum class CmdReg : Addr
+// unprivileged registers (writable by the application)
+enum class UnprivReg : Addr
 {
     COMMAND,
     DATA,
     ARG1,
+    CUR_TIME,
+    PRINT,
 };
 
-constexpr unsigned numTcuRegs = 4;
+constexpr unsigned numExtRegs = 2;
 constexpr unsigned numPrivRegs = 6;
-constexpr unsigned numCmdRegs = 3;
+constexpr unsigned numUnprivRegs = 5;
 constexpr unsigned numEpRegs = 3;
 // buffer for prints (32 * 8 bytes)
 constexpr unsigned numBufRegs = 32;
@@ -410,7 +410,7 @@ class RegFile
 
     bool hasFeature(Features feature) const
     {
-        return get(TcuReg::FEATURES) & static_cast<reg_t>(feature);
+        return get(ExtReg::FEATURES) & static_cast<reg_t>(feature);
     }
 
     TcuError invalidate(epid_t epId, bool force, unsigned *unreadMask);
@@ -429,33 +429,31 @@ class RegFile
         return getVPE(PrivReg::CUR_VPE);
     }
 
-    void updateMsgCnt();
+    reg_t get(ExtReg reg, RegAccess access = RegAccess::TCU) const;
 
-    reg_t get(TcuReg reg, RegAccess access = RegAccess::TCU) const;
-
-    void set(TcuReg reg, reg_t value, RegAccess access = RegAccess::TCU);
+    void set(ExtReg reg, reg_t value, RegAccess access = RegAccess::TCU);
 
     reg_t get(PrivReg reg, RegAccess access = RegAccess::TCU) const;
 
     void set(PrivReg reg, reg_t value, RegAccess access = RegAccess::TCU);
 
-    reg_t get(CmdReg reg, RegAccess access = RegAccess::TCU) const;
+    reg_t get(UnprivReg reg, RegAccess access = RegAccess::TCU) const;
 
-    void set(CmdReg reg, reg_t value, RegAccess access = RegAccess::TCU);
+    void set(UnprivReg reg, reg_t value, RegAccess access = RegAccess::TCU);
 
     CmdCommand::Bits getCommand()
     {
-        return get(CmdReg::COMMAND);
+        return get(UnprivReg::COMMAND);
     }
 
     CmdData::Bits getData() const
     {
-        return CmdData::Bits(get(CmdReg::DATA));
+        return CmdData::Bits(get(UnprivReg::DATA));
     }
 
     void setData(const CmdData::Bits &data)
     {
-        set(CmdReg::DATA, data);
+        set(UnprivReg::DATA, data);
     }
 
     Ep *getEp(epid_t epId) { return &eps.at(epId); }
@@ -491,11 +489,11 @@ class RegFile
 
     Tcu &tcu;
 
-    std::vector<reg_t> tcuRegs;
+    std::vector<reg_t> extRegs;
 
     std::vector<reg_t> privRegs;
 
-    std::vector<reg_t> cmdRegs;
+    std::vector<reg_t> unprivRegs;
 
     std::vector<Ep> eps;
 
@@ -508,9 +506,9 @@ class RegFile
 
   private:
 
-    static const char *tcuRegNames[];
+    static const char *extRegNames[];
     static const char *privRegNames[];
-    static const char *cmdRegNames[];
+    static const char *unprivRegNames[];
     static const char *epTypeNames[];
 };
 
