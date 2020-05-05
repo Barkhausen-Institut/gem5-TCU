@@ -411,11 +411,11 @@ TcuAbortTest::tick()
             SendEp ep = {0, 0, 0};
             ep.r0.type = static_cast<RegFile::reg_t>(EpType::SEND);
             ep.r0.vpe = Tcu::INVALID_VPE_ID;
-            ep.r0.curcrd = Tcu::CREDITS_UNLIM;
-            ep.r0.maxcrd = Tcu::CREDITS_UNLIM;
-            ep.r0.maxMsgSize = 10;
-            ep.r1.targetPe = id;
-            ep.r1.targetEp = EP_RECV;
+            ep.r0.curCrd = Tcu::CREDITS_UNLIM;
+            ep.r0.maxCrd = Tcu::CREDITS_UNLIM;
+            ep.r0.msgSize = 10;
+            ep.r1.tgtPe = id;
+            ep.r1.tgtEp = EP_RECV;
             ep.r2.label = 0;
 
             RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
@@ -434,10 +434,10 @@ TcuAbortTest::tick()
             RecvEp ep = {0, 0, 0};
             ep.r0.type = static_cast<RegFile::reg_t>(EpType::RECEIVE);
             ep.r0.vpe = Tcu::INVALID_VPE_ID;
-            ep.r0.replyEps = EP_REPLY;
-            ep.r0.size = 10;
-            ep.r0.msgSize = 10;
-            ep.r1.bufAddr = RECV_ADDR;
+            ep.r0.rplEps = EP_REPLY;
+            ep.r0.slots = 10;
+            ep.r0.slotSize = 10;
+            ep.r1.buffer = RECV_ADDR;
             ep.r2.unread = 0;
             ep.r2.occupied = 0;
 

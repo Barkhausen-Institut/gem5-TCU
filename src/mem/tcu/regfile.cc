@@ -124,7 +124,7 @@ RegFile::invalidate(epid_t epId, bool force, unsigned *unreadMask)
     SendEp *sep;
     if (!force && (sep = getSendEp(epId)) != nullptr)
     {
-        if (sep->r0.curcrd != sep->r0.maxcrd)
+        if (sep->r0.curCrd != sep->r0.maxCrd)
             return TcuError::MISS_CREDITS;
     }
 
@@ -312,8 +312,8 @@ SendEp::print(const RegFile &rf,
                             "curcrd=%u max=%#x lbl=%#llx rpl=%d]\n",
         regAccessName(access), read ? "<-" : "->",
         epId, "", r0.vpe,
-        r1.targetPe, r1.targetEp, r0.crdEp,
-        r0.maxcrd, r0.curcrd, 1 << r0.maxMsgSize,
+        r1.tgtPe, r1.tgtEp, r0.crdEp,
+        r0.maxCrd, r0.curCrd, 1 << r0.msgSize,
         r2.label, r0.reply);
 }
 
@@ -328,8 +328,8 @@ RecvEp::print(const RegFile &rf,
                             "occ=%#010x unr=%#010x rd=%u wr=%u]\n",
         regAccessName(access), read ? "<-" : "->",
         epId, "", r0.vpe,
-        r1.bufAddr, 1 << r0.msgSize, 1 << r0.size, r0.replyEps,
-        unreadMsgs(), r2.occupied, r2.unread, r0.rdPos, r0.wrPos);
+        r1.buffer, 1 << r0.slotSize, 1 << r0.slots, r0.rplEps,
+        unreadMsgs(), r2.occupied, r2.unread, r0.rpos, r0.wpos);
 }
 
 void

@@ -160,8 +160,8 @@ TcuCommands::executeCommand(PacketPtr pkt)
     commands[static_cast<size_t>(cmd.opcode)]++;
 
     assert(cmd.epid < tcu.numEndpoints);
-    DPRINTF(TcuCmd, "Starting command %s with EP=%u, arg=%#lx\n",
-            cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epid, cmd.arg);
+    DPRINTF(TcuCmd, "Starting command %s with EP=%u, arg0=%#lx\n",
+            cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epid, cmd.arg0);
 
     switch (cmd.opcode)
     {
@@ -186,13 +186,13 @@ TcuCommands::executeCommand(PacketPtr pkt)
         break;
         case CmdCommand::ACK_MSG:
         {
-            TcuError res = tcu.msgUnit->ackMessage(cmd.epid, cmd.arg);
+            TcuError res = tcu.msgUnit->ackMessage(cmd.epid, cmd.arg0);
             finishCommand(res);
         }
         break;
         case CmdCommand::SLEEP:
         {
-            int ep = cmd.arg & 0xFFFF;
+            int ep = cmd.arg0 & 0xFFFF;
             if (!tcu.startSleep(ep))
                 finishCommand(TcuError::NONE);
         }
@@ -291,7 +291,7 @@ TcuCommands::finishCommand(TcuError error)
     if (cmd.opcode == CmdCommand::SEND)
         tcu.msgUnit->finishMsgSend(error, cmd.epid);
     else if (cmd.opcode == CmdCommand::REPLY)
-        tcu.msgUnit->finishMsgReply(error, cmd.epid, cmd.arg);
+        tcu.msgUnit->finishMsgReply(error, cmd.epid, cmd.arg0);
     else if (error == TcuError::NONE &&
              (cmd.opcode == CmdCommand::READ || cmd.opcode == CmdCommand::WRITE))
     {
@@ -334,8 +334,8 @@ TcuCommands::executePrivCommand(PacketPtr pkt)
 
     privCommands[static_cast<size_t>(cmd.opcode)]++;
 
-    DPRINTF(TcuCmd, "Executing privileged command %s with arg=%p\n",
-            privCmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg);
+    DPRINTF(TcuCmd, "Executing privileged command %s with arg0=%p\n",
+            privCmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg0);
 
     Cycles delay(1);
 
@@ -346,8 +346,8 @@ TcuCommands::executePrivCommand(PacketPtr pkt)
         case PrivCommand::INV_PAGE:
             if (tcu.tlb())
             {
-                uint16_t asid = cmd.arg >> 44;
-                Addr virt = cmd.arg & 0xFFFFFFFFFFF;
+                uint16_t asid = cmd.arg0 >> 44;
+                Addr virt = cmd.arg0 & 0xFFFFFFFFFFF;
                 tcu.tlb()->remove(virt, asid);
             }
             break;
@@ -358,10 +358,10 @@ TcuCommands::executePrivCommand(PacketPtr pkt)
         case PrivCommand::INS_TLB:
             if (tcu.tlb())
             {
-                uint16_t asid = cmd.arg >> 44;
-                Addr virt = cmd.arg & 0xFFFFFFFF000;
-                uint flags = cmd.arg & 0x1F;
-                Addr phys = tcu.regs().get(PrivReg::PRIV_CMD_ARG);
+                uint16_t asid = cmd.arg0 >> 44;
+                Addr virt = cmd.arg0 & 0xFFFFFFFF000;
+                uint flags = cmd.arg0 & 0x1F;
+                Addr phys = tcu.regs().get(PrivReg::PRIV_CMD_ARG1);
                 tcu.tlb()->insert(virt, asid, NocAddr(phys), flags);
             }
             break;
@@ -369,14 +369,14 @@ TcuCommands::executePrivCommand(PacketPtr pkt)
         {
             RegFile::reg_t old = tcu.regs().get(PrivReg::CUR_VPE);
             tcu.regs().set(PrivReg::OLD_VPE, old);
-            tcu.regs().set(PrivReg::CUR_VPE, cmd.arg & 0xFFFFFFFF);
+            tcu.regs().set(PrivReg::CUR_VPE, cmd.arg0 & 0xFFFFFFFF);
             break;
         }
         case PrivCommand::FLUSH_CACHE:
             delay += tcu.flushInvalCaches(true);
             break;
         case PrivCommand::SET_TIMER:
-            tcu.restartTimer(cmd.arg);
+            tcu.restartTimer(cmd.arg0);
             break;
         case PrivCommand::ABORT_CMD:
             privCmdPkt = pkt;
@@ -392,7 +392,7 @@ TcuCommands::executePrivCommand(PacketPtr pkt)
         tcu.schedCpuResponse(pkt, tcu.clockEdge(delay));
 
     // set privileged command back to IDLE
-    cmd.arg = 0;
+    cmd.arg0 = 0;
     cmd.opcode = PrivCommand::IDLE;
     tcu.regs().set(PrivReg::PRIV_CMD, cmd);
 
@@ -409,11 +409,11 @@ TcuCommands::finishAbort()
         privCmdPkt = nullptr;
 
         PrivCommand::Bits cmd = tcu.regs().get(PrivReg::PRIV_CMD);
-        cmd.arg = static_cast<RegFile::reg_t>(abort);
+        cmd.arg0 = static_cast<RegFile::reg_t>(abort);
 
         DPRINTF(TcuCmd, "Finished privileged command %s with res=%d\n",
                 privCmdNames[static_cast<size_t>(cmd.opcode)],
-                cmd.arg);
+                cmd.arg0);
 
         cmd.opcode = PrivCommand::IDLE;
         tcu.regs().set(PrivReg::PRIV_CMD, cmd);

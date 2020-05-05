@@ -55,7 +55,7 @@ enum class PrivReg : Addr
 {
     CORE_REQ,
     PRIV_CMD,
-    PRIV_CMD_ARG,
+    PRIV_CMD_ARG1,
     CUR_VPE,
     OLD_VPE,
     CLEAR_IRQ,
@@ -112,18 +112,18 @@ struct CmdCommand
     };
 
     BitUnion64(Bits)
-        Bitfield<56, 24> arg;
+        Bitfield<56, 24> arg0;
         Bitfield<23, 20> error;
         Bitfield<19, 4> epid;
         Bitfield<3, 0> opcode;
     EndBitUnion(Bits)
 
-    static Bits create(Opcode op, epid_t ep, uint64_t arg = 0)
+    static Bits create(Opcode op, epid_t ep, uint64_t arg0 = 0)
     {
         Bits cmd = 0;
         cmd.opcode = op;
         cmd.epid = ep;
-        cmd.arg = arg;
+        cmd.arg0 = arg0;
         return cmd;
     }
 };
@@ -159,7 +159,7 @@ struct PrivCommand
     };
 
     BitUnion64(Bits)
-        Bitfield<64, 4> arg;
+        Bitfield<64, 4> arg0;
         Bitfield<3, 0> opcode;
     EndBitUnion(Bits)
 };
@@ -195,16 +195,16 @@ struct SendEp
     BitUnion64(R0)
         Bitfield<53> reply;
         Bitfield<52, 37> crdEp;
-        Bitfield<36, 31> maxMsgSize;
-        Bitfield<30, 25> maxcrd;
-        Bitfield<24, 19> curcrd;
+        Bitfield<36, 31> msgSize;
+        Bitfield<30, 25> maxCrd;
+        Bitfield<24, 19> curCrd;
         Bitfield<18, 3> vpe;
         Bitfield<2, 0> type;
     EndBitUnion(R0)
 
     BitUnion64(R1)
-        Bitfield<23, 16> targetPe;
-        Bitfield<15, 0> targetEp;
+        Bitfield<23, 16> tgtPe;
+        Bitfield<15, 0> tgtEp;
     EndBitUnion(R1)
 
     BitUnion64(R2)
@@ -227,9 +227,9 @@ struct RecvEp
 
     int offsetToIdx(Addr off) const
     {
-        if (r0.msgSize == 0)
+        if (r0.slotSize == 0)
             return MAX_MSGS;
-        int idx = off >> r0.msgSize;
+        int idx = off >> r0.slotSize;
         return (idx >= 0 && idx < MAX_MSGS) ? idx : MAX_MSGS;
     }
 
@@ -263,17 +263,17 @@ struct RecvEp
                RegAccess access) const;
 
     BitUnion64(R0)
-        Bitfield<58, 53> rdPos;
-        Bitfield<52, 47> wrPos;
-        Bitfield<46, 41> msgSize;
-        Bitfield<40, 35> size;
-        Bitfield<34, 19> replyEps;
+        Bitfield<58, 53> rpos;
+        Bitfield<52, 47> wpos;
+        Bitfield<46, 41> slotSize;
+        Bitfield<40, 35> slots;
+        Bitfield<34, 19> rplEps;
         Bitfield<18, 3> vpe;
         Bitfield<2, 0> type;
     EndBitUnion(R0)
 
     BitUnion64(R1)
-        Bitfield<63, 0> bufAddr;
+        Bitfield<63, 0> buffer;
     EndBitUnion(R1)
 
     BitUnion64(R2)

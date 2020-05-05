@@ -84,17 +84,17 @@ MessageUnit::startTransmission(const CmdCommand::Bits& cmd)
             return;
         }
 
-        if (ep->r0.replyEps == Tcu::INVALID_EP_ID)
+        if (ep->r0.rplEps == Tcu::INVALID_EP_ID)
         {
             DPRINTFS(Tcu, (&tcu),
                      "EP%u: no reply EPs, cannot reply on msg %p\n",
-                     epid, cmd.arg);
+                     epid, cmd.arg0);
             tcu.scheduleFinishOp(Cycles(1), TcuError::INV_EP);
             return;
         }
 
-        int msgidx = ep->offsetToIdx(cmd.arg);
-        epid = ep->r0.replyEps + msgidx;
+        int msgidx = ep->offsetToIdx(cmd.arg0);
+        epid = ep->r0.rplEps + msgidx;
 
         SendEp *sep = tcu.regs().getSendEp(epid);
 
@@ -102,7 +102,7 @@ MessageUnit::startTransmission(const CmdCommand::Bits& cmd)
         {
             DPRINTFS(Tcu, (&tcu),
                      "EP%u: invalid reply EP. Double reply for msg %p?\n",
-                     epid, cmd.arg);
+                     epid, cmd.arg0);
             tcu.scheduleFinishOp(Cycles(1), TcuError::INV_ARGS);
             return;
         }
@@ -124,21 +124,6 @@ MessageUnit::startTransmission(const CmdCommand::Bits& cmd)
     const CmdData::Bits data = tcu.regs().getData();
     SendEp *ep = tcu.regs().getSendEp(epid);
 
-    // get info from reply EP
-    if (cmd.opcode == CmdCommand::SEND && cmd.arg != Tcu::INVALID_EP_ID)
-    {
-        RecvEp *rep = tcu.regs().getRecvEp(cmd.arg);
-        if (!rep || rep->r0.vpe != tcu.regs().getCurVPE().id)
-        {
-            DPRINTFS(Tcu, (&tcu), "EP%u: invalid reply EP\n", cmd.arg);
-            tcu.scheduleFinishOp(Cycles(1), TcuError::INV_EP);
-            return;
-        }
-
-        info.replyEpId = cmd.arg;
-        info.replySize = rep->r0.msgSize;
-    }
-
     // check if the send EP is valid
     if (!ep || ep->r0.vpe != tcu.regs().getCurVPE().id ||
         (cmd.opcode == CmdCommand::SEND && ep->r0.reply))
@@ -149,17 +134,32 @@ MessageUnit::startTransmission(const CmdCommand::Bits& cmd)
     }
 
     // check message size
-    if (data.size + sizeof(MessageHeader) > (1 << ep->r0.maxMsgSize))
+    if (data.size + sizeof(MessageHeader) > (1 << ep->r0.msgSize))
     {
         DPRINTFS(Tcu, (&tcu), "EP%u: message too large\n", epid);
         tcu.scheduleFinishOp(Cycles(1), TcuError::INV_ARGS);
         return;
     }
 
-    // check if we have enough credits
-    if (ep->r0.curcrd != Tcu::CREDITS_UNLIM)
+    // get info from receive EP
+    if (cmd.opcode == CmdCommand::SEND && cmd.arg0 != Tcu::INVALID_EP_ID)
     {
-        if (ep->r0.curcrd == 0)
+        RecvEp *rep = tcu.regs().getRecvEp(cmd.arg0);
+        if (!rep || rep->r0.vpe != tcu.regs().getCurVPE().id)
+        {
+            DPRINTFS(Tcu, (&tcu), "EP%u: invalid reply EP\n", cmd.arg0);
+            tcu.scheduleFinishOp(Cycles(1), TcuError::INV_EP);
+            return;
+        }
+
+        info.replyEpId = cmd.arg0;
+        info.replySize = rep->r0.slotSize;
+    }
+
+    // check if we have enough credits
+    if (cmd.opcode == CmdCommand::REPLY || ep->r0.curCrd != Tcu::CREDITS_UNLIM)
+    {
+        if (ep->r0.curCrd == 0)
         {
             DPRINTFS(Tcu, (&tcu), "EP%u: no credits to send message\n", epid);
             tcu.scheduleFinishOp(Cycles(1), TcuError::MISS_CREDITS);
@@ -167,20 +167,20 @@ MessageUnit::startTransmission(const CmdCommand::Bits& cmd)
         }
 
         // pay the credits
-        ep->r0.curcrd = ep->r0.curcrd - 1;
+        ep->r0.curCrd = ep->r0.curCrd - 1;
 
         DPRINTFS(TcuCredits, (&tcu), "EP%u paid 1 credit (%u left)\n",
-                 epid, ep->r0.curcrd);
+                 epid, ep->r0.curCrd);
 
         tcu.regs().updateEp(epid);
     }
 
     // fill the info struct and start the transfer
-    info.targetPeId   = ep->r1.targetPe;
-    info.targetEpId   = ep->r1.targetEp;
+    info.targetPeId   = ep->r1.tgtPe;
+    info.targetEpId   = ep->r1.tgtEp;
     info.label        = ep->r2.label;
     info.replyLabel   = tcu.regs().get(UnprivReg::ARG1);
-    info.unlimcred    = ep->r0.curcrd == Tcu::CREDITS_UNLIM;
+    info.unlimcred    = ep->r0.curCrd == Tcu::CREDITS_UNLIM;
     info.ready        = true;
     info.sepId        = epid;
 
@@ -287,14 +287,14 @@ MessageUnit::recvCredits(epid_t epid)
     if (!ep)
         return;
 
-    if (ep->r0.curcrd != Tcu::CREDITS_UNLIM)
+    if (ep->r0.curCrd != Tcu::CREDITS_UNLIM)
     {
-        ep->r0.curcrd = ep->r0.curcrd + 1;
-        assert(ep->r0.curcrd <= ep->r0.maxcrd);
+        ep->r0.curCrd = ep->r0.curCrd + 1;
+        assert(ep->r0.curCrd <= ep->r0.maxCrd);
 
         DPRINTFS(TcuCredits, (&tcu),
             "EP%u received 1 credit (%u in total)\n",
-            epid, ep->r0.curcrd);
+            epid, ep->r0.curCrd);
 
         tcu.regs().updateEp(epid);
     }
@@ -317,12 +317,12 @@ MessageUnit::fetchMessage(epid_t epid, Addr *msgOff)
     }
 
     int i;
-    for (i = ep->r0.rdPos; i < (1 << ep->r0.size); ++i)
+    for (i = ep->r0.rpos; i < (1 << ep->r0.slots); ++i)
     {
         if (ep->isUnread(i))
             goto found;
     }
-    for (i = 0; i < ep->r0.rdPos; ++i)
+    for (i = 0; i < ep->r0.rpos; ++i)
     {
         if (ep->isUnread(i))
             goto found;
@@ -335,7 +335,7 @@ found:
     assert(ep->isOccupied(i));
 
     ep->setUnread(i, false);
-    ep->r0.rdPos = i + 1;
+    ep->r0.rpos = i + 1;
 
     DPRINTFS(TcuBuf, (&tcu),
         "EP%u: fetched message at index %u (count=%u)\n",
@@ -344,7 +344,7 @@ found:
     tcu.regs().updateEp(epid);
     tcu.regs().rem_msg();
 
-    *msgOff = i << ep->r0.msgSize;
+    *msgOff = i << ep->r0.slotSize;
     return TcuError::NONE;
 }
 
@@ -355,15 +355,15 @@ MessageUnit::allocSlot(size_t msgSize, epid_t epid, RecvEp *ep)
     if (!ep)
         return -1;
 
-    assert(msgSize <= (1 << ep->r0.msgSize));
+    assert(msgSize <= (1 << ep->r0.slotSize));
 
     int i;
-    for (i = ep->r0.wrPos; i < (1 << ep->r0.size); ++i)
+    for (i = ep->r0.wpos; i < (1 << ep->r0.slots); ++i)
     {
         if (!ep->isOccupied(i))
             goto found;
     }
-    for (i = 0; i < ep->r0.wrPos; ++i)
+    for (i = 0; i < ep->r0.wpos; ++i)
     {
         if (!ep->isOccupied(i))
             goto found;
@@ -373,7 +373,7 @@ MessageUnit::allocSlot(size_t msgSize, epid_t epid, RecvEp *ep)
 
 found:
     ep->setOccupied(i, true);
-    ep->r0.wrPos = i + 1;
+    ep->r0.wpos = i + 1;
 
     DPRINTFS(TcuBuf, (&tcu),
         "EP%u: put message at index %u\n",
@@ -402,11 +402,11 @@ MessageUnit::ackMessage(epid_t epId, Addr msgOff)
         unread = true;
     }
 
-    if (ep->r0.replyEps != Tcu::INVALID_EP_ID)
+    if (ep->r0.rplEps != Tcu::INVALID_EP_ID)
     {
         // invalidate reply EP
         unsigned unread_mask;
-        tcu.regs().invalidate(ep->r0.replyEps + msgidx, true, &unread_mask);
+        tcu.regs().invalidate(ep->r0.rplEps + msgidx, true, &unread_mask);
     }
 
     DPRINTFS(TcuBuf, (&tcu),
@@ -423,16 +423,16 @@ TcuError
 MessageUnit::invalidateReply(epid_t repId, peid_t peId, epid_t sepId)
 {
     RecvEp *ep = tcu.regs().getRecvEp(repId);
-    if (!ep || ep->r0.replyEps == Tcu::INVALID_EP_ID)
+    if (!ep || ep->r0.rplEps == Tcu::INVALID_EP_ID)
         return TcuError::INV_EP;
 
-    for (epid_t i = 0; i < (1 << ep->r0.size); ++i)
+    for (epid_t i = 0; i < (1 << ep->r0.slots); ++i)
     {
-        auto *sep = tcu.regs().getSendEp(ep->r0.replyEps + i);
-        if (sep && sep->r1.targetPe == peId && sep->r0.crdEp == sepId)
+        auto *sep = tcu.regs().getSendEp(ep->r0.rplEps + i);
+        if (sep && sep->r1.tgtPe == peId && sep->r0.crdEp == sepId)
         {
             unsigned unread_mask;
-            tcu.regs().invalidate(ep->r0.replyEps + i, true, &unread_mask);
+            tcu.regs().invalidate(ep->r0.rplEps + i, true, &unread_mask);
         }
     }
     return TcuError::NONE;
@@ -450,17 +450,10 @@ MessageUnit::finishMsgReceive(epid_t epId,
     if (!ep)
         return TcuError::INV_EP;
 
-    int idx = (msgAddr - ep->r1.bufAddr) >> ep->r0.msgSize;
+    int idx = (msgAddr - ep->r1.buffer) >> ep->r0.slotSize;
 
     if (error == TcuError::NONE)
     {
-        // Note that replyEpId is the Id of *our* sending EP
-        if (header->flags & Tcu::REPLY_FLAG &&
-            header->replyEpId != Tcu::INVALID_EP_ID)
-        {
-            recvCredits(header->replyEpId);
-        }
-
         DPRINTFS(TcuBuf, (&tcu),
             "EP%u: increment message count to %u\n",
             epId, ep->unreadMsgs() + 1);
@@ -468,21 +461,28 @@ MessageUnit::finishMsgReceive(epid_t epId,
         ep->setUnread(idx, true);
 
         if (!(header->flags & Tcu::REPLY_FLAG) &&
-            ep->r0.replyEps != Tcu::INVALID_EP_ID &&
+            ep->r0.rplEps != Tcu::INVALID_EP_ID &&
             header->replyEpId != Tcu::INVALID_EP_ID)
         {
             // install use-once reply EP
-            Ep *sep = tcu.regs().getEp(ep->r0.replyEps + idx);
+            Ep *sep = tcu.regs().getEp(ep->r0.rplEps + idx);
             sep->send.r0.type = static_cast<uint>(EpType::SEND);
             sep->send.r0.vpe = ep->r0.vpe;
-            sep->send.r0.maxMsgSize = header->replySize;
-            sep->send.r0.maxcrd = sep->send.r0.curcrd = 1;
+            sep->send.r0.msgSize = header->replySize;
+            sep->send.r0.maxCrd = sep->send.r0.curCrd = 1;
             sep->send.r0.crdEp = header->senderEpId;
             sep->send.r0.reply = 1;
-            sep->send.r1.targetPe = header->senderPeId;
-            sep->send.r1.targetEp = header->replyEpId;
+            sep->send.r1.tgtPe = header->senderPeId;
+            sep->send.r1.tgtEp = header->replyEpId;
             sep->send.r2.label = header->replyLabel;
-            tcu.regs().updateEp(ep->r0.replyEps + idx);
+            tcu.regs().updateEp(ep->r0.rplEps + idx);
+        }
+
+        // Note that replyEpId is the Id of *our* sending EP
+        if (header->flags & Tcu::REPLY_FLAG &&
+            header->replyEpId != Tcu::INVALID_EP_ID)
+        {
+            recvCredits(header->replyEpId);
         }
     }
     else
@@ -548,7 +548,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
     uint rflags = XferUnit::XferFlags::MSGRECV;
     // receive EPs use a physical address, thus NOPF and NOXLATE.
     rflags |= XferUnit::XferFlags::NOPF | XferUnit::NOXLATE;
-    Addr localAddr = ep->r1.bufAddr + (msgidx << ep->r0.msgSize);
+    Addr localAddr = ep->r1.buffer + (msgidx << ep->r0.slotSize);
 
     auto *ev = new ReceiveTransferEvent(this, localAddr,
                                         ep->r0.vpe, rflags, pkt);
