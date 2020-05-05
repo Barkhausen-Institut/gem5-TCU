@@ -53,9 +53,9 @@ static const char *privCmdNames[] =
     "INV_TLB",
     "INS_TLB",
     "XCHG_VPE",
-    "FLUSH_CACHE",
     "SET_TIMER",
     "ABORT_CMD",
+    "FLUSH_CACHE",
 };
 
 static const char *extCmdNames[] =
@@ -83,7 +83,7 @@ TcuCommands::TcuCommands(Tcu &_tcu)
     static_assert(sizeof(cmdNames) / sizeof(cmdNames[0]) ==
         CmdCommand::SLEEP + 1, "cmdNames out of sync");
     static_assert(sizeof(privCmdNames) / sizeof(privCmdNames[0]) ==
-        PrivCommand::ABORT_CMD + 1, "privCmdNames out of sync");
+        PrivCommand::FLUSH_CACHE + 1, "privCmdNames out of sync");
     static_assert(sizeof(extCmdNames) / sizeof(extCmdNames[0]) ==
         ExtCommand::RESET + 1, "extCmdNames out of sync");
 }

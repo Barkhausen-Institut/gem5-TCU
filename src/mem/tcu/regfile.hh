@@ -153,9 +153,9 @@ struct PrivCommand
         INV_TLB         = 2,
         INS_TLB         = 3,
         XCHG_VPE        = 4,
-        FLUSH_CACHE     = 5,
-        SET_TIMER       = 6,
-        ABORT_CMD       = 7,
+        SET_TIMER       = 5,
+        ABORT_CMD       = 6,
+        FLUSH_CACHE     = 7,
     };
 
     BitUnion64(Bits)
