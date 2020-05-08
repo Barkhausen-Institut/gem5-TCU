@@ -391,7 +391,6 @@ TcuAbortTest::tick()
             ep.r0.vpe = Tcu::INVALID_VPE_ID;
             ep.r0.flags = Tcu::MemoryFlags::READ | Tcu::MemoryFlags::WRITE;
             ep.r0.targetPe = id;
-            ep.r0.targetVpe = Tcu::INVALID_VPE_ID;
             ep.r1.remoteAddr = 0;
             ep.r2.remoteSize = 0xFFFFFFFFFFFFFFFF;
 

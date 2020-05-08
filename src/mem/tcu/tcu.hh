@@ -85,7 +85,6 @@ class Tcu : public BaseTcu
     {
         TcuError result;
         NocPacketType packetType;
-        vpeid_t tvpe;
     };
 
     struct InitSenderState : public Packet::SenderState
@@ -147,7 +146,6 @@ class Tcu : public BaseTcu
 
     void sendNocRequest(NocPacketType type,
                         PacketPtr pkt,
-                        vpeid_t tvpe,
                         Cycles delay,
                         bool functional = false);
 

@@ -80,18 +80,16 @@ class MemoryUnit
       protected:
 
         NocAddr dest;
-        vpeid_t vpe;
 
       public:
 
         WriteTransferEvent(Addr local,
                            size_t size,
-                           vpeid_t _vpe,
                            uint flags,
                            NocAddr _dest)
             : TransferEvent(XferUnit::TransferType::LOCAL_READ,
                             local, size, flags),
-              dest(_dest), vpe(_vpe)
+              dest(_dest)
         {}
 
         void transferStart() override {}
@@ -104,17 +102,15 @@ class MemoryUnit
       protected:
 
         PacketPtr pkt;
-        vpeid_t vpe;
 
       public:
 
         ReceiveTransferEvent(XferUnit::TransferType type,
                              Addr local,
-                             vpeid_t _vpe,
                              uint flags,
                              PacketPtr _pkt)
             : XferUnit::TransferEvent(type, local, _pkt->getSize(), flags),
-              pkt(_pkt), vpe(_vpe)
+              pkt(_pkt)
         {}
 
         void transferStart() override;
@@ -157,7 +153,7 @@ class MemoryUnit
     /**
      * Received read/write request from NoC -> Mem/regfile request
      */
-    TcuError recvFromNoc(vpeid_t tvpe, PacketPtr pkt);
+    TcuError recvFromNoc(PacketPtr pkt);
 
   private:
 

@@ -46,6 +46,7 @@ class AccelCtxSwSM
     {
         VPE_CTRL,
         MAP,
+        TRANSLATE,
         REM_MSGS,
     };
 

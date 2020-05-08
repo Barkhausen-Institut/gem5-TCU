@@ -339,11 +339,10 @@ MemEp::print(const RegFile &rf,
              RegAccess access) const
 {
     DPRINTFNS(rf.name(),
-        "%s%s EP%u%14s: Mem[vpe=%u, pe=%u tvpe=%u addr=%#llx "
+        "%s%s EP%u%14s: Mem[vpe=%u, pe=%u addr=%#llx "
                            "size=%#llx flags=%#x]\n",
         regAccessName(access), read ? "<-" : "->",
-        epId, "", r0.vpe,
-        r0.targetPe, r0.targetVpe,
+        epId, "", r0.vpe, r0.targetPe,
         r1.remoteAddr, r2.remoteSize,
         r0.flags);
 }

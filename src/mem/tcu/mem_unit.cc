@@ -122,7 +122,6 @@ MemoryUnit::startRead(const CmdCommand::Bits& cmd)
 
     tcu.sendNocRequest(Tcu::NocPacketType::READ_REQ,
                        pkt,
-                       ep->r0.targetVpe,
                        tcu.commandToNocRequestLatency);
 }
 
@@ -224,8 +223,7 @@ MemoryUnit::startWrite(const CmdCommand::Bits& cmd)
 
     NocAddr dest(ep->r0.targetPe, ep->r1.remoteAddr + offset);
 
-    auto xfer = new WriteTransferEvent(
-        data.addr, size, ep->r0.targetVpe, 0, dest);
+    auto xfer = new WriteTransferEvent(data.addr, size, 0, dest);
     tcu.startTransfer(xfer, Cycles(0));
 }
 
@@ -252,7 +250,7 @@ MemoryUnit::WriteTransferEvent::transferDone(TcuError result)
         else
             pktType = Tcu::NocPacketType::WRITE_REQ;
 
-        tcu().sendNocRequest(pktType, pkt, vpe, delay);
+        tcu().sendNocRequest(pktType, pkt, delay);
     }
 }
 
@@ -281,15 +279,14 @@ MemoryUnit::recvFunctionalFromNoc(PacketPtr pkt)
 }
 
 TcuError
-MemoryUnit::recvFromNoc(vpeid_t tvpe, PacketPtr pkt)
+MemoryUnit::recvFromNoc(PacketPtr pkt)
 {
     NocAddr addr(pkt->getAddr());
 
-    DPRINTFS(Tcu, (&tcu), "\e[1m[%s <- ?]\e[0m %#018lx:%lu (VPE %u)\n",
+    DPRINTFS(Tcu, (&tcu), "\e[1m[%s <- ?]\e[0m %#018lx:%lu\n",
         pkt->isWrite() ? "wr" : "rd",
         addr.offset,
-        pkt->getSize(),
-        tvpe);
+        pkt->getSize());
 
     if (pkt->isWrite())
         tcu.printPacket(pkt);
@@ -314,11 +311,19 @@ MemoryUnit::recvFromNoc(vpeid_t tvpe, PacketPtr pkt)
 
         auto type = pkt->isWrite() ? XferUnit::TransferType::REMOTE_WRITE
                                    : XferUnit::TransferType::REMOTE_READ;
-        // we never allow pagefaults for remote accesses
-        uint xflags = XferUnit::NOPF;
+        // accesses from remote TCUs always refer to physical memory
+        uint xflags = XferUnit::NOXLATE;
 
-        auto *ev = new ReceiveTransferEvent(
-            type, addr.offset, tvpe, xflags, pkt);
+        // to keep the modularity of the system, allowing memory in an
+        // arbitrary tile, we don't use one contiguous region of physical
+        // memory, but use NocAddr that contains the PE id and the offset
+        // within that PE. since this access refers to the physical memory seen
+        // by a specific PE, we need a NocAddr to refer to the PE and a NocAddr
+        // to refer to the physical memory. To solve that, we have the latter
+        // NocAddr converted to a physical address as the offset within the
+        // former NocAddr.
+        Addr noc = Tcu::physToNoc(addr.offset);
+        auto *ev = new ReceiveTransferEvent(type, noc, xflags, pkt);
         tcu.startTransfer(ev, delay);
     }
 
@@ -328,10 +333,6 @@ MemoryUnit::recvFromNoc(vpeid_t tvpe, PacketPtr pkt)
 void
 MemoryUnit::ReceiveTransferEvent::transferStart()
 {
-    // the memory access refers to the VPE given by the NoC request, not
-    // necessarily the currently running VPE
-    vpeId(vpe);
-
     if (pkt->isWrite())
     {
         // here is also no additional delay, because we are doing that in

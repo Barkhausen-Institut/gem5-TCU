@@ -294,7 +294,6 @@ struct MemEp
                RegAccess access) const;
 
     BitUnion64(R0)
-        Bitfield<46, 31> targetVpe;
         Bitfield<30, 23> targetPe;
         Bitfield<22, 19> flags;
         Bitfield<18, 3> vpe;

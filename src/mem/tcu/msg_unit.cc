@@ -550,8 +550,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
     rflags |= XferUnit::XferFlags::NOPF | XferUnit::NOXLATE;
     Addr localAddr = ep->r1.buffer + (msgidx << ep->r0.slotSize);
 
-    auto *ev = new ReceiveTransferEvent(this, localAddr,
-                                        ep->r0.vpe, rflags, pkt);
+    auto *ev = new ReceiveTransferEvent(this, localAddr, rflags, pkt);
     tcu.startTransfer(ev, delay);
 
     return TcuError::NONE;

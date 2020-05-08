@@ -63,7 +63,7 @@ class MessageUnit
                           uint flags,
                           NocAddr dest,
                           MessageHeader *_header)
-            : WriteTransferEvent(local, size, 0, flags, dest),
+            : WriteTransferEvent(local, size, flags, dest),
               header(_header)
         {}
 
@@ -79,11 +79,10 @@ class MessageUnit
 
         ReceiveTransferEvent(MessageUnit *_msgUnit,
                              Addr local,
-                             vpeid_t vpe,
                              uint flags,
                              PacketPtr pkt)
             : MemoryUnit::ReceiveTransferEvent(
-                XferUnit::TransferType::REMOTE_WRITE, local, vpe, flags, pkt),
+                XferUnit::TransferType::REMOTE_WRITE, local, flags, pkt),
               msgUnit(_msgUnit), msgAddr(local)
         {}
 

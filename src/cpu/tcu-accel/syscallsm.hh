@@ -43,6 +43,7 @@ class SyscallSM
         // capability creations
         CREATE_SRV,
         CREATE_SESS,
+        CREATE_MGATE,
         CREATE_RGATE,
         CREATE_SGATE,
         CREATE_MAP,
