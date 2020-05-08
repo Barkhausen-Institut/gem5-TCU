@@ -346,8 +346,8 @@ TcuCommands::executePrivCommand(PacketPtr pkt)
         case PrivCommand::INV_PAGE:
             if (tcu.tlb())
             {
-                uint16_t asid = cmd.arg0 >> 44;
-                Addr virt = cmd.arg0 & 0xFFFFFFFFFFF;
+                uint16_t asid = cmd.arg0 >> 32;
+                Addr virt = cmd.arg0 & 0xFFFFFFFF;
                 tcu.tlb()->remove(virt, asid);
             }
             break;
@@ -358,8 +358,8 @@ TcuCommands::executePrivCommand(PacketPtr pkt)
         case PrivCommand::INS_TLB:
             if (tcu.tlb())
             {
-                uint16_t asid = cmd.arg0 >> 44;
-                Addr virt = cmd.arg0 & 0xFFFFFFFF000;
+                uint16_t asid = cmd.arg0 >> 32;
+                Addr virt = cmd.arg0 & 0xFFFFF000;
                 uint flags = cmd.arg0 & 0x1F;
                 Addr phys = tcu.regs().get(PrivReg::PRIV_CMD_ARG1);
                 tcu.tlb()->insert(virt, asid, NocAddr(phys), flags);
