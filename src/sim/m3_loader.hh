@@ -71,8 +71,6 @@ class M3Loader
         uint64_t mod_count;
         uint64_t mod_size;
         uint64_t pe_count;
-        uint64_t pe_mem_base;
-        uint64_t pe_mem_size;
         MemMod mems[MAX_MEMS];
     } M5_ATTR_PACKED;
 
