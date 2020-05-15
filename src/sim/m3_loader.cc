@@ -193,8 +193,7 @@ M3Loader::initState(System &sys, PEMemory &mem, MasterPort &noc)
     // modules for the kernel
     if (modOffset)
     {
-        uint8_t *modarray = nullptr;
-        size_t modarraysize = 0;
+        BootModule *bmods = new BootModule[mods.size()]();
 
         i = 0;
         Addr addr = NocAddr(mem.memPe, modOffset).getAddr();
@@ -208,22 +207,14 @@ M3Loader::initState(System &sys, PEMemory &mem, MasterPort &noc)
             std::string mod_name(basename(tmp));
             delete[] tmp;
 
-            // extend module array
-            size_t cmdlen = mod_name.length() + 1;
-            modarraysize += cmdlen + sizeof(BootModule);
-            modarray = reinterpret_cast<uint8_t*>(
-                realloc(modarray, modarraysize));
-
             // construct module info
-            BootModule *bmod = reinterpret_cast<BootModule*>(
-                modarray + modarraysize - (cmdlen + sizeof(BootModule)));
-            bmod->namelen = cmdlen;
-            bmod->addr = addr;
-            bmod->size = size;
-            strcpy(bmod->name, mod_name.c_str());
+            bmods[i].addr = addr;
+            bmods[i].size = size;
+            panic_if(mod_name.length() >= MAX_MODNAME_LEN, "name too long");
+            strcpy(bmods[i].name, mod_name.c_str());
 
             inform("Loaded '%s' to %p .. %p",
-                bmod->name, bmod->addr, bmod->addr + bmod->size);
+                bmods[i].name, bmods[i].addr, bmods[i].addr + bmods[i].size);
 
             // to next
             addr += size + TcuTlb::PAGE_SIZE - 1;
@@ -231,49 +222,55 @@ M3Loader::initState(System &sys, PEMemory &mem, MasterPort &noc)
             i++;
         }
 
+        // determine memory regions
+        size_t mem_count = 0;
+        MemMod *bmems = new MemMod[pes.size()];
+        auto avail_mem_start = modOffset + modSize + pes.size() * peSize;
+        bmems[0].size = pes[mem.memPe] & ~static_cast<Addr>(0xFFF);
+        if (bmems[0].size < avail_mem_start)
+            panic("Not enough DRAM for modules and PEs");
+        bmems[0].addr = avail_mem_start;
+        bmems[0].size -= avail_mem_start;
+        mem_count++;
+
+        for (size_t i = 0; i < pes.size(); ++i) {
+            if (i != mem.memPe && (pes[i] & 0x7) == 2) {
+                bmems[mem_count].addr = 0;
+                bmems[mem_count].size = pes[i] & ~static_cast<Addr>(0xFFF);
+                mem_count++;
+            }
+        }
+
         // write kenv
         env.kenv = addr;
         KernelEnv kenv;
         kenv.mod_count = mods.size();
-        kenv.mod_size = modarraysize;
         kenv.pe_count  = pes.size();
-        auto avail_mem_start = modOffset + modSize + pes.size() * peSize;
-        kenv.mems[0].size = pes[mem.memPe] & ~static_cast<Addr>(0xFFF);
-        if (kenv.mems[0].size < avail_mem_start)
-            panic("Not enough DRAM for modules and PEs");
-        kenv.mems[0].addr = avail_mem_start;
-        kenv.mems[0].size -= avail_mem_start;
-
-        size_t j = 1;
-        for (size_t i = 0; i < pes.size(); ++i) {
-            if (i != mem.memPe && (pes[i] & 0x7) == 2) {
-                if (j >= MAX_MEMS)
-                    panic("Too many memory PEs");
-                kenv.mems[j].addr = 0;
-                kenv.mems[j].size = pes[i] & ~static_cast<Addr>(0xFFF);
-                j++;
-            }
-        }
-        for (; j < MAX_MEMS; ++j)
-            kenv.mems[j] = {0, 0};
+        kenv.mem_count = mem_count;
         writeRemote(noc, addr, reinterpret_cast<uint8_t*>(&kenv),
                     sizeof(kenv));
         addr += sizeof(kenv);
 
         // write modules to memory
-        writeRemote(noc, addr, reinterpret_cast<uint8_t*>(modarray),
-                    modarraysize);
-        free(modarray);
-        addr += modarraysize;
+        size_t bmodsize = kenv.mod_count * sizeof(BootModule);
+        writeRemote(noc, addr, reinterpret_cast<uint8_t*>(bmods), bmodsize);
+        delete[] bmods;
+        addr += bmodsize;
 
         // write PEs to memory
-        uint32_t *kpes = new uint32_t[pes.size()]();
-        for (size_t i = 0; i < pes.size(); ++i)
+        uint32_t *kpes = new uint32_t[kenv.pe_count]();
+        for (size_t i = 0; i < kenv.pe_count; ++i)
             kpes[i] = pes[i];
-        writeRemote(noc, addr, reinterpret_cast<uint8_t*>(kpes),
-                    pes.size() * sizeof(uint32_t));
+        size_t bpesize = kenv.pe_count * sizeof(uint32_t);
+        writeRemote(noc, addr, reinterpret_cast<uint8_t*>(kpes), bpesize);
         delete[] kpes;
-        addr += pes.size() * sizeof(uint32_t);
+        addr += bpesize;
+
+        // write memory regions to memory
+        size_t bmemsize = kenv.mem_count * sizeof(MemMod);
+        writeRemote(noc, addr, reinterpret_cast<uint8_t*>(bmems), bmemsize);
+        delete[] bmems;
+        addr += bmemsize;
 
         // check size
         Addr end = NocAddr(mem.memPe, modOffset + modSize).getAddr();
