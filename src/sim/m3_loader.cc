@@ -247,6 +247,7 @@ M3Loader::initState(System &sys, PEMemory &mem, MasterPort &noc)
         kenv.mod_count = mods.size();
         kenv.pe_count  = pes.size();
         kenv.mem_count = mem_count;
+        kenv.serv_count = 0;
         writeRemote(noc, addr, reinterpret_cast<uint8_t*>(&kenv),
                     sizeof(kenv));
         addr += sizeof(kenv);

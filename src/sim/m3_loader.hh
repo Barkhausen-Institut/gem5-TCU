@@ -63,6 +63,7 @@ class M3Loader
         uint64_t mod_count;
         uint64_t pe_count;
         uint64_t mem_count;
+        uint64_t serv_count;
     } M5_ATTR_PACKED;
 
     struct BootEnv
