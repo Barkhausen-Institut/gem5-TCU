@@ -391,13 +391,13 @@ TcuCommands::executePrivCommand(PacketPtr pkt)
     if (pkt)
         tcu.schedCpuResponse(pkt, tcu.clockEdge(delay));
 
+    DPRINTF(TcuCmd, "Finished privileged command %s with res=0\n",
+            privCmdNames[static_cast<size_t>(cmd.opcode)]);
+
     // set privileged command back to IDLE
     cmd.arg0 = 0;
     cmd.opcode = PrivCommand::IDLE;
     tcu.regs().set(PrivReg::PRIV_CMD, cmd);
-
-    DPRINTF(TcuCmd, "Finished privileged command %s with res=0\n",
-            privCmdNames[static_cast<size_t>(cmd.opcode)]);
 }
 
 void
