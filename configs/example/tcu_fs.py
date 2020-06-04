@@ -36,7 +36,7 @@ from m5.defines import buildEnv
 from m5.objects import *
 from m5.util import addToPath, fatal
 
-addToPath('../hw/gem5/configs')
+addToPath('../platform/gem5/configs')
 
 from common.FSConfig import *
 from common import Simulation
