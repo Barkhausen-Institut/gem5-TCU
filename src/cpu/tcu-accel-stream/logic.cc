@@ -82,7 +82,7 @@ AccelLogic::tick()
             size_t rem = dataSize - pos;
             pullSize = std::min(accel->chunkSize, rem);
             pkt = accel->createPacket(
-                TcuAccelStream::BUF_ADDR + offset + pos,
+                accel->bufferAddr() + offset + pos,
                 pullSize,
                 MemCmd::ReadReq
             );
@@ -91,7 +91,7 @@ AccelLogic::tick()
         case State::LOGIC_PUSH:
         {
             pkt = accel->createPacket(
-                TcuAccelStream::BUF_ADDR + offset + pos,
+                accel->bufferAddr() + offset + pos,
                 pullData,
                 pullSize,
                 MemCmd::WriteReq

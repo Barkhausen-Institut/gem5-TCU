@@ -121,6 +121,8 @@ class TcuAccel : public ClockedObject
     Addr chunkSize;
     size_t maxDataSize;
 
+    const Addr offset;
+
   private:
 
     CpuPort port;

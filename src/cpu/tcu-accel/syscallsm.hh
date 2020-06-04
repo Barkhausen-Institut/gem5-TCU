@@ -35,7 +35,7 @@
 
 class SyscallSM
 {
-    static const size_t RBUF_ADDR = 0x1FB000;
+    static const size_t RBUF_ADDR = 0x2FB000;
 
   public:
     enum Operation

@@ -60,6 +60,7 @@ Tcu::Tcu(TcuParams* p)
     wakeupEp(0xFFFF),
     memPe(),
     memOffset(),
+    peMemOffset(p->pe_mem_offset),
     atomicMode(p->system->isAtomicMode()),
     numEndpoints(p->num_endpoints),
     maxNocPacketSize(p->max_noc_packet_size),
@@ -457,9 +458,11 @@ Tcu::completeNocRequest(PacketPtr pkt)
         if(pkt->isRead())
             printPacket(pkt);
 
-        if (dynamic_cast<InitSenderState*>(pkt->senderState))
+        if (auto state = dynamic_cast<InitSenderState*>(pkt->senderState))
         {
             // undo the change from handleCacheMemRequest
+            if (state->offset)
+                noc.offset += peMemOffset;
             pkt->setAddr(noc.offset - memOffset);
             pkt->req->setPaddr(noc.offset - memOffset);
             pkt->popSenderState();
@@ -634,8 +637,13 @@ Tcu::handleCacheMemRequest(PacketPtr pkt, bool functional)
     // only happen when loading a program at startup, TLB misses in the core
     // and pseudoInst
     bool was_noc = noc.valid;
+    bool offset = false;
     if (!was_noc)
     {
+        offset = noc.offset >= peMemOffset;
+        if (offset)
+            noc.offset -= peMemOffset;
+
         noc = NocAddr(memPe, memOffset + noc.offset);
         pkt->setAddr(noc.getAddr());
     }
@@ -660,7 +668,7 @@ Tcu::handleCacheMemRequest(PacketPtr pkt, bool functional)
     if (!was_noc && !functional)
     {
         // remember that we did this change
-        pkt->pushSenderState(new InitSenderState);
+        pkt->pushSenderState(new InitSenderState(offset));
     }
 
     auto type = functional ? Tcu::NocPacketType::CACHE_MEM_REQ_FUNC

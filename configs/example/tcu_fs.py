@@ -320,6 +320,11 @@ def createPE(noc, options, no, systemType, l1size, l2size, spmsize, tcupos, memP
         pe.spm.cpu_port = pe.xbar.default
         pe.spm.range = spmsize
 
+    if options.isa == 'riscv':
+        pe.tcu.pe_mem_offset = 0x10000000
+        if l1size is None and not spmsize is None:
+            pe.spm.offset = pe.tcu.pe_mem_offset
+
     if systemType != MemSystem:
         pe.memory_pe = memPE
         pe.memory_offset = pe_offset + (pe_size * no)
@@ -574,6 +579,7 @@ def createAccelPE(noc, options, no, accel, memPE, l1size=None, l2size=None, spms
         sys.exit(1)
     pe.tcu.connector.accelerator = pe.accel
     pe.accel.id = no;
+    pe.accel.offset = pe.tcu.pe_mem_offset
 
     connectCuToMem(pe, options, pe.accel.port)
 

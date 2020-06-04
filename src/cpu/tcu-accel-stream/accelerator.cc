@@ -200,7 +200,7 @@ TcuAccelStream::completeRequest(PacketPtr pkt)
                 const RegFile::reg_t *regs = pkt->getConstPtr<RegFile::reg_t>();
                 if (regs[0] != static_cast<RegFile::reg_t>(-1))
                 {
-                    ctx.msgAddr = regs[0] + RBUF_ADDR;
+                    ctx.msgAddr = regs[0] + rbufAddr();
                     DPRINTF(TcuAccelStream,
                             "Received message @ %p\n", ctx.msgAddr);
                     if (ctx.flags & Flags::EXIT)
@@ -653,7 +653,7 @@ TcuAccelStream::tick()
                     (ctx.flags & Flags::OUTPUT) ? "output" : "input",
                     rdwr_msg.commit);
 
-            pkt = createPacket(BUF_ADDR + bufSize,
+            pkt = createPacket(bufferAddr() + bufSize,
                                sizeof(rdwr_msg),
                                MemCmd::WriteReq);
             memcpy(pkt->getPtr<uint8_t>(),
@@ -669,7 +669,7 @@ TcuAccelStream::tick()
                     (ctx.flags & Flags::OUTPUT) ? EP_OUT_SEND : EP_IN_SEND,
                     EP_RECV
                 ),
-                CmdData::create(BUF_ADDR + bufSize, sizeof(rdwr_msg)),
+                CmdData::create(bufferAddr() + bufSize, sizeof(rdwr_msg)),
                 (ctx.flags & Flags::OUTPUT) ? LBL_OUT_REPLY : LBL_IN_REPLY
             );
             break;
@@ -684,7 +684,7 @@ TcuAccelStream::tick()
         {
             pkt = createTcuCmdPkt(
                 CmdCommand::create(CmdCommand::ACK_MSG, EP_RECV,
-                                   ctx.msgAddr - RBUF_ADDR),
+                                   ctx.msgAddr - rbufAddr()),
                 0
             );
             break;
@@ -719,7 +719,7 @@ TcuAccelStream::tick()
             pkt = createTcuCmdPkt(
                 CmdCommand::create(CmdCommand::READ, EP_IN_MEM,
                                    ctx.inOff + ctx.inPos),
-                CmdData::create(BUF_ADDR, ctx.lastSize)
+                CmdData::create(bufferAddr(), ctx.lastSize)
             );
             ctx.inPos += ctx.lastSize;
             break;
@@ -737,7 +737,7 @@ TcuAccelStream::tick()
             pkt = createTcuCmdPkt(
                 CmdCommand::create(CmdCommand::WRITE, EP_OUT_MEM,
                                    ctx.outOff + ctx.outPos),
-                CmdData::create(BUF_ADDR + ctx.bufOff, amount)
+                CmdData::create(bufferAddr() + ctx.bufOff, amount)
             );
 
             ctx.bufOff += amount;
@@ -758,7 +758,7 @@ TcuAccelStream::tick()
                     "MSG: sending reply(off=%#llx, len=%#llx)\n",
                     reply.off, reply.len);
 
-            pkt = createPacket(BUF_ADDR + bufSize,
+            pkt = createPacket(bufferAddr() + bufSize,
                                sizeof(reply),
                                MemCmd::WriteReq);
             memcpy(pkt->getPtr<uint8_t>(), (char*)&reply, sizeof(reply));
@@ -768,8 +768,8 @@ TcuAccelStream::tick()
         {
             pkt = createTcuCmdPkt(
                 CmdCommand::create(CmdCommand::REPLY, EP_RECV,
-                                   replyAddr - RBUF_ADDR),
-                CmdData::create(BUF_ADDR + bufSize, sizeof(reply))
+                                   replyAddr - rbufAddr()),
+                CmdData::create(bufferAddr() + bufSize, sizeof(reply))
             );
             break;
         }
@@ -795,7 +795,7 @@ TcuAccelStream::tick()
                     "MSG: sending commit request(nbytes=%#llx)\n",
                     rdwr_msg.commit);
 
-            pkt = createPacket(BUF_ADDR + bufSize,
+            pkt = createPacket(bufferAddr() + bufSize,
                                sizeof(rdwr_msg),
                                MemCmd::WriteReq);
             memcpy(pkt->getPtr<uint8_t>(),
@@ -807,7 +807,7 @@ TcuAccelStream::tick()
         {
             pkt = createTcuCmdPkt(
                 CmdCommand::create(CmdCommand::SEND, EP_OUT_SEND, EP_RECV),
-                CmdData::create(BUF_ADDR + bufSize, sizeof(rdwr_msg)),
+                CmdData::create(bufferAddr() + bufSize, sizeof(rdwr_msg)),
                 LBL_OUT_REPLY
             );
             break;
@@ -826,7 +826,7 @@ TcuAccelStream::tick()
                 auto addr = ctx.inReqAddr ? ctx.inReqAddr : ctx.outReqAddr;
                 pkt = createTcuCmdPkt(
                     CmdCommand::create(CmdCommand::ACK_MSG,
-                                       EP_RECV, addr - RBUF_ADDR),
+                                       EP_RECV, addr - rbufAddr()),
                     0
                 );
                 break;
@@ -852,7 +852,8 @@ TcuAccelStream::tick()
             exit_msg.vpe_sel = SyscallSM::VPE_SEL;
             exit_msg.arg = 0;
 
-            pkt = createPacket(MSG_ADDR, sizeof(exit_msg), MemCmd::WriteReq);
+            pkt = createPacket(sendMsgAddr(), sizeof(exit_msg),
+                               MemCmd::WriteReq);
             memcpy(pkt->getPtr<void>(), &exit_msg, sizeof(exit_msg));
             break;
         }

@@ -35,7 +35,8 @@ Scratchpad::Scratchpad(const ScratchpadParams* p)
     cpuPort(name() + ".cpu_port", *this),
     tcuPort(name() + ".tcu_port", *this),
     latency(p->latency),
-    throughput(p->throughput)
+    throughput(p->throughput),
+    offset(p->offset)
 {
 }
 
@@ -68,9 +69,22 @@ Scratchpad::getPort(const std::string &if_name, PortID idx)
 Tick
 Scratchpad::recvAtomic(PacketPtr pkt)
 {
+    bool out_of_range = false;
+    if (offset != 0)
+    {
+        if (pkt->getAddr() >= offset)
+            pkt->setAddr(pkt->getAddr() - offset);
+        else
+        {
+            out_of_range = true;
+            warn_once("%s: address out-of-range: %#x\n",
+                      name(), pkt->getAddr());
+        }
+    }
+
     // ignore invalid requests
     AddrRange pktRange(pkt->getAddr(), pkt->getAddr() + pkt->getSize() - 1);
-    if (!pktRange.isSubset(getAddrRange()))
+    if (out_of_range || !pktRange.isSubset(getAddrRange()))
     {
         if (pkt->needsResponse())
             pkt->makeResponse();

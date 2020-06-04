@@ -131,7 +131,7 @@ TcuAccelInDir::completeRequest(PacketPtr pkt)
                 const RegFile::reg_t *regs = pkt->getConstPtr<RegFile::reg_t>();
                 if(regs[0] != static_cast<RegFile::reg_t>(-1))
                 {
-                    msgAddr = RBUF_ADDR + regs[0];
+                    msgAddr = rbufAddr() + regs[0];
                     DPRINTF(TcuAccelInDir, "Received message @ %p\n", msgAddr);
                     state = State::READ_MSG;
                 }
@@ -288,7 +288,7 @@ TcuAccelInDir::tick()
         {
             pkt = createTcuCmdPkt(
                 CmdCommand::create(CmdCommand::WRITE, EP_OUT),
-                CmdData::create(BUF_ADDR, dataSize)
+                CmdData::create(bufferAddr(), dataSize)
             );
             break;
         }
@@ -301,7 +301,7 @@ TcuAccelInDir::tick()
 
         case State::STORE_REPLY:
         {
-            pkt = createPacket(BUF_ADDR,
+            pkt = createPacket(bufferAddr(),
                                sizeof(reply),
                                MemCmd::WriteReq);
             memcpy(pkt->getPtr<uint8_t>(), (char*)&reply, sizeof(reply));
@@ -311,8 +311,8 @@ TcuAccelInDir::tick()
         {
             pkt = createTcuCmdPkt(
                 CmdCommand::create(CmdCommand::REPLY, EP_RECV,
-                                   msgAddr - RBUF_ADDR),
-                CmdData::create(BUF_ADDR, sizeof(reply))
+                                   msgAddr - rbufAddr()),
+                CmdData::create(bufferAddr(), sizeof(reply))
             );
             break;
         }

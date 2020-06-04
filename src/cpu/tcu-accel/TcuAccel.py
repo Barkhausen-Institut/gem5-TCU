@@ -38,6 +38,7 @@ class TcuAccel(ClockedObject):
     system = Param.System(Parent.any, "System this tester is part of")
     id = Param.Unsigned("Core ID")
     regfile_base_addr = Param.Addr(0xF0000000, "Register file address")
+    offset = Param.Unsigned(0, "The offset that all accesses have to go above")
 
     max_data_size = Param.MemorySize("1kB", "The maximum size of data transfers")
 

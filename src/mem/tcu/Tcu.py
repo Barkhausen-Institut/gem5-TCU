@@ -48,6 +48,8 @@ class BaseTcu(ClockedObject):
 
     cache_mem_slave_port = SlavePort("Port that performs memory requests on behalf of the cache")
 
+    pe_mem_offset = Param.Unsigned(0, "The offset that all accesses have to go above")
+
     caches = VectorParam.Cache([], "The caches that need to be flushed/invalidated")
 
     mmio_region = Param.AddrRange(AddrRange(0xF0000000, 0xF0002FFF), "MMIO region of the TCU")

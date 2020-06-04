@@ -40,8 +40,12 @@
 class M3Loader
 {
   protected:
-    static const size_t ENV_SIZE        = 0x2000;
-    static const uintptr_t ENV_START    = 0x200000;
+    static const size_t ENV_SIZE        = 0x1000;
+#if THE_ISA == RISCV_ISA
+    static const uintptr_t ENV_START    = 0x10100000;
+#else
+    static const uintptr_t ENV_START    = 0x100000;
+#endif
     static const size_t HEAP_SIZE       = 0x4000;
     static const size_t MAX_MODNAME_LEN = 64;
 

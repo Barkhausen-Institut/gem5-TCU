@@ -64,6 +64,8 @@ class Scratchpad : public AbstractMemory
 
     const unsigned throughput;
 
+    const Addr offset;
+
   protected:
 
     Tick recvAtomic(PacketPtr pkt);

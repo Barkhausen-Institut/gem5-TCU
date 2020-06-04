@@ -89,6 +89,9 @@ class Tcu : public BaseTcu
 
     struct InitSenderState : public Packet::SenderState
     {
+        explicit InitSenderState(bool _offset) : offset(_offset) {}
+
+        bool offset;
     };
 
   public:
@@ -219,6 +222,8 @@ class Tcu : public BaseTcu
     unsigned memPe;
     Addr memOffset;
     Addr memSize;
+
+    const Addr peMemOffset;
 
     const bool atomicMode;
 

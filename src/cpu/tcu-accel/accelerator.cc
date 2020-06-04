@@ -86,6 +86,7 @@ TcuAccel::TcuAccel(const TcuAccelParams *p)
     tickEvent(this),
     chunkSize(system->cacheLineSize()),
     maxDataSize(p->max_data_size),
+    offset(p->offset),
     port("port", this),
     masterId(system->getMasterId(this, name())),
     id(p->id),

@@ -82,7 +82,7 @@ SyscallSM::tick()
         {
             pkt = accel->createTcuCmdPkt(
                 CmdCommand::create(CmdCommand::ACK_MSG, TcuAccel::EP_SYSR,
-                                   replyAddr - RBUF_ADDR),
+                                   replyAddr - (RBUF_ADDR + accel->offset)),
                 0
             );
             break;
@@ -128,7 +128,7 @@ SyscallSM::handleMemResp(PacketPtr pkt)
             const RegFile::reg_t *regs = pkt->getConstPtr<RegFile::reg_t>();
             if(regs[0] != static_cast<RegFile::reg_t>(-1))
             {
-                replyAddr = regs[0] + RBUF_ADDR;
+                replyAddr = regs[0] + RBUF_ADDR + accel->offset;
                 state = State::SYSC_ACK;
             }
             else

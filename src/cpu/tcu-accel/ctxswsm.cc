@@ -89,7 +89,7 @@ AccelCtxSwSM::tick()
         {
             pkt = accel->createTcuCmdPkt(
                 CmdCommand::create(CmdCommand::REPLY, EP_RECV,
-                                   msgAddr - RBUF_ADDR),
+                                   msgAddr - (RBUF_ADDR + accel->offset)),
                 CmdData::create(msgAddr, sizeof(reply))
             );
             break;
@@ -122,7 +122,7 @@ AccelCtxSwSM::handleMemResp(PacketPtr pkt)
             const RegFile::reg_t *regs = pkt->getConstPtr<RegFile::reg_t>();
             if(regs[0] != static_cast<RegFile::reg_t>(-1))
             {
-                msgAddr = regs[0] + RBUF_ADDR;
+                msgAddr = regs[0] + RBUF_ADDR + accel->offset;
                 state = State::READ_MSG;
             }
             else
