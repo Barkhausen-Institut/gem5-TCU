@@ -66,8 +66,15 @@ class M3Loader
         uint64_t serv_count;
     } M5_ATTR_PACKED;
 
+    enum Platform
+    {
+        GEM5,
+        HW
+    };
+
     struct BootEnv
     {
+        uint64_t platform;
         uint64_t pe_id;
         uint64_t pe_desc;
         uint64_t argc;

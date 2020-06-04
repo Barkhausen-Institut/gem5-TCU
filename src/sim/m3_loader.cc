@@ -144,6 +144,7 @@ M3Loader::initState(System &sys, PEMemory &mem, MasterPort &noc)
 {
     BootEnv env;
     memset(&env, 0, sizeof(env));
+    env.platform = Platform::GEM5;
     env.pe_id = coreId;
     env.pe_desc = pes[coreId];
     env.argc = getArgc();
