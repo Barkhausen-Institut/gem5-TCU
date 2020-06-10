@@ -308,8 +308,8 @@ SendEp::print(const RegFile &rf,
               RegAccess access) const
 {
     DPRINTFNS(rf.name(),
-        "%s%s EP%u%14s: Send[vpe=%u, pe=%u ep=%u crdep=%u maxcrd=%u "
-                            "curcrd=%u max=%#x lbl=%#llx rpl=%d]\n",
+        "%s%s EP%-3u%12s: Send[vpe=%u, pe=%u ep=%u crdep=%u maxcrd=%u "
+                              "curcrd=%u max=%#x lbl=%#llx rpl=%d]\n",
         regAccessName(access), read ? "<-" : "->",
         epId, "", r0.vpe,
         r1.tgtPe, r1.tgtEp, r0.crdEp,
@@ -324,8 +324,8 @@ RecvEp::print(const RegFile &rf,
               RegAccess access) const
 {
     DPRINTFNS(rf.name(),
-        "%s%s EP%u%14s: Recv[vpe=%u, buf=%p msz=%#x bsz=%#x rpl=%u msgs=%u "
-                            "occ=%#010x unr=%#010x rd=%u wr=%u]\n",
+        "%s%s EP%-3u%12s: Recv[vpe=%u, buf=%p msz=%#x bsz=%#x rpl=%u msgs=%u "
+                              "occ=%#010x unr=%#010x rd=%u wr=%u]\n",
         regAccessName(access), read ? "<-" : "->",
         epId, "", r0.vpe,
         r1.buffer, 1 << r0.slotSize, 1 << r0.slots, r0.rplEps,
@@ -339,8 +339,8 @@ MemEp::print(const RegFile &rf,
              RegAccess access) const
 {
     DPRINTFNS(rf.name(),
-        "%s%s EP%u%14s: Mem[vpe=%u, pe=%u addr=%#llx "
-                           "size=%#llx flags=%#x]\n",
+        "%s%s EP%-3u%12s: Mem[vpe=%u, pe=%u addr=%#llx "
+                             "size=%#llx flags=%#x]\n",
         regAccessName(access), read ? "<-" : "->",
         epId, "", r0.vpe, r0.targetPe,
         r1.remoteAddr, r2.remoteSize,
@@ -353,10 +353,11 @@ InvalidEp::print(const RegFile &rf,
                  bool read,
                  RegAccess access) const
 {
-    DPRINTFN("%s%s EP%u%14s: INVALID (%#x)\n",
-             regAccessName(access), read ? "<-" : "->",
-             epId, "",
-             static_cast<uint>(type()));
+    DPRINTFNS(rf.name(),
+        "%s%s EP%-3u%12s: INVALID (%#x)\n",
+        regAccessName(access), read ? "<-" : "->",
+        epId, "",
+        static_cast<uint>(type()));
 }
 
 RegFile::reg_t
