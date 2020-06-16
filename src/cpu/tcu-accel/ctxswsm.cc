@@ -80,6 +80,7 @@ AccelCtxSwSM::tick()
         case State::STORE_REPLY:
         {
             reply.res = 0;
+            reply.val = 0;
             pkt = accel->createPacket(msgAddr, sizeof(reply), MemCmd::WriteReq);
             memcpy(pkt->getPtr<uint8_t>(), (char*)&reply, sizeof(reply));
             break;

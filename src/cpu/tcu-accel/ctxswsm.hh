@@ -71,6 +71,7 @@ class AccelCtxSwSM
     struct
     {
         uint64_t res;
+        uint64_t val;
     } M5_ATTR_PACKED reply;
 
   public:
