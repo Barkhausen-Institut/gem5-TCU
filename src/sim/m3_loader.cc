@@ -259,10 +259,10 @@ M3Loader::initState(System &sys, PEMemory &mem, MasterPort &noc)
         addr += bmodsize;
 
         // write PEs to memory
-        uint32_t *kpes = new uint32_t[kenv.pe_count]();
+        uint64_t *kpes = new uint64_t[kenv.pe_count]();
         for (size_t i = 0; i < kenv.pe_count; ++i)
             kpes[i] = pes[i];
-        size_t bpesize = kenv.pe_count * sizeof(uint32_t);
+        size_t bpesize = kenv.pe_count * sizeof(uint64_t);
         writeRemote(noc, addr, reinterpret_cast<uint8_t*>(kpes), bpesize);
         delete[] kpes;
         addr += bpesize;

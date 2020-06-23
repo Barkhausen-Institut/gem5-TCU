@@ -69,8 +69,8 @@ class M3Loader
     struct BootEnv
     {
         uint64_t pe_id;
-        uint32_t pe_desc;
-        uint32_t argc;
+        uint64_t pe_desc;
+        uint64_t argc;
         uint64_t argv;
         uint64_t heap_size;
         uint64_t pe_mem_base;
