@@ -346,6 +346,11 @@ XferUnit::continueTransfer(Buffer *buf)
             reads.sample(tcu.curCycle() - buf->event->startCycle);
         else
             writes.sample(tcu.curCycle() - buf->event->startCycle);
+        if (buf->event->trans)
+        {
+            buf->event->trans->abort();
+            buf->event->trans = NULL;
+        }
         buf->event->finish();
         buf->event = NULL;
 
@@ -378,12 +383,6 @@ XferUnit::TransferEvent::abort(TcuError error)
         static_cast<int>(error));
 
     buf->event->result = error;
-    if (trans)
-    {
-        trans->abort();
-        trans = NULL;
-        // will be deleted by abort()
-    }
 
     xfer->aborts++;
 
