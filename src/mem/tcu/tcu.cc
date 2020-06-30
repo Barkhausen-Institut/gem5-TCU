@@ -629,25 +629,25 @@ Tcu::handleCacheMemRequest(PacketPtr pkt, bool functional)
     pkt->setAddr(nocAddr);
 
     NocAddr noc(nocAddr);
+
     // special case: we check whether this is actually a NocAddr. this does
     // only happen when loading a program at startup, TLB misses in the core
     // and pseudoInst
-    if (!noc.valid)
+    bool was_noc = noc.valid;
+    if (!was_noc)
     {
-        if (noc.offset > memSize)
-        {
-            DPRINTF(TcuMem, "Ignoring %s request of LLC for %u bytes @ %d:%#x\n",
-                pkt->cmdString(), pkt->getSize(), noc.peId, noc.offset);
-            return false;
-        }
-
         noc = NocAddr(memPe, memOffset + noc.offset);
         pkt->setAddr(noc.getAddr());
-        if (!functional)
-        {
-            // remember that we did this change
-            pkt->pushSenderState(new InitSenderState);
-        }
+    }
+
+    // TODO this is a temporary check that prevents failures if the core does
+    // speculative accesses to arbitrary addresses. with physical memory
+    // protection, this check can be removed.
+    if (noc.peId != memPe || (!noc.valid && noc.offset > memSize))
+    {
+        DPRINTF(TcuMem, "Ignoring %s request of LLC for %u bytes @ %d:%#x\n",
+            pkt->cmdString(), pkt->getSize(), noc.peId, noc.offset);
+        return false;
     }
 
     DPRINTF(TcuMem, "Handling %s request of LLC for %u bytes @ %d:%#x\n",
@@ -656,6 +656,12 @@ Tcu::handleCacheMemRequest(PacketPtr pkt, bool functional)
 
     if(pkt->isWrite())
         printPacket(pkt);
+
+    if (!was_noc && !functional)
+    {
+        // remember that we did this change
+        pkt->pushSenderState(new InitSenderState);
+    }
 
     auto type = functional ? Tcu::NocPacketType::CACHE_MEM_REQ_FUNC
                            : Tcu::NocPacketType::CACHE_MEM_REQ;
