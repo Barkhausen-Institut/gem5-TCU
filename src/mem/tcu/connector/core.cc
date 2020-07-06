@@ -31,6 +31,7 @@
 #include "mem/tcu/connector/core.hh"
 #include "mem/tcu/tcu.hh"
 #include "cpu/simple/base.hh"
+#include "cpu/minor/cpu.hh"
 #include "sim/process.hh"
 
 CoreConnector::CoreConnector(const CoreConnectorParams *p)
@@ -56,6 +57,8 @@ void
 CoreConnector::suspend()
 {
     if (system->threadContexts.size() == 0)
+        return;
+    if (dynamic_cast<MinorCPU*>(system->threadContexts[0]->getCpuPtr()))
         return;
 
     if (system->threadContexts[0]->status() == ThreadContext::Active)
