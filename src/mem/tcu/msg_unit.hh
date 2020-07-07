@@ -135,12 +135,6 @@ class MessageUnit
     TcuError ackMessage(epid_t epId, Addr msgOff);
 
     /**
-     * Invalidates all reply header for receive EP <repId> that have been sent
-     * from PE <peId> and send EP <sepId>.
-     */
-    TcuError invalidateReply(epid_t repId, peid_t peId, epid_t sepId);
-
-    /**
      * Finishes a message receive
      */
     TcuError finishMsgReceive(epid_t epId,

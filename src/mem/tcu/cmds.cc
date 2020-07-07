@@ -62,7 +62,6 @@ static const char *extCmdNames[] =
 {
     "IDLE",
     "INV_EP",
-    "INV_REPLY",
     "RESET",
 };
 
@@ -446,15 +445,6 @@ TcuCommands::executeExtCommand(PacketPtr pkt)
             TcuError res = tcu.regs().invalidate(epid, force, &unreadMask);
             cmd.error = static_cast<uint>(res);
             cmd.arg = unreadMask;
-            break;
-        }
-        case ExtCommand::INV_REPLY:
-        {
-            epid_t repid = cmd.arg & 0xFFFF;
-            peid_t peid = (cmd.arg >> 16) & 0xFF;
-            epid_t sepid = (cmd.arg >> 24) & 0xFFFF;
-            TcuError res = tcu.msgUnit->invalidateReply(repid, peid, sepid);
-            cmd.error = static_cast<uint>(res);
             break;
         }
         case ExtCommand::RESET:

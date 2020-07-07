@@ -420,25 +420,6 @@ MessageUnit::ackMessage(epid_t epId, Addr msgOff)
 }
 
 TcuError
-MessageUnit::invalidateReply(epid_t repId, peid_t peId, epid_t sepId)
-{
-    RecvEp *ep = tcu.regs().getRecvEp(repId);
-    if (!ep || ep->r0.rplEps == Tcu::INVALID_EP_ID)
-        return TcuError::INV_EP;
-
-    for (epid_t i = 0; i < (1 << ep->r0.slots); ++i)
-    {
-        auto *sep = tcu.regs().getSendEp(ep->r0.rplEps + i);
-        if (sep && sep->r1.tgtPe == peId && sep->r0.crdEp == sepId)
-        {
-            unsigned unread_mask;
-            tcu.regs().invalidate(ep->r0.rplEps + i, true, &unread_mask);
-        }
-    }
-    return TcuError::NONE;
-}
-
-TcuError
 MessageUnit::finishMsgReceive(epid_t epId,
                               Addr msgAddr,
                               const MessageHeader *header,

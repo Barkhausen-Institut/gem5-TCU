@@ -170,8 +170,7 @@ struct ExtCommand
     {
         IDLE            = 0,
         INV_EP          = 1,
-        INV_REPLY       = 2,
-        RESET           = 3,
+        RESET           = 2,
     };
 
     BitUnion64(Bits)
