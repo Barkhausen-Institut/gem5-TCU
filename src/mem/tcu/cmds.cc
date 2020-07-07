@@ -287,12 +287,8 @@ TcuCommands::finishCommand(TcuError error)
 
     cmdFinish = NULL;
 
-    if (cmd.opcode == CmdCommand::SEND)
-        tcu.msgUnit->finishMsgSend(error, cmd.epid);
-    else if (cmd.opcode == CmdCommand::REPLY)
-        tcu.msgUnit->finishMsgReply(error, cmd.epid, cmd.arg0);
-    else if (error == TcuError::NONE &&
-             (cmd.opcode == CmdCommand::READ || cmd.opcode == CmdCommand::WRITE))
+    if (error == TcuError::NONE &&
+        (cmd.opcode == CmdCommand::READ || cmd.opcode == CmdCommand::WRITE))
     {
         const CmdData::Bits data = tcu.regs().getData();
         if (data.size > 0)

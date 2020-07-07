@@ -184,6 +184,10 @@ MessageUnit::startTransmission(const CmdCommand::Bits& cmd)
     info.ready        = true;
     info.sepId        = epid;
 
+    // everything is fine, ACK the message
+    if (cmd.opcode == CmdCommand::REPLY)
+        ackMessage(cmd.epid, cmd.arg0);
+
     startXfer(cmd);
 }
 
@@ -260,23 +264,6 @@ MessageUnit::SendTransferEvent::transferStart()
 
     delete header;
     header = nullptr;
-}
-
-void
-MessageUnit::finishMsgReply(TcuError error, epid_t epid, Addr msgOff)
-{
-    if (error == TcuError::NONE)
-        ackMessage(epid, msgOff);
-    // undo credit reduction
-    else if (info.sepId != Tcu::INVALID_EP_ID)
-        recvCredits(info.sepId);
-}
-
-void
-MessageUnit::finishMsgSend(TcuError error, epid_t epid)
-{
-    if (error != TcuError::NONE && info.sepId != Tcu::INVALID_EP_ID)
-        recvCredits(info.sepId);
 }
 
 void

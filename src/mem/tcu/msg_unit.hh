@@ -110,16 +110,6 @@ class MessageUnit
     TcuError recvFromNoc(PacketPtr pkt);
 
     /**
-     * Finishes the reply-on-message command
-     */
-    void finishMsgReply(TcuError error, epid_t epid, Addr msgOff);
-
-    /**
-     * Finishes the send-message command
-     */
-    void finishMsgSend(TcuError error, epid_t epid);
-
-    /**
      * Receives credits again
      */
     void recvCredits(epid_t epid);
