@@ -368,10 +368,7 @@ found:
 int
 MessageUnit::allocSlot(size_t msgSize, epid_t epid, RecvEp *ep)
 {
-    // the RecvEp might be invalid
-    if (!ep)
-        return -1;
-
+    assert(ep != nullptr);
     assert(msgSize <= (1 << ep->r0.slotSize));
 
     int i;
@@ -526,6 +523,14 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
     }
 
     RecvEp *ep = tcu.regs().getRecvEp(epId);
+    if (!ep || (ep->r1.buffer & 0x7) != 0)
+    {
+        DPRINTFS(Tcu, (&tcu),
+            "EP%u: ignoring message: receive EP invalid\n",
+            epId);
+        tcu.sendNocResponse(pkt);
+        return !ep ? TcuError::RECV_GONE : TcuError::RECV_MISALIGN;
+    }
 
     int msgidx = allocSlot(pkt->getSize(), epId, ep);
     if (msgidx == -1)
