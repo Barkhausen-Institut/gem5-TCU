@@ -191,25 +191,6 @@ MessageUnit::startTransmission(const CmdCommand::Bits& cmd)
         info.replySize = rep->r0.slotSize;
     }
 
-    // check if we have enough credits
-    if (cmd.opcode == CmdCommand::REPLY || ep->r0.curCrd != Tcu::CREDITS_UNLIM)
-    {
-        if (ep->r0.curCrd == 0)
-        {
-            DPRINTFS(Tcu, (&tcu), "EP%u: no credits to send message\n", epid);
-            tcu.scheduleFinishOp(Cycles(1), TcuError::NO_CREDITS);
-            return;
-        }
-
-        // pay the credits
-        ep->r0.curCrd = ep->r0.curCrd - 1;
-
-        DPRINTFS(TcuCredits, (&tcu), "EP%u paid 1 credit (%u left)\n",
-                 epid, ep->r0.curCrd);
-
-        tcu.regs().updateEp(epid);
-    }
-
     // fill the info struct and start the transfer
     info.targetPeId   = ep->r1.tgtPe;
     info.targetEpId   = ep->r1.tgtEp;
@@ -218,10 +199,6 @@ MessageUnit::startTransmission(const CmdCommand::Bits& cmd)
     info.unlimcred    = ep->r0.curCrd == Tcu::CREDITS_UNLIM;
     info.ready        = true;
     info.sepId        = epid;
-
-    // everything is fine, ACK the message
-    if (cmd.opcode == CmdCommand::REPLY)
-        ackMessage(cmd.epid, cmd.arg0);
 
     startXfer(cmd);
 }
@@ -278,7 +255,7 @@ MessageUnit::startXfer(const CmdCommand::Bits& cmd)
 
     // start the transfer of the payload
     auto *ev = new SendTransferEvent(
-        data.addr, data.size, flags, nocAddr, header);
+        this, data.addr, data.size, flags, nocAddr, header);
     tcu.startTransfer(ev, tcu.startMsgTransferDelay);
 
     info.ready = false;
@@ -299,6 +276,45 @@ MessageUnit::SendTransferEvent::transferStart()
 
     delete header;
     header = nullptr;
+}
+
+void
+MessageUnit::SendTransferEvent::transferDone(TcuError result)
+{
+    if (result == TcuError::NONE)
+    {
+        CmdCommand::Bits cmd = tcu().regs().getCommand();
+
+        // check if we have enough credits
+        SendEp *ep = tcu().regs().getSendEp(msgUnit->info.sepId);
+        if (cmd.opcode == CmdCommand::REPLY ||
+            ep->r0.curCrd != Tcu::CREDITS_UNLIM)
+        {
+            if (ep->r0.curCrd == 0)
+            {
+                DPRINTFS(Tcu, (&tcu()),
+                         "EP%u: no credits to send message\n",
+                         msgUnit->info.sepId);
+                result = TcuError::NO_CREDITS;
+            }
+            else
+            {
+                // pay the credits
+                ep->r0.curCrd = ep->r0.curCrd - 1;
+
+                DPRINTFS(TcuCredits, (&tcu()),
+                         "EP%u paid 1 credit (%u left)\n",
+                         msgUnit->info.sepId, ep->r0.curCrd);
+
+                tcu().regs().updateEp(msgUnit->info.sepId);
+            }
+        }
+
+        if (cmd.opcode == CmdCommand::REPLY)
+            msgUnit->ackMessage(cmd.epid, cmd.arg0);
+    }
+
+    MemoryUnit::WriteTransferEvent::transferDone(result);
 }
 
 void

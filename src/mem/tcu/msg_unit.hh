@@ -54,20 +54,24 @@ class MessageUnit
 
     class SendTransferEvent : public MemoryUnit::WriteTransferEvent
     {
+        MessageUnit *msgUnit;
         MessageHeader *header;
 
       public:
 
-        SendTransferEvent(Addr local,
+        SendTransferEvent(MessageUnit *_msgUnit,
+                          Addr local,
                           size_t size,
                           uint flags,
                           NocAddr dest,
                           MessageHeader *_header)
             : WriteTransferEvent(local, size, flags, dest),
+              msgUnit(_msgUnit),
               header(_header)
         {}
 
         void transferStart() override;
+        void transferDone(TcuError result) override;
     };
 
     class ReceiveTransferEvent : public MemoryUnit::ReceiveTransferEvent
