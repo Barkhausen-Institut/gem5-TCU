@@ -407,7 +407,7 @@ MessageUnit::ackMessage(epid_t epId, Addr msgOff)
         return TcuError::FOREIGN_EP;
 
     int msgidx = ep->offsetToIdx(msgOff);
-    if (msgidx == RecvEp::MAX_MSGS || !ep->isOccupied(msgidx))
+    if (msgidx == RecvEp::MAX_MSGS)
         return TcuError::INV_MSG_OFF;
 
     bool unread = false;
