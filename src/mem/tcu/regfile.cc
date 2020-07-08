@@ -125,7 +125,7 @@ RegFile::invalidate(epid_t epId, bool force, unsigned *unreadMask)
     if (!force && (sep = getSendEp(epId)) != nullptr)
     {
         if (sep->r0.curCrd != sep->r0.maxCrd)
-            return TcuError::MISS_CREDITS;
+            return TcuError::NO_CREDITS;
     }
 
     RecvEp *rep;

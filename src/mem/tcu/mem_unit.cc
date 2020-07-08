@@ -79,9 +79,17 @@ MemoryUnit::startRead(const CmdCommand::Bits& cmd)
 {
     MemEp *ep = tcu.regs().getMemEp(cmd.epid);
 
-    if(!ep || ep->r0.vpe != tcu.regs().getCurVPE().id)
+    if(!ep)
     {
-        tcu.scheduleFinishOp(Cycles(1), TcuError::INV_EP);
+        DPRINTFS(Tcu, (&tcu), "EP%u: invalid EP\n", cmd.epid);
+        tcu.scheduleFinishOp(Cycles(1), TcuError::NO_MEP);
+        return;
+    }
+
+    if(ep->r0.vpe != tcu.regs().getCurVPE().id)
+    {
+        DPRINTFS(Tcu, (&tcu), "EP%u: foreign EP\n", cmd.epid);
+        tcu.scheduleFinishOp(Cycles(1), TcuError::FOREIGN_EP);
         return;
     }
 
@@ -110,7 +118,7 @@ MemoryUnit::startRead(const CmdCommand::Bits& cmd)
 
     if(size + offset < size || size + offset > ep->r2.remoteSize)
     {
-        tcu.scheduleFinishOp(Cycles(1), TcuError::INV_ARGS);
+        tcu.scheduleFinishOp(Cycles(1), TcuError::OUT_OF_BOUNDS);
         return;
     }
 
@@ -186,9 +194,17 @@ MemoryUnit::startWrite(const CmdCommand::Bits& cmd)
 {
     MemEp *ep = tcu.regs().getMemEp(cmd.epid);
 
-    if(!ep || ep->r0.vpe != tcu.regs().getCurVPE().id)
+    if(!ep)
     {
-        tcu.scheduleFinishOp(Cycles(1), TcuError::INV_EP);
+        DPRINTFS(Tcu, (&tcu), "EP%u: invalid EP\n", cmd.epid);
+        tcu.scheduleFinishOp(Cycles(1), TcuError::NO_MEP);
+        return;
+    }
+
+    if(ep->r0.vpe != tcu.regs().getCurVPE().id)
+    {
+        DPRINTFS(Tcu, (&tcu), "EP%u: foreign EP\n", cmd.epid);
+        tcu.scheduleFinishOp(Cycles(1), TcuError::FOREIGN_EP);
         return;
     }
 
@@ -217,7 +233,7 @@ MemoryUnit::startWrite(const CmdCommand::Bits& cmd)
 
     if(size + offset < size || size + offset > ep->r2.remoteSize)
     {
-        tcu.scheduleFinishOp(Cycles(1), TcuError::INV_ARGS);
+        tcu.scheduleFinishOp(Cycles(1), TcuError::OUT_OF_BOUNDS);
         return;
     }
 

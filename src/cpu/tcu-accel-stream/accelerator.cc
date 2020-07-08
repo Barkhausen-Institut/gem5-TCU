@@ -170,7 +170,7 @@ TcuAccelStream::completeRequest(PacketPtr pkt)
                     auto err = static_cast<TcuError>((long)cmd.error);
                     if (err == TcuError::NONE)
                         ctx.flags |= Flags::WAIT;
-                    if (err == TcuError::INV_EP)
+                    if (err == TcuError::NO_SEP || err == TcuError::RECV_GONE)
                     {
                         ctx.flags = Flags::EXIT;
                         state = State::EXIT;

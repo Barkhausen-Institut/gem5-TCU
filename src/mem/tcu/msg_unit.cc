@@ -77,10 +77,17 @@ MessageUnit::startTransmission(const CmdCommand::Bits& cmd)
     {
         RecvEp *ep = tcu.regs().getRecvEp(epid);
 
-        if(!ep || ep->r0.vpe != tcu.regs().getCurVPE().id)
+        if(!ep)
         {
             DPRINTFS(Tcu, (&tcu), "EP%u: invalid EP\n", epid);
-            tcu.scheduleFinishOp(Cycles(1), TcuError::INV_EP);
+            tcu.scheduleFinishOp(Cycles(1), TcuError::NO_REP);
+            return;
+        }
+
+        if(ep->r0.vpe != tcu.regs().getCurVPE().id)
+        {
+            DPRINTFS(Tcu, (&tcu), "EP%u: foreign EP\n", epid);
+            tcu.scheduleFinishOp(Cycles(1), TcuError::FOREIGN_EP);
             return;
         }
 
@@ -89,7 +96,7 @@ MessageUnit::startTransmission(const CmdCommand::Bits& cmd)
             DPRINTFS(Tcu, (&tcu),
                      "EP%u: no reply EPs, cannot reply on msg %p\n",
                      epid, cmd.arg0);
-            tcu.scheduleFinishOp(Cycles(1), TcuError::INV_EP);
+            tcu.scheduleFinishOp(Cycles(1), TcuError::REPLIES_DISABLED);
             return;
         }
 
@@ -98,12 +105,12 @@ MessageUnit::startTransmission(const CmdCommand::Bits& cmd)
 
         SendEp *sep = tcu.regs().getSendEp(epid);
 
-        if (!sep || !sep->r0.reply)
+        if (!sep)
         {
             DPRINTFS(Tcu, (&tcu),
                      "EP%u: invalid reply EP. Double reply for msg %p?\n",
                      epid, cmd.arg0);
-            tcu.scheduleFinishOp(Cycles(1), TcuError::INV_ARGS);
+            tcu.scheduleFinishOp(Cycles(1), TcuError::NO_SEP);
             return;
         }
 
@@ -125,11 +132,25 @@ MessageUnit::startTransmission(const CmdCommand::Bits& cmd)
     SendEp *ep = tcu.regs().getSendEp(epid);
 
     // check if the send EP is valid
-    if (!ep || ep->r0.vpe != tcu.regs().getCurVPE().id ||
-        (cmd.opcode == CmdCommand::SEND && ep->r0.reply))
+    if(!ep)
     {
         DPRINTFS(Tcu, (&tcu), "EP%u: invalid EP\n", epid);
-        tcu.scheduleFinishOp(Cycles(1), TcuError::INV_EP);
+        tcu.scheduleFinishOp(Cycles(1), TcuError::NO_SEP);
+        return;
+    }
+
+    if(ep->r0.vpe != tcu.regs().getCurVPE().id)
+    {
+        DPRINTFS(Tcu, (&tcu), "EP%u: foreign EP\n", epid);
+        tcu.scheduleFinishOp(Cycles(1), TcuError::FOREIGN_EP);
+        return;
+    }
+
+    if ((cmd.opcode == CmdCommand::SEND && ep->r0.reply) ||
+        (cmd.opcode == CmdCommand::REPLY && !ep->r0.reply))
+    {
+        DPRINTFS(Tcu, (&tcu), "EP%u: send vs. reply\n", epid);
+        tcu.scheduleFinishOp(Cycles(1), TcuError::SEND_REPLY_EP);
         return;
     }
 
@@ -137,7 +158,7 @@ MessageUnit::startTransmission(const CmdCommand::Bits& cmd)
     if (data.size + sizeof(MessageHeader) > (1 << ep->r0.msgSize))
     {
         DPRINTFS(Tcu, (&tcu), "EP%u: message too large\n", epid);
-        tcu.scheduleFinishOp(Cycles(1), TcuError::INV_ARGS);
+        tcu.scheduleFinishOp(Cycles(1), TcuError::OUT_OF_BOUNDS);
         return;
     }
 
@@ -145,10 +166,17 @@ MessageUnit::startTransmission(const CmdCommand::Bits& cmd)
     if (cmd.opcode == CmdCommand::SEND && cmd.arg0 != Tcu::INVALID_EP_ID)
     {
         RecvEp *rep = tcu.regs().getRecvEp(cmd.arg0);
-        if (!rep || rep->r0.vpe != tcu.regs().getCurVPE().id)
+        if(!rep)
         {
-            DPRINTFS(Tcu, (&tcu), "EP%u: invalid reply EP\n", cmd.arg0);
-            tcu.scheduleFinishOp(Cycles(1), TcuError::INV_EP);
+            DPRINTFS(Tcu, (&tcu), "EP%u: invalid EP\n", cmd.arg0);
+            tcu.scheduleFinishOp(Cycles(1), TcuError::NO_REP);
+            return;
+        }
+
+        if(rep->r0.vpe != tcu.regs().getCurVPE().id)
+        {
+            DPRINTFS(Tcu, (&tcu), "EP%u: foreign EP\n", cmd.arg0);
+            tcu.scheduleFinishOp(Cycles(1), TcuError::FOREIGN_EP);
             return;
         }
 
@@ -162,7 +190,7 @@ MessageUnit::startTransmission(const CmdCommand::Bits& cmd)
         if (ep->r0.curCrd == 0)
         {
             DPRINTFS(Tcu, (&tcu), "EP%u: no credits to send message\n", epid);
-            tcu.scheduleFinishOp(Cycles(1), TcuError::MISS_CREDITS);
+            tcu.scheduleFinishOp(Cycles(1), TcuError::NO_CREDITS);
             return;
         }
 
@@ -291,8 +319,10 @@ TcuError
 MessageUnit::fetchMessage(epid_t epid, Addr *msgOff)
 {
     RecvEp *ep = tcu.regs().getRecvEp(epid);
-    if (!ep || ep->r0.vpe != tcu.regs().getCurVPE().id)
-        return TcuError::INV_EP;
+    if (!ep)
+        return TcuError::NO_REP;
+    if (ep->r0.vpe != tcu.regs().getCurVPE().id)
+        return TcuError::FOREIGN_EP;
 
     // check if the current VPE has unread messages at all. note that this is
     // important in case it is out of sync with the receive EPs, i.e., if we
@@ -374,12 +404,14 @@ TcuError
 MessageUnit::ackMessage(epid_t epId, Addr msgOff)
 {
     RecvEp *ep = tcu.regs().getRecvEp(epId);
-    if (!ep || ep->r0.vpe != tcu.regs().getCurVPE().id)
-        return TcuError::INV_EP;
+    if (!ep)
+        return TcuError::NO_REP;
+    if (ep->r0.vpe != tcu.regs().getCurVPE().id)
+        return TcuError::FOREIGN_EP;
 
     int msgidx = ep->offsetToIdx(msgOff);
     if (msgidx == RecvEp::MAX_MSGS || !ep->isOccupied(msgidx))
-        return TcuError::INV_MSG;
+        return TcuError::INV_MSG_OFF;
 
     bool unread = false;
     ep->setOccupied(msgidx, false);
@@ -416,7 +448,7 @@ MessageUnit::finishMsgReceive(epid_t epId,
 {
     RecvEp *ep = tcu.regs().getRecvEp(epId);
     if (!ep)
-        return TcuError::INV_EP;
+        return TcuError::NO_REP;
 
     int idx = (msgAddr - ep->r1.buffer) >> ep->r0.slotSize;
 
@@ -504,7 +536,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
         noSpace++;
 
         tcu.sendNocResponse(pkt);
-        return TcuError::NO_RING_SPACE;
+        return TcuError::RECV_NO_SPACE;
     }
 
     // the message is transferred piece by piece; we can start as soon as

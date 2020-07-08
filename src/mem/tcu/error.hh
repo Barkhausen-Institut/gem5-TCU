@@ -33,14 +33,21 @@
 enum class TcuError
 {
     NONE                = 0,
-    MISS_CREDITS        = 1,
-    NO_RING_SPACE       = 2,
-    PAGEFAULT           = 3,
-    INV_EP              = 4,
-    ABORT               = 5,
-    INV_MSG             = 6,
-    INV_ARGS            = 7,
-    NO_PERM             = 8,
+    NO_MEP              = 1,
+    NO_SEP              = 2,
+    NO_REP              = 3,
+    FOREIGN_EP          = 4,
+    SEND_REPLY_EP       = 5,
+    RECV_GONE           = 6,
+    RECV_MISALIGN       = 7,
+    RECV_NO_SPACE       = 8,
+    REPLIES_DISABLED    = 9,
+    OUT_OF_BOUNDS       = 10,
+    NO_CREDITS          = 11,
+    NO_PERM             = 12,
+    INV_MSG_OFF         = 13,
+    PAGEFAULT           = 14,
+    ABORT               = 15,
 };
 
 #endif // __MEM_TCU_ERROR_HH__
