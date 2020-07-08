@@ -101,8 +101,15 @@ MessageUnit::startTransmission(const CmdCommand::Bits& cmd)
         }
 
         int msgidx = ep->offsetToIdx(cmd.arg0);
-        epid = ep->r0.rplEps + msgidx;
+        if (msgidx == RecvEp::MAX_MSGS)
+        {
+            DPRINTFS(Tcu, (&tcu),
+                     "EP%u: offset out of bounds (%#x)\n", epid, cmd.arg0);
+            tcu.scheduleFinishOp(Cycles(1), TcuError::INV_MSG_OFF);
+            return;
+        }
 
+        epid = ep->r0.rplEps + msgidx;
         SendEp *sep = tcu.regs().getSendEp(epid);
 
         if (!sep)

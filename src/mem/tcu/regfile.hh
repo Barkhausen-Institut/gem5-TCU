@@ -229,7 +229,7 @@ struct RecvEp
         if (r0.slotSize == 0)
             return MAX_MSGS;
         int idx = off >> r0.slotSize;
-        return (idx >= 0 && idx < MAX_MSGS) ? idx : MAX_MSGS;
+        return (idx >= 0 && idx < (1 << r0.slots)) ? idx : MAX_MSGS;
     }
 
     bool isUnread(int idx) const
