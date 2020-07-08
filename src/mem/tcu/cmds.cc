@@ -363,7 +363,7 @@ TcuCommands::executePrivCommand(PacketPtr pkt)
         case PrivCommand::XCHG_VPE:
         {
             RegFile::reg_t old = tcu.regs().get(PrivReg::CUR_VPE);
-            tcu.regs().set(PrivReg::OLD_VPE, old);
+            tcu.regs().set(PrivReg::PRIV_CMD_ARG1, old);
             tcu.regs().set(PrivReg::CUR_VPE, cmd.arg0 & 0xFFFFFFFF);
             break;
         }

@@ -57,7 +57,6 @@ enum class PrivReg : Addr
     PRIV_CMD,
     PRIV_CMD_ARG1,
     CUR_VPE,
-    OLD_VPE,
     CLEAR_IRQ,
 };
 
@@ -72,7 +71,7 @@ enum class UnprivReg : Addr
 };
 
 constexpr unsigned numExtRegs = 2;
-constexpr unsigned numPrivRegs = 6;
+constexpr unsigned numPrivRegs = 5;
 constexpr unsigned numUnprivRegs = 5;
 constexpr unsigned numEpRegs = 3;
 // buffer for prints (32 * 8 bytes)

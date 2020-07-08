@@ -49,7 +49,6 @@ const char *RegFile::privRegNames[] = {
     "PRIV_CMD",
     "PRIV_CMD_ARG",
     "CUR_VPE",
-    "OLD_VPE",
     "CLEAR_IRQ",
 };
 
