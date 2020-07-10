@@ -111,8 +111,8 @@ struct CmdCommand
     };
 
     BitUnion64(Bits)
-        Bitfield<56, 24> arg0;
-        Bitfield<23, 20> error;
+        Bitfield<57, 25> arg0;
+        Bitfield<24, 20> error;
         Bitfield<19, 4> epid;
         Bitfield<3, 0> opcode;
     EndBitUnion(Bits)
@@ -173,8 +173,8 @@ struct ExtCommand
     };
 
     BitUnion64(Bits)
-        Bitfield<64, 8> arg;
-        Bitfield<7, 4> error;
+        Bitfield<64, 9> arg;
+        Bitfield<8, 4> error;
         Bitfield<3, 0> opcode;
     EndBitUnion(Bits)
 };
