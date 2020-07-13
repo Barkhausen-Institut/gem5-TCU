@@ -285,33 +285,34 @@ MessageUnit::SendTransferEvent::transferDone(TcuError result)
     {
         CmdCommand::Bits cmd = tcu().regs().getCommand();
 
-        // check if we have enough credits
-        SendEp *ep = tcu().regs().getSendEp(msgUnit->info.sepId);
-        if (cmd.opcode == CmdCommand::REPLY ||
-            ep->r0.curCrd != Tcu::CREDITS_UNLIM)
-        {
-            if (ep->r0.curCrd == 0)
-            {
-                DPRINTFS(Tcu, (&tcu()),
-                         "EP%u: no credits to send message\n",
-                         msgUnit->info.sepId);
-                result = TcuError::NO_CREDITS;
-            }
-            else
-            {
-                // pay the credits
-                ep->r0.curCrd = ep->r0.curCrd - 1;
-
-                DPRINTFS(TcuCredits, (&tcu()),
-                         "EP%u paid 1 credit (%u left)\n",
-                         msgUnit->info.sepId, ep->r0.curCrd);
-
-                tcu().regs().updateEp(msgUnit->info.sepId);
-            }
-        }
-
         if (cmd.opcode == CmdCommand::REPLY)
             msgUnit->ackMessage(cmd.epid, cmd.arg0);
+        else
+        {
+            // check if we have enough credits
+            SendEp *ep = tcu().regs().getSendEp(msgUnit->info.sepId);
+            if (ep->r0.curCrd != Tcu::CREDITS_UNLIM)
+            {
+                if (ep->r0.curCrd == 0)
+                {
+                    DPRINTFS(Tcu, (&tcu()),
+                             "EP%u: no credits to send message\n",
+                             msgUnit->info.sepId);
+                    result = TcuError::NO_CREDITS;
+                }
+                else
+                {
+                    // pay the credits
+                    ep->r0.curCrd = ep->r0.curCrd - 1;
+
+                    DPRINTFS(TcuCredits, (&tcu()),
+                             "EP%u paid 1 credit (%u left)\n",
+                             msgUnit->info.sepId, ep->r0.curCrd);
+
+                    tcu().regs().updateEp(msgUnit->info.sepId);
+                }
+            }
+        }
     }
 
     MemoryUnit::WriteTransferEvent::transferDone(result);
