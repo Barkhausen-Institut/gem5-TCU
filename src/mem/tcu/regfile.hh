@@ -496,8 +496,6 @@ class RegFile
 
     std::vector<reg_t> bufRegs;
 
-    const unsigned numEndpoints;
-
     // used for debug messages (DPRINTF)
     const std::string _name;
 

@@ -93,7 +93,6 @@ RegFile::RegFile(Tcu &_tcu, const std::string& name, unsigned _numEndpoints)
       unprivRegs(numUnprivRegs, 0),
       eps(_numEndpoints, Ep()),
       bufRegs(numBufRegs * sizeof(reg_t), 0),
-      numEndpoints(_numEndpoints),
       _name(name)
 {
     static_assert(sizeof(extRegNames) / sizeof(extRegNames[0]) ==
@@ -479,7 +478,7 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
             Addr epAddr = regAddr - sizeof(reg_t) * nonEpRegs;
 
             // endpoint address
-            if (epAddr < sizeof(reg_t) * numEpRegs * tcu.numEndpoints)
+            if (epAddr < sizeof(reg_t) * numEpRegs * eps.size())
             {
                 epid_t epId = epAddr / (sizeof(reg_t) * numEpRegs);
                 unsigned regNumber = (epAddr / sizeof(reg_t)) % numEpRegs;
@@ -502,8 +501,7 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
             // buf register
             else
             {
-                Addr bufAddr = epAddr -
-                    sizeof(reg_t) * numEpRegs * tcu.numEndpoints;
+                Addr bufAddr = epAddr - sizeof(reg_t) * numEpRegs * eps.size();
                 size_t idx = bufAddr / sizeof(reg_t);
 
                 if (idx < bufRegs.size())
