@@ -38,20 +38,6 @@ class MessageUnit
 {
   public:
 
-    struct MsgInfo
-    {
-        epid_t sepId;
-        bool ready;
-        bool unlimcred;
-        uint8_t flags;
-        peid_t targetPeId;
-        epid_t targetEpId;
-        epid_t replyEpId;
-        uint64_t label;
-        uint64_t replyLabel;
-        unsigned replySize;
-    };
-
     class SendTransferEvent : public MemoryUnit::WriteTransferEvent
     {
         MessageUnit *msgUnit;
@@ -99,14 +85,19 @@ class MessageUnit
         void transferDone(TcuError result) override;
     };
 
-    MessageUnit(Tcu &_tcu) : tcu(_tcu), info() {}
+    MessageUnit(Tcu &_tcu) : tcu(_tcu), cmdSep(Tcu::INVALID_EP_ID) {}
 
     void regStats();
 
     /**
-     * Start message transmission -> Mem request
+     * Start SEND command
      */
-    void startTransmission(const CmdCommand::Bits& cmd);
+    void startSend(const CmdCommand::Bits &cmd);
+
+    /**
+     * Start REPLY command
+     */
+    void startReply(const CmdCommand::Bits &cmd);
 
     /**
      * Received a message from NoC -> Mem request
@@ -141,13 +132,13 @@ class MessageUnit
   private:
     int allocSlot(size_t msgSize, epid_t epid, RecvEp *ep);
 
-    void startXfer(const CmdCommand::Bits& cmd);
+    void startSendReply(const CmdCommand::Bits &cmd, epid_t epid);
 
   private:
 
     Tcu &tcu;
 
-    MsgInfo info;
+    epid_t cmdSep;
 
     Stats::Histogram sentBytes;
     Stats::Histogram repliedBytes;

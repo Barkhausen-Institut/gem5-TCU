@@ -165,8 +165,10 @@ TcuCommands::executeCommand(PacketPtr pkt)
     switch (cmd.opcode)
     {
         case CmdCommand::SEND:
+            tcu.msgUnit->startSend(cmd);
+            break;
         case CmdCommand::REPLY:
-            tcu.msgUnit->startTransmission(cmd);
+            tcu.msgUnit->startReply(cmd);
             break;
         case CmdCommand::READ:
             tcu.memUnit->startRead(cmd);

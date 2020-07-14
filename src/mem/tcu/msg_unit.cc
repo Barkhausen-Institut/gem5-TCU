@@ -66,74 +66,58 @@ MessageUnit::regStats()
 }
 
 void
-MessageUnit::startTransmission(const CmdCommand::Bits& cmd)
+MessageUnit::startSend(const CmdCommand::Bits &cmd)
+{
+    startSendReply(cmd, cmd.epid);
+}
+
+void
+MessageUnit::startReply(const CmdCommand::Bits &cmd)
 {
     epid_t epid = cmd.epid;
 
-    info.sepId = Tcu::INVALID_EP_ID;
+    RecvEp *ep = tcu.regs().getRecvEp(epid);
 
-    // if we want to reply, load the reply EP first
-    if (cmd.opcode == CmdCommand::REPLY)
+    if(!ep)
     {
-        RecvEp *ep = tcu.regs().getRecvEp(epid);
-
-        if(!ep)
-        {
-            DPRINTFS(Tcu, (&tcu), "EP%u: invalid EP\n", epid);
-            tcu.scheduleFinishOp(Cycles(1), TcuError::NO_REP);
-            return;
-        }
-
-        if(ep->r0.vpe != tcu.regs().getCurVPE().id)
-        {
-            DPRINTFS(Tcu, (&tcu), "EP%u: foreign EP\n", epid);
-            tcu.scheduleFinishOp(Cycles(1), TcuError::FOREIGN_EP);
-            return;
-        }
-
-        if (ep->r0.rplEps == Tcu::INVALID_EP_ID)
-        {
-            DPRINTFS(Tcu, (&tcu),
-                     "EP%u: no reply EPs, cannot reply on msg %p\n",
-                     epid, cmd.arg0);
-            tcu.scheduleFinishOp(Cycles(1), TcuError::REPLIES_DISABLED);
-            return;
-        }
-
-        int msgidx = ep->offsetToIdx(cmd.arg0);
-        if (msgidx == RecvEp::MAX_MSGS)
-        {
-            DPRINTFS(Tcu, (&tcu),
-                     "EP%u: offset out of bounds (%#x)\n", epid, cmd.arg0);
-            tcu.scheduleFinishOp(Cycles(1), TcuError::INV_MSG_OFF);
-            return;
-        }
-
-        epid = ep->r0.rplEps + msgidx;
-        SendEp *sep = tcu.regs().getSendEp(epid);
-
-        if (!sep)
-        {
-            DPRINTFS(Tcu, (&tcu),
-                     "EP%u: invalid reply EP. Double reply for msg %p?\n",
-                     epid, cmd.arg0);
-            tcu.scheduleFinishOp(Cycles(1), TcuError::NO_SEP);
-            return;
-        }
-
-        assert(sep->r0.vpe == tcu.regs().getCurVPE().id);
-
-        // grant credits to the sender
-        info.replyEpId = sep->r0.crdEp;
-        info.flags = Tcu::REPLY_FLAG;
-        info.replySize = 0;
+        DPRINTFS(Tcu, (&tcu), "EP%u: invalid EP\n", epid);
+        tcu.scheduleFinishOp(Cycles(1), TcuError::NO_REP);
+        return;
     }
-    else
+
+    if(ep->r0.vpe != tcu.regs().getCurVPE().id)
     {
-        info.flags = 0;
-        info.replyEpId = Tcu::INVALID_EP_ID;
-        info.replySize = ceil(log2(sizeof(MessageHeader)));
+        DPRINTFS(Tcu, (&tcu), "EP%u: foreign EP\n", epid);
+        tcu.scheduleFinishOp(Cycles(1), TcuError::FOREIGN_EP);
+        return;
     }
+
+    if (ep->r0.rplEps == Tcu::INVALID_EP_ID)
+    {
+        DPRINTFS(Tcu, (&tcu),
+                 "EP%u: no reply EPs, cannot reply on msg %p\n",
+                 epid, cmd.arg0);
+        tcu.scheduleFinishOp(Cycles(1), TcuError::REPLIES_DISABLED);
+        return;
+    }
+
+    int msgidx = ep->offsetToIdx(cmd.arg0);
+    if (msgidx == RecvEp::MAX_MSGS)
+    {
+        DPRINTFS(Tcu, (&tcu),
+                 "EP%u: offset out of bounds (%#x)\n", epid, cmd.arg0);
+        tcu.scheduleFinishOp(Cycles(1), TcuError::INV_MSG_OFF);
+        return;
+    }
+
+    epid_t sepid = ep->r0.rplEps + msgidx;
+    startSendReply(cmd, sepid);
+}
+
+void
+MessageUnit::startSendReply(const CmdCommand::Bits &cmd, epid_t epid)
+{
+    cmdSep = epid;
 
     const CmdData::Bits data = tcu.regs().getData();
     SendEp *ep = tcu.regs().getSendEp(epid);
@@ -169,46 +153,46 @@ MessageUnit::startTransmission(const CmdCommand::Bits& cmd)
         return;
     }
 
+    epid_t replyEpId;
+    size_t replySize;
+
     // get info from receive EP
-    if (cmd.opcode == CmdCommand::SEND && cmd.arg0 != Tcu::INVALID_EP_ID)
+    if (cmd.opcode == CmdCommand::SEND)
     {
-        RecvEp *rep = tcu.regs().getRecvEp(cmd.arg0);
-        if(!rep)
+        if (cmd.arg0 != Tcu::INVALID_EP_ID)
         {
-            DPRINTFS(Tcu, (&tcu), "EP%u: invalid EP\n", cmd.arg0);
-            tcu.scheduleFinishOp(Cycles(1), TcuError::NO_REP);
-            return;
-        }
+            RecvEp *rep = tcu.regs().getRecvEp(cmd.arg0);
+            if(!rep)
+            {
+                DPRINTFS(Tcu, (&tcu), "EP%u: invalid EP\n", cmd.arg0);
+                tcu.scheduleFinishOp(Cycles(1), TcuError::NO_REP);
+                return;
+            }
 
-        if(rep->r0.vpe != tcu.regs().getCurVPE().id)
+            if(rep->r0.vpe != tcu.regs().getCurVPE().id)
+            {
+                DPRINTFS(Tcu, (&tcu), "EP%u: foreign EP\n", cmd.arg0);
+                tcu.scheduleFinishOp(Cycles(1), TcuError::FOREIGN_EP);
+                return;
+            }
+
+            replyEpId = cmd.arg0;
+            replySize = rep->r0.slotSize;
+        }
+        else
         {
-            DPRINTFS(Tcu, (&tcu), "EP%u: foreign EP\n", cmd.arg0);
-            tcu.scheduleFinishOp(Cycles(1), TcuError::FOREIGN_EP);
-            return;
+            replyEpId = Tcu::INVALID_EP_ID;
+            replySize = ceil(log2(sizeof(MessageHeader)));
         }
-
-        info.replyEpId = cmd.arg0;
-        info.replySize = rep->r0.slotSize;
     }
+    else
+    {
+        assert(ep->r0.vpe == tcu.regs().getCurVPE().id);
 
-    // fill the info struct and start the transfer
-    info.targetPeId   = ep->r1.tgtPe;
-    info.targetEpId   = ep->r1.tgtEp;
-    info.label        = ep->r2.label;
-    info.replyLabel   = tcu.regs().get(UnprivReg::ARG1);
-    info.unlimcred    = ep->r0.curCrd == Tcu::CREDITS_UNLIM;
-    info.ready        = true;
-    info.sepId        = epid;
-
-    startXfer(cmd);
-}
-
-void
-MessageUnit::startXfer(const CmdCommand::Bits& cmd)
-{
-    assert(info.ready);
-
-    const CmdData::Bits data = tcu.regs().getData();
+        // grant credits to the sender
+        replyEpId = ep->r0.crdEp;
+        replySize = 0;
+    }
 
     if (cmd.opcode == CmdCommand::REPLY)
         repliedBytes.sample(data.size);
@@ -217,26 +201,27 @@ MessageUnit::startXfer(const CmdCommand::Bits& cmd)
 
     DPRINTFS(Tcu, (&tcu), "\e[1m[%s -> %u]\e[0m with EP%u of %#018lx:%lu\n",
              cmd.opcode == CmdCommand::REPLY ? "rp" : "sd",
-             info.targetPeId,
+             ep->r1.tgtPe,
              cmd.epid,
              data.addr,
              data.size);
 
+    // build header
     MessageHeader* header = new MessageHeader;
-
     if (cmd.opcode == CmdCommand::REPLY)
         header->flags = Tcu::REPLY_FLAG;
     else
         header->flags = 0; // normal message
-    header->flags |= info.flags;
 
     header->senderPeId   = tcu.peId;
-    header->senderEpId   = info.unlimcred ? Tcu::INVALID_EP_ID : cmd.epid;
-    header->replyEpId    = info.replyEpId;
+    header->senderEpId   = ep->r0.curCrd == Tcu::CREDITS_UNLIM
+                           ? Tcu::INVALID_EP_ID
+                           : cmd.epid;
+    header->replyEpId    = replyEpId;
     header->length       = data.size;
-    header->label        = info.label;
-    header->replyLabel   = info.replyLabel;
-    header->replySize    = info.replySize;
+    header->label        = ep->r2.label;
+    header->replyLabel   = tcu.regs().get(UnprivReg::ARG1);
+    header->replySize    = replySize;
 
     DPRINTFS(Tcu, (&tcu),
         "  src: pe=%u ep=%u rpep=%u rplbl=%#018lx rpsize=%#x flags=%#x%s\n",
@@ -246,19 +231,17 @@ MessageUnit::startXfer(const CmdCommand::Bits& cmd)
 
     DPRINTFS(Tcu, (&tcu),
         "  dst: pe=%u ep=%u lbl=%#018lx\n",
-        info.targetPeId, info.targetEpId, info.label);
+        ep->r1.tgtPe, ep->r1.tgtEp, header->label);
 
     assert(data.size + sizeof(MessageHeader) <= tcu.maxNocPacketSize);
 
-    NocAddr nocAddr(info.targetPeId, info.targetEpId);
+    NocAddr nocAddr(ep->r1.tgtPe, ep->r1.tgtEp);
     uint flags = XferUnit::MESSAGE;
 
     // start the transfer of the payload
     auto *ev = new SendTransferEvent(
         this, data.addr, data.size, flags, nocAddr, header);
     tcu.startTransfer(ev, tcu.startMsgTransferDelay);
-
-    info.ready = false;
 }
 
 void
@@ -290,14 +273,14 @@ MessageUnit::SendTransferEvent::transferDone(TcuError result)
         else
         {
             // check if we have enough credits
-            SendEp *ep = tcu().regs().getSendEp(msgUnit->info.sepId);
+            SendEp *ep = tcu().regs().getSendEp(msgUnit->cmdSep);
             if (ep->r0.curCrd != Tcu::CREDITS_UNLIM)
             {
                 if (ep->r0.curCrd == 0)
                 {
                     DPRINTFS(Tcu, (&tcu()),
                              "EP%u: no credits to send message\n",
-                             msgUnit->info.sepId);
+                             msgUnit->cmdSep);
                     result = TcuError::NO_CREDITS;
                 }
                 else
@@ -307,9 +290,9 @@ MessageUnit::SendTransferEvent::transferDone(TcuError result)
 
                     DPRINTFS(TcuCredits, (&tcu()),
                              "EP%u paid 1 credit (%u left)\n",
-                             msgUnit->info.sepId, ep->r0.curCrd);
+                             msgUnit->cmdSep, ep->r0.curCrd);
 
-                    tcu().regs().updateEp(msgUnit->info.sepId);
+                    tcu().regs().updateEp(msgUnit->cmdSep);
                 }
             }
         }
