@@ -82,10 +82,12 @@ class SyscallSM
     enum State
     {
         SYSC_SEND,
-        SYSC_WAIT,
+        SYSC_SEND_WAIT,
         SYSC_FETCH,
+        SYSC_FETCH_WAIT,
         SYSC_READ_ADDR,
         SYSC_ACK,
+        SYSC_ACK_WAIT,
     };
 
     static const uint64_t VPE_SEL = 2;

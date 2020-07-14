@@ -77,25 +77,37 @@ MemoryUnit::regStats()
 void
 MemoryUnit::startRead(const CmdCommand::Bits& cmd)
 {
-    MemEp *ep = tcu.regs().getMemEp(cmd.epid);
+    eps.addEp(cmd.epid);
+    eps.onFetched(
+        std::bind(&MemoryUnit::startReadWithEP, this, std::placeholders::_1));
+}
 
-    if(!ep)
+void
+MemoryUnit::startReadWithEP(EpFile::EpCache &eps)
+{
+    CmdCommand::Bits cmd = tcu.regs().getCommand();
+
+    const Ep ep = eps.getEp(cmd.epid);
+
+    if(ep.type() != EpType::MEMORY)
     {
         DPRINTFS(Tcu, (&tcu), "EP%u: invalid EP\n", cmd.epid);
-        tcu.scheduleFinishOp(Cycles(1), TcuError::NO_MEP);
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::NO_MEP);
         return;
     }
 
-    if(ep->r0.vpe != tcu.regs().getCurVPE().id)
+    const MemEp mep = ep.mem;
+
+    if(mep.r0.vpe != tcu.regs().getCurVPE().id)
     {
         DPRINTFS(Tcu, (&tcu), "EP%u: foreign EP\n", cmd.epid);
-        tcu.scheduleFinishOp(Cycles(1), TcuError::FOREIGN_EP);
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::FOREIGN_EP);
         return;
     }
 
-    if(!(ep->r0.flags & Tcu::MemoryFlags::READ))
+    if(!(mep.r0.flags & Tcu::MemoryFlags::READ))
     {
-        tcu.scheduleFinishOp(Cycles(1), TcuError::NO_PERM);
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::NO_PERM);
         return;
     }
 
@@ -107,22 +119,22 @@ MemoryUnit::startRead(const CmdCommand::Bits& cmd)
 
     DPRINTFS(Tcu, (&tcu),
         "\e[1m[rd -> %u]\e[0m at %#018lx+%#lx with EP%u into %#018lx:%lu\n",
-        ep->r0.targetPe, ep->r1.remoteAddr, offset,
+        mep.r0.targetPe, mep.r1.remoteAddr, offset,
         cmd.epid, data.addr, size);
 
     if(size == 0)
     {
-        tcu.scheduleFinishOp(Cycles(1), TcuError::NONE);
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::NONE);
         return;
     }
 
-    if(size + offset < size || size + offset > ep->r2.remoteSize)
+    if(size + offset < size || size + offset > mep.r2.remoteSize)
     {
-        tcu.scheduleFinishOp(Cycles(1), TcuError::OUT_OF_BOUNDS);
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::OUT_OF_BOUNDS);
         return;
     }
 
-    NocAddr nocAddr(ep->r0.targetPe, ep->r1.remoteAddr + offset);
+    NocAddr nocAddr(mep.r0.targetPe, mep.r1.remoteAddr + offset);
 
     auto pkt = tcu.generateRequest(nocAddr.getAddr(),
                                    size,
@@ -146,7 +158,7 @@ MemoryUnit::LocalWriteTransferEvent::transferDone(TcuError result)
     if (result == TcuError::NONE)
         finishReadWrite(tcu(), tmpSize);
 
-    tcu().scheduleFinishOp(Cycles(1), result);
+    tcu().scheduleCmdFinish(Cycles(1), result);
 }
 
 void
@@ -162,7 +174,7 @@ MemoryUnit::readComplete(const CmdCommand::Bits& cmd, PacketPtr pkt, TcuError er
 
     if (error != TcuError::NONE)
     {
-        tcu.scheduleFinishOp(delay, error);
+        tcu.scheduleCmdFinish(delay, error);
         return;
     }
 
@@ -184,7 +196,7 @@ MemoryUnit::ReadTransferEvent::transferDone(TcuError result)
     if (result == TcuError::NONE)
         finishReadWrite(tcu(), pkt->getSize());
 
-    tcu().scheduleFinishOp(Cycles(1), result);
+    tcu().scheduleCmdFinish(Cycles(1), result);
 
     tcu().freeRequest(pkt);
 }
@@ -192,25 +204,37 @@ MemoryUnit::ReadTransferEvent::transferDone(TcuError result)
 void
 MemoryUnit::startWrite(const CmdCommand::Bits& cmd)
 {
-    MemEp *ep = tcu.regs().getMemEp(cmd.epid);
+    eps.addEp(cmd.epid);
+    eps.onFetched(
+        std::bind(&MemoryUnit::startWriteWithEP, this, std::placeholders::_1));
+}
 
-    if(!ep)
+void
+MemoryUnit::startWriteWithEP(EpFile::EpCache &eps)
+{
+    CmdCommand::Bits cmd = tcu.regs().getCommand();
+
+    const Ep ep = eps.getEp(cmd.epid);
+
+    if(ep.type() != EpType::MEMORY)
     {
         DPRINTFS(Tcu, (&tcu), "EP%u: invalid EP\n", cmd.epid);
-        tcu.scheduleFinishOp(Cycles(1), TcuError::NO_MEP);
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::NO_MEP);
         return;
     }
 
-    if(ep->r0.vpe != tcu.regs().getCurVPE().id)
+    const MemEp mep = ep.mem;
+
+    if(mep.r0.vpe != tcu.regs().getCurVPE().id)
     {
         DPRINTFS(Tcu, (&tcu), "EP%u: foreign EP\n", cmd.epid);
-        tcu.scheduleFinishOp(Cycles(1), TcuError::FOREIGN_EP);
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::FOREIGN_EP);
         return;
     }
 
-    if(!(ep->r0.flags & Tcu::MemoryFlags::WRITE))
+    if(!(mep.r0.flags & Tcu::MemoryFlags::WRITE))
     {
-        tcu.scheduleFinishOp(Cycles(1), TcuError::NO_PERM);
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::NO_PERM);
         return;
     }
 
@@ -222,22 +246,22 @@ MemoryUnit::startWrite(const CmdCommand::Bits& cmd)
 
     DPRINTFS(Tcu, (&tcu),
         "\e[1m[wr -> %u]\e[0m at %#018lx+%#lx with EP%u from %#018lx:%lu\n",
-        ep->r0.targetPe, ep->r1.remoteAddr, offset,
+        mep.r0.targetPe, mep.r1.remoteAddr, offset,
         cmd.epid, data.addr, size);
 
     if(size == 0)
     {
-        tcu.scheduleFinishOp(Cycles(1), TcuError::NONE);
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::NONE);
         return;
     }
 
-    if(size + offset < size || size + offset > ep->r2.remoteSize)
+    if(size + offset < size || size + offset > mep.r2.remoteSize)
     {
-        tcu.scheduleFinishOp(Cycles(1), TcuError::OUT_OF_BOUNDS);
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::OUT_OF_BOUNDS);
         return;
     }
 
-    NocAddr dest(ep->r0.targetPe, ep->r1.remoteAddr + offset);
+    NocAddr dest(mep.r0.targetPe, mep.r1.remoteAddr + offset);
 
     auto xfer = new WriteTransferEvent(data.addr, size, 0, dest);
     tcu.startTransfer(xfer, Cycles(0));
@@ -248,7 +272,7 @@ MemoryUnit::WriteTransferEvent::transferDone(TcuError result)
 {
     if (result != TcuError::NONE)
     {
-        tcu().scheduleFinishOp(Cycles(1), result);
+        tcu().scheduleCmdFinish(Cycles(1), result);
     }
     else
     {
@@ -280,7 +304,7 @@ MemoryUnit::writeComplete(const CmdCommand::Bits& cmd, PacketPtr pkt, TcuError e
     // basically has no payload since we only receive an ACK back for
     // writing
     Cycles delay = tcu.ticksToCycles(pkt->headerDelay);
-    tcu.scheduleFinishOp(delay, error);
+    tcu.scheduleCmdFinish(delay, error);
 
     tcu.freeRequest(pkt);
 }
@@ -294,7 +318,7 @@ MemoryUnit::recvFunctionalFromNoc(PacketPtr pkt)
     tcu.sendFunctionalMemRequest(pkt);
 }
 
-TcuError
+void
 MemoryUnit::recvFromNoc(PacketPtr pkt)
 {
     NocAddr addr(pkt->getAddr());
@@ -342,8 +366,6 @@ MemoryUnit::recvFromNoc(PacketPtr pkt)
         auto *ev = new ReceiveTransferEvent(type, noc, xflags, pkt);
         tcu.startTransfer(ev, delay);
     }
-
-    return TcuError::NONE;
 }
 
 void

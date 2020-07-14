@@ -42,10 +42,12 @@ class MessageUnit
     {
         MessageUnit *msgUnit;
         MessageHeader *header;
+        epid_t sepid;
 
       public:
 
         SendTransferEvent(MessageUnit *_msgUnit,
+                          epid_t _sepid,
                           Addr local,
                           size_t size,
                           uint flags,
@@ -53,7 +55,8 @@ class MessageUnit
                           MessageHeader *_header)
             : WriteTransferEvent(local, size, flags, dest),
               msgUnit(_msgUnit),
-              header(_header)
+              header(_header),
+              sepid(_sepid)
         {}
 
         void transferStart() override;
@@ -64,65 +67,85 @@ class MessageUnit
     {
         MessageUnit *msgUnit;
         Addr msgAddr;
+        EpFile::EpCache *eps;
+        epid_t epid;
 
       public:
 
         ReceiveTransferEvent(MessageUnit *_msgUnit,
+                             EpFile::EpCache *_eps,
+                             epid_t _epid,
                              Addr local,
                              uint flags,
                              PacketPtr pkt)
             : MemoryUnit::ReceiveTransferEvent(
                 XferUnit::TransferType::REMOTE_WRITE, local, flags, pkt),
-              msgUnit(_msgUnit), msgAddr(local)
+              msgUnit(_msgUnit), msgAddr(local), eps(_eps), epid(_epid)
         {}
-
-        epid_t rep() const
-        {
-            NocAddr addr(pkt->getAddr());
-            return addr.offset;
-        }
 
         void transferDone(TcuError result) override;
     };
 
-    MessageUnit(Tcu &_tcu) : tcu(_tcu), cmdSep(Tcu::INVALID_EP_ID) {}
+    MessageUnit(Tcu &_tcu)
+      : tcu(_tcu),
+        cmdEps(_tcu.eps().newCache()),
+        extCmdEps(_tcu.eps().newCache())
+    {}
 
     void regStats();
 
     /**
-     * Start SEND command
+     * Starts the SEND command
      */
     void startSend(const CmdCommand::Bits &cmd);
 
     /**
-     * Start REPLY command
+     * Starts the REPLY command
      */
     void startReply(const CmdCommand::Bits &cmd);
 
     /**
+     * Starts the FETCH command
+     */
+    void startFetch(const CmdCommand::Bits &cmd);
+
+    /**
+     * Starts the INV_EP command
+     */
+    void startInvalidate(const ExtCommand::Bits &cmd);
+
+    /**
+     * Starts the ACK_MSG command
+     */
+    void startAck(const CmdCommand::Bits &cmd);
+
+    /**
      * Received a message from NoC -> Mem request
      */
-    TcuError recvFromNoc(PacketPtr pkt);
+    void recvFromNoc(PacketPtr pkt);
 
-    /**
-     * Receives credits again
-     */
-    void recvCredits(epid_t epid);
+  private:
 
-    /**
-     * Fetches the next message and sets *msgOff to the message offset or -1
-     */
-    TcuError fetchMessage(epid_t epid, Addr *msgOff);
+    void fetchWithEP(EpFile::EpCache &eps);
 
-    /**
-     * Acknowledges the message @ <msgOff> within the receive buffer
-     */
-    TcuError ackMessage(epid_t epId, Addr msgOff);
+    void invalidateWithEP(EpFile::EpCache &eps);
 
-    /**
-     * Finishes a message receive
-     */
-    TcuError finishMsgReceive(epid_t epId,
+    void startAckWithEP(EpFile::EpCache &eps);
+
+    void ackMessage(RecvEp &rep, int msgidx);
+
+    void recvCredits(EpFile::EpCache &eps, SendEp &sep);
+
+    int allocSlot(EpFile::EpCache &eps, size_t msgSize, RecvEp &ep);
+
+    void startReplyWithEP(EpFile::EpCache &eps);
+
+    void startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid);
+
+    void recvFromNocWithEP(EpFile::EpCache &eps, PacketPtr pkt);
+
+    TcuError finishMsgReceive(EpFile::EpCache &eps,
+                              RecvEp &ep,
                               Addr msgAddr,
                               const MessageHeader *header,
                               TcuError error,
@@ -130,15 +153,11 @@ class MessageUnit
                               bool addMsg);
 
   private:
-    int allocSlot(size_t msgSize, epid_t epid, RecvEp *ep);
-
-    void startSendReply(const CmdCommand::Bits &cmd, epid_t epid);
-
-  private:
 
     Tcu &tcu;
 
-    epid_t cmdSep;
+    EpFile::EpCache cmdEps;
+    EpFile::EpCache extCmdEps;
 
     Stats::Histogram sentBytes;
     Stats::Histogram repliedBytes;

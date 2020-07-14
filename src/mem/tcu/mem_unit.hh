@@ -32,6 +32,7 @@
 #define __MEM_TCU_MEM_UNIT_HH__
 
 #include "mem/tcu/tcu.hh"
+#include "mem/tcu/ep_file.hh"
 #include "mem/tcu/xfer_unit.hh"
 
 class MemoryUnit
@@ -118,7 +119,7 @@ class MemoryUnit
         void transferDone(TcuError result) override;
     };
 
-    MemoryUnit(Tcu &_tcu) : tcu(_tcu) {}
+    MemoryUnit(Tcu &_tcu) : tcu(_tcu), eps(_tcu.eps().newCache()) {}
 
     void regStats();
 
@@ -153,11 +154,17 @@ class MemoryUnit
     /**
      * Received read/write request from NoC -> Mem/regfile request
      */
-    TcuError recvFromNoc(PacketPtr pkt);
+    void recvFromNoc(PacketPtr pkt);
 
   private:
 
+    void startReadWithEP(EpFile::EpCache &eps);
+
+    void startWriteWithEP(EpFile::EpCache &eps);
+
     Tcu &tcu;
+
+    EpFile::EpCache eps;
 
     Stats::Histogram readBytes;
     Stats::Histogram writtenBytes;

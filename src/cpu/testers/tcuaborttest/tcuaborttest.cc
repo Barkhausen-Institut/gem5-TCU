@@ -32,7 +32,7 @@
 #include "debug/TcuAbortTest.hh"
 #include "debug/TcuAbortTestAccess.hh"
 #include "mem/tcu/tcu.hh"
-#include "mem/tcu/regfile.hh"
+#include "mem/tcu/reg_file.hh"
 #include "sim/pe_memory.hh"
 #include "sim/sim_exit.hh"
 

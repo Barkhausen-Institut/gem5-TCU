@@ -68,88 +68,109 @@ MessageUnit::regStats()
 void
 MessageUnit::startSend(const CmdCommand::Bits &cmd)
 {
-    startSendReply(cmd, cmd.epid);
+    cmdEps.addEp(cmd.epid);
+    if (cmd.arg0 != Tcu::INVALID_EP_ID)
+        cmdEps.addEp(cmd.arg0);
+    cmdEps.onFetched(std::bind(&MessageUnit::startSendReplyWithEP,
+                               this, std::placeholders::_1, cmd.epid));
 }
 
 void
 MessageUnit::startReply(const CmdCommand::Bits &cmd)
 {
-    epid_t epid = cmd.epid;
-
-    RecvEp *ep = tcu.regs().getRecvEp(epid);
-
-    if(!ep)
-    {
-        DPRINTFS(Tcu, (&tcu), "EP%u: invalid EP\n", epid);
-        tcu.scheduleFinishOp(Cycles(1), TcuError::NO_REP);
-        return;
-    }
-
-    if(ep->r0.vpe != tcu.regs().getCurVPE().id)
-    {
-        DPRINTFS(Tcu, (&tcu), "EP%u: foreign EP\n", epid);
-        tcu.scheduleFinishOp(Cycles(1), TcuError::FOREIGN_EP);
-        return;
-    }
-
-    if (ep->r0.rplEps == Tcu::INVALID_EP_ID)
-    {
-        DPRINTFS(Tcu, (&tcu),
-                 "EP%u: no reply EPs, cannot reply on msg %p\n",
-                 epid, cmd.arg0);
-        tcu.scheduleFinishOp(Cycles(1), TcuError::REPLIES_DISABLED);
-        return;
-    }
-
-    int msgidx = ep->offsetToIdx(cmd.arg0);
-    if (msgidx == RecvEp::MAX_MSGS)
-    {
-        DPRINTFS(Tcu, (&tcu),
-                 "EP%u: offset out of bounds (%#x)\n", epid, cmd.arg0);
-        tcu.scheduleFinishOp(Cycles(1), TcuError::INV_MSG_OFF);
-        return;
-    }
-
-    epid_t sepid = ep->r0.rplEps + msgidx;
-    startSendReply(cmd, sepid);
+    cmdEps.addEp(cmd.epid);
+    cmdEps.onFetched(std::bind(&MessageUnit::startReplyWithEP,
+                               this, std::placeholders::_1));
 }
 
 void
-MessageUnit::startSendReply(const CmdCommand::Bits &cmd, epid_t epid)
+MessageUnit::startReplyWithEP(EpFile::EpCache &eps)
 {
-    cmdSep = epid;
+    const CmdCommand::Bits cmd = tcu.regs().getCommand();
 
+    const Ep ep = eps.getEp(cmd.epid);
+
+    if(ep.type() != EpType::RECEIVE)
+    {
+        DPRINTFS(Tcu, (&tcu), "EP%u: invalid EP\n", cmd.epid);
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::NO_REP);
+        return;
+    }
+
+    const RecvEp &rep = ep.recv;
+
+    if(rep.r0.vpe != tcu.regs().getCurVPE().id)
+    {
+        DPRINTFS(Tcu, (&tcu), "EP%u: foreign EP\n", cmd.epid);
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::FOREIGN_EP);
+        return;
+    }
+
+    if (rep.r0.rplEps == Tcu::INVALID_EP_ID)
+    {
+        DPRINTFS(Tcu, (&tcu),
+                 "EP%u: no reply EPs, cannot reply on msg %p\n",
+                 cmd.epid, cmd.arg0);
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::REPLIES_DISABLED);
+        return;
+    }
+
+    int msgidx = rep.offsetToIdx(cmd.arg0);
+    if (msgidx == RecvEp::MAX_MSGS)
+    {
+        DPRINTFS(Tcu, (&tcu),
+                 "EP%u: offset out of bounds (%#x)\n", cmd.epid, cmd.arg0);
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::INV_MSG_OFF);
+        return;
+    }
+
+    epid_t sepid = rep.r0.rplEps + msgidx;
+    eps.addEp(sepid);
+    eps.onFetched(std::bind(&MessageUnit::startSendReplyWithEP,
+                            this, std::placeholders::_1, sepid));
+}
+
+void
+MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
+{
+    const CmdCommand::Bits cmd = tcu.regs().getCommand();
     const CmdData::Bits data = tcu.regs().getData();
-    SendEp *ep = tcu.regs().getSendEp(epid);
 
-    // check if the send EP is valid
-    if(!ep)
+    const Ep ep = eps.getEp(epid);
+
+    Ep replyEp(0);
+    if (cmd.opcode == CmdCommand::SEND && cmd.arg0 != Tcu::INVALID_EP_ID)
+        replyEp = eps.getEp(cmd.arg0);
+
+    if(ep.type() != EpType::SEND)
     {
         DPRINTFS(Tcu, (&tcu), "EP%u: invalid EP\n", epid);
-        tcu.scheduleFinishOp(Cycles(1), TcuError::NO_SEP);
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::NO_SEP);
         return;
     }
 
-    if(ep->r0.vpe != tcu.regs().getCurVPE().id)
+    const SendEp &sep = ep.send;
+
+    if(sep.r0.vpe != tcu.regs().getCurVPE().id)
     {
         DPRINTFS(Tcu, (&tcu), "EP%u: foreign EP\n", epid);
-        tcu.scheduleFinishOp(Cycles(1), TcuError::FOREIGN_EP);
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::FOREIGN_EP);
         return;
     }
 
-    if ((cmd.opcode == CmdCommand::SEND && ep->r0.reply) ||
-        (cmd.opcode == CmdCommand::REPLY && !ep->r0.reply))
+    if ((cmd.opcode == CmdCommand::SEND && sep.r0.reply) ||
+        (cmd.opcode == CmdCommand::REPLY && !sep.r0.reply))
     {
         DPRINTFS(Tcu, (&tcu), "EP%u: send vs. reply\n", epid);
-        tcu.scheduleFinishOp(Cycles(1), TcuError::SEND_REPLY_EP);
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::SEND_REPLY_EP);
         return;
     }
 
     // check message size
-    if (data.size + sizeof(MessageHeader) > (1 << ep->r0.msgSize))
+    if (data.size + sizeof(MessageHeader) > (1 << sep.r0.msgSize))
     {
         DPRINTFS(Tcu, (&tcu), "EP%u: message too large\n", epid);
-        tcu.scheduleFinishOp(Cycles(1), TcuError::OUT_OF_BOUNDS);
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::OUT_OF_BOUNDS);
         return;
     }
 
@@ -161,23 +182,24 @@ MessageUnit::startSendReply(const CmdCommand::Bits &cmd, epid_t epid)
     {
         if (cmd.arg0 != Tcu::INVALID_EP_ID)
         {
-            RecvEp *rep = tcu.regs().getRecvEp(cmd.arg0);
-            if(!rep)
+            if(replyEp.type() != EpType::RECEIVE)
             {
                 DPRINTFS(Tcu, (&tcu), "EP%u: invalid EP\n", cmd.arg0);
-                tcu.scheduleFinishOp(Cycles(1), TcuError::NO_REP);
+                tcu.scheduleCmdFinish(Cycles(1), TcuError::NO_REP);
                 return;
             }
 
-            if(rep->r0.vpe != tcu.regs().getCurVPE().id)
+            const RecvEp &rep = replyEp.recv;
+
+            if(rep.r0.vpe != tcu.regs().getCurVPE().id)
             {
                 DPRINTFS(Tcu, (&tcu), "EP%u: foreign EP\n", cmd.arg0);
-                tcu.scheduleFinishOp(Cycles(1), TcuError::FOREIGN_EP);
+                tcu.scheduleCmdFinish(Cycles(1), TcuError::FOREIGN_EP);
                 return;
             }
 
             replyEpId = cmd.arg0;
-            replySize = rep->r0.slotSize;
+            replySize = rep.r0.slotSize;
         }
         else
         {
@@ -187,10 +209,10 @@ MessageUnit::startSendReply(const CmdCommand::Bits &cmd, epid_t epid)
     }
     else
     {
-        assert(ep->r0.vpe == tcu.regs().getCurVPE().id);
+        assert(sep.r0.vpe == tcu.regs().getCurVPE().id);
 
         // grant credits to the sender
-        replyEpId = ep->r0.crdEp;
+        replyEpId = sep.r0.crdEp;
         replySize = 0;
     }
 
@@ -201,7 +223,7 @@ MessageUnit::startSendReply(const CmdCommand::Bits &cmd, epid_t epid)
 
     DPRINTFS(Tcu, (&tcu), "\e[1m[%s -> %u]\e[0m with EP%u of %#018lx:%lu\n",
              cmd.opcode == CmdCommand::REPLY ? "rp" : "sd",
-             ep->r1.tgtPe,
+             sep.r1.tgtPe,
              cmd.epid,
              data.addr,
              data.size);
@@ -214,12 +236,12 @@ MessageUnit::startSendReply(const CmdCommand::Bits &cmd, epid_t epid)
         header->flags = 0; // normal message
 
     header->senderPeId   = tcu.peId;
-    header->senderEpId   = ep->r0.curCrd == Tcu::CREDITS_UNLIM
+    header->senderEpId   = sep.r0.curCrd == Tcu::CREDITS_UNLIM
                            ? Tcu::INVALID_EP_ID
                            : cmd.epid;
     header->replyEpId    = replyEpId;
     header->length       = data.size;
-    header->label        = ep->r2.label;
+    header->label        = sep.r2.label;
     header->replyLabel   = tcu.regs().get(UnprivReg::ARG1);
     header->replySize    = replySize;
 
@@ -231,17 +253,19 @@ MessageUnit::startSendReply(const CmdCommand::Bits &cmd, epid_t epid)
 
     DPRINTFS(Tcu, (&tcu),
         "  dst: pe=%u ep=%u lbl=%#018lx\n",
-        ep->r1.tgtPe, ep->r1.tgtEp, header->label);
+        sep.r1.tgtPe, sep.r1.tgtEp, header->label);
 
     assert(data.size + sizeof(MessageHeader) <= tcu.maxNocPacketSize);
 
-    NocAddr nocAddr(ep->r1.tgtPe, ep->r1.tgtEp);
+    NocAddr nocAddr(sep.r1.tgtPe, sep.r1.tgtEp);
     uint flags = XferUnit::MESSAGE;
 
     // start the transfer of the payload
     auto *ev = new SendTransferEvent(
-        this, data.addr, data.size, flags, nocAddr, header);
+        this, sep.id, data.addr, data.size, flags, nocAddr, header);
     tcu.startTransfer(ev, tcu.startMsgTransferDelay);
+
+    eps.setAutoFinish(false);
 }
 
 void
@@ -269,86 +293,130 @@ MessageUnit::SendTransferEvent::transferDone(TcuError result)
         CmdCommand::Bits cmd = tcu().regs().getCommand();
 
         if (cmd.opcode == CmdCommand::REPLY)
-            msgUnit->ackMessage(cmd.epid, cmd.arg0);
+        {
+            RecvEp rep = msgUnit->cmdEps.getEp(cmd.epid).recv;
+            int msgidx = rep.offsetToIdx(cmd.arg0);
+            msgUnit->ackMessage(rep, msgidx);
+        }
         else
         {
+            SendEp sep = msgUnit->cmdEps.getEp(sepid).send;
             // check if we have enough credits
-            SendEp *ep = tcu().regs().getSendEp(msgUnit->cmdSep);
-            if (ep->r0.curCrd != Tcu::CREDITS_UNLIM)
+            if (sep.r0.curCrd != Tcu::CREDITS_UNLIM)
             {
-                if (ep->r0.curCrd == 0)
+                if (sep.r0.curCrd == 0)
                 {
                     DPRINTFS(Tcu, (&tcu()),
                              "EP%u: no credits to send message\n",
-                             msgUnit->cmdSep);
+                             sep.id);
                     result = TcuError::NO_CREDITS;
                 }
                 else
                 {
                     // pay the credits
-                    ep->r0.curCrd = ep->r0.curCrd - 1;
+                    sep.r0.curCrd = sep.r0.curCrd - 1;
 
                     DPRINTFS(TcuCredits, (&tcu()),
                              "EP%u paid 1 credit (%u left)\n",
-                             msgUnit->cmdSep, ep->r0.curCrd);
+                             sep.id, sep.r0.curCrd);
 
-                    tcu().regs().updateEp(msgUnit->cmdSep);
+                    msgUnit->cmdEps.updateEp(sep);
                 }
             }
         }
     }
 
     MemoryUnit::WriteTransferEvent::transferDone(result);
+
+    msgUnit->cmdEps.onFinished([](EpFile::EpCache &) {});
 }
 
 void
-MessageUnit::recvCredits(epid_t epid)
+MessageUnit::startInvalidate(const ExtCommand::Bits &cmd)
 {
-    SendEp *ep = tcu.regs().getSendEp(epid);
-    // don't do anything if the EP is invalid
-    if (!ep)
-        return;
-
-    if (ep->r0.curCrd != Tcu::CREDITS_UNLIM)
-    {
-        ep->r0.curCrd = ep->r0.curCrd + 1;
-        assert(ep->r0.curCrd <= ep->r0.maxCrd);
-
-        DPRINTFS(TcuCredits, (&tcu),
-            "EP%u received 1 credit (%u in total)\n",
-            epid, ep->r0.curCrd);
-
-        tcu.regs().updateEp(epid);
-    }
+    extCmdEps.addEp(cmd.arg & 0xFFFF);
+    extCmdEps.onFetched(std::bind(&MessageUnit::invalidateWithEP,
+                                  this, std::placeholders::_1));
 }
 
-TcuError
-MessageUnit::fetchMessage(epid_t epid, Addr *msgOff)
+void
+MessageUnit::invalidateWithEP(EpFile::EpCache &eps)
 {
-    RecvEp *ep = tcu.regs().getRecvEp(epid);
-    if (!ep)
-        return TcuError::NO_REP;
-    if (ep->r0.vpe != tcu.regs().getCurVPE().id)
-        return TcuError::FOREIGN_EP;
+    ExtCommand::Bits cmd = tcu.regs().get(ExtReg::EXT_CMD);
+
+    epid_t epid = cmd.arg & 0xFFFF;
+    bool force = !!(cmd.arg & (1 << 16));
+    unsigned unreadMask = 0;
+
+    Ep ep = eps.getEp(epid);
+
+    if (!force && ep.type() == EpType::SEND)
+    {
+        if (ep.send.r0.curCrd != ep.send.r0.maxCrd)
+        {
+            tcu.scheduleExtCmdFinish(Cycles(1), TcuError::NO_CREDITS, 0);
+            return;
+        }
+    }
+
+    if (!force && ep.type() == EpType::RECEIVE)
+        unreadMask = ep.recv.r2.unread;
+
+    for (int i = 0; i < numEpRegs; ++i)
+        ep.inval.r[i] = 0;
+    eps.updateEp(ep.send);
+
+    eps.onFinished([this, unreadMask](EpFile::EpCache &) {
+        tcu.scheduleExtCmdFinish(Cycles(1), TcuError::NONE, unreadMask);
+    });
+}
+
+void
+MessageUnit::startFetch(const CmdCommand::Bits &cmd)
+{
+    cmdEps.addEp(cmd.epid);
+    cmdEps.onFetched(std::bind(&MessageUnit::fetchWithEP,
+                               this, std::placeholders::_1));
+}
+
+void
+MessageUnit::fetchWithEP(EpFile::EpCache &eps)
+{
+    CmdCommand::Bits cmd = tcu.regs().getCommand();
+
+    Ep ep = eps.getEp(cmd.epid);
+    if (ep.type() != EpType::RECEIVE)
+    {
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::NO_REP);
+        return;
+    }
+
+    RecvEp &rep = ep.recv;
+    if (rep.r0.vpe != tcu.regs().getCurVPE().id)
+    {
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::FOREIGN_EP);
+        return;
+    }
 
     // check if the current VPE has unread messages at all. note that this is
     // important in case it is out of sync with the receive EPs, i.e., if we
     // have ongoing foreignRecv core requests.
-    if (ep->r2.unread == 0 || tcu.regs().getCurVPE().msgs == 0)
+    if (rep.r2.unread == 0 || tcu.regs().getCurVPE().msgs == 0)
     {
-        *msgOff = -1;
-        return TcuError::NONE;
+        tcu.regs().set(UnprivReg::ARG1, -1);
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::NONE);
+        return;
     }
 
     int i;
-    for (i = ep->r0.rpos; i < (1 << ep->r0.slots); ++i)
+    for (i = rep.r0.rpos; i < (1 << rep.r0.slots); ++i)
     {
-        if (ep->isUnread(i))
+        if (rep.isUnread(i))
             goto found;
     }
-    for (i = 0; i < ep->r0.rpos; ++i)
+    for (i = 0; i < rep.r0.rpos; ++i)
     {
-        if (ep->isUnread(i))
+        if (rep.isUnread(i))
             goto found;
     }
 
@@ -356,160 +424,209 @@ MessageUnit::fetchMessage(epid_t epid, Addr *msgOff)
     assert(false);
 
 found:
-    assert(ep->isOccupied(i));
+    assert(rep.isOccupied(i));
 
-    ep->setUnread(i, false);
-    ep->r0.rpos = i + 1;
+    rep.setUnread(i, false);
+    rep.r0.rpos = i + 1;
 
     DPRINTFS(TcuBuf, (&tcu),
         "EP%u: fetched message at index %u (count=%u)\n",
-        epid, i, ep->unreadMsgs());
+        cmd.epid, i, rep.unreadMsgs());
 
-    tcu.regs().updateEp(epid);
+    eps.updateEp(rep);
     tcu.regs().rem_msg();
+    tcu.regs().set(UnprivReg::ARG1, i << rep.r0.slotSize);
 
-    *msgOff = i << ep->r0.slotSize;
-    return TcuError::NONE;
+    eps.onFinished([this](EpFile::EpCache &) {
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::NONE);
+    });
+}
+
+void
+MessageUnit::startAck(const CmdCommand::Bits &cmd)
+{
+    cmdEps.addEp(cmd.epid);
+    cmdEps.onFetched(std::bind(&MessageUnit::startAckWithEP,
+                     this, std::placeholders::_1));
+}
+
+void
+MessageUnit::startAckWithEP(EpFile::EpCache &eps)
+{
+    CmdCommand::Bits cmd = tcu.regs().getCommand();
+
+    Ep ep = eps.getEp(cmd.epid);
+    if (ep.type() != EpType::RECEIVE)
+    {
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::NO_REP);
+        return;
+    }
+
+    RecvEp &rep = ep.recv;
+    if (rep.r0.vpe != tcu.regs().getCurVPE().id)
+    {
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::FOREIGN_EP);
+        return;
+    }
+
+    int msgidx = rep.offsetToIdx(cmd.arg0);
+    if (msgidx == RecvEp::MAX_MSGS)
+    {
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::INV_MSG_OFF);
+        return;
+    }
+
+    ackMessage(rep, msgidx);
+
+    eps.onFinished([this](EpFile::EpCache &) {
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::NONE);
+    });
+}
+
+void MessageUnit::ackMessage(RecvEp &rep, int msgidx)
+{
+    bool unread = false;
+    rep.setOccupied(msgidx, false);
+    if (rep.isUnread(msgidx))
+    {
+        rep.setUnread(msgidx, false);
+        unread = true;
+    }
+
+    if (rep.r0.rplEps != Tcu::INVALID_EP_ID)
+    {
+        // invalidate reply EP
+        SendEp replyEp;
+        replyEp.id = rep.r0.rplEps + msgidx;
+        replyEp.r0 = 0;
+        replyEp.r1 = 0;
+        replyEp.r2 = 0;
+        cmdEps.updateEp(replyEp);
+    }
+
+    DPRINTFS(TcuBuf, (&tcu),
+        "EP%u: acked msg at index %d\n",
+        rep.id, msgidx);
+
+    cmdEps.updateEp(rep);
+    if (unread)
+        tcu.regs().rem_msg();
 }
 
 int
-MessageUnit::allocSlot(size_t msgSize, epid_t epid, RecvEp *ep)
+MessageUnit::allocSlot(EpFile::EpCache &eps, size_t msgSize, RecvEp &ep)
 {
-    assert(ep != nullptr);
-    assert(msgSize <= (1 << ep->r0.slotSize));
+    assert(msgSize <= (1 << ep.r0.slotSize));
 
     int i;
-    for (i = ep->r0.wpos; i < (1 << ep->r0.slots); ++i)
+    for (i = ep.r0.wpos; i < (1 << ep.r0.slots); ++i)
     {
-        if (!ep->isOccupied(i))
+        if (!ep.isOccupied(i))
             goto found;
     }
-    for (i = 0; i < ep->r0.wpos; ++i)
+    for (i = 0; i < ep.r0.wpos; ++i)
     {
-        if (!ep->isOccupied(i))
+        if (!ep.isOccupied(i))
             goto found;
     }
 
     return -1;
 
 found:
-    ep->setOccupied(i, true);
-    ep->r0.wpos = i + 1;
+    ep.setOccupied(i, true);
+    ep.r0.wpos = i + 1;
 
     DPRINTFS(TcuBuf, (&tcu),
         "EP%u: put message at index %u\n",
-        epid, i);
+        ep.id, i);
 
-    tcu.regs().updateEp(epid);
+    eps.updateEp(ep);
     return i;
 }
 
-TcuError
-MessageUnit::ackMessage(epid_t epId, Addr msgOff)
+void
+MessageUnit::recvCredits(EpFile::EpCache &eps, SendEp &sep)
 {
-    RecvEp *ep = tcu.regs().getRecvEp(epId);
-    if (!ep)
-        return TcuError::NO_REP;
-    if (ep->r0.vpe != tcu.regs().getCurVPE().id)
-        return TcuError::FOREIGN_EP;
-
-    int msgidx = ep->offsetToIdx(msgOff);
-    if (msgidx == RecvEp::MAX_MSGS)
-        return TcuError::INV_MSG_OFF;
-
-    bool unread = false;
-    ep->setOccupied(msgidx, false);
-    if (ep->isUnread(msgidx))
+    if (sep.r0.curCrd != Tcu::CREDITS_UNLIM)
     {
-        ep->setUnread(msgidx, false);
-        unread = true;
+        sep.r0.curCrd = sep.r0.curCrd + 1;
+        assert(sep.r0.curCrd <= sep.r0.maxCrd);
+
+        DPRINTFS(TcuCredits, (&tcu),
+            "EP%u received 1 credit (%u in total)\n",
+            sep.id, sep.r0.curCrd);
+
+        eps.updateEp(sep);
     }
-
-    if (ep->r0.rplEps != Tcu::INVALID_EP_ID)
-    {
-        // invalidate reply EP
-        unsigned unread_mask;
-        tcu.regs().invalidate(ep->r0.rplEps + msgidx, true, &unread_mask);
-    }
-
-    DPRINTFS(TcuBuf, (&tcu),
-        "EP%u: acked msg at index %d\n",
-        epId, msgidx);
-
-    tcu.regs().updateEp(epId);
-    if (unread)
-        tcu.regs().rem_msg();
-    return TcuError::NONE;
 }
 
 TcuError
-MessageUnit::finishMsgReceive(epid_t epId,
+MessageUnit::finishMsgReceive(EpFile::EpCache &eps,
+                              RecvEp &ep,
                               Addr msgAddr,
                               const MessageHeader *header,
                               TcuError error,
                               uint xferFlags,
                               bool addMsg)
 {
-    RecvEp *ep = tcu.regs().getRecvEp(epId);
-    if (!ep)
-        return TcuError::NO_REP;
-
-    int idx = (msgAddr - ep->r1.buffer) >> ep->r0.slotSize;
+    int idx = (msgAddr - ep.r1.buffer) >> ep.r0.slotSize;
 
     if (error == TcuError::NONE)
     {
         DPRINTFS(TcuBuf, (&tcu),
             "EP%u: increment message count to %u\n",
-            epId, ep->unreadMsgs() + 1);
+            ep.id, ep.unreadMsgs() + 1);
 
-        ep->setUnread(idx, true);
+        ep.setUnread(idx, true);
 
         if (!(header->flags & Tcu::REPLY_FLAG) &&
-            ep->r0.rplEps != Tcu::INVALID_EP_ID &&
+            ep.r0.rplEps != Tcu::INVALID_EP_ID &&
             header->replyEpId != Tcu::INVALID_EP_ID)
         {
             // install use-once reply EP
-            Ep *sep = tcu.regs().getEp(ep->r0.rplEps + idx);
-            sep->send.r0.type = static_cast<uint>(EpType::SEND);
-            sep->send.r0.vpe = ep->r0.vpe;
-            sep->send.r0.msgSize = header->replySize;
-            sep->send.r0.maxCrd = sep->send.r0.curCrd = 1;
-            sep->send.r0.crdEp = header->senderEpId;
-            sep->send.r0.reply = 1;
-            sep->send.r1.tgtPe = header->senderPeId;
-            sep->send.r1.tgtEp = header->replyEpId;
-            sep->send.r2.label = header->replyLabel;
-            tcu.regs().updateEp(ep->r0.rplEps + idx);
+            SendEp rep;
+            rep.id = ep.r0.rplEps + idx;
+            rep.r0.type = static_cast<uint>(EpType::SEND);
+            rep.r0.vpe = ep.r0.vpe;
+            rep.r0.msgSize = header->replySize;
+            rep.r0.maxCrd = rep.r0.curCrd = 1;
+            rep.r0.crdEp = header->senderEpId;
+            rep.r0.reply = 1;
+            rep.r1.tgtPe = header->senderPeId;
+            rep.r1.tgtEp = header->replyEpId;
+            rep.r2.label = header->replyLabel;
+            eps.updateEp(rep);
         }
 
-        // Note that replyEpId is the Id of *our* sending EP
         if (header->flags & Tcu::REPLY_FLAG &&
             header->replyEpId != Tcu::INVALID_EP_ID)
         {
-            recvCredits(header->replyEpId);
+            Ep sep = eps.getEp(header->replyEpId);
+            if (sep.type() == EpType::SEND)
+                recvCredits(eps, sep.send);
         }
     }
     else
-        ep->setOccupied(idx, false);
+        ep.setOccupied(idx, false);
 
-    tcu.regs().updateEp(epId);
+    eps.updateEp(ep);
 
     if (error == TcuError::NONE && addMsg)
     {
         tcu.regs().add_msg();
-        tcu.wakeupCore(false);
+        tcu.wakeupCore(false, ep.id);
     }
 
     return error;
 }
 
-TcuError
+void
 MessageUnit::recvFromNoc(PacketPtr pkt)
 {
     assert(pkt->isWrite());
     assert(pkt->hasData());
 
-    MessageHeader* header = pkt->getPtr<MessageHeader>();
+    MessageHeader *header = pkt->getPtr<MessageHeader>();
 
     receivedBytes.sample(header->length);
 
@@ -529,26 +646,54 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
             DPRINTFS(TcuMsgs, (&tcu), "    word%2lu: %#018x\n", i, words[i]);
     }
 
-    RecvEp *ep = tcu.regs().getRecvEp(epId);
-    if (!ep || (ep->r1.buffer & 0x7) != 0)
+    EpFile::EpCache *cache = new EpFile::EpCache(tcu.eps().newCache());
+    cache->addEp(epId);
+    // Note that replyEpId is the Id of *our* sending EP
+    if (header->flags & Tcu::REPLY_FLAG &&
+        header->replyEpId != Tcu::INVALID_EP_ID)
+        cache->addEp(header->replyEpId);
+    cache->onFetched(std::bind(&MessageUnit::recvFromNocWithEP,
+                       this, std::placeholders::_1, pkt));
+}
+
+void
+MessageUnit::recvFromNocWithEP(EpFile::EpCache &eps, PacketPtr pkt)
+{
+    NocAddr addr(pkt->getAddr());
+    epid_t epid = addr.offset;
+
+    Ep ep = eps.getEp(epid);
+
+    if (ep.type() != EpType::RECEIVE)
     {
         DPRINTFS(Tcu, (&tcu),
             "EP%u: ignoring message: receive EP invalid\n",
-            epId);
-        tcu.sendNocResponse(pkt);
-        return !ep ? TcuError::RECV_GONE : TcuError::RECV_MISALIGN;
+            epid);
+        tcu.sendNocResponse(pkt, TcuError::RECV_GONE);
+        return;
     }
 
-    int msgidx = allocSlot(pkt->getSize(), epId, ep);
+    RecvEp &rep = ep.recv;
+
+    if ((rep.r1.buffer & 0x7) != 0)
+    {
+        DPRINTFS(Tcu, (&tcu),
+            "EP%u: ignoring message: receive EP invalid\n",
+            epid);
+        tcu.sendNocResponse(pkt, TcuError::RECV_MISALIGN);
+        return;
+    }
+
+    int msgidx = allocSlot(eps, pkt->getSize(), rep);
     if (msgidx == -1)
     {
         DPRINTFS(Tcu, (&tcu),
             "EP%u: ignoring message: no space left\n",
-            epId);
+            epid);
         noSpace++;
 
-        tcu.sendNocResponse(pkt);
-        return TcuError::RECV_NO_SPACE;
+        tcu.sendNocResponse(pkt, TcuError::RECV_NO_SPACE);
+        return;
     }
 
     // the message is transferred piece by piece; we can start as soon as
@@ -560,31 +705,36 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
     uint rflags = XferUnit::XferFlags::MSGRECV;
     // receive EPs use a physical address, thus NOPF and NOXLATE.
     rflags |= XferUnit::XferFlags::NOPF | XferUnit::NOXLATE;
-    Addr localAddr = ep->r1.buffer + (msgidx << ep->r0.slotSize);
+    Addr localAddr = rep.r1.buffer + (msgidx << rep.r0.slotSize);
 
-    auto *ev = new ReceiveTransferEvent(this, localAddr, rflags, pkt);
+    auto *ev = new ReceiveTransferEvent(
+        this, &eps, epid, localAddr, rflags, pkt);
     tcu.startTransfer(ev, delay);
 
-    return TcuError::NONE;
+    eps.setAutoFinish(false);
 }
 
 void
 MessageUnit::ReceiveTransferEvent::transferDone(TcuError result)
 {
-    MessageHeader* header = pkt->getPtr<MessageHeader>();
-    epid_t epId = rep();
+    MessageHeader *header = pkt->getPtr<MessageHeader>();
 
-    RecvEp *ep = tcu().regs().getRecvEp(epId);
-    if (result == TcuError::NONE && ep != nullptr)
+    if (result == TcuError::NONE)
     {
-        bool foreign = ep->r0.vpe != tcu().regs().getCurVPE().id;
-        result = msgUnit->finishMsgReceive(epId, msgAddr, header,
+        RecvEp rep = eps->getEp(epid).recv;
+
+        bool foreign = rep.r0.vpe != tcu().regs().getCurVPE().id;
+        result = msgUnit->finishMsgReceive(*eps, rep, msgAddr, header,
                                            result, flags(), !foreign);
 
         // notify SW if we received a message for a different VPE
         if(foreign)
-            tcu().startForeignReceive(epId, ep->r0.vpe);
+            tcu().startForeignReceive(rep.id, rep.r0.vpe);
     }
 
     MemoryUnit::ReceiveTransferEvent::transferDone(result);
+
+    eps->onFinished([](EpFile::EpCache &eps) {
+        delete &eps;
+    });
 }

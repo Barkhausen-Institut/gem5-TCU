@@ -30,7 +30,7 @@
 #ifndef __MEM_TCU_CORE_REQS_HH__
 #define __MEM_TCU_CORE_REQS_HH__
 
-#include "mem/tcu/regfile.hh"
+#include "mem/tcu/reg_file.hh"
 #include "mem/tcu/xfer_unit.hh"
 
 #include <list>

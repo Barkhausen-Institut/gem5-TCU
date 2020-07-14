@@ -60,6 +60,7 @@ class AccelCtxSwSM
     enum State
     {
         FETCH_MSG,
+        FETCH_MSG_WAIT,
         READ_MSG_ADDR,
         READ_MSG,
 

@@ -34,7 +34,8 @@ SyscallSM::stateName() const
 {
     const char *names[] =
     {
-        "SEND", "WAIT", "FETCH", "READ_ADDR", "ACK"
+        "SEND", "SEND_WAIT", "FETCH", "FETCH_WAIT",
+        "READ_ADDR", "ACK", "ACK_WAIT"
     };
     return names[static_cast<size_t>(state)];
 }
@@ -53,12 +54,6 @@ SyscallSM::tick()
                                    TcuAccel::EP_SYSR),
                 CmdData::create(accel->sendMsgAddr(), syscallSize)
             );
-            break;
-        }
-        case State::SYSC_WAIT:
-        {
-            Addr regAddr = accel->getRegAddr(UnprivReg::COMMAND);
-            pkt = accel->createTcuRegPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }
         case State::SYSC_FETCH:
@@ -87,6 +82,15 @@ SyscallSM::tick()
             );
             break;
         }
+
+        case State::SYSC_SEND_WAIT:
+        case State::SYSC_FETCH_WAIT:
+        case State::SYSC_ACK_WAIT:
+        {
+            Addr regAddr = accel->getRegAddr(UnprivReg::COMMAND);
+            pkt = accel->createTcuRegPkt(regAddr, 0, MemCmd::ReadReq);
+            break;
+        }
     }
 
     return pkt;
@@ -97,16 +101,17 @@ SyscallSM::handleMemResp(PacketPtr pkt)
 {
     auto lastState = state;
 
+    auto data = pkt->getConstPtr<RegFile::reg_t>();
+
     switch(state)
     {
         case State::SYSC_SEND:
         {
-            state = State::SYSC_WAIT;
+            state = State::SYSC_SEND_WAIT;
             break;
         }
-        case State::SYSC_WAIT:
+        case State::SYSC_SEND_WAIT:
         {
-            auto data = pkt->getConstPtr<RegFile::reg_t>();
             CmdCommand::Bits cmd =
                 *reinterpret_cast<const RegFile::reg_t*>(data);
             if (cmd.opcode == 0)
@@ -120,12 +125,20 @@ SyscallSM::handleMemResp(PacketPtr pkt)
         }
         case State::SYSC_FETCH:
         {
-            state = State::SYSC_READ_ADDR;
+            state = State::SYSC_FETCH_WAIT;
+            break;
+        }
+        case State::SYSC_FETCH_WAIT:
+        {
+            CmdCommand::Bits cmd =
+                *reinterpret_cast<const RegFile::reg_t*>(data);
+            if (cmd.opcode == 0)
+                state = State::SYSC_READ_ADDR;
             break;
         }
         case State::SYSC_READ_ADDR:
         {
-            const RegFile::reg_t *regs = pkt->getConstPtr<RegFile::reg_t>();
+            const RegFile::reg_t *regs = data;
             if(regs[0] != static_cast<RegFile::reg_t>(-1))
             {
                 replyAddr = regs[0] + RBUF_ADDR + accel->offset;
@@ -140,7 +153,16 @@ SyscallSM::handleMemResp(PacketPtr pkt)
         }
         case State::SYSC_ACK:
         {
-            return true;
+            state = State::SYSC_ACK_WAIT;
+            break;
+        }
+        case State::SYSC_ACK_WAIT:
+        {
+            CmdCommand::Bits cmd =
+                *reinterpret_cast<const RegFile::reg_t*>(data);
+            if (cmd.opcode == 0)
+                return true;
+            break;
         }
     }
 

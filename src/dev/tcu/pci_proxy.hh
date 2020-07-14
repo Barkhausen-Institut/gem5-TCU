@@ -32,7 +32,7 @@
 
 #include "dev/tcu/pci_host.hh"
 #include "mem/tcu/tcu.hh"
-#include "mem/tcu/regfile.hh"
+#include "mem/tcu/reg_file.hh"
 #include "mem/mem_object.hh"
 #include "params/TcuPciProxy.hh"
 

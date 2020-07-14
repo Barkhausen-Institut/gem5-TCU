@@ -36,7 +36,7 @@
 #include "cpu/tcu-accel/syscallsm.hh"
 #include "cpu/tcu-accel/yieldsm.hh"
 #include "mem/tcu/connector/base.hh"
-#include "mem/tcu/regfile.hh"
+#include "mem/tcu/reg_file.hh"
 #include "sim/system.hh"
 
 class TcuAccelInDir : public TcuAccel
@@ -76,6 +76,7 @@ class TcuAccelInDir : public TcuAccel
         IDLE,
 
         FETCH_MSG,
+        FETCH_MSG_WAIT,
         READ_MSG_ADDR,
         READ_MSG,
 

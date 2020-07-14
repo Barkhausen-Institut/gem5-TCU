@@ -41,6 +41,7 @@ AccelCtxSwSM::stateName() const
     const char *names[] =
     {
         "FETCH_MSG",
+        "FETCH_MSG_WAIT",
         "READ_MSG_ADDR",
         "READ_MSG",
         "STORE_REPLY",
@@ -94,6 +95,8 @@ AccelCtxSwSM::tick()
             );
             break;
         }
+
+        case State::FETCH_MSG_WAIT:
         case State::REPLY_WAIT:
         {
             Addr regAddr = accel->getRegAddr(UnprivReg::COMMAND);
@@ -110,11 +113,21 @@ AccelCtxSwSM::handleMemResp(PacketPtr pkt)
 {
     auto lastState = state;
 
+    auto pkt_data = pkt->getConstPtr<uint8_t>();
+
     switch(state)
     {
         case State::FETCH_MSG:
         {
-            state = State::READ_MSG_ADDR;
+            state = State::FETCH_MSG_WAIT;
+            break;
+        }
+        case State::FETCH_MSG_WAIT:
+        {
+            CmdCommand::Bits cmd =
+                *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
+            if (cmd.opcode == 0)
+                state = State::READ_MSG_ADDR;
             break;
         }
         case State::READ_MSG_ADDR:
@@ -135,7 +148,7 @@ AccelCtxSwSM::handleMemResp(PacketPtr pkt)
         case State::READ_MSG:
         {
             const uint64_t *args =
-                reinterpret_cast<const uint64_t*>(pkt->getConstPtr<uint8_t>() + sizeof(MessageHeader));
+                reinterpret_cast<const uint64_t*>(pkt_data + sizeof(MessageHeader));
 
             vpe_id = args[1];
             if (args[0] == Operation::VPE_CTRL && args[2] == VPECtrl::START)
@@ -159,7 +172,7 @@ AccelCtxSwSM::handleMemResp(PacketPtr pkt)
         case State::REPLY_WAIT:
         {
             CmdCommand::Bits cmd =
-                *reinterpret_cast<const RegFile::reg_t*>(pkt->getConstPtr<uint8_t>());
+                *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
             if (cmd.opcode == 0)
             {
                 bool res = switched;

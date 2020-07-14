@@ -34,7 +34,8 @@
 #include "mem/tcu/connector/base.hh"
 #include "mem/tcu/base.hh"
 #include "mem/tcu/cmds.hh"
-#include "mem/tcu/regfile.hh"
+#include "mem/tcu/ep_file.hh"
+#include "mem/tcu/reg_file.hh"
 #include "mem/tcu/noc_addr.hh"
 #include "mem/tcu/xfer_unit.hh"
 #include "mem/tcu/core_reqs.hh"
@@ -104,6 +105,8 @@ class Tcu : public BaseTcu
 
     RegFile &regs() { return regFile; }
 
+    EpFile &eps() { return epFile; }
+
     TcuTlb *tlb() { return tlBuf; }
 
     bool isMemPE(unsigned pe) const;
@@ -113,11 +116,15 @@ class Tcu : public BaseTcu
 
     void printLine(Addr len);
 
+    void startWaitEP(const CmdCommand::Bits &cmd);
+
+    void startWaitEPWithEP(EpFile::EpCache &eps, epid_t epid);
+
     bool startSleep(epid_t wakeupEp);
 
     void stopSleep();
 
-    void wakeupCore(bool force);
+    void wakeupCore(bool force, epid_t rep);
 
     Cycles reset(bool flushInval);
 
@@ -140,7 +147,15 @@ class Tcu : public BaseTcu
         return cmds.isCommandAborting();
     }
 
-    void scheduleFinishOp(Cycles delay, TcuError error = TcuError::NONE);
+    void scheduleCmdFinish(Cycles delay, TcuError error = TcuError::NONE)
+    {
+        cmds.scheduleCmdFinish(delay, error);
+    }
+
+    void scheduleExtCmdFinish(Cycles delay, TcuError error, RegFile::reg_t arg)
+    {
+        cmds.scheduleExtCmdFinish(delay, error, arg);
+    }
 
     void sendMemRequest(PacketPtr pkt,
                         Addr virt,
@@ -152,7 +167,7 @@ class Tcu : public BaseTcu
                         Cycles delay,
                         bool functional = false);
 
-    void sendNocResponse(PacketPtr pkt);
+    void sendNocResponse(PacketPtr pkt, TcuError result = TcuError::NONE);
 
     static Addr physToNoc(Addr phys);
     static Addr nocToPhys(Addr noc);
@@ -208,6 +223,10 @@ class Tcu : public BaseTcu
     XferUnit *xferUnit;
 
     CoreRequests coreReqs;
+
+    EpFile epFile;
+
+    EpFile::EpCache sleepEPs;
 
     TcuCommands cmds;
 

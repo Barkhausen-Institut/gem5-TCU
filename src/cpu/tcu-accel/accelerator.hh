@@ -33,7 +33,7 @@
 
 #include "params/TcuAccel.hh"
 #include "mem/tcu/connector/base.hh"
-#include "mem/tcu/regfile.hh"
+#include "mem/tcu/reg_file.hh"
 #include "mem/tcu/tcu.hh"
 #include "sim/system.hh"
 

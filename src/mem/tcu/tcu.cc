@@ -54,6 +54,8 @@ Tcu::Tcu(TcuParams* p)
     memUnit(new MemoryUnit(*this)),
     xferUnit(new XferUnit(*this, p->block_size, p->buf_count, p->buf_size)),
     coreReqs(*this, p->buf_count),
+    epFile(*this),
+    sleepEPs(epFile.newCache()),
     cmds(*this),
     fireTimerEvent(*this),
     completeCoreReqEvent(coreReqs),
@@ -172,26 +174,47 @@ Tcu::freeRequest(PacketPtr pkt)
     delete pkt;
 }
 
-bool
-Tcu::has_message(epid_t ep)
+void
+Tcu::startWaitEP(const CmdCommand::Bits &cmd)
 {
-    if (ep == 0xFFFF && regs().getVPE(PrivReg::CUR_VPE).msgs > 0)
-        return true;
+    int ep = cmd.arg0 & 0xFFFF;
 
-    if (ep != 0xFFFF)
+    if (ep == INVALID_EP_ID)
     {
-        RecvEp *rep = regs().getRecvEp(ep);
-        if (rep && rep->r2.unread != 0)
-            return true;
+        if (regs().getVPE(PrivReg::CUR_VPE).msgs > 0)
+        {
+            scheduleCmdFinish(Cycles(1), TcuError::NONE);
+            return;
+        }
+
+        if (!startSleep(ep))
+            scheduleCmdFinish(Cycles(1), TcuError::NONE);
     }
-    return false;
+    else
+    {
+        sleepEPs.addEp(ep);
+        sleepEPs.onFetched(std::bind(&Tcu::startWaitEPWithEP,
+                                     this, std::placeholders::_1, ep));
+    }
+}
+
+void
+Tcu::startWaitEPWithEP(EpFile::EpCache &eps, epid_t epid)
+{
+    const Ep ep = eps.getEp(epid);
+    if (ep.type() == EpType::RECEIVE && ep.recv.r2.unread != 0)
+    {
+        scheduleCmdFinish(Cycles(1), TcuError::NONE);
+        return;
+    }
+
+    if (!startSleep(epid))
+        scheduleCmdFinish(Cycles(1), TcuError::NONE);
 }
 
 bool
 Tcu::startSleep(epid_t ep)
 {
-    if (has_message(ep))
-        return false;
     if (connector->havePendingIrq())
         return false;
 
@@ -209,14 +232,14 @@ Tcu::stopSleep()
 }
 
 void
-Tcu::wakeupCore(bool force)
+Tcu::wakeupCore(bool force, epid_t rep)
 {
-    if (force || has_message(wakeupEp))
+    if (force || wakeupEp == INVALID_EP_ID || rep == wakeupEp)
     {
         // better stop the command in this cycle to ensure that the core
         // does not issue another command before we can finish the sleep.
         if (regs().getCommand().opcode == CmdCommand::SLEEP)
-            scheduleFinishOp(Cycles(0));
+            scheduleCmdFinish(Cycles(0));
         else
             connector->wakeup();
     }
@@ -253,7 +276,7 @@ Tcu::flushInvalCaches(bool invalidate)
 void
 Tcu::setIrq(BaseConnector::IRQ irq)
 {
-    wakeupCore(true);
+    wakeupCore(true, INVALID_EP_ID);
 
     connector->setIrq(irq);
 
@@ -351,8 +374,11 @@ Tcu::sendNocRequest(NocPacketType type,
 }
 
 void
-Tcu::sendNocResponse(PacketPtr pkt)
+Tcu::sendNocResponse(PacketPtr pkt, TcuError result)
 {
+    auto senderState = dynamic_cast<NocSenderState*>(pkt->senderState);
+    senderState->result = result;
+
     pkt->makeResponse();
 
     if (!atomicMode)
@@ -481,7 +507,7 @@ Tcu::completeNocRequest(PacketPtr pkt)
         // if the current command should be aborted, just ignore the packet
         // and finish the command
         if (cmds.isCommandAborting())
-            scheduleFinishOp(Cycles(1), TcuError::ABORT);
+            scheduleCmdFinish(Cycles(1), TcuError::ABORT);
         else
         {
             auto cmd = regs().getCommand();
@@ -528,14 +554,12 @@ Tcu::handleNocRequest(PacketPtr pkt)
 
     auto senderState = dynamic_cast<NocSenderState*>(pkt->senderState);
 
-    TcuError res = TcuError::NONE;
-
     switch (senderState->packetType)
     {
         case NocPacketType::MESSAGE:
         {
             nocMsgRecvs++;
-            res = msgUnit->recvFromNoc(pkt);
+            msgUnit->recvFromNoc(pkt);
             break;
         }
         case NocPacketType::READ_REQ:
@@ -546,7 +570,7 @@ Tcu::handleNocRequest(PacketPtr pkt)
                 nocReadRecvs++;
             else if (senderState->packetType == NocPacketType::WRITE_REQ)
                 nocWriteRecvs++;
-            res = memUnit->recvFromNoc(pkt);
+            memUnit->recvFromNoc(pkt);
             break;
         }
         case NocPacketType::CACHE_MEM_REQ_FUNC:
@@ -555,8 +579,6 @@ Tcu::handleNocRequest(PacketPtr pkt)
         default:
             panic("Unexpected NocPacketType\n");
     }
-
-    senderState->result = res;
 }
 
 bool
@@ -747,12 +769,6 @@ Tcu::sendFunctionalMemRequest(PacketPtr pkt)
     pkt->req->setMasterId(masterId);
 
     dcacheMasterPort.sendFunctional(pkt);
-}
-
-void
-Tcu::scheduleFinishOp(Cycles delay, TcuError error)
-{
-    cmds.scheduleFinishOp(delay, error);
 }
 
 Tcu*

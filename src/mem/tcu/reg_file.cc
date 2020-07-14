@@ -32,7 +32,7 @@
 #include "debug/Tcu.hh"
 #include "debug/TcuReg.hh"
 #include "debug/TcuRegRange.hh"
-#include "mem/tcu/regfile.hh"
+#include "mem/tcu/reg_file.hh"
 #include "mem/tcu/tcu.hh"
 
 #define DPRINTFNS(name, ...) do {                                       \
@@ -115,30 +115,6 @@ RegFile::RegFile(Tcu &_tcu, const std::string& name, unsigned numEndpoints)
     vpe.id = Tcu::INVALID_VPE_ID;
     vpe.msgs = 0;
     set(PrivReg::CUR_VPE, vpe);
-}
-
-TcuError
-RegFile::invalidate(epid_t epId, bool force, unsigned *unreadMask)
-{
-    *unreadMask = 0;
-
-    SendEp *sep;
-    if (!force && (sep = getSendEp(epId)) != nullptr)
-    {
-        if (sep->r0.curCrd != sep->r0.maxCrd)
-            return TcuError::NO_CREDITS;
-    }
-
-    RecvEp *rep;
-    if (!force && (rep = getRecvEp(epId)) != nullptr)
-        *unreadMask = rep->r2.unread;
-
-    for (int i = 0; i < numEpRegs; ++i)
-        set(epId, i, 0);
-
-    updateEp(epId);
-
-    return TcuError::NONE;
 }
 
 void
@@ -232,50 +208,6 @@ RegFile::set(UnprivReg reg, reg_t value, RegAccess access)
                          value);
 
     unprivRegs[static_cast<Addr>(reg)] = value;
-}
-
-SendEp*
-RegFile::getSendEp(epid_t epId, bool print)
-{
-    Ep *ep = getEp(epId, EpType::SEND, print);
-    return ep ? &ep->send : nullptr;
-}
-
-RecvEp*
-RegFile::getRecvEp(epid_t epId, bool print)
-{
-    Ep *ep = getEp(epId, EpType::RECEIVE, print);
-    return ep ? &ep->recv : nullptr;
-}
-
-MemEp*
-RegFile::getMemEp(epid_t epId, bool print)
-{
-    Ep *ep = getEp(epId, EpType::MEMORY, print);
-    return ep ? &ep->mem : nullptr;
-}
-
-Ep*
-RegFile::getEp(epid_t epId, EpType type, bool print)
-{
-    Ep &ep = eps.at(epId);
-    if (ep.type() != type)
-    {
-        DPRINTF(Tcu, "EP%u: expected %s EP, got %s\n",
-                epId, epTypeNames[static_cast<size_t>(type)],
-                epTypeNames[static_cast<size_t>(ep.type())]);
-        return nullptr;
-    }
-
-    if (print)
-        printEpAccess(epId, true, RegAccess::TCU);
-    return &ep;
-}
-
-void
-RegFile::updateEp(epid_t epId)
-{
-    printEpAccess(epId, false, RegAccess::TCU);
 }
 
 void

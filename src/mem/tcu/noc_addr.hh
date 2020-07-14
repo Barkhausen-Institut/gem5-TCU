@@ -32,7 +32,7 @@
 #define __MEM_TCU_NOC_ADDR_HH__
 
 #include "base/types.hh"
-#include "mem/tcu/regfile.hh"
+#include "mem/tcu/reg_file.hh"
 
 /**
  *

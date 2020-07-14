@@ -37,7 +37,7 @@
 #include "cpu/tcu-accel/syscallsm.hh"
 #include "cpu/tcu-accel/yieldsm.hh"
 #include "mem/tcu/connector/base.hh"
-#include "mem/tcu/regfile.hh"
+#include "mem/tcu/reg_file.hh"
 #include "sim/system.hh"
 
 class TcuAccelStream : public TcuAccel
@@ -91,6 +91,7 @@ class TcuAccelStream : public TcuAccel
         IDLE,
 
         FETCH_MSG,
+        FETCH_MSG_WAIT,
         READ_MSG_ADDR,
         READ_MSG,
 
@@ -98,6 +99,7 @@ class TcuAccelStream : public TcuAccel
         INOUT_SEND,
         INOUT_SEND_WAIT,
         INOUT_ACK,
+        INOUT_ACK_WAIT,
 
         READ_DATA,
         READ_DATA_WAIT,
@@ -118,6 +120,7 @@ class TcuAccelStream : public TcuAccel
         COMMIT_SEND_WAIT,
 
         EXIT_ACK,
+        EXIT_ACK_WAIT,
         EXIT,
     };
 

@@ -33,7 +33,7 @@
 
 #include "params/TcuAbortTest.hh"
 #include "mem/tcu/tcu.hh"
-#include "mem/tcu/regfile.hh"
+#include "mem/tcu/reg_file.hh"
 #include "sim/system.hh"
 
 class TcuAbortTest : public ClockedObject

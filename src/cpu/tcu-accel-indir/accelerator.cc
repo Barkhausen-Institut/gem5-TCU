@@ -31,7 +31,7 @@
 #include "debug/TcuAccelInDir.hh"
 #include "debug/TcuAccelInDirState.hh"
 #include "mem/tcu/tcu.hh"
-#include "mem/tcu/regfile.hh"
+#include "mem/tcu/reg_file.hh"
 #include "sim/pe_memory.hh"
 
 #include <iomanip>
@@ -41,6 +41,7 @@ static const char *stateNames[] =
     "IDLE",
 
     "FETCH_MSG",
+    "FETCH_MSG_WAIT",
     "READ_MSG_ADDR",
     "READ_MSG",
 
@@ -123,7 +124,15 @@ TcuAccelInDir::completeRequest(PacketPtr pkt)
 
             case State::FETCH_MSG:
             {
-                state = State::READ_MSG_ADDR;
+                state = State::FETCH_MSG_WAIT;
+                break;
+            }
+            case State::FETCH_MSG_WAIT:
+            {
+                CmdCommand::Bits cmd =
+                    *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
+                if (cmd.opcode == 0)
+                    state = State::READ_MSG_ADDR;
                 break;
             }
             case State::READ_MSG_ADDR:
@@ -292,12 +301,6 @@ TcuAccelInDir::tick()
             );
             break;
         }
-        case State::WRITE_DATA_WAIT:
-        {
-            Addr regAddr = getRegAddr(UnprivReg::COMMAND);
-            pkt = createTcuRegPkt(regAddr, 0, MemCmd::ReadReq);
-            break;
-        }
 
         case State::STORE_REPLY:
         {
@@ -316,6 +319,9 @@ TcuAccelInDir::tick()
             );
             break;
         }
+
+        case State::FETCH_MSG_WAIT:
+        case State::WRITE_DATA_WAIT:
         case State::REPLY_WAIT:
         {
             Addr regAddr = getRegAddr(UnprivReg::COMMAND);

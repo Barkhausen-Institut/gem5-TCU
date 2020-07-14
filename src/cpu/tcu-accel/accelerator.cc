@@ -31,7 +31,7 @@
 #include "cpu/tcu-accel/accelerator.hh"
 #include "debug/TcuConnector.hh"
 #include "mem/tcu/tcu.hh"
-#include "mem/tcu/regfile.hh"
+#include "mem/tcu/reg_file.hh"
 #include "sim/pe_memory.hh"
 
 #include <iomanip>

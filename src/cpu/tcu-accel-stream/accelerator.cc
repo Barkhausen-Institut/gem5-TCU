@@ -31,7 +31,7 @@
 #include "debug/TcuAccelStream.hh"
 #include "debug/TcuAccelStreamState.hh"
 #include "mem/tcu/tcu.hh"
-#include "mem/tcu/regfile.hh"
+#include "mem/tcu/reg_file.hh"
 #include "sim/pe_memory.hh"
 
 #include <iomanip>
@@ -41,6 +41,7 @@ static const char *stateNames[] =
     "IDLE",
 
     "FETCH_MSG",
+    "FETCH_MSG_WAIT",
     "READ_MSG_ADDR",
     "READ_MSG",
 
@@ -48,6 +49,7 @@ static const char *stateNames[] =
     "INOUT_SEND",
     "INOUT_SEND_WAIT",
     "INOUT_ACK",
+    "INOUT_ACK_WAIT",
 
     "READ_DATA",
     "READ_DATA_WAIT",
@@ -68,6 +70,7 @@ static const char *stateNames[] =
     "COMMIT_SEND_WAIT",
 
     "EXIT_ACK",
+    "EXIT_ACK_WAIT",
     "EXIT",
 };
 
@@ -185,14 +188,32 @@ TcuAccelStream::completeRequest(PacketPtr pkt)
             }
             case State::INOUT_ACK:
             {
-                state = (ctx.flags & Flags::OUTPUT) ? State::WRITE_DATA
-                                                    : State::READ_DATA;
+                state = State::INOUT_ACK_WAIT;
+                break;
+            }
+            case State::INOUT_ACK_WAIT:
+            {
+                CmdCommand::Bits cmd =
+                    *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
+                if (cmd.opcode == 0)
+                {
+                    state = (ctx.flags & Flags::OUTPUT) ? State::WRITE_DATA
+                                                        : State::READ_DATA;
+                }
                 break;
             }
 
             case State::FETCH_MSG:
             {
-                state = State::READ_MSG_ADDR;
+                state = State::FETCH_MSG_WAIT;
+                break;
+            }
+            case State::FETCH_MSG_WAIT:
+            {
+                CmdCommand::Bits cmd =
+                    *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
+                if (cmd.opcode == 0)
+                    state = State::READ_MSG_ADDR;
                 break;
             }
             case State::READ_MSG_ADDR:
@@ -448,10 +469,25 @@ TcuAccelStream::completeRequest(PacketPtr pkt)
 
             case State::EXIT_ACK:
             {
-                if (ctx.inReqAddr)
-                    ctx.inReqAddr = 0;
-                else
-                    ctx.outReqAddr = 0;
+                state = State::EXIT_ACK_WAIT;
+                break;
+            }
+            case State::EXIT_ACK_WAIT:
+            {
+                CmdCommand::Bits cmd =
+                    *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
+                if (cmd.opcode == 0)
+                {
+                    if (ctx.inReqAddr)
+                        ctx.inReqAddr = 0;
+                    else
+                        ctx.outReqAddr = 0;
+
+                    if (ctx.flags & Flags::EXIT)
+                        state = State::IDLE;
+                    else
+                        state = State::EXIT;
+                }
                 break;
             }
 
@@ -674,12 +710,6 @@ TcuAccelStream::tick()
             );
             break;
         }
-        case State::INOUT_SEND_WAIT:
-        {
-            Addr regAddr = getRegAddr(UnprivReg::COMMAND);
-            pkt = createTcuRegPkt(regAddr, 0, MemCmd::ReadReq);
-            break;
-        }
         case State::INOUT_ACK:
         {
             pkt = createTcuCmdPkt(
@@ -724,12 +754,6 @@ TcuAccelStream::tick()
             ctx.inPos += ctx.lastSize;
             break;
         }
-        case State::READ_DATA_WAIT:
-        {
-            Addr regAddr = getRegAddr(UnprivReg::COMMAND);
-            pkt = createTcuRegPkt(regAddr, 0, MemCmd::ReadReq);
-            break;
-        }
 
         case State::WRITE_DATA:
         {
@@ -743,12 +767,6 @@ TcuAccelStream::tick()
             ctx.bufOff += amount;
             ctx.lastSize -= amount;
             ctx.outPos += amount;
-            break;
-        }
-        case State::WRITE_DATA_WAIT:
-        {
-            Addr regAddr = getRegAddr(UnprivReg::COMMAND);
-            pkt = createTcuRegPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }
 
@@ -771,12 +789,6 @@ TcuAccelStream::tick()
                                    replyAddr - rbufAddr()),
                 CmdData::create(bufferAddr() + bufSize, sizeof(reply))
             );
-            break;
-        }
-        case State::REPLY_WAIT:
-        {
-            Addr regAddr = getRegAddr(UnprivReg::COMMAND);
-            pkt = createTcuRegPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }
 
@@ -810,12 +822,6 @@ TcuAccelStream::tick()
                 CmdData::create(bufferAddr() + bufSize, sizeof(rdwr_msg)),
                 LBL_OUT_REPLY
             );
-            break;
-        }
-        case State::COMMIT_SEND_WAIT:
-        {
-            Addr regAddr = getRegAddr(UnprivReg::COMMAND);
-            pkt = createTcuRegPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }
 
@@ -855,6 +861,20 @@ TcuAccelStream::tick()
             pkt = createPacket(sendMsgAddr(), sizeof(exit_msg),
                                MemCmd::WriteReq);
             memcpy(pkt->getPtr<void>(), &exit_msg, sizeof(exit_msg));
+            break;
+        }
+
+        case State::INOUT_ACK_WAIT:
+        case State::FETCH_MSG_WAIT:
+        case State::READ_DATA_WAIT:
+        case State::WRITE_DATA_WAIT:
+        case State::REPLY_WAIT:
+        case State::COMMIT_SEND_WAIT:
+        case State::INOUT_SEND_WAIT:
+        case State::EXIT_ACK_WAIT:
+        {
+            Addr regAddr = getRegAddr(UnprivReg::COMMAND);
+            pkt = createTcuRegPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }
     }

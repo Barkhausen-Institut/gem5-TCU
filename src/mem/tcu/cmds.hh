@@ -59,7 +59,9 @@ class TcuCommands
 
     void stopCommand();
 
-    void scheduleFinishOp(Cycles delay, TcuError error = TcuError::NONE);
+    void scheduleCmdFinish(Cycles delay, TcuError error = TcuError::NONE);
+
+    void scheduleExtCmdFinish(Cycles delay, TcuError error, RegFile::reg_t arg);
 
     void setRemoteCommand(bool remote)
     {
@@ -84,6 +86,8 @@ class TcuCommands
     void executeExtCommand(PacketPtr pkt);
 
     void finishCommand(TcuError error);
+
+    void finishExtCommand(TcuError error, RegFile::reg_t arg);
 
   private:
 
@@ -166,11 +170,35 @@ class TcuCommands
         const char* description() const override { return "FinishCommandEvent"; }
     };
 
+    struct FinishExtCommandEvent : public CmdEvent
+    {
+        TcuError error;
+        RegFile::reg_t arg;
+
+        FinishExtCommandEvent(TcuCommands& _cmds,
+                              TcuError _error, RegFile::reg_t _arg)
+            : CmdEvent(_cmds), error(_error), arg(_arg)
+        {}
+
+        void process() override
+        {
+            cmds.finishExtCommand(error, arg);
+            setFlags(AutoDelete);
+        }
+
+        const char* description() const override
+        {
+            return "FinishExtCommandEvent";
+        }
+    };
+
     Tcu &tcu;
 
     PacketPtr cmdPkt;
     PacketPtr privCmdPkt;
+    PacketPtr extCmdPkt;
     FinishCommandEvent *cmdFinish;
+    FinishExtCommandEvent *extCmdFinish;
     AbortType abort;
     bool cmdIsRemote;
 

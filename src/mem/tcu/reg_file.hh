@@ -28,8 +28,8 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
-#ifndef __MEM_TCU_REGFILE_HH__
-#define __MEM_TCU_REGFILE_HH__
+#ifndef __MEM_TCU_REG_FILE_HH__
+#define __MEM_TCU_REG_FILE_HH__
 
 #include <vector>
 
@@ -334,7 +334,20 @@ struct InvalidEp
 
 union Ep
 {
+    explicit Ep() : Ep(0xFFFF) {}
     explicit Ep(epid_t id) : inval({id, {0, 0, 0}}) {}
+
+    Ep(const Ep &ep) {
+        inval.id = ep.inval.id;
+        for(size_t i = 0; i < numEpRegs; ++i)
+            inval.r[i] = ep.inval.r[i];
+    }
+    Ep &operator=(const Ep &ep) {
+        if(&ep != this) {
+            inval = ep.inval;
+        }
+        return *this;
+    }
 
     EpType type() const
     {
@@ -389,9 +402,12 @@ struct MessageHeader
 } M5_ATTR_PACKED;
 
 class Tcu;
+class EpFile;
 
 class RegFile
 {
+    friend class EpFile;
+
   public:
 
     using reg_t = uint64_t;
@@ -415,8 +431,6 @@ class RegFile
     {
         return get(ExtReg::FEATURES) & static_cast<reg_t>(feature);
     }
-
-    TcuError invalidate(epid_t epId, bool force, unsigned *unreadMask);
 
     void add_msg();
 
@@ -459,16 +473,6 @@ class RegFile
         set(UnprivReg::DATA, data);
     }
 
-    Ep *getEp(epid_t epId) { return &eps.at(epId); }
-
-    SendEp *getSendEp(epid_t epId, bool print = true);
-
-    RecvEp *getRecvEp(epid_t epId, bool print = true);
-
-    MemEp *getMemEp(epid_t epId, bool print = true);
-
-    void updateEp(epid_t epId);
-
     const char *getBuffer(size_t bytes);
 
     /// returns which command registers have been written
@@ -478,11 +482,25 @@ class RegFile
 
   private:
 
+    Ep getEp(epid_t epId) const
+    {
+        printEpAccess(epId, true, RegAccess::TCU);
+        return eps.at(epId);
+    }
+
+    template<class T>
+    void updateEp(const T &ep)
+    {
+        Ep &old = eps.at(ep.id);
+        old.inval.r[0] = ep.r0;
+        old.inval.r[1] = ep.r1;
+        old.inval.r[2] = ep.r2;
+        printEpAccess(ep.id, false, RegAccess::TCU);
+    }
+
     reg_t get(epid_t epId, size_t idx) const;
 
     void set(epid_t epId, size_t idx, reg_t value);
-
-    Ep *getEp(epid_t epId, EpType type, bool print);
 
     void printEpAccess(epid_t epId, bool read, RegAccess access) const;
 
@@ -513,4 +531,4 @@ class RegFile
     static const char *epTypeNames[];
 };
 
-#endif // __MEM_TCU_REGFILE_HH__
+#endif // __MEM_TCU_REG_FILE_HH__

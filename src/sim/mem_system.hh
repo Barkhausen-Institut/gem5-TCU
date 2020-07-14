@@ -33,7 +33,7 @@
 #include <string>
 #include <vector>
 
-#include "mem/tcu/regfile.hh"
+#include "mem/tcu/reg_file.hh"
 #include "sim/system.hh"
 #include "params/MemSystem.hh"
 

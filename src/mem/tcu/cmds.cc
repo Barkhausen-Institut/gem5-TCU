@@ -75,7 +75,9 @@ TcuCommands::TcuCommands(Tcu &_tcu)
     : tcu(_tcu),
       cmdPkt(),
       privCmdPkt(),
+      extCmdPkt(),
       cmdFinish(),
+      extCmdFinish(),
       abort(),
       cmdIsRemote()
 {
@@ -177,27 +179,14 @@ TcuCommands::executeCommand(PacketPtr pkt)
             tcu.memUnit->startWrite(cmd);
             break;
         case CmdCommand::FETCH_MSG:
-        {
-            Addr offset;
-            TcuError res = tcu.msgUnit->fetchMessage(cmd.epid, &offset);
-            if (res == TcuError::NONE)
-                tcu.regs().set(UnprivReg::ARG1, offset);
-            finishCommand(res);
-        }
-        break;
+            tcu.msgUnit->startFetch(cmd);
+            break;
         case CmdCommand::ACK_MSG:
-        {
-            TcuError res = tcu.msgUnit->ackMessage(cmd.epid, cmd.arg0);
-            finishCommand(res);
-        }
-        break;
+            tcu.msgUnit->startAck(cmd);
+            break;
         case CmdCommand::SLEEP:
-        {
-            int ep = cmd.arg0 & 0xFFFF;
-            if (!tcu.startSleep(ep))
-                finishCommand(TcuError::NONE);
-        }
-        break;
+            tcu.startWaitEP(cmd);
+            break;
         default:
             // TODO error handling
             panic("Invalid opcode %#x\n", static_cast<RegFile::reg_t>(cmd.opcode));
@@ -243,7 +232,7 @@ TcuCommands::abortCommand()
             auto res = tcu.xferUnit->tryAbortCommand();
             // if the current command used the xferUnit, we're done
             if (res == XferUnit::AbortResult::ABORTED)
-                scheduleFinishOp(Cycles(1), TcuError::ABORT);
+                scheduleCmdFinish(Cycles(1), TcuError::ABORT);
         }
 
         if (abort != AbortType::NONE)
@@ -262,7 +251,7 @@ TcuCommands::abortCommand()
 }
 
 void
-TcuCommands::scheduleFinishOp(Cycles delay, TcuError error)
+TcuCommands::scheduleCmdFinish(Cycles delay, TcuError error)
 {
     if (tcu.regs().getCommand().opcode != CmdCommand::IDLE)
     {
@@ -424,11 +413,11 @@ TcuCommands::executeExtCommand(PacketPtr pkt)
 {
     ExtCommand::Bits cmd = tcu.regs().get(ExtReg::EXT_CMD);
 
+    assert(extCmdPkt == nullptr);
     extCommands[static_cast<size_t>(cmd.opcode)]++;
+    extCmdPkt = pkt;
 
-    Cycles delay(1);
-
-    DPRINTF(TcuCmd, "Executing external command %s with arg=%p\n",
+    DPRINTF(TcuCmd, "Starting external command %s with arg=%p\n",
             extCmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg);
 
     switch (cmd.opcode)
@@ -436,34 +425,56 @@ TcuCommands::executeExtCommand(PacketPtr pkt)
         case ExtCommand::IDLE:
             break;
         case ExtCommand::INV_EP:
+            tcu.msgUnit->startInvalidate(cmd);
+            break;
+        case ExtCommand::RESET:
         {
-            epid_t epid = cmd.arg & 0xFFFF;
-            bool force = !!(cmd.arg & (1 << 16));
-            unsigned unreadMask;
-            TcuError res = tcu.regs().invalidate(epid, force, &unreadMask);
-            cmd.error = static_cast<uint>(res);
-            cmd.arg = unreadMask;
+            Cycles delay = tcu.reset(cmd.arg != 0);
+            scheduleExtCmdFinish(delay, TcuError::NONE, 0);
             break;
         }
-        case ExtCommand::RESET:
-            delay += tcu.reset(cmd.arg != 0);
-            break;
         default:
             // TODO error handling
             panic("Invalid opcode %#x\n", static_cast<RegFile::reg_t>(cmd.opcode));
     }
+}
 
-    if (pkt)
-        tcu.schedNocResponse(pkt, tcu.clockEdge(delay));
+void
+TcuCommands::finishExtCommand(TcuError error, RegFile::reg_t arg)
+{
+    ExtCommand::Bits cmd = tcu.regs().get(ExtReg::EXT_CMD);
 
-    if (cmd.error != static_cast<uint>(TcuError::NONE))
-    {
-        DPRINTF(TcuCmd, "External command %s failed (%u)\n",
-                extCmdNames[static_cast<size_t>(cmd.opcode)],
-                static_cast<uint>(cmd.error));
-    }
+    DPRINTF(TcuCmd, "Finished external command %s with res=%d\n",
+            extCmdNames[static_cast<size_t>(cmd.opcode)],
+            static_cast<uint>(error));
 
+    cmd.arg = arg;
     // set external command back to IDLE
     cmd.opcode = ExtCommand::IDLE;
+    cmd.error = static_cast<uint>(error);
     tcu.regs().set(ExtReg::EXT_CMD, cmd);
+
+    assert(extCmdPkt != nullptr);
+    tcu.schedNocResponse(extCmdPkt, tcu.clockEdge(Cycles(1)));
+    extCmdPkt = nullptr;
+    extCmdFinish = nullptr;
+}
+
+void
+TcuCommands::scheduleExtCmdFinish(Cycles delay, TcuError error,
+                                  RegFile::reg_t arg)
+{
+    if (extCmdFinish)
+    {
+        tcu.deschedule(extCmdFinish);
+        delete extCmdFinish;
+    }
+
+    if (delay == 0)
+        finishExtCommand(error, arg);
+    else
+    {
+        extCmdFinish = new FinishExtCommandEvent(*this, error, arg);
+        tcu.schedule(extCmdFinish, tcu.clockEdge(delay));
+    }
 }
