@@ -86,12 +86,12 @@ static const char *regAccessName(RegAccess access)
     return "TCU";
 }
 
-RegFile::RegFile(Tcu &_tcu, const std::string& name, unsigned _numEndpoints)
+RegFile::RegFile(Tcu &_tcu, const std::string& name, unsigned numEndpoints)
     : tcu(_tcu),
       extRegs(numExtRegs, 0),
       privRegs(numPrivRegs, 0),
       unprivRegs(numUnprivRegs, 0),
-      eps(_numEndpoints, Ep()),
+      eps(),
       bufRegs(numBufRegs * sizeof(reg_t), 0),
       _name(name)
 {
@@ -101,6 +101,9 @@ RegFile::RegFile(Tcu &_tcu, const std::string& name, unsigned _numEndpoints)
         numPrivRegs, "privRegNames out of sync");
     static_assert(sizeof(unprivRegNames) / sizeof(unprivRegNames[0]) ==
         numUnprivRegs, "unprivRegNames out of sync");
+
+    for(unsigned i = 0; i < numEndpoints; ++i)
+        eps.push_back(Ep(i));
 
     // at boot, all PEs are privileged
     reg_t feat = static_cast<reg_t>(Features::PRIV);
@@ -285,23 +288,22 @@ RegFile::printEpAccess(epid_t epId, bool read, RegAccess access) const
     switch (ep.type())
     {
         case EpType::INVALID:
-            ep.inval.print(*this, epId, false, access);
+            ep.inval.print(*this, false, access);
             break;
         case EpType::SEND:
-            ep.send.print(*this, epId, false, access);
+            ep.send.print(*this, false, access);
             break;
         case EpType::RECEIVE:
-            ep.recv.print(*this, epId, false, access);
+            ep.recv.print(*this, false, access);
             break;
         case EpType::MEMORY:
-            ep.mem.print(*this, epId, false, access);
+            ep.mem.print(*this, false, access);
             break;
     }
 }
 
 void
 SendEp::print(const RegFile &rf,
-              epid_t epId,
               bool read,
               RegAccess access) const
 {
@@ -309,7 +311,7 @@ SendEp::print(const RegFile &rf,
         "%s%s EP%-3u%12s: Send[vpe=%u, pe=%u ep=%u crdep=%u maxcrd=%u "
                               "curcrd=%u max=%#x lbl=%#llx rpl=%d]\n",
         regAccessName(access), read ? "<-" : "->",
-        epId, "", r0.vpe,
+        id, "", r0.vpe,
         r1.tgtPe, r1.tgtEp, r0.crdEp,
         r0.maxCrd, r0.curCrd, 1 << r0.msgSize,
         r2.label, r0.reply);
@@ -317,7 +319,6 @@ SendEp::print(const RegFile &rf,
 
 void
 RecvEp::print(const RegFile &rf,
-              epid_t epId,
               bool read,
               RegAccess access) const
 {
@@ -325,14 +326,13 @@ RecvEp::print(const RegFile &rf,
         "%s%s EP%-3u%12s: Recv[vpe=%u, buf=%p msz=%#x bsz=%#x rpl=%u msgs=%u "
                               "occ=%#010x unr=%#010x rd=%u wr=%u]\n",
         regAccessName(access), read ? "<-" : "->",
-        epId, "", r0.vpe,
+        id, "", r0.vpe,
         r1.buffer, 1 << r0.slotSize, 1 << r0.slots, r0.rplEps,
         unreadMsgs(), r2.occupied, r2.unread, r0.rpos, r0.wpos);
 }
 
 void
 MemEp::print(const RegFile &rf,
-             epid_t epId,
              bool read,
              RegAccess access) const
 {
@@ -340,21 +340,20 @@ MemEp::print(const RegFile &rf,
         "%s%s EP%-3u%12s: Mem[vpe=%u, pe=%u addr=%#llx "
                              "size=%#llx flags=%#x]\n",
         regAccessName(access), read ? "<-" : "->",
-        epId, "", r0.vpe, r0.targetPe,
+        id, "", r0.vpe, r0.targetPe,
         r1.remoteAddr, r2.remoteSize,
         r0.flags);
 }
 
 void
 InvalidEp::print(const RegFile &rf,
-                 epid_t epId,
                  bool read,
                  RegAccess access) const
 {
     DPRINTFNS(rf.name(),
         "%s%s EP%-3u%12s: INVALID (%#x)\n",
         regAccessName(access), read ? "<-" : "->",
-        epId, "",
+        id, "",
         static_cast<uint>(type()));
 }
 

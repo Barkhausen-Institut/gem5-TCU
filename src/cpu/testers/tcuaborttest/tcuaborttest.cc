@@ -386,7 +386,7 @@ TcuAbortTest::tick()
                                sizeof(RegFile::reg_t) * numEpRegs,
                                MemCmd::WriteReq);
 
-            MemEp ep = {0, 0, 0};
+            MemEp ep;
             ep.r0.type = static_cast<RegFile::reg_t>(EpType::MEMORY);
             ep.r0.vpe = Tcu::INVALID_VPE_ID;
             ep.r0.flags = Tcu::MemoryFlags::READ | Tcu::MemoryFlags::WRITE;
@@ -407,7 +407,7 @@ TcuAbortTest::tick()
                                sizeof(RegFile::reg_t) * numEpRegs,
                                MemCmd::WriteReq);
 
-            SendEp ep = {0, 0, 0};
+            SendEp ep;
             ep.r0.type = static_cast<RegFile::reg_t>(EpType::SEND);
             ep.r0.vpe = Tcu::INVALID_VPE_ID;
             ep.r0.curCrd = Tcu::CREDITS_UNLIM;
@@ -430,7 +430,7 @@ TcuAbortTest::tick()
                                sizeof(RegFile::reg_t) * numEpRegs,
                                MemCmd::WriteReq);
 
-            RecvEp ep = {0, 0, 0};
+            RecvEp ep;
             ep.r0.type = static_cast<RegFile::reg_t>(EpType::RECEIVE);
             ep.r0.vpe = Tcu::INVALID_VPE_ID;
             ep.r0.rplEps = EP_REPLY;

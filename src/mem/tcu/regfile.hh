@@ -185,8 +185,9 @@ struct SendEp
 {
     static const uint8_t FL_REPLY   = 1;
 
+    explicit SendEp() : id(), r0(0), r1(0), r2(0) {}
+
     void print(const RegFile &rf,
-               epid_t epId,
                bool read,
                RegAccess access) const;
 
@@ -209,6 +210,7 @@ struct SendEp
         Bitfield<31, 0> label;
     EndBitUnion(R2)
 
+    epid_t id;
     R0 r0;
     R1 r1;
     R2 r2;
@@ -217,6 +219,8 @@ struct SendEp
 struct RecvEp
 {
     static const size_t MAX_MSGS    = 32;
+
+    explicit RecvEp() : id(), r0(0), r1(0), r2(0) {}
 
     int unreadMsgs() const
     {
@@ -256,7 +260,6 @@ struct RecvEp
     }
 
     void print(const RegFile &rf,
-               epid_t epId,
                bool read,
                RegAccess access) const;
 
@@ -279,6 +282,7 @@ struct RecvEp
         Bitfield<31, 0> occupied;
     EndBitUnion(R2)
 
+    epid_t id;
     R0 r0;
     R1 r1;
     R2 r2;
@@ -286,8 +290,9 @@ struct RecvEp
 
 struct MemEp
 {
+    explicit MemEp() : id(), r0(0), r1(0), r2(0) {}
+
     void print(const RegFile &rf,
-               epid_t epId,
                bool read,
                RegAccess access) const;
 
@@ -306,6 +311,7 @@ struct MemEp
         Bitfield<63, 0> remoteSize;
     EndBitUnion(R2)
 
+    epid_t id;
     R0 r0;
     R1 r1;
     R2 r2;
@@ -314,7 +320,6 @@ struct MemEp
 struct InvalidEp
 {
     void print(const RegFile &rf,
-               epid_t epId,
                bool read,
                RegAccess access) const;
 
@@ -323,12 +328,13 @@ struct InvalidEp
         return static_cast<EpType>(r[0] & 0x7);
     }
 
+    epid_t id;
     uint64_t r[3];
 };
 
 union Ep
 {
-    explicit Ep() : inval({0, 0, 0}) {}
+    explicit Ep(epid_t id) : inval({id, {0, 0, 0}}) {}
 
     EpType type() const
     {
