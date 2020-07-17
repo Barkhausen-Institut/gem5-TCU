@@ -65,6 +65,13 @@ static const char *extCmdNames[] =
     "RESET",
 };
 
+#define COMMAND_NAME(names, idx)                         \
+    (                                                    \
+        ((idx) < (sizeof((names)) / sizeof((names)[0]))) \
+        ? (names)[static_cast<size_t>(idx)]              \
+        : "??"                                           \
+    )
+
 const std::string
 TcuCommands::CmdEvent::name() const
 {
@@ -158,11 +165,12 @@ TcuCommands::executeCommand(PacketPtr pkt)
 
     assert(cmdPkt == nullptr);
     cmdPkt = pkt;
-    commands[static_cast<size_t>(cmd.opcode)]++;
+    if (cmd.opcode < sizeof(cmdNames) / sizeof(cmdNames[0]))
+        commands[static_cast<size_t>(cmd.opcode)]++;
 
     assert(cmd.epid < tcu.numEndpoints);
     DPRINTF(TcuCmd, "Starting command %s with EP=%u, arg0=%#lx\n",
-            cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epid, cmd.arg0);
+            COMMAND_NAME(cmdNames, cmd.opcode), cmd.epid, cmd.arg0);
 
     switch (cmd.opcode)
     {
@@ -188,8 +196,8 @@ TcuCommands::executeCommand(PacketPtr pkt)
             tcu.startWaitEP(cmd);
             break;
         default:
-            // TODO error handling
-            panic("Invalid opcode %#x\n", static_cast<RegFile::reg_t>(cmd.opcode));
+            finishCommand(TcuError::UNKNOWN_CMD);
+            return;
     }
 
     if (cmdPkt && cmd.opcode != CmdCommand::SLEEP)
@@ -296,7 +304,7 @@ TcuCommands::finishCommand(TcuError error)
         tcu.stopSleep();
 
     DPRINTF(TcuCmd, "Finished command %s with EP=%u -> %u\n",
-            cmdNames[static_cast<size_t>(cmd.opcode)], cmd.epid,
+            COMMAND_NAME(cmdNames, cmd.opcode), cmd.epid,
             static_cast<uint>(error));
 
     // let the SW know that the command is finished
@@ -318,12 +326,15 @@ TcuCommands::executePrivCommand(PacketPtr pkt)
 {
     PrivCommand::Bits cmd = tcu.regs().get(PrivReg::PRIV_CMD);
 
-    privCommands[static_cast<size_t>(cmd.opcode)]++;
+    if (cmd.opcode < sizeof(privCmdNames) / sizeof(privCmdNames[0]))
+        privCommands[static_cast<size_t>(cmd.opcode)]++;
 
     DPRINTF(TcuCmd, "Executing privileged command %s with arg0=%p\n",
-            privCmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg0);
+            COMMAND_NAME(privCmdNames, cmd.opcode), cmd.arg0);
 
     Cycles delay(1);
+
+    TcuError res = TcuError::NONE;
 
     switch (cmd.opcode)
     {
@@ -370,18 +381,19 @@ TcuCommands::executePrivCommand(PacketPtr pkt)
             abortCommand();
             return;
         default:
-            // TODO error handling
-            panic("Invalid opcode %#x\n", static_cast<RegFile::reg_t>(cmd.opcode));
+            res = TcuError::UNKNOWN_CMD;
+            break;
     }
 
     if (pkt)
         tcu.schedCpuResponse(pkt, tcu.clockEdge(delay));
 
-    DPRINTF(TcuCmd, "Finished privileged command %s with res=0\n",
-            privCmdNames[static_cast<size_t>(cmd.opcode)]);
+    DPRINTF(TcuCmd, "Finished privileged command %s with arg0=0, res=%d\n",
+            COMMAND_NAME(privCmdNames, cmd.opcode), static_cast<uint>(res));
 
     // set privileged command back to IDLE
     cmd.arg0 = 0;
+    cmd.error = static_cast<uint>(res);
     cmd.opcode = PrivCommand::IDLE;
     tcu.regs().set(PrivReg::PRIV_CMD, cmd);
 }
@@ -397,9 +409,8 @@ TcuCommands::finishAbort()
         PrivCommand::Bits cmd = tcu.regs().get(PrivReg::PRIV_CMD);
         cmd.arg0 = static_cast<RegFile::reg_t>(abort);
 
-        DPRINTF(TcuCmd, "Finished privileged command %s with res=%d\n",
-                privCmdNames[static_cast<size_t>(cmd.opcode)],
-                cmd.arg0);
+        DPRINTF(TcuCmd, "Finished privileged command %s with arg0=%d, res=0\n",
+                COMMAND_NAME(privCmdNames, cmd.opcode), cmd.arg0);
 
         cmd.opcode = PrivCommand::IDLE;
         tcu.regs().set(PrivReg::PRIV_CMD, cmd);
@@ -414,11 +425,12 @@ TcuCommands::executeExtCommand(PacketPtr pkt)
     ExtCommand::Bits cmd = tcu.regs().get(ExtReg::EXT_CMD);
 
     assert(extCmdPkt == nullptr);
-    extCommands[static_cast<size_t>(cmd.opcode)]++;
+    if (cmd.opcode < sizeof(extCmdNames) / sizeof(extCmdNames[0]))
+        extCommands[static_cast<size_t>(cmd.opcode)]++;
     extCmdPkt = pkt;
 
     DPRINTF(TcuCmd, "Starting external command %s with arg=%p\n",
-            extCmdNames[static_cast<size_t>(cmd.opcode)], cmd.arg);
+            COMMAND_NAME(extCmdNames, cmd.opcode), cmd.arg);
 
     switch (cmd.opcode)
     {
@@ -434,8 +446,8 @@ TcuCommands::executeExtCommand(PacketPtr pkt)
             break;
         }
         default:
-            // TODO error handling
-            panic("Invalid opcode %#x\n", static_cast<RegFile::reg_t>(cmd.opcode));
+            scheduleExtCmdFinish(Cycles(1), TcuError::UNKNOWN_CMD, 0);
+            break;
     }
 }
 
@@ -445,7 +457,7 @@ TcuCommands::finishExtCommand(TcuError error, RegFile::reg_t arg)
     ExtCommand::Bits cmd = tcu.regs().get(ExtReg::EXT_CMD);
 
     DPRINTF(TcuCmd, "Finished external command %s with res=%d\n",
-            extCmdNames[static_cast<size_t>(cmd.opcode)],
+            COMMAND_NAME(extCmdNames, cmd.opcode),
             static_cast<uint>(error));
 
     cmd.arg = arg;
