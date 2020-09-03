@@ -43,16 +43,9 @@ class CoreRequests
 
     struct Request
     {
-        enum Type
-        {
-            TRANSLATE,
-            FOREIGN_RECV,
-        };
-
-        explicit Request(size_t _id, CoreRequests &_req, Type _type)
+        explicit Request(size_t _id, CoreRequests &_req)
             : id(_id),
               req(_req),
-              type(_type),
               waiting(true)
         {}
         virtual ~Request() {
@@ -63,14 +56,13 @@ class CoreRequests
 
         size_t id;
         CoreRequests &req;
-        Type type;
         bool waiting;
     };
 
     struct XlateRequest : public Request
     {
         explicit XlateRequest(size_t id, CoreRequests &req)
-            : Request(id, req, TRANSLATE) {}
+            : Request(id, req) {}
 
         void start() override;
         void complete(RegFile::reg_t resp) override;
@@ -85,7 +77,7 @@ class CoreRequests
     struct ForeignRecvRequest : public Request
     {
         explicit ForeignRecvRequest(size_t id, CoreRequests &req)
-            : Request(id, req, FOREIGN_RECV) {}
+            : Request(id, req) {}
 
         void start() override;
         void complete(RegFile::reg_t) override {}

@@ -121,7 +121,7 @@ void
 CoreRequests::XlateRequest::start()
 {
     XlateCoreReq xreq = 0;
-    xreq.type = type;
+    xreq.type = CoreMsgType::XLATE_REQ;
     xreq.canPf = canPf;
     xreq.virt = virt >> TcuTlb::PAGE_BITS;
     xreq.vpe = vpeId;
@@ -136,7 +136,7 @@ void
 CoreRequests::ForeignRecvRequest::start()
 {
     ForeignCoreReq freq = 0;
-    freq.type = type;
+    freq.type = CoreMsgType::FOREIGN_REQ;
     freq.ep = epId;
     freq.vpe = vpeId;
     req.tcu.regs().set(PrivReg::CORE_REQ, freq);
@@ -173,19 +173,18 @@ CoreRequests::XlateRequest::complete(RegFile::reg_t resp)
 void
 CoreRequests::completeReqs()
 {
-    RegFile::reg_t resp = tcu.regs().get(PrivReg::CORE_REQ);
-    if (resp)
-    {
-        assert(!reqs.empty());
-        Request *req = reqs.front();
-        DPRINTFS(TcuCoreReqs, (&tcu), "CoreRequest[%lu] done\n", req->id);
-        reqs.pop_front();
+    CoreMsg resp = tcu.regs().get(PrivReg::CORE_REQ);
+    assert(resp.type == CoreMsgType::RESP);
+    assert(!reqs.empty());
 
-        req->complete(resp);
-        delete req;
+    Request *req = reqs.front();
+    DPRINTFS(TcuCoreReqs, (&tcu), "CoreRequest[%lu] done\n", req->id);
+    reqs.pop_front();
 
-        tcu.regs().set(PrivReg::CORE_REQ, 0);
-    }
+    req->complete(resp);
+    delete req;
+
+    tcu.regs().set(PrivReg::CORE_REQ, CoreMsgType::IDLE);
 
     startNextReq();
 }
@@ -199,7 +198,7 @@ CoreRequests::abortReq(size_t id)
         {
             DPRINTFS(TcuCoreReqs, (&tcu), "CoreRequest[%lu] aborted\n", id);
             if (!(*r)->waiting)
-               tcu.regs().set(PrivReg::CORE_REQ, 0);
+               tcu.regs().set(PrivReg::CORE_REQ, CoreMsgType::IDLE);
            reqs.erase(r);
            delete *r;
            break;
