@@ -30,7 +30,7 @@
 from m5.params import *
 from m5.proxy import *
 
-from Platform import Platform
+from m5.objects.Platform import Platform
 
 class IOPlatform(Platform):
     type = 'IOPlatform'

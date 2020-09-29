@@ -25,7 +25,7 @@
 # of the authors and should not be interpreted as representing official policies,
 # either expressed or implied, of the FreeBSD Project.
 
-from Connector import CoreConnector
+from m5.objects.Connector import CoreConnector
 from m5.params import *
 from m5.proxy import *
 

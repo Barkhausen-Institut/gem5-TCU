@@ -27,7 +27,7 @@
 # either expressed or implied, of the FreeBSD Project.
 
 from m5.params import *
-from AbstractMemory import *
+from m5.objects.AbstractMemory import *
 
 class Scratchpad(AbstractMemory):
     type = 'Scratchpad'

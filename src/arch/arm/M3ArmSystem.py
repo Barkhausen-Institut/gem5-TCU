@@ -26,7 +26,7 @@
 # policies, either expressed or implied, of the FreeBSD Project.
 
 from m5.params import *
-from ArmSystem import ArmSystem
+from m5.objects.ArmSystem import ArmSystem
 
 class M3ArmSystem(ArmSystem):
     type = 'M3ArmSystem'

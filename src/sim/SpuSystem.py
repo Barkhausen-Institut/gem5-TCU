@@ -26,7 +26,7 @@
 # policies, either expressed or implied, of the FreeBSD Project.
 
 from m5.params import *
-from System import System
+from m5.objects.System import System
 
 class SpuSystem(System):
     type = 'SpuSystem'
