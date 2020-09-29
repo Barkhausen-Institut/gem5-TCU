@@ -62,6 +62,7 @@
 
 class Network;
 class GPUCoalescer;
+class DMASequencer;
 
 // used to communicate that an in_port peeked the wrong message type
 class RejectException: public std::exception
@@ -90,7 +91,8 @@ class AbstractController : public ClockedObject, public Consumer
     bool isBlocked(Addr);
 
     virtual MessageBuffer* getMandatoryQueue() const = 0;
-    virtual MessageBuffer* getMemoryQueue() const = 0;
+    virtual MessageBuffer* getMemReqQueue() const = 0;
+    virtual MessageBuffer* getMemRespQueue() const = 0;
     virtual AccessPermission getAccessPermission(const Addr &addr) = 0;
 
     virtual void print(std::ostream & out) const = 0;
@@ -100,6 +102,7 @@ class AbstractController : public ClockedObject, public Consumer
 
     virtual void recordCacheTrace(int cntrl, CacheRecorder* tr) = 0;
     virtual Sequencer* getCPUSequencer() const = 0;
+    virtual DMASequencer* getDMASequencer() const = 0;
     virtual GPUCoalescer* getGPUCoalescer() const = 0;
 
     // This latency is used by the sequencer when enqueueing requests.
@@ -111,6 +114,7 @@ class AbstractController : public ClockedObject, public Consumer
 
     //! These functions are used by ruby system to read/write the data blocks
     //! that exist with in the controller.
+    virtual bool functionalReadBuffers(PacketPtr&) = 0;
     virtual void functionalRead(const Addr &addr, PacketPtr) = 0;
     void functionalMemoryRead(PacketPtr);
     //! The return value indicates the number of messages written with the
@@ -136,11 +140,6 @@ class AbstractController : public ClockedObject, public Consumer
     Port &getPort(const std::string &if_name,
                   PortID idx=InvalidPortID);
 
-    void queueMemoryRead(const MachineID &id, Addr addr, Cycles latency);
-    void queueMemoryWrite(const MachineID &id, Addr addr, Cycles latency,
-                          const DataBlock &block);
-    void queueMemoryWritePartial(const MachineID &id, Addr addr, Cycles latency,
-                                 const DataBlock &block, int size);
     void recvTimingResp(PacketPtr pkt);
     Tick recvAtomic(PacketPtr pkt);
 
@@ -178,6 +177,7 @@ class AbstractController : public ClockedObject, public Consumer
     void wakeUpBuffers(Addr addr);
     void wakeUpAllBuffers(Addr addr);
     void wakeUpAllBuffers();
+    bool serviceMemoryQueue();
 
   protected:
     const NodeID m_version;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2013,2017-2019 ARM Limited
+ * Copyright (c) 2011-2013,2017-2020 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -39,7 +39,7 @@
 #include "arch/arm/isa.hh"
 
 std::string
-ImmOp64::generateDisassembly(Addr pc, const SymbolTable *symtab) const
+ImmOp64::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -48,7 +48,8 @@ ImmOp64::generateDisassembly(Addr pc, const SymbolTable *symtab) const
 }
 
 std::string
-RegRegImmImmOp64::generateDisassembly(Addr pc, const SymbolTable *symtab) const
+RegRegImmImmOp64::generateDisassembly(
+        Addr pc, const Loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -61,7 +62,7 @@ RegRegImmImmOp64::generateDisassembly(Addr pc, const SymbolTable *symtab) const
 
 std::string
 RegRegRegImmOp64::generateDisassembly(
-    Addr pc, const SymbolTable *symtab) const
+    Addr pc, const Loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -75,7 +76,8 @@ RegRegRegImmOp64::generateDisassembly(
 }
 
 std::string
-UnknownOp64::generateDisassembly(Addr pc, const SymbolTable *symtab) const
+UnknownOp64::generateDisassembly(
+        Addr pc, const Loader::SymbolTable *symtab) const
 {
     return csprintf("%-10s (inst %#08x)", "unknown", encoding());
 }
@@ -124,6 +126,11 @@ MiscRegOp64::checkEL1Trap(ThreadContext *tc, const MiscRegIndex misc_reg,
             ec = EC_TRAPPED_SIMD_FP;
             immediate = 0x1E00000;
         }
+        break;
+      // Generic Timer
+      case MISCREG_CNTFRQ_EL0 ... MISCREG_CNTVOFF_EL2:
+        trap_to_sup = el == EL0 &&
+                      isGenericTimerSystemAccessTrapEL1(misc_reg, tc);
         break;
       default:
         break;
@@ -292,6 +299,11 @@ MiscRegOp64::checkEL2Trap(ThreadContext *tc, const MiscRegIndex misc_reg,
                     trap_to_hyp = hcr.imo && el == EL1;
             }
             break;
+          // Generic Timer
+          case MISCREG_CNTFRQ_EL0 ... MISCREG_CNTVOFF_EL2:
+            trap_to_hyp = el <= EL1 &&
+                          isGenericTimerSystemAccessTrapEL2(misc_reg, tc);
+            break;
           default:
             break;
         }
@@ -340,6 +352,11 @@ MiscRegOp64::checkEL3Trap(ThreadContext *tc, const MiscRegIndex misc_reg,
       case MISCREG_APIBKeyLo_EL1:
         trap_to_mon = (el==EL1 || el==EL2) && scr.apk==0 && ELIs64(tc, EL3);
         break;
+      // Generic Timer
+      case MISCREG_CNTFRQ_EL0 ... MISCREG_CNTVOFF_EL2:
+        trap_to_mon = el == EL1 &&
+                      isGenericTimerSystemAccessTrapEL3(misc_reg, tc);
+        break;
       default:
         break;
     }
@@ -359,7 +376,8 @@ MiscRegImmOp64::miscRegImm() const
 }
 
 std::string
-MiscRegImmOp64::generateDisassembly(Addr pc, const SymbolTable *symtab) const
+MiscRegImmOp64::generateDisassembly(
+        Addr pc, const Loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss);
@@ -371,7 +389,7 @@ MiscRegImmOp64::generateDisassembly(Addr pc, const SymbolTable *symtab) const
 
 std::string
 MiscRegRegImmOp64::generateDisassembly(
-    Addr pc, const SymbolTable *symtab) const
+    Addr pc, const Loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss);
@@ -383,7 +401,7 @@ MiscRegRegImmOp64::generateDisassembly(
 
 std::string
 RegMiscRegImmOp64::generateDisassembly(
-    Addr pc, const SymbolTable *symtab) const
+    Addr pc, const Loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss);
@@ -417,8 +435,8 @@ MiscRegImplDefined64::execute(ExecContext *xc,
 }
 
 std::string
-MiscRegImplDefined64::generateDisassembly(Addr pc,
-                                          const SymbolTable *symtab) const
+MiscRegImplDefined64::generateDisassembly(
+        Addr pc, const Loader::SymbolTable *symtab) const
 {
     return csprintf("%-10s (implementation defined)", fullMnemonic.c_str());
 }

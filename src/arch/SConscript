@@ -63,15 +63,12 @@ env.SwitchingHeaders(
         kernel_stats.hh
         locked_mem.hh
         microcode_rom.hh
-        mmapped_ipr.hh
-        process.hh
         pseudo_inst.hh
         registers.hh
         remote_gdb.hh
         stacktrace.hh
         types.hh
         utility.hh
-        vtophys.hh
         '''),
     env.subst('${TARGET_ISA}'))
 

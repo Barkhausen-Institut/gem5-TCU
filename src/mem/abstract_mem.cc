@@ -43,6 +43,8 @@
 #include <vector>
 
 #include "arch/locked_mem.hh"
+#include "base/loader/memory_image.hh"
+#include "base/loader/object_file.hh"
 #include "cpu/base.hh"
 #include "cpu/thread_context.hh"
 #include "debug/LLSC.hh"
@@ -61,15 +63,41 @@ AbstractMemory::AbstractMemory(const Params *p) :
     kvmMap(p->kvm_map), _system(NULL),
     stats(*this)
 {
+    panic_if(!range.valid() || !range.size(),
+             "Memory range %s must be valid with non-zero size.",
+             range.to_string());
 }
 
 void
-AbstractMemory::init()
+AbstractMemory::initState()
 {
-    assert(system());
+    ClockedObject::initState();
 
-    if (size() % _system->getPageBytes() != 0)
-        panic("Memory Size not divisible by page size\n");
+    const auto &file = params()->image_file;
+    if (file == "")
+        return;
+
+    auto *object = Loader::createObjectFile(file, true);
+    fatal_if(!object, "%s: Could not load %s.", name(), file);
+
+    panic_if(!object->loadGlobalSymbols(Loader::debugSymbolTable),
+             "%s: Could not load symbols from %s.", name(), file);
+
+    Loader::MemoryImage image = object->buildImage();
+
+    AddrRange image_range(image.minAddr(), image.maxAddr());
+    if (!range.contains(image_range.start())) {
+        warn("%s: Moving image from %s to memory address range %s.",
+                name(), image_range.to_string(), range.to_string());
+        image = image.offset(range.start());
+        image_range = AddrRange(image.minAddr(), image.maxAddr());
+    }
+    panic_if(!image_range.isSubset(range), "%s: memory image %s doesn't fit.",
+             name(), file);
+
+    PortProxy proxy([this](PacketPtr pkt) { functionalAccess(pkt); }, size());
+
+    panic_if(!image.write(proxy), "%s: Unable to write image.");
 }
 
 void

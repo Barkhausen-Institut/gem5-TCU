@@ -60,7 +60,7 @@ enum PrivilegeMode
     PRV_M = 3
 };
 
-enum FSMode
+enum FPUStatus
 {
     OFF = 0,
     INITIAL = 1,

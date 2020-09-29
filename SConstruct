@@ -78,6 +78,7 @@
 from __future__ import print_function
 
 # Global Python includes
+import atexit
 import itertools
 import os
 import re
@@ -96,7 +97,7 @@ import SCons
 import SCons.Node
 import SCons.Node.FS
 
-from m5.util import compareVersions, readCommand
+from m5.util import compareVersions, readCommand, readCommandWithReturn
 
 help_texts = {
     "options" : "",
@@ -168,7 +169,7 @@ AddLocalOption('--with-asan', dest='with_asan', action='store_true',
 AddLocalOption('--with-systemc-tests', dest='with_systemc_tests',
                action='store_true', help='Build systemc tests')
 
-from gem5_scons import Transform, error, warning
+from gem5_scons import Transform, error, warning, summarize_warnings
 
 if GetOption('no_lto') and GetOption('force_lto'):
     error('--no-lto and --force-lto are mutually exclusive')
@@ -213,19 +214,6 @@ def rfind(l, elt, offs = -1):
 def makePathListAbsolute(path_list, root=GetLaunchDir()):
     return [abspath(joinpath(root, expanduser(str(p))))
             for p in path_list]
-
-def find_first_prog(prog_names):
-    """Find the absolute path to the first existing binary in prog_names"""
-
-    if not isinstance(prog_names, (list, tuple)):
-        prog_names = [ prog_names ]
-
-    for p in prog_names:
-        p = main.WhereIs(p)
-        if p is not None:
-            return p
-
-    return None
 
 # Each target must have 'build' in the interior of the path; the
 # directory below this will determine the build parameters.  For
@@ -289,7 +277,7 @@ global_vars.AddVariables(
     ('CCFLAGS_EXTRA', 'Extra C and C++ compiler flags', ''),
     ('LDFLAGS_EXTRA', 'Extra linker flags', ''),
     ('PYTHON_CONFIG', 'Python config binary to use',
-     [ 'python2.7-config', 'python-config' ]),
+     [ 'python2.7-config', 'python-config', 'python3-config' ]),
     ('PROTOC', 'protoc tool', environ.get('PROTOC', 'protoc')),
     ('BATCH', 'Use batch pool for build and tests', False),
     ('BATCH_CMD', 'Batch pool submission command name', 'qdo'),
@@ -372,7 +360,10 @@ if main['GCC'] or main['CLANG']:
         main.Append(CCFLAGS=['-I/usr/local/include'])
         main.Append(CXXFLAGS=['-I/usr/local/include'])
 
-    main.Append(LINKFLAGS='-Wl,--as-needed')
+    # On Mac OS X/Darwin the default linker doesn't support the
+    # option --as-needed
+    if sys.platform != "darwin":
+        main.Append(LINKFLAGS='-Wl,--as-needed')
     main['FILTER_PSHLINKFLAGS'] = lambda x: str(x).replace(' -shared', '')
     main['PSHLINKFLAGS'] = main.subst('${FILTER_PSHLINKFLAGS(SHLINKFLAGS)}')
     if GetOption('gold_linker'):
@@ -439,9 +430,9 @@ if main['GCC']:
     disable_lto = GetOption('no_lto')
     if not disable_lto and main.get('BROKEN_INCREMENTAL_LTO', False) and \
             not GetOption('force_lto'):
-        warning('Warning: Your compiler doesn\'t support incremental linking '
-                'and lto at the same time, so lto is being disabled. To force '
-                'lto on anyway, use the --force-lto option. That will disable '
+        warning('Your compiler doesn\'t support incremental linking and lto '
+                'at the same time, so lto is being disabled. To force lto on '
+                'anyway, use the --force-lto option. That will disable '
                 'partial linking.')
         disable_lto = True
 
@@ -486,6 +477,11 @@ elif main['CLANG']:
                          # interchangeably.
                          '-Wno-mismatched-tags',
                          ])
+    if compareVersions(clang_version, "10.0") >= 0:
+        main.Append(CCFLAGS=['-Wno-c99-designator'])
+
+    if compareVersions(clang_version, "8.0") >= 0:
+        main.Append(CCFLAGS=['-Wno-defaulted-function-deleted'])
 
     main.Append(TCMALLOC_CCFLAGS=['-fno-builtin'])
 
@@ -511,6 +507,16 @@ if GetOption('with_asan'):
     # Available for gcc >= 4.8 or llvm >= 3.1 both a requirement
     # by the build system
     sanitizers.append('address')
+    suppressions_file = Dir('util').File('lsan-suppressions').get_abspath()
+    suppressions_opt = 'suppressions=%s' % suppressions_file
+    main['ENV']['LSAN_OPTIONS'] = ':'.join([suppressions_opt,
+                                            'print_suppressions=0'])
+    print()
+    warning('To suppress false positive leaks, set the LSAN_OPTIONS '
+            'environment variable to "%s" when running gem5' %
+            suppressions_opt)
+    warning('LSAN_OPTIONS=suppressions=%s' % suppressions_opt)
+    print()
 if sanitizers:
     sanitizers = ','.join(sanitizers)
     if main['GCC'] or main['CLANG']:
@@ -670,7 +676,7 @@ if main['USE_PYTHON']:
     # version of python, see above for instructions on how to invoke
     # scons with the appropriate PATH set.
 
-    python_config = find_first_prog(main['PYTHON_CONFIG'])
+    python_config = main.Detect(main['PYTHON_CONFIG'])
     if python_config is None:
         error("Can't find a suitable python-config, tried %s" % \
               main['PYTHON_CONFIG'])
@@ -678,16 +684,31 @@ if main['USE_PYTHON']:
     print("Info: Using Python config: %s" % (python_config, ))
     py_includes = readCommand([python_config, '--includes'],
                               exception='').split()
-    py_includes = filter(lambda s: match(r'.*\/include\/.*',s), py_includes)
+    py_includes = list(filter(
+        lambda s: match(r'.*\/include\/.*',s), py_includes))
     # Strip the -I from the include folders before adding them to the
     # CPPPATH
-    py_includes = map(lambda s: s[2:] if s.startswith('-I') else s, py_includes)
+    py_includes = list(map(
+        lambda s: s[2:] if s.startswith('-I') else s, py_includes))
     main.Append(CPPPATH=py_includes)
 
     # Read the linker flags and split them into libraries and other link
     # flags. The libraries are added later through the call the CheckLib.
-    py_ld_flags = readCommand([python_config, '--ldflags'],
-        exception='').split()
+    # Note: starting in Python 3.8 the --embed flag is required to get the
+    # -lpython3.8 linker flag
+    retcode, cmd_stdout = readCommandWithReturn(
+        [python_config, '--ldflags', '--embed'], exception='')
+    if retcode != 0:
+        # If --embed isn't detected then we're running python <3.8
+        retcode, cmd_stdout = readCommandWithReturn(
+            [python_config, '--ldflags'], exception='')
+
+    # Checking retcode again
+    if retcode != 0:
+        error("Failing on python-config --ldflags command")
+
+    py_ld_flags = cmd_stdout.split()
+
     py_libs = []
     for lib in py_ld_flags:
          if not lib.startswith('-l'):
@@ -711,6 +732,10 @@ if main['USE_PYTHON']:
     for lib in py_libs:
         if not conf.CheckLib(lib):
             error("Can't find library %s required by python." % lib)
+
+main.Prepend(CPPPATH=Dir('ext/pybind11/include/'))
+# Bare minimum environment that only includes python
+base_py_env = main.Clone()
 
 # On Solaris you need to use libsocket for socket ops
 if not conf.CheckLibWithHeader(None, 'sys/socket.h', 'C++', 'accept(0,0,0);'):
@@ -967,7 +992,7 @@ sticky_vars.AddVariables(
     EnumVariable('TARGET_ISA', 'Target ISA', 'alpha', all_isa_list),
     EnumVariable('TARGET_GPU_ISA', 'Target GPU ISA', 'hsail', all_gpu_isa_list),
     ListVariable('CPU_MODELS', 'CPU models',
-                 sorted(n for n,m in CpuModel.dict.iteritems() if m.default),
+                 sorted(n for n,m in CpuModel.dict.items() if m.default),
                  sorted(CpuModel.dict.keys())),
     BoolVariable('EFENCE', 'Link with Electric Fence malloc debugger',
                  False),
@@ -1012,10 +1037,9 @@ export_vars += ['USE_FENV', 'TARGET_ISA', 'TARGET_GPU_ISA', 'CP_ANNOTATE',
 # operands are the name of the variable and a Value node containing the
 # value of the variable.
 def build_config_file(target, source, env):
-    (variable, value) = [s.get_contents() for s in source]
-    f = file(str(target[0]), 'w')
-    print('#define', variable, value, file=f)
-    f.close()
+    (variable, value) = [s.get_contents().decode('utf-8') for s in source]
+    with open(str(target[0]), 'w') as f:
+        print('#define', variable, value, file=f)
     return None
 
 # Combine the two functions into a scons Action object.
@@ -1106,8 +1130,6 @@ for root, dirs, files in os.walk(ext_dir):
 gdb_xml_dir = joinpath(ext_dir, 'gdb-xml')
 Export('gdb_xml_dir')
 
-main.Prepend(CPPPATH=Dir('ext/pybind11/include/'))
-
 ###################################################
 #
 # This builder and wrapper method are used to set up a directory with
@@ -1190,7 +1212,7 @@ for variant_path in variant_paths:
                                   joinpath(opts_dir, default)]
         else:
             default_vars_files = [joinpath(opts_dir, variant_dir)]
-        existing_files = filter(isfile, default_vars_files)
+        existing_files = list(filter(isfile, default_vars_files))
         if existing_files:
             default_vars_file = existing_files[0]
             sticky_vars.files.append(default_vars_file)
@@ -1265,7 +1287,8 @@ for variant_path in variant_paths:
     # The src/SConscript file sets up the build rules in 'env' according
     # to the configured variables.  It returns a list of environments,
     # one for each variant build (debug, opt, etc.)
-    SConscript('src/SConscript', variant_dir = variant_path, exports = 'env')
+    SConscript('src/SConscript', variant_dir=variant_path,
+               exports=['env', 'base_py_env'])
 
 # base help text
 Help('''
@@ -1279,3 +1302,5 @@ Global build variables:
 
 %(local_vars)s
 ''' % help_texts)
+
+atexit.register(summarize_warnings)

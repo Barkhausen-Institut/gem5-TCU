@@ -96,6 +96,9 @@ let {{
 
     StaticInstPtr
     decodeNeonData(ExtMachInst machInst);
+
+    StaticInstPtr
+    decodeAdvancedSIMD(ExtMachInst machInst);
     '''
 
     decoder_output = '''
@@ -141,7 +144,7 @@ let {{
                                                  bits(machInst, 22) << 4);
         const uint32_t type = bits(machInst, 11, 8);
         uint32_t size = 0;
-        uint32_t align = TLB::MustBeOne;
+        uint32_t align = 0;
         unsigned inc = 1;
         unsigned regs = 1;
         unsigned lane = 0;
@@ -333,6 +336,84 @@ let {{
         return new Unknown(machInst);
     }
     '''
+    decoder_output += '''
+    StaticInstPtr
+    decodeAdvancedSIMD(ExtMachInst machInst)
+    {
+        uint8_t op_code = (bits(machInst, 25) << 1)
+                          | bits(machInst, 21);
+
+        IntRegIndex vd = (IntRegIndex)(2 * (bits(machInst, 15, 12) |
+                               (bits(machInst, 22) << 4)));
+        IntRegIndex vn = (IntRegIndex)(2 * (bits(machInst, 19, 16) |
+                               (bits(machInst, 7) << 4)));
+        IntRegIndex vm = (IntRegIndex)(2 * (bits(machInst, 3, 0) |
+                               (bits(machInst, 5) << 4)));
+        bool q = bits (machInst, 6);
+        switch (op_code) {
+          case 0x0:
+          {
+            // VCADD
+            bool s = bits (machInst, 20);
+            if (s) {
+               if (q)
+                   return new VcaddQ<uint32_t>(machInst, vd, vn, vm);
+               else
+                   return new VcaddD<uint32_t>(machInst, vd, vn, vm);
+            } else {
+               if (q)
+                   return new VcaddQ<uint16_t>(machInst, vd, vn, vm);
+               else
+                   return new VcaddD<uint16_t>(machInst, vd, vn, vm);
+            }
+          }
+          case 0x1:
+          {
+            // VCMLA
+            bool s = bits (machInst, 20);
+            if (s) {
+               if (q)
+                   return new VcmlaQ<uint32_t>(machInst, vd, vn, vm);
+               else
+                   return new VcmlaD<uint32_t>(machInst, vd, vn, vm);
+            } else {
+               if (q)
+                   return new VcmlaQ<uint16_t>(machInst, vd, vn, vm);
+               else
+                   return new VcmlaD<uint16_t>(machInst, vd, vn, vm);
+            }
+          }
+          case 0x2:
+          case 0x3:
+          {
+            // VCMLA by element
+            bool s = bits (machInst, 23);
+            if (s) {
+               uint8_t index_fp = 0;
+               if (q)
+                   return new VcmlaElemQ<uint32_t>(machInst, vd, vn, vm,
+                                                   index_fp);
+               else
+                   return new VcmlaElemD<uint32_t>(machInst, vd, vn, vm,
+                                                   index_fp);
+            } else {
+               vm = (IntRegIndex)(uint8_t)(2* bits(machInst, 3, 0));
+               uint8_t index_fp = bits(machInst, 5);
+               if (q)
+                   return new VcmlaElemQ<uint16_t>(machInst, vd, vn, vm,
+                                                   index_fp);
+               else
+                   return new VcmlaElemD<uint16_t>(machInst, vd, vn, vm,
+                                                   index_fp);
+            }
+          }
+          default:
+            return new Unknown64(machInst);
+        }
+
+    }
+    '''
+
 
     decoder_output += '''
     static StaticInstPtr
@@ -1869,6 +1950,12 @@ def format ThumbNeonData() {{
     '''
 }};
 
+def format Thumb32NeonSIMD() {{
+    decode_block = '''
+    return decodeAdvancedSIMD(machInst);
+    '''
+}};
+
 let {{
     header_output = '''
     bool
@@ -1901,14 +1988,8 @@ let {{
         const uint32_t offset = bits(machInst, 7, 0);
         const bool single = (bits(machInst, 8) == 0);
         const IntRegIndex rn = (IntRegIndex)(uint32_t)bits(machInst, 19, 16);
-        RegIndex vd;
-        if (single) {
-            vd = (RegIndex)(uint32_t)((bits(machInst, 15, 12) << 1) |
-                                      bits(machInst, 22));
-        } else {
-            vd = (RegIndex)(uint32_t)((bits(machInst, 15, 12) << 1) |
-                                      (bits(machInst, 22) << 5));
-        }
+        RegIndex vd = decodeFpVd(machInst, single ? 0x2 : 0x3, false);
+
         switch (bits(opcode, 4, 3)) {
           case 0x0:
             if (bits(opcode, 4, 1) == 0x2 &&
@@ -1982,13 +2063,6 @@ let {{
           case 0x3:
             const bool up = (bits(machInst, 23) == 1);
             const uint32_t imm = bits(machInst, 7, 0) << 2;
-            if (single) {
-                vd = (RegIndex)(uint32_t)((bits(machInst, 15, 12) << 1) |
-                                          (bits(machInst, 22)));
-            } else {
-                vd = (RegIndex)(uint32_t)((bits(machInst, 15, 12) << 1) |
-                                          (bits(machInst, 22) << 5));
-            }
             if (bits(opcode, 1, 0) == 0x0) {
                 if (single) {
                     if (up) {
@@ -2047,6 +2121,10 @@ let {{
     header_output = '''
     StaticInstPtr
     decodeShortFpTransfer(ExtMachInst machInst);
+
+    IntRegIndex decodeFpVd(ExtMachInst machInst, uint32_t size, bool isInt);
+    IntRegIndex decodeFpVm(ExtMachInst machInst, uint32_t size, bool isInt);
+    IntRegIndex decodeFpVn(ExtMachInst machInst, uint32_t size);
     '''
     decoder_output = '''
     IntRegIndex decodeFpVd(ExtMachInst machInst, uint32_t size, bool isInt)

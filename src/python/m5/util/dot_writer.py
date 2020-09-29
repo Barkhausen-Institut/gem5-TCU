@@ -267,7 +267,7 @@ def dot_gen_colour(simNode, isPort = False):
     return dot_rgb_to_html(r, g, b)
 
 def dot_rgb_to_html(r, g, b):
-    return "#%.2x%.2x%.2x" % (r, g, b)
+    return "#%.2x%.2x%.2x" % (int(r), int(g), int(b))
 
 # We need to create all of the clock domains. We abuse the alpha channel to get
 # the correct domain colouring.
@@ -338,6 +338,8 @@ def dot_create_dvfs_nodes(simNode, callgraph, domain=None):
 
 def do_dot(root, outdir, dotFilename):
     if not pydot:
+        warn("No dot file generated. " +
+             "Please install pydot to generate the dot file and pdf.")
         return
     # * use ranksep > 1.0 for for vertical separation between nodes
     # especially useful if you need to annotate edges using e.g. visio
@@ -358,6 +360,8 @@ def do_dot(root, outdir, dotFilename):
 
 def do_dvfs_dot(root, outdir, dotFilename):
     if not pydot:
+        warn("No dot file generated. " +
+             "Please install pydot to generate the dot file and pdf.")
         return
 
     # There is a chance that we are unable to resolve the clock or

@@ -260,7 +260,7 @@ BaseCPU::mwaitAtomic(ThreadID tid, ThreadContext *tc, BaseTLB *dtb)
     if (secondAddr > addr)
         size = secondAddr - addr;
 
-    req->setVirt(0, addr, size, 0x0, dataMasterId(), tc->instAddr());
+    req->setVirt(addr, size, 0x0, dataMasterId(), tc->instAddr());
 
     // translate to physical address
     Fault fault = dtb->translateAtomic(req, tc, BaseTLB::Read);
@@ -329,11 +329,11 @@ BaseCPU::startup()
     }
 
     if (_switchedOut)
-        ClockedObject::pwrState(Enums::PwrState::OFF);
+        powerState->set(Enums::PwrState::OFF);
 
     // Assumption CPU start to operate instantaneously without any latency
-    if (ClockedObject::pwrState() == Enums::PwrState::UNDEFINED)
-        ClockedObject::pwrState(Enums::PwrState::ON);
+    if (powerState->get() == Enums::PwrState::UNDEFINED)
+        powerState->set(Enums::PwrState::ON);
 
 }
 
@@ -463,7 +463,7 @@ BaseCPU::schedulePowerGatingEvent()
             return;
     }
 
-    if (ClockedObject::pwrState() == Enums::PwrState::CLK_GATED &&
+    if (powerState->get() == Enums::PwrState::CLK_GATED &&
         powerGatingOnIdle) {
         assert(!enterPwrGatingEvent.scheduled());
         // Schedule a power gating event when clock gated for the specified
@@ -492,7 +492,7 @@ BaseCPU::activateContext(ThreadID thread_num)
     if (enterPwrGatingEvent.scheduled())
         deschedule(enterPwrGatingEvent);
     // For any active thread running, update CPU power state to active (ON)
-    ClockedObject::pwrState(Enums::PwrState::ON);
+    powerState->set(Enums::PwrState::ON);
 
     updateCycleCounters(CPU_STATE_WAKEUP);
 }
@@ -513,7 +513,7 @@ BaseCPU::suspendContext(ThreadID thread_num)
     updateCycleCounters(CPU_STATE_SLEEP);
 
     // All CPU threads suspended, enter lower power state for the CPU
-    ClockedObject::pwrState(Enums::PwrState::CLK_GATED);
+    powerState->set(Enums::PwrState::CLK_GATED);
 
     // If pwrGatingLatency is set to 0 then this mechanism is disabled
     if (powerGatingOnIdle) {
@@ -532,7 +532,7 @@ BaseCPU::haltContext(ThreadID thread_num)
 void
 BaseCPU::enterPwrGating(void)
 {
-    ClockedObject::pwrState(Enums::PwrState::OFF);
+    powerState->set(Enums::PwrState::OFF);
 }
 
 void
@@ -548,7 +548,7 @@ BaseCPU::switchOut()
     flushTLBs();
 
     // Go to the power gating state
-    ClockedObject::pwrState(Enums::PwrState::OFF);
+    powerState->set(Enums::PwrState::OFF);
 }
 
 void
@@ -561,7 +561,7 @@ BaseCPU::takeOverFrom(BaseCPU *oldCPU)
     _pid = oldCPU->getPid();
     _taskId = oldCPU->taskId();
     // Take over the power state of the switchedOut CPU
-    ClockedObject::pwrState(oldCPU->pwrState());
+    powerState->set(oldCPU->powerState->get());
 
     previousState = oldCPU->previousState;
     previousCycle = oldCPU->previousCycle;
@@ -749,7 +749,7 @@ bool AddressMonitor::doMonitor(PacketPtr pkt) {
 
 
 void
-BaseCPU::traceFunctionsInternal(SymbolTable *symtab, Addr pc)
+BaseCPU::traceFunctionsInternal(const Loader::SymbolTable *symtab, Addr pc)
 {
     if (!symtab)
         return;
@@ -758,9 +758,8 @@ BaseCPU::traceFunctionsInternal(SymbolTable *symtab, Addr pc)
     // update saved range.  Otherwise do nothing.
     if (pc < currentFunctionStart || pc >= currentFunctionEnd) {
         string sym_str;
-        bool found = symtab->findNearestSymbol(pc, sym_str,
-                                                         currentFunctionStart,
-                                                         currentFunctionEnd);
+        bool found = symtab->findNearestSymbol(
+                pc, sym_str, currentFunctionStart, currentFunctionEnd);
 
         if (!found) {
             // no symbol found: use addr as label

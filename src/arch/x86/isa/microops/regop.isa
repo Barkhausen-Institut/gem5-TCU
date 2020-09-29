@@ -375,8 +375,8 @@ let {{
             return cls
 
 
+    @six.add_metaclass(RegOpMeta)
     class RegOp(X86Microop):
-        __metaclass__ = RegOpMeta
         # This class itself doesn't act as a microop
         abstract = True
 
@@ -398,7 +398,7 @@ let {{
                 self.ext = 0
             else:
                 if not isinstance(flags, (list, tuple)):
-                    raise Exception, "flags must be a list or tuple of flags"
+                    raise Exception("flags must be a list or tuple of flags")
                 self.ext = " | ".join(flags)
                 self.className += "Flags"
 

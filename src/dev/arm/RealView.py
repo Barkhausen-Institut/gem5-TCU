@@ -51,6 +51,7 @@ from m5.objects.Platform import Platform
 from m5.objects.Terminal import Terminal
 from m5.objects.Uart import Uart
 from m5.objects.SimpleMemory import SimpleMemory
+from m5.objects.GenericTimer import *
 from m5.objects.Gic import *
 from m5.objects.EnergyCtrl import EnergyCtrl
 from m5.objects.ClockedObject import ClockedObject
@@ -159,7 +160,7 @@ class GenericArmPciHost(GenericPciHost):
 
         # AXI memory address range
         ranges += self.pciFdtAddr(space=2, addr=0)
-        ranges += state.addrCells(0x40000000) # Fixed offset
+        ranges += state.addrCells(self.pci_mem_base)
         ranges += local_state.sizeCells(0x40000000) # Fixed size
         node.append(FdtPropertyWords("ranges", ranges))
 
@@ -437,54 +438,11 @@ class CpuLocalTimer(BasicPioDevice):
     int_timer = Param.ArmPPI("Interrrupt used per-cpu to GIC")
     int_watchdog = Param.ArmPPI("Interrupt for per-cpu watchdog to GIC")
 
-class GenericTimer(ClockedObject):
-    type = 'GenericTimer'
-    cxx_header = "dev/arm/generic_timer.hh"
-    system = Param.ArmSystem(Parent.any, "system")
-    int_phys_s = Param.ArmPPI("Physical (S) timer interrupt")
-    int_phys_ns = Param.ArmPPI("Physical (NS) timer interrupt")
-    int_virt = Param.ArmPPI("Virtual timer interrupt")
-    int_hyp = Param.ArmPPI("Hypervisor timer interrupt")
-
-    freqs = VectorParam.UInt32([0x01800000], "Frequencies available for the "
-        "system counter (in Hz). First element is the base frequency, "
-        "following are alternative lower ones which must be exact divisors")
-
-    def generateDeviceTree(self, state):
-        node = FdtNode("timer")
-
-        node.appendCompatible(["arm,cortex-a15-timer",
-                               "arm,armv7-timer",
-                               "arm,armv8-timer"])
-        node.append(FdtPropertyWords("interrupts", [
-            1, int(self.int_phys_s.num) - 16, 0xf08,
-            1, int(self.int_phys_ns.num) - 16, 0xf08,
-            1, int(self.int_virt.num) - 16, 0xf08,
-            1, int(self.int_hyp.num) - 16, 0xf08,
-        ]))
-        clock = state.phandle(self.clk_domain.unproxy(self))
-        node.append(FdtPropertyWords("clocks", clock))
-
-        yield node
-
-class GenericTimerMem(PioDevice):
-    type = 'GenericTimerMem'
-    cxx_header = "dev/arm/generic_timer.hh"
-
-    base = Param.Addr(0, "Base address")
-
-    int_phys = Param.ArmSPI("Physical Interrupt")
-    int_virt = Param.ArmSPI("Virtual Interrupt")
-
-    freqs = VectorParam.UInt32([0x01800000], "Frequencies available for the "
-        "system counter (in Hz). First element is the base frequency, "
-        "following are alternative lower ones which must be exact divisors")
-
 class PL031(AmbaIntDevice):
     type = 'PL031'
     cxx_header = "dev/arm/rtc_pl031.hh"
     time = Param.Time('01/01/2009', "System time to use ('Now' for actual time)")
-    amba_id = 0x00341031
+    amba_id = 0x00041031
 
     def generateDeviceTree(self, state):
         node = self.generateBasicPioDeviceNode(state, 'rtc', self.pio_addr,
@@ -493,6 +451,7 @@ class PL031(AmbaIntDevice):
         node.appendCompatible(["arm,pl031", "arm,primecell"])
         clock = state.phandle(self.clk_domain.unproxy(self))
         node.append(FdtPropertyWords("clocks", clock))
+        node.append(FdtPropertyStrings("clock-names", ["apb_pclk"]))
 
         yield node
 
@@ -587,6 +546,17 @@ class HDLcd(AmbaDmaDevice):
 
         yield node
 
+class FVPBasePwrCtrl(BasicPioDevice):
+    """
+Based on Fast Models Base_PowerController v11.8
+Reference:
+    Fast Models Reference Manual - Section 7.7.2 - Version 11.8
+    Document ID: 100964_1180_00_en
+    """
+
+    type = 'FVPBasePwrCtrl'
+    cxx_header = 'dev/arm/fvp_base_pwr_ctrl.hh'
+
 class RealView(Platform):
     type = 'RealView'
     cxx_header = "dev/arm/realview.hh"
@@ -598,6 +568,12 @@ class RealView(Platform):
         return []
 
     def _off_chip_devices(self):
+        return []
+
+    def _on_chip_memory(self):
+        return []
+
+    def _off_chip_memory(self):
         return []
 
     _off_chip_ranges = []
@@ -649,13 +625,14 @@ class RealView(Platform):
         if bridge:
             bridge.ranges = self._off_chip_ranges
 
-    def attachIO(self, *args, **kwargs):
-        self._attach_io(self._off_chip_devices(), *args, **kwargs)
+    def attachIO(self, bus, dma_ports=None, mem_ports=None):
+        self._attach_mem(self._off_chip_memory(), bus, mem_ports)
+        self._attach_io(self._off_chip_devices(), bus, dma_ports)
 
     def setupBootLoader(self, cur_sys, boot_loader, atags_addr, load_offset):
-        cur_sys.boot_loader = boot_loader
-        cur_sys.atags_addr = atags_addr
-        cur_sys.load_offset = load_offset
+        cur_sys.workload.boot_loader = boot_loader
+        cur_sys.workload.atags_addr = atags_addr
+        cur_sys.workload.load_addr_offset = load_offset
 
     def generateDeviceTree(self, state):
         node = FdtNode("/") # Things in this module need to end up in the root
@@ -668,9 +645,13 @@ class RealView(Platform):
         yield node
 
     def annotateCpuDeviceNode(self, cpu, state):
-        cpu.append(FdtPropertyStrings("enable-method", "spin-table"))
-        cpu.append(FdtPropertyWords("cpu-release-addr", \
-                                    state.addrCells(0x8000fff8)))
+        system = self.system.unproxy(self)
+        if system._have_psci:
+            cpu.append(FdtPropertyStrings('enable-method', 'psci'))
+        else:
+            cpu.append(FdtPropertyStrings("enable-method", "spin-table"))
+            cpu.append(FdtPropertyWords("cpu-release-addr", \
+                                        state.addrCells(0x8000fff8)))
 
 class VExpress_EMM(RealView):
     _mem_regions = [ AddrRange('2GB', size='2GB') ]
@@ -724,6 +705,7 @@ class VExpress_EMM(RealView):
         conf_base=0x30000000, conf_size='256MB', conf_device_bits=16,
         pci_pio_base=0)
 
+    sys_counter = SystemCounter()
     generic_timer = GenericTimer(int_phys_s=ArmPPI(num=29),
                                  int_phys_ns=ArmPPI(num=30),
                                  int_virt=ArmPPI(num=27),
@@ -871,8 +853,8 @@ References:
 Memory map:
    0x00000000-0x03ffffff: Boot memory (CS0)
    0x04000000-0x07ffffff: Reserved
-   0x08000000-0x0bffffff: Reserved (CS0 alias)
-   0x0c000000-0x0fffffff: Reserved (Off-chip, CS4)
+   0x08000000-0x0bffffff: NOR FLASH0 (CS0 alias)
+   0x0c000000-0x0fffffff: NOR FLASH1 (Off-chip, CS4)
    0x10000000-0x13ffffff: gem5-specific peripherals (Off-chip, CS5)
        0x10000000-0x1000ffff: gem5 energy controller
        0x10010000-0x1001ffff: gem5 pseudo-ops
@@ -884,15 +866,23 @@ Memory map:
        0x1c060000-0x1c06ffff: KMI0 (keyboard)
        0x1c070000-0x1c07ffff: KMI1 (mouse)
        0x1c090000-0x1c09ffff: UART0
-       0x1c0a0000-0x1c0affff: UART1 (reserved)
-       0x1c0b0000-0x1c0bffff: UART2 (reserved)
-       0x1c0c0000-0x1c0cffff: UART3 (reserved)
+       0x1c0a0000-0x1c0affff: UART1
+       0x1c0b0000-0x1c0bffff: UART2
+       0x1c0c0000-0x1c0cffff: UART3
        0x1c0f0000-0x1c0fffff: Watchdog (SP805)
        0x1c130000-0x1c13ffff: VirtIO (gem5/FM extension)
        0x1c140000-0x1c14ffff: VirtIO (gem5/FM extension)
        0x1c170000-0x1c17ffff: RTC
 
    0x20000000-0x3fffffff: On-chip peripherals:
+       0x2a430000-0x2a43ffff: System Counter (control)
+       0x2a490000-0x2a49ffff: Trusted Watchdog (SP805)
+       0x2a800000-0x2a800fff: System Counter (read)
+       0x2a810000-0x2a810fff: System Timer (control)
+
+       0x2a820000-0x2a820fff: System Timer (frame 0)
+       0x2a830000-0x2a830fff: System Timer (frame 1)
+
        0x2b000000-0x2b00ffff: HDLCD
 
        0x2b060000-0x2b060fff: System Watchdog (SP805)
@@ -936,6 +926,9 @@ Interrupts:
         46   : Reserved (CLCD)
         47   : Reserved (Ethernet)
         48   : Reserved (USB)
+        56   : Trusted Watchdog (SP805)
+        57   : System timer0 (phys)
+        58   : System timer1 (phys)
     95-255: On-chip interrupt sources (we use these for
             gem5-specific devices, SPIs)
          74    : VirtIO (gem5/FM extension)
@@ -962,29 +955,54 @@ Interrupts:
     bootmem = SimpleMemory(range=AddrRange(0, size='64MB'),
                            conf_table_reported=False)
 
+    # NOR flash, flash0
+    flash0 = SimpleMemory(range=AddrRange(0x08000000, size='64MB'),
+                          conf_table_reported=False)
+
+    # Trusted SRAM
+    trusted_sram = SimpleMemory(range=AddrRange(0x04000000, size='256kB'),
+                                conf_table_reported=False)
+
     # Platform control device (off-chip)
     realview_io = RealViewCtrl(proc_id0=0x14000000, proc_id1=0x14000000,
-                               idreg=0x02250000, pio_addr=0x1c010000)
+                               idreg=0x30101100, pio_addr=0x1c010000)
     mcc = VExpressMCC()
     dcc = CoreTile2A15DCC()
 
     ### On-chip devices ###
+
+    # Trusted Watchdog, SP805
+    trusted_watchdog = Sp805(pio_addr=0x2a490000, int_num=56)
+
+    sys_counter = SystemCounter()
     generic_timer = GenericTimer(int_phys_s=ArmPPI(num=29),
                                  int_phys_ns=ArmPPI(num=30),
                                  int_virt=ArmPPI(num=27),
                                  int_hyp=ArmPPI(num=26))
+    generic_timer_mem = GenericTimerMem(cnt_control_base=0x2a430000,
+                                        cnt_read_base=0x2a800000,
+                                        cnt_ctl_base=0x2a810000,
+                                        frames=[
+            GenericTimerFrame(cnt_base=0x2a820000,
+                int_phys=ArmSPI(num=57), int_virt=ArmSPI(num=133)),
+            GenericTimerFrame(cnt_base=0x2a830000,
+                int_phys=ArmSPI(num=58), int_virt=ArmSPI(num=134))
+    ])
 
     system_watchdog = Sp805(pio_addr=0x2b060000, int_num=130)
 
     def _on_chip_devices(self):
         return [
-            self.generic_timer,
+            self.generic_timer_mem,
+            self.trusted_watchdog,
             self.system_watchdog
-        ]
+        ] + self.generic_timer_mem.frames
 
     def _on_chip_memory(self):
         memories = [
             self.bootmem,
+            self.trusted_sram,
+            self.flash0,
         ]
         return memories
 
@@ -995,6 +1013,9 @@ Interrupts:
 
     uart = [
         Pl011(pio_addr=0x1c090000, int_num=37),
+        Pl011(pio_addr=0x1c0a0000, int_num=38, device=Terminal()),
+        Pl011(pio_addr=0x1c0b0000, int_num=39, device=Terminal()),
+        Pl011(pio_addr=0x1c0c0000, int_num=40, device=Terminal())
     ]
 
     kmi0 = Pl050(pio_addr=0x1c060000, int_num=44, ps2=PS2Keyboard())
@@ -1008,9 +1029,12 @@ Interrupts:
     pci_host = GenericArmPciHost(
         conf_base=0x30000000, conf_size='256MB', conf_device_bits=12,
         pci_pio_base=0x2f000000,
+        pci_mem_base=0x40000000,
         int_policy="ARM_PCI_INT_DEV", int_base=100, int_count=4)
 
     energy_ctrl = EnergyCtrl(pio_addr=0x10000000)
+
+    pwr_ctrl = FVPBasePwrCtrl(pio_addr=0x1c100000)
 
     vio = [
         MmioVirtIO(pio_addr=0x1c130000, pio_size=0x1000,
@@ -1019,20 +1043,29 @@ Interrupts:
                    interrupt=ArmSPI(num=75)),
     ]
 
+    # NOR flash, flash1
+    flash1 = SimpleMemory(range=AddrRange(0x0c000000, 0x10000000),
+                          conf_table_reported=False)
+
     def _off_chip_devices(self):
         return [
             self.realview_io,
-            self.uart[0],
             self.kmi0,
             self.kmi1,
             self.watchdog,
             self.rtc,
             self.pci_host,
             self.energy_ctrl,
+            self.pwr_ctrl,
             self.clock32KHz,
             self.clock24MHz,
             self.vio[0],
             self.vio[1],
+        ] + self.uart
+
+    def _off_chip_memory(self):
+        return [
+            self.flash1,
         ]
 
     def __init__(self, **kwargs):
@@ -1070,14 +1103,15 @@ Interrupts:
 
         self.smmu = SMMUv3(reg_map=AddrRange(0x2b400000, size=0x00020000))
 
+        self.smmu.master = bus.slave
+        self.smmu.control = bus.master
+
         dma_ports = []
         for dev in devices:
             self._attach_device(dev, bus, dma_ports)
-            self.smmu.connect(dev, bus)
+            self.smmu.connect(dev)
 
-    def setupBootLoader(self, cur_sys, loc, boot_loader=None):
-        if boot_loader is None:
-            boot_loader = [ loc('boot.arm64'), loc('boot.arm') ]
+    def setupBootLoader(self, cur_sys, boot_loader):
         super(VExpress_GEM5_Base, self).setupBootLoader(
                 cur_sys, boot_loader, 0x8000000, 0x80000000)
 
@@ -1098,6 +1132,24 @@ Interrupts:
         node.append(FdtPropertyWords("arm,hbi", [0x0]))
         node.append(FdtPropertyWords("arm,vexpress,site", [0xf]))
 
+        system = self.system.unproxy(self)
+        if system._have_psci:
+            # PSCI functions exposed to the kernel
+            if not system.have_security:
+                raise AssertionError("PSCI requires EL3 (have_security)")
+
+            psci_node = FdtNode('psci')
+            psci_node.appendCompatible(['arm,psci-1.0', 'arm,psci-0.2',
+                                        'arm,psci'])
+            method = 'smc'
+            psci_node.append(FdtPropertyStrings('method', method))
+            psci_node.append(FdtPropertyWords('cpu_suspend', 0xc4000001))
+            psci_node.append(FdtPropertyWords('cpu_off', 0x84000002))
+            psci_node.append(FdtPropertyWords('cpu_on', 0xc4000003))
+            psci_node.append(FdtPropertyWords('sys_poweroff', 0x84000008))
+            psci_node.append(FdtPropertyWords('sys_reset', 0x84000009))
+            node.append(psci_node)
+
         yield node
 
 class VExpress_GEM5_V1_Base(VExpress_GEM5_Base):
@@ -1108,6 +1160,12 @@ class VExpress_GEM5_V1_Base(VExpress_GEM5_Base):
     gicv2m.frames = [
         Gicv2mFrame(spi_base=256, spi_len=64, addr=0x2c1c0000),
     ]
+
+    def setupBootLoader(self, cur_sys, loc, boot_loader=None):
+        if boot_loader is None:
+            boot_loader = [ loc('boot.arm64'), loc('boot.arm') ]
+        super(VExpress_GEM5_V1_Base, self).setupBootLoader(
+                cur_sys, boot_loader)
 
     def _on_chip_devices(self):
         return super(VExpress_GEM5_V1_Base,self)._on_chip_devices() + [
@@ -1150,3 +1208,38 @@ class VExpress_GEM5_V2(VExpress_GEM5_V2_Base):
         return super(VExpress_GEM5_V2,self)._on_chip_devices() + [
                 self.hdlcd,
             ]
+
+class VExpress_GEM5_Foundation(VExpress_GEM5_Base):
+    """
+    Based on Armv8-A FVP Foundation platform v11.8
+    Reference for memory and interrupt map:
+        Armv8-A Foundation Platform - User Guide - Version 11.8
+        Document ID: 100961_1180_00_en
+    """
+    _off_chip_ranges = [
+        # CS1-CS5
+        AddrRange(0x0c000000, 0x20000000),
+        # External AXI interface (PCI)
+        AddrRange(0x40000000, 0x80000000),
+    ]
+
+    gic = Gicv3(dist_addr=0x2f000000, redist_addr=0x2f100000,
+                maint_int=ArmPPI(num=25), gicv4=False,
+                its=NULL)
+
+    pci_host = GenericArmPciHost(
+        conf_base=0x40000000, conf_size='256MB', conf_device_bits=12,
+        pci_pio_base=0x50000000,
+        pci_mem_base=0x400000000,
+        int_policy="ARM_PCI_INT_DEV", int_base=100, int_count=4)
+
+    def _on_chip_devices(self):
+        return super(VExpress_GEM5_Foundation, self)._on_chip_devices() + [
+                self.gic
+            ]
+
+    def setupBootLoader(self, cur_sys, loc, boot_loader=None):
+        if boot_loader is None:
+            boot_loader = [ loc('boot_v2.arm64') ]
+        super(VExpress_GEM5_Foundation, self).setupBootLoader(
+                cur_sys, boot_loader)

@@ -53,7 +53,7 @@ output header {{
                 uint64_t setFlags, Fault _fault, uint8_t _cc);
 
         std::string generateDisassembly(Addr pc,
-                const SymbolTable *symtab) const;
+                const Loader::SymbolTable *symtab) const;
     };
 
     class MicroHalt : public X86ISA::X86MicroopBase
@@ -71,7 +71,7 @@ output header {{
         Fault execute(ExecContext *, Trace::InstRecord *) const;
 
         std::string generateDisassembly(Addr pc,
-                const SymbolTable *symtab) const;
+                const Loader::SymbolTable *symtab) const;
     };
 }};
 
@@ -135,8 +135,9 @@ def template MicroFaultConstructor {{
 }};
 
 output decoder {{
-    std::string MicroFaultBase::generateDisassembly(Addr pc,
-            const SymbolTable *symtab) const
+    std::string
+    MicroFaultBase::generateDisassembly(
+            Addr pc, const Loader::SymbolTable *symtab) const
     {
         std::stringstream response;
 
@@ -149,8 +150,9 @@ output decoder {{
         return response.str();
     }
 
-    std::string MicroHalt::generateDisassembly(Addr pc,
-            const SymbolTable *symtab) const
+    std::string
+    MicroHalt::generateDisassembly(
+            Addr pc, const Loader::SymbolTable *symtab) const
     {
         std::stringstream response;
 
@@ -167,7 +169,7 @@ let {{
             self.fault = fault
             if flags:
                 if not isinstance(flags, (list, tuple)):
-                    raise Exception, "flags must be a list or tuple of flags"
+                    raise Exception("flags must be a list or tuple of flags")
                 self.cond = " | ".join(flags)
                 self.className += "Flags"
             else:

@@ -112,8 +112,6 @@ class SimpleThread : public ThreadState, public ThreadContext
 
     TheISA::PCState _pcState;
 
-    SymbolTable *symtab;
-
     /** Did this instruction execute or is it predicated false */
     bool predicate;
 
@@ -252,9 +250,9 @@ class SimpleThread : public ThreadState, public ThreadContext
     Process *getProcessPtr() override { return ThreadState::getProcessPtr(); }
     void setProcessPtr(Process *p) override { ThreadState::setProcessPtr(p); }
 
-    SymbolTable *getSymTab() {
+    const Loader::SymbolTable *getSymTab() {
         if(FullSystem)
-            return getSystemPtr()->kernelSymtab;
+            return getSystemPtr()->workload->symtab(this);
         return getProcessPtr()->symtab;
     }
 

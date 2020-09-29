@@ -29,18 +29,22 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+import six
 import math
 import m5
 from m5.objects import *
 from m5.defines import buildEnv
 from m5.util import addToPath
-from Ruby import create_topology
-from Ruby import send_evicts
+from .Ruby import create_topology
+from .Ruby import send_evicts
 
 addToPath('../')
 
 from topologies.Cluster import Cluster
 from topologies.Crossbar import Crossbar
+
+if six.PY3:
+    long = int
 
 class CntrlBase:
     _seqs = 0
@@ -153,6 +157,11 @@ class TCPCntrl(TCP_Controller, CntrlBase):
         self.coalescer.ruby_system = ruby_system
         self.coalescer.support_inst_reqs = False
         self.coalescer.is_cpu_sequencer = False
+        if options.tcp_deadlock_threshold:
+          self.coalescer.deadlock_threshold = \
+              options.tcp_deadlock_threshold
+        self.coalescer.max_coalesces_per_cycle = \
+            options.max_coalesces_per_cycle
 
         self.sequencer = RubySequencer()
         self.sequencer.version = self.seqCount()
@@ -227,6 +236,9 @@ class SQCCntrl(SQC_Controller, CntrlBase):
         self.sequencer.ruby_system = ruby_system
         self.sequencer.support_data_reqs = False
         self.sequencer.is_cpu_sequencer = False
+        if options.sqc_deadlock_threshold:
+          self.sequencer.deadlock_threshold = \
+            options.sqc_deadlock_threshold
 
         self.ruby_system = ruby_system
 
@@ -370,6 +382,9 @@ def define_options(parser):
                       help = "SQC cache size")
     parser.add_option("--sqc-assoc", type = 'int', default = 8,
                       help = "SQC cache assoc")
+    parser.add_option("--sqc-deadlock-threshold", type='int',
+                      help="Set the SQC deadlock threshold to some value")
+
     parser.add_option("--WB_L1", action = "store_true", default = False,
                       help = "writeback L1")
     parser.add_option("--WB_L2", action = "store_true", default = False,
@@ -386,6 +401,11 @@ def define_options(parser):
                       help = "tcp size")
     parser.add_option("--tcp-assoc", type = 'int', default = 16,
                       help = "tcp assoc")
+    parser.add_option("--tcp-deadlock-threshold", type='int',
+                      help="Set the TCP deadlock threshold to some value")
+    parser.add_option("--max-coalesces-per-cycle", type="int", default=1,
+                      help="Maximum insts that may coalesce in a cycle");
+
     parser.add_option("--noL1", action = "store_true", default = False,
                       help = "bypassL1")
 
@@ -453,6 +473,7 @@ def create_system(options, full_system, system, dma_devices, bootmem,
 
         dir_cntrl.triggerQueue = MessageBuffer(ordered = True)
         dir_cntrl.L3triggerQueue = MessageBuffer(ordered = True)
+        dir_cntrl.requestToMemory = MessageBuffer()
         dir_cntrl.responseFromMemory = MessageBuffer()
 
         exec("ruby_system.dir_cntrl%d = dir_cntrl" % i)
@@ -499,16 +520,16 @@ def create_system(options, full_system, system, dma_devices, bootmem,
 
     # Register CPUs and caches for each CorePair and directory (SE mode only)
     if not full_system:
-        for i in xrange((options.num_cpus + 1) // 2):
+        for i in range((options.num_cpus + 1) // 2):
             FileSystemConfig.register_cpu(physical_package_id = 0,
                                           core_siblings = \
-                                            xrange(options.num_cpus),
+                                            range(options.num_cpus),
                                           core_id = i*2,
                                           thread_siblings = [])
 
             FileSystemConfig.register_cpu(physical_package_id = 0,
                                           core_siblings = \
-                                            xrange(options.num_cpus),
+                                            range(options.num_cpus),
                                           core_id = i*2+1,
                                           thread_siblings = [])
 
@@ -547,7 +568,7 @@ def create_system(options, full_system, system, dma_devices, bootmem,
                                             line_size = options.cacheline_size,
                                             assoc = options.l3_assoc,
                                             cpus = [n for n in
-                                                xrange(options.num_cpus)])
+                                                range(options.num_cpus)])
 
     gpuCluster = None
     if hasattr(options, 'bw_scalor') and options.bw_scalor > 0:

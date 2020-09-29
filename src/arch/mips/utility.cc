@@ -32,12 +32,10 @@
 
 #include "arch/mips/isa_traits.hh"
 #include "arch/mips/registers.hh"
-#include "arch/mips/vtophys.hh"
 #include "base/bitfield.hh"
 #include "base/logging.hh"
 #include "cpu/static_inst.hh"
 #include "cpu/thread_context.hh"
-#include "mem/fs_translating_port_proxy.hh"
 #include "sim/serialize.hh"
 
 using namespace MipsISA;
@@ -242,13 +240,5 @@ copyMiscRegs(ThreadContext *src, ThreadContext *dest)
 {
     panic("Copy Misc. Regs Not Implemented Yet\n");
 }
-void
-skipFunction(ThreadContext *tc)
-{
-    PCState newPC = tc->pcState();
-    newPC.set(tc->readIntReg(ReturnAddressReg));
-    tc->pcState(newPC);
-}
-
 
 } // namespace MipsISA

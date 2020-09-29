@@ -55,9 +55,6 @@ def operands {{
     'sp': ('IntReg', 'ud', 'StackPointerReg', 'IsInteger', 2),
 
     'a0': ('IntReg', 'ud', '10', 'IsInteger', 1),
-    'a1': ('IntReg', 'ud', '11', 'IsInteger', 2),
-    'a2': ('IntReg', 'ud', '12', 'IsInteger', 3),
-    'a3': ('IntReg', 'ud', '13', 'IsInteger', 4),
 
     'Fd': ('FloatReg', 'df', 'FD', 'IsFloating', 1),
     'Fd_bits': ('FloatReg', 'ud', 'FD', 'IsFloating', 1),

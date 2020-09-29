@@ -91,7 +91,6 @@ namespace ArmISA
         bool haveVirtualization;
         bool haveCrypto;
         bool haveLargeAsid64;
-        bool haveGICv3CPUInterface;
         uint8_t physAddrRange;
         bool haveSVE;
         bool haveLSE;
@@ -727,14 +726,14 @@ namespace ArmISA
                                            unsigned eCount);
 
         void
-        serialize(CheckpointOut &cp) const
+        serialize(CheckpointOut &cp) const override
         {
             DPRINTF(Checkpoint, "Serializing Arm Misc Registers\n");
             SERIALIZE_ARRAY(miscRegs, NUM_PHYS_MISCREGS);
         }
 
         void
-        unserialize(CheckpointIn &cp)
+        unserialize(CheckpointIn &cp) override
         {
             DPRINTF(Checkpoint, "Unserializing Arm Misc Registers\n");
             UNSERIALIZE_ARRAY(miscRegs, NUM_PHYS_MISCREGS);
@@ -744,16 +743,19 @@ namespace ArmISA
 
         void startup(ThreadContext *tc);
 
+        void takeOverFrom(ThreadContext *new_tc,
+                          ThreadContext *old_tc) override;
+
         Enums::DecoderFlavor decoderFlavor() const { return _decoderFlavor; }
 
-        /** Getter for haveGICv3CPUInterface */
+        /** Returns true if the ISA has a GICv3 cpu interface */
         bool haveGICv3CpuIfc() const
         {
-            // haveGICv3CPUInterface is initialized at startup time, hence
+            // gicv3CpuInterface is initialized at startup time, hence
             // trying to read its value before the startup stage will lead
             // to an error
             assert(afterStartup);
-            return haveGICv3CPUInterface;
+            return gicv3CpuInterface != nullptr;
         }
 
         Enums::VecRegRenameMode

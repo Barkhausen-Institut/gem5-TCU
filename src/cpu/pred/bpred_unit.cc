@@ -233,7 +233,6 @@ BPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
                     "RAS predicted target: %s, RAS index: %i\n",
                     tid, seqNum, pc, target, predict_record.RASIndex);
         } else {
-            ++BTBLookups;
 
             if (inst->isCall()) {
                 RAS[tid].push(pc);
@@ -250,6 +249,7 @@ BPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
             }
 
             if (inst->isDirectCtrl() || !iPred) {
+                ++BTBLookups;
                 // Check BTB on direct branches
                 if (BTB.valid(pc.instAddr(), tid)) {
                     ++BTBHits;
@@ -263,6 +263,7 @@ BPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
                     DPRINTF(Branch, "[tid:%i] [sn:%llu] BTB doesn't have a "
                             "valid entry\n",tid,seqNum);
                     pred_taken = false;
+                    predict_record.predTaken = pred_taken;
                     // The Direction of the branch predictor is altered
                     // because the BTB did not have an entry
                     // The predictor needs to be updated accordingly
@@ -293,6 +294,7 @@ BPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
                 } else {
                     ++indirectMisses;
                     pred_taken = false;
+                    predict_record.predTaken = pred_taken;
                     DPRINTF(Branch,
                             "[tid:%i] [sn:%llu] "
                             "Instruction %s no indirect "

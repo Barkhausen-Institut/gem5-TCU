@@ -48,11 +48,12 @@
 using namespace std;
 using namespace SparcISA;
 
-static const int FirstArgumentReg = 8;
+const std::vector<int> SparcProcess::SyscallABI::ArgumentRegs = {
+    INTREG_O0, INTREG_O1, INTREG_O2, INTREG_O3, INTREG_O4, INTREG_O5
+};
 
-
-SparcProcess::SparcProcess(ProcessParams *params, ObjectFile *objFile,
-                           Addr _StackBias)
+SparcProcess::SparcProcess(ProcessParams *params,
+                           ::Loader::ObjectFile *objFile, Addr _StackBias)
     : Process(params,
               new EmulationPageTable(params->name, params->pid, PageBytes),
               objFile),
@@ -123,22 +124,17 @@ SparcProcess::initState()
      */
 
     // No windows contain info from other programs
-    // tc->setMiscRegNoEffect(MISCREG_OTHERWIN, 0);
-    tc->setIntReg(NumIntArchRegs + 6, 0);
+    tc->setIntReg(INTREG_OTHERWIN, 0);
     // There are no windows to pop
-    // tc->setMiscRegNoEffect(MISCREG_CANRESTORE, 0);
-    tc->setIntReg(NumIntArchRegs + 4, 0);
+    tc->setIntReg(INTREG_CANRESTORE, 0);
     // All windows are available to save into
-    // tc->setMiscRegNoEffect(MISCREG_CANSAVE, NWindows - 2);
-    tc->setIntReg(NumIntArchRegs + 3, NWindows - 2);
+    tc->setIntReg(INTREG_CANSAVE, NWindows - 2);
     // All windows are "clean"
-    // tc->setMiscRegNoEffect(MISCREG_CLEANWIN, NWindows);
-    tc->setIntReg(NumIntArchRegs + 5, NWindows);
+    tc->setIntReg(INTREG_CLEANWIN, NWindows);
     // Start with register window 0
     tc->setMiscReg(MISCREG_CWP, 0);
     // Always use spill and fill traps 0
-    // tc->setMiscRegNoEffect(MISCREG_WSTATE, 0);
-    tc->setIntReg(NumIntArchRegs + 7, 0);
+    tc->setIntReg(INTREG_WSTATE, 0);
     // Set the trap level to 0
     tc->setMiscRegNoEffect(MISCREG_TL, 0);
     // Set the ASI register to something fixed
@@ -224,7 +220,7 @@ SparcProcess::argsInit(int pageSize)
 
     // Setup the auxilliary vectors. These will already have endian conversion.
     // Auxilliary vectors are loaded only for elf formatted executables.
-    ElfObject * elfObject = dynamic_cast<ElfObject *>(objFile);
+    auto *elfObject = dynamic_cast<::Loader::ElfObject *>(objFile);
     if (elfObject) {
         // Bits which describe the system hardware capabilities
         auxv.emplace_back(M5_AT_HWCAP, hwcap);
@@ -255,6 +251,8 @@ SparcProcess::argsInit(int pageSize)
         auxv.emplace_back(M5_AT_EGID, egid());
         // Whether to enable "secure mode" in the executable
         auxv.emplace_back(M5_AT_SECURE, 0);
+        // The address of 16 "random" bytes.
+        auxv.emplace_back(M5_AT_RANDOM, 0);
     }
 
     // Figure out how big the initial stack needs to be
@@ -265,6 +263,9 @@ SparcProcess::argsInit(int pageSize)
     // This is the name of the file which is present on the initial stack
     // It's purpose is to let the user space linker examine the original file.
     int file_name_size = filename.size() + 1;
+
+    const int numRandomBytes = 16;
+    int aux_data_size = numRandomBytes;
 
     int env_data_size = 0;
     for (int i = 0; i < envp.size(); ++i) {
@@ -307,6 +308,7 @@ SparcProcess::argsInit(int pageSize)
 
     int space_needed =
         info_block_size +
+        aux_data_size +
         aux_padding +
         frame_size;
 
@@ -315,16 +317,16 @@ SparcProcess::argsInit(int pageSize)
     memState->setStackSize(memState->getStackBase() - memState->getStackMin());
 
     // Allocate space for the stack
-    allocateMem(roundDown(memState->getStackMin(), pageSize),
-                roundUp(memState->getStackSize(), pageSize));
+    memState->mapRegion(roundDown(memState->getStackMin(), pageSize),
+                        roundUp(memState->getStackSize(), pageSize), "stack");
 
     // map out initial stack contents
     IntType sentry_base = memState->getStackBase() - sentry_size;
     IntType file_name_base = sentry_base - file_name_size;
     IntType env_data_base = file_name_base - env_data_size;
     IntType arg_data_base = env_data_base - arg_data_size;
-    IntType auxv_array_base = arg_data_base -
-        info_block_padding - aux_array_size - aux_padding;
+    IntType aux_data_base = arg_data_base - info_block_padding - aux_data_size;
+    IntType auxv_array_base = aux_data_base - aux_array_size - aux_padding;
     IntType envp_array_base = auxv_array_base - envp_array_size;
     IntType argv_array_base = envp_array_base - argv_array_size;
     IntType argc_base = argv_array_base - argc_size;
@@ -355,29 +357,35 @@ SparcProcess::argsInit(int pageSize)
 
     // Write out the sentry void *
     uint64_t sentry_NULL = 0;
-    initVirtMem.writeBlob(sentry_base, &sentry_NULL, sentry_size);
+    initVirtMem->writeBlob(sentry_base, &sentry_NULL, sentry_size);
 
     // Write the file name
-    initVirtMem.writeString(file_name_base, filename.c_str());
+    initVirtMem->writeString(file_name_base, filename.c_str());
+
+    // Fix up the aux vectors which point to data.
+    for (auto &aux: auxv) {
+        if (aux.type == M5_AT_RANDOM)
+            aux.val = aux_data_base;
+    }
 
     // Copy the aux stuff
     Addr auxv_array_end = auxv_array_base;
     for (const auto &aux: auxv) {
-        initVirtMem.write(auxv_array_end, aux, GuestByteOrder);
+        initVirtMem->write(auxv_array_end, aux, GuestByteOrder);
         auxv_array_end += sizeof(aux);
     }
 
     // Write out the terminating zeroed auxilliary vector
     const AuxVector<IntType> zero(0, 0);
-    initVirtMem.write(auxv_array_end, zero);
+    initVirtMem->write(auxv_array_end, zero);
     auxv_array_end += sizeof(zero);
 
     copyStringArray(envp, envp_array_base, env_data_base,
-                    BigEndianByteOrder, initVirtMem);
+                    BigEndianByteOrder, *initVirtMem);
     copyStringArray(argv, argv_array_base, arg_data_base,
-                    BigEndianByteOrder, initVirtMem);
+                    BigEndianByteOrder, *initVirtMem);
 
-    initVirtMem.writeBlob(argc_base, &guestArgc, intSize);
+    initVirtMem->writeBlob(argc_base, &guestArgc, intSize);
 
     // Set up space for the trap handlers into the processes address space.
     // Since the stack grows down and there is reserved address space abov
@@ -408,9 +416,9 @@ Sparc64Process::argsInit(int intSize, int pageSize)
     SparcProcess::argsInit<uint64_t>(pageSize);
 
     // Stuff the trap handlers into the process address space
-    initVirtMem.writeBlob(fillStart,
+    initVirtMem->writeBlob(fillStart,
             fillHandler64, sizeof(MachInst) * numFillInsts);
-    initVirtMem.writeBlob(spillStart,
+    initVirtMem->writeBlob(spillStart,
             spillHandler64, sizeof(MachInst) *  numSpillInsts);
 }
 
@@ -420,17 +428,17 @@ Sparc32Process::argsInit(int intSize, int pageSize)
     SparcProcess::argsInit<uint32_t>(pageSize);
 
     // Stuff the trap handlers into the process address space
-    initVirtMem.writeBlob(fillStart,
+    initVirtMem->writeBlob(fillStart,
             fillHandler32, sizeof(MachInst) * numFillInsts);
-    initVirtMem.writeBlob(spillStart,
+    initVirtMem->writeBlob(spillStart,
             spillHandler32, sizeof(MachInst) *  numSpillInsts);
 }
 
 void Sparc32Process::flushWindows(ThreadContext *tc)
 {
-    RegVal Cansave = tc->readIntReg(NumIntArchRegs + 3);
-    RegVal Canrestore = tc->readIntReg(NumIntArchRegs + 4);
-    RegVal Otherwin = tc->readIntReg(NumIntArchRegs + 6);
+    RegVal Cansave = tc->readIntReg(INTREG_CANSAVE);
+    RegVal Canrestore = tc->readIntReg(INTREG_CANRESTORE);
+    RegVal Otherwin = tc->readIntReg(INTREG_OTHERWIN);
     RegVal CWP = tc->readMiscReg(MISCREG_CWP);
     RegVal origCWP = CWP;
     CWP = (CWP + Cansave + 2) % NWindows;
@@ -455,17 +463,17 @@ void Sparc32Process::flushWindows(ThreadContext *tc)
             CWP = (CWP + 1) % NWindows;
         }
     }
-    tc->setIntReg(NumIntArchRegs + 3, Cansave);
-    tc->setIntReg(NumIntArchRegs + 4, Canrestore);
+    tc->setIntReg(INTREG_CANSAVE, Cansave);
+    tc->setIntReg(INTREG_CANRESTORE, Canrestore);
     tc->setMiscReg(MISCREG_CWP, origCWP);
 }
 
 void
 Sparc64Process::flushWindows(ThreadContext *tc)
 {
-    RegVal Cansave = tc->readIntReg(NumIntArchRegs + 3);
-    RegVal Canrestore = tc->readIntReg(NumIntArchRegs + 4);
-    RegVal Otherwin = tc->readIntReg(NumIntArchRegs + 6);
+    RegVal Cansave = tc->readIntReg(INTREG_CANSAVE);
+    RegVal Canrestore = tc->readIntReg(INTREG_CANRESTORE);
+    RegVal Otherwin = tc->readIntReg(INTREG_OTHERWIN);
     RegVal CWP = tc->readMiscReg(MISCREG_CWP);
     RegVal origCWP = CWP;
     CWP = (CWP + Cansave + 2) % NWindows;
@@ -490,47 +498,7 @@ Sparc64Process::flushWindows(ThreadContext *tc)
             CWP = (CWP + 1) % NWindows;
         }
     }
-    tc->setIntReg(NumIntArchRegs + 3, Cansave);
-    tc->setIntReg(NumIntArchRegs + 4, Canrestore);
+    tc->setIntReg(INTREG_CANSAVE, Cansave);
+    tc->setIntReg(INTREG_CANRESTORE, Canrestore);
     tc->setMiscReg(MISCREG_CWP, origCWP);
-}
-
-RegVal
-Sparc32Process::getSyscallArg(ThreadContext *tc, int &i)
-{
-    assert(i < 6);
-    return bits(tc->readIntReg(FirstArgumentReg + i++), 31, 0);
-}
-
-RegVal
-Sparc64Process::getSyscallArg(ThreadContext *tc, int &i)
-{
-    assert(i < 6);
-    return tc->readIntReg(FirstArgumentReg + i++);
-}
-
-void
-SparcProcess::setSyscallReturn(ThreadContext *tc, SyscallReturn sysret)
-{
-    // check for error condition.  SPARC syscall convention is to
-    // indicate success/failure in reg the carry bit of the ccr
-    // and put the return value itself in the standard return value reg ().
-    PSTATE pstate = tc->readMiscRegNoEffect(MISCREG_PSTATE);
-    if (sysret.successful()) {
-        // no error, clear XCC.C
-        tc->setIntReg(NumIntArchRegs + 2,
-                      tc->readIntReg(NumIntArchRegs + 2) & 0xEE);
-        RegVal val = sysret.returnValue();
-        if (pstate.am)
-            val = bits(val, 31, 0);
-        tc->setIntReg(ReturnValueReg, val);
-    } else {
-        // got an error, set XCC.C
-        tc->setIntReg(NumIntArchRegs + 2,
-                      tc->readIntReg(NumIntArchRegs + 2) | 0x11);
-        RegVal val = sysret.errnoValue();
-        if (pstate.am)
-            val = bits(val, 31, 0);
-        tc->setIntReg(ReturnValueReg, val);
-    }
 }

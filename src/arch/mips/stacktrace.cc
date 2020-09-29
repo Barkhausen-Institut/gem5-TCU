@@ -31,12 +31,11 @@
 #include <string>
 
 #include "arch/mips/isa_traits.hh"
-#include "arch/mips/vtophys.hh"
 #include "base/bitfield.hh"
 #include "base/trace.hh"
 #include "cpu/base.hh"
 #include "cpu/thread_context.hh"
-#include "mem/fs_translating_port_proxy.hh"
+#include "mem/port_proxy.hh"
 #include "sim/system.hh"
 
 using namespace MipsISA;

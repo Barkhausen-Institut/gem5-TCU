@@ -26,18 +26,22 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __SYSTEM_EVENTS_HH__
-#define __SYSTEM_EVENTS_HH__
+#ifndef __KERN_SYSTEM_EVENTS_HH__
+#define __KERN_SYSTEM_EVENTS_HH__
 
 #include "cpu/pc_event.hh"
 
-class SkipFuncEvent : public PCEvent
+class SkipFuncBase : public PCEvent
 {
+  protected:
+    virtual void returnFromFuncIn(ThreadContext *tc) = 0;
+
   public:
-    SkipFuncEvent(PCEventScope *s, const std::string &desc, Addr addr)
-        : PCEvent(s, desc, addr)
+    SkipFuncBase(PCEventScope *s, const std::string &desc, Addr addr) :
+        PCEvent(s, desc, addr)
     {}
-    virtual void process(ThreadContext *tc);
+
+    void process(ThreadContext *tc) override;
 };
 
-#endif // __SYSTEM_EVENTS_HH__
+#endif // __KERN_SYSTEM_EVENTS_HH__

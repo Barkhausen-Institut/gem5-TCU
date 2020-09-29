@@ -29,8 +29,8 @@ Built in test cases that verify particular details about a gem5 run.
 '''
 import re
 
-from testlib import test
-from testlib.config import constants
+from testlib import test_util as test
+from testlib.configuration import constants
 from testlib.helper import joinpath, diff_out_file
 
 class Verifier(object):
@@ -46,16 +46,6 @@ class Verifier(object):
         name = '-'.join([name_pfx, self.__class__.__name__])
         return test.TestFunction(self._test,
                 name=name, fixtures=self.fixtures)
-
-    def failed(self, fixtures):
-        '''
-        Called if this verifier fails to cleanup (or not) as needed.
-        '''
-        try:
-            fixtures[constants.tempdir_fixture_name].skip_cleanup()
-        except KeyError:
-            pass # No need to do anything if the tempdir fixture doesn't exist
-
 
 class MatchGoldStandard(Verifier):
     '''
@@ -90,7 +80,6 @@ class MatchGoldStandard(Verifier):
                             ignore_regexes=self.ignore_regex,
                             logger=params.log)
         if diff is not None:
-            self.failed(fixtures)
             test.fail('Stdout did not match:\n%s\nSee %s for full results'
                       % (diff, tempdir))
 
@@ -127,6 +116,7 @@ class MatchStdout(DerivedGoldStandard):
     _file = constants.gem5_simulation_stdout
     _default_ignore_regex = [
             re.compile('^Redirecting (stdout|stderr) to'),
+            re.compile('^gem5 version '),
             re.compile('^gem5 compiled '),
             re.compile('^gem5 started '),
             re.compile('^gem5 executing on '),
@@ -194,7 +184,6 @@ class MatchRegex(Verifier):
             if parse_file(joinpath(tempdir,
                                    constants.gem5_simulation_stderr)):
                 return # Success
-        self.failed(fixtures)
         test.fail('Could not match regex.')
 
 _re_type = type(re.compile(''))

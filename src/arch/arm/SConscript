@@ -44,6 +44,8 @@ if env['TARGET_ISA'] == 'arm':
 # Workaround for bug in SCons version > 0.97d20071212
 # Scons bug id: 2006 M5 Bug id: 308
     Dir('isa/formats')
+
+    GTest('aapcs64.test', 'aapcs64.test.cc')
     Source('decoder.cc')
     Source('faults.cc')
     Source('insts/branch.cc')
@@ -67,10 +69,11 @@ if env['TARGET_ISA'] == 'arm':
     Source('isa_device.cc')
     Source('linux/linux.cc')
     Source('linux/process.cc')
-    Source('linux/system.cc')
+    Source('linux/fs_workload.cc')
     Source('freebsd/freebsd.cc')
     Source('freebsd/process.cc')
-    Source('freebsd/system.cc')
+    Source('freebsd/fs_workload.cc')
+    Source('fs_workload.cc')
     Source('m3/system.cc')
     Source('miscregs.cc')
     Source('nativetrace.cc')
@@ -88,8 +91,8 @@ if env['TARGET_ISA'] == 'arm':
     Source('tlb.cc')
     Source('tlbi_op.cc')
     Source('utility.cc')
-    Source('vtophys.cc')
 
+    SimObject('ArmFsWorkload.py')
     SimObject('ArmInterrupts.py')
     SimObject('ArmISA.py')
     SimObject('ArmNativeTrace.py')

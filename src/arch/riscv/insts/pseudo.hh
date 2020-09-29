@@ -32,7 +32,6 @@
 #include <string>
 
 #include "arch/riscv/insts/static_inst.hh"
-#include "cpu/static_inst.hh"
 
 namespace RiscvISA
 {
@@ -43,7 +42,10 @@ class PseudoOp : public RiscvStaticInst
     using RiscvStaticInst::RiscvStaticInst;
 
     std::string generateDisassembly(
-        Addr pc, const SymbolTable *symtab) const override;
+        Addr pc, const Loader::SymbolTable *symtab) const override
+    {
+        return mnemonic;
+    }
 };
 
 }

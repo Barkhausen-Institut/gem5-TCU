@@ -40,7 +40,7 @@
 #include "arch/isa_traits.hh"
 #include "config/the_isa.hh"
 #include "cpu/thread_context.hh"
-#include "mem/fs_translating_port_proxy.hh"
+#include "mem/port_proxy.hh"
 #include "sim/byteswap.hh"
 #include "sim/system.hh"
 
@@ -93,7 +93,7 @@ Linux::dumpDmesg(ThreadContext *tc, std::ostream &os)
 {
     System *system = tc->getSystemPtr();
     const ByteOrder bo = system->getGuestByteOrder();
-    const SymbolTable *symtab = system->kernelSymtab;
+    const auto *symtab = system->workload->symtab(tc);
     PortProxy &proxy = tc->getVirtProxy();
 
     Addr addr_lb = 0, addr_lb_len = 0, addr_first = 0, addr_next = 0;

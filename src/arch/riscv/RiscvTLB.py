@@ -31,6 +31,7 @@ from m5.params import *
 from m5.proxy import *
 
 from m5.objects.BaseTLB import BaseTLB, BasePagetableWalker
+from m5.objects.ClockedObject import ClockedObject
 
 class RiscvPagetableWalker(BasePagetableWalker):
     type = 'RiscvPagetableWalker'

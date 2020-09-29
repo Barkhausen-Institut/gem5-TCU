@@ -136,9 +136,9 @@ class O3ThreadContext : public ThreadContext
 
     void setContextId(ContextID id) override { thread->setContextId(id); }
 
-    virtual SymbolTable *getSymTab() {
+    virtual const Loader::SymbolTable *getSymTab() {
         if(FullSystem)
-            return getSystemPtr()->kernelSymtab;
+            return getSystemPtr()->workload->symtab(this);
         return getProcessPtr()->symtab;
     }
 

@@ -121,7 +121,7 @@ class CheckerThreadContext : public ThreadContext
        checkerTC->setContextId(id);
     }
 
-    SymbolTable *getSymTab() { return actualTC->getSymTab(); }
+    const Loader::SymbolTable *getSymTab() override { return actualTC->getSymTab(); }
 
     /** Returns this thread's ID number. */
     int threadId() const override { return actualTC->threadId(); }

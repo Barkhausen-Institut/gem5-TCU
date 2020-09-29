@@ -61,11 +61,7 @@ namespace X86ISA
         Addr _gdtStart;
         Addr _gdtSize;
 
-        SyscallDesc *syscallDescs;
-        const int numSyscallDescs;
-
-        X86Process(ProcessParams * params, ObjectFile *objFile,
-                   SyscallDesc *_syscallDescs, int _numSyscallDescs);
+        X86Process(ProcessParams *params, ::Loader::ObjectFile *objFile);
 
         template<class IntType>
         void argsInit(int pageSize,
@@ -78,10 +74,6 @@ namespace X86ISA
         Addr gdtSize()
         { return _gdtSize; }
 
-        SyscallDesc* getDesc(int callnum) override;
-
-        void setSyscallReturn(ThreadContext *tc,
-                              SyscallReturn return_value) override;
         void clone(ThreadContext *old_tc, ThreadContext *new_tc,
                    Process *process, RegVal flags) override;
 
@@ -93,7 +85,6 @@ namespace X86ISA
 
             _gdtStart = in._gdtStart;
             _gdtSize = in._gdtSize;
-            syscallDescs = in.syscallDescs;
 
             return *this;
         }
@@ -102,9 +93,6 @@ namespace X86ISA
     class X86_64Process : public X86Process
     {
       protected:
-        X86_64Process(ProcessParams *params, ObjectFile *objFile,
-                      SyscallDesc *_syscallDescs, int _numSyscallDescs);
-
         class VSyscallPage
         {
           public:
@@ -130,12 +118,11 @@ namespace X86ISA
         VSyscallPage vsyscallPage;
 
       public:
+        X86_64Process(ProcessParams *params, ::Loader::ObjectFile *objFile);
+
         void argsInit(int pageSize);
         void initState() override;
 
-        RegVal getSyscallArg(ThreadContext *tc, int &i) override;
-        /// Explicitly import the otherwise hidden getSyscallArg
-        using Process::getSyscallArg;
         void clone(ThreadContext *old_tc, ThreadContext *new_tc,
                    Process *process, RegVal flags) override;
     };
@@ -143,9 +130,6 @@ namespace X86ISA
     class I386Process : public X86Process
     {
       protected:
-        I386Process(ProcessParams *params, ObjectFile *objFile,
-                    SyscallDesc *_syscallDescs, int _numSyscallDescs);
-
         class VSyscallPage
         {
           public:
@@ -171,11 +155,11 @@ namespace X86ISA
         VSyscallPage vsyscallPage;
 
       public:
+        I386Process(ProcessParams *params, ::Loader::ObjectFile *objFile);
+
         void argsInit(int pageSize);
         void initState() override;
 
-        RegVal getSyscallArg(ThreadContext *tc, int &i) override;
-        RegVal getSyscallArg(ThreadContext *tc, int &i, int width) override;
         void clone(ThreadContext *old_tc, ThreadContext *new_tc,
                    Process *process, RegVal flags) override;
     };

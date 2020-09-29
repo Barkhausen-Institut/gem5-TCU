@@ -48,6 +48,7 @@
 #include "arch/generic/isa.hh"
 #include "arch/registers.hh"
 #include "arch/types.hh"
+#include "base/loader/symtab.hh"
 #include "base/types.hh"
 #include "config/the_isa.hh"
 #include "cpu/pc_event.hh"
@@ -68,7 +69,6 @@ class EndQuiesceEvent;
 class PortProxy;
 class Process;
 class System;
-class SymbolTable;
 namespace Kernel {
     class Statistics;
 }
@@ -135,7 +135,7 @@ class ThreadContext : public PCEventScope
 
     virtual void setContextId(ContextID id) = 0;
 
-    virtual SymbolTable *getSymTab() = 0;
+    virtual const Loader::SymbolTable *getSymTab() = 0;
 
     virtual BaseTLB *getITBPtr() = 0;
 

@@ -43,8 +43,10 @@
 #define __SIM_SYSCALL_DESC_HH__
 
 #include <functional>
+#include <map>
 #include <string>
 
+#include "base/logging.hh"
 #include "base/types.hh"
 #include "cpu/thread_context.hh"
 #include "sim/guest_abi.hh"
@@ -53,8 +55,7 @@
 
 class SyscallDesc;
 
-SyscallReturn unimplementedFunc(SyscallDesc *desc, int num,
-                                ThreadContext *tc);
+SyscallReturn unimplementedFunc(SyscallDesc *desc, ThreadContext *tc);
 
 /**
  * This class provides the wrapper interface for the system call
@@ -64,31 +65,40 @@ SyscallReturn unimplementedFunc(SyscallDesc *desc, int num,
  */
 class SyscallDesc {
   public:
-    using SyscallExecutor =
-        std::function<SyscallReturn(SyscallDesc *, int num, ThreadContext *)>;
-
-    SyscallDesc(const char *name, SyscallExecutor sys_exec=unimplementedFunc)
-        : _name(name), executor(sys_exec)
-    {}
-
     /**
      * Interface for invoking the system call funcion pointer. Note that
      * this acts as a gateway for all system calls and serves a good point
      * to add filters for behaviors or apply checks for all system calls.
-     * @param callnum Number associated with call (by operating system)
-     * @param proc Handle for the owning Process to pass information
      * @param tc Handle for owning ThreadContext to pass information
      */
-    void doSyscall(int callnum, ThreadContext *tc, Fault *fault);
+    void doSyscall(ThreadContext *tc, Fault *fault);
 
-    std::string name() { return _name; }
+    std::string name() const { return _name; }
+    int num() const { return _num; }
+
+    /**
+     * For use within the system call executor if new threads are created and
+     * need something returned into them.
+     */
+    virtual void returnInto(ThreadContext *tc, const SyscallReturn &ret) = 0;
+
+  protected:
+    using Executor =
+        std::function<SyscallReturn(SyscallDesc *, ThreadContext *)>;
+    using Dumper = std::function<std::string(std::string, ThreadContext *)>;
+
+    SyscallDesc(int num, const char *name, Executor exec, Dumper dump) :
+        _name(name), _num(num), executor(exec), dumper(dump)
+    {}
 
   private:
     /** System call name (e.g., open, mmap, clone, socket, etc.) */
     std::string _name;
+    int _num;
 
     /** Mechanism for ISAs to connect to the emul function definitions */
-    SyscallExecutor executor;
+    Executor executor;
+    Dumper dumper;
 };
 
 /*
@@ -102,28 +112,27 @@ class SyscallDescABI : public SyscallDesc
   private:
     // Aliases to make the code below a little more concise.
     template <typename ...Args>
-    using SyscallABIExecutor =
-        std::function<SyscallReturn(SyscallDesc *, int,
-                                    ThreadContext *, Args...)>;
+    using ABIExecutor =
+        std::function<SyscallReturn(SyscallDesc *, ThreadContext *, Args...)>;
 
     template <typename ...Args>
-    using SyscallABIExecutorPtr =
-        SyscallReturn (*)(SyscallDesc *, int, ThreadContext *, Args...);
+    using ABIExecutorPtr =
+        SyscallReturn (*)(SyscallDesc *, ThreadContext *, Args...);
 
 
     // Wrap an executor with guest arguments with a normal executor that gets
     // those additional arguments from the guest context.
     template <typename ...Args>
-    static inline SyscallExecutor
-    buildExecutor(SyscallABIExecutor<Args...> target)
+    static inline Executor
+    buildExecutor(ABIExecutor<Args...> target)
     {
-        return [target](SyscallDesc *desc, int num,
+        return [target](SyscallDesc *desc,
                         ThreadContext *tc) -> SyscallReturn {
-            // Create a partial function which will stick desc and num to the
-            // front of the parameter list.
-            auto partial = [target,desc,num](
+            // Create a partial function which will stick desc to the front of
+            // the parameter list.
+            auto partial = [target,desc](
                     ThreadContext *tc, Args... args) -> SyscallReturn {
-                return target(desc, num, tc, args...);
+                return target(desc, tc, args...);
             };
 
             // Use invokeSimcall to gather the other arguments based on the
@@ -134,66 +143,66 @@ class SyscallDescABI : public SyscallDesc
         };
     }
 
+    template <typename ...Args>
+    static inline Dumper
+    buildDumper()
+    {
+        return [](std::string name, ThreadContext *tc) -> std::string {
+            return dumpSimcall<ABI, SyscallReturn, Args...>(name, tc);
+        };
+    }
 
   public:
     // Constructors which plumb in buildExecutor.
     template <typename ...Args>
-    SyscallDescABI(const char *name, SyscallABIExecutor<Args...> target) :
-        SyscallDesc(name, buildExecutor<Args...>(target))
+    SyscallDescABI(int num, const char *name, ABIExecutor<Args...> target) :
+        SyscallDesc(num, name, buildExecutor<Args...>(target),
+                               buildDumper<Args...>())
     {}
 
     template <typename ...Args>
-    SyscallDescABI(const char *name, SyscallABIExecutorPtr<Args...> target) :
-        SyscallDescABI(name, SyscallABIExecutor<Args...>(target))
+    SyscallDescABI(int num, const char *name, ABIExecutorPtr<Args...> target) :
+        SyscallDescABI(num, name, ABIExecutor<Args...>(target))
     {}
 
-    using SyscallDesc::SyscallDesc;
-};
+    SyscallDescABI(int num, const char *name) :
+        SyscallDescABI(num, name, ABIExecutor<>(unimplementedFunc))
+    {}
 
-struct DefaultSyscallABI
-{
-    using Position = int;
-};
-
-namespace GuestABI
-{
-
-template <>
-struct Result<DefaultSyscallABI, SyscallReturn>
-{
-    static void
-    store(ThreadContext *tc, const SyscallReturn &ret)
+    void
+    returnInto(ThreadContext *tc, const SyscallReturn &ret) override
     {
-        auto *process = tc->getProcessPtr();
-        process->setSyscallReturn(tc, ret);
+        GuestABI::Result<ABI, SyscallReturn>::store(tc, ret);
     }
 };
 
-template <typename Arg>
-struct Argument<DefaultSyscallABI, Arg,
-    typename std::enable_if<std::is_integral<Arg>::value>::type>
+template <typename ABI>
+class SyscallDescTable
 {
-    static Arg
-    get(ThreadContext *tc, DefaultSyscallABI::Position &position)
+  private:
+    std::map<int, SyscallDescABI<ABI>> _descs;
+
+  public:
+    SyscallDescTable(std::initializer_list<SyscallDescABI<ABI>> descs)
     {
-        auto *process = tc->getProcessPtr();
-        return process->getSyscallArg(tc, position);
+        for (auto &desc: descs) {
+            auto res = _descs.insert({desc.num(), desc});
+            panic_if(!res.second, "Failed to insert desc %s", desc.name());
+        }
+    }
+
+    SyscallDesc
+    *get(int num, bool fatal_if_missing=true)
+    {
+        auto it = _descs.find(num);
+        if (it == _descs.end()) {
+            if (fatal_if_missing)
+                fatal("Syscall %d out of range", num);
+            else
+                return nullptr;
+        }
+        return &it->second;
     }
 };
-
-template <typename Arg>
-struct Argument<DefaultSyscallABI, Arg,
-    typename std::enable_if<std::is_pointer<Arg>::value>::type>
-{
-    static Arg
-    get(ThreadContext *tc, DefaultSyscallABI::Position &position)
-    {
-        auto *process = tc->getProcessPtr();
-        RegVal reg = process->getSyscallArg(tc, position);
-        return (Arg)(uintptr_t)(reg);
-    }
-};
-
-} // namespace GuestABI
 
 #endif // __SIM_SYSCALL_DESC_HH__

@@ -43,7 +43,6 @@
 
 #include "arch/stacktrace.hh"
 #include "arch/utility.hh"
-#include "arch/vtophys.hh"
 #include "base/cp_annotate.hh"
 #include "base/cprintf.hh"
 #include "base/inifile.hh"
@@ -422,12 +421,6 @@ change_thread_state(ThreadID tid, int activate, int priority)
 {
 }
 
-Addr
-BaseSimpleCPU::dbg_vtophys(Addr addr)
-{
-    return vtophys(threadContexts[curThread], addr);
-}
-
 void
 BaseSimpleCPU::wakeup(ThreadID tid)
 {
@@ -471,7 +464,7 @@ BaseSimpleCPU::setupFetchRequest(const RequestPtr &req)
     // set up memory request for instruction fetch
     DPRINTF(Fetch, "Fetch: Inst PC:%08p, Fetch PC:%08p\n", instAddr, fetchPC);
 
-    req->setVirt(0, fetchPC, sizeof(MachInst), Request::INST_FETCH,
+    req->setVirt(fetchPC, sizeof(MachInst), Request::INST_FETCH,
                  instMasterId(), instAddr);
 }
 

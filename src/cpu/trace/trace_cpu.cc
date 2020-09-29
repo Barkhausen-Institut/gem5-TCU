@@ -650,16 +650,15 @@ TraceCPU::ElasticDataGen::executeMemReq(GraphNode* node_ptr)
 
     // Create a request and the packet containing request
     auto req = std::make_shared<Request>(
-        node_ptr->physAddr, node_ptr->size,
-        node_ptr->flags, masterID, node_ptr->seqNum,
-        ContextID(0));
+        node_ptr->physAddr, node_ptr->size, node_ptr->flags, masterID);
+    req->setReqInstSeqNum(node_ptr->seqNum);
 
     req->setPC(node_ptr->pc);
-    // If virtual address is valid, set the asid and virtual address fields
+    // If virtual address is valid, set the virtual address field
     // of the request.
     if (node_ptr->virtAddr != 0) {
-        req->setVirt(node_ptr->asid, node_ptr->virtAddr, node_ptr->size,
-                        node_ptr->flags, masterID, node_ptr->pc);
+        req->setVirt(node_ptr->virtAddr, node_ptr->size,
+                     node_ptr->flags, masterID, node_ptr->pc);
         req->setPaddr(node_ptr->physAddr);
         req->setReqInstSeqNum(node_ptr->seqNum);
     }
@@ -1326,11 +1325,6 @@ TraceCPU::ElasticDataGen::InputStream::read(GraphNode* element)
             element->virtAddr = pkt_msg.v_addr();
         else
             element->virtAddr = 0;
-
-        if (pkt_msg.has_asid())
-            element->asid = pkt_msg.asid();
-        else
-            element->asid = 0;
 
         if (pkt_msg.has_size())
             element->size = pkt_msg.size();

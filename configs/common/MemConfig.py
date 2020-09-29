@@ -1,4 +1,4 @@
-# Copyright (c) 2013, 2017 ARM Limited
+# Copyright (c) 2013, 2017, 2020 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -38,7 +38,7 @@ from __future__ import absolute_import
 
 import m5.objects
 from common import ObjectList
-from . import HMC
+from common import HMC
 
 def create_mem_ctrl(cls, r, i, nbr_mem_ctrls, intlv_bits, intlv_size):
     """
@@ -109,6 +109,7 @@ def config_mem(options, system):
     opt_elastic_trace_en = getattr(options, "elastic_trace_en", False)
     opt_mem_ranks = getattr(options, "mem_ranks", None)
     opt_dram_powerdown = getattr(options, "enable_dram_powerdown", None)
+    opt_mem_channels_intlv = getattr(options, "mem_channels_intlv", 128)
 
     if opt_mem_type == "HMC_2500_1x32":
         HMChost = HMC.config_hmc_host_ctrl(options, system)
@@ -125,7 +126,7 @@ def config_mem(options, system):
             port_data=opt_tlm_memory,
             port=system.membus.master,
             addr_ranges=system.mem_ranges)
-        system.kernel_addr_check = False
+        system.workload.addr_check = False
         return
 
     if opt_external_memory_system:
@@ -133,7 +134,7 @@ def config_mem(options, system):
             port_type=opt_external_memory_system,
             port_data="init_mem0", port=xbar.master,
             addr_ranges=system.mem_ranges)
-        subsystem.kernel_addr_check = False
+        subsystem.workload.addr_check = False
         return
 
     nbr_mem_ctrls = opt_mem_channels
@@ -154,7 +155,7 @@ def config_mem(options, system):
     # byte granularity, or cache line granularity if larger than 128
     # byte. This value is based on the locality seen across a large
     # range of workloads.
-    intlv_size = max(128, system.cache_line_size.value)
+    intlv_size = max(opt_mem_channels_intlv, system.cache_line_size.value)
 
     # For every range (most systems will only have one), create an
     # array of controllers and set their parameters to match their

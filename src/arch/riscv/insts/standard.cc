@@ -43,7 +43,7 @@ namespace RiscvISA
 {
 
 string
-RegOp::generateDisassembly(Addr pc, const SymbolTable *symtab) const
+RegOp::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
 {
     stringstream ss;
     ss << mnemonic << ' ' << registerName(_destRegIdx[0]) << ", " <<
@@ -53,7 +53,7 @@ RegOp::generateDisassembly(Addr pc, const SymbolTable *symtab) const
 }
 
 string
-CSROp::generateDisassembly(Addr pc, const SymbolTable *symtab) const
+CSROp::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
 {
     stringstream ss;
     ss << mnemonic << ' ' << registerName(_destRegIdx[0]) << ", ";
@@ -68,7 +68,7 @@ CSROp::generateDisassembly(Addr pc, const SymbolTable *symtab) const
 }
 
 string
-SystemOp::generateDisassembly(Addr pc, const SymbolTable *symtab) const
+SystemOp::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
 {
     if (strcmp(mnemonic, "fence_vma") == 0) {
         stringstream ss;

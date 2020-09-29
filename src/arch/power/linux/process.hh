@@ -38,22 +38,14 @@
 class PowerLinuxProcess : public PowerProcess
 {
   public:
-    PowerLinuxProcess(ProcessParams * params, ObjectFile *objFile);
-
-    SyscallDesc *getDesc(int callnum) override;
+    PowerLinuxProcess(ProcessParams * params, ::Loader::ObjectFile *objFile);
 
     void initState() override;
 
     void syscall(ThreadContext *tc, Fault *fault) override;
 
-    RegVal getSyscallArg(ThreadContext *tc, int &i) override;
-    /// Explicitly import the otherwise hidden getSyscallArg
-    using Process::getSyscallArg;
-
-    /// Array of syscall descriptors, indexed by call number.
-    static SyscallDescABI<DefaultSyscallABI> syscallDescs[];
-
-    const int Num_Syscall_Descs;
+    /// Syscall descriptors, indexed by call number.
+    static SyscallDescTable<SyscallABI> syscallDescs;
 };
 
 #endif // __POWER_LINUX_PROCESS_HH__

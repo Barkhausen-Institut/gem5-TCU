@@ -51,7 +51,6 @@
 #include "arch/generic/tlb.hh"
 #include "arch/isa_traits.hh"
 #include "arch/utility.hh"
-#include "arch/vtophys.hh"
 #include "base/random.hh"
 #include "base/types.hh"
 #include "config/the_isa.hh"
@@ -631,7 +630,7 @@ DefaultFetch<Impl>::fetchCacheLine(Addr vaddr, ThreadID tid, Addr pc)
     // Set the appropriate read size and flags as well.
     // Build request here.
     RequestPtr mem_req = std::make_shared<Request>(
-        tid, fetchBufferBlockPC, fetchBufferSize,
+        fetchBufferBlockPC, fetchBufferSize,
         Request::INST_FETCH, cpu->instMasterId(), pc,
         cpu->thread[tid]->contextId());
 
@@ -1110,8 +1109,6 @@ DefaultFetch<Impl>::buildInst(ThreadID tid, StaticInstPtr staticInst,
     DynInstPtr instruction =
         new DynInst(staticInst, curMacroop, thisPC, nextPC, seq, cpu);
     instruction->setTid(tid);
-
-    instruction->setASID(tid);
 
     instruction->setThreadState(cpu->thread[tid]);
 

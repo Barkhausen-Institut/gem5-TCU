@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2012-2013, 2016-2019 ARM Limited
+ * Copyright (c) 2010, 2012-2013, 2016-2020 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -131,14 +131,14 @@ inPrivilegedMode(ThreadContext *tc)
 bool inAArch64(ThreadContext *tc);
 
 static inline OperatingMode
-currOpMode(ThreadContext *tc)
+currOpMode(const ThreadContext *tc)
 {
-    CPSR cpsr = tc->readMiscReg(MISCREG_CPSR);
+    CPSR cpsr = tc->readMiscRegNoEffect(MISCREG_CPSR);
     return (OperatingMode) (uint8_t) cpsr.mode;
 }
 
 static inline ExceptionLevel
-currEL(ThreadContext *tc)
+currEL(const ThreadContext *tc)
 {
     return opModeToEL(currOpMode(tc));
 }
@@ -182,7 +182,7 @@ bool ELIs64(ThreadContext *tc, ExceptionLevel el);
  */
 bool ELIsInHost(ThreadContext *tc, ExceptionLevel el);
 
-bool isBigEndian64(ThreadContext *tc);
+bool isBigEndian64(const ThreadContext *tc);
 
 /**
  * badMode is checking if the execution mode provided as an argument is
@@ -256,8 +256,11 @@ bool longDescFormatInUse(ThreadContext *tc);
  * to VMPIDR_EL2 (as it happens in virtualized systems) */
 RegVal readMPIDR(ArmSystem *arm_sys, ThreadContext *tc);
 
-/** This helper function is returing the value of MPIDR_EL1 */
+/** This helper function is returning the value of MPIDR_EL1 */
 RegVal getMPIDR(ArmSystem *arm_sys, ThreadContext *tc);
+
+/** Retrieves MPIDR_EL1.{Aff2,Aff1,Aff0} affinity numbers */
+RegVal getAffinity(ArmSystem *arm_sys, ThreadContext *tc);
 
 static inline uint32_t
 mcrMrcIssBuild(bool isRead, uint32_t crm, IntRegIndex rt, uint32_t crn,
@@ -307,21 +310,84 @@ msrMrs64IssBuild(bool isRead, uint32_t op0, uint32_t op1, uint32_t crn,
         (op0 << 20);
 }
 
+Fault
+mcrMrc15Trap(const MiscRegIndex miscReg, ExtMachInst machInst,
+             ThreadContext *tc, uint32_t imm);
 bool
-mcrMrc15TrapToHyp(const MiscRegIndex miscReg, ThreadContext *tc, uint32_t iss);
+mcrMrc15TrapToHyp(const MiscRegIndex miscReg, ThreadContext *tc, uint32_t iss,
+                  ExceptionClass *ec = nullptr);
 
 bool
 mcrMrc14TrapToHyp(const MiscRegIndex miscReg, HCR hcr, CPSR cpsr, SCR scr,
                   HDCR hdcr, HSTR hstr, HCPTR hcptr, uint32_t iss);
+
+Fault
+mcrrMrrc15Trap(const MiscRegIndex miscReg, ExtMachInst machInst,
+               ThreadContext *tc, uint32_t imm);
 bool
-mcrrMrrc15TrapToHyp(const MiscRegIndex miscReg, CPSR cpsr, SCR scr, HSTR hstr,
-                    HCR hcr, uint32_t iss);
+mcrrMrrc15TrapToHyp(const MiscRegIndex miscReg, ThreadContext *tc,
+                    uint32_t iss, ExceptionClass *ec = nullptr);
+
+Fault
+AArch64AArch32SystemAccessTrap(const MiscRegIndex miscReg,
+                               ExtMachInst machInst, ThreadContext *tc,
+                               uint32_t imm, ExceptionClass ec);
+bool
+isAArch64AArch32SystemAccessTrapEL1(const MiscRegIndex miscReg,
+                                    ThreadContext *tc);
+bool
+isAArch64AArch32SystemAccessTrapEL2(const MiscRegIndex miscReg,
+                                    ThreadContext *tc);
+bool
+isGenericTimerHypTrap(const MiscRegIndex miscReg, ThreadContext *tc,
+                      ExceptionClass *ec);
+bool condGenericTimerPhysHypTrap(const MiscRegIndex miscReg,
+                                 ThreadContext *tc);
+bool
+isGenericTimerCommonEL0HypTrap(const MiscRegIndex miscReg, ThreadContext *tc,
+                               ExceptionClass *ec);
+bool
+isGenericTimerPhysHypTrap(const MiscRegIndex miscReg, ThreadContext *tc,
+                          ExceptionClass *ec);
+bool
+condGenericTimerPhysHypTrap(const MiscRegIndex miscReg, ThreadContext *tc);
+bool
+isGenericTimerSystemAccessTrapEL1(const MiscRegIndex miscReg,
+                                  ThreadContext *tc);
+bool
+condGenericTimerSystemAccessTrapEL1(const MiscRegIndex miscReg,
+                                    ThreadContext *tc);
+bool
+isGenericTimerSystemAccessTrapEL2(const MiscRegIndex miscReg,
+                                  ThreadContext *tc);
+bool
+isGenericTimerCommonEL0SystemAccessTrapEL2(const MiscRegIndex miscReg,
+                                           ThreadContext *tc);
+bool
+isGenericTimerPhysEL0SystemAccessTrapEL2(const MiscRegIndex miscReg,
+                                         ThreadContext *tc);
+bool
+isGenericTimerPhysEL1SystemAccessTrapEL2(const MiscRegIndex miscReg,
+                                         ThreadContext *tc);
+bool
+isGenericTimerVirtSystemAccessTrapEL2(const MiscRegIndex miscReg,
+                                      ThreadContext *tc);
+bool
+condGenericTimerCommonEL0SystemAccessTrapEL2(const MiscRegIndex miscReg,
+                                             ThreadContext *tc);
+bool
+condGenericTimerCommonEL1SystemAccessTrapEL2(const MiscRegIndex miscReg,
+                                             ThreadContext *tc);
+bool
+condGenericTimerPhysEL1SystemAccessTrapEL2(const MiscRegIndex miscReg,
+                                           ThreadContext *tc);
+bool
+isGenericTimerSystemAccessTrapEL3(const MiscRegIndex miscReg,
+                                  ThreadContext *tc);
 
 bool SPAlignmentCheckEnabled(ThreadContext* tc);
 
 uint64_t getArgument(ThreadContext *tc, int &number, uint16_t size, bool fp);
-
-void skipFunction(ThreadContext *tc);
 
 inline void
 advancePC(PCState &pc, const StaticInstPtr &inst)
@@ -368,7 +434,7 @@ int decodePhysAddrRange64(uint8_t pa_enc);
  */
 uint8_t encodePhysAddrRange64(int pa_size);
 
-inline ByteOrder byteOrder(ThreadContext *tc)
+inline ByteOrder byteOrder(const ThreadContext *tc)
 {
     return isBigEndian64(tc) ? BigEndianByteOrder : LittleEndianByteOrder;
 };

@@ -31,12 +31,11 @@
 #include <string>
 
 #include "arch/arm/isa_traits.hh"
-#include "arch/arm/vtophys.hh"
 #include "base/bitfield.hh"
 #include "base/trace.hh"
 #include "cpu/base.hh"
 #include "cpu/thread_context.hh"
-#include "mem/fs_translating_port_proxy.hh"
+#include "mem/port_proxy.hh"
 #include "sim/system.hh"
 
 namespace ArmISA
@@ -46,7 +45,7 @@ static int32_t
 readSymbol(ThreadContext *tc, const std::string name)
 {
     PortProxy &vp = tc->getVirtProxy();
-    SymbolTable *symtab = tc->getSystemPtr()->kernelSymtab;
+    const auto *symtab = tc->getSystemPtr()->workload->symtab(tc);
 
     Addr addr;
     if (!symtab->findAddress(name, addr))

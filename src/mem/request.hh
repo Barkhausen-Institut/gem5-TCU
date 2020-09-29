@@ -76,7 +76,9 @@ namespace ContextSwitchTaskId {
     };
 }
 
+class Packet;
 class Request;
+class ThreadContext;
 
 typedef std::shared_ptr<Request> RequestPtr;
 typedef uint16_t MasterID;
@@ -119,8 +121,6 @@ class Request
          * the UNCACHEABLE flag is set as well.
          */
         STRICT_ORDER                = 0x00000800,
-        /** This request is to a memory mapped register. */
-        MMAPPED_IPR                 = 0x00002000,
         /** This request is made in privileged mode. */
         PRIVILEGED                  = 0x00008000,
 
@@ -247,6 +247,9 @@ class Request
         ARG_SEGMENT            = 0x00000800,
     };
 
+    using LocalAccessor =
+        std::function<Cycles(ThreadContext *tc, Packet *pkt)>;
+
   private:
     typedef uint16_t PrivateFlagsType;
     typedef ::Flags<PrivateFlagsType> PrivateFlags;
@@ -256,7 +259,7 @@ class Request
         VALID_SIZE           = 0x00000001,
         /** Whether or not paddr is valid (has been written yet). */
         VALID_PADDR          = 0x00000002,
-        /** Whether or not the vaddr & asid are valid. */
+        /** Whether or not the vaddr is valid. */
         VALID_VADDR          = 0x00000004,
         /** Whether or not the instruction sequence number is valid. */
         VALID_INST_SEQ_NUM   = 0x00000008,
@@ -279,37 +282,17 @@ class Request
   private:
 
     /**
-     * Set up a physical (e.g. device) request in a previously
-     * allocated Request object.
-     */
-    void
-    setPhys(Addr paddr, unsigned size, Flags flags, MasterID mid, Tick time)
-    {
-        _paddr = paddr;
-        _size = size;
-        _time = time;
-        _masterId = mid;
-        _flags.clear(~STICKY_FLAGS);
-        _flags.set(flags);
-        privateFlags.clear(~STICKY_PRIVATE_FLAGS);
-        privateFlags.set(VALID_PADDR|VALID_SIZE);
-        depth = 0;
-        accessDelta = 0;
-        //translateDelta = 0;
-    }
-
-    /**
      * The physical address of the request. Valid only if validPaddr
      * is set.
      */
-    Addr _paddr;
+    Addr _paddr = 0;
 
     /**
      * The size of the request. This field must be set when vaddr or
-     * paddr is written via setVirt() or setPhys(), so it is always
-     * valid as long as one of the address fields is valid.
+     * paddr is written via setVirt() or a phys basec constructor, so it is
+     * always valid as long as one of the address fields is valid.
      */
-    unsigned _size;
+    unsigned _size = 0;
 
     /** Byte-enable mask for writes. */
     std::vector<bool> _byteEnable;
@@ -317,7 +300,7 @@ class Request
     /** The requestor ID which is unique in the system for all ports
      * that are capable of issuing a transaction
      */
-    MasterID _masterId;
+    MasterID _masterId = invldMasterId;
 
     /** Flag structure for the request. */
     Flags _flags;
@@ -333,54 +316,49 @@ class Request
      * latencies. This field is set to curTick() any time paddr or vaddr
      * is written.
      */
-    Tick _time;
+    Tick _time = MaxTick;
 
     /**
      * The task id associated with this request
      */
-    uint32_t _taskId;
+    uint32_t _taskId = ContextSwitchTaskId::Unknown;
 
-    union {
-        struct {
-            /**
-             * The stream ID uniquely identifies a device behind the
-             * SMMU/IOMMU Each transaction arriving at the SMMU/IOMMU is
-             * associated with exactly one stream ID.
-             */
-            uint32_t  _streamId;
+    /**
+     * The stream ID uniquely identifies a device behind the
+     * SMMU/IOMMU Each transaction arriving at the SMMU/IOMMU is
+     * associated with exactly one stream ID.
+     */
+    uint32_t _streamId = 0;
 
-            /**
-             * The substream ID identifies an "execution context" within a
-             * device behind an SMMU/IOMMU. It's intended to map 1-to-1 to
-             * PCIe PASID (Process Address Space ID). The presence of a
-             * substream ID is optional.
-             */
-            uint32_t _substreamId;
-        };
-
-        /** The address space ID. */
-        uint64_t _asid;
-    };
+    /**
+     * The substream ID identifies an "execution context" within a
+     * device behind an SMMU/IOMMU. It's intended to map 1-to-1 to
+     * PCIe PASID (Process Address Space ID). The presence of a
+     * substream ID is optional.
+     */
+    uint32_t _substreamId = 0;
 
     /** The virtual address of the request. */
-    Addr _vaddr;
+    Addr _vaddr = MaxAddr;
 
     /**
      * Extra data for the request, such as the return value of
      * store conditional or the compare value for a CAS. */
-    uint64_t _extraData;
+    uint64_t _extraData = 0;
 
     /** The context ID (for statistics, locks, and wakeups). */
-    ContextID _contextId;
+    ContextID _contextId = InvalidContextID;
 
     /** program counter of initiating access; for tracing/debugging */
-    Addr _pc;
+    Addr _pc = MaxAddr;
 
     /** Sequence number of the instruction that creates the request */
-    InstSeqNum _reqInstSeqNum;
+    InstSeqNum _reqInstSeqNum = 0;
 
     /** A pointer to an atomic operation */
-    AtomicOpFunctorPtr atomicOpFunctor;
+    AtomicOpFunctorPtr atomicOpFunctor = nullptr;
+
+    LocalAccessor _localAccessor;
 
   public:
 
@@ -389,81 +367,25 @@ class Request
      *  _flags and privateFlags are cleared by Flags default
      *  constructor.)
      */
-    Request()
-        : _paddr(0), _size(0), _masterId(invldMasterId), _time(0),
-          _taskId(ContextSwitchTaskId::Unknown), _asid(0), _vaddr(0),
-          _extraData(0), _contextId(0), _pc(0),
-          _reqInstSeqNum(0), atomicOpFunctor(nullptr), translateDelta(0),
-          accessDelta(0), depth(0)
-    {}
-
-    Request(Addr paddr, unsigned size, Flags flags, MasterID mid,
-            InstSeqNum seq_num, ContextID cid)
-        : _paddr(0), _size(0), _masterId(invldMasterId), _time(0),
-          _taskId(ContextSwitchTaskId::Unknown), _asid(0), _vaddr(0),
-          _extraData(0), _contextId(0), _pc(0),
-          _reqInstSeqNum(seq_num), atomicOpFunctor(nullptr), translateDelta(0),
-          accessDelta(0), depth(0)
-    {
-        setPhys(paddr, size, flags, mid, curTick());
-        setContext(cid);
-        privateFlags.set(VALID_INST_SEQ_NUM);
-    }
+    Request() {}
 
     /**
      * Constructor for physical (e.g. device) requests.  Initializes
      * just physical address, size, flags, and timestamp (to curTick()).
      * These fields are adequate to perform a request.
      */
-    Request(Addr paddr, unsigned size, Flags flags, MasterID mid)
-        : _paddr(0), _size(0), _masterId(invldMasterId), _time(0),
-          _taskId(ContextSwitchTaskId::Unknown), _asid(0), _vaddr(0),
-          _extraData(0), _contextId(0), _pc(0),
-          _reqInstSeqNum(0), atomicOpFunctor(nullptr), translateDelta(0),
-          accessDelta(0), depth(0)
+    Request(Addr paddr, unsigned size, Flags flags, MasterID mid) :
+        _paddr(paddr), _size(size), _masterId(mid), _time(curTick())
     {
-        setPhys(paddr, size, flags, mid, curTick());
+        _flags.set(flags);
+        privateFlags.set(VALID_PADDR|VALID_SIZE);
     }
 
-    Request(Addr paddr, unsigned size, Flags flags, MasterID mid, Tick time)
-        : _paddr(0), _size(0), _masterId(invldMasterId), _time(0),
-          _taskId(ContextSwitchTaskId::Unknown), _asid(0), _vaddr(0),
-          _extraData(0), _contextId(0), _pc(0),
-          _reqInstSeqNum(0), atomicOpFunctor(nullptr), translateDelta(0),
-          accessDelta(0), depth(0)
-    {
-        setPhys(paddr, size, flags, mid, time);
-    }
-
-    Request(Addr paddr, unsigned size, Flags flags, MasterID mid, Tick time,
-            Addr pc)
-        : _paddr(0), _size(0), _masterId(invldMasterId), _time(0),
-          _taskId(ContextSwitchTaskId::Unknown), _asid(0), _vaddr(0),
-          _extraData(0), _contextId(0), _pc(pc),
-          _reqInstSeqNum(0), atomicOpFunctor(nullptr), translateDelta(0),
-          accessDelta(0), depth(0)
-    {
-        setPhys(paddr, size, flags, mid, time);
-        privateFlags.set(VALID_PC);
-    }
-
-    Request(uint64_t asid, Addr vaddr, unsigned size, Flags flags,
-            MasterID mid, Addr pc, ContextID cid)
-        : _paddr(0), _size(0), _masterId(invldMasterId), _time(0),
-          _taskId(ContextSwitchTaskId::Unknown), _asid(0), _vaddr(0),
-          _extraData(0), _contextId(0), _pc(0),
-          _reqInstSeqNum(0), atomicOpFunctor(nullptr), translateDelta(0),
-          accessDelta(0), depth(0)
-    {
-        setVirt(asid, vaddr, size, flags, mid, pc);
-        setContext(cid);
-    }
-
-    Request(uint64_t asid, Addr vaddr, unsigned size, Flags flags,
+    Request(Addr vaddr, unsigned size, Flags flags,
             MasterID mid, Addr pc, ContextID cid,
-            AtomicOpFunctorPtr atomic_op)
+            AtomicOpFunctorPtr atomic_op=nullptr)
     {
-        setVirt(asid, vaddr, size, flags, mid, pc, std::move(atomic_op));
+        setVirt(vaddr, size, flags, mid, pc, std::move(atomic_op));
         setContext(cid);
     }
 
@@ -475,13 +397,13 @@ class Request
           _memSpaceConfigFlags(other._memSpaceConfigFlags),
           privateFlags(other.privateFlags),
           _time(other._time),
-          _taskId(other._taskId), _asid(other._asid), _vaddr(other._vaddr),
+          _taskId(other._taskId), _vaddr(other._vaddr),
           _extraData(other._extraData), _contextId(other._contextId),
           _pc(other._pc), _reqInstSeqNum(other._reqInstSeqNum),
+          _localAccessor(other._localAccessor),
           translateDelta(other.translateDelta),
           accessDelta(other.accessDelta), depth(other.depth)
     {
-
         atomicOpFunctor.reset(other.atomicOpFunctor ?
                                 other.atomicOpFunctor->clone() : nullptr);
     }
@@ -518,10 +440,9 @@ class Request
      * allocated Request object.
      */
     void
-    setVirt(uint64_t asid, Addr vaddr, unsigned size, Flags flags,
-            MasterID mid, Addr pc, AtomicOpFunctorPtr amo_op = nullptr)
+    setVirt(Addr vaddr, unsigned size, Flags flags, MasterID mid, Addr pc,
+            AtomicOpFunctorPtr amo_op=nullptr)
     {
-        _asid = asid;
         _vaddr = vaddr;
         _size = size;
         _masterId = mid;
@@ -536,14 +457,12 @@ class Request
         accessDelta = 0;
         translateDelta = 0;
         atomicOpFunctor = std::move(amo_op);
+        _localAccessor = nullptr;
     }
 
     /**
-     * Set just the physical address.  This usually used to record the
-     * result of a translation. However, when using virtualized CPUs
-     * setPhys() is sometimes called to finalize a physical address
-     * without a virtual address, so we can't check if the virtual
-     * address is valid.
+     * Set just the physical address. This usually used to record the
+     * result of a translation.
      */
     void
     setPaddr(Addr paddr)
@@ -598,19 +517,19 @@ class Request
     /**
      * Time for the TLB/table walker to successfully translate this request.
      */
-    Tick translateDelta;
+    Tick translateDelta = 0;
 
     /**
      * Access latency to complete this memory transaction not including
      * translation time.
      */
-    Tick accessDelta;
+    Tick accessDelta = 0;
 
     /**
      * Level of the cache hierachy where this request was responded to
      * (e.g. 0 = L1; 1 = L2).
      */
-    mutable int depth;
+    mutable int depth = 0;
 
     /**
      *  Accessor for size.
@@ -661,6 +580,17 @@ class Request
     {
         assert(privateFlags.isSet(VALID_PADDR|VALID_VADDR));
         return _time;
+    }
+
+    /** Is this request for a local memory mapped resource/register? */
+    bool isLocalAccess() { return (bool)_localAccessor; }
+    /** Set the function which will enact that access. */
+    void setLocalAccessor(LocalAccessor acc) { _localAccessor = acc; }
+    /** Perform the installed local access. */
+    Cycles
+    localAccessor(ThreadContext *tc, Packet *pkt)
+    {
+        return _localAccessor(tc, pkt);
     }
 
     /**
@@ -738,21 +668,6 @@ class Request
     void
     taskId(uint32_t id) {
         _taskId = id;
-    }
-
-    /** Accessor function for asid.*/
-    uint64_t
-    getAsid() const
-    {
-        assert(privateFlags.isSet(VALID_VADDR));
-        return _asid;
-    }
-
-    /** Accessor function for asid.*/
-    void
-    setAsid(uint64_t asid)
-    {
-        _asid = asid;
     }
 
     /** Accessor function for architecture-specific flags.*/
@@ -898,7 +813,6 @@ class Request
     bool isLockedRMW() const { return _flags.isSet(LOCKED_RMW); }
     bool isSwap() const { return _flags.isSet(MEM_SWAP|MEM_SWAP_COND); }
     bool isCondSwap() const { return _flags.isSet(MEM_SWAP_COND); }
-    bool isMmappedIpr() const { return _flags.isSet(MMAPPED_IPR); }
     bool isSecure() const { return _flags.isSet(SECURE); }
     bool isPTWalk() const { return _flags.isSet(PT_WALK); }
     bool isAcquire() const { return _flags.isSet(ACQUIRE); }

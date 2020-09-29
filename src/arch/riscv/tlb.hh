@@ -38,7 +38,6 @@
 #include "arch/riscv/isa_traits.hh"
 #include "arch/riscv/pagetable.hh"
 #include "arch/riscv/utility.hh"
-#include "arch/riscv/vtophys.hh"
 #include "base/statistics.hh"
 #include "mem/request.hh"
 #include "params/RiscvTLB.hh"
@@ -107,6 +106,8 @@ class TLB : public BaseTLB
                           ThreadContext *tc, Mode mode) override;
     void translateTiming(const RequestPtr &req, ThreadContext *tc,
                          Translation *translation, Mode mode) override;
+    Fault translateFunctional(const RequestPtr &req,
+                              ThreadContext *tc, Mode mode) override;
     Fault finalizePhysical(const RequestPtr &req,
                            ThreadContext *tc, Mode mode) const override;
 

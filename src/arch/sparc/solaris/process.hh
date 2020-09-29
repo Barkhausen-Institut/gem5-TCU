@@ -41,9 +41,7 @@ class SparcSolarisProcess : public Sparc64Process
 {
   public:
     /// Constructor.
-    SparcSolarisProcess(ProcessParams * params, ObjectFile *objFile);
-
-    SyscallDesc *getDesc(int callnum) override;
+    SparcSolarisProcess(ProcessParams * params, ::Loader::ObjectFile *objFile);
 
     /// The target system's hostname.
     static const char *hostname;
@@ -51,9 +49,7 @@ class SparcSolarisProcess : public Sparc64Process
     void syscall(ThreadContext *tc, Fault *fault) override;
 
      /// Array of syscall descriptors, indexed by call number.
-    static SyscallDescABI<DefaultSyscallABI> syscallDescs[];
-
-    const int Num_Syscall_Descs;
+    static SyscallDescTable<Sparc64Process::SyscallABI> syscallDescs;
 };
 
 

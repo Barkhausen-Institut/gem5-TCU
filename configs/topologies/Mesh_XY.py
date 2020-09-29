@@ -33,7 +33,7 @@ from m5.objects import *
 
 from common import FileSystemConfig
 
-from .BaseTopology import SimpleTopology
+from topologies.BaseTopology import SimpleTopology
 
 # Creates a generic Mesh assuming an equal number of cache
 # and directory controllers.
@@ -176,6 +176,6 @@ class Mesh_XY(SimpleTopology):
 
     # Register nodes with filesystem
     def registerTopology(self, options):
-        for i in xrange(options.num_cpus):
+        for i in range(options.num_cpus):
             FileSystemConfig.register_node([i],
                     MemorySize(options.mem_size) / options.num_cpus, i)

@@ -29,8 +29,7 @@
 #include "arch/sparc/utility.hh"
 
 #include "arch/sparc/faults.hh"
-#include "arch/sparc/vtophys.hh"
-#include "mem/fs_translating_port_proxy.hh"
+#include "mem/port_proxy.hh"
 
 namespace SparcISA {
 
@@ -240,14 +239,6 @@ copyRegs(ThreadContext *src, ThreadContext *dest)
 
     // Lastly copy PC/NPC
     dest->pcState(src->pcState());
-}
-
-void
-skipFunction(ThreadContext *tc)
-{
-    PCState newPC = tc->pcState();
-    newPC.set(tc->readIntReg(ReturnAddressReg));
-    tc->pcState(newPC);
 }
 
 } // namespace SPARC_ISA

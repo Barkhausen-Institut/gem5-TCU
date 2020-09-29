@@ -314,7 +314,7 @@ def createPE(noc, options, no, systemType, l1size, l2size, spmsize, tcupos, memP
 
         # don't check whether the kernel is in memory because a PE does not have memory in this
         # case, but just a cache that is connected to a different PE
-        pe.kernel_addr_check = False
+        pe.workload.addr_check = False
     elif not spmsize is None:
         pe.spm = Scratchpad(in_addr_map="true")
         pe.spm.cpu_port = pe.xbar.default
@@ -357,10 +357,10 @@ def createCorePE(noc, options, no, cmdline, memPE, l1size=None, l2size=None,
         sysType = M3ArmSystem
         con = ArmConnector
     elif options.isa == 'riscv':
-        sysType = M3RiscvSystem
+        sysType = M3System
         con = RiscvConnector
     else:
-        sysType = M3X86System
+        sysType = M3System
         con = X86Connector
 
     pe = createPE(
@@ -392,9 +392,16 @@ def createCorePE(noc, options, no, cmdline, memPE, l1size=None, l2size=None,
         pe.mod_size = mod_size
         pe.pe_size = pe_size
 
-    # Command line
-    pe.kernel = cmdline.split(' ')[0]
-    pe.boot_osflags = cmdline
+    # workload and command line
+    if options.isa == 'riscv':
+        pe.workload = RiscvBareMetal(bootloader = cmdline.split(' ')[0])
+    elif options.isa == 'arm':
+        pe.workload = ArmFsWorkload(object_file = cmdline.split(' ')[0],
+                                    atags_addr=0)
+    else:
+        pe.workload = X86FsWorkload(object_file = cmdline.split(' ')[0])
+    pe.cmdline = cmdline
+
     print "PE%02d: %s" % (no, cmdline)
     print '      Core =%s %s @ %s' % (type(pe.cpu), options.isa, options.cpu_clock)
     printConfig(pe, tcupos)

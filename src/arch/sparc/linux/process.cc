@@ -48,23 +48,23 @@ class SparcLinuxObjectFileLoader : public Process::Loader
 {
   public:
     Process *
-    load(ProcessParams *params, ObjectFile *obj_file) override
+    load(ProcessParams *params, ::Loader::ObjectFile *obj_file) override
     {
         auto arch = obj_file->getArch();
         auto opsys = obj_file->getOpSys();
 
-        if (arch != ObjectFile::SPARC64 && arch != ObjectFile::SPARC32)
+        if (arch != ::Loader::SPARC64 && arch != ::Loader::SPARC32)
             return nullptr;
 
-        if (opsys == ObjectFile::UnknownOpSys) {
+        if (opsys == ::Loader::UnknownOpSys) {
             warn("Unknown operating system; assuming Linux.");
-            opsys = ObjectFile::Linux;
+            opsys = ::Loader::Linux;
         }
 
-        if (opsys != ObjectFile::Linux)
+        if (opsys != ::Loader::Linux)
             return nullptr;
 
-        if (arch == ObjectFile::SPARC64)
+        if (arch == ::Loader::SPARC64)
             return new Sparc64LinuxProcess(params, obj_file);
         else
             return new Sparc32LinuxProcess(params, obj_file);
@@ -75,31 +75,16 @@ SparcLinuxObjectFileLoader loader;
 
 } // anonymous namespace
 
-SyscallDesc*
-SparcLinuxProcess::getDesc(int callnum)
-{
-    if (callnum < 0 || callnum >= Num_Syscall_Descs)
-        return NULL;
-    return &syscallDescs[callnum];
-}
-
-SyscallDesc*
-SparcLinuxProcess::getDesc32(int callnum)
-{
-    if (callnum < 0 || callnum >= Num_Syscall32_Descs)
-        return NULL;
-    return &syscall32Descs[callnum];
-}
-
 Sparc32LinuxProcess::Sparc32LinuxProcess(ProcessParams * params,
-                                         ObjectFile *objFile)
+                                         ::Loader::ObjectFile *objFile)
     : Sparc32Process(params, objFile)
 {}
 
 void
 Sparc32LinuxProcess::syscall(ThreadContext *tc, Fault *fault)
 {
-    doSyscall(tc->readIntReg(1), tc, fault);
+    Sparc32Process::syscall(tc, fault);
+    syscall32Descs.get(tc->readIntReg(1))->doSyscall(tc, fault);
 }
 
 void
@@ -115,14 +100,27 @@ Sparc32LinuxProcess::handleTrap(int trapNum, ThreadContext *tc, Fault *fault)
 }
 
 Sparc64LinuxProcess::Sparc64LinuxProcess(ProcessParams * params,
-                                         ObjectFile *objFile)
+                                         ::Loader::ObjectFile *objFile)
     : Sparc64Process(params, objFile)
 {}
 
 void
 Sparc64LinuxProcess::syscall(ThreadContext *tc, Fault *fault)
 {
-    doSyscall(tc->readIntReg(1), tc, fault);
+    Sparc64Process::syscall(tc, fault);
+    syscallDescs.get(tc->readIntReg(1))->doSyscall(tc, fault);
+}
+
+void
+Sparc64LinuxProcess::getContext(ThreadContext *tc)
+{
+    warn("The getcontext trap is not implemented on SPARC");
+}
+
+void
+Sparc64LinuxProcess::setContext(ThreadContext *tc)
+{
+    panic("The setcontext trap is not implemented on SPARC");
 }
 
 void
@@ -132,6 +130,12 @@ Sparc64LinuxProcess::handleTrap(int trapNum, ThreadContext *tc, Fault *fault)
       // case 0x10: // Linux 32 bit syscall trap
       case 0x6d: // Linux 64 bit syscall trap
         tc->syscall(fault);
+        break;
+      case 0x6e: // Linux 64 bit getcontext trap
+        getContext(tc);
+        break;
+      case 0x6f: // Linux 64 bit setcontext trap
+        setContext(tc);
         break;
       default:
         SparcProcess::handleTrap(trapNum, tc, fault);

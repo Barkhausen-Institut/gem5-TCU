@@ -29,16 +29,20 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+import six
 import math
 import m5
 from m5.objects import *
 from m5.defines import buildEnv
 from m5.util import addToPath
-from Ruby import send_evicts
+from .Ruby import send_evicts
 
 addToPath('../')
 
 from topologies.Cluster import Cluster
+
+if six.PY3:
+    long = int
 
 class CntrlBase:
     _seqs = 0
@@ -154,6 +158,11 @@ class TCPCntrl(TCP_Controller, CntrlBase):
         self.coalescer.ruby_system = ruby_system
         self.coalescer.support_inst_reqs = False
         self.coalescer.is_cpu_sequencer = False
+        if options.tcp_deadlock_threshold:
+          self.coalescer.deadlock_threshold = \
+            options.tcp_deadlock_threshold
+        self.coalescer.max_coalesces_per_cycle = \
+            options.max_coalesces_per_cycle
 
         self.sequencer = RubySequencer()
         self.sequencer.version = self.seqCount()
@@ -193,6 +202,10 @@ class SQCCntrl(SQC_Controller, CntrlBase):
         self.sequencer.ruby_system = ruby_system
         self.sequencer.support_data_reqs = False
         self.sequencer.is_cpu_sequencer = False
+        if options.sqc_deadlock_threshold:
+          self.sequencer.deadlock_threshold = \
+            options.sqc_deadlock_threshold
+
         self.ruby_system = ruby_system
         if options.recycle_latency:
             self.recycle_latency = options.recycle_latency
@@ -405,6 +418,8 @@ def define_options(parser):
                       help="SQC cache size")
     parser.add_option("--sqc-assoc", type='int', default=8,
                       help="SQC cache assoc")
+    parser.add_option("--sqc-deadlock-threshold", type='int',
+                      help="Set the SQC deadlock threshold to some value")
 
     parser.add_option("--WB_L1", action="store_true",
         default=False, help="L2 Writeback Cache")
@@ -420,6 +435,10 @@ def define_options(parser):
                       help="tcc assoc")
     parser.add_option("--tcp-size", type='string', default='16kB',
                       help="tcp size")
+    parser.add_option("--tcp-deadlock-threshold", type='int',
+                      help="Set the TCP deadlock threshold to some value")
+    parser.add_option("--max-coalesces-per-cycle", type="int", default=1,
+                      help="Maximum insts that may coalesce in a cycle");
 
     parser.add_option("--dir-tag-latency", type="int", default=4)
     parser.add_option("--dir-tag-banks", type="int", default=4)
@@ -711,6 +730,7 @@ def create_system(options, full_system, system, dma_devices, bootmem,
 
     dir_cntrl.triggerQueue = MessageBuffer(ordered = True)
     dir_cntrl.L3triggerQueue = MessageBuffer(ordered = True)
+    dir_cntrl.requestToMemory = MessageBuffer()
     dir_cntrl.responseFromMemory = MessageBuffer()
 
     exec("system.dir_cntrl%d = dir_cntrl" % i)

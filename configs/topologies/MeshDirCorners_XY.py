@@ -32,7 +32,7 @@ from m5.objects import *
 
 from common import FileSystemConfig
 
-from .BaseTopology import SimpleTopology
+from topologies.BaseTopology import SimpleTopology
 
 # Creates a Mesh topology with 4 directories, one at each corner.
 # One L1 (and L2, depending on the protocol) are connected to each router.
@@ -101,7 +101,7 @@ class MeshDirCorners_XY(SimpleTopology):
         # NUMA Node for each quadrant
         # With odd columns or rows, the nodes will be unequal
         numa_nodes = [ [], [], [], []]
-        for i in xrange(num_routers):
+        for i in range(num_routers):
             if i % num_columns < num_columns / 2  and \
                i < num_routers / 2:
                 numa_nodes[0].append(i)

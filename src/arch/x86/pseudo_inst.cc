@@ -28,7 +28,8 @@
 
 #include "arch/x86/pseudo_inst.hh"
 
-#include "arch/x86/system.hh"
+#include "arch/x86/fs_workload.hh"
+#include "arch/x86/isa_traits.hh"
 #include "cpu/thread_context.hh"
 #include "debug/PseudoInst.hh"
 #include "mem/se_translating_port_proxy.hh"
@@ -48,7 +49,7 @@ m5PageFault(ThreadContext *tc)
     DPRINTF(PseudoInst, "PseudoInst::m5PageFault()\n");
 
     Process *p = tc->getProcessPtr();
-    if (!p->fixupStackFault(tc->readMiscReg(MISCREG_CR2))) {
+    if (!p->fixupFault(tc->readMiscReg(MISCREG_CR2))) {
         PortProxy &proxy = tc->getVirtProxy();
         // at this point we should have 6 values on the interrupt stack
         int size = 6;

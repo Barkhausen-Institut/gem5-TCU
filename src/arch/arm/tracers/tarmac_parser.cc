@@ -48,8 +48,8 @@
 #include "config/the_isa.hh"
 #include "cpu/static_inst.hh"
 #include "cpu/thread_context.hh"
-#include "mem/fs_translating_port_proxy.hh"
 #include "mem/packet.hh"
+#include "mem/port_proxy.hh"
 #include "sim/core.hh"
 #include "sim/faults.hh"
 #include "sim/sim_exit.hh"
@@ -873,8 +873,7 @@ TarmacParserRecord::dump()
     ostream &outs = Trace::output();
 
     uint64_t written_data = 0;
-    unsigned mem_flags = ArmISA::TLB::MustBeOne | 3 |
-        ArmISA::TLB::AllowUnaligned;
+    unsigned mem_flags = 3 | ArmISA::TLB::AllowUnaligned;
 
     ISetState isetstate;
 
@@ -1185,7 +1184,7 @@ TarmacParserRecord::readMemNoEffect(Addr addr, uint8_t *data, unsigned size,
     const RequestPtr &req = memReq;
     ArmISA::TLB* dtb = static_cast<TLB*>(thread->getDTBPtr());
 
-    req->setVirt(0, addr, size, flags, thread->pcState().instAddr(),
+    req->setVirt(addr, size, flags, thread->pcState().instAddr(),
                  Request::funcMasterId);
 
     // Translate to physical address
@@ -1198,8 +1197,8 @@ TarmacParserRecord::readMemNoEffect(Addr addr, uint8_t *data, unsigned size,
     // Now do the access
     if (fault == NoFault &&
         !req->getFlags().isSet(Request::NO_ACCESS)) {
-        if (req->isLLSC() || req->isMmappedIpr())
-            // LLSCs and mem. mapped IPRs are ignored
+        if (req->isLLSC() || req->isLocalAccess())
+            // LLSCs and local accesses are ignored
             return false;
         // the translating proxy will perform the virtual to physical
         // translation again

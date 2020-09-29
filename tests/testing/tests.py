@@ -1,4 +1,4 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python
 #
 # Copyright (c) 2016-2017 ARM Limited
 # All rights reserved
@@ -38,7 +38,14 @@
 from abc import ABCMeta, abstractmethod
 import os
 from collections import namedtuple
+
+from six import add_metaclass
+
+import sys
+sys.path.append(os.path.dirname(__file__))
+
 from units import *
+from helpers import FileIgnoreList
 from results import TestResult
 import shutil
 
@@ -171,6 +178,7 @@ def get_default_protocol(arch):
 all_categories = ("quick", "long")
 all_modes = ("fs", "se")
 
+@add_metaclass(ABCMeta)
 class Test(object):
     """Test case base class.
 
@@ -180,8 +188,6 @@ class Test(object):
     the run phase fails.
 
     """
-
-    __metaclass__ = ABCMeta
 
     def __init__(self, name):
         self.test_name = name

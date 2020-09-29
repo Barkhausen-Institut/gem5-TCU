@@ -35,24 +35,53 @@
 
 #include "mem/page_table.hh"
 #include "sim/process.hh"
+#include "sim/syscall_abi.hh"
 
+namespace Loader
+{
 class ObjectFile;
+} // namespace Loader;
 
 class PowerProcess : public Process
 {
   protected:
-    PowerProcess(ProcessParams * params, ObjectFile *objFile);
+    PowerProcess(ProcessParams * params, ::Loader::ObjectFile *objFile);
 
     void initState() override;
 
   public:
     void argsInit(int intSize, int pageSize);
-    RegVal getSyscallArg(ThreadContext *tc, int &i) override;
-    /// Explicitly import the otherwise hidden getSyscallArg
-    using Process::getSyscallArg;
-    void setSyscallReturn(ThreadContext *tc,
-            SyscallReturn return_value) override;
+
+    struct SyscallABI : public GenericSyscallABI64
+    {
+        static const std::vector<int> ArgumentRegs;
+    };
 };
+
+namespace GuestABI
+{
+
+template <>
+struct Result<PowerProcess::SyscallABI, SyscallReturn>
+{
+    static void
+    store(ThreadContext *tc, const SyscallReturn &ret)
+    {
+        if (ret.suppressed() || ret.needsRetry())
+            return;
+
+        PowerISA::Cr cr = tc->readIntReg(PowerISA::INTREG_CR);
+        if (ret.successful()) {
+            cr.cr0.so = 0;
+        } else {
+            cr.cr0.so = 1;
+        }
+        tc->setIntReg(PowerISA::INTREG_CR, cr);
+        tc->setIntReg(PowerISA::ReturnValueReg, ret.encodedValue());
+    }
+};
+
+} // namespace GuestABI
 
 #endif // __POWER_PROCESS_HH__
 

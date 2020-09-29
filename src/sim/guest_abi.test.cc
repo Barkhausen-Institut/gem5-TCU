@@ -63,13 +63,13 @@ const double ThreadContext::DefaultFloatResult = 0.0;
 // registers.
 struct TestABI_1D
 {
-    using Position = int;
+    using State = int;
 };
 
-// ABI anchor for an ABI which allocates a register for non-void return types.
-struct TestABI_RetReg
+// ABI anchor for an ABI which uses the prepare() hook.
+struct TestABI_Prepare
 {
-    using Position = int;
+    using State = int;
 };
 
 // ABI anchor for an ABI which has 2D progress. Conceptually, this could be
@@ -77,15 +77,15 @@ struct TestABI_RetReg
 // registers.
 struct TestABI_2D
 {
-    using Position = std::pair<int, int>;
+    using State = std::pair<int, int>;
 };
 
 struct TestABI_TcInit
 {
-    struct Position
+    struct State
     {
         int pos;
-        Position(const ThreadContext *tc) : pos(tc->intOffset) {}
+        State(const ThreadContext *tc) : pos(tc->intOffset) {}
     };
 };
 
@@ -98,9 +98,9 @@ template <>
 struct Argument<TestABI_1D, int>
 {
     static int
-    get(ThreadContext *tc, TestABI_1D::Position &position)
+    get(ThreadContext *tc, TestABI_1D::State &state)
     {
-        return tc->ints[position++];
+        return tc->ints[state++];
     }
 };
 
@@ -109,9 +109,9 @@ struct Argument<TestABI_1D, Arg,
     typename std::enable_if<std::is_floating_point<Arg>::value>::type>
 {
     static Arg
-    get(ThreadContext *tc, TestABI_1D::Position &position)
+    get(ThreadContext *tc, TestABI_1D::State &state)
     {
-        return tc->floats[position++];
+        return tc->floats[state++];
     }
 };
 
@@ -136,19 +136,33 @@ struct Result<TestABI_1D, Ret,
     }
 };
 
-// Hooks for the return value allocating ABI. It uses the same rules as the
-// 1D ABI for arguments, but allocates space for and discards return values.
-template <typename Arg>
-struct Argument<TestABI_RetReg, Arg> : public Argument<TestABI_1D, Arg> {};
+// Hooks for the ABI which uses prepare(). It uses the same rules as the
+// 1D ABI for arguments, but allocates space for and discards return values
+// and returns integer arguments in reverse order.
+template <>
+struct Argument<TestABI_Prepare, int>
+{
+    static int
+    get(ThreadContext *tc, TestABI_Prepare::State &state)
+    {
+        return tc->ints[--state];
+    }
+
+    static void
+    prepare(ThreadContext *tc, TestABI_Prepare::State &state)
+    {
+        state++;
+    }
+};
 
 template <typename Ret>
-struct Result<TestABI_RetReg, Ret>
+struct Result<TestABI_Prepare, Ret>
 {
     static void store(ThreadContext *tc, const Ret &ret) {}
     static void
-    allocate(ThreadContext *tc, TestABI_RetReg::Position &position)
+    prepare(ThreadContext *tc, TestABI_Prepare::State &state)
     {
-        position++;
+        state++;
     }
 };
 
@@ -159,9 +173,9 @@ template <>
 struct Argument<TestABI_2D, int>
 {
     static int
-    get(ThreadContext *tc, TestABI_2D::Position &position)
+    get(ThreadContext *tc, TestABI_2D::State &state)
     {
-        return tc->ints[position.first++];
+        return tc->ints[state.first++];
     }
 };
 
@@ -170,9 +184,9 @@ struct Argument<TestABI_2D, Arg,
     typename std::enable_if<std::is_floating_point<Arg>::value>::type>
 {
     static Arg
-    get(ThreadContext *tc, TestABI_2D::Position &position)
+    get(ThreadContext *tc, TestABI_2D::State &state)
     {
-        return tc->floats[position.second++];
+        return tc->floats[state.second++];
     }
 };
 
@@ -202,9 +216,9 @@ template <>
 struct Argument<TestABI_TcInit, int>
 {
     static int
-    get(ThreadContext *tc, TestABI_TcInit::Position &position)
+    get(ThreadContext *tc, TestABI_TcInit::State &state)
     {
-        return tc->ints[position.pos++];
+        return tc->ints[state.pos++];
     }
 };
 
@@ -229,15 +243,17 @@ testIntVoid(ThreadContext *tc, int a, float b, int c, double d,
 // Test functions which verify that the return allocating ABI allocates space
 // for its return value successfully.
 void
-testRetRegVoid(ThreadContext *tc, int a)
+testPrepareVoid(ThreadContext *tc, int a, int b)
 {
-    EXPECT_EQ(a, tc->ints[0]);
+    EXPECT_EQ(a, tc->ints[1]);
+    EXPECT_EQ(b, tc->ints[0]);
 }
 
 int
-testRetRegInt(ThreadContext *tc, int a)
+testPrepareInt(ThreadContext *tc, int a, int b)
 {
-    EXPECT_EQ(a, tc->ints[1]);
+    EXPECT_EQ(a, tc->ints[2]);
+    EXPECT_EQ(b, tc->ints[1]);
     return 0;
 }
 
@@ -283,11 +299,11 @@ TEST(GuestABI, ABI_1D_args)
     EXPECT_EQ(tc.floatResult, tc.DefaultFloatResult);
 }
 
-TEST(GuestABI, ABI_RetReg)
+TEST(GuestABI, ABI_Prepare)
 {
     ThreadContext tc;
-    invokeSimcall<TestABI_RetReg>(&tc, testRetRegVoid);
-    invokeSimcall<TestABI_RetReg>(&tc, testRetRegInt);
+    invokeSimcall<TestABI_Prepare>(&tc, testPrepareVoid);
+    invokeSimcall<TestABI_Prepare>(&tc, testPrepareInt);
 }
 
 TEST(GuestABI, ABI_2D_args)
@@ -329,6 +345,15 @@ TEST(GuestABI, ABI_returns)
         EXPECT_EQ(tc.intResult, tc.DefaultIntResult);
         EXPECT_EQ(tc.floatResult, DoubleRetValue + 1.0);
     }
+    {
+        // Disable storing the return value in the ThreadContext.
+        ThreadContext tc;
+        int ret = invokeSimcall<TestABI_1D, false>(&tc, testIntRet);
+        EXPECT_EQ(ret, IntRetValue);
+        EXPECT_EQ(tc.intResult, tc.DefaultIntResult);
+        EXPECT_EQ(tc.floatResult, tc.DefaultFloatResult);
+    }
+
 
     // 2D returns.
     {

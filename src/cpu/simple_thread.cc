@@ -55,8 +55,8 @@
 #include "cpu/profile.hh"
 #include "cpu/quiesce_event.hh"
 #include "cpu/thread_context.hh"
-#include "mem/fs_translating_port_proxy.hh"
 #include "mem/se_translating_port_proxy.hh"
+#include "mem/translating_port_proxy.hh"
 #include "params/BaseCPU.hh"
 #include "sim/faults.hh"
 #include "sim/full_system.hh"
@@ -98,7 +98,7 @@ SimpleThread::SimpleThread(BaseCPU *_cpu, int _thread_num, System *_sys,
     clearArchRegs();
 
     if (baseCpu->params()->profile) {
-        profile = new FunctionProfile(system->kernelSymtab);
+        profile = new FunctionProfile(system->workload->symtab(this));
         Callback *cb =
             new MakeCallback<SimpleThread,
             &SimpleThread::dumpFuncProfile>(this);
@@ -120,6 +120,8 @@ SimpleThread::takeOverFrom(ThreadContext *oldContext)
 {
     ::takeOverFrom(*this, *oldContext);
     decoder.takeOverFrom(oldContext->getDecoderPtr());
+
+    isa->takeOverFrom(this, oldContext);
 
     kernelStats = oldContext->getKernelStats();
     funcExeInst = oldContext->readFuncExeInst();

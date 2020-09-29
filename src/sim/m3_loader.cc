@@ -28,7 +28,6 @@
  */
 
 #include "sim/m3_loader.hh"
-#include "arch/vtophys.hh"
 #include "base/trace.hh"
 #include "base/loader/object_file.hh"
 #include "cpu/thread_context.hh"

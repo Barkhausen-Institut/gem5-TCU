@@ -57,7 +57,7 @@ let {{
             # This shouldn't be part of the eaCode, but until the exec templates
             # are converted over it's the easiest place to put it.
             eaCode += '\n    unsigned memAccessFlags = '
-            eaCode += (string.join(memFlags, '|') + ';')
+            eaCode += ('|'.join(memFlags) + ';')
 
             codeBlobs["ea_code"] = eaCode
 
@@ -214,7 +214,7 @@ let {{
             else:
                 memSuffix = '_ub'
         else:
-            raise Exception, "Unrecognized size for access %d" % size
+            raise Exception("Unrecognized size for access {}".format(size))
 
         return memSuffix
 
@@ -226,7 +226,7 @@ let {{
         elif not post and not writeback:
             base = "MemoryOffset<%s>" % base
         else:
-            raise Exception, "Illegal combination of post and writeback"
+            raise Exception("Illegal combination of post and writeback")
         return base
 }};
 

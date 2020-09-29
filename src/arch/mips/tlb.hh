@@ -36,7 +36,6 @@
 #include "arch/mips/isa_traits.hh"
 #include "arch/mips/pagetable.hh"
 #include "arch/mips/utility.hh"
-#include "arch/mips/vtophys.hh"
 #include "base/statistics.hh"
 #include "mem/request.hh"
 #include "params/MipsTLB.hh"
@@ -112,13 +111,11 @@ class TLB : public BaseTLB
     void translateTiming(
             const RequestPtr &req, ThreadContext *tc,
             Translation *translation, Mode mode) override;
+    Fault translateFunctional(
+            const RequestPtr &req, ThreadContext *tc, Mode mode) override;
     Fault finalizePhysical(
             const RequestPtr &req,
             ThreadContext *tc, Mode mode) const override;
-
-  private:
-    Fault translateInst(const RequestPtr &req, ThreadContext *tc);
-    Fault translateData(const RequestPtr &req, ThreadContext *tc, bool write);
 };
 
 }

@@ -60,7 +60,7 @@ namespace ArmISA
 
 ISA::ISA(Params *p) : BaseISA(p), system(NULL),
     _decoderFlavor(p->decoderFlavor), _vecRegRenameMode(Enums::Full),
-    pmu(p->pmu), haveGICv3CPUInterface(false), impdefAsNop(p->impdef_nop),
+    pmu(p->pmu), impdefAsNop(p->impdef_nop),
     afterStartup(false)
 {
     miscRegs[MISCREG_SCTLR_RST] = 0;
@@ -428,7 +428,6 @@ ISA::startup(ThreadContext *tc)
     if (system) {
         Gicv3 *gicv3 = dynamic_cast<Gicv3 *>(system->getGIC());
         if (gicv3) {
-            haveGICv3CPUInterface = true;
             gicv3CpuInterface.reset(gicv3->getCPUInterface(tc->contextId()));
             gicv3CpuInterface->setISA(this);
             gicv3CpuInterface->setThreadContext(tc);
@@ -438,6 +437,16 @@ ISA::startup(ThreadContext *tc)
     afterStartup = true;
 }
 
+void
+ISA::takeOverFrom(ThreadContext *new_tc, ThreadContext *old_tc)
+{
+    pmu->setThreadContext(new_tc);
+
+    if (system && gicv3CpuInterface) {
+        gicv3CpuInterface->setISA(this);
+        gicv3CpuInterface->setThreadContext(new_tc);
+    }
+}
 
 RegVal
 ISA::readMiscRegNoEffect(int misc_reg) const
@@ -744,18 +753,13 @@ ISA::readMiscReg(int misc_reg, ThreadContext *tc)
                (haveVirtualization    ? 0x0000000000000200 : 0) | // EL2
                (haveSecurity          ? 0x0000000000002000 : 0) | // EL3
                (haveSVE               ? 0x0000000100000000 : 0) | // SVE
-               (haveGICv3CPUInterface ? 0x0000000001000000 : 0);
+               (gicv3CpuInterface     ? 0x0000000001000000 : 0);
       case MISCREG_ID_AA64PFR1_EL1:
         return 0; // bits [63:0] RES0 (reserved for future use)
 
       // Generic Timer registers
-      case MISCREG_CNTHV_CTL_EL2:
-      case MISCREG_CNTHV_CVAL_EL2:
-      case MISCREG_CNTHV_TVAL_EL2:
-      case MISCREG_CNTFRQ ... MISCREG_CNTHP_CTL:
-      case MISCREG_CNTPCT ... MISCREG_CNTHP_CVAL:
-      case MISCREG_CNTKCTL_EL1 ... MISCREG_CNTV_CVAL_EL0:
-      case MISCREG_CNTVOFF_EL2 ... MISCREG_CNTPS_CVAL_EL1:
+      case MISCREG_CNTFRQ ... MISCREG_CNTVOFF:
+      case MISCREG_CNTFRQ_EL0 ... MISCREG_CNTVOFF_EL2:
         return getGenericTimer(tc).readMiscReg(misc_reg);
 
       case MISCREG_ICC_AP0R0 ... MISCREG_ICH_LRC15:
@@ -1685,60 +1689,54 @@ ISA::setMiscReg(int misc_reg, RegVal val, ThreadContext *tc)
               Fault fault;
               switch(misc_reg) {
                 case MISCREG_ATS1CPR:
-                  flags    = TLB::MustBeOne;
                   tranType = TLB::S1CTran;
                   mode     = BaseTLB::Read;
                   break;
                 case MISCREG_ATS1CPW:
-                  flags    = TLB::MustBeOne;
                   tranType = TLB::S1CTran;
                   mode     = BaseTLB::Write;
                   break;
                 case MISCREG_ATS1CUR:
-                  flags    = TLB::MustBeOne | TLB::UserMode;
+                  flags    = TLB::UserMode;
                   tranType = TLB::S1CTran;
                   mode     = BaseTLB::Read;
                   break;
                 case MISCREG_ATS1CUW:
-                  flags    = TLB::MustBeOne | TLB::UserMode;
+                  flags    = TLB::UserMode;
                   tranType = TLB::S1CTran;
                   mode     = BaseTLB::Write;
                   break;
                 case MISCREG_ATS12NSOPR:
                   if (!haveSecurity)
                       panic("Security Extensions required for ATS12NSOPR");
-                  flags    = TLB::MustBeOne;
                   tranType = TLB::S1S2NsTran;
                   mode     = BaseTLB::Read;
                   break;
                 case MISCREG_ATS12NSOPW:
                   if (!haveSecurity)
                       panic("Security Extensions required for ATS12NSOPW");
-                  flags    = TLB::MustBeOne;
                   tranType = TLB::S1S2NsTran;
                   mode     = BaseTLB::Write;
                   break;
                 case MISCREG_ATS12NSOUR:
                   if (!haveSecurity)
                       panic("Security Extensions required for ATS12NSOUR");
-                  flags    = TLB::MustBeOne | TLB::UserMode;
+                  flags    = TLB::UserMode;
                   tranType = TLB::S1S2NsTran;
                   mode     = BaseTLB::Read;
                   break;
                 case MISCREG_ATS12NSOUW:
                   if (!haveSecurity)
                       panic("Security Extensions required for ATS12NSOUW");
-                  flags    = TLB::MustBeOne | TLB::UserMode;
+                  flags    = TLB::UserMode;
                   tranType = TLB::S1S2NsTran;
                   mode     = BaseTLB::Write;
                   break;
                 case MISCREG_ATS1HR: // only really useful from secure mode.
-                  flags    = TLB::MustBeOne;
                   tranType = TLB::HypMode;
                   mode     = BaseTLB::Read;
                   break;
                 case MISCREG_ATS1HW:
-                  flags    = TLB::MustBeOne;
                   tranType = TLB::HypMode;
                   mode     = BaseTLB::Write;
                   break;
@@ -1753,7 +1751,7 @@ ISA::setMiscReg(int misc_reg, RegVal val, ThreadContext *tc)
                    miscRegName[misc_reg]);
 
               auto req = std::make_shared<Request>(
-                  0, val, 0, flags,  Request::funcMasterId,
+                  val, 0, flags,  Request::funcMasterId,
                   tc->pcState().pc(), tc->contextId());
 
               fault = getDTBPtr(tc)->translateFunctional(
@@ -1952,62 +1950,54 @@ ISA::setMiscReg(int misc_reg, RegVal val, ThreadContext *tc)
                 Fault fault;
                 switch(misc_reg) {
                   case MISCREG_AT_S1E1R_Xt:
-                    flags    = TLB::MustBeOne;
                     tranType = TLB::S1E1Tran;
                     mode     = BaseTLB::Read;
                     break;
                   case MISCREG_AT_S1E1W_Xt:
-                    flags    = TLB::MustBeOne;
                     tranType = TLB::S1E1Tran;
                     mode     = BaseTLB::Write;
                     break;
                   case MISCREG_AT_S1E0R_Xt:
-                    flags    = TLB::MustBeOne | TLB::UserMode;
+                    flags    = TLB::UserMode;
                     tranType = TLB::S1E0Tran;
                     mode     = BaseTLB::Read;
                     break;
                   case MISCREG_AT_S1E0W_Xt:
-                    flags    = TLB::MustBeOne | TLB::UserMode;
+                    flags    = TLB::UserMode;
                     tranType = TLB::S1E0Tran;
                     mode     = BaseTLB::Write;
                     break;
                   case MISCREG_AT_S1E2R_Xt:
-                    flags    = TLB::MustBeOne;
                     tranType = TLB::S1E2Tran;
                     mode     = BaseTLB::Read;
                     break;
                   case MISCREG_AT_S1E2W_Xt:
-                    flags    = TLB::MustBeOne;
                     tranType = TLB::S1E2Tran;
                     mode     = BaseTLB::Write;
                     break;
                   case MISCREG_AT_S12E0R_Xt:
-                    flags    = TLB::MustBeOne | TLB::UserMode;
+                    flags    = TLB::UserMode;
                     tranType = TLB::S12E0Tran;
                     mode     = BaseTLB::Read;
                     break;
                   case MISCREG_AT_S12E0W_Xt:
-                    flags    = TLB::MustBeOne | TLB::UserMode;
+                    flags    = TLB::UserMode;
                     tranType = TLB::S12E0Tran;
                     mode     = BaseTLB::Write;
                     break;
                   case MISCREG_AT_S12E1R_Xt:
-                    flags    = TLB::MustBeOne;
                     tranType = TLB::S12E1Tran;
                     mode     = BaseTLB::Read;
                     break;
                   case MISCREG_AT_S12E1W_Xt:
-                    flags    = TLB::MustBeOne;
                     tranType = TLB::S12E1Tran;
                     mode     = BaseTLB::Write;
                     break;
                   case MISCREG_AT_S1E3R_Xt:
-                    flags    = TLB::MustBeOne;
                     tranType = TLB::S1E3Tran;
                     mode     = BaseTLB::Read;
                     break;
                   case MISCREG_AT_S1E3W_Xt:
-                    flags    = TLB::MustBeOne;
                     tranType = TLB::S1E3Tran;
                     mode     = BaseTLB::Write;
                     break;
@@ -2021,8 +2011,8 @@ ISA::setMiscReg(int misc_reg, RegVal val, ThreadContext *tc)
                 warn("Translating via %s in functional mode! Fix Me!\n",
                      miscRegName[misc_reg]);
 
-                req->setVirt(0, val, 0, flags,  Request::funcMasterId,
-                               tc->pcState().pc());
+                req->setVirt(val, 0, flags,  Request::funcMasterId,
+                             tc->pcState().pc());
                 req->setContext(tc->contextId());
                 fault = getDTBPtr(tc)->translateFunctional(req, tc, mode,
                                                            tranType);
@@ -2085,13 +2075,8 @@ ISA::setMiscReg(int misc_reg, RegVal val, ThreadContext *tc)
             break;
 
           // Generic Timer registers
-          case MISCREG_CNTHV_CTL_EL2:
-          case MISCREG_CNTHV_CVAL_EL2:
-          case MISCREG_CNTHV_TVAL_EL2:
-          case MISCREG_CNTFRQ ... MISCREG_CNTHP_CTL:
-          case MISCREG_CNTPCT ... MISCREG_CNTHP_CVAL:
-          case MISCREG_CNTKCTL_EL1 ... MISCREG_CNTV_CVAL_EL0:
-          case MISCREG_CNTVOFF_EL2 ... MISCREG_CNTPS_CVAL_EL1:
+          case MISCREG_CNTFRQ ... MISCREG_CNTVOFF:
+          case MISCREG_CNTFRQ_EL0 ... MISCREG_CNTVOFF_EL2:
             getGenericTimer(tc).setMiscReg(misc_reg, newVal);
             break;
           case MISCREG_ICC_AP0R0 ... MISCREG_ICH_LRC15:

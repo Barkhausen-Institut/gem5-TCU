@@ -34,10 +34,10 @@
 #include <vector>
 
 #include "arch/riscv/faults.hh"
+#include "arch/riscv/fs_workload.hh"
 #include "arch/riscv/pagetable.hh"
 #include "arch/riscv/pagetable_walker.hh"
 #include "arch/riscv/pra_constants.hh"
-#include "arch/riscv/system.hh"
 #include "arch/riscv/utility.hh"
 #include "base/inifile.hh"
 #include "base/str.hh"
@@ -49,6 +49,7 @@
 #include "params/RiscvTLB.hh"
 #include "sim/full_system.hh"
 #include "sim/process.hh"
+#include "sim/system.hh"
 
 using namespace std;
 using namespace RiscvISA;
@@ -76,7 +77,7 @@ TLB::TLB(const Params *p)
     walker->setTLB(this);
 }
 
-RiscvISA::Walker *
+Walker *
 TLB::getWalker()
 {
     return walker;
@@ -349,7 +350,7 @@ TLB::translate(const RequestPtr &req, ThreadContext *tc,
         // according to the RISC-V tests, negative physical addresses trigger
         // an illegal address exception.
         // TODO where is that written in the manual?
-        if (!delayed && fault == NoFault && (req->getPaddr() & (1ULL << 63))) {
+        if (!delayed && fault == NoFault && bits(req->getPaddr(), 63)) {
             ExceptionCode code;
             if (mode == TLB::Read)
                 code = ExceptionCode::LOAD_ACCESS;
@@ -392,7 +393,7 @@ TLB::translateAtomic(const RequestPtr &req, ThreadContext *tc, Mode mode)
 
 void
 TLB::translateTiming(const RequestPtr &req, ThreadContext *tc,
-        Translation *translation, Mode mode)
+                     Translation *translation, Mode mode)
 {
     bool delayed;
     assert(translation);
@@ -401,6 +402,53 @@ TLB::translateTiming(const RequestPtr &req, ThreadContext *tc,
         translation->finish(fault, req, tc, mode);
     else
         translation->markDelayed();
+}
+
+Fault
+TLB::translateFunctional(const RequestPtr &req, ThreadContext *tc, Mode mode)
+{
+    const Addr vaddr = req->getVaddr();
+    Addr paddr = vaddr;
+
+    if (FullSystem) {
+        TLB *tlb = dynamic_cast<TLB *>(tc->getDTBPtr());
+
+        PrivilegeMode pmode = tlb->getMemPriv(tc, mode);
+        SATP satp = tc->readMiscReg(MISCREG_SATP);
+        if (pmode != PrivilegeMode::PRV_M &&
+            satp.mode != AddrXlateMode::BARE) {
+            Walker *walker = tlb->getWalker();
+            unsigned logBytes;
+            Fault fault = walker->startFunctional(
+                    tc, paddr, logBytes, mode);
+            if (fault != NoFault)
+                return fault;
+
+            Addr masked_addr = vaddr & mask(logBytes);
+            paddr |= masked_addr;
+        }
+    }
+    else {
+        Process *process = tc->getProcessPtr();
+        const auto *pte = process->pTable->lookup(vaddr);
+
+        if (!pte && mode != Execute) {
+            // Check if we just need to grow the stack.
+            if (process->fixupFault(vaddr)) {
+                // If we did, lookup the entry for the new page.
+                pte = process->pTable->lookup(vaddr);
+            }
+        }
+
+        if (!pte)
+            return std::make_shared<GenericPageTableFault>(req->getVaddr());
+
+        paddr = pte->paddr | process->pTable->pageOffset(vaddr);
+    }
+
+    DPRINTF(TLB, "Translated (functional) %#x -> %#x.\n", vaddr, paddr);
+    req->setPaddr(paddr);
+    return NoFault;
 }
 
 Fault

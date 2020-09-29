@@ -472,7 +472,7 @@ VldMultOp::VldMultOp(const char *mnem, ExtMachInst machInst, OpClass __opClass,
 
     RegIndex rMid = deinterleave ? VecSpecialElem : vd * 2;
 
-    uint32_t noAlign = TLB::MustBeOne;
+    uint32_t noAlign = 0;
 
     unsigned uopIdx = 0;
     switch (regs) {
@@ -833,7 +833,7 @@ VstMultOp::VstMultOp(const char *mnem, ExtMachInst machInst, OpClass __opClass,
     if (interleave) numMicroops += (regs / elems);
     microOps = new StaticInstPtr[numMicroops];
 
-    uint32_t noAlign = TLB::MustBeOne;
+    uint32_t noAlign = 0;
 
     RegIndex rMid = interleave ? VecSpecialElem : vd * 2;
 
@@ -1143,8 +1143,7 @@ VldMultOp64::VldMultOp64(const char *mnem, ExtMachInst machInst,
 
     microOps = new StaticInstPtr[numMicroops];
     unsigned uopIdx = 0;
-    uint32_t memaccessFlags = TLB::MustBeOne | (TLB::ArmFlags) eSize |
-        TLB::AllowUnaligned;
+    uint32_t memaccessFlags = (TLB::ArmFlags)eSize | TLB::AllowUnaligned;
 
     int i = 0;
     for (; i < numMemMicroops - 1; ++i) {
@@ -1251,8 +1250,7 @@ VstMultOp64::VstMultOp64(const char *mnem, ExtMachInst machInst,
         }
     }
 
-    uint32_t memaccessFlags = TLB::MustBeOne | (TLB::ArmFlags) eSize |
-        TLB::AllowUnaligned;
+    uint32_t memaccessFlags = (TLB::ArmFlags)eSize | TLB::AllowUnaligned;
 
     int i = 0;
     for (; i < numMemMicroops - 1; ++i) {
@@ -1319,8 +1317,7 @@ VldSingleOp64::VldSingleOp64(const char *mnem, ExtMachInst machInst,
     microOps = new StaticInstPtr[numMicroops];
     unsigned uopIdx = 0;
 
-    uint32_t memaccessFlags = TLB::MustBeOne | (TLB::ArmFlags) eSize |
-        TLB::AllowUnaligned;
+    uint32_t memaccessFlags = (TLB::ArmFlags)eSize | TLB::AllowUnaligned;
 
     int i = 0;
     for (; i < numMemMicroops - 1; ++i) {
@@ -1398,8 +1395,7 @@ VstSingleOp64::VstSingleOp64(const char *mnem, ExtMachInst machInst,
             numStructElems, index, i /* step */, replicate);
     }
 
-    uint32_t memaccessFlags = TLB::MustBeOne | (TLB::ArmFlags) eSize |
-        TLB::AllowUnaligned;
+    uint32_t memaccessFlags = (TLB::ArmFlags)eSize | TLB::AllowUnaligned;
 
     int i = 0;
     for (; i < numMemMicroops - 1; ++i) {
@@ -1510,7 +1506,8 @@ MacroVFPMemOp::MacroVFPMemOp(const char *mnem, ExtMachInst machInst,
 }
 
 std::string
-MicroIntImmOp::generateDisassembly(Addr pc, const SymbolTable *symtab) const
+MicroIntImmOp::generateDisassembly(
+        Addr pc, const Loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss);
@@ -1523,7 +1520,8 @@ MicroIntImmOp::generateDisassembly(Addr pc, const SymbolTable *symtab) const
 }
 
 std::string
-MicroIntImmXOp::generateDisassembly(Addr pc, const SymbolTable *symtab) const
+MicroIntImmXOp::generateDisassembly(
+        Addr pc, const Loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss);
@@ -1536,7 +1534,8 @@ MicroIntImmXOp::generateDisassembly(Addr pc, const SymbolTable *symtab) const
 }
 
 std::string
-MicroSetPCCPSR::generateDisassembly(Addr pc, const SymbolTable *symtab) const
+MicroSetPCCPSR::generateDisassembly(
+        Addr pc, const Loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss);
@@ -1545,7 +1544,8 @@ MicroSetPCCPSR::generateDisassembly(Addr pc, const SymbolTable *symtab) const
 }
 
 std::string
-MicroIntRegXOp::generateDisassembly(Addr pc, const SymbolTable *symtab) const
+MicroIntRegXOp::generateDisassembly(
+        Addr pc, const Loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss);
@@ -1557,7 +1557,8 @@ MicroIntRegXOp::generateDisassembly(Addr pc, const SymbolTable *symtab) const
 }
 
 std::string
-MicroIntMov::generateDisassembly(Addr pc, const SymbolTable *symtab) const
+MicroIntMov::generateDisassembly(
+        Addr pc, const Loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss);
@@ -1568,7 +1569,8 @@ MicroIntMov::generateDisassembly(Addr pc, const SymbolTable *symtab) const
 }
 
 std::string
-MicroIntOp::generateDisassembly(Addr pc, const SymbolTable *symtab) const
+MicroIntOp::generateDisassembly(
+        Addr pc, const Loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss);
@@ -1581,7 +1583,8 @@ MicroIntOp::generateDisassembly(Addr pc, const SymbolTable *symtab) const
 }
 
 std::string
-MicroMemOp::generateDisassembly(Addr pc, const SymbolTable *symtab) const
+MicroMemOp::generateDisassembly(
+        Addr pc, const Loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss);
@@ -1598,7 +1601,8 @@ MicroMemOp::generateDisassembly(Addr pc, const SymbolTable *symtab) const
 }
 
 std::string
-MicroMemPairOp::generateDisassembly(Addr pc, const SymbolTable *symtab) const
+MicroMemPairOp::generateDisassembly(
+        Addr pc, const Loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss);

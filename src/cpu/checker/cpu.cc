@@ -44,7 +44,6 @@
 #include <string>
 
 #include "arch/generic/tlb.hh"
-#include "arch/vtophys.hh"
 #include "cpu/base.hh"
 #include "cpu/simple_thread.hh"
 #include "cpu/static_inst.hh"
@@ -156,13 +155,13 @@ CheckerCPU::genMemFragmentRequest(Addr frag_addr, int size,
                                                         size_left));
         auto it_end = byte_enable.cbegin() + (size - size_left);
         if (isAnyActiveElement(it_start, it_end)) {
-            mem_req = std::make_shared<Request>(0, frag_addr, frag_size,
+            mem_req = std::make_shared<Request>(frag_addr, frag_size,
                     flags, masterId, thread->pcState().instAddr(),
                     tc->contextId());
             mem_req->setByteEnable(std::vector<bool>(it_start, it_end));
         }
     } else {
-        mem_req = std::make_shared<Request>(0, frag_addr, frag_size,
+        mem_req = std::make_shared<Request>(frag_addr, frag_size,
                     flags, masterId, thread->pcState().instAddr(),
                     tc->contextId());
     }
@@ -214,7 +213,7 @@ CheckerCPU::readMem(Addr addr, uint8_t *data, unsigned size,
 
             pkt->dataStatic(data);
 
-            if (!(mem_req->isUncacheable() || mem_req->isMmappedIpr())) {
+            if (!(mem_req->isUncacheable() || mem_req->isLocalAccess())) {
                 // Access memory to see if we have the same data
                 dcachePort->sendFunctional(pkt);
             } else {
@@ -354,12 +353,6 @@ CheckerCPU::writeMem(uint8_t *data, unsigned size,
    }
 
    return fault;
-}
-
-Addr
-CheckerCPU::dbg_vtophys(Addr addr)
-{
-    return vtophys(tc, addr);
 }
 
 /**

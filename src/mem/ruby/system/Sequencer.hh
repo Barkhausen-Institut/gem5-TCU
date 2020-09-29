@@ -1,4 +1,16 @@
 /*
+ * Copyright (c) 2019-2020 ARM Limited
+ * All rights reserved
+ *
+ * The license below extends only to copyright in the software and shall
+ * not be construed as granting a license to any other intellectual
+ * property including but not limited to intellectual property relating
+ * to a hardware implementation of the functionality of the software
+ * licensed hereunder.  You may use the software subject to the license
+ * terms below provided that you ensure that this notice is replicated
+ * unmodified and in its entirety in all distributions of the software,
+ * modified or unmodified, in source code or in binary form.
+ *
  * Copyright (c) 1999-2008 Mark D. Hill and David A. Wood
  * All rights reserved.
  *
@@ -52,6 +64,15 @@ struct SequencerRequest
                 : pkt(_pkt), m_type(_m_type), m_second_type(_m_second_type),
                   issue_time(_issue_time)
     {}
+
+    bool functionalWrite(Packet *func_pkt) const
+    {
+        // Follow-up on RubyRequest::functionalWrite
+        // This makes sure the hitCallback won't overrite the value we
+        // expect to find
+        assert(func_pkt->isWrite());
+        return func_pkt->trySatisfyFunctional(pkt);
+    }
 };
 
 std::ostream& operator<<(std::ostream& out, const SequencerRequest& obj);
@@ -63,11 +84,18 @@ class Sequencer : public RubyPort
     Sequencer(const Params *);
     ~Sequencer();
 
+    /**
+     * Proxy function to writeCallback that first
+     * invalidates the line address in the local monitor.
+     */
+    void writeCallbackScFail(Addr address,
+                        DataBlock& data);
+
     // Public Methods
     void wakeup(); // Used only for deadlock detection
-    void resetStats();
+    void resetStats() override;
     void collateStats();
-    void regStats();
+    void regStats() override;
 
     void writeCallback(Addr address,
                        DataBlock& data,
@@ -85,14 +113,14 @@ class Sequencer : public RubyPort
                       const Cycles forwardRequestTime = Cycles(0),
                       const Cycles firstResponseTime = Cycles(0));
 
-    RequestStatus makeRequest(PacketPtr pkt);
+    RequestStatus makeRequest(PacketPtr pkt) override;
     bool empty() const;
-    int outstandingCount() const { return m_outstanding_count; }
+    int outstandingCount() const override { return m_outstanding_count; }
 
-    bool isDeadlockEventScheduled() const
+    bool isDeadlockEventScheduled() const override
     { return deadlockCheckEvent.scheduled(); }
 
-    void descheduleDeadlockEvent()
+    void descheduleDeadlockEvent() override
     { deschedule(deadlockCheckEvent); }
 
     void print(std::ostream& out) const;
@@ -100,8 +128,9 @@ class Sequencer : public RubyPort
 
     void markRemoved();
     void evictionCallback(Addr address);
-    void invalidateSC(Addr address);
     int coreId() const { return m_coreId; }
+
+    virtual int functionalWrite(Packet *func_pkt) override;
 
     void recordRequestType(SequencerRequestType requestType);
     Stats::Histogram& getOutstandReqHist() { return m_outstandReqHist; }
@@ -168,7 +197,6 @@ class Sequencer : public RubyPort
 
     RequestStatus insertRequest(PacketPtr pkt, RubyRequestType primary_type,
                                 RubyRequestType secondary_type);
-    bool handleLlsc(Addr address, SequencerRequest* request);
 
     // Private copy constructor and assignment operator
     Sequencer(const Sequencer& obj);
@@ -234,6 +262,39 @@ class Sequencer : public RubyPort
     std::vector<Stats::Counter> m_IncompleteTimes;
 
     EventFunctionWrapper deadlockCheckEvent;
+
+    // support for LL/SC
+
+    /**
+     * Places the cache line address into the global monitor
+     * tagged with this Sequencer object's version id.
+     */
+    void llscLoadLinked(const Addr);
+
+    /**
+     * Removes the cache line address from the global monitor.
+     * This is independent of this Sequencer object's version id.
+     */
+    void llscClearMonitor(const Addr);
+
+    /**
+     * Searches for cache line address in the global monitor
+     * tagged with this Sequencer object's version id.
+     * If a match is found, the entry is is erased from
+     * the global monitor.
+     *
+     * @return a boolean indicating if the line address was found.
+     */
+    bool llscStoreConditional(const Addr);
+
+  public:
+    /**
+     * Searches for cache line address in the global monitor
+     * tagged with this Sequencer object's version id.
+     *
+     * @return a boolean indicating if the line address was found.
+     */
+    bool llscCheckMonitor(const Addr);
 };
 
 inline std::ostream&

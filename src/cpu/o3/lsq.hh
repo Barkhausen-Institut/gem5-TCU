@@ -408,7 +408,7 @@ class LSQ
         {
             if (byte_enable.empty() ||
                 isAnyActiveElement(byte_enable.begin(), byte_enable.end())) {
-                auto request = std::make_shared<Request>(_inst->getASID(),
+                auto request = std::make_shared<Request>(
                         addr, size, _flags, _inst->masterId(),
                         _inst->instAddr(), _inst->contextId(),
                         std::move(_amo_op));
@@ -455,10 +455,10 @@ class LSQ
          * For a previously allocated Request objects.
          */
         void
-        setVirt(int asid, Addr vaddr, unsigned size, Request::Flags flags_,
+        setVirt(Addr vaddr, unsigned size, Request::Flags flags_,
                 MasterID mid, Addr pc)
         {
-            request()->setVirt(asid, vaddr, size, flags_, mid, pc);
+            request()->setVirt(vaddr, size, flags_, mid, pc);
         }
 
         void
@@ -549,8 +549,8 @@ class LSQ
         /**
          * Memory mapped IPR accesses
          */
-        virtual void handleIprWrite(ThreadContext *thread, PacketPtr pkt) = 0;
-        virtual Cycles handleIprRead(ThreadContext *thread, PacketPtr pkt) = 0;
+        virtual Cycles handleLocalAccess(
+                ThreadContext *thread, PacketPtr pkt) = 0;
 
         /**
          * Test if the request accesses a particular cache line.
@@ -737,8 +737,7 @@ class LSQ
         virtual bool recvTimingResp(PacketPtr pkt);
         virtual void sendPacketToCache();
         virtual void buildPackets();
-        virtual void handleIprWrite(ThreadContext *thread, PacketPtr pkt);
-        virtual Cycles handleIprRead(ThreadContext *thread, PacketPtr pkt);
+        virtual Cycles handleLocalAccess(ThreadContext *thread, PacketPtr pkt);
         virtual bool isCacheBlockHit(Addr blockAddr, Addr cacheBlockMask);
     };
 
@@ -811,8 +810,7 @@ class LSQ
         virtual void sendPacketToCache();
         virtual void buildPackets();
 
-        virtual void handleIprWrite(ThreadContext *thread, PacketPtr pkt);
-        virtual Cycles handleIprRead(ThreadContext *thread, PacketPtr pkt);
+        virtual Cycles handleLocalAccess(ThreadContext *thread, PacketPtr pkt);
         virtual bool isCacheBlockHit(Addr blockAddr, Addr cacheBlockMask);
 
         virtual RequestPtr mainRequest();

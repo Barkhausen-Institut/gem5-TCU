@@ -1,6 +1,6 @@
 # -*- mode:python -*-
 
-# Copyright (c) 2018 ARM Limited
+# Copyright (c) 2018, 2020 ARM Limited
 #
 # The license below extends only to copyright in the software and shall
 # not be construed as granting a license to any other intellectual
@@ -45,6 +45,7 @@ import functools
 import imp
 import os
 import re
+import six
 import sys
 import zlib
 
@@ -142,12 +143,12 @@ class SourceMeta(type):
         super(SourceMeta, cls).__init__(name, bases, dict)
         cls.all = SourceList()
 
+@six.add_metaclass(SourceMeta)
 class SourceFile(object):
     '''Base object that encapsulates the notion of a source file.
     This includes, the source node, target node, various manipulations
     of those.  A source file also specifies a set of tags which
     describing arbitrary properties of the source file.'''
-    __metaclass__ = SourceMeta
 
     static_objs = {}
     shared_objs = {}
@@ -155,14 +156,14 @@ class SourceFile(object):
     def __init__(self, source, tags=None, add_tags=None, append=None):
         if tags is None:
             tags='gem5 lib'
-        if isinstance(tags, basestring):
+        if isinstance(tags, six.string_types):
             tags = set([tags])
         if not isinstance(tags, set):
             tags = set(tags)
         self.tags = tags
 
         if add_tags:
-            if isinstance(add_tags, basestring):
+            if isinstance(add_tags, six.string_types):
                 add_tags = set([add_tags])
             if not isinstance(add_tags, set):
                 add_tags = set(add_tags)
@@ -264,7 +265,7 @@ def blobToCpp(data, symbol, cpp_code, hpp_code=None, namespace=None):
     cpp_code(symbol_declaration + ' = {')
     cpp_code.indent()
     step = 16
-    for i in xrange(0, len(data), step):
+    for i in six.moves.range(0, len(data), step):
         x = array.array('B', data[i:i+step])
         cpp_code(''.join('%d,' % d for d in x))
     cpp_code.dedent()
@@ -283,7 +284,8 @@ def Blob(blob_path, symbol):
     cpp_path = path_noext + '.cc'
     hpp_path = path_noext + '.hh'
     def embedBlob(target, source, env):
-        data = file(str(source[0]), 'r').read()
+        with open(str(source[0]), 'rb') as f:
+            data = f.read()
         cpp_code = code_formatter()
         hpp_code = code_formatter()
         blobToCpp(data, symbol, cpp_code, hpp_code, namespace='Blobs')
@@ -380,7 +382,7 @@ class SimObject(PySource):
         the m5.objects package)'''
         super(SimObject, self).__init__('m5.objects', source, tags, add_tags)
         if self.fixed:
-            raise AttributeError, "Too late to call SimObject now."
+            raise AttributeError("Too late to call SimObject now.")
 
         bisect.insort_right(SimObject.modnames, self.modname)
 
@@ -413,9 +415,9 @@ class ExecutableMeta(type):
 
         cls.all = []
 
+@six.add_metaclass(ExecutableMeta)
 class Executable(object):
     '''Base class for creating an executable from sources.'''
-    __metaclass__ = ExecutableMeta
 
     abstract = True
 
@@ -550,12 +552,12 @@ Export('GTest')
 debug_flags = {}
 def DebugFlag(name, desc=None):
     if name in debug_flags:
-        raise AttributeError, "Flag %s already specified" % name
+        raise AttributeError("Flag {} already specified".format(name))
     debug_flags[name] = (name, (), desc)
 
 def CompoundFlag(name, flags, desc=None):
     if name in debug_flags:
-        raise AttributeError, "Flag %s already specified" % name
+        raise AttributeError("Flag {} already specified".format(name))
 
     compound = tuple(flags)
     debug_flags[name] = (name, compound, desc)
@@ -619,10 +621,10 @@ for opt in export_vars:
     env.ConfigFile(opt)
 
 def makeTheISA(source, target, env):
-    isas = [ src.get_contents() for src in source ]
+    isas = [ src.get_contents().decode('utf-8') for src in source ]
     target_isa = env['TARGET_ISA']
     def define(isa):
-        return isa.upper() + '_ISA'
+        return str(isa.upper()) + '_ISA'
 
     def namespace(isa):
         return isa[0].upper() + isa[1:].lower() + 'ISA'
@@ -660,14 +662,14 @@ def makeTheISA(source, target, env):
 
     code.write(str(target[0]))
 
-env.Command('config/the_isa.hh', map(Value, all_isa_list),
+env.Command('config/the_isa.hh', list(map(Value, all_isa_list)),
             MakeAction(makeTheISA, Transform("CFG ISA", 0)))
 
 def makeTheGPUISA(source, target, env):
-    isas = [ src.get_contents() for src in source ]
+    isas = [ src.get_contents().decode('utf-8') for src in source ]
     target_gpu_isa = env['TARGET_GPU_ISA']
     def define(isa):
-        return isa.upper() + '_ISA'
+        return str(isa.upper()) + '_ISA'
 
     def namespace(isa):
         return isa[0].upper() + isa[1:].lower() + 'ISA'
@@ -705,7 +707,7 @@ def makeTheGPUISA(source, target, env):
 
     code.write(str(target[0]))
 
-env.Command('config/the_gpu_isa.hh', map(Value, all_gpu_isa_list),
+env.Command('config/the_gpu_isa.hh', list(map(Value, all_gpu_isa_list)),
             MakeAction(makeTheGPUISA, Transform("CFG ISA", 0)))
 
 ########################################################################
@@ -721,9 +723,6 @@ class DictImporter(object):
     def __init__(self, modules):
         self.modules = modules
         self.installed = set()
-
-    def __del__(self):
-        self.unload()
 
     def unload(self):
         import sys
@@ -766,7 +765,8 @@ class DictImporter(object):
             mod.__path__ = source.modpath
         mod.__file__ = source.abspath
 
-        exec file(source.abspath, 'r') in mod.__dict__
+        compiled = compile(open(source.abspath).read(), source.abspath, 'exec')
+        exec(compiled, mod.__dict__)
 
         return mod
 
@@ -796,7 +796,7 @@ sys.meta_path.remove(importer)
 sim_objects = m5.SimObject.allClasses
 all_enums = m5.params.allEnums
 
-for name,obj in sorted(sim_objects.iteritems()):
+for name,obj in sorted(sim_objects.items()):
     for param in obj._params.local.values():
         # load the ptype attribute now because it depends on the
         # current version of SimObject.allClasses, but when scons
@@ -820,7 +820,7 @@ depends.sort(key = lambda x: x.name)
 # Generate Python file containing a dict specifying the current
 # buildEnv flags.
 def makeDefinesPyFile(target, source, env):
-    build_env = source[0].get_contents()
+    build_env = source[0].get_contents().decode('utf-8')
 
     code = code_formatter()
     code("""
@@ -830,6 +830,7 @@ import m5.util
 buildEnv = m5.util.SmartDict($build_env)
 
 compileDate = _m5.core.compileDate
+gem5Version = _m5.core.gem5Version
 _globals = globals()
 for key,val in _m5.core.__dict__.items():
     if key.startswith('flag_'):
@@ -849,7 +850,8 @@ PySource('m5', 'python/m5/defines.py')
 def makeInfoPyFile(target, source, env):
     code = code_formatter()
     for src in source:
-        data = ''.join(file(src.srcnode().abspath, 'r').xreadlines())
+        with open(src.srcnode().abspath, 'r') as f:
+            data = ''.join(f)
         code('$src = ${{repr(data)}}')
     code.write(str(target[0]))
 
@@ -878,7 +880,7 @@ def createSimObjectCxxConfig(is_header):
     def body(target, source, env):
         assert len(target) == 1 and len(source) == 1
 
-        name = str(source[0].get_contents())
+        name = source[0].get_contents().decode('utf-8')
         obj = sim_objects[name]
 
         code = code_formatter()
@@ -919,7 +921,7 @@ def createSimObjectPyBindWrapper(target, source, env):
 
 # Generate all of the SimObject param C++ struct header files
 params_hh_files = []
-for name,simobj in sorted(sim_objects.iteritems()):
+for name,simobj in sorted(sim_objects.items()):
     py_source = PySource.modules[simobj.__module__]
     extra_deps = [ py_source.tnode ]
 
@@ -931,7 +933,7 @@ for name,simobj in sorted(sim_objects.iteritems()):
 
 # C++ parameter description files
 if GetOption('with_cxx_config'):
-    for name,simobj in sorted(sim_objects.iteritems()):
+    for name,simobj in sorted(sim_objects.items()):
         py_source = PySource.modules[simobj.__module__]
         extra_deps = [ py_source.tnode ]
 
@@ -956,14 +958,14 @@ if GetOption('with_cxx_config'):
 
         code = code_formatter()
 
-        for name,simobj in sorted(sim_objects.iteritems()):
+        for name,simobj in sorted(sim_objects.items()):
             if not hasattr(simobj, 'abstract') or not simobj.abstract:
                 code('#include "cxx_config/${name}.hh"')
         code()
         code('void cxxConfigInit()')
         code('{')
         code.indent()
-        for name,simobj in sorted(sim_objects.iteritems()):
+        for name,simobj in sorted(sim_objects.items()):
             not_abstract = not hasattr(simobj, 'abstract') or \
                 not simobj.abstract
             if not_abstract and 'type' in simobj.__dict__:
@@ -978,14 +980,14 @@ if GetOption('with_cxx_config'):
     env.Command(cxx_config_init_cc_file, Value(name),
         MakeAction(createCxxConfigInitCC, Transform("CXXCINIT")))
     cxx_param_hh_files = ["cxx_config/%s.hh" % simobj
-        for name,simobj in sorted(sim_objects.iteritems())
+        for name,simobj in sorted(sim_objects.items())
         if not hasattr(simobj, 'abstract') or not simobj.abstract]
     Depends(cxx_config_init_cc_file, cxx_param_hh_files +
             [File('sim/cxx_config.hh')])
     Source(cxx_config_init_cc_file)
 
 # Generate all enum header files
-for name,enum in sorted(all_enums.iteritems()):
+for name,enum in sorted(all_enums.items()):
     py_source = PySource.modules[enum.__module__]
     extra_deps = [ py_source.tnode ]
 
@@ -1002,7 +1004,7 @@ for name,enum in sorted(all_enums.iteritems()):
 
 # Generate SimObject Python bindings wrapper files
 if env['USE_PYTHON']:
-    for name,simobj in sorted(sim_objects.iteritems()):
+    for name,simobj in sorted(sim_objects.items()):
         py_source = PySource.modules[simobj.__module__]
         extra_deps = [ py_source.tnode ]
         cc_file = File('python/_m5/param_%s.cc' % name)
@@ -1054,7 +1056,7 @@ namespace Debug {
 
 ''')
 
-    for name, flag in sorted(source[0].read().iteritems()):
+    for name, flag in sorted(source[0].read().items()):
         n, compound, desc = flag
         assert n == name
 
@@ -1116,7 +1118,7 @@ namespace Debug {
 
     code.write(str(target[0]))
 
-for name,flag in sorted(debug_flags.iteritems()):
+for name,flag in sorted(debug_flags.items()):
     n, compound, desc = flag
     assert n == name
 
@@ -1138,7 +1140,7 @@ env.AlwaysBuild(tags)
 # Build a small helper that marshals the Python code using the same
 # version of Python as gem5. This is in an unorthodox location to
 # avoid building it for every variant.
-py_marshal = env.Program('marshal', 'python/marshal.cc')[0]
+py_marshal = base_py_env.Program('marshal', 'python/marshal.cc')[0]
 
 # Embed python files.  All .py files that have been indicated by a
 # PySource() call in a SConscript need to be embedded into the M5
@@ -1162,7 +1164,8 @@ def embedPyFile(target, source, env):
 
     import subprocess
 
-    marshalled = subprocess.check_output([source[0].abspath, str(source[1])])
+    marshalled = subprocess.check_output(
+            [source[0].abspath, str(source[1])], env=env['ENV'])
 
     compressed = zlib.compress(marshalled)
     data = compressed
@@ -1193,8 +1196,8 @@ EmbeddedPython embedded_${sym}(
     code.write(str(target[0]))
 
 for source in PySource.all:
-    env.Command(source.cpp, [ py_marshal, source.tnode ],
-                MakeAction(embedPyFile, Transform("EMBED PY")))
+    base_py_env.Command(source.cpp, [ py_marshal, source.tnode ],
+                        MakeAction(embedPyFile, Transform("EMBED PY")))
     Source(source.cpp, tags=source.tags, add_tags='python')
 
 ########################################################################

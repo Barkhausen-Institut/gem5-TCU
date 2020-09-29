@@ -54,21 +54,16 @@ if env['TARGET_ISA'] == 'riscv':
     Source('remote_gdb.cc')
     Source('stacktrace.cc')
     Source('tlb.cc')
-    Source('system.cc')
-    Source('vtophys.cc')
-
-    Source('m3/system.cc')
 
     Source('linux/process.cc')
     Source('linux/linux.cc')
 
-    Source('bare_metal/system.cc')
+    Source('bare_metal/fs_workload.cc')
 
+    SimObject('RiscvFsWorkload.py')
     SimObject('RiscvInterrupts.py')
     SimObject('RiscvISA.py')
     SimObject('RiscvTLB.py')
-    SimObject('RiscvSystem.py')
-    SimObject('M3RiscvSystem.py')
 
     DebugFlag('RiscvMisc')
     DebugFlag('TLBVerbose')
