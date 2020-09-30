@@ -227,7 +227,7 @@ let {{
     exec_output += PredOpExecute.subst(deprecated_exitIop)
 
     m5getcycles_code = '''
-        R0 = PseudoInst::getCycles(xc->tcBase(), R0);
+        R0 = PseudoInst::get_cycles(xc->tcBase(), R0);
     '''
 
     m5getcyclesIop = InstObjParams("m5getcycles", "M5getcycles", "PredOp",

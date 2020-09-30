@@ -231,7 +231,7 @@
                         PseudoInst::togglesync(xc->tcBase());
                     }}, IsNonSpeculative, IsQuiesce);
                     0x63: m5getcycles({{
-                        Rax = PseudoInst::getCycles(xc->tcBase(), Rdi);
+                        Rax = PseudoInst::get_cycles(xc->tcBase(), Rdi);
                     }}, IsNonSpeculative);
                     default: Inst::UD2();
                 }

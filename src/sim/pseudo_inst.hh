@@ -120,7 +120,7 @@ void workbegin(ThreadContext *tc, uint64_t workid, uint64_t threadid);
 void workend(ThreadContext *tc, uint64_t workid, uint64_t threadid);
 void m5Syscall(ThreadContext *tc);
 void togglesync(ThreadContext *tc);
-uint64_t getCycles(ThreadContext *tc, uint64_t msg);
+uint64_t get_cycles(ThreadContext *tc, uint64_t msg);
 
 /**
  * Execute a decoded M5 pseudo instruction
@@ -259,7 +259,8 @@ pseudoInst(ThreadContext *tc, uint8_t func, uint64_t &result)
 
       /* print current timestamp */
       case M5OP_GET_CYCLES:
-        return invokeSimcall<ABI>(tc, getCycles);
+        result = invokeSimcall<ABI>(tc, get_cycles);
+        return true;
 
       default:
         warn("Unhandled m5 op: %#x\n", func);

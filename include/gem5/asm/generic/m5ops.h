@@ -108,7 +108,8 @@
     M5OP(m5_work_end, M5OP_WORK_END)                            \
     M5OP(m5_se_syscall, M5OP_SE_SYSCALL)                        \
     M5OP(m5_se_page_fault, M5OP_SE_PAGE_FAULT)                  \
-    M5OP(m5_dist_toggle_sync, M5OP_DIST_TOGGLE_SYNC)
+    M5OP(m5_dist_toggle_sync, M5OP_DIST_TOGGLE_SYNC)            \
+    M5OP(m5_get_cycles, M5OP_GET_CYCLES)
 
 #define M5OP_MERGE_TOKENS_I(a, b) a##b
 #define M5OP_MERGE_TOKENS(a, b) M5OP_MERGE_TOKENS_I(a, b)

@@ -606,7 +606,7 @@ workend(ThreadContext *tc, uint64_t workid, uint64_t threadid)
 }
 
 uint64_t
-getCycles(ThreadContext *tc, uint64_t msg)
+get_cycles(ThreadContext *tc, uint64_t msg)
 {
     DPRINTFS(Tcu, tc->getCpuPtr(), "DEBUG %#x\n", msg);
     return tc->getCpuPtr()->curCycle();
