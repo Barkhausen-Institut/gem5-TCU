@@ -302,10 +302,11 @@ TcuAbortTest::completeRequest(PacketPtr pkt)
                         break;
                     case SubState::WAIT_ABORT:
                     {
-                        RegFile::reg_t reg = *pkt->getPtr<RegFile::reg_t>();
-                        if ((reg & 0xF) == 0)
+                        PrivCommand::Bits cmd = *pkt->getPtr<RegFile::reg_t>();
+                        if (cmd.opcode == 0)
                         {
-                            abortType = reg >> 4;
+                            assert(cmd.error == 0);
+                            abortType = cmd.arg0;
                             DPRINTF(TcuAbortTest,
                                     "Command aborted as %#x\n", abortType);
                             abortTypes |= 1 << abortType;
@@ -315,9 +316,9 @@ TcuAbortTest::completeRequest(PacketPtr pkt)
                     }
                     case SubState::WAIT_CMD:
                     {
-                        RegFile::reg_t reg = *pkt->getPtr<RegFile::reg_t>();
-                        if ((reg & 0xF) == 0)
-                            finishTest(((reg >> 20) & 0xF) == 0);
+                        CmdCommand::Bits cmd = *pkt->getPtr<RegFile::reg_t>();
+                        if (cmd.opcode == 0)
+                            finishTest(cmd.error == 0);
                         break;
                     }
                 }
