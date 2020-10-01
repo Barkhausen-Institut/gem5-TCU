@@ -36,6 +36,8 @@
 #include "sim/pe_memory.hh"
 #include "sim/sim_exit.hh"
 
+#define ARRAY_SIZE(a)   (sizeof((a)) / sizeof((a)[0]))
+
 static const Addr DATA_ADDR         = 0x1000;
 static const Addr DEST_ADDR         = 0x2000;
 static const Addr RECV_ADDR         = 0x3000;
@@ -82,6 +84,11 @@ static const char *abortNames[] =
 Addr
 TcuAbortTest::getRegAddr(PrivReg reg)
 {
+    static_assert(ARRAY_SIZE(stateNames) == static_cast<size_t>(State::STOP) + 1,
+                  "stateNames out of sync");
+    static_assert(ARRAY_SIZE(substateNames) == static_cast<size_t>(SubState::WAIT_CMD) + 1,
+                  "substateNames out of sync");
+
     return TcuTlb::PAGE_SIZE * 2 +
            static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
 }
@@ -518,7 +525,9 @@ TcuAbortTest::tick()
                 {
                     inform("  Abort %u of %s took %lu ticks (%s)\n",
                         delay, testNames[testNo], curTick() - abortStart,
-                        abortNames[abortType]);
+                        abortType < ARRAY_SIZE(abortNames)
+                            ? abortNames[abortType]
+                            : "??");
 
                     Addr regAddr = getRegAddr(UnprivReg::COMMAND);
                     pkt = createTcuRegisterPkt(regAddr, 0, MemCmd::ReadReq);
