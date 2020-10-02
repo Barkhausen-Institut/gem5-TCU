@@ -45,7 +45,7 @@ class TcuAccelInDir : public TcuAccel
     static const unsigned EP_RECV       = 17;
 
     static const size_t MSG_SIZE        = 64;
-    static const Addr RBUF_ADDR         = 0x2FFF00;
+    static const Addr RBUF_ADDR         = 0x3FFF00;
     static const Addr MSG_ADDR          = 0x2000;
     static const Addr BUF_ADDR          = 0x8000;
     static const size_t BLOCK_SIZE      = 1024;

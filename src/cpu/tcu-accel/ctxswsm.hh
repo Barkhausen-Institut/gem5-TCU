@@ -37,7 +37,7 @@ class AccelCtxSwSM
 {
     static const uint64_t OUR_VPE   = 0xFFFF;
 
-    static const size_t RBUF_ADDR   = 0x2FF040;
+    static const size_t RBUF_ADDR   = 0x3FF040;
 
     static const unsigned EP_RECV   = 2;
     static const size_t MSG_SIZE    = 64;
