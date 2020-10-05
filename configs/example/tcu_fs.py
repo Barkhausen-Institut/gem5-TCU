@@ -225,7 +225,7 @@ def connectCuToMem(pe, options, dport, iport=None, l1size=None, tcupos=0):
             pe.tcu.icache_slave_port = iport
         pe.tcu.dcache_slave_port = dport
 
-def createPE(noc, options, no, systemType, l1size, l2size, spmsize, tcupos, memPE):
+def createPE(noc, options, no, systemType, l1size, l2size, spmsize, tcupos, memPE, epCount):
     CPUClass = ObjectList.cpu_list.get(options.cpu_type)
 
     # each PE is represented by it's own subsystem
@@ -244,7 +244,7 @@ def createPE(noc, options, no, systemType, l1size, l2size, spmsize, tcupos, memP
     pe.tcu = Tcu(max_noc_packet_size='2kB', buf_size='2kB')
     pe.tcu.pe_id = no
 
-    pe.tcu.num_endpoints = 192
+    pe.tcu.num_endpoints = epCount
     if tcupos > 0:
         pe.tcu.tlb_entries = 32
     else:
@@ -349,8 +349,8 @@ def createPE(noc, options, no, systemType, l1size, l2size, spmsize, tcupos, memP
 
     return pe
 
-def createCorePE(noc, options, no, cmdline, memPE, l1size=None, l2size=None,
-                 tcupos=0, spmsize='8MB'):
+def createCorePE(noc, options, no, cmdline, memPE, epCount,
+                 l1size=None, l2size=None, tcupos=0, spmsize='8MB'):
     CPUClass = ObjectList.cpu_list.get(options.cpu_type)
 
     if options.isa == 'arm':
@@ -366,7 +366,7 @@ def createCorePE(noc, options, no, cmdline, memPE, l1size=None, l2size=None,
     pe = createPE(
         noc=noc, options=options, no=no, systemType=sysType,
         l1size=l1size, l2size=l2size, spmsize=spmsize, tcupos=tcupos,
-        memPE=memPE
+        memPE=memPE, epCount=epCount
     )
     pe.tcu.connector = con()
     pe.readfile = "/dev/stdin"
@@ -453,11 +453,11 @@ def createCorePE(noc, options, no, cmdline, memPE, l1size=None, l2size=None,
 
     return pe
 
-def createDevicePE(noc, options, no, memPE):
+def createDevicePE(noc, options, no, memPE, epCount):
     pe = createPE(
         noc=noc, options=options, no=no, systemType=SpuSystem,
         l1size=None, l2size=None, spmsize=None, memPE=memPE,
-        tcupos=0
+        tcupos=0, epCount=epCount
     )
     pe.tcu.connector = BaseConnector()
 
@@ -491,8 +491,8 @@ def createDevicePE(noc, options, no, memPE):
 
     return pe
 
-def createStoragePE(noc, options, no, memPE, img0=None, img1=None):
-    pe = createDevicePE(noc, options, no, memPE)
+def createStoragePE(noc, options, no, memPE, epCount, img0=None, img1=None):
+    pe = createDevicePE(noc, options, no, memPE, epCount)
 
     # create disks
     disks = []
@@ -531,8 +531,8 @@ def createStoragePE(noc, options, no, memPE, img0=None, img1=None):
 
     return pe
 
-def createEtherPE(noc, options, no, memPE):
-    pe = createDevicePE(noc, options, no, memPE)
+def createEtherPE(noc, options, no, memPE, epCount):
+    pe = createDevicePE(noc, options, no, memPE, epCount)
 
     pe.nic = IGbE_e1000()
     pe.nic.clk_domain = SrcClockDomain(clock=options.sys_clock,
@@ -561,11 +561,12 @@ def linkEtherPEs(ether0, ether1):
     ether0.etherlink = link
     ether1.etherlink = link
 
-def createAccelPE(noc, options, no, accel, memPE, l1size=None, l2size=None, spmsize='64kB'):
+def createAccelPE(noc, options, no, accel, memPE, epCount,
+                  l1size=None, l2size=None, spmsize='64kB'):
     pe = createPE(
         noc=noc, options=options, no=no, systemType=SpuSystem,
         l1size=l1size, l2size=l2size, spmsize=spmsize, memPE=memPE,
-        tcupos=0
+        tcupos=0, epCount=epCount
     )
     pe.tcu.connector = TcuAccelConnector()
 
@@ -596,11 +597,12 @@ def createAccelPE(noc, options, no, accel, memPE, l1size=None, l2size=None, spms
 
     return pe
 
-def createAbortTestPE(noc, options, no, memPE, l1size=None, l2size=None, spmsize='8MB'):
+def createAbortTestPE(noc, options, no, memPE, epCount,
+                      l1size=None, l2size=None, spmsize='8MB'):
     pe = createPE(
         noc=noc, options=options, no=no, systemType=SpuSystem,
         l1size=l1size, l2size=l2size, spmsize=spmsize, memPE=memPE,
-        tcupos=0
+        tcupos=0, epCount=epCount
     )
     pe.tcu.connector = BaseConnector()
 
@@ -615,11 +617,12 @@ def createAbortTestPE(noc, options, no, memPE, l1size=None, l2size=None, spmsize
 
     return pe
 
-def createMemPE(noc, options, no, size, dram=True, image=None, imageNum=0):
+def createMemPE(noc, options, no, size, epCount,
+                dram=True, image=None, imageNum=0):
     pe = createPE(
         noc=noc, options=options, no=no, systemType=MemSystem,
         l1size=None, l2size=None, spmsize=None, memPE=0,
-        tcupos=0
+        tcupos=0, epCount=epCount
     )
     pe.clk_domain = SrcClockDomain(clock=options.sys_clock,
                                    voltage_domain=pe.voltage_domain)
