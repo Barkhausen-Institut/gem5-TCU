@@ -49,6 +49,7 @@ enum class TcuError
     PAGEFAULT           = 14,
     ABORT               = 15,
     UNKNOWN_CMD         = 16,
+    RECV_OUT_OF_BOUNDS  = 17,
 };
 
 #endif // __MEM_TCU_ERROR_HH__

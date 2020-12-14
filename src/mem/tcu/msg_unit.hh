@@ -136,7 +136,7 @@ class MessageUnit
 
     void recvCredits(EpFile::EpCache &eps, SendEp &sep);
 
-    int allocSlot(EpFile::EpCache &eps, size_t msgSize, RecvEp &ep);
+    int allocSlot(EpFile::EpCache &eps, RecvEp &ep);
 
     void startReplyWithEP(EpFile::EpCache &eps);
 

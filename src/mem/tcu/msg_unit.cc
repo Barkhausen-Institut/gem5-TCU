@@ -514,10 +514,8 @@ void MessageUnit::ackMessage(RecvEp &rep, int msgidx)
 }
 
 int
-MessageUnit::allocSlot(EpFile::EpCache &eps, size_t msgSize, RecvEp &ep)
+MessageUnit::allocSlot(EpFile::EpCache &eps, RecvEp &ep)
 {
-    assert(msgSize <= (1 << ep.r0.slotSize));
-
     int i;
     for (i = ep.r0.wpos; i < (1 << ep.r0.slots); ++i)
     {
@@ -684,7 +682,16 @@ MessageUnit::recvFromNocWithEP(EpFile::EpCache &eps, PacketPtr pkt)
         return;
     }
 
-    int msgidx = allocSlot(eps, pkt->getSize(), rep);
+    if (pkt->getSize() > (1 << rep.r0.slotSize))
+    {
+        DPRINTFS(Tcu, (&tcu),
+            "EP%u: ignoring message: message too large\n",
+            epid);
+        tcu.sendNocResponse(pkt, TcuError::RECV_OUT_OF_BOUNDS);
+        return;
+    }
+
+    int msgidx = allocSlot(eps, rep);
     if (msgidx == -1)
     {
         DPRINTFS(Tcu, (&tcu),
