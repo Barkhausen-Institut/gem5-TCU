@@ -50,6 +50,8 @@ enum class TcuError
     ABORT               = 15,
     UNKNOWN_CMD         = 16,
     RECV_OUT_OF_BOUNDS  = 17,
+    RECV_INV_RPL_EPS    = 18,
+    SEND_INV_CRD_EP     = 19,
 };
 
 #endif // __MEM_TCU_ERROR_HH__

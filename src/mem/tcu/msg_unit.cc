@@ -115,6 +115,15 @@ MessageUnit::startReplyWithEP(EpFile::EpCache &eps)
         return;
     }
 
+    if ((rep.r0.rplEps + (1 << rep.r0.slots)) > tcu.numEndpoints)
+    {
+        DPRINTFS(Tcu, (&tcu),
+            "EP%u: reply EPs out of bounds\n",
+            cmd.epid);
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::RECV_INV_RPL_EPS);
+        return;
+    }
+
     int msgidx = rep.offsetToIdx(cmd.arg0);
     if (msgidx == RecvEp::MAX_MSGS)
     {
@@ -210,6 +219,14 @@ MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
     else
     {
         assert(sep.r0.vpe == tcu.regs().getCurVPE().id);
+
+        if (sep.r0.crdEp != Tcu::INVALID_EP_ID &&
+            sep.r0.crdEp >= tcu.numEndpoints)
+        {
+            DPRINTFS(Tcu, (&tcu), "EP%u: credit EP invalid\n", cmd.arg0);
+            tcu.scheduleCmdFinish(Cycles(1), TcuError::SEND_INV_CRD_EP);
+            return;
+        }
 
         // grant credits to the sender
         replyEpId = sep.r0.crdEp;
@@ -469,6 +486,13 @@ MessageUnit::startAckWithEP(EpFile::EpCache &eps)
         return;
     }
 
+    if (rep.r0.rplEps != Tcu::INVALID_EP_ID &&
+        (rep.r0.rplEps + (1 << rep.r0.slots)) > tcu.numEndpoints)
+    {
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::RECV_INV_RPL_EPS);
+        return;
+    }
+
     int msgidx = rep.offsetToIdx(cmd.arg0);
     if (msgidx == RecvEp::MAX_MSGS)
     {
@@ -630,7 +654,15 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
 
     NocAddr addr(pkt->getAddr());
     epid_t epId = addr.offset;
-    assert(epId != Tcu::INVALID_EP_ID);
+
+    if (epId >= tcu.numEndpoints)
+    {
+        DPRINTFS(Tcu, (&tcu),
+            "EP%u: ignoring message: receive EP invalid\n",
+            epId);
+        tcu.sendNocResponse(pkt, TcuError::RECV_GONE);
+        return;
+    }
 
     DPRINTFS(Tcu, (&tcu),
         "\e[1m[rv <- %u]\e[0m %lu bytes on EP%u\n",
@@ -688,6 +720,16 @@ MessageUnit::recvFromNocWithEP(EpFile::EpCache &eps, PacketPtr pkt)
             "EP%u: ignoring message: message too large\n",
             epid);
         tcu.sendNocResponse(pkt, TcuError::RECV_OUT_OF_BOUNDS);
+        return;
+    }
+
+    if (rep.r0.rplEps != Tcu::INVALID_EP_ID &&
+        (rep.r0.rplEps + (1 << rep.r0.slots)) > tcu.numEndpoints)
+    {
+        DPRINTFS(Tcu, (&tcu),
+            "EP%u: ignoring message: reply EPs out of bounds\n",
+            epid);
+        tcu.sendNocResponse(pkt, TcuError::RECV_INV_RPL_EPS);
         return;
     }
 
