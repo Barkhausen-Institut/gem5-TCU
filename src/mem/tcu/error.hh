@@ -53,6 +53,7 @@ enum class TcuError
     RECV_INV_RPL_EPS    = 18,
     SEND_INV_CRD_EP     = 19,
     SEND_INV_MSG_SZ     = 20,
+    RECV_BUSY           = 21,
 };
 
 #endif // __MEM_TCU_ERROR_HH__

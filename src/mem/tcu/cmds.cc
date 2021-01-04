@@ -286,18 +286,29 @@ TcuCommands::finishCommand(TcuError error)
 
     cmdFinish = NULL;
 
-    if (error == TcuError::NONE &&
-        (cmd.opcode == CmdCommand::READ || cmd.opcode == CmdCommand::WRITE))
+    switch(cmd.opcode)
     {
-        const CmdData::Bits data = tcu.regs().getData();
-        if (data.size > 0)
+        case CmdCommand::READ:
+        case CmdCommand::WRITE:
         {
-            if (cmd.opcode == CmdCommand::READ)
-                tcu.memUnit->startRead(cmd);
-            else
-                tcu.memUnit->startWrite(cmd);
-            return;
+            const CmdData::Bits data = tcu.regs().getData();
+            if (error == TcuError::NONE && data.size > 0)
+            {
+                if (cmd.opcode == CmdCommand::READ)
+                    tcu.memUnit->startRead(cmd);
+                else
+                    tcu.memUnit->startWrite(cmd);
+                return;
+            }
+            break;
         }
+
+        case CmdCommand::SEND:
+        case CmdCommand::REPLY:
+            // if not finished yet, don't continue here
+            if (!tcu.msgUnit->finishMsgSend(error))
+                return;
+            break;
     }
 
     if (cmdPkt || cmd.opcode == CmdCommand::SLEEP)

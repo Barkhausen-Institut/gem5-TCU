@@ -88,6 +88,7 @@ class MessageUnit
 
     MessageUnit(Tcu &_tcu)
       : tcu(_tcu),
+        sendReplyFinished(true),
         cmdEps(_tcu.eps().newCache()),
         extCmdEps(_tcu.eps().newCache())
     {}
@@ -120,6 +121,13 @@ class MessageUnit
     void startAck(const CmdCommand::Bits &cmd);
 
     /**
+     * Finishes a SEND or REPLY command with given result.
+     *
+     * @return true if the SEND/REPLY command is finished now
+     */
+    bool finishMsgSend(TcuError result);
+
+    /**
      * Received a message from NoC -> Mem request
      */
     void recvFromNoc(PacketPtr pkt);
@@ -144,6 +152,8 @@ class MessageUnit
 
     void recvFromNocWithEP(EpFile::EpCache &eps, PacketPtr pkt);
 
+    void finishMsgSendWithEp(EpFile::EpCache &eps, TcuError result);
+
     TcuError finishMsgReceive(EpFile::EpCache &eps,
                               RecvEp &ep,
                               Addr msgAddr,
@@ -156,6 +166,7 @@ class MessageUnit
 
     Tcu &tcu;
 
+    bool sendReplyFinished;
     EpFile::EpCache cmdEps;
     EpFile::EpCache extCmdEps;
 

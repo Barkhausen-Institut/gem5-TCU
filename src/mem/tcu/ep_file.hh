@@ -61,6 +61,8 @@ class EpFile
 
         explicit EpCache(EpFile &eps);
 
+        State getState() const { return state; }
+
         void addEp(epid_t ep);
 
         Ep getEp(epid_t ep);

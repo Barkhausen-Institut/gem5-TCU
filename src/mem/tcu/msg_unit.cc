@@ -316,18 +316,13 @@ MessageUnit::SendTransferEvent::transferDone(TcuError result)
     {
         CmdCommand::Bits cmd = tcu().regs().getCommand();
 
-        if (cmd.opcode == CmdCommand::REPLY)
-        {
-            RecvEp rep = msgUnit->cmdEps.getEp(cmd.epid).recv;
-            int msgidx = rep.offsetToIdx(cmd.arg0);
-            msgUnit->ackMessage(rep, msgidx);
-        }
-        else
+        if (cmd.opcode != CmdCommand::REPLY)
         {
             SendEp sep = msgUnit->cmdEps.getEp(sepid).send;
-            // check if we have enough credits
+
             if (sep.r0.curCrd != Tcu::CREDITS_UNLIM)
             {
+                // check if we have enough credits
                 if (sep.r0.curCrd == 0)
                 {
                     DPRINTFS(Tcu, (&tcu()),
@@ -337,7 +332,7 @@ MessageUnit::SendTransferEvent::transferDone(TcuError result)
                 }
                 else
                 {
-                    // pay the credits
+                    // pay the credits (and undo it on error)
                     sep.r0.curCrd = sep.r0.curCrd - 1;
 
                     DPRINTFS(TcuCredits, (&tcu()),
@@ -348,11 +343,61 @@ MessageUnit::SendTransferEvent::transferDone(TcuError result)
                 }
             }
         }
+
+        // if no error occurred, finishMsgSend is called afterwards
+        if (result == TcuError::NONE)
+            msgUnit->sendReplyFinished = false;
     }
 
     MemoryUnit::WriteTransferEvent::transferDone(result);
 
     msgUnit->cmdEps.onFinished([](EpFile::EpCache &) {});
+}
+
+bool
+MessageUnit::finishMsgSend(TcuError result)
+{
+    if (!sendReplyFinished)
+    {
+        // fetch the EP again and finish the send
+        CmdCommand::Bits cmd = tcu.regs().getCommand();
+        cmdEps.addEp(cmd.epid);
+        cmdEps.onFetched(std::bind(&MessageUnit::finishMsgSendWithEp,
+                                   this, std::placeholders::_1, result));
+        return false;
+    }
+
+    // everything done
+    return true;
+}
+
+void
+MessageUnit::finishMsgSendWithEp(EpFile::EpCache &eps, TcuError result)
+{
+    CmdCommand::Bits cmd = tcu.regs().getCommand();
+
+    // ACK message on successful replies
+    if (result == TcuError::NONE && cmd.opcode == CmdCommand::REPLY)
+    {
+        RecvEp rep = eps.getEp(cmd.epid).recv;
+        int msgidx = rep.offsetToIdx(cmd.arg0);
+        ackMessage(rep, msgidx);
+    }
+
+    // give credits back on failed sends
+    if (result != TcuError::NONE && cmd.opcode == CmdCommand::SEND)
+    {
+        SendEp sep = eps.getEp(cmd.epid).send;
+        recvCredits(eps, sep);
+    }
+
+    // we've updated EPs, so ensure that we write them back before finishing
+    cmdEps.onFinished([](EpFile::EpCache &) {});
+
+    // don't finish the SEND/REPLY again
+    sendReplyFinished = true;
+    // now we can finish the command
+    tcu.scheduleCmdFinish(Cycles(1), result);
 }
 
 void
