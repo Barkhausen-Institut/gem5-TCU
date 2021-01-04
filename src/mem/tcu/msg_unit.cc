@@ -176,6 +176,13 @@ MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
     }
 
     // check message size
+    if (sep.r0.msgSize > 11)
+    {
+        DPRINTFS(Tcu, (&tcu), "EP%u: invalid msgSize\n", epid);
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::SEND_INV_MSG_SZ);
+        return;
+    }
+
     if (data.size + sizeof(MessageHeader) > (1 << sep.r0.msgSize))
     {
         DPRINTFS(Tcu, (&tcu), "EP%u: message too large\n", epid);
