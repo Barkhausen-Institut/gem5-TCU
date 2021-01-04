@@ -818,20 +818,21 @@ MessageUnit::recvFromNocWithEP(EpFile::EpCache &eps, PacketPtr pkt)
 void
 MessageUnit::ReceiveTransferEvent::transferDone(TcuError result)
 {
+    // message receives can't fail here, because they access physical memory
+    // and cannot be aborted.
+    assert(result == TcuError::NONE);
+
     MessageHeader *header = pkt->getPtr<MessageHeader>();
 
-    if (result == TcuError::NONE)
-    {
-        RecvEp rep = eps->getEp(epid).recv;
+    RecvEp rep = eps->getEp(epid).recv;
 
-        bool foreign = rep.r0.vpe != tcu().regs().getCurVPE().id;
-        result = msgUnit->finishMsgReceive(*eps, rep, msgAddr, header,
-                                           result, flags(), !foreign);
+    bool foreign = rep.r0.vpe != tcu().regs().getCurVPE().id;
+    result = msgUnit->finishMsgReceive(*eps, rep, msgAddr, header,
+                                       result, flags(), !foreign);
 
-        // notify SW if we received a message for a different VPE
-        if(foreign)
-            tcu().startForeignReceive(rep.id, rep.r0.vpe);
-    }
+    // notify SW if we received a message for a different VPE
+    if(foreign)
+        tcu().startForeignReceive(rep.id, rep.r0.vpe);
 
     MemoryUnit::ReceiveTransferEvent::transferDone(result);
 
