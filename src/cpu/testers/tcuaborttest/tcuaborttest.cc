@@ -442,7 +442,7 @@ TcuAbortTest::tick()
             ep.r0.type = static_cast<RegFile::reg_t>(EpType::RECEIVE);
             ep.r0.vpe = Tcu::INVALID_VPE_ID;
             ep.r0.rplEps = EP_REPLY;
-            ep.r0.slots = 10;
+            ep.r0.slots = 1;
             ep.r0.slotSize = 10;
             ep.r1.buffer = RECV_ADDR;
             ep.r2.unread = 0;
