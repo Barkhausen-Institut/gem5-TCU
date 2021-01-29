@@ -589,7 +589,6 @@ Tcu::handleCoreMemRequest(PacketPtr pkt,
                           bool functional)
 {
     bool res = true;
-    bool delayed = false;
     Addr virt = pkt->getAddr();
 
     DPRINTF(TcuCoreMemAcc, "%s access for %#lx: start\n",
@@ -622,11 +621,8 @@ Tcu::handleCoreMemRequest(PacketPtr pkt,
         }
     }
 
-    if (!delayed)
-    {
-        DPRINTF(TcuCoreMemAcc, "%s access for %#lx: finished\n",
-            pkt->cmdString(), virt);
-    }
+    DPRINTF(TcuCoreMemAcc, "%s access for %#lx: finished\n",
+        pkt->cmdString(), virt);
 
     return res;
 }
