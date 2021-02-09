@@ -84,8 +84,6 @@ class M3Loader
         uint64_t argc;
         uint64_t argv;
         uint64_t heap_size;
-        uint64_t pe_mem_base;
-        uint64_t pe_mem_size;
         uint64_t kenv;
         uint64_t lambda;
     } M5_ATTR_PACKED;

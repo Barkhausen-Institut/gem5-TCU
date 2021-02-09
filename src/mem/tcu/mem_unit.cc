@@ -354,16 +354,7 @@ MemoryUnit::recvFromNoc(PacketPtr pkt)
         // accesses from remote TCUs always refer to physical memory
         uint xflags = XferUnit::NOXLATE;
 
-        // to keep the modularity of the system, allowing memory in an
-        // arbitrary tile, we don't use one contiguous region of physical
-        // memory, but use NocAddr that contains the PE id and the offset
-        // within that PE. since this access refers to the physical memory seen
-        // by a specific PE, we need a NocAddr to refer to the PE and a NocAddr
-        // to refer to the physical memory. To solve that, we have the latter
-        // NocAddr converted to a physical address as the offset within the
-        // former NocAddr.
-        Addr noc = Tcu::physToNoc(addr.offset);
-        auto *ev = new ReceiveTransferEvent(type, noc, xflags, pkt);
+        auto *ev = new ReceiveTransferEvent(type, addr.offset, xflags, pkt);
         tcu.startTransfer(ev, delay);
     }
 }

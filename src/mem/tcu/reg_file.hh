@@ -424,6 +424,7 @@ class EpFile;
 
 class RegFile
 {
+    friend class Tcu;
     friend class EpFile;
 
   public:
@@ -499,6 +500,8 @@ class RegFile
     const std::string name() const { return _name; }
 
   private:
+
+    void initMemEp();
 
     Ep getEp(epid_t epId) const
     {

@@ -256,7 +256,6 @@ XferUnit::TransferEvent::translateDone(bool success, const NocAddr &phys)
     // local might have been moved forward
     // make sure to use the correct page offset
     Addr physAddr = phys.getAddr() & ~static_cast<Addr>(TcuTlb::PAGE_MASK);
-    physAddr = xfer->tcu.nocToPhys(physAddr);
     physAddr += local & TcuTlb::PAGE_MASK;
 
     while(freeSlots > 0 && pageRemaining > 0)

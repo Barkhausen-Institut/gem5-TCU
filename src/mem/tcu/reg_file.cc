@@ -34,6 +34,7 @@
 #include "debug/TcuRegRange.hh"
 #include "mem/tcu/reg_file.hh"
 #include "mem/tcu/tcu.hh"
+#include "sim/pe_memory.hh"
 
 #define DPRINTFNS(name, ...) do {                                       \
     Trace::getDebugLogger()->dprintf(curTick(), name, __VA_ARGS__);     \
@@ -115,6 +116,29 @@ RegFile::RegFile(Tcu &_tcu, const std::string& name, unsigned numEndpoints)
     vpe.id = Tcu::INVALID_VPE_ID;
     vpe.msgs = 0;
     set(PrivReg::CUR_VPE, vpe);
+
+    initMemEp();
+}
+
+void
+RegFile::initMemEp()
+{
+    PEMemory *sys = dynamic_cast<PEMemory*>(tcu.systemObject());
+    if (sys)
+    {
+        NocAddr phys = sys->getPhys(0);
+
+        MemEp ep;
+        ep.r0.type = static_cast<RegFile::reg_t>(EpType::MEMORY);
+        ep.r0.vpe = Tcu::INVALID_VPE_ID;
+        // TODO exec
+        ep.r0.flags = Tcu::MemoryFlags::READ | Tcu::MemoryFlags::WRITE;
+        ep.r0.targetPe = phys.peId;
+        ep.r1.remoteAddr = phys.offset;
+        ep.r2.remoteSize = sys->memSize;
+
+        updateEp(ep);
+    }
 }
 
 void

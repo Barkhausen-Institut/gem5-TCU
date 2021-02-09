@@ -154,10 +154,6 @@ M3Loader::initState(System &sys, PEMemory &mem, MasterPort &noc)
     Addr args = argv + sizeof(uint64_t) * env.argc;
     env.argv = argv;
 
-    // pass the PE memory address and size to PEMux/kernel
-    env.pe_mem_base = 0;
-    env.pe_mem_size = mem.memSize;
-
     // with paging, the kernel gets an initial heap mapped
     if ((pes[coreId] & 0x7) == 1 || (pes[coreId] & 0x7) == 2)
         env.heap_size = HEAP_SIZE;
@@ -229,13 +225,13 @@ M3Loader::initState(System &sys, PEMemory &mem, MasterPort &noc)
         bmems[0].size = pes[mem.memPe] & ~static_cast<Addr>(0xFFF);
         if (bmems[0].size < avail_mem_start)
             panic("Not enough DRAM for modules and PEs");
-        bmems[0].addr = avail_mem_start;
+        bmems[0].addr = NocAddr(mem.memPe, avail_mem_start).getAddr();
         bmems[0].size -= avail_mem_start;
         mem_count++;
 
         for (size_t i = 0; i < pes.size(); ++i) {
             if (i != mem.memPe && (pes[i] & 0x7) == 2) {
-                bmems[mem_count].addr = 0;
+                bmems[mem_count].addr = NocAddr(i, 0).getAddr();
                 bmems[mem_count].size = pes[i] & ~static_cast<Addr>(0xFFF);
                 mem_count++;
             }

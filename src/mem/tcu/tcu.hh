@@ -90,9 +90,9 @@ class Tcu : public BaseTcu
 
     struct InitSenderState : public Packet::SenderState
     {
-        explicit InitSenderState(bool _offset) : offset(_offset) {}
+        explicit InitSenderState(Addr _oldAddr) : oldAddr(_oldAddr) {}
 
-        bool offset;
+        Addr oldAddr;
     };
 
   public:
@@ -102,6 +102,8 @@ class Tcu : public BaseTcu
     ~Tcu();
 
     void regStats() override;
+
+    System *systemObject() { return system; }
 
     RegFile &regs() { return regFile; }
 
@@ -169,8 +171,7 @@ class Tcu : public BaseTcu
 
     void sendNocResponse(PacketPtr pkt, TcuError result = TcuError::NONE);
 
-    static Addr physToNoc(Addr phys);
-    static Addr nocToPhys(Addr noc);
+    NocAddr translatePhysToNoC(Addr phys, bool write);
 
     void startTransfer(void *event, Cycles delay);
 
@@ -237,10 +238,6 @@ class Tcu : public BaseTcu
     int wakeupEp;
 
   public:
-
-    unsigned memPe;
-    Addr memOffset;
-    Addr memSize;
 
     const Addr peMemOffset;
 

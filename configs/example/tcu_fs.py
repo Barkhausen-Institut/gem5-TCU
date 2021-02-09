@@ -75,9 +75,9 @@ IO_address_space_base           = 0xff20000000000000
 interrupts_address_space_base   = 0xff40000000000000
 APIC_range_size                 = 1 << 12;
 
-base_offset                     = 2048 * 1024 * 1024
+base_offset                     = 512 * 1024 * 1024
 mod_offset                      = base_offset
-mod_size                        = 32 * 1024 * 1024
+mod_size                        = 64 * 1024 * 1024
 pe_offset                       = mod_offset + mod_size
 pe_size                         = 16 * 1024 * 1024
 

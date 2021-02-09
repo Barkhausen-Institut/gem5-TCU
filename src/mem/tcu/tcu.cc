@@ -60,8 +60,6 @@ Tcu::Tcu(TcuParams* p)
     fireTimerEvent(*this),
     completeCoreReqEvent(coreReqs),
     wakeupEp(0xFFFF),
-    memPe(),
-    memOffset(),
     peMemOffset(p->pe_mem_offset),
     atomicMode(p->system->isAtomicMode()),
     numEndpoints(p->num_endpoints),
@@ -82,17 +80,6 @@ Tcu::Tcu(TcuParams* p)
     assert(p->buf_size >= maxNocPacketSize);
 
     connector->setTcu(this);
-
-    PEMemory *sys = dynamic_cast<PEMemory*>(system);
-    if (sys)
-    {
-        NocAddr phys = sys->getPhys(0);
-        memPe = phys.peId;
-        memOffset = phys.offset;
-        memSize = sys->memSize;
-        DPRINTF(Tcu, "Using memory range %p .. %p\n",
-            memOffset, memOffset + memSize);
-    }
 }
 
 Tcu::~Tcu()
@@ -395,40 +382,6 @@ Tcu::sendNocResponse(PacketPtr pkt, TcuError result)
     }
 }
 
-Addr
-Tcu::physToNoc(Addr phys)
-{
-#if THE_ISA == X86_ISA
-    return (phys & ~0x0000FF0000000000ULL) |
-          ((phys & 0x0000FF0000000000ULL) << 16);
-#elif THE_ISA == ARM_ISA
-    return (phys & ~0x000000FF00000000ULL) |
-          ((phys & 0x000000FF00000000ULL) << 24);
-#elif THE_ISA == RISCV_ISA
-    return (phys & ~0x00FF000000000000ULL) |
-          ((phys & 0x00FF000000000000ULL) << 8);
-#else
-#   error "Unsupported ISA"
-#endif
-}
-
-Addr
-Tcu::nocToPhys(Addr noc)
-{
-#if THE_ISA == X86_ISA
-    return (noc & ~0xFF00000000000000ULL) |
-          ((noc & 0xFF00000000000000ULL) >> 16);
-#elif THE_ISA == ARM_ISA
-    return (noc & ~0xFF00000000000000ULL) |
-          ((noc & 0xFF00000000000000ULL) >> 24);
-#elif THE_ISA == RISCV_ISA
-    return (noc & ~0xFF00000000000000ULL) |
-          ((noc & 0xFF00000000000000ULL) >> 8);
-#else
-#   error "Unsupported ISA"
-#endif
-}
-
 void
 Tcu::startTransfer(void *event, Cycles delay)
 {
@@ -475,29 +428,21 @@ Tcu::completeNocRequest(PacketPtr pkt)
         // as these target memory PEs, there can't be any error
         assert(senderState->result == TcuError::NONE);
 
-        NocAddr noc(pkt->getAddr());
-        DPRINTF(TcuMem,
-            "Finished %s request of LLC for %u bytes @ %d:%#x\n",
-            pkt->isRead() ? "read" : "write",
-            pkt->getSize(), noc.peId, noc.offset);
-
-        if(pkt->isRead())
-            printPacket(pkt);
-
         if (auto state = dynamic_cast<InitSenderState*>(pkt->senderState))
         {
             // undo the change from handleCacheMemRequest
-            if (state->offset)
-                noc.offset += peMemOffset;
-            pkt->setAddr(noc.offset - memOffset);
-            pkt->req->setPaddr(noc.offset - memOffset);
+            pkt->setAddr(state->oldAddr);
+            pkt->req->setPaddr(state->oldAddr);
             pkt->popSenderState();
         }
 
-        // translate NoC address to physical address
-        Addr phys = nocToPhys(pkt->getAddr());
-        pkt->setAddr(phys);
-        pkt->req->setPaddr(phys);
+        DPRINTF(TcuMem,
+            "Finished %s request of LLC for %u bytes @ %#x\n",
+            pkt->isRead() ? "read" : "write",
+            pkt->getSize(), pkt->getAddr());
+
+        if(pkt->isRead())
+            printPacket(pkt);
 
         sendCacheMemResponse(pkt, true);
     }
@@ -627,6 +572,44 @@ Tcu::handleCoreMemRequest(PacketPtr pkt,
     return res;
 }
 
+NocAddr
+Tcu::translatePhysToNoC(Addr phys, bool write)
+{
+    Addr physAddr = phys - peMemOffset;
+    Addr physOff = physAddr & 0x3FFFFFFF;
+    epid_t epid = physAddr >> 30;
+
+    if (epid >= numEndpoints || regs().getEp(epid).type() != EpType::MEMORY)
+    {
+        DPRINTFS(Tcu, this, "PMP-EP%u: invalid EP (phys=%#x)\n", epid, phys);
+        warn("PE%u,PMP-EP%u: invalid EP", peId, epid);
+        return NocAddr();
+    }
+
+    const MemEp mep = regs().getEp(epid).mem;
+
+    if (physOff >= mep.r2.remoteSize)
+    {
+        DPRINTFS(Tcu, this,
+                 "PMP-EP%u: out of bounds (%#x vs. %#x)\n",
+                 epid, physOff, mep.r2.remoteSize);
+        warn("PE%u,PMP-EP%u: out of bounds", peId, epid);
+        return NocAddr();
+    }
+    if ((!write && !(mep.r0.flags & MemoryFlags::READ)) ||
+        (write && !(mep.r0.flags & MemoryFlags::WRITE)))
+    {
+        DPRINTFS(Tcu, this,
+                 "PMP-EP%u: permission denied (flags=%#x, write=%d)\n",
+                 epid, mep.r0.flags, write);
+        warn("PE%u,PMP-EP%u: permission denied", peId, epid);
+        return NocAddr();
+    }
+
+    // translate to NoC address
+    return NocAddr(mep.r0.targetPe, mep.r1.remoteAddr + physOff);
+}
+
 bool
 Tcu::handleCacheMemRequest(PacketPtr pkt, bool functional)
 {
@@ -643,51 +626,23 @@ Tcu::handleCacheMemRequest(PacketPtr pkt, bool functional)
     if (pkt->cmd == MemCmd::BadAddressError)
         return false;
 
-    Addr physAddr = pkt->getAddr();
-
-    // translate physical address to NoC address
-    Addr nocAddr = physToNoc(physAddr);
-    pkt->setAddr(nocAddr);
-
-    NocAddr noc(nocAddr);
-
-    // special case: we check whether this is actually a NocAddr. this does
-    // only happen when loading a program at startup, TLB misses in the core
-    // and pseudoInst
-    bool was_noc = noc.valid;
-    bool offset = false;
-    if (!was_noc)
-    {
-        offset = noc.offset >= peMemOffset;
-        if (offset)
-            noc.offset -= peMemOffset;
-
-        noc = NocAddr(memPe, memOffset + noc.offset);
-        pkt->setAddr(noc.getAddr());
-    }
-
-    // TODO this is a temporary check that prevents failures if the core does
-    // speculative accesses to arbitrary addresses. with physical memory
-    // protection, this check can be removed.
-    if (noc.peId != memPe || (!noc.valid && noc.offset > memSize))
-    {
-        DPRINTF(TcuMem, "Ignoring %s request of LLC for %u bytes @ %d:%#x\n",
-            pkt->cmdString(), pkt->getSize(), noc.peId, noc.offset);
+    Addr pktAddr = pkt->getAddr();
+    // assert((pktAddr & (pkt->getSize() - 1)) == 0);
+    NocAddr noc = translatePhysToNoC(pktAddr, pkt->isWrite());
+    if (!noc.valid)
         return false;
-    }
 
-    DPRINTF(TcuMem, "Handling %s request of LLC for %u bytes @ %d:%#x\n",
-                    pkt->cmdString(),
-                    pkt->getSize(), noc.peId, noc.offset);
+    pkt->setAddr(noc.getAddr());
+
+    DPRINTF(TcuMem, "Sending LLC request for %#x to %d:%#x\n",
+                    pktAddr, noc.peId, noc.offset);
 
     if(pkt->isWrite())
         printPacket(pkt);
 
-    if (!was_noc && !functional)
-    {
-        // remember that we did this change
-        pkt->pushSenderState(new InitSenderState(offset));
-    }
+    // remember that we did this change
+    if (!functional)
+        pkt->pushSenderState(new InitSenderState(pktAddr));
 
     auto type = functional ? Tcu::NocPacketType::CACHE_MEM_REQ_FUNC
                            : Tcu::NocPacketType::CACHE_MEM_REQ;
@@ -700,8 +655,7 @@ Tcu::handleCacheMemRequest(PacketPtr pkt, bool functional)
     extMemReqs++;
 
     if (functional)
-        pkt->setAddr(physAddr);
-
+        pkt->setAddr(pktAddr);
     return true;
 }
 
