@@ -39,7 +39,7 @@ class AccelCtxSwSM
 
     static const size_t RBUF_ADDR   = 0x3FF040;
 
-    static const unsigned EP_RECV   = 2;
+    static const unsigned EP_RECV   = 6;
     static const size_t MSG_SIZE    = 64;
 
     enum Operation

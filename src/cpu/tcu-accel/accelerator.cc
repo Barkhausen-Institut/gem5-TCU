@@ -36,8 +36,8 @@
 
 #include <iomanip>
 
-const unsigned TcuAccel::EP_SYSS       = 4;
-const unsigned TcuAccel::EP_SYSR       = 5;
+const unsigned TcuAccel::EP_SYSS       = 8;
+const unsigned TcuAccel::EP_SYSR       = 9;
 
 Addr
 TcuAccel::getRegAddr(PrivReg reg)
