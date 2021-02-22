@@ -804,8 +804,8 @@ MessageUnit::recvFromNocWithEP(EpFile::EpCache &eps, PacketPtr pkt)
     delay += tcu.nocToTransferLatency;
 
     uint rflags = XferUnit::XferFlags::MSGRECV;
-    // receive EPs use a physical address, thus NOPF and NOXLATE.
-    rflags |= XferUnit::XferFlags::NOPF | XferUnit::NOXLATE;
+    // receive EPs use a physical address, thus NOXLATE.
+    rflags |= XferUnit::NOXLATE;
     Addr localAddr = rep.r1.buffer + (msgidx << rep.r0.slotSize);
 
     auto *ev = new ReceiveTransferEvent(

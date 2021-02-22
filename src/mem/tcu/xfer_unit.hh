@@ -48,10 +48,9 @@ class XferUnit
 
     enum XferFlags
     {
-        NOPF      = 1,
-        MESSAGE   = 2,
-        MSGRECV   = 4,
-        NOXLATE   = 8,
+        MESSAGE   = 1,
+        MSGRECV   = 2,
+        NOXLATE   = 4,
     };
 
     enum AbortType
@@ -71,8 +70,6 @@ class XferUnit
         {}
 
         void abort();
-
-        bool causePagefault();
 
         void finished(bool success, const NocAddr &phys);
     };

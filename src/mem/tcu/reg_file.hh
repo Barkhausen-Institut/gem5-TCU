@@ -380,8 +380,7 @@ EndBitUnion(CoreMsg)
 
 BitUnion64(XlateCoreReq)
     Bitfield<1, 0> type;
-    Bitfield<2> canPf;
-    Bitfield<4, 3> access;
+    Bitfield<3, 2> access;
     Bitfield<47, 12> virt;
     Bitfield<63, 48> vpe;
 EndBitUnion(XlateCoreReq)

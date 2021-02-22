@@ -62,7 +62,6 @@ size_t
 CoreRequests::startTranslate(vpeid_t vpeId,
                              Addr virt,
                              uint access,
-                             bool canPf,
                              XferUnit::Translation *trans)
 {
     size_t id = nextId();
@@ -72,12 +71,11 @@ CoreRequests::startTranslate(vpeid_t vpeId,
     req->virt = virt;
     req->vpeId = vpeId;
     req->access = access;
-    req->canPf = canPf;
     reqs.push_back(req);
 
     DPRINTFS(TcuCoreReqs, (&tcu),
-        "CoreRequest[%lu]: translate(vpeId=%#x, addr=%p, acc=%#x pf=%d)\n",
-        id, vpeId, virt, access, canPf);
+        "CoreRequest[%lu]: translate(vpeId=%#x, addr=%p, acc=%#x)\n",
+        id, vpeId, virt, access);
     coreReqs++;
 
     if(reqs.size() == 1)
@@ -122,7 +120,6 @@ CoreRequests::XlateRequest::start()
 {
     XlateCoreReq xreq = 0;
     xreq.type = CoreMsgType::XLATE_REQ;
-    xreq.canPf = canPf;
     xreq.virt = virt >> TcuTlb::PAGE_BITS;
     xreq.vpe = vpeId;
     xreq.access = access;

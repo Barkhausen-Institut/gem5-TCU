@@ -37,12 +37,11 @@
 
 static const char *decodeFlags(uint flags)
 {
-    static char buf[5];
+    static char buf[4];
     buf[0] = (flags & XferUnit::MESSAGE) ? 'm' : '-';
     buf[1] = (flags & XferUnit::MSGRECV) ? 'r' : '-';
-    buf[2] = (flags & XferUnit::NOPF)    ? 'p' : '-';
-    buf[3] = (flags & XferUnit::NOXLATE) ? 'x' : '-';
-    buf[4] = '\0';
+    buf[2] = (flags & XferUnit::NOXLATE) ? 'x' : '-';
+    buf[3] = '\0';
     return buf;
 }
 
@@ -106,12 +105,6 @@ void
 XferUnit::Translation::abort()
 {
     event.xfer->tcu.abortTranslate(event.coreReq);
-}
-
-bool
-XferUnit::Translation::causePagefault()
-{
-    return !(event.flags() & XferFlags::NOPF);
 }
 
 void
@@ -209,18 +202,8 @@ XferUnit::TransferEvent::process()
             if (res == TcuTlb::PAGEFAULT)
                 xfer->pagefaults++;
 
-            // if this is a pagefault and we are not allowed to cause one,
-            // report an error
-            bool can_pf = !(flags() & XferFlags::NOPF);
-            if (res == TcuTlb::PAGEFAULT && !can_pf)
-            {
-                abort(TcuError::PAGEFAULT);
-                return;
-            }
-
             trans = new Translation(*this);
-            coreReq = xfer->tcu.startTranslate(vpe, local, access,
-                                               can_pf, trans);
+            coreReq = xfer->tcu.startTranslate(vpe, local, access, trans);
             return;
         }
     }
