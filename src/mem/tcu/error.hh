@@ -54,6 +54,8 @@ enum class TcuError
     SEND_INV_CRD_EP     = 19,
     SEND_INV_MSG_SZ     = 20,
     RECV_BUSY           = 21,
+    TIMEOUT_MEM         = 22,
+    TIMEOUT_NOC         = 23,
 };
 
 #endif // __MEM_TCU_ERROR_HH__
