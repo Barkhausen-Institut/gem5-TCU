@@ -56,6 +56,7 @@ enum class TcuError
     RECV_BUSY           = 21,
     TIMEOUT_MEM         = 22,
     TIMEOUT_NOC         = 23,
+    PAGE_BOUNDARY       = 24,
 };
 
 #endif // __MEM_TCU_ERROR_HH__

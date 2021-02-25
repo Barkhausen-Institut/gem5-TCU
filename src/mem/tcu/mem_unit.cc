@@ -134,6 +134,14 @@ MemoryUnit::startReadWithEP(EpFile::EpCache &eps)
         return;
     }
 
+    if((data.addr & ~static_cast<Addr>(TcuTlb::PAGE_MASK)) !=
+       ((data.addr + size - 1) & ~static_cast<Addr>(TcuTlb::PAGE_MASK)))
+    {
+        DPRINTFS(Tcu, (&tcu), "EP%u: data contains page boundary\n", cmd.epid);
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::PAGE_BOUNDARY);
+        return;
+    }
+
     NocAddr nocAddr(mep.r0.targetPe, mep.r1.remoteAddr + offset);
 
     auto pkt = tcu.generateRequest(nocAddr.getAddr(),
@@ -258,6 +266,14 @@ MemoryUnit::startWriteWithEP(EpFile::EpCache &eps)
     if(size + offset < size || size + offset > mep.r2.remoteSize)
     {
         tcu.scheduleCmdFinish(Cycles(1), TcuError::OUT_OF_BOUNDS);
+        return;
+    }
+
+    if((data.addr & ~static_cast<Addr>(TcuTlb::PAGE_MASK)) !=
+       ((data.addr + size - 1) & ~static_cast<Addr>(TcuTlb::PAGE_MASK)))
+    {
+        DPRINTFS(Tcu, (&tcu), "EP%u: data contains page boundary\n", cmd.epid);
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::PAGE_BOUNDARY);
         return;
     }
 
