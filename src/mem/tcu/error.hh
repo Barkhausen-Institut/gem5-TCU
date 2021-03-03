@@ -57,6 +57,7 @@ enum class TcuError
     TIMEOUT_MEM         = 22,
     TIMEOUT_NOC         = 23,
     PAGE_BOUNDARY       = 24,
+    MSG_UNALIGNED       = 25,
 };
 
 #endif // __MEM_TCU_ERROR_HH__

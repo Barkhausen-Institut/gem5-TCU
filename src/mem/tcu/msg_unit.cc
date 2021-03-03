@@ -190,6 +190,13 @@ MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
         return;
     }
 
+    if (data.addr & 0xF)
+    {
+        DPRINTFS(Tcu, (&tcu), "EP%u: message is not 16-byte aligned\n", epid);
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::MSG_UNALIGNED);
+        return;
+    }
+
     if(data.size != 0 &&
         (data.addr & ~static_cast<Addr>(TcuTlb::PAGE_MASK)) !=
        ((data.addr + data.size - 1) & ~static_cast<Addr>(TcuTlb::PAGE_MASK)))
