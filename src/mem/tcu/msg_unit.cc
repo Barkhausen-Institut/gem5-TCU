@@ -197,13 +197,25 @@ MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
         return;
     }
 
-    if(data.size != 0 &&
-        (data.addr & ~static_cast<Addr>(TcuTlb::PAGE_MASK)) !=
+    auto data_page = data.addr & ~static_cast<Addr>(TcuTlb::PAGE_MASK);
+    if(data.size != 0 && data_page !=
        ((data.addr + data.size - 1) & ~static_cast<Addr>(TcuTlb::PAGE_MASK)))
     {
         DPRINTFS(Tcu, (&tcu), "EP%u: message contains page boundary\n", epid);
         tcu.scheduleCmdFinish(Cycles(1), TcuError::PAGE_BOUNDARY);
         return;
+    }
+
+    if (tcu.tlb())
+    {
+        auto asid = tcu.regs().getCurVPE().id;
+        NocAddr phys;
+        if (tcu.tlb()->lookup(data_page, asid, TcuTlb::READ, &phys) != TcuTlb::HIT)
+        {
+            DPRINTFS(Tcu, (&tcu), "EP%u: TLB miss for data address\n", epid);
+            tcu.scheduleCmdFinish(Cycles(1), TcuError::TLB_MISS);
+            return;
+        }
     }
 
     epid_t replyEpId;

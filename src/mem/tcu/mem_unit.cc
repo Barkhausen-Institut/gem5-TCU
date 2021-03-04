@@ -134,12 +134,25 @@ MemoryUnit::startReadWithEP(EpFile::EpCache &eps)
         return;
     }
 
-    if((data.addr & ~static_cast<Addr>(TcuTlb::PAGE_MASK)) !=
+    auto data_page = data.addr & ~static_cast<Addr>(TcuTlb::PAGE_MASK);
+    if(data_page !=
        ((data.addr + size - 1) & ~static_cast<Addr>(TcuTlb::PAGE_MASK)))
     {
         DPRINTFS(Tcu, (&tcu), "EP%u: data contains page boundary\n", cmd.epid);
         tcu.scheduleCmdFinish(Cycles(1), TcuError::PAGE_BOUNDARY);
         return;
+    }
+
+    if (tcu.tlb())
+    {
+        auto asid = tcu.regs().getCurVPE().id;
+        NocAddr phys;
+        if (tcu.tlb()->lookup(data_page, asid, TcuTlb::WRITE, &phys) != TcuTlb::HIT)
+        {
+            DPRINTFS(Tcu, (&tcu), "EP%u: TLB miss for data address\n", cmd.epid);
+            tcu.scheduleCmdFinish(Cycles(1), TcuError::TLB_MISS);
+            return;
+        }
     }
 
     NocAddr nocAddr(mep.r0.targetPe, mep.r1.remoteAddr + offset);
@@ -269,12 +282,25 @@ MemoryUnit::startWriteWithEP(EpFile::EpCache &eps)
         return;
     }
 
-    if((data.addr & ~static_cast<Addr>(TcuTlb::PAGE_MASK)) !=
-       ((data.addr + size - 1) & ~static_cast<Addr>(TcuTlb::PAGE_MASK)))
+    auto data_page = data.addr & ~static_cast<Addr>(TcuTlb::PAGE_MASK);
+    if(data_page !=
+        ((data.addr + size - 1) & ~static_cast<Addr>(TcuTlb::PAGE_MASK)))
     {
         DPRINTFS(Tcu, (&tcu), "EP%u: data contains page boundary\n", cmd.epid);
         tcu.scheduleCmdFinish(Cycles(1), TcuError::PAGE_BOUNDARY);
         return;
+    }
+
+    if (tcu.tlb())
+    {
+        auto asid = tcu.regs().getCurVPE().id;
+        NocAddr phys;
+        if (tcu.tlb()->lookup(data_page, asid, TcuTlb::READ, &phys) != TcuTlb::HIT)
+        {
+            DPRINTFS(Tcu, (&tcu), "EP%u: TLB miss for data address\n", cmd.epid);
+            tcu.scheduleCmdFinish(Cycles(1), TcuError::TLB_MISS);
+            return;
+        }
     }
 
     NocAddr dest(mep.r0.targetPe, mep.r1.remoteAddr + offset);
