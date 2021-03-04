@@ -46,7 +46,7 @@ class M3Loader
 #else
     static const uintptr_t ENV_START    = 0x100000;
 #endif
-    static const size_t HEAP_SIZE       = 0x4000;
+    static const size_t HEAP_SIZE       = 0x8000;
     static const size_t MAX_MODNAME_LEN = 64;
 
     struct BootModule
