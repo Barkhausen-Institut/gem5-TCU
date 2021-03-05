@@ -206,11 +206,11 @@ MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
         return;
     }
 
+    NocAddr phys(data.addr);
     if (tcu.tlb())
     {
         auto asid = tcu.regs().getCurVPE().id;
-        NocAddr phys;
-        if (tcu.tlb()->lookup(data_page, asid, TcuTlb::READ, &phys) != TcuTlb::HIT)
+        if (tcu.tlb()->lookup(data.addr, asid, TcuTlb::READ, &phys) != TcuTlb::HIT)
         {
             DPRINTFS(Tcu, (&tcu), "EP%u: TLB miss for data address\n", epid);
             tcu.scheduleCmdFinish(Cycles(1), TcuError::TLB_MISS);
@@ -314,7 +314,7 @@ MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
 
     // start the transfer of the payload
     auto *ev = new SendTransferEvent(
-        this, sep.id, data.addr, data.size, flags, nocAddr, header);
+        this, sep.id, phys, data.size, flags, nocAddr, header);
     tcu.startTransfer(ev, tcu.startMsgTransferDelay);
 
     eps.setAutoFinish(false);
@@ -832,12 +832,10 @@ MessageUnit::recvFromNocWithEP(EpFile::EpCache &eps, PacketPtr pkt)
     delay += tcu.nocToTransferLatency;
 
     uint rflags = XferUnit::XferFlags::MSGRECV;
-    // receive EPs use a physical address, thus NOXLATE.
-    rflags |= XferUnit::NOXLATE;
-    Addr localAddr = rep.r1.buffer + (msgidx << rep.r0.slotSize);
+    Addr physAddr = rep.r1.buffer + (msgidx << rep.r0.slotSize);
 
     auto *ev = new ReceiveTransferEvent(
-        this, &eps, epid, localAddr, rflags, pkt);
+        this, &eps, epid, NocAddr(physAddr), rflags, pkt);
     tcu.startTransfer(ev, delay);
 
     eps.setAutoFinish(false);
@@ -855,7 +853,7 @@ MessageUnit::ReceiveTransferEvent::transferDone(TcuError result)
     RecvEp rep = eps->getEp(epid).recv;
 
     bool foreign = rep.r0.vpe != tcu().regs().getCurVPE().id;
-    result = msgUnit->finishMsgReceive(*eps, rep, msgAddr, header,
+    result = msgUnit->finishMsgReceive(*eps, rep, msgAddr.getAddr(), header,
                                        result, flags(), !foreign);
 
     // notify SW if we received a message for a different VPE

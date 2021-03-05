@@ -143,18 +143,6 @@ MemoryUnit::startReadWithEP(EpFile::EpCache &eps)
         return;
     }
 
-    if (tcu.tlb())
-    {
-        auto asid = tcu.regs().getCurVPE().id;
-        NocAddr phys;
-        if (tcu.tlb()->lookup(data_page, asid, TcuTlb::WRITE, &phys) != TcuTlb::HIT)
-        {
-            DPRINTFS(Tcu, (&tcu), "EP%u: TLB miss for data address\n", cmd.epid);
-            tcu.scheduleCmdFinish(Cycles(1), TcuError::TLB_MISS);
-            return;
-        }
-    }
-
     NocAddr nocAddr(mep.r0.targetPe, mep.r1.remoteAddr + offset);
 
     auto pkt = tcu.generateRequest(nocAddr.getAddr(),
@@ -199,7 +187,19 @@ MemoryUnit::readComplete(const CmdCommand::Bits& cmd, PacketPtr pkt, TcuError er
         return;
     }
 
-    auto xfer = new ReadTransferEvent(data.addr, 0, pkt);
+    NocAddr phys(data.addr);
+    if (tcu.tlb())
+    {
+        auto asid = tcu.regs().getCurVPE().id;
+        if (tcu.tlb()->lookup(data.addr, asid, TcuTlb::WRITE, &phys) != TcuTlb::HIT)
+        {
+            DPRINTFS(Tcu, (&tcu), "EP%u: TLB miss for data address\n", cmd.epid);
+            tcu.scheduleCmdFinish(delay, TcuError::TLB_MISS);
+            return;
+        }
+    }
+
+    auto xfer = new ReadTransferEvent(phys, 0, pkt);
     tcu.startTransfer(xfer, delay);
 }
 
@@ -291,11 +291,11 @@ MemoryUnit::startWriteWithEP(EpFile::EpCache &eps)
         return;
     }
 
+    NocAddr phys(data.addr);
     if (tcu.tlb())
     {
         auto asid = tcu.regs().getCurVPE().id;
-        NocAddr phys;
-        if (tcu.tlb()->lookup(data_page, asid, TcuTlb::READ, &phys) != TcuTlb::HIT)
+        if (tcu.tlb()->lookup(data.addr, asid, TcuTlb::READ, &phys) != TcuTlb::HIT)
         {
             DPRINTFS(Tcu, (&tcu), "EP%u: TLB miss for data address\n", cmd.epid);
             tcu.scheduleCmdFinish(Cycles(1), TcuError::TLB_MISS);
@@ -305,7 +305,7 @@ MemoryUnit::startWriteWithEP(EpFile::EpCache &eps)
 
     NocAddr dest(mep.r0.targetPe, mep.r1.remoteAddr + offset);
 
-    auto xfer = new WriteTransferEvent(data.addr, size, 0, dest);
+    auto xfer = new WriteTransferEvent(phys, size, 0, dest);
     tcu.startTransfer(xfer, Cycles(0));
 }
 
@@ -394,9 +394,7 @@ MemoryUnit::recvFromNoc(PacketPtr pkt)
         auto type = pkt->isWrite() ? XferUnit::TransferType::REMOTE_WRITE
                                    : XferUnit::TransferType::REMOTE_READ;
         // accesses from remote TCUs always refer to physical memory
-        uint xflags = XferUnit::NOXLATE;
-
-        auto *ev = new ReceiveTransferEvent(type, addr.offset, xflags, pkt);
+        auto *ev = new ReceiveTransferEvent(type, NocAddr(addr.offset), 0, pkt);
         tcu.startTransfer(ev, delay);
     }
 }

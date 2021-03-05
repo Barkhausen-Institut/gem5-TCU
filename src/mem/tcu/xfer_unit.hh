@@ -50,7 +50,6 @@ class XferUnit
     {
         MESSAGE   = 1,
         MSGRECV   = 2,
-        NOXLATE   = 4,
     };
 
     enum AbortType
@@ -60,19 +59,6 @@ class XferUnit
     };
 
     class TransferEvent;
-
-    struct Translation
-    {
-        TransferEvent& event;
-
-        Translation(TransferEvent& _event)
-            : event(_event)
-        {}
-
-        void abort();
-
-        void finished(bool success, const NocAddr &phys);
-    };
 
   private:
 
@@ -130,32 +116,26 @@ class XferUnit
 
         Cycles startCycle;
         TransferType type;
-        vpeid_t vpe;
-        Addr local;
+        NocAddr phys;
         size_t remaining;
         uint xferFlags;
         TcuError result;
-        Translation *trans;
-        size_t coreReq;
         int freeSlots;
 
       public:
 
         TransferEvent(TransferType _type,
-                      Addr _local,
+                      NocAddr _phys,
                       size_t _size,
                       uint _flags = 0)
             : xfer(),
               buf(),
               startCycle(),
               type(_type),
-              vpe(),
-              local(_local),
+              phys(_phys),
               remaining(_size),
               xferFlags(_flags),
               result(TcuError::NONE),
-              trans(),
-              coreReq(),
               freeSlots()
         {}
 
@@ -164,10 +144,6 @@ class XferUnit
         int bufId() const { return buf->id; }
 
         uint flags() const { return xferFlags; }
-
-        vpeid_t vpeId() const { return vpe; }
-
-        void vpeId(uint16_t id) { vpe = id; }
 
         void *data() { return buf->bytes; }
 
@@ -181,8 +157,6 @@ class XferUnit
 
         const std::string name() const override;
 
-        Translation *translation() { return trans; }
-
         virtual void transferStart() = 0;
 
         virtual void transferDone(TcuError result) = 0;
@@ -193,8 +167,6 @@ class XferUnit
 
         void finish()
         {
-            assert(trans == NULL);
-
             setFlags(AutoDelete);
         }
 
@@ -216,8 +188,6 @@ class XferUnit
         void process() override;
 
         void tryStart();
-
-        void translateDone(bool success, const NocAddr &phys);
 
         AbortResult abort(TcuError error);
     };
@@ -257,7 +227,6 @@ class XferUnit
     Stats::Histogram bytesRead;
     Stats::Histogram bytesWritten;
     Stats::Scalar delays;
-    Stats::Scalar pagefaults;
     Stats::Scalar aborts;
 };
 

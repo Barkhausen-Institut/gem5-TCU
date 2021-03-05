@@ -59,33 +59,6 @@ CoreRequests::regStats()
 }
 
 size_t
-CoreRequests::startTranslate(vpeid_t vpeId,
-                             Addr virt,
-                             uint access,
-                             XferUnit::Translation *trans)
-{
-    size_t id = nextId();
-
-    auto req = new XlateRequest(id, *this);
-    req->trans = trans;
-    req->virt = virt;
-    req->vpeId = vpeId;
-    req->access = access;
-    reqs.push_back(req);
-
-    DPRINTFS(TcuCoreReqs, (&tcu),
-        "CoreRequest[%lu]: translate(vpeId=%#x, addr=%p, acc=%#x)\n",
-        id, vpeId, virt, access);
-    coreReqs++;
-
-    if(reqs.size() == 1)
-        req->start();
-    else
-        coreDelays++;
-    return id;
-}
-
-size_t
 CoreRequests::startForeignReceive(epid_t epId,
                                   vpeid_t vpeId)
 {
@@ -116,20 +89,6 @@ CoreRequests::Request::start()
 }
 
 void
-CoreRequests::XlateRequest::start()
-{
-    XlateCoreReq xreq = 0;
-    xreq.type = CoreMsgType::XLATE_REQ;
-    xreq.virt = virt >> TcuTlb::PAGE_BITS;
-    xreq.vpe = vpeId;
-    xreq.access = access;
-    req.tcu.regs().set(PrivReg::CORE_REQ, xreq);
-    waiting = false;
-
-    Request::start();
-}
-
-void
 CoreRequests::ForeignRecvRequest::start()
 {
     ForeignCoreReq freq = 0;
@@ -140,31 +99,6 @@ CoreRequests::ForeignRecvRequest::start()
     waiting = false;
 
     Request::start();
-}
-
-void
-CoreRequests::XlateRequest::complete(RegFile::reg_t resp)
-{
-    XlateCoreResp xresp(resp);
-    Addr base = (xresp.flags & TcuTlb::LARGE) ?
-                (xresp.largePhys << TcuTlb::LPAGE_BITS) :
-                (xresp.smallPhys << TcuTlb::PAGE_BITS);
-    Addr off = (xresp.flags & TcuTlb::LARGE) ?
-               (virt & TcuTlb::LPAGE_MASK) :
-               (virt & TcuTlb::PAGE_MASK);
-
-    NocAddr phys(base + off);
-    uint flags = xresp.flags & (TcuTlb::RWX | TcuTlb::LARGE | TcuTlb::FIXED);
-    if (flags == 0)
-    {
-        trans->finished(false, phys);
-        req.coreFails++;
-    }
-    else
-    {
-        req.tcu.tlb()->insert(virt, vpeId, phys, flags);
-        trans->finished(true, phys);
-    }
 }
 
 void

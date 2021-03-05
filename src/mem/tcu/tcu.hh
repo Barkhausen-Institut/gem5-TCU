@@ -160,7 +160,6 @@ class Tcu : public BaseTcu
     }
 
     void sendMemRequest(PacketPtr pkt,
-                        Addr virt,
                         Addr data,
                         Cycles delay);
 
@@ -175,14 +174,7 @@ class Tcu : public BaseTcu
 
     void startTransfer(void *event, Cycles delay);
 
-    size_t startTranslate(vpeid_t vpeId,
-                          Addr virt,
-                          uint access,
-                          XferUnit::Translation *trans);
-
     size_t startForeignReceive(epid_t epId, vpeid_t vpeId);
-
-    void abortTranslate(size_t reqId);
 
     void printPacket(PacketPtr pkt) const;
 

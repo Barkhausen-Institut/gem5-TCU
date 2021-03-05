@@ -46,10 +46,10 @@ class MemoryUnit
 
       public:
 
-        LocalWriteTransferEvent(Addr local, uint8_t *_tmp,
+        LocalWriteTransferEvent(NocAddr phys, uint8_t *_tmp,
                                 size_t _size, uint flags)
             : TransferEvent(XferUnit::TransferType::LOCAL_WRITE,
-                            local, _size, flags),
+                            phys, _size, flags),
               tmp(_tmp),
               tmpSize(_size)
         {}
@@ -65,9 +65,9 @@ class MemoryUnit
 
       public:
 
-        ReadTransferEvent(Addr local, uint flags, PacketPtr _pkt)
+        ReadTransferEvent(NocAddr phys, uint flags, PacketPtr _pkt)
             : TransferEvent(XferUnit::TransferType::LOCAL_WRITE,
-                            local, _pkt->getSize(), flags),
+                            phys, _pkt->getSize(), flags),
               pkt(_pkt)
         {}
 
@@ -84,12 +84,12 @@ class MemoryUnit
 
       public:
 
-        WriteTransferEvent(Addr local,
+        WriteTransferEvent(NocAddr phys,
                            size_t size,
                            uint flags,
                            NocAddr _dest)
             : TransferEvent(XferUnit::TransferType::LOCAL_READ,
-                            local, size, flags),
+                            phys, size, flags),
               dest(_dest)
         {}
 
@@ -107,10 +107,10 @@ class MemoryUnit
       public:
 
         ReceiveTransferEvent(XferUnit::TransferType type,
-                             Addr local,
+                             NocAddr phys,
                              uint flags,
                              PacketPtr _pkt)
-            : XferUnit::TransferEvent(type, local, _pkt->getSize(), flags),
+            : XferUnit::TransferEvent(type, phys, _pkt->getSize(), flags),
               pkt(_pkt)
         {}
 

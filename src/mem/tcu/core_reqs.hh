@@ -59,20 +59,6 @@ class CoreRequests
         bool waiting;
     };
 
-    struct XlateRequest : public Request
-    {
-        explicit XlateRequest(size_t id, CoreRequests &req)
-            : Request(id, req) {}
-
-        void start() override;
-        void complete(RegFile::reg_t resp) override;
-
-        XferUnit::Translation *trans;
-        vpeid_t vpeId;
-        Addr virt;
-        uint access;
-    };
-
     struct ForeignRecvRequest : public Request
     {
         explicit ForeignRecvRequest(size_t id, CoreRequests &req)
@@ -90,11 +76,6 @@ class CoreRequests
     const std::string name() const;
 
     void regStats();
-
-    size_t startTranslate(vpeid_t vpeId,
-                          Addr virt,
-                          uint access,
-                          XferUnit::Translation *trans);
 
     size_t startForeignReceive(epid_t epId,
                                vpeid_t vpeId);

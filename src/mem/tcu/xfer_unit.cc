@@ -37,11 +37,10 @@
 
 static const char *decodeFlags(uint flags)
 {
-    static char buf[4];
+    static char buf[3];
     buf[0] = (flags & XferUnit::MESSAGE) ? 'm' : '-';
     buf[1] = (flags & XferUnit::MSGRECV) ? 'r' : '-';
-    buf[2] = (flags & XferUnit::NOXLATE) ? 'x' : '-';
-    buf[3] = '\0';
+    buf[2] = '\0';
     return buf;
 }
 
@@ -93,26 +92,9 @@ XferUnit::regStats()
     delays
         .name(tcu.name() + ".xfer.delays")
         .desc("Number of delays due to occupied buffers");
-    pagefaults
-        .name(tcu.name() + ".xfer.pagefaults")
-        .desc("Number of pagefaults during transfers");
     aborts
         .name(tcu.name() + ".xfer.aborts")
         .desc("Number of aborts");
-}
-
-void
-XferUnit::Translation::abort()
-{
-    event.xfer->tcu.abortTranslate(event.coreReq);
-}
-
-void
-XferUnit::Translation::finished(bool success, const NocAddr &phys)
-{
-    event.translateDone(success, phys);
-
-    delete this;
 }
 
 void
@@ -120,8 +102,6 @@ XferUnit::TransferEvent::tryStart()
 {
     assert(buf == NULL);
 
-    // by default, virtual addresses refer to the running VPE
-    vpe = xfer->tcu.regs().getCurVPE().id;
     buf = xfer->allocateBuf(this, flags());
 
     // try again later, if there is no free buffer
@@ -131,7 +111,7 @@ XferUnit::TransferEvent::tryStart()
             "Delaying %s transfer of %lu bytes @ %p [flags=%s]\n",
             isWrite() ? "mem-write" : "mem-read",
             remaining,
-            local,
+            phys.getAddr(),
             decodeFlags(flags()));
 
         xfer->delays++;
@@ -160,7 +140,7 @@ XferUnit::TransferEvent::start()
         buf->id,
         isWrite() ? "mem-write" : "mem-read",
         remaining,
-        local,
+        phys.getAddr(),
         decodeFlags(flags()));
 
     xfer->tcu.schedule(this, xfer->tcu.clockEdge(Cycles(1)));
@@ -187,74 +167,26 @@ XferUnit::TransferEvent::process()
         return;
     }
 
-    NocAddr phys(local);
-    if (xfer->tcu.tlb() && !(flags() & NOXLATE))
-    {
-        // the TCU can always write to receive buffers and they are pinned
-        // so, don't check for write access in that case
-        uint access = isWrite() && !(flags() & MSGRECV) ? TcuTlb::WRITE
-                                                        : TcuTlb::READ;
-
-        TcuTlb::Result res = xfer->tcu.tlb()->lookup(
-            local, vpe, access, &phys);
-        if (res != TcuTlb::HIT)
-        {
-            if (res == TcuTlb::PAGEFAULT)
-                xfer->pagefaults++;
-
-            trans = new Translation(*this);
-            coreReq = xfer->tcu.startTranslate(vpe, local, access, trans);
-            return;
-        }
-    }
-
-    translateDone(true, phys);
-}
-
-void
-XferUnit::TransferEvent::translateDone(bool success, const NocAddr &phys)
-{
     // if there was an error, we have aborted it on purpose
     // in this case, TransferEvent::abort() will do the rest
     if (result != TcuError::NONE)
         return;
 
-    trans = NULL;
+    Addr physAddr = phys.getAddr();
 
-    if (!success)
+    while(freeSlots > 0 && remaining > 0)
     {
-        abort(TcuError::PAGEFAULT);
-        return;
-    }
-
-    // it might happen that we called process() multiple times in a row. if
-    // another one already generated all remaining memory requests, we are
-    // done here
-    if (remaining == 0)
-        return;
-
-    Addr nextPage = local + TcuTlb::PAGE_SIZE;
-    nextPage &= ~static_cast<Addr>(TcuTlb::PAGE_MASK);
-    Addr pageRemaining = std::min(remaining, nextPage - local);
-    // local might have been moved forward
-    // make sure to use the correct page offset
-    Addr physAddr = phys.getAddr() & ~static_cast<Addr>(TcuTlb::PAGE_MASK);
-    physAddr += local & TcuTlb::PAGE_MASK;
-
-    while(freeSlots > 0 && pageRemaining > 0)
-    {
-        Addr localOff = local & (xfer->blockSize - 1);
-        Addr reqSize = std::min(remaining, xfer->blockSize - localOff);
+        Addr physOff = physAddr & (xfer->blockSize - 1);
+        Addr reqSize = std::min(remaining, xfer->blockSize - physOff);
 
         auto cmd = isWrite() ? MemCmd::WriteReq : MemCmd::ReadReq;
         auto pkt = xfer->tcu.generateRequest(physAddr, reqSize, cmd);
 
         DPRINTFS(TcuXfers, (&xfer->tcu),
-            "buf%d: %s %lu bytes @ %p->%p in local memory\n",
+            "buf%d: %s %lu bytes @ %p in local memory\n",
             buf->id,
             isWrite() ? "Writing" : "Reading",
             reqSize,
-            local,
             physAddr);
 
         Cycles lat = xfer->tcu.transferToMemRequestLatency;
@@ -266,17 +198,17 @@ XferUnit::TransferEvent::translateDone(bool success, const NocAddr &phys)
             memcpy(pkt->getPtr<uint8_t>(), buf->bytes + buf->offset, reqSize);
         }
 
-        xfer->tcu.sendMemRequest(pkt, local,
-                                 buf->id | (buf->offset << 32), lat);
+        xfer->tcu.sendMemRequest(pkt, buf->id | (buf->offset << 32), lat);
 
         // to next block
-        local += reqSize;
         buf->offset += reqSize;
         physAddr += reqSize;
         remaining -= reqSize;
-        pageRemaining -= reqSize;
         freeSlots--;
     }
+
+    // remember our position
+    phys = NocAddr(physAddr);
 }
 
 void
@@ -317,19 +249,13 @@ XferUnit::continueTransfer(Buffer *buf)
     {
         buf->event->transferDone(buf->event->result);
 
-        DPRINTFS(TcuXfers, (&tcu), "buf%d: Transfer done\n",
-                 buf->id);
+        DPRINTFS(TcuXfers, (&tcu), "buf%d: Transfer done\n", buf->id);
 
         // we're done with this buffer now
         if (buf->event->isRead())
             reads.sample(tcu.curCycle() - buf->event->startCycle);
         else
             writes.sample(tcu.curCycle() - buf->event->startCycle);
-        if (buf->event->trans)
-        {
-            buf->event->trans->abort();
-            buf->event->trans = NULL;
-        }
         buf->event->finish();
         buf->event = NULL;
 

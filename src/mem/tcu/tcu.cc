@@ -303,7 +303,6 @@ Tcu::printLine(Addr len)
 
 void
 Tcu::sendMemRequest(PacketPtr pkt,
-                    Addr virt,
                     Addr data,
                     Cycles delay)
 {
@@ -390,31 +389,13 @@ Tcu::startTransfer(void *event, Cycles delay)
 }
 
 size_t
-Tcu::startTranslate(vpeid_t vpeId,
-                    Addr virt,
-                    uint access,
-                    XferUnit::Translation *trans)
+Tcu::startForeignReceive(epid_t epId, vpeid_t vpeId)
 {
     // if a command is running, send the response now to finish its memory
     // write instruction to the COMMAND register
     cmds.stopCommand();
 
-    return coreReqs.startTranslate(vpeId, virt, access, trans);
-}
-
-size_t
-Tcu::startForeignReceive(epid_t epId, vpeid_t vpeId)
-{
-    // as above
-    cmds.stopCommand();
-
     return coreReqs.startForeignReceive(epId, vpeId);
-}
-
-void
-Tcu::abortTranslate(size_t reqId)
-{
-    coreReqs.abortReq(reqId);
 }
 
 void

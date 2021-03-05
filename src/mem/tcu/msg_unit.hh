@@ -48,12 +48,12 @@ class MessageUnit
 
         SendTransferEvent(MessageUnit *_msgUnit,
                           epid_t _sepid,
-                          Addr local,
+                          NocAddr phys,
                           size_t size,
                           uint flags,
                           NocAddr dest,
                           MessageHeader *_header)
-            : WriteTransferEvent(local, size, flags, dest),
+            : WriteTransferEvent(phys, size, flags, dest),
               msgUnit(_msgUnit),
               header(_header),
               sepid(_sepid)
@@ -66,7 +66,7 @@ class MessageUnit
     class ReceiveTransferEvent : public MemoryUnit::ReceiveTransferEvent
     {
         MessageUnit *msgUnit;
-        Addr msgAddr;
+        NocAddr msgAddr;
         EpFile::EpCache *eps;
         epid_t epid;
 
@@ -75,12 +75,12 @@ class MessageUnit
         ReceiveTransferEvent(MessageUnit *_msgUnit,
                              EpFile::EpCache *_eps,
                              epid_t _epid,
-                             Addr local,
+                             NocAddr phys,
                              uint flags,
                              PacketPtr pkt)
             : MemoryUnit::ReceiveTransferEvent(
-                XferUnit::TransferType::REMOTE_WRITE, local, flags, pkt),
-              msgUnit(_msgUnit), msgAddr(local), eps(_eps), epid(_epid)
+                XferUnit::TransferType::REMOTE_WRITE, phys, flags, pkt),
+              msgUnit(_msgUnit), msgAddr(phys), eps(_eps), epid(_epid)
         {}
 
         void transferDone(TcuError result) override;
