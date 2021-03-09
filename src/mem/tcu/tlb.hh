@@ -115,9 +115,9 @@ class TcuTlb
 
     Result lookup(Addr virt, uint16_t asid, uint access, NocAddr *phys);
 
-    void insert(Addr virt, uint16_t asid, NocAddr phys, uint flags);
+    bool insert(Addr virt, uint16_t asid, NocAddr phys, uint flags);
 
-    void remove(Addr virt, uint16_t asid);
+    bool remove(Addr virt, uint16_t asid);
 
     void clear();
 
@@ -125,7 +125,7 @@ class TcuTlb
 
     Result do_lookup(Addr virt, uint16_t asid, uint access, NocAddr *phys);
 
-    void evict();
+    bool evict();
 
     Tcu &tcu;
     TlbEntryTrie trie;

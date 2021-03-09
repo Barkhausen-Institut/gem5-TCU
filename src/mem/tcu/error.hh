@@ -59,6 +59,7 @@ enum class TcuError
     PAGE_BOUNDARY       = 24,
     MSG_UNALIGNED       = 25,
     TLB_MISS            = 26,
+    TLB_FULL            = 27,
 };
 
 #endif // __MEM_TCU_ERROR_HH__

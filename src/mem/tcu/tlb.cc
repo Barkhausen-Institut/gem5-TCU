@@ -135,7 +135,7 @@ TcuTlb::do_lookup(Addr virt, uint16_t asid, uint access, NocAddr *phys)
     return HIT;
 }
 
-void
+bool
 TcuTlb::evict()
 {
     uint min = std::numeric_limits<uint>::max();
@@ -149,14 +149,17 @@ TcuTlb::evict()
         }
     }
 
-    assert(minEntry);
+    if (!minEntry)
+        return false;
+
     trie.remove(minEntry->handle);
     minEntry->handle = NULL;
     free.push_back(minEntry);
     evicts++;
+    return true;
 }
 
-void
+bool
 TcuTlb::insert(Addr virt, uint16_t asid, NocAddr phys, uint flags)
 {
     assert(flags != 0);
@@ -169,8 +172,10 @@ TcuTlb::insert(Addr virt, uint16_t asid, NocAddr phys, uint flags)
     Entry *e = trie.lookup(key);
     if (!e)
     {
-        if (free.empty())
-            evict();
+        if (free.empty()) {
+            if (!evict())
+                return false;
+        }
 
         assert(!free.empty());
         e = free.back();
@@ -194,23 +199,25 @@ TcuTlb::insert(Addr virt, uint16_t asid, NocAddr phys, uint flags)
              "TLB insert for virt=%p asid=%#x perm=%s -> %p\n",
              e->virt, e->asid, decode_access(e->flags), e->phys.getAddr());
     inserts++;
+    return true;
 }
 
-void
+bool
 TcuTlb::remove(Addr virt, uint16_t asid)
 {
     Entry *e = trie.lookup(build_key(asid, virt));
-    if (e)
-    {
-        DPRINTFS(TcuTlbWrite, (&tcu),
-                 "TLB invalidate for virt=%p asid=%#x perm=%s -> %p\n",
-                 virt, asid, decode_access(e->flags), e->phys.getAddr());
+    if (!e)
+        return false;
 
-        trie.remove(e->handle);
-        e->handle = NULL;
-        free.push_back(e);
-        invalidates++;
-    }
+    DPRINTFS(TcuTlbWrite, (&tcu),
+             "TLB invalidate for virt=%p asid=%#x perm=%s -> %p\n",
+             virt, asid, decode_access(e->flags), e->phys.getAddr());
+
+    trie.remove(e->handle);
+    e->handle = NULL;
+    free.push_back(e);
+    invalidates++;
+    return true;
 }
 
 void
