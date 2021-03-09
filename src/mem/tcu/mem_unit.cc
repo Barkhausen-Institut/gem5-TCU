@@ -194,7 +194,7 @@ MemoryUnit::readComplete(const CmdCommand::Bits& cmd, PacketPtr pkt, TcuError er
         if (tcu.tlb()->lookup(data.addr, asid, TcuTlb::WRITE, &phys) != TcuTlb::HIT)
         {
             DPRINTFS(Tcu, (&tcu), "EP%u: TLB miss for data address\n", cmd.epid);
-            tcu.scheduleCmdFinish(delay, TcuError::TLB_MISS);
+            tcu.scheduleCmdFinish(delay, TcuError::TRANSLATION_FAULT);
             return;
         }
     }
@@ -298,7 +298,7 @@ MemoryUnit::startWriteWithEP(EpFile::EpCache &eps)
         if (tcu.tlb()->lookup(data.addr, asid, TcuTlb::READ, &phys) != TcuTlb::HIT)
         {
             DPRINTFS(Tcu, (&tcu), "EP%u: TLB miss for data address\n", cmd.epid);
-            tcu.scheduleCmdFinish(Cycles(1), TcuError::TLB_MISS);
+            tcu.scheduleCmdFinish(Cycles(1), TcuError::TRANSLATION_FAULT);
             return;
         }
     }

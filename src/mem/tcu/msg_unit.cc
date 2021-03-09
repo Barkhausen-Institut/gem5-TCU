@@ -213,7 +213,7 @@ MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
         if (tcu.tlb()->lookup(data.addr, asid, TcuTlb::READ, &phys) != TcuTlb::HIT)
         {
             DPRINTFS(Tcu, (&tcu), "EP%u: TLB miss for data address\n", epid);
-            tcu.scheduleCmdFinish(Cycles(1), TcuError::TLB_MISS);
+            tcu.scheduleCmdFinish(Cycles(1), TcuError::TRANSLATION_FAULT);
             return;
         }
     }

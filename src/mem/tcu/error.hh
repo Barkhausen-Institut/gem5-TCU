@@ -46,7 +46,7 @@ enum class TcuError
     NO_CREDITS          = 11,
     NO_PERM             = 12,
     INV_MSG_OFF         = 13,
-    PAGEFAULT           = 14,
+    TRANSLATION_FAULT   = 14,
     ABORT               = 15,
     UNKNOWN_CMD         = 16,
     RECV_OUT_OF_BOUNDS  = 17,
