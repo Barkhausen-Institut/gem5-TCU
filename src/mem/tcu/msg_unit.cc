@@ -785,15 +785,6 @@ MessageUnit::recvFromNocWithEP(EpFile::EpCache &eps, PacketPtr pkt)
 
     RecvEp &rep = ep.recv;
 
-    if ((rep.r1.buffer & 0x7) != 0)
-    {
-        DPRINTFS(Tcu, (&tcu),
-            "EP%u: ignoring message: receive EP invalid\n",
-            epid);
-        tcu.sendNocResponse(pkt, TcuError::RECV_MISALIGN);
-        return;
-    }
-
     if (pkt->getSize() > (1 << rep.r0.slotSize))
     {
         DPRINTFS(Tcu, (&tcu),
