@@ -684,7 +684,10 @@ Tcu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
         if (result & RegFile::WROTE_CORE_REQ)
             schedule(completeCoreReqEvent, when);
         if (result & RegFile::WROTE_PRINT)
+        {
             printLine(regs().get(UnprivReg::PRINT));
+            regs().set(UnprivReg::PRINT, 0);
+        }
         if (result & RegFile::WROTE_CLEAR_IRQ)
             clearIrq((BaseConnector::IRQ)regs().get(PrivReg::CLEAR_IRQ));
     }
