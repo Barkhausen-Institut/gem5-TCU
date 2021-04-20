@@ -79,6 +79,7 @@ Walker::WalkerState::translateWithTLB(const RequestPtr &req, ThreadContext *tc,
                                       BaseTLB::Mode mode, bool &delayed)
 {
     Addr vaddr = req->getVaddr();
+    vaddr &= ((static_cast<Addr>(1) << VADDR_BITS) - 1);
     Addr paddr = ourWalker()->tlb->translateWithTLB(vaddr, satp.asid, mode);
     req->setPaddr(paddr);
     delayed = false;
