@@ -30,7 +30,11 @@
 namespace ArmISA
 {
 
-const std::vector<int> RegABI32::ArgumentRegs = {0, 1, 2, 3, 4, 5, 6};
-const std::vector<int> RegABI64::ArgumentRegs = {0, 1, 2, 3, 4, 5, 6};
+const std::vector<int> RegABI32::ArgumentRegs = {
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11
+};
+const std::vector<int> RegABI64::ArgumentRegs = {
+    0, 1, 2, 3, 4, 5, 6
+};
 
 } // namespace ArmISA
