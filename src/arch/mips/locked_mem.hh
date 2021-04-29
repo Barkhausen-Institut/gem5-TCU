@@ -47,9 +47,10 @@
  * ISA-specific helper functions for locked memory accesses.
  */
 
-#include "arch/registers.hh"
+#include "arch/mips/registers.hh"
 #include "base/logging.hh"
 #include "base/trace.hh"
+#include "cpu/base.hh"
 #include "debug/LLSC.hh"
 #include "mem/packet.hh"
 #include "mem/request.hh"

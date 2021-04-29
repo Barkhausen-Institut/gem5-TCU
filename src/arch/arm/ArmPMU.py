@@ -39,7 +39,8 @@ from m5.SimObject import *
 from m5.params import *
 from m5.params import isNullPointer
 from m5.proxy import *
-from m5.objects.Gic import ArmInterruptPin
+from m5.objects.Gic import ArmInterruptPin, ArmPPI
+from m5.util.fdthelper import *
 
 class ProbeEvent(object):
     def __init__(self, pmu, _eventId, obj, *listOfNames):
@@ -116,14 +117,20 @@ class ArmPMU(SimObject):
         if bpred is not None and isNullPointer(bpred):
             bpred = None
 
+        # 0x00: SW_INCR
         self.addEvent(SoftwareIncrement(self,0x00))
         # 0x01: L1I_CACHE_REFILL
+        # 0x02: L1I_TLB_REFILL,
         self.addEvent(ProbeEvent(self,0x02, itb, "Refills"))
         # 0x03: L1D_CACHE_REFILL
         # 0x04: L1D_CACHE
+        # 0x05: L1D_TLB_REFILL
         self.addEvent(ProbeEvent(self,0x05, dtb, "Refills"))
+        # 0x06: LD_RETIRED
         self.addEvent(ProbeEvent(self,0x06, cpu, "RetiredLoads"))
+        # 0x07: ST_RETIRED
         self.addEvent(ProbeEvent(self,0x07, cpu, "RetiredStores"))
+        # 0x08: INST_RETIRED
         self.addEvent(ProbeEvent(self,0x08, cpu, "RetiredInsts"))
         # 0x09: EXC_TAKEN
         # 0x0A: EXC_RETURN
@@ -132,10 +139,14 @@ class ArmPMU(SimObject):
         # 0x0D: BR_IMMED_RETIRED
         # 0x0E: BR_RETURN_RETIRED
         # 0x0F: UNALIGEND_LDST_RETIRED
+        # 0x10: BR_MIS_PRED
         self.addEvent(ProbeEvent(self,0x10, bpred, "Misses"))
+        # 0x11: CPU_CYCLES
         self.addEvent(ProbeEvent(self, ARCH_EVENT_CORE_CYCLES, cpu,
                                  "ActiveCycles"))
+        # 0x12: BR_PRED
         self.addEvent(ProbeEvent(self,0x12, bpred, "Branches"))
+        # 0x13: MEM_ACCESS
         self.addEvent(ProbeEvent(self,0x13, cpu, "RetiredLoads",
                                  "RetiredStores"))
         # 0x14: L1I_CACHE
@@ -151,6 +162,7 @@ class ArmPMU(SimObject):
         # 0x1E: CHAIN
         # 0x1F: L1D_CACHE_ALLOCATE
         # 0x20: L2D_CACHE_ALLOCATE
+        # 0x21: BR_RETIRED
         self.addEvent(ProbeEvent(self,0x21, cpu, "RetiredBranches"))
         # 0x22: BR_MIS_PRED_RETIRED
         # 0x23: STALL_FRONTEND
@@ -167,6 +179,21 @@ class ArmPMU(SimObject):
         # 0x2E: L2I_TLB_REFILL
         # 0x2F: L2D_TLB
         # 0x30: L2I_TLB
+
+    def generateDeviceTree(self, state):
+        # For simplicity we just support PPIs for DTB autogen otherwise
+        # it would be difficult to construct a ordered list of SPIs
+        assert isinstance(self.interrupt, ArmPPI)
+
+        node = FdtNode("pmu")
+        node.appendCompatible("arm,armv8-pmuv3")
+
+        gic = self.platform.unproxy(self).gic
+        node.append(
+            FdtPropertyWords("interrupts",
+                self.interrupt.generateFdtProperty(gic)))
+
+        yield node
 
     cycleEventId = Param.Int(ARCH_EVENT_CORE_CYCLES, "Cycle event id")
     platform = Param.Platform(Parent.any, "Platform this device is part of.")

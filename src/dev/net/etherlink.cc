@@ -44,11 +44,13 @@
 
 #include "dev/net/etherlink.hh"
 
+#include <cassert>
 #include <cmath>
 #include <deque>
 #include <string>
 #include <vector>
 
+#include "base/logging.hh"
 #include "base/random.hh"
 #include "base/trace.hh"
 #include "debug/Ethernet.hh"
@@ -61,15 +63,13 @@
 #include "sim/serialize.hh"
 #include "sim/system.hh"
 
-using namespace std;
-
-EtherLink::EtherLink(const Params *p)
+EtherLink::EtherLink(const Params &p)
     : SimObject(p)
 {
-    link[0] = new Link(name() + ".link0", this, 0, p->speed,
-                       p->delay, p->delay_var, p->dump);
-    link[1] = new Link(name() + ".link1", this, 1, p->speed,
-                       p->delay, p->delay_var, p->dump);
+    link[0] = new Link(name() + ".link0", this, 0, p.speed,
+                       p.delay, p.delay_var, p.dump);
+    link[1] = new Link(name() + ".link1", this, 1, p.speed,
+                       p.delay, p.delay_var, p.dump);
 
     interface[0] = new Interface(name() + ".int0", link[0], link[1]);
     interface[1] = new Interface(name() + ".int1", link[1], link[0]);
@@ -96,14 +96,14 @@ EtherLink::getPort(const std::string &if_name, PortID idx)
 }
 
 
-EtherLink::Interface::Interface(const string &name, Link *tx, Link *rx)
+EtherLink::Interface::Interface(const std::string &name, Link *tx, Link *rx)
     : EtherInt(name), txlink(tx)
 {
     tx->setTxInt(this);
     rx->setRxInt(this);
 }
 
-EtherLink::Link::Link(const string &name, EtherLink *p, int num,
+EtherLink::Link::Link(const std::string &name, EtherLink *p, int num,
                       double rate, Tick delay, Tick delay_var, EtherDump *d)
     : objName(name), parent(p), number(num), txint(NULL), rxint(NULL),
       ticksPerByte(rate), linkDelay(delay), delayVar(delay_var), dump(d),
@@ -196,7 +196,7 @@ EtherLink::Link::transmit(EthPacketPtr pkt)
 }
 
 void
-EtherLink::Link::serialize(const string &base, CheckpointOut &cp) const
+EtherLink::Link::serialize(const std::string &base, CheckpointOut &cp) const
 {
     bool packet_exists = packet != nullptr;
     paramOut(cp, base + ".packet_exists", packet_exists);
@@ -222,12 +222,12 @@ EtherLink::Link::serialize(const string &base, CheckpointOut &cp) const
 }
 
 void
-EtherLink::Link::unserialize(const string &base, CheckpointIn &cp)
+EtherLink::Link::unserialize(const std::string &base, CheckpointIn &cp)
 {
     bool packet_exists;
     paramIn(cp, base + ".packet_exists", packet_exists);
     if (packet_exists) {
-        packet = make_shared<EthPacketData>();
+        packet = std::make_shared<EthPacketData>();
         packet->unserialize(base + ".packet", cp);
     }
 
@@ -243,7 +243,7 @@ EtherLink::Link::unserialize(const string &base, CheckpointIn &cp)
     if (optParamIn(cp, base + ".tx_queue_size", tx_queue_size)) {
         for (size_t idx = 0; idx < tx_queue_size; ++idx) {
             Tick tick;
-            EthPacketPtr delayed_packet = make_shared<EthPacketData>();
+            EthPacketPtr delayed_packet = std::make_shared<EthPacketData>();
 
             paramIn(cp, csprintf("%s.txQueue[%i].tick", base, idx), tick);
             delayed_packet->unserialize(
@@ -263,10 +263,4 @@ EtherLink::Link::unserialize(const string &base, CheckpointIn &cp)
         warn("Old-style EtherLink serialization format detected, "
              "in-flight packets may have been dropped.\n");
     }
-}
-
-EtherLink *
-EtherLinkParams::create()
-{
-    return new EtherLink(this);
 }

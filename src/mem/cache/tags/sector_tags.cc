@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Inria
+ * Copyright (c) 2018, 2020 Inria
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -45,15 +45,18 @@
 #include "mem/cache/replacement_policies/replaceable_entry.hh"
 #include "mem/cache/tags/indexing_policies/base.hh"
 
-SectorTags::SectorTags(const SectorTagsParams *p)
-    : BaseTags(p), allocAssoc(p->assoc),
-      sequentialAccess(p->sequential_access),
-      replacementPolicy(p->replacement_policy),
-      numBlocksPerSector(p->num_blocks_per_sector),
+SectorTags::SectorTags(const SectorTagsParams &p)
+    : BaseTags(p), allocAssoc(p.assoc),
+      sequentialAccess(p.sequential_access),
+      replacementPolicy(p.replacement_policy),
+      numBlocksPerSector(p.num_blocks_per_sector),
       numSectors(numBlocks / numBlocksPerSector),
       sectorShift(floorLog2(blkSize)), sectorMask(numBlocksPerSector - 1),
       sectorStats(stats, *this)
 {
+    // There must be a indexing policy
+    fatal_if(!p.indexing_policy, "An indexing policy is required");
+
     // Check parameters
     fatal_if(blkSize < 4 || !isPowerOf2(blkSize),
              "Block size must be at least 4 and a power of 2");
@@ -125,6 +128,7 @@ SectorTags::invalidate(CacheBlk *blk)
     if (!sector_blk->isValid()) {
         // Decrease the number of tags in use
         stats.tagsInUse--;
+        assert(stats.tagsInUse.value() >= 0);
 
         // Invalidate replacement data, as we're invalidating the sector
         replacementPolicy->invalidate(sector_blk->replacementData);
@@ -151,7 +155,7 @@ SectorTags::accessBlock(Addr addr, bool is_secure, Cycles &lat)
     // If a cache hit
     if (blk != nullptr) {
         // Update number of references to accessed block
-        blk->refCount++;
+        blk->increaseRefCount();
 
         // Get block's sector
         SectorSubBlk* sub_blk = static_cast<SectorSubBlk*>(blk);
@@ -183,6 +187,7 @@ SectorTags::insertBlock(const PacketPtr pkt, CacheBlk *blk)
     } else {
         // Increment tag counter
         stats.tagsInUse++;
+        assert(stats.tagsInUse.value() <= numSectors);
 
         // A new entry resets the replacement data
         replacementPolicy->reset(sector_blk->replacementData);
@@ -190,6 +195,52 @@ SectorTags::insertBlock(const PacketPtr pkt, CacheBlk *blk)
 
     // Do common block insertion functionality
     BaseTags::insertBlock(pkt, blk);
+}
+
+void
+SectorTags::moveBlock(CacheBlk *src_blk, CacheBlk *dest_blk)
+{
+    const bool dest_was_valid =
+        static_cast<SectorSubBlk*>(dest_blk)->getSectorBlock()->isValid();
+
+    BaseTags::moveBlock(src_blk, dest_blk);
+
+    // Get blocks' sectors. The blocks have effectively been swapped by now,
+    // so src points to an invalid block, and dest to the moved valid one.
+    SectorSubBlk* src_sub_blk = static_cast<SectorSubBlk*>(src_blk);
+    const SectorBlk* src_sector_blk = src_sub_blk->getSectorBlock();
+    SectorSubBlk* dest_sub_blk = static_cast<SectorSubBlk*>(dest_blk);
+    const SectorBlk* dest_sector_blk = dest_sub_blk->getSectorBlock();
+
+    // Since the blocks were using different replacement data pointers,
+    // we must touch the replacement data of the new entry, and invalidate
+    // the one that is being moved.
+    // When a block in a sector is invalidated, it does not make the tag
+    // invalid automatically, as there might be other blocks in the sector
+    // using it. The tag is invalidated only when there is a single block
+    // in the sector.
+    if (!src_sector_blk->isValid()) {
+        // Invalidate replacement data, as we're invalidating the sector
+        replacementPolicy->invalidate(src_sector_blk->replacementData);
+
+        if (dest_was_valid) {
+            // If destination sector was valid, and the source sector became
+            // invalid, there is one less tag being used
+            stats.tagsInUse--;
+            assert(stats.tagsInUse.value() >= 0);
+        }
+    } else if (!dest_was_valid) {
+        // If destination sector was invalid and became valid, and the source
+        // sector is still valid, there is one extra tag being used
+        stats.tagsInUse++;
+        assert(stats.tagsInUse.value() <= numSectors);
+    }
+
+    if (dest_was_valid) {
+        replacementPolicy->touch(dest_sector_blk->replacementData);
+    } else {
+        replacementPolicy->reset(dest_sector_blk->replacementData);
+    }
 }
 
 CacheBlk*
@@ -209,8 +260,7 @@ SectorTags::findBlock(Addr addr, bool is_secure) const
     // Search for block
     for (const auto& sector : entries) {
         auto blk = static_cast<SectorBlk*>(sector)->blks[offset];
-        if (blk->getTag() == tag && blk->isValid() &&
-            blk->isSecure() == is_secure) {
+        if (blk->matchTag(tag, is_secure)) {
             return blk;
         }
     }
@@ -232,8 +282,7 @@ SectorTags::findVictim(Addr addr, const bool is_secure, const std::size_t size,
     SectorBlk* victim_sector = nullptr;
     for (const auto& sector : sector_entries) {
         SectorBlk* sector_blk = static_cast<SectorBlk*>(sector);
-        if ((tag == sector_blk->getTag()) && sector_blk->isValid() &&
-            (is_secure == sector_blk->isSecure())){
+        if (sector_blk->matchTag(tag, is_secure)) {
             victim_sector = sector_blk;
             break;
         }
@@ -251,8 +300,7 @@ SectorTags::findVictim(Addr addr, const bool is_secure, const std::size_t size,
 
     // Get evicted blocks. Blocks are only evicted if the sectors mismatch and
     // the currently existing sector is valid.
-    if ((tag == victim_sector->getTag()) &&
-        (is_secure == victim_sector->isSecure())){
+    if (victim_sector->matchTag(tag, is_secure)) {
         // It would be a hit if victim was valid, and upgrades do not call
         // findVictim, so it cannot happen
         assert(!victim->isValid());
@@ -282,15 +330,16 @@ SectorTags::regenerateBlkAddr(const CacheBlk* blk) const
 {
     const SectorSubBlk* blk_cast = static_cast<const SectorSubBlk*>(blk);
     const SectorBlk* sec_blk = blk_cast->getSectorBlock();
-    const Addr sec_addr = indexingPolicy->regenerateAddr(blk->tag, sec_blk);
+    const Addr sec_addr =
+        indexingPolicy->regenerateAddr(blk->getTag(), sec_blk);
     return sec_addr | ((Addr)blk_cast->getSectorOffset() << sectorShift);
 }
 
 SectorTags::SectorTagsStats::SectorTagsStats(BaseTagStats &base_group,
     SectorTags& _tags)
   : Stats::Group(&base_group), tags(_tags),
-    evictionsReplacement(this, "evictions_replacement",
-        "Number of blocks evicted due to a replacement")
+    ADD_STAT(evictionsReplacement, UNIT_COUNT,
+             "Number of blocks evicted due to a replacement")
 {
 }
 
@@ -324,13 +373,4 @@ SectorTags::anyBlk(std::function<bool(CacheBlk &)> visitor)
         }
     }
     return false;
-}
-
-SectorTags *
-SectorTagsParams::create()
-{
-    // There must be a indexing policy
-    fatal_if(!indexing_policy, "An indexing policy is required");
-
-    return new SectorTags(this);
 }

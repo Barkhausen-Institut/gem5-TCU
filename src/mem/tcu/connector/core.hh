@@ -38,7 +38,7 @@ class CoreConnector : public BaseConnector
 {
   public:
 
-    CoreConnector(const CoreConnectorParams *p);
+    CoreConnector(const CoreConnectorParams &p);
 
     virtual bool canSuspendCmds()
     {

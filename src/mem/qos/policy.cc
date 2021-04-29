@@ -41,7 +41,7 @@
 
 namespace QoS {
 
-Policy::Policy(const Params* p)
+Policy::Policy(const Params &p)
   : SimObject(p)
 {}
 
@@ -51,7 +51,7 @@ uint8_t
 Policy::schedule(const PacketPtr pkt)
 {
     assert(pkt->req);
-    return schedule(pkt->req->masterId(), pkt->getSize());
+    return schedule(pkt->req->requestorId(), pkt->getSize());
 }
 
 } // namespace QoS

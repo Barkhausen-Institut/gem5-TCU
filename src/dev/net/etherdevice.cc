@@ -30,339 +30,288 @@
 
 #include "sim/stats.hh"
 
-void
-EtherDevice::regStats()
+EtherDevice::EtherDeviceStats::EtherDeviceStats(Stats::Group *parent)
+    : Stats::Group(parent, "EtherDevice"),
+      ADD_STAT(postedInterrupts, UNIT_COUNT, "Number of posts to CPU"),
+      ADD_STAT(txBytes, UNIT_BYTE, "Bytes Transmitted"),
+      ADD_STAT(rxBytes, UNIT_BYTE, "Bytes Received"),
+      ADD_STAT(txPackets, UNIT_COUNT, "Number of Packets Transmitted"),
+      ADD_STAT(rxPackets, UNIT_COUNT, "Number of Packets Received"),
+      ADD_STAT(txBandwidth, UNIT_RATE(Stats::Units::Bit, Stats::Units::Second),
+               "Transmit Bandwidth",
+               txBytes * Stats::constant(8) / simSeconds),
+      ADD_STAT(rxBandwidth, UNIT_RATE(Stats::Units::Bit, Stats::Units::Second),
+               "Receive Bandwidth",
+               rxBytes * Stats::constant(8) / simSeconds),
+      ADD_STAT(txIpChecksums, UNIT_COUNT,
+               "Number of tx IP Checksums done by device"),
+      ADD_STAT(rxIpChecksums, UNIT_COUNT,
+               "Number of rx IP Checksums done by device"),
+      ADD_STAT(txTcpChecksums, UNIT_COUNT,
+               "Number of tx TCP Checksums done by device"),
+      ADD_STAT(rxTcpChecksums, UNIT_COUNT,
+               "Number of rx TCP Checksums done by device"),
+      ADD_STAT(txUdpChecksums, UNIT_COUNT,
+               "Number of tx UDP Checksums done by device"),
+      ADD_STAT(rxUdpChecksums, UNIT_COUNT,
+               "Number of rx UDP Checksums done by device"),
+      ADD_STAT(descDmaReads, UNIT_COUNT,
+               "Number of descriptors the device read w/ DMA"),
+      ADD_STAT(descDmaWrites, UNIT_COUNT,
+               "Number of descriptors the device wrote w/ DMA"),
+      ADD_STAT(descDmaRdBytes, UNIT_COUNT,
+               "Number of descriptor bytes read w/ DMA"),
+      ADD_STAT(descDmaWrBytes, UNIT_COUNT,
+               "Number of descriptor bytes write w/ DMA"),
+      ADD_STAT(totBandwidth,
+               UNIT_RATE(Stats::Units::Bit, Stats::Units::Second),
+               "Total Bandwidth",
+               txBandwidth + rxBandwidth),
+      ADD_STAT(totPackets, UNIT_COUNT, "Total Packets", txPackets + rxPackets),
+      ADD_STAT(totBytes, UNIT_BYTE, "Total Bytes", txBytes + rxBytes),
+      ADD_STAT(totPacketRate,
+               UNIT_RATE(Stats::Units::Count, Stats::Units::Second),
+               "Total Packet Tranmission Rate",
+               totPackets / simSeconds),
+      ADD_STAT(txPacketRate,
+               UNIT_RATE(Stats::Units::Count, Stats::Units::Second),
+               "Packet Tranmission Rate",
+               txPackets / simSeconds),
+      ADD_STAT(rxPacketRate,
+               UNIT_RATE(Stats::Units::Count, Stats::Units::Second),
+               "Packet Reception Rate",
+               rxPackets / simSeconds),
+      ADD_STAT(postedSwi, UNIT_COUNT,
+               "Number of software interrupts posted to CPU"),
+      ADD_STAT(totalSwi, UNIT_COUNT, "Total number of Swi written to ISR"),
+      ADD_STAT(coalescedSwi,
+               UNIT_RATE(Stats::Units::Count, Stats::Units::Count),
+               "Average number of Swi's coalesced into each post",
+               totalSwi / postedInterrupts),
+      ADD_STAT(postedRxIdle, UNIT_COUNT,
+               "Number of rxIdle interrupts posted to CPU"),
+      ADD_STAT(totalRxIdle, UNIT_COUNT,
+               "Total number of RxIdle written to ISR"),
+      ADD_STAT(coalescedRxIdle,
+               UNIT_RATE(Stats::Units::Count, Stats::Units::Count),
+               "Average number of RxIdle's coalesced into each post",
+               totalRxIdle / postedInterrupts),
+      ADD_STAT(postedRxOk, UNIT_COUNT,
+               "Number of RxOk interrupts posted to CPU"),
+      ADD_STAT(totalRxOk, UNIT_COUNT, "Total number of RxOk written to ISR"),
+      ADD_STAT(coalescedRxOk,
+               UNIT_RATE(Stats::Units::Count, Stats::Units::Count),
+               "Average number of RxOk's coalesced into each post",
+               totalRxOk / postedInterrupts),
+      ADD_STAT(postedRxDesc, UNIT_COUNT,
+               "Number of RxDesc interrupts posted to CPU"),
+      ADD_STAT(totalRxDesc, UNIT_COUNT,
+               "Total number of RxDesc written to ISR"),
+      ADD_STAT(coalescedRxDesc,
+               UNIT_RATE(Stats::Units::Count, Stats::Units::Count),
+               "Average number of RxDesc's coalesced into each post",
+               totalRxDesc / postedInterrupts),
+      ADD_STAT(postedTxOk, UNIT_COUNT,
+               "Number of TxOk interrupts posted to CPU"),
+      ADD_STAT(totalTxOk, UNIT_COUNT,
+               "Total number of TxOk written to ISR"),
+      ADD_STAT(coalescedTxOk,
+               UNIT_RATE(Stats::Units::Count, Stats::Units::Count),
+               "Average number of TxOk's coalesced into each post",
+               totalTxOk / postedInterrupts),
+      ADD_STAT(postedTxIdle, UNIT_COUNT,
+               "Number of TxIdle interrupts posted to CPU"),
+      ADD_STAT(totalTxIdle, UNIT_COUNT,
+               "Total number of TxIdle written to ISR"),
+      ADD_STAT(coalescedTxIdle,
+               UNIT_RATE(Stats::Units::Count, Stats::Units::Count),
+               "Average number of TxIdle's coalesced into each post",
+               totalTxIdle / postedInterrupts),
+      ADD_STAT(postedTxDesc, UNIT_COUNT,
+               "Number of TxDesc interrupts posted to CPU"),
+      ADD_STAT(totalTxDesc, UNIT_COUNT,
+               "Total number of TxDesc written to ISR"),
+      ADD_STAT(coalescedTxDesc,
+               UNIT_RATE(Stats::Units::Count, Stats::Units::Count),
+               "Average number of TxDesc's coalesced into each post",
+               totalTxDesc / postedInterrupts),
+      ADD_STAT(postedRxOrn, UNIT_COUNT,
+               "Number of RxOrn posted to CPU"),
+      ADD_STAT(totalRxOrn, UNIT_COUNT,
+               "Total number of RxOrn written to ISR"),
+      ADD_STAT(coalescedRxOrn,
+               UNIT_RATE(Stats::Units::Count, Stats::Units::Count),
+               "Average number of RxOrn's coalesced into each post",
+               totalRxOrn / postedInterrupts),
+      ADD_STAT(coalescedTotal,
+               UNIT_RATE(Stats::Units::Count, Stats::Units::Count),
+               "Average number of interrupts coalesced into each post"),
+      ADD_STAT(droppedPackets, UNIT_COUNT, "Number of packets dropped")
 {
-    PciDevice::regStats();
+
+    postedInterrupts
+        .precision(0);
 
     txBytes
-        .name(name() + ".txBytes")
-        .desc("Bytes Transmitted")
-        .prereq(txBytes)
-        ;
+        .prereq(txBytes);
 
     rxBytes
-        .name(name() + ".rxBytes")
-        .desc("Bytes Received")
-        .prereq(rxBytes)
-        ;
+        .prereq(rxBytes);
 
     txPackets
-        .name(name() + ".txPackets")
-        .desc("Number of Packets Transmitted")
-        .prereq(txBytes)
-        ;
+        .prereq(txBytes);
 
     rxPackets
-        .name(name() + ".rxPackets")
-        .desc("Number of Packets Received")
-        .prereq(rxBytes)
-        ;
+        .prereq(rxBytes);
 
     txIpChecksums
-        .name(name() + ".txIpChecksums")
-        .desc("Number of tx IP Checksums done by device")
         .precision(0)
-        .prereq(txBytes)
-        ;
+        .prereq(txBytes);
 
     rxIpChecksums
-        .name(name() + ".rxIpChecksums")
-        .desc("Number of rx IP Checksums done by device")
         .precision(0)
-        .prereq(rxBytes)
-        ;
+        .prereq(rxBytes);
 
     txTcpChecksums
-        .name(name() + ".txTcpChecksums")
-        .desc("Number of tx TCP Checksums done by device")
         .precision(0)
-        .prereq(txBytes)
-        ;
+        .prereq(txBytes);
 
     rxTcpChecksums
-        .name(name() + ".rxTcpChecksums")
-        .desc("Number of rx TCP Checksums done by device")
         .precision(0)
-        .prereq(rxBytes)
-        ;
+        .prereq(rxBytes);
 
     txUdpChecksums
-        .name(name() + ".txUdpChecksums")
-        .desc("Number of tx UDP Checksums done by device")
         .precision(0)
-        .prereq(txBytes)
-        ;
+        .prereq(txBytes);
 
     rxUdpChecksums
-        .name(name() + ".rxUdpChecksums")
-        .desc("Number of rx UDP Checksums done by device")
         .precision(0)
-        .prereq(rxBytes)
-        ;
+        .prereq(rxBytes);
 
     descDmaReads
-        .name(name() + ".descDMAReads")
-        .desc("Number of descriptors the device read w/ DMA")
-        .precision(0)
-        ;
+        .precision(0);
 
     descDmaWrites
-        .name(name() + ".descDMAWrites")
-        .desc("Number of descriptors the device wrote w/ DMA")
-        .precision(0)
-        ;
+        .precision(0);
 
     descDmaRdBytes
-        .name(name() + ".descDmaReadBytes")
-        .desc("number of descriptor bytes read w/ DMA")
-        .precision(0)
-        ;
+        .precision(0);
 
     descDmaWrBytes
-        .name(name() + ".descDmaWriteBytes")
-        .desc("number of descriptor bytes write w/ DMA")
-        .precision(0)
-        ;
+        .precision(0);
 
     txBandwidth
-        .name(name() + ".txBandwidth")
-        .desc("Transmit Bandwidth (bits/s)")
         .precision(0)
         .prereq(txBytes)
         ;
 
     rxBandwidth
-        .name(name() + ".rxBandwidth")
-        .desc("Receive Bandwidth (bits/s)")
         .precision(0)
-        .prereq(rxBytes)
-        ;
+        .prereq(rxBytes);
 
     totBandwidth
-        .name(name() + ".totBandwidth")
-        .desc("Total Bandwidth (bits/s)")
         .precision(0)
-        .prereq(totBytes)
-        ;
+        .prereq(totBytes);
 
     totPackets
-        .name(name() + ".totPackets")
-        .desc("Total Packets")
         .precision(0)
-        .prereq(totBytes)
-        ;
+        .prereq(totBytes);
 
     totBytes
-        .name(name() + ".totBytes")
-        .desc("Total Bytes")
         .precision(0)
-        .prereq(totBytes)
-        ;
+        .prereq(totBytes);
 
     totPacketRate
-        .name(name() + ".totPPS")
-        .desc("Total Tranmission Rate (packets/s)")
         .precision(0)
-        .prereq(totBytes)
-        ;
+        .prereq(totBytes);
 
     txPacketRate
-        .name(name() + ".txPPS")
-        .desc("Packet Tranmission Rate (packets/s)")
         .precision(0)
-        .prereq(txBytes)
-        ;
+        .prereq(txBytes);
 
     rxPacketRate
-        .name(name() + ".rxPPS")
-        .desc("Packet Reception Rate (packets/s)")
         .precision(0)
-        .prereq(rxBytes)
-        ;
+        .prereq(rxBytes);
 
     postedSwi
-        .name(name() + ".postedSwi")
-        .desc("number of software interrupts posted to CPU")
-        .precision(0)
-        ;
+        .precision(0);
 
     totalSwi
-        .name(name() + ".totalSwi")
-        .desc("total number of Swi written to ISR")
-        .precision(0)
-        ;
+        .precision(0);
 
     coalescedSwi
-        .name(name() + ".coalescedSwi")
-        .desc("average number of Swi's coalesced into each post")
-        .precision(0)
-        ;
+        .precision(0);
 
     postedRxIdle
-        .name(name() + ".postedRxIdle")
-        .desc("number of rxIdle interrupts posted to CPU")
-        .precision(0)
-        ;
+        .precision(0);
 
     totalRxIdle
-        .name(name() + ".totalRxIdle")
-        .desc("total number of RxIdle written to ISR")
-        .precision(0)
-        ;
+        .precision(0);
 
     coalescedRxIdle
-        .name(name() + ".coalescedRxIdle")
-        .desc("average number of RxIdle's coalesced into each post")
-        .precision(0)
-        ;
+        .precision(0);
 
     postedRxOk
-        .name(name() + ".postedRxOk")
-        .desc("number of RxOk interrupts posted to CPU")
-        .precision(0)
-        ;
+        .precision(0);
 
     totalRxOk
-        .name(name() + ".totalRxOk")
-        .desc("total number of RxOk written to ISR")
-        .precision(0)
-        ;
+        .precision(0);
 
     coalescedRxOk
-        .name(name() + ".coalescedRxOk")
-        .desc("average number of RxOk's coalesced into each post")
-        .precision(0)
-        ;
+        .precision(0);
 
     postedRxDesc
-        .name(name() + ".postedRxDesc")
-        .desc("number of RxDesc interrupts posted to CPU")
-        .precision(0)
-        ;
+        .precision(0);
 
     totalRxDesc
-        .name(name() + ".totalRxDesc")
-        .desc("total number of RxDesc written to ISR")
-        .precision(0)
-        ;
+        .precision(0);
 
     coalescedRxDesc
-        .name(name() + ".coalescedRxDesc")
-        .desc("average number of RxDesc's coalesced into each post")
-        .precision(0)
-        ;
+        .precision(0);
 
     postedTxOk
-        .name(name() + ".postedTxOk")
-        .desc("number of TxOk interrupts posted to CPU")
-        .precision(0)
-        ;
+        .precision(0);
 
     totalTxOk
-        .name(name() + ".totalTxOk")
-        .desc("total number of TxOk written to ISR")
-        .precision(0)
-        ;
+        .precision(0);
 
     coalescedTxOk
-        .name(name() + ".coalescedTxOk")
-        .desc("average number of TxOk's coalesced into each post")
-        .precision(0)
-        ;
+        .precision(0);
 
     postedTxIdle
-        .name(name() + ".postedTxIdle")
-        .desc("number of TxIdle interrupts posted to CPU")
-        .precision(0)
-        ;
+        .precision(0);
 
     totalTxIdle
-        .name(name() + ".totalTxIdle")
-        .desc("total number of TxIdle written to ISR")
-        .precision(0)
-        ;
+        .precision(0);
 
     coalescedTxIdle
-        .name(name() + ".coalescedTxIdle")
-        .desc("average number of TxIdle's coalesced into each post")
-        .precision(0)
-        ;
+        .precision(0);
 
     postedTxDesc
-        .name(name() + ".postedTxDesc")
-        .desc("number of TxDesc interrupts posted to CPU")
-        .precision(0)
-        ;
+        .precision(0);
 
     totalTxDesc
-        .name(name() + ".totalTxDesc")
-        .desc("total number of TxDesc written to ISR")
-        .precision(0)
-        ;
+        .precision(0);
 
     coalescedTxDesc
-        .name(name() + ".coalescedTxDesc")
-        .desc("average number of TxDesc's coalesced into each post")
-        .precision(0)
-        ;
+        .precision(0);
 
     postedRxOrn
-        .name(name() + ".postedRxOrn")
-        .desc("number of RxOrn posted to CPU")
-        .precision(0)
-        ;
+        .precision(0);
 
     totalRxOrn
-        .name(name() + ".totalRxOrn")
-        .desc("total number of RxOrn written to ISR")
-        .precision(0)
-        ;
+        .precision(0);
 
     coalescedRxOrn
-        .name(name() + ".coalescedRxOrn")
-        .desc("average number of RxOrn's coalesced into each post")
-        .precision(0)
-        ;
+        .precision(0);
 
     coalescedTotal
-        .name(name() + ".coalescedTotal")
-        .desc("average number of interrupts coalesced into each post")
-        .precision(0)
-        ;
-
-    postedInterrupts
-        .name(name() + ".postedInterrupts")
-        .desc("number of posts to CPU")
-        .precision(0)
-        ;
+        .precision(0);
 
     droppedPackets
-        .name(name() + ".droppedPackets")
-        .desc("number of packets dropped")
-        .precision(0)
-        ;
-
-    coalescedSwi = totalSwi / postedInterrupts;
-    coalescedRxIdle = totalRxIdle / postedInterrupts;
-    coalescedRxOk = totalRxOk / postedInterrupts;
-    coalescedRxDesc = totalRxDesc / postedInterrupts;
-    coalescedTxOk = totalTxOk / postedInterrupts;
-    coalescedTxIdle = totalTxIdle / postedInterrupts;
-    coalescedTxDesc = totalTxDesc / postedInterrupts;
-    coalescedRxOrn = totalRxOrn / postedInterrupts;
+        .precision(0);
 
     coalescedTotal = (totalSwi + totalRxIdle + totalRxOk + totalRxDesc +
                       totalTxOk + totalTxIdle + totalTxDesc +
                       totalRxOrn) / postedInterrupts;
-
-    txBandwidth = txBytes * Stats::constant(8) / simSeconds;
-    rxBandwidth = rxBytes * Stats::constant(8) / simSeconds;
-    totBandwidth = txBandwidth + rxBandwidth;
-    totBytes = txBytes + rxBytes;
-    totPackets = txPackets + rxPackets;
-
-    txPacketRate = txPackets / simSeconds;
-    rxPacketRate = rxPackets / simSeconds;
-    totPacketRate = totPackets / simSeconds;
 }

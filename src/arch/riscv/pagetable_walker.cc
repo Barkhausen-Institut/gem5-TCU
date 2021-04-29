@@ -55,7 +55,6 @@
 #include "arch/riscv/faults.hh"
 #include "arch/riscv/pagetable.hh"
 #include "arch/riscv/tlb.hh"
-#include "arch/riscv/vtophys.hh"
 #include "base/bitfield.hh"
 #include "base/trie.hh"
 #include "cpu/base.hh"
@@ -66,54 +65,220 @@
 
 namespace RiscvISA {
 
-BaseWalker::BaseWalkerState *
-Walker::createState(BaseWalker *walker, BaseTLB::Translation *translation,
-                    const RequestPtr &req, bool isFunctional)
+Fault
+Walker::start(ThreadContext * _tc, BaseTLB::Translation *_translation,
+              const RequestPtr &_req, BaseTLB::Mode _mode)
 {
-    return new WalkerState(walker, translation, req, isFunctional);
+    // TODO: in timing mode, instead of blocking when there are other
+    // outstanding requests, see if this request can be coalesced with
+    // another one (i.e. either coalesce or start walk)
+    WalkerState * newState = new WalkerState(this, _translation, _req);
+    newState->initState(_tc, _mode, sys->isTimingMode());
+    if (currStates.size()) {
+        assert(newState->isTiming());
+        DPRINTF(PageTableWalker, "Walks in progress: %d\n", currStates.size());
+        currStates.push_back(newState);
+        return NoFault;
+    } else {
+        currStates.push_back(newState);
+        Fault fault = newState->startWalk();
+        if (!newState->isTiming()) {
+            currStates.pop_front();
+            delete newState;
+        }
+        return fault;
+    }
 }
 
 Fault
-Walker::WalkerState::translateWithTLB(const RequestPtr &req, ThreadContext *tc,
-                                      BaseTLB::Translation *translation,
-                                      BaseTLB::Mode mode, bool &delayed)
+Walker::startFunctional(ThreadContext * _tc, Addr &addr, unsigned &logBytes,
+              BaseTLB::Mode _mode)
 {
-    Addr vaddr = req->getVaddr();
-    vaddr &= ((static_cast<Addr>(1) << VADDR_BITS) - 1);
-    Addr paddr = ourWalker()->tlb->translateWithTLB(vaddr, satp.asid, mode);
-    req->setPaddr(paddr);
-    delayed = false;
-    return NoFault;
+    funcState.initState(_tc, _mode);
+    return funcState.startFunctional(addr, logBytes);
+}
+
+bool
+Walker::WalkerPort::recvTimingResp(PacketPtr pkt)
+{
+    return walker->recvTimingResp(pkt);
+}
+
+bool
+Walker::recvTimingResp(PacketPtr pkt)
+{
+    WalkerSenderState * senderState =
+        dynamic_cast<WalkerSenderState *>(pkt->popSenderState());
+    WalkerState * senderWalk = senderState->senderWalk;
+    bool walkComplete = senderWalk->recvPacket(pkt);
+    delete senderState;
+    if (walkComplete) {
+        std::list<WalkerState *>::iterator iter;
+        for (iter = currStates.begin(); iter != currStates.end(); iter++) {
+            WalkerState * walkerState = *(iter);
+            if (walkerState == senderWalk) {
+                iter = currStates.erase(iter);
+                break;
+            }
+        }
+        delete senderWalk;
+        // Since we block requests when another is outstanding, we
+        // need to check if there is a waiting request to be serviced
+        if (currStates.size() && !startWalkWrapperEvent.scheduled())
+            // delay sending any new requests until we are finished
+            // with the responses
+            schedule(startWalkWrapperEvent, clockEdge());
+    }
+    return true;
 }
 
 void
-Walker::WalkerState::setupWalk(Addr vaddr)
+Walker::WalkerPort::recvReqRetry()
 {
-    vaddr &= ((static_cast<Addr>(1) << VADDR_BITS) - 1);
+    walker->recvReqRetry();
+}
 
+void
+Walker::recvReqRetry()
+{
+    std::list<WalkerState *>::iterator iter;
+    for (iter = currStates.begin(); iter != currStates.end(); iter++) {
+        WalkerState * walkerState = *(iter);
+        if (walkerState->isRetrying()) {
+            walkerState->retry();
+        }
+    }
+}
+
+bool Walker::sendTiming(WalkerState* sendingState, PacketPtr pkt)
+{
+    WalkerSenderState* walker_state = new WalkerSenderState(sendingState);
+    pkt->pushSenderState(walker_state);
+    if (port.sendTimingReq(pkt)) {
+        return true;
+    } else {
+        // undo the adding of the sender state and delete it, as we
+        // will do it again the next time we attempt to send it
+        pkt->popSenderState();
+        delete walker_state;
+        return false;
+    }
+
+}
+
+Port &
+Walker::getPort(const std::string &if_name, PortID idx)
+{
+    if (if_name == "port")
+        return port;
+    else
+        return ClockedObject::getPort(if_name, idx);
+}
+
+void
+Walker::WalkerState::initState(ThreadContext * _tc,
+        BaseTLB::Mode _mode, bool _isTiming)
+{
+    assert(state == Ready);
+    started = false;
+    tc = _tc;
+    mode = _mode;
+    timing = _isTiming;
     // fetch these now in case they change during the walk
     status = tc->readMiscReg(MISCREG_STATUS);
-    pmode = ourWalker()->tlb->getMemPriv(tc, mode);
+    pmode = walker->tlb->getMemPriv(tc, mode);
     satp = tc->readMiscReg(MISCREG_SATP);
     assert(satp.mode == AddrXlateMode::SV39);
+}
 
-    Addr shift = PageShift + LEVEL_BITS * 2;
-    Addr idx = (vaddr >> shift) & LEVEL_MASK;
-    Addr topAddr = (satp.ppn << PageShift) + (idx * sizeof(PTESv39));
-    level = 2;
+void
+Walker::startWalkWrapper()
+{
+    unsigned num_squashed = 0;
+    WalkerState *currState = currStates.front();
+    while ((num_squashed < numSquashable) && currState &&
+        currState->translation->squashed()) {
+        currStates.pop_front();
+        num_squashed++;
 
-    DPRINTF(PageTableWalker, "Performing table walk for address %#x\n", vaddr);
-    DPRINTF(PageTableWalker, "Loading level%d PTE from %#x\n", level, topAddr);
+        DPRINTF(PageTableWalker, "Squashing table walk for address %#x\n",
+            currState->req->getVaddr());
 
-    entry.vaddr = vaddr;
-    entry.asid = satp.asid;
+        // finish the translation which will delete the translation object
+        currState->translation->finish(
+            std::make_shared<UnimpFault>("Squashed Inst"),
+            currState->req, currState->tc, currState->mode);
 
-    Request::Flags flags = Request::PHYSICAL;
-    RequestPtr request = std::make_shared<Request>(
-        topAddr, sizeof(PTESv39), flags, ourWalker()->masterId);
+        // delete the current request if there are no inflight packets.
+        // if there is something in flight, delete when the packets are
+        // received and inflight is zero.
+        if (currState->numInflight() == 0) {
+            delete currState;
+        } else {
+            currState->squash();
+        }
 
-    read = new Packet(request, MemCmd::ReadReq);
-    read->allocate();
+        // check the next translation request, if it exists
+        if (currStates.size())
+            currState = currStates.front();
+        else
+            currState = NULL;
+    }
+    if (currState && !currState->wasStarted())
+        currState->startWalk();
+}
+
+Fault
+Walker::WalkerState::startWalk()
+{
+    Fault fault = NoFault;
+    assert(!started);
+    started = true;
+    setupWalk(req->getVaddr());
+    if (timing) {
+        nextState = state;
+        state = Waiting;
+        timingFault = NoFault;
+        sendPackets();
+    } else {
+        do {
+            walker->port.sendAtomic(read);
+            PacketPtr write = NULL;
+            fault = stepWalk(write);
+            assert(fault == NoFault || read == NULL);
+            state = nextState;
+            nextState = Ready;
+            if (write)
+                walker->port.sendAtomic(write);
+        } while (read);
+        state = Ready;
+        nextState = Waiting;
+    }
+    return fault;
+}
+
+Fault
+Walker::WalkerState::startFunctional(Addr &addr, unsigned &logBytes)
+{
+    Fault fault = NoFault;
+    assert(!started);
+    started = true;
+    setupWalk(addr);
+
+    do {
+        walker->port.sendFunctional(read);
+        // On a functional access (page table lookup), writes should
+        // not happen so this pointer is ignored after stepWalk
+        PacketPtr write = NULL;
+        fault = stepWalk(write);
+        assert(fault == NoFault || read == NULL);
+        state = nextState;
+        nextState = Ready;
+    } while (read);
+    logBytes = entry.logBytes;
+    addr = entry.paddr << PageShift;
+
+    return fault;
 }
 
 Fault
@@ -136,27 +301,27 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
     if (!pte.v || (!pte.r && pte.w)) {
         doEndWalk = true;
         DPRINTF(PageTableWalker, "PTE invalid, raising PF\n");
-        fault = pageFault();
+        fault = pageFault(pte.v);
     }
     else {
         // step 4:
         if (pte.r || pte.x) {
             // step 5: leaf PTE
             doEndWalk = true;
-            fault = ourWalker()->tlb->checkPermissions(status, pmode,
-                                                       entry.vaddr, mode, pte);
+            fault = walker->tlb->checkPermissions(status, pmode,
+                                                  entry.vaddr, mode, pte);
 
             // step 6
             if (fault == NoFault) {
                 if (level >= 1 && pte.ppn0 != 0) {
                     DPRINTF(PageTableWalker,
                             "PTE has misaligned PPN, raising PF\n");
-                    fault = pageFault();
+                    fault = pageFault(true);
                 }
                 else if (level == 2 && pte.ppn1 != 0) {
                     DPRINTF(PageTableWalker,
                             "PTE has misaligned PPN, raising PF\n");
-                    fault = pageFault();
+                    fault = pageFault(true);
                 }
             }
 
@@ -189,7 +354,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
             if (level < 0) {
                 DPRINTF(PageTableWalker, "No leaf PTE found, raising PF\n");
                 doEndWalk = true;
-                fault = pageFault();
+                fault = pageFault(true);
             }
             else {
                 Addr shift = (PageShift + LEVEL_BITS * level);
@@ -219,7 +384,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
 
         if (doTLBInsert) {
             if (!functional)
-                ourWalker()->tlb->insert(entry.vaddr, entry);
+                walker->tlb->insert(entry.vaddr, entry);
             else {
                 DPRINTF(PageTableWalker, "Translated %#x -> %#x\n",
                         entry.vaddr, entry.paddr << PageShift |
@@ -231,7 +396,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
     else {
         //If we didn't return, we're setting up another read.
         RequestPtr request = std::make_shared<Request>(
-            nextRead, oldRead->getSize(), flags, ourWalker()->masterId);
+            nextRead, oldRead->getSize(), flags, walker->requestorId);
         read = new Packet(request, MemCmd::ReadReq);
         read->allocate();
 
@@ -243,23 +408,175 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
 }
 
 void
-Walker::WalkerState::finishFunctional(Addr &addr, unsigned &logBytes)
+Walker::WalkerState::endWalk()
 {
-    logBytes = entry.logBytes;
-    addr = entry.paddr << PageShift;
+    nextState = Ready;
+    delete read;
+    read = NULL;
+}
+
+void
+Walker::WalkerState::setupWalk(Addr vaddr)
+{
+    vaddr &= (static_cast<Addr>(1) << VADDR_BITS) - 1;
+
+    Addr shift = PageShift + LEVEL_BITS * 2;
+    Addr idx = (vaddr >> shift) & LEVEL_MASK;
+    Addr topAddr = (satp.ppn << PageShift) + (idx * sizeof(PTESv39));
+    level = 2;
+
+    DPRINTF(PageTableWalker, "Performing table walk for address %#x\n", vaddr);
+    DPRINTF(PageTableWalker, "Loading level%d PTE from %#x\n", level, topAddr);
+
+    state = Translate;
+    nextState = Ready;
+    entry.vaddr = vaddr;
+    entry.asid = satp.asid;
+
+    Request::Flags flags = Request::PHYSICAL;
+    RequestPtr request = std::make_shared<Request>(
+        topAddr, sizeof(PTESv39), flags, walker->requestorId);
+
+    read = new Packet(request, MemCmd::ReadReq);
+    read->allocate();
+}
+
+bool
+Walker::WalkerState::recvPacket(PacketPtr pkt)
+{
+    assert(pkt->isResponse());
+    assert(inflight);
+    assert(state == Waiting);
+    inflight--;
+    if (squashed) {
+        // if were were squashed, return true once inflight is zero and
+        // this WalkerState will be freed there.
+        return (inflight == 0);
+    }
+    if (pkt->isRead()) {
+        // should not have a pending read it we also had one outstanding
+        assert(!read);
+
+        // @todo someone should pay for this
+        pkt->headerDelay = pkt->payloadDelay = 0;
+
+        state = nextState;
+        nextState = Ready;
+        PacketPtr write = NULL;
+        read = pkt;
+        timingFault = stepWalk(write);
+        state = Waiting;
+        assert(timingFault == NoFault || read == NULL);
+        if (write) {
+            writes.push_back(write);
+        }
+        sendPackets();
+    } else {
+        sendPackets();
+    }
+    if (inflight == 0 && read == NULL && writes.size() == 0) {
+        state = Ready;
+        nextState = Waiting;
+        if (timingFault == NoFault) {
+            /*
+             * Finish the translation. Now that we know the right entry is
+             * in the TLB, this should work with no memory accesses.
+             * There could be new faults unrelated to the table walk like
+             * permissions violations, so we'll need the return value as
+             * well.
+             */
+            Addr vaddr = req->getVaddr();
+            vaddr &= (static_cast<Addr>(1) << VADDR_BITS) - 1;
+            Addr paddr = walker->tlb->translateWithTLB(vaddr, satp.asid, mode);
+            req->setPaddr(paddr);
+            walker->pma->check(req);
+            // Let the CPU continue.
+            translation->finish(NoFault, req, tc, mode);
+        } else {
+            // There was a fault during the walk. Let the CPU know.
+            translation->finish(timingFault, req, tc, mode);
+        }
+        return true;
+    }
+
+    return false;
+}
+
+void
+Walker::WalkerState::sendPackets()
+{
+    //If we're already waiting for the port to become available, just return.
+    if (retrying)
+        return;
+
+    //Reads always have priority
+    if (read) {
+        PacketPtr pkt = read;
+        read = NULL;
+        inflight++;
+        if (!walker->sendTiming(this, pkt)) {
+            retrying = true;
+            read = pkt;
+            inflight--;
+            return;
+        }
+    }
+    //Send off as many of the writes as we can.
+    while (writes.size()) {
+        PacketPtr write = writes.back();
+        writes.pop_back();
+        inflight++;
+        if (!walker->sendTiming(this, write)) {
+            retrying = true;
+            writes.push_back(write);
+            inflight--;
+            return;
+        }
+    }
+}
+
+unsigned
+Walker::WalkerState::numInflight() const
+{
+    return inflight;
+}
+
+bool
+Walker::WalkerState::isRetrying()
+{
+    return retrying;
+}
+
+bool
+Walker::WalkerState::isTiming()
+{
+    return timing;
+}
+
+bool
+Walker::WalkerState::wasStarted()
+{
+    return started;
+}
+
+void
+Walker::WalkerState::squash()
+{
+    squashed = true;
+}
+
+void
+Walker::WalkerState::retry()
+{
+    retrying = false;
+    sendPackets();
 }
 
 Fault
-Walker::WalkerState::pageFault()
+Walker::WalkerState::pageFault(bool present)
 {
     DPRINTF(PageTableWalker, "Raising page fault.\n");
-    return ourWalker()->tlb->createPagefault(entry.vaddr, mode);
+    return walker->tlb->createPagefault(entry.vaddr, mode);
 }
 
 } /* end namespace RiscvISA */
-
-RiscvISA::Walker *
-RiscvPagetableWalkerParams::create()
-{
-    return new RiscvISA::Walker(this);
-}

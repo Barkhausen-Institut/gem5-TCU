@@ -28,6 +28,7 @@
 #ifndef __SIM_SYSCALL_ABI_HH__
 #define __SIM_SYSCALL_ABI_HH__
 
+#include "base/bitfield.hh"
 #include "base/types.hh"
 #include "cpu/thread_context.hh"
 #include "sim/guest_abi.hh"
@@ -35,49 +36,28 @@
 
 class SyscallDesc;
 
-namespace GuestABI
-{
-
-// Does this normally 64 bit data type shrink down to 32 bits for 32 bit ABIs?
-template <typename T, typename Enabled=void>
-struct IsConforming : public std::false_type {};
-
-template <>
-struct IsConforming<Addr> : public std::true_type {};
-
-} // namespace GuestABI
-
 struct GenericSyscallABI
 {
     using State = int;
 };
 
 struct GenericSyscallABI64 : public GenericSyscallABI
-{};
+{
+    using UintPtr = uint64_t;
+};
 
 struct GenericSyscallABI32 : public GenericSyscallABI
 {
+    using UintPtr = uint32_t;
+
     // Is this argument too big for a single register?
     template <typename T, typename Enabled=void>
-    struct IsWide;
+    struct IsWide : public std::false_type {};
 
     template <typename T>
-    struct IsWide<T, typename std::enable_if<
-        std::is_integral<T>::value &&
-        (sizeof(T) < sizeof(uint64_t) ||
-         GuestABI::IsConforming<T>::value)>::type>
-    {
-        static const bool value = false;
-    };
-
-    template <typename T>
-    struct IsWide<T, typename std::enable_if<
-        std::is_integral<T>::value &&
-        sizeof(T) == sizeof(uint64_t) &&
-        !GuestABI::IsConforming<T>::value>::type>
-    {
-        static const bool value = true;
-    };
+    struct IsWide<T, std::enable_if_t<(sizeof(T) > sizeof(UintPtr))>> :
+        public std::true_type
+    {};
 
     // Read two registers and merge them into one value.
     static uint64_t
@@ -95,9 +75,9 @@ namespace GuestABI
 // For 64 bit systems, return syscall args directly.
 template <typename ABI, typename Arg>
 struct Argument<ABI, Arg,
-    typename std::enable_if<
+    typename std::enable_if_t<
         std::is_base_of<GenericSyscallABI64, ABI>::value &&
-        std::is_integral<Arg>::value>::type>
+        std::is_integral<Arg>::value>>
 {
     static Arg
     get(ThreadContext *tc, typename ABI::State &state)
@@ -112,7 +92,8 @@ struct Argument<ABI, Arg,
 // arguments aren't handled generically.
 template <typename ABI, typename Arg>
 struct Argument<ABI, Arg,
-    typename std::enable_if<!ABI::template IsWide<Arg>::value>::type>
+    typename std::enable_if_t<std::is_integral<Arg>::value &&
+        !ABI::template IsWide<Arg>::value>>
 {
     static Arg
     get(ThreadContext *tc, typename ABI::State &state)

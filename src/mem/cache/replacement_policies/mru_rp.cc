@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2018 Inria
+ * Copyright (c) 2018-2020 Inria
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -32,14 +32,17 @@
 #include <memory>
 
 #include "params/MRURP.hh"
+#include "sim/core.hh"
 
-MRURP::MRURP(const Params *p)
-    : BaseReplacementPolicy(p)
+namespace ReplacementPolicy {
+
+MRU::MRU(const Params &p)
+  : Base(p)
 {
 }
 
 void
-MRURP::invalidate(const std::shared_ptr<ReplacementData>& replacement_data)
+MRU::invalidate(const std::shared_ptr<ReplacementData>& replacement_data)
 const
 {
     // Reset last touch timestamp
@@ -48,7 +51,7 @@ const
 }
 
 void
-MRURP::touch(const std::shared_ptr<ReplacementData>& replacement_data) const
+MRU::touch(const std::shared_ptr<ReplacementData>& replacement_data) const
 {
     // Update last touch timestamp
     std::static_pointer_cast<MRUReplData>(
@@ -56,7 +59,7 @@ MRURP::touch(const std::shared_ptr<ReplacementData>& replacement_data) const
 }
 
 void
-MRURP::reset(const std::shared_ptr<ReplacementData>& replacement_data) const
+MRU::reset(const std::shared_ptr<ReplacementData>& replacement_data) const
 {
     // Set last touch timestamp
     std::static_pointer_cast<MRUReplData>(
@@ -64,7 +67,7 @@ MRURP::reset(const std::shared_ptr<ReplacementData>& replacement_data) const
 }
 
 ReplaceableEntry*
-MRURP::getVictim(const ReplacementCandidates& candidates) const
+MRU::getVictim(const ReplacementCandidates& candidates) const
 {
     // There must be at least one replacement candidate
     assert(candidates.size() > 0);
@@ -90,13 +93,9 @@ MRURP::getVictim(const ReplacementCandidates& candidates) const
 }
 
 std::shared_ptr<ReplacementData>
-MRURP::instantiateEntry()
+MRU::instantiateEntry()
 {
     return std::shared_ptr<ReplacementData>(new MRUReplData());
 }
 
-MRURP*
-MRURPParams::create()
-{
-    return new MRURP(this);
-}
+} // namespace ReplacementPolicy

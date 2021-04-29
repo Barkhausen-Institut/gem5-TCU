@@ -47,6 +47,8 @@
 #include "params/ArmNativeTrace.hh"
 #include "sim/byteswap.hh"
 
+using namespace ArmISA;
+
 namespace Trace {
 
 #if TRACING_ON
@@ -217,13 +219,3 @@ Trace::ArmNativeTrace::check(NativeTraceRecord *record)
 }
 
 } // namespace Trace
-
-////////////////////////////////////////////////////////////////////////
-//
-//  ExeTracer Simulation Object
-//
-Trace::ArmNativeTrace *
-ArmNativeTraceParams::create()
-{
-    return new Trace::ArmNativeTrace(this);
-}

@@ -67,14 +67,8 @@
  * implementation doesn't copy the pointer into any long-term storage
  * (which is pretty hard to imagine they would have reason to do).
  */
-class ExecContext {
-  public:
-    typedef TheISA::PCState PCState;
-
-    using VecRegContainer = TheISA::VecRegContainer;
-    using VecElem = TheISA::VecElem;
-    using VecPredRegContainer = TheISA::VecPredRegContainer;
-
+class ExecContext
+{
   public:
     /**
      * @{
@@ -111,36 +105,35 @@ class ExecContext {
     /** Vector Register Interfaces. */
     /** @{ */
     /** Reads source vector register operand. */
-    virtual const VecRegContainer&
-    readVecRegOperand(const StaticInst *si, int idx) const = 0;
+    virtual const TheISA::VecRegContainer& readVecRegOperand(
+            const StaticInst *si, int idx) const = 0;
 
     /** Gets destination vector register operand for modification. */
-    virtual VecRegContainer&
-    getWritableVecRegOperand(const StaticInst *si, int idx) = 0;
+    virtual TheISA::VecRegContainer& getWritableVecRegOperand(
+            const StaticInst *si, int idx) = 0;
 
     /** Sets a destination vector register operand to a value. */
-    virtual void
-    setVecRegOperand(const StaticInst *si, int idx,
-                     const VecRegContainer& val) = 0;
+    virtual void setVecRegOperand(const StaticInst *si, int idx,
+            const TheISA::VecRegContainer& val) = 0;
     /** @} */
 
     /** Vector Register Lane Interfaces. */
     /** @{ */
     /** Reads source vector 8bit operand. */
-    virtual ConstVecLane8
-    readVec8BitLaneOperand(const StaticInst *si, int idx) const = 0;
+    virtual ConstVecLane8 readVec8BitLaneOperand(
+            const StaticInst *si, int idx) const = 0;
 
     /** Reads source vector 16bit operand. */
-    virtual ConstVecLane16
-    readVec16BitLaneOperand(const StaticInst *si, int idx) const = 0;
+    virtual ConstVecLane16 readVec16BitLaneOperand(
+            const StaticInst *si, int idx) const = 0;
 
     /** Reads source vector 32bit operand. */
-    virtual ConstVecLane32
-    readVec32BitLaneOperand(const StaticInst *si, int idx) const = 0;
+    virtual ConstVecLane32 readVec32BitLaneOperand(
+            const StaticInst *si, int idx) const = 0;
 
     /** Reads source vector 64bit operand. */
-    virtual ConstVecLane64
-    readVec64BitLaneOperand(const StaticInst *si, int idx) const = 0;
+    virtual ConstVecLane64 readVec64BitLaneOperand(
+            const StaticInst *si, int idx) const = 0;
 
     /** Write a lane of the destination vector operand. */
     /** @{ */
@@ -157,28 +150,28 @@ class ExecContext {
     /** Vector Elem Interfaces. */
     /** @{ */
     /** Reads an element of a vector register. */
-    virtual VecElem readVecElemOperand(const StaticInst *si,
-                                        int idx) const = 0;
+    virtual TheISA::VecElem readVecElemOperand(
+            const StaticInst *si, int idx) const = 0;
 
     /** Sets a vector register to a value. */
-    virtual void setVecElemOperand(const StaticInst *si, int idx,
-                                   const VecElem val) = 0;
+    virtual void setVecElemOperand(
+            const StaticInst *si, int idx, const TheISA::VecElem val) = 0;
     /** @} */
 
     /** Predicate registers interface. */
     /** @{ */
     /** Reads source predicate register operand. */
-    virtual const VecPredRegContainer&
-    readVecPredRegOperand(const StaticInst *si, int idx) const = 0;
+    virtual const TheISA::VecPredRegContainer& readVecPredRegOperand(
+            const StaticInst *si, int idx) const = 0;
 
     /** Gets destination predicate register operand for modification. */
-    virtual VecPredRegContainer&
-    getWritableVecPredRegOperand(const StaticInst *si, int idx) = 0;
+    virtual TheISA::VecPredRegContainer& getWritableVecPredRegOperand(
+            const StaticInst *si, int idx) = 0;
 
     /** Sets a destination predicate register operand to a value. */
-    virtual void
-    setVecPredRegOperand(const StaticInst *si, int idx,
-                         const VecPredRegContainer& val) = 0;
+    virtual void setVecPredRegOperand(
+            const StaticInst *si, int idx,
+            const TheISA::VecPredRegContainer& val) = 0;
     /** @} */
 
     /**
@@ -216,8 +209,8 @@ class ExecContext {
      * @{
      * @name PC Control
      */
-    virtual PCState pcState() const = 0;
-    virtual void pcState(const PCState &val) = 0;
+    virtual TheISA::PCState pcState() const = 0;
+    virtual void pcState(const TheISA::PCState &val) = 0;
     /** @} */
 
     /**
@@ -231,9 +224,9 @@ class ExecContext {
      * mode need not override (though in that case this function
      * should never be called).
      */
-    virtual Fault readMem(Addr addr, uint8_t *data, unsigned int size,
-            Request::Flags flags,
-            const std::vector<bool>& byte_enable = std::vector<bool>())
+    virtual Fault
+    readMem(Addr addr, uint8_t *data, unsigned int size,
+            Request::Flags flags, const std::vector<bool>& byte_enable)
     {
         panic("ExecContext::readMem() should be overridden\n");
     }
@@ -245,29 +238,33 @@ class ExecContext {
      * mode need not override (though in that case this function
      * should never be called).
      */
-    virtual Fault initiateMemRead(Addr addr, unsigned int size,
-            Request::Flags flags,
-            const std::vector<bool>& byte_enable = std::vector<bool>())
+    virtual Fault
+    initiateMemRead(Addr addr, unsigned int size,
+            Request::Flags flags, const std::vector<bool>& byte_enable)
     {
         panic("ExecContext::initiateMemRead() should be overridden\n");
     }
 
+    /**
+     * Initiate an HTM command,
+     * e.g. tell Ruby we're starting/stopping a transaction
+     */
+    virtual Fault initiateHtmCmd(Request::Flags flags) = 0;
     /**
      * For atomic-mode contexts, perform an atomic memory write operation.
      * For timing-mode contexts, initiate a timing memory write operation.
      */
     virtual Fault writeMem(uint8_t *data, unsigned int size, Addr addr,
                            Request::Flags flags, uint64_t *res,
-                           const std::vector<bool>& byte_enable =
-                               std::vector<bool>()) = 0;
+                           const std::vector<bool>& byte_enable) = 0;
 
     /**
      * For atomic-mode contexts, perform an atomic AMO (a.k.a., Atomic
      * Read-Modify-Write Memory Operation)
      */
-    virtual Fault amoMem(Addr addr, uint8_t *data, unsigned int size,
-                         Request::Flags flags,
-                         AtomicOpFunctorPtr amo_op)
+    virtual Fault
+    amoMem(Addr addr, uint8_t *data, unsigned int size,
+            Request::Flags flags, AtomicOpFunctorPtr amo_op)
     {
         panic("ExecContext::amoMem() should be overridden\n");
     }
@@ -276,9 +273,9 @@ class ExecContext {
      * For timing-mode contexts, initiate an atomic AMO (atomic
      * read-modify-write memory operation)
      */
-    virtual Fault initiateMemAMO(Addr addr, unsigned int size,
-                                 Request::Flags flags,
-                                 AtomicOpFunctorPtr amo_op)
+    virtual Fault
+    initiateMemAMO(Addr addr, unsigned int size, Request::Flags flags,
+            AtomicOpFunctorPtr amo_op)
     {
         panic("ExecContext::initiateMemAMO() should be overridden\n");
     }
@@ -295,18 +292,6 @@ class ExecContext {
 
     /** @} */
 
-    /**
-     * @{
-     * @name SysCall Emulation Interfaces
-     */
-
-    /**
-     * Executes a syscall.
-     */
-    virtual void syscall(Fault *fault) = 0;
-
-    /** @} */
-
     /** Returns a pointer to the ThreadContext. */
     virtual ThreadContext *tcBase() const = 0;
 
@@ -319,6 +304,12 @@ class ExecContext {
     virtual void setPredicate(bool val) = 0;
     virtual bool readMemAccPredicate() const = 0;
     virtual void setMemAccPredicate(bool val) = 0;
+
+    // hardware transactional memory
+    virtual uint64_t newHtmTransactionUid() const = 0;
+    virtual uint64_t getHtmTransactionUid() const = 0;
+    virtual bool inHtmTransactionalState() const = 0;
+    virtual uint64_t getHtmTransactionalDepth() const = 0;
 
     /** @} */
 

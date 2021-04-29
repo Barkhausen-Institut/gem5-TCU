@@ -35,10 +35,8 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
-#include <string>
 
 #include "base/atomicio.hh"
-#include "base/debug.hh"
 #include "base/logging.hh"
 #include "base/output.hh"
 #include "base/str.hh"
@@ -91,13 +89,13 @@ setDebugLogger(Logger *logger)
 void
 enable()
 {
-    Debug::SimpleFlag::enableAll();
+    Debug::Flag::globalEnable();
 }
 
 void
 disable()
 {
-    Debug::SimpleFlag::disableAll();
+    Debug::Flag::globalDisable();
 }
 
 ObjectMatch ignore;

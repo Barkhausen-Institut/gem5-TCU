@@ -43,16 +43,15 @@
 #include "sim/syscall_return.hh"
 #include "sim/system.hh"
 
-using namespace std;
 using namespace PowerISA;
 
 PowerProcess::PowerProcess(
-        ProcessParams *params, ::Loader::ObjectFile *objFile)
+       const ProcessParams &params, ::Loader::ObjectFile *objFile)
     : Process(params,
-              new EmulationPageTable(params->name, params->pid, PageBytes),
+              new EmulationPageTable(params.name, params.pid, PageBytes),
               objFile)
 {
-    fatal_if(params->useArchPT, "Arch page tables not implemented.");
+    fatal_if(params.useArchPT, "Arch page tables not implemented.");
     // Set up break point (Top of Heap)
     Addr brk_point = image.maxAddr();
     brk_point = roundUp(brk_point, PageBytes);
@@ -67,9 +66,9 @@ PowerProcess::PowerProcess(
     // Set up region for mmaps. For now, start at bottom of kuseg space.
     Addr mmap_end = 0x70000000L;
 
-    memState = make_shared<MemState>(this, brk_point, stack_base,
-                                     max_stack_size, next_thread_stack_base,
-                                     mmap_end);
+    memState = std::make_shared<MemState>(
+            this, brk_point, stack_base, max_stack_size,
+            next_thread_stack_base, mmap_end);
 }
 
 void
@@ -77,7 +76,7 @@ PowerProcess::initState()
 {
     Process::initState();
 
-    argsInit(MachineBytes, PageBytes);
+    argsInit(sizeof(uint32_t), PageBytes);
 }
 
 void
@@ -85,7 +84,7 @@ PowerProcess::argsInit(int intSize, int pageSize)
 {
     std::vector<AuxVector<uint32_t>> auxv;
 
-    string filename;
+    std::string filename;
     if (argv.size() < 1)
         filename = "";
     else
@@ -146,7 +145,7 @@ PowerProcess::argsInit(int intSize, int pageSize)
     // A sentry NULL void pointer at the top of the stack.
     int sentry_size = intSize;
 
-    string platform = "v51";
+    std::string platform = "v51";
     int platform_size = platform.size() + 1;
 
     // The aux vectors are put on the stack in two groups. The first group are
@@ -261,13 +260,13 @@ PowerProcess::argsInit(int intSize, int pageSize)
     auxv_array_end += sizeof(zero);
 
     copyStringArray(envp, envp_array_base, env_data_base,
-                    BigEndianByteOrder, *initVirtMem);
+                    ByteOrder::big, *initVirtMem);
     copyStringArray(argv, argv_array_base, arg_data_base,
-                    BigEndianByteOrder, *initVirtMem);
+                    ByteOrder::big, *initVirtMem);
 
     initVirtMem->writeBlob(argc_base, &guestArgc, intSize);
 
-    ThreadContext *tc = system->getThreadContext(contextIds[0]);
+    ThreadContext *tc = system->threads[contextIds[0]];
 
     //Set the stack pointer register
     tc->setIntReg(StackPointerReg, stack_min);
@@ -277,7 +276,3 @@ PowerProcess::argsInit(int intSize, int pageSize)
     //Align the "stack_min" to a page boundary.
     memState->setStackMin(roundDown(stack_min, pageSize));
 }
-
-const std::vector<int> PowerProcess::SyscallABI::ArgumentRegs = {
-    3, 4, 5, 6, 7, 8
-};

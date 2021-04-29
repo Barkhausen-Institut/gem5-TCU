@@ -41,7 +41,6 @@
 #include "base/bitfield.hh"
 
 using namespace ArmISA;
-using namespace std;
 
 bool
 ArmISA::calculateTBI(ThreadContext* tc, ExceptionLevel el,
@@ -101,11 +100,11 @@ ArmISA::calculateBottomPACBit(ThreadContext* tc, ExceptionLevel el,
         using64k  = el == EL2 ? tcr2.tg0 == 0x1 : tcr3.tg0 == 0x1 ;
     }
     uint32_t max_limit_tsz_field = using64k ? 47 : 48;
-    tsz_field = min(tsz_field, max_limit_tsz_field);
+    tsz_field = std::min(tsz_field, max_limit_tsz_field);
     const AA64MMFR2 mm_fr2 = tc->readMiscReg(MISCREG_ID_AA64MMFR2_EL1);
 
     uint32_t tszmin = (using64k && (bool)mm_fr2.varange) ? 12 : 16;
-    tsz_field = max(tsz_field, tszmin);
+    tsz_field = std::max(tsz_field, tszmin);
 
     return (64-tsz_field);
 }
@@ -286,9 +285,9 @@ ArmISA::authDA(ThreadContext * tc, uint64_t X, uint64_t Y, uint64_t* out)
   using the same algorithm and key as AddPACDA().
 */
 
-    bool trapEL2;
-    bool trapEL3;
-    bool enable;
+    bool trapEL2 = false;
+    bool trapEL3 = false;
+    bool enable = false;
 
     uint64_t hi_key= tc->readMiscReg(MISCREG_APDAKeyHi_EL1);
     uint64_t lo_key= tc->readMiscReg(MISCREG_APDAKeyLo_EL1);
@@ -354,9 +353,9 @@ ArmISA::authDB(ThreadContext* tc, uint64_t X, uint64_t Y, uint64_t* out)
   using the same algorithm and key as AddPACDA().
 */
 
-    bool trapEL2;
-    bool trapEL3;
-    bool enable;
+    bool trapEL2 = false;
+    bool trapEL3 = false;
+    bool enable = false;
 
     uint64_t hi_key= tc->readMiscReg(MISCREG_APDBKeyHi_EL1);
     uint64_t lo_key= tc->readMiscReg(MISCREG_APDBKeyLo_EL1);
@@ -424,9 +423,9 @@ ArmISA::authIA(ThreadContext * tc, uint64_t X, uint64_t Y, uint64_t* out)
   using the same algorithm and key as AddPACDA().
 */
 
-    bool trapEL2;
-    bool trapEL3;
-    bool enable;
+    bool trapEL2 = false;
+    bool trapEL3 = false;
+    bool enable = false;
 
     uint64_t hi_key= tc->readMiscReg(MISCREG_APIAKeyHi_EL1);
     uint64_t lo_key= tc->readMiscReg(MISCREG_APIAKeyLo_EL1);
@@ -498,9 +497,9 @@ ArmISA::authIB(ThreadContext *tc, uint64_t X, uint64_t Y, uint64_t* out)
   using the same algorithm and key as AddPACDA().
 */
 
-    bool trapEL2;
-    bool trapEL3;
-    bool enable;
+    bool trapEL2 = false;
+    bool trapEL3 = false;
+    bool enable = false;
 
     uint64_t hi_key= tc->readMiscReg(MISCREG_APIBKeyHi_EL1);
     uint64_t lo_key= tc->readMiscReg(MISCREG_APIBKeyLo_EL1);
@@ -566,9 +565,9 @@ ArmISA::authIB(ThreadContext *tc, uint64_t X, uint64_t Y, uint64_t* out)
 Fault
 ArmISA::addPACDA(ThreadContext* tc, uint64_t X, uint64_t Y, uint64_t* out)
 {
-    bool trapEL2;
-    bool trapEL3;
-    bool enable;
+    bool trapEL2 = false;
+    bool trapEL3 = false;
+    bool enable = false;
 
     uint64_t hi_key= tc->readMiscReg(MISCREG_APDAKeyHi_EL1);
     uint64_t lo_key= tc->readMiscReg(MISCREG_APDAKeyLo_EL1);
@@ -630,9 +629,9 @@ ArmISA::addPACDA(ThreadContext* tc, uint64_t X, uint64_t Y, uint64_t* out)
 Fault
 ArmISA::addPACDB(ThreadContext* tc, uint64_t X, uint64_t Y, uint64_t* out)
 {
-    bool trapEL2;
-    bool trapEL3;
-    bool enable;
+    bool trapEL2 = false;
+    bool trapEL3 = false;
+    bool enable = false;
 
     uint64_t hi_key= tc->readMiscReg(MISCREG_APDBKeyHi_EL1);
     uint64_t lo_key= tc->readMiscReg(MISCREG_APDBKeyLo_EL1);
@@ -691,8 +690,8 @@ ArmISA::addPACDB(ThreadContext* tc, uint64_t X, uint64_t Y, uint64_t* out)
 Fault
 ArmISA::addPACGA(ThreadContext * tc, uint64_t X, uint64_t Y, uint64_t* out)
 {
-    bool trapEL2;
-    bool trapEL3;
+    bool trapEL2 = false;
+    bool trapEL3 = false;
 
     uint64_t hi_key= tc->readMiscReg(MISCREG_APGAKeyHi_EL1);
     uint64_t lo_key= tc->readMiscReg(MISCREG_APGAKeyLo_EL1);
@@ -706,7 +705,7 @@ ArmISA::addPACGA(ThreadContext * tc, uint64_t X, uint64_t Y, uint64_t* out)
     {
         case EL0:
             trapEL2 = (EL2Enabled(tc) && hcr.api == 0 &&
-                      (hcr.tge == '0' || hcr.e2h == 0));
+                      (hcr.tge == 0 || hcr.e2h == 0));
             trapEL3 = have_el3 && sc3.api == 0;
             break;
         case EL1:
@@ -738,9 +737,9 @@ ArmISA::addPACGA(ThreadContext * tc, uint64_t X, uint64_t Y, uint64_t* out)
 
 Fault
 ArmISA::addPACIA(ThreadContext * tc, uint64_t X, uint64_t Y, uint64_t* out){
-    bool trapEL2;
-    bool trapEL3;
-    bool enable;
+    bool trapEL2 = false;
+    bool trapEL3 = false;
+    bool enable = false;
 
     uint64_t hi_key= tc->readMiscReg(MISCREG_APIAKeyHi_EL1);
     uint64_t lo_key= tc->readMiscReg(MISCREG_APIAKeyLo_EL1);
@@ -797,9 +796,9 @@ ArmISA::addPACIA(ThreadContext * tc, uint64_t X, uint64_t Y, uint64_t* out){
 
 Fault
 ArmISA::addPACIB(ThreadContext* tc, uint64_t X, uint64_t Y, uint64_t* out){
-    bool trapEL2;
-    bool trapEL3;
-    bool enable;
+    bool trapEL2 = false;
+    bool trapEL3 = false;
+    bool enable = false;
 
     uint64_t hi_key= tc->readMiscReg(MISCREG_APIBKeyHi_EL1);
     uint64_t lo_key= tc->readMiscReg(MISCREG_APIBKeyLo_EL1);
@@ -859,8 +858,8 @@ ArmISA::addPACIB(ThreadContext* tc, uint64_t X, uint64_t Y, uint64_t* out){
 
 Fault
 ArmISA::stripPAC(ThreadContext* tc, uint64_t A, bool data, uint64_t* out){
-    bool trapEL2;
-    bool trapEL3;
+    bool trapEL2 = false;
+    bool trapEL3 = false;
 
     uint64_t ptr;
 

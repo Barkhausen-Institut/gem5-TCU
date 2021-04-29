@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 ARM Limited
+ * Copyright (c) 2015, 2020 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -49,6 +49,7 @@
 #include <cerrno>
 #include <fstream>
 #include <list>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -63,8 +64,6 @@
 
 // For stat reset hack
 #include "sim/stat_control.hh"
-
-using namespace std;
 
 int ckptMaxCount = 0;
 int ckptCount = 0;
@@ -182,14 +181,14 @@ Serializable::unserializeSection(CheckpointIn &cp, const char *name)
 }
 
 void
-Serializable::serializeAll(const string &cpt_dir)
+Serializable::serializeAll(const std::string &cpt_dir)
 {
-    string dir = CheckpointIn::setDir(cpt_dir);
+    std::string dir = CheckpointIn::setDir(cpt_dir);
     if (mkdir(dir.c_str(), 0775) == -1 && errno != EEXIST)
             fatal("couldn't mkdir %s\n", dir);
 
-    string cpt_file = dir + CheckpointIn::baseFilename;
-    ofstream outstream(cpt_file.c_str());
+    std::string cpt_file = dir + CheckpointIn::baseFilename;
+    std::ofstream outstream(cpt_file.c_str());
     time_t t = time(NULL);
     if (!outstream.is_open())
         fatal("Unable to open file %s for writing\n", cpt_file.c_str());
@@ -245,30 +244,31 @@ Serializable::currentSection()
 
 const char *CheckpointIn::baseFilename = "m5.cpt";
 
-string CheckpointIn::currentDirectory;
+std::string CheckpointIn::currentDirectory;
 
-string
-CheckpointIn::setDir(const string &name)
+std::string
+CheckpointIn::setDir(const std::string &name)
 {
     // use csprintf to insert curTick() into directory name if it
     // appears to have a format placeholder in it.
-    currentDirectory = (name.find("%") != string::npos) ?
+    currentDirectory = (name.find("%") != std::string::npos) ?
         csprintf(name, curTick()) : name;
     if (currentDirectory[currentDirectory.size() - 1] != '/')
         currentDirectory += "/";
     return currentDirectory;
 }
 
-string
+std::string
 CheckpointIn::dir()
 {
     return currentDirectory;
 }
 
-CheckpointIn::CheckpointIn(const string &cpt_dir, SimObjectResolver &resolver)
+CheckpointIn::CheckpointIn(const std::string &cpt_dir,
+        SimObjectResolver &resolver)
     : db(new IniFile), objNameResolver(resolver), _cptDir(setDir(cpt_dir))
 {
-    string filename = getCptDir() + "/" + CheckpointIn::baseFilename;
+    std::string filename = getCptDir() + "/" + CheckpointIn::baseFilename;
     if (!db->load(filename)) {
         fatal("Can't load checkpoint file '%s'\n", filename);
     }
@@ -278,24 +278,51 @@ CheckpointIn::~CheckpointIn()
 {
     delete db;
 }
-
+/**
+ * @param section Here we mention the section we are looking for
+ * (example: currentsection).
+ * @param entry Mention the entry we are looking for (example: interrupt
+ * time) in the section.
+ *
+ * @return Returns true if the entry exists in the named section
+ * we are looking in.
+ */
 bool
-CheckpointIn::entryExists(const string &section, const string &entry)
+CheckpointIn::entryExists(const std::string &section, const std::string &entry)
 {
     return db->entryExists(section, entry);
 }
-
+/**
+ * @param section Here we mention the section we are looking for
+ * (example: currentsection).
+ * @param entry Mention the entry we are looking for (example: Cache
+ * line size etc) in the section.
+ * @param value Give the value at the said entry.
+ *
+ * @return Returns true if the searched parameter exists with
+ * the value, given the section .
+ */
 bool
-CheckpointIn::find(const string &section, const string &entry, string &value)
+CheckpointIn::find(const std::string &section, const std::string &entry,
+        std::string &value)
 {
     return db->find(section, entry, value);
 }
-
+/**
+ * @param section Here we mention the section we are looking for
+ * (example: currentsection).
+ * @param entry Mention the SimObject we are looking for (example:
+ * interruput time) in the section.
+ * @param value Give the value at the said entry.
+ *
+ * @return Returns true if a SimObject exists in the section.
+ *
+ */
 bool
-CheckpointIn::findObj(const string &section, const string &entry,
+CheckpointIn::findObj(const std::string &section, const std::string &entry,
                     SimObject *&value)
 {
-    string path;
+    std::string path;
 
     if (!db->find(section, entry, path))
         return false;
@@ -305,22 +332,29 @@ CheckpointIn::findObj(const string &section, const string &entry,
 }
 
 bool
-CheckpointIn::sectionExists(const string &section)
+CheckpointIn::sectionExists(const std::string &section)
 {
     return db->sectionExists(section);
 }
 
 void
-objParamIn(CheckpointIn &cp, const string &name, SimObject * &param)
+CheckpointIn::visitSection(const std::string &section,
+    IniFile::VisitSectionCallback cb)
 {
-    const string &section(Serializable::currentSection());
+    db->visitSection(section, cb);
+}
+
+void
+objParamIn(CheckpointIn &cp, const std::string &name, SimObject * &param)
+{
+    const std::string &section(Serializable::currentSection());
     if (!cp.findObj(section, name, param)) {
         fatal("Can't unserialize '%s:%s'\n", section, name);
     }
 }
 
 void
-debug_serialize(const string &cpt_dir)
+debug_serialize(const std::string &cpt_dir)
 {
     Serializable::serializeAll(cpt_dir);
 }

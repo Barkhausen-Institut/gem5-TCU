@@ -49,16 +49,15 @@
 #include "debug/ROB.hh"
 #include "params/DerivO3CPU.hh"
 
-using namespace std;
-
 template <class Impl>
-ROB<Impl>::ROB(O3CPU *_cpu, DerivO3CPUParams *params)
-    : robPolicy(params->smtROBPolicy),
+ROB<Impl>::ROB(O3CPU *_cpu, const DerivO3CPUParams &params)
+    : robPolicy(params.smtROBPolicy),
       cpu(_cpu),
-      numEntries(params->numROBEntries),
-      squashWidth(params->squashWidth),
+      numEntries(params.numROBEntries),
+      squashWidth(params.squashWidth),
       numInstsInROB(0),
-      numThreads(params->numThreads)
+      numThreads(params.numThreads),
+      stats(_cpu)
 {
     //Figure out rob policy
     if (robPolicy == SMTQueuePolicy::Dynamic) {
@@ -81,7 +80,7 @@ ROB<Impl>::ROB(O3CPU *_cpu, DerivO3CPUParams *params)
     } else if (robPolicy == SMTQueuePolicy::Threshold) {
         DPRINTF(Fetch, "ROB sharing policy set to Threshold\n");
 
-        int threshold =  params->smtROBThreshold;;
+        int threshold =  params.smtROBThreshold;;
 
         //Divide up by threshold amount
         for (ThreadID tid = 0; tid < numThreads; tid++) {
@@ -123,7 +122,7 @@ ROB<Impl>::name() const
 
 template <class Impl>
 void
-ROB<Impl>::setActiveThreads(list<ThreadID> *at_ptr)
+ROB<Impl>::setActiveThreads(std::list<ThreadID> *at_ptr)
 {
     DPRINTF(ROB, "Setting active threads list pointer.\n");
     activeThreads = at_ptr;
@@ -152,8 +151,8 @@ ROB<Impl>::resetEntries()
     if (robPolicy != SMTQueuePolicy::Dynamic || numThreads > 1) {
         auto active_threads = activeThreads->size();
 
-        list<ThreadID>::iterator threads = activeThreads->begin();
-        list<ThreadID>::iterator end = activeThreads->end();
+        std::list<ThreadID>::iterator threads = activeThreads->begin();
+        std::list<ThreadID>::iterator end = activeThreads->end();
 
         while (threads != end) {
             ThreadID tid = *threads++;
@@ -204,7 +203,7 @@ ROB<Impl>::insertInst(const DynInstPtr &inst)
 {
     assert(inst);
 
-    robWrites++;
+    stats.writes++;
 
     DPRINTF(ROB, "Adding inst PC %s to the ROB.\n", inst->pcState());
 
@@ -239,7 +238,7 @@ template <class Impl>
 void
 ROB<Impl>::retireHead(ThreadID tid)
 {
-    robWrites++;
+    stats.writes++;
 
     assert(numInstsInROB > 0);
 
@@ -274,7 +273,7 @@ template <class Impl>
 bool
 ROB<Impl>::isHeadReady(ThreadID tid)
 {
-    robReads++;
+    stats.reads++;
     if (threadEntries[tid] != 0) {
         return instList[tid].front()->readyToCommit();
     }
@@ -287,8 +286,8 @@ bool
 ROB<Impl>::canCommit()
 {
     //@todo: set ActiveThreads through ROB or CPU
-    list<ThreadID>::iterator threads = activeThreads->begin();
-    list<ThreadID>::iterator end = activeThreads->end();
+    std::list<ThreadID>::iterator threads = activeThreads->begin();
+    std::list<ThreadID>::iterator end = activeThreads->end();
 
     while (threads != end) {
         ThreadID tid = *threads++;
@@ -319,7 +318,7 @@ template <class Impl>
 void
 ROB<Impl>::doSquash(ThreadID tid)
 {
-    robWrites++;
+    stats.writes++;
     DPRINTF(ROB, "[tid:%i] Squashing instructions until [sn:%llu].\n",
             tid, squashedSeqNum[tid]);
 
@@ -337,8 +336,18 @@ ROB<Impl>::doSquash(ThreadID tid)
 
     bool robTailUpdate = false;
 
+    unsigned int numInstsToSquash = squashWidth;
+
+    // If the CPU is exiting, squash all of the instructions
+    // it is told to, even if that exceeds the squashWidth.
+    // Set the number to the number of entries (the max).
+    if (cpu->isThreadExiting(tid))
+    {
+        numInstsToSquash = numEntries;
+    }
+
     for (int numSquashed = 0;
-         numSquashed < squashWidth &&
+         numSquashed < numInstsToSquash &&
          squashIt[tid] != instList[tid].end() &&
          (*squashIt[tid])->seqNum > squashedSeqNum[tid];
          ++numSquashed)
@@ -400,8 +409,8 @@ ROB<Impl>::updateHead()
     bool first_valid = true;
 
     // @todo: set ActiveThreads through ROB or CPU
-    list<ThreadID>::iterator threads = activeThreads->begin();
-    list<ThreadID>::iterator end = activeThreads->end();
+    std::list<ThreadID>::iterator threads = activeThreads->begin();
+    std::list<ThreadID>::iterator end = activeThreads->end();
 
     while (threads != end) {
         ThreadID tid = *threads++;
@@ -441,8 +450,8 @@ ROB<Impl>::updateTail()
     tail = instList[0].end();
     bool first_valid = true;
 
-    list<ThreadID>::iterator threads = activeThreads->begin();
-    list<ThreadID>::iterator end = activeThreads->end();
+    std::list<ThreadID>::iterator threads = activeThreads->begin();
+    std::list<ThreadID>::iterator end = activeThreads->end();
 
     while (threads != end) {
         ThreadID tid = *threads++;
@@ -528,17 +537,11 @@ ROB<Impl>::readTailInst(ThreadID tid)
 }
 
 template <class Impl>
-void
-ROB<Impl>::regStats()
+ROB<Impl>::ROBStats::ROBStats(Stats::Group *parent)
+    : Stats::Group(parent, "rob"),
+      ADD_STAT(reads, UNIT_COUNT, "The number of ROB reads"),
+      ADD_STAT(writes, UNIT_COUNT, "The number of ROB writes")
 {
-    using namespace Stats;
-    robReads
-        .name(name() + ".rob_reads")
-        .desc("The number of ROB reads");
-
-    robWrites
-        .name(name() + ".rob_writes")
-        .desc("The number of ROB writes");
 }
 
 template <class Impl>

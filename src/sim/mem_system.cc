@@ -32,11 +32,11 @@
 #include "mem/tcu/tlb.hh"
 #include "params/MemSystem.hh"
 
-MemSystem::MemSystem(Params *p)
+MemSystem::MemSystem(const Params &p)
     : System(p),
-      peId(p->pe_id),
-      memFile(p->mem_file),
-      memFileNum(p->mem_file_num)
+      peId(p.pe_id),
+      memFile(p.mem_file),
+      memFileNum(p.mem_file_num)
 {
 }
 
@@ -78,10 +78,4 @@ MemSystem::initState()
         delete[] data;
         fclose(f);
     }
-}
-
-MemSystem *
-MemSystemParams::create()
-{
-    return new MemSystem(this);
 }

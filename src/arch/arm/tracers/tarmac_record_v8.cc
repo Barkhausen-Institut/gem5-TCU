@@ -37,9 +37,13 @@
 
 #include "arch/arm/tracers/tarmac_record_v8.hh"
 
+#include <memory>
+
 #include "arch/arm/insts/static_inst.hh"
-#include "arch/arm/tlb.hh"
+#include "arch/arm/mmu.hh"
 #include "arch/arm/tracers/tarmac_tracer.hh"
+
+using namespace ArmISA;
 
 namespace Trace {
 
@@ -54,8 +58,9 @@ TarmacTracerRecordV8::TraceInstEntryV8::TraceInstEntryV8(
     const auto thread = tarmCtx.thread;
 
     // Evaluate physical address
-    ArmISA::TLB* dtb = static_cast<TLB*>(thread->getDTBPtr());
-    paddrValid = dtb->translateFunctional(thread, addr, paddr);
+    auto mmu = static_cast<ArmISA::MMU*>(thread->getMMUPtr());
+    paddrValid = mmu->translateFunctional(
+        thread, addr, paddr);
 }
 
 TarmacTracerRecordV8::TraceMemEntryV8::TraceMemEntryV8(
@@ -68,8 +73,8 @@ TarmacTracerRecordV8::TraceMemEntryV8::TraceMemEntryV8(
     const auto thread = tarmCtx.thread;
 
     // Evaluate physical address
-    ArmISA::TLB* dtb = static_cast<TLB*>(thread->getDTBPtr());
-    dtb->translateFunctional(thread, addr, paddr);
+    auto mmu = static_cast<ArmISA::MMU*>(thread->getMMUPtr());
+    mmu->translateFunctional(thread, addr, paddr);
 }
 
 TarmacTracerRecordV8::TraceRegEntryV8::TraceRegEntryV8(
@@ -183,7 +188,7 @@ TarmacTracerRecordV8::addInstEntry(std::vector<InstPtr>& queue,
     // Generate an instruction entry in the record and
     // add it to the Instruction Queue
     queue.push_back(
-        m5::make_unique<TraceInstEntryV8>(tarmCtx, predicate)
+        std::make_unique<TraceInstEntryV8>(tarmCtx, predicate)
     );
 }
 
@@ -196,9 +201,9 @@ TarmacTracerRecordV8::addMemEntry(std::vector<MemPtr>& queue,
     // Memory Queue
     if (getMemValid()) {
         queue.push_back(
-            m5::make_unique<TraceMemEntryV8>(tarmCtx,
-                                             static_cast<uint8_t>(getSize()),
-                                             getAddr(), getIntData())
+            std::make_unique<TraceMemEntryV8>(tarmCtx,
+                                              static_cast<uint8_t>(getSize()),
+                                              getAddr(), getIntData())
         );
     }
 }
@@ -218,9 +223,7 @@ TarmacTracerRecordV8::addRegEntry(std::vector<RegPtr>& queue,
 
         // Copying the entry and adding it to the "list"
         // of entries to be dumped to trace.
-        queue.push_back(
-            m5::make_unique<TraceRegEntryV8>(single_reg)
-        );
+        queue.push_back(std::make_unique<TraceRegEntryV8>(single_reg));
     }
 
     // Gem5 is treating CPSR flags as separate registers (CC registers),

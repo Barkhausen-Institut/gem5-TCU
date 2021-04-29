@@ -48,7 +48,7 @@
 
 #include "sim/clocked_object.hh"
 
-class TickedObjectParams;
+struct TickedObjectParams;
 
 /** Ticked attaches gem5's event queue/scheduler to evaluate
  *  calls and provides a start/stop interface to ticking.
@@ -163,7 +163,7 @@ class Ticked : public Serializable
 class TickedObject : public ClockedObject, public Ticked
 {
   public:
-    TickedObject(const TickedObjectParams *params,
+    TickedObject(const TickedObjectParams &params,
         Event::Priority priority = Event::CPU_Tick_Pri);
 
     /** Disambiguate to make these functions overload correctly */

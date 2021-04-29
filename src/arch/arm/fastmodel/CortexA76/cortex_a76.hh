@@ -52,32 +52,16 @@ class CortexA76Cluster;
 class CortexA76 : public Iris::CPU<CortexA76TC>
 {
   protected:
-    typedef FastModelCortexA76Params Params;
     typedef Iris::CPU<CortexA76TC> Base;
-    const Params &_params;
 
     CortexA76Cluster *cluster = nullptr;
     int num = 0;
 
-    const Params &params() { return _params; }
-
   public:
-    CortexA76(Params &p) : Base(&p, scx::scx_get_iris_connection_interface()),
-        _params(p)
+    PARAMS(FastModelCortexA76);
+    CortexA76(const Params &p) :
+        Base(p, scx::scx_get_iris_connection_interface())
     {}
-
-    void
-    clockPeriodUpdated() override
-    {
-        Base::clockPeriodUpdated();
-
-        // FIXME(b/139447397): this is a workaround since CNTFRQ_EL0 should not
-        // be modified after clock is changed in real hardwares. Remove or
-        // modify this after a more reasonable solution is found.
-        for (auto *tc : threadContexts) {
-            tc->setMiscRegNoEffect(ArmISA::MISCREG_CNTFRQ_EL0, frequency());
-        }
-    }
 
     void initState() override;
 
@@ -93,13 +77,11 @@ class CortexA76 : public Iris::CPU<CortexA76TC>
 class CortexA76Cluster : public SimObject
 {
   private:
-    typedef FastModelCortexA76ClusterParams Params;
-    const Params &_params;
-
     std::vector<CortexA76 *> cores;
     sc_core::sc_module *evs;
 
   public:
+    PARAMS(FastModelCortexA76Cluster);
     template <class T>
     void
     set_evs_param(const std::string &n, T val)
@@ -107,11 +89,10 @@ class CortexA76Cluster : public SimObject
         scx::scx_set_parameter(evs->name() + std::string(".") + n, val);
     }
 
-    CortexA76 *getCore(int num) { return cores.at(num); }
-    sc_core::sc_module *getEvs() { return evs; }
+    CortexA76 *getCore(int num) const { return cores.at(num); }
+    sc_core::sc_module *getEvs() const { return evs; }
 
-    CortexA76Cluster(Params &p);
-    const Params &params() { return _params; }
+    CortexA76Cluster(const Params &p);
 
     Port &getPort(const std::string &if_name,
             PortID idx=InvalidPortID) override;

@@ -54,6 +54,9 @@ def template MicroLimmOpExecute {{
 def template MicroLimmOpDeclare {{
     class %(class_name)s : public X86ISA::X86MicroopBase
     {
+      private:
+        %(reg_idx_arr_decl)s;
+
       protected:
         const RegIndex dest;
         const uint64_t imm;
@@ -61,7 +64,7 @@ def template MicroLimmOpDeclare {{
         RegIndex foldOBit;
 
         std::string generateDisassembly(Addr pc,
-            const Loader::SymbolTable *symtab) const;
+            const Loader::SymbolTable *symtab) const override;
 
       public:
         %(class_name)s(ExtMachInst _machInst,
@@ -69,7 +72,7 @@ def template MicroLimmOpDeclare {{
                 uint64_t setFlags, InstRegIndex _dest,
                 uint64_t _imm, uint8_t _dataSize);
 
-        Fault execute(ExecContext *, Trace::InstRecord *) const;
+        Fault execute(ExecContext *, Trace::InstRecord *) const override;
     };
 }};
 
@@ -96,22 +99,19 @@ def template MicroLimmOpConstructor {{
                 setFlags, %(op_class)s),
                 dest(_dest.index()), imm(_imm), dataSize(_dataSize)
     {
+        %(set_reg_idx_arr)s;
         foldOBit = (dataSize == 1 && !machInst.rex.present) ? 1 << 6 : 0;
         %(constructor)s;
     }
 }};
 
 let {{
-    import six
-    if six.PY3:
-        long = int
-
     class LimmOp(X86Microop):
         def __init__(self, dest, imm, dataSize="env.dataSize"):
             self.className = "Limm"
             self.mnemonic = "limm"
             self.dest = dest
-            if isinstance(imm, (int, long)):
+            if isinstance(imm, int):
                 imm = "ULL(%d)" % imm
             self.imm = imm
             self.dataSize = dataSize
@@ -141,10 +141,10 @@ let {{
             self.className = "Lfpimm"
             self.mnemonic = "lfpimm"
             self.dest = dest
-            if isinstance(imm, (int, long)):
+            if isinstance(imm, int):
                 imm = "ULL(%d)" % imm
             elif isinstance(imm, float):
-                imm = "getDoubleBits(%.16f)" % imm
+                imm = "floatToBits64(%.16f)" % imm
             self.imm = imm
             self.dataSize = dataSize
 

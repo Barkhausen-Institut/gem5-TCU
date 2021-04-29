@@ -41,7 +41,6 @@
 #include "mem/port_proxy.hh"
 #include "sim/byteswap.hh"
 
-using namespace std;
 using namespace X86ISA;
 
 template<class T>
@@ -69,16 +68,4 @@ void X86ISA::E820Table::writeTo(PortProxy& proxy, Addr countAddr, Addr addr)
         writeVal(entries[i]->size, proxy, addr);
         writeVal(entries[i]->type, proxy, addr);
     }
-}
-
-E820Table *
-X86E820TableParams::create()
-{
-    return new E820Table(this);
-}
-
-E820Entry *
-X86E820EntryParams::create()
-{
-    return new E820Entry(this);
 }

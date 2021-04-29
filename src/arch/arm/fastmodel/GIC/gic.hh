@@ -80,9 +80,9 @@ class SCGIC : public scx_evs_GIC
     };
 
     std::unique_ptr<Terminator> terminator;
-    const SCFastModelGICParams &_params;
 
   public:
+    SCGIC(const SCFastModelGICParams &p) : SCGIC(p, p.name.c_str()) {}
     SCGIC(const SCFastModelGICParams &params, sc_core::sc_module_name _name);
 
     SignalInterruptInitiatorSocket signalInterrupt;
@@ -96,11 +96,7 @@ class SCGIC : public scx_evs_GIC
         scx_evs_GIC::start_of_simulation();
     }
     void start_of_simulation() override {}
-    const SCFastModelGICParams &
-    params()
-    {
-        return _params;
-    }
+    PARAMS(SCFastModelGIC);
 };
 
 // This class pairs with the one above to implement the receiving end of gem5's

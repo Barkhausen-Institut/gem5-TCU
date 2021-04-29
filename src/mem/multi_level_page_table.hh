@@ -37,6 +37,7 @@
 #include <string>
 
 #include "base/types.hh"
+#include "debug/MMU.hh"
 #include "mem/page_table.hh"
 #include "sim/system.hh"
 
@@ -192,8 +193,8 @@ class MultiLevelPageTable : public EmulationPageTable
 
 public:
     MultiLevelPageTable(const std::string &__name, uint64_t _pid,
-                        System *_sys, Addr pageSize) :
-            EmulationPageTable(__name, _pid, pageSize), system(_sys)
+                        System *_sys, Addr _pageSize) :
+            EmulationPageTable(__name, _pid, _pageSize), system(_sys)
     {}
 
     ~MultiLevelPageTable() {}
@@ -204,7 +205,7 @@ public:
         if (shared)
             return;
 
-        _basePtr = prepTopTable<EntryTypes...>(system, pageSize);
+        _basePtr = prepTopTable<EntryTypes...>(system, _pageSize);
     }
 
     Addr basePtr() { return _basePtr; }
@@ -216,8 +217,8 @@ public:
 
         Final entry;
 
-        for (int64_t offset = 0; offset < size; offset += pageSize) {
-            walk<EntryTypes...>(system, pageSize, _basePtr,
+        for (int64_t offset = 0; offset < size; offset += _pageSize) {
+            walk<EntryTypes...>(system, _pageSize, _basePtr,
                                 vaddr + offset, true, &entry);
 
             entry.reset(paddr + offset, true, flags & Uncacheable,
@@ -236,16 +237,16 @@ public:
 
         Final old_entry, new_entry;
 
-        for (int64_t offset = 0; offset < size; offset += pageSize) {
+        for (int64_t offset = 0; offset < size; offset += _pageSize) {
             // Unmap the original mapping.
-            walk<EntryTypes...>(system, pageSize, _basePtr, vaddr + offset,
+            walk<EntryTypes...>(system, _pageSize, _basePtr, vaddr + offset,
                                 false, &old_entry);
             old_entry.present(false);
             old_entry.write(system->physProxy);
 
             // Map the new one.
-            walk<EntryTypes...>(system, pageSize, _basePtr, new_vaddr + offset,
-                                true, &new_entry);
+            walk<EntryTypes...>(system, _pageSize, _basePtr,
+                                new_vaddr + offset, true, &new_entry);
             new_entry.reset(old_entry.paddr(), true, old_entry.uncacheable(),
                             old_entry.readonly());
             new_entry.write(system->physProxy);
@@ -259,8 +260,8 @@ public:
 
         Final entry;
 
-        for (int64_t offset = 0; offset < size; offset += pageSize) {
-            walk<EntryTypes...>(system, pageSize, _basePtr,
+        for (int64_t offset = 0; offset < size; offset += _pageSize) {
+            walk<EntryTypes...>(system, _pageSize, _basePtr,
                                 vaddr + offset, false, &entry);
             fatal_if(!entry.present(),
                      "PageTable::unmap: Address %#x not mapped.", vaddr);

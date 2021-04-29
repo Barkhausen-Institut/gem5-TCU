@@ -69,11 +69,11 @@ class AccelCtxSwSM
         REPLY_WAIT,
     };
 
-    struct
+    struct M5_ATTR_PACKED
     {
         uint64_t res;
         uint64_t val;
-    } M5_ATTR_PACKED reply;
+    } reply;
 
   public:
 

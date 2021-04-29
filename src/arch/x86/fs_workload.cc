@@ -50,11 +50,11 @@
 namespace X86ISA
 {
 
-FsWorkload::FsWorkload(Params *p) : KernelWorkload(*p),
-    smbiosTable(p->smbios_table),
-    mpFloatingPointer(p->intel_mp_pointer),
-    mpConfigTable(p->intel_mp_table),
-    rsdp(p->acpi_description_table_pointer)
+FsWorkload::FsWorkload(const Params &p) : KernelWorkload(p),
+    smbiosTable(p.smbios_table),
+    mpFloatingPointer(p.intel_mp_pointer),
+    mpConfigTable(p.intel_mp_table),
+    rsdp(p.acpi_description_table_pointer)
 {}
 
 void
@@ -106,7 +106,7 @@ FsWorkload::initState()
 {
     KernelWorkload::initState();
 
-    for (auto *tc: system->threadContexts) {
+    for (auto *tc: system->threads) {
         X86ISA::InitInterrupt(0).invoke(tc);
 
         if (tc->contextId() == 0) {
@@ -124,7 +124,7 @@ FsWorkload::initState()
     fatal_if(kernelObj->getArch() == Loader::I386,
              "Loading a 32 bit x86 kernel is not supported.");
 
-    ThreadContext *tc = system->threadContexts[0];
+    ThreadContext *tc = system->threads[0];
     auto phys_proxy = system->physProxy;
 
     // This is the boot strap processor (BSP). Initialize it to look like
@@ -189,6 +189,12 @@ FsWorkload::initState()
 
     // 32 bit data segment
     SegDescriptor dsDesc = initDesc;
+    dsDesc.type.e = 0;
+    dsDesc.type.w = 1;
+    dsDesc.d = 1;
+    dsDesc.baseHigh = 0;
+    dsDesc.baseLow = 0;
+
     uint64_t dsDescVal = dsDesc;
     phys_proxy.writeBlob(GDTBase + numGDTEntries * 8, (&dsDescVal), 8);
 
@@ -204,10 +210,16 @@ FsWorkload::initState()
     tc->setMiscReg(MISCREG_SS, (RegVal)ds);
 
     tc->setMiscReg(MISCREG_TSL, 0);
+    SegAttr ldtAttr = 0;
+    ldtAttr.unusable = 1;
+    tc->setMiscReg(MISCREG_TSL_ATTR, ldtAttr);
     tc->setMiscReg(MISCREG_TSG_BASE, GDTBase);
     tc->setMiscReg(MISCREG_TSG_LIMIT, 8 * numGDTEntries - 1);
 
     SegDescriptor tssDesc = initDesc;
+    tssDesc.type = 0xB;
+    tssDesc.s = 0;
+
     uint64_t tssDescVal = tssDesc;
     phys_proxy.writeBlob(GDTBase + numGDTEntries * 8, (&tssDescVal), 8);
 
@@ -369,9 +381,3 @@ FsWorkload::writeOutMPTable(Addr fp, Addr &fpSize, Addr &tableSize, Addr table)
 }
 
 } // namespace X86ISA
-
-X86ISA::FsWorkload *
-X86FsWorkloadParams::create()
-{
-    return new X86ISA::FsWorkload(this);
-}

@@ -41,42 +41,13 @@
 #include <sstream>
 #include <typeinfo>
 
+#include "base/trace.hh"
 #include "debug/MinorTiming.hh"
 #include "enums/OpClass.hh"
 
-MinorOpClass *
-MinorOpClassParams::create()
-{
-    return new MinorOpClass(this);
-}
-
-MinorOpClassSet *
-MinorOpClassSetParams::create()
-{
-    return new MinorOpClassSet(this);
-}
-
-MinorFUTiming *
-MinorFUTimingParams::create()
-{
-    return new MinorFUTiming(this);
-}
-
-MinorFU *
-MinorFUParams::create()
-{
-    return new MinorFU(this);
-}
-
-MinorFUPool *
-MinorFUPoolParams::create()
-{
-    return new MinorFUPool(this);
-}
-
-MinorOpClassSet::MinorOpClassSet(const MinorOpClassSetParams *params) :
+MinorOpClassSet::MinorOpClassSet(const MinorOpClassSetParams &params) :
     SimObject(params),
-    opClasses(params->opClasses),
+    opClasses(params.opClasses),
     /* Initialise to true for an empty list so that 'fully capable' is
      *  the default */
     capabilityList(Num_OpClasses, (opClasses.empty() ? true : false))
@@ -86,17 +57,17 @@ MinorOpClassSet::MinorOpClassSet(const MinorOpClassSetParams *params) :
 }
 
 MinorFUTiming::MinorFUTiming(
-    const MinorFUTimingParams *params) :
+    const MinorFUTimingParams &params) :
     SimObject(params),
-    mask(params->mask),
-    match(params->match),
-    description(params->description),
-    suppress(params->suppress),
-    extraCommitLat(params->extraCommitLat),
-    extraCommitLatExpr(params->extraCommitLatExpr),
-    extraAssumedLat(params->extraAssumedLat),
-    srcRegsRelativeLats(params->srcRegsRelativeLats),
-    opClasses(params->opClasses)
+    mask(params.mask),
+    match(params.match),
+    description(params.description),
+    suppress(params.suppress),
+    extraCommitLat(params.extraCommitLat),
+    extraCommitLatExpr(params.extraCommitLatExpr),
+    extraAssumedLat(params.extraAssumedLat),
+    srcRegsRelativeLats(params.srcRegsRelativeLats),
+    opClasses(params.opClasses)
 { }
 
 namespace Minor
@@ -200,13 +171,12 @@ FUPipeline::advance()
 MinorFUTiming *
 FUPipeline::findTiming(const StaticInstPtr &inst)
 {
-#if THE_ISA == ARM_ISA
-    /* This should work for any ISA with a POD mach_inst */
-    TheISA::ExtMachInst mach_inst = inst->machInst;
-#else
-    /* Just allow extra decode based on op classes */
-    uint64_t mach_inst = 0;
-#endif
+    /*
+     * This will only work on ISAs with an instruction format with a fixed size
+     * which can be categorized using bit masks. This is really only supported
+     * on ARM and is a bit of a hack.
+     */
+    uint64_t mach_inst = inst->getEMI();
 
     const std::vector<MinorFUTiming *> &timings =
         description.timings;

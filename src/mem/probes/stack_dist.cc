@@ -40,56 +40,51 @@
 #include "params/StackDistProbe.hh"
 #include "sim/system.hh"
 
-StackDistProbe::StackDistProbe(StackDistProbeParams *p)
+StackDistProbe::StackDistProbe(const StackDistProbeParams &p)
     : BaseMemProbe(p),
-      lineSize(p->line_size),
-      disableLinearHists(p->disable_linear_hists),
-      disableLogHists(p->disable_log_hists),
-      calc(p->verify)
+      lineSize(p.line_size),
+      disableLinearHists(p.disable_linear_hists),
+      disableLogHists(p.disable_log_hists),
+      calc(p.verify),
+      stats(this)
 {
-    fatal_if(p->system->cacheLineSize() > p->line_size,
+    fatal_if(p.system->cacheLineSize() > p.line_size,
              "The stack distance probe must use a cache line size that is "
              "larger or equal to the system's cahce line size.");
 }
 
-void
-StackDistProbe::regStats()
+StackDistProbe::
+StackDistProbeStats::StackDistProbeStats(StackDistProbe *parent)
+    : Stats::Group(parent),
+      ADD_STAT(readLinearHist, UNIT_COUNT, "Reads linear distribution"),
+      ADD_STAT(readLogHist, UNIT_RATIO, "Reads logarithmic distribution"),
+      ADD_STAT(writeLinearHist, UNIT_COUNT, "Writes linear distribution"),
+      ADD_STAT(writeLogHist, UNIT_RATIO, "Writes logarithmic distribution"),
+      ADD_STAT(infiniteSD, UNIT_COUNT,
+               "Number of requests with infinite stack distance")
 {
-    BaseMemProbe::regStats();
-
-    const StackDistProbeParams *p(
-        dynamic_cast<const StackDistProbeParams *>(params()));
-    assert(p);
-
     using namespace Stats;
 
+    const StackDistProbeParams &p =
+        dynamic_cast<const StackDistProbeParams &>(parent->params());
+
     readLinearHist
-        .init(p->linear_hist_bins)
-        .name(name() + ".readLinearHist")
-        .desc("Reads linear distribution")
-        .flags(disableLinearHists ? nozero : pdf);
+        .init(p.linear_hist_bins)
+        .flags(parent->disableLinearHists ? nozero : pdf);
 
     readLogHist
-        .init(p->log_hist_bins)
-        .name(name() + ".readLogHist")
-        .desc("Reads logarithmic distribution")
-        .flags(disableLogHists ? nozero : pdf);
+        .init(p.log_hist_bins)
+        .flags(parent->disableLogHists ? nozero : pdf);
 
     writeLinearHist
-        .init(p->linear_hist_bins)
-        .name(name() + ".writeLinearHist")
-        .desc("Writes linear distribution")
-        .flags(disableLinearHists ? nozero : pdf);
+        .init(p.linear_hist_bins)
+        .flags(parent->disableLinearHists ? nozero : pdf);
 
     writeLogHist
-        .init(p->log_hist_bins)
-        .name(name() + ".writeLogHist")
-        .desc("Writes logarithmic distribution")
-        .flags(disableLogHists ? nozero : pdf);
+        .init(p.log_hist_bins)
+        .flags(parent->disableLogHists ? nozero : pdf);
 
     infiniteSD
-        .name(name() + ".infinity")
-        .desc("Number of requests with infinite stack distance")
         .flags(nozero);
 }
 
@@ -107,16 +102,16 @@ StackDistProbe::handleRequest(const ProbePoints::PacketInfo &pkt_info)
     // Calculate the stack distance
     const uint64_t sd(calc.calcStackDistAndUpdate(aligned_addr).first);
     if (sd == StackDistCalc::Infinity) {
-        infiniteSD++;
+        stats.infiniteSD++;
         return;
     }
 
     // Sample the stack distance of the address in linear bins
     if (!disableLinearHists) {
         if (pkt_info.cmd.isRead())
-            readLinearHist.sample(sd);
+            stats.readLinearHist.sample(sd);
         else
-            writeLinearHist.sample(sd);
+            stats.writeLinearHist.sample(sd);
     }
 
     if (!disableLogHists) {
@@ -124,15 +119,8 @@ StackDistProbe::handleRequest(const ProbePoints::PacketInfo &pkt_info)
 
         // Sample the stack distance of the address in log bins
         if (pkt_info.cmd.isRead())
-            readLogHist.sample(sd_lg2);
+            stats.readLogHist.sample(sd_lg2);
         else
-            writeLogHist.sample(sd_lg2);
+            stats.writeLogHist.sample(sd_lg2);
     }
-}
-
-
-StackDistProbe *
-StackDistProbeParams::create()
-{
-    return new StackDistProbe(this);
 }

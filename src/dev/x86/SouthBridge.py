@@ -33,6 +33,7 @@ from m5.objects.I8237 import I8237
 from m5.objects.I8254 import I8254
 from m5.objects.I8259 import I8259
 from m5.objects.Ide import IdeController
+from m5.objects.PciDevice import PciLegacyIoBar, PciIoBar
 from m5.objects.PcSpeaker import PcSpeaker
 from m5.SimObject import SimObject
 
@@ -66,22 +67,14 @@ class SouthBridge(SimObject):
 
     # IDE controller
     ide = IdeController(disks=[], pci_func=0, pci_dev=4, pci_bus=0)
-    ide.BAR0 = 0x1f0
-    ide.BAR0LegacyIO = True
-    ide.BAR1 = 0x3f4
-    ide.BAR1Size = '3B'
-    ide.BAR1LegacyIO = True
-    ide.BAR2 = 0x170
-    ide.BAR2LegacyIO = True
-    ide.BAR3 = 0x374
-    ide.BAR3Size = '3B'
-    ide.BAR3LegacyIO = True
-    ide.BAR4 = 1
+    ide.BAR0 = PciLegacyIoBar(addr=0x1f0, size='8B')
+    ide.BAR1 = PciLegacyIoBar(addr=0x3f4, size='3B')
+    ide.BAR2 = PciLegacyIoBar(addr=0x170, size='8B')
+    ide.BAR3 = PciLegacyIoBar(addr=0x374, size='3B')
     ide.Command = 0
     ide.ProgIF = 0x80
     ide.InterruptLine = 14
     ide.InterruptPin = 1
-    ide.LegacyIOBase = x86IOAddress(0)
 
     def attachIO(self, bus, dma_ports):
         # Route interrupt signals
@@ -97,15 +90,15 @@ class SouthBridge(SimObject):
         self.speaker.i8254 = self.pit
         self.io_apic.external_int_pic = self.pic1
         # Connect to the bus
-        self.cmos.pio = bus.master
-        self.dma1.pio = bus.master
-        self.ide.pio = bus.master
+        self.cmos.pio = bus.mem_side_ports
+        self.dma1.pio = bus.mem_side_ports
+        self.ide.pio = bus.mem_side_ports
         if dma_ports.count(self.ide.dma) == 0:
-                self.ide.dma = bus.slave
-        self.keyboard.pio = bus.master
-        self.pic1.pio = bus.master
-        self.pic2.pio = bus.master
-        self.pit.pio = bus.master
-        self.speaker.pio = bus.master
-        self.io_apic.pio = bus.master
-        self.io_apic.int_master = bus.slave
+                self.ide.dma = bus.cpu_side_ports
+        self.keyboard.pio = bus.mem_side_ports
+        self.pic1.pio = bus.mem_side_ports
+        self.pic2.pio = bus.mem_side_ports
+        self.pit.pio = bus.mem_side_ports
+        self.speaker.pio = bus.mem_side_ports
+        self.io_apic.pio = bus.mem_side_ports
+        self.io_apic.int_requestor = bus.cpu_side_ports

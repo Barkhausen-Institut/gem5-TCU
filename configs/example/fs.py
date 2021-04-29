@@ -1,4 +1,4 @@
-# Copyright (c) 2010-2013, 2016, 2019 ARM Limited
+# Copyright (c) 2010-2013, 2016, 2019-2020 ARM Limited
 # Copyright (c) 2020 Barkhausen Institut
 # All rights reserved.
 #
@@ -38,9 +38,6 @@
 # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-from __future__ import print_function
-from __future__ import absolute_import
 
 import optparse
 import sys
@@ -172,17 +169,7 @@ def build_test_system(np):
             cpu.createThreads()
             cpu.createInterruptController()
 
-            cpu.icache_port = test_sys.ruby._cpu_ports[i].slave
-            cpu.dcache_port = test_sys.ruby._cpu_ports[i].slave
-
-            if buildEnv['TARGET_ISA'] in ("x86", "arm"):
-                cpu.itb.walker.port = test_sys.ruby._cpu_ports[i].slave
-                cpu.dtb.walker.port = test_sys.ruby._cpu_ports[i].slave
-
-            if buildEnv['TARGET_ISA'] in "x86":
-                cpu.interrupts[0].pio = test_sys.ruby._cpu_ports[i].master
-                cpu.interrupts[0].int_master = test_sys.ruby._cpu_ports[i].slave
-                cpu.interrupts[0].int_slave = test_sys.ruby._cpu_ports[i].master
+            test_sys.ruby._cpu_ports[i].connectCpuPorts(cpu)
 
     else:
         if options.caches or options.l2cache:
@@ -369,8 +356,11 @@ if options.frame_capture:
 
 if buildEnv['TARGET_ISA'] == "arm" and not options.bare_metal \
         and not options.dtb_filename:
-    if options.machine_type not in ["VExpress_GEM5", "VExpress_GEM5_V1"]:
-        warn("Can only correctly generate a dtb for VExpress_GEM5_V1 " \
+    if options.machine_type not in ["VExpress_GEM5",
+                                    "VExpress_GEM5_V1",
+                                    "VExpress_GEM5_V2",
+                                    "VExpress_GEM5_Foundation"]:
+        warn("Can only correctly generate a dtb for VExpress_GEM5_* " \
              "platforms, unless custom hardware models have been equipped "\
              "with generation functionality.")
 

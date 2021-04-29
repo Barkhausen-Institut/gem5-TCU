@@ -49,7 +49,7 @@ class TcuPciProxy;
 class TcuPciHost : public PciHost
 {
   public:
-    TcuPciHost(const TcuPciHostParams* p);
+    TcuPciHost(const TcuPciHostParams &p);
     virtual ~TcuPciHost();
 
   public: // PioDevice

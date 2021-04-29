@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014 ARM Limited
+ * Copyright (c) 2012, 2014, 2020 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -45,6 +45,7 @@
 #include <memory>
 #include <set>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "base/statistics.hh"
 #include "cpu/inst_seq.hh"
@@ -84,12 +85,13 @@ class MemDepUnit
   public:
     typedef typename Impl::DynInstPtr DynInstPtr;
     typedef typename Impl::DynInstConstPtr DynInstConstPtr;
+    typedef typename Impl::O3CPU O3CPU;
 
     /** Empty constructor. Must call init() prior to using in this case. */
     MemDepUnit();
 
     /** Constructs a MemDepUnit with given parameters. */
-    MemDepUnit(DerivO3CPUParams *params);
+    MemDepUnit(const DerivO3CPUParams &params);
 
     /** Frees up any memory allocated. */
     ~MemDepUnit();
@@ -98,10 +100,7 @@ class MemDepUnit
     std::string name() const { return _name; }
 
     /** Initializes the unit with parameters and a thread id. */
-    void init(DerivO3CPUParams *params, ThreadID tid);
-
-    /** Registers statistics. */
-    void regStats();
+    void init(const DerivO3CPUParams &params, ThreadID tid, O3CPU *cpu);
 
     /** Determine if we are drained. */
     bool isDrained() const;
@@ -138,14 +137,8 @@ class MemDepUnit
      */
     void replay();
 
-    /** Completes a memory instruction. */
-    void completed(const DynInstPtr &inst);
-
-    /** Completes a barrier instruction. */
-    void completeBarrier(const DynInstPtr &inst);
-
-    /** Wakes any dependents of a memory instruction. */
-    void wakeDependents(const DynInstPtr &inst);
+    /** Notifies completion of an instruction. */
+    void completeInst(const DynInstPtr &inst);
 
     /** Squashes all instructions up until a given sequence number for a
      *  specific thread.
@@ -163,6 +156,13 @@ class MemDepUnit
     void dumpLists();
 
   private:
+
+    /** Completes a memory instruction. */
+    void completed(const DynInstPtr &inst);
+
+    /** Wakes any dependents of a memory instruction. */
+    void wakeDependents(const DynInstPtr &inst);
+
     typedef typename std::list<DynInstPtr>::iterator ListIt;
 
     class MemDepEntry;
@@ -177,7 +177,7 @@ class MemDepUnit
       public:
         /** Constructs a memory dependence entry. */
         MemDepEntry(const DynInstPtr &new_inst)
-            : inst(new_inst), regsReady(false), memDepReady(false),
+            : inst(new_inst), regsReady(false), memDeps(0),
               completed(false), squashed(false)
         {
 #ifdef DEBUG
@@ -216,8 +216,8 @@ class MemDepUnit
 
         /** If the registers are ready or not. */
         bool regsReady;
-        /** If all memory dependencies have been satisfied. */
-        bool memDepReady;
+        /** Number of memory dependencies that need to be satisfied. */
+        int memDeps;
         /** If the instruction is completed. */
         bool completed;
         /** If the instruction is squashed. */
@@ -257,29 +257,40 @@ class MemDepUnit
      */
     MemDepPred depPred;
 
+    /** Sequence numbers of outstanding load barriers. */
+    std::unordered_set<InstSeqNum> loadBarrierSNs;
+
+    /** Sequence numbers of outstanding store barriers. */
+    std::unordered_set<InstSeqNum> storeBarrierSNs;
+
     /** Is there an outstanding load barrier that loads must wait on. */
-    bool loadBarrier;
-    /** The sequence number of the load barrier. */
-    InstSeqNum loadBarrierSN;
+    bool hasLoadBarrier() const { return !loadBarrierSNs.empty(); }
+
     /** Is there an outstanding store barrier that loads must wait on. */
-    bool storeBarrier;
-    /** The sequence number of the store barrier. */
-    InstSeqNum storeBarrierSN;
+    bool hasStoreBarrier() const { return !storeBarrierSNs.empty(); }
+
+    /** Inserts the SN of a barrier inst. to the list of tracked barriers */
+    void insertBarrierSN(const DynInstPtr &barr_inst);
 
     /** Pointer to the IQ. */
     InstructionQueue<Impl> *iqPtr;
 
     /** The thread id of this memory dependence unit. */
     int id;
-
-    /** Stat for number of inserted loads. */
-    Stats::Scalar insertedLoads;
-    /** Stat for number of inserted stores. */
-    Stats::Scalar insertedStores;
-    /** Stat for number of conflicting loads that had to wait for a store. */
-    Stats::Scalar conflictingLoads;
-    /** Stat for number of conflicting stores that had to wait for a store. */
-    Stats::Scalar conflictingStores;
+    struct MemDepUnitStats : public Stats::Group
+    {
+        MemDepUnitStats(Stats::Group *parent);
+        /** Stat for number of inserted loads. */
+        Stats::Scalar insertedLoads;
+        /** Stat for number of inserted stores. */
+        Stats::Scalar insertedStores;
+        /** Stat for number of conflicting loads that had to wait for a
+         *  store. */
+        Stats::Scalar conflictingLoads;
+        /** Stat for number of conflicting stores that had to wait for a
+         *  store. */
+        Stats::Scalar conflictingStores;
+    } stats;
 };
 
 #endif // __CPU_O3_MEM_DEP_UNIT_HH__

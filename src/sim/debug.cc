@@ -33,14 +33,12 @@
 
 #include "base/debug.hh"
 #include "cpu/pc_event.hh"
-#include "sim/eventq_impl.hh"
+#include "sim/eventq.hh"
 #include "sim/global_event.hh"
 #include "sim/kernel_workload.hh"
 #include "sim/sim_events.hh"
 #include "sim/sim_exit.hh"
 #include "sim/system.hh"
-
-using namespace std;
 
 //
 // Debug event: place a breakpoint on the process function and

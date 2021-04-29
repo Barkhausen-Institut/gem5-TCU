@@ -42,28 +42,29 @@
 #include "debug/Fetch.hh"
 #include "debug/Tage.hh"
 
-TAGEBase::TAGEBase(const TAGEBaseParams *p)
+TAGEBase::TAGEBase(const TAGEBaseParams &p)
    : SimObject(p),
-     logRatioBiModalHystEntries(p->logRatioBiModalHystEntries),
-     nHistoryTables(p->nHistoryTables),
-     tagTableCounterBits(p->tagTableCounterBits),
-     tagTableUBits(p->tagTableUBits),
-     histBufferSize(p->histBufferSize),
-     minHist(p->minHist),
-     maxHist(p->maxHist),
-     pathHistBits(p->pathHistBits),
-     tagTableTagWidths(p->tagTableTagWidths),
-     logTagTableSizes(p->logTagTableSizes),
-     threadHistory(p->numThreads),
-     logUResetPeriod(p->logUResetPeriod),
-     initialTCounterValue(p->initialTCounterValue),
-     numUseAltOnNa(p->numUseAltOnNa),
-     useAltOnNaBits(p->useAltOnNaBits),
-     maxNumAlloc(p->maxNumAlloc),
-     noSkip(p->noSkip),
-     speculativeHistUpdate(p->speculativeHistUpdate),
-     instShiftAmt(p->instShiftAmt),
-     initialized(false)
+     logRatioBiModalHystEntries(p.logRatioBiModalHystEntries),
+     nHistoryTables(p.nHistoryTables),
+     tagTableCounterBits(p.tagTableCounterBits),
+     tagTableUBits(p.tagTableUBits),
+     histBufferSize(p.histBufferSize),
+     minHist(p.minHist),
+     maxHist(p.maxHist),
+     pathHistBits(p.pathHistBits),
+     tagTableTagWidths(p.tagTableTagWidths),
+     logTagTableSizes(p.logTagTableSizes),
+     threadHistory(p.numThreads),
+     logUResetPeriod(p.logUResetPeriod),
+     initialTCounterValue(p.initialTCounterValue),
+     numUseAltOnNa(p.numUseAltOnNa),
+     useAltOnNaBits(p.useAltOnNaBits),
+     maxNumAlloc(p.maxNumAlloc),
+     noSkip(p.noSkip),
+     speculativeHistUpdate(p.speculativeHistUpdate),
+     instShiftAmt(p.instShiftAmt),
+     initialized(false),
+     stats(this, nHistoryTables)
 {
     if (noSkip.empty()) {
         // Set all the table to enabled by default
@@ -82,6 +83,7 @@ TAGEBase::init()
     if (initialized) {
        return;
     }
+
     // Current method for periodically resetting the u counter bits only
     // works for 1 or 2 bits
     // Also make sure that it is not 0
@@ -465,7 +467,7 @@ TAGEBase::handleAllocAndUReset(bool alloc, bool taken, BranchInfo* bi,
         //Allocate entries
         unsigned numAllocated = 0;
         for (int i = X; i <= nHistoryTables; i++) {
-            if ((gtable[i][bi->tableIndices[i]].u == 0)) {
+            if (gtable[i][bi->tableIndices[i]].u == 0) {
                 gtable[i][bi->tableIndices[i]].tag = bi->tableTags[i];
                 gtable[i][bi->tableIndices[i]].ctr = (taken) ? 0 : -1;
                 ++numAllocated;
@@ -656,26 +658,28 @@ TAGEBase::updateStats(bool taken, BranchInfo* bi)
     if (taken == bi->tagePred) {
         // correct prediction
         switch (bi->provider) {
-          case BIMODAL_ONLY: tageBimodalProviderCorrect++; break;
-          case TAGE_LONGEST_MATCH: tageLongestMatchProviderCorrect++; break;
-          case BIMODAL_ALT_MATCH: bimodalAltMatchProviderCorrect++; break;
-          case TAGE_ALT_MATCH: tageAltMatchProviderCorrect++; break;
+          case BIMODAL_ONLY: stats.bimodalProviderCorrect++; break;
+          case TAGE_LONGEST_MATCH: stats.longestMatchProviderCorrect++; break;
+          case BIMODAL_ALT_MATCH:
+            stats.bimodalAltMatchProviderCorrect++;
+            break;
+          case TAGE_ALT_MATCH: stats.altMatchProviderCorrect++; break;
         }
     } else {
         // wrong prediction
         switch (bi->provider) {
-          case BIMODAL_ONLY: tageBimodalProviderWrong++; break;
+          case BIMODAL_ONLY: stats.bimodalProviderWrong++; break;
           case TAGE_LONGEST_MATCH:
-            tageLongestMatchProviderWrong++;
+            stats.longestMatchProviderWrong++;
             if (bi->altTaken == taken) {
-                tageAltMatchProviderWouldHaveHit++;
+                stats.altMatchProviderWouldHaveHit++;
             }
             break;
           case BIMODAL_ALT_MATCH:
-            bimodalAltMatchProviderWrong++;
+            stats.bimodalAltMatchProviderWrong++;
             break;
           case TAGE_ALT_MATCH:
-            tageAltMatchProviderWrong++;
+            stats.altMatchProviderWrong++;
             break;
         }
 
@@ -683,7 +687,7 @@ TAGEBase::updateStats(bool taken, BranchInfo* bi)
           case BIMODAL_ALT_MATCH:
           case TAGE_ALT_MATCH:
             if (bi->longestMatchPred == taken) {
-                tageLongestMatchProviderWouldHaveHit++;
+                stats.longestMatchProviderWouldHaveHit++;
             }
         }
     }
@@ -691,8 +695,8 @@ TAGEBase::updateStats(bool taken, BranchInfo* bi)
     switch (bi->provider) {
       case TAGE_LONGEST_MATCH:
       case TAGE_ALT_MATCH:
-        tageLongestMatchProvider[bi->hitBank]++;
-        tageAltMatchProvider[bi->altBank]++;
+        stats.longestMatchProvider[bi->hitBank]++;
+        stats.altMatchProvider[bi->altBank]++;
         break;
     }
 }
@@ -712,68 +716,45 @@ TAGEBase::getGHR(ThreadID tid, BranchInfo *bi) const
     return val;
 }
 
-void
-TAGEBase::regStats()
+TAGEBase::TAGEBaseStats::TAGEBaseStats(
+    Stats::Group *parent, unsigned nHistoryTables)
+    : Stats::Group(parent),
+      ADD_STAT(longestMatchProviderCorrect, UNIT_COUNT,
+               "Number of times TAGE Longest Match is the provider and the "
+               "prediction is correct"),
+      ADD_STAT(altMatchProviderCorrect, UNIT_COUNT,
+               "Number of times TAGE Alt Match is the provider and the "
+               "prediction is correct"),
+      ADD_STAT(bimodalAltMatchProviderCorrect, UNIT_COUNT,
+               "Number of times TAGE Alt Match is the bimodal and it is the "
+               "provider and the prediction is correct"),
+      ADD_STAT(bimodalProviderCorrect, UNIT_COUNT,
+               "Number of times there are no hits on the TAGE tables and the "
+               "bimodal prediction is correct"),
+      ADD_STAT(longestMatchProviderWrong, UNIT_COUNT,
+               "Number of times TAGE Longest Match is the provider and the "
+               "prediction is wrong"),
+      ADD_STAT(altMatchProviderWrong, UNIT_COUNT,
+               "Number of times TAGE Alt Match is the provider and the "
+               "prediction is wrong"),
+      ADD_STAT(bimodalAltMatchProviderWrong, UNIT_COUNT,
+               "Number of times TAGE Alt Match is the bimodal and it is the "
+               "provider and the prediction is wrong"),
+      ADD_STAT(bimodalProviderWrong, UNIT_COUNT,
+               "Number of times there are no hits on the TAGE tables and the "
+               "bimodal prediction is wrong"),
+      ADD_STAT(altMatchProviderWouldHaveHit, UNIT_COUNT,
+               "Number of times TAGE Longest Match is the provider, the "
+               "prediction is wrong and Alt Match prediction was correct"),
+      ADD_STAT(longestMatchProviderWouldHaveHit, UNIT_COUNT,
+               "Number of times TAGE Alt Match is the provider, the "
+               "prediction is wrong and Longest Match prediction was correct"),
+      ADD_STAT(longestMatchProvider, UNIT_COUNT,
+               "TAGE provider for longest match"),
+      ADD_STAT(altMatchProvider, UNIT_COUNT, "TAGE provider for alt match")
 {
-    tageLongestMatchProviderCorrect
-        .name(name() + ".tageLongestMatchProviderCorrect")
-        .desc("Number of times TAGE Longest Match is the provider and "
-              "the prediction is correct");
-
-    tageAltMatchProviderCorrect
-        .name(name() + ".tageAltMatchProviderCorrect")
-        .desc("Number of times TAGE Alt Match is the provider and "
-              "the prediction is correct");
-
-    bimodalAltMatchProviderCorrect
-        .name(name() + ".bimodalAltMatchProviderCorrect")
-        .desc("Number of times TAGE Alt Match is the bimodal and it is the "
-              "provider and the prediction is correct");
-
-    tageBimodalProviderCorrect
-        .name(name() + ".tageBimodalProviderCorrect")
-        .desc("Number of times there are no hits on the TAGE tables "
-              "and the bimodal prediction is correct");
-
-    tageLongestMatchProviderWrong
-        .name(name() + ".tageLongestMatchProviderWrong")
-        .desc("Number of times TAGE Longest Match is the provider and "
-              "the prediction is wrong");
-
-    tageAltMatchProviderWrong
-        .name(name() + ".tageAltMatchProviderWrong")
-        .desc("Number of times TAGE Alt Match is the provider and "
-              "the prediction is wrong");
-
-    bimodalAltMatchProviderWrong
-        .name(name() + ".bimodalAltMatchProviderWrong")
-        .desc("Number of times TAGE Alt Match is the bimodal and it is the "
-              "provider and the prediction is wrong");
-
-    tageBimodalProviderWrong
-        .name(name() + ".tageBimodalProviderWrong")
-        .desc("Number of times there are no hits on the TAGE tables "
-              "and the bimodal prediction is wrong");
-
-    tageAltMatchProviderWouldHaveHit
-        .name(name() + ".tageAltMatchProviderWouldHaveHit")
-        .desc("Number of times TAGE Longest Match is the provider, "
-              "the prediction is wrong and Alt Match prediction was correct");
-
-    tageLongestMatchProviderWouldHaveHit
-        .name(name() + ".tageLongestMatchProviderWouldHaveHit")
-        .desc("Number of times TAGE Alt Match is the provider, the "
-              "prediction is wrong and Longest Match prediction was correct");
-
-    tageLongestMatchProvider
-        .init(nHistoryTables + 1)
-        .name(name() + ".tageLongestMatchProvider")
-        .desc("TAGE provider for longest match");
-
-    tageAltMatchProvider
-        .init(nHistoryTables + 1)
-        .name(name() + ".tageAltMatchProvider")
-        .desc("TAGE provider for alt match");
+    longestMatchProvider.init(nHistoryTables + 1);
+    altMatchProvider.init(nHistoryTables + 1);
 }
 
 int8_t
@@ -815,10 +796,4 @@ TAGEBase::getSizeInBits() const {
     bits += pathHistBits;
     bits += logUResetPeriod;
     return bits;
-}
-
-TAGEBase*
-TAGEBaseParams::create()
-{
-    return new TAGEBase(this);
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 ARM Limited
+ * Copyright (c) 2019,2021 ARM Limited
  * All rights reserved.
  *
  * The license below extends only to copyright in the software and shall
@@ -44,17 +44,15 @@
 
 #include "mem/ruby/slicc_interface/RubySlicc_Util.hh"
 
-using namespace std;
-
 void
-RubyRequest::print(ostream& out) const
+RubyRequest::print(std::ostream& out) const
 {
   out << "[RubyRequest: ";
-  out << hex << "LineAddress = 0x" << m_LineAddress << dec << " ";
-  out << hex << "PhysicalAddress = 0x" << m_PhysicalAddress << dec << " ";
-  out << "Type = " << m_Type << " ";
-  out << hex << "ProgramCounter = 0x" << m_ProgramCounter << dec << " ";
-  out << "AccessMode = " << m_AccessMode << " ";
+  out << std::hex << "LineAddress = 0x" << m_LineAddress << std::dec << " ";
+  out << std::hex << "PhysicalAddress = 0x" << m_PhysicalAddress;
+  out << std::dec << " " << "Type = " << m_Type << " ";
+  out << std::hex << "ProgramCounter = 0x" << m_ProgramCounter << std::dec;
+  out << " " << "AccessMode = " << m_AccessMode << " ";
   out << "Size = " << m_Size << " ";
   out << "Prefetch = " << m_Prefetch << " ";
 //  out << "Time = " << getTime() << " ";
@@ -72,6 +70,12 @@ RubyRequest::functionalRead(Packet *pkt)
 }
 
 bool
+RubyRequest::functionalRead(Packet *pkt, WriteMask &mask)
+{
+    return false;
+}
+
+bool
 RubyRequest::functionalWrite(Packet *pkt)
 {
     // This needs a little explanation. I am not sure if this message
@@ -81,8 +85,17 @@ RubyRequest::functionalWrite(Packet *pkt)
     // has to overwrite the data for the timing request, even if the
     // timing request has still not been ordered globally.
 
-    if (!data)
-      return false;
+    if (!pkt->hasData() || !m_pkt->hasData())
+        return false;
+
+    uint8_t *data =  m_pkt->getPtr<uint8_t>();
+
+    if (pkt->isMaskedWrite() || m_pkt->isMaskedWrite()) {
+        warn("Skiping functional write to/from a masked write packet"
+            " (addr: %#x, other addr: %#x).\n", m_PhysicalAddress,
+              pkt->getAddr());
+        return false;
+    }
 
     Addr wBase = pkt->getAddr();
     Addr wTail = wBase + pkt->getSize();

@@ -34,42 +34,36 @@
 #include "cpu/minor/cpu.hh"
 #include "sim/process.hh"
 
-CoreConnector::CoreConnector(const CoreConnectorParams *p)
+CoreConnector::CoreConnector(const CoreConnectorParams &p)
   : BaseConnector(p),
-    system(p->system)
+    system(p.system)
 {
 }
 
 void
 CoreConnector::wakeup()
 {
-    if (system->threadContexts.size() == 0)
+    if (system->threads.empty())
         return;
 
-    if (system->threadContexts[0]->status() == ThreadContext::Suspended)
+    if (system->threads[0]->status() == ThreadContext::Suspended)
     {
         DPRINTF(TcuConnector, "Waking up core\n");
-        system->threadContexts[0]->activate();
+        system->threads[0]->activate();
     }
 }
 
 void
 CoreConnector::suspend()
 {
-    if (system->threadContexts.size() == 0)
+    if (system->threads.empty())
         return;
-    if (dynamic_cast<MinorCPU*>(system->threadContexts[0]->getCpuPtr()))
+    if (dynamic_cast<MinorCPU*>(system->threads[0]->getCpuPtr()))
         return;
 
-    if (system->threadContexts[0]->status() == ThreadContext::Active)
+    if (system->threads[0]->status() == ThreadContext::Active)
     {
         DPRINTF(TcuConnector, "Suspending core\n");
-        system->threadContexts[0]->suspend();
+        system->threads[0]->suspend();
     }
-}
-
-CoreConnector*
-CoreConnectorParams::create()
-{
-    return new CoreConnector(this);
 }

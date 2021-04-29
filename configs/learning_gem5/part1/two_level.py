@@ -38,9 +38,6 @@ IMPORTANT: If you modify this file, it's likely that the Learning gem5 book
 
 """
 
-from __future__ import print_function
-from __future__ import absolute_import
-
 # import the m5 (gem5) library created when gem5 is built
 import m5
 # import all of the SimObjects
@@ -132,9 +129,12 @@ if m5.defines.buildEnv['TARGET_ISA'] == "x86":
 system.system_port = system.membus.slave
 
 # Create a DDR3 memory controller
-system.mem_ctrl = DDR3_1600_8x8()
-system.mem_ctrl.range = system.mem_ranges[0]
+system.mem_ctrl = MemCtrl()
+system.mem_ctrl.dram = DDR3_1600_8x8()
+system.mem_ctrl.dram.range = system.mem_ranges[0]
 system.mem_ctrl.port = system.membus.master
+
+system.workload = SEWorkload.init_compatible(binary)
 
 # Create a process for a simple "Hello World" application
 process = Process()

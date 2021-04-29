@@ -57,14 +57,15 @@
 using std::list;
 
 template<class Impl>
-DefaultDecode<Impl>::DefaultDecode(O3CPU *_cpu, DerivO3CPUParams *params)
+DefaultDecode<Impl>::DefaultDecode(O3CPU *_cpu, const DerivO3CPUParams &params)
     : cpu(_cpu),
-      renameToDecodeDelay(params->renameToDecodeDelay),
-      iewToDecodeDelay(params->iewToDecodeDelay),
-      commitToDecodeDelay(params->commitToDecodeDelay),
-      fetchToDecodeDelay(params->fetchToDecodeDelay),
-      decodeWidth(params->decodeWidth),
-      numThreads(params->numThreads)
+      renameToDecodeDelay(params.renameToDecodeDelay),
+      iewToDecodeDelay(params.iewToDecodeDelay),
+      commitToDecodeDelay(params.commitToDecodeDelay),
+      fetchToDecodeDelay(params.fetchToDecodeDelay),
+      decodeWidth(params.decodeWidth),
+      numThreads(params.numThreads),
+      stats(_cpu)
 {
     if (decodeWidth > Impl::MaxWidth)
         fatal("decodeWidth (%d) is larger than compiled limit (%d),\n"
@@ -72,7 +73,7 @@ DefaultDecode<Impl>::DefaultDecode(O3CPU *_cpu, DerivO3CPUParams *params)
              decodeWidth, static_cast<int>(Impl::MaxWidth));
 
     // @todo: Make into a parameter
-    skidBufferMax = (fetchToDecodeDelay + 1) *  params->fetchWidth;
+    skidBufferMax = (fetchToDecodeDelay + 1) *  params.fetchWidth;
     for (int tid = 0; tid < Impl::MaxThreads; tid++) {
         stalls[tid] = {false};
         decodeStatus[tid] = Idle;
@@ -119,50 +120,38 @@ DefaultDecode<Impl>::name() const
 }
 
 template <class Impl>
-void
-DefaultDecode<Impl>::regStats()
+DefaultDecode<Impl>::DecodeStats::DecodeStats(O3CPU *cpu)
+    : Stats::Group(cpu, "decode"),
+      ADD_STAT(idleCycles, UNIT_CYCLE, "Number of cycles decode is idle"),
+      ADD_STAT(blockedCycles, UNIT_CYCLE,
+               "Number of cycles decode is blocked"),
+      ADD_STAT(runCycles, UNIT_CYCLE, "Number of cycles decode is running"),
+      ADD_STAT(unblockCycles, UNIT_CYCLE,
+               "Number of cycles decode is unblocking"),
+      ADD_STAT(squashCycles, UNIT_CYCLE,
+               "Number of cycles decode is squashing"),
+      ADD_STAT(branchResolved, UNIT_COUNT,
+               "Number of times decode resolved a branch"),
+      ADD_STAT(branchMispred, UNIT_COUNT,
+               "Number of times decode detected a branch misprediction"),
+      ADD_STAT(controlMispred, UNIT_COUNT,
+               "Number of times decode detected an instruction incorrectly "
+               "predicted as a control"),
+      ADD_STAT(decodedInsts, UNIT_COUNT,
+               "Number of instructions handled by decode"),
+      ADD_STAT(squashedInsts, UNIT_COUNT,
+               "Number of squashed instructions handled by decode")
 {
-    decodeIdleCycles
-        .name(name() + ".IdleCycles")
-        .desc("Number of cycles decode is idle")
-        .prereq(decodeIdleCycles);
-    decodeBlockedCycles
-        .name(name() + ".BlockedCycles")
-        .desc("Number of cycles decode is blocked")
-        .prereq(decodeBlockedCycles);
-    decodeRunCycles
-        .name(name() + ".RunCycles")
-        .desc("Number of cycles decode is running")
-        .prereq(decodeRunCycles);
-    decodeUnblockCycles
-        .name(name() + ".UnblockCycles")
-        .desc("Number of cycles decode is unblocking")
-        .prereq(decodeUnblockCycles);
-    decodeSquashCycles
-        .name(name() + ".SquashCycles")
-        .desc("Number of cycles decode is squashing")
-        .prereq(decodeSquashCycles);
-    decodeBranchResolved
-        .name(name() + ".BranchResolved")
-        .desc("Number of times decode resolved a branch")
-        .prereq(decodeBranchResolved);
-    decodeBranchMispred
-        .name(name() + ".BranchMispred")
-        .desc("Number of times decode detected a branch misprediction")
-        .prereq(decodeBranchMispred);
-    decodeControlMispred
-        .name(name() + ".ControlMispred")
-        .desc("Number of times decode detected an instruction incorrectly"
-              " predicted as a control")
-        .prereq(decodeControlMispred);
-    decodeDecodedInsts
-        .name(name() + ".DecodedInsts")
-        .desc("Number of instructions handled by decode")
-        .prereq(decodeDecodedInsts);
-    decodeSquashedInsts
-        .name(name() + ".SquashedInsts")
-        .desc("Number of squashed instructions handled by decode")
-        .prereq(decodeSquashedInsts);
+    idleCycles.prereq(idleCycles);
+    blockedCycles.prereq(blockedCycles);
+    runCycles.prereq(runCycles);
+    unblockCycles.prereq(unblockCycles);
+    squashCycles.prereq(squashCycles);
+    branchResolved.prereq(branchResolved);
+    branchMispred.prereq(branchMispred);
+    controlMispred.prereq(controlMispred);
+    decodedInsts.prereq(decodedInsts);
+    squashedInsts.prereq(squashedInsts);
 }
 
 template<class Impl>
@@ -607,9 +596,9 @@ DefaultDecode<Impl>::decode(bool &status_change, ThreadID tid)
     //     check if stall conditions have passed
 
     if (decodeStatus[tid] == Blocked) {
-        ++decodeBlockedCycles;
+        ++stats.blockedCycles;
     } else if (decodeStatus[tid] == Squashing) {
-        ++decodeSquashCycles;
+        ++stats.squashCycles;
     }
 
     // Decode should try to decode as many instructions as its bandwidth
@@ -653,14 +642,14 @@ DefaultDecode<Impl>::decodeInsts(ThreadID tid)
         DPRINTF(Decode, "[tid:%i] Nothing to do, breaking out"
                 " early.\n",tid);
         // Should I change the status to idle?
-        ++decodeIdleCycles;
+        ++stats.idleCycles;
         return;
     } else if (decodeStatus[tid] == Unblocking) {
         DPRINTF(Decode, "[tid:%i] Unblocking, removing insts from skid "
                 "buffer.\n",tid);
-        ++decodeUnblockCycles;
+        ++stats.unblockCycles;
     } else if (decodeStatus[tid] == Running) {
-        ++decodeRunCycles;
+        ++stats.runCycles;
     }
 
     std::queue<DynInstPtr>
@@ -684,7 +673,7 @@ DefaultDecode<Impl>::decodeInsts(ThreadID tid)
                     "squashed, skipping.\n",
                     tid, inst->seqNum, inst->pcState());
 
-            ++decodeSquashedInsts;
+            ++stats.squashedInsts;
 
             --insts_available;
 
@@ -706,7 +695,7 @@ DefaultDecode<Impl>::decodeInsts(ThreadID tid)
 
         ++(toRename->size);
         ++toRenameIndex;
-        ++decodeDecodedInsts;
+        ++stats.decodedInsts;
         --insts_available;
 
 #if TRACING_ON
@@ -720,7 +709,7 @@ DefaultDecode<Impl>::decodeInsts(ThreadID tid)
         if (inst->readPredTaken() && !inst->isControl()) {
             panic("Instruction predicted as a branch!");
 
-            ++decodeControlMispred;
+            ++stats.controlMispred;
 
             // Might want to set some sort of boolean and just do
             // a check at the end
@@ -735,10 +724,10 @@ DefaultDecode<Impl>::decodeInsts(ThreadID tid)
         if (inst->isDirectCtrl() &&
            (inst->isUncondCtrl() || inst->readPredTaken()))
         {
-            ++decodeBranchResolved;
+            ++stats.branchResolved;
 
             if (!(inst->branchTarget() == inst->readPredTarg())) {
-                ++decodeBranchMispred;
+                ++stats.branchMispred;
 
                 // Might want to set some sort of boolean and just do
                 // a check at the end
@@ -747,8 +736,9 @@ DefaultDecode<Impl>::decodeInsts(ThreadID tid)
 
                 DPRINTF(Decode,
                         "[tid:%i] [sn:%llu] "
-                        "Updating predictions: PredPC: %s\n",
-                        tid, inst->seqNum, target);
+                        "Updating predictions: Wrong predicted target: %s \
+                        PredPC: %s\n",
+                        tid, inst->seqNum, inst->readPredTarg(), target);
                 //The micro pc after an instruction level branch should be 0
                 inst->setPredTarg(target);
                 break;

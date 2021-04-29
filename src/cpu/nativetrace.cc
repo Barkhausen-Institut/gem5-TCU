@@ -33,11 +33,9 @@
 #include "debug/GDBMisc.hh"
 #include "params/NativeTrace.hh"
 
-using namespace std;
-
 namespace Trace {
 
-NativeTrace::NativeTrace(const Params *p)
+NativeTrace::NativeTrace(const Params &p)
     : ExeTracer(p)
 {
     if (ListenSocket::allDisabled())
@@ -49,7 +47,7 @@ NativeTrace::NativeTrace(const Params *p)
         DPRINTF(GDBMisc, "Can't bind port %d\n", port);
         port++;
     }
-    ccprintf(cerr, "Listening for native process on port %d\n", port);
+    ccprintf(std::cerr, "Listening for native process on port %d\n", port);
     fd = native_listener.accept();
 }
 

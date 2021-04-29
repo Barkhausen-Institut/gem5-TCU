@@ -37,13 +37,11 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from __future__ import print_function
-
 import os
 import re
 import sys
 
-from six import string_types
+from itertools import zip_longest
 
 from . import convert
 from . import jobfile
@@ -51,8 +49,6 @@ from . import jobfile
 from .attrdict import attrdict, multiattrdict, optiondict
 from .code_formatter import code_formatter
 from .multidict import multidict
-from .smartdict import SmartDict
-from .sorteddict import SortedDict
 
 # panic() should be called when something happens that should never
 # ever happen regardless of what the user does (i.e., an acutal m5
@@ -124,7 +120,7 @@ def compareVersions(v1, v2):
     def make_version_list(v):
         if isinstance(v, (list,tuple)):
             return v
-        elif isinstance(v, string_types):
+        elif isinstance(v, str):
             return list(map(lambda x: int(re.match('\d+', x).group()),
                             v.split('.')))
         else:
@@ -132,13 +128,13 @@ def compareVersions(v1, v2):
 
     v1 = make_version_list(v1)
     v2 = make_version_list(v2)
+
     # Compare corresponding elements of lists
-    for n1,n2 in zip(v1, v2):
+    # The shorter list is filled with 0 till the lists have the same length
+    for n1,n2 in zip_longest(v1, v2, fillvalue=0):
         if n1 < n2: return -1
         if n1 > n2: return  1
-    # all corresponding values are equal... see if one has extra values
-    if len(v1) < len(v2): return -1
-    if len(v1) > len(v2): return  1
+
     return 0
 
 def crossproduct(items):

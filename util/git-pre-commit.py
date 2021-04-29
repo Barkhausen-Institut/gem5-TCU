@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Copyright (c) 2016 ARM Limited
 # All rights reserved
@@ -35,7 +35,7 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from __future__ import print_function
+
 
 from tempfile import TemporaryFile
 import os
@@ -76,10 +76,18 @@ for status, fname in git.status(filter="MA", cached=True):
     else:
         regions = all_regions
 
-    # Show they appropriate object and dump it to a file
-    status = git.file_from_index(fname)
+    # Show the appropriate object and dump it to a file
+    try:
+        status = git.file_from_index(fname)
+    except UnicodeDecodeError:
+        print("Decoding '" + fname
+            + "' throws a UnicodeDecodeError.", file=sys.stderr)
+        print("Please check '" + fname
+            + "' exclusively uses utf-8 character encoding.", file=sys.stderr)
+        sys.exit(1)
+
     f = TemporaryFile()
-    f.write(status.encode())
+    f.write(status.encode('utf-8'))
 
     verifiers = [ v(ui, opts, base=repo_base) for v in all_verifiers ]
     for v in verifiers:
@@ -114,6 +122,6 @@ if failing_files:
             "fixes for commit in\n"
             "the following files: ", file=sys.stderr)
         for f in staged_mismatch:
-            print("\t%s".format(f), file=sys.stderr)
+            print("\t{}".format(f), file=sys.stderr)
         print("Please `git --add' them", file=sys.stderr)
     sys.exit(1)

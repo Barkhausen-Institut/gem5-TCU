@@ -47,7 +47,7 @@ struct MmioVirtIOParams;
 class MmioVirtIO : public BasicPioDevice
 {
   public:
-    MmioVirtIO(const MmioVirtIOParams *params);
+    MmioVirtIO(const MmioVirtIOParams &params);
     virtual ~MmioVirtIO();
 
   protected: // BasicPioDevice
@@ -102,8 +102,6 @@ class MmioVirtIO : public BasicPioDevice
     uint32_t guestFeaturesSelect;
     uint32_t pageSize;
     uint32_t interruptStatus;
-
-    MakeCallback<MmioVirtIO, &MmioVirtIO::kick> callbackKick;
 
   protected: // Params
     VirtIODeviceBase &vio;

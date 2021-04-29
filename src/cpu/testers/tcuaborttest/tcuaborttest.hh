@@ -39,7 +39,7 @@
 class TcuAbortTest : public ClockedObject
 {
   public:
-    TcuAbortTest(const TcuAbortTestParams *p);
+    TcuAbortTest(const TcuAbortTestParams &p);
 
     Port& getPort(const std::string &if_name,
                   PortID idx = InvalidPortID) override;
@@ -100,7 +100,7 @@ class TcuAbortTest : public ClockedObject
     Addr reg_base;
 
     /// Request id for all generated traffic
-    MasterID masterId;
+    RequestorID requestorId;
 
     unsigned int id;
 

@@ -51,17 +51,15 @@
 #include "params/MaltaIO.hh"
 #include "sim/system.hh"
 
-using namespace std;
-
-MaltaIO::RTC::RTC(const string &name, const MaltaIOParams *p)
-    : MC146818(p->malta, name, p->time, p->year_is_bcd, p->frequency),
-      malta(p->malta)
+MaltaIO::RTC::RTC(const std::string &name, const MaltaIOParams &p)
+    : MC146818(p.malta, name, p.time, p.year_is_bcd, p.frequency),
+      malta(p.malta)
 {
 }
 
-MaltaIO::MaltaIO(const Params *p)
-    : BasicPioDevice(p, 0x100), malta(p->malta),
-      pitimer(this, p->name + "pitimer"), rtc(p->name + ".rtc", p)
+MaltaIO::MaltaIO(const Params &p)
+    : BasicPioDevice(p, 0x100), malta(p.malta),
+      pitimer(this, p.name + "pitimer"), rtc(p.name + ".rtc", p)
 {
     // set the back pointer from malta to myself
     malta->io = this;
@@ -74,7 +72,7 @@ MaltaIO::MaltaIO(const Params *p)
 Tick
 MaltaIO::frequency() const
 {
-    return SimClock::Frequency / params()->frequency;
+    return SimClock::Frequency / params().frequency;
 }
 
 Tick
@@ -142,10 +140,4 @@ MaltaIO::startup()
 {
     rtc.startup();
     pitimer.startup();
-}
-
-MaltaIO *
-MaltaIOParams::create()
-{
-    return new MaltaIO(this);
 }

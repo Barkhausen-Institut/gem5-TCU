@@ -61,9 +61,3 @@ BaseConnector::startIrq(IRQ irq)
     _tcu->regs().set(PrivReg::CLEAR_IRQ, irq);
     doSetIrq(irq);
 }
-
-BaseConnector*
-BaseConnectorParams::create()
-{
-    return new BaseConnector(this);
-}

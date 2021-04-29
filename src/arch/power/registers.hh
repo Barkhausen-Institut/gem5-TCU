@@ -31,18 +31,11 @@
 
 #include "arch/generic/vec_pred_reg.hh"
 #include "arch/generic/vec_reg.hh"
-#include "arch/power/generated/max_inst_regs.hh"
 #include "arch/power/miscregs.hh"
 #include "base/types.hh"
 
-namespace PowerISA {
-
-using PowerISAInst::MaxInstSrcRegs;
-using PowerISAInst::MaxInstDestRegs;
-
-// Power writes a misc register outside of the isa parser, so it can't
-// be detected by it. Manually add it here.
-const int MaxMiscDestRegs = PowerISAInst::MaxMiscDestRegs + 1;
+namespace PowerISA
+{
 
 // Not applicable to Power
 using VecElem = ::DummyVecElem;
@@ -66,11 +59,9 @@ const int NumIntArchRegs = 32;
 // and zero register, which doesn't actually exist but needs a number
 const int NumIntSpecialRegs = 9;
 const int NumFloatArchRegs = 32;
-const int NumFloatSpecialRegs = 0;
-const int NumInternalProcRegs = 0;
 
 const int NumIntRegs = NumIntArchRegs + NumIntSpecialRegs;
-const int NumFloatRegs = NumFloatArchRegs + NumFloatSpecialRegs;
+const int NumFloatRegs = NumFloatArchRegs;
 const int NumVecRegs = 1;  // Not applicable to Power
                            // (1 to prevent warnings)
 const int NumVecPredRegs = 1;  // Not applicable to Power
@@ -80,20 +71,10 @@ const int NumMiscRegs = NUM_MISCREGS;
 
 // Semantically meaningful register indices
 const int ReturnValueReg = 3;
-const int ArgumentReg0 = 3;
-const int ArgumentReg1 = 4;
-const int ArgumentReg2 = 5;
-const int ArgumentReg3 = 6;
-const int ArgumentReg4 = 7;
-const int FramePointerReg = 31;
 const int StackPointerReg = 1;
 
 // There isn't one in Power, but we need to define one somewhere
 const int ZeroReg = NumIntRegs - 1;
-
-const int SyscallNumReg = 0;
-const int SyscallPseudoReturnReg = 3;
-const int SyscallSuccessReg = 3;
 
 enum MiscIntRegNums {
     INTREG_CR = NumIntArchRegs,

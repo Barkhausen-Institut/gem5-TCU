@@ -32,8 +32,8 @@
 
 namespace Prefetcher {
 
-SlimAMPM::SlimAMPM(const SlimAMPMPrefetcherParams* p)
-  : Queued(p), ampm(*p->ampm), dcpt(*p->dcpt)
+SlimAMPM::SlimAMPM(const SlimAMPMPrefetcherParams &p)
+  : Queued(p), ampm(*p.ampm), dcpt(*p.dcpt)
 {
 }
 
@@ -48,9 +48,3 @@ SlimAMPM::calculatePrefetch(const PrefetchInfo &pfi,
 }
 
 } // namespace Prefetcher
-
-Prefetcher::SlimAMPM*
-SlimAMPMPrefetcherParams::create()
-{
-    return new Prefetcher::SlimAMPM(this);
-}

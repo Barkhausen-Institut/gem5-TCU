@@ -45,7 +45,7 @@ class SpuSystem : public System, public PEMemory
 
   public:
     typedef SpuSystemParams Params;
-    SpuSystem(Params *p);
+    SpuSystem(const Params &p);
     ~SpuSystem();
 
     uint32_t pedesc(peid_t pe) const override;

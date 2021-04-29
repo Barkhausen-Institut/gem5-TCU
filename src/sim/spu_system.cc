@@ -31,12 +31,12 @@
 #include "mem/port_proxy.hh"
 #include "params/SpuSystem.hh"
 
-SpuSystem::SpuSystem(Params *p)
+SpuSystem::SpuSystem(const Params &p)
     : System(p),
-      PEMemory(this, p->memory_pe, p->memory_offset, p->memory_size,
+      PEMemory(this, p.memory_pe, p.memory_offset, p.memory_size,
                 physProxy),
-      pes(p->pes),
-      peId(p->pe_id)
+      pes(p.pes),
+      peId(p.pe_id)
 {
 }
 
@@ -47,10 +47,4 @@ SpuSystem::~SpuSystem()
 uint32_t SpuSystem::pedesc(peid_t pe) const
 {
     return pes[pe];
-}
-
-SpuSystem *
-SpuSystemParams::create()
-{
-    return new SpuSystem(this);
 }

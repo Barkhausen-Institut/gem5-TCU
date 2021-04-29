@@ -43,13 +43,13 @@
 #include "debug/CommMonitor.hh"
 #include "sim/stats.hh"
 
-CommMonitor::CommMonitor(Params* params)
+CommMonitor::CommMonitor(const Params &params)
     : SimObject(params),
-      masterPort(name() + "-master", *this),
-      slavePort(name() + "-slave", *this),
+      memSidePort(name() + "-mem_side_port", *this),
+      cpuSidePort(name() + "-cpu_side_port", *this),
       samplePeriodicEvent([this]{ samplePeriodic(); }, name()),
-      samplePeriodTicks(params->sample_period),
-      samplePeriod(params->sample_period / SimClock::Float::s),
+      samplePeriodTicks(params.sample_period),
+      samplePeriod(params.sample_period / SimClock::Float::s),
       stats(this, params)
 {
     DPRINTF(CommMonitor,
@@ -57,17 +57,11 @@ CommMonitor::CommMonitor(Params* params)
             name(), samplePeriodTicks, samplePeriod * 1E3);
 }
 
-CommMonitor*
-CommMonitorParams::create()
-{
-    return new CommMonitor(this);
-}
-
 void
 CommMonitor::init()
 {
     // make sure both sides of the monitor are connected
-    if (!slavePort.isConnected() || !masterPort.isConnected())
+    if (!cpuSidePort.isConnected() || !memSidePort.isConnected())
         fatal("Communication monitor is not connected on both sides.\n");
 }
 
@@ -81,10 +75,10 @@ CommMonitor::regProbePoints()
 Port &
 CommMonitor::getPort(const std::string &if_name, PortID idx)
 {
-    if (if_name == "master") {
-        return masterPort;
-    } else if (if_name == "slave") {
-        return slavePort;
+    if (if_name == "mem_side_port") {
+        return memSidePort;
+    } else if (if_name == "cpu_side_port") {
+        return cpuSidePort;
     } else {
         return SimObject::getPort(if_name, idx);
     }
@@ -93,82 +87,95 @@ CommMonitor::getPort(const std::string &if_name, PortID idx)
 void
 CommMonitor::recvFunctional(PacketPtr pkt)
 {
-    masterPort.sendFunctional(pkt);
+    memSidePort.sendFunctional(pkt);
 }
 
 void
 CommMonitor::recvFunctionalSnoop(PacketPtr pkt)
 {
-    slavePort.sendFunctionalSnoop(pkt);
+    cpuSidePort.sendFunctionalSnoop(pkt);
 }
 
 CommMonitor::MonitorStats::MonitorStats(Stats::Group *parent,
-                                        const CommMonitorParams *params)
+                                        const CommMonitorParams &params)
     : Stats::Group(parent),
 
-      disableBurstLengthHists(params->disable_burst_length_hists),
-      ADD_STAT(readBurstLengthHist,
+      disableBurstLengthHists(params.disable_burst_length_hists),
+      ADD_STAT(readBurstLengthHist, UNIT_BYTE,
                "Histogram of burst lengths of transmitted packets"),
-      ADD_STAT(writeBurstLengthHist,
+      ADD_STAT(writeBurstLengthHist, UNIT_BYTE,
                "Histogram of burst lengths of transmitted packets"),
 
-      disableBandwidthHists(params->disable_bandwidth_hists),
+      disableBandwidthHists(params.disable_bandwidth_hists),
       readBytes(0),
       ADD_STAT(readBandwidthHist,
-               "Histogram of read bandwidth per sample period (bytes/s)"),
-      ADD_STAT(totalReadBytes, "Number of bytes read"),
-      ADD_STAT(averageReadBandwidth, "Average read bandwidth (bytes/s)",
+               UNIT_RATE(Stats::Units::Byte, Stats::Units::Second),
+               "Histogram of read bandwidth per sample period"),
+      ADD_STAT(totalReadBytes, UNIT_BYTE, "Number of bytes read"),
+      ADD_STAT(averageReadBandwidth,
+               UNIT_RATE(Stats::Units::Byte, Stats::Units::Second),
+               "Average read bandwidth",
                totalReadBytes / simSeconds),
 
       writtenBytes(0),
-      ADD_STAT(writeBandwidthHist, "Histogram of write bandwidth (bytes/s)"),
-      ADD_STAT(totalWrittenBytes, "Number of bytes written"),
-      ADD_STAT(averageWriteBandwidth, "Average write bandwidth (bytes/s)",
+      ADD_STAT(writeBandwidthHist,
+               UNIT_RATE(Stats::Units::Byte, Stats::Units::Second),
+               "Histogram of write bandwidth"),
+      ADD_STAT(totalWrittenBytes,
+               UNIT_RATE(Stats::Units::Byte, Stats::Units::Second),
+               "Number of bytes written"),
+      ADD_STAT(averageWriteBandwidth,
+               UNIT_RATE(Stats::Units::Byte, Stats::Units::Second),
+               "Average write bandwidth",
                totalWrittenBytes / simSeconds),
 
-      disableLatencyHists(params->disable_latency_hists),
-      ADD_STAT(readLatencyHist, "Read request-response latency"),
-      ADD_STAT(writeLatencyHist, "Write request-response latency"),
+      disableLatencyHists(params.disable_latency_hists),
+      ADD_STAT(readLatencyHist, UNIT_TICK, "Read request-response latency"),
+      ADD_STAT(writeLatencyHist, UNIT_TICK, "Write request-response latency"),
 
-      disableITTDists(params->disable_itt_dists),
-      ADD_STAT(ittReadRead, "Read-to-read inter transaction time"),
-      ADD_STAT(ittWriteWrite , "Write-to-write inter transaction time"),
-      ADD_STAT(ittReqReq, "Request-to-request inter transaction time"),
+      disableITTDists(params.disable_itt_dists),
+      ADD_STAT(ittReadRead, UNIT_TICK, "Read-to-read inter transaction time"),
+      ADD_STAT(ittWriteWrite, UNIT_TICK,
+               "Write-to-write inter transaction time"),
+      ADD_STAT(ittReqReq, UNIT_TICK,
+               "Request-to-request inter transaction time"),
       timeOfLastRead(0), timeOfLastWrite(0), timeOfLastReq(0),
 
-      disableOutstandingHists(params->disable_outstanding_hists),
-      ADD_STAT(outstandingReadsHist, "Outstanding read transactions"),
+      disableOutstandingHists(params.disable_outstanding_hists),
+      ADD_STAT(outstandingReadsHist, UNIT_COUNT,
+               "Outstanding read transactions"),
       outstandingReadReqs(0),
-      ADD_STAT(outstandingWritesHist, "Outstanding write transactions"),
+      ADD_STAT(outstandingWritesHist, UNIT_COUNT,
+               "Outstanding write transactions"),
       outstandingWriteReqs(0),
 
-      disableTransactionHists(params->disable_transaction_hists),
-      ADD_STAT(readTransHist,
+      disableTransactionHists(params.disable_transaction_hists),
+      ADD_STAT(readTransHist, UNIT_COUNT,
                "Histogram of read transactions per sample period"),
       readTrans(0),
-      ADD_STAT(writeTransHist,
+      ADD_STAT(writeTransHist, UNIT_COUNT,
                "Histogram of write transactions per sample period"),
       writeTrans(0),
 
-      disableAddrDists(params->disable_addr_dists),
-      readAddrMask(params->read_addr_mask),
-      writeAddrMask(params->write_addr_mask),
-      ADD_STAT(readAddrDist, "Read address distribution"),
-      ADD_STAT(writeAddrDist, "Write address distribution")
+      disableAddrDists(params.disable_addr_dists),
+      readAddrMask(params.read_addr_mask),
+      writeAddrMask(params.write_addr_mask),
+      ADD_STAT(readAddrDist, UNIT_COUNT, "Read address distribution"),
+      ADD_STAT(writeAddrDist, UNIT_COUNT, "Write address distribution")
 {
     using namespace Stats;
 
     readBurstLengthHist
-        .init(params->burst_length_bins)
+        .init(params.burst_length_bins)
         .flags(disableBurstLengthHists ? nozero : pdf);
 
     writeBurstLengthHist
-        .init(params->burst_length_bins)
+        .init(params.burst_length_bins)
         .flags(disableBurstLengthHists ? nozero : pdf);
 
     // Stats based on received responses
     readBandwidthHist
-        .init(params->bandwidth_bins)
+        .init(params.bandwidth_bins)
         .flags(disableBandwidthHists ? nozero : pdf);
 
     averageReadBandwidth
@@ -179,7 +186,7 @@ CommMonitor::MonitorStats::MonitorStats(Stats::Group *parent,
 
     // Stats based on successfully sent requests
     writeBandwidthHist
-        .init(params->bandwidth_bins)
+        .init(params.bandwidth_bins)
         .flags(disableBandwidthHists ? (pdf | nozero) : pdf);
 
     averageWriteBandwidth
@@ -190,42 +197,42 @@ CommMonitor::MonitorStats::MonitorStats(Stats::Group *parent,
 
 
     readLatencyHist
-        .init(params->latency_bins)
+        .init(params.latency_bins)
         .flags(disableLatencyHists ? nozero : pdf);
 
     writeLatencyHist
-        .init(params->latency_bins)
+        .init(params.latency_bins)
         .flags(disableLatencyHists ? nozero : pdf);
 
     ittReadRead
-        .init(1, params->itt_max_bin, params->itt_max_bin /
-              params->itt_bins)
+        .init(1, params.itt_max_bin, params.itt_max_bin /
+              params.itt_bins)
         .flags(disableITTDists ? nozero : pdf);
 
     ittWriteWrite
-        .init(1, params->itt_max_bin, params->itt_max_bin /
-              params->itt_bins)
+        .init(1, params.itt_max_bin, params.itt_max_bin /
+              params.itt_bins)
         .flags(disableITTDists ? nozero : pdf);
 
     ittReqReq
-        .init(1, params->itt_max_bin, params->itt_max_bin /
-              params->itt_bins)
+        .init(1, params.itt_max_bin, params.itt_max_bin /
+              params.itt_bins)
         .flags(disableITTDists ? nozero : pdf);
 
     outstandingReadsHist
-        .init(params->outstanding_bins)
+        .init(params.outstanding_bins)
         .flags(disableOutstandingHists ? nozero : pdf);
 
     outstandingWritesHist
-        .init(params->outstanding_bins)
+        .init(params.outstanding_bins)
         .flags(disableOutstandingHists ? nozero : pdf);
 
     readTransHist
-        .init(params->transaction_bins)
+        .init(params.transaction_bins)
         .flags(disableTransactionHists ? nozero : pdf);
 
     writeTransHist
-        .init(params->transaction_bins)
+        .init(params.transaction_bins)
         .flags(disableTransactionHists ? nozero : pdf);
 
     readAddrDist
@@ -344,7 +351,7 @@ CommMonitor::recvAtomic(PacketPtr pkt)
     ProbePoints::PacketInfo req_pkt_info(pkt);
     ppPktReq->notify(req_pkt_info);
 
-    const Tick delay(masterPort.sendAtomic(pkt));
+    const Tick delay(memSidePort.sendAtomic(pkt));
 
     stats.updateReqStats(req_pkt_info, true, expects_response);
     if (expects_response)
@@ -360,7 +367,7 @@ CommMonitor::recvAtomic(PacketPtr pkt)
 Tick
 CommMonitor::recvAtomicSnoop(PacketPtr pkt)
 {
-    return slavePort.sendAtomicSnoop(pkt);
+    return cpuSidePort.sendAtomicSnoop(pkt);
 }
 
 bool
@@ -385,7 +392,7 @@ CommMonitor::recvTimingReq(PacketPtr pkt)
     }
 
     // Attempt to send the packet
-    bool successful = masterPort.sendTimingReq(pkt);
+    bool successful = memSidePort.sendTimingReq(pkt);
 
     // If not successful, restore the sender state
     if (!successful && expects_response && !stats.disableLatencyHists) {
@@ -428,7 +435,7 @@ CommMonitor::recvTimingResp(PacketPtr pkt)
     }
 
     // Attempt to send the packet
-    bool successful = slavePort.sendTimingResp(pkt);
+    bool successful = cpuSidePort.sendTimingResp(pkt);
 
     if (!stats.disableLatencyHists) {
         // If packet successfully send, sample value of latency,
@@ -456,57 +463,57 @@ CommMonitor::recvTimingResp(PacketPtr pkt)
 void
 CommMonitor::recvTimingSnoopReq(PacketPtr pkt)
 {
-    slavePort.sendTimingSnoopReq(pkt);
+    cpuSidePort.sendTimingSnoopReq(pkt);
 }
 
 bool
 CommMonitor::recvTimingSnoopResp(PacketPtr pkt)
 {
-    return masterPort.sendTimingSnoopResp(pkt);
+    return memSidePort.sendTimingSnoopResp(pkt);
 }
 
 void
 CommMonitor::recvRetrySnoopResp()
 {
-    slavePort.sendRetrySnoopResp();
+    cpuSidePort.sendRetrySnoopResp();
 }
 
 bool
 CommMonitor::isSnooping() const
 {
-    // check if the connected master port is snooping
-    return slavePort.isSnooping();
+    // check if the connected request port is snooping
+    return cpuSidePort.isSnooping();
 }
 
 AddrRangeList
 CommMonitor::getAddrRanges() const
 {
-    // get the address ranges of the connected slave port
-    return masterPort.getAddrRanges();
+    // get the address ranges of the connected CPU-side port
+    return memSidePort.getAddrRanges();
 }
 
 void
 CommMonitor::recvReqRetry()
 {
-    slavePort.sendRetryReq();
+    cpuSidePort.sendRetryReq();
 }
 
 void
 CommMonitor::recvRespRetry()
 {
-    masterPort.sendRetryResp();
+    memSidePort.sendRetryResp();
 }
 
 bool
 CommMonitor::tryTiming(PacketPtr pkt)
 {
-    return masterPort.tryTiming(pkt);
+    return memSidePort.tryTiming(pkt);
 }
 
 void
 CommMonitor::recvRangeChange()
 {
-    slavePort.sendRangeChange();
+    cpuSidePort.sendRangeChange();
 }
 
 void

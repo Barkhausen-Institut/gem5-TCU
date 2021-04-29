@@ -55,15 +55,9 @@ class EtherBus : public SimObject
     EtherDump *dump;
 
   public:
-    typedef EtherBusParams Params;
-    EtherBus(const Params *p);
+    using Params = EtherBusParams;
+    EtherBus(const Params &p);
     virtual ~EtherBus() {}
-
-    const Params *
-    params() const
-    {
-        return dynamic_cast<const Params *>(_params);
-    }
 
     void txDone();
     void reg(EtherInt *dev);

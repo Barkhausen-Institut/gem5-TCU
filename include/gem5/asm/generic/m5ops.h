@@ -53,6 +53,7 @@
 #define M5OP_DEPRECATED3        0x20 // deprecated exit function
 #define M5OP_EXIT               0x21
 #define M5OP_FAIL               0x22
+#define M5OP_SUM                0x23 // For testing
 #define M5OP_INIT_PARAM         0x30
 #define M5OP_LOAD_SYMBOL        0x31
 #define M5OP_RESET_STATS        0x40
@@ -75,11 +76,11 @@
 #define M5OP_WORK_BEGIN         0x5a
 #define M5OP_WORK_END           0x5b
 
-#define M5OP_SE_SYSCALL         0x60
-#define M5OP_SE_PAGE_FAULT      0x61
 #define M5OP_DIST_TOGGLE_SYNC   0x62
 
 #define M5OP_GET_CYCLES         0x63
+
+#define M5OP_WORKLOAD           0x70
 
 
 #define M5OP_FOREACH                                            \
@@ -92,6 +93,7 @@
     M5OP(m5_wake_cpu, M5OP_WAKE_CPU)                            \
     M5OP(m5_exit, M5OP_EXIT)                                    \
     M5OP(m5_fail, M5OP_FAIL)                                    \
+    M5OP(m5_sum, M5OP_SUM)                                      \
     M5OP(m5_init_param, M5OP_INIT_PARAM)                        \
     M5OP(m5_load_symbol, M5OP_LOAD_SYMBOL)                      \
     M5OP(m5_reset_stats, M5OP_RESET_STATS)                      \
@@ -106,10 +108,9 @@
     M5OP(m5_panic, M5OP_PANIC)                                  \
     M5OP(m5_work_begin, M5OP_WORK_BEGIN)                        \
     M5OP(m5_work_end, M5OP_WORK_END)                            \
-    M5OP(m5_se_syscall, M5OP_SE_SYSCALL)                        \
-    M5OP(m5_se_page_fault, M5OP_SE_PAGE_FAULT)                  \
     M5OP(m5_dist_toggle_sync, M5OP_DIST_TOGGLE_SYNC)            \
-    M5OP(m5_get_cycles, M5OP_GET_CYCLES)
+    M5OP(m5_get_cycles, M5OP_GET_CYCLES)                        \
+    M5OP(m5_workload, M5OP_WORKLOAD)                            \
 
 #define M5OP_MERGE_TOKENS_I(a, b) a##b
 #define M5OP_MERGE_TOKENS(a, b) M5OP_MERGE_TOKENS_I(a, b)

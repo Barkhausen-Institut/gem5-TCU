@@ -33,7 +33,7 @@
 #include "cpu/simple/base.hh"
 #include "sim/process.hh"
 
-ArmConnector::ArmConnector(const ArmConnectorParams *p)
+ArmConnector::ArmConnector(const ArmConnectorParams &p)
   : CoreConnector(p)
 {
 }
@@ -43,7 +43,7 @@ ArmConnector::doSetIrq(IRQ irq)
 {
     DPRINTF(TcuConnector, "Injecting IRQ %d (vector 2)\n", irq);
 
-    ThreadContext *tc = system->getThreadContext(0);
+    ThreadContext *tc = system->threads[0];
     tc->getCpuPtr()->getInterruptController(0)->post(2, 0);
 }
 
@@ -52,12 +52,6 @@ ArmConnector::doClearIrq(IRQ irq)
 {
     DPRINTF(TcuConnector, "Clearing IRQ %d (vector 2)\n", irq);
 
-    ThreadContext *tc = system->getThreadContext(0);
+    ThreadContext *tc = system->threads[0];
     tc->getCpuPtr()->getInterruptController(0)->clear(2, 0);
-}
-
-ArmConnector*
-ArmConnectorParams::create()
-{
-    return new ArmConnector(this);
 }

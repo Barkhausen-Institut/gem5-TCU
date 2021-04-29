@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017 ARM Limited
+ * Copyright (c) 2017,2019 ARM Limited
  * All rights reserved.
  *
  * The license below extends only to copyright in the software and shall
@@ -49,10 +49,8 @@
 #include "mem/ruby/system/RubySystem.hh"
 #include "sim/system.hh"
 
-using namespace std;
-
-DirectoryMemory::DirectoryMemory(const Params *p)
-    : SimObject(p), addrRanges(p->addr_ranges.begin(), p->addr_ranges.end())
+DirectoryMemory::DirectoryMemory(const Params &p)
+    : SimObject(p), addrRanges(p.addr_ranges.begin(), p.addr_ranges.end())
 {
     m_size_bytes = 0;
     for (const auto &r: addrRanges) {
@@ -127,6 +125,7 @@ DirectoryMemory::allocate(Addr address, AbstractCacheEntry *entry)
 
     idx = mapAddressToLocalIdx(address);
     assert(idx < m_num_entries);
+    assert(m_entries[idx] == NULL);
     entry->changePermission(AccessPermission_Read_Only);
     m_entries[idx] = entry;
 
@@ -134,7 +133,21 @@ DirectoryMemory::allocate(Addr address, AbstractCacheEntry *entry)
 }
 
 void
-DirectoryMemory::print(ostream& out) const
+DirectoryMemory::deallocate(Addr address)
+{
+    assert(isPresent(address));
+    uint64_t idx;
+    DPRINTF(RubyCache, "Removing entry for address: %#x\n", address);
+
+    idx = mapAddressToLocalIdx(address);
+    assert(idx < m_num_entries);
+    assert(m_entries[idx] != NULL);
+    delete m_entries[idx];
+    m_entries[idx] = NULL;
+}
+
+void
+DirectoryMemory::print(std::ostream& out) const
 {
 }
 
@@ -142,10 +155,4 @@ void
 DirectoryMemory::recordRequestType(DirectoryRequestType requestType) {
     DPRINTF(RubyStats, "Recorded statistic: %s\n",
             DirectoryRequestType_to_string(requestType));
-}
-
-DirectoryMemory *
-RubyDirectoryMemoryParams::create()
-{
-    return new DirectoryMemory(this);
 }

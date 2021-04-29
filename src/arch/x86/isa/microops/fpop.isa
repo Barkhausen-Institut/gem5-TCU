@@ -77,13 +77,16 @@ def template MicroFpOpExecute {{
 def template MicroFpOpDeclare {{
     class %(class_name)s : public %(base_class)s
     {
+      private:
+        %(reg_idx_arr_decl)s;
+
       public:
         %(class_name)s(ExtMachInst _machInst,
                 const char * instMnem, uint64_t setFlags,
                 InstRegIndex _src1, InstRegIndex _src2, InstRegIndex _dest,
                 uint8_t _dataSize, int8_t _spm);
 
-        Fault execute(ExecContext *, Trace::InstRecord *) const;
+        Fault execute(ExecContext *, Trace::InstRecord *) const override;
     };
 }};
 
@@ -96,13 +99,12 @@ def template MicroFpOpConstructor {{
                 _src1, _src2, _dest, _dataSize, _spm,
                 %(op_class)s)
     {
+        %(set_reg_idx_arr)s;
         %(constructor)s;
     }
 }};
 
 let {{
-
-    import six
 
     # Make these empty strings so that concatenating onto
     # them will always work.
@@ -124,7 +126,7 @@ let {{
 
             # If there's something optional to do with flags, generate
             # a version without it and fix up this version to use it.
-            if flag_code is not "" or cond_check is not "true":
+            if flag_code != "" or cond_check != "true":
                 self.buildCppClasses(name, Name, suffix,
                         code, "", "true", else_code, op_class)
                 suffix = "Flags" + suffix
@@ -196,8 +198,7 @@ let {{
 
             return cls
 
-    @six.add_metaclass(FpOpMeta)
-    class FpUnaryOp(X86Microop):
+    class FpUnaryOp(X86Microop, metaclass=FpOpMeta):
         # This class itself doesn't act as a microop
         abstract = True
 
@@ -232,8 +233,7 @@ let {{
                 "dataSize" : self.dataSize,
                 "spm" : self.spm}
 
-    @six.add_metaclass(FpOpMeta)
-    class FpBinaryOp(X86Microop):
+    class FpBinaryOp(X86Microop, metaclass=FpOpMeta):
         # This class itself doesn't act as a microop
         abstract = True
 

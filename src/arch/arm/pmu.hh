@@ -52,7 +52,7 @@
 #include "sim/sim_object.hh"
 #include "sim/system.hh"
 
-class ArmPMUParams;
+struct ArmPMUParams;
 class Platform;
 class ThreadContext;
 class ArmInterruptPin;
@@ -93,7 +93,7 @@ namespace ArmISA {
  */
 class PMU : public SimObject, public ArmISA::BaseISADevice {
   public:
-    PMU(const ArmPMUParams *p);
+    PMU(const ArmPMUParams &p);
     ~PMU();
 
     void addEventProbe(unsigned int id, SimObject *obj, const char *name);

@@ -28,14 +28,14 @@
 
 #include "mem/ruby/network/simple/SimpleLink.hh"
 
-SimpleExtLink::SimpleExtLink(const Params *p)
+SimpleExtLink::SimpleExtLink(const Params &p)
     : BasicExtLink(p)
 {
     // For the simple links, the bandwidth factor translates to the
     // bandwidth multiplier.  The multipiler, in combination with the
     // endpoint bandwidth multiplier - message size multiplier ratio,
     // determines the link bandwidth in bytes
-    m_bw_multiplier = p->bandwidth_factor;
+    m_bw_multiplier = p.bandwidth_factor;
 }
 
 void
@@ -44,30 +44,18 @@ SimpleExtLink::print(std::ostream& out) const
     out << name();
 }
 
-SimpleExtLink *
-SimpleExtLinkParams::create()
-{
-    return new SimpleExtLink(this);
-}
-
-SimpleIntLink::SimpleIntLink(const Params *p)
+SimpleIntLink::SimpleIntLink(const Params &p)
     : BasicIntLink(p)
 {
     // For the simple links, the bandwidth factor translates to the
     // bandwidth multiplier.  The multipiler, in combination with the
     // endpoint bandwidth multiplier - message size multiplier ratio,
     // determines the link bandwidth in bytes
-    m_bw_multiplier = p->bandwidth_factor;
+    m_bw_multiplier = p.bandwidth_factor;
 }
 
 void
 SimpleIntLink::print(std::ostream& out) const
 {
     out << name();
-}
-
-SimpleIntLink *
-SimpleIntLinkParams::create()
-{
-    return new SimpleIntLink(this);
 }

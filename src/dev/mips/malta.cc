@@ -43,10 +43,8 @@
 #include "params/Malta.hh"
 #include "sim/system.hh"
 
-using namespace std;
-
-Malta::Malta(const Params *p)
-    : Platform(p), system(p->system)
+Malta::Malta(const Params &p)
+    : Platform(p), system(p.system)
 {
     for (int i = 0; i < Malta::Max_CPUs; i++)
         intr_sum_type[i] = 0;
@@ -94,10 +92,4 @@ void
 Malta::unserialize(CheckpointIn &cp)
 {
     UNSERIALIZE_ARRAY(intr_sum_type, Malta::Max_CPUs);
-}
-
-Malta *
-MaltaParams::create()
-{
-    return new Malta(this);
 }

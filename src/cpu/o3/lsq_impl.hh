@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012, 2014, 2017-2018 ARM Limited
+ * Copyright (c) 2011-2012, 2014, 2017-2019 ARM Limited
  * Copyright (c) 2013 Advanced Micro Devices, Inc.
  * All rights reserved
  *
@@ -51,33 +51,32 @@
 #include "cpu/o3/lsq.hh"
 #include "debug/Drain.hh"
 #include "debug/Fetch.hh"
+#include "debug/HtmCpu.hh"
 #include "debug/LSQ.hh"
 #include "debug/Writeback.hh"
 #include "params/DerivO3CPU.hh"
 
-using namespace std;
-
 template <class Impl>
-LSQ<Impl>::LSQ(O3CPU *cpu_ptr, IEW *iew_ptr, DerivO3CPUParams *params)
+LSQ<Impl>::LSQ(O3CPU *cpu_ptr, IEW *iew_ptr, const DerivO3CPUParams &params)
     : cpu(cpu_ptr), iewStage(iew_ptr),
       _cacheBlocked(false),
-      cacheStorePorts(params->cacheStorePorts), usedStorePorts(0),
-      cacheLoadPorts(params->cacheLoadPorts), usedLoadPorts(0),
-      lsqPolicy(params->smtLSQPolicy),
-      LQEntries(params->LQEntries),
-      SQEntries(params->SQEntries),
-      maxLQEntries(maxLSQAllocation(lsqPolicy, LQEntries, params->numThreads,
-                  params->smtLSQThreshold)),
-      maxSQEntries(maxLSQAllocation(lsqPolicy, SQEntries, params->numThreads,
-                  params->smtLSQThreshold)),
+      cacheStorePorts(params.cacheStorePorts), usedStorePorts(0),
+      cacheLoadPorts(params.cacheLoadPorts), usedLoadPorts(0),
+      lsqPolicy(params.smtLSQPolicy),
+      LQEntries(params.LQEntries),
+      SQEntries(params.SQEntries),
+      maxLQEntries(maxLSQAllocation(lsqPolicy, LQEntries, params.numThreads,
+                  params.smtLSQThreshold)),
+      maxSQEntries(maxLSQAllocation(lsqPolicy, SQEntries, params.numThreads,
+                  params.smtLSQThreshold)),
       dcachePort(this, cpu_ptr),
-      numThreads(params->numThreads)
+      numThreads(params.numThreads)
 {
     assert(numThreads > 0 && numThreads <= Impl::MaxThreads);
 
-    //**********************************************/
-    //************ Handle SMT Parameters ***********/
-    //**********************************************/
+    //**********************************************
+    //************ Handle SMT Parameters ***********
+    //**********************************************
 
     /* Run SMT olicy checks. */
         if (lsqPolicy == SMTQueuePolicy::Dynamic) {
@@ -88,8 +87,8 @@ LSQ<Impl>::LSQ(O3CPU *cpu_ptr, IEW *iew_ptr, DerivO3CPUParams *params)
                 maxLQEntries,maxSQEntries);
     } else if (lsqPolicy == SMTQueuePolicy::Threshold) {
 
-        assert(params->smtLSQThreshold > params->LQEntries);
-        assert(params->smtLSQThreshold > params->SQEntries);
+        assert(params.smtLSQThreshold > params.LQEntries);
+        assert(params.smtLSQThreshold > params.SQEntries);
 
         DPRINTF(LSQ, "LSQ sharing policy set to Threshold: "
                 "%i entries per LQ | %i entries per SQ\n",
@@ -117,17 +116,7 @@ LSQ<Impl>::name() const
 
 template<class Impl>
 void
-LSQ<Impl>::regStats()
-{
-    //Initialize LSQs
-    for (ThreadID tid = 0; tid < numThreads; tid++) {
-        thread[tid].regStats();
-    }
-}
-
-template<class Impl>
-void
-LSQ<Impl>::setActiveThreads(list<ThreadID> *at_ptr)
+LSQ<Impl>::setActiveThreads(std::list<ThreadID> *at_ptr)
 {
     activeThreads = at_ptr;
     assert(activeThreads != 0);
@@ -265,8 +254,8 @@ template<class Impl>
 void
 LSQ<Impl>::writebackStores()
 {
-    list<ThreadID>::iterator threads = activeThreads->begin();
-    list<ThreadID>::iterator end = activeThreads->end();
+    std::list<ThreadID>::iterator threads = activeThreads->begin();
+    std::list<ThreadID>::iterator end = activeThreads->end();
 
     while (threads != end) {
         ThreadID tid = *threads++;
@@ -285,8 +274,8 @@ bool
 LSQ<Impl>::violation()
 {
     /* Answers: Does Anybody Have a Violation?*/
-    list<ThreadID>::iterator threads = activeThreads->begin();
-    list<ThreadID>::iterator end = activeThreads->end();
+    std::list<ThreadID>::iterator threads = activeThreads->begin();
+    std::list<ThreadID>::iterator end = activeThreads->end();
 
     while (threads != end) {
         ThreadID tid = *threads++;
@@ -380,8 +369,8 @@ LSQ<Impl>::getCount()
 {
     unsigned total = 0;
 
-    list<ThreadID>::iterator threads = activeThreads->begin();
-    list<ThreadID>::iterator end = activeThreads->end();
+    std::list<ThreadID>::iterator threads = activeThreads->begin();
+    std::list<ThreadID>::iterator end = activeThreads->end();
 
     while (threads != end) {
         ThreadID tid = *threads++;
@@ -398,8 +387,8 @@ LSQ<Impl>::numLoads()
 {
     unsigned total = 0;
 
-    list<ThreadID>::iterator threads = activeThreads->begin();
-    list<ThreadID>::iterator end = activeThreads->end();
+    std::list<ThreadID>::iterator threads = activeThreads->begin();
+    std::list<ThreadID>::iterator end = activeThreads->end();
 
     while (threads != end) {
         ThreadID tid = *threads++;
@@ -416,8 +405,8 @@ LSQ<Impl>::numStores()
 {
     unsigned total = 0;
 
-    list<ThreadID>::iterator threads = activeThreads->begin();
-    list<ThreadID>::iterator end = activeThreads->end();
+    std::list<ThreadID>::iterator threads = activeThreads->begin();
+    std::list<ThreadID>::iterator end = activeThreads->end();
 
     while (threads != end) {
         ThreadID tid = *threads++;
@@ -434,8 +423,8 @@ LSQ<Impl>::numFreeLoadEntries()
 {
     unsigned total = 0;
 
-    list<ThreadID>::iterator threads = activeThreads->begin();
-    list<ThreadID>::iterator end = activeThreads->end();
+    std::list<ThreadID>::iterator threads = activeThreads->begin();
+    std::list<ThreadID>::iterator end = activeThreads->end();
 
     while (threads != end) {
         ThreadID tid = *threads++;
@@ -452,8 +441,8 @@ LSQ<Impl>::numFreeStoreEntries()
 {
     unsigned total = 0;
 
-    list<ThreadID>::iterator threads = activeThreads->begin();
-    list<ThreadID>::iterator end = activeThreads->end();
+    std::list<ThreadID>::iterator threads = activeThreads->begin();
+    std::list<ThreadID>::iterator end = activeThreads->end();
 
     while (threads != end) {
         ThreadID tid = *threads++;
@@ -482,8 +471,8 @@ template<class Impl>
 bool
 LSQ<Impl>::isFull()
 {
-    list<ThreadID>::iterator threads = activeThreads->begin();
-    list<ThreadID>::iterator end = activeThreads->end();
+    std::list<ThreadID>::iterator threads = activeThreads->begin();
+    std::list<ThreadID>::iterator end = activeThreads->end();
 
     while (threads != end) {
         ThreadID tid = *threads++;
@@ -518,8 +507,8 @@ template<class Impl>
 bool
 LSQ<Impl>::lqEmpty() const
 {
-    list<ThreadID>::const_iterator threads = activeThreads->begin();
-    list<ThreadID>::const_iterator end = activeThreads->end();
+    std::list<ThreadID>::const_iterator threads = activeThreads->begin();
+    std::list<ThreadID>::const_iterator end = activeThreads->end();
 
     while (threads != end) {
         ThreadID tid = *threads++;
@@ -535,8 +524,8 @@ template<class Impl>
 bool
 LSQ<Impl>::sqEmpty() const
 {
-    list<ThreadID>::const_iterator threads = activeThreads->begin();
-    list<ThreadID>::const_iterator end = activeThreads->end();
+    std::list<ThreadID>::const_iterator threads = activeThreads->begin();
+    std::list<ThreadID>::const_iterator end = activeThreads->end();
 
     while (threads != end) {
         ThreadID tid = *threads++;
@@ -552,8 +541,8 @@ template<class Impl>
 bool
 LSQ<Impl>::lqFull()
 {
-    list<ThreadID>::iterator threads = activeThreads->begin();
-    list<ThreadID>::iterator end = activeThreads->end();
+    std::list<ThreadID>::iterator threads = activeThreads->begin();
+    std::list<ThreadID>::iterator end = activeThreads->end();
 
     while (threads != end) {
         ThreadID tid = *threads++;
@@ -581,8 +570,8 @@ template<class Impl>
 bool
 LSQ<Impl>::sqFull()
 {
-    list<ThreadID>::iterator threads = activeThreads->begin();
-    list<ThreadID>::iterator end = activeThreads->end();
+    std::list<ThreadID>::iterator threads = activeThreads->begin();
+    std::list<ThreadID>::iterator end = activeThreads->end();
 
     while (threads != end) {
         ThreadID tid = *threads++;
@@ -610,8 +599,8 @@ template<class Impl>
 bool
 LSQ<Impl>::isStalled()
 {
-    list<ThreadID>::iterator threads = activeThreads->begin();
-    list<ThreadID>::iterator end = activeThreads->end();
+    std::list<ThreadID>::iterator threads = activeThreads->begin();
+    std::list<ThreadID>::iterator end = activeThreads->end();
 
     while (threads != end) {
         ThreadID tid = *threads++;
@@ -637,8 +626,8 @@ template<class Impl>
 bool
 LSQ<Impl>::hasStoresToWB()
 {
-    list<ThreadID>::iterator threads = activeThreads->begin();
-    list<ThreadID>::iterator end = activeThreads->end();
+    std::list<ThreadID>::iterator threads = activeThreads->begin();
+    std::list<ThreadID>::iterator end = activeThreads->end();
 
     while (threads != end) {
         ThreadID tid = *threads++;
@@ -654,8 +643,8 @@ template<class Impl>
 bool
 LSQ<Impl>::willWB()
 {
-    list<ThreadID>::iterator threads = activeThreads->begin();
-    list<ThreadID>::iterator end = activeThreads->end();
+    std::list<ThreadID>::iterator threads = activeThreads->begin();
+    std::list<ThreadID>::iterator end = activeThreads->end();
 
     while (threads != end) {
         ThreadID tid = *threads++;
@@ -671,8 +660,8 @@ template<class Impl>
 void
 LSQ<Impl>::dumpInsts() const
 {
-    list<ThreadID>::const_iterator threads = activeThreads->begin();
-    list<ThreadID>::const_iterator end = activeThreads->end();
+    std::list<ThreadID>::const_iterator threads = activeThreads->begin();
+    std::list<ThreadID>::const_iterator end = activeThreads->end();
 
     while (threads != end) {
         ThreadID tid = *threads++;
@@ -691,7 +680,7 @@ LSQ<Impl>::pushRequest(const DynInstPtr& inst, bool isLoad, uint8_t *data,
     // This comming request can be either load, store or atomic.
     // Atomic request has a corresponding pointer to its atomic memory
     // operation
-    bool isAtomic M5_VAR_USED = !isLoad && amo_op;
+    M5_VAR_USED bool isAtomic = !isLoad && amo_op;
 
     ThreadID tid = cpu->contextToThread(inst->contextId());
     auto cacheLineSize = cpu->cacheLineSize();
@@ -706,11 +695,17 @@ LSQ<Impl>::pushRequest(const DynInstPtr& inst, bool isLoad, uint8_t *data,
     // lines. For now, such cross-line update is not supported.
     assert(!isAtomic || (isAtomic && !needs_burst));
 
+    const bool htm_cmd = isLoad && (flags & Request::HTM_CMD);
+
     if (inst->translationStarted()) {
         req = inst->savedReq;
         assert(req);
     } else {
-        if (needs_burst) {
+        if (htm_cmd) {
+            assert(addr == 0x0lu);
+            assert(size == 8);
+            req = new HtmCmdRequest(&thread[tid], inst, flags);
+        } else if (needs_burst) {
             req = new SplitDataRequest(&thread[tid], inst, isLoad, addr,
                     size, flags, data, res);
         } else {
@@ -718,9 +713,7 @@ LSQ<Impl>::pushRequest(const DynInstPtr& inst, bool isLoad, uint8_t *data,
                     size, flags, data, res, std::move(amo_op));
         }
         assert(req);
-        if (!byte_enable.empty()) {
-            req->_byteEnable = byte_enable;
-        }
+        req->_byteEnable = byte_enable;
         inst->setRequest();
         req->taskId(cpu->taskId());
 
@@ -895,11 +888,9 @@ LSQ<Impl>::SplitDataRequest::initiateTranslation()
     uint32_t size_so_far = 0;
 
     mainReq = std::make_shared<Request>(base_addr,
-                _size, _flags, _inst->masterId(),
+                _size, _flags, _inst->requestorId(),
                 _inst->instAddr(), _inst->contextId());
-    if (!_byteEnable.empty()) {
-        mainReq->setByteEnable(_byteEnable);
-    }
+    mainReq->setByteEnable(_byteEnable);
 
     // Paddr is not used in mainReq. However, we will accumulate the flags
     // from the sub requests into mainReq by calling setFlags() in finish().
@@ -908,41 +899,29 @@ LSQ<Impl>::SplitDataRequest::initiateTranslation()
     mainReq->setPaddr(0);
 
     /* Get the pre-fix, possibly unaligned. */
-    if (_byteEnable.empty()) {
-        this->addRequest(base_addr, next_addr - base_addr, _byteEnable);
-    } else {
-        auto it_start = _byteEnable.begin();
-        auto it_end = _byteEnable.begin() + (next_addr - base_addr);
-        this->addRequest(base_addr, next_addr - base_addr,
-                         std::vector<bool>(it_start, it_end));
-    }
+    auto it_start = _byteEnable.begin();
+    auto it_end = _byteEnable.begin() + (next_addr - base_addr);
+    this->addRequest(base_addr, next_addr - base_addr,
+                     std::vector<bool>(it_start, it_end));
     size_so_far = next_addr - base_addr;
 
     /* We are block aligned now, reading whole blocks. */
     base_addr = next_addr;
     while (base_addr != final_addr) {
-        if (_byteEnable.empty()) {
-            this->addRequest(base_addr, cacheLineSize, _byteEnable);
-        } else {
-            auto it_start = _byteEnable.begin() + size_so_far;
-            auto it_end = _byteEnable.begin() + size_so_far + cacheLineSize;
-            this->addRequest(base_addr, cacheLineSize,
-                             std::vector<bool>(it_start, it_end));
-        }
+        auto it_start = _byteEnable.begin() + size_so_far;
+        auto it_end = _byteEnable.begin() + size_so_far + cacheLineSize;
+        this->addRequest(base_addr, cacheLineSize,
+                         std::vector<bool>(it_start, it_end));
         size_so_far += cacheLineSize;
         base_addr += cacheLineSize;
     }
 
     /* Deal with the tail. */
     if (size_so_far < _size) {
-        if (_byteEnable.empty()) {
-            this->addRequest(base_addr, _size - size_so_far, _byteEnable);
-        } else {
-            auto it_start = _byteEnable.begin() + size_so_far;
-            auto it_end = _byteEnable.end();
-            this->addRequest(base_addr, _size - size_so_far,
-                             std::vector<bool>(it_start, it_end));
-        }
+        auto it_start = _byteEnable.begin() + size_so_far;
+        auto it_end = _byteEnable.end();
+        this->addRequest(base_addr, _size - size_so_far,
+                         std::vector<bool>(it_start, it_end));
     }
 
     if (_requests.size() > 0) {
@@ -973,7 +952,7 @@ void
 LSQ<Impl>::LSQRequest::sendFragmentToTranslation(int i)
 {
     numInTranslationFragments++;
-    _port.dTLB()->translateTiming(
+    _port.getMMUPtr()->translateTiming(
             this->request(i),
             this->_inst->thread->getTC(), this,
             this->isLoad() ? BaseTLB::Read : BaseTLB::Write);
@@ -1033,6 +1012,23 @@ LSQ<Impl>::SingleDataRequest::buildPackets()
                     :  Packet::createWrite(request()));
         _packets.back()->dataStatic(_inst->memData);
         _packets.back()->senderState = _senderState;
+
+        // hardware transactional memory
+        // If request originates in a transaction (not necessarily a HtmCmd),
+        // then the packet should be marked as such.
+        if (_inst->inHtmTransactionalState()) {
+            _packets.back()->setHtmTransactional(
+                _inst->getHtmTransactionUid());
+
+            DPRINTF(HtmCpu,
+              "HTM %s pc=0x%lx - vaddr=0x%lx - paddr=0x%lx - htmUid=%u\n",
+              isLoad() ? "LD" : "ST",
+              _inst->instAddr(),
+              _packets.back()->req->hasVaddr() ?
+                  _packets.back()->req->getVaddr() : 0lu,
+              _packets.back()->getAddr(),
+              _inst->getHtmTransactionUid());
+        }
     }
     assert(_packets.size() == 1);
 }
@@ -1049,6 +1045,21 @@ LSQ<Impl>::SplitDataRequest::buildPackets()
         if (isLoad()) {
             _mainPacket = Packet::createRead(mainReq);
             _mainPacket->dataStatic(_inst->memData);
+
+            // hardware transactional memory
+            // If request originates in a transaction,
+            // packet should be marked as such
+            if (_inst->inHtmTransactionalState()) {
+                _mainPacket->setHtmTransactional(
+                    _inst->getHtmTransactionUid());
+                DPRINTF(HtmCpu,
+                  "HTM LD.0 pc=0x%lx-vaddr=0x%lx-paddr=0x%lx-htmUid=%u\n",
+                  _inst->instAddr(),
+                  _mainPacket->req->hasVaddr() ?
+                      _mainPacket->req->getVaddr() : 0lu,
+                  _mainPacket->getAddr(),
+                  _inst->getHtmTransactionUid());
+            }
         }
         for (int i = 0; i < _requests.size() && _fault[i] == NoFault; i++) {
             RequestPtr r = _requests[i];
@@ -1066,6 +1077,23 @@ LSQ<Impl>::SplitDataRequest::buildPackets()
             }
             pkt->senderState = _senderState;
             _packets.push_back(pkt);
+
+            // hardware transactional memory
+            // If request originates in a transaction,
+            // packet should be marked as such
+            if (_inst->inHtmTransactionalState()) {
+                _packets.back()->setHtmTransactional(
+                    _inst->getHtmTransactionUid());
+                DPRINTF(HtmCpu,
+                  "HTM %s.%d pc=0x%lx-vaddr=0x%lx-paddr=0x%lx-htmUid=%u\n",
+                  isLoad() ? "LD" : "ST",
+                  i+1,
+                  _inst->instAddr(),
+                  _packets.back()->req->hasVaddr() ?
+                      _packets.back()->req->getVaddr() : 0lu,
+                  _packets.back()->getAddr(),
+                  _inst->getHtmTransactionUid());
+            }
         }
     }
     assert(_packets.size() > 0);
@@ -1190,6 +1218,61 @@ void
 LSQ<Impl>::DcachePort::recvReqRetry()
 {
     lsq->recvReqRetry();
+}
+
+template<class Impl>
+LSQ<Impl>::HtmCmdRequest::HtmCmdRequest(LSQUnit* port,
+                  const DynInstPtr& inst,
+                  const Request::Flags& flags_) :
+    SingleDataRequest(port, inst, true, 0x0lu, 8, flags_,
+        nullptr, nullptr, nullptr)
+{
+    assert(_requests.size() == 0);
+
+    this->addRequest(_addr, _size, _byteEnable);
+
+    if (_requests.size() > 0) {
+        _requests.back()->setReqInstSeqNum(_inst->seqNum);
+        _requests.back()->taskId(_taskId);
+        _requests.back()->setPaddr(_addr);
+        _requests.back()->setInstCount(_inst->getCpuPtr()->totalInsts());
+
+        _inst->strictlyOrdered(_requests.back()->isStrictlyOrdered());
+        _inst->fault = NoFault;
+        _inst->physEffAddr = _requests.back()->getPaddr();
+        _inst->memReqFlags = _requests.back()->getFlags();
+        _inst->savedReq = this;
+
+        setState(State::Translation);
+    } else {
+        panic("unexpected behaviour");
+    }
+}
+
+template<class Impl>
+void
+LSQ<Impl>::HtmCmdRequest::initiateTranslation()
+{
+    // Transaction commands are implemented as loads to avoid significant
+    // changes to the cpu and memory interfaces
+    // The virtual and physical address uses a dummy value of 0x00
+    // Address translation does not really occur thus the code below
+
+    flags.set(Flag::TranslationStarted);
+    flags.set(Flag::TranslationFinished);
+
+    _inst->translationStarted(true);
+    _inst->translationCompleted(true);
+
+    setState(State::Request);
+}
+
+template<class Impl>
+void
+LSQ<Impl>::HtmCmdRequest::finish(const Fault &fault, const RequestPtr &req,
+        ThreadContext* tc, BaseTLB::Mode mode)
+{
+    panic("unexpected behaviour");
 }
 
 #endif//__CPU_O3_LSQ_IMPL_HH__

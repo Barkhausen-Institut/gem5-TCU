@@ -29,36 +29,49 @@
 #ifndef __ARCH_RISCV_BARE_METAL_SYSTEM_HH__
 #define __ARCH_RISCV_BARE_METAL_SYSTEM_HH__
 
-#include "arch/riscv/fs_workload.hh"
 #include "params/RiscvBareMetal.hh"
+#include "sim/workload.hh"
 
 namespace RiscvISA
 {
 
-class BareMetal : public RiscvISA::FsWorkload
+class BareMetal : public Workload
 {
   protected:
+    // checker for bare metal application
+    bool _isBareMetal;
+    // entry point for simulation
+    Addr _resetVect;
     Loader::ObjectFile *bootloader;
-    Loader::SymbolTable *bootloaderSymtab;
+    Loader::SymbolTable bootloaderSymtab;
 
   public:
-    typedef RiscvBareMetalParams Params;
-    BareMetal(Params *p);
+    PARAMS(RiscvBareMetal);
+    BareMetal(const Params &p);
     ~BareMetal();
 
     void initState() override;
 
     Loader::Arch getArch() const override { return bootloader->getArch(); }
-    const Loader::SymbolTable *
+    const Loader::SymbolTable &
     symtab(ThreadContext *tc) override
     {
         return bootloaderSymtab;
     }
+
     bool
-    insertSymbol(Addr address, const std::string &symbol) override
+    insertSymbol(const Loader::Symbol &symbol) override
     {
-        return bootloaderSymtab->insert(address, symbol);
+        return bootloaderSymtab.insert(symbol);
     }
+
+    // return reset vector
+    Addr resetVect() const { return _resetVect; }
+
+    // return bare metal checker
+    bool isBareMetal() const { return _isBareMetal; }
+
+    Addr getEntry() const override { return _resetVect; }
 };
 
 } // namespace RiscvISA

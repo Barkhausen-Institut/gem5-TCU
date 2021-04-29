@@ -47,20 +47,23 @@
 #include "debug/DiskImageRead.hh"
 #include "debug/DiskImageWrite.hh"
 #include "sim/byteswap.hh"
+#include "sim/serialize.hh"
 #include "sim/sim_exit.hh"
-
-using namespace std;
 
 ////////////////////////////////////////////////////////////////////////
 //
 // Raw Disk image
 //
-RawDiskImage::RawDiskImage(const Params* p)
+RawDiskImage::RawDiskImage(const Params &p)
     : DiskImage(p), disk_size(0)
-{ open(p->image_file, p->read_only); }
+{
+    open(p.image_file, p.read_only);
+}
 
 RawDiskImage::~RawDiskImage()
-{ close(); }
+{
+    close();
+}
 
 void
 RawDiskImage::notifyFork()
@@ -68,22 +71,22 @@ RawDiskImage::notifyFork()
     if (initialized && !readonly)
         panic("Attempting to fork system with read-write raw disk image.");
 
-    const Params *p(dynamic_cast<const Params *>(params()));
+    const Params &p = dynamic_cast<const Params &>(params());
     close();
-    open(p->image_file, p->read_only);
+    open(p.image_file, p.read_only);
 }
 
 void
-RawDiskImage::open(const string &filename, bool rd_only)
+RawDiskImage::open(const std::string &filename, bool rd_only)
 {
     if (!filename.empty()) {
         initialized = true;
         readonly = rd_only;
         file = filename;
 
-        ios::openmode mode = ios::in | ios::binary;
+        std::ios::openmode mode = std::ios::in | std::ios::binary;
         if (!readonly)
-            mode |= ios::out;
+            mode |= std::ios::out;
         stream.open(file.c_str(), mode);
         if (!stream.is_open())
             panic("Error opening %s", filename);
@@ -102,7 +105,7 @@ RawDiskImage::size() const
     if (disk_size == 0) {
         if (!stream.is_open())
             panic("file not open!\n");
-        stream.seekg(0, ios::end);
+        stream.seekg(0, std::ios::end);
         disk_size = stream.tellg();
     }
 
@@ -118,11 +121,11 @@ RawDiskImage::read(uint8_t *data, std::streampos offset) const
     if (!stream.is_open())
         panic("file not open!\n");
 
-    stream.seekg(offset * SectorSize, ios::beg);
+    stream.seekg(offset * SectorSize, std::ios::beg);
     if (!stream.good())
         panic("Could not seek to location in file");
 
-    streampos pos = stream.tellg();
+    std::streampos pos = stream.tellg();
     stream.read((char *)data, SectorSize);
 
     DPRINTF(DiskImageRead, "read: offset=%d\n", (uint64_t)offset);
@@ -143,22 +146,16 @@ RawDiskImage::write(const uint8_t *data, std::streampos offset)
     if (!stream.is_open())
         panic("file not open!\n");
 
-    stream.seekp(offset * SectorSize, ios::beg);
+    stream.seekp(offset * SectorSize, std::ios::beg);
     if (!stream.good())
         panic("Could not seek to location in file");
 
     DPRINTF(DiskImageWrite, "write: offset=%d\n", (uint64_t)offset);
     DDUMP(DiskImageWrite, data, SectorSize);
 
-    streampos pos = stream.tellp();
+    std::streampos pos = stream.tellp();
     stream.write((const char *)data, SectorSize);
     return stream.tellp() - pos;
-}
-
-RawDiskImage *
-RawDiskImageParams::create()
-{
-    return new RawDiskImage(this);
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -168,30 +165,20 @@ RawDiskImageParams::create()
 const uint32_t CowDiskImage::VersionMajor = 1;
 const uint32_t CowDiskImage::VersionMinor = 0;
 
-class CowDiskCallback : public Callback
-{
-  private:
-    CowDiskImage *image;
-
-  public:
-    CowDiskCallback(CowDiskImage *i) : image(i) {}
-    void process() { image->save(); delete this; }
-};
-
-CowDiskImage::CowDiskImage(const Params *p)
-    : DiskImage(p), filename(p->image_file), child(p->child), table(NULL)
+CowDiskImage::CowDiskImage(const Params &p)
+    : DiskImage(p), filename(p.image_file), child(p.child), table(NULL)
 {
     if (filename.empty()) {
-        initSectorTable(p->table_size);
+        initSectorTable(p.table_size);
     } else {
         if (!open(filename)) {
-            if (p->read_only)
+            if (p.read_only)
                 fatal("could not open read-only file");
-            initSectorTable(p->table_size);
+            initSectorTable(p.table_size);
         }
 
-        if (!p->read_only)
-            registerExitCallback(new CowDiskCallback(this));
+        if (!p.read_only)
+            registerExitCallback([this]() { save(); });
     }
 }
 
@@ -209,7 +196,7 @@ CowDiskImage::~CowDiskImage()
 void
 CowDiskImage::notifyFork()
 {
-    if (!dynamic_cast<const Params *>(params())->read_only &&
+    if (!dynamic_cast<const Params &>(params()).read_only &&
         !filename.empty()) {
         inform("Disabling saving of COW image in forked child process.\n");
         filename = "";
@@ -217,7 +204,7 @@ CowDiskImage::notifyFork()
 }
 
 void
-SafeRead(ifstream &stream, void *data, int count)
+SafeRead(std::ifstream &stream, void *data, int count)
 {
     stream.read((char *)data, count);
     if (!stream.is_open())
@@ -232,23 +219,23 @@ SafeRead(ifstream &stream, void *data, int count)
 
 template<class T>
 void
-SafeRead(ifstream &stream, T &data)
+SafeRead(std::ifstream &stream, T &data)
 {
     SafeRead(stream, &data, sizeof(data));
 }
 
 template<class T>
 void
-SafeReadSwap(ifstream &stream, T &data)
+SafeReadSwap(std::ifstream &stream, T &data)
 {
     SafeRead(stream, &data, sizeof(data));
     data = letoh(data); //is this the proper byte order conversion?
 }
 
 bool
-CowDiskImage::open(const string &file)
+CowDiskImage::open(const std::string &file)
 {
-    ifstream stream(file.c_str());
+    std::ifstream stream(file.c_str());
     if (!stream.is_open())
         return false;
 
@@ -300,7 +287,7 @@ CowDiskImage::initSectorTable(int hash_size)
 }
 
 void
-SafeWrite(ofstream &stream, const void *data, int count)
+SafeWrite(std::ofstream &stream, const void *data, int count)
 {
     stream.write((const char *)data, count);
     if (!stream.is_open())
@@ -315,14 +302,14 @@ SafeWrite(ofstream &stream, const void *data, int count)
 
 template<class T>
 void
-SafeWrite(ofstream &stream, const T &data)
+SafeWrite(std::ofstream &stream, const T &data)
 {
     SafeWrite(stream, &data, sizeof(data));
 }
 
 template<class T>
 void
-SafeWriteSwap(ofstream &stream, const T &data)
+SafeWriteSwap(std::ofstream &stream, const T &data)
 {
     T swappeddata = letoh(data); //is this the proper byte order conversion?
     SafeWrite(stream, &swappeddata, sizeof(data));
@@ -338,12 +325,12 @@ CowDiskImage::save() const
         save(filename);}
 
 void
-CowDiskImage::save(const string &file) const
+CowDiskImage::save(const std::string &file) const
 {
     if (!initialized)
         panic("RawDiskImage not initialized");
 
-    ofstream stream(file.c_str());
+    std::ofstream stream(file.c_str());
     if (!stream.is_open() || stream.fail() || stream.bad())
         panic("Error opening %s", file);
 
@@ -434,7 +421,7 @@ CowDiskImage::write(const uint8_t *data, std::streampos offset)
 void
 CowDiskImage::serialize(CheckpointOut &cp) const
 {
-    string cowFilename = name() + ".cow";
+    std::string cowFilename = name() + ".cow";
     SERIALIZE_SCALAR(cowFilename);
     save(CheckpointIn::dir() + "/" + cowFilename);
 }
@@ -442,14 +429,8 @@ CowDiskImage::serialize(CheckpointOut &cp) const
 void
 CowDiskImage::unserialize(CheckpointIn &cp)
 {
-    string cowFilename;
+    std::string cowFilename;
     UNSERIALIZE_SCALAR(cowFilename);
     cowFilename = cp.getCptDir() + "/" + cowFilename;
     open(cowFilename);
-}
-
-CowDiskImage *
-CowDiskImageParams::create()
-{
-    return new CowDiskImage(this);
 }

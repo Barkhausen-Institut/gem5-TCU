@@ -37,9 +37,6 @@ IMPORTANT: If you modify this file, it's likely that the Learning gem5 book
 
 """
 
-from __future__ import print_function
-from __future__ import absolute_import
-
 import math
 
 from m5.defines import buildEnv
@@ -82,7 +79,6 @@ class MyCacheSystem(RubySystem):
         # and other controllers, too.
         self.sequencers = [RubySequencer(version = i,
                                 # I/D cache is combined and grab from ctrl
-                                icache = self.controllers[i].cacheMemory,
                                 dcache = self.controllers[i].cacheMemory,
                                 clk_domain = self.controllers[i].clk_domain,
                                 ) for i in range(len(cpus))]
@@ -104,16 +100,7 @@ class MyCacheSystem(RubySystem):
 
         # Connect the cpu's cache, interrupt, and TLB ports to Ruby
         for i,cpu in enumerate(cpus):
-            cpu.icache_port = self.sequencers[i].slave
-            cpu.dcache_port = self.sequencers[i].slave
-            isa = buildEnv['TARGET_ISA']
-            if isa == 'x86':
-                cpu.interrupts[0].pio = self.sequencers[i].master
-                cpu.interrupts[0].int_master = self.sequencers[i].slave
-                cpu.interrupts[0].int_slave = self.sequencers[i].master
-            if isa == 'x86' or isa == 'arm':
-                cpu.itb.walker.port = self.sequencers[i].slave
-                cpu.dtb.walker.port = self.sequencers[i].slave
+            self.sequencers[i].connectCpuPorts(cpu)
 
 class L1Cache(L1Cache_Controller):
 

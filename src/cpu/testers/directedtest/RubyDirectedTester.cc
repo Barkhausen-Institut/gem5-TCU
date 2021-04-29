@@ -46,17 +46,17 @@
 #include "debug/DirectedTest.hh"
 #include "sim/sim_exit.hh"
 
-RubyDirectedTester::RubyDirectedTester(const Params *p)
+RubyDirectedTester::RubyDirectedTester(const Params &p)
   : ClockedObject(p),
     directedStartEvent([this]{ wakeup(); }, "Directed tick",
                        false, Event::CPU_Tick_Pri),
-    m_requests_to_complete(p->requests_to_complete),
-    generator(p->generator)
+    m_requests_to_complete(p.requests_to_complete),
+    generator(p.generator)
 {
     m_requests_completed = 0;
 
     // create the ports
-    for (int i = 0; i < p->port_cpuPort_connection_count; ++i) {
+    for (int i = 0; i < p.port_cpuPort_connection_count; ++i) {
         ports.push_back(new CpuPort(csprintf("%s-port%d", name(), i),
                                     this, i));
     }
@@ -105,7 +105,7 @@ RubyDirectedTester::CpuPort::recvTimingResp(PacketPtr pkt)
     return true;
 }
 
-MasterPort*
+RequestPort*
 RubyDirectedTester::getCpuPort(int idx)
 {
     assert(idx >= 0 && idx < ports.size());
@@ -135,10 +135,4 @@ RubyDirectedTester::wakeup()
     } else {
         exitSimLoop("Ruby DirectedTester completed");
     }
-}
-
-RubyDirectedTester *
-RubyDirectedTesterParams::create()
-{
-    return new RubyDirectedTester(this);
 }

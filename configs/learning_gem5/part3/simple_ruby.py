@@ -36,8 +36,6 @@ IMPORTANT: If you modify this file, it's likely that the Learning gem5 book
            also needs to be updated. For now, email Jason <jason@lowepower.com>
 
 """
-from __future__ import print_function
-from __future__ import absolute_import
 
 # import the m5 (gem5) library created when gem5 is built
 import m5
@@ -68,8 +66,9 @@ system.mem_ranges = [AddrRange('512MB')] # Create an address range
 system.cpu = [TimingSimpleCPU() for i in range(2)]
 
 # Create a DDR3 memory controller and connect it to the membus
-system.mem_ctrl = DDR3_1600_8x8()
-system.mem_ctrl.range = system.mem_ranges[0]
+system.mem_ctrl = MemCtrl()
+system.mem_ctrl.dram = DDR3_1600_8x8()
+system.mem_ctrl.dram.range = system.mem_ranges[0]
 
 # create the interrupt controller for the CPU and connect to the membus
 for cpu in system.cpu:
@@ -97,6 +96,8 @@ process.cmd = [binary]
 for cpu in system.cpu:
     cpu.workload = process
     cpu.createThreads()
+
+system.workload = SEWorkload.init_compatible(binary)
 
 # Set up the pseudo file system for the threads function above
 config_filesystem(system)

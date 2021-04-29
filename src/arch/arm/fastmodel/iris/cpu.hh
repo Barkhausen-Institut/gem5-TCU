@@ -38,18 +38,15 @@
 namespace Iris
 {
 
-// The name of the event that should be notified when the CPU subsystem needs
-// to adjust it's clock.
-static const std::string ClockEventName = "gem5_clock_period_event";
-// The name of the attribute the subsystem should create which can be set to
-// the desired clock period, in gem5's Ticks.
-static const std::string PeriodAttributeName = "gem5_clock_period_attribute";
-// The name of the attribute the subsystem should create which will be set to
-// a pointer to its corresponding gem5 CPU.
-static const std::string Gem5CpuClusterAttributeName = "gem5_cpu_cluster";
-// The name of the attribute the subsystem should create to hold the
-// sendFunctional delegate for port proxies.
-static const std::string SendFunctionalAttributeName = "gem5_send_functional";
+// The base interface of the EVS used by gem5 BaseCPU below.
+class BaseCpuEvs
+{
+  public:
+    virtual void sendFunc(PacketPtr pkt) = 0;
+    virtual void setClkPeriod(Tick clk_period) = 0;
+    virtual void setSysCounterFrq(uint64_t sys_counter_frq) = 0;
+    virtual void setCluster(SimObject *cluster) = 0;
+};
 
 // This CPU class adds some mechanisms which help attach the gem5 and fast
 // model CPUs to each other. It acts as a base class for the gem5 CPU, and
@@ -58,7 +55,7 @@ static const std::string SendFunctionalAttributeName = "gem5_send_functional";
 class BaseCPU : public ::BaseCPU
 {
   public:
-    BaseCPU(BaseCPUParams *params, sc_core::sc_module *_evs);
+    BaseCPU(const BaseCPUParams &params, sc_core::sc_module *_evs);
     virtual ~BaseCPU();
 
     Port &
@@ -87,32 +84,19 @@ class BaseCPU : public ::BaseCPU
     PortProxy::SendFunctionalFunc
     getSendFunctional() override
     {
-        if (sendFunctional)
-            return sendFunctional->value;
-        return ::BaseCPU::getSendFunctional();
+        return [this] (PacketPtr pkt) { evs_base_cpu->sendFunc(pkt); };
     }
 
   protected:
     sc_core::sc_module *evs;
-
-  private:
-    sc_core::sc_event *clockEvent;
-    sc_core::sc_attribute<Tick> *periodAttribute;
-    sc_core::sc_attribute<PortProxy::SendFunctionalFunc> *sendFunctional;
+    // Hold casted pointer to *evs.
+    Iris::BaseCpuEvs *evs_base_cpu;
 
   protected:
     void
     clockPeriodUpdated() override
     {
-        if (!clockEvent || !periodAttribute) {
-            warn("Unable to notify EVS of clock change, missing:");
-            warn_if(!clockEvent, "  Clock change event");
-            warn_if(!periodAttribute, "  Clock period attribute");
-            return;
-        }
-
-        periodAttribute->value = clockPeriod();
-        clockEvent->notify();
+        evs_base_cpu->setClkPeriod(clockPeriod());
     }
 
     void init() override;
@@ -128,17 +112,19 @@ template <class TC>
 class CPU : public Iris::BaseCPU
 {
   public:
-    CPU(IrisBaseCPUParams *params, iris::IrisConnectionInterface *iris_if) :
-        BaseCPU(params, params->evs)
+    CPU(const IrisBaseCPUParams &params,
+            iris::IrisConnectionInterface *iris_if) :
+        BaseCPU(params, params.evs)
     {
         const std::string parent_path = evs->name();
-        System *sys = params->system;
+        System *sys = params.system;
 
         int thread_id = 0;
-        for (const std::string &sub_path: params->thread_paths) {
+        for (const std::string &sub_path: params.thread_paths) {
             std::string path = parent_path + "." + sub_path;
-            auto *tc = new TC(this, thread_id++, sys,
-                    params->dtb, params->itb,iris_if, path);
+            auto id = thread_id++;
+            auto *tc = new TC(this, id, sys, params.mmu,
+                    params.isa[id], iris_if, path);
             threadContexts.push_back(tc);
         }
     }

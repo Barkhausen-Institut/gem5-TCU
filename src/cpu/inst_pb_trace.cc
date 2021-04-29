@@ -66,11 +66,11 @@ InstPBTraceRecord::dump()
         tracer.traceMem(staticInst, getAddr(), getSize(), getFlags());
 }
 
-InstPBTrace::InstPBTrace(const InstPBTraceParams *p)
+InstPBTrace::InstPBTrace(const InstPBTraceParams &p)
     : InstTracer(p), buf(nullptr), bufSize(0), curMsg(nullptr)
 {
     // Create our output file
-    createTraceFile(p->file_name);
+    createTraceFile(p.file_name);
 }
 
 void
@@ -91,9 +91,7 @@ InstPBTrace::createTraceFile(std::string filename)
     traceStream->write(header_msg);
 
     // get a callback when we exit so we can close the file
-    Callback *cb = new MakeCallback<InstPBTrace,
-             &InstPBTrace::closeStreams>(this);
-    registerExitCallback(cb);
+    registerExitCallback([this]() { closeStreams(); });
 }
 
 void
@@ -176,11 +174,3 @@ InstPBTrace::traceMem(StaticInstPtr si, Addr a, Addr s, unsigned f)
 }
 
 } // namespace Trace
-
-
-Trace::InstPBTrace*
-InstPBTraceParams::create()
-{
-    return new Trace::InstPBTrace(this);
-}
-

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Inria
+ * Copyright (c) 2019-2020 Inria
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -48,6 +48,8 @@ struct Base64Delta32Params;
 struct Base32Delta8Params;
 struct Base32Delta16Params;
 struct Base16Delta8Params;
+
+namespace Compressor {
 
 /**
  * Base class for all base-delta-immediate compressors. Although not proposed
@@ -113,13 +115,13 @@ class BaseDelta : public DictionaryCompressor<BaseType>
 
     void addToDictionary(DictionaryEntry data) override;
 
-    std::unique_ptr<BaseCacheCompressor::CompressionData>
-    compress(const uint64_t* data, Cycles& comp_lat,
-        Cycles& decomp_lat) override;
+    std::unique_ptr<Base::CompressionData> compress(
+        const std::vector<Base::Chunk>& chunks,
+        Cycles& comp_lat, Cycles& decomp_lat) override;
 
   public:
     typedef BaseDictionaryCompressorParams Params;
-    BaseDelta(const Params *p);
+    BaseDelta(const Params &p);
     ~BaseDelta() = default;
 };
 
@@ -157,7 +159,7 @@ class Base64Delta8 : public BaseDelta<uint64_t, 8>
 {
   public:
     typedef Base64Delta8Params Params;
-    Base64Delta8(const Params *p);
+    Base64Delta8(const Params &p);
     ~Base64Delta8() = default;
 };
 
@@ -165,7 +167,7 @@ class Base64Delta16 : public BaseDelta<uint64_t, 16>
 {
   public:
     typedef Base64Delta16Params Params;
-    Base64Delta16(const Params *p);
+    Base64Delta16(const Params &p);
     ~Base64Delta16() = default;
 };
 
@@ -173,7 +175,7 @@ class Base64Delta32 : public BaseDelta<uint64_t, 32>
 {
   public:
     typedef Base64Delta32Params Params;
-    Base64Delta32(const Params *p);
+    Base64Delta32(const Params &p);
     ~Base64Delta32() = default;
 };
 
@@ -181,7 +183,7 @@ class Base32Delta8 : public BaseDelta<uint32_t, 8>
 {
   public:
     typedef Base32Delta8Params Params;
-    Base32Delta8(const Params *p);
+    Base32Delta8(const Params &p);
     ~Base32Delta8() = default;
 };
 
@@ -189,7 +191,7 @@ class Base32Delta16 : public BaseDelta<uint32_t, 16>
 {
   public:
     typedef Base32Delta16Params Params;
-    Base32Delta16(const Params *p);
+    Base32Delta16(const Params &p);
     ~Base32Delta16() = default;
 };
 
@@ -197,8 +199,10 @@ class Base16Delta8 : public BaseDelta<uint16_t, 8>
 {
   public:
     typedef Base16Delta8Params Params;
-    Base16Delta8(const Params *p);
+    Base16Delta8(const Params &p);
     ~Base16Delta8() = default;
 };
+
+} // namespace Compressor
 
 #endif //__MEM_CACHE_COMPRESSORS_BASE_DELTA_HH__

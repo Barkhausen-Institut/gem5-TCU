@@ -39,9 +39,9 @@
 #define __DEV_ARM_SMMU_V3_TRANSL_HH__
 
 #include "base/compiler.hh"
+#include "dev/arm/smmu_v3_deviceifc.hh"
 #include "dev/arm/smmu_v3_proc.hh"
 #include "dev/arm/smmu_v3_ptops.hh"
-#include "dev/arm/smmu_v3_slaveifc.hh"
 #include "mem/packet.hh"
 
 struct SMMUTranslRequest
@@ -91,13 +91,13 @@ class SMMUTranslationProcess : public SMMUProcess
         bool       writable;
     };
 
-    SMMUv3SlaveInterface &ifc;
+    SMMUv3DeviceInterface &ifc;
 
     SMMUTranslRequest request;
     TranslContext context;
 
     Tick recvTick;
-    Tick M5_CLASS_VAR_USED faultTick;
+    M5_CLASS_VAR_USED Tick faultTick;
 
     virtual void main(Yield &yield);
 
@@ -174,7 +174,7 @@ class SMMUTranslationProcess : public SMMUProcess
 
   public:
     SMMUTranslationProcess(const std::string &name, SMMUv3 &_smmu,
-        SMMUv3SlaveInterface &_ifc);
+        SMMUv3DeviceInterface &_ifc);
 
     virtual ~SMMUTranslationProcess();
 

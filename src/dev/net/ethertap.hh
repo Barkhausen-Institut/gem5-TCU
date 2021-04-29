@@ -56,15 +56,9 @@ class EtherTapInt;
 class EtherTapBase : public SimObject
 {
   public:
-    typedef EtherTapBaseParams Params;
-    EtherTapBase(const Params *p);
+    using Params = EtherTapBaseParams;
+    EtherTapBase(const Params &p);
     virtual ~EtherTapBase();
-
-    const Params *
-    params() const
-    {
-        return dynamic_cast<const Params *>(_params);
-    }
 
     void serialize(CheckpointOut &cp) const override;
     void unserialize(CheckpointIn &cp) override;
@@ -136,15 +130,9 @@ class TapListener;
 class EtherTapStub : public EtherTapBase
 {
   public:
-    typedef EtherTapStubParams Params;
-    EtherTapStub(const Params *p);
+    using Params = EtherTapStubParams;
+    EtherTapStub(const Params &p);
     ~EtherTapStub();
-
-    const Params *
-    params() const
-    {
-        return dynamic_cast<const Params *>(_params);
-    }
 
     void serialize(CheckpointOut &cp) const override;
     void unserialize(CheckpointIn &cp) override;
@@ -171,15 +159,9 @@ class EtherTapStub : public EtherTapBase
 class EtherTap : public EtherTapBase
 {
   public:
-    typedef EtherTapParams Params;
-    EtherTap(const Params *p);
+    using Params = EtherTapParams;
+    EtherTap(const Params &p);
     ~EtherTap();
-
-    const Params *
-    params() const
-    {
-        return dynamic_cast<const Params *>(_params);
-    }
 
 
   protected:

@@ -39,7 +39,7 @@
 class TcuPciProxy : public ClockedObject
 {
   public:
-    TcuPciProxy(const TcuPciProxyParams* p);
+    TcuPciProxy(const TcuPciProxyParams &p);
 
     void init() override;
 
@@ -113,7 +113,7 @@ class TcuPciProxy : public ClockedObject
         void recvReqRetry() override { reqPacketQueue.retry(); }
     };
 
-    class TcuSlavePort : public QueuedSlavePort
+    class TcuSlavePort : public QueuedResponsePort
     {
       private:
         TcuPciProxy& pciProxy;
@@ -121,7 +121,7 @@ class TcuPciProxy : public ClockedObject
 
       public:
         TcuSlavePort(const std::string& _name, TcuPciProxy* _pciProxy)
-            : QueuedSlavePort(_name, _pciProxy, respPacketQueue),
+            : QueuedResponsePort(_name, _pciProxy, respPacketQueue),
               pciProxy(*_pciProxy),
               respPacketQueue(*_pciProxy, *this)
         {
@@ -167,7 +167,7 @@ class TcuPciProxy : public ClockedObject
         void recvReqRetry() override { reqPacketQueue.retry(); }
     };
 
-    class DmaPort : public QueuedSlavePort
+    class DmaPort : public QueuedResponsePort
     {
       private:
         TcuPciProxy& pciProxy;
@@ -175,7 +175,7 @@ class TcuPciProxy : public ClockedObject
 
       public:
         DmaPort(const std::string& _name, TcuPciProxy* _pciProxy)
-            : QueuedSlavePort(_name, _pciProxy, respPacketQueue),
+            : QueuedResponsePort(_name, _pciProxy, respPacketQueue),
               pciProxy(*_pciProxy),
               respPacketQueue(*_pciProxy, *this)
         {
@@ -249,7 +249,7 @@ class TcuPciProxy : public ClockedObject
     PioPort pioPort;
     DmaPort dmaPort;
 
-    MasterID masterId;
+    RequestorID requestorId;
     unsigned int id;
     Addr tcuRegBase;
 

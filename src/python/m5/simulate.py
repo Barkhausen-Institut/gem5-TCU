@@ -37,8 +37,6 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from __future__ import print_function
-
 import atexit
 import os
 import sys
@@ -107,8 +105,9 @@ def instantiate(ckpt_dir=None):
         except ImportError:
             pass
 
-    do_dot(root, options.outdir, options.dot_config)
-    do_ruby_dot(root, options.outdir, options.dot_config)
+    if options.dot_config:
+        do_dot(root, options.outdir, options.dot_config)
+        do_ruby_dot(root, options.outdir, options.dot_config)
 
     # Initialize the global statistics
     stats.initSimStats()
@@ -174,7 +173,15 @@ def simulate(*args, **kwargs):
     if _drain_manager.isDrained():
         _drain_manager.resume()
 
-    return _m5.event.simulate(*args, **kwargs)
+    # We flush stdout and stderr before and after the simulation to ensure the
+    # output arrive in order.
+    sys.stdout.flush()
+    sys.stderr.flush()
+    sim_out = _m5.event.simulate(*args, **kwargs)
+    sys.stdout.flush()
+    sys.stderr.flush()
+
+    return sim_out
 
 def drain():
     """Drain the simulator in preparation of a checkpoint or memory mode

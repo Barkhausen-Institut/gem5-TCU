@@ -45,70 +45,86 @@ class EtherInt;
 class EtherDevice : public PciDevice
 {
   public:
-    typedef EtherDeviceParams Params;
-    EtherDevice(const Params *params)
-        : PciDevice(params)
+    using Params = EtherDeviceParams;
+    EtherDevice(const Params &params)
+        : PciDevice(params),
+          etherDeviceStats(this)
     {}
 
-    const Params *
-    params() const
-    {
-        return dynamic_cast<const Params *>(_params);
-    }
-
-  public:
-    void regStats();
-
   protected:
-    Stats::Scalar txBytes;
-    Stats::Scalar rxBytes;
-    Stats::Scalar txPackets;
-    Stats::Scalar rxPackets;
-    Stats::Scalar txIpChecksums;
-    Stats::Scalar rxIpChecksums;
-    Stats::Scalar txTcpChecksums;
-    Stats::Scalar rxTcpChecksums;
-    Stats::Scalar txUdpChecksums;
-    Stats::Scalar rxUdpChecksums;
-    Stats::Scalar descDmaReads;
-    Stats::Scalar descDmaWrites;
-    Stats::Scalar descDmaRdBytes;
-    Stats::Scalar descDmaWrBytes;
-    Stats::Formula totBandwidth;
-    Stats::Formula totPackets;
-    Stats::Formula totBytes;
-    Stats::Formula totPacketRate;
-    Stats::Formula txBandwidth;
-    Stats::Formula rxBandwidth;
-    Stats::Formula txPacketRate;
-    Stats::Formula rxPacketRate;
-    Stats::Scalar postedSwi;
-    Stats::Formula coalescedSwi;
-    Stats::Scalar totalSwi;
-    Stats::Scalar postedRxIdle;
-    Stats::Formula coalescedRxIdle;
-    Stats::Scalar totalRxIdle;
-    Stats::Scalar postedRxOk;
-    Stats::Formula coalescedRxOk;
-    Stats::Scalar totalRxOk;
-    Stats::Scalar postedRxDesc;
-    Stats::Formula coalescedRxDesc;
-    Stats::Scalar totalRxDesc;
-    Stats::Scalar postedTxOk;
-    Stats::Formula coalescedTxOk;
-    Stats::Scalar totalTxOk;
-    Stats::Scalar postedTxIdle;
-    Stats::Formula coalescedTxIdle;
-    Stats::Scalar totalTxIdle;
-    Stats::Scalar postedTxDesc;
-    Stats::Formula coalescedTxDesc;
-    Stats::Scalar totalTxDesc;
-    Stats::Scalar postedRxOrn;
-    Stats::Formula coalescedRxOrn;
-    Stats::Scalar totalRxOrn;
-    Stats::Formula coalescedTotal;
-    Stats::Scalar postedInterrupts;
-    Stats::Scalar droppedPackets;
+    struct EtherDeviceStats : public Stats::Group
+    {
+        EtherDeviceStats(Stats::Group *parent);
+
+        Stats::Scalar postedInterrupts;
+
+        Stats::Scalar txBytes;
+        Stats::Scalar rxBytes;
+
+        Stats::Scalar txPackets;
+        Stats::Scalar rxPackets;
+
+        Stats::Formula txBandwidth;
+        Stats::Formula rxBandwidth;
+
+        Stats::Scalar txIpChecksums;
+        Stats::Scalar rxIpChecksums;
+
+        Stats::Scalar txTcpChecksums;
+        Stats::Scalar rxTcpChecksums;
+
+        Stats::Scalar txUdpChecksums;
+        Stats::Scalar rxUdpChecksums;
+
+        Stats::Scalar descDmaReads;
+        Stats::Scalar descDmaWrites;
+
+        Stats::Scalar descDmaRdBytes;
+        Stats::Scalar descDmaWrBytes;
+
+        Stats::Formula totBandwidth;
+        Stats::Formula totPackets;
+        Stats::Formula totBytes;
+        Stats::Formula totPacketRate;
+
+        Stats::Formula txPacketRate;
+        Stats::Formula rxPacketRate;
+
+        Stats::Scalar postedSwi;
+        Stats::Scalar totalSwi;
+        Stats::Formula coalescedSwi;
+
+        Stats::Scalar postedRxIdle;
+        Stats::Scalar totalRxIdle;
+        Stats::Formula coalescedRxIdle;
+
+        Stats::Scalar postedRxOk;
+        Stats::Scalar totalRxOk;
+        Stats::Formula coalescedRxOk;
+
+        Stats::Scalar postedRxDesc;
+        Stats::Scalar totalRxDesc;
+        Stats::Formula coalescedRxDesc;
+
+        Stats::Scalar postedTxOk;
+        Stats::Scalar totalTxOk;
+        Stats::Formula coalescedTxOk;
+
+        Stats::Scalar postedTxIdle;
+        Stats::Scalar totalTxIdle;
+        Stats::Formula coalescedTxIdle;
+
+        Stats::Scalar postedTxDesc;
+        Stats::Scalar totalTxDesc;
+        Stats::Formula coalescedTxDesc;
+
+        Stats::Scalar postedRxOrn;
+        Stats::Scalar totalRxOrn;
+        Stats::Formula coalescedRxOrn;
+
+        Stats::Formula coalescedTotal;
+        Stats::Scalar droppedPackets;
+    } etherDeviceStats;
 };
 
 /**
@@ -124,16 +140,10 @@ class EtherDevice : public PciDevice
 class EtherDevBase : public EtherDevice
 {
   public:
-    EtherDevBase(const EtherDevBaseParams *params)
+    using Params = EtherDevBaseParams;
+    EtherDevBase(const Params &params)
         : EtherDevice(params)
     {}
-
-    const EtherDevBaseParams *
-    params() const
-    {
-        return dynamic_cast<const EtherDevBaseParams *>(_params);
-    }
-
 };
 
 #endif // __DEV_NET_ETHERDEVICE_HH__

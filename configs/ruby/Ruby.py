@@ -1,4 +1,4 @@
-# Copyright (c) 2012, 2017-2018 ARM Limited
+# Copyright (c) 2012, 2017-2018, 2021 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -37,8 +37,6 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from __future__ import print_function
-
 import math
 import m5
 from m5.objects import *
@@ -76,6 +74,15 @@ def define_options(parser):
     parser.add_option("--numa-high-bit", type="int", default=0,
                       help="high order address bit to use for numa mapping. " \
                            "0 = highest bit, not specified = lowest bit")
+    parser.add_option("--interleaving-bits", type="int", default=0,
+                      help="number of bits to specify interleaving " \
+                           "in directory, memory controllers and caches. "
+                           "0 = not specified")
+    parser.add_option("--xor-low-bit", type="int", default=20,
+                      help="hashing bit for channel selection" \
+                           "see MemConfig for explanation of the default"\
+                           "parameter. If set to 0, xor_high_bit is also"\
+                           "set to 0.")
 
     parser.add_option("--recycle-latency", type="int", default=10,
                       help="Recycle latency for ruby controller input buffers")
@@ -86,7 +93,13 @@ def define_options(parser):
     Network.define_options(parser)
 
 def setup_memory_controllers(system, ruby, dir_cntrls, options):
-    ruby.block_size_bytes = options.cacheline_size
+    if (options.numa_high_bit):
+        block_size_bits = options.numa_high_bit + 1 - \
+                          int(math.log(options.num_dirs, 2))
+        ruby.block_size_bytes = 2 ** (block_size_bits)
+    else:
+        ruby.block_size_bytes = options.cacheline_size
+
     ruby.memory_size_bits = 48
 
     index = 0
@@ -115,15 +128,19 @@ def setup_memory_controllers(system, ruby, dir_cntrls, options):
         dir_ranges = []
         for r in system.mem_ranges:
             mem_type = ObjectList.mem_list.get(options.mem_type)
-            mem_ctrl = MemConfig.create_mem_ctrl(mem_type, r, index,
+            dram_intf = MemConfig.create_mem_intf(mem_type, r, index,
                 options.num_dirs, int(math.log(options.num_dirs, 2)),
-                intlv_size)
+                intlv_size, options.xor_low_bit)
+            if issubclass(mem_type, DRAMInterface):
+                mem_ctrl = m5.objects.MemCtrl(dram = dram_intf)
+            else:
+                mem_ctrl = dram_intf
 
             if options.access_backing_store:
-                mem_ctrl.kvm_map=False
+                dram_intf.kvm_map=False
 
             mem_ctrls.append(mem_ctrl)
-            dir_ranges.append(mem_ctrl.range)
+            dir_ranges.append(dram_intf.range)
 
             if crossbar != None:
                 mem_ctrl.port = crossbar.master
@@ -131,8 +148,8 @@ def setup_memory_controllers(system, ruby, dir_cntrls, options):
                 mem_ctrl.port = dir_cntrl.memory
 
             # Enable low-power DRAM states if option is set
-            if issubclass(mem_type, DRAMCtrl):
-                mem_ctrl.enable_dram_powerdown = \
+            if issubclass(mem_type, DRAMInterface):
+                mem_ctrl.dram.enable_dram_powerdown = \
                         options.enable_dram_powerdown
 
         index += 1
@@ -210,11 +227,7 @@ def create_system(options, full_system, system, piobus = None, dma_ports = [],
     # Connect the cpu sequencers and the piobus
     if piobus != None:
         for cpu_seq in cpu_sequencers:
-            cpu_seq.pio_master_port = piobus.slave
-            cpu_seq.mem_master_port = piobus.slave
-
-            if buildEnv['TARGET_ISA'] == "x86":
-                cpu_seq.pio_slave_port = piobus.master
+            cpu_seq.connectIOPorts(piobus)
 
     ruby.number_of_virtual_networks = ruby.network.number_of_virtual_networks
     ruby._cpu_ports = cpu_sequencers

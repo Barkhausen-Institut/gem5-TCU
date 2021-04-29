@@ -39,12 +39,13 @@
 
 #include "params/TickedObject.hh"
 #include "sim/clocked_object.hh"
+#include "sim/serialize.hh"
 
 Ticked::Ticked(ClockedObject &object_,
     Stats::Scalar *imported_num_cycles,
     Event::Priority priority) :
     object(object_),
-    event([this]{ processClockEvent(); }, name(), false, priority),
+    event([this]{ processClockEvent(); }, object_.name(), false, priority),
     running(false),
     lastStopped(0),
     /* Allocate numCycles if an external stat wasn't passed in */
@@ -106,7 +107,7 @@ Ticked::unserialize(CheckpointIn &cp)
     lastStopped = Cycles(lastStoppedUint);
 }
 
-TickedObject::TickedObject(const TickedObjectParams *params,
+TickedObject::TickedObject(const TickedObjectParams &params,
     Event::Priority priority) :
     ClockedObject(params),
     /* Make numCycles in Ticked */

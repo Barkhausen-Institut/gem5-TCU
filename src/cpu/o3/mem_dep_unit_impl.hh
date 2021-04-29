@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014 ARM Limited
+ * Copyright (c) 2012, 2014, 2020 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -42,7 +42,10 @@
 #define __CPU_O3_MEM_DEP_UNIT_IMPL_HH__
 
 #include <map>
+#include <memory>
+#include <vector>
 
+#include "base/debug.hh"
 #include "cpu/o3/inst_queue.hh"
 #include "cpu/o3/mem_dep_unit.hh"
 #include "debug/MemDepUnit.hh"
@@ -50,18 +53,18 @@
 
 template <class MemDepPred, class Impl>
 MemDepUnit<MemDepPred, Impl>::MemDepUnit()
-    : loadBarrier(false), loadBarrierSN(0), storeBarrier(false),
-      storeBarrierSN(0), iqPtr(NULL)
+    : iqPtr(NULL),
+      stats(nullptr)
 {
 }
 
 template <class MemDepPred, class Impl>
-MemDepUnit<MemDepPred, Impl>::MemDepUnit(DerivO3CPUParams *params)
-    : _name(params->name + ".memdepunit"),
-      depPred(params->store_set_clear_period, params->SSITSize,
-              params->LFSTSize),
-      loadBarrier(false), loadBarrierSN(0), storeBarrier(false),
-      storeBarrierSN(0), iqPtr(NULL)
+MemDepUnit<MemDepPred, Impl>::MemDepUnit(const DerivO3CPUParams &params)
+    : _name(params.name + ".memdepunit"),
+      depPred(params.store_set_clear_period, params.SSITSize,
+              params.LFSTSize),
+      iqPtr(NULL),
+      stats(nullptr)
 {
     DPRINTF(MemDepUnit, "Creating MemDepUnit object.\n");
 }
@@ -93,36 +96,32 @@ MemDepUnit<MemDepPred, Impl>::~MemDepUnit()
 
 template <class MemDepPred, class Impl>
 void
-MemDepUnit<MemDepPred, Impl>::init(DerivO3CPUParams *params, ThreadID tid)
+MemDepUnit<MemDepPred, Impl>::init(
+        const DerivO3CPUParams &params, ThreadID tid, O3CPU *cpu)
 {
     DPRINTF(MemDepUnit, "Creating MemDepUnit %i object.\n",tid);
 
-    _name = csprintf("%s.memDep%d", params->name, tid);
+    _name = csprintf("%s.memDep%d", params.name, tid);
     id = tid;
 
-    depPred.init(params->store_set_clear_period, params->SSITSize,
-            params->LFSTSize);
+    depPred.init(params.store_set_clear_period, params.SSITSize,
+            params.LFSTSize);
+
+    std::string stats_group_name = csprintf("MemDepUnit__%i", tid);
+    cpu->addStatGroup(stats_group_name.c_str(), &stats);
 }
 
 template <class MemDepPred, class Impl>
-void
-MemDepUnit<MemDepPred, Impl>::regStats()
+MemDepUnit<MemDepPred, Impl>::
+MemDepUnitStats::MemDepUnitStats(Stats::Group *parent)
+    : Stats::Group(parent),
+      ADD_STAT(insertedLoads, UNIT_COUNT,
+               "Number of loads inserted to the mem dependence unit."),
+      ADD_STAT(insertedStores, UNIT_COUNT,
+               "Number of stores inserted to the mem dependence unit."),
+      ADD_STAT(conflictingLoads, UNIT_COUNT, "Number of conflicting loads."),
+      ADD_STAT(conflictingStores, UNIT_COUNT, "Number of conflicting stores.")
 {
-    insertedLoads
-        .name(name() + ".insertedLoads")
-        .desc("Number of loads inserted to the mem dependence unit.");
-
-    insertedStores
-        .name(name() + ".insertedStores")
-        .desc("Number of stores inserted to the mem dependence unit.");
-
-    conflictingLoads
-        .name(name() + ".conflictingLoads")
-        .desc("Number of conflicting loads.");
-
-    conflictingStores
-        .name(name() + ".conflictingStores")
-        .desc("Number of conflicting stores.");
 }
 
 template <class MemDepPred, class Impl>
@@ -155,8 +154,8 @@ void
 MemDepUnit<MemDepPred, Impl>::takeOverFrom()
 {
     // Be sure to reset all state.
-    loadBarrier = storeBarrier = false;
-    loadBarrierSN = storeBarrierSN = 0;
+    loadBarrierSNs.clear();
+    storeBarrierSNs.clear();
     depPred.clear();
 }
 
@@ -165,6 +164,39 @@ void
 MemDepUnit<MemDepPred, Impl>::setIQ(InstructionQueue<Impl> *iq_ptr)
 {
     iqPtr = iq_ptr;
+}
+
+template <class MemDepPred, class Impl>
+void
+MemDepUnit<MemDepPred, Impl>::insertBarrierSN(const DynInstPtr &barr_inst)
+{
+    InstSeqNum barr_sn = barr_inst->seqNum;
+
+    if (barr_inst->isReadBarrier() || barr_inst->isHtmCmd())
+        loadBarrierSNs.insert(barr_sn);
+    if (barr_inst->isWriteBarrier() || barr_inst->isHtmCmd())
+        storeBarrierSNs.insert(barr_sn);
+
+    if (DTRACE(MemDepUnit)) {
+        const char *barrier_type = nullptr;
+        if (barr_inst->isReadBarrier() && barr_inst->isWriteBarrier())
+            barrier_type = "memory";
+        else if (barr_inst->isReadBarrier())
+            barrier_type = "read";
+        else if (barr_inst->isWriteBarrier())
+            barrier_type = "write";
+
+        if (barrier_type) {
+            DPRINTF(MemDepUnit, "Inserted a %s barrier %s SN:%lli\n",
+                    barrier_type, barr_inst->pcState(), barr_sn);
+        }
+
+        if (loadBarrierSNs.size() || storeBarrierSNs.size()) {
+            DPRINTF(MemDepUnit, "Outstanding load barriers = %d; "
+                                "store barriers = %d\n",
+                    loadBarrierSNs.size(), storeBarrierSNs.size());
+        }
+    }
 }
 
 template <class MemDepPred, class Impl>
@@ -188,39 +220,46 @@ MemDepUnit<MemDepPred, Impl>::insert(const DynInstPtr &inst)
 
     // Check any barriers and the dependence predictor for any
     // producing memrefs/stores.
-    InstSeqNum producing_store;
-    if ((inst->isLoad() || inst->isAtomic()) && loadBarrier) {
-        DPRINTF(MemDepUnit, "Load barrier [sn:%lli] in flight\n",
-                loadBarrierSN);
-        producing_store = loadBarrierSN;
-    } else if ((inst->isStore() || inst->isAtomic()) && storeBarrier) {
-        DPRINTF(MemDepUnit, "Store barrier [sn:%lli] in flight\n",
-                storeBarrierSN);
-        producing_store = storeBarrierSN;
+    std::vector<InstSeqNum>  producing_stores;
+    if ((inst->isLoad() || inst->isAtomic()) && hasLoadBarrier()) {
+        DPRINTF(MemDepUnit, "%d load barriers in flight\n",
+                loadBarrierSNs.size());
+        producing_stores.insert(std::end(producing_stores),
+                                std::begin(loadBarrierSNs),
+                                std::end(loadBarrierSNs));
+    } else if ((inst->isStore() || inst->isAtomic()) && hasStoreBarrier()) {
+        DPRINTF(MemDepUnit, "%d store barriers in flight\n",
+                storeBarrierSNs.size());
+        producing_stores.insert(std::end(producing_stores),
+                                std::begin(storeBarrierSNs),
+                                std::end(storeBarrierSNs));
     } else {
-        producing_store = depPred.checkInst(inst->instAddr());
+        InstSeqNum dep = depPred.checkInst(inst->instAddr());
+        if (dep != 0)
+            producing_stores.push_back(dep);
     }
 
-    MemDepEntryPtr store_entry = NULL;
+    std::vector<MemDepEntryPtr> store_entries;
 
     // If there is a producing store, try to find the entry.
-    if (producing_store != 0) {
-        DPRINTF(MemDepUnit, "Searching for producer\n");
+    for (auto producing_store : producing_stores) {
+        DPRINTF(MemDepUnit, "Searching for producer [sn:%lli]\n",
+                            producing_store);
         MemDepHashIt hash_it = memDepHash.find(producing_store);
 
         if (hash_it != memDepHash.end()) {
-            store_entry = (*hash_it).second;
-            DPRINTF(MemDepUnit, "Proucer found\n");
+            store_entries.push_back((*hash_it).second);
+            DPRINTF(MemDepUnit, "Producer found\n");
         }
     }
 
     // If no store entry, then instruction can issue as soon as the registers
     // are ready.
-    if (!store_entry) {
+    if (store_entries.empty()) {
         DPRINTF(MemDepUnit, "No dependency for inst PC "
                 "%s [sn:%lli].\n", inst->pcState(), inst->seqNum);
 
-        inst_entry->memDepReady = true;
+        assert(inst_entry->memDeps == 0);
 
         if (inst->readyToIssue()) {
             inst_entry->regsReady = true;
@@ -229,8 +268,9 @@ MemDepUnit<MemDepPred, Impl>::insert(const DynInstPtr &inst)
         }
     } else {
         // Otherwise make the instruction dependent on the store/barrier.
-        DPRINTF(MemDepUnit, "Adding to dependency list; "
-                "inst PC %s is dependent on [sn:%lli].\n",
+        DPRINTF(MemDepUnit, "Adding to dependency list\n");
+        for (M5_VAR_USED auto producing_store : producing_stores)
+            DPRINTF(MemDepUnit, "\tinst PC %s is dependent on [sn:%lli].\n",
                 inst->pcState(), producing_store);
 
         if (inst->readyToIssue()) {
@@ -241,14 +281,20 @@ MemDepUnit<MemDepPred, Impl>::insert(const DynInstPtr &inst)
         inst->clearCanIssue();
 
         // Add this instruction to the list of dependents.
-        store_entry->dependInsts.push_back(inst_entry);
+        for (auto store_entry : store_entries)
+            store_entry->dependInsts.push_back(inst_entry);
+
+        inst_entry->memDeps = store_entries.size();
 
         if (inst->isLoad()) {
-            ++conflictingLoads;
+            ++stats.conflictingLoads;
         } else {
-            ++conflictingStores;
+            ++stats.conflictingStores;
         }
     }
+
+    // for load-acquire store-release that could also be a barrier
+    insertBarrierSN(inst);
 
     if (inst->isStore() || inst->isAtomic()) {
         DPRINTF(MemDepUnit, "Inserting store/atomic PC %s [sn:%lli].\n",
@@ -256,9 +302,9 @@ MemDepUnit<MemDepPred, Impl>::insert(const DynInstPtr &inst)
 
         depPred.insertStore(inst->instAddr(), inst->seqNum, inst->threadNumber);
 
-        ++insertedStores;
+        ++stats.insertedStores;
     } else if (inst->isLoad()) {
-        ++insertedLoads;
+        ++stats.insertedLoads;
     } else {
         panic("Unknown type! (most likely a barrier).");
     }
@@ -268,21 +314,7 @@ template <class MemDepPred, class Impl>
 void
 MemDepUnit<MemDepPred, Impl>::insertNonSpec(const DynInstPtr &inst)
 {
-    ThreadID tid = inst->threadNumber;
-
-    MemDepEntryPtr inst_entry = std::make_shared<MemDepEntry>(inst);
-
-    // Insert the MemDepEntry into the hash.
-    memDepHash.insert(
-        std::pair<InstSeqNum, MemDepEntryPtr>(inst->seqNum, inst_entry));
-#ifdef DEBUG
-    MemDepEntry::memdep_insert++;
-#endif
-
-    // Add the instruction to the list.
-    instList[tid].push_back(inst);
-
-    inst_entry->listIt = --(instList[tid].end());
+    insertBarrier(inst);
 
     // Might want to turn this part into an inline function or something.
     // It's shared between both insert functions.
@@ -292,9 +324,9 @@ MemDepUnit<MemDepPred, Impl>::insertNonSpec(const DynInstPtr &inst)
 
         depPred.insertStore(inst->instAddr(), inst->seqNum, inst->threadNumber);
 
-        ++insertedStores;
+        ++stats.insertedStores;
     } else if (inst->isLoad()) {
-        ++insertedLoads;
+        ++stats.insertedLoads;
     } else {
         panic("Unknown type! (most likely a barrier).");
     }
@@ -304,28 +336,13 @@ template <class MemDepPred, class Impl>
 void
 MemDepUnit<MemDepPred, Impl>::insertBarrier(const DynInstPtr &barr_inst)
 {
-    InstSeqNum barr_sn = barr_inst->seqNum;
-    // Memory barriers block loads and stores, write barriers only stores.
-    if (barr_inst->isMemBarrier()) {
-        loadBarrier = true;
-        loadBarrierSN = barr_sn;
-        storeBarrier = true;
-        storeBarrierSN = barr_sn;
-        DPRINTF(MemDepUnit, "Inserted a memory barrier %s SN:%lli\n",
-                barr_inst->pcState(),barr_sn);
-    } else if (barr_inst->isWriteBarrier()) {
-        storeBarrier = true;
-        storeBarrierSN = barr_sn;
-        DPRINTF(MemDepUnit, "Inserted a write barrier\n");
-    }
-
     ThreadID tid = barr_inst->threadNumber;
 
     MemDepEntryPtr inst_entry = std::make_shared<MemDepEntry>(barr_inst);
 
     // Add the MemDepEntry to the hash.
     memDepHash.insert(
-        std::pair<InstSeqNum, MemDepEntryPtr>(barr_sn, inst_entry));
+        std::pair<InstSeqNum, MemDepEntryPtr>(barr_inst->seqNum, inst_entry));
 #ifdef DEBUG
     MemDepEntry::memdep_insert++;
 #endif
@@ -334,6 +351,8 @@ MemDepUnit<MemDepPred, Impl>::insertBarrier(const DynInstPtr &barr_inst)
     instList[tid].push_back(barr_inst);
 
     inst_entry->listIt = --(instList[tid].end());
+
+    insertBarrierSN(barr_inst);
 }
 
 template <class MemDepPred, class Impl>
@@ -348,7 +367,7 @@ MemDepUnit<MemDepPred, Impl>::regsReady(const DynInstPtr &inst)
 
     inst_entry->regsReady = true;
 
-    if (inst_entry->memDepReady) {
+    if (inst_entry->memDeps == 0) {
         DPRINTF(MemDepUnit, "Instruction has its memory "
                 "dependencies resolved, adding it to the ready list.\n");
 
@@ -426,22 +445,33 @@ MemDepUnit<MemDepPred, Impl>::completed(const DynInstPtr &inst)
 
 template <class MemDepPred, class Impl>
 void
-MemDepUnit<MemDepPred, Impl>::completeBarrier(const DynInstPtr &inst)
+MemDepUnit<MemDepPred, Impl>::completeInst(const DynInstPtr &inst)
 {
     wakeDependents(inst);
     completed(inst);
-
     InstSeqNum barr_sn = inst->seqNum;
-    DPRINTF(MemDepUnit, "barrier completed: %s SN:%lli\n", inst->pcState(),
-            inst->seqNum);
-    if (inst->isMemBarrier()) {
-        if (loadBarrierSN == barr_sn)
-            loadBarrier = false;
-        if (storeBarrierSN == barr_sn)
-            storeBarrier = false;
-    } else if (inst->isWriteBarrier()) {
-        if (storeBarrierSN == barr_sn)
-            storeBarrier = false;
+
+    if (inst->isWriteBarrier() || inst->isHtmCmd()) {
+        assert(hasStoreBarrier());
+        storeBarrierSNs.erase(barr_sn);
+    }
+    if (inst->isReadBarrier() || inst->isHtmCmd()) {
+        assert(hasLoadBarrier());
+        loadBarrierSNs.erase(barr_sn);
+    }
+    if (DTRACE(MemDepUnit)) {
+        const char *barrier_type = nullptr;
+        if (inst->isWriteBarrier() && inst->isReadBarrier())
+            barrier_type = "Memory";
+        else if (inst->isWriteBarrier())
+            barrier_type = "Write";
+        else if (inst->isReadBarrier())
+            barrier_type = "Read";
+
+        if (barrier_type) {
+            DPRINTF(MemDepUnit, "%s barrier completed: %s SN:%lli\n",
+                                barrier_type, inst->pcState(), inst->seqNum);
+        }
     }
 }
 
@@ -450,8 +480,8 @@ void
 MemDepUnit<MemDepPred, Impl>::wakeDependents(const DynInstPtr &inst)
 {
     // Only stores, atomics and barriers have dependents.
-    if (!inst->isStore() && !inst->isAtomic() && !inst->isMemBarrier() &&
-        !inst->isWriteBarrier()) {
+    if (!inst->isStore() && !inst->isAtomic() && !inst->isReadBarrier() &&
+        !inst->isWriteBarrier() && !inst->isHtmCmd()) {
         return;
     }
 
@@ -469,10 +499,13 @@ MemDepUnit<MemDepPred, Impl>::wakeDependents(const DynInstPtr &inst)
                 "[sn:%lli].\n",
                 woken_inst->inst->seqNum);
 
-        if (woken_inst->regsReady && !woken_inst->squashed) {
+        assert(woken_inst->memDeps > 0);
+        woken_inst->memDeps -= 1;
+
+        if ((woken_inst->memDeps == 0) &&
+            woken_inst->regsReady &&
+            !woken_inst->squashed) {
             moveToReady(woken_inst);
-        } else {
-            woken_inst->memDepReady = true;
         }
     }
 
@@ -507,11 +540,9 @@ MemDepUnit<MemDepPred, Impl>::squash(const InstSeqNum &squashed_num,
         DPRINTF(MemDepUnit, "Squashing inst [sn:%lli]\n",
                 (*squash_it)->seqNum);
 
-        if ((*squash_it)->seqNum == loadBarrierSN)
-              loadBarrier = false;
+        loadBarrierSNs.erase((*squash_it)->seqNum);
 
-        if ((*squash_it)->seqNum == storeBarrierSN)
-              storeBarrier = false;
+        storeBarrierSNs.erase((*squash_it)->seqNum);
 
         hash_it = memDepHash.find((*squash_it)->seqNum);
 

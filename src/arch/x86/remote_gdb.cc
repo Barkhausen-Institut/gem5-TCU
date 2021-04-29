@@ -44,6 +44,7 @@
 
 #include <string>
 
+#include "arch/x86/mmu.hh"
 #include "arch/x86/pagetable_walker.hh"
 #include "arch/x86/process.hh"
 #include "arch/x86/regs/int.hh"
@@ -57,7 +58,6 @@
 #include "mem/page_table.hh"
 #include "sim/full_system.hh"
 
-using namespace std;
 using namespace X86ISA;
 
 RemoteGDB::RemoteGDB(System *_system, ThreadContext *c, int _port) :
@@ -68,8 +68,8 @@ bool
 RemoteGDB::acc(Addr va, size_t len)
 {
     if (FullSystem) {
-        Walker *walker = dynamic_cast<TLB *>(
-            context()->getDTBPtr())->getWalker();
+        Walker *walker = dynamic_cast<MMU *>(
+            context()->getMMUPtr())->getDataWalker();
         unsigned logBytes;
         Fault fault = walker->startFunctional(context(), va, logBytes,
                                               BaseTLB::Read);

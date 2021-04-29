@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2018 Inria
+ * Copyright (c) 2018, 2020 Inria
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -62,7 +62,17 @@ class SectorSubBlk : public CacheBlk
     SectorSubBlk() : CacheBlk(), _sectorBlk(nullptr), _sectorOffset(0) {}
     SectorSubBlk(const SectorSubBlk&) = delete;
     SectorSubBlk& operator=(const SectorSubBlk&) = delete;
-    ~SectorSubBlk() {};
+    SectorSubBlk(SectorSubBlk&&) = delete;
+    /**
+     * Move assignment operator.
+     * This should only be used to move an existing valid entry into an
+     * invalid one, not to create a new entry. In the end the valid entry
+     * will become invalid, and the invalid, valid. All location related
+     * variables will remain the same, that is, an entry cannot change
+     * its sector block nor its offset.
+     */
+    SectorSubBlk& operator=(SectorSubBlk&& other) = default;
+    ~SectorSubBlk() = default;
 
     /**
      * Set sector block associated to this block.
@@ -76,7 +86,7 @@ class SectorSubBlk : public CacheBlk
      *
      * @return The sector block pointer.
      */
-    const SectorBlk* getSectorBlock() const;
+    SectorBlk* getSectorBlock() const;
 
     /**
      * Set offset of this sub-block within the sector.
@@ -92,41 +102,19 @@ class SectorSubBlk : public CacheBlk
      */
     int getSectorOffset() const;
 
-    /**
-     * Get tag associated to this block.
-     *
-     * @return The tag value.
-     */
-    Addr getTag() const;
+    Addr getTag() const override;
 
     /**
      * Set valid bit and inform sector block.
      */
     void setValid() override;
 
-    /**
-     * Set secure bit and inform sector block.
-     */
-    void setSecure() override;
+    void insert(const Addr tag, const bool is_secure) override;
 
     /**
      * Invalidate the block and inform sector block.
      */
     void invalidate() override;
-
-    /**
-     * Set member variables when a block insertion occurs. Resets reference
-     * count to 1 (the insertion counts as a reference), and touch block if
-     * it hadn't been touched previously. Sets the insertion tick to the
-     * current tick. Marks the block valid.
-     *
-     * @param tag Block address tag.
-     * @param is_secure Whether the block is in secure space or not.
-     * @param src_master_ID The source requestor ID.
-     * @param task_ID The new task ID.
-     */
-    void insert(const Addr tag, const bool is_secure, const int src_master_ID,
-                const uint32_t task_ID) override;
 
     /**
      * Pretty-print sector offset and other CacheBlk information.
@@ -140,7 +128,7 @@ class SectorSubBlk : public CacheBlk
  * A Basic Sector block.
  * Contains the tag and a list of blocks associated to this sector.
  */
-class SectorBlk : public ReplaceableEntry
+class SectorBlk : public TaggedEntry
 {
   private:
     /**
@@ -148,17 +136,6 @@ class SectorBlk : public ReplaceableEntry
      * of its sub-blocks is valid.
      */
     uint8_t _validCounter;
-
-  protected:
-    /**
-     * Sector tag value. A sector's tag is the tag of all its sub-blocks.
-     */
-    Addr _tag;
-
-    /**
-     * Whether sector blk is in secure-space or not.
-     */
-    bool _secureBit;
 
   public:
     SectorBlk();
@@ -174,7 +151,7 @@ class SectorBlk : public ReplaceableEntry
      *
      * @return True if any of the blocks in the sector is valid.
      */
-    bool isValid() const;
+    bool isValid() const override;
 
     /**
      * Get the number of sub-blocks that have been validated.
@@ -182,29 +159,6 @@ class SectorBlk : public ReplaceableEntry
      * @return The number of valid sub-blocks.
      */
     uint8_t getNumValid() const;
-
-    /**
-     * Checks that a sector block is secure. A single secure block suffices
-     * to imply that the whole sector is secure, as the insertion proccess
-     * asserts that different secure spaces can't coexist in the same sector.
-     *
-     * @return True if any of the blocks in the sector is secure.
-     */
-    bool isSecure() const;
-
-    /**
-     * Set tag associated to this block.
-     *
-     * @param The tag value.
-     */
-    void setTag(const Addr tag);
-
-    /**
-     * Get tag associated to this block.
-     *
-     * @return The tag value.
-     */
-    Addr getTag() const;
 
     /**
      * Increase the number of valid sub-blocks.
@@ -217,17 +171,19 @@ class SectorBlk : public ReplaceableEntry
     void invalidateSubBlk();
 
     /**
-     * Set secure bit.
-     */
-    void setSecure();
-
-    /**
      * Sets the position of the sub-entries, besides its own.
      *
      * @param set The set of this entry and sub-entries.
      * @param way The way of this entry and sub-entries.
      */
     void setPosition(const uint32_t set, const uint32_t way) override;
+
+    /**
+     * Print relevant information for this sector block and its sub-blocks.
+     *
+     * @return A string with the contents of the sector block.
+     */
+    std::string print() const override;
 };
 
 #endif //__MEM_CACHE_TAGS_SECTOR_BLK_HH__

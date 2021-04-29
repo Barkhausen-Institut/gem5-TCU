@@ -1,4 +1,4 @@
-# Copyright (c) 2009, 2012-2013, 2015-2020 ARM Limited
+# Copyright (c) 2009, 2012-2013, 2015-2021 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -48,7 +48,6 @@ class ArmSystem(System):
     cxx_header = "arch/arm/system.hh"
     multi_proc = Param.Bool(True, "Multiprocessor system?")
     gic_cpu_addr = Param.Addr(0, "Addres of the GIC CPU interface")
-    flags_addr = Param.Addr(0, "Address of the flags register for MP booting")
     have_security = Param.Bool(False,
         "True if Security Extensions are implemented")
     have_virtualization = Param.Bool(False,
@@ -60,7 +59,7 @@ class ArmSystem(System):
         "Reset address (ARMv8)")
     auto_reset_addr = Param.Bool(True,
         "Determine reset address from kernel entry point if no boot loader")
-    highest_el_is_64 = Param.Bool(False,
+    highest_el_is_64 = Param.Bool(True,
         "True if the register width of the highest implemented exception level "
         "is 64 bits (ARMv8)")
     phys_addr_range_64 = Param.UInt8(40,
@@ -73,9 +72,14 @@ class ArmSystem(System):
         "SVE vector length in quadwords (128-bit)")
     have_lse = Param.Bool(True,
         "True if LSE is implemented (ARMv8.1)")
+    have_vhe = Param.Bool(False,
+        "True if FEAT_VHE (Virtualization Host Extensions) is implemented")
     have_pan = Param.Bool(True,
         "True if Priviledge Access Never is implemented (ARMv8.1)")
-
+    have_secel2 = Param.Bool(True,
+        "True if Secure EL2 is implemented (ARMv8)")
+    have_tme = Param.Bool(False,
+        "True if transactional memory extension (TME) is implemented")
     semihosting = Param.ArmSemihosting(NULL,
         "Enable support for the Arm semihosting by settings this parameter")
 
@@ -106,7 +110,7 @@ class ArmSystem(System):
         # root instead of appended.
 
         def generateMemNode(mem_range):
-            node = FdtNode("memory@%x" % long(mem_range.start))
+            node = FdtNode("memory@%x" % int(mem_range.start))
             node.append(FdtPropertyStrings("device_type", ["memory"]))
             node.append(FdtPropertyWords("reg",
                 state.addrCells(mem_range.start) +

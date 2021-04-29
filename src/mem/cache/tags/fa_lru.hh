@@ -153,18 +153,13 @@ class FALRU : public BaseTags
     /**
      * Construct and initialize this cache tagstore.
      */
-    FALRU(const Params *p);
+    FALRU(const Params &p);
     ~FALRU();
 
     /**
      * Initialize blocks as FALRUBlk instances.
      */
     void tagsInit() override;
-
-    /**
-     * Register the stats for this object.
-     */
-    void regStats() override;
 
     /**
      * Invalidate a cache block.
@@ -232,6 +227,8 @@ class FALRU : public BaseTags
      */
     void insertBlock(const PacketPtr pkt, CacheBlk *blk) override;
 
+    void moveBlock(CacheBlk *src_blk, CacheBlk *dest_blk) override;
+
     /**
      * Generate the tag from the addres. For fully associative this is just the
      * block address.
@@ -251,7 +248,7 @@ class FALRU : public BaseTags
      */
     Addr regenerateBlkAddr(const CacheBlk* blk) const override
     {
-        return blk->tag;
+        return blk->getTag();
     }
 
     void forEachBlk(std::function<void(CacheBlk &)> visitor) override {
@@ -276,23 +273,11 @@ class FALRU : public BaseTags
      * caches from a set minimum size of interest up to the actual
      * cache size.
      */
-    class CacheTracking
+    class CacheTracking : public Stats::Group
     {
       public:
         CacheTracking(unsigned min_size, unsigned max_size,
-                      unsigned block_size)
-            : blkSize(block_size),
-              minTrackedSize(min_size),
-              numTrackedCaches(max_size > min_size ?
-                               floorLog2(max_size) - floorLog2(min_size) : 0),
-              inAllCachesMask(mask(numTrackedCaches)),
-              boundaries(numTrackedCaches)
-        {
-            fatal_if(numTrackedCaches > sizeof(CachesMask) * 8,
-                     "Not enough bits (%s) in type CachesMask type to keep "
-                     "track of %d caches\n", sizeof(CachesMask),
-                     numTrackedCaches);
-        }
+                      unsigned block_size, Stats::Group *parent);
 
         /**
          * Initialiaze cache blocks and the tracking mechanism
@@ -349,11 +334,6 @@ class FALRU : public BaseTags
          * @param head the LRU block of the actual cache
          */
         void check(const FALRUBlk *head, const FALRUBlk *tail) const;
-
-        /**
-         * Register the stats for this object.
-         */
-        void regStats(std::string name);
 
       private:
         /** The size of the cache block */

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2018 ARM Limited
+ * Copyright (c) 2015, 2018, 2020 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -48,15 +48,16 @@
 
 #include <algorithm>
 #include <iostream>
-#include <list>
-#include <map>
+#include <iterator>
 #include <stack>
 #include <set>
+#include <type_traits>
+#include <unordered_map>
 #include <vector>
 
-#include "base/bitunion.hh"
+#include "base/inifile.hh"
 #include "base/logging.hh"
-#include "base/str.hh"
+#include "sim/serialize_handlers.hh"
 
 class IniFile;
 class SimObject;
@@ -79,6 +80,8 @@ class CheckpointIn
     ~CheckpointIn();
 
     /**
+     * @return Returns the current directory being used for creating
+     * checkpoints or restoring checkpoints.
      * @ingroup api_serialize
      * @{
      */
@@ -92,6 +95,8 @@ class CheckpointIn
 
     bool entryExists(const std::string &section, const std::string &entry);
     bool sectionExists(const std::string &section);
+    void visitSection(const std::string &section,
+        IniFile::VisitSectionCallback cb);
     /** @}*/ //end of api_checkout group
 
     // The following static functions have to do with checkpoint
@@ -136,6 +141,10 @@ class CheckpointIn
 /**
  * Basic support for object serialization.
  *
+ * The Serailizable interface is used to create checkpoints. Any
+ * object that implements this interface can be included in
+ * gem5's checkpointing system.
+ *
  * Objects that support serialization should derive from this
  * class. Such objects can largely be divided into two categories: 1)
  * True SimObjects (deriving from SimObject), and 2) child objects
@@ -165,27 +174,28 @@ class CheckpointIn
  */
 class Serializable
 {
-  protected:
-    /**
-     * Scoped checkpoint section helper class
-     *
-     * This helper class creates a section within a checkpoint without
-     * the need for a separate serializeable object. It is mainly used
-     * within the Serializable class when serializing or unserializing
-     * section (see serializeSection() and unserializeSection()). It
-     * can also be used to maintain backwards compatibility in
-     * existing code that serializes structs that are not inheriting
-     * from Serializable into subsections.
-     *
-     * When the class is instantiated, it appends a name to the active
-     * path in a checkpoint. The old path is later restored when the
-     * instance is destroyed. For example, serializeSection() could be
-     * implemented by instantiating a ScopedCheckpointSection and then
-     * calling serialize() on an object.
-     */
+  public:
     class ScopedCheckpointSection {
       public:
         /**
+         * This is the constructor for Scoped checkpoint section helper
+         * class.
+         *
+         * Scoped checkpoint helper class creates a section within a
+         * checkpoint without the need for a separate serializeable
+         * object. It is mainly used within the Serializable class
+         * when serializing or unserializing section (see
+         * serializeSection() and unserializeSection()). It
+         * can also be used to maintain backwards compatibility in
+         * existing code that serializes structs that are not inheriting
+         * from Serializable into subsections.
+         *
+         * When the class is instantiated, it appends a name to the active
+         * path in a checkpoint. The old path is later restored when the
+         * instance is destroyed. For example, serializeSection() could be
+         * implemented by instantiating a ScopedCheckpointSection and then
+         * calling serialize() on an object.
+         *
          * @ingroup api_serialize
          * @{
          */
@@ -217,7 +227,6 @@ class Serializable
         void nameOut(CheckpointIn &cp) {};
     };
 
-  public:
     /**
      * @ingroup api_serialize
      */
@@ -297,6 +306,8 @@ class Serializable
     static const std::string &currentSection();
 
     /**
+     * Serializes all the SimObjects.
+     *
      * @ingroup api_serialize
      */
     static void serializeAll(const std::string &cpt_dir);
@@ -311,142 +322,10 @@ class Serializable
 };
 
 /**
- * @ingroup api_serialize
- */
-template <class T>
-bool
-parseParam(const std::string &s, T &value)
-{
-    // The base implementations use to_number for parsing and '<<' for
-    // displaying, suitable for integer types.
-    return to_number(s, value);
-}
-
-/**
- * @ingroup api_serialize
- */
-template <class T>
-void
-showParam(CheckpointOut &os, const T &value)
-{
-    os << value;
-}
-
-/**
- * @ingroup api_serialize
- */
-template <class T>
-bool
-parseParam(const std::string &s, BitUnionType<T> &value)
-{
-    // Zero initialize storage to avoid leaking an uninitialized value
-    BitUnionBaseType<T> storage = BitUnionBaseType<T>();
-    auto res = to_number(s, storage);
-    value = storage;
-    return res;
-}
-
-/**
- * @ingroup api_serialize
- */
-template <class T>
-void
-showParam(CheckpointOut &os, const BitUnionType<T> &value)
-{
-    auto storage = static_cast<BitUnionBaseType<T>>(value);
-
-    // For a BitUnion8, the storage type is an unsigned char.
-    // Since we want to serialize a number we need to cast to
-    // unsigned int
-    os << ((sizeof(storage) == 1) ?
-        static_cast<unsigned int>(storage) : storage);
-}
-
-/**
- * @ingroup api_serialize
- */
-template <>
-inline void
-showParam(CheckpointOut &os, const char &value)
-{
-    // Treat 8-bit ints (chars) as ints on output, not as chars
-    os << (int)value;
-}
-
-/**
- * @ingroup api_serialize
- */
-template <>
-inline void
-showParam(CheckpointOut &os, const signed char &value)
-{
-    os << (int)value;
-}
-
-/**
- * @ingroup api_serialize
- */
-template <>
-inline void
-showParam(CheckpointOut &os, const unsigned char &value)
-{
-    os << (unsigned int)value;
-}
-
-/**
- * @ingroup api_serialize
- */
-template <>
-inline bool
-parseParam(const std::string &s, float &value)
-{
-    return to_number(s, value);
-}
-
-/**
- * @ingroup api_serialize
- */
-template <>
-inline bool
-parseParam(const std::string &s, double &value)
-{
-    return to_number(s, value);
-}
-
-/**
- * @ingroup api_serialize
- */
-template <>
-inline bool
-parseParam(const std::string &s, bool &value)
-{
-    return to_bool(s, value);
-}
-
-/**
- * @ingroup api_serialize
- */
-template <>
-inline void
-showParam(CheckpointOut &os, const bool &value)
-{
-    // Display bools as strings
-    os << (value ? "true" : "false");
-}
-
-/**
- * @ingroup api_serialize
- */
-template <>
-inline bool
-parseParam(const std::string &s, std::string &value)
-{
-    // String requires no processing to speak of
-    value = s;
-    return true;
-}
-
-/**
+ * This function is used for writing parameters to a checkpoint.
+ * @param os The checkpoint to be written to.
+ * @param name Name of the parameter to be set.
+ * @param param Value of the parameter to be written.
  * @ingroup api_serialize
  */
 template <class T>
@@ -454,58 +333,75 @@ void
 paramOut(CheckpointOut &os, const std::string &name, const T &param)
 {
     os << name << "=";
-    showParam(os, param);
+    ShowParam<T>::show(os, param);
     os << "\n";
 }
 
+template <class T>
+bool
+paramInImpl(CheckpointIn &cp, const std::string &name, T &param)
+{
+    const std::string &section(Serializable::currentSection());
+    std::string str;
+    return cp.find(section, name, str) && ParseParam<T>::parse(str, param);
+}
+
 /**
+ * This function is used for restoring optional parameters from the
+ * checkpoint.
+ * @param cp The checkpoint to be read from.
+ * @param name Name of the parameter to be read.
+ * @param param Value of the parameter to be read.
+ * @param do_warn If the warn is set to true then the function prints the
+ * warning message.
+ * @return Returns if the parameter existed in the checkpoint.
+ *
+ * @ingroup api_serialize
+ */
+template <class T>
+bool
+optParamIn(CheckpointIn &cp, const std::string &name, T &param,
+           bool do_warn=true)
+{
+    if (paramInImpl(cp, name, param))
+        return true;
+
+    warn_if(do_warn, "optional parameter %s:%s not present",
+            Serializable::currentSection(), name);
+    return false;
+}
+
+/**
+ * This function is used for restoring parameters from a checkpoint.
+ * @param os The checkpoint to be restored from.
+ * @param name Name of the parameter to be set.
+ * @param param Value of the parameter to be restored.
  * @ingroup api_serialize
  */
 template <class T>
 void
 paramIn(CheckpointIn &cp, const std::string &name, T &param)
 {
-    const std::string &section(Serializable::currentSection());
-    std::string str;
-    if (!cp.find(section, name, str) || !parseParam(str, param)) {
-        fatal("Can't unserialize '%s:%s'\n", section, name);
-    }
+    fatal_if(!paramInImpl(cp, name, param),
+        "Can't unserialize '%s:%s'", Serializable::currentSection(), name);
 }
 
 /**
  * @ingroup api_serialize
  */
-template <class T>
-bool
-optParamIn(CheckpointIn &cp, const std::string &name,
-           T &param, bool warn = true)
-{
-    const std::string &section(Serializable::currentSection());
-    std::string str;
-    if (!cp.find(section, name, str) || !parseParam(str, param)) {
-        if (warn)
-            warn("optional parameter %s:%s not present\n", section, name);
-        return false;
-    } else {
-        return true;
-    }
-}
-
-/**
- * @ingroup api_serialize
- */
-template <class T>
+template <class InputIterator>
 void
 arrayParamOut(CheckpointOut &os, const std::string &name,
-              const std::vector<T> &param)
+              InputIterator start, InputIterator end)
 {
-    typename std::vector<T>::size_type size = param.size();
     os << name << "=";
-    if (size > 0)
-        showParam(os, param[0]);
-    for (typename std::vector<T>::size_type i = 1; i < size; ++i) {
+    auto it = start;
+    using Elem = std::remove_cv_t<std::remove_reference_t<decltype(*it)>>;
+    if (it != end)
+        ShowParam<Elem>::show(os, *it++);
+    while (it != end) {
         os << " ";
-        showParam(os, param[i]);
+        ShowParam<Elem>::show(os, *it++);
     }
     os << "\n";
 }
@@ -514,45 +410,14 @@ arrayParamOut(CheckpointOut &os, const std::string &name,
  * @ingroup api_serialize
  */
 template <class T>
-void
+decltype(std::begin(std::declval<const T&>()),
+         std::end(std::declval<const T&>()), void())
 arrayParamOut(CheckpointOut &os, const std::string &name,
-              const std::list<T> &param)
+              const T &param)
 {
-    typename std::list<T>::const_iterator it = param.begin();
-
-    os << name << "=";
-    if (param.size() > 0)
-        showParam(os, *it);
-    it++;
-    while (it != param.end()) {
-        os << " ";
-        showParam(os, *it);
-        it++;
-    }
-    os << "\n";
+    arrayParamOut(os, name, std::begin(param), std::end(param));
 }
 
-/**
- * @ingroup api_serialize
- */
-template <class T>
-void
-arrayParamOut(CheckpointOut &os, const std::string &name,
-              const std::set<T> &param)
-{
-    typename std::set<T>::const_iterator it = param.begin();
-
-    os << name << "=";
-    if (param.size() > 0)
-        showParam(os, *it);
-    it++;
-    while (it != param.end()) {
-        os << " ";
-        showParam(os, *it);
-        it++;
-    }
-    os << "\n";
-}
 
 /**
  * @ingroup api_serialize
@@ -562,14 +427,7 @@ void
 arrayParamOut(CheckpointOut &os, const std::string &name,
               const T *param, unsigned size)
 {
-    os << name << "=";
-    if (size > 0)
-        showParam(os, param[0]);
-    for (unsigned i = 1; i < size; ++i) {
-        os << " ";
-        showParam(os, param[i]);
-    }
-    os << "\n";
+    arrayParamOut(os, name, param, param + size);
 }
 
 /**
@@ -583,160 +441,72 @@ arrayParamOut(CheckpointOut &os, const std::string &name,
  *
  * @ingroup api_serialize
  */
+
+template <class T, class InsertIterator>
+void
+arrayParamIn(CheckpointIn &cp, const std::string &name,
+             InsertIterator inserter, ssize_t fixed_size=-1)
+{
+    const std::string &section = Serializable::currentSection();
+    std::string str;
+    fatal_if(!cp.find(section, name, str),
+        "Can't unserialize '%s:%s'.", section, name);
+
+    std::vector<std::string> tokens;
+    tokenize(tokens, str, ' ');
+
+    fatal_if(fixed_size >= 0 && tokens.size() != fixed_size,
+             "Array size mismatch on %s:%s (Got %u, expected %u)'\n",
+             section, name, tokens.size(), fixed_size);
+
+    for (const auto &token: tokens) {
+        T value;
+        fatal_if(!ParseParam<T>::parse(token, value),
+                 "Could not parse \"%s\".", str);
+        *inserter = value;
+    }
+}
+
+/**
+ * @ingroup api_serialize
+ */
+template <class T>
+decltype(std::declval<T>().insert(std::declval<typename T::value_type>()),
+         void())
+arrayParamIn(CheckpointIn &cp, const std::string &name, T &param)
+{
+    param.clear();
+    arrayParamIn<typename T::value_type>(
+            cp, name, std::inserter(param, param.begin()));
+}
+
+/**
+ * @ingroup api_serialize
+ */
+template <class T>
+decltype(std::declval<T>().push_back(std::declval<typename T::value_type>()),
+         void())
+arrayParamIn(CheckpointIn &cp, const std::string &name, T &param)
+{
+    param.clear();
+    arrayParamIn<typename T::value_type>(cp, name, std::back_inserter(param));
+}
+
+/**
+ * @ingroup api_serialize
+ */
 template <class T>
 void
 arrayParamIn(CheckpointIn &cp, const std::string &name,
              T *param, unsigned size)
 {
-    const std::string &section(Serializable::currentSection());
-    std::string str;
-    if (!cp.find(section, name, str)) {
-        fatal("Can't unserialize '%s:%s'\n", section, name);
-    }
+    struct ArrayInserter
+    {
+        T *data;
+        T &operator *() { return *data++; }
+    } insert_it{param};
 
-    // code below stolen from VectorParam<T>::parse().
-    // it would be nice to unify these somehow...
-
-    std::vector<std::string> tokens;
-
-    tokenize(tokens, str, ' ');
-
-    // Need this if we were doing a vector
-    // value.resize(tokens.size());
-
-    fatal_if(tokens.size() != size,
-             "Array size mismatch on %s:%s (Got %u, expected %u)'\n",
-             section, name, tokens.size(), size);
-
-    for (std::vector<std::string>::size_type i = 0; i < tokens.size(); i++) {
-        // need to parse into local variable to handle vector<bool>,
-        // for which operator[] returns a special reference class
-        // that's not the same as 'bool&', (since it's a packed
-        // vector)
-        T scalar_value;
-        if (!parseParam(tokens[i], scalar_value)) {
-            std::string err("could not parse \"");
-
-            err += str;
-            err += "\"";
-
-            fatal(err);
-        }
-
-        // assign parsed value to vector
-        param[i] = scalar_value;
-    }
-}
-
-/**
- * @ingroup api_serialize
- */
-template <class T>
-void
-arrayParamIn(CheckpointIn &cp, const std::string &name, std::vector<T> &param)
-{
-    const std::string &section(Serializable::currentSection());
-    std::string str;
-    if (!cp.find(section, name, str)) {
-        fatal("Can't unserialize '%s:%s'\n", section, name);
-    }
-
-    // code below stolen from VectorParam<T>::parse().
-    // it would be nice to unify these somehow...
-
-    std::vector<std::string> tokens;
-
-    tokenize(tokens, str, ' ');
-
-    // Need this if we were doing a vector
-    // value.resize(tokens.size());
-
-    param.resize(tokens.size());
-
-    for (std::vector<std::string>::size_type i = 0; i < tokens.size(); i++) {
-        // need to parse into local variable to handle vector<bool>,
-        // for which operator[] returns a special reference class
-        // that's not the same as 'bool&', (since it's a packed
-        // vector)
-        T scalar_value;
-        if (!parseParam(tokens[i], scalar_value)) {
-            std::string err("could not parse \"");
-
-            err += str;
-            err += "\"";
-
-            fatal(err);
-        }
-
-        // assign parsed value to vector
-        param[i] = scalar_value;
-    }
-}
-
-/**
- * @ingroup api_serialize
- */
-template <class T>
-void
-arrayParamIn(CheckpointIn &cp, const std::string &name, std::list<T> &param)
-{
-    const std::string &section(Serializable::currentSection());
-    std::string str;
-    if (!cp.find(section, name, str)) {
-        fatal("Can't unserialize '%s:%s'\n", section, name);
-    }
-    param.clear();
-
-    std::vector<std::string> tokens;
-    tokenize(tokens, str, ' ');
-
-    for (std::vector<std::string>::size_type i = 0; i < tokens.size(); i++) {
-        T scalar_value;
-        if (!parseParam(tokens[i], scalar_value)) {
-            std::string err("could not parse \"");
-
-            err += str;
-            err += "\"";
-
-            fatal(err);
-        }
-
-        // assign parsed value to vector
-        param.push_back(scalar_value);
-    }
-}
-
-/**
- * @ingroup api_serialize
- */
-template <class T>
-void
-arrayParamIn(CheckpointIn &cp, const std::string &name, std::set<T> &param)
-{
-    const std::string &section(Serializable::currentSection());
-    std::string str;
-    if (!cp.find(section, name, str)) {
-        fatal("Can't unserialize '%s:%s'\n", section, name);
-    }
-    param.clear();
-
-    std::vector<std::string> tokens;
-    tokenize(tokens, str, ' ');
-
-    for (std::vector<std::string>::size_type i = 0; i < tokens.size(); i++) {
-        T scalar_value;
-        if (!parseParam(tokens[i], scalar_value)) {
-            std::string err("could not parse \"");
-
-            err += str;
-            err += "\"";
-
-            fatal(err);
-        }
-
-        // assign parsed value to vector
-        param.insert(scalar_value);
-    }
+    arrayParamIn<T>(cp, name, insert_it, size);
 }
 
 void
@@ -748,6 +518,57 @@ debug_serialize(const std::string &cpt_dir);
  */
 void
 objParamIn(CheckpointIn &cp, const std::string &name, SimObject * &param);
+
+/**
+ * Serialize a mapping represented as two arrays: one containing names
+ * and the other containing values.
+ *
+ * @param names array of keys
+ * @param param array of values
+ * @param size size of the names and param arrays
+ */
+template <class T>
+void
+mappingParamOut(CheckpointOut &os, const char* sectionName,
+    const char* const names[], const T *param, unsigned size)
+{
+    Serializable::ScopedCheckpointSection sec(os, sectionName);
+    for (unsigned i = 0; i < size; ++i) {
+        paramOut(os, names[i], param[i]);
+    }
+}
+
+/**
+ * Restore mappingParamOut. Keys missing from the checkpoint are ignored.
+ */
+template <class T>
+void
+mappingParamIn(CheckpointIn &cp, const char* sectionName,
+    const char* const names[], T *param, unsigned size)
+{
+    Serializable::ScopedCheckpointSection sec(cp, sectionName);
+    std::unordered_map<std::string, size_t> name_to_index;
+    for (size_t i = 0; i < size; i++) {
+        name_to_index[names[i]] = i;
+    }
+    for (size_t i = 0; i < size; i++) {
+        auto& key = names[i];
+        T value;
+        if (optParamIn(cp, key, value)) {
+            param[name_to_index[key]] = value;
+        }
+    }
+    cp.visitSection(
+        Serializable::currentSection(),
+        [name_to_index](const std::string& key, const std::string& val)
+        {
+            if (!name_to_index.count(key)) {
+                warn("unknown entry found in checkpoint: %s %s %s\n",
+                    Serializable::currentSection(), key, val);
+            }
+        }
+    );
+}
 
 //
 // These macros are streamlined to use in serialize/unserialize
@@ -879,5 +700,17 @@ objParamIn(CheckpointIn &cp, const std::string &name, SimObject * &param);
         objParamIn(cp, #objptr, sptr);                  \
         objptr = dynamic_cast<decltype(objptr)>(sptr);  \
     } while (0)
+
+/**
+ * \def SERIALIZE_MAPPING(member, names, size)
+ */
+#define SERIALIZE_MAPPING(member, names, size) \
+        mappingParamOut(cp, #member, names, member, size)
+
+/**
+ * \def UNSERIALIZE_MAPPING(member, names, size)
+ */
+#define UNSERIALIZE_MAPPING(member, names, size) \
+        mappingParamIn(cp, #member, names, member, size)
 
 #endif // __SERIALIZE_HH__

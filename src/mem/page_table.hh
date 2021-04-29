@@ -38,6 +38,7 @@
 #include <string>
 #include <unordered_map>
 
+#include "base/bitfield.hh"
 #include "base/intmath.hh"
 #include "base/types.hh"
 #include "mem/request.hh"
@@ -62,7 +63,7 @@ class EmulationPageTable : public Serializable
     typedef PTable::iterator PTableItr;
     PTable pTable;
 
-    const Addr pageSize;
+    const Addr _pageSize;
     const Addr offsetMask;
 
     const uint64_t _pid;
@@ -72,10 +73,10 @@ class EmulationPageTable : public Serializable
 
     EmulationPageTable(
             const std::string &__name, uint64_t _pid, Addr _pageSize) :
-            pageSize(_pageSize), offsetMask(mask(floorLog2(_pageSize))),
+            _pageSize(_pageSize), offsetMask(mask(floorLog2(_pageSize))),
             _pid(_pid), _name(__name), shared(false)
     {
-        assert(isPowerOf2(pageSize));
+        assert(isPowerOf2(_pageSize));
     }
 
     uint64_t pid() const { return _pid; };
@@ -104,6 +105,9 @@ class EmulationPageTable : public Serializable
 
     Addr pageAlign(Addr a)  { return (a & ~offsetMask); }
     Addr pageOffset(Addr a) { return (a &  offsetMask); }
+    // Page size can technically vary based on the virtual address, but we'll
+    // ignore that for now.
+    Addr pageSize()   { return _pageSize; }
 
     /**
      * Maps a virtual memory region to a physical memory region.

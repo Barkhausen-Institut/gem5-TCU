@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2012-2013, 2015,2017-2020 ARM Limited
+ * Copyright (c) 2010, 2012-2013, 2015,2017-2021 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -51,32 +51,35 @@
 #include "dev/arm/gic_v2.hh"
 #include "mem/physical.hh"
 
-using namespace std;
 using namespace Linux;
+using namespace ArmISA;
 
-ArmSystem::ArmSystem(Params *p)
+ArmSystem::ArmSystem(const Params &p)
     : System(p),
-      _haveSecurity(p->have_security),
-      _haveLPAE(p->have_lpae),
-      _haveVirtualization(p->have_virtualization),
-      _haveCrypto(p->have_crypto),
+      _haveSecurity(p.have_security),
+      _haveLPAE(p.have_lpae),
+      _haveVirtualization(p.have_virtualization),
+      _haveCrypto(p.have_crypto),
       _genericTimer(nullptr),
       _gic(nullptr),
       _pwrCtrl(nullptr),
-      _highestELIs64(p->highest_el_is_64),
-      _physAddrRange64(p->phys_addr_range_64),
-      _haveLargeAsid64(p->have_large_asid_64),
-      _haveSVE(p->have_sve),
-      _sveVL(p->sve_vl),
-      _haveLSE(p->have_lse),
-      _havePAN(p->have_pan),
-      semihosting(p->semihosting),
-      multiProc(p->multi_proc)
+      _highestELIs64(p.highest_el_is_64),
+      _physAddrRange64(p.phys_addr_range_64),
+      _haveLargeAsid64(p.have_large_asid_64),
+      _haveTME(p.have_tme),
+      _haveSVE(p.have_sve),
+      _sveVL(p.sve_vl),
+      _haveLSE(p.have_lse),
+      _haveVHE(p.have_vhe),
+      _havePAN(p.have_pan),
+      _haveSecEL2(p.have_secel2),
+      semihosting(p.semihosting),
+      multiProc(p.multi_proc)
 {
-    if (p->auto_reset_addr) {
+    if (p.auto_reset_addr) {
         _resetAddr = workload->getEntry();
     } else {
-        _resetAddr = p->reset_addr;
+        _resetAddr = p.reset_addr;
         warn_if(workload->getEntry() != _resetAddr,
                 "Workload entry point %#x and reset address %#x are different",
                 workload->getEntry(), _resetAddr);
@@ -92,7 +95,7 @@ ArmSystem::ArmSystem(Params *p)
 
     if (_highestELIs64 && (
             _physAddrRange64 < 32 ||
-            _physAddrRange64 > 48 ||
+            _physAddrRange64 > MaxPhysAddrRange ||
             (_physAddrRange64 % 4 != 0 && _physAddrRange64 != 42))) {
         fatal("Invalid physical address range (%d)\n", _physAddrRange64);
     }
@@ -143,6 +146,12 @@ ArmSystem::haveEL(ThreadContext *tc, ExceptionLevel el)
         warn("Unimplemented Exception Level\n");
         return false;
     }
+}
+
+bool
+ArmSystem::haveTME(ThreadContext *tc)
+{
+    return getArmSystem(tc)->haveTME();
 }
 
 Addr
@@ -224,10 +233,4 @@ ArmSystem::callClearWakeRequest(ThreadContext *tc)
 {
     if (FVPBasePwrCtrl *pwr_ctrl = getArmSystem(tc)->getPowerController())
         pwr_ctrl->clearWakeRequest(tc);
-}
-
-ArmSystem *
-ArmSystemParams::create()
-{
-    return new ArmSystem(this);
 }

@@ -38,7 +38,7 @@ class IOPlatform : public Platform
   public:
     typedef IOPlatformParams Params;
 
-    IOPlatform(const Params *p) : Platform(p) {
+    IOPlatform(const Params &p) : Platform(p) {
     }
 
     /**

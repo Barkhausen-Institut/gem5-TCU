@@ -28,6 +28,7 @@
 
 #include "dev/x86/cmos.hh"
 
+#include "base/trace.hh"
 #include "debug/CMOS.hh"
 #include "dev/x86/intdev.hh"
 #include "mem/packet_access.hh"
@@ -136,10 +137,4 @@ X86ISA::Cmos::unserialize(CheckpointIn &cp)
 
     // Serialize the timer
     rtc.unserialize("rtc", cp);
-}
-
-X86ISA::Cmos *
-CmosParams::create()
-{
-    return new X86ISA::Cmos(this);
 }

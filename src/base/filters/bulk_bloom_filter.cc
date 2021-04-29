@@ -37,7 +37,7 @@
 
 namespace BloomFilter {
 
-Bulk::Bulk(const BloomFilterBulkParams* p)
+Bulk::Bulk(const BloomFilterBulkParams &p)
     : MultiBitSel(p), sectorBits(floorLog2(parFilterSize))
 {
     fatal_if((numHashes * sectorBits) >
@@ -96,10 +96,3 @@ Bulk::permute(Addr addr) const
 }
 
 } // namespace BloomFilter
-
-BloomFilter::Bulk*
-BloomFilterBulkParams::create()
-{
-    return new BloomFilter::Bulk(this);
-}
-

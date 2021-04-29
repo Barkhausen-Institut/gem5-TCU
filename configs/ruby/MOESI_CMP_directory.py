@@ -113,7 +113,7 @@ def create_system(options, full_system, system, dma_ports, bootmem,
                                       clk_domain=clk_domain,
                                       ruby_system=ruby_system)
 
-        cpu_seq = RubySequencer(version=i, icache=l1i_cache,
+        cpu_seq = RubySequencer(version=i,
                                 dcache=l1d_cache, clk_domain=clk_domain,
                                 ruby_system=ruby_system)
 
@@ -211,6 +211,7 @@ def create_system(options, full_system, system, dma_ports, bootmem,
         dir_cntrl.forwardFromDir.master = ruby_system.network.slave
         dir_cntrl.requestToMemory = MessageBuffer()
         dir_cntrl.responseFromMemory = MessageBuffer()
+        dir_cntrl.triggerQueue = MessageBuffer(ordered = True)
 
 
     for i, dma_port in enumerate(dma_ports):

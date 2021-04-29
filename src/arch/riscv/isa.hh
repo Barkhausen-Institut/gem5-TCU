@@ -76,18 +76,15 @@ class ISA : public BaseISA
     bool hpmCounterEnabled(int counter) const;
 
   public:
-    typedef RiscvISAParams Params;
+    using Params = RiscvISAParams;
 
-    void clear(ThreadContext *tc) { clear(); }
-
-  protected:
     void clear();
 
   public:
     RegVal readMiscRegNoEffect(int misc_reg) const;
-    RegVal readMiscReg(int misc_reg, ThreadContext *tc);
+    RegVal readMiscReg(int misc_reg);
     void setMiscRegNoEffect(int misc_reg, RegVal val);
-    void setMiscReg(int misc_reg, RegVal val, ThreadContext *tc);
+    void setMiscReg(int misc_reg, RegVal val);
 
     RegId flattenRegId(const RegId &regId) const { return regId; }
     int flattenIntIndex(int reg) const { return reg; }
@@ -98,17 +95,12 @@ class ISA : public BaseISA
     int flattenCCIndex(int reg) const { return reg; }
     int flattenMiscIndex(int reg) const { return reg; }
 
-    void startup(ThreadContext *tc) {}
+    bool inUserMode() const override { return true; }
 
-    void serialize(CheckpointOut &cp) const;
-    void unserialize(CheckpointIn &cp);
+    void serialize(CheckpointOut &cp) const override;
+    void unserialize(CheckpointIn &cp) override;
 
-    /// Explicitly import the otherwise hidden startup
-    using BaseISA::startup;
-
-    const Params *params() const;
-
-    ISA(Params *p);
+    ISA(const Params &p);
 };
 
 } // namespace RiscvISA

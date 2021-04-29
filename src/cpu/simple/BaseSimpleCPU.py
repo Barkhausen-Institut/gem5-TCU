@@ -24,8 +24,6 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from __future__ import print_function
-
 from m5.defines import buildEnv
 from m5.params import *
 
@@ -40,11 +38,12 @@ class BaseSimpleCPU(BaseCPU):
 
     def addCheckerCpu(self):
         if buildEnv['TARGET_ISA'] in ['arm']:
-            from m5.objects.ArmTLB import ArmITB, ArmDTB
+            from m5.objects.ArmTLB import ArmMMU
 
             self.checker = DummyChecker(workload = self.workload)
-            self.checker.itb = ArmITB(size = self.itb.size)
-            self.checker.dtb = ArmDTB(size = self.dtb.size)
+            self.checker.mmu = ArmMMU()
+            self.checker.mmu.itb.size = self.mmu.itb.size
+            self.checker.mmu.dtb.size = self.mmu.dtb.size
         else:
             print("ERROR: Checker only supported under ARM ISA!")
             exit(1)

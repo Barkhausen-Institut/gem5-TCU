@@ -44,32 +44,23 @@
 /**
  * the default constructor that works with SWIG
  */
-LdsState::LdsState(const Params *params) :
+LdsState::LdsState(const Params &params) :
     ClockedObject(params),
     tickEvent(this),
     cuPort(name() + ".port", this),
-    maximumSize(params->size),
-    range(params->range),
-    bankConflictPenalty(params->bankConflictPenalty),
-    banks(params->banks)
+    maximumSize(params.size),
+    range(params.range),
+    bankConflictPenalty(params.bankConflictPenalty),
+    banks(params.banks)
 {
-    fatal_if(params->banks <= 0,
+    fatal_if(params.banks <= 0,
              "Number of LDS banks should be positive number");
-    fatal_if((params->banks & (params->banks - 1)) != 0,
+    fatal_if((params.banks & (params.banks - 1)) != 0,
              "Number of LDS banks should be a power of 2");
-    fatal_if(params->size <= 0,
+    fatal_if(params.size <= 0,
              "cannot allocate an LDS with a size less than 1");
-    fatal_if(params->size % 2,
+    fatal_if(params.size % 2,
           "the LDS should be an even number");
-}
-
-/**
- * Needed by the SWIG compiler
- */
-LdsState *
-LdsStateParams::create()
-{
-    return new LdsState(this);
 }
 
 /**
@@ -198,10 +189,10 @@ LdsState::processPacket(PacketPtr packet)
     // the number of conflicts this packet will have when accessing the LDS
     unsigned bankConflicts = countBankConflicts(packet, &bankAccesses);
     // count the total number of physical LDS bank accessed
-    parent->ldsBankAccesses += bankAccesses;
+    parent->stats.ldsBankAccesses += bankAccesses;
     // count the LDS bank conflicts. A number set to 1 indicates one
     // access per bank maximum so there are no bank conflicts
-    parent->ldsBankConflictDist.sample(bankConflicts-1);
+    parent->stats.ldsBankConflictDist.sample(bankConflicts-1);
 
     GPUDynInstPtr dynInst = getDynInstr(packet);
     // account for the LDS bank conflict overhead
@@ -210,8 +201,8 @@ LdsState::processPacket(PacketPtr packet)
         parent->loadBusLength();
     // delay for accessing the LDS
     Tick processingTime =
-        parent->shader->ticks(bankConflicts * bankConflictPenalty) +
-        parent->shader->ticks(busLength);
+        parent->cyclesToTicks(Cycles(bankConflicts * bankConflictPenalty)) +
+        parent->cyclesToTicks(Cycles(busLength));
     // choose (delay + last packet in queue) or (now + delay) as the time to
     // return this
     Tick doneAt = earliestReturnTime() + processingTime;

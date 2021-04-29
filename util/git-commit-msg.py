@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Copyright (c) 2019 Inria
 # All rights reserved
@@ -32,6 +32,7 @@
 import os
 import re
 import sys
+from maint.lib import maintainers
 
 from style.repo import GitRepo
 
@@ -45,7 +46,7 @@ def _printErrorQuit(error_message):
     print(error_message)
 
     print("The commit has been cancelled, but a copy of it can be found in "
-            + sys.argv[1] + " : ")
+          + sys.argv[1] + " : ")
 
     print("""
 --------------------------------------------------------------------------
@@ -57,8 +58,8 @@ def _printErrorQuit(error_message):
 
     print("""
 The first line of a commit must contain one or more gem5 tags separated by
-commas (see MAINTAINERS for the possible tags), followed by a colon and a
-commit title. There must be no leading nor trailing whitespaces.
+commas (see MAINTAINERS.yaml for the possible tags), followed by a colon and
+a commit title. There must be no leading nor trailing whitespaces.
 
 This header line must then be followed by an empty line. A detailed message,
 although highly recommended, is not mandatory and can follow that empty line.
@@ -85,17 +86,12 @@ def _validateTags(commit_header):
     """
 
     # List of valid tags
-    # @todo this is error prone, and should be extracted automatically from
-    #       a file
+    maintainer_dict = maintainers.Maintainers.from_file()
+    valid_tags = [tag for tag, _ in maintainer_dict]
 
-    valid_tags = ["arch", "arch-alpha", "arch-arm", "arch-gcn3", "arch-hsail",
-        "arch-mips", "arch-power", "arch-riscv", "arch-sparc", "arch-x86",
-        "base", "configs", "cpu", "cpu-kvm", "cpu-minor", "cpu-o3",
-        "cpu-simple", "dev", "dev-arm", "dev-virtio", "ext", "fastmodel",
-        "gpu-compute", "learning-gem5", "mem", "mem-cache", "mem-garnet",
-        "mem-ruby", "misc", "python", "scons", "sim", "sim-se", "sim-power",
-        "stats", "system", "system-alpha", "system-arm", "systemc", "tests",
-        "util", "RFC", "WIP"]
+    # Remove non-tag 'pmc' and add special tags not in MAINTAINERS.yaml
+    valid_tags.remove('pmc')
+    valid_tags.extend(['RFC', 'WIP'])
 
     tags = ''.join(commit_header.split(':')[0].split()).split(',')
     if (any(tag not in valid_tags for tag in tags)):
@@ -113,10 +109,12 @@ commit_message = open(sys.argv[1]).read()
 commit_message_lines = commit_message.splitlines()
 commit_header = commit_message_lines[0]
 commit_header_match = \
-    re.search("^(\S[\w\-][,\s*[\w\-]+]*:.+\S$)", commit_header)
+    re.search("^(fixup! )?(\S[\w\-][,\s*[\w\-]+]*:.+\S$)", commit_header)
 if ((commit_header_match is None)):
     _printErrorQuit("Invalid commit header")
-_validateTags(commit_header)
+if commit_header_match.group(1) == "fixup! ":
+    sys.exit(0)
+_validateTags(commit_header_match.group(2))
 
 # Make sure commit title does not exceed threshold. This line is limited to
 # a smaller number because version control systems may add a prefix, causing

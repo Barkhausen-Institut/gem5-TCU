@@ -50,9 +50,10 @@ SimObject('BadDevice.py')
 
 Source('baddev.cc')
 Source('intel_8254_timer.cc')
-Source('io_platform.cc')
 Source('mc146818.cc')
 Source('pixelpump.cc')
 
 DebugFlag('Intel8254Timer')
 DebugFlag('MC146818')
+
+GTest('reg_bank.test', 'reg_bank.test.cc')

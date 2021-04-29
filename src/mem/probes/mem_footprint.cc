@@ -41,50 +41,46 @@
 #include "base/intmath.hh"
 #include "params/MemFootprintProbe.hh"
 
-MemFootprintProbe::MemFootprintProbe(MemFootprintProbeParams *p)
+MemFootprintProbe::MemFootprintProbe(const MemFootprintProbeParams &p)
     : BaseMemProbe(p),
-      cacheLineSizeLg2(floorLog2(p->system->cacheLineSize())),
-      pageSizeLg2(floorLog2(p->page_size)),
-      totalCacheLinesInMem(p->system->memSize() / p->system->cacheLineSize()),
-      totalPagesInMem(p->system->memSize() / p->page_size),
+      cacheLineSizeLg2(floorLog2(p.system->cacheLineSize())),
+      pageSizeLg2(floorLog2(p.page_size)),
+      totalCacheLinesInMem(p.system->memSize() / p.system->cacheLineSize()),
+      totalPagesInMem(p.system->memSize() / p.page_size),
       cacheLines(),
       cacheLinesAll(),
       pages(),
       pagesAll(),
-      system(p->system)
+      system(p.system),
+      stats(this)
 {
     fatal_if(!isPowerOf2(system->cacheLineSize()),
              "MemFootprintProbe expects cache line size is power of 2.");
-    fatal_if(!isPowerOf2(p->page_size),
+    fatal_if(!isPowerOf2(p.page_size),
              "MemFootprintProbe expects page size parameter is power of 2");
 }
 
-void
-MemFootprintProbe::regStats()
+MemFootprintProbe::
+MemFootprintProbeStats::MemFootprintProbeStats(MemFootprintProbe *parent)
+    : Stats::Group(parent),
+      ADD_STAT(cacheLine, UNIT_COUNT,
+               "Memory footprint at cache line granularity"),
+      ADD_STAT(cacheLineTotal, UNIT_COUNT,
+               "Total memory footprint at cache line granularity since "
+               "simulation begin"),
+      ADD_STAT(page, UNIT_COUNT, "Memory footprint at page granularity"),
+      ADD_STAT(pageTotal, UNIT_COUNT,
+               "Total memory footprint at page granularity since simulation "
+               "begin")
 {
-    BaseMemProbe::regStats();
-
     using namespace Stats;
     // clang-format off
-    fpCacheLine.name(name() + ".cacheline")
-        .desc("Memory footprint at cache line granularity")
-        .flags(nozero | nonan);
-    fpCacheLineTotal.name(name() + ".cacheline_total")
-        .desc("Total memory footprint at cache line granularity since "
-              "simulation begin")
-        .flags(nozero | nonan);
-    fpPage.name(name() + ".page")
-        .desc("Memory footprint at page granularity")
-        .flags(nozero | nonan);
-    fpPageTotal.name(name() + ".page_total")
-        .desc("Total memory footprint at page granularity since simulation "
-              "begin")
-        .flags(nozero | nonan);
+    cacheLine.flags(nozero | nonan);
+    cacheLineTotal.flags(nozero | nonan);
+    page.flags(nozero | nonan);
+    pageTotal.flags(nozero | nonan);
     // clang-format on
-
-    registerResetCallback(
-        new MakeCallback<MemFootprintProbe, &MemFootprintProbe::statReset>(
-            this));
+    registerResetCallback([parent]() { parent->statReset(); });
 }
 
 void
@@ -110,10 +106,10 @@ MemFootprintProbe::handleRequest(const ProbePoints::PacketInfo &pi)
     assert(cacheLines.size() <= cacheLinesAll.size());
     assert(pages.size() <= pagesAll.size());
 
-    fpCacheLine = cacheLines.size() << cacheLineSizeLg2;
-    fpCacheLineTotal = cacheLinesAll.size() << cacheLineSizeLg2;
-    fpPage = pages.size() << pageSizeLg2;
-    fpPageTotal = pagesAll.size() << pageSizeLg2;
+    stats.cacheLine = cacheLines.size() << cacheLineSizeLg2;
+    stats.cacheLineTotal = cacheLinesAll.size() << cacheLineSizeLg2;
+    stats.page = pages.size() << pageSizeLg2;
+    stats.pageTotal = pagesAll.size() << pageSizeLg2;
 }
 
 void
@@ -121,10 +117,4 @@ MemFootprintProbe::statReset()
 {
     cacheLines.clear();
     pages.clear();
-}
-
-MemFootprintProbe *
-MemFootprintProbeParams::create()
-{
-    return new MemFootprintProbe(this);
 }

@@ -159,11 +159,14 @@ decode OPCODE_HI default Unknown::unknown() {
                     0x2: movz({{ Rd = (Rt == 0) ? Rs : Rd; }});
                     0x3: movn({{ Rd = (Rt != 0) ? Rs : Rd; }});
                     0x4: decode FullSystemInt {
-                        0: syscall_se({{ xc->syscall(&fault); }},
-                                IsSerializeAfter, IsNonSpeculative);
-                      default: syscall({{ fault = std::make_shared<SystemCallFault>(); }});
+                        0: syscall_se({{
+                            fault = std::make_shared<SESyscallFault>();
+                        }});
+                      default: syscall({{
+                            fault = std::make_shared<SystemCallFault>();
+                        }});
                     }
-                    0x7: sync({{ ; }}, IsMemBarrier);
+                    0x7: sync({{ ; }}, IsReadBarrier, IsWriteBarrier);
                   0x5: break({{fault = std::make_shared<BreakpointFault>();}});
                 }
 
@@ -171,10 +174,10 @@ decode OPCODE_HI default Unknown::unknown() {
 
             0x2: decode FUNCTION_LO {
                 0x0: HiLoRsSelOp::mfhi({{ Rd = HI_RS_SEL; }},
-                             IntMultOp, IsIprAccess);
+                             IntMultOp, IsSerializeBefore);
                 0x1: HiLoRdSelOp::mthi({{ HI_RD_SEL = Rs; }});
                 0x2: HiLoRsSelOp::mflo({{ Rd = LO_RS_SEL; }},
-                             IntMultOp, IsIprAccess);
+                             IntMultOp, IsSerializeBefore);
                 0x3: HiLoRdSelOp::mtlo({{ LO_RD_SEL = Rs; }});
             }
 
@@ -716,7 +719,7 @@ decode OPCODE_HI default Unknown::unknown() {
                         LLFlag = 0;
                         Status = status;
                         SRSCtl = srsCtl;
-                    }}, IsReturn, IsSerializing, IsERET);
+                    }}, IsReturn, IsSerializing);
 
                     0x1F: deret({{
                         DebugReg debug = Debug;
@@ -729,13 +732,13 @@ decode OPCODE_HI default Unknown::unknown() {
                             // Undefined;
                         }
                         Debug = debug;
-                    }}, IsReturn, IsSerializing, IsERET);
+                    }}, IsReturn, IsSerializing);
                 }
                 format CP0TLB {
                     0x01: tlbr({{
                         MipsISA::PTE *PTEntry =
                             dynamic_cast<MipsISA::TLB *>(
-                                xc->tcBase()->getITBPtr())->
+                                xc->tcBase()->getMMUPtr()->itb)->
                                 getEntry(Index & 0x7FFFFFFF);
                         if (PTEntry == NULL) {
                             fatal("Invalid PTE Entry received on "
@@ -816,7 +819,7 @@ decode OPCODE_HI default Unknown::unknown() {
                             (1 << newEntry.AddrShiftAmount) - 1;
 
                         auto ptr = dynamic_cast<MipsISA::TLB *>(
-                            xc->tcBase()->getITBPtr());
+                            xc->tcBase()->getMMUPtr()->itb);
                         Config3Reg config3 = Config3;
                         PageGrainReg pageGrain = PageGrain;
                         int SP = 0;
@@ -882,7 +885,7 @@ decode OPCODE_HI default Unknown::unknown() {
                             (1 << newEntry.AddrShiftAmount) - 1;
 
                         auto ptr = dynamic_cast<MipsISA::TLB *>(
-                            xc->tcBase()->getITBPtr());
+                            xc->tcBase()->getMMUPtr()->itb);
                         Config3Reg config3 = Config3;
                         PageGrainReg pageGrain = PageGrain;
                         int SP = 0;
@@ -906,7 +909,7 @@ decode OPCODE_HI default Unknown::unknown() {
                             vpn = ((EntryHi >> 11) & 0xFFFFFFFC);
                         }
                         tlbIndex = dynamic_cast<MipsISA::TLB *>(
-                            xc->tcBase()->getITBPtr())->
+                            xc->tcBase()->getMMUPtr()->itb)->
                             probeEntry(vpn, entryHi.asid);
                         // Check TLB for entry matching EntryHi
                         if (tlbIndex != -1) {
@@ -1529,7 +1532,7 @@ decode OPCODE_HI default Unknown::unknown() {
                     if (Rs<2:0> == 0) {
                         Fd_ud = Fs_ud;
                     } else if (Rs<2:0> == 4) {
-                        if (GuestByteOrder == BigEndianByteOrder)
+                        if (GuestByteOrder == ByteOrder::big)
                             Fd_ud = Fs_ud<31:0> << 32 | Ft_ud<63:32>;
                         else
                             Fd_ud = Ft_ud<31:0> << 32 | Fs_ud<63:32>;

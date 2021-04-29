@@ -34,29 +34,31 @@
 #include "cpu/pred/loop_predictor.hh"
 
 #include "base/random.hh"
+#include "base/trace.hh"
 #include "debug/LTage.hh"
 #include "params/LoopPredictor.hh"
 
-LoopPredictor::LoopPredictor(LoopPredictorParams *p)
-  : SimObject(p), logSizeLoopPred(p->logSizeLoopPred),
-    loopTableAgeBits(p->loopTableAgeBits),
-    loopTableConfidenceBits(p->loopTableConfidenceBits),
-    loopTableTagBits(p->loopTableTagBits),
-    loopTableIterBits(p->loopTableIterBits),
-    logLoopTableAssoc(p->logLoopTableAssoc),
+LoopPredictor::LoopPredictor(const LoopPredictorParams &p)
+  : SimObject(p), logSizeLoopPred(p.logSizeLoopPred),
+    loopTableAgeBits(p.loopTableAgeBits),
+    loopTableConfidenceBits(p.loopTableConfidenceBits),
+    loopTableTagBits(p.loopTableTagBits),
+    loopTableIterBits(p.loopTableIterBits),
+    logLoopTableAssoc(p.logLoopTableAssoc),
     confidenceThreshold((1 << loopTableConfidenceBits) - 1),
     loopTagMask((1 << loopTableTagBits) - 1),
     loopNumIterMask((1 << loopTableIterBits) - 1),
     loopSetMask((1 << (logSizeLoopPred - logLoopTableAssoc)) - 1),
     loopUseCounter(-1),
-    withLoopBits(p->withLoopBits),
-    useDirectionBit(p->useDirectionBit),
-    useSpeculation(p->useSpeculation),
-    useHashing(p->useHashing),
-    restrictAllocation(p->restrictAllocation),
-    initialLoopIter(p->initialLoopIter),
-    initialLoopAge(p->initialLoopAge),
-    optionalAgeReset(p->optionalAgeReset)
+    withLoopBits(p.withLoopBits),
+    useDirectionBit(p.useDirectionBit),
+    useSpeculation(p.useSpeculation),
+    useHashing(p.useHashing),
+    restrictAllocation(p.restrictAllocation),
+    initialLoopIter(p.initialLoopIter),
+    initialLoopAge(p.initialLoopAge),
+    optionalAgeReset(p.optionalAgeReset),
+    stats(this)
 {
     assert(initialLoopAge <= ((1 << loopTableAgeBits) - 1));
 }
@@ -313,9 +315,9 @@ void
 LoopPredictor::updateStats(bool taken, BranchInfo* bi)
 {
     if (taken == bi->loopPred) {
-        loopPredictorCorrect++;
+        stats.correct++;
     } else {
-        loopPredictorWrong++;
+        stats.wrong++;
     }
 }
 
@@ -343,18 +345,15 @@ LoopPredictor::condBranchUpdate(ThreadID tid, Addr branch_pc, bool taken,
     loopUpdate(branch_pc, taken, bi, tage_pred);
 }
 
-void
-LoopPredictor::regStats()
+LoopPredictor::LoopPredictorStats::LoopPredictorStats(Stats::Group *parent)
+    : Stats::Group(parent),
+      ADD_STAT(correct, UNIT_COUNT,
+               "Number of times the loop predictor is the provider and the "
+               "prediction is correct"),
+      ADD_STAT(wrong, UNIT_COUNT,
+               "Number of times the loop predictor is the provider and the "
+               "prediction is wrong")
 {
-    loopPredictorCorrect
-        .name(name() + ".loopPredictorCorrect")
-        .desc("Number of times the loop predictor is the provider and "
-              "the prediction is correct");
-
-    loopPredictorWrong
-        .name(name() + ".loopPredictorWrong")
-        .desc("Number of times the loop predictor is the provider and "
-              "the prediction is wrong");
 }
 
 size_t
@@ -364,10 +363,4 @@ LoopPredictor::getSizeInBits() const
         ((useSpeculation ? 3 : 2) * loopTableIterBits +
         loopTableConfidenceBits + loopTableTagBits +
         loopTableAgeBits + useDirectionBit);
-}
-
-LoopPredictor *
-LoopPredictorParams::create()
-{
-    return new LoopPredictor(this);
 }

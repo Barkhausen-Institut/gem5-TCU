@@ -82,18 +82,12 @@ class I82094AA : public BasicPioDevice
 
     std::vector<IntSinkPin<I82094AA> *> inputs;
 
-    IntMasterPort<I82094AA> intMasterPort;
+    IntRequestPort<I82094AA> intRequestPort;
 
   public:
-    typedef I82094AAParams Params;
+    using Params = I82094AAParams;
 
-    const Params *
-    params() const
-    {
-        return dynamic_cast<const Params *>(_params);
-    }
-
-    I82094AA(Params *p);
+    I82094AA(const Params &p);
 
     void init() override;
 

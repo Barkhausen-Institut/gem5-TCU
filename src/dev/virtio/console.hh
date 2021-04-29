@@ -65,7 +65,7 @@ class VirtIOConsole : public VirtIODeviceBase
 {
   public:
     typedef VirtIOConsoleParams Params;
-    VirtIOConsole(Params *params);
+    VirtIOConsole(const Params &params);
     virtual ~VirtIOConsole();
 
     void readConfig(PacketPtr pkt, Addr cfgOffset);
@@ -77,10 +77,10 @@ class VirtIOConsole : public VirtIODeviceBase
      * @note This needs to be changed if the multiport feature is
      * announced!
      */
-    struct Config {
+    struct M5_ATTR_PACKED Config {
         uint16_t cols;
         uint16_t rows;
-    } M5_ATTR_PACKED;
+    };
 
     /** Currently active configuration (host byte order) */
     Config config;
@@ -148,8 +148,6 @@ class VirtIOConsole : public VirtIODeviceBase
 
   protected:
     SerialDevice &device;
-    MakeCallback<VirtIOConsole::TermRecvQueue,
-                 &VirtIOConsole::TermRecvQueue::trySend> callbackDataAvail;
 };
 
 #endif // __DEV_VIRTIO_CONSOLE_HH__

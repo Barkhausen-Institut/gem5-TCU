@@ -48,10 +48,15 @@ from m5.objects.SimpleMemory import *
 class MemoryMode(Enum): vals = ['invalid', 'atomic', 'timing',
                                 'atomic_noncaching']
 
+if buildEnv['TARGET_ISA'] in ('sparc', 'power'):
+    default_byte_order = 'big'
+else:
+    default_byte_order = 'little'
+
 class System(SimObject):
     type = 'System'
     cxx_header = "sim/system.hh"
-    system_port = MasterPort("System port")
+    system_port = RequestPort("System port")
 
     cxx_exports = [
         PyBindMethod("getMemoryMode"),
@@ -78,7 +83,14 @@ class System(SimObject):
     # I/O bridge or cache
     mem_ranges = VectorParam.AddrRange([], "Ranges that constitute main memory")
 
+    shared_backstore = Param.String("", "backstore's shmem segment filename, "
+        "use to directly address the backstore from another host-OS process. "
+        "Leave this empty to unset the MAP_SHARED flag.")
+
     cache_line_size = Param.Unsigned(64, "Cache line size in bytes")
+
+    byte_order = Param.ByteOrder(default_byte_order,
+                                 "Default byte order of system components")
 
     redirect_paths = VectorParam.RedirectPath([], "Path redirections")
 
@@ -99,7 +111,7 @@ class System(SimObject):
     work_cpus_ckpt_count = Param.Counter(0,
         "create checkpoint when active cpu count value is reached")
 
-    workload = Param.Workload(NULL, "Operating system kernel")
+    workload = Param.Workload(NULL, "Workload to run on this system")
     init_param = Param.UInt64(0, "numerical value to pass into simulator")
     readfile = Param.String("", "file to read startup script from")
     symbolfile = Param.String("", "file to get the symbols from")

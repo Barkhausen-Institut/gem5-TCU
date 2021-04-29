@@ -42,16 +42,15 @@
 #include "mem/packet_access.hh"
 #include "params/MmioVirtIO.hh"
 
-MmioVirtIO::MmioVirtIO(const MmioVirtIOParams *params)
-    : BasicPioDevice(params, params->pio_size),
+MmioVirtIO::MmioVirtIO(const MmioVirtIOParams &params)
+    : BasicPioDevice(params, params.pio_size),
       hostFeaturesSelect(0), guestFeaturesSelect(0), pageSize(0),
-      interruptStatus(0),
-      callbackKick(this), vio(*params->vio),
-      interrupt(params->interrupt->get())
+      interruptStatus(0), vio(*params.vio),
+      interrupt(params.interrupt->get())
 {
     fatal_if(!interrupt, "No MMIO VirtIO interrupt specified\n");
 
-    vio.registerKickCallback(&callbackKick);
+    vio.registerKickCallback([this]() { kick(); });
 }
 
 MmioVirtIO::~MmioVirtIO()
@@ -273,11 +272,4 @@ MmioVirtIO::setInterrupts(uint32_t value)
     } else if (old_ints && !interruptStatus) {
         interrupt->clear();
     }
-}
-
-
-MmioVirtIO *
-MmioVirtIOParams::create()
-{
-    return new MmioVirtIO(this);
 }

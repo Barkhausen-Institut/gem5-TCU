@@ -1,3 +1,15 @@
+# Copyright (c) 2020-2021 ARM Limited
+# All rights reserved.
+#
+# The license below extends only to copyright in the software and shall
+# not be construed as granting a license to any other intellectual
+# property including but not limited to intellectual property relating
+# to a hardware implementation of the functionality of the software
+# licensed hereunder.  You may use the software subject to the license
+# terms below provided that you ensure that this notice is replicated
+# unmodified and in its entirety in all distributions of the software,
+# modified or unmodified, in source code or in binary form.
+#
 # Copyright (c) 1999-2008 Mark D. Hill and David A. Wood
 # Copyright (c) 2009 The Hewlett-Packard Development Company
 # All rights reserved.
@@ -37,6 +49,9 @@ class DataMember(Var):
         super(DataMember, self).__init__(symtab, ident, location, type,
                                          code, pairs, machine)
         self.init_code = init_code
+        self.real_c_type = self.type.c_ident
+        if "template" in pairs:
+            self.real_c_type += pairs["template"]
 
 class Enumeration(PairContainer):
     def __init__(self, ident, pairs):
@@ -235,31 +250,16 @@ $klass ${{self.c_ident}}$parent
                     code('m_$ident = ${{dm["default"]}}; // default for this field')
                 elif "default" in dm.type:
                     # Look for the type default
-                    tid = dm.type.c_ident
-                    code('m_$ident = ${{dm.type["default"]}}; // default value of $tid')
+                    tid = dm.real_c_type
+                    code('m_$ident = ${{dm.type["default"]}};')
+                    code(' // default value of $tid')
                 else:
                     code('// m_$ident has no default')
             code.dedent()
         code('}')
 
         # ******** Copy constructor ********
-        if not self.isGlobal:
-            code('${{self.c_ident}}(const ${{self.c_ident}}&other)')
-
-            # Call superclass constructor
-            if "interface" in self:
-                code('    : ${{self["interface"]}}(other)')
-
-            code('{')
-            code.indent()
-
-            for dm in self.data_members.values():
-                code('m_${{dm.ident}} = other.m_${{dm.ident}};')
-
-            code.dedent()
-            code('}')
-        else:
-            code('${{self.c_ident}}(const ${{self.c_ident}}&) = default;')
+        code('${{self.c_ident}}(const ${{self.c_ident}}&) = default;')
 
         # ******** Assignment operator ********
 
@@ -268,7 +268,7 @@ $klass ${{self.c_ident}}$parent
 
         # ******** Full init constructor ********
         if not self.isGlobal:
-            params = [ 'const %s& local_%s' % (dm.type.c_ident, dm.ident) \
+            params = [ 'const %s& local_%s' % (dm.real_c_type, dm.ident) \
                        for dm in self.data_members.values() ]
             params = ', '.join(params)
 
@@ -318,7 +318,7 @@ clone() const
 /** \\brief Const accessor method for ${{dm.ident}} field.
  *  \\return ${{dm.ident}} field
  */
-const ${{dm.type.c_ident}}&
+const ${{dm.real_c_type}}&
 get${{dm.ident}}() const
 {
     return m_${{dm.ident}};
@@ -332,7 +332,7 @@ get${{dm.ident}}() const
 /** \\brief Non-const accessor method for ${{dm.ident}} field.
  *  \\return ${{dm.ident}} field
  */
-${{dm.type.c_ident}}&
+${{dm.real_c_type}}&
 get${{dm.ident}}()
 {
     return m_${{dm.ident}};
@@ -345,7 +345,7 @@ get${{dm.ident}}()
                 code('''
 /** \\brief Mutator method for ${{dm.ident}} field */
 void
-set${{dm.ident}}(const ${{dm.type.c_ident}}& local_${{dm.ident}})
+set${{dm.ident}}(const ${{dm.real_c_type}}& local_${{dm.ident}})
 {
     m_${{dm.ident}} = local_${{dm.ident}};
 }
@@ -375,7 +375,7 @@ set${{dm.ident}}(const ${{dm.type.c_ident}}& local_${{dm.ident}})
                 if "desc" in dm:
                     code('/** ${{dm["desc"]}} */')
 
-                code('$const${{dm.type.c_ident}} m_${{dm.ident}}$init;')
+                code('$const${{dm.real_c_type}} m_${{dm.ident}}$init;')
 
         # Prototypes for methods defined for the Type
         for item in self.methods:
@@ -414,14 +414,12 @@ operator<<(std::ostream& out, const ${{self.c_ident}}& obj)
 
 #include "mem/ruby/protocol/${{self.c_ident}}.hh"
 #include "mem/ruby/system/RubySystem.hh"
-
-using namespace std;
 ''')
 
         code('''
 /** \\brief Print the state of this object */
 void
-${{self.c_ident}}::print(ostream& out) const
+${{self.c_ident}}::print(std::ostream& out) const
 {
     out << "[${{self.c_ident}}: ";
 ''')
@@ -568,8 +566,6 @@ std::ostream& operator<<(std::ostream& out, const ${{self.c_ident}}& obj);
 #include "base/logging.hh"
 #include "mem/ruby/protocol/${{self.c_ident}}.hh"
 
-using namespace std;
-
 ''')
 
         if self.isStateDecl:
@@ -602,16 +598,16 @@ AccessPermission ${{self.c_ident}}_to_permission(const ${{self.c_ident}}& obj)
 
         code('''
 // Code for output operator
-ostream&
-operator<<(ostream& out, const ${{self.c_ident}}& obj)
+std::ostream&
+operator<<(std::ostream& out, const ${{self.c_ident}}& obj)
 {
     out << ${{self.c_ident}}_to_string(obj);
-    out << flush;
+    out << std::flush;
     return out;
 }
 
 // Code to convert state to a string
-string
+std::string
 ${{self.c_ident}}_to_string(const ${{self.c_ident}}& obj)
 {
     switch(obj) {
@@ -633,7 +629,7 @@ ${{self.c_ident}}_to_string(const ${{self.c_ident}}& obj)
 
 // Code to convert from a string to the enumeration
 ${{self.c_ident}}
-string_to_${{self.c_ident}}(const string& str)
+string_to_${{self.c_ident}}(const std::string& str)
 {
 ''')
 

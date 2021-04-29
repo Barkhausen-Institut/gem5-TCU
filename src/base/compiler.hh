@@ -45,69 +45,85 @@
 
 // http://gcc.gnu.org/onlinedocs/gcc/Function-Attributes.html
 
-#if defined(__GNUC__) // clang or gcc
-#  define M5_ATTR_NORETURN  __attribute__((noreturn))
-#  define M5_DUMMY_RETURN
-#  define M5_VAR_USED __attribute__((unused))
-#  define M5_ATTR_PACKED __attribute__ ((__packed__))
-#  define M5_NO_INLINE __attribute__ ((__noinline__))
-#  define M5_DEPRECATED __attribute__((deprecated))
-#  define M5_DEPRECATED_MSG(MSG) __attribute__((deprecated(MSG)))
-#  define M5_UNREACHABLE __builtin_unreachable()
-#  define M5_PUBLIC __attribute__ ((visibility ("default")))
-#  define M5_LOCAL __attribute__ ((visibility ("hidden")))
+
+/*
+ * Attributes that become standard in later versions of c++.
+ */
+
+// Use M5_FALLTHROUGH to mark when you're intentionally falling through from
+// one case to another in a switch statement.
+#if __has_cpp_attribute(fallthrough) // Standard in c++17.
+#  define M5_FALLTHROUGH [[fallthrough]]
+#else
+// Not supported, so it's not necessary to avoid warnings.
+#  define M5_FALLTHROUGH
 #endif
 
-#if defined(__clang__)
+// When the return value of a function should not be discarded, mark it with
+// M5_NODISCARD.
+#if __has_cpp_attribute(nodiscard) // Standard in c++17, with message in c++20.
+#  define M5_NODISCARD [[nodiscard]]
+#else
+// Not supported, but it's optional so we can just omit it.
+#  define M5_NODISCARD
+#endif
+
+// When a variable may purposefully not be used, for instance if it's only used
+// in debug statements which might be disabled, mark it with M5_VAR_USED.
+#if __has_cpp_attribute(maybe_unused) // Standard in c++17.
+#  define M5_VAR_USED [[maybe_unused]]
+#elif defined(__GNUC__)
+// gcc and clang support a custom attribute which is essentially the same
+// thing.
+#  define M5_VAR_USED [[gnu::unused]]
+#else
+#  error "Don't know what to do for your compiler."
+#endif
+
+
+/*
+ * Compiler specific features.
+ */
+
+#if defined(__GNUC__) // clang or gcc.
+// Mark a structure as packed, so that no padding is added to its layout. This
+// padding might be added to, for instance, ensure certain fields have certain
+// alignment.
+#  define M5_ATTR_PACKED [[gnu::packed]]
+
+// Prevent a function from being inlined.
+#  define M5_NO_INLINE [[gnu::noinline]]
+
+// Set the visibility of a symbol.
+#  define M5_PUBLIC [[gnu:visibility("default")]]
+#  define M5_LOCAL [[gnu::visibility("hidden")]]
+#  define M5_WEAK [[gnu::weak]]
+
+// Force an alignment for a variable.
+#  define M5_ALIGNED(alignment) [[gnu::aligned(alignment)]]
+
+// Marker for what should be an unreachable point in the code.
+#  define M5_UNREACHABLE __builtin_unreachable()
+
+// To mark a branch condition as likely taken, wrap it's condition with
+// M5_LIKELY. To mark it as likely not taken, wrap it's condition with
+// M5_UNLIKELY. These can be replaced with the standard attributes [[likely]]
+// and [[unlikely]] in c++20, although the syntax is different enough that
+// we can't do that with direct substitution.
+#  define M5_LIKELY(cond) __builtin_expect(!!(cond), 1)
+#  define M5_UNLIKELY(cond) __builtin_expect(!!(cond), 0)
+#else
+#  error "Don't know what to do for your compiler."
+#endif
+
+// When a member variable may be unused, mark it with M5_CLASS_VAR_USED. This
+// needs to be limitted to clang only since clang warns on these unused
+// variables, and g++ will actually warn if you use this attribute since it
+// won't do anything there.
+#if defined(__clang__) // clang only.
 #  define M5_CLASS_VAR_USED M5_VAR_USED
 #else
 #  define M5_CLASS_VAR_USED
 #endif
-
-// This can be removed once all compilers support C++17
-#if defined __has_cpp_attribute
-    // Note: We must separate this if statement because GCC < 5.0 doesn't
-    //       support the function-like syntax in #if statements.
-    #if __has_cpp_attribute(fallthrough)
-        #define M5_FALLTHROUGH [[fallthrough]]
-    #else
-        #define M5_FALLTHROUGH
-    #endif
-
-    #if __has_cpp_attribute(nodiscard)
-        #define M5_NODISCARD [[nodiscard]]
-    #else
-        #define M5_NODISCARD
-    #endif
-#else
-    // Unsupported (and no warning) on GCC < 7.
-    #define M5_FALLTHROUGH
-
-    #define M5_NODISCARD
-#endif
-
-// std::make_unique redefined for C++11 compilers
-namespace m5
-{
-
-#if __cplusplus >= 201402L // C++14
-
-using std::make_unique;
-
-#else // C++11
-
-/** Defining custom version of make_unique: m5::make_unique<>() */
-template<typename T, typename... Args>
-std::unique_ptr<T>
-make_unique( Args&&... constructor_args )
-{
-    return std::unique_ptr<T>(
-               new T( std::forward<Args>(constructor_args)... )
-           );
-}
-
-#endif // __cplusplus >= 201402L
-
-} //namespace m5
 
 #endif // __BASE_COMPILER_HH__

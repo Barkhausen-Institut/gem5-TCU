@@ -42,22 +42,9 @@
 namespace PowerISA
 {
 
-ISA::ISA(Params *p) : BaseISA(p)
+ISA::ISA(const Params &p) : BaseISA(p)
 {
     clear();
 }
 
-const PowerISAParams *
-ISA::params() const
-{
-    return dynamic_cast<const Params *>(_params);
 }
-
-}
-
-PowerISA::ISA *
-PowerISAParams::create()
-{
-    return new PowerISA::ISA(this);
-}
-

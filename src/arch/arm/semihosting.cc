@@ -37,10 +37,14 @@
 
 #include "arch/arm/semihosting.hh"
 
+#include <unistd.h>
+
+#include <cerrno>
 #include <cstdio>
 
 #include "arch/arm/utility.hh"
 #include "base/logging.hh"
+#include "base/output.hh"
 #include "base/time.hh"
 #include "debug/Semihosting.hh"
 #include "dev/serial/serial.hh"
@@ -134,21 +138,21 @@ const std::map<const std::string, FILE *> ArmSemihosting::stdioMap{
     {"stderr", ::stderr},
 };
 
-ArmSemihosting::ArmSemihosting(const ArmSemihostingParams *p)
+ArmSemihosting::ArmSemihosting(const ArmSemihostingParams &p)
     : SimObject(p),
-      cmdLine(p->cmd_line),
-      memReserve(p->mem_reserve),
-      stackSize(p->stack_size),
-      timeBase([p]{ struct tm t = p->time; return mkutctime(&t); }()),
+      cmdLine(p.cmd_line),
+      memReserve(p.mem_reserve),
+      stackSize(p.stack_size),
+      timeBase([p]{ struct tm t = p.time; return mkutctime(&t); }()),
       tickShift(calcTickShift()),
       semiErrno(0),
-      filesRootDir(!p->files_root_dir.empty() &&
-                   p->files_root_dir.back() != '/' ?
-                   p->files_root_dir + '/' : p->files_root_dir),
-      stdin(getSTDIO("stdin", p->stdin, "r")),
-      stdout(getSTDIO("stdout", p->stdout, "w")),
-      stderr(p->stderr == p->stdout ?
-             stdout : getSTDIO("stderr", p->stderr, "w"))
+      filesRootDir(!p.files_root_dir.empty() &&
+                   p.files_root_dir.back() != '/' ?
+                   p.files_root_dir + '/' : p.files_root_dir),
+      stdin(getSTDIO("stdin", p.stdin, "r")),
+      stdout(getSTDIO("stdout", p.stdout, "w")),
+      stderr(p.stderr == p.stdout ?
+             stdout : getSTDIO("stderr", p.stderr, "w"))
 {
     // Create an empty place-holder file for position 0 as semi-hosting
     // calls typically expect non-zero file handles.
@@ -244,7 +248,7 @@ ArmSemihosting::portProxy(ThreadContext *tc)
     static std::unique_ptr<PortProxy> port_proxy_s;
     static System *secure_sys = nullptr;
 
-    if (ArmISA::inSecureState(tc)) {
+    if (ArmISA::isSecure(tc)) {
         System *sys = tc->getSystemPtr();
         if (sys != secure_sys) {
             if (FullSystem) {
@@ -449,16 +453,21 @@ ArmSemihosting::RetErrno
 ArmSemihosting::callTmpNam(ThreadContext *tc, Addr addr, uint64_t id,
                            size_t size)
 {
-    std::vector<char> buf(L_tmpnam);
-    char *path = tmpnam(buf.data());
-    if (!path)
-        return retError(EINVAL);
+    std::string path = "";
+    int64_t unlink_call_ret = 0;
 
-    const size_t path_len = strlen(path);
+    do {
+        path = simout.resolve(csprintf("%s.tmp%05i", name(), tmpNameIndex++));
+        // remove the (potentially existing) file of the given path
+        unlink_call_ret = unlink(path.c_str());
+    // if the file is busy, find another name
+    } while ((unlink_call_ret < 0) && (errno == EBUSY));
+
+    const size_t path_len = path.length();
     if (path_len >= size)
         return retError(ENOSPC);
 
-    portProxy(tc).writeBlob(addr, path, path_len + 1);
+    portProxy(tc).writeBlob(addr, path.c_str(), path_len + 1);
     return retOK(0);
 }
 
@@ -695,18 +704,6 @@ struct SemiPseudoAbi64 : public ArmSemihosting::Abi64
 
 namespace GuestABI
 {
-
-// Ignore return values since those will be handled by semihosting.
-template <typename T>
-struct Result<SemiPseudoAbi32, T>
-{
-    static void store(ThreadContext *tc, const T &ret) {}
-};
-template <typename T>
-struct Result<SemiPseudoAbi64, T>
-{
-    static void store(ThreadContext *tc, const T &ret) {}
-};
 
 // Handle arguments the same as for semihosting operations. Skipping the first
 // slot is handled internally by the State type.
@@ -1045,11 +1042,4 @@ operator << (std::ostream &os, const ArmSemihosting::InPlaceArg &ipa)
 {
     ccprintf(os, "[%#x-%#x)", ipa.addr, ipa.addr + ipa.size - 1);
     return os;
-}
-
-
-ArmSemihosting *
-ArmSemihostingParams::create()
-{
-    return new ArmSemihosting(this);
 }

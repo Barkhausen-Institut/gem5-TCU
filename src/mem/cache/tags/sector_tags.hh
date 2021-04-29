@@ -44,7 +44,9 @@
 #include "mem/packet.hh"
 #include "params/SectorTags.hh"
 
-class BaseReplacementPolicy;
+namespace ReplacementPolicy {
+    class Base;
+}
 class ReplaceableEntry;
 
 /**
@@ -71,7 +73,7 @@ class SectorTags : public BaseTags
     const bool sequentialAccess;
 
     /** Replacement policy */
-    BaseReplacementPolicy *replacementPolicy;
+    ReplacementPolicy::Base *replacementPolicy;
 
     /** Number of data blocks per sector. */
     const unsigned numBlocksPerSector;
@@ -106,7 +108,7 @@ class SectorTags : public BaseTags
     /**
      * Construct and initialize this tag store.
      */
-    SectorTags(const Params *p);
+    SectorTags(const Params &p);
 
     /**
      * Destructor.
@@ -146,6 +148,8 @@ class SectorTags : public BaseTags
      * @param blk The block to update.
      */
     void insertBlock(const PacketPtr pkt, CacheBlk *blk) override;
+
+    void moveBlock(CacheBlk *src_blk, CacheBlk *dest_blk) override;
 
     /**
      * Finds the given address in the cache, do not update replacement data.

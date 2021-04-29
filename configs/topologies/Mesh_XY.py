@@ -25,9 +25,6 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from __future__ import print_function
-from __future__ import absolute_import
-
 from m5.params import *
 from m5.objects import *
 
@@ -178,4 +175,4 @@ class Mesh_XY(SimpleTopology):
     def registerTopology(self, options):
         for i in range(options.num_cpus):
             FileSystemConfig.register_node([i],
-                    MemorySize(options.mem_size) / options.num_cpus, i)
+                    MemorySize(options.mem_size) // options.num_cpus, i)

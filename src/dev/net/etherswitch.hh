@@ -35,6 +35,8 @@
 
 #include <map>
 #include <set>
+#include <string>
+#include <vector>
 
 #include "base/inet.hh"
 #include "dev/net/etherint.hh"
@@ -43,20 +45,16 @@
 #include "dev/net/pktfifo.hh"
 #include "params/EtherSwitch.hh"
 #include "sim/eventq.hh"
+#include "sim/serialize.hh"
 #include "sim/sim_object.hh"
 
 class EtherSwitch : public SimObject
 {
   public:
-    typedef EtherSwitchParams Params;
+    using Params = EtherSwitchParams;
 
-    EtherSwitch(const Params *p);
+    EtherSwitch(const Params &p);
     ~EtherSwitch();
-
-    const Params * params() const
-    {
-        return dynamic_cast<const Params*>(_params);
-    }
 
     Port &getPort(const std::string &if_name,
                   PortID idx=InvalidPortID) override;

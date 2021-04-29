@@ -37,6 +37,7 @@
 
 #include "dev/arm/vgic.hh"
 
+#include "arch/arm/interrupts.hh"
 #include "base/trace.hh"
 #include "debug/Checkpoint.hh"
 #include "debug/VGIC.hh"
@@ -44,10 +45,10 @@
 #include "mem/packet.hh"
 #include "mem/packet_access.hh"
 
-VGic::VGic(const Params *p)
-    : PioDevice(p), gicvIIDR(p->gicv_iidr), platform(p->platform),
-      gic(p->gic), vcpuAddr(p->vcpu_addr), hvAddr(p->hv_addr),
-      pioDelay(p->pio_delay), maintInt(p->maint_int)
+VGic::VGic(const Params &p)
+    : PioDevice(p), gicvIIDR(p.gicv_iidr), platform(p.platform),
+      gic(p.gic), vcpuAddr(p.vcpu_addr), hvAddr(p.hv_addr),
+      pioDelay(p.pio_delay), maintInt(p.maint_int)
 {
     for (int x = 0; x < VGIC_CPU_MAX; x++) {
         postVIntEvent[x] = new EventFunctionWrapper(
@@ -56,7 +57,7 @@ VGic::VGic(const Params *p)
         maintIntPosted[x] = false;
         vIntPosted[x] = false;
     }
-    assert(sys->numRunningContexts() <= VGIC_CPU_MAX);
+    assert(sys->threads.numRunning() <= VGIC_CPU_MAX);
 }
 
 VGic::~VGic()
@@ -147,7 +148,7 @@ VGic::readCtrl(PacketPtr pkt)
 
     DPRINTF(VGIC, "VGIC HVCtrl read register %#x\n", daddr);
 
-    /* Munge the address: 0-0xfff is the usual space banked by requester CPU.
+    /* Munge the address: 0-0xfff is the usual space banked by requestor CPU.
      * Anything > that is 0x200-sized slices of 'per CPU' regs.
      */
     if (daddr & ~0x1ff) {
@@ -291,7 +292,7 @@ VGic::writeCtrl(PacketPtr pkt)
     DPRINTF(VGIC, "VGIC HVCtrl write register %#x <= %#x\n",
             daddr, pkt->getLE<uint32_t>());
 
-    /* Munge the address: 0-0xfff is the usual space banked by requester CPU.
+    /* Munge the address: 0-0xfff is the usual space banked by requestor CPU.
      * Anything > that is 0x200-sized slices of 'per CPU' regs.
      */
     if (daddr & ~0x1ff) {
@@ -414,8 +415,8 @@ VGic::updateIntState(ContextID ctx_id)
         }
     }
 
-    assert(sys->numRunningContexts() <= VGIC_CPU_MAX);
-    for (int i = 0; i < sys->numRunningContexts(); i++) {
+    assert(sys->threads.numRunning() <= VGIC_CPU_MAX);
+    for (int i = 0; i < sys->threads.numRunning(); i++) {
         struct vcpuIntData *vid = &vcpuData[i];
         // Are any LRs active that weren't before?
         if (!vIntPosted[i]) {
@@ -550,10 +551,4 @@ VGic::vcpuIntData::unserialize(CheckpointIn &cp)
         ScopedCheckpointSection sec_lr(cp, csprintf("LR%d", i));
         paramIn(cp, "lr", LR[i]);
     }
-}
-
-VGic *
-VGicParams::create()
-{
-    return new VGic(this);
 }

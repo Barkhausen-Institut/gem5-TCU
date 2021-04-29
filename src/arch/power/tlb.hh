@@ -110,21 +110,9 @@ class TLB : public BaseTLB
 
     PowerISA::PTE *lookup(Addr vpn, uint8_t asn) const;
 
-    mutable Stats::Scalar read_hits;
-    mutable Stats::Scalar read_misses;
-    mutable Stats::Scalar read_acv;
-    mutable Stats::Scalar read_accesses;
-    mutable Stats::Scalar write_hits;
-    mutable Stats::Scalar write_misses;
-    mutable Stats::Scalar write_acv;
-    mutable Stats::Scalar write_accesses;
-    Stats::Formula hits;
-    Stats::Formula misses;
-    Stats::Formula accesses;
-
   public:
     typedef PowerTLBParams Params;
-    TLB(const Params *p);
+    TLB(const Params &p);
     virtual ~TLB();
 
     void takeOverFrom(BaseTLB *otlb) override {}
@@ -170,8 +158,6 @@ class TLB : public BaseTLB
     // Checkpointing
     void serialize(CheckpointOut &cp) const override;
     void unserialize(CheckpointIn &cp) override;
-
-    void regStats() override;
 };
 
 } // namespace PowerISA

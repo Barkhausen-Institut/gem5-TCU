@@ -40,16 +40,16 @@
 #include "cpu/pred/multiperspective_perceptron_tage_64KB.hh"
 
 MPP_StatisticalCorrector_64KB::MPP_StatisticalCorrector_64KB(
-    const MPP_StatisticalCorrector_64KBParams *p)
+    const MPP_StatisticalCorrector_64KBParams &p)
   : MPP_StatisticalCorrector(p),
-    numEntriesSecondLocalHistories(p->numEntriesSecondLocalHistories),
-    numEntriesThirdLocalHistories(p->numEntriesThirdLocalHistories),
-    snb(p->snb),
-    logSnb(p->logSnb),
-    sm(p->sm),
-    tnb(p->tnb),
-    logTnb(p->logTnb),
-    tm(p->tm)
+    numEntriesSecondLocalHistories(p.numEntriesSecondLocalHistories),
+    numEntriesThirdLocalHistories(p.numEntriesThirdLocalHistories),
+    snb(p.snb),
+    logSnb(p.logSnb),
+    sm(p.sm),
+    tnb(p.tnb),
+    logTnb(p.logTnb),
+    tm(p.tm)
 {
     initGEHLTable(snb, sm, sgehl, logSnb, ws, -1);
     initGEHLTable(tnb, tm, tgehl, logTnb, wt, -1);
@@ -196,15 +196,8 @@ MPP_StatisticalCorrector_64KB::getSizeInBits() const
     return bits;
 }
 
-MPP_StatisticalCorrector_64KB*
-MPP_StatisticalCorrector_64KBParams::create()
-{
-    return new MPP_StatisticalCorrector_64KB(this);
-}
-
-
 MultiperspectivePerceptronTAGE64KB::MultiperspectivePerceptronTAGE64KB(
-        const MultiperspectivePerceptronTAGE64KBParams *p)
+        const MultiperspectivePerceptronTAGE64KBParams &p)
     : MultiperspectivePerceptronTAGE(p)
 {
 }
@@ -221,10 +214,4 @@ MultiperspectivePerceptronTAGE64KB::createSpecs()
     addSpec(new IMLI(4, 1.98, 0, 6, *this));
     addSpec(new RECENCY(9, 3, -1, 2.51, 0, 6, *this));
     addSpec(new ACYCLIC(12, -1, -1, 2.0, 0, 6, *this));
-}
-
-MultiperspectivePerceptronTAGE64KB*
-MultiperspectivePerceptronTAGE64KBParams::create()
-{
-    return new MultiperspectivePerceptronTAGE64KB(this);
 }

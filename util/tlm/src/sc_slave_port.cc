@@ -293,18 +293,14 @@ SCSlavePort::pec(
 
         bool need_retry = false;
 
-        /*
-         * If the packet was piped through and needs a response, we don't need
-         * to touch the packet and can forward it directly as a response.
-         * Otherwise, we need to make a response and send the transformed
-         * packet.
-         */
-        if (extension.isPipeThrough()) {
-            if (packet->isResponse()) {
-                need_retry = !sendTimingResp(packet);
-            }
-        } else if (packet->needsResponse()) {
+        // If there is another gem5 model under the receiver side, and already
+        // make a response packet back, we can simply send it back. Otherwise,
+        // we make a response packet before sending it back to the initiator
+        // side gem5 module.
+        if (packet->needsResponse()) {
             packet->makeResponse();
+        }
+        if (packet->isResponse()) {
             need_retry = !sendTimingResp(packet);
         }
 
@@ -361,7 +357,7 @@ SCSlavePort::nb_transport_bw(tlm::tlm_generic_payload& trans,
 SCSlavePort::SCSlavePort(const std::string &name_,
     const std::string &systemc_name,
     ExternalSlave &owner_) :
-    ExternalSlave::Port(name_, owner_),
+    ExternalSlave::ExternalPort(name_, owner_),
     blockingRequest(NULL),
     needToSendRequestRetry(false),
     blockingResponse(NULL),
@@ -380,7 +376,7 @@ SCSlavePort::bindToTransactor(Gem5SlaveTransactor* transactor)
                                                 &SCSlavePort::nb_transport_bw);
 }
 
-ExternalSlave::Port*
+ExternalSlave::ExternalPort*
 SCSlavePortHandler::getExternalPort(const std::string &name,
                                     ExternalSlave &owner,
                                     const std::string &port_data)

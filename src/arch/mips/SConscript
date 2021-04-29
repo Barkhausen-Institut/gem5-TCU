@@ -1,6 +1,7 @@
 # -*- mode:python -*-
 
 # Copyright (c) 2004-2006 The Regents of The University of Michigan
+# Copyright (c) 2020 LabWare
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -36,18 +37,22 @@ if env['TARGET_ISA'] == 'mips':
     Source('interrupts.cc')
     Source('isa.cc')
     Source('linux/linux.cc')
-    Source('linux/process.cc')
+    Source('linux/se_workload.cc')
     Source('pagetable.cc')
     Source('process.cc')
     Source('remote_gdb.cc')
-    Source('stacktrace.cc')
+    Source('se_workload.cc')
     Source('tlb.cc')
     Source('utility.cc')
 
     SimObject('MipsInterrupts.py')
     SimObject('MipsISA.py')
+    SimObject('MipsMMU.py')
+    SimObject('MipsSeWorkload.py')
     SimObject('MipsTLB.py')
 
     DebugFlag('MipsPRA')
 
     ISADesc('isa/main.isa')
+
+    GdbXml('mips.xml', 'gdb_xml_mips')

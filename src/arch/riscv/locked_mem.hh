@@ -49,9 +49,10 @@
 #include <stack>
 #include <unordered_map>
 
-#include "arch/registers.hh"
+#include "arch/riscv/registers.hh"
 #include "base/logging.hh"
 #include "base/trace.hh"
+#include "cpu/base.hh"
 #include "debug/LLSC.hh"
 #include "mem/packet.hh"
 #include "mem/request.hh"

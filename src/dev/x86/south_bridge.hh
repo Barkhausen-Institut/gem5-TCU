@@ -55,14 +55,8 @@ class SouthBridge : public SimObject
     X86ISA::I82094AA * ioApic;
 
   public:
-    typedef SouthBridgeParams Params;
-    SouthBridge(const Params *p);
-
-    const Params *
-    params() const
-    {
-        return dynamic_cast<const Params *>(_params);
-    }
+    using Params = SouthBridgeParams;
+    SouthBridge(const Params &p);
 };
 
 #endif //__DEV_X86_SOUTH_BRIDGE_HH__

@@ -45,6 +45,8 @@
 #ifndef __CPU_MINOR_DECODE_HH__
 #define __CPU_MINOR_DECODE_HH__
 
+#include <vector>
+
 #include "cpu/minor/buffers.hh"
 #include "cpu/minor/cpu.hh"
 #include "cpu/minor/dyn_inst.hh"
@@ -138,7 +140,7 @@ class Decode : public Named
   public:
     Decode(const std::string &name,
         MinorCPU &cpu_,
-        MinorCPUParams &params,
+        const MinorCPUParams &params,
         Latch<ForwardInstData>::Output inp_,
         Latch<ForwardInstData>::Input out_,
         std::vector<InputBuffer<ForwardInstData>> &next_stage_input_buffer);

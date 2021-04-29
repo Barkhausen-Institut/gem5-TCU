@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019 ARM Limited
+ * Copyright (c) 2017, 2019, 2021 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -52,6 +52,7 @@
 #include "base/logging.hh"
 #include "base/random.hh"
 #include "base/socket.hh"
+#include "base/temperature.hh"
 #include "base/types.hh"
 #include "sim/core.hh"
 #include "sim/drain.hh"
@@ -72,7 +73,7 @@ SimObject *
 PybindSimObjectResolver::resolveSimObject(const std::string &name)
 {
     // TODO
-    py::module m = py::module::import("m5.SimObject");
+    py::module_ m = py::module_::import("m5.SimObject");
     auto f = m.attr("resolveSimObject");
 
     return f(name).cast<SimObject *>();
@@ -94,9 +95,9 @@ const bool flag_NDEBUG = false;
 const bool flag_TRACING_ON = TRACING_ON;
 
 static void
-init_drain(py::module &m_native)
+init_drain(py::module_ &m_native)
 {
-    py::module m = m_native.def_submodule("drain");
+    py::module_ m = m_native.def_submodule("drain");
 
     py::enum_<DrainState>(m, "DrainState")
         .value("Running", DrainState::Running)
@@ -126,9 +127,9 @@ init_drain(py::module &m_native)
 }
 
 static void
-init_serialize(py::module &m_native)
+init_serialize(py::module_ &m_native)
 {
-    py::module m = m_native.def_submodule("serialize");
+    py::module_ m = m_native.def_submodule("serialize");
 
     py::class_<Serializable, std::unique_ptr<Serializable, py::nodelete>>(
         m, "Serializable")
@@ -139,9 +140,9 @@ init_serialize(py::module &m_native)
 }
 
 static void
-init_range(py::module &m_native)
+init_range(py::module_ &m_native)
 {
-    py::module m = m_native.def_submodule("range");
+    py::module_ m = m_native.def_submodule("range");
 
     py::class_<AddrRange>(m, "AddrRange")
         .def(py::init<>())
@@ -174,9 +175,9 @@ init_range(py::module &m_native)
 }
 
 static void
-init_net(py::module &m_native)
+init_net(py::module_ &m_native)
 {
-    py::module m = m_native.def_submodule("net");
+    py::module_ m = m_native.def_submodule("net");
 
     py::class_<Net::EthAddr>(m, "EthAddr")
         .def(py::init<>())
@@ -200,17 +201,17 @@ init_net(py::module &m_native)
 }
 
 static void
-init_loader(py::module &m_native)
+init_loader(py::module_ &m_native)
 {
-    py::module m = m_native.def_submodule("loader");
+    py::module_ m = m_native.def_submodule("loader");
 
     m.def("setInterpDir", &Loader::setInterpDir);
 }
 
 void
-pybind_init_core(py::module &m_native)
+pybind_init_core(py::module_ &m_native)
 {
-    py::module m_core = m_native.def_submodule("core");
+    py::module_ m_core = m_native.def_submodule("core");
 
     py::class_<Cycles>(m_core, "Cycles")
         .def(py::init<>())
@@ -218,6 +219,38 @@ pybind_init_core(py::module &m_native)
         .def("__int__", &Cycles::operator uint64_t)
         .def("__add__", &Cycles::operator+)
         .def("__sub__", &Cycles::operator-)
+        ;
+
+    py::class_<Temperature>(m_core, "Temperature")
+        .def(py::init<>())
+        .def(py::init<double>())
+        .def_static("from_celsius", &Temperature::fromCelsius)
+        .def_static("from_kelvin", &Temperature::fromKelvin)
+        .def_static("from_fahrenheit", &Temperature::fromFahrenheit)
+        .def("celsius", &Temperature::toCelsius)
+        .def("kelvin", &Temperature::toKelvin)
+        .def("fahrenheit", &Temperature::toFahrenheit)
+        .def(py::self == py::self)
+        .def(py::self != py::self)
+        .def(py::self < py::self)
+        .def(py::self <= py::self)
+        .def(py::self > py::self)
+        .def(py::self >= py::self)
+        .def(py::self + py::self)
+        .def(py::self - py::self)
+        .def(py::self * float())
+        .def(float() * py::self)
+        .def(py::self / float())
+        .def("__str__", [](const Temperature &t) {
+                std::stringstream s;
+                s << t;
+                return s.str();
+            })
+        .def("__repr__", [](const Temperature &t) {
+                std::stringstream s;
+                s << "Temperature(" << t.toKelvin() << ")";
+                return s.str();
+            })
         ;
 
     py::class_<tm>(m_core, "tm")

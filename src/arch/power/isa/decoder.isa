@@ -278,6 +278,10 @@ decode OPCODE default Unknown::unknown() {
                 0x100: mtlr({{ LR = Rs; }});
                 0x120: mtctr({{ CTR = Rs; }});
             }
+            512: mcrxr({{
+                CR = insertCRField(CR, BF, XER<31:28>);
+                XER = XER<27:0>;
+                }});
         }
 
         // All loads with an index register. The non-update versions
@@ -343,8 +347,8 @@ decode OPCODE default Unknown::unknown() {
         format MiscOp {
             278: dcbt({{ }});
             246: dcbtst({{ }});
-            598: sync({{ }}, [ IsMemBarrier ]);
-            854: eieio({{ }}, [ IsMemBarrier ]);
+            598: sync({{ }}, [ IsReadBarrier, IsWriteBarrier ]);
+            854: eieio({{ }}, [ IsReadBarrier, IsWriteBarrier ]);
         }
     }
 
@@ -515,8 +519,7 @@ decode OPCODE default Unknown::unknown() {
         55: stfdu({{ Mem_df = Fs; }});
     }
 
-    17: IntOp::sc({{ xc->syscall(&fault); }},
-                  [ IsSyscall, IsNonSpeculative, IsSerializeAfter ]);
+    17: IntOp::sc({{ return std::make_shared<SESyscallFault>(); }});
 
     format FloatArithOp {
         59: decode A_XO {

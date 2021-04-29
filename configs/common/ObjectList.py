@@ -34,9 +34,6 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from __future__ import print_function
-from __future__ import absolute_import
-
 import m5.objects
 import inspect
 import sys
@@ -162,7 +159,7 @@ class EnumList(ObjectList):
             if not key.startswith("Num_"):
                 self._sub_classes[key] = value
 
-
+rp_list = ObjectList(getattr(m5.objects, 'BaseReplacementPolicy', None))
 bp_list = ObjectList(getattr(m5.objects, 'BranchPredictor', None))
 cpu_list = CPUList(getattr(m5.objects, 'BaseCPU', None))
 hwp_list = ObjectList(getattr(m5.objects, 'BasePrefetcher', None))

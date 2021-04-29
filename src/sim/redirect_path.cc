@@ -30,6 +30,8 @@
 
 #include <unistd.h>
 
+#include "base/str.hh"
+
 static std::string
 normalizePath(std::string path)
 {
@@ -44,18 +46,12 @@ normalizePath(std::string path)
     return path;
 }
 
-RedirectPath::RedirectPath(const RedirectPathParams *p)
+RedirectPath::RedirectPath(const RedirectPathParams &p)
     : SimObject(p)
 {
-    _appPath = normalizePath(p->app_path);
+    _appPath = normalizePath(p.app_path);
 
-    for (auto hp : p->host_paths) {
+    for (auto hp : p.host_paths) {
         _hostPaths.push_back(normalizePath(hp));
     }
-}
-
-RedirectPath*
-RedirectPathParams::create()
-{
-    return new RedirectPath(this);
 }

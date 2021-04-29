@@ -28,33 +28,31 @@
 
 #include "base/cprintf.hh"
 
-#include <cassert>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 
 #include "base/compiler.hh"
 
-using namespace std;
-
-namespace cp {
+namespace cp
+{
 
 Print::Print(std::ostream &stream, const std::string &format)
     : stream(stream), format(format.c_str()), ptr(format.c_str()), cont(false)
 {
-    saved_flags = stream.flags();
-    saved_fill = stream.fill();
-    saved_precision = stream.precision();
-    saved_width = stream.width();
+    savedFlags = stream.flags();
+    savedFill = stream.fill();
+    savedPrecision = stream.precision();
+    savedWidth = stream.width();
 }
 
 Print::Print(std::ostream &stream, const char *format)
     : stream(stream), format(format), ptr(format), cont(false)
 {
-    saved_flags = stream.flags();
-    saved_fill = stream.fill();
-    saved_precision = stream.precision();
-    saved_width = stream.width();
+    savedFlags = stream.flags();
+    savedFill = stream.fill();
+    savedPrecision = stream.precision();
+    savedWidth = stream.width();
 }
 
 Print::~Print()
@@ -72,7 +70,7 @@ Print::process()
         switch (*ptr) {
           case '%':
             if (ptr[1] != '%') {
-                process_flag();
+                processFlag();
                 return;
             }
             stream.put('%');
@@ -80,13 +78,13 @@ Print::process()
             break;
 
           case '\n':
-            stream << endl;
+            stream << std::endl;
             ++ptr;
             break;
           case '\r':
             ++ptr;
             if (*ptr != '\n')
-                stream << endl;
+                stream << std::endl;
             break;
 
           default:
@@ -99,7 +97,7 @@ Print::process()
 }
 
 void
-Print::process_flag()
+Print::processFlag()
 {
     bool done = false;
     bool end_number = false;
@@ -107,24 +105,25 @@ Print::process_flag()
     int number = 0;
 
     stream.fill(' ');
-    stream.flags((ios::fmtflags)0);
+    stream.flags((std::ios::fmtflags)0);
 
     while (!done) {
         ++ptr;
         if (*ptr >= '0' && *ptr <= '9') {
             if (end_number)
                 continue;
-        } else if (number > 0)
+        } else if (number > 0) {
             end_number = true;
+        }
 
         switch (*ptr) {
           case 's':
-            fmt.format = Format::string;
+            fmt.format = Format::String;
             done = true;
             break;
 
           case 'c':
-            fmt.format = Format::character;
+            fmt.format = Format::Character;
             done = true;
             break;
 
@@ -132,9 +131,9 @@ Print::process_flag()
             continue;
 
           case 'p':
-            fmt.format = Format::integer;
-            fmt.base = Format::hex;
-            fmt.alternate_form = true;
+            fmt.format = Format::Integer;
+            fmt.base = Format::Hex;
+            fmt.alternateForm = true;
             done = true;
             break;
 
@@ -142,21 +141,21 @@ Print::process_flag()
             fmt.uppercase = true;
             M5_FALLTHROUGH;
           case 'x':
-            fmt.base = Format::hex;
-            fmt.format = Format::integer;
+            fmt.base = Format::Hex;
+            fmt.format = Format::Integer;
             done = true;
             break;
 
           case 'o':
-            fmt.base = Format::oct;
-            fmt.format = Format::integer;
+            fmt.base = Format::Oct;
+            fmt.format = Format::Integer;
             done = true;
             break;
 
           case 'd':
           case 'i':
           case 'u':
-            fmt.format = Format::integer;
+            fmt.format = Format::Integer;
             done = true;
             break;
 
@@ -164,8 +163,8 @@ Print::process_flag()
             fmt.uppercase = true;
             M5_FALLTHROUGH;
           case 'g':
-            fmt.format = Format::floating;
-            fmt.float_format = Format::best;
+            fmt.format = Format::Floating;
+            fmt.floatFormat = Format::Best;
             done = true;
             break;
 
@@ -173,14 +172,14 @@ Print::process_flag()
             fmt.uppercase = true;
             M5_FALLTHROUGH;
           case 'e':
-            fmt.format = Format::floating;
-            fmt.float_format = Format::scientific;
+            fmt.format = Format::Floating;
+            fmt.floatFormat = Format::Scientific;
             done = true;
             break;
 
           case 'f':
-            fmt.format = Format::floating;
-            fmt.float_format = Format::fixed;
+            fmt.format = Format::Floating;
+            fmt.floatFormat = Format::Fixed;
             done = true;
             break;
 
@@ -190,19 +189,19 @@ Print::process_flag()
             break;
 
           case '#':
-            fmt.alternate_form = true;
+            fmt.alternateForm = true;
             break;
 
           case '-':
-            fmt.flush_left = true;
+            fmt.flushLeft = true;
             break;
 
           case '+':
-            fmt.print_sign = true;
+            fmt.printSign = true;
             break;
 
           case ' ':
-            fmt.blank_space = true;
+            fmt.blankSpace = true;
             break;
 
           case '.':
@@ -215,7 +214,7 @@ Print::process_flag()
 
           case '0':
             if (number == 0) {
-                fmt.fill_zero = true;
+                fmt.fillZero = true;
                 break;
             }
             M5_FALLTHROUGH;
@@ -233,13 +232,13 @@ Print::process_flag()
 
           case '*':
             if (have_precision)
-                fmt.get_precision = true;
+                fmt.getPrecision = true;
             else
-                fmt.get_width = true;
+                fmt.getWidth = true;
             break;
 
           case '%':
-            assert(false && "we shouldn't get here");
+            M5_UNREACHABLE;
             break;
 
           default:
@@ -258,13 +257,13 @@ Print::process_flag()
         }
 
         if (done) {
-            if ((fmt.format == Format::integer) && have_precision) {
+            if ((fmt.format == Format::Integer) && have_precision) {
                 // specified a . but not a float, set width
                 fmt.width = fmt.precision;
                 // precision requries digits for width, must fill with 0
-                fmt.fill_zero = true;
-            } else if ((fmt.format == Format::floating) && !have_precision &&
-                        fmt.fill_zero) {
+                fmt.fillZero = true;
+            } else if ((fmt.format == Format::Floating) && !have_precision &&
+                        fmt.fillZero) {
                 // ambiguous case, matching printf
                 fmt.precision = fmt.width;
             }
@@ -275,7 +274,7 @@ Print::process_flag()
 }
 
 void
-Print::end_args()
+Print::endArgs()
 {
     size_t len;
 
@@ -290,13 +289,13 @@ Print::end_args()
             break;
 
           case '\n':
-            stream << endl;
+            stream << std::endl;
             ++ptr;
             break;
           case '\r':
             ++ptr;
             if (*ptr != '\n')
-                stream << endl;
+                stream << std::endl;
             break;
 
           default:
@@ -307,10 +306,10 @@ Print::end_args()
         }
     }
 
-    stream.flags(saved_flags);
-    stream.fill(saved_fill);
-    stream.precision(saved_precision);
-    stream.width(saved_width);
+    stream.flags(savedFlags);
+    stream.fill(savedFill);
+    stream.precision(savedPrecision);
+    stream.width(savedWidth);
 }
 
 } // namespace cp

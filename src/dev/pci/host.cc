@@ -45,7 +45,7 @@
 #include "params/GenericPciHost.hh"
 #include "params/PciHost.hh"
 
-PciHost::PciHost(const PciHostParams *p)
+PciHost::PciHost(const PciHostParams &p)
     : PioDevice(p)
 {
 }
@@ -115,13 +115,13 @@ PciHost::DeviceInterface::clearInt()
 }
 
 
-GenericPciHost::GenericPciHost(const GenericPciHostParams *p)
+GenericPciHost::GenericPciHost(const GenericPciHostParams &p)
     : PciHost(p),
-      platform(*p->platform),
-      confBase(p->conf_base), confSize(p->conf_size),
-      confDeviceBits(p->conf_device_bits),
-      pciPioBase(p->pci_pio_base), pciMemBase(p->pci_mem_base),
-      pciDmaBase(p->pci_dma_base)
+      platform(*p.platform),
+      confBase(p.conf_base), confSize(p.conf_size),
+      confDeviceBits(p.conf_device_bits),
+      pciPioBase(p.pci_pio_base), pciMemBase(p.pci_mem_base),
+      pciDmaBase(p.pci_dma_base)
 {
 }
 
@@ -217,9 +217,3 @@ GenericPciHost::mapPciInterrupt(const PciBusAddr &addr, PciIntPin pin) const
     return dev->interruptLine();
 }
 
-
-GenericPciHost *
-GenericPciHostParams::create()
-{
-    return new GenericPciHost(this);
-}

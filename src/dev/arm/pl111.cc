@@ -53,16 +53,16 @@
 using std::vector;
 
 // initialize clcd registers
-Pl111::Pl111(const Params *p)
-    : AmbaDmaDevice(p), lcdTiming0(0), lcdTiming1(0), lcdTiming2(0),
+Pl111::Pl111(const Params &p)
+    : AmbaDmaDevice(p, 0x10000), lcdTiming0(0), lcdTiming1(0), lcdTiming2(0),
       lcdTiming3(0), lcdUpbase(0), lcdLpbase(0), lcdControl(0), lcdImsc(0),
       lcdRis(0), lcdMis(0),
       clcdCrsrCtrl(0), clcdCrsrConfig(0), clcdCrsrPalette0(0),
       clcdCrsrPalette1(0), clcdCrsrXY(0), clcdCrsrClip(0), clcdCrsrImsc(0),
       clcdCrsrIcr(0), clcdCrsrRis(0), clcdCrsrMis(0),
-      pixelClock(p->pixel_clock),
+      pixelClock(p.pixel_clock),
       converter(PixelConverter::rgba8888_le), fb(LcdMaxWidth, LcdMaxHeight),
-      vnc(p->vnc), bmp(&fb), pic(NULL),
+      vnc(p.vnc), bmp(&fb), pic(NULL),
       width(LcdMaxWidth), height(LcdMaxHeight),
       bytesPerPixel(4), startTime(0), startAddr(0), maxAddr(0), curAddr(0),
       waterMark(0), dmaPendingNum(0),
@@ -71,10 +71,8 @@ Pl111::Pl111(const Params *p)
       dmaDoneEventAll(maxOutstandingDma, this),
       dmaDoneEventFree(maxOutstandingDma),
       intEvent([this]{ generateInterrupt(); }, name()),
-      enableCapture(p->enable_capture)
+      enableCapture(p.enable_capture)
 {
-    pioSize = 0xFFFF;
-
     dmaBuffer = new uint8_t[buffer_size];
 
     memset(lcdPalette, 0, sizeof(lcdPalette));
@@ -182,7 +180,7 @@ Pl111::read(PacketPtr pkt)
       default:
         if (readId(pkt, AMBA_ID, pioAddr)) {
             // Hack for variable size accesses
-            data = pkt->getLE<uint32_t>();
+            data = pkt->getUintX(ByteOrder::little);
             break;
         } else if (daddr >= CrsrImage && daddr <= 0xBFC) {
             // CURSOR IMAGE
@@ -203,21 +201,7 @@ Pl111::read(PacketPtr pkt)
         }
     }
 
-    switch(pkt->getSize()) {
-      case 1:
-        pkt->setLE<uint8_t>(data);
-        break;
-      case 2:
-        pkt->setLE<uint16_t>(data);
-        break;
-      case 4:
-        pkt->setLE<uint32_t>(data);
-        break;
-      default:
-        panic("CLCD controller read size too big?\n");
-        break;
-    }
-
+    pkt->setUintX(data, ByteOrder::little);
     pkt->makeAtomicResponse();
     return pioDelay;
 }
@@ -229,22 +213,7 @@ Pl111::write(PacketPtr pkt)
     // use a temporary data since the LCD registers are read/written with
     // different size operations
     //
-    uint32_t data = 0;
-
-    switch(pkt->getSize()) {
-      case 1:
-        data = pkt->getLE<uint8_t>();
-        break;
-      case 2:
-        data = pkt->getLE<uint16_t>();
-        break;
-      case 4:
-        data = pkt->getLE<uint32_t>();
-        break;
-      default:
-        panic("PL111 CLCD controller write size too big?\n");
-        break;
-    }
+    const uint32_t data = pkt->getUintX(ByteOrder::little);
 
     assert(pkt->getAddr() >= pioAddr &&
            pkt->getAddr() < pioAddr + pioSize);
@@ -303,7 +272,7 @@ Pl111::write(PacketPtr pkt)
         lcdMis = lcdImsc & lcdRis;
 
         if (!lcdMis)
-            gic->clearInt(intNum);
+            interrupt->clear();
 
          break;
       case LcdRis:
@@ -317,7 +286,7 @@ Pl111::write(PacketPtr pkt)
         lcdMis = lcdImsc & lcdRis;
 
         if (!lcdMis)
-            gic->clearInt(intNum);
+            interrupt->clear();
 
         break;
       case LcdUpCurr:
@@ -412,13 +381,13 @@ Pl111::pixelConverter() const
             bytesPerPixel,
             offsets[2], offsets[1], offsets[0],
             rw, gw, bw,
-            LittleEndianByteOrder);
+            ByteOrder::little);
     } else {
         return PixelConverter(
             bytesPerPixel,
             offsets[0], offsets[1], offsets[2],
             rw, gw, bw,
-            LittleEndianByteOrder);
+            ByteOrder::little);
     }
 }
 
@@ -759,7 +728,7 @@ Pl111::generateInterrupt()
     lcdMis = lcdImsc & lcdRis;
 
     if (lcdMis.underflow || lcdMis.baseaddr || lcdMis.vcomp || lcdMis.ahbmaster) {
-        gic->sendInt(intNum);
+        interrupt->raise();
         DPRINTF(PL111, " -- Generated\n");
     }
 }
@@ -771,11 +740,3 @@ Pl111::getAddrRanges() const
     ranges.push_back(RangeSize(pioAddr, pioSize));
     return ranges;
 }
-
-Pl111 *
-Pl111Params::create()
-{
-    return new Pl111(this);
-}
-
-

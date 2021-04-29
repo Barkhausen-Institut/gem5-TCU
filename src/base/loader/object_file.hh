@@ -34,6 +34,7 @@
 #include "base/loader/image_file.hh"
 #include "base/loader/image_file_data.hh"
 #include "base/loader/memory_image.hh"
+#include "base/loader/symtab.hh"
 #include "base/logging.hh"
 #include "base/types.hh"
 
@@ -55,6 +56,8 @@ enum Arch {
     Riscv32
 };
 
+const char *archToString(Arch arch);
+
 enum OpSys {
     UnknownOpSys,
     Tru64,
@@ -64,6 +67,8 @@ enum OpSys {
     FreeBSD
 };
 
+const char *opSysToString(OpSys op_sys);
+
 class SymbolTable;
 
 class ObjectFile : public ImageFile
@@ -72,35 +77,12 @@ class ObjectFile : public ImageFile
     Arch arch = UnknownArch;
     OpSys opSys = UnknownOpSys;
 
+    SymbolTable _symtab;
+
     ObjectFile(ImageFileDataPtr ifd);
 
   public:
     virtual ~ObjectFile() {};
-
-    virtual bool
-    loadAllSymbols(SymbolTable *symtab, Addr base=0,
-            Addr offset=0, Addr mask=MaxAddr)
-    {
-        return true;
-    };
-    virtual bool
-    loadGlobalSymbols(SymbolTable *symtab, Addr base=0,
-                      Addr offset=0, Addr mask=MaxAddr)
-    {
-        return true;
-    }
-    virtual bool
-    loadLocalSymbols(SymbolTable *symtab, Addr base=0,
-                     Addr offset=0, Addr mask=MaxAddr)
-    {
-        return true;
-    }
-    virtual bool
-    loadWeakSymbols(SymbolTable *symtab, Addr base=0,
-                    Addr offset=0, Addr mask=MaxAddr)
-    {
-        return true;
-    }
 
     virtual ObjectFile *getInterpreter() const { return nullptr; }
     virtual bool relocatable() const { return false; }
@@ -120,6 +102,8 @@ class ObjectFile : public ImageFile
 
     Arch  getArch()  const { return arch; }
     OpSys getOpSys() const { return opSys; }
+
+    const SymbolTable &symtab() const { return _symtab; }
 
   protected:
     Addr entry = 0;

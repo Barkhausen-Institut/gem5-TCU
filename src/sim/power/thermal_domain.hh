@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 ARM Limited
+ * Copyright (c) 2015, 2021 Arm Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -41,6 +41,7 @@
 #include <vector>
 
 #include "base/statistics.hh"
+#include "base/temperature.hh"
 #include "params/ThermalDomain.hh"
 #include "sim/power/thermal_entity.hh"
 #include "sim/power/thermal_node.hh"
@@ -59,21 +60,21 @@ class ThermalDomain : public SimObject, public ThermalEntity
   public:
 
     typedef ThermalDomainParams Params;
-    ThermalDomain(const Params *p);
+    ThermalDomain(const Params &p);
 
     /**
      * Get the startup temperature.
      *
      * @return Initial temperature of the domain
      */
-    double initialTemperature() const { return _initTemperature; }
+    Temperature initialTemperature() const { return _initTemperature; }
 
     /**
      * Get the current temperature.
      *
-     * @return Initial temperature of the domain
+     * @return current temperature of the domain
      */
-    double currentTemperature() const;
+    Temperature currentTemperature() const;
 
     /** Set/Get circuit node associated with this domain */
     void setNode(ThermalNode * n) { node = n; }
@@ -93,12 +94,8 @@ class ThermalDomain : public SimObject, public ThermalEntity
       */
     void setSubSystem(SubSystem * ss);
 
-    void regStats() override;
-    void serialize(CheckpointOut &cp) const override;
-    void unserialize(CheckpointIn &cp) override;
-
   private:
-    double _initTemperature;
+    const Temperature _initTemperature;
     ThermalNode * node;
     SubSystem * subsystem;
 
@@ -106,7 +103,7 @@ class ThermalDomain : public SimObject, public ThermalEntity
     Stats::Value currentTemp;
 
     /** Probe to signal for temperature changes in this domain */
-    ProbePointArg<double> *ppThermalUpdate;
+    ProbePointArg<Temperature> *ppThermalUpdate;
 
 };
 

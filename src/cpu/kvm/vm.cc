@@ -64,6 +64,12 @@ Kvm *Kvm::instance = NULL;
 Kvm::Kvm()
     : kvmFD(-1), apiVersion(-1), vcpuMMapSize(0)
 {
+    static bool created = false;
+    if (created)
+        warn_once("Use of multiple KvmVMs is currently untested!");
+
+    created = true;
+
     kvmFD = ::open("/dev/kvm", O_RDWR);
     if (kvmFD == -1)
         fatal("KVM: Failed to open /dev/kvm\n");
@@ -289,11 +295,12 @@ Kvm::createVM()
 }
 
 
-KvmVM::KvmVM(KvmVMParams *params)
+KvmVM::KvmVM(const KvmVMParams &params)
     : SimObject(params),
       kvm(new Kvm()), system(nullptr),
       vmFD(kvm->createVM()),
       started(false),
+      _hasKernelIRQChip(false),
       nextVCPUID(0)
 {
     maxMemorySlot = kvm->capNumMemSlots();
@@ -301,8 +308,8 @@ KvmVM::KvmVM(KvmVMParams *params)
     if (!maxMemorySlot)
         maxMemorySlot = 32;
     /* Setup the coalesced MMIO regions */
-    for (int i = 0; i < params->coalescedMMIO.size(); ++i)
-        coalesceMMIO(params->coalescedMMIO[i]);
+    for (int i = 0; i < params.coalescedMMIO.size(); ++i)
+        coalesceMMIO(params.coalescedMMIO[i]);
 }
 
 KvmVM::~KvmVM()
@@ -539,7 +546,7 @@ KvmVM::contextIdToVCpuId(ContextID ctx) const
 {
     assert(system != nullptr);
     return dynamic_cast<BaseKvmCPU*>
-        (system->getThreadContext(ctx)->getCpuPtr())->getVCpuID();
+        (system->threads[ctx]->getCpuPtr())->getVCpuID();
 }
 
 int
@@ -577,17 +584,4 @@ KvmVM::ioctl(int request, long p1) const
     assert(vmFD != -1);
 
     return ::ioctl(vmFD, request, p1);
-}
-
-
-KvmVM *
-KvmVMParams::create()
-{
-    static bool created = false;
-    if (created)
-        warn_once("Use of multiple KvmVMs is currently untested!\n");
-
-    created = true;
-
-    return new KvmVM(this);
 }

@@ -30,13 +30,13 @@
 
 #include "mem/scratchpad.hh"
 
-Scratchpad::Scratchpad(const ScratchpadParams* p)
+Scratchpad::Scratchpad(const ScratchpadParams &p)
   : AbstractMemory(p),
     cpuPort(name() + ".cpu_port", *this),
     tcuPort(name() + ".tcu_port", *this),
-    latency(p->latency),
-    throughput(p->throughput),
-    offset(p->offset)
+    latency(p.latency),
+    throughput(p.throughput),
+    offset(p.offset)
 {
 }
 
@@ -134,10 +134,4 @@ Tick
 Scratchpad::ScratchpadPort::recvAtomic(PacketPtr pkt)
 {
     return scratchpad.recvAtomic(pkt);
-}
-
-Scratchpad*
-ScratchpadParams::create()
-{
-    return new Scratchpad(this);
 }

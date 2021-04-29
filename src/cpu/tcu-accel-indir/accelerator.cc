@@ -55,9 +55,9 @@ static const char *stateNames[] =
     "CTXSW",
 };
 
-TcuAccelInDir::TcuAccelInDir(const TcuAccelInDirParams *p)
+TcuAccelInDir::TcuAccelInDir(const TcuAccelInDirParams &p)
   : TcuAccel(p),
-    bufSize(p->buf_size),
+    bufSize(p.buf_size),
     irqPending(false),
     memPending(false),
     state(State::IDLE),
@@ -335,10 +335,4 @@ TcuAccelInDir::tick()
         memPending = true;
         sendPkt(pkt);
     }
-}
-
-TcuAccelInDir*
-TcuAccelInDirParams::create()
-{
-    return new TcuAccelInDir(this);
 }

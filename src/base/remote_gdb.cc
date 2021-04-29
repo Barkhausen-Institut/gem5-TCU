@@ -141,7 +141,6 @@
 #include "base/intmath.hh"
 #include "base/socket.hh"
 #include "base/trace.hh"
-#include "config/the_isa.hh"
 #include "cpu/base.hh"
 #include "cpu/static_inst.hh"
 #include "cpu/thread_context.hh"
@@ -151,15 +150,12 @@
 #include "sim/full_system.hh"
 #include "sim/system.hh"
 
-using namespace std;
-using namespace TheISA;
-
 static const char GDBStart = '$';
 static const char GDBEnd = '#';
 static const char GDBGoodP = '+';
 static const char GDBBadP = '-';
 
-vector<BaseRemoteGDB *> debuggers;
+std::vector<BaseRemoteGDB *> debuggers;
 
 class HardBreakpoint : public PCEvent
 {
@@ -202,7 +198,7 @@ struct BadClient
 // Exception to throw when an error needs to be reported to the client.
 struct CmdError
 {
-    string error;
+    std::string error;
     CmdError(std::string _error) : error(_error)
     {}
 };
@@ -328,7 +324,7 @@ BaseRemoteGDB::~BaseRemoteGDB()
     delete dataEvent;
 }
 
-string
+std::string
 BaseRemoteGDB::name()
 {
     return sys->name() + ".remote_gdb";
@@ -350,7 +346,7 @@ BaseRemoteGDB::listen()
     connectEvent = new ConnectEvent(this, listener.getfd(), POLLIN);
     pollQueue.schedule(connectEvent);
 
-    ccprintf(cerr, "%d: %s: listening for remote gdb on port %d\n",
+    ccprintf(std::cerr, "%d: %s: listening for remote gdb on port %d\n",
              curTick(), name(), _port);
 }
 
@@ -715,21 +711,6 @@ BaseRemoteGDB::removeHardBreak(Addr addr, size_t len)
 }
 
 void
-BaseRemoteGDB::clearTempBreakpoint(Addr &bkpt)
-{
-    DPRINTF(GDBMisc, "setTempBreakpoint: addr=%#x\n", bkpt);
-    removeHardBreak(bkpt, sizeof(TheISA::MachInst));
-    bkpt = 0;
-}
-
-void
-BaseRemoteGDB::setTempBreakpoint(Addr bkpt)
-{
-    DPRINTF(GDBMisc, "setTempBreakpoint: addr=%#x\n", bkpt);
-    insertHardBreak(bkpt, sizeof(TheISA::MachInst));
-}
-
-void
 BaseRemoteGDB::scheduleInstCommitEvent(Event *ev, int delta)
 {
     // Here "ticks" aren't simulator ticks which measure time, they're
@@ -805,7 +786,7 @@ std::map<char, BaseRemoteGDB::GdbCommand> BaseRemoteGDB::command_map = {
 bool
 BaseRemoteGDB::checkBpLen(size_t len)
 {
-    return len == sizeof(MachInst);
+    return true;
 }
 
 bool
@@ -941,8 +922,8 @@ BaseRemoteGDB::cmd_mem_w(GdbCommand::Context &ctx)
 bool
 BaseRemoteGDB::cmd_query_var(GdbCommand::Context &ctx)
 {
-    string s(ctx.data, ctx.len - 1);
-    string xfer_read_prefix = "Xfer:features:read:";
+    std::string s(ctx.data, ctx.len - 1);
+    std::string xfer_read_prefix = "Xfer:features:read:";
     if (s.rfind("Supported:", 0) == 0) {
         std::ostringstream oss;
         // This reply field mandatory. We can receive arbitrarily

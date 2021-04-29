@@ -31,7 +31,6 @@
 
 #include "arch/riscv/faults.hh"
 
-#include "arch/riscv/fs_workload.hh"
 #include "arch/riscv/isa.hh"
 #include "arch/riscv/registers.hh"
 #include "arch/riscv/utility.hh"
@@ -40,6 +39,7 @@
 #include "debug/Fault.hh"
 #include "sim/debug.hh"
 #include "sim/full_system.hh"
+#include "sim/workload.hh"
 
 namespace RiscvISA
 {
@@ -113,7 +113,7 @@ RiscvFault::invoke(ThreadContext *tc, const StaticInstPtr &inst)
             tval = MISCREG_MTVAL;
 
             status.mpp = pp;
-            status.mpie = status.sie;
+            status.mpie = status.mie;
             status.mie = 0;
             break;
           default:
@@ -122,8 +122,12 @@ RiscvFault::invoke(ThreadContext *tc, const StaticInstPtr &inst)
         }
 
         // Set fault cause, privilege, and return PC
-        tc->setMiscReg(cause,
-                       (isInterrupt() << (sizeof(uint64_t) * 4 - 1)) | _code);
+        // Interrupt is indicated on the MSB of cause (bit 63 in RV64)
+        uint64_t _cause = _code;
+        if (isInterrupt()) {
+           _cause |= (1L << 63);
+        }
+        tc->setMiscReg(cause, _cause);
         tc->setMiscReg(epc, tc->instAddr());
         tc->setMiscReg(tval, trap_value());
         tc->setMiscReg(MISCREG_PRV, prv);
@@ -151,8 +155,8 @@ void Reset::invoke(ThreadContext *tc, const StaticInstPtr &inst)
     tc->setMiscReg(MISCREG_MCAUSE, 0);
 
     // Advance the PC to the implementation-defined reset vector
-    auto workload = dynamic_cast<FsWorkload *>(tc->getSystemPtr()->workload);
-    PCState pc = workload->resetVect();
+    auto workload = dynamic_cast<Workload *>(tc->getSystemPtr()->workload);
+    PCState pc = workload->getEntry();
     tc->pcState(pc);
 }
 
@@ -194,8 +198,7 @@ BreakpointFault::invokeSE(ThreadContext *tc, const StaticInstPtr &inst)
 void
 SyscallFault::invokeSE(ThreadContext *tc, const StaticInstPtr &inst)
 {
-    Fault *fault = NoFault;
-    tc->syscall(fault);
+    tc->getSystemPtr()->workload->syscall(tc);
 }
 
 } // namespace RiscvISA

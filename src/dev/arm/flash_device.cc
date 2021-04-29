@@ -56,31 +56,21 @@
 #include "debug/Drain.hh"
 
 /**
- * Create this device
- */
-
-FlashDevice*
-FlashDeviceParams::create()
-{
-    return new FlashDevice(this);
-}
-
-
-/**
  * Flash Device constructor and destructor
  */
 
-FlashDevice::FlashDevice(const FlashDeviceParams* p):
+FlashDevice::FlashDevice(const FlashDeviceParams &p):
     AbstractNVM(p),
     diskSize(0),
-    blockSize(p->blk_size),
-    pageSize(p->page_size),
-    GCActivePercentage(p->GC_active),
-    readLatency(p->read_lat),
-    writeLatency(p->write_lat),
-    eraseLatency(p->erase_lat),
-    dataDistribution(p->data_distribution),
-    numPlanes(p->num_planes),
+    blockSize(p.blk_size),
+    pageSize(p.page_size),
+    GCActivePercentage(p.GC_active),
+    readLatency(p.read_lat),
+    writeLatency(p.write_lat),
+    eraseLatency(p.erase_lat),
+    dataDistribution(p.data_distribution),
+    numPlanes(p.num_planes),
+    stats(this),
     pagesPerBlock(0),
     pagesPerDisk(0),
     blocksPerDisk(0),
@@ -160,8 +150,8 @@ FlashDevice::~FlashDevice()
  * an event that uses the callback function on completion of the action.
  */
 void
-FlashDevice::accessDevice(uint64_t address, uint32_t amount, Callback *event,
-                          Actions action)
+FlashDevice::accessDevice(uint64_t address, uint32_t amount,
+                          const std::function<void()> &event, Actions action)
 {
     DPRINTF(FlashDevice, "Flash calculation for %d bytes in %d pages\n"
             , amount, pageSize);
@@ -258,7 +248,6 @@ FlashDevice::accessDevice(uint64_t address, uint32_t amount, Callback *event,
             else
                 cbe.time = time[count] +
                            planeEventQueue[count].back().time;
-            cbe.function = NULL;
             planeEventQueue[count].push_back(cbe);
 
             DPRINTF(FlashDevice, "scheduled at: %ld\n", cbe.time);
@@ -308,14 +297,13 @@ FlashDevice::actionComplete()
                  * the callback entry first need to be cleared before it can
                  * be called.
                  */
-                Callback *temp = planeEventQueue[plane_address].front().
-                                 function;
+                auto temp = planeEventQueue[plane_address].front().function;
                 planeEventQueue[plane_address].pop_front();
 
                 /**Found a callback, lets make it happen*/
-                if (temp != NULL) {
+                if (temp) {
                     DPRINTF(FlashDevice, "Callback, %d\n", plane_address);
-                    temp->process();
+                    temp();
                 }
             }
         }
@@ -467,49 +455,41 @@ FlashDevice::getUnknownPages(uint32_t index)
     return unknownPages[index >> 5] & (0x01 << (index % 32));
 }
 
-void
-FlashDevice::regStats()
+FlashDevice::
+FlashDeviceStats::FlashDeviceStats(Stats::Group *parent)
+    : Stats::Group(parent, "FlashDevice"),
+    ADD_STAT(totalGCActivations, UNIT_COUNT,
+             "Number of Garbage collector activations"),
+    ADD_STAT(writeAccess, UNIT_COUNT, "Histogram of write addresses"),
+    ADD_STAT(readAccess, UNIT_COUNT, "Histogram of read addresses"),
+    ADD_STAT(fileSystemAccess, UNIT_COUNT,
+             "Histogram of file system accesses"),
+    ADD_STAT(writeLatency, UNIT_TICK, "Histogram of write latency"),
+    ADD_STAT(readLatency, UNIT_TICK, "Histogram of read latency")
 {
-    AbstractNVM::regStats();
-
     using namespace Stats;
 
-    std::string fd_name = name() + ".FlashDevice";
-
-    // Register the stats
     /** Amount of GC activations*/
-    stats.totalGCActivations
-        .name(fd_name + ".totalGCActivations")
-        .desc("Number of Garbage collector activations")
+    totalGCActivations
         .flags(none);
 
     /** Histogram of address accesses*/
-    stats.writeAccess
+    writeAccess
         .init(2)
-        .name(fd_name + ".writeAccessHist")
-        .desc("Histogram of write addresses")
         .flags(pdf);
-    stats.readAccess
+    readAccess
         .init(2)
-        .name(fd_name + ".readAccessHist")
-        .desc("Histogram of read addresses")
         .flags(pdf);
-    stats.fileSystemAccess
+    fileSystemAccess
         .init(100)
-        .name(fd_name + ".fileSystemAccessHist")
-        .desc("Histogram of file system accesses")
         .flags(pdf);
 
     /** Histogram of access latencies*/
-    stats.writeLatency
+    writeLatency
         .init(100)
-        .name(fd_name + ".writeLatencyHist")
-        .desc("Histogram of write latency")
         .flags(pdf);
-    stats.readLatency
+    readLatency
         .init(100)
-        .name(fd_name + ".readLatencyHist")
-        .desc("Histogram of read latency")
         .flags(pdf);
 }
 

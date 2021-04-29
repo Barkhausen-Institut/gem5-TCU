@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 ARM Limited
+ * Copyright (c) 2019,2021 ARM Limited
  * All rights reserved.
  *
  * The license below extends only to copyright in the software and shall
@@ -57,8 +57,7 @@
 #include "mem/simple_mem.hh"
 #include "sim/eventq.hh"
 #include "sim/simulate.hh"
-
-using namespace std;
+#include "sim/system.hh"
 
 bool RubySystem::m_randomization;
 uint32_t RubySystem::m_block_size_bytes;
@@ -70,31 +69,31 @@ bool RubySystem::m_warmup_enabled = false;
 unsigned RubySystem::m_systems_to_warmup = 0;
 bool RubySystem::m_cooldown_enabled = false;
 
-RubySystem::RubySystem(const Params *p)
-    : ClockedObject(p), m_access_backing_store(p->access_backing_store),
+RubySystem::RubySystem(const Params &p)
+    : ClockedObject(p), m_access_backing_store(p.access_backing_store),
       m_cache_recorder(NULL)
 {
-    m_randomization = p->randomization;
+    m_randomization = p.randomization;
 
-    m_block_size_bytes = p->block_size_bytes;
+    m_block_size_bytes = p.block_size_bytes;
     assert(isPowerOf2(m_block_size_bytes));
     m_block_size_bits = floorLog2(m_block_size_bytes);
-    m_memory_size_bits = p->memory_size_bits;
+    m_memory_size_bits = p.memory_size_bits;
 
     // Resize to the size of different machine types
     m_abstract_controls.resize(MachineType_NUM);
 
     // Collate the statistics before they are printed.
-    Stats::registerDumpCallback(new RubyStatsCallback(this));
+    Stats::registerDumpCallback([this]() { collateStats(); });
     // Create the profiler
     m_profiler = new Profiler(p, this);
-    m_phys_mem = p->phys_mem;
+    m_phys_mem = p.phys_mem;
 }
 
 void
 RubySystem::registerNetwork(Network* network_ptr)
 {
-    m_network = network_ptr;
+    m_networks.emplace_back(network_ptr);
 }
 
 void
@@ -106,9 +105,63 @@ RubySystem::registerAbstractController(AbstractController* cntrl)
     m_abstract_controls[id.getType()][id.getNum()] = cntrl;
 }
 
+void
+RubySystem::registerMachineID(const MachineID& mach_id, Network* network)
+{
+    int network_id = -1;
+    for (int idx = 0; idx < m_networks.size(); ++idx) {
+        if (m_networks[idx].get() == network) {
+            network_id = idx;
+        }
+    }
+
+    fatal_if(network_id < 0, "Could not add MachineID %s. Network not found",
+             MachineIDToString(mach_id).c_str());
+
+    machineToNetwork.insert(std::make_pair(mach_id, network_id));
+}
+
+// This registers all requestor IDs in the system for functional reads. This
+// should be called in init() since requestor IDs are obtained in a SimObject's
+// constructor and there are functional reads/writes between init() and
+// startup().
+void
+RubySystem::registerRequestorIDs()
+{
+    // Create the map for RequestorID to network node. This is done in init()
+    // because all RequestorIDs must be obtained in the constructor and
+    // AbstractControllers are registered in their constructor. This is done
+    // in two steps: (1) Add all of the AbstractControllers. Since we don't
+    // have a mapping of RequestorID to MachineID this is the easiest way to
+    // filter out AbstractControllers from non-Ruby requestors. (2) Go through
+    // the system's list of RequestorIDs and add missing RequestorIDs to
+    // network 0 (the default).
+    for (auto& cntrl : m_abs_cntrl_vec) {
+        RequestorID id = cntrl->getRequestorId();
+        MachineID mach_id = cntrl->getMachineID();
+
+        // These are setup in Network constructor and should exist
+        fatal_if(!machineToNetwork.count(mach_id),
+                 "No machineID %s. Does not belong to a Ruby network?",
+                 MachineIDToString(mach_id).c_str());
+
+        auto network_id = machineToNetwork[mach_id];
+        requestorToNetwork.insert(std::make_pair(id, network_id));
+
+        // Create helper vectors for each network to iterate over.
+        netCntrls[network_id].push_back(cntrl);
+    }
+
+    // Default all other requestor IDs to network 0
+    for (auto id = 0; id < params().system->maxRequestors(); ++id) {
+        if (!requestorToNetwork.count(id)) {
+            requestorToNetwork.insert(std::make_pair(id, 0));
+        }
+    }
+}
+
 RubySystem::~RubySystem()
 {
-    delete m_network;
     delete m_profiler;
 }
 
@@ -117,7 +170,7 @@ RubySystem::makeCacheRecorder(uint8_t *uncompressed_trace,
                               uint64_t cache_trace_size,
                               uint64_t block_size_bytes)
 {
-    vector<Sequencer*> sequencer_map;
+    std::vector<Sequencer*> sequencer_map;
     Sequencer* sequencer_ptr = NULL;
 
     for (int cntrl = 0; cntrl < m_abs_cntrl_vec.size(); cntrl++) {
@@ -164,14 +217,15 @@ RubySystem::memWriteback()
 
     // Deschedule all prior events on the event queue, but record the tick they
     // were scheduled at so they can be restored correctly later.
-    list<pair<Event*, Tick> > original_events;
+    std::list<std::pair<Event*, Tick> > original_events;
     while (!eventq->empty()) {
         Event *curr_head = eventq->getHead();
         if (curr_head->isAutoDelete()) {
             DPRINTF(RubyCacheTrace, "Event %s auto-deletes when descheduled,"
                     " not recording\n", curr_head->name());
         } else {
-            original_events.push_back(make_pair(curr_head, curr_head->when()));
+            original_events.push_back(
+                    std::make_pair(curr_head, curr_head->when()));
         }
         eventq->deschedule(curr_head);
     }
@@ -194,7 +248,7 @@ RubySystem::memWriteback()
     // done after setting curTick back to its original value so that events do
     // not seem to be scheduled in the past.
     while (!original_events.empty()) {
-        pair<Event*, Tick> event = original_events.back();
+        std::pair<Event*, Tick> event = original_events.back();
         eventq->schedule(event.first, event.second);
         original_events.pop_back();
     }
@@ -218,11 +272,11 @@ RubySystem::memWriteback()
 }
 
 void
-RubySystem::writeCompressedTrace(uint8_t *raw_data, string filename,
+RubySystem::writeCompressedTrace(uint8_t *raw_data, std::string filename,
                                  uint64_t uncompressed_trace_size)
 {
     // Create the checkpoint file for the memory
-    string thefile = CheckpointIn::dir() + "/" + filename.c_str();
+    std::string thefile = CheckpointIn::dir() + "/" + filename.c_str();
 
     int fd = creat(thefile.c_str(), 0664);
     if (fd < 0) {
@@ -266,7 +320,7 @@ RubySystem::serialize(CheckpointOut &cp) const
     uint8_t *raw_data = new uint8_t[4096];
     uint64_t cache_trace_size = m_cache_recorder->aggregateRecords(&raw_data,
                                                                  4096);
-    string cache_trace_file = name() + ".cache.gz";
+    std::string cache_trace_file = name() + ".cache.gz";
     writeCompressedTrace(raw_data, cache_trace_file, cache_trace_size);
 
     SERIALIZE_SCALAR(cache_trace_file);
@@ -285,7 +339,7 @@ RubySystem::drainResume()
 }
 
 void
-RubySystem::readCompressedTrace(string filename, uint8_t *&raw_data,
+RubySystem::readCompressedTrace(std::string filename, uint8_t *&raw_data,
                                 uint64_t &uncompressed_trace_size)
 {
     // Read the trace file
@@ -326,7 +380,7 @@ RubySystem::unserialize(CheckpointIn &cp)
     uint64_t block_size_bytes = getBlockSizeBytes();
     UNSERIALIZE_OPT_SCALAR(block_size_bytes);
 
-    string cache_trace_file;
+    std::string cache_trace_file;
     uint64_t cache_trace_size = 0;
 
     UNSERIALIZE_SCALAR(cache_trace_file);
@@ -340,6 +394,12 @@ RubySystem::unserialize(CheckpointIn &cp)
 
     // Create the cache recorder that will hang around until startup.
     makeCacheRecorder(uncompressed_trace, cache_trace_size, block_size_bytes);
+}
+
+void
+RubySystem::init()
+{
+    registerRequestorIDs();
 }
 
 void
@@ -407,8 +467,12 @@ void
 RubySystem::resetStats()
 {
     m_start_cycle = curCycle();
+    for (auto& network : m_networks) {
+        network->resetStats();
+    }
 }
 
+#ifndef PARTIAL_FUNC_READS
 bool
 RubySystem::functionalRead(PacketPtr pkt)
 {
@@ -416,7 +480,6 @@ RubySystem::functionalRead(PacketPtr pkt)
     Addr line_address = makeLineAddress(address);
 
     AccessPermission access_perm = AccessPermission_NotPresent;
-    int num_controllers = m_abs_cntrl_vec.size();
 
     DPRINTF(RubySystem, "Functional Read request for %#x\n", address);
 
@@ -427,21 +490,26 @@ RubySystem::functionalRead(PacketPtr pkt)
     unsigned int num_backing_store = 0;
     unsigned int num_invalid = 0;
 
+    // Only send functional requests within the same network.
+    assert(requestorToNetwork.count(pkt->requestorId()));
+    int request_net_id = requestorToNetwork[pkt->requestorId()];
+    assert(netCntrls.count(request_net_id));
+
     AbstractController *ctrl_ro = nullptr;
     AbstractController *ctrl_rw = nullptr;
     AbstractController *ctrl_backing_store = nullptr;
 
     // In this loop we count the number of controllers that have the given
     // address in read only, read write and busy states.
-    for (unsigned int i = 0; i < num_controllers; ++i) {
-        access_perm = m_abs_cntrl_vec[i]-> getAccessPermission(line_address);
+    for (auto& cntrl : netCntrls[request_net_id]) {
+        access_perm = cntrl-> getAccessPermission(line_address);
         if (access_perm == AccessPermission_Read_Only){
             num_ro++;
-            if (ctrl_ro == nullptr) ctrl_ro = m_abs_cntrl_vec[i];
+            if (ctrl_ro == nullptr) ctrl_ro = cntrl;
         }
         else if (access_perm == AccessPermission_Read_Write){
             num_rw++;
-            if (ctrl_rw == nullptr) ctrl_rw = m_abs_cntrl_vec[i];
+            if (ctrl_rw == nullptr) ctrl_rw = cntrl;
         }
         else if (access_perm == AccessPermission_Busy)
             num_busy++;
@@ -454,7 +522,7 @@ RubySystem::functionalRead(PacketPtr pkt)
             // or not.
             num_backing_store++;
             if (ctrl_backing_store == nullptr)
-                ctrl_backing_store = m_abs_cntrl_vec[i];
+                ctrl_backing_store = cntrl;
         }
         else if (access_perm == AccessPermission_Invalid ||
                  access_perm == AccessPermission_NotPresent)
@@ -469,6 +537,7 @@ RubySystem::functionalRead(PacketPtr pkt)
     // The reason is because the Backing_Store memory could easily be stale, if
     // there are copies floating around the cache hierarchy, so you want to read
     // it only if it's not in the cache hierarchy at all.
+    int num_controllers = netCntrls[request_net_id].size();
     if (num_invalid == (num_controllers - 1) && num_backing_store == 1) {
         DPRINTF(RubySystem, "only copy in Backing_Store memory, read from it\n");
         ctrl_backing_store->functionalRead(line_address, pkt);
@@ -504,19 +573,110 @@ RubySystem::functionalRead(PacketPtr pkt)
         DPRINTF(RubySystem, "Controllers functionalRead lookup "
                             "(num_maybe_stale=%d, num_busy = %d)\n",
                 num_maybe_stale, num_busy);
-        for (unsigned int i = 0; i < num_controllers;++i) {
-            if (m_abs_cntrl_vec[i]->functionalReadBuffers(pkt))
+        for (auto& cntrl : netCntrls[request_net_id]) {
+            if (cntrl->functionalReadBuffers(pkt))
                 return true;
         }
         DPRINTF(RubySystem, "Network functionalRead lookup "
                             "(num_maybe_stale=%d, num_busy = %d)\n",
                 num_maybe_stale, num_busy);
-        if (m_network->functionalRead(pkt))
-            return true;
+        for (auto& network : m_networks) {
+            if (network->functionalRead(pkt))
+                return true;
+        }
     }
 
     return false;
 }
+#else
+bool
+RubySystem::functionalRead(PacketPtr pkt)
+{
+    Addr address(pkt->getAddr());
+    Addr line_address = makeLineAddress(address);
+
+    DPRINTF(RubySystem, "Functional Read request for %#x\n", address);
+
+    std::vector<AbstractController*> ctrl_ro;
+    std::vector<AbstractController*> ctrl_busy;
+    std::vector<AbstractController*> ctrl_others;
+    AbstractController *ctrl_rw = nullptr;
+    AbstractController *ctrl_bs = nullptr;
+
+    // Build lists of controllers that have line
+    for (auto ctrl : m_abs_cntrl_vec) {
+        switch(ctrl->getAccessPermission(line_address)) {
+            case AccessPermission_Read_Only:
+                ctrl_ro.push_back(ctrl);
+                break;
+            case AccessPermission_Busy:
+                ctrl_busy.push_back(ctrl);
+                break;
+            case AccessPermission_Read_Write:
+                assert(ctrl_rw == nullptr);
+                ctrl_rw = ctrl;
+                break;
+            case AccessPermission_Backing_Store:
+                assert(ctrl_bs == nullptr);
+                ctrl_bs = ctrl;
+                break;
+            case AccessPermission_Backing_Store_Busy:
+                assert(ctrl_bs == nullptr);
+                ctrl_bs = ctrl;
+                ctrl_busy.push_back(ctrl);
+                break;
+            default:
+                ctrl_others.push_back(ctrl);
+                break;
+        }
+    }
+
+    DPRINTF(RubySystem, "num_ro=%d, num_busy=%d , has_rw=%d, "
+                        "backing_store=%d\n",
+                ctrl_ro.size(), ctrl_busy.size(),
+                ctrl_rw != nullptr, ctrl_bs != nullptr);
+
+    // Issue functional reads to all controllers found in a stable state
+    // until we get a full copy of the line
+    WriteMask bytes;
+    if (ctrl_rw != nullptr) {
+        ctrl_rw->functionalRead(line_address, pkt, bytes);
+        // if a RW controllter has the full line that's all uptodate
+        if (bytes.isFull())
+            return true;
+    }
+
+    // Get data from RO and BS
+    for (auto ctrl : ctrl_ro)
+        ctrl->functionalRead(line_address, pkt, bytes);
+
+    ctrl_bs->functionalRead(line_address, pkt, bytes);
+
+    // if there is any busy controller or bytes still not set, then a partial
+    // and/or dirty copy of the line might be in a message buffer or the
+    // network
+    if (!ctrl_busy.empty() || !bytes.isFull()) {
+        DPRINTF(RubySystem, "Reading from busy controllers and network\n");
+        for (auto ctrl : ctrl_busy) {
+            ctrl->functionalRead(line_address, pkt, bytes);
+            ctrl->functionalReadBuffers(pkt, bytes);
+        }
+        for (auto& network : m_networks) {
+            network->functionalRead(pkt, bytes);
+        }
+        for (auto ctrl : ctrl_others) {
+            ctrl->functionalRead(line_address, pkt, bytes);
+            ctrl->functionalReadBuffers(pkt, bytes);
+        }
+    }
+    // we either got the full line or couldn't find anything at this point
+    panic_if(!(bytes.isFull() || bytes.isEmpty()),
+            "Inconsistent state on functional read for %#x %s\n",
+            address, bytes);
+
+    return bytes.isFull();
+}
+#endif
 
 // The function searches through all the buffers that exist in different
 // cache, directory and memory controllers, and in the network components
@@ -528,43 +688,42 @@ RubySystem::functionalWrite(PacketPtr pkt)
     Addr addr(pkt->getAddr());
     Addr line_addr = makeLineAddress(addr);
     AccessPermission access_perm = AccessPermission_NotPresent;
-    int num_controllers = m_abs_cntrl_vec.size();
 
     DPRINTF(RubySystem, "Functional Write request for %#x\n", addr);
 
-    uint32_t M5_VAR_USED num_functional_writes = 0;
+    M5_VAR_USED uint32_t num_functional_writes = 0;
 
-    for (unsigned int i = 0; i < num_controllers;++i) {
-        num_functional_writes +=
-            m_abs_cntrl_vec[i]->functionalWriteBuffers(pkt);
+    // Only send functional requests within the same network.
+    assert(requestorToNetwork.count(pkt->requestorId()));
+    int request_net_id = requestorToNetwork[pkt->requestorId()];
+    assert(netCntrls.count(request_net_id));
 
-        access_perm = m_abs_cntrl_vec[i]->getAccessPermission(line_addr);
+    for (auto& cntrl : netCntrls[request_net_id]) {
+        num_functional_writes += cntrl->functionalWriteBuffers(pkt);
+
+        access_perm = cntrl->getAccessPermission(line_addr);
         if (access_perm != AccessPermission_Invalid &&
             access_perm != AccessPermission_NotPresent) {
             num_functional_writes +=
-                m_abs_cntrl_vec[i]->functionalWrite(line_addr, pkt);
+                cntrl->functionalWrite(line_addr, pkt);
         }
 
         // Also updates requests pending in any sequencer associated
         // with the controller
-        if (m_abs_cntrl_vec[i]->getCPUSequencer()) {
+        if (cntrl->getCPUSequencer()) {
             num_functional_writes +=
-                m_abs_cntrl_vec[i]->getCPUSequencer()->functionalWrite(pkt);
+                cntrl->getCPUSequencer()->functionalWrite(pkt);
         }
-        if (m_abs_cntrl_vec[i]->getDMASequencer()) {
+        if (cntrl->getDMASequencer()) {
             num_functional_writes +=
-                m_abs_cntrl_vec[i]->getDMASequencer()->functionalWrite(pkt);
+                cntrl->getDMASequencer()->functionalWrite(pkt);
         }
     }
 
-    num_functional_writes += m_network->functionalWrite(pkt);
+    for (auto& network : m_networks) {
+        num_functional_writes += network->functionalWrite(pkt);
+    }
     DPRINTF(RubySystem, "Messages written = %u\n", num_functional_writes);
 
     return true;
-}
-
-RubySystem *
-RubySystemParams::create()
-{
-    return new RubySystem(this);
 }

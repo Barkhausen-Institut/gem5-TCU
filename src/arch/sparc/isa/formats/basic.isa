@@ -31,6 +31,9 @@ def template BasicDeclare {{
  */
 class %(class_name)s : public %(base_class)s
 {
+  private:
+    %(reg_idx_arr_decl)s;
+
   public:
     // Constructor.
     %(class_name)s(ExtMachInst machInst);
@@ -45,11 +48,14 @@ def template FpBasicDeclare {{
  */
 class %(class_name)s : public %(base_class)s
 {
+  private:
+    %(reg_idx_arr_decl)s;
+
   public:
     // Constructor.
     %(class_name)s(ExtMachInst machInst);
     Fault execute(ExecContext *, Trace::InstRecord *) const override;
-    Fault doFpOp(ExecContext *, Trace::InstRecord *) const M5_NO_INLINE;
+    M5_NO_INLINE Fault doFpOp(ExecContext *, Trace::InstRecord *) const;
 };
 }};
 
@@ -60,6 +66,9 @@ def template BasicDeclareWithMnemonic {{
  */
 class %(class_name)s : public %(base_class)s
 {
+  private:
+    %(reg_idx_arr_decl)s;
+
   public:
     // Constructor.
     %(class_name)s(const char *mnemonic, ExtMachInst machInst);
@@ -72,6 +81,7 @@ def template BasicConstructor {{
 %(class_name)s::%(class_name)s(ExtMachInst machInst) :
         %(base_class)s("%(mnemonic)s", machInst, %(op_class)s)
 {
+    %(set_reg_idx_arr)s;
     %(constructor)s;
 }
 }};
@@ -81,6 +91,7 @@ def template BasicConstructorWithMnemonic {{
 %(class_name)s::%(class_name)s(const char *mnemonic, ExtMachInst machInst) :
         %(base_class)s(mnemonic, machInst, %(op_class)s)
 {
+    %(set_reg_idx_arr)s;
     %(constructor)s;
 }
 }};

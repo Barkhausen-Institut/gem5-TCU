@@ -128,7 +128,7 @@ TcuAbortTest::CpuPort::recvReqRetry()
     tcutest.recvRetry();
 }
 
-TcuAbortTest::TcuAbortTest(const TcuAbortTestParams *p)
+TcuAbortTest::TcuAbortTest(const TcuAbortTestParams &p)
   : ClockedObject(p),
     tickEvent(this),
     port("port", this),
@@ -139,14 +139,14 @@ TcuAbortTest::TcuAbortTest(const TcuAbortTestParams *p)
     abortType(),
     abortTypes(),
     abortStart(0),
-    system(p->system),
+    system(p.system),
     // TODO parameterize
     reg_base(0xF0000000),
-    masterId(p->system->getMasterId(this, name())),
-    atomic(p->system->isAtomicMode()),
+    requestorId(p.system->getRequestorId(this, name())),
+    atomic(p.system->isAtomicMode()),
     retryPkt(nullptr)
 {
-    id = p->id;
+    id = p.id;
 
     // kick things into action
     schedule(tickEvent, curTick());
@@ -207,7 +207,7 @@ TcuAbortTest::createPacket(Addr paddr,
 {
     Request::Flags flags;
 
-    auto req = std::make_shared<Request>(paddr, size, flags, masterId);
+    auto req = std::make_shared<Request>(paddr, size, flags, requestorId);
     req->setContext(id);
 
     auto pkt = new Packet(req, cmd);
@@ -554,10 +554,4 @@ TcuAbortTest::tick()
         schedule(tickEvent, clockEdge(Cycles(1)));
     else
         sendPkt(pkt);
-}
-
-TcuAbortTest*
-TcuAbortTestParams::create()
-{
-    return new TcuAbortTest(this);
 }

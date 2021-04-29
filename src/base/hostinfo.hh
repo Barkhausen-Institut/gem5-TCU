@@ -29,20 +29,12 @@
 #ifndef __HOSTINFO_HH__
 #define __HOSTINFO_HH__
 
-#include <string>
-
-#include "base/types.hh"
-
-std::string __get_hostname();
-
-std::string &hostname();
-
-uint64_t procInfo(const char *filename, const char *target);
+#include <cstdint>
 
 /**
  * Determine the simulator process' total virtual memory usage.
  *
- * @return virtual memory usage in kilobytes
+ * @return Virtual memory usage in kilobytes
  */
 uint64_t memUsage();
 

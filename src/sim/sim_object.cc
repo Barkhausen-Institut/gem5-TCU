@@ -35,9 +35,6 @@
 #include "debug/Checkpoint.hh"
 #include "sim/probe/probe.hh"
 
-using namespace std;
-
-
 ////////////////////////////////////////////////////////////////////////
 //
 // SimObject member definitions
@@ -52,8 +49,8 @@ SimObject::SimObjectList SimObject::simObjectList;
 //
 // SimObject constructor: used to maintain static simObjectList
 //
-SimObject::SimObject(const Params *p)
-    : EventManager(getEventQueue(p->eventq_index)),
+SimObject::SimObject(const Params &p)
+    : EventManager(getEventQueue(p.eventq_index)),
       Stats::Group(nullptr),
       _params(p)
 {
@@ -148,7 +145,7 @@ SimObject::serializeAll(CheckpointOut &cp)
 // static function: flag which objects should have the debugger break
 //
 void
-SimObject::debugObjectBreak(const string &objs)
+SimObject::debugObjectBreak(const std::string &objs)
 {
     SimObjectList::const_iterator i = simObjectList.begin();
     SimObjectList::const_iterator end = simObjectList.end();
@@ -163,7 +160,7 @@ SimObject::debugObjectBreak(const string &objs)
 void
 debugObjectBreak(const char *objs)
 {
-    SimObject::debugObjectBreak(string(objs));
+    SimObject::debugObjectBreak(std::string(objs));
 }
 #endif
 

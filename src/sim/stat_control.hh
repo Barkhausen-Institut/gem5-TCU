@@ -46,11 +46,6 @@
 
 namespace Stats {
 
-double statElapsedTime();
-
-Tick statElapsedTicks();
-
-Tick statFinalTick();
 
 void initSimStats();
 

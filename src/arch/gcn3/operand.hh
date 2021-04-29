@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017 Advanced Micro Devices, Inc.
+ * Copyright (c) 2017-2018 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
  * For use for simulation and test purposes only
@@ -29,8 +29,6 @@
  * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Anthony Gutierrez
  */
 
 #ifndef __ARCH_GCN3_OPERAND_HH__
@@ -153,7 +151,7 @@ namespace Gcn3ISA
             ComputeUnit *cu = _gpuDynInst->computeUnit();
 
             for (auto i = 0; i < NumDwords; ++i) {
-                int vgprIdx = cu->registerManager.mapVgpr(wf, _opIdx + i);
+                int vgprIdx = cu->registerManager->mapVgpr(wf, _opIdx + i);
                 vrfData[i] = &cu->vrf[wf->simdId]->readWriteable(vgprIdx);
 
                 DPRINTF(GPUVRF, "Read v[%d]\n", vgprIdx);
@@ -207,7 +205,7 @@ namespace Gcn3ISA
                 ? _gpuDynInst->exec_mask : wf->execMask();
 
             if (NumDwords == 1) {
-                int vgprIdx = cu->registerManager.mapVgpr(wf, _opIdx);
+                int vgprIdx = cu->registerManager->mapVgpr(wf, _opIdx);
                 vrfData[0] = &cu->vrf[wf->simdId]->readWriteable(vgprIdx);
                 assert(vrfData[0]);
                 auto reg_file_vgpr = vrfData[0]->template as<VecElemU32>();
@@ -223,8 +221,8 @@ namespace Gcn3ISA
                 DPRINTF(GPUVRF, "Write v[%d]\n", vgprIdx);
                 cu->vrf[wf->simdId]->printReg(wf, vgprIdx);
             } else if (NumDwords == 2) {
-                int vgprIdx0 = cu->registerManager.mapVgpr(wf, _opIdx);
-                int vgprIdx1 = cu->registerManager.mapVgpr(wf, _opIdx + 1);
+                int vgprIdx0 = cu->registerManager->mapVgpr(wf, _opIdx);
+                int vgprIdx1 = cu->registerManager->mapVgpr(wf, _opIdx + 1);
                 vrfData[0] = &cu->vrf[wf->simdId]->readWriteable(vgprIdx0);
                 vrfData[1] = &cu->vrf[wf->simdId]->readWriteable(vgprIdx1);
                 assert(vrfData[0]);
@@ -264,7 +262,7 @@ namespace Gcn3ISA
          * primitive types (i.e., 8b to 64b primitives).
          */
         template<bool Condition = (NumDwords == 1 || NumDwords == 2) && Const>
-        typename std::enable_if<Condition, const DataType>::type
+        typename std::enable_if_t<Condition, const DataType>
         operator[](size_t idx) const
         {
             assert(idx < NumVecElemPerVecReg);
@@ -307,7 +305,7 @@ namespace Gcn3ISA
          * primitive types (i.e., 8b to 64b primitives).
          */
         template<bool Condition = (NumDwords == 1 || NumDwords == 2) && !Const>
-        typename std::enable_if<Condition, DataType&>::type
+        typename std::enable_if_t<Condition, DataType&>
         operator[](size_t idx)
         {
             assert(!scalar);
@@ -392,7 +390,7 @@ namespace Gcn3ISA
          * that we need to perform computation on.
          */
         template<bool Condition = NumDwords == 1 || NumDwords == 2>
-        typename std::enable_if<Condition, DataType>::type
+        typename std::enable_if_t<Condition, DataType>
         rawData() const
         {
             assert(sizeof(DataType) <= sizeof(srfData));
@@ -435,9 +433,34 @@ namespace Gcn3ISA
 
             if (!isScalarReg(_opIdx)) {
                 if (_opIdx == REG_EXEC_LO) {
-                    uint64_t new_exec_mask_val(0);
-                    std::memcpy((void*)&new_exec_mask_val,
-                        (void*)srfData.data(), sizeof(new_exec_mask_val));
+                    ScalarRegU64 new_exec_mask_val
+                        = wf->execMask().to_ullong();
+                    if (NumDwords == 1) {
+                        std::memcpy((void*)&new_exec_mask_val,
+                            (void*)srfData.data(), sizeof(VecElemU32));
+                    } else if (NumDwords == 2) {
+                        std::memcpy((void*)&new_exec_mask_val,
+                            (void*)srfData.data(), sizeof(VecElemU64));
+                    } else {
+                        panic("Trying to write more than 2 DWORDS to EXEC\n");
+                    }
+                    VectorMask new_exec_mask(new_exec_mask_val);
+                    wf->execMask() = new_exec_mask;
+                    DPRINTF(GPUSRF, "Write EXEC\n");
+                    DPRINTF(GPUSRF, "EXEC = %#x\n", new_exec_mask_val);
+                } else if (_opIdx == REG_EXEC_HI) {
+                    /**
+                     * If we're writing only the upper half of the EXEC mask
+                     * this ought to be a single dword operand.
+                     */
+                    assert(NumDwords == 1);
+                    ScalarRegU32 new_exec_mask_hi_val(0);
+                    ScalarRegU64 new_exec_mask_val
+                        = wf->execMask().to_ullong();
+                    std::memcpy((void*)&new_exec_mask_hi_val,
+                        (void*)srfData.data(), sizeof(new_exec_mask_hi_val));
+                    replaceBits(new_exec_mask_val, 63, 32,
+                                new_exec_mask_hi_val);
                     VectorMask new_exec_mask(new_exec_mask_val);
                     wf->execMask() = new_exec_mask;
                     DPRINTF(GPUSRF, "Write EXEC\n");
@@ -466,7 +489,7 @@ namespace Gcn3ISA
          * bit access to scalar data. primarily used for setting vcc bits.
          */
         template<bool Condition = NumDwords == 1 || NumDwords == 2>
-        typename std::enable_if<Condition, void>::type
+        typename std::enable_if_t<Condition, void>
         setBit(int bit, int bit_val)
         {
             DataType &sgpr = *((DataType*)srfData.data());
@@ -474,7 +497,7 @@ namespace Gcn3ISA
         }
 
         template<bool Condition = (NumDwords == 1 || NumDwords == 2) && !Const>
-        typename std::enable_if<Condition, ScalarOperand&>::type
+        typename std::enable_if_t<Condition, ScalarOperand&>
         operator=(DataType rhs)
         {
             std::memcpy((void*)srfData.data(), (void*)&rhs, sizeof(DataType));
@@ -496,13 +519,39 @@ namespace Gcn3ISA
             switch(_opIdx) {
               case REG_EXEC_LO:
                 {
-                    assert(NumDwords == 2);
-                    ScalarRegU64 exec_mask = _gpuDynInst->wavefront()->
-                        execMask().to_ullong();
-                    std::memcpy((void*)srfData.data(), (void*)&exec_mask,
-                        sizeof(srfData));
-                    DPRINTF(GPUSRF, "Read EXEC\n");
-                    DPRINTF(GPUSRF, "EXEC = %#x\n", exec_mask);
+                    if (NumDwords == 1) {
+                        ScalarRegU32 exec_mask = _gpuDynInst->wavefront()->
+                            execMask().to_ulong();
+                        std::memcpy((void*)srfData.data(), (void*)&exec_mask,
+                            sizeof(exec_mask));
+                        DPRINTF(GPUSRF, "Read EXEC\n");
+                        DPRINTF(GPUSRF, "EXEC = %#x\n", exec_mask);
+                    } else {
+                        assert(NumDwords == 2);
+                        ScalarRegU64 exec_mask = _gpuDynInst->wavefront()->
+                            execMask().to_ullong();
+                        std::memcpy((void*)srfData.data(), (void*)&exec_mask,
+                            sizeof(exec_mask));
+                        DPRINTF(GPUSRF, "Read EXEC\n");
+                        DPRINTF(GPUSRF, "EXEC = %#x\n", exec_mask);
+                    }
+                }
+                break;
+              case REG_EXEC_HI:
+                {
+                    /**
+                     * If we're reading only the upper half of the EXEC mask
+                     * this ought to be a single dword operand.
+                     */
+                    assert(NumDwords == 1);
+                    ScalarRegU64 exec_mask = _gpuDynInst->wavefront()
+                        ->execMask().to_ullong();
+
+                    ScalarRegU32 exec_mask_hi = bits(exec_mask, 63, 32);
+                    std::memcpy((void*)srfData.data(), (void*)&exec_mask_hi,
+                                sizeof(exec_mask_hi));
+                    DPRINTF(GPUSRF, "Read EXEC_HI\n");
+                    DPRINTF(GPUSRF, "EXEC_HI = %#x\n", exec_mask_hi);
                 }
                 break;
               case REG_SRC_SWDA:
@@ -515,7 +564,7 @@ namespace Gcn3ISA
                 {
                     typename OpTraits<DataType>::FloatT pos_half = 0.5;
                     std::memcpy((void*)srfData.data(), (void*)&pos_half,
-                        sizeof(srfData));
+                        sizeof(pos_half));
 
                 }
                 break;
@@ -523,44 +572,44 @@ namespace Gcn3ISA
                 {
                     typename OpTraits<DataType>::FloatT neg_half = -0.5;
                     std::memcpy((void*)srfData.data(), (void*)&neg_half,
-                        sizeof(srfData));
+                        sizeof(neg_half));
                 }
                 break;
               case REG_POS_ONE:
                 {
                     typename OpTraits<DataType>::FloatT pos_one = 1.0;
-                    std::memcpy(srfData.data(), &pos_one, sizeof(srfData));
+                    std::memcpy(srfData.data(), &pos_one, sizeof(pos_one));
                 }
                 break;
               case REG_NEG_ONE:
                 {
                     typename OpTraits<DataType>::FloatT neg_one = -1.0;
-                    std::memcpy(srfData.data(), &neg_one, sizeof(srfData));
+                    std::memcpy(srfData.data(), &neg_one, sizeof(neg_one));
                 }
                 break;
               case REG_POS_TWO:
                 {
                     typename OpTraits<DataType>::FloatT pos_two = 2.0;
-                    std::memcpy(srfData.data(), &pos_two, sizeof(srfData));
+                    std::memcpy(srfData.data(), &pos_two, sizeof(pos_two));
                 }
                 break;
               case REG_NEG_TWO:
                 {
                     typename OpTraits<DataType>::FloatT neg_two = -2.0;
-                    std::memcpy(srfData.data(), &neg_two, sizeof(srfData));
+                    std::memcpy(srfData.data(), &neg_two, sizeof(neg_two));
                 }
                 break;
               case REG_POS_FOUR:
                 {
                     typename OpTraits<DataType>::FloatT pos_four = 4.0;
-                    std::memcpy(srfData.data(), &pos_four, sizeof(srfData));
+                    std::memcpy(srfData.data(), &pos_four, sizeof(pos_four));
                 }
                 break;
               case REG_NEG_FOUR:
                 {
                     typename OpTraits<DataType>::FloatT neg_four = -4.0;
                     std::memcpy((void*)srfData.data(), (void*)&neg_four ,
-                        sizeof(srfData));
+                        sizeof(neg_four));
                 }
                 break;
                 case REG_PI:
@@ -573,20 +622,25 @@ namespace Gcn3ISA
 
                     if (sizeof(DataType) == sizeof(ScalarRegF64)) {
                         std::memcpy((void*)srfData.data(),
-                            (void*)&pi_u64, sizeof(srfData));
+                            (void*)&pi_u64, sizeof(pi_u64));
                     } else {
                         std::memcpy((void*)srfData.data(),
-                            (void*)&pi_u32, sizeof(srfData));
+                            (void*)&pi_u32, sizeof(pi_u32));
                     }
                 }
                 break;
               default:
                 {
                     assert(sizeof(DataType) <= sizeof(srfData));
-                    DataType misc_val
-                        = (DataType)_gpuDynInst->readMiscReg(_opIdx);
+                    DataType misc_val(0);
+                    if (isConstVal(_opIdx)) {
+                        misc_val = (DataType)_gpuDynInst
+                            ->readConstVal<DataType>(_opIdx);
+                    } else {
+                        misc_val = (DataType)_gpuDynInst->readMiscReg(_opIdx);
+                    }
                     std::memcpy((void*)srfData.data(), (void*)&misc_val,
-                        sizeof(DataType));
+                                sizeof(DataType));
                 }
             }
         }
@@ -605,16 +659,16 @@ namespace Gcn3ISA
 
             if (_opIdx == REG_VCC_LO) {
                 sgprIdx = cu->registerManager
-                    .mapSgpr(wf, wf->reservedScalarRegs - 2 + dword);
+                    ->mapSgpr(wf, wf->reservedScalarRegs - 2 + dword);
             } else if (_opIdx == REG_FLAT_SCRATCH_HI) {
                 sgprIdx = cu->registerManager
-                    .mapSgpr(wf, wf->reservedScalarRegs - 3 + dword);
+                    ->mapSgpr(wf, wf->reservedScalarRegs - 3 + dword);
             } else if (_opIdx == REG_FLAT_SCRATCH_LO) {
                 assert(NumDwords == 1);
                 sgprIdx = cu->registerManager
-                    .mapSgpr(wf, wf->reservedScalarRegs - 4 + dword);
+                    ->mapSgpr(wf, wf->reservedScalarRegs - 4 + dword);
             } else {
-                sgprIdx = cu->registerManager.mapSgpr(wf, _opIdx + dword);
+                sgprIdx = cu->registerManager->mapSgpr(wf, _opIdx + dword);
             }
 
             assert(sgprIdx > -1);

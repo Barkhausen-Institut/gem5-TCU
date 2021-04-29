@@ -35,17 +35,17 @@
 #include "base/bitfield.hh"
 #include "base/intmath.hh"
 
-BiModeBP::BiModeBP(const BiModeBPParams *params)
+BiModeBP::BiModeBP(const BiModeBPParams &params)
     : BPredUnit(params),
-      globalHistoryReg(params->numThreads, 0),
-      globalHistoryBits(ceilLog2(params->globalPredictorSize)),
-      choicePredictorSize(params->choicePredictorSize),
-      choiceCtrBits(params->choiceCtrBits),
-      globalPredictorSize(params->globalPredictorSize),
-      globalCtrBits(params->globalCtrBits),
-      choiceCounters(choicePredictorSize, SatCounter(choiceCtrBits)),
-      takenCounters(globalPredictorSize, SatCounter(globalCtrBits)),
-      notTakenCounters(globalPredictorSize, SatCounter(globalCtrBits))
+      globalHistoryReg(params.numThreads, 0),
+      globalHistoryBits(ceilLog2(params.globalPredictorSize)),
+      choicePredictorSize(params.choicePredictorSize),
+      choiceCtrBits(params.choiceCtrBits),
+      globalPredictorSize(params.globalPredictorSize),
+      globalCtrBits(params.globalCtrBits),
+      choiceCounters(choicePredictorSize, SatCounter8(choiceCtrBits)),
+      takenCounters(globalPredictorSize, SatCounter8(globalCtrBits)),
+      notTakenCounters(globalPredictorSize, SatCounter8(globalCtrBits))
 {
     if (!isPowerOf2(choicePredictorSize))
         fatal("Invalid choice predictor size.\n");
@@ -224,10 +224,4 @@ BiModeBP::updateGlobalHistReg(ThreadID tid, bool taken)
     globalHistoryReg[tid] = taken ? (globalHistoryReg[tid] << 1) | 1 :
                                (globalHistoryReg[tid] << 1);
     globalHistoryReg[tid] &= historyRegisterMask;
-}
-
-BiModeBP*
-BiModeBPParams::create()
-{
-    return new BiModeBP(this);
 }

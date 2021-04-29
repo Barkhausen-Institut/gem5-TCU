@@ -29,18 +29,16 @@
 #ifndef __SIM_EXIT_HH__
 #define __SIM_EXIT_HH__
 
+#include <functional>
 #include <string>
 
 #include "base/types.hh"
 
 Tick curTick();
 
-// forward declaration
-class Callback;
-
 /// Register a callback to be called when Python exits.  Defined in
 /// sim/main.cc.
-void registerExitCallback(Callback *);
+void registerExitCallback(const std::function<void()> &);
 
 /// Schedule an event to exit the simulation loop (returning to
 /// Python) at the end of the current cycle (curTick()).  The message

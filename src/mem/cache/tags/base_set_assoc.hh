@@ -82,7 +82,7 @@ class BaseSetAssoc : public BaseTags
     const bool sequentialAccess;
 
     /** Replacement policy */
-    BaseReplacementPolicy *replacementPolicy;
+    ReplacementPolicy::Base *replacementPolicy;
 
   public:
     /** Convenience typedef. */
@@ -91,7 +91,7 @@ class BaseSetAssoc : public BaseTags
     /**
      * Construct and initialize this tag store.
      */
-    BaseSetAssoc(const Params *p);
+    BaseSetAssoc(const Params &p);
 
     /**
      * Destructor
@@ -141,7 +141,7 @@ class BaseSetAssoc : public BaseTags
         // If a cache hit
         if (blk != nullptr) {
             // Update number of references to accessed block
-            blk->refCount++;
+            blk->increaseRefCount();
 
             // Update replacement data of accessed block
             replacementPolicy->touch(blk->replacementData);
@@ -199,6 +199,8 @@ class BaseSetAssoc : public BaseTags
         replacementPolicy->reset(blk->replacementData);
     }
 
+    void moveBlock(CacheBlk *src_blk, CacheBlk *dest_blk) override;
+
     /**
      * Limit the allocation for the cache ways.
      * @param ways The maximum number of ways available for replacement.
@@ -226,7 +228,7 @@ class BaseSetAssoc : public BaseTags
      */
     Addr regenerateBlkAddr(const CacheBlk* blk) const override
     {
-        return indexingPolicy->regenerateAddr(blk->tag, blk);
+        return indexingPolicy->regenerateAddr(blk->getTag(), blk);
     }
 
     void forEachBlk(std::function<void(CacheBlk &)> visitor) override {

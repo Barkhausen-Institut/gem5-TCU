@@ -40,6 +40,7 @@
 
 #include "arch/x86/faults.hh"
 #include "arch/x86/insts/microldstop.hh"
+#include "arch/x86/isa_traits.hh"
 #include "arch/x86/pagetable.hh"
 #include "arch/x86/pagetable_walker.hh"
 #include "arch/x86/regs/misc.hh"
@@ -62,19 +63,18 @@
 namespace X86ISA
 {
 
-    GpuTLB::GpuTLB(const Params *p)
-        : ClockedObject(p), configAddress(0), size(p->size),
+    GpuTLB::GpuTLB(const Params &p)
+        : ClockedObject(p), configAddress(0), size(p.size),
           cleanupEvent([this]{ cleanup(); }, name(), false,
                        Event::Maximum_Pri),
-          exitEvent([this]{ exitCallback(); }, name())
+          exitEvent([this]{ exitCallback(); }, name()), stats(this)
     {
-        assoc = p->assoc;
+        assoc = p.assoc;
         assert(assoc <= size);
         numSets = size/assoc;
-        allocationPolicy = p->allocationPolicy;
+        allocationPolicy = p.allocationPolicy;
         hasMemSidePort = false;
-        accessDistance = p->accessDistance;
-        clock = p->clk_domain->clockPeriod();
+        accessDistance = p.accessDistance;
 
         tlb.assign(size, TlbEntry());
 
@@ -94,13 +94,13 @@ namespace X86ISA
          * @warning: the set-associative version assumes you have a
          * fixed page size of 4KB.
          * If the page size is greather than 4KB (as defined in the
-         * TheISA::PageBytes), then there are various issues w/ the current
+         * X86ISA::PageBytes), then there are various issues w/ the current
          * implementation (you'd have the same 8KB page being replicated in
          * different sets etc)
          */
         setMask = numSets - 1;
 
-        maxCoalescedReqs = p->maxOutstandingReqs;
+        maxCoalescedReqs = p.maxOutstandingReqs;
 
         // Do not allow maxCoalescedReqs to be more than the TLB associativity
         if (maxCoalescedReqs > assoc) {
@@ -109,18 +109,18 @@ namespace X86ISA
         }
 
         outstandingReqs = 0;
-        hitLatency = p->hitLatency;
-        missLatency1 = p->missLatency1;
-        missLatency2 = p->missLatency2;
+        hitLatency = p.hitLatency;
+        missLatency1 = p.missLatency1;
+        missLatency2 = p.missLatency2;
 
-        // create the slave ports based on the number of connected ports
-        for (size_t i = 0; i < p->port_slave_connection_count; ++i) {
+        // create the response ports based on the number of connected ports
+        for (size_t i = 0; i < p.port_cpu_side_ports_connection_count; ++i) {
             cpuSidePort.push_back(new CpuSidePort(csprintf("%s-port%d",
                                   name(), i), this, i));
         }
 
-        // create the master ports based on the number of connected ports
-        for (size_t i = 0; i < p->port_master_connection_count; ++i) {
+        // create the request ports based on the number of connected ports
+        for (size_t i = 0; i < p.port_mem_side_ports_connection_count; ++i) {
             memSidePort.push_back(new MemSidePort(csprintf("%s-port%d",
                                   name(), i), this, i));
         }
@@ -136,13 +136,13 @@ namespace X86ISA
     Port &
     GpuTLB::getPort(const std::string &if_name, PortID idx)
     {
-        if (if_name == "slave") {
+        if (if_name == "cpu_side_ports") {
             if (idx >= static_cast<PortID>(cpuSidePort.size())) {
                 panic("TLBCoalescer::getPort: unknown index %d\n", idx);
             }
 
             return *cpuSidePort[idx];
-        } else if (if_name == "master") {
+        } else if (if_name == "mem_side_ports") {
             if (idx >= static_cast<PortID>(memSidePort.size())) {
                 panic("TLBCoalescer::getPort: unknown index %d\n", idx);
             }
@@ -164,7 +164,7 @@ namespace X86ISA
          * vpn holds the virtual page address
          * The least significant bits are simply masked
          */
-        int set = (vpn >> TheISA::PageShift) & setMask;
+        int set = (vpn >> PageShift) & setMask;
 
         if (!freeList[set].empty()) {
             newEntry = freeList[set].front();
@@ -184,7 +184,7 @@ namespace X86ISA
     GpuTLB::EntryList::iterator
     GpuTLB::lookupIt(Addr va, bool update_lru)
     {
-        int set = (va >> TheISA::PageShift) & setMask;
+        int set = (va >> PageShift) & setMask;
 
         if (FA) {
             assert(!set);
@@ -214,7 +214,7 @@ namespace X86ISA
     TlbEntry*
     GpuTLB::lookup(Addr va, bool update_lru)
     {
-        int set = (va >> TheISA::PageShift) & setMask;
+        int set = (va >> PageShift) & setMask;
 
         auto entry = lookupIt(va, update_lru);
 
@@ -266,7 +266,7 @@ namespace X86ISA
     GpuTLB::demapPage(Addr va, uint64_t asn)
     {
 
-        int set = (va >> TheISA::PageShift) & setMask;
+        int set = (va >> PageShift) & setMask;
         auto entry = lookupIt(va, false);
 
         if (entry != entryList[set].end()) {
@@ -402,12 +402,12 @@ namespace X86ISA
                     return tlb_hit;
                 }
 
-                localNumTLBAccesses++;
+                stats.localNumTLBAccesses++;
 
                 if (!entry) {
-                    localNumTLBMisses++;
+                    stats.localNumTLBMisses++;
                 } else {
-                    localNumTLBHits++;
+                    stats.localNumTLBHits++;
                 }
             }
         }
@@ -499,10 +499,10 @@ namespace X86ISA
                 DPRINTF(GPUTLB, "Paging enabled.\n");
                 // The vaddr already has the segment base applied.
                 TlbEntry *entry = lookup(vaddr);
-                localNumTLBAccesses++;
+                stats.localNumTLBAccesses++;
 
                 if (!entry) {
-                    localNumTLBMisses++;
+                    stats.localNumTLBMisses++;
                     if (timing) {
                         latency = missLatency1;
                     }
@@ -544,7 +544,7 @@ namespace X86ISA
                         DPRINTF(GPUTLB, "Miss was serviced.\n");
                     }
                 } else {
-                    localNumTLBHits++;
+                    stats.localNumTLBHits++;
 
                     if (timing) {
                         latency = hitLatency;
@@ -624,8 +624,8 @@ namespace X86ISA
     {
         bool delayedResponse;
 
-        return GpuTLB::translate(req, tc, nullptr, mode, delayedResponse, false,
-                                 latency);
+        return GpuTLB::translate(req, tc, nullptr, mode, delayedResponse,
+            false, latency);
     }
 
     void
@@ -659,89 +659,6 @@ namespace X86ISA
     {
     }
 
-    void
-    GpuTLB::regStats()
-    {
-        ClockedObject::regStats();
-
-        localNumTLBAccesses
-            .name(name() + ".local_TLB_accesses")
-            .desc("Number of TLB accesses")
-            ;
-
-        localNumTLBHits
-            .name(name() + ".local_TLB_hits")
-            .desc("Number of TLB hits")
-            ;
-
-        localNumTLBMisses
-            .name(name() + ".local_TLB_misses")
-            .desc("Number of TLB misses")
-            ;
-
-        localTLBMissRate
-            .name(name() + ".local_TLB_miss_rate")
-            .desc("TLB miss rate")
-            ;
-
-        accessCycles
-            .name(name() + ".access_cycles")
-            .desc("Cycles spent accessing this TLB level")
-            ;
-
-        pageTableCycles
-            .name(name() + ".page_table_cycles")
-            .desc("Cycles spent accessing the page table")
-            ;
-
-        localTLBMissRate = 100 * localNumTLBMisses / localNumTLBAccesses;
-
-        numUniquePages
-            .name(name() + ".unique_pages")
-            .desc("Number of unique pages touched")
-            ;
-
-        localCycles
-            .name(name() + ".local_cycles")
-            .desc("Number of cycles spent in queue for all incoming reqs")
-            ;
-
-        localLatency
-            .name(name() + ".local_latency")
-            .desc("Avg. latency over incoming coalesced reqs")
-            ;
-
-        localLatency = localCycles / localNumTLBAccesses;
-
-        globalNumTLBAccesses
-            .name(name() + ".global_TLB_accesses")
-            .desc("Number of TLB accesses")
-            ;
-
-        globalNumTLBHits
-            .name(name() + ".global_TLB_hits")
-            .desc("Number of TLB hits")
-            ;
-
-        globalNumTLBMisses
-            .name(name() + ".global_TLB_misses")
-            .desc("Number of TLB misses")
-            ;
-
-        globalTLBMissRate
-            .name(name() + ".global_TLB_miss_rate")
-            .desc("TLB miss rate")
-            ;
-
-        globalTLBMissRate = 100 * globalNumTLBMisses / globalNumTLBAccesses;
-
-        avgReuseDistance
-            .name(name() + ".avg_reuse_distance")
-            .desc("avg. reuse distance over all pages (in ticks)")
-            ;
-
-    }
-
     /**
      * Do the TLB lookup for this coalesced request and schedule
      * another event <TLB access latency> cycles later.
@@ -754,7 +671,7 @@ namespace X86ISA
         assert(pkt->senderState);
 
         Addr virt_page_addr = roundDown(pkt->req->getVaddr(),
-                                        TheISA::PageBytes);
+                                        X86ISA::PageBytes);
 
         TranslationState *sender_state =
                 safe_cast<TranslationState*>(pkt->senderState);
@@ -768,10 +685,10 @@ namespace X86ISA
         int req_cnt = sender_state->reqCnt.back();
 
         if (update_stats) {
-            accessCycles -= (curTick() * req_cnt);
-            localCycles -= curTick();
+            stats.accessCycles -= (curTick() * req_cnt);
+            stats.localCycles -= curTick();
             updatePageFootprint(virt_page_addr);
-            globalNumTLBAccesses += req_cnt;
+            stats.globalNumTLBAccesses += req_cnt;
         }
 
         tlbOutcome lookup_outcome = TLB_MISS;
@@ -795,21 +712,21 @@ namespace X86ISA
                 // the reqCnt has an entry per level, so its size tells us
                 // which level we are in
                 sender_state->hitLevel = sender_state->reqCnt.size();
-                globalNumTLBHits += req_cnt;
+                stats.globalNumTLBHits += req_cnt;
             }
         } else {
             if (update_stats)
-                globalNumTLBMisses += req_cnt;
+                stats.globalNumTLBMisses += req_cnt;
         }
 
         /*
-         * We now know the TLB lookup outcome (if it's a hit or a miss), as well
-         * as the TLB access latency.
+         * We now know the TLB lookup outcome (if it's a hit or a miss), as
+         * well as the TLB access latency.
          *
          * We create and schedule a new TLBEvent which will help us take the
-         * appropriate actions (e.g., update TLB on a hit, send request to lower
-         * level TLB on a miss, or start a page walk if this was the last-level
-         * TLB)
+         * appropriate actions (e.g., update TLB on a hit, send request to
+         * lower level TLB on a miss, or start a page walk if this was the
+         * last-level TLB)
          */
         TLBEvent *tlb_event =
             new TLBEvent(this, virt_page_addr, lookup_outcome, pkt);
@@ -823,15 +740,15 @@ namespace X86ISA
         assert(tlb_event);
 
         DPRINTF(GPUTLB, "schedule translationReturnEvent @ curTick %d\n",
-                curTick() + this->ticks(hitLatency));
+                curTick() + cyclesToTicks(Cycles(hitLatency)));
 
-        schedule(tlb_event, curTick() + this->ticks(hitLatency));
+        schedule(tlb_event, curTick() + cyclesToTicks(Cycles(hitLatency)));
     }
 
-    GpuTLB::TLBEvent::TLBEvent(GpuTLB* _tlb, Addr _addr, tlbOutcome tlb_outcome,
-                               PacketPtr _pkt)
-        : Event(CPU_Tick_Pri), tlb(_tlb), virtPageAddr(_addr),
-        outcome(tlb_outcome), pkt(_pkt)
+    GpuTLB::TLBEvent::TLBEvent(GpuTLB* _tlb, Addr _addr,
+        tlbOutcome tlb_outcome, PacketPtr _pkt)
+            : Event(CPU_Tick_Pri), tlb(_tlb), virtPageAddr(_addr),
+              outcome(tlb_outcome), pkt(_pkt)
     {
     }
 
@@ -848,7 +765,8 @@ namespace X86ISA
         bool storeCheck = flags & (StoreCheck << FlagShift);
 
         // Do paging protection checks.
-        bool inUser = (m5Reg.cpl == 3 && !(flags & (CPL0FlagBit << FlagShift)));
+        bool inUser
+            = (m5Reg.cpl == 3 && !(flags & (CPL0FlagBit << FlagShift)));
         CR0 cr0 = tc->readMiscRegNoEffect(MISCREG_CR0);
 
         bool badWrite = (!tlb_entry->writable && (inUser || cr0.wp));
@@ -874,10 +792,9 @@ namespace X86ISA
      * The latter calls handelHit with TLB miss as tlbOutcome.
      */
     void
-    GpuTLB::handleTranslationReturn(Addr virt_page_addr, tlbOutcome tlb_outcome,
-            PacketPtr pkt)
+    GpuTLB::handleTranslationReturn(Addr virt_page_addr,
+        tlbOutcome tlb_outcome, PacketPtr pkt)
     {
-
         assert(pkt);
         Addr vaddr = pkt->req->getVaddr();
 
@@ -890,15 +807,18 @@ namespace X86ISA
         TlbEntry *local_entry, *new_entry;
 
         if (tlb_outcome == TLB_HIT) {
-            DPRINTF(GPUTLB, "Translation Done - TLB Hit for addr %#x\n", vaddr);
+            DPRINTF(GPUTLB, "Translation Done - TLB Hit for addr %#x\n",
+                vaddr);
             local_entry = sender_state->tlbEntry;
         } else {
             DPRINTF(GPUTLB, "Translation Done - TLB Miss for addr %#x\n",
                     vaddr);
 
-            // We are returning either from a page walk or from a hit at a lower
-            // TLB level. The senderState should be "carrying" a pointer to the
-            // correct TLBEntry.
+            /**
+             * We are returning either from a page walk or from a hit at a
+             * lower TLB level. The senderState should be "carrying" a pointer
+             * to the correct TLBEntry.
+             */
             new_entry = sender_state->tlbEntry;
             assert(new_entry);
             local_entry = new_entry;
@@ -927,7 +847,7 @@ namespace X86ISA
         Addr paddr = local_entry->paddr | (vaddr & (page_size - 1));
         DPRINTF(GPUTLB, "Translated %#x -> %#x.\n", vaddr, paddr);
 
-        // Since this packet will be sent through the cpu side slave port,
+        // Since this packet will be sent through the cpu side port,
         // it must be converted to a response pkt if it is not one already
         if (pkt->isRequest()) {
             pkt->makeTimingResponse();
@@ -978,16 +898,16 @@ namespace X86ISA
             handleTranslationReturn(virtPageAddr, TLB_HIT, pkt);
 
             if (update_stats) {
-                accessCycles += (req_cnt * curTick());
-                localCycles += curTick();
+                stats.accessCycles += (req_cnt * curTick());
+                stats.localCycles += curTick();
             }
 
         } else if (outcome == TLB_MISS) {
 
             DPRINTF(GPUTLB, "This is a TLB miss\n");
             if (update_stats) {
-                accessCycles += (req_cnt*curTick());
-                localCycles += curTick();
+                stats.accessCycles += (req_cnt*curTick());
+                stats.localCycles += curTick();
             }
 
             if (hasMemSidePort) {
@@ -995,8 +915,8 @@ namespace X86ISA
                 // the reply back till when we propagate it to the coalescer
                 // above.
                 if (update_stats) {
-                    accessCycles += (req_cnt * 1);
-                    localCycles += 1;
+                    stats.accessCycles += (req_cnt * 1);
+                    stats.localCycles += 1;
                 }
 
                 /**
@@ -1019,16 +939,17 @@ namespace X86ISA
                         "addr %#x\n", virtPageAddr);
 
                 if (update_stats)
-                    pageTableCycles -= (req_cnt*curTick());
+                    stats.pageTableCycles -= (req_cnt*curTick());
 
                 TLBEvent *tlb_event = translationReturnEvent[virtPageAddr];
                 assert(tlb_event);
                 tlb_event->updateOutcome(PAGE_WALK);
-                schedule(tlb_event, curTick() + ticks(missLatency2));
+                schedule(tlb_event,
+                         curTick() + cyclesToTicks(Cycles(missLatency2)));
             }
         } else if (outcome == PAGE_WALK) {
             if (update_stats)
-                pageTableCycles += (req_cnt*curTick());
+                stats.pageTableCycles += (req_cnt*curTick());
 
             // Need to access the page table and update the TLB
             DPRINTF(GPUTLB, "Doing a page walk for address %#x\n",
@@ -1095,7 +1016,7 @@ namespace X86ISA
         return virtPageAddr;
     }
 
-    /*
+    /**
      * recvTiming receives a coalesced timing request from a TLBCoalescer
      * and it calls issueTLBLookup()
      * It only rejects the packet if we have exceeded the max
@@ -1145,15 +1066,17 @@ namespace X86ISA
             DPRINTF(GPUTLB, "Functional Translation Done - TLB miss for addr "
                     "%#x\n", vaddr);
 
-            // We are returning either from a page walk or from a hit at a lower
-            // TLB level. The senderState should be "carrying" a pointer to the
-            // correct TLBEntry.
+            /**
+             * We are returning either from a page walk or from a hit at a
+             * lower TLB level. The senderState should be "carrying" a pointer
+             * to the correct TLBEntry.
+             */
             new_entry = sender_state->tlbEntry;
             assert(new_entry);
             local_entry = new_entry;
 
             if (allocationPolicy) {
-                Addr virt_page_addr = roundDown(vaddr, TheISA::PageBytes);
+                Addr virt_page_addr = roundDown(vaddr, X86ISA::PageBytes);
 
                 DPRINTF(GPUTLB, "allocating entry w/ addr %#x\n",
                         virt_page_addr);
@@ -1204,7 +1127,7 @@ namespace X86ISA
         bool update_stats = !sender_state->prefetch;
 
         Addr virt_page_addr = roundDown(pkt->req->getVaddr(),
-                                        TheISA::PageBytes);
+                                        X86ISA::PageBytes);
 
         if (update_stats)
             tlb->updatePageFootprint(virt_page_addr);
@@ -1216,17 +1139,17 @@ namespace X86ISA
         // functional mode means no coalescing
         // global metrics are the same as the local metrics
         if (update_stats) {
-            tlb->globalNumTLBAccesses++;
+            tlb->stats.globalNumTLBAccesses++;
 
             if (success) {
                 sender_state->hitLevel = sender_state->reqCnt.size();
-                tlb->globalNumTLBHits++;
+                tlb->stats.globalNumTLBHits++;
             }
         }
 
         if (!success) {
             if (update_stats)
-                tlb->globalNumTLBMisses++;
+                tlb->stats.globalNumTLBMisses++;
             if (tlb->hasMemSidePort) {
                 // there is a TLB below -> propagate down the TLB hierarchy
                 tlb->memSidePort[0]->sendFunctional(pkt);
@@ -1267,8 +1190,8 @@ namespace X86ISA
                 } else {
                     // If this was a prefetch, then do the normal thing if it
                     // was a successful translation.  Otherwise, send an empty
-                    // TLB entry back so that it can be figured out as empty and
-                    // handled accordingly.
+                    // TLB entry back so that it can be figured out as empty
+                    // and handled accordingly.
                     if (pte) {
                         DPRINTF(GPUTLB, "Mapping %#x to %#x\n", alignedVaddr,
                                 pte->paddr);
@@ -1318,7 +1241,7 @@ namespace X86ISA
     AddrRangeList
     GpuTLB::CpuSidePort::getAddrRanges() const
     {
-        // currently not checked by the master
+        // currently not checked by the requestor
         AddrRangeList ranges;
 
         return ranges;
@@ -1333,7 +1256,7 @@ namespace X86ISA
     GpuTLB::MemSidePort::recvTimingResp(PacketPtr pkt)
     {
         Addr virt_page_addr = roundDown(pkt->req->getVaddr(),
-                                        TheISA::PageBytes);
+                                        X86ISA::PageBytes);
 
         DPRINTF(GPUTLB, "MemSidePort recvTiming for virt_page_addr %#x\n",
                 virt_page_addr);
@@ -1343,7 +1266,7 @@ namespace X86ISA
         assert(virt_page_addr == tlb_event->getTLBEventVaddr());
 
         tlb_event->updateOutcome(MISS_RETURN);
-        tlb->schedule(tlb_event, curTick()+tlb->ticks(1));
+        tlb->schedule(tlb_event, curTick()+tlb->clockPeriod());
 
         return true;
     }
@@ -1393,13 +1316,13 @@ namespace X86ISA
         tmp_access_info.sumDistance = 0;
         tmp_access_info.meanDistance = 0;
 
-        ret = TLBFootprint.insert(AccessPatternTable::value_type(virt_page_addr,
-                                  tmp_access_info));
+        ret = TLBFootprint.insert(
+            AccessPatternTable::value_type(virt_page_addr, tmp_access_info));
 
         bool first_page_access = ret.second;
 
         if (first_page_access) {
-            numUniquePages++;
+            stats.numUniquePages++;
         } else  {
             int accessed_before;
             accessed_before  = curTick() - ret.first->second.lastTimeAccessed;
@@ -1411,7 +1334,7 @@ namespace X86ISA
 
         if (accessDistance) {
             ret.first->second.localTLBAccesses
-                .push_back(localNumTLBAccesses.value());
+                .push_back(stats.localNumTLBAccesses.value());
         }
     }
 
@@ -1428,90 +1351,108 @@ namespace X86ISA
             page_stat_file = simout.create(name().c_str())->stream();
 
             // print header
-            *page_stat_file << "page,max_access_distance,mean_access_distance, "
-                            << "stddev_distance" << std::endl;
+            *page_stat_file
+                << "page,max_access_distance,mean_access_distance, "
+                << "stddev_distance" << std::endl;
         }
 
         // update avg. reuse distance footprint
-        AccessPatternTable::iterator iter, iter_begin, iter_end;
         unsigned int sum_avg_reuse_distance_per_page = 0;
 
         // iterate through all pages seen by this TLB
-        for (iter = TLBFootprint.begin(); iter != TLBFootprint.end(); iter++) {
-            sum_avg_reuse_distance_per_page += iter->second.totalReuseDistance /
-                                               iter->second.accessesPerPage;
+        for (auto &iter : TLBFootprint) {
+            sum_avg_reuse_distance_per_page += iter.second.totalReuseDistance /
+                                               iter.second.accessesPerPage;
 
             if (accessDistance) {
-                unsigned int tmp = iter->second.localTLBAccesses[0];
+                unsigned int tmp = iter.second.localTLBAccesses[0];
                 unsigned int prev = tmp;
 
-                for (int i = 0; i < iter->second.localTLBAccesses.size(); ++i) {
+                for (int i = 0; i < iter.second.localTLBAccesses.size(); ++i) {
                     if (i) {
                         tmp = prev + 1;
                     }
 
-                    prev = iter->second.localTLBAccesses[i];
+                    prev = iter.second.localTLBAccesses[i];
                     // update the localTLBAccesses value
                     // with the actual differece
-                    iter->second.localTLBAccesses[i] -= tmp;
+                    iter.second.localTLBAccesses[i] -= tmp;
                     // compute the sum of AccessDistance per page
                     // used later for mean
-                    iter->second.sumDistance +=
-                        iter->second.localTLBAccesses[i];
+                    iter.second.sumDistance +=
+                        iter.second.localTLBAccesses[i];
                 }
 
-                iter->second.meanDistance =
-                    iter->second.sumDistance / iter->second.accessesPerPage;
+                iter.second.meanDistance =
+                    iter.second.sumDistance / iter.second.accessesPerPage;
 
                 // compute std_dev and max  (we need a second round because we
                 // need to know the mean value
                 unsigned int max_distance = 0;
                 unsigned int stddev_distance = 0;
 
-                for (int i = 0; i < iter->second.localTLBAccesses.size(); ++i) {
+                for (int i = 0; i < iter.second.localTLBAccesses.size(); ++i) {
                     unsigned int tmp_access_distance =
-                        iter->second.localTLBAccesses[i];
+                        iter.second.localTLBAccesses[i];
 
                     if (tmp_access_distance > max_distance) {
                         max_distance = tmp_access_distance;
                     }
 
                     unsigned int diff =
-                        tmp_access_distance - iter->second.meanDistance;
+                        tmp_access_distance - iter.second.meanDistance;
                     stddev_distance += pow(diff, 2);
 
                 }
 
                 stddev_distance =
-                    sqrt(stddev_distance/iter->second.accessesPerPage);
+                    sqrt(stddev_distance/iter.second.accessesPerPage);
 
                 if (page_stat_file) {
-                    *page_stat_file << std::hex << iter->first << ",";
+                    *page_stat_file << std::hex << iter.first << ",";
                     *page_stat_file << std::dec << max_distance << ",";
-                    *page_stat_file << std::dec << iter->second.meanDistance
+                    *page_stat_file << std::dec << iter.second.meanDistance
                                     << ",";
                     *page_stat_file << std::dec << stddev_distance;
                     *page_stat_file << std::endl;
                 }
 
                 // erase the localTLBAccesses array
-                iter->second.localTLBAccesses.clear();
+                iter.second.localTLBAccesses.clear();
             }
         }
 
         if (!TLBFootprint.empty()) {
-            avgReuseDistance =
+            stats.avgReuseDistance =
                 sum_avg_reuse_distance_per_page / TLBFootprint.size();
         }
 
         //clear the TLBFootprint map
         TLBFootprint.clear();
     }
+
+    GpuTLB::GpuTLBStats::GpuTLBStats(Stats::Group *parent)
+        : Stats::Group(parent),
+          ADD_STAT(localNumTLBAccesses, "Number of TLB accesses"),
+          ADD_STAT(localNumTLBHits, "Number of TLB hits"),
+          ADD_STAT(localNumTLBMisses, "Number of TLB misses"),
+          ADD_STAT(localTLBMissRate, "TLB miss rate"),
+          ADD_STAT(globalNumTLBAccesses, "Number of TLB accesses"),
+          ADD_STAT(globalNumTLBHits, "Number of TLB hits"),
+          ADD_STAT(globalNumTLBMisses, "Number of TLB misses"),
+          ADD_STAT(globalTLBMissRate, "TLB miss rate"),
+          ADD_STAT(accessCycles, "Cycles spent accessing this TLB level"),
+          ADD_STAT(pageTableCycles, "Cycles spent accessing the page table"),
+          ADD_STAT(numUniquePages, "Number of unique pages touched"),
+          ADD_STAT(localCycles, "Number of cycles spent in queue for all "
+                   "incoming reqs"),
+          ADD_STAT(localLatency, "Avg. latency over incoming coalesced reqs"),
+          ADD_STAT(avgReuseDistance, "avg. reuse distance over all pages (in "
+                   "ticks)")
+    {
+        localLatency = localCycles / localNumTLBAccesses;
+
+        localTLBMissRate = 100 * localNumTLBMisses / localNumTLBAccesses;
+        globalTLBMissRate = 100 * globalNumTLBMisses / globalNumTLBAccesses;
+    }
 } // namespace X86ISA
-
-X86ISA::GpuTLB*
-X86GPUTLBParams::create()
-{
-    return new X86ISA::GpuTLB(this);
-}
-

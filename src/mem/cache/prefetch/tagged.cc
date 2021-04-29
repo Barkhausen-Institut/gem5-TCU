@@ -37,8 +37,8 @@
 
 namespace Prefetcher {
 
-Tagged::Tagged(const TaggedPrefetcherParams *p)
-    : Queued(p), degree(p->degree)
+Tagged::Tagged(const TaggedPrefetcherParams &p)
+    : Queued(p), degree(p.degree)
 {
 
 }
@@ -56,9 +56,3 @@ Tagged::calculatePrefetch(const PrefetchInfo &pfi,
 }
 
 } // namespace Prefetcher
-
-Prefetcher::Tagged*
-TaggedPrefetcherParams::create()
-{
-   return new Prefetcher::Tagged(this);
-}

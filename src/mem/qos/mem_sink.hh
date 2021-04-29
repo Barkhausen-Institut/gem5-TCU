@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 ARM Limited
+ * Copyright (c) 2018-2020 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -41,9 +41,13 @@
 #ifndef __MEM_QOS_MEM_SINK_HH__
 #define __MEM_QOS_MEM_SINK_HH__
 
+#include "mem/abstract_mem.hh"
 #include "mem/qos/mem_ctrl.hh"
 #include "mem/qport.hh"
 #include "params/QoSMemSinkCtrl.hh"
+
+struct QoSMemSinkInterfaceParams;
+class QoSMemSinkInterface;
 
 namespace QoS {
 
@@ -64,7 +68,7 @@ class MemSinkCtrl : public MemCtrl
     using PacketQueue = std::deque<PacketPtr>;
 
   private:
-    class MemoryPort : public QueuedSlavePort
+    class MemoryPort : public QueuedResponsePort
     {
       private:
         /** reference to parent memory object */
@@ -120,7 +124,7 @@ class MemSinkCtrl : public MemCtrl
      *
      * @param p QoS Memory Sink configuration parameters
      */
-    MemSinkCtrl(const QoSMemSinkCtrlParams*);
+    MemSinkCtrl(const QoSMemSinkCtrlParams &);
 
     virtual ~MemSinkCtrl();
 
@@ -131,11 +135,11 @@ class MemSinkCtrl : public MemCtrl
     DrainState drain() override;
 
     /**
-     * Getter method to access this memory's slave port
+     * Getter method to access this memory's response port
      *
      * @param if_name interface name
      * @param idx port ID number
-     * @return reference to this memory's slave port
+     * @return reference to this memory's response port
      */
     Port &getPort(const std::string &if_name, PortID=InvalidPortID) override;
 
@@ -160,8 +164,13 @@ class MemSinkCtrl : public MemCtrl
     /** Write request packets queue buffer size in #packets */
     const uint64_t writeBufferSize;
 
-    /** Memory slave port */
+    /** Memory response port */
     MemoryPort port;
+
+    /**
+     * Create pointer to interface of actual media
+     */
+    QoSMemSinkInterface* const interface;
 
     /** Read request pending */
     bool retryRdReq;
@@ -172,11 +181,16 @@ class MemSinkCtrl : public MemCtrl
     /** Next request service time */
     Tick nextRequest;
 
-    /** Count the number of read retries */
-    Stats::Scalar numReadRetries;
+    struct MemSinkCtrlStats : public Stats::Group
+    {
+        MemSinkCtrlStats(Stats::Group *parent);
 
-    /** Count the number of write retries */
-    Stats::Scalar numWriteRetries;
+        /** Count the number of read retries */
+        Stats::Scalar numReadRetries;
+
+        /** Count the number of write retries */
+        Stats::Scalar numWriteRetries;
+    };
 
     /**
      * QoS-aware (per priority) incoming read requests packets queue
@@ -238,10 +252,22 @@ class MemSinkCtrl : public MemCtrl
     */
     bool recvTimingReq(PacketPtr pkt);
 
-    /** Registers statistics */
-    void regStats() override;
+    MemSinkCtrlStats stats;
 };
 
 } // namespace QoS
+
+class QoSMemSinkInterface : public AbstractMemory
+{
+  public:
+    /** Setting a pointer to the interface */
+    void setMemCtrl(QoS::MemSinkCtrl* _ctrl) { ctrl = _ctrl; };
+
+    /** Pointer to the controller */
+    QoS::MemSinkCtrl* ctrl;
+
+    QoSMemSinkInterface(const QoSMemSinkInterfaceParams &_p);
+};
+
 
 #endif /* __MEM_QOS_MEM_SINK_HH__ */

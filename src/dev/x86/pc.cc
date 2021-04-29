@@ -45,8 +45,8 @@
 #include "dev/x86/south_bridge.hh"
 #include "sim/system.hh"
 
-Pc::Pc(const Params *p)
-    : Platform(p), system(p->system)
+Pc::Pc(const Params &p)
+    : Platform(p), system(p.system)
 {
     southBridge = NULL;
 }
@@ -133,10 +133,4 @@ void
 Pc::clearPciInt(int line)
 {
     warn_once("Tried to clear PCI interrupt %d\n", line);
-}
-
-Pc *
-PcParams::create()
-{
-    return new Pc(this);
 }

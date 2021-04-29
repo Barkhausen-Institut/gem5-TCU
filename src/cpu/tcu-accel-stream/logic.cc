@@ -34,17 +34,17 @@
 #include "cpu/tcu-accel-stream/algorithm_rot13.hh"
 #include "cpu/tcu-accel-stream/logic.hh"
 
-AccelLogic::AccelLogic(const AccelLogicParams *p)
+AccelLogic::AccelLogic(const AccelLogicParams &p)
     : ClockedObject(p), tickEvent(this), port("port", this),
       accel(), algo(), state(), stateChanged(),
       compTime(), opStart(), dataSize(), offset(), pos(), pullSize(), pullData()
 {
-    if (p->algorithm == 0)
+    if (p.algorithm == 0)
         algo = new TcuAccelStreamAlgoCopy();
-    else if(p->algorithm == 1)
+    else if(p.algorithm == 1)
         algo = new TcuAccelStreamAlgoROT13();
     else
-        panic("Unknown algorithm %d\n", p->algorithm);
+        panic("Unknown algorithm %d\n", p.algorithm);
 }
 
 std::string
@@ -210,10 +210,4 @@ AccelLogic::recvRetry()
     assert(retryPkt);
     if (port.sendTimingReq(retryPkt))
         retryPkt = nullptr;
-}
-
-AccelLogic*
-AccelLogicParams::create()
-{
-    return new AccelLogic(this);
 }

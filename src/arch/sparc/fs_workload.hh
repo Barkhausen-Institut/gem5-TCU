@@ -42,7 +42,7 @@ class FsWorkload : public Workload
     Loader::SymbolTable defaultSymtab;
 
   public:
-    FsWorkload(SparcFsWorkloadParams *params) : Workload(params) {}
+    FsWorkload(const SparcFsWorkloadParams &params) : Workload(params) {}
     void initState() override;
 
     Addr
@@ -54,16 +54,16 @@ class FsWorkload : public Workload
     }
     Loader::Arch getArch() const override { return Loader::SPARC64; }
 
-    const Loader::SymbolTable *
+    const Loader::SymbolTable &
     symtab(ThreadContext *tc) override
     {
-        return &defaultSymtab;
+        return defaultSymtab;
     }
 
     bool
-    insertSymbol(Addr address, const std::string &symbol) override
+    insertSymbol(const Loader::Symbol &symbol) override
     {
-        return defaultSymtab.insert(address, symbol);
+        return defaultSymtab.insert(symbol);
     }
 };
 

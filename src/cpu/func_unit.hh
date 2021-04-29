@@ -41,6 +41,22 @@
 
 ////////////////////////////////////////////////////////////////////////////
 //
+//  The SimObjects we use to get the FU information into the simulator
+//
+////////////////////////////////////////////////////////////////////////////
+
+//
+//  We use 2 objects to specify this data in the INI file:
+//    (1) OpDesc - Describes the operation class & latencies
+//                   (multiple OpDesc objects can refer to the same
+//                   operation classes)
+//    (2) FUDesc - Describes the operations available in the unit &
+//                   the number of these units
+//
+//
+
+////////////////////////////////////////////////////////////////////////////
+//
 //  Structures used ONLY during the initialization phase...
 //
 //
@@ -53,9 +69,9 @@ class OpDesc : public SimObject
     Cycles opLat;
     bool pipelined;
 
-    OpDesc(const OpDescParams *p)
-        : SimObject(p), opClass(p->opClass), opLat(p->opLat),
-          pipelined(p->pipelined) {};
+    OpDesc(const OpDescParams &p)
+        : SimObject(p), opClass(p.opClass), opLat(p.opLat),
+          pipelined(p.pipelined) {};
 };
 
 class FUDesc : public SimObject
@@ -64,8 +80,8 @@ class FUDesc : public SimObject
     std::vector<OpDesc *> opDescList;
     unsigned         number;
 
-    FUDesc(const FUDescParams *p)
-        : SimObject(p), opDescList(p->opList), number(p->count) {};
+    FUDesc(const FUDescParams &p)
+        : SimObject(p), opDescList(p.opList), number(p.count) {};
 };
 
 typedef std::vector<OpDesc *>::const_iterator OPDDiterator;

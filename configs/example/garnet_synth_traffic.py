@@ -26,9 +26,6 @@
 #
 # Author: Tushar Krishna
 
-from __future__ import print_function
-from __future__ import absolute_import
-
 import m5
 from m5.objects import *
 from m5.defines import buildEnv
@@ -145,7 +142,7 @@ root = Root(full_system = False, system = system)
 root.system.mem_mode = 'timing'
 
 # Not much point in this being higher than the L1 latency
-m5.ticks.setGlobalFrequency('1ns')
+m5.ticks.setGlobalFrequency('1ps')
 
 # instantiate configuration
 m5.instantiate()

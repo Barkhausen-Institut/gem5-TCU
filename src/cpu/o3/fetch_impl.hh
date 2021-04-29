@@ -49,13 +49,11 @@
 #include <queue>
 
 #include "arch/generic/tlb.hh"
-#include "arch/isa_traits.hh"
 #include "arch/utility.hh"
 #include "base/random.hh"
 #include "base/types.hh"
 #include "config/the_isa.hh"
 #include "cpu/base.hh"
-//#include "cpu/checker/cpu.hh"
 #include "cpu/o3/cpu.hh"
 #include "cpu/o3/fetch.hh"
 #include "cpu/exetrace.hh"
@@ -73,29 +71,27 @@
 #include "sim/system.hh"
 #include "cpu/o3/isa_specific.hh"
 
-using namespace std;
-
 template<class Impl>
-DefaultFetch<Impl>::DefaultFetch(O3CPU *_cpu, DerivO3CPUParams *params)
-    : fetchPolicy(params->smtFetchPolicy),
+DefaultFetch<Impl>::DefaultFetch(O3CPU *_cpu, const DerivO3CPUParams &params)
+    : fetchPolicy(params.smtFetchPolicy),
       cpu(_cpu),
       branchPred(nullptr),
-      decodeToFetchDelay(params->decodeToFetchDelay),
-      renameToFetchDelay(params->renameToFetchDelay),
-      iewToFetchDelay(params->iewToFetchDelay),
-      commitToFetchDelay(params->commitToFetchDelay),
-      fetchWidth(params->fetchWidth),
-      decodeWidth(params->decodeWidth),
+      decodeToFetchDelay(params.decodeToFetchDelay),
+      renameToFetchDelay(params.renameToFetchDelay),
+      iewToFetchDelay(params.iewToFetchDelay),
+      commitToFetchDelay(params.commitToFetchDelay),
+      fetchWidth(params.fetchWidth),
+      decodeWidth(params.decodeWidth),
       retryPkt(NULL),
       retryTid(InvalidThreadID),
       cacheBlkSize(cpu->cacheLineSize()),
-      fetchBufferSize(params->fetchBufferSize),
+      fetchBufferSize(params.fetchBufferSize),
       fetchBufferMask(fetchBufferSize - 1),
-      fetchQueueSize(params->fetchQueueSize),
-      numThreads(params->numThreads),
-      numFetchingThreads(params->smtNumFetchingThreads),
+      fetchQueueSize(params.fetchQueueSize),
+      numThreads(params.numThreads),
+      numFetchingThreads(params.smtNumFetchingThreads),
       icachePort(this, _cpu),
-      finishTranslationEvent(this)
+      finishTranslationEvent(this), fetchStats(_cpu, this)
 {
     if (numThreads > Impl::MaxThreads)
         fatal("numThreads (%d) is larger than compiled limit (%d),\n"
@@ -111,10 +107,6 @@ DefaultFetch<Impl>::DefaultFetch(O3CPU *_cpu, DerivO3CPUParams *params)
     if (cacheBlkSize % fetchBufferSize)
         fatal("cache block (%u bytes) is not a multiple of the "
               "fetch buffer (%u bytes)\n", cacheBlkSize, fetchBufferSize);
-
-    // Figure out fetch policy
-    panic_if(fetchPolicy == FetchPolicy::SingleThread && numThreads > 1,
-             "Invalid Fetch Policy for a SMT workload.");
 
     // Get the size of an instruction.
     instSize = sizeof(TheISA::MachInst);
@@ -135,11 +127,11 @@ DefaultFetch<Impl>::DefaultFetch(O3CPU *_cpu, DerivO3CPUParams *params)
         issuePipelinedIfetch[i] = false;
     }
 
-    branchPred = params->branchPred;
+    branchPred = params.branchPred;
 
     for (ThreadID tid = 0; tid < numThreads; tid++) {
         decoder[tid] = new TheISA::Decoder(
-                dynamic_cast<TheISA::ISA *>(params->isa[tid]));
+                dynamic_cast<TheISA::ISA *>(params.isa[tid]));
         // Create space to buffer the cache line data,
         // which may not hold the entire cache line.
         fetchBuffer[tid] = new uint8_t[fetchBufferSize];
@@ -164,128 +156,102 @@ DefaultFetch<Impl>::regProbePoints()
 }
 
 template <class Impl>
-void
-DefaultFetch<Impl>::regStats()
+DefaultFetch<Impl>::
+FetchStatGroup::FetchStatGroup(O3CPU *cpu, DefaultFetch *fetch)
+    : Stats::Group(cpu, "fetch"),
+    ADD_STAT(icacheStallCycles, UNIT_CYCLE,
+             "Number of cycles fetch is stalled on an Icache miss"),
+    ADD_STAT(insts, UNIT_COUNT, "Number of instructions fetch has processed"),
+    ADD_STAT(branches, UNIT_COUNT,
+             "Number of branches that fetch encountered"),
+    ADD_STAT(predictedBranches, UNIT_COUNT,
+             "Number of branches that fetch has predicted taken"),
+    ADD_STAT(cycles, UNIT_CYCLE,
+             "Number of cycles fetch has run and was not squashing or "
+             "blocked"),
+    ADD_STAT(squashCycles, UNIT_CYCLE,
+             "Number of cycles fetch has spent squashing"),
+    ADD_STAT(tlbCycles, UNIT_CYCLE,
+             "Number of cycles fetch has spent waiting for tlb"),
+    ADD_STAT(idleCycles, UNIT_CYCLE, "Number of cycles fetch was idle"),
+    ADD_STAT(blockedCycles, UNIT_CYCLE,
+             "Number of cycles fetch has spent blocked"),
+    ADD_STAT(miscStallCycles, UNIT_CYCLE,
+             "Number of cycles fetch has spent waiting on interrupts, or bad "
+             "addresses, or out of MSHRs"),
+    ADD_STAT(pendingDrainCycles, UNIT_CYCLE,
+             "Number of cycles fetch has spent waiting on pipes to drain"),
+    ADD_STAT(noActiveThreadStallCycles, UNIT_CYCLE,
+             "Number of stall cycles due to no active thread to fetch from"),
+    ADD_STAT(pendingTrapStallCycles, UNIT_CYCLE,
+             "Number of stall cycles due to pending traps"),
+    ADD_STAT(pendingQuiesceStallCycles, UNIT_CYCLE,
+             "Number of stall cycles due to pending quiesce instructions"),
+    ADD_STAT(icacheWaitRetryStallCycles, UNIT_CYCLE,
+             "Number of stall cycles due to full MSHR"),
+    ADD_STAT(cacheLines, UNIT_COUNT, "Number of cache lines fetched"),
+    ADD_STAT(icacheSquashes, UNIT_COUNT,
+             "Number of outstanding Icache misses that were squashed"),
+    ADD_STAT(tlbSquashes, UNIT_COUNT,
+             "Number of outstanding ITLB misses that were squashed"),
+    ADD_STAT(nisnDist, UNIT_COUNT,
+             "Number of instructions fetched each cycle (Total)"),
+    ADD_STAT(idleRate, UNIT_RATIO, "Ratio of cycles fetch was idle",
+             idleCycles / cpu->baseStats.numCycles),
+    ADD_STAT(branchRate, UNIT_RATIO, "Number of branch fetches per cycle",
+             branches / cpu->baseStats.numCycles),
+    ADD_STAT(rate, UNIT_RATE(Stats::Units::Count, Stats::Units::Cycle),
+             "Number of inst fetches per cycle",
+             insts / cpu->baseStats.numCycles)
 {
-    icacheStallCycles
-        .name(name() + ".icacheStallCycles")
-        .desc("Number of cycles fetch is stalled on an Icache miss")
-        .prereq(icacheStallCycles);
-
-    fetchedInsts
-        .name(name() + ".Insts")
-        .desc("Number of instructions fetch has processed")
-        .prereq(fetchedInsts);
-
-    fetchedBranches
-        .name(name() + ".Branches")
-        .desc("Number of branches that fetch encountered")
-        .prereq(fetchedBranches);
-
-    predictedBranches
-        .name(name() + ".predictedBranches")
-        .desc("Number of branches that fetch has predicted taken")
-        .prereq(predictedBranches);
-
-    fetchCycles
-        .name(name() + ".Cycles")
-        .desc("Number of cycles fetch has run and was not squashing or"
-              " blocked")
-        .prereq(fetchCycles);
-
-    fetchSquashCycles
-        .name(name() + ".SquashCycles")
-        .desc("Number of cycles fetch has spent squashing")
-        .prereq(fetchSquashCycles);
-
-    fetchTlbCycles
-        .name(name() + ".TlbCycles")
-        .desc("Number of cycles fetch has spent waiting for tlb")
-        .prereq(fetchTlbCycles);
-
-    fetchIdleCycles
-        .name(name() + ".IdleCycles")
-        .desc("Number of cycles fetch was idle")
-        .prereq(fetchIdleCycles);
-
-    fetchBlockedCycles
-        .name(name() + ".BlockedCycles")
-        .desc("Number of cycles fetch has spent blocked")
-        .prereq(fetchBlockedCycles);
-
-    fetchedCacheLines
-        .name(name() + ".CacheLines")
-        .desc("Number of cache lines fetched")
-        .prereq(fetchedCacheLines);
-
-    fetchMiscStallCycles
-        .name(name() + ".MiscStallCycles")
-        .desc("Number of cycles fetch has spent waiting on interrupts, or "
-              "bad addresses, or out of MSHRs")
-        .prereq(fetchMiscStallCycles);
-
-    fetchPendingDrainCycles
-        .name(name() + ".PendingDrainCycles")
-        .desc("Number of cycles fetch has spent waiting on pipes to drain")
-        .prereq(fetchPendingDrainCycles);
-
-    fetchNoActiveThreadStallCycles
-        .name(name() + ".NoActiveThreadStallCycles")
-        .desc("Number of stall cycles due to no active thread to fetch from")
-        .prereq(fetchNoActiveThreadStallCycles);
-
-    fetchPendingTrapStallCycles
-        .name(name() + ".PendingTrapStallCycles")
-        .desc("Number of stall cycles due to pending traps")
-        .prereq(fetchPendingTrapStallCycles);
-
-    fetchPendingQuiesceStallCycles
-        .name(name() + ".PendingQuiesceStallCycles")
-        .desc("Number of stall cycles due to pending quiesce instructions")
-        .prereq(fetchPendingQuiesceStallCycles);
-
-    fetchIcacheWaitRetryStallCycles
-        .name(name() + ".IcacheWaitRetryStallCycles")
-        .desc("Number of stall cycles due to full MSHR")
-        .prereq(fetchIcacheWaitRetryStallCycles);
-
-    fetchIcacheSquashes
-        .name(name() + ".IcacheSquashes")
-        .desc("Number of outstanding Icache misses that were squashed")
-        .prereq(fetchIcacheSquashes);
-
-    fetchTlbSquashes
-        .name(name() + ".ItlbSquashes")
-        .desc("Number of outstanding ITLB misses that were squashed")
-        .prereq(fetchTlbSquashes);
-
-    fetchNisnDist
-        .init(/* base value */ 0,
-              /* last value */ fetchWidth,
+        icacheStallCycles
+            .prereq(icacheStallCycles);
+        insts
+            .prereq(insts);
+        branches
+            .prereq(branches);
+        predictedBranches
+            .prereq(predictedBranches);
+        cycles
+            .prereq(cycles);
+        squashCycles
+            .prereq(squashCycles);
+        tlbCycles
+            .prereq(tlbCycles);
+        idleCycles
+            .prereq(idleCycles);
+        blockedCycles
+            .prereq(blockedCycles);
+        cacheLines
+            .prereq(cacheLines);
+        miscStallCycles
+            .prereq(miscStallCycles);
+        pendingDrainCycles
+            .prereq(pendingDrainCycles);
+        noActiveThreadStallCycles
+            .prereq(noActiveThreadStallCycles);
+        pendingTrapStallCycles
+            .prereq(pendingTrapStallCycles);
+        pendingQuiesceStallCycles
+            .prereq(pendingQuiesceStallCycles);
+        icacheWaitRetryStallCycles
+            .prereq(icacheWaitRetryStallCycles);
+        icacheSquashes
+            .prereq(icacheSquashes);
+        tlbSquashes
+            .prereq(tlbSquashes);
+        nisnDist
+            .init(/* base value */ 0,
+              /* last value */ fetch->fetchWidth,
               /* bucket size */ 1)
-        .name(name() + ".rateDist")
-        .desc("Number of instructions fetched each cycle (Total)")
-        .flags(Stats::pdf);
-
-    idleRate
-        .name(name() + ".idleRate")
-        .desc("Percent of cycles fetch was idle")
-        .prereq(idleRate);
-    idleRate = fetchIdleCycles * 100 / cpu->numCycles;
-
-    branchRate
-        .name(name() + ".branchRate")
-        .desc("Number of branch fetches per cycle")
-        .flags(Stats::total);
-    branchRate = fetchedBranches / cpu->numCycles;
-
-    fetchRate
-        .name(name() + ".rate")
-        .desc("Number of inst fetches per cycle")
-        .flags(Stats::total);
-    fetchRate = fetchedInsts / cpu->numCycles;
+            .flags(Stats::pdf);
+        idleRate
+            .prereq(idleRate);
+        branchRate
+            .flags(Stats::total);
+        rate
+            .flags(Stats::total);
 }
-
 template<class Impl>
 void
 DefaultFetch<Impl>::setTimeBuffer(TimeBuffer<TimeStruct> *time_buffer)
@@ -394,7 +360,7 @@ DefaultFetch<Impl>::processCacheCompletion(PacketPtr pkt)
     // to return.
     if (fetchStatus[tid] != IcacheWaitResponse ||
         pkt->req != memReq[tid]) {
-        ++fetchIcacheSquashes;
+        ++fetchStats.icacheSquashes;
         delete pkt;
         return;
     }
@@ -587,10 +553,10 @@ DefaultFetch<Impl>::lookupAndUpdateNextPC(
     inst->setPredTarg(nextPC);
     inst->setPredTaken(predict_taken);
 
-    ++fetchedBranches;
+    ++fetchStats.branches;
 
     if (predict_taken) {
-        ++predictedBranches;
+        ++fetchStats.predictedBranches;
     }
 
     return predict_taken;
@@ -631,7 +597,7 @@ DefaultFetch<Impl>::fetchCacheLine(Addr vaddr, ThreadID tid, Addr pc)
     // Build request here.
     RequestPtr mem_req = std::make_shared<Request>(
         fetchBufferBlockPC, fetchBufferSize,
-        Request::INST_FETCH, cpu->instMasterId(), pc,
+        Request::INST_FETCH, cpu->instRequestorId(), pc,
         cpu->thread[tid]->contextId());
 
     mem_req->taskId(cpu->taskId());
@@ -641,7 +607,7 @@ DefaultFetch<Impl>::fetchCacheLine(Addr vaddr, ThreadID tid, Addr pc)
     // Initiate translation of the icache block
     fetchStatus[tid] = ItlbWait;
     FetchTranslation *trans = new FetchTranslation(this);
-    cpu->itb->translateTiming(mem_req, cpu->thread[tid]->getTC(),
+    cpu->mmu->translateTiming(mem_req, cpu->thread[tid]->getTC(),
                               trans, BaseTLB::Execute);
     return true;
 }
@@ -663,7 +629,7 @@ DefaultFetch<Impl>::finishTranslation(const Fault &fault,
         mem_req->getVaddr() != memReq[tid]->getVaddr()) {
         DPRINTF(Fetch, "[tid:%i] Ignoring itlb completed after squash\n",
                 tid);
-        ++fetchTlbSquashes;
+        ++fetchStats.tlbSquashes;
         return;
     }
 
@@ -689,7 +655,7 @@ DefaultFetch<Impl>::finishTranslation(const Fault &fault,
         fetchBufferValid[tid] = false;
         DPRINTF(Fetch, "Fetch: Doing instruction read.\n");
 
-        fetchedCacheLines++;
+        fetchStats.cacheLines++;
 
         // Access the cache.
         if (!icachePort.sendTimingReq(data_pkt)) {
@@ -802,7 +768,7 @@ DefaultFetch<Impl>::doSquash(const TheISA::PCState &newPC,
     // some opportunities to handle interrupts may be missed.
     delayedCommit[tid] = true;
 
-    ++fetchSquashCycles;
+    ++fetchStats.squashCycles;
 }
 
 template<class Impl>
@@ -840,8 +806,8 @@ typename DefaultFetch<Impl>::FetchStatus
 DefaultFetch<Impl>::updateFetchStatus()
 {
     //Check Running
-    list<ThreadID>::iterator threads = activeThreads->begin();
-    list<ThreadID>::iterator end = activeThreads->end();
+    std::list<ThreadID>::iterator threads = activeThreads->begin();
+    std::list<ThreadID>::iterator end = activeThreads->end();
 
     while (threads != end) {
         ThreadID tid = *threads++;
@@ -893,8 +859,8 @@ template <class Impl>
 void
 DefaultFetch<Impl>::tick()
 {
-    list<ThreadID>::iterator threads = activeThreads->begin();
-    list<ThreadID>::iterator end = activeThreads->end();
+    std::list<ThreadID>::iterator threads = activeThreads->begin();
+    std::list<ThreadID>::iterator end = activeThreads->end();
     bool status_change = false;
 
     wroteToTimeBuffer = false;
@@ -931,7 +897,7 @@ DefaultFetch<Impl>::tick()
     }
 
     // Record number of instructions fetched this cycle for distribution.
-    fetchNisnDist.sample(numInst);
+    fetchStats.nisnDist.sample(numInst);
 
     if (status_change) {
         // Change the fetch stage status if there was a status change.
@@ -1203,23 +1169,23 @@ DefaultFetch<Impl>::fetch(bool &status_change)
             fetchCacheLine(fetchAddr, tid, thisPC.instAddr());
 
             if (fetchStatus[tid] == IcacheWaitResponse)
-                ++icacheStallCycles;
+                ++fetchStats.icacheStallCycles;
             else if (fetchStatus[tid] == ItlbWait)
-                ++fetchTlbCycles;
+                ++fetchStats.tlbCycles;
             else
-                ++fetchMiscStallCycles;
+                ++fetchStats.miscStallCycles;
             return;
         } else if ((checkInterrupt(thisPC.instAddr()) && !delayedCommit[tid])) {
             // Stall CPU if an interrupt is posted and we're not issuing
             // an delayed commit micro-op currently (delayed commit instructions
             // are not interruptable by interrupts, only faults)
-            ++fetchMiscStallCycles;
+            ++fetchStats.miscStallCycles;
             DPRINTF(Fetch, "[tid:%i] Fetch is stalled!\n", tid);
             return;
         }
     } else {
         if (fetchStatus[tid] == Idle) {
-            ++fetchIdleCycles;
+            ++fetchStats.idleCycles;
             DPRINTF(Fetch, "[tid:%i] Fetch is idle!\n", tid);
         }
 
@@ -1227,7 +1193,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
         return;
     }
 
-    ++fetchCycles;
+    ++fetchStats.cycles;
 
     TheISA::PCState nextPC = thisPC;
 
@@ -1297,7 +1263,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
                     staticInst = decoder[tid]->decode(thisPC);
 
                     // Increment stat of fetched instructions.
-                    ++fetchedInsts;
+                    ++fetchStats.insts;
 
                     if (staticInst->isMacroop()) {
                         curMacroop = staticInst;
@@ -1316,7 +1282,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
             bool newMacro = false;
             if (curMacroop || inRom) {
                 if (inRom) {
-                    staticInst = cpu->microcodeRom.fetchMicroop(
+                    staticInst = decoder[tid]->fetchRomMicroop(
                             thisPC.microPC(), curMacroop);
                 } else {
                     staticInst = curMacroop->fetchMicroop(thisPC.microPC());
@@ -1447,19 +1413,19 @@ DefaultFetch<Impl>::getFetchingThread()
 {
     if (numThreads > 1) {
         switch (fetchPolicy) {
-          case FetchPolicy::RoundRobin:
+          case SMTFetchPolicy::RoundRobin:
             return roundRobin();
-          case FetchPolicy::IQCount:
+          case SMTFetchPolicy::IQCount:
             return iqCount();
-          case FetchPolicy::LSQCount:
+          case SMTFetchPolicy::LSQCount:
             return lsqCount();
-          case FetchPolicy::Branch:
+          case SMTFetchPolicy::Branch:
             return branchCount();
           default:
             return InvalidThreadID;
         }
     } else {
-        list<ThreadID>::iterator thread = activeThreads->begin();
+        std::list<ThreadID>::iterator thread = activeThreads->begin();
         if (thread == activeThreads->end()) {
             return InvalidThreadID;
         }
@@ -1481,8 +1447,8 @@ template<class Impl>
 ThreadID
 DefaultFetch<Impl>::roundRobin()
 {
-    list<ThreadID>::iterator pri_iter = priorityList.begin();
-    list<ThreadID>::iterator end      = priorityList.end();
+    std::list<ThreadID>::iterator pri_iter = priorityList.begin();
+    std::list<ThreadID>::iterator end      = priorityList.end();
 
     ThreadID high_pri;
 
@@ -1512,12 +1478,12 @@ ThreadID
 DefaultFetch<Impl>::iqCount()
 {
     //sorted from lowest->highest
-    std::priority_queue<unsigned,vector<unsigned>,
+    std::priority_queue<unsigned, std::vector<unsigned>,
                         std::greater<unsigned> > PQ;
     std::map<unsigned, ThreadID> threadMap;
 
-    list<ThreadID>::iterator threads = activeThreads->begin();
-    list<ThreadID>::iterator end = activeThreads->end();
+    std::list<ThreadID>::iterator threads = activeThreads->begin();
+    std::list<ThreadID>::iterator end = activeThreads->end();
 
     while (threads != end) {
         ThreadID tid = *threads++;
@@ -1549,12 +1515,12 @@ ThreadID
 DefaultFetch<Impl>::lsqCount()
 {
     //sorted from lowest->highest
-    std::priority_queue<unsigned,vector<unsigned>,
+    std::priority_queue<unsigned, std::vector<unsigned>,
                         std::greater<unsigned> > PQ;
     std::map<unsigned, ThreadID> threadMap;
 
-    list<ThreadID>::iterator threads = activeThreads->begin();
-    list<ThreadID>::iterator end = activeThreads->end();
+    std::list<ThreadID>::iterator threads = activeThreads->begin();
+    std::list<ThreadID>::iterator end = activeThreads->end();
 
     while (threads != end) {
         ThreadID tid = *threads++;
@@ -1626,35 +1592,35 @@ DefaultFetch<Impl>::profileStall(ThreadID tid) {
     // @todo Per-thread stats
 
     if (stalls[tid].drain) {
-        ++fetchPendingDrainCycles;
+        ++fetchStats.pendingDrainCycles;
         DPRINTF(Fetch, "Fetch is waiting for a drain!\n");
     } else if (activeThreads->empty()) {
-        ++fetchNoActiveThreadStallCycles;
+        ++fetchStats.noActiveThreadStallCycles;
         DPRINTF(Fetch, "Fetch has no active thread!\n");
     } else if (fetchStatus[tid] == Blocked) {
-        ++fetchBlockedCycles;
+        ++fetchStats.blockedCycles;
         DPRINTF(Fetch, "[tid:%i] Fetch is blocked!\n", tid);
     } else if (fetchStatus[tid] == Squashing) {
-        ++fetchSquashCycles;
+        ++fetchStats.squashCycles;
         DPRINTF(Fetch, "[tid:%i] Fetch is squashing!\n", tid);
     } else if (fetchStatus[tid] == IcacheWaitResponse) {
-        ++icacheStallCycles;
+        ++fetchStats.icacheStallCycles;
         DPRINTF(Fetch, "[tid:%i] Fetch is waiting cache response!\n",
                 tid);
     } else if (fetchStatus[tid] == ItlbWait) {
-        ++fetchTlbCycles;
+        ++fetchStats.tlbCycles;
         DPRINTF(Fetch, "[tid:%i] Fetch is waiting ITLB walk to "
                 "finish!\n", tid);
     } else if (fetchStatus[tid] == TrapPending) {
-        ++fetchPendingTrapStallCycles;
+        ++fetchStats.pendingTrapStallCycles;
         DPRINTF(Fetch, "[tid:%i] Fetch is waiting for a pending trap!\n",
                 tid);
     } else if (fetchStatus[tid] == QuiescePending) {
-        ++fetchPendingQuiesceStallCycles;
+        ++fetchStats.pendingQuiesceStallCycles;
         DPRINTF(Fetch, "[tid:%i] Fetch is waiting for a pending quiesce "
                 "instruction!\n", tid);
     } else if (fetchStatus[tid] == IcacheWaitRetry) {
-        ++fetchIcacheWaitRetryStallCycles;
+        ++fetchStats.icacheWaitRetryStallCycles;
         DPRINTF(Fetch, "[tid:%i] Fetch is waiting for an I-cache retry!\n",
                 tid);
     } else if (fetchStatus[tid] == NoGoodAddr) {

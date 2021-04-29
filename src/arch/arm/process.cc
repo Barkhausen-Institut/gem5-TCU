@@ -55,20 +55,19 @@
 #include "sim/syscall_return.hh"
 #include "sim/system.hh"
 
-using namespace std;
 using namespace ArmISA;
 
-ArmProcess::ArmProcess(ProcessParams *params, ::Loader::ObjectFile *objFile,
-                       ::Loader::Arch _arch)
+ArmProcess::ArmProcess(const ProcessParams &params,
+                       ::Loader::ObjectFile *objFile, ::Loader::Arch _arch)
     : Process(params,
-              new EmulationPageTable(params->name, params->pid, PageBytes),
+              new EmulationPageTable(params.name, params.pid, PageBytes),
               objFile),
       arch(_arch)
 {
-    fatal_if(params->useArchPT, "Arch page tables not implemented.");
+    fatal_if(params.useArchPT, "Arch page tables not implemented.");
 }
 
-ArmProcess32::ArmProcess32(ProcessParams *params,
+ArmProcess32::ArmProcess32(const ProcessParams &params,
         ::Loader::ObjectFile *objFile, ::Loader::Arch _arch)
     : ArmProcess(params, objFile, _arch)
 {
@@ -78,13 +77,13 @@ ArmProcess32::ArmProcess32(ProcessParams *params,
     Addr next_thread_stack_base = stack_base - max_stack_size;
     Addr mmap_end = 0x40000000L;
 
-    memState = make_shared<MemState>(this, brk_point, stack_base,
-                                     max_stack_size, next_thread_stack_base,
-                                     mmap_end);
+    memState = std::make_shared<MemState>(
+            this, brk_point, stack_base, max_stack_size,
+            next_thread_stack_base, mmap_end);
 }
 
 ArmProcess64::ArmProcess64(
-        ProcessParams *params, ::Loader::ObjectFile *objFile,
+        const ProcessParams &params, ::Loader::ObjectFile *objFile,
         ::Loader::Arch _arch)
     : ArmProcess(params, objFile, _arch)
 {
@@ -94,9 +93,9 @@ ArmProcess64::ArmProcess64(
     Addr next_thread_stack_base = stack_base - max_stack_size;
     Addr mmap_end = 0x4000000000L;
 
-    memState = make_shared<MemState>(this, brk_point, stack_base,
-                                     max_stack_size, next_thread_stack_base,
-                                     mmap_end);
+    memState = std::make_shared<MemState>(
+            this, brk_point, stack_base, max_stack_size,
+            next_thread_stack_base, mmap_end);
 }
 
 void
@@ -104,8 +103,8 @@ ArmProcess32::initState()
 {
     Process::initState();
     argsInit<uint32_t>(PageBytes, INTREG_SP);
-    for (int i = 0; i < contextIds.size(); i++) {
-        ThreadContext * tc = system->getThreadContext(contextIds[i]);
+    for (auto id: contextIds) {
+        ThreadContext *tc = system->threads[id];
         CPACR cpacr = tc->readMiscReg(MISCREG_CPACR);
         // Enable the floating point coprocessors.
         cpacr.cp10 = 0x3;
@@ -123,8 +122,8 @@ ArmProcess64::initState()
 {
     Process::initState();
     argsInit<uint64_t>(PageBytes, INTREG_SP0);
-    for (int i = 0; i < contextIds.size(); i++) {
-        ThreadContext * tc = system->getThreadContext(contextIds[i]);
+    for (auto id: contextIds) {
+        ThreadContext *tc = system->threads[id];
         CPSR cpsr = tc->readMiscReg(MISCREG_CPSR);
         cpsr.mode = MODE_EL0T;
         tc->setMiscReg(MISCREG_CPSR, cpsr);
@@ -206,7 +205,7 @@ ArmProcess64::armHwcapImpl() const
 
     uint32_t hwcap = 0;
 
-    ThreadContext *tc = system->getThreadContext(contextIds[0]);
+    ThreadContext *tc = system->threads[contextIds[0]];
 
     const AA64PFR0 pf_r0 = tc->readMiscReg(MISCREG_ID_AA64PFR0_EL1);
 
@@ -257,7 +256,7 @@ ArmProcess::argsInit(int pageSize, IntRegIndex spIndex)
 
     std::vector<AuxVector<IntType>> auxv;
 
-    string filename;
+    std::string filename;
     if (argv.size() < 1)
         filename = "";
     else
@@ -318,7 +317,7 @@ ArmProcess::argsInit(int pageSize, IntRegIndex spIndex)
     // A sentry NULL void pointer at the top of the stack.
     int sentry_size = intSize;
 
-    string platform = "v71";
+    std::string platform = "v71";
     int platform_size = platform.size() + 1;
 
     // Bytes for AT_RANDOM above, we'll just keep them 0
@@ -435,13 +434,13 @@ ArmProcess::argsInit(int pageSize, IntRegIndex spIndex)
     auxv_array_end += sizeof(zero);
 
     copyStringArray(envp, envp_array_base, env_data_base,
-                    LittleEndianByteOrder, *initVirtMem);
+                    ByteOrder::little, *initVirtMem);
     copyStringArray(argv, argv_array_base, arg_data_base,
-                    LittleEndianByteOrder, *initVirtMem);
+                    ByteOrder::little, *initVirtMem);
 
     initVirtMem->writeBlob(argc_base, &guestArgc, intSize);
 
-    ThreadContext *tc = system->getThreadContext(contextIds[0]);
+    ThreadContext *tc = system->threads[contextIds[0]];
     //Set the stack pointer register
     tc->setIntReg(spIndex, memState->getStackMin());
     //A pointer to a function to run when the program exits. We'll set this
@@ -472,11 +471,3 @@ ArmProcess::argsInit(int pageSize, IntRegIndex spIndex)
     //Align the "stackMin" to a page boundary.
     memState->setStackMin(roundDown(memState->getStackMin(), pageSize));
 }
-
-const std::vector<int> ArmProcess32::SyscallABI::ArgumentRegs = {
-    0, 1, 2, 3, 4, 5, 6
-};
-
-const std::vector<int> ArmProcess64::SyscallABI::ArgumentRegs = {
-    0, 1, 2, 3, 4, 5, 6
-};

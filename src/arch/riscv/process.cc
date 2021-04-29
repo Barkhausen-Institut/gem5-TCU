@@ -54,19 +54,18 @@
 #include "sim/syscall_return.hh"
 #include "sim/system.hh"
 
-using namespace std;
 using namespace RiscvISA;
 
-RiscvProcess::RiscvProcess(ProcessParams *params,
+RiscvProcess::RiscvProcess(const ProcessParams &params,
         ::Loader::ObjectFile *objFile) :
         Process(params,
-                new EmulationPageTable(params->name, params->pid, PageBytes),
+                new EmulationPageTable(params.name, params.pid, PageBytes),
                 objFile)
 {
-    fatal_if(params->useArchPT, "Arch page tables not implemented.");
+    fatal_if(params.useArchPT, "Arch page tables not implemented.");
 }
 
-RiscvProcess64::RiscvProcess64(ProcessParams *params,
+RiscvProcess64::RiscvProcess64(const ProcessParams &params,
         ::Loader::ObjectFile *objFile) :
         RiscvProcess(params, objFile)
 {
@@ -75,11 +74,11 @@ RiscvProcess64::RiscvProcess64(ProcessParams *params,
     const Addr next_thread_stack_base = stack_base - max_stack_size;
     const Addr brk_point = roundUp(image.maxAddr(), PageBytes);
     const Addr mmap_end = 0x4000000000000000L;
-    memState = make_shared<MemState>(this, brk_point, stack_base,
+    memState = std::make_shared<MemState>(this, brk_point, stack_base,
             max_stack_size, next_thread_stack_base, mmap_end);
 }
 
-RiscvProcess32::RiscvProcess32(ProcessParams *params,
+RiscvProcess32::RiscvProcess32(const ProcessParams &params,
         ::Loader::ObjectFile *objFile) :
         RiscvProcess(params, objFile)
 {
@@ -88,7 +87,7 @@ RiscvProcess32::RiscvProcess32(ProcessParams *params,
     const Addr next_thread_stack_base = stack_base - max_stack_size;
     const Addr brk_point = roundUp(image.maxAddr(), PageBytes);
     const Addr mmap_end = 0x40000000L;
-    memState = make_shared<MemState>(this, brk_point, stack_base,
+    memState = std::make_shared<MemState>(this, brk_point, stack_base,
             max_stack_size, next_thread_stack_base, mmap_end);
 }
 
@@ -99,7 +98,7 @@ RiscvProcess64::initState()
 
     argsInit<uint64_t>(PageBytes);
     for (ContextID ctx: contextIds)
-        system->getThreadContext(ctx)->setMiscRegNoEffect(MISCREG_PRV, PRV_U);
+        system->threads[ctx]->setMiscRegNoEffect(MISCREG_PRV, PRV_U);
 }
 
 void
@@ -109,10 +108,11 @@ RiscvProcess32::initState()
 
     argsInit<uint32_t>(PageBytes);
     for (ContextID ctx: contextIds) {
-        system->getThreadContext(ctx)->setMiscRegNoEffect(MISCREG_PRV, PRV_U);
-        PCState pc = system->getThreadContext(ctx)->pcState();
+        auto *tc = system->threads[ctx];
+        tc->setMiscRegNoEffect(MISCREG_PRV, PRV_U);
+        PCState pc = tc->pcState();
         pc.rv32(true);
-        system->getThreadContext(ctx)->pcState(pc);
+        tc->pcState(pc);
     }
 }
 
@@ -128,13 +128,13 @@ RiscvProcess::argsInit(int pageSize)
     // Determine stack size and populate auxv
     Addr stack_top = memState->getStackMin();
     stack_top -= RandomBytes;
-    for (const string& arg: argv)
+    for (const std::string& arg: argv)
         stack_top -= arg.size() + 1;
-    for (const string& env: envp)
+    for (const std::string& env: envp)
         stack_top -= env.size() + 1;
     stack_top &= -addrSize;
 
-    vector<AuxVector<IntType>> auxv;
+    std::vector<AuxVector<IntType>> auxv;
     if (elfObject != nullptr) {
         auxv.emplace_back(M5_AT_ENTRY, objFile->entryPoint());
         auxv.emplace_back(M5_AT_PHNUM, elfObject->programHeaderCount());
@@ -156,18 +156,18 @@ RiscvProcess::argsInit(int pageSize)
     // Copy random bytes (for AT_RANDOM) to stack
     memState->setStackMin(memState->getStackMin() - RandomBytes);
     uint8_t at_random[RandomBytes];
-    generate(begin(at_random), end(at_random),
-             [&]{ return random_mt.random(0, 0xFF); });
+    std::generate(std::begin(at_random), std::end(at_random),
+                  [&]{ return random_mt.random(0, 0xFF); });
     initVirtMem->writeBlob(memState->getStackMin(), at_random, RandomBytes);
 
     // Copy argv to stack
-    vector<Addr> argPointers;
-    for (const string& arg: argv) {
+    std::vector<Addr> argPointers;
+    for (const std::string& arg: argv) {
         memState->setStackMin(memState->getStackMin() - (arg.size() + 1));
         initVirtMem->writeString(memState->getStackMin(), arg.c_str());
         argPointers.push_back(memState->getStackMin());
         if (DTRACE(Stack)) {
-            string wrote;
+            std::string wrote;
             initVirtMem->readString(wrote, argPointers.back());
             DPRINTFN("Wrote arg \"%s\" to address %p\n",
                     wrote, (void*)memState->getStackMin());
@@ -176,8 +176,8 @@ RiscvProcess::argsInit(int pageSize)
     argPointers.push_back(0);
 
     // Copy envp to stack
-    vector<Addr> envPointers;
-    for (const string& env: envp) {
+    std::vector<Addr> envPointers;
+    for (const std::string& env: envp) {
         memState->setStackMin(memState->getStackMin() - (env.size() + 1));
         initVirtMem->writeString(memState->getStackMin(), env.c_str());
         envPointers.push_back(memState->getStackMin());
@@ -221,7 +221,7 @@ RiscvProcess::argsInit(int pageSize)
     }
 
     // Push aux vector onto stack
-    std::map<IntType, string> aux_keys = {
+    std::map<IntType, std::string> aux_keys = {
         {M5_AT_ENTRY, "M5_AT_ENTRY"},
         {M5_AT_PHNUM, "M5_AT_PHNUM"},
         {M5_AT_PHENT, "M5_AT_PHENT"},
@@ -239,13 +239,9 @@ RiscvProcess::argsInit(int pageSize)
         pushOntoStack(aux.val);
     }
 
-    ThreadContext *tc = system->getThreadContext(contextIds[0]);
+    ThreadContext *tc = system->threads[contextIds[0]];
     tc->setIntReg(StackPointerReg, memState->getStackMin());
     tc->pcState(getStartPC());
 
     memState->setStackMin(roundDown(memState->getStackMin(), pageSize));
 }
-
-const std::vector<int> RiscvProcess::SyscallABI::ArgumentRegs = {
-    10, 11, 12, 13, 14, 15, 16
-};

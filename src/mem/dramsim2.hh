@@ -59,7 +59,7 @@ class DRAMSim2 : public AbstractMemory
      * having unbounded storage that is implicitly created in the port
      * itself.
      */
-    class MemoryPort : public SlavePort
+    class MemoryPort : public ResponsePort
     {
 
       private:
@@ -167,7 +167,7 @@ class DRAMSim2 : public AbstractMemory
   public:
 
     typedef DRAMSim2Params Params;
-    DRAMSim2(const Params *p);
+    DRAMSim2(const Params &p);
 
     /**
      * Read completion callback.

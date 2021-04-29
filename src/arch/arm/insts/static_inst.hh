@@ -45,6 +45,8 @@
 
 #include "arch/arm/faults.hh"
 #include "arch/arm/utility.hh"
+#include "arch/arm/isa.hh"
+#include "arch/arm/self_debug.hh"
 #include "arch/arm/system.hh"
 #include "base/trace.hh"
 #include "cpu/exec_context.hh"
@@ -195,8 +197,17 @@ class ArmStaticInst : public StaticInst
         pcState.advance();
     }
 
+    uint64_t getEMI() const override { return machInst; }
+
     std::string generateDisassembly(
             Addr pc, const Loader::SymbolTable *symtab) const override;
+
+    static void
+    activateBreakpoint(ThreadContext *tc)
+    {
+        SelfDebug *sd = ArmISA::ISA::getSelfDebug(tc);
+        sd->activateDebug();
+    }
 
     static inline uint32_t
     cpsrWriteByInstr(CPSR cpsr, uint32_t val, SCR scr, NSACR nsacr,
@@ -204,11 +215,13 @@ class ArmStaticInst : public StaticInst
     {
         bool privileged   = (cpsr.mode != MODE_USER);
         bool haveVirt     = ArmSystem::haveVirtualization(tc);
-        bool haveSecurity = ArmSystem::haveSecurity(tc);
-        bool isSecure     = inSecureState(scr, cpsr) || !haveSecurity;
+        bool isSecure     = ArmISA::isSecure(tc);
 
         uint32_t bitMask = 0;
 
+        if (affectState && byteMask==0xF){
+            activateBreakpoint(tc);
+        }
         if (bits(byteMask, 3)) {
             unsigned lowIdx = affectState ? 24 : 27;
             bitMask = bitMask | mask(31, lowIdx);
@@ -244,7 +257,7 @@ class ArmStaticInst : public StaticInst
                         validModeChange = false;
                     // There is no Hyp mode ('11010') in Secure state, so that
                     // is UNPREDICTABLE
-                    if (scr.ns == '0' && newMode == MODE_HYP)
+                    if (scr.ns == 0 && newMode == MODE_HYP)
                         validModeChange = false;
                     // Cannot move into Hyp mode directly from a Non-secure
                     // PL1 mode
@@ -474,11 +487,6 @@ class ArmStaticInst : public StaticInst
      * @param el Target EL for the trap.
      */
     Fault sveAccessTrap(ExceptionLevel el) const;
-
-    /**
-     * Check an SVE access against CPTR_EL2 and CPTR_EL3.
-     */
-    Fault checkSveTrap(ThreadContext *tc, CPSR cpsr) const;
 
     /**
      * Check an SVE access against CPACR_EL1, CPTR_EL2, and CPTR_EL3.

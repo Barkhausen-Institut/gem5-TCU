@@ -97,7 +97,7 @@ Tick
 StubSlavePort::recvAtomic(PacketPtr packet)
 {
     if (DTRACE(ExternalPort)) {
-        unsigned int M5_VAR_USED size = packet->getSize();
+        M5_VAR_USED unsigned int size = packet->getSize();
 
         DPRINTF(ExternalPort, "StubSlavePort: recvAtomic a: 0x%x size: %d"
             " data: ...\n", packet->getAddr(), size);
@@ -178,13 +178,13 @@ ExternalSlave::ExternalPort::getAddrRanges() const
     return owner.addrRanges;
 }
 
-ExternalSlave::ExternalSlave(ExternalSlaveParams *params) :
+ExternalSlave::ExternalSlave(const ExternalSlaveParams &params) :
     SimObject(params),
     externalPort(NULL),
-    portName(params->name + ".port"),
-    portType(params->port_type),
-    portData(params->port_data),
-    addrRanges(params->addr_ranges.begin(), params->addr_ranges.end())
+    portName(params.name + ".port"),
+    portType(params.port_type),
+    portData(params.port_data),
+    addrRanges(params.addr_ranges.begin(), params.addr_ranges.end())
 {
     /* Register the stub handler if it hasn't already been registered */
     if (portHandlers.find("stub") == portHandlers.end())
@@ -228,12 +228,6 @@ ExternalSlave::init()
     } else {
         externalPort->sendRangeChange();
     }
-}
-
-ExternalSlave *
-ExternalSlaveParams::create()
-{
-    return new ExternalSlave(this);
 }
 
 void

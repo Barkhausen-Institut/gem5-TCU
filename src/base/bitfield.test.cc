@@ -87,22 +87,22 @@ TEST(BitfieldTest, MaskAllBitsGreaterThan64)
  */
 TEST(BitfieldTest, MaskOneBit)
 {
-    EXPECT_EQ(1, mask(0,0));
+    EXPECT_EQ(1, mask(0, 0));
 }
 
 TEST(BitfieldTest, MaskTwoBits)
 {
-    EXPECT_EQ((1 << 1) + 1, mask(1,0));
+    EXPECT_EQ((1 << 1) + 1, mask(1, 0));
 }
 
 TEST(BitfieldTest, MaskThreeBits)
 {
-    EXPECT_EQ((1 << 5) + (1 << 4) + (1 << 3), mask(5,3));
+    EXPECT_EQ((1 << 5) + (1 << 4) + (1 << 3), mask(5, 3));
 }
 
 TEST(BitfieldTest, MaskEntireRange)
 {
-    EXPECT_EQ(0xFFFFFFFFFFFFFFFF, mask(63,0));
+    EXPECT_EQ(0xFFFFFFFFFFFFFFFF, mask(63, 0));
 }
 
 TEST(BitfieldTest, MaskOutsideOfRange)
@@ -288,24 +288,6 @@ TEST(BitfieldTest, FindLsb)
 TEST(BitfieldTest, FindLsbZero)
 {
     EXPECT_EQ(64, findLsbSet(0));
-}
-
-/* The following tests a simple function that verifies whether a value is a
- * a power of two or not.
- */
-TEST(BitfieldTest, IsPow2)
-{
-    EXPECT_TRUE(isPow2(32));
-}
-
-TEST(BitfieldTest, IsNotPow2)
-{
-    EXPECT_FALSE(isPow2(36));
-}
-
-TEST(BitfieldTest, IsPow2Zero)
-{
-    EXPECT_TRUE(isPow2(0));
 }
 
 /*

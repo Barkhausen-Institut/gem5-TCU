@@ -72,7 +72,7 @@ class Scratchpad : public AbstractMemory
 
   public:
 
-    Scratchpad(const ScratchpadParams* p);
+    Scratchpad(const ScratchpadParams &p);
 
     void init() override;
 

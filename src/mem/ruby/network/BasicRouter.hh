@@ -39,9 +39,8 @@
 class BasicRouter : public ClockedObject
 {
   public:
-    typedef BasicRouterParams Params;
-    BasicRouter(const Params *p);
-    const Params *params() const { return (const Params *)_params; }
+    PARAMS(BasicRouter);
+    BasicRouter(const Params &p);
 
     void init();
 

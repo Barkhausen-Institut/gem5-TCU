@@ -62,7 +62,7 @@ class X86Connector : public CoreConnector
 
   public:
 
-    X86Connector(const X86ConnectorParams *p);
+    X86Connector(const X86ConnectorParams &p);
 
     Port& getPort(const std::string &n, PortID idx) override;
 

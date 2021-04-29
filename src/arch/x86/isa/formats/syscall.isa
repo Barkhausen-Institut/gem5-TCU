@@ -54,7 +54,7 @@ output header {{
         }
 
         std::string generateDisassembly(Addr pc,
-                const Loader::SymbolTable *symtab) const;
+                const Loader::SymbolTable *symtab) const override;
     };
 }};
 
@@ -67,7 +67,7 @@ output decoder {{
 
         printMnemonic(response, mnemonic);
         ccprintf(response, " ");
-        printReg(response, _srcRegIdx[0], machInst.opSize);
+        printReg(response, srcRegIdx(0), machInst.opSize);
         return response.str();
     }
 }};

@@ -38,7 +38,7 @@ class TcuAccelConnector : public BaseConnector
 {
   public:
 
-    TcuAccelConnector(const TcuAccelConnectorParams *p);
+    TcuAccelConnector(const TcuAccelConnectorParams &p);
 
     void wakeup() override;
 

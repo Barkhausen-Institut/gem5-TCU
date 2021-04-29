@@ -64,8 +64,6 @@ SimplePoolManager::printRegion()
 bool
 SimplePoolManager::canAllocate(uint32_t numRegions, uint32_t size)
 {
-    assert(numRegions * minAllocatedElements(size) <= poolSize());
-
     return _reservedGroups == 0;
 }
 

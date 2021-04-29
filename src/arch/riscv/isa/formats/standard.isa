@@ -39,6 +39,9 @@ def template ImmDeclare {{
     //
     class %(class_name)s : public %(base_class)s
     {
+      private:
+        %(reg_idx_arr_decl)s;
+
       public:
         /// Constructor.
         %(class_name)s(MachInst machInst);
@@ -52,6 +55,7 @@ def template ImmConstructor {{
     %(class_name)s::%(class_name)s(MachInst machInst)
         : %(base_class)s("%(mnemonic)s", machInst, %(op_class)s)
     {
+        %(set_reg_idx_arr)s;
         %(constructor)s;
         %(imm_code)s;
     }
@@ -177,6 +181,9 @@ def template BranchDeclare {{
     //
     class %(class_name)s : public %(base_class)s
     {
+      private:
+        %(reg_idx_arr_decl)s;
+
       public:
         /// Constructor.
         %(class_name)s(MachInst machInst);
@@ -237,6 +244,9 @@ def template JumpDeclare {{
     //
     class %(class_name)s : public %(base_class)s
     {
+      private:
+        %(reg_idx_arr_decl)s;
+
       public:
         /// Constructor.
         %(class_name)s(MachInst machInst);
@@ -275,7 +285,7 @@ def template JumpExecute {{
     %(class_name)s::branchTarget(ThreadContext *tc) const
     {
         PCState pc = tc->pcState();
-        pc.set((tc->readIntReg(_srcRegIdx[0].index()) + imm)&~0x1);
+        pc.set((tc->readIntReg(srcRegIdx(0).index()) + imm)&~0x1);
         return pc;
     }
 
@@ -283,10 +293,13 @@ def template JumpExecute {{
     %(class_name)s::generateDisassembly(
             Addr pc, const Loader::SymbolTable *symtab) const
     {
-        std::vector<RegId> indices = {%(regs)s};
         std::stringstream ss;
         ss << mnemonic << ' ';
-        ss << registerName(indices[0]);
+        if (QUADRANT == 0x3)
+            ss << registerName(destRegIdx(0)) << ", "
+               << imm << "(" << registerName(srcRegIdx(0)) << ")";
+        else
+            ss << registerName(srcRegIdx(0));
         return ss.str();
     }
 }};
@@ -313,7 +326,7 @@ def template CSRExecute {{
             if (pm == PRV_U || (pm == PRV_S && status.tvm == 1)) {
                 std::string error = csprintf(
                     "SATP access in user mode or with TVM enabled\n");
-                fault = make_shared<IllegalInstFault>(error, machInst);
+                fault = std::make_shared<IllegalInstFault>(error, machInst);
                 olddata = 0;
             } else {
                 olddata = xc->readMiscReg(CSRData.at(csr).physIndex);
@@ -325,7 +338,7 @@ def template CSRExecute {{
             if (pm != PrivilegeMode::PRV_M) {
                 std::string error = csprintf(
                     "MSTATUS is only accessibly in machine mode\n");
-                fault = make_shared<IllegalInstFault>(error, machInst);
+                fault = std::make_shared<IllegalInstFault>(error, machInst);
                 olddata = 0;
             } else {
                 olddata = xc->readMiscReg(CSRData.at(csr).physIndex);
@@ -337,12 +350,13 @@ def template CSRExecute {{
                 olddata = xc->readMiscReg(CSRData.at(csr).physIndex);
             } else {
                 std::string error = csprintf("Illegal CSR index %#x\n", csr);
-                fault = make_shared<IllegalInstFault>(error, machInst);
+                fault = std::make_shared<IllegalInstFault>(error, machInst);
                 olddata = 0;
             }
             break;
         }
         auto mask = CSRMasks.find(csr);
+        auto olddata_all = olddata;
         if (mask != CSRMasks.end())
             olddata &= mask->second;
         DPRINTF(RiscvMisc, "Reading CSR %s: %#x\n", CSRData.at(csr).name,
@@ -358,27 +372,37 @@ def template CSRExecute {{
                     if (bits(csr, 11, 10) == 0x3) {
                         std::string error = csprintf("CSR %s is read-only\n",
                                                      CSRData.at(csr).name);
-                        fault = make_shared<IllegalInstFault>(error, machInst);
+                        fault = std::make_shared<IllegalInstFault>(
+                                error, machInst);
                     } else {
-                        DPRINTF(RiscvMisc, "Writing %#x to CSR %s.\n", data,
+                        auto newdata_all = data;
+                        if (mask != CSRMasks.end()) {
+                            // we must keep those original bits not in mask
+                            // olddata and data only contain thebits visable
+                            // in current privilige level
+                            newdata_all = (olddata_all & (~mask->second))
+                                          | data;
+                        }
+                        DPRINTF(RiscvMisc, "Writing %#x to CSR %s.\n",
+                                newdata_all,
                                 CSRData.at(csr).name);
-                        INTERRUPT oldinterrupt = olddata;
-                        INTERRUPT newinterrupt = data;
                         switch (csr) {
                           case CSR_FCSR:
                             xc->setMiscReg(MISCREG_FFLAGS, bits(data, 4, 0));
                             xc->setMiscReg(MISCREG_FRM, bits(data, 7, 5));
                             break;
                           case CSR_MIP: case CSR_MIE:
-                            if (oldinterrupt.mei == newinterrupt.mei &&
-                                oldinterrupt.mti == newinterrupt.mti &&
-                                oldinterrupt.msi == newinterrupt.msi) {
-                                xc->setMiscReg(CSRData.at(csr).physIndex,data);
+                          case CSR_SIP: case CSR_SIE:
+                          case CSR_UIP: case CSR_UIE:
+                          case CSR_MSTATUS: case CSR_SSTATUS: case CSR_USTATUS:
+                            if (newdata_all != olddata_all) {
+                                xc->setMiscReg(CSRData.at(csr).physIndex,
+                                               newdata_all);
                             } else {
-                                std::string error = "Interrupt m bits are "
-                                                    "read-only\n";
-                                fault = make_shared<IllegalInstFault>(error,
-                                                                     machInst);
+                                std::string error = "Only bits in mask are "
+                                                    "allowed to be set\n";
+                                fault = std::make_shared<IllegalInstFault>(
+                                        error, machInst);
                             }
                             break;
                           default:
@@ -406,7 +430,7 @@ def format ROp(code, *opt_flags) {{
 
 def format IOp(code, imm_type='int64_t', imm_code='imm = sext<12>(IMM12);',
               *opt_flags) {{
-    regs = ['_destRegIdx[0]','_srcRegIdx[0]']
+    regs = ['destRegIdx(0)','srcRegIdx(0)']
     iop = InstObjParams(name, Name, 'ImmOp<%s>' % imm_type,
         {'imm_code': imm_code, 'code': code,
          'regs': ','.join(regs)}, opt_flags)
@@ -417,7 +441,7 @@ def format IOp(code, imm_type='int64_t', imm_code='imm = sext<12>(IMM12);',
 }};
 
 def format FenceOp(code, imm_type='int64_t', *opt_flags) {{
-    regs = ['_destRegIdx[0]','_srcRegIdx[0]']
+    regs = ['destRegIdx(0)','srcRegIdx(0)']
     iop = InstObjParams(name, Name, 'ImmOp<%s>' % imm_type,
         {'code': code, 'imm_code': 'imm = sext<12>(IMM12);',
          'regs': ','.join(regs)}, opt_flags)
@@ -435,7 +459,7 @@ def format BOp(code, *opt_flags) {{
                       IMMSIGN << 12;
                 imm = sext<13>(imm);
                """
-    regs = ['_srcRegIdx[0]','_srcRegIdx[1]']
+    regs = ['srcRegIdx(0)','srcRegIdx(1)']
     iop = InstObjParams(name, Name, 'ImmOp<int64_t>',
         {'code': code, 'imm_code': imm_code,
          'regs': ','.join(regs)}, opt_flags)
@@ -446,7 +470,7 @@ def format BOp(code, *opt_flags) {{
 }};
 
 def format Jump(code, *opt_flags) {{
-    regs = ['_srcRegIdx[0]']
+    regs = ['srcRegIdx(0)']
     iop = InstObjParams(name, Name, 'ImmOp<int64_t>',
         {'code': code, 'imm_code': 'imm = sext<12>(IMM12);',
          'regs': ','.join(regs)}, opt_flags)
@@ -457,7 +481,7 @@ def format Jump(code, *opt_flags) {{
 }};
 
 def format UOp(code, *opt_flags) {{
-    regs = ['_destRegIdx[0]']
+    regs = ['destRegIdx(0)']
     iop = InstObjParams(name, Name, 'ImmOp<int64_t>',
         {'code': code, 'imm_code': 'imm = IMM20;',
          'regs': ','.join(regs)}, opt_flags)
@@ -476,7 +500,7 @@ def format JOp(code, *opt_flags) {{
                 imm = sext<21>(imm);
                """
     pc = 'pc.set(pc.pc() + imm);'
-    regs = ['_destRegIdx[0]']
+    regs = ['destRegIdx(0)']
     iop = InstObjParams(name, Name, 'ImmOp<int64_t>',
         {'code': code, 'imm_code': imm_code,
          'regs': ','.join(regs)}, opt_flags)

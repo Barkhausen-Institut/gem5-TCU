@@ -105,7 +105,7 @@ class Pipeline : public Ticked
     bool needToSignalDrained;
 
   public:
-    Pipeline(MinorCPU &cpu_, MinorCPUParams &params);
+    Pipeline(MinorCPU &cpu_, const MinorCPUParams &params);
 
   public:
     /** Wake up the Fetch unit.  This is needed on thread activation esp.
@@ -125,9 +125,6 @@ class Pipeline : public Ticked
     void evaluate() override;
 
     void minorTrace() const;
-
-    /** Stats registering */
-    void regStats();
 
     /** Functions below here are BaseCPU operations passed on to pipeline
      *  stages */

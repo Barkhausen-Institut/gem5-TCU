@@ -114,7 +114,7 @@ class BaseTags : public ClockedObject
 
         BaseTags &tags;
 
-        /** Per cycle average of the number of tags that hold valid data. */
+        /** Per tick average of the number of tags that hold valid data. */
         Stats::Average tagsInUse;
 
         /** The total number of references to a block before it is replaced. */
@@ -133,8 +133,8 @@ class BaseTags : public ClockedObject
          */
         Stats::Formula avgRefs;
 
-        /** The cycle that the warmup percentage was hit. 0 on failure. */
-        Stats::Scalar warmupCycle;
+        /** The tick that the warmup percentage was hit. 0 on failure. */
+        Stats::Scalar warmupTick;
 
         /** Average occupancy of each requestor using the cache */
         Stats::AverageVector occupancies;
@@ -148,8 +148,8 @@ class BaseTags : public ClockedObject
         /** Occupancy of each context/cpu using the cache */
         Stats::Vector2d ageTaskId;
 
-        /** Occ % of each context/cpu using the cache */
-        Stats::Formula percentOccsTaskId;
+        /** Occ ratio of each context/cpu using the cache */
+        Stats::Formula ratioOccsTaskId;
 
         /** Number of tags consulted over all accesses. */
         Stats::Scalar tagAccesses;
@@ -159,7 +159,7 @@ class BaseTags : public ClockedObject
 
   public:
     typedef BaseTagsParams Params;
-    BaseTags(const Params *p);
+    BaseTags(const Params &p);
 
     /**
      * Destructor.
@@ -256,8 +256,8 @@ class BaseTags : public ClockedObject
         assert(blk);
         assert(blk->isValid());
 
-        stats.occupancies[blk->srcMasterId]--;
-        stats.totalRefs += blk->refCount;
+        stats.occupancies[blk->getSrcRequestorId()]--;
+        stats.totalRefs += blk->getRefCount();
         stats.sampledRefs++;
 
         blk->invalidate();
@@ -312,6 +312,16 @@ class BaseTags : public ClockedObject
     virtual void insertBlock(const PacketPtr pkt, CacheBlk *blk);
 
     /**
+     * Move a block's metadata to another location decided by the replacement
+     * policy. It behaves as a swap, however, since the destination block
+     * should be invalid, the result is a move.
+     *
+     * @param src_blk The source block.
+     * @param dest_blk The destination block. Must be invalid.
+     */
+    virtual void moveBlock(CacheBlk *src_blk, CacheBlk *dest_blk);
+
+    /**
      * Regenerate the block address.
      *
      * @param block The block.
@@ -354,14 +364,6 @@ class BaseTags : public ClockedObject
      * @param blk The input block
      */
     void computeStatsVisitor(CacheBlk &blk);
-};
-
-class BaseTagsCallback : public Callback
-{
-    BaseTags *tags;
-  public:
-    BaseTagsCallback(BaseTags *t) : tags(t) {}
-    virtual void process() { tags->cleanupRefs(); };
 };
 
 #endif //__MEM_CACHE_TAGS_BASE_HH__

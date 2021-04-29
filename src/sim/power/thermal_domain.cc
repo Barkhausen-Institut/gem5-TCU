@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 ARM Limited
+ * Copyright (c) 2015, 2021 Arm Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -48,13 +48,16 @@
 #include "sim/probe/probe.hh"
 #include "sim/sub_system.hh"
 
-ThermalDomain::ThermalDomain(const Params *p)
-    : SimObject(p), _initTemperature(p->initial_temperature),
-    node(NULL), subsystem(NULL)
+ThermalDomain::ThermalDomain(const Params &p)
+    : SimObject(p), _initTemperature(p.initial_temperature),
+    node(NULL), subsystem(NULL),
+    ADD_STAT(currentTemp, UNIT_CELSIUS, "Temperature")
 {
+    currentTemp
+        .functor([this]() { return currentTemperature().toCelsius(); });
 }
 
-double
+Temperature
 ThermalDomain::currentTemperature() const
 {
     return node->temp;
@@ -66,44 +69,14 @@ ThermalDomain::setSubSystem(SubSystem * ss)
     assert(!this->subsystem);
     this->subsystem = ss;
 
-    ppThermalUpdate = new ProbePointArg<double>(subsystem->getProbeManager(),
-                                                "thermalUpdate");
-}
-
-void
-ThermalDomain::regStats()
-{
-    SimObject::regStats();
-
-    currentTemp
-        .method(this, &ThermalDomain::currentTemperature)
-        .name(params()->name + ".temp")
-        .desc("Temperature in centigrate degrees")
-        ;
+    ppThermalUpdate = new ProbePointArg<Temperature>(
+        subsystem->getProbeManager(), "thermalUpdate");
 }
 
 void
 ThermalDomain::emitUpdate()
 {
     ppThermalUpdate->notify(node->temp);
-}
-
-ThermalDomain *
-ThermalDomainParams::create()
-{
-    return new ThermalDomain(this);
-}
-
-void
-ThermalDomain::serialize(CheckpointOut &cp) const
-{
-    SERIALIZE_SCALAR(_initTemperature);
-}
-
-void
-ThermalDomain::unserialize(CheckpointIn &cp)
-{
-    UNSERIALIZE_SCALAR(_initTemperature);
 }
 
 

@@ -31,11 +31,12 @@
 #include "debug/TcuSlavePort.hh"
 #include "debug/TcuMasterPort.hh"
 #include "debug/Tcu.hh"
+#include "base/trace.hh"
 #include "mem/tcu/base.hh"
 #include "mem/tcu/noc_addr.hh"
 
 BaseTcu::TcuMasterPort::TcuMasterPort(const std::string& _name, BaseTcu& _tcu)
-  : QueuedMasterPort(_name, &_tcu, reqQueue, snoopRespQueue),
+  : QueuedRequestPort(_name, &_tcu, reqQueue, snoopRespQueue),
     tcu(_tcu),
     reqQueue(_tcu, *this),
     snoopRespQueue(_tcu, *this)
@@ -268,7 +269,7 @@ BaseTcu::CacheMemSlavePort::getAddrRanges() const
     return ranges;
 }
 
-BaseTcu::BaseTcu(BaseTcuParams* p)
+BaseTcu::BaseTcu(const BaseTcuParams &p)
   : ClockedObject(p),
     nocMasterPort(*this),
     nocSlavePort(*this),
@@ -277,11 +278,11 @@ BaseTcu::BaseTcu(BaseTcuParams* p)
     icacheSlavePort(icacheMasterPort, *this, true),
     dcacheSlavePort(dcacheMasterPort, *this, false),
     cacheMemSlavePort(*this),
-    caches(p->caches),
+    caches(p.caches),
     nocReqFinishedEvent(*this),
-    peId(p->pe_id),
-    mmioRegion(p->mmio_region),
-    slaveRegion(p->slave_region)
+    peId(p.pe_id),
+    mmioRegion(p.mmio_region),
+    slaveRegion(p.slave_region)
 {
 }
 

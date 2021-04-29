@@ -69,8 +69,6 @@ class NopStaticInst : public StaticInst
 StaticInstPtr StaticInst::nullStaticInstPtr;
 StaticInstPtr StaticInst::nopStaticInstPtr = new NopStaticInst;
 
-using namespace std;
-
 StaticInst::~StaticInst()
 {
     if (cachedDisassembly)
@@ -106,7 +104,6 @@ StaticInst::branchTarget(const TheISA::PCState &pc) const
 {
     panic("StaticInst::branchTarget() called on instruction "
           "that is not a PC-relative branch.");
-    M5_DUMMY_RETURN;
 }
 
 TheISA::PCState
@@ -114,14 +111,13 @@ StaticInst::branchTarget(ThreadContext *tc) const
 {
     panic("StaticInst::branchTarget() called on instruction "
           "that is not an indirect branch.");
-    M5_DUMMY_RETURN;
 }
 
-const string &
+const std::string &
 StaticInst::disassemble(Addr pc, const Loader::SymbolTable *symtab) const
 {
     if (!cachedDisassembly)
-        cachedDisassembly = new string(generateDisassembly(pc, symtab));
+        cachedDisassembly = new std::string(generateDisassembly(pc, symtab));
 
     return *cachedDisassembly;
 }

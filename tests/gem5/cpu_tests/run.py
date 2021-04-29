@@ -119,6 +119,8 @@ args = parser.parse_args()
 
 system = System()
 
+system.workload = SEWorkload.init_compatible(args.binary)
+
 system.clk_domain = SrcClockDomain()
 system.clk_domain.clock = '1GHz'
 system.clk_domain.voltage_domain = VoltageDomain()

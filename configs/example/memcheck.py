@@ -36,9 +36,6 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from __future__ import print_function
-from __future__ import absolute_import
-
 import optparse
 import random
 import sys
@@ -217,7 +214,7 @@ cfg_file.close()
 proto_tester = TrafficGen(config_file = cfg_file_path)
 
 # Set up the system along with a DRAM controller
-system = System(physmem = DDR3_1600_8x8())
+system = System(physmem = MemCtrl(dram = DDR3_1600_8x8()))
 
 system.voltage_domain = VoltageDomain(voltage = '1V')
 

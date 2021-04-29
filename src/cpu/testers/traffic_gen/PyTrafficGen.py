@@ -1,4 +1,4 @@
-# Copyright (c) 2018 ARM Limited
+# Copyright (c) 2018-2020 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -58,6 +58,9 @@ class PyTrafficGen(BaseTrafficGen):
         PyBindMethod("createRandom"),
         PyBindMethod("createDram"),
         PyBindMethod("createDramRot"),
+        PyBindMethod("createHybrid"),
+        PyBindMethod("createNvm"),
+        PyBindMethod("createStrided")
     ]
 
     @cxxMethod(override=True)

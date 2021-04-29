@@ -39,10 +39,10 @@
 
 #include "params/GenericArmPciHost.hh"
 
-GenericArmPciHost::GenericArmPciHost(const GenericArmPciHostParams *p)
+GenericArmPciHost::GenericArmPciHost(const GenericArmPciHostParams &p)
     : GenericPciHost(p),
-      intPolicy(p->int_policy), intBase(p->int_base),
-      intCount(p->int_count)
+      intPolicy(p.int_policy), intBase(p.int_base),
+      intCount(p.int_count)
 {
 }
 
@@ -67,11 +67,4 @@ GenericArmPciHost::mapPciInterrupt(const PciBusAddr &addr, PciIntPin pin) const
       default:
         fatal("Unsupported PCI interrupt routing policy.");
     }
-}
-
-
-GenericArmPciHost *
-GenericArmPciHostParams::create()
-{
-    return new GenericArmPciHost(this);
 }

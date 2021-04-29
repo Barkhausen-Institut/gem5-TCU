@@ -31,6 +31,7 @@
 
 #include <deque>
 
+#include "base/bitunion.hh"
 #include "dev/intpin.hh"
 #include "dev/io_device.hh"
 #include "dev/ps2/device.hh"
@@ -116,15 +117,9 @@ class I8042 : public BasicPioDevice
     uint8_t readDataOut();
 
   public:
-    typedef I8042Params Params;
+    using Params = I8042Params;
 
-    const Params *
-    params() const
-    {
-        return dynamic_cast<const Params *>(_params);
-    }
-
-    I8042(Params *p);
+    I8042(const Params &p);
 
     Port &
     getPort(const std::string &if_name, PortID idx=InvalidPortID) override

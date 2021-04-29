@@ -40,6 +40,7 @@ Import('*')
 if env['TARGET_ISA'] == 'arm':
     SimObject('AbstractNVM.py')
     SimObject('Display.py')
+    SimObject('Doorbell.py')
     SimObject('FlashDevice.py')
     SimObject('GenericTimer.py')
     SimObject('Gic.py')
@@ -77,9 +78,10 @@ if env['TARGET_ISA'] == 'arm':
     Source('smmu_v3_ports.cc');
     Source('smmu_v3_proc.cc');
     Source('smmu_v3_ptops.cc');
-    Source('smmu_v3_slaveifc.cc');
+    Source('smmu_v3_deviceifc.cc');
     Source('smmu_v3_transl.cc');
     Source('timer_sp804.cc')
+    Source('watchdog_generic.cc')
     Source('watchdog_sp805.cc')
     Source('gpu_nomali.cc')
     Source('pci_host.cc')
@@ -87,7 +89,6 @@ if env['TARGET_ISA'] == 'arm':
     Source('realview.cc')
     Source('rtc_pl031.cc')
     Source('timer_cpulocal.cc')
-    Source('timer_a9global.cc')
     Source('vgic.cc')
     Source('vio_mmio.cc')
     Source('ufs_device.cc')

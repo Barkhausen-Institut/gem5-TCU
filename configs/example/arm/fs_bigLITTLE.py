@@ -1,4 +1,4 @@
-# Copyright (c) 2016-2017, 2019 ARM Limited
+# Copyright (c) 2016-2017, 2019-2021 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -36,10 +36,6 @@
 # This is an example configuration script for full system simulation of
 # a generic ARM bigLITTLE system.
 
-
-from __future__ import print_function
-from __future__ import absolute_import
-
 import argparse
 import os
 import sys
@@ -60,7 +56,6 @@ from devices import AtomicCluster, KvmCluster, FastmodelCluster
 
 
 default_disk = 'aarch64-ubuntu-trusty-headless.img'
-default_rcs = 'bootscript.rcS'
 
 default_mem_size= "2GB"
 
@@ -124,7 +119,7 @@ def createSystem(caches, kernel, bootscript, machine_type="VExpress_GEM5",
                                    object_file=SysPaths.binary(kernel)),
                                readfile=bootscript)
 
-    sys.mem_ctrls = [ SimpleMemory(range=r, port=sys.membus.master)
+    sys.mem_ctrls = [ SimpleMemory(range=r, port=sys.membus.mem_side_ports)
                       for r in sys.mem_ranges ]
 
     sys.connect()
@@ -175,7 +170,7 @@ def addOptions(parser):
                         help="Hardware platform class")
     parser.add_argument("--disk", action="append", type=str, default=[],
                         help="Disks to instantiate")
-    parser.add_argument("--bootscript", type=str, default=default_rcs,
+    parser.add_argument("--bootscript", type=str, default="",
                         help="Linux bootscript")
     parser.add_argument("--cpu-type", type=str, choices=list(cpu_types.keys()),
                         default="timing",
@@ -213,13 +208,16 @@ def addOptions(parser):
              "only parameters of its children.")
     parser.add_argument("--vio-9p", action="store_true",
                         help=Options.vio_9p_help)
+    parser.add_argument("--dtb-gen", action="store_true",
+                        help="Doesn't run simulation, it generates a DTB only")
     return parser
 
 def build(options):
     m5.ticks.fixGlobalFrequency()
 
     kernel_cmd = [
-        "earlyprintk=pl011,0x1c090000",
+        "earlyprintk",
+        "earlycon=pl011,0x1c090000",
         "console=ttyAMA0",
         "lpj=19988480",
         "norandmaps",
@@ -366,6 +364,10 @@ def run(checkpoint_dir=m5.options.outdir):
     sys.exit(event.getCode())
 
 
+def generateDtb(root):
+    root.system.generateDtb(os.path.join(m5.options.outdir, "system.dtb"))
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Generic ARM big.LITTLE configuration")
@@ -374,7 +376,10 @@ def main():
     root = build(options)
     root.apply_config(options.param)
     instantiate(options)
-    run()
+    if options.dtb_gen:
+      generateDtb(root)
+    else:
+      run()
 
 
 if __name__ == "__m5_main__":

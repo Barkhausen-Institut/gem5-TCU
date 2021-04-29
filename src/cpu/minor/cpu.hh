@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2014 ARM Limited
+ * Copyright (c) 2012-2014, 2020 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -95,7 +95,7 @@ class MinorCPU : public BaseCPU
   public:
     /** Provide a non-protected base class for Minor's Ports as derived
      *  classes are created by Fetch1 and Execute */
-    class MinorCPUPort : public MasterPort
+    class MinorCPUPort : public RequestPort
     {
       public:
         /** The enclosing cpu */
@@ -103,7 +103,7 @@ class MinorCPU : public BaseCPU
 
       public:
         MinorCPUPort(const std::string& name_, MinorCPU &cpu_)
-            : MasterPort(name_, &cpu_), cpu(cpu_)
+            : RequestPort(name_, &cpu_), cpu(cpu_)
         { }
 
     };
@@ -118,7 +118,7 @@ class MinorCPU : public BaseCPU
     Port &getInstPort() override;
 
   public:
-    MinorCPU(MinorCPUParams *params);
+    MinorCPU(const MinorCPUParams &params);
 
     ~MinorCPU();
 
@@ -181,11 +181,18 @@ class MinorCPU : public BaseCPU
         return prio_list;
     }
 
+    /** The tick method in the MinorCPU is simply updating the cycle
+     * counters as the ticking of the pipeline stages is already
+     * handled by the Pipeline object.
+     */
+    void tick() { updateCycleCounters(BaseCPU::CPU_STATE_ON); }
+
     /** Interface for stages to signal that they have become active after
      *  a callback or eventq event where the pipeline itself may have
      *  already been idled.  The stage argument should be from the
      *  enumeration Pipeline::StageId */
     void wakeupOnEvent(unsigned int stage_id);
+    EventFunctionWrapper *fetchEventWrapper;
 };
 
 #endif /* __CPU_MINOR_CPU_HH__ */

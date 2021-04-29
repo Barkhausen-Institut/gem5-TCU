@@ -41,15 +41,15 @@
 #include "dev/tcu/pci_proxy.hh"
 #include "dev/pci/device.hh"
 
-TcuPciHost::TcuPciHost(const TcuPciHostParams* p)
+TcuPciHost::TcuPciHost(const TcuPciHostParams &p)
     : PciHost(p),
-      pciProxy(p->pci_proxy),
-      confBase(p->conf_base),
-      confSize(p->conf_size),
-      confDeviceBits(p->conf_device_bits),
-      pciPioBase(p->pci_pio_base),
-      pciMemBase(p->pci_mem_base),
-      pciDmaBase(p->pci_dma_base)
+      pciProxy(p.pci_proxy),
+      confBase(p.conf_base),
+      confSize(p.conf_size),
+      confDeviceBits(p.conf_device_bits),
+      pciPioBase(p.pci_pio_base),
+      pciMemBase(p.pci_mem_base),
+      pciDmaBase(p.pci_dma_base)
 {
     pciProxy->setPciHost(this);
 }
@@ -128,10 +128,4 @@ void
 TcuPciHost::clearInt(const PciBusAddr& addr, PciIntPin pin)
 {
     // We don't care
-}
-
-TcuPciHost*
-TcuPciHostParams::create()
-{
-    return new TcuPciHost(this);
 }

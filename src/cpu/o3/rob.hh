@@ -85,7 +85,7 @@ class ROB
      *  @param _cpu   The cpu object pointer.
      *  @param params The cpu params including several ROB-specific parameters.
      */
-    ROB(O3CPU *_cpu, DerivO3CPUParams *params);
+    ROB(O3CPU *_cpu, const DerivO3CPUParams &params);
 
     std::string name() const;
 
@@ -257,9 +257,6 @@ class ROB
      */
     size_t countInsts(ThreadID tid);
 
-    /** Registers statistics. */
-    void regStats();
-
   private:
     /** Reset the ROB state */
     void resetState();
@@ -323,10 +320,15 @@ class ROB
     /** Number of active threads. */
     ThreadID numThreads;
 
-    // The number of rob_reads
-    Stats::Scalar robReads;
-    // The number of rob_writes
-    Stats::Scalar robWrites;
+
+    struct ROBStats : public Stats::Group {
+        ROBStats(Stats::Group *parent);
+
+        // The number of rob_reads
+        Stats::Scalar reads;
+        // The number of rob_writes
+        Stats::Scalar writes;
+    } stats;
 };
 
 #endif //__CPU_O3_ROB_HH__

@@ -29,7 +29,6 @@
 import optparse
 import sys
 import os
-import ConfigParser
 
 import m5
 from m5.defines import buildEnv
@@ -140,7 +139,7 @@ def getOptions():
     options.mem_watches = {}
 
     if args:
-        print "Error: script doesn't take any positional arguments"
+        print("Error: script doesn't take any positional arguments")
         sys.exit(1)
 
     return options
@@ -151,19 +150,19 @@ def getCacheStr(cache):
     )
 
 def printConfig(pe, tcupos):
-    print '      TCU  =eps:%d, bufsz:%d B, blocksz:%d B, count:%d, tlb:%d' % \
+    print('      TCU  =eps:%d, bufsz:%d B, blocksz:%d B, count:%d, tlb:%d' % \
         (pe.tcu.num_endpoints, pe.tcu.buf_size.value, pe.tcu.block_size.value,
-         pe.tcu.buf_count, pe.tcu.tlb_entries)
+         pe.tcu.buf_count, pe.tcu.tlb_entries))
 
     try:
-        print '      L1i$ =%s' % (getCacheStr(pe.l1icache))
-        print '      L1d$ =%s' % (getCacheStr(pe.l1dcache))
+        print('      L1i$ =%s' % (getCacheStr(pe.l1icache)))
+        print('      L1d$ =%s' % (getCacheStr(pe.l1dcache)))
         try:
-            print '      L2$  =%s' % (getCacheStr(pe.l2cache))
+            print('      L2$  =%s' % (getCacheStr(pe.l2cache)))
         except:
             pass
         try:
-            print '      IO$  =%s' % (getCacheStr(pe.iocache))
+            print('      IO$  =%s' % (getCacheStr(pe.iocache)))
         except:
             pass
 
@@ -178,20 +177,20 @@ def printConfig(pe, tcupos):
             str += ' -> L2$'
         if tcupos == 2:
             str += ' -> IO$ -> TCU'
-        print str
+        print(str)
     except:
         try:
-            print '      imem =%d KiB' % (int(pe.spm.range.end) / 1024)
-            print '      Comp =Core -> TCU -> SPM'
+            print('      imem =%d KiB' % (int(pe.spm.range.end) / 1024))
+            print('      Comp =Core -> TCU -> SPM')
         except:
             pass
 
 def interpose(pe, options, name, port):
-    if options.mem_watches.has_key(int(pe.pe_id)):
+    if int(pe.pe_id) in options.mem_watches:
         watch = options.mem_watches[int(pe.pe_id)]
         mon = CommMonitor()
         mon.trace = MemWatchProbe(probe_name="PktResponse", ranges=watch)
-        mon.slave = port
+        mon.cpu_side_ports = port
         setattr(pe, name, mon)
         return mon.master
     return port
@@ -208,8 +207,8 @@ def connectTcuToMem(pe, options, l1size, tcupos):
         else:
             pe.iocache.cpu_side = dport
     else:
-        pe.xbar.slave = iport
-        pe.xbar.slave = dport
+        pe.xbar.cpu_side_ports = iport
+        pe.xbar.cpu_side_ports = dport
 
 def connectCuToMem(pe, options, dport, iport=None, l1size=None, tcupos=0):
     dport = interpose(pe, options, 'cu_dmon', dport)
@@ -251,8 +250,8 @@ def createPE(noc, options, no, systemType, l1size, l2size, spmsize, tcupos, memP
         pe.tcu.tlb_entries = 128
 
     # connection to noc
-    pe.tcu.noc_master_port = noc.slave
-    pe.tcu.noc_slave_port  = noc.master
+    pe.tcu.noc_master_port = noc.cpu_side_ports
+    pe.tcu.noc_slave_port  = noc.mem_side_ports
 
     pe.tcu.slave_region = [AddrRange(0, pe.tcu.mmio_region.start - 1)]
 
@@ -288,15 +287,15 @@ def createPE(noc, options, no, systemType, l1size, l2size, spmsize, tcupos, memP
             # use a crossbar to connect l1icache and l1dcache to l2cache
             pe.tol2bus = L2XBar()
             pe.l2cache.cpu_side = pe.tol2bus.default
-            pe.l2cache.mem_side = pe.xbar.slave
+            pe.l2cache.mem_side = pe.xbar.cpu_side_ports
 
-            pe.l1icache.mem_side = pe.tol2bus.slave
-            pe.l1dcache.mem_side = pe.tol2bus.slave
+            pe.l1icache.mem_side = pe.tol2bus.cpu_side_ports
+            pe.l1dcache.mem_side = pe.tol2bus.cpu_side_ports
         else:
             pe.l1dcache.prefetcher = StridePrefetcher(degree = 16)
 
-            pe.l1icache.mem_side = pe.xbar.slave
-            pe.l1dcache.mem_side = pe.xbar.slave
+            pe.l1icache.mem_side = pe.xbar.cpu_side_ports
+            pe.l1dcache.mem_side = pe.xbar.cpu_side_ports
 
         if tcupos > 0:
             pe.iocache = L1_DCache(size='8kB')
@@ -305,9 +304,9 @@ def createPE(noc, options, no, systemType, l1size, l2size, spmsize, tcupos, memP
             pe.iocache.response_latency = 4
             pe.tcu.caches.append(pe.iocache)
             if not l2size is None and tcupos == 1:
-                pe.iocache.mem_side = pe.tol2bus.slave
+                pe.iocache.mem_side = pe.tol2bus.cpu_side_ports
             else:
-                pe.iocache.mem_side = pe.xbar.slave
+                pe.iocache.mem_side = pe.xbar.cpu_side_ports
 
         # the TCU handles LLC misses
         pe.tcu.cache_mem_slave_port = pe.xbar.default
@@ -345,7 +344,7 @@ def createPE(noc, options, no, systemType, l1size, l2size, spmsize, tcupos, memP
 
     connectTcuToMem(pe, options, l1size, tcupos)
 
-    pe.system_port = pe.xbar.slave
+    pe.system_port = pe.xbar.cpu_side_ports
 
     return pe
 
@@ -372,7 +371,7 @@ def createCorePE(noc, options, no, cmdline, memPE, epCount,
     pe.readfile = "/dev/stdin"
 
     # connection to the NoC for initialization
-    pe.noc_master_port = noc.slave
+    pe.noc_master_port = noc.cpu_side_ports
 
     pe.cpu = CPUClass()
     pe.cpu.cpu_id = 0
@@ -384,7 +383,7 @@ def createCorePE(noc, options, no, cmdline, memPE, epCount,
 
     # cache misses to MMIO region go to TCU
     if not l1size is None and tcupos > 0:
-        pe.tcu.dcache_slave_port = pe.xbar.master
+        pe.tcu.dcache_slave_port = pe.xbar.mem_side_ports
         pe.tcu.slave_region = [pe.tcu.mmio_region]
 
     if "kernel" in cmdline:
@@ -396,27 +395,27 @@ def createCorePE(noc, options, no, cmdline, memPE, epCount,
     if options.isa == 'riscv':
         pe.workload = RiscvBareMetal(bootloader = cmdline.split(' ')[0])
     elif options.isa == 'arm':
-        pe.workload = ArmFsWorkload(object_file = cmdline.split(' ')[0],
-                                    atags_addr=0)
+        pe.workload = ArmFsWorkload(object_file = cmdline.split(' ')[0])
+        pe.highest_el_is_64 = False
     else:
         pe.workload = X86FsWorkload(object_file = cmdline.split(' ')[0])
     pe.cmdline = cmdline
 
-    print "PE%02d: %s" % (no, cmdline)
-    print '      Core =%s %s @ %s' % (type(pe.cpu), options.isa, options.cpu_clock)
+    print("PE%02d: %s" % (no, cmdline))
+    print('      Core =%s %s @ %s' % (type(pe.cpu), options.isa, options.cpu_clock))
     printConfig(pe, tcupos)
 
     # if specified, let this PE wait for GDB
     if options.pausepe == no:
-        print '      waiting for GDB'
+        print('      waiting for GDB')
         pe.cpu.wait_for_remote_gdb = True
 
-    print
+    print()
 
     # connect the IO space via bridge to the root NoC
     pe.bridge = Bridge(delay='50ns')
-    pe.bridge.master = noc.slave
-    pe.bridge.slave = pe.xbar.master
+    pe.bridge.mem_side_port = noc.cpu_side_ports
+    pe.bridge.cpu_side_port = pe.xbar.mem_side_ports
     pe.bridge.ranges = \
         [
         AddrRange(IO_address_space_base,
@@ -428,28 +427,27 @@ def createCorePE(noc, options, no, cmdline, memPE, epCount,
     #     pe.pc = Pc()
     #     pe.intrctrl = IntrControl()
     #     pe.iobus = IOXBar()
-    #     pe.xbar.master = pe.iobus.slave
+    #     pe.xbar.mem_side_ports = pe.iobus.cpu_side_ports
     #     pe.pc.attachIO(pe.iobus)
 
     pe.cpu.createThreads()
     pe.cpu.createInterruptController()
 
     if options.isa == 'x86_64':
-        pe.cpu.interrupts[0].pio = pe.xbar.master
+        pe.cpu.interrupts[0].pio = pe.xbar.mem_side_ports
         pe.cpu.interrupts[0].int_slave = pe.tcu.connector.irq_master_port
-        pe.cpu.interrupts[0].int_master = pe.xbar.slave
+        pe.cpu.interrupts[0].int_master = pe.xbar.cpu_side_ports
 
     pe.cpu.itb_walker_cache = PageTableWalkerCache()
     pe.cpu.dtb_walker_cache = PageTableWalkerCache()
-    pe.cpu.itb.walker.port = pe.cpu.itb_walker_cache.cpu_side
-    pe.cpu.dtb.walker.port = pe.cpu.dtb_walker_cache.cpu_side
+    pe.cpu.mmu.connectWalkerPorts(pe.cpu.itb_walker_cache.cpu_side, pe.cpu.dtb_walker_cache.cpu_side)
 
     if not l2size is None:
-        pe.cpu.itb_walker_cache.mem_side = pe.tol2bus.slave
-        pe.cpu.dtb_walker_cache.mem_side = pe.tol2bus.slave
+        pe.cpu.itb_walker_cache.mem_side = pe.tol2bus.cpu_side_ports
+        pe.cpu.dtb_walker_cache.mem_side = pe.tol2bus.cpu_side_ports
     else:
-        pe.cpu.itb_walker_cache.mem_side = pe.xbar.slave
-        pe.cpu.dtb_walker_cache.mem_side = pe.xbar.slave
+        pe.cpu.itb_walker_cache.mem_side = pe.xbar.cpu_side_ports
+        pe.cpu.dtb_walker_cache.mem_side = pe.xbar.cpu_side_ports
 
     return pe
 
@@ -469,7 +467,7 @@ def createDevicePE(noc, options, no, memPE, epCount):
                                          voltage_domain=pe.voltage_domain)
 
     connectCuToMem(pe, options, pe.proxy.tcu_master_port)
-    pe.proxy.tcu_slave_port = pe.xbar.master
+    pe.proxy.tcu_slave_port = pe.xbar.mem_side_ports
 
     # for the PCI config space
     pe.pci_host = TcuPciHost()
@@ -481,13 +479,13 @@ def createDevicePE(noc, options, no, memPE, epCount):
     pe.iobus = IOXBar()
     # I/O bridge for requests from the host to the device
     pe.iobridge = Bridge(delay='50ns')
-    pe.iobridge.master = pe.iobus.slave
-    pe.proxy.pio_port = pe.iobridge.slave
-    pe.pci_host.pio = pe.iobus.master
+    pe.iobridge.mem_side_port = pe.iobus.cpu_side_ports
+    pe.proxy.pio_port = pe.iobridge.cpu_side_port
+    pe.pci_host.pio = pe.iobus.mem_side_ports
 
     # DMA bridge for requests from the device to the host
     pe.dmabridge = Bridge(delay='50ns')
-    pe.dmabridge.master = pe.proxy.dma_port
+    pe.dmabridge.mem_side_port = pe.proxy.dma_port
 
     return pe
 
@@ -522,12 +520,12 @@ def createStoragePE(noc, options, no, memPE, epCount, img0=None, img1=None):
     pe.idectrl.ctrl_offset = 0
 
     pe.idectrl.pio = pe.iobus.default
-    pe.idectrl.dma = pe.dmabridge.slave
+    pe.idectrl.dma = pe.dmabridge.cpu_side_ports
 
-    print 'pe%02d: %s' % (no, img0)
+    print('pe%02d: %s' % (no, img0))
     printConfig(pe, 0)
-    print '      Comp =TCU -> Proxy -> IDE'
-    print
+    print('      Comp =TCU -> Proxy -> IDE')
+    print()
 
     return pe
 
@@ -544,12 +542,12 @@ def createEtherPE(noc, options, no, memPE, epCount):
     pe.nic.pci_func = 0
 
     pe.nic.pio = pe.iobus.default
-    pe.nic.dma = pe.dmabridge.slave
+    pe.nic.dma = pe.dmabridge.cpu_side_port
 
-    print 'PE%02d: IGbE_e1000' % (no)
+    print('PE%02d: IGbE_e1000' % (no))
     printConfig(pe, 0)
-    print '      Comp =TCU -> Proxy -> NIC'
-    print
+    print('      Comp =TCU -> Proxy -> NIC')
+    print()
 
     return pe
 
@@ -580,10 +578,10 @@ def createAccelPE(noc, options, no, accel, memPE, epCount,
         pe.accel = TcuAccelStream()
         pe.accel.logic = AccelLogic()
         pe.accel.logic.algorithm = algos.get(accel)
-        pe.accel.logic.port = pe.xbar.slave
+        pe.accel.logic.port = pe.xbar.cpu_side_ports
         pe.accel.buf_size = "4kB"
     else:
-        print 'Accelerator "%s" does not exist' % (accel)
+        print('Accelerator "%s" does not exist' % (accel))
         sys.exit(1)
     pe.tcu.connector.accelerator = pe.accel
     pe.accel.id = no;
@@ -591,9 +589,9 @@ def createAccelPE(noc, options, no, accel, memPE, epCount,
 
     connectCuToMem(pe, options, pe.accel.port)
 
-    print 'PE%02d: %s accelerator @ %s' % (no, accel, options.cpu_clock)
+    print('PE%02d: %s accelerator @ %s' % (no, accel, options.cpu_clock))
     printConfig(pe, 0)
-    print
+    print()
 
     return pe
 
@@ -611,9 +609,9 @@ def createAbortTestPE(noc, options, no, memPE, epCount,
 
     connectCuToMem(pe, options, pe.cpu.port)
 
-    print 'PE%02d: aborttest core' % (no)
+    print('PE%02d: aborttest core' % (no))
     printConfig(pe, 0)
-    print
+    print()
 
     return pe
 
@@ -632,29 +630,32 @@ def createMemPE(noc, options, no, size, epCount,
     # simulation artefact anyway)
     pe.tcu.buf_count = 8
 
+    size_bytes = MemorySize(size).value
     if dram:
-        pe.mem_ctrl = DDR3_1600_8x8()
-        pe.mem_ctrl.device_size = size
-        pe.mem_ctrl.port = pe.xbar.master
+        pe.mem_ctrl = MemCtrl()
+        pe.mem_ctrl.dram = DDR3_1600_8x8()
+        pe.mem_ctrl.dram.device_size = size
+        pe.mem_ctrl.dram.range = size_bytes
+        pe.mem_ctrl.port = pe.xbar.mem_side_ports
     else:
         pe.mem_ctrl = Scratchpad(in_addr_map="true")
-        pe.mem_ctrl.cpu_port = pe.xbar.master
-    pe.mem_ctrl.range = MemorySize(size).value
+        pe.mem_ctrl.cpu_port = pe.xbar.mem_side_ports
+        pe.mem_ctrl.range = size_bytes
 
     if not image is None:
         if os.stat(image).st_size * imageNum > base_offset:
-            print 'File "%s" is too large for memory layout (%u x %u vs %u)' \
-              % (image, imageNum, os.stat(image).st_size, base_offset)
+            print('File "%s" is too large for memory layout (%u x %u vs %u)' \
+              % (image, imageNum, os.stat(image).st_size, base_offset))
             sys.exit(1)
         pe.mem_file = image
         pe.mem_file_num = imageNum
 
-    print 'PE%02d: %s x %d' % (no, image, imageNum)
+    print('PE%02d: %s x %d' % (no, image, imageNum))
     printConfig(pe, 0)
-    print '      imem =%d KiB' % (int(pe.mem_ctrl.range.end) / 1024)
+    print('      imem =%d KiB' % (int(size_bytes) / 1024))
     name = 'SPM' if type(pe.mem_ctrl).__name__ == 'Scratchpad' else 'DRAM'
-    print '      Comp =TCU -> %s' % (name)
-    print
+    print('      Comp =TCU -> %s' % (name))
+    print()
 
     return pe
 
@@ -675,14 +676,14 @@ def createRoot(options):
     # create a dummy platform and system for the UART
     root.platform = IOPlatform()
     root.platform.system = System()
-    root.platform.system.system_port = root.noc.slave
+    root.platform.system.system_port = root.noc.cpu_side_ports
     root.platform.intrctrl = IntrControl()
 
     # UART and terminal
     root.platform.com_1 = Uart8250()
     root.platform.com_1.pio_addr = IO_address_space_base + 0x3f8
     root.platform.com_1.device = Terminal()
-    root.platform.com_1.pio = root.noc.master
+    root.platform.com_1.pio = root.noc.mem_side_ports
 
     return root
 
@@ -692,7 +693,7 @@ def runSimulation(root, options, pes):
     for pe in pes:
         size = 0
         if hasattr(pe, 'mem_ctrl'):
-            size = int(pe.mem_ctrl.range.end)
+            size = int(pe.mem_ctrl.dram.device_size)
             assert size % 4096 == 0, "Memory size not page aligned"
             size |= 2   # mem
         else:
@@ -731,10 +732,12 @@ def runSimulation(root, options, pes):
         except:
             pass
 
+    sys.stdout.flush()
+
     # Instantiate configuration
     m5.instantiate()
 
     # Simulate until program terminates
     exit_event = m5.simulate(options.maxtick)
 
-    print 'Exiting @ tick', m5.curTick(), 'because', exit_event.getCause()
+    print('Exiting @ tick', m5.curTick(), 'because', exit_event.getCause())

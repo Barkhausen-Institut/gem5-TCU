@@ -31,9 +31,9 @@
 #include "cpu/tcu-accel/connector.hh"
 #include "debug/TcuConnector.hh"
 
-TcuAccelConnector::TcuAccelConnector(const TcuAccelConnectorParams *p)
+TcuAccelConnector::TcuAccelConnector(const TcuAccelConnectorParams &p)
   : BaseConnector(p),
-    acc(p->accelerator)
+    acc(p.accelerator)
 {
     acc->setConnector(this);
 }
@@ -58,10 +58,4 @@ TcuAccelConnector::reset()
 {
     DPRINTF(TcuConnector, "Resetting accelerator\n");
     acc->reset();
-}
-
-TcuAccelConnector*
-TcuAccelConnectorParams::create()
-{
-    return new TcuAccelConnector(this);
 }

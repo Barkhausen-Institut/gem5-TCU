@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 ARM Limited
+ * Copyright (c) 2019, 2021 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -51,7 +51,12 @@ class ChannelAddr
   public:
     using Type = Addr;
 
-    /** Explicit constructor assigning a value. */
+    /**
+     * Explicit constructor assigning a value.
+     *
+     * @ingroup api_channel_addr
+     * @{
+     */
     explicit constexpr ChannelAddr(Type _a) : a(_a) { }
 
     /** Converting back to the value type. */
@@ -86,6 +91,14 @@ class ChannelAddr
 
     constexpr ChannelAddr operator<<(const int b) const {
         return ChannelAddr(a << b);
+    }
+
+    constexpr ChannelAddr operator^(const int b) const {
+        return ChannelAddr(a ^ b);
+    }
+
+    constexpr ChannelAddr operator%(const int b) const {
+        return ChannelAddr(a % b);
     }
 
     constexpr ChannelAddr operator*(const Type &b) const {
@@ -131,6 +144,8 @@ class ChannelAddr
     constexpr bool operator==(const ChannelAddr &b) const { return a == b.a; }
     constexpr bool operator!=(const ChannelAddr &b) const { return a != b.a; }
 
+    /** @} */ // end of api_channel_addr
+
   private:
     /** Member holding the actual value. */
     Type a;
@@ -139,10 +154,15 @@ class ChannelAddr
 /**
  * The ChanneelAddrRange class describes a contiguous range of
  * addresses in a contiguous channel-local address space.
+ * The start is inclusive, the end is not.
  */
 class ChannelAddrRange
 {
   public:
+    /**
+     * @ingroup api_channel_addr
+     * @{
+     */
     constexpr ChannelAddrRange()
         : ChannelAddrRange(ChannelAddr(1), ChannelAddr(0)) {}
 
@@ -154,16 +174,18 @@ class ChannelAddrRange
 
     constexpr ChannelAddrRange(const ChannelAddrRange &) = default;
 
-    constexpr ChannelAddr size() const { return _end - _start + 1; }
+    constexpr ChannelAddr size() const { return _end - _start; }
 
-    constexpr bool valid() const { return _start <= _end; }
+    constexpr bool valid() const { return _start < _end; }
 
     constexpr ChannelAddr start() const { return _start; }
     constexpr ChannelAddr end() const { return _end; }
 
     constexpr bool contains(ChannelAddr a) const {
-        return a >= _start && a <= _end;
+        return a >= _start && a < _end;
     }
+
+    /** @} */ // end of api_channel_addr
 
   protected:
     ChannelAddr _start;
@@ -186,6 +208,9 @@ namespace std
     };
 }
 
+/**
+ * @ingroup api_channel_addr
+ */
 std::ostream &operator<<(std::ostream &out, const ChannelAddr &addr);
 
 #endif // __BASE_CHANNEL_ADDR_HH__

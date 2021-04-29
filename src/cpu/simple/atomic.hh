@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2013, 2015, 2018 ARM Limited
+ * Copyright (c) 2012-2013, 2015, 2018, 2020 ARM Limited
  * All rights reserved.
  *
  * The license below extends only to copyright in the software and shall
@@ -51,13 +51,12 @@ class AtomicSimpleCPU : public BaseSimpleCPU
 {
   public:
 
-    AtomicSimpleCPU(AtomicSimpleCPUParams *params);
+    AtomicSimpleCPU(const AtomicSimpleCPUParams &params);
     virtual ~AtomicSimpleCPU();
 
     void init() override;
 
   protected:
-
     EventFunctionWrapper tickEvent;
 
     const int width;
@@ -86,12 +85,12 @@ class AtomicSimpleCPU : public BaseSimpleCPU
      * <li>Stay at PC is true.
      * </ul>
      */
-    bool isCpuDrained() const {
+    bool
+    isCpuDrained() const
+    {
         SimpleExecContext &t_info = *threadInfo[curThread];
-
         return t_info.thread->microPC() == 0 &&
-            !locked &&
-            !t_info.stayAtPC;
+            !locked && !t_info.stayAtPC;
     }
 
     /**
@@ -101,7 +100,8 @@ class AtomicSimpleCPU : public BaseSimpleCPU
      */
     bool tryCompleteDrain();
 
-    virtual Tick sendPacket(MasterPort &port, const PacketPtr &pkt);
+    virtual Tick sendPacket(RequestPort &port, const PacketPtr &pkt);
+    virtual Tick fetchInstMem();
 
     /**
      * An AtomicCPUPort overrides the default behaviour of the
@@ -109,24 +109,25 @@ class AtomicSimpleCPU : public BaseSimpleCPU
      * also provides an implementation for the purely virtual timing
      * functions and panics on either of these.
      */
-    class AtomicCPUPort : public MasterPort
+    class AtomicCPUPort : public RequestPort
     {
 
       public:
 
         AtomicCPUPort(const std::string &_name, BaseSimpleCPU* _cpu)
-            : MasterPort(_name, _cpu)
+            : RequestPort(_name, _cpu)
         { }
 
       protected:
 
-        bool recvTimingResp(PacketPtr pkt)
+        bool
+        recvTimingResp(PacketPtr pkt)
         {
             panic("Atomic CPU doesn't expect recvTimingResp!\n");
-            return true;
         }
 
-        void recvReqRetry()
+        void
+        recvReqRetry()
         {
             panic("Atomic CPU doesn't expect recvRetry!\n");
         }
@@ -137,7 +138,7 @@ class AtomicSimpleCPU : public BaseSimpleCPU
     {
 
       public:
-        AtomicCPUDPort(const std::string &_name, BaseSimpleCPU* _cpu)
+        AtomicCPUDPort(const std::string &_name, BaseSimpleCPU *_cpu)
             : AtomicCPUPort(_name, _cpu), cpu(_cpu)
         {
             cacheBlockMask = ~(cpu->cacheLineSize() - 1);
@@ -167,7 +168,7 @@ class AtomicSimpleCPU : public BaseSimpleCPU
     Tick dcache_latency;
 
     /** Probe Points. */
-    ProbePointArg<std::pair<SimpleThread*, const StaticInstPtr>> *ppCommit;
+    ProbePointArg<std::pair<SimpleThread *, const StaticInstPtr>> *ppCommit;
 
   protected:
 
@@ -186,7 +187,7 @@ class AtomicSimpleCPU : public BaseSimpleCPU
     void drainResume() override;
 
     void switchOut() override;
-    void takeOverFrom(BaseCPU *oldCPU) override;
+    void takeOverFrom(BaseCPU *old_cpu) override;
 
     void verifyMemoryMode() const override;
 
@@ -209,22 +210,36 @@ class AtomicSimpleCPU : public BaseSimpleCPU
      * @param[in,out] size_left Size left to be processed in the memory access.
      * @return True if the byte-enable mask for the fragment is not all-false.
      */
-    bool genMemFragmentRequest(const RequestPtr& req, Addr frag_addr,
+    bool genMemFragmentRequest(const RequestPtr &req, Addr frag_addr,
                                int size, Request::Flags flags,
-                               const std::vector<bool>& byte_enable,
-                               int& frag_size, int& size_left) const;
+                               const std::vector<bool> &byte_enable,
+                               int &frag_size, int &size_left) const;
 
     Fault readMem(Addr addr, uint8_t *data, unsigned size,
                   Request::Flags flags,
-                  const std::vector<bool>& byte_enable = std::vector<bool>())
+                  const std::vector<bool> &byte_enable=std::vector<bool>())
         override;
+
+    Fault
+    initiateHtmCmd(Request::Flags flags) override
+    {
+        panic("initiateHtmCmd() is for timing accesses, and should "
+              "never be called on AtomicSimpleCPU.\n");
+    }
+
+    void
+    htmSendAbortSignal(HtmFailureFaultCause cause) override
+    {
+        panic("htmSendAbortSignal() is for timing accesses, and should "
+              "never be called on AtomicSimpleCPU.\n");
+    }
 
     Fault writeMem(uint8_t *data, unsigned size,
                    Addr addr, Request::Flags flags, uint64_t *res,
-                   const std::vector<bool>& byte_enable = std::vector<bool>())
+                   const std::vector<bool> &byte_enable=std::vector<bool>())
         override;
 
-    Fault amoMem(Addr addr, uint8_t* data, unsigned size,
+    Fault amoMem(Addr addr, uint8_t *data, unsigned size,
                  Request::Flags flags, AtomicOpFunctorPtr amo_op) override;
 
     void regProbePoints() override;

@@ -48,7 +48,7 @@
 
 #include "mem/cache/replacement_policies/replaceable_entry.hh"
 
-SetAssociative::SetAssociative(const Params *p)
+SetAssociative::SetAssociative(const Params &p)
     : BaseIndexingPolicy(p)
 {
 }
@@ -70,10 +70,4 @@ std::vector<ReplaceableEntry*>
 SetAssociative::getPossibleEntries(const Addr addr) const
 {
     return sets[extractSet(addr)];
-}
-
-SetAssociative*
-SetAssociativeParams::create()
-{
-    return new SetAssociative(this);
 }

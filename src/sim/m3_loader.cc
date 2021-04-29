@@ -99,10 +99,10 @@ M3Loader::writeArg(System &sys, Addr &args, size_t &i, Addr argv,
 }
 
 void
-M3Loader::writeRemote(MasterPort &noc, Addr dest,
+M3Loader::writeRemote(RequestPort &noc, Addr dest,
                       const uint8_t *data, size_t size)
 {
-    auto req = std::make_shared<Request>(dest, size, 0, Request::funcMasterId);
+    auto req = std::make_shared<Request>(dest, size, 0, Request::funcRequestorId);
     Packet pkt(req, MemCmd::WriteReq);
     pkt.dataStaticConst(data);
 
@@ -118,7 +118,7 @@ M3Loader::writeRemote(MasterPort &noc, Addr dest,
 }
 
 Addr
-M3Loader::loadModule(MasterPort &noc, const std::string &filename, Addr addr)
+M3Loader::loadModule(RequestPort &noc, const std::string &filename, Addr addr)
 {
     FILE *f = fopen(filename.c_str(), "r");
     if(!f)
@@ -139,7 +139,7 @@ M3Loader::loadModule(MasterPort &noc, const std::string &filename, Addr addr)
 }
 
 void
-M3Loader::initState(System &sys, PEMemory &mem, MasterPort &noc)
+M3Loader::initState(System &sys, PEMemory &mem, RequestPort &noc)
 {
     BootEnv env;
     memset(&env, 0, sizeof(env));

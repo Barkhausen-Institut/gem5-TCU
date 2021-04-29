@@ -38,7 +38,7 @@ class DirectedGenerator : public SimObject
 {
   public:
     typedef DirectedGeneratorParams Params;
-    DirectedGenerator(const Params *p);
+    DirectedGenerator(const Params &p);
 
     virtual ~DirectedGenerator() {}
 
@@ -49,7 +49,7 @@ class DirectedGenerator : public SimObject
 
   protected:
     int m_num_cpus;
-    MasterID masterId;
+    RequestorID requestorId;
     RubyDirectedTester* m_directed_tester;
 };
 

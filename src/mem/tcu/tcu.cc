@@ -43,41 +43,41 @@
 #include "sim/pe_memory.hh"
 #include "sim/system.hh"
 
-Tcu::Tcu(TcuParams* p)
+Tcu::Tcu(const TcuParams &p)
   : BaseTcu(p),
-    masterId(p->system->getMasterId(this, name())),
-    system(p->system),
-    regFile(*this, name() + ".regFile", p->num_endpoints),
-    connector(p->connector),
-    tlBuf(p->tlb_entries > 0 ? new TcuTlb(*this, p->tlb_entries) : NULL),
+    requestorId(p.system->getRequestorId(this, name())),
+    system(p.system),
+    regFile(*this, name() + ".regFile", p.num_endpoints),
+    connector(p.connector),
+    tlBuf(p.tlb_entries > 0 ? new TcuTlb(*this, p.tlb_entries) : NULL),
     msgUnit(new MessageUnit(*this)),
     memUnit(new MemoryUnit(*this)),
-    xferUnit(new XferUnit(*this, p->block_size, p->buf_count, p->buf_size)),
-    coreReqs(*this, p->buf_count),
+    xferUnit(new XferUnit(*this, p.block_size, p.buf_count, p.buf_size)),
+    coreReqs(*this, p.buf_count),
     epFile(*this),
     sleepEPs(epFile.newCache()),
     cmds(*this),
     fireTimerEvent(*this),
     completeCoreReqEvent(coreReqs),
     wakeupEp(0xFFFF),
-    peMemOffset(p->pe_mem_offset),
-    atomicMode(p->system->isAtomicMode()),
-    numEndpoints(p->num_endpoints),
-    maxNocPacketSize(p->max_noc_packet_size),
-    blockSize(p->block_size),
-    bufCount(p->buf_count),
-    bufSize(p->buf_size),
-    reqCount(p->req_count),
-    cacheBlocksPerCycle(p->cache_blocks_per_cycle),
-    registerAccessLatency(p->register_access_latency),
-    cpuToCacheLatency(p->cpu_to_cache_latency),
-    commandToNocRequestLatency(p->command_to_noc_request_latency),
-    startMsgTransferDelay(p->start_msg_transfer_delay),
-    transferToMemRequestLatency(p->transfer_to_mem_request_latency),
-    transferToNocLatency(p->transfer_to_noc_latency),
-    nocToTransferLatency(p->noc_to_transfer_latency)
+    peMemOffset(p.pe_mem_offset),
+    atomicMode(p.system->isAtomicMode()),
+    numEndpoints(p.num_endpoints),
+    maxNocPacketSize(p.max_noc_packet_size),
+    blockSize(p.block_size),
+    bufCount(p.buf_count),
+    bufSize(p.buf_size),
+    reqCount(p.req_count),
+    cacheBlocksPerCycle(p.cache_blocks_per_cycle),
+    registerAccessLatency(p.register_access_latency),
+    cpuToCacheLatency(p.cpu_to_cache_latency),
+    commandToNocRequestLatency(p.command_to_noc_request_latency),
+    startMsgTransferDelay(p.start_msg_transfer_delay),
+    transferToMemRequestLatency(p.transfer_to_mem_request_latency),
+    transferToNocLatency(p.transfer_to_noc_latency),
+    nocToTransferLatency(p.noc_to_transfer_latency)
 {
-    assert(p->buf_size >= maxNocPacketSize);
+    assert(p.buf_size >= maxNocPacketSize);
 
     connector->setTcu(this);
 }
@@ -142,7 +142,7 @@ Tcu::generateRequest(Addr paddr, Addr size, MemCmd cmd)
 {
     Request::Flags flags;
 
-    auto req = std::make_shared<Request>(paddr, size, flags, masterId);
+    auto req = std::make_shared<Request>(paddr, size, flags, requestorId);
 
     auto pkt = new Packet(req, cmd);
 
@@ -308,11 +308,11 @@ Tcu::sendMemRequest(PacketPtr pkt,
 {
     auto senderState = new MemSenderState();
     senderState->data = data;
-    senderState->mid = pkt->req->masterId();
+    senderState->mid = pkt->req->requestorId();
 
     // ensure that this packet has our master id (not the id of a master in
     // a different PE)
-    pkt->req->setMasterId(masterId);
+    pkt->req->setRequestorId(requestorId);
 
     pkt->pushSenderState(senderState);
 
@@ -456,8 +456,8 @@ Tcu::completeMemRequest(PacketPtr pkt)
 
     auto senderState = dynamic_cast<MemSenderState*>(pkt->popSenderState());
 
-    // set the old master id again
-    pkt->req->setMasterId(senderState->mid);
+    // set the old requestor id again
+    pkt->req->setRequestorId(senderState->mid);
 
     xferUnit->recvMemResponse(senderState->data, pkt);
 
@@ -699,15 +699,9 @@ void
 Tcu::sendFunctionalMemRequest(PacketPtr pkt)
 {
     // set our master id (it might be from a different PE)
-    pkt->req->setMasterId(masterId);
+    pkt->req->setRequestorId(requestorId);
 
     dcacheMasterPort.sendFunctional(pkt);
-}
-
-Tcu*
-TcuParams::create()
-{
-    return new Tcu(this);
 }
 
 void

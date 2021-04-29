@@ -42,7 +42,7 @@ class BaseTcu : public ClockedObject
 {
   protected:
 
-    class TcuMasterPort : public QueuedMasterPort
+    class TcuMasterPort : public QueuedRequestPort
     {
       protected:
 
@@ -223,7 +223,7 @@ class BaseTcu : public ClockedObject
 
   public:
 
-    BaseTcu(BaseTcuParams* p);
+    BaseTcu(const BaseTcuParams &p);
 
     void init() override;
 

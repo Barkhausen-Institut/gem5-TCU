@@ -38,12 +38,12 @@
 
 #include "gpu-compute/scheduling_policy.hh"
 
-class ComputeUnitParams;
+struct ComputeUnitParams;
 
 class Scheduler
 {
   public:
-    Scheduler(const ComputeUnitParams *params);
+    Scheduler(const ComputeUnitParams &params);
     Wavefront *chooseWave();
     void bindList(std::vector<Wavefront*> *sched_list);
 

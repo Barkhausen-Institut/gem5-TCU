@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2017, 2020 ARM Limited
+ * Copyright (c) 2016-2017, 2020-2021 Arm Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -45,8 +45,8 @@
 #include "sim/power/thermal_model.hh"
 #include "sim/sim_object.hh"
 
-MathExprPowerModel::MathExprPowerModel(const Params *p)
-    : PowerModelState(p), dyn_expr(p->dyn), st_expr(p->st)
+MathExprPowerModel::MathExprPowerModel(const Params &p)
+    : PowerModelState(p), dyn_expr(p.dyn), st_expr(p.st)
 {
 }
 
@@ -86,7 +86,7 @@ MathExprPowerModel::getStatValue(const std::string &name) const
 
     // Automatic variables:
     if (name == "temp") {
-        return _temp;
+        return _temp.toCelsius();
     } else if (name == "voltage") {
         return clocked_object->voltage();
     } else if (name=="clock_period") {
@@ -112,10 +112,4 @@ void
 MathExprPowerModel::regStats()
 {
     PowerModelState::regStats();
-}
-
-MathExprPowerModel*
-MathExprPowerModelParams::create()
-{
-    return new MathExprPowerModel(this);
 }

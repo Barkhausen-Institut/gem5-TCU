@@ -24,9 +24,6 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from __future__ import print_function
-from six import add_metaclass
-
 try:
     import builtins
 except ImportError:
@@ -112,8 +109,7 @@ class code_formatter_meta(type):
                 }
         cls.pattern = re.compile(pat, re.VERBOSE | re.DOTALL | re.MULTILINE)
 
-@add_metaclass(code_formatter_meta)
-class code_formatter(object):
+class code_formatter(object, metaclass=code_formatter_meta):
     delim = r'$'
     ident = r'[_A-z]\w*'
     pos = r'[0-9]+'
@@ -266,7 +262,7 @@ class code_formatter(object):
                 lineno = 1
             else:
                 lines = format[:i].splitlines(True)
-                colno = i - reduce(lambda x,y: x+y, (len(z) for z in lines))
+                colno = i - sum(len(z) for z in lines)
                 lineno = len(lines)
 
                 raise ValueError('Invalid format string: line %d, col %d' %

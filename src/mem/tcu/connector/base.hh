@@ -48,7 +48,7 @@ class BaseConnector : public ClockedObject
         TIMER,
     };
 
-    BaseConnector(const BaseConnectorParams *p)
+    BaseConnector(const BaseConnectorParams &p)
       : ClockedObject(p),
         _tcu()
     { }

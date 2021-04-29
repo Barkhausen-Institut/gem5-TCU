@@ -29,8 +29,6 @@
  * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Anthony Gutierrez
  */
 
 #ifndef __ARCH_GCN3_INSTS_INSTRUCTIONS_HH__
@@ -5846,9 +5844,7 @@ namespace Gcn3ISA
         getOperandSize(int opIdx) override
         {
             switch (opIdx) {
-              case 0: //ssrc
-                return 8;
-              case 1: //sdst
+              case 0: //sdst
                 return 8;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
@@ -5860,9 +5856,7 @@ namespace Gcn3ISA
         isSrcOperand(int opIdx) override
         {
             switch (opIdx) {
-              case 0: //ssrc
-                return true;
-              case 1: //sdst
+              case 0: //sdst
                 return false;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
@@ -5874,9 +5868,7 @@ namespace Gcn3ISA
         isDstOperand(int opIdx) override
         {
             switch (opIdx) {
-              case 0: //ssrc
-                return false;
-              case 1: //sdst
+              case 0: //sdst
                 return true;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
@@ -79143,7 +79135,7 @@ namespace Gcn3ISA
               case 0: //vgpr_addr
                 return 8;
               case 1: //vgpr_dst
-                return 32;
+                return 1;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
                 return -1;
@@ -79267,7 +79259,7 @@ namespace Gcn3ISA
               case 0: //vgpr_addr
                 return 8;
               case 1: //vgpr_dst
-                return 32;
+                return 2;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
                 return -1;
@@ -79949,9 +79941,9 @@ namespace Gcn3ISA
               case 0: //vgpr_addr
                 return 8;
               case 1: //vgpr_src
-                return 32;
+                return 4;
               case 2: //vgpr_dst
-                return 32;
+                return 4;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
                 return -1;
@@ -79991,6 +79983,8 @@ namespace Gcn3ISA
         } // isDstOperand
 
         void execute(GPUDynInstPtr) override;
+        void initiateAcc(GPUDynInstPtr) override;
+        void completeAcc(GPUDynInstPtr) override;
     }; // Inst_FLAT__FLAT_ATOMIC_SWAP
 
     class Inst_FLAT__FLAT_ATOMIC_CMPSWAP : public Inst_FLAT
@@ -80151,9 +80145,9 @@ namespace Gcn3ISA
               case 0: //vgpr_addr
                 return 8;
               case 1: //vgpr_src
-                return 32;
+                return 4;
               case 2: //vgpr_dst
-                return 32;
+                return 4;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
                 return -1;
@@ -80193,6 +80187,8 @@ namespace Gcn3ISA
         } // isDstOperand
 
         void execute(GPUDynInstPtr) override;
+        void initiateAcc(GPUDynInstPtr) override;
+        void completeAcc(GPUDynInstPtr) override;
     }; // Inst_FLAT__FLAT_ATOMIC_SUB
 
     class Inst_FLAT__FLAT_ATOMIC_SMIN : public Inst_FLAT
@@ -80217,9 +80213,9 @@ namespace Gcn3ISA
               case 0: //vgpr_addr
                 return 8;
               case 1: //vgpr_src
-                return 32;
+                return 4;
               case 2: //vgpr_dst
-                return 32;
+                return 4;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
                 return -1;
@@ -80283,9 +80279,9 @@ namespace Gcn3ISA
               case 0: //vgpr_addr
                 return 8;
               case 1: //vgpr_src
-                return 32;
+                return 4;
               case 2: //vgpr_dst
-                return 32;
+                return 4;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
                 return -1;
@@ -80349,9 +80345,9 @@ namespace Gcn3ISA
               case 0: //vgpr_addr
                 return 8;
               case 1: //vgpr_src
-                return 32;
+                return 4;
               case 2: //vgpr_dst
-                return 32;
+                return 4;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
                 return -1;
@@ -80415,9 +80411,9 @@ namespace Gcn3ISA
               case 0: //vgpr_addr
                 return 8;
               case 1: //vgpr_src
-                return 32;
+                return 4;
               case 2: //vgpr_dst
-                return 32;
+                return 4;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
                 return -1;
@@ -80481,9 +80477,9 @@ namespace Gcn3ISA
               case 0: //vgpr_addr
                 return 8;
               case 1: //vgpr_src
-                return 32;
+                return 4;
               case 2: //vgpr_dst
-                return 32;
+                return 4;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
                 return -1;
@@ -80547,9 +80543,9 @@ namespace Gcn3ISA
               case 0: //vgpr_addr
                 return 8;
               case 1: //vgpr_src
-                return 32;
+                return 4;
               case 2: //vgpr_dst
-                return 32;
+                return 4;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
                 return -1;
@@ -80613,9 +80609,9 @@ namespace Gcn3ISA
               case 0: //vgpr_addr
                 return 8;
               case 1: //vgpr_src
-                return 32;
+                return 4;
               case 2: //vgpr_dst
-                return 32;
+                return 4;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
                 return -1;
@@ -80679,9 +80675,9 @@ namespace Gcn3ISA
               case 0: //vgpr_addr
                 return 8;
               case 1: //vgpr_src
-                return 32;
+                return 4;
               case 2: //vgpr_dst
-                return 32;
+                return 4;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
                 return -1;
@@ -80721,6 +80717,8 @@ namespace Gcn3ISA
         } // isDstOperand
 
         void execute(GPUDynInstPtr) override;
+        void initiateAcc(GPUDynInstPtr) override;
+        void completeAcc(GPUDynInstPtr) override;
     }; // Inst_FLAT__FLAT_ATOMIC_INC
 
     class Inst_FLAT__FLAT_ATOMIC_DEC : public Inst_FLAT
@@ -80745,9 +80743,9 @@ namespace Gcn3ISA
               case 0: //vgpr_addr
                 return 8;
               case 1: //vgpr_src
-                return 32;
+                return 4;
               case 2: //vgpr_dst
-                return 32;
+                return 4;
               default:
                 fatal("op idx %i out of bounds\n", opIdx);
                 return -1;
@@ -80787,6 +80785,8 @@ namespace Gcn3ISA
         } // isDstOperand
 
         void execute(GPUDynInstPtr) override;
+        void initiateAcc(GPUDynInstPtr) override;
+        void completeAcc(GPUDynInstPtr) override;
     }; // Inst_FLAT__FLAT_ATOMIC_DEC
 
     class Inst_FLAT__FLAT_ATOMIC_SWAP_X2 : public Inst_FLAT
@@ -81055,6 +81055,8 @@ namespace Gcn3ISA
         } // isDstOperand
 
         void execute(GPUDynInstPtr) override;
+        void initiateAcc(GPUDynInstPtr) override;
+        void completeAcc(GPUDynInstPtr) override;
     }; // Inst_FLAT__FLAT_ATOMIC_SUB_X2
 
     class Inst_FLAT__FLAT_ATOMIC_SMIN_X2 : public Inst_FLAT
@@ -81583,6 +81585,8 @@ namespace Gcn3ISA
         } // isDstOperand
 
         void execute(GPUDynInstPtr) override;
+        void initiateAcc(GPUDynInstPtr) override;
+        void completeAcc(GPUDynInstPtr) override;
     }; // Inst_FLAT__FLAT_ATOMIC_INC_X2
 
     class Inst_FLAT__FLAT_ATOMIC_DEC_X2 : public Inst_FLAT
@@ -81649,6 +81653,8 @@ namespace Gcn3ISA
         } // isDstOperand
 
         void execute(GPUDynInstPtr) override;
+        void initiateAcc(GPUDynInstPtr) override;
+        void completeAcc(GPUDynInstPtr) override;
     }; // Inst_FLAT__FLAT_ATOMIC_DEC_X2
 } // namespace Gcn3ISA
 

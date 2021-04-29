@@ -46,10 +46,8 @@
 #include "base/trace.hh"
 #include "config/the_isa.hh"
 #include "cpu/base.hh"
-#include "cpu/quiesce_event.hh"
 #include "debug/Context.hh"
 #include "debug/Quiesce.hh"
-#include "kern/kernel_stats.hh"
 #include "params/BaseCPU.hh"
 #include "sim/full_system.hh"
 
@@ -130,70 +128,49 @@ ThreadContext::compare(ThreadContext *one, ThreadContext *two)
 void
 ThreadContext::quiesce()
 {
-    if (!getCpuPtr()->params()->do_quiesce)
-        return;
-
-    DPRINTF(Quiesce, "%s: quiesce()\n", getCpuPtr()->name());
-
-    suspend();
-    if (getKernelStats())
-        getKernelStats()->quiesce();
+    getSystemPtr()->threads.quiesce(contextId());
 }
 
 
 void
 ThreadContext::quiesceTick(Tick resume)
 {
-    BaseCPU *cpu = getCpuPtr();
-
-    if (!cpu->params()->do_quiesce)
-        return;
-
-    EndQuiesceEvent *quiesceEvent = getQuiesceEvent();
-
-    cpu->reschedule(quiesceEvent, resume, true);
-
-    DPRINTF(Quiesce, "%s: quiesceTick until %lu\n", cpu->name(), resume);
-
-    suspend();
-    if (getKernelStats())
-        getKernelStats()->quiesce();
+    getSystemPtr()->threads.quiesceTick(contextId(), resume);
 }
 
 void
 serialize(const ThreadContext &tc, CheckpointOut &cp)
 {
-    using namespace TheISA;
-
-    RegVal floatRegs[NumFloatRegs];
-    for (int i = 0; i < NumFloatRegs; ++i)
+    RegVal floatRegs[TheISA::NumFloatRegs];
+    for (int i = 0; i < TheISA::NumFloatRegs; ++i)
         floatRegs[i] = tc.readFloatRegFlat(i);
     // This is a bit ugly, but needed to maintain backwards
     // compatibility.
-    arrayParamOut(cp, "floatRegs.i", floatRegs, NumFloatRegs);
+    arrayParamOut(cp, "floatRegs.i", floatRegs, TheISA::NumFloatRegs);
 
-    std::vector<TheISA::VecRegContainer> vecRegs(NumVecRegs);
-    for (int i = 0; i < NumVecRegs; ++i) {
+    std::vector<TheISA::VecRegContainer> vecRegs(TheISA::NumVecRegs);
+    for (int i = 0; i < TheISA::NumVecRegs; ++i) {
         vecRegs[i] = tc.readVecRegFlat(i);
     }
     SERIALIZE_CONTAINER(vecRegs);
 
-    std::vector<TheISA::VecPredRegContainer> vecPredRegs(NumVecPredRegs);
-    for (int i = 0; i < NumVecPredRegs; ++i) {
+    std::vector<TheISA::VecPredRegContainer>
+        vecPredRegs(TheISA::NumVecPredRegs);
+    for (int i = 0; i < TheISA::NumVecPredRegs; ++i) {
         vecPredRegs[i] = tc.readVecPredRegFlat(i);
     }
     SERIALIZE_CONTAINER(vecPredRegs);
 
-    RegVal intRegs[NumIntRegs];
-    for (int i = 0; i < NumIntRegs; ++i)
+    RegVal intRegs[TheISA::NumIntRegs];
+    for (int i = 0; i < TheISA::NumIntRegs; ++i)
         intRegs[i] = tc.readIntRegFlat(i);
-    SERIALIZE_ARRAY(intRegs, NumIntRegs);
+    SERIALIZE_ARRAY(intRegs, TheISA::NumIntRegs);
 
-    if (NumCCRegs) {
-        RegVal ccRegs[NumCCRegs];
-        for (int i = 0; i < NumCCRegs; ++i)
+    if (TheISA::NumCCRegs) {
+        RegVal ccRegs[TheISA::NumCCRegs];
+        for (int i = 0; i < TheISA::NumCCRegs; ++i)
             ccRegs[i] = tc.readCCRegFlat(i);
-        SERIALIZE_ARRAY(ccRegs, NumCCRegs);
+        SERIALIZE_ARRAY(ccRegs, TheISA::NumCCRegs);
     }
 
     tc.pcState().serialize(cp);
@@ -204,40 +181,39 @@ serialize(const ThreadContext &tc, CheckpointOut &cp)
 void
 unserialize(ThreadContext &tc, CheckpointIn &cp)
 {
-    using namespace TheISA;
-
-    RegVal floatRegs[NumFloatRegs];
+    RegVal floatRegs[TheISA::NumFloatRegs];
     // This is a bit ugly, but needed to maintain backwards
     // compatibility.
-    arrayParamIn(cp, "floatRegs.i", floatRegs, NumFloatRegs);
-    for (int i = 0; i < NumFloatRegs; ++i)
+    arrayParamIn(cp, "floatRegs.i", floatRegs, TheISA::NumFloatRegs);
+    for (int i = 0; i < TheISA::NumFloatRegs; ++i)
         tc.setFloatRegFlat(i, floatRegs[i]);
 
-    std::vector<TheISA::VecRegContainer> vecRegs(NumVecRegs);
+    std::vector<TheISA::VecRegContainer> vecRegs(TheISA::NumVecRegs);
     UNSERIALIZE_CONTAINER(vecRegs);
-    for (int i = 0; i < NumVecRegs; ++i) {
+    for (int i = 0; i < TheISA::NumVecRegs; ++i) {
         tc.setVecRegFlat(i, vecRegs[i]);
     }
 
-    std::vector<TheISA::VecPredRegContainer> vecPredRegs(NumVecPredRegs);
+    std::vector<TheISA::VecPredRegContainer>
+        vecPredRegs(TheISA::NumVecPredRegs);
     UNSERIALIZE_CONTAINER(vecPredRegs);
-    for (int i = 0; i < NumVecPredRegs; ++i) {
+    for (int i = 0; i < TheISA::NumVecPredRegs; ++i) {
         tc.setVecPredRegFlat(i, vecPredRegs[i]);
     }
 
-    RegVal intRegs[NumIntRegs];
-    UNSERIALIZE_ARRAY(intRegs, NumIntRegs);
-    for (int i = 0; i < NumIntRegs; ++i)
+    RegVal intRegs[TheISA::NumIntRegs];
+    UNSERIALIZE_ARRAY(intRegs, TheISA::NumIntRegs);
+    for (int i = 0; i < TheISA::NumIntRegs; ++i)
         tc.setIntRegFlat(i, intRegs[i]);
 
-    if (NumCCRegs) {
-        RegVal ccRegs[NumCCRegs];
-        UNSERIALIZE_ARRAY(ccRegs, NumCCRegs);
-        for (int i = 0; i < NumCCRegs; ++i)
+    if (TheISA::NumCCRegs) {
+        RegVal ccRegs[TheISA::NumCCRegs];
+        UNSERIALIZE_ARRAY(ccRegs, TheISA::NumCCRegs);
+        for (int i = 0; i < TheISA::NumCCRegs; ++i)
             tc.setCCRegFlat(i, ccRegs[i]);
     }
 
-    PCState pcState;
+    TheISA::PCState pcState;
     pcState.unserialize(cp);
     tc.pcState(pcState);
 
@@ -254,26 +230,8 @@ takeOverFrom(ThreadContext &ntc, ThreadContext &otc)
     ntc.setContextId(otc.contextId());
     ntc.setThreadId(otc.threadId());
 
-    if (FullSystem) {
+    if (FullSystem)
         assert(ntc.getSystemPtr() == otc.getSystemPtr());
-
-        BaseCPU *ncpu(ntc.getCpuPtr());
-        assert(ncpu);
-        EndQuiesceEvent *oqe(otc.getQuiesceEvent());
-        assert(oqe);
-        assert(oqe->tc == &otc);
-
-        BaseCPU *ocpu(otc.getCpuPtr());
-        assert(ocpu);
-        EndQuiesceEvent *nqe(ntc.getQuiesceEvent());
-        assert(nqe);
-        assert(nqe->tc == &ntc);
-
-        if (oqe->scheduled()) {
-            ncpu->schedule(nqe, oqe->when());
-            ocpu->deschedule(oqe);
-        }
-    }
 
     otc.setStatus(ThreadContext::Halted);
 }

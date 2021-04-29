@@ -38,11 +38,20 @@
 #ifndef __DEV_ARM_GENERIC_TIMER_HH__
 #define __DEV_ARM_GENERIC_TIMER_HH__
 
+#include <cstdint>
+#include <vector>
+
 #include "arch/arm/isa_device.hh"
 #include "arch/arm/system.hh"
+#include "base/addr_range.hh"
+#include "base/bitunion.hh"
+#include "base/types.hh"
 #include "dev/arm/base_gic.hh"
 #include "dev/arm/generic_timer_miscregs_types.hh"
 #include "sim/core.hh"
+#include "sim/drain.hh"
+#include "sim/eventq.hh"
+#include "sim/serialize.hh"
 #include "sim/sim_object.hh"
 
 /// @file
@@ -55,14 +64,14 @@
 ///     I2 - System Level Implementation of the Generic Timer
 
 class Checkpoint;
-class SystemCounterParams;
-class GenericTimerParams;
-class GenericTimerFrameParams;
-class GenericTimerMemParams;
+struct SystemCounterParams;
+struct GenericTimerParams;
+struct GenericTimerFrameParams;
+struct GenericTimerMemParams;
 
 /// Abstract class for elements whose events depend on the counting speed
 /// of the System Counter
-class SystemCounterListener : public Serializable
+class SystemCounterListener
 {
   public:
     /// Called from the SystemCounter when a change in counting speed occurred
@@ -100,7 +109,7 @@ class SystemCounter : public SimObject
     static constexpr size_t MAX_FREQ_ENTRIES = 1004;
 
   public:
-    SystemCounter(SystemCounterParams *const p);
+    SystemCounter(const SystemCounterParams &p);
 
     /// Validates a System Counter reference
     /// @param sys_cnt System counter reference to validate
@@ -165,7 +174,8 @@ class SystemCounter : public SimObject
 };
 
 /// Per-CPU architected timer.
-class ArchTimer : public SystemCounterListener, public Drainable
+class ArchTimer : public SystemCounterListener, public Drainable,
+                  public Serializable
 {
   protected:
     /// Control register.
@@ -276,9 +286,9 @@ class ArchTimerKvm : public ArchTimer
 class GenericTimer : public SimObject
 {
   public:
-    const GenericTimerParams * params() const;
+    PARAMS(GenericTimer);
 
-    GenericTimer(GenericTimerParams *const p);
+    GenericTimer(const Params &p);
 
     void serialize(CheckpointOut &cp) const override;
     void unserialize(CheckpointIn &cp) override;
@@ -288,7 +298,7 @@ class GenericTimer : public SimObject
     RegVal readMiscReg(int misc_reg, unsigned cpu);
 
   protected:
-    class CoreTimers : public SystemCounterListener
+    class CoreTimers : public SystemCounterListener, public Serializable
     {
       public:
         CoreTimers(GenericTimer &_parent, ArmSystem &system, unsigned cpu,
@@ -302,10 +312,10 @@ class GenericTimer : public SimObject
         uint32_t cntfrq;
 
         /// Kernel control register
-        CNTKCTL cntkctl;
+        ArmISA::CNTKCTL cntkctl;
 
         /// Hypervisor control register
-        CNTHCTL cnthctl;
+        ArmISA::CNTHCTL cnthctl;
 
         /// Thread (HW) context associated to this PE implementation
         ThreadContext *threadContext;
@@ -392,7 +402,7 @@ class GenericTimerISA : public ArmISA::BaseISADevice
 class GenericTimerFrame : public PioDevice
 {
   public:
-    GenericTimerFrame(GenericTimerFrameParams *const p);
+    GenericTimerFrame(const GenericTimerFrameParams &p);
 
     void serialize(CheckpointOut &cp) const override;
     void unserialize(CheckpointIn &cp) override;
@@ -496,7 +506,7 @@ class GenericTimerFrame : public PioDevice
 class GenericTimerMem : public PioDevice
 {
   public:
-    GenericTimerMem(GenericTimerMemParams *const p);
+    GenericTimerMem(const GenericTimerMemParams &p);
 
     /// Validates a Generic Timer register frame address range
     /// @param base_addr Range of the register frame

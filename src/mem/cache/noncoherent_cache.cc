@@ -56,9 +56,11 @@
 #include "mem/cache/mshr.hh"
 #include "params/NoncoherentCache.hh"
 
-NoncoherentCache::NoncoherentCache(const NoncoherentCacheParams *p)
-    : BaseCache(p, p->system->cacheLineSize())
+NoncoherentCache::NoncoherentCache(const NoncoherentCacheParams &p)
+    : BaseCache(p, p.system->cacheLineSize())
 {
+    assert(p.tags);
+    assert(p.replacement_policy);
 }
 
 void
@@ -83,7 +85,7 @@ NoncoherentCache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
         // referenced block was not present or it was invalid. If that
         // is the case, make sure that the new block is marked as
         // writable
-        blk->status |= BlkWritable;
+        blk->setCoherenceBits(CacheBlk::WritableBit);
     }
 
     return success;
@@ -228,7 +230,7 @@ void
 NoncoherentCache::functionalAccess(PacketPtr pkt, bool from_cpu_side)
 {
     panic_if(!from_cpu_side, "Non-coherent cache received functional snoop"
-             " request\n");
+            " request\n");
 
     BaseCache::functionalAccess(pkt, from_cpu_side);
 }
@@ -269,8 +271,8 @@ NoncoherentCache::serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt,
             completion_time += clockEdge(responseLatency) +
                 (transfer_offset ? pkt->payloadDelay : 0);
 
-            assert(tgt_pkt->req->masterId() < system->maxMasters());
-            stats.cmdStats(tgt_pkt).missLatency[tgt_pkt->req->masterId()] +=
+            assert(tgt_pkt->req->requestorId() < system->maxRequestors());
+            stats.cmdStats(tgt_pkt).missLatency[tgt_pkt->req->requestorId()] +=
                 completion_time - target.recvTime;
 
             tgt_pkt->makeTimingResponse();
@@ -288,7 +290,7 @@ NoncoherentCache::serviceMSHRTargets(MSHR *mshr, const PacketPtr pkt,
             assert(tgt_pkt->cmd == MemCmd::HardPFReq);
 
             if (blk)
-                blk->status |= BlkHWPrefetched;
+                blk->setPrefetched();
 
             // We have filled the block and the prefetcher does not
             // require responses.
@@ -340,19 +342,10 @@ NoncoherentCache::evictBlock(CacheBlk *blk)
     // If we clean writebacks are not enabled, we do not take any
     // further action for evictions of clean blocks (i.e., CleanEvicts
     // are unnecessary).
-    PacketPtr pkt = (blk->isDirty() || writebackClean) ?
+    PacketPtr pkt = (blk->isSet(CacheBlk::DirtyBit) || writebackClean) ?
         writebackBlk(blk) : nullptr;
 
     invalidateBlock(blk);
 
     return pkt;
-}
-
-NoncoherentCache*
-NoncoherentCacheParams::create()
-{
-    assert(tags);
-    assert(replacement_policy);
-
-    return new NoncoherentCache(this);
 }

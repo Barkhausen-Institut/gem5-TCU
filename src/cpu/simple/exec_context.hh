@@ -54,11 +54,8 @@
 
 class BaseSimpleCPU;
 
-class SimpleExecContext : public ExecContext {
-  protected:
-    using VecRegContainer = TheISA::VecRegContainer;
-    using VecElem = TheISA::VecElem;
-
+class SimpleExecContext : public ExecContext
+{
   public:
     BaseSimpleCPU *cpu;
     SimpleThread* thread;
@@ -73,107 +70,212 @@ class SimpleExecContext : public ExecContext {
     TheISA::PCState predPC;
 
     /** PER-THREAD STATS */
-
-    // Number of simulated instructions
     Counter numInst;
-    Stats::Scalar numInsts;
     Counter numOp;
-    Stats::Scalar numOps;
-
-    // Number of integer alu accesses
-    Stats::Scalar numIntAluAccesses;
-
-    // Number of float alu accesses
-    Stats::Scalar numFpAluAccesses;
-
-    // Number of vector alu accesses
-    Stats::Scalar numVecAluAccesses;
-
-    // Number of function calls/returns
-    Stats::Scalar numCallsReturns;
-
-    // Conditional control instructions;
-    Stats::Scalar numCondCtrlInsts;
-
-    // Number of int instructions
-    Stats::Scalar numIntInsts;
-
-    // Number of float instructions
-    Stats::Scalar numFpInsts;
-
-    // Number of vector instructions
-    Stats::Scalar numVecInsts;
-
-    // Number of integer register file accesses
-    Stats::Scalar numIntRegReads;
-    Stats::Scalar numIntRegWrites;
-
-    // Number of float register file accesses
-    Stats::Scalar numFpRegReads;
-    Stats::Scalar numFpRegWrites;
-
-    // Number of vector register file accesses
-    mutable Stats::Scalar numVecRegReads;
-    Stats::Scalar numVecRegWrites;
-
-    // Number of predicate register file accesses
-    mutable Stats::Scalar numVecPredRegReads;
-    Stats::Scalar numVecPredRegWrites;
-
-    // Number of condition code register file accesses
-    Stats::Scalar numCCRegReads;
-    Stats::Scalar numCCRegWrites;
-
-    // Number of simulated memory references
-    Stats::Scalar numMemRefs;
-    Stats::Scalar numLoadInsts;
-    Stats::Scalar numStoreInsts;
-
-    // Number of idle cycles
-    Stats::Formula numIdleCycles;
-
-    // Number of busy cycles
-    Stats::Formula numBusyCycles;
-
     // Number of simulated loads
     Counter numLoad;
-
-    // Number of idle cycles
-    Stats::Average notIdleFraction;
-    Stats::Formula idleFraction;
-
     // Number of cycles stalled for I-cache responses
-    Stats::Scalar icacheStallCycles;
     Counter lastIcacheStall;
-
     // Number of cycles stalled for D-cache responses
-    Stats::Scalar dcacheStallCycles;
     Counter lastDcacheStall;
 
-    /// @{
-    /// Total number of branches fetched
-    Stats::Scalar numBranches;
-    /// Number of branches predicted as taken
-    Stats::Scalar numPredictedBranches;
-    /// Number of misprediced branches
-    Stats::Scalar numBranchMispred;
-    /// @}
+    struct ExecContextStats : public Stats::Group
+    {
+        ExecContextStats(BaseSimpleCPU *cpu, SimpleThread *thread)
+            : Stats::Group(cpu,
+                           csprintf("exec_context.thread_%i",
+                                    thread->threadId()).c_str()),
+              ADD_STAT(numInsts, UNIT_COUNT,
+                       "Number of instructions committed"),
+              ADD_STAT(numOps, UNIT_COUNT,
+                       "Number of ops (including micro ops) committed"),
+              ADD_STAT(numIntAluAccesses, UNIT_COUNT,
+                       "Number of integer alu accesses"),
+              ADD_STAT(numFpAluAccesses, UNIT_COUNT,
+                       "Number of float alu accesses"),
+              ADD_STAT(numVecAluAccesses, UNIT_COUNT,
+                       "Number of vector alu accesses"),
+              ADD_STAT(numCallsReturns, UNIT_COUNT,
+                       "Number of times a function call or return occured"),
+              ADD_STAT(numCondCtrlInsts, UNIT_COUNT,
+                       "Number of instructions that are conditional controls"),
+              ADD_STAT(numIntInsts, UNIT_COUNT,
+                       "Number of integer instructions"),
+              ADD_STAT(numFpInsts, UNIT_COUNT, "Number of float instructions"),
+              ADD_STAT(numVecInsts, UNIT_COUNT,
+                       "Number of vector instructions"),
+              ADD_STAT(numIntRegReads, UNIT_COUNT,
+                       "Number of times the integer registers were read"),
+              ADD_STAT(numIntRegWrites, UNIT_COUNT,
+                       "Number of times the integer registers were written"),
+              ADD_STAT(numFpRegReads, UNIT_COUNT,
+                       "Number of times the floating registers were read"),
+              ADD_STAT(numFpRegWrites, UNIT_COUNT,
+                       "Number of times the floating registers were written"),
+              ADD_STAT(numVecRegReads, UNIT_COUNT,
+                       "Number of times the vector registers were read"),
+              ADD_STAT(numVecRegWrites, UNIT_COUNT,
+                       "Number of times the vector registers were written"),
+              ADD_STAT(numVecPredRegReads, UNIT_COUNT,
+                       "Number of times the predicate registers were read"),
+              ADD_STAT(numVecPredRegWrites, UNIT_COUNT,
+                       "Number of times the predicate registers were written"),
+              ADD_STAT(numCCRegReads, UNIT_COUNT,
+                       "Number of times the CC registers were read"),
+              ADD_STAT(numCCRegWrites, UNIT_COUNT,
+                       "Number of times the CC registers were written"),
+              ADD_STAT(numMemRefs, UNIT_COUNT, "Number of memory refs"),
+              ADD_STAT(numLoadInsts, UNIT_COUNT,
+                       "Number of load instructions"),
+              ADD_STAT(numStoreInsts, UNIT_COUNT,
+                       "Number of store instructions"),
+              ADD_STAT(numIdleCycles, UNIT_CYCLE, "Number of idle cycles"),
+              ADD_STAT(numBusyCycles, UNIT_CYCLE, "Number of busy cycles"),
+              ADD_STAT(notIdleFraction, UNIT_RATIO,
+                       "Percentage of non-idle cycles"),
+              ADD_STAT(idleFraction, UNIT_RATIO, "Percentage of idle cycles"),
+              ADD_STAT(icacheStallCycles, UNIT_CYCLE,
+                       "ICache total stall cycles"),
+              ADD_STAT(dcacheStallCycles, UNIT_CYCLE,
+                       "DCache total stall cycles"),
+              ADD_STAT(numBranches, UNIT_COUNT, "Number of branches fetched"),
+              ADD_STAT(numPredictedBranches, UNIT_COUNT,
+                       "Number of branches predicted as taken"),
+              ADD_STAT(numBranchMispred, UNIT_COUNT,
+                       "Number of branch mispredictions"),
+              ADD_STAT(statExecutedInstType, UNIT_COUNT,
+                       "Class of executed instruction.")
+        {
+            numCCRegReads
+                .flags(Stats::nozero);
 
-   // Instruction mix histogram by OpClass
-   Stats::Vector statExecutedInstType;
+            numCCRegWrites
+                .flags(Stats::nozero);
+
+            icacheStallCycles
+                .prereq(icacheStallCycles);
+
+            dcacheStallCycles
+                .prereq(dcacheStallCycles);
+
+            statExecutedInstType
+                .init(Enums::Num_OpClass)
+                .flags(Stats::total | Stats::pdf | Stats::dist);
+
+            for (unsigned i = 0; i < Num_OpClasses; ++i) {
+                statExecutedInstType.subname(i, Enums::OpClassStrings[i]);
+            }
+
+            idleFraction = Stats::constant(1.0) - notIdleFraction;
+            numIdleCycles = idleFraction * cpu->baseStats.numCycles;
+            numBusyCycles = notIdleFraction * cpu->baseStats.numCycles;
+
+            numBranches
+                .prereq(numBranches);
+
+            numPredictedBranches
+                .prereq(numPredictedBranches);
+
+            numBranchMispred
+                .prereq(numBranchMispred);
+        }
+
+        // Number of simulated instructions
+        Stats::Scalar numInsts;
+        Stats::Scalar numOps;
+
+        // Number of integer alu accesses
+        Stats::Scalar numIntAluAccesses;
+
+        // Number of float alu accesses
+        Stats::Scalar numFpAluAccesses;
+
+        // Number of vector alu accesses
+        Stats::Scalar numVecAluAccesses;
+
+        // Number of function calls/returns
+        Stats::Scalar numCallsReturns;
+
+        // Conditional control instructions;
+        Stats::Scalar numCondCtrlInsts;
+
+        // Number of int instructions
+        Stats::Scalar numIntInsts;
+
+        // Number of float instructions
+        Stats::Scalar numFpInsts;
+
+        // Number of vector instructions
+        Stats::Scalar numVecInsts;
+
+        // Number of integer register file accesses
+        Stats::Scalar numIntRegReads;
+        Stats::Scalar numIntRegWrites;
+
+        // Number of float register file accesses
+        Stats::Scalar numFpRegReads;
+        Stats::Scalar numFpRegWrites;
+
+        // Number of vector register file accesses
+        mutable Stats::Scalar numVecRegReads;
+        Stats::Scalar numVecRegWrites;
+
+        // Number of predicate register file accesses
+        mutable Stats::Scalar numVecPredRegReads;
+        Stats::Scalar numVecPredRegWrites;
+
+        // Number of condition code register file accesses
+        Stats::Scalar numCCRegReads;
+        Stats::Scalar numCCRegWrites;
+
+        // Number of simulated memory references
+        Stats::Scalar numMemRefs;
+        Stats::Scalar numLoadInsts;
+        Stats::Scalar numStoreInsts;
+
+        // Number of idle cycles
+        Stats::Formula numIdleCycles;
+
+        // Number of busy cycles
+        Stats::Formula numBusyCycles;
+
+        // Number of idle cycles
+        Stats::Average notIdleFraction;
+        Stats::Formula idleFraction;
+
+        // Number of cycles stalled for I-cache responses
+        Stats::Scalar icacheStallCycles;
+
+        // Number of cycles stalled for D-cache responses
+        Stats::Scalar dcacheStallCycles;
+
+        /// @{
+        /// Total number of branches fetched
+        Stats::Scalar numBranches;
+        /// Number of branches predicted as taken
+        Stats::Scalar numPredictedBranches;
+        /// Number of misprediced branches
+        Stats::Scalar numBranchMispred;
+        /// @}
+
+        // Instruction mix histogram by OpClass
+        Stats::Vector statExecutedInstType;
+
+    } execContextStats;
 
   public:
     /** Constructor */
     SimpleExecContext(BaseSimpleCPU* _cpu, SimpleThread* _thread)
         : cpu(_cpu), thread(_thread), fetchOffset(0), stayAtPC(false),
-        numInst(0), numOp(0), numLoad(0), lastIcacheStall(0), lastDcacheStall(0)
+        numInst(0), numOp(0), numLoad(0), lastIcacheStall(0),
+        lastDcacheStall(0), execContextStats(cpu, thread)
     { }
 
     /** Reads an integer register. */
     RegVal
     readIntRegOperand(const StaticInst *si, int idx) override
     {
-        numIntRegReads++;
+        execContextStats.numIntRegReads++;
         const RegId& reg = si->srcRegIdx(idx);
         assert(reg.isIntReg());
         return thread->readIntReg(reg.index());
@@ -183,7 +285,7 @@ class SimpleExecContext : public ExecContext {
     void
     setIntRegOperand(const StaticInst *si, int idx, RegVal val) override
     {
-        numIntRegWrites++;
+        execContextStats.numIntRegWrites++;
         const RegId& reg = si->destRegIdx(idx);
         assert(reg.isIntReg());
         thread->setIntReg(reg.index(), val);
@@ -194,7 +296,7 @@ class SimpleExecContext : public ExecContext {
     RegVal
     readFloatRegOperandBits(const StaticInst *si, int idx) override
     {
-        numFpRegReads++;
+        execContextStats.numFpRegReads++;
         const RegId& reg = si->srcRegIdx(idx);
         assert(reg.isFloatReg());
         return thread->readFloatReg(reg.index());
@@ -205,27 +307,27 @@ class SimpleExecContext : public ExecContext {
     void
     setFloatRegOperandBits(const StaticInst *si, int idx, RegVal val) override
     {
-        numFpRegWrites++;
+        execContextStats.numFpRegWrites++;
         const RegId& reg = si->destRegIdx(idx);
         assert(reg.isFloatReg());
         thread->setFloatReg(reg.index(), val);
     }
 
     /** Reads a vector register. */
-    const VecRegContainer &
+    const TheISA::VecRegContainer &
     readVecRegOperand(const StaticInst *si, int idx) const override
     {
-        numVecRegReads++;
+        execContextStats.numVecRegReads++;
         const RegId& reg = si->srcRegIdx(idx);
         assert(reg.isVecReg());
         return thread->readVecReg(reg);
     }
 
     /** Reads a vector register for modification. */
-    VecRegContainer &
+    TheISA::VecRegContainer &
     getWritableVecRegOperand(const StaticInst *si, int idx) override
     {
-        numVecRegWrites++;
+        execContextStats.numVecRegWrites++;
         const RegId& reg = si->destRegIdx(idx);
         assert(reg.isVecReg());
         return thread->getWritableVecReg(reg);
@@ -234,9 +336,9 @@ class SimpleExecContext : public ExecContext {
     /** Sets a vector register to a value. */
     void
     setVecRegOperand(const StaticInst *si, int idx,
-                     const VecRegContainer& val) override
+                     const TheISA::VecRegContainer& val) override
     {
-        numVecRegWrites++;
+        execContextStats.numVecRegWrites++;
         const RegId& reg = si->destRegIdx(idx);
         assert(reg.isVecReg());
         thread->setVecReg(reg, val);
@@ -245,14 +347,14 @@ class SimpleExecContext : public ExecContext {
     /** Vector Register Lane Interfaces. */
     /** @{ */
     /** Reads source vector lane. */
-    template <typename VecElem>
-    VecLaneT<VecElem, true>
+    template <typename VE>
+    VecLaneT<VE, true>
     readVecLaneOperand(const StaticInst *si, int idx) const
     {
-        numVecRegReads++;
+        execContextStats.numVecRegReads++;
         const RegId& reg = si->srcRegIdx(idx);
         assert(reg.isVecReg());
-        return thread->readVecLane<VecElem>(reg);
+        return thread->readVecLane<VE>(reg);
     }
     /** Reads source vector 8bit operand. */
     virtual ConstVecLane8
@@ -284,7 +386,7 @@ class SimpleExecContext : public ExecContext {
     setVecLaneOperandT(const StaticInst *si, int idx,
             const LD& val)
     {
-        numVecRegWrites++;
+        execContextStats.numVecRegWrites++;
         const RegId& reg = si->destRegIdx(idx);
         assert(reg.isVecReg());
         return thread->setVecLane(reg, val);
@@ -312,10 +414,10 @@ class SimpleExecContext : public ExecContext {
     /** @} */
 
     /** Reads an element of a vector register. */
-    VecElem
+    TheISA::VecElem
     readVecElemOperand(const StaticInst *si, int idx) const override
     {
-        numVecRegReads++;
+        execContextStats.numVecRegReads++;
         const RegId& reg = si->srcRegIdx(idx);
         assert(reg.isVecElem());
         return thread->readVecElem(reg);
@@ -324,27 +426,27 @@ class SimpleExecContext : public ExecContext {
     /** Sets an element of a vector register to a value. */
     void
     setVecElemOperand(const StaticInst *si, int idx,
-                      const VecElem val) override
+                      const TheISA::VecElem val) override
     {
-        numVecRegWrites++;
+        execContextStats.numVecRegWrites++;
         const RegId& reg = si->destRegIdx(idx);
         assert(reg.isVecElem());
         thread->setVecElem(reg, val);
     }
 
-    const VecPredRegContainer&
+    const TheISA::VecPredRegContainer&
     readVecPredRegOperand(const StaticInst *si, int idx) const override
     {
-        numVecPredRegReads++;
+        execContextStats.numVecPredRegReads++;
         const RegId& reg = si->srcRegIdx(idx);
         assert(reg.isVecPredReg());
         return thread->readVecPredReg(reg);
     }
 
-    VecPredRegContainer&
+    TheISA::VecPredRegContainer&
     getWritableVecPredRegOperand(const StaticInst *si, int idx) override
     {
-        numVecPredRegWrites++;
+        execContextStats.numVecPredRegWrites++;
         const RegId& reg = si->destRegIdx(idx);
         assert(reg.isVecPredReg());
         return thread->getWritableVecPredReg(reg);
@@ -352,9 +454,9 @@ class SimpleExecContext : public ExecContext {
 
     void
     setVecPredRegOperand(const StaticInst *si, int idx,
-                         const VecPredRegContainer& val) override
+                         const TheISA::VecPredRegContainer& val) override
     {
-        numVecPredRegWrites++;
+        execContextStats.numVecPredRegWrites++;
         const RegId& reg = si->destRegIdx(idx);
         assert(reg.isVecPredReg());
         thread->setVecPredReg(reg, val);
@@ -363,7 +465,7 @@ class SimpleExecContext : public ExecContext {
     RegVal
     readCCRegOperand(const StaticInst *si, int idx) override
     {
-        numCCRegReads++;
+        execContextStats.numCCRegReads++;
         const RegId& reg = si->srcRegIdx(idx);
         assert(reg.isCCReg());
         return thread->readCCReg(reg.index());
@@ -372,7 +474,7 @@ class SimpleExecContext : public ExecContext {
     void
     setCCRegOperand(const StaticInst *si, int idx, RegVal val) override
     {
-        numCCRegWrites++;
+        execContextStats.numCCRegWrites++;
         const RegId& reg = si->destRegIdx(idx);
         assert(reg.isCCReg());
         thread->setCCReg(reg.index(), val);
@@ -381,7 +483,7 @@ class SimpleExecContext : public ExecContext {
     RegVal
     readMiscRegOperand(const StaticInst *si, int idx) override
     {
-        numIntRegReads++;
+        execContextStats.numIntRegReads++;
         const RegId& reg = si->srcRegIdx(idx);
         assert(reg.isMiscReg());
         return thread->readMiscReg(reg.index());
@@ -390,7 +492,7 @@ class SimpleExecContext : public ExecContext {
     void
     setMiscRegOperand(const StaticInst *si, int idx, RegVal val) override
     {
-        numIntRegWrites++;
+        execContextStats.numIntRegWrites++;
         const RegId& reg = si->destRegIdx(idx);
         assert(reg.isMiscReg());
         thread->setMiscReg(reg.index(), val);
@@ -403,7 +505,7 @@ class SimpleExecContext : public ExecContext {
     RegVal
     readMiscReg(int misc_reg) override
     {
-        numIntRegReads++;
+        execContextStats.numIntRegReads++;
         return thread->readMiscReg(misc_reg);
     }
 
@@ -414,18 +516,18 @@ class SimpleExecContext : public ExecContext {
     void
     setMiscReg(int misc_reg, RegVal val) override
     {
-        numIntRegWrites++;
+        execContextStats.numIntRegWrites++;
         thread->setMiscReg(misc_reg, val);
     }
 
-    PCState
+    TheISA::PCState
     pcState() const override
     {
         return thread->pcState();
     }
 
     void
-    pcState(const PCState &val) override
+    pcState(const TheISA::PCState &val) override
     {
         thread->pcState(val);
     }
@@ -433,31 +535,32 @@ class SimpleExecContext : public ExecContext {
     Fault
     readMem(Addr addr, uint8_t *data, unsigned int size,
             Request::Flags flags,
-            const std::vector<bool>& byte_enable = std::vector<bool>())
+            const std::vector<bool>& byte_enable)
         override
     {
-        assert(byte_enable.empty() || byte_enable.size() == size);
+        assert(byte_enable.size() == size);
         return cpu->readMem(addr, data, size, flags, byte_enable);
     }
 
     Fault
     initiateMemRead(Addr addr, unsigned int size,
                     Request::Flags flags,
-                    const std::vector<bool>& byte_enable = std::vector<bool>())
+                    const std::vector<bool>& byte_enable)
         override
     {
-        assert(byte_enable.empty() || byte_enable.size() == size);
+        assert(byte_enable.size() == size);
         return cpu->initiateMemRead(addr, size, flags, byte_enable);
     }
 
     Fault
     writeMem(uint8_t *data, unsigned int size, Addr addr,
              Request::Flags flags, uint64_t *res,
-             const std::vector<bool>& byte_enable = std::vector<bool>())
+             const std::vector<bool>& byte_enable)
         override
     {
-        assert(byte_enable.empty() || byte_enable.size() == size);
-        return cpu->writeMem(data, size, addr, flags, res, byte_enable);
+        assert(byte_enable.size() == size);
+        return cpu->writeMem(data, size, addr, flags, res,
+            byte_enable);
     }
 
     Fault amoMem(Addr addr, uint8_t *data, unsigned int size,
@@ -471,6 +574,11 @@ class SimpleExecContext : public ExecContext {
                          AtomicOpFunctorPtr amo_op) override
     {
         return cpu->initiateMemAMO(addr, size, flags, std::move(amo_op));
+    }
+
+    Fault initiateHtmCmd(Request::Flags flags) override
+    {
+        return cpu->initiateHtmCmd(flags);
     }
 
     /**
@@ -489,15 +597,6 @@ class SimpleExecContext : public ExecContext {
     readStCondFailures() const override
     {
         return thread->readStCondFailures();
-    }
-
-    /**
-     * Executes a syscall specified by the callnum.
-     */
-    void
-    syscall(Fault *fault) override
-    {
-        thread->syscall(fault);
     }
 
     /** Returns a pointer to the ThreadContext. */
@@ -531,6 +630,31 @@ class SimpleExecContext : public ExecContext {
         thread->setMemAccPredicate(val);
     }
 
+    uint64_t
+    getHtmTransactionUid() const override
+    {
+        return tcBase()->getHtmCheckpointPtr()->getHtmUid();
+    }
+
+    uint64_t
+    newHtmTransactionUid() const override
+    {
+        return tcBase()->getHtmCheckpointPtr()->newHtmUid();
+    }
+
+    bool
+    inHtmTransactionalState() const override
+    {
+        return (getHtmTransactionalDepth() > 0);
+    }
+
+    uint64_t
+    getHtmTransactionalDepth() const override
+    {
+        assert(thread->htmTransactionStarts >= thread->htmTransactionStops);
+        return (thread->htmTransactionStarts - thread->htmTransactionStops);
+    }
+
     /**
      * Invalidate a page in the DTLB <i>and</i> ITLB.
      */
@@ -555,7 +679,7 @@ class SimpleExecContext : public ExecContext {
     void
     mwaitAtomic(ThreadContext *tc) override
     {
-        cpu->mwaitAtomic(thread->threadId(), tc, thread->dtb);
+        cpu->mwaitAtomic(thread->threadId(), tc, thread->mmu);
     }
 
     AddressMonitor *

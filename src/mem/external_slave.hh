@@ -39,7 +39,7 @@
  * @file
  *
  * ExternalSlave is a memory object representing a binding from
- * a gem5 master to a slave port in a system external to gem5.
+ * a gem5 requestor to a response port in a system external to gem5.
  *
  * During initialisation, a `handler' for the port type specified in the
  * port's port_type parameter is found from the registered port handlers
@@ -123,7 +123,7 @@ class ExternalSlave : public SimObject
     static std::map<std::string, Handler *> portHandlers;
 
   public:
-    ExternalSlave(ExternalSlaveParams *params);
+    ExternalSlave(const ExternalSlaveParams &params);
 
     /** Port interface.  Responds only to port "port" */
     Port &getPort(const std::string &if_name,

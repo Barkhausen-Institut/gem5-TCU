@@ -41,7 +41,7 @@ static int translate(RiscvConnector::IRQ irq)
     return RiscvISA::ExceptionCode::INT_TIMER_SUPER;
 }
 
-RiscvConnector::RiscvConnector(const RiscvConnectorParams *p)
+RiscvConnector::RiscvConnector(const RiscvConnectorParams &p)
   : CoreConnector(p)
 {
 }
@@ -52,7 +52,7 @@ RiscvConnector::doSetIrq(IRQ irq)
     int vector = translate(irq);
     DPRINTF(TcuConnector, "Injecting IRQ %d (vector %d)\n", irq, vector);
 
-    ThreadContext *tc = system->getThreadContext(0);
+    ThreadContext *tc = system->threads[0];
     tc->getCpuPtr()->getInterruptController(0)->post(vector, 0);
 }
 
@@ -62,12 +62,6 @@ RiscvConnector::doClearIrq(IRQ irq)
     int vector = translate(irq);
     DPRINTF(TcuConnector, "Clearing IRQ %d (vector %d)\n", irq, vector);
 
-    ThreadContext *tc = system->getThreadContext(0);
+    ThreadContext *tc = system->threads[0];
     tc->getCpuPtr()->getInterruptController(0)->clear(vector, 0);
-}
-
-RiscvConnector*
-RiscvConnectorParams::create()
-{
-    return new RiscvConnector(this);
 }

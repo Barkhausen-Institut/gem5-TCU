@@ -44,7 +44,6 @@
 #include <sstream>
 #include <cxxabi.h>
 
-#include "arch/isa_traits.hh"
 #include "arch/utility.hh"
 #include "base/loader/symtab.hh"
 #include "config/the_isa.hh"
@@ -52,12 +51,8 @@
 #include "cpu/static_inst.hh"
 #include "cpu/thread_context.hh"
 #include "debug/ExecAll.hh"
-#include "debug/ExecPC.hh"
 #include "debug/FmtTicksOff.hh"
 #include "enums/OpClass.hh"
-
-using namespace std;
-using namespace TheISA;
 
 namespace Trace {
 
@@ -66,50 +61,47 @@ Trace::ExeTracerRecord::traceInst(const StaticInstPtr &inst, bool ran)
 {
     std::stringstream outs;
 
-    if (!Debug::ExecUser || !Debug::ExecKernel) {
-        bool in_user_mode = TheISA::inUserMode(thread);
-        if (in_user_mode && !Debug::ExecUser) return;
-        if (!in_user_mode && !Debug::ExecKernel) return;
-    }
+    const bool in_user_mode = thread->getIsaPtr()->inUserMode();
+    if (in_user_mode && !Debug::ExecUser)
+        return;
+    if (!in_user_mode && !Debug::ExecKernel)
+        return;
 
-    if (Debug::ExecAsid)
-        outs << "A" << dec << TheISA::getExecutingAsid(thread) << " ";
+    if (Debug::ExecAsid) {
+        outs << "A" << std::dec <<
+            thread->getIsaPtr()->getExecutingAsid() << " ";
+    }
 
     if (Debug::ExecThread)
         outs << "T" << thread->threadId() << " : ";
 
-    std::string sym_str;
-    Addr sym_addr;
     Addr cur_pc = pc.instAddr();
-    if (thread->getSymTab() && Debug::ExecSymbol &&
-            (!FullSystem || !inUserMode(thread)) &&
-            thread->getSymTab()->findNearestSymbol(
-                cur_pc, sym_str, sym_addr)) {
-        if (cur_pc != sym_addr)
-            sym_str += csprintf("+%d",cur_pc - sym_addr);
-        if(Debug::ExecPC)
-            outs << "0x" << hex << cur_pc << " @ ";
+    Loader::SymbolTable::const_iterator it;
+    ccprintf(outs, "%#x", cur_pc);
+    if (Debug::ExecSymbol && (!FullSystem || !in_user_mode) &&
+            (it = thread->getSymTab().findNearest(cur_pc)) !=
+                thread->getSymTab().end()) {
+        Addr delta = cur_pc - it->address;
+        if (delta)
+            ccprintf(outs, " @%s+%d", it->name, delta);
         else
-            outs << "@";
-        outs << sym_str;
-    } else {
-        outs << "0x" << hex << cur_pc;
+            ccprintf(outs, " @%s", it->name);
     }
 
     if (inst->isMicroop()) {
-        outs << "." << setw(2) << dec << pc.microPC();
+        ccprintf(outs, ".%2d", pc.microPC());
     } else {
-        outs << "   ";
+        ccprintf(outs, "   ");
     }
 
-    outs << " : ";
+    ccprintf(outs, " : ");
 
     //
     //  Print decoded instruction
     //
 
-    outs << setw(26) << left;
-    outs << inst->disassemble(cur_pc, thread->getSymTab());
+    outs << std::setw(26) << std::left;
+    outs << inst->disassemble(cur_pc, &thread->getSymTab());
 
     if (ran) {
         outs << " : ";
@@ -158,13 +150,13 @@ Trace::ExeTracerRecord::traceInst(const StaticInstPtr &inst, bool ran)
         }
 
         if (Debug::ExecEffAddr && getMemValid())
-            outs << " A=0x" << hex << addr;
+            outs << " A=0x" << std::hex << addr;
 
         if (Debug::ExecFetchSeq && fetch_seq_valid)
-            outs << "  FetchSeq=" << dec << fetch_seq;
+            outs << "  FetchSeq=" << std::dec << fetch_seq;
 
         if (Debug::ExecCPSeq && cp_seq_valid)
-            outs << "  CPSeq=" << dec << cp_seq;
+            outs << "  CPSeq=" << std::dec << cp_seq;
 
         if (Debug::ExecFlags) {
             outs << "  flags=(";
@@ -176,7 +168,7 @@ Trace::ExeTracerRecord::traceInst(const StaticInstPtr &inst, bool ran)
     //
     //  End of line...
     //
-    outs << endl;
+    outs << std::endl;
 
     Trace::getDebugLogger()->dprintf_flag(
         when, thread->getCpuPtr()->name(), "ExecEnable", "%s",
@@ -207,13 +199,3 @@ Trace::ExeTracerRecord::dump()
 }
 
 } // namespace Trace
-
-////////////////////////////////////////////////////////////////////////
-//
-//  ExeTracer Simulation Object
-//
-Trace::ExeTracer *
-ExeTracerParams::create()
-{
-    return new Trace::ExeTracer(this);
-}

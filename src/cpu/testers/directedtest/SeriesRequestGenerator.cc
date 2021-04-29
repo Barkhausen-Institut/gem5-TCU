@@ -35,10 +35,10 @@
 #include "cpu/testers/directedtest/RubyDirectedTester.hh"
 #include "debug/DirectedTest.hh"
 
-SeriesRequestGenerator::SeriesRequestGenerator(const Params *p)
+SeriesRequestGenerator::SeriesRequestGenerator(const Params &p)
     : DirectedGenerator(p),
-      m_addr_increment_size(p->addr_increment_size),
-      m_percent_writes(p->percent_writes)
+      m_addr_increment_size(p.addr_increment_size),
+      m_percent_writes(p.percent_writes)
 {
     m_status = SeriesRequestGeneratorStatus_Thinking;
     m_active_node = 0;
@@ -55,12 +55,13 @@ SeriesRequestGenerator::initiate()
     DPRINTF(DirectedTest, "initiating request\n");
     assert(m_status == SeriesRequestGeneratorStatus_Thinking);
 
-    MasterPort* port = m_directed_tester->getCpuPort(m_active_node);
+    RequestPort* port = m_directed_tester->getCpuPort(m_active_node);
 
     Request::Flags flags;
 
     // For simplicity, requests are assumed to be 1 byte-sized
-    RequestPtr req = std::make_shared<Request>(m_address, 1, flags, masterId);
+    RequestPtr req = std::make_shared<Request>(m_address, 1, flags,
+                                               requestorId);
 
     Packet::Command cmd;
     bool do_write = (random_mt.random(0, 100) < m_percent_writes);
@@ -106,10 +107,4 @@ SeriesRequestGenerator::performCallback(uint32_t proc, Addr address)
         m_address += m_addr_increment_size;
         m_active_node = 0;
     }
-}
-
-SeriesRequestGenerator *
-SeriesRequestGeneratorParams::create()
-{
-    return new SeriesRequestGenerator(this);
 }

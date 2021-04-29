@@ -44,8 +44,8 @@
 #include "debug/Fetch.hh"
 #include "debug/LTage.hh"
 
-LTAGE::LTAGE(const LTAGEParams *params)
-  : TAGE(params), loopPredictor(params->loop_predictor)
+LTAGE::LTAGE(const LTAGEParams &params)
+  : TAGE(params), loopPredictor(params.loop_predictor)
 {
 }
 
@@ -141,14 +141,3 @@ LTAGE::squash(ThreadID tid, void *bp_history)
     TAGE::squash(tid, bp_history);
 }
 
-void
-LTAGE::regStats()
-{
-    TAGE::regStats();
-}
-
-LTAGE*
-LTAGEParams::create()
-{
-    return new LTAGE(this);
-}

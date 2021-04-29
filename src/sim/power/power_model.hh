@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018 ARM Limited
+ * Copyright (c) 2016, 2018, 2021 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -39,6 +39,7 @@
 #define __SIM_POWER_POWER_MODEL_HH__
 
 #include "base/statistics.hh"
+#include "base/temperature.hh"
 #include "enums/PMType.hh"
 #include "params/PowerModel.hh"
 #include "params/PowerModelState.hh"
@@ -56,7 +57,7 @@ class PowerModelState : public SimObject
   public:
 
     typedef PowerModelStateParams Params;
-    PowerModelState(const Params *p);
+    PowerModelState(const Params &p);
 
     /**
      * Get the dynamic power consumption.
@@ -75,38 +76,23 @@ class PowerModelState : public SimObject
     /**
      * Temperature update.
      *
-     * @param temp Current temperature of the HW part (Celsius)
+     * @param temp Current temperature of the HW part
      */
-    virtual void setTemperature(double temp) { _temp = temp; }
+    virtual void setTemperature(Temperature temp) { _temp = temp; }
 
     void setClockedObject(ClockedObject * clkobj) {
         clocked_object = clkobj;
     }
 
-    void regStats() {
-        SimObject::regStats();
-
-        dynamicPower
-          .method(this, &PowerModelState::getDynamicPower)
-          .name(params()->name + ".dynamic_power")
-          .desc("Dynamic power for this object (Watts)")
-        ;
-
-        staticPower
-          .method(this, &PowerModelState::getStaticPower)
-          .name(params()->name + ".static_power")
-          .desc("Static power for this object (Watts)")
-        ;
-    }
-
   protected:
-    Stats::Value dynamicPower, staticPower;
 
     /** Current temperature */
-    double _temp;
+    Temperature _temp;
 
     /** The clocked object we belong to */
     ClockedObject * clocked_object;
+
+    Stats::Value dynamicPower, staticPower;
 };
 
 /**
@@ -120,7 +106,7 @@ class PowerModel : public SimObject
   public:
 
     typedef PowerModelParams Params;
-    PowerModel(const Params *p);
+    PowerModel(const Params &p);
 
     /**
      * Get the dynamic power consumption.
@@ -136,38 +122,22 @@ class PowerModel : public SimObject
      */
     double getStaticPower() const;
 
-    void regStats() {
-        SimObject::regStats();
-
-        dynamicPower
-          .method(this, &PowerModel::getDynamicPower)
-          .name(params()->name + ".dynamic_power")
-          .desc("Dynamic power for this power state")
-        ;
-
-        staticPower
-          .method(this, &PowerModel::getStaticPower)
-          .name(params()->name + ".static_power")
-          .desc("Static power for this power state")
-        ;
-    }
-
     void setClockedObject(ClockedObject *clkobj);
 
     virtual void regProbePoints();
 
-    void thermalUpdateCallback(const double & temp);
+    void thermalUpdateCallback(const Temperature &temp);
 
   protected:
     /** Listener class to catch thermal events */
-    class ThermalProbeListener : public ProbeListenerArgBase<double>
+    class ThermalProbeListener : public ProbeListenerArgBase<Temperature>
     {
       public:
         ThermalProbeListener(PowerModel &_pm, ProbeManager *pm,
                       const std::string &name)
             : ProbeListenerArgBase(pm, name), pm(_pm) {}
 
-        void notify(const double &temp)
+        void notify(const Temperature &temp)
         {
             pm.thermalUpdateCallback(temp);
         }
@@ -175,8 +145,6 @@ class PowerModel : public SimObject
       protected:
         PowerModel &pm;
     };
-
-    Stats::Value dynamicPower, staticPower;
 
     /** Actual power models (one per power state) */
     std::vector<PowerModelState*> states_pm;
@@ -192,6 +160,8 @@ class PowerModel : public SimObject
 
     /** The type of power model - collects all power, static or dynamic only */
     Enums::PMType power_model_type;
+
+    Stats::Value dynamicPower, staticPower;
 };
 
 #endif

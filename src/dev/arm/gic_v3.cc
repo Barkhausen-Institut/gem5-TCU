@@ -51,7 +51,7 @@
 #include "mem/packet.hh"
 #include "mem/packet_access.hh"
 
-Gicv3::Gicv3(const Params * p)
+Gicv3::Gicv3(const Params &p)
     : BaseGic(p)
 {
 }
@@ -59,37 +59,36 @@ Gicv3::Gicv3(const Params * p)
 void
 Gicv3::init()
 {
-    distributor = new Gicv3Distributor(this, params()->it_lines);
-    redistributors.resize(sys->numContexts(), nullptr);
-    cpuInterfaces.resize(sys->numContexts(), nullptr);
+    distributor = new Gicv3Distributor(this, params().it_lines);
+    int threads = sys->threads.size();
+    redistributors.resize(threads, nullptr);
+    cpuInterfaces.resize(threads, nullptr);
 
-    panic_if(sys->numContexts() > params()->cpu_max,
+    panic_if(threads > params().cpu_max,
         "Exceeding maximum number of PEs supported by GICv3: "
-        "using %u while maximum is %u\n", sys->numContexts(),
-        params()->cpu_max);
+        "using %u while maximum is %u.", threads, params().cpu_max);
 
-    for (int i = 0; i < sys->numContexts(); i++) {
+    for (int i = 0; i < threads; i++) {
         redistributors[i] = new Gicv3Redistributor(this, i);
         cpuInterfaces[i] = new Gicv3CPUInterface(this, i);
     }
 
-    distRange = RangeSize(params()->dist_addr,
-        Gicv3Distributor::ADDR_RANGE_SIZE - 1);
+    distRange = RangeSize(params().dist_addr,
+        Gicv3Distributor::ADDR_RANGE_SIZE);
 
     redistSize = redistributors[0]->addrRangeSize;
-    redistRange = RangeSize(params()->redist_addr,
-         redistSize * sys->numContexts() - 1);
+    redistRange = RangeSize(params().redist_addr, redistSize * threads);
 
     addrRanges = {distRange, redistRange};
 
     distributor->init();
 
-    for (int i = 0; i < sys->numContexts(); i++) {
+    for (int i = 0; i < threads; i++) {
         redistributors[i]->init();
         cpuInterfaces[i]->init();
     }
 
-    Gicv3Its *its = params()->its;
+    Gicv3Its *its = params().its;
     if (its)
         its->setGIC(this);
 
@@ -109,7 +108,7 @@ Gicv3::read(PacketPtr pkt)
         const Addr daddr = addr - distRange.start();
         panic_if(!distributor, "Distributor is null!");
         resp = distributor->read(daddr, size, is_secure_access);
-        delay = params()->dist_pio_delay;
+        delay = params().dist_pio_delay;
         DPRINTF(GIC, "Gicv3::read(): (distributor) context_id %d register %#x "
                 "size %d is_secure_access %d (value %#x)\n",
                 pkt->req->contextId(), daddr, size, is_secure_access, resp);
@@ -119,7 +118,7 @@ Gicv3::read(PacketPtr pkt)
         Gicv3Redistributor *redist = getRedistributorByAddr(addr);
         resp = redist->read(daddr, size, is_secure_access);
 
-        delay = params()->redist_pio_delay;
+        delay = params().redist_pio_delay;
         DPRINTF(GIC, "Gicv3::read(): (redistributor %d) context_id %d "
                 "register %#x size %d is_secure_access %d (value %#x)\n",
                 redist->processorNumber(), pkt->req->contextId(), daddr, size,
@@ -128,7 +127,7 @@ Gicv3::read(PacketPtr pkt)
         panic("Gicv3::read(): unknown address %#x\n", addr);
     }
 
-    pkt->setUintX(resp, LittleEndianByteOrder);
+    pkt->setUintX(resp, ByteOrder::little);
     pkt->makeAtomicResponse();
     return delay;
 }
@@ -137,7 +136,7 @@ Tick
 Gicv3::write(PacketPtr pkt)
 {
     const size_t size = pkt->getSize();
-    uint64_t data = pkt->getUintX(LittleEndianByteOrder);
+    uint64_t data = pkt->getUintX(ByteOrder::little);
     const Addr addr = pkt->getAddr();
     bool is_secure_access = pkt->isSecure();
     Tick delay = 0;
@@ -149,7 +148,7 @@ Gicv3::write(PacketPtr pkt)
                 "register %#x size %d is_secure_access %d value %#x\n",
                 pkt->req->contextId(), daddr, size, is_secure_access, data);
         distributor->write(daddr, data, size, is_secure_access);
-        delay = params()->dist_pio_delay;
+        delay = params().dist_pio_delay;
     } else if (redistRange.contains(addr)) {
         Addr daddr = (addr - redistRange.start()) % redistSize;
 
@@ -161,7 +160,7 @@ Gicv3::write(PacketPtr pkt)
 
         redist->write(daddr, data, size, is_secure_access);
 
-        delay = params()->redist_pio_delay;
+        delay = params().redist_pio_delay;
     } else {
         panic("Gicv3::write(): unknown address %#x\n", addr);
     }
@@ -173,46 +172,47 @@ Gicv3::write(PacketPtr pkt)
 void
 Gicv3::sendInt(uint32_t int_id)
 {
-    panic_if(int_id < Gicv3::SGI_MAX + Gicv3::PPI_MAX, "Invalid SPI!");
-    panic_if(int_id >= Gicv3::INTID_SECURE, "Invalid SPI!");
     DPRINTF(Interrupt, "Gicv3::sendInt(): received SPI %d\n", int_id);
     distributor->sendInt(int_id);
 }
 
 void
-Gicv3::clearInt(uint32_t number)
+Gicv3::clearInt(uint32_t int_id)
 {
-    distributor->deassertSPI(number);
+    DPRINTF(Interrupt, "Gicv3::clearInt(): received SPI %d\n", int_id);
+    distributor->clearInt(int_id);
 }
 
 void
 Gicv3::sendPPInt(uint32_t int_id, uint32_t cpu)
 {
     panic_if(cpu >= redistributors.size(), "Invalid cpuID sending PPI!");
-    panic_if(int_id < Gicv3::SGI_MAX, "Invalid PPI!");
-    panic_if(int_id >= Gicv3::SGI_MAX + Gicv3::PPI_MAX, "Invalid PPI!");
     DPRINTF(Interrupt, "Gicv3::sendPPInt(): received PPI %d cpuTarget %#x\n",
             int_id, cpu);
     redistributors[cpu]->sendPPInt(int_id);
 }
 
 void
-Gicv3::clearPPInt(uint32_t num, uint32_t cpu)
+Gicv3::clearPPInt(uint32_t int_id, uint32_t cpu)
 {
+    panic_if(cpu >= redistributors.size(), "Invalid cpuID clearing PPI!");
+    DPRINTF(Interrupt, "Gicv3::clearPPInt(): received PPI %d cpuTarget %#x\n",
+            int_id, cpu);
+    redistributors[cpu]->clearPPInt(int_id);
 }
 
 void
 Gicv3::postInt(uint32_t cpu, ArmISA::InterruptTypes int_type)
 {
     platform->intrctrl->post(cpu, int_type, 0);
-    ArmSystem::callClearStandByWfi(sys->getThreadContext(cpu));
+    ArmSystem::callClearStandByWfi(sys->threads[cpu]);
 }
 
 bool
 Gicv3::supportsVersion(GicVersion version)
 {
     return (version == GicVersion::GIC_V3) ||
-           (version == GicVersion::GIC_V4 && params()->gicv4);
+           (version == GicVersion::GIC_V4 && params().gicv4);
 }
 
 void
@@ -293,10 +293,4 @@ Gicv3::unserialize(CheckpointIn & cp)
          cpu_interface_id < cpuInterfaces.size(); cpu_interface_id++)
         cpuInterfaces[cpu_interface_id]->unserializeSection(cp,
             csprintf("cpuInterface.%i", cpu_interface_id));
-}
-
-Gicv3 *
-Gicv3Params::create()
-{
-    return new Gicv3(this);
 }

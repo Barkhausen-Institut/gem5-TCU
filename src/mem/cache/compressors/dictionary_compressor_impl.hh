@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 Inria
+ * Copyright (c) 2018-2020 Inria
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,9 +35,12 @@
 
 #include <algorithm>
 
+#include "base/trace.hh"
 #include "debug/CacheComp.hh"
 #include "mem/cache/compressors/dictionary_compressor.hh"
 #include "params/BaseDictionaryCompressor.hh"
+
+namespace Compressor {
 
 template <class T>
 DictionaryCompressor<T>::CompData::CompData()
@@ -57,7 +60,7 @@ DictionaryCompressor<T>::CompData::addEntry(std::unique_ptr<Pattern> pattern)
 }
 
 template <class T>
-DictionaryCompressor<T>::DictionaryCompressor(const Params *p)
+DictionaryCompressor<T>::DictionaryCompressor(const Params &p)
     : BaseDictionaryCompressor(p)
 {
     dictionary.resize(dictionarySize);
@@ -74,6 +77,13 @@ DictionaryCompressor<T>::resetDictionary()
 
     // Set all entries as 0
     std::fill(dictionary.begin(), dictionary.end(), toDictionaryEntry(0));
+}
+
+template <typename T>
+std::unique_ptr<typename DictionaryCompressor<T>::CompData>
+DictionaryCompressor<T>::instantiateDictionaryCompData() const
+{
+    return std::unique_ptr<DictionaryCompressor<T>::CompData>(new CompData());
 }
 
 template <typename T>
@@ -101,7 +111,7 @@ DictionaryCompressor<T>::compressValue(const T data)
     }
 
     // Update stats
-    patternStats[pattern->getPatternNumber()]++;
+    dictionaryStats.patterns[pattern->getPatternNumber()]++;
 
     // Push into dictionary
     if (pattern->shouldAllocate()) {
@@ -112,19 +122,18 @@ DictionaryCompressor<T>::compressValue(const T data)
 }
 
 template <class T>
-std::unique_ptr<BaseCacheCompressor::CompressionData>
-DictionaryCompressor<T>::compress(const uint64_t* data)
+std::unique_ptr<Base::CompressionData>
+DictionaryCompressor<T>::compress(const std::vector<Chunk>& chunks)
 {
-    std::unique_ptr<BaseCacheCompressor::CompressionData> comp_data =
-        std::unique_ptr<CompData>(new CompData());
+    std::unique_ptr<Base::CompressionData> comp_data =
+        instantiateDictionaryCompData();
 
     // Reset dictionary
     resetDictionary();
 
     // Compress every value sequentially
     CompData* const comp_data_ptr = static_cast<CompData*>(comp_data.get());
-    const std::vector<T> values((T*)data, (T*)data + blkSize / sizeof(T));
-    for (const auto& value : values) {
+    for (const auto& value : chunks) {
         std::unique_ptr<Pattern> pattern = compressValue(value);
         DPRINTF(CacheComp, "Compressed %016x to %s\n", value,
             pattern->print());
@@ -133,6 +142,21 @@ DictionaryCompressor<T>::compress(const uint64_t* data)
 
     // Return compressed line
     return comp_data;
+}
+
+template <class T>
+std::unique_ptr<Base::CompressionData>
+DictionaryCompressor<T>::compress(const std::vector<Chunk>& chunks,
+    Cycles& comp_lat, Cycles& decomp_lat)
+{
+    // Set latencies based on the degree of parallelization, and any extra
+    // latencies due to shifting or packaging
+    comp_lat = Cycles(compExtraLatency +
+        (chunks.size() / compChunksPerCycle));
+    decomp_lat = Cycles(decompExtraLatency +
+        (chunks.size() / decompChunksPerCycle));
+
+    return compress(chunks);
 }
 
 template <class T>
@@ -207,5 +231,7 @@ DictionaryCompressor<T>::fromDictionaryEntry(const DictionaryEntry& entry)
     }
     return value;
 }
+
+} // namespace Compressor
 
 #endif //__MEM_CACHE_COMPRESSORS_DICTIONARY_COMPRESSOR_IMPL_HH__

@@ -49,7 +49,8 @@
 namespace X86ISA
 {
 
-FsLinux::FsLinux(Params *p) : X86ISA::FsWorkload(p), e820Table(p->e820_table)
+FsLinux::FsLinux(const Params &p) :
+    X86ISA::FsWorkload(p), e820Table(p.e820_table)
 {}
 
 void
@@ -123,13 +124,7 @@ FsLinux::initState()
      * Pass the location of the real mode data structure to the kernel
      * using register %esi. We'll use %rsi which should be equivalent.
      */
-    system->threadContexts[0]->setIntReg(INTREG_RSI, realModeData);
+    system->threads[0]->setIntReg(INTREG_RSI, realModeData);
 }
 
 } // namespace X86ISA
-
-X86ISA::FsLinux *
-X86FsLinuxParams::create()
-{
-    return new X86ISA::FsLinux(this);
-}

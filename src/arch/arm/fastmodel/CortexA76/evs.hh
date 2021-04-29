@@ -32,6 +32,7 @@
 
 #include "arch/arm/fastmodel/amba_ports.hh"
 #include "arch/arm/fastmodel/common/signal_receiver.hh"
+#include "arch/arm/fastmodel/iris/cpu.hh"
 #include "arch/arm/fastmodel/protocol/exported_clock_rate_control.hh"
 #include "mem/port_proxy.hh"
 #include "params/FastModelScxEvsCortexA76x1.hh"
@@ -52,7 +53,7 @@ namespace FastModel
 class CortexA76Cluster;
 
 template <class Types>
-class ScxEvsCortexA76 : public Types::Base
+class ScxEvsCortexA76 : public Types::Base, public Iris::BaseCpuEvs
 {
   private:
     static const int CoreCount = Types::CoreCount;
@@ -62,6 +63,7 @@ class ScxEvsCortexA76 : public Types::Base
     SC_HAS_PROCESS(ScxEvsCortexA76);
 
     ClockRateControlInitiatorSocket clockRateControl;
+    ClockRateControlInitiatorSocket periphClockRateControl;
 
     typedef sc_gem5::TlmTargetBaseWrapper<
         64, svp_gicv3_comms::gicv3_comms_fw_if,
@@ -81,18 +83,12 @@ class ScxEvsCortexA76 : public Types::Base
     std::vector<std::unique_ptr<SignalReceiver>> vcpumntirq;
     std::vector<std::unique_ptr<SignalReceiver>> cntpnsirq;
 
-    sc_core::sc_event clockChanged;
-    sc_core::sc_attribute<Tick> clockPeriod;
-    sc_core::sc_attribute<CortexA76Cluster *> gem5CpuCluster;
-    sc_core::sc_attribute<PortProxy::SendFunctionalFunc> sendFunctional;
-
-    void sendFunc(PacketPtr pkt);
-
-    void clockChangeHandler();
+    CortexA76Cluster *gem5CpuCluster;
 
     const Params &params;
 
   public:
+    ScxEvsCortexA76(const Params &p) : ScxEvsCortexA76(p.name.c_str(), p) {}
     ScxEvsCortexA76(const sc_core::sc_module_name &mod_name, const Params &p);
 
     void before_end_of_elaboration() override;
@@ -105,6 +101,14 @@ class ScxEvsCortexA76 : public Types::Base
         Base::start_of_simulation();
     }
     void start_of_simulation() override {}
+
+    void sendFunc(PacketPtr pkt) override;
+
+    void setClkPeriod(Tick clk_period) override;
+
+    void setSysCounterFrq(uint64_t sys_counter_frq) override;
+
+    void setCluster(SimObject *cluster) override;
 };
 
 struct ScxEvsCortexA76x1Types

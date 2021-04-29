@@ -66,7 +66,8 @@ class BaseCPU;
 
 int divideFromConf(uint32_t conf);
 
-namespace X86ISA {
+namespace X86ISA
+{
 
 ApicRegIndex decodeAddr(Addr paddr);
 
@@ -170,13 +171,11 @@ class Interrupts : public BaseInterrupts
 
     void requestInterrupt(uint8_t vector, uint8_t deliveryMode, bool level);
 
-    BaseCPU *cpu;
-
     int initialApicId;
 
     // Ports for interrupts.
-    IntSlavePort<Interrupts> intSlavePort;
-    IntMasterPort<Interrupts> intMasterPort;
+    IntResponsePort<Interrupts> intResponsePort;
+    IntRequestPort<Interrupts> intRequestPort;
 
     // Port for memory mapped register accesses.
     PioPort<Interrupts> pioPort;
@@ -191,15 +190,9 @@ class Interrupts : public BaseInterrupts
     /*
      * Params stuff.
      */
-    typedef X86LocalApicParams Params;
+    using Params = X86LocalApicParams;
 
-    void setCPU(BaseCPU * newCPU) override;
-
-    const Params *
-    params() const
-    {
-        return dynamic_cast<const Params *>(_params);
-    }
+    void setThreadContext(ThreadContext *_tc) override;
 
     /*
      * Initialize this object by registering it with the IO APIC.
@@ -229,10 +222,10 @@ class Interrupts : public BaseInterrupts
     Port &getPort(const std::string &if_name,
                   PortID idx=InvalidPortID) override
     {
-        if (if_name == "int_master") {
-            return intMasterPort;
-        } else if (if_name == "int_slave") {
-            return intSlavePort;
+        if (if_name == "int_requestor") {
+            return intRequestPort;
+        } else if (if_name == "int_responder") {
+            return intResponsePort;
         } else if (if_name == "pio") {
             return pioPort;
         }
@@ -255,13 +248,13 @@ class Interrupts : public BaseInterrupts
      * Constructor.
      */
 
-    Interrupts(Params * p);
+    Interrupts(const Params &p);
 
     /*
      * Functions for retrieving interrupts for the CPU to handle.
      */
 
-    bool checkInterrupts(ThreadContext *tc) const override;
+    bool checkInterrupts() const override;
     /**
      * Check if there are pending interrupts without ignoring the
      * interrupts disabled flag.
@@ -275,8 +268,8 @@ class Interrupts : public BaseInterrupts
      * @return true there are unmaskable interrupts pending.
      */
     bool hasPendingUnmaskable() const { return pendingUnmaskableInt; }
-    Fault getInterrupt(ThreadContext *tc) override;
-    void updateIntrInfo(ThreadContext *tc) override;
+    Fault getInterrupt() override;
+    void updateIntrInfo() override;
 
     /*
      * Serialization.

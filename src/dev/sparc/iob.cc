@@ -51,16 +51,16 @@
 #include "sim/faults.hh"
 #include "sim/system.hh"
 
-Iob::Iob(const Params *p)
-    : PioDevice(p), ic(p->platform->intrctrl)
+Iob::Iob(const Params &p)
+    : PioDevice(p), ic(p.platform->intrctrl)
 {
     iobManAddr = ULL(0x9800000000);
     iobManSize = ULL(0x0100000000);
     iobJBusAddr = ULL(0x9F00000000);
     iobJBusSize = ULL(0x0100000000);
-    assert (params()->system->threadContexts.size() <= MaxNiagaraProcs);
+    assert(params().system->threads.size() <= MaxNiagaraProcs);
 
-    pioDelay = p->pio_latency;
+    pioDelay = p.pio_latency;
 
     for (int x = 0; x < NumDeviceIds; ++x) {
         intMan[x].cpu = 0;
@@ -276,7 +276,7 @@ void
 Iob::generateIpi(Type type, int cpu_id, int vector)
 {
     SparcISA::SparcFault<SparcISA::PowerOnReset> *por = new SparcISA::PowerOnReset();
-    if (cpu_id >= sys->numContexts())
+    if (cpu_id >= sys->threads.size())
         return;
 
     switch (type) {
@@ -289,16 +289,16 @@ Iob::generateIpi(Type type, int cpu_id, int vector)
         warn("Sending reset to CPU: %d\n", cpu_id);
         if (vector != por->trapType())
             panic("Don't know how to set non-POR reset to cpu\n");
-        por->invoke(sys->threadContexts[cpu_id]);
-        sys->threadContexts[cpu_id]->activate();
+        por->invoke(sys->threads[cpu_id]);
+        sys->threads[cpu_id]->activate();
         break;
       case 2: // idle -- this means stop executing and don't wake on interrupts
         DPRINTF(Iob, "Idling CPU because of I/O write cpu: %d\n", cpu_id);
-        sys->threadContexts[cpu_id]->halt();
+        sys->threads[cpu_id]->halt();
         break;
       case 3: // resume
         DPRINTF(Iob, "Resuming CPU because of I/O write cpu: %d\n", cpu_id);
-        sys->threadContexts[cpu_id]->activate();
+        sys->threads[cpu_id]->activate();
         break;
       default:
         panic("Invalid type to generate ipi\n");
@@ -374,10 +374,4 @@ Iob::unserialize(CheckpointIn &cp)
         paramIn(cp, "busy", jIntBusy[x].busy);
         paramIn(cp, "source", jIntBusy[x].source);
     };
-}
-
-Iob *
-IobParams::create()
-{
-    return new Iob(this);
 }

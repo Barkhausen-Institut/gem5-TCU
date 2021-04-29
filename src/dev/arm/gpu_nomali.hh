@@ -43,14 +43,14 @@
 #include "dev/io_device.hh"
 #include "libnomali/nomali.h"
 
-class NoMaliGpuParams;
-class CustomNoMaliGpuParams;
+struct NoMaliGpuParams;
+struct CustomNoMaliGpuParams;
 class RealView;
 
 class NoMaliGpu : public PioDevice
 {
   public:
-    NoMaliGpu(const NoMaliGpuParams *p);
+    NoMaliGpu(const NoMaliGpuParams &p);
     virtual ~NoMaliGpu();
 
     void init() override;
@@ -99,7 +99,7 @@ class NoMaliGpu : public PioDevice
      * @param err Error code from the NoMali library.
      * @param msg Message to print.
      */
-    static void gpuPanic(nomali_error_t err, const char *msg) M5_ATTR_NORETURN;
+    [[noreturn]] static void gpuPanic(nomali_error_t err, const char *msg);
     /**
      * Panic if the NoMali returned an error, do nothing otherwise.
      *
@@ -188,7 +188,7 @@ class NoMaliGpu : public PioDevice
 class CustomNoMaliGpu : public NoMaliGpu
 {
   public:
-    CustomNoMaliGpu(const CustomNoMaliGpuParams *p);
+    CustomNoMaliGpu(const CustomNoMaliGpuParams &p);
     virtual ~CustomNoMaliGpu();
 
   protected:

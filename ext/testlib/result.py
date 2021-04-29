@@ -1,3 +1,15 @@
+# Copyright (c) 2020 ARM Limited
+# All rights reserved
+#
+# The license below extends only to copyright in the software and shall
+# not be construed as granting a license to any other intellectual
+# property including but not limited to intellectual property relating
+# to a hardware implementation of the functionality of the software
+# licensed hereunder.  You may use the software subject to the license
+# terms below provided that you ensure that this notice is replicated
+# unmodified and in its entirety in all distributions of the software,
+# modified or unmodified, in source code or in binary form.
+#
 # Copyright (c) 2017 Mark D. Hill and David A. Wood
 # All rights reserved.
 #
@@ -33,7 +45,6 @@ import xml.sax.saxutils
 from testlib.configuration import config
 import testlib.helper as helper
 import testlib.state as state
-import testlib.log as log
 
 def _create_uid_index(iterable):
     index = {}
@@ -60,6 +71,10 @@ class _CommonMetadataMixin:
     @property
     def unsuccessful(self):
         return self._metadata.result.value != state.Result.Passed
+
+    @property
+    def time(self):
+        return self._metadata.time
 
 
 class InternalTestResult(_CommonMetadataMixin):
@@ -259,6 +274,7 @@ class JUnitTestCase(XMLElement):
              # TODO JUnit expects class of test.. add as test metadata.
             XMLAttribute('classname', str(test_result.uid)),
             XMLAttribute('status', str(test_result.result)),
+            XMLAttribute('time', str(test_result.time["user_time"])),
         ]
 
         # TODO JUnit expects a message for the reason a test was

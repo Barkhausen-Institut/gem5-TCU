@@ -51,7 +51,7 @@ class TcuAccelInDir : public TcuAccel
     static const size_t BLOCK_SIZE      = 1024;
 
   public:
-    TcuAccelInDir(const TcuAccelInDirParams *p);
+    TcuAccelInDir(const TcuAccelInDirParams &p);
 
     void wakeup() override;
 
@@ -109,10 +109,10 @@ class TcuAccelInDir : public TcuAccel
         FORWARD,
     };
 
-    struct
+    struct M5_ATTR_PACKED
     {
         uint64_t count;
-    } M5_ATTR_PACKED reply;
+    } reply;
 
     YieldSM yield;
     AccelCtxSwSM ctxsw;

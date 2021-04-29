@@ -53,20 +53,6 @@ namespace X86ISA
         return retPC;
     }
 
-    uint64_t
-    getArgument(ThreadContext *tc, int &number, uint16_t size, bool fp);
-
-    static inline bool
-    inUserMode(ThreadContext *tc)
-    {
-        if (!FullSystem) {
-            return true;
-        } else {
-            HandyM5Reg m5reg = tc->readMiscRegNoEffect(MISCREG_M5_REG);
-            return m5reg.cpl == 3;
-        }
-    }
-
     void copyRegs(ThreadContext *src, ThreadContext *dest);
 
     void copyMiscRegs(ThreadContext *src, ThreadContext *dest);
@@ -76,13 +62,6 @@ namespace X86ISA
     {
         inst->advancePC(pc);
     }
-
-    inline uint64_t
-    getExecutingAsid(ThreadContext *tc)
-    {
-        return 0;
-    }
-
 
     /**
      * Reconstruct the rflags register from the internal gem5 register
@@ -112,13 +91,6 @@ namespace X86ISA
      * @param val New rflags value to store in TC
      */
     void setRFlags(ThreadContext *tc, uint64_t val);
-
-    /**
-     * Extract the bit string representing a double value.
-     */
-    inline uint64_t getDoubleBits(double val) {
-        return *(uint64_t *)(&val);
-    }
 
     /**
      * Convert an x87 tag word to abridged tag format.

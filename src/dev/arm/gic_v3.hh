@@ -41,6 +41,7 @@
 #ifndef __DEV_ARM_GICV3_H__
 #define __DEV_ARM_GICV3_H__
 
+#include "arch/arm/interrupts.hh"
 #include "dev/arm/base_gic.hh"
 #include "params/Gicv3.hh"
 
@@ -55,7 +56,6 @@ class Gicv3 : public BaseGic
     friend class Gicv3CPUInterface;
     friend class Gicv3Redistributor;
 
-    typedef Gicv3Params Params;
     Gicv3Distributor * distributor;
     std::vector<Gicv3Redistributor *> redistributors;
     std::vector<Gicv3CPUInterface *> cpuInterfaces;
@@ -110,11 +110,7 @@ class Gicv3 : public BaseGic
 
     void init() override;
 
-    const Params *
-    params() const
-    {
-        return dynamic_cast<const Params *>(_params);
-    }
+    PARAMS(Gicv3);
 
     Tick read(PacketPtr pkt) override;
     void reset();
@@ -127,7 +123,7 @@ class Gicv3 : public BaseGic
 
   public:
 
-    Gicv3(const Params * p);
+    Gicv3(const Params &p);
     void deassertInt(uint32_t cpu, ArmISA::InterruptTypes int_type);
     void deassertAll(uint32_t cpu);
     bool haveAsserted(uint32_t cpu) const;

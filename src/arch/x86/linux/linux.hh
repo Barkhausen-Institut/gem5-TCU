@@ -46,7 +46,7 @@
 class X86Linux : public Linux
 {
   public:
-    static const ByteOrder byteOrder = LittleEndianByteOrder;
+    static const ByteOrder byteOrder = ByteOrder::little;
 
     static void
     archClone(uint64_t flags,
@@ -73,8 +73,8 @@ namespace GuestABI
 
 template <typename ABI>
 struct Result<ABI, SyscallReturn,
-    typename std::enable_if<std::is_base_of<
-        X86Linux::SyscallABI, ABI>::value>::type>
+    typename std::enable_if_t<std::is_base_of<
+        X86Linux::SyscallABI, ABI>::value>>
 {
     static void
     store(ThreadContext *tc, const SyscallReturn &ret)
@@ -243,7 +243,7 @@ class X86Linux32 : public X86Linux
 {
   public:
 
-    typedef struct {
+    typedef struct M5_ATTR_PACKED {
         uint64_t st_dev;
         uint8_t __pad0[4];
         uint32_t __st_ino;
@@ -263,7 +263,7 @@ class X86Linux32 : public X86Linux
         uint32_t st_ctimeX;
         uint32_t st_ctime_nsec;
         uint64_t st_ino;
-    } __attribute__((__packed__)) tgt_stat64;
+    } tgt_stat64;
 
     static const int TGT_SIGHUP         = 0x000001;
     static const int TGT_SIGINT         = 0x000002;

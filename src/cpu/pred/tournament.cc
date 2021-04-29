@@ -43,25 +43,25 @@
 #include "base/bitfield.hh"
 #include "base/intmath.hh"
 
-TournamentBP::TournamentBP(const TournamentBPParams *params)
+TournamentBP::TournamentBP(const TournamentBPParams &params)
     : BPredUnit(params),
-      localPredictorSize(params->localPredictorSize),
-      localCtrBits(params->localCtrBits),
-      localCtrs(localPredictorSize, SatCounter(localCtrBits)),
-      localHistoryTableSize(params->localHistoryTableSize),
-      localHistoryBits(ceilLog2(params->localPredictorSize)),
-      globalPredictorSize(params->globalPredictorSize),
-      globalCtrBits(params->globalCtrBits),
-      globalCtrs(globalPredictorSize, SatCounter(globalCtrBits)),
-      globalHistory(params->numThreads, 0),
+      localPredictorSize(params.localPredictorSize),
+      localCtrBits(params.localCtrBits),
+      localCtrs(localPredictorSize, SatCounter8(localCtrBits)),
+      localHistoryTableSize(params.localHistoryTableSize),
+      localHistoryBits(ceilLog2(params.localPredictorSize)),
+      globalPredictorSize(params.globalPredictorSize),
+      globalCtrBits(params.globalCtrBits),
+      globalCtrs(globalPredictorSize, SatCounter8(globalCtrBits)),
+      globalHistory(params.numThreads, 0),
       globalHistoryBits(
-          ceilLog2(params->globalPredictorSize) >
-          ceilLog2(params->choicePredictorSize) ?
-          ceilLog2(params->globalPredictorSize) :
-          ceilLog2(params->choicePredictorSize)),
-      choicePredictorSize(params->choicePredictorSize),
-      choiceCtrBits(params->choiceCtrBits),
-      choiceCtrs(choicePredictorSize, SatCounter(choiceCtrBits))
+          ceilLog2(params.globalPredictorSize) >
+          ceilLog2(params.choicePredictorSize) ?
+          ceilLog2(params.globalPredictorSize) :
+          ceilLog2(params.choicePredictorSize)),
+      choicePredictorSize(params.choicePredictorSize),
+      choiceCtrBits(params.choiceCtrBits),
+      choiceCtrs(choicePredictorSize, SatCounter8(choiceCtrBits))
 {
     if (!isPowerOf2(localPredictorSize)) {
         fatal("Invalid local predictor size!\n");
@@ -341,12 +341,6 @@ TournamentBP::squash(ThreadID tid, void *bp_history)
 
     // Delete this BPHistory now that we're done with it.
     delete history;
-}
-
-TournamentBP*
-TournamentBPParams::create()
-{
-    return new TournamentBP(this);
 }
 
 #ifdef DEBUG

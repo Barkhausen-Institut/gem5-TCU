@@ -31,9 +31,6 @@ World application. Adds a simple memobj between the CPU and the membus.
 This config file assumes that the x86 ISA was built.
 """
 
-from __future__ import print_function
-from __future__ import absolute_import
-
 # import the m5 (gem5) library created when gem5 is built
 import m5
 # import all of the SimObjects
@@ -74,8 +71,9 @@ system.cpu.interrupts[0].int_master = system.membus.slave
 system.cpu.interrupts[0].int_slave = system.membus.master
 
 # Create a DDR3 memory controller and connect it to the membus
-system.mem_ctrl = DDR3_1600_8x8()
-system.mem_ctrl.range = system.mem_ranges[0]
+system.mem_ctrl = MemCtrl()
+system.mem_ctrl.dram = DDR3_1600_8x8()
+system.mem_ctrl.dram.range = system.mem_ranges[0]
 system.mem_ctrl.port = system.membus.master
 
 # Connect the system up to the membus
@@ -93,6 +91,8 @@ process.cmd = [binpath]
 # Set the cpu to use the process as its workload and create thread contexts
 system.cpu.workload = process
 system.cpu.createThreads()
+
+system.workload = SEWorkload.init_compatible(binpath)
 
 # set up the root SimObject and start the simulation
 root = Root(full_system = False, system = system)

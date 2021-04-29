@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 ARM Limited
+ * Copyright (c) 2012, 2020 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -44,7 +44,7 @@
 #include <memory>
 
 #include "arch/arm/interrupts.hh"
-#include "arch/registers.hh"
+#include "arch/arm/registers.hh"
 #include "cpu/kvm/base.hh"
 #include "debug/Kvm.hh"
 #include "debug/KvmContext.hh"
@@ -157,6 +157,8 @@ static uint64_t invariant_reg_vector[] = {
     REG_CP32(15, 0, 0, 2, 3), // ID_ISAR3
     REG_CP32(15, 0, 0, 2, 4), // ID_ISAR4
     REG_CP32(15, 0, 0, 2, 5), // ID_ISAR5
+    REG_CP32(15, 0, 0, 2, 6), // ID_MMFR4
+    REG_CP32(15, 0, 0, 2, 7), // ID_ISAR6
 
     REG_CP32(15, 0, 1, 0, 0), // CSSIDR
     REG_CP32(15, 0, 1, 0, 1), // CLIDR
@@ -241,7 +243,7 @@ ArmKvmCPU::KvmCoreMiscRegInfo ArmKvmCPU::kvmCoreMiscRegs[] = {
     { 0, NUM_MISCREGS }
 };
 
-ArmKvmCPU::ArmKvmCPU(ArmKvmCPUParams *params)
+ArmKvmCPU::ArmKvmCPU(const ArmKvmCPUParams &params)
     : BaseKvmCPU(params),
       irqAsserted(false), fiqAsserted(false)
 {
@@ -840,10 +842,4 @@ ArmKvmCPU::updateTCStateVFP(uint64_t id, bool show_warnings)
         if (show_warnings)
             warn("Unhandled VFP register: 0x%x\n", id);
     }
-}
-
-ArmKvmCPU *
-ArmKvmCPUParams::create()
-{
-    return new ArmKvmCPU(this);
 }

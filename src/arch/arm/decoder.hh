@@ -46,15 +46,17 @@
 #include "arch/arm/miscregs.hh"
 #include "arch/arm/types.hh"
 #include "arch/generic/decode_cache.hh"
+#include "arch/generic/decoder.hh"
 #include "base/types.hh"
 #include "cpu/static_inst.hh"
+#include "debug/Decode.hh"
 #include "enums/DecoderFlavor.hh"
 
 namespace ArmISA
 {
 
 class ISA;
-class Decoder
+class Decoder : public InstDecoder
 {
   protected:
     //The extended machine instruction being generated
@@ -79,7 +81,7 @@ class Decoder
     Enums::DecoderFlavor decoderFlavor;
 
     /// A cache of decoded instruction objects.
-    static GenericISA::BasicDecodeCache defaultCache;
+    static GenericISA::BasicDecodeCache<Decoder, ExtMachInst> defaultCache;
 
     /**
      * Pre-decode an instruction from the current state of the
@@ -168,9 +170,13 @@ class Decoder
      * @param mach_inst A pre-decoded instruction
      * @retval A pointer to the corresponding StaticInst object.
      */
-    StaticInstPtr decode(ExtMachInst mach_inst, Addr addr)
+    StaticInstPtr
+    decode(ExtMachInst mach_inst, Addr addr)
     {
-        return defaultCache.decode(this, mach_inst, addr);
+        StaticInstPtr si = defaultCache.decode(this, mach_inst, addr);
+        DPRINTF(Decode, "Decode: Decoded %s instruction: %#x\n",
+                si->getName(), mach_inst);
+        return si;
     }
 
     /**
@@ -196,13 +202,15 @@ class Decoder
 
 
   public: // ARM-specific decoder state manipulation
-    void setContext(FPSCR fpscr)
+    void
+    setContext(FPSCR fpscr)
     {
         fpscrLen = fpscr.len;
         fpscrStride = fpscr.stride;
     }
 
-    void setSveLen(uint8_t len)
+    void
+    setSveLen(uint8_t len)
     {
         sveLen = len;
     }

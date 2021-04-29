@@ -40,7 +40,7 @@
 
 #include "dev/arm/amba_device.hh"
 
-class Sp805Params;
+struct Sp805Params;
 
 /**
  * @file
@@ -52,7 +52,7 @@ class Sp805Params;
 class Sp805 : public AmbaIntDevice
 {
   public:
-    Sp805(Sp805Params const* params);
+    Sp805(const Sp805Params &params);
 
     void serialize(CheckpointOut &cp) const override;
     void unserialize(CheckpointIn &cp) override;
@@ -92,9 +92,6 @@ class Sp805 : public AmbaIntDevice
 
     /** Indicates if reset behaviour is enabled when counter reaches 0 */
     bool resetEnabled;
-
-    /** Indicates if an interrupt has been raised by the counter reaching 0 */
-    bool intRaised;
 
     /** Indicates if write access to registers is enabled */
     bool writeAccessEnabled;

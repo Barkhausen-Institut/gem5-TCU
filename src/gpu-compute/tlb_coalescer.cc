@@ -35,31 +35,32 @@
 
 #include <cstring>
 
+#include "arch/x86/isa_traits.hh"
 #include "base/logging.hh"
 #include "debug/GPUTLB.hh"
 #include "sim/process.hh"
 
-TLBCoalescer::TLBCoalescer(const Params *p)
+TLBCoalescer::TLBCoalescer(const Params &p)
     : ClockedObject(p),
-      clock(p->clk_domain->clockPeriod()),
-      TLBProbesPerCycle(p->probesPerCycle),
-      coalescingWindow(p->coalescingWindow),
-      disableCoalescing(p->disableCoalescing),
+      TLBProbesPerCycle(p.probesPerCycle),
+      coalescingWindow(p.coalescingWindow),
+      disableCoalescing(p.disableCoalescing),
       probeTLBEvent([this]{ processProbeTLBEvent(); },
                     "Probe the TLB below",
                     false, Event::CPU_Tick_Pri),
       cleanupEvent([this]{ processCleanupEvent(); },
                    "Cleanup issuedTranslationsTable hashmap",
-                   false, Event::Maximum_Pri)
+                   false, Event::Maximum_Pri),
+      stats(this)
 {
-    // create the slave ports based on the number of connected ports
-    for (size_t i = 0; i < p->port_slave_connection_count; ++i) {
+    // create the response ports based on the number of connected ports
+    for (size_t i = 0; i < p.port_cpu_side_ports_connection_count; ++i) {
         cpuSidePort.push_back(new CpuSidePort(csprintf("%s-port%d", name(), i),
                                               this, i));
     }
 
-    // create the master ports based on the number of connected ports
-    for (size_t i = 0; i < p->port_master_connection_count; ++i) {
+    // create the request ports based on the number of connected ports
+    for (size_t i = 0; i < p.port_mem_side_ports_connection_count; ++i) {
         memSidePort.push_back(new MemSidePort(csprintf("%s-port%d", name(), i),
                                               this, i));
     }
@@ -68,13 +69,13 @@ TLBCoalescer::TLBCoalescer(const Params *p)
 Port &
 TLBCoalescer::getPort(const std::string &if_name, PortID idx)
 {
-    if (if_name == "slave") {
+    if (if_name == "cpu_side_ports") {
         if (idx >= static_cast<PortID>(cpuSidePort.size())) {
             panic("TLBCoalescer::getPort: unknown index %d\n", idx);
         }
 
         return *cpuSidePort[idx];
-    } else  if (if_name == "master") {
+    } else  if (if_name == "mem_side_ports") {
         if (idx >= static_cast<PortID>(memSidePort.size())) {
             panic("TLBCoalescer::getPort: unknown index %d\n", idx);
         }
@@ -106,10 +107,10 @@ TLBCoalescer::canCoalesce(PacketPtr incoming_pkt, PacketPtr coalesced_pkt)
     // Rule 1: Coalesce requests only if they
     // fall within the same virtual page
     Addr incoming_virt_page_addr = roundDown(incoming_pkt->req->getVaddr(),
-                                             TheISA::PageBytes);
+                                             X86ISA::PageBytes);
 
     Addr coalesced_virt_page_addr = roundDown(coalesced_pkt->req->getVaddr(),
-                                              TheISA::PageBytes);
+                                              X86ISA::PageBytes);
 
     if (incoming_virt_page_addr != coalesced_virt_page_addr)
         return false;
@@ -139,7 +140,7 @@ TLBCoalescer::canCoalesce(PacketPtr incoming_pkt, PacketPtr coalesced_pkt)
 void
 TLBCoalescer::updatePhysAddresses(PacketPtr pkt)
 {
-    Addr virt_page_addr = roundDown(pkt->req->getVaddr(), TheISA::PageBytes);
+    Addr virt_page_addr = roundDown(pkt->req->getVaddr(), X86ISA::PageBytes);
 
     DPRINTF(GPUTLB, "Update phys. addr. for %d coalesced reqs for page %#x\n",
             issuedTranslationsTable[virt_page_addr].size(), virt_page_addr);
@@ -199,7 +200,7 @@ TLBCoalescer::updatePhysAddresses(PacketPtr pkt)
             sender_state->hitLevel = first_hit_level;
         }
 
-        SlavePort *return_port = sender_state->ports.back();
+        ResponsePort *return_port = sender_state->ports.back();
         sender_state->ports.pop_back();
 
         // Translation is done - Convert to a response pkt if necessary and
@@ -256,11 +257,11 @@ TLBCoalescer::CpuSidePort::recvTimingReq(PacketPtr pkt)
         sender_state->reqCnt.push_back(req_cnt);
 
         // update statistics
-        coalescer->uncoalescedAccesses++;
+        coalescer->stats.uncoalescedAccesses++;
         req_cnt = sender_state->reqCnt.back();
         DPRINTF(GPUTLB, "receiving pkt w/ req_cnt %d\n", req_cnt);
-        coalescer->queuingCycles -= (curTick() * req_cnt);
-        coalescer->localqueuingCycles -= curTick();
+        coalescer->stats.queuingCycles -= (curTick() * req_cnt);
+        coalescer->stats.localqueuingCycles -= curTick();
     }
 
     // FIXME if you want to coalesce not based on the issueTime
@@ -302,7 +303,7 @@ TLBCoalescer::CpuSidePort::recvTimingReq(PacketPtr pkt)
     // and make necessary allocations.
     if (!coalescedReq_cnt || !didCoalesce) {
         if (update_stats)
-            coalescer->coalescedAccesses++;
+            coalescer->stats.coalescedAccesses++;
 
         std::vector<PacketPtr> new_array;
         new_array.push_back(pkt);
@@ -317,7 +318,7 @@ TLBCoalescer::CpuSidePort::recvTimingReq(PacketPtr pkt)
     //coalesced requests to the TLB
     if (!coalescer->probeTLBEvent.scheduled()) {
         coalescer->schedule(coalescer->probeTLBEvent,
-                curTick() + coalescer->ticks(1));
+                curTick() + coalescer->clockPeriod());
     }
 
     return true;
@@ -339,13 +340,13 @@ TLBCoalescer::CpuSidePort::recvFunctional(PacketPtr pkt)
     bool update_stats = !sender_state->prefetch;
 
     if (update_stats)
-        coalescer->uncoalescedAccesses++;
+        coalescer->stats.uncoalescedAccesses++;
 
     // If there is a pending timing request for this virtual address
     // print a warning message. This is a temporary caveat of
     // the current simulator where atomic and timing requests can
     // coexist. FIXME remove this check/warning in the future.
-    Addr virt_page_addr = roundDown(pkt->req->getVaddr(), TheISA::PageBytes);
+    Addr virt_page_addr = roundDown(pkt->req->getVaddr(), X86ISA::PageBytes);
     int map_count = coalescer->issuedTranslationsTable.count(virt_page_addr);
 
     if (map_count) {
@@ -359,7 +360,7 @@ TLBCoalescer::CpuSidePort::recvFunctional(PacketPtr pkt)
 AddrRangeList
 TLBCoalescer::CpuSidePort::getAddrRanges() const
 {
-    // currently not checked by the master
+    // currently not checked by the requestor
     AddrRangeList ranges;
 
     return ranges;
@@ -380,7 +381,7 @@ TLBCoalescer::MemSidePort::recvReqRetry()
     //we've receeived a retry. Schedule a probeTLBEvent
     if (!coalescer->probeTLBEvent.scheduled())
         coalescer->schedule(coalescer->probeTLBEvent,
-                curTick() + coalescer->ticks(1));
+                curTick() + coalescer->clockPeriod());
 }
 
 void
@@ -430,7 +431,7 @@ TLBCoalescer::processProbeTLBEvent()
 
             // compute virtual page address for this request
             Addr virt_page_addr = roundDown(first_packet->req->getVaddr(),
-                    TheISA::PageBytes);
+                    X86ISA::PageBytes);
 
             // is there another outstanding request for the same page addr?
             int pending_reqs =
@@ -448,7 +449,7 @@ TLBCoalescer::processProbeTLBEvent()
 
             // send the coalesced request for virt_page_addr
             if (!memSidePort[0]->sendTimingReq(first_packet)) {
-                DPRINTF(GPUTLB, "Failed to send TLB request for page %#x",
+                DPRINTF(GPUTLB, "Failed to send TLB request for page %#x\n",
                        virt_page_addr);
 
                 // No need for a retries queue since we are already buffering
@@ -467,7 +468,7 @@ TLBCoalescer::processProbeTLBEvent()
                     // by the one we just sent counting all the way from
                     // the top of TLB hiearchy (i.e., from the CU)
                     int req_cnt = tmp_sender_state->reqCnt.back();
-                    queuingCycles += (curTick() * req_cnt);
+                    stats.queuingCycles += (curTick() * req_cnt);
 
                     DPRINTF(GPUTLB, "%s sending pkt w/ req_cnt %d\n",
                             name(), req_cnt);
@@ -475,7 +476,7 @@ TLBCoalescer::processProbeTLBEvent()
                     // pkt_cnt is number of packets we coalesced into the one
                     // we just sent but only at this coalescer level
                     int pkt_cnt = iter->second[vector_index].size();
-                    localqueuingCycles += (curTick() * pkt_cnt);
+                    stats.localqueuingCycles += (curTick() * pkt_cnt);
                 }
 
                 DPRINTF(GPUTLB, "Successfully sent TLB request for page %#x",
@@ -520,43 +521,14 @@ TLBCoalescer::processCleanupEvent()
     }
 }
 
-void
-TLBCoalescer::regStats()
+TLBCoalescer::TLBCoalescerStats::TLBCoalescerStats(Stats::Group *parent)
+    : Stats::Group(parent),
+      ADD_STAT(uncoalescedAccesses, "Number of uncoalesced TLB accesses"),
+      ADD_STAT(coalescedAccesses, "Number of coalesced TLB accesses"),
+      ADD_STAT(queuingCycles, "Number of cycles spent in queue"),
+      ADD_STAT(localqueuingCycles,
+               "Number of cycles spent in queue for all incoming reqs"),
+      ADD_STAT(localLatency, "Avg. latency over all incoming pkts")
 {
-    ClockedObject::regStats();
-
-    uncoalescedAccesses
-        .name(name() + ".uncoalesced_accesses")
-        .desc("Number of uncoalesced TLB accesses")
-        ;
-
-    coalescedAccesses
-        .name(name() + ".coalesced_accesses")
-        .desc("Number of coalesced TLB accesses")
-        ;
-
-    queuingCycles
-        .name(name() + ".queuing_cycles")
-        .desc("Number of cycles spent in queue")
-        ;
-
-    localqueuingCycles
-        .name(name() + ".local_queuing_cycles")
-        .desc("Number of cycles spent in queue for all incoming reqs")
-        ;
-
-    localLatency
-        .name(name() + ".local_latency")
-        .desc("Avg. latency over all incoming pkts")
-        ;
-
     localLatency = localqueuingCycles / uncoalescedAccesses;
 }
-
-
-TLBCoalescer*
-TLBCoalescerParams::create()
-{
-    return new TLBCoalescer(this);
-}
-

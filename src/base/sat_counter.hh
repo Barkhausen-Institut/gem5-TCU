@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Inria
+ * Copyright (c) 2019, 2020 Inria
  * All rights reserved.
  *
  * The license below extends only to copyright in the software and shall
@@ -50,12 +50,15 @@
 /**
  * Implements an n bit saturating counter and provides methods to
  * increment, decrement, and read it.
+ *
+ * @tparam T The type of the underlying counter container.
  */
-class SatCounter
+template <class T>
+class GenericSatCounter
 {
   public:
     /** The default constructor should never be used. */
-    SatCounter() = delete;
+    GenericSatCounter() = delete;
 
     /**
      * Constructor for the counter. The explicit keyword is used to make
@@ -65,50 +68,68 @@ class SatCounter
      *
      * @param bits How many bits the counter will have.
      * @param initial_val Starting value for the counter.
+     *
+     * @ingroup api_sat_counter
      */
-    explicit SatCounter(unsigned bits, uint8_t initial_val = 0)
-        : initialVal(initial_val), maxVal((1 << bits) - 1),
+    explicit GenericSatCounter(unsigned bits, T initial_val = 0)
+        : initialVal(initial_val), maxVal((1ULL << bits) - 1),
           counter(initial_val)
     {
-        fatal_if(bits > 8*sizeof(uint8_t),
+        fatal_if(bits > 8*sizeof(T),
                  "Number of bits exceeds counter size");
         fatal_if(initial_val > maxVal,
                  "Saturating counter's Initial value exceeds max value.");
     }
 
-    /** Copy constructor. */
-    SatCounter(const SatCounter& other)
+    /**
+     * Copy constructor.
+     *
+     * @ingroup api_sat_counter
+     */
+    GenericSatCounter(const GenericSatCounter& other)
         : initialVal(other.initialVal), maxVal(other.maxVal),
           counter(other.counter)
     {
     }
 
-    /** Copy assignment. */
-    SatCounter& operator=(const SatCounter& other) {
+    /**
+     * Copy assignment.
+     *
+     * @ingroup api_sat_counter
+     */
+    GenericSatCounter& operator=(const GenericSatCounter& other) {
         if (this != &other) {
-            SatCounter temp(other);
+            GenericSatCounter temp(other);
             this->swap(temp);
         }
         return *this;
     }
 
-    /** Move constructor. */
-    SatCounter(SatCounter&& other)
+    /**
+     * Move constructor.
+     *
+     * @ingroup api_sat_counter
+     */
+    GenericSatCounter(GenericSatCounter&& other)
     {
         initialVal = other.initialVal;
         maxVal = other.maxVal;
         counter = other.counter;
-        SatCounter temp(0);
+        GenericSatCounter temp(0);
         other.swap(temp);
     }
 
-    /** Move assignment. */
-    SatCounter& operator=(SatCounter&& other) {
+    /**
+     * Move assignment.
+     *
+     * @ingroup api_sat_counter
+     */
+    GenericSatCounter& operator=(GenericSatCounter&& other) {
         if (this != &other) {
             initialVal = other.initialVal;
             maxVal = other.maxVal;
             counter = other.counter;
-            SatCounter temp(0);
+            GenericSatCounter temp(0);
             other.swap(temp);
         }
         return *this;
@@ -119,17 +140,23 @@ class SatCounter
      * copy-assignment created by the compiler.
      *
      * @param other The other object to swap contents with.
+     *
+     * @ingroup api_sat_counter
      */
     void
-    swap(SatCounter& other)
+    swap(GenericSatCounter& other)
     {
         std::swap(initialVal, other.initialVal);
         std::swap(maxVal, other.maxVal);
         std::swap(counter, other.counter);
     }
 
-    /** Pre-increment operator. */
-    SatCounter&
+    /**
+     * Pre-increment operator.
+     *
+     * @ingroup api_sat_counter
+     */
+    GenericSatCounter&
     operator++()
     {
         if (counter < maxVal) {
@@ -138,17 +165,25 @@ class SatCounter
         return *this;
     }
 
-    /** Post-increment operator. */
-    SatCounter
+    /**
+     * Post-increment operator.
+     *
+     * @ingroup api_sat_counter
+     */
+    GenericSatCounter
     operator++(int)
     {
-        SatCounter old_counter = *this;
+        GenericSatCounter old_counter = *this;
         ++*this;
         return old_counter;
     }
 
-    /** Pre-decrement operator. */
-    SatCounter&
+    /**
+     * Pre-decrement operator.
+     *
+     * @ingroup api_sat_counter
+     */
+    GenericSatCounter&
     operator--()
     {
         if (counter > 0) {
@@ -157,17 +192,25 @@ class SatCounter
         return *this;
     }
 
-    /** Post-decrement operator. */
-    SatCounter
+    /**
+     * Post-decrement operator.
+     *
+     * @ingroup api_sat_counter
+     */
+    GenericSatCounter
     operator--(int)
     {
-        SatCounter old_counter = *this;
+        GenericSatCounter old_counter = *this;
         --*this;
         return old_counter;
     }
 
-    /** Shift-right-assignment. */
-    SatCounter&
+    /**
+     * Shift-right-assignment.
+     *
+     * @ingroup api_sat_counter
+     */
+    GenericSatCounter&
     operator>>=(const int& shift)
     {
         assert(shift >= 0);
@@ -175,8 +218,12 @@ class SatCounter
         return *this;
     }
 
-    /** Shift-left-assignment. */
-    SatCounter&
+    /**
+     * Shift-left-assignment.
+     *
+     * @ingroup api_sat_counter
+     */
+    GenericSatCounter&
     operator<<=(const int& shift)
     {
         assert(shift >= 0);
@@ -187,9 +234,13 @@ class SatCounter
         return *this;
     }
 
-    /** Add-assignment. */
-    SatCounter&
-    operator+=(const int& value)
+    /**
+     * Add-assignment.
+     *
+     * @ingroup api_sat_counter
+     */
+    GenericSatCounter&
+    operator+=(const long long& value)
     {
         if (value >= 0) {
             if (maxVal - this->counter >= value) {
@@ -203,9 +254,13 @@ class SatCounter
         return *this;
     }
 
-    /** Subtract-assignment. */
-    SatCounter&
-    operator-=(const int& value)
+    /**
+     * Subtract-assignment.
+     *
+     * @ingroup api_sat_counter
+     */
+    GenericSatCounter&
+    operator-=(const long long& value)
     {
         if (value >= 0) {
             if (this->counter > value) {
@@ -221,10 +276,16 @@ class SatCounter
 
     /**
      * Read the counter's value.
+     *
+     * @ingroup api_sat_counter
      */
-    operator uint8_t() const { return counter; }
+    operator T() const { return counter; }
 
-    /** Reset the counter to its initial value. */
+    /**
+     * Reset the counter to its initial value.
+     *
+     * @ingroup api_sat_counter
+     */
     void reset() { counter = initialVal; }
 
     /**
@@ -233,6 +294,8 @@ class SatCounter
      *
      * @return A value between 0.0 and 1.0 to indicate which percentile of
      *         the maximum value the current value is.
+     *
+     * @ingroup api_sat_counter
      */
     double calcSaturation() const { return (double) counter / maxVal; }
 
@@ -240,6 +303,8 @@ class SatCounter
      * Whether the counter has achieved its maximum value or not.
      *
      * @return True if the counter saturated.
+     *
+     * @ingroup api_sat_counter
      */
     bool isSaturated() const { return counter == maxVal; }
 
@@ -247,6 +312,8 @@ class SatCounter
      * Saturate the counter.
      *
      * @return The value added to the counter to reach saturation.
+     *
+     * @ingroup api_sat_counter
      */
     uint8_t saturate()
     {
@@ -256,9 +323,21 @@ class SatCounter
     }
 
   private:
-    uint8_t initialVal;
-    uint8_t maxVal;
-    uint8_t counter;
+    T initialVal;
+    T maxVal;
+    T counter;
 };
+
+/** @ingroup api_sat_counter
+ *  @{
+ */
+typedef GenericSatCounter<uint8_t> SatCounter8;
+typedef GenericSatCounter<uint16_t> SatCounter16;
+typedef GenericSatCounter<uint32_t> SatCounter32;
+typedef GenericSatCounter<uint64_t> SatCounter64;
+/** @} */
+
+[[deprecated("Use SatCounter8 (or variants) instead")]]
+typedef SatCounter8 SatCounter;
 
 #endif // __BASE_SAT_COUNTER_HH__

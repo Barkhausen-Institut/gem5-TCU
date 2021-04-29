@@ -1,4 +1,4 @@
-# Copyright (c) 2012-2013, 2017-2019 ARM Limited
+# Copyright (c) 2012-2013, 2017-2020 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -60,7 +60,7 @@ class BaseGic(PioDevice):
     gicv_iidr = Param.UInt32(0,
         "VM CPU Interface Identification Register")
 
-    def interruptCells(self, int_type, int_num, int_flag):
+    def interruptCells(self, int_type, int_num, int_trigger, partition=None):
         """
         Interupt cells generation helper:
         Following specifications described in
@@ -68,7 +68,29 @@ class BaseGic(PioDevice):
         Documentation/devicetree/bindings/interrupt-controller/arm,gic.txt
         """
         assert self._state.interrupt_cells == 3
-        return [ int_type, int_num, int_flag ]
+
+        # Check for affinity in case of PPI. If there is no PPI
+        # partitioning, set the affinity to target all CPUs
+        # (affinity = 0xf00)
+        if partition is None and int_type == ArmPPI._LINUX_ID:
+            affinity = 0xf00
+        else:
+            affinity = 0
+
+        return [ int_type, int_num, affinity | int_trigger ]
+
+class ArmInterruptType(ScopedEnum):
+    """
+    The values of the scoped enum are matching Linux macroes
+    defined in include/linux/irq.h. They are mainly meant
+    to be used for DTB autogen
+    """
+    map = {
+        'IRQ_TYPE_EDGE_RISING' : 0x1,
+        'IRQ_TYPE_EDGE_FALLING' : 0x2,
+        'IRQ_TYPE_LEVEL_HIGH' : 0x4,
+        'IRQ_TYPE_LEVEL_LOW' : 0x8
+    }
 
 class ArmInterruptPin(SimObject):
     type = 'ArmInterruptPin'
@@ -78,16 +100,42 @@ class ArmInterruptPin(SimObject):
 
     platform = Param.Platform(Parent.any, "Platform with interrupt controller")
     num = Param.UInt32("Interrupt number in GIC")
+    int_type = Param.ArmInterruptType('IRQ_TYPE_LEVEL_HIGH',
+        "Interrupt type (level/edge triggered)")
 
 class ArmSPI(ArmInterruptPin):
     type = 'ArmSPI'
     cxx_header = "dev/arm/base_gic.hh"
     cxx_class = "ArmSPIGen"
 
+    _LINUX_ID = 0
+
+    def generateFdtProperty(self, gic):
+        """
+        Return a list used as an entry for an interrupt FdtProperty
+
+        Subtracting 32 because Linux assumes that SPIs start at 0, while
+        gem5 uses the internal GIC numbering (SPIs start at 32)
+        """
+        return gic.interruptCells(
+            self._LINUX_ID, self.num - 32, int(self.int_type.getValue()))
+
 class ArmPPI(ArmInterruptPin):
     type = 'ArmPPI'
     cxx_header = "dev/arm/base_gic.hh"
     cxx_class = "ArmPPIGen"
+
+    _LINUX_ID = 1
+
+    def generateFdtProperty(self, gic):
+        """
+        Return a list used as an entry for an interrupt FdtProperty
+
+        Subtracting 16 because Linux assumes that PPIs start at 0, while
+        gem5 uses the internal GIC numbering (PPIs start at 16)
+        """
+        return gic.interruptCells(
+            self._LINUX_ID, self.num - 16, int(self.int_type.getValue()))
 
 class GicV2(BaseGic):
     type = 'GicV2'
@@ -177,7 +225,7 @@ class Gicv3Its(BasicPioDevice):
     type = 'Gicv3Its'
     cxx_header = "dev/arm/gic_v3_its.hh"
 
-    dma = MasterPort("DMA port")
+    dma = RequestPort("DMA port")
     pio_size = Param.Unsigned(0x20000, "Gicv3Its pio size")
 
     # CIL [36] = 0: ITS supports 16-bit CollectionID
@@ -222,7 +270,7 @@ class Gicv3(BaseGic):
 
     gicv4 = Param.Bool(True, "GICv4 extension available")
 
-    def interruptCells(self, int_type, int_num, int_flag):
+    def interruptCells(self, int_type, int_num, int_trigger, partition=None):
         """
         Interupt cells generation helper:
         Following specifications described in
@@ -233,7 +281,7 @@ class Gicv3(BaseGic):
         assert len(prop) >= 3
         prop[0] = int_type
         prop[1] = int_num
-        prop[2] = int_flag
+        prop[2] = int_trigger
         return prop
 
     def generateDeviceTree(self, state):
@@ -257,7 +305,7 @@ class Gicv3(BaseGic):
 
         node.append(FdtPropertyWords("reg", regs))
         node.append(FdtPropertyWords("interrupts",
-            self.interruptCells(1, int(self.maint_int.num)-16, 0xf04)))
+            self.interruptCells(1, int(self.maint_int.num)-16, 0x4)))
 
         node.appendPhandle(self)
 

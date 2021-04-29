@@ -61,7 +61,7 @@ class LocalBP : public BPredUnit
     /**
      * Default branch predictor constructor.
      */
-    LocalBP(const LocalBPParams *params);
+    LocalBP(const LocalBPParams &params);
 
     virtual void uncondBranch(ThreadID tid, Addr pc, void * &bp_history);
 
@@ -116,7 +116,7 @@ class LocalBP : public BPredUnit
     const unsigned localPredictorSets;
 
     /** Array of counters that make up the local predictor. */
-    std::vector<SatCounter> localCtrs;
+    std::vector<SatCounter8> localCtrs;
 
     /** Mask to get index bits. */
     const unsigned indexMask;

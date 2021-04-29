@@ -28,9 +28,6 @@
 #
 # "m5 test.py"
 
-from __future__ import print_function
-from __future__ import absolute_import
-
 import os
 import optparse
 import sys
@@ -281,6 +278,8 @@ OceanNoncontig, Raytrace, WaterNSquared, or WaterSpatial
 for cluster in clusters:
     for cpu in cluster.cpus:
         cpu.workload = root.workload
+
+system.workload = SEWorkload.init_compatible(root.workload.executable)
 
 # ----------------------
 # Run the simulation

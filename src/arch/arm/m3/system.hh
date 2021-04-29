@@ -42,7 +42,7 @@
 
 class M3ArmSystem : public ArmSystem, public PEMemory
 {
-    class NoCMasterPort : public QueuedMasterPort
+    class NoCMasterPort : public QueuedRequestPort
     {
       protected:
 
@@ -65,7 +65,7 @@ class M3ArmSystem : public ArmSystem, public PEMemory
 
   public:
     typedef M3ArmSystemParams Params;
-    M3ArmSystem(Params *p);
+    M3ArmSystem(const Params &p);
 
     uint32_t pedesc(peid_t pe) const override;
 

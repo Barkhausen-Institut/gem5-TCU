@@ -37,6 +37,7 @@
 #include "base/bitunion.hh"
 #include "dev/io_device.hh"
 #include "dev/pci/device.hh"
+#include "dev/reg_bank.hh"
 #include "params/IdeController.hh"
 
 class IdeDisk;
@@ -62,6 +63,43 @@ class IdeController : public PciDevice
         Bitfield<0> startStop;
     EndBitUnion(BMICommandReg)
 
+    /** Registers used in device specific PCI configuration */
+    class ConfigSpaceRegs : public RegisterBankLE
+    {
+      public:
+        ConfigSpaceRegs(const std::string &name) :
+            RegisterBankLE(name, PCI_DEVICE_SPECIFIC)
+        {
+            // None of these registers are actually hooked up to control
+            // anything, so they have no specially defined behaviors. They
+            // just store values for now, but should presumably do something
+            // in a more accurate model.
+            addRegisters({primaryTiming, secondaryTiming, deviceTiming, raz0,
+                          udmaControl, raz1, udmaTiming, raz2});
+        }
+
+        enum {
+            TimeRegWithDecodeEnabled = 0x8000
+        };
+
+        /* Offset in config space */
+        /* 0x40-0x41 */ Register16 primaryTiming =
+                            {"primary timing", TimeRegWithDecodeEnabled};
+        /* 0x42-0x43 */ Register16 secondaryTiming =
+                            {"secondary timing", TimeRegWithDecodeEnabled};
+        /* 0x44      */ Register8 deviceTiming = {"device timing"};
+        /* 0x45-0x47 */ RegisterRaz raz0 = {"raz0", 3};
+        /* 0x48      */ Register8 udmaControl = {"udma control"};
+        /* 0x49      */ RegisterRaz raz1 = {"raz1", 1};
+        /* 0x4a-0x4b */ Register16 udmaTiming = {"udma timing"};
+        /* 0x4c-...  */ RegisterRaz raz2 = {"raz2", PCI_CONFIG_SIZE - 0x4c};
+
+        void serialize(CheckpointOut &cp) const;
+        void unserialize(CheckpointIn &cp);
+    };
+
+    ConfigSpaceRegs configSpaceRegs;
+
     struct Channel
     {
         std::string _name;
@@ -72,13 +110,12 @@ class IdeController : public PciDevice
             return _name;
         }
 
-        /** Command and control block registers */
-        Addr cmdAddr, cmdSize, ctrlAddr, ctrlSize;
-
         /** Registers used for bus master interface */
         struct BMIRegs
         {
-            void reset() {
+            void
+            reset()
+            {
                 memset(static_cast<void *>(this), 0, sizeof(*this));
             }
 
@@ -89,27 +126,31 @@ class IdeController : public PciDevice
             uint32_t bmidtp;
         } bmiRegs;
 
-        /** IDE disks connected to this controller */
-        IdeDisk *master, *slave;
+        /** IDE disks connected to this controller
+         * For more details about device0 and device1 see:
+         * https://en.wikipedia.org/wiki/Parallel_ATA
+         * #Multiple_devices_on_a_cable
+         *
+        */
+        IdeDisk *device0 = nullptr, *device1 = nullptr;
 
         /** Currently selected disk */
-        IdeDisk *selected;
+        IdeDisk *selected = nullptr;
 
-        bool selectBit;
+        bool selectBit = false;
 
         void
-        select(bool selSlave)
+        select(bool select_device_1)
         {
-            selectBit = selSlave;
-            selected = selectBit ? slave : master;
+            selectBit = select_device_1;
+            selected = selectBit ? device1 : device0;
         }
 
         void accessCommand(Addr offset, int size, uint8_t *data, bool read);
         void accessControl(Addr offset, int size, uint8_t *data, bool read);
         void accessBMI(Addr offset, int size, uint8_t *data, bool read);
 
-        Channel(std::string newName, Addr _cmdSize, Addr _ctrlSize);
-        ~Channel();
+        Channel(std::string newName);
 
         void serialize(const std::string &base, std::ostream &os) const;
         void unserialize(const std::string &base, CheckpointIn &cp);
@@ -118,28 +159,13 @@ class IdeController : public PciDevice
     Channel primary;
     Channel secondary;
 
-    /** Bus master interface (BMI) registers */
-    Addr bmiAddr, bmiSize;
-
-    /** Registers used in device specific PCI configuration */
-    uint16_t primaryTiming, secondaryTiming;
-    uint8_t deviceTiming;
-    uint8_t udmaControl;
-    uint16_t udmaTiming;
-    uint16_t ideConfig;
-
-    // Internal management variables
-    bool ioEnabled;
-    bool bmEnabled;
-
     uint32_t ioShift, ctrlOffset;
 
     void dispatchAccess(PacketPtr pkt, bool read);
 
   public:
-    typedef IdeControllerParams Params;
-    const Params *params() const { return (const Params *)_params; }
-    IdeController(Params *p);
+    PARAMS(IdeController);
+    IdeController(const Params &p);
 
     /** See if a disk is selected based on its pointer */
     bool isDiskSelected(IdeDisk *diskPtr);

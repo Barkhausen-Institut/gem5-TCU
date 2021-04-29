@@ -29,7 +29,7 @@
 #include "arch/x86/isa.hh"
 
 #include "arch/x86/decoder.hh"
-#include "arch/x86/tlb.hh"
+#include "arch/x86/mmu.hh"
 #include "cpu/base.hh"
 #include "cpu/thread_context.hh"
 #include "params/X86ISA.hh"
@@ -40,8 +40,7 @@ namespace X86ISA
 
 void
 ISA::updateHandyM5Reg(Efer efer, CR0 cr0,
-                      SegAttr csAttr, SegAttr ssAttr, RFLAGS rflags,
-                      ThreadContext *tc)
+                      SegAttr csAttr, SegAttr ssAttr, RFLAGS rflags)
 {
     HandyM5Reg m5reg = 0;
     if (efer.lma) {
@@ -131,15 +130,11 @@ ISA::clear()
     regVal[MISCREG_APIC_BASE] = lApicBase;
 }
 
-ISA::ISA(Params *p) : BaseISA(p)
+ISA::ISA(const X86ISAParams &p) : BaseISA(p), vendorString(p.vendor_string)
 {
+    fatal_if(vendorString.size() != 12,
+             "CPUID vendor string must be 12 characters\n");
     clear();
-}
-
-const X86ISAParams *
-ISA::params() const
-{
-    return dynamic_cast<const Params *>(_params);
 }
 
 RegVal
@@ -154,7 +149,7 @@ ISA::readMiscRegNoEffect(int miscReg) const
 }
 
 RegVal
-ISA::readMiscReg(int miscReg, ThreadContext * tc)
+ISA::readMiscReg(int miscReg)
 {
     if (miscReg == MISCREG_TSC) {
         return regVal[MISCREG_TSC] + tc->getCpuPtr()->curCycle();
@@ -218,7 +213,7 @@ ISA::setMiscRegNoEffect(int miscReg, RegVal val)
 }
 
 void
-ISA::setMiscReg(int miscReg, RegVal val, ThreadContext * tc)
+ISA::setMiscReg(int miscReg, RegVal val)
 {
     RegVal newVal = val;
     switch(miscReg)
@@ -240,8 +235,7 @@ ISA::setMiscReg(int miscReg, RegVal val, ThreadContext * tc)
                 }
             }
             if (toggled.pg) {
-                dynamic_cast<TLB *>(tc->getITBPtr())->flushAll();
-                dynamic_cast<TLB *>(tc->getDTBPtr())->flushAll();
+                tc->getMMUPtr()->flushAll();
             }
             //This must always be 1.
             newCR0.et = 1;
@@ -250,22 +244,19 @@ ISA::setMiscReg(int miscReg, RegVal val, ThreadContext * tc)
                              newCR0,
                              regVal[MISCREG_CS_ATTR],
                              regVal[MISCREG_SS_ATTR],
-                             regVal[MISCREG_RFLAGS],
-                             tc);
+                             regVal[MISCREG_RFLAGS]);
         }
         break;
       case MISCREG_CR2:
         break;
       case MISCREG_CR3:
-        dynamic_cast<TLB *>(tc->getITBPtr())->flushNonGlobal();
-        dynamic_cast<TLB *>(tc->getDTBPtr())->flushNonGlobal();
+        static_cast<MMU *>(tc->getMMUPtr())->flushNonGlobal();
         break;
       case MISCREG_CR4:
         {
             CR4 toggled = regVal[miscReg] ^ val;
             if (toggled.pae || toggled.pse || toggled.pge) {
-                dynamic_cast<TLB *>(tc->getITBPtr())->flushAll();
-                dynamic_cast<TLB *>(tc->getDTBPtr())->flushAll();
+                tc->getMMUPtr()->flushAll();
             }
         }
         break;
@@ -292,8 +283,7 @@ ISA::setMiscReg(int miscReg, RegVal val, ThreadContext * tc)
                              regVal[MISCREG_CR0],
                              newCSAttr,
                              regVal[MISCREG_SS_ATTR],
-                             regVal[MISCREG_RFLAGS],
-                             tc);
+                             regVal[MISCREG_RFLAGS]);
         }
         break;
       case MISCREG_SS_ATTR:
@@ -301,8 +291,7 @@ ISA::setMiscReg(int miscReg, RegVal val, ThreadContext * tc)
                          regVal[MISCREG_CR0],
                          regVal[MISCREG_CS_ATTR],
                          val,
-                         regVal[MISCREG_RFLAGS],
-                         tc);
+                         regVal[MISCREG_RFLAGS]);
         break;
       // These segments always actually use their bases, or in other words
       // their effective bases must stay equal to their actual bases.
@@ -409,8 +398,7 @@ ISA::setMiscReg(int miscReg, RegVal val, ThreadContext * tc)
                          regVal[MISCREG_CR0],
                          regVal[MISCREG_CS_ATTR],
                          regVal[MISCREG_SS_ATTR],
-                         regVal[MISCREG_RFLAGS],
-                         tc);
+                         regVal[MISCREG_RFLAGS]);
         return;
       default:
         break;
@@ -432,20 +420,20 @@ ISA::unserialize(CheckpointIn &cp)
                      regVal[MISCREG_CR0],
                      regVal[MISCREG_CS_ATTR],
                      regVal[MISCREG_SS_ATTR],
-                     regVal[MISCREG_RFLAGS],
-                     NULL);
+                     regVal[MISCREG_RFLAGS]);
 }
 
 void
-ISA::startup(ThreadContext *tc)
+ISA::setThreadContext(ThreadContext *_tc)
 {
+    BaseISA::setThreadContext(_tc);
     tc->getDecoderPtr()->setM5Reg(regVal[MISCREG_M5_REG]);
 }
 
+std::string
+ISA::getVendorString() const
+{
+    return vendorString;
 }
 
-X86ISA::ISA *
-X86ISAParams::create()
-{
-    return new X86ISA::ISA(this);
 }

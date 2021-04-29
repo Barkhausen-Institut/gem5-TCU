@@ -79,7 +79,7 @@ class Malta : public Platform
      * @param intctrl pointer to the interrupt controller
      */
     typedef MaltaParams Params;
-    Malta(const Params *p);
+    Malta(const Params &p);
 
     /**
      * Cause the cpu to post a serial interrupt to the CPU.
@@ -108,21 +108,18 @@ class Malta : public Platform
     calcPciConfigAddr(int bus, int dev, int func)
     {
         panic("Need implementation\n");
-        M5_DUMMY_RETURN
     }
 
     Addr
     calcPciIOAddr(Addr addr)
     {
         panic("Need implementation\n");
-        M5_DUMMY_RETURN
     }
 
     Addr
     calcPciMemAddr(Addr addr)
     {
         panic("Need implementation\n");
-        M5_DUMMY_RETURN
     }
 
     void serialize(CheckpointOut &cp) const override;

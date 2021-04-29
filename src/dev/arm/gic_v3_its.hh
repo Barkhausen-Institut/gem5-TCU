@@ -38,9 +38,15 @@
 #ifndef __DEV_ARM_GICV3_ITS_H__
 #define __DEV_ARM_GICV3_ITS_H__
 
+#include <cstdint>
+#include <memory>
 #include <queue>
+#include <vector>
 
+#include "base/addr_range.hh"
+#include "base/bitunion.hh"
 #include "base/coroutine.hh"
+#include "base/types.hh"
 #include "dev/dma_device.hh"
 #include "params/Gicv3Its.hh"
 
@@ -77,14 +83,14 @@ class Gicv3Its : public BasicPioDevice
     friend class ::ItsTranslation;
     friend class ::ItsCommand;
   public:
-    class DataPort : public MasterPort
+    class DataPort : public RequestPort
     {
       protected:
         Gicv3Its &its;
 
       public:
         DataPort(const std::string &_name, Gicv3Its &_its) :
-            MasterPort(_name, &_its),
+            RequestPort(_name, &_its),
             its(_its)
         {}
 
@@ -100,7 +106,7 @@ class Gicv3Its : public BasicPioDevice
     bool recvTimingResp(PacketPtr pkt);
     void recvReqRetry();
 
-    Gicv3Its(const Gicv3ItsParams *params);
+    Gicv3Its(const Gicv3ItsParams &params);
 
     void setGIC(Gicv3 *_gic);
 
@@ -319,7 +325,7 @@ class Gicv3Its : public BasicPioDevice
 
   private:
     std::queue<ItsAction> packetsToRetry;
-    uint32_t masterId;
+    uint32_t requestorId;
     Gicv3 *gic;
     EventFunctionWrapper commandEvent;
 

@@ -36,8 +36,6 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from __future__ import print_function
-
 from m5.defines import buildEnv
 from m5.params import *
 from m5.proxy import *
@@ -47,8 +45,8 @@ from m5.objects.FUPool import *
 from m5.objects.O3Checker import O3Checker
 from m5.objects.BranchPredictor import *
 
-class FetchPolicy(ScopedEnum):
-    vals = [ 'SingleThread', 'RoundRobin', 'Branch', 'IQCount', 'LSQCount' ]
+class SMTFetchPolicy(ScopedEnum):
+    vals = [ 'RoundRobin', 'Branch', 'IQCount', 'LSQCount' ]
 
 class SMTQueuePolicy(ScopedEnum):
     vals = [ 'Dynamic', 'Partitioned', 'Threshold' ]
@@ -159,7 +157,7 @@ class DerivO3CPU(BaseCPU):
     numROBEntries = Param.Unsigned(192, "Number of reorder buffer entries")
 
     smtNumFetchingThreads = Param.Unsigned(1, "SMT Number of Fetching Threads")
-    smtFetchPolicy = Param.FetchPolicy('SingleThread', "SMT Fetch policy")
+    smtFetchPolicy = Param.SMTFetchPolicy('RoundRobin', "SMT Fetch policy")
     smtLSQPolicy    = Param.SMTQueuePolicy('Partitioned',
                                            "SMT LSQ Sharing Policy")
     smtLSQThreshold = Param.Int(100, "SMT LSQ Threshold Sharing Parameter")
@@ -179,14 +177,15 @@ class DerivO3CPU(BaseCPU):
 
     def addCheckerCpu(self):
         if buildEnv['TARGET_ISA'] in ['arm']:
-            from m5.objects.ArmTLB import ArmDTB, ArmITB
+            from m5.objects.ArmTLB import ArmMMU
 
             self.checker = O3Checker(workload=self.workload,
                                      exitOnError=False,
                                      updateOnError=True,
                                      warnOnlyOnLoadError=True)
-            self.checker.itb = ArmITB(size = self.itb.size)
-            self.checker.dtb = ArmDTB(size = self.dtb.size)
+            self.checker.mmu = ArmMMU()
+            self.checker.mmu.itb.size = self.mmu.itb.size
+            self.checker.mmu.dtb.size = self.mmu.dtb.size
             self.checker.cpu_id = self.cpu_id
 
         else:

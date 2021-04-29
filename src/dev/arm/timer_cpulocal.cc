@@ -37,8 +37,11 @@
 
 #include "dev/arm/timer_cpulocal.hh"
 
+#include <cassert>
+
 #include "arch/arm/system.hh"
 #include "base/intmath.hh"
+#include "base/logging.hh"
 #include "base/trace.hh"
 #include "debug/Checkpoint.hh"
 #include "debug/Timer.hh"
@@ -46,7 +49,7 @@
 #include "mem/packet.hh"
 #include "mem/packet_access.hh"
 
-CpuLocalTimer::CpuLocalTimer(Params *p)
+CpuLocalTimer::CpuLocalTimer(const Params &p)
     : BasicPioDevice(p, 0x38)
 {
 }
@@ -54,17 +57,17 @@ CpuLocalTimer::CpuLocalTimer(Params *p)
 void
 CpuLocalTimer::init()
 {
-   auto p = params();
+   const auto &p = params();
    // Initialize the timer registers for each per cpu timer
-   for (int i = 0; i < sys->numContexts(); i++) {
-        ThreadContext* tc = sys->getThreadContext(i);
+   for (int i = 0; i < sys->threads.size(); i++) {
+        ThreadContext* tc = sys->threads[i];
         std::stringstream oss;
         oss << name() << ".timer" << i;
 
         localTimer.emplace_back(
             new Timer(oss.str(), this,
-                      p->int_timer->get(tc),
-                      p->int_watchdog->get(tc)));
+                      p.int_timer->get(tc),
+                      p.int_watchdog->get(tc)));
     }
 
     BasicPioDevice::init();
@@ -429,19 +432,13 @@ CpuLocalTimer::Timer::unserialize(CheckpointIn &cp)
 void
 CpuLocalTimer::serialize(CheckpointOut &cp) const
 {
-    for (int i = 0; i < sys->numContexts(); i++)
+    for (int i = 0; i < sys->threads.size(); i++)
         localTimer[i]->serializeSection(cp, csprintf("timer%d", i));
 }
 
 void
 CpuLocalTimer::unserialize(CheckpointIn &cp)
 {
-    for (int i = 0; i < sys->numContexts(); i++)
+    for (int i = 0; i < sys->threads.size(); i++)
         localTimer[i]->unserializeSection(cp, csprintf("timer%d", i));
-}
-
-CpuLocalTimer *
-CpuLocalTimerParams::create()
-{
-    return new CpuLocalTimer(this);
 }

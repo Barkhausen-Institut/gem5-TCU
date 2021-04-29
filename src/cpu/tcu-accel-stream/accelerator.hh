@@ -64,7 +64,7 @@ class TcuAccelStream : public TcuAccel
     static const uint64_t NO_COMMIT     = 0xFFFFFFFFFFFFFFFF;
 
   public:
-    TcuAccelStream(const TcuAccelStreamParams *p);
+    TcuAccelStream(const TcuAccelStreamParams &p);
 
     void wakeup() override;
 
@@ -157,7 +157,7 @@ class TcuAccelStream : public TcuAccel
         STARTED     = 0x400,
     };
 
-    struct
+    struct M5_ATTR_PACKED
     {
         uint16_t bufOff;
         uint16_t flags;
@@ -180,28 +180,28 @@ class TcuAccelStream : public TcuAccel
         uint64_t nextSysc;
         // padding
         uint64_t : 64;
-    } M5_ATTR_PACKED ctx;
+    } ctx;
 
-    struct
+    struct M5_ATTR_PACKED
     {
         uint64_t cmd;
         uint64_t commit;
-    } M5_ATTR_PACKED rdwr_msg;
+    } rdwr_msg;
 
-    struct
+    struct M5_ATTR_PACKED
     {
         uint64_t opcode;
         uint64_t vpe_sel;
         uint64_t op;
         uint64_t arg;
-    } M5_ATTR_PACKED exit_msg;
+    } exit_msg;
 
-    struct
+    struct M5_ATTR_PACKED
     {
         uint64_t err;
         uint64_t off;
         uint64_t len;
-    } M5_ATTR_PACKED reply;
+    } reply;
 
     size_t bufSize;
     SyscallSM sysc;

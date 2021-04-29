@@ -40,9 +40,6 @@
 #
 # "m5 test.py"
 
-from __future__ import print_function
-from __future__ import absolute_import
-
 import optparse
 import sys
 import os
@@ -169,11 +166,12 @@ if options.smt and options.num_cpus > 1:
     fatal("You cannot use SMT with multiple CPUs!")
 
 np = options.num_cpus
+mp0_path = multiprocesses[0].executable
 system = System(cpu = [CPUClass(cpu_id=i) for i in range(np)],
                 mem_mode = test_mem_mode,
                 mem_ranges = [AddrRange(options.mem_size)],
                 cache_line_size = options.cacheline_size,
-                workload = NULL)
+                workload = SEWorkload.init_compatible(mp0_path))
 
 if numThreads > 1:
     system.multi_thread = True
@@ -259,14 +257,7 @@ if options.ruby:
         system.cpu[i].createInterruptController()
 
         # Connect the cpu's cache ports to Ruby
-        system.cpu[i].icache_port = ruby_port.slave
-        system.cpu[i].dcache_port = ruby_port.slave
-        if buildEnv['TARGET_ISA'] == 'x86':
-            system.cpu[i].interrupts[0].pio = ruby_port.master
-            system.cpu[i].interrupts[0].int_master = ruby_port.slave
-            system.cpu[i].interrupts[0].int_slave = ruby_port.master
-            system.cpu[i].itb.walker.port = ruby_port.slave
-            system.cpu[i].dtb.walker.port = ruby_port.slave
+        ruby_port.connectCpuPorts(system.cpu[i])
 else:
     MemClass = Simulation.setMemClass(options)
     system.membus = SystemXBar()

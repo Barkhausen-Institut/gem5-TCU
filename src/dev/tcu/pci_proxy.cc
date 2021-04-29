@@ -57,7 +57,7 @@ TcuPciProxy::createPacket(
 {
     Request::Flags flags;
 
-    auto req = std::make_shared<Request>(paddr, size, flags, masterId);
+    auto req = std::make_shared<Request>(paddr, size, flags, requestorId);
     req->setContext(id);
 
     auto pkt = new Packet(req, cmd);
@@ -126,7 +126,7 @@ TcuPciProxy::createPciConfigPacket(
     Request::Flags flags;
 
     Addr addr = encodePciAddress(busAddr, offset);
-    auto req = std::make_shared<Request>(addr, size, flags, masterId);
+    auto req = std::make_shared<Request>(addr, size, flags, requestorId);
 
     auto pkt = new Packet(req, cmd);
     pkt->dataStatic(data);
@@ -134,15 +134,15 @@ TcuPciProxy::createPciConfigPacket(
     return pkt;
 }
 
-TcuPciProxy::TcuPciProxy(const TcuPciProxyParams* p)
+TcuPciProxy::TcuPciProxy(const TcuPciProxyParams &p)
     : ClockedObject(p),
       tcuMasterPort(name() + ".tcu_master_port", this),
       tcuSlavePort(name() + ".tcu_slave_port", this),
       pioPort(name() + ".pio_port", this),
       dmaPort(name() + ".dma_port", this),
-      masterId(p->system->getMasterId(this, name())),
-      id(p->id),
-      tcuRegBase(p->tcu_regfile_base_addr),
+      requestorId(p.system->getRequestorId(this, name())),
+      id(p.id),
+      tcuRegBase(p.tcu_regfile_base_addr),
       deviceBusAddr(0, 0, 0),
       tickEvent(this),
       cmdSM(this),
@@ -545,10 +545,4 @@ TcuPciProxy::DmaPort::getAddrRanges() const
     AddrRangeList ranges;
     ranges.push_back(AddrRange(0, 0xffffffffffffffff));
     return ranges;
-}
-
-TcuPciProxy*
-TcuPciProxyParams::create()
-{
-    return new TcuPciProxy(this);
 }

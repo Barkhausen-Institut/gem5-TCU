@@ -38,8 +38,14 @@
 #ifndef __DEV_ARM_SP804_HH__
 #define __DEV_ARM_SP804_HH__
 
+#include <cstdint>
+
+#include "base/bitunion.hh"
+#include "base/types.hh"
 #include "dev/arm/amba_device.hh"
 #include "params/Sp804.hh"
+#include "sim/eventq.hh"
+#include "sim/serialize.hh"
 
 /** @file
  * This implements the dual Sp804 timer block
@@ -80,8 +86,8 @@ class Sp804 : public AmbaPioDevice
         /** Pointer to parent class */
         Sp804 *parent;
 
-        /** Number of interrupt to cause/clear */
-        const uint32_t intNum;
+        /** Pointer to the interrupt pin */
+        ArmInterruptPin * const interrupt;
 
         /** Number of ticks in a clock input */
         const Tick clock;
@@ -109,7 +115,8 @@ class Sp804 : public AmbaPioDevice
          * @param val the value to start at (pre-16 bit masking if en) */
         void restartCounter(uint32_t val);
 
-        Timer(std::string __name, Sp804 *parent, int int_num, Tick clock);
+        Timer(std::string __name, Sp804 *parent, ArmInterruptPin *_interrupt,
+              Tick clock);
 
         std::string name() const { return _name; }
 
@@ -123,25 +130,18 @@ class Sp804 : public AmbaPioDevice
         void unserialize(CheckpointIn &cp) override;
     };
 
-    /** Pointer to the GIC for causing an interrupt */
-    BaseGic *gic;
-
     /** Timers that do the actual work */
     Timer timer0;
     Timer timer1;
 
   public:
-    typedef Sp804Params Params;
-    const Params *
-    params() const
-    {
-        return dynamic_cast<const Params *>(_params);
-    }
+    using Params = Sp804Params;
+
     /**
       * The constructor for RealView just registers itself with the MMU.
       * @param p params structure
       */
-    Sp804(Params *p);
+    Sp804(const Params &p);
 
     /**
      * Handle a read to the device

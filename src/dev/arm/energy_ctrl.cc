@@ -37,22 +37,24 @@
 
 #include "dev/arm/energy_ctrl.hh"
 
+#include "base/trace.hh"
 #include "debug/EnergyCtrl.hh"
 #include "mem/packet.hh"
 #include "mem/packet_access.hh"
 #include "params/EnergyCtrl.hh"
 #include "sim/dvfs_handler.hh"
+#include "sim/serialize.hh"
 
-EnergyCtrl::EnergyCtrl(const Params *p)
+EnergyCtrl::EnergyCtrl(const Params &p)
     : BasicPioDevice(p, PIO_NUM_FIELDS * 4),        // each field is 32 bit
-      dvfsHandler(p->dvfs_handler),
+      dvfsHandler(p.dvfs_handler),
       domainID(0),
       domainIDIndexToRead(0),
       perfLevelAck(0),
       perfLevelToRead(0),
       updateAckEvent([this]{ updatePLAck(); }, name())
 {
-    fatal_if(!p->dvfs_handler, "EnergyCtrl: Needs a DVFSHandler for a "
+    fatal_if(!p.dvfs_handler, "EnergyCtrl: Needs a DVFSHandler for a "
              "functioning system.\n");
 }
 
@@ -238,11 +240,6 @@ EnergyCtrl::unserialize(CheckpointIn &cp)
     if (next_event != 0) {
         schedule(updateAckEvent, next_event);
     }
-}
-
-EnergyCtrl * EnergyCtrlParams::create()
-{
-    return new EnergyCtrl(this);
 }
 
 void

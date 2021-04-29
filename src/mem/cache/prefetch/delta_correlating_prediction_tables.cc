@@ -36,10 +36,10 @@
 namespace Prefetcher {
 
 DeltaCorrelatingPredictionTables::DeltaCorrelatingPredictionTables(
-   DeltaCorrelatingPredictionTablesParams *p) : SimObject(p),
-   deltaBits(p->delta_bits), deltaMaskBits(p->delta_mask_bits),
-   table(p->table_assoc, p->table_entries, p->table_indexing_policy,
-         p->table_replacement_policy, DCPTEntry(p->deltas_per_entry))
+   const DeltaCorrelatingPredictionTablesParams &p) : SimObject(p),
+   deltaBits(p.delta_bits), deltaMaskBits(p.delta_mask_bits),
+   table(p.table_assoc, p.table_entries, p.table_indexing_policy,
+         p.table_replacement_policy, DCPTEntry(p.deltas_per_entry))
 {
 }
 
@@ -145,8 +145,8 @@ DeltaCorrelatingPredictionTables::calculatePrefetch(
     }
 }
 
-DCPT::DCPT(const DCPTPrefetcherParams *p)
-  : Queued(p), dcpt(*p->dcpt)
+DCPT::DCPT(const DCPTPrefetcherParams &p)
+  : Queued(p), dcpt(*p.dcpt)
 {
 }
 
@@ -158,15 +158,3 @@ DCPT::calculatePrefetch(const PrefetchInfo &pfi,
 }
 
 } // namespace Prefetcher
-
-Prefetcher::DeltaCorrelatingPredictionTables*
-DeltaCorrelatingPredictionTablesParams::create()
-{
-   return new Prefetcher::DeltaCorrelatingPredictionTables(this);
-}
-
-Prefetcher::DCPT*
-DCPTPrefetcherParams::create()
-{
-    return new Prefetcher::DCPT(this);
-}

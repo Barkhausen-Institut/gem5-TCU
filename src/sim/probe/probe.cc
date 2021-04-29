@@ -48,9 +48,10 @@ ProbePoint::ProbePoint(ProbeManager *manager, const std::string& _name)
     }
 }
 
-ProbeListenerObject::ProbeListenerObject(const ProbeListenerObjectParams *params)
+ProbeListenerObject::ProbeListenerObject(
+        const ProbeListenerObjectParams &params)
     : SimObject(params),
-      manager(params->manager->getProbeManager())
+      manager(params.manager->getProbeManager())
 {
 }
 
@@ -71,12 +72,6 @@ ProbeListener::ProbeListener(ProbeManager *_manager, const std::string &_name)
 ProbeListener::~ProbeListener()
 {
     manager->removeListener(name, *this);
-}
-
-ProbeListenerObject*
-ProbeListenerObjectParams::create()
-{
-    return new ProbeListenerObject(this);
 }
 
 bool

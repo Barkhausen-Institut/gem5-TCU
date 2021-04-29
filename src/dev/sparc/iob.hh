@@ -121,14 +121,8 @@ class Iob : public PioDevice
     void readJBus(PacketPtr pkt);
 
   public:
-    typedef IobParams Params;
-    Iob(const Params *p);
-
-    const Params *
-    params() const
-    {
-        return dynamic_cast<const Params *>(_params);
-    }
+    PARAMS(Iob);
+    Iob(const Params &p);
 
     Tick read(PacketPtr pkt) override;
     Tick write(PacketPtr pkt) override;

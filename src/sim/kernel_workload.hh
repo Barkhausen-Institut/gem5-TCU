@@ -41,12 +41,7 @@ class System;
 
 class KernelWorkload : public Workload
 {
-  public:
-    using Params = KernelWorkloadParams;
-
   protected:
-    const Params &_params;
-
     Loader::MemoryImage image;
 
     /** Mask that should be anded for binary/symbol loading.
@@ -69,12 +64,14 @@ class KernelWorkload : public Workload
     std::vector<Loader::ObjectFile *> extras;
 
     Loader::ObjectFile *kernelObj = nullptr;
-    Loader::SymbolTable *kernelSymtab = nullptr;
+    // Keep a separate copy of the kernel's symbol table so we can add things
+    // to it.
+    Loader::SymbolTable kernelSymtab;
 
     const std::string commandLine;
 
   public:
-    const Params &params() const { return _params; }
+    PARAMS(KernelWorkload);
 
     Addr start() const { return _start; }
     Addr end() const { return _end; }
@@ -82,7 +79,6 @@ class KernelWorkload : public Workload
     Addr loadAddrOffset() const { return _loadAddrOffset; }
 
     KernelWorkload(const Params &p);
-    ~KernelWorkload();
 
     Addr getEntry() const override { return kernelObj->entryPoint(); }
     Loader::Arch
@@ -91,16 +87,16 @@ class KernelWorkload : public Workload
         return kernelObj->getArch();
     }
 
-    const Loader::SymbolTable *
+    const Loader::SymbolTable &
     symtab(ThreadContext *tc) override
     {
         return kernelSymtab;
     }
 
     bool
-    insertSymbol(Addr address, const std::string &symbol) override
+    insertSymbol(const Loader::Symbol &symbol) override
     {
-        return kernelSymtab->insert(address, symbol);
+        return kernelSymtab.insert(symbol);
     }
 
     void initState() override;

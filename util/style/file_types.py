@@ -118,7 +118,7 @@ def lang_type(filename, firstline=None, openok=True):
     return None
 
 # directories and files to ignore by default
-default_dir_ignore = frozenset(('.hg', '.svn', 'build', 'ext'))
+default_dir_ignore = frozenset(('build', 'ext'))
 default_file_ignore = frozenset(('parsetab.py', ))
 
 def find_files(base, languages=all_languages,
@@ -178,10 +178,10 @@ def update_file(dst, src, language, mutator):
     orig_lines = []
 
     # grab all of the lines of the file and strip them of their line ending
-    old_lines = list(line.rstrip('\r\n') for line in src.xreadlines())
+    old_lines = list(line.rstrip('\r\n') for line in src)
     new_lines = list(mutator(old_lines, src.name, language))
 
-    for line in src.xreadlines():
+    for line in src:
         line = line
 
     if inplace:

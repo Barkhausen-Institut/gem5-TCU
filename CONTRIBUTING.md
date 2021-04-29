@@ -86,20 +86,20 @@ To clone the gem5 repository:
  git clone https://gem5.googlesource.com/public/gem5
 ```
 
-By default, the master branch is checked out. The master branch is stable,
-containing the latest released version of gem5. To obtain code still
-under-development (and which contributions can be made):
+By default, the stable branch is checked out. The stable branch contains the
+latest released version of gem5. To obtain code still under-development (and
+which contributions can be made):
 
 ```
 cd gem5
 git checkout --track origin/develop
 ```
 
-Changes should be made to this develop branch. Changes to the master branch
+Changes should be made to this develop branch. Changes to the stable branch
 will be blocked. Once a change on the develop branch is properly incorporated
-into the gem5 repo it will be merged into the master Branch upon the next
+into the gem5 repo it will be merged into the stable branch upon the next
 release of gem5. New releases of gem5 occur three times a year. Ergo, changes
-made to the develop branch should appear on the master branch within three to
+made to the develop branch should appear on the stable branch within three to
 four months as part of a stable release.
 
 Other gem5 repositories
@@ -109,7 +109,11 @@ There are a few repositories other than the main gem5 development repository.
 
  * public/m5threads: The code for a pthreads implementation that works with
    gem5's syscall emulation mode.
-
+ * public/gem5-resources: Resources to enable computer architecture research
+   with gem5. See the README.md file in the gem5-resources repository for more
+   information.
+ * public/gem5-website: The gem5.org website source. See the README.md file in
+   the gem5-website repository for more information.
 
 Making changes to gem5
 ======================
@@ -122,6 +126,15 @@ Unlike our previous flow with Mercurial and patch queues, when using git, you
 will be committing changes to your local branch. By using separate branches in
 git, you will be able to pull in and merge changes from mainline and simply
 keep up with upstream changes.
+
+We use a rebase-always model for contributions to the develop branch of gem5.
+In this model, the changes are rebased on top of the tip of develop instead of
+merged. This means that to contribute, you will have to frequently rebase any
+feature branches on top of develop. If you see a "merge conflict" in gerrit, it
+can often be solved with a simple rebase. To find out more information about
+rebasing and git, see the [git book].
+
+[git book]: https://git-scm.com/book/en/v2/Git-Branching-Rebasing
 
 Requirements for change descriptions
 ------------------------------------
@@ -136,7 +149,7 @@ A canonical commit message consists of three parts:
    causes line-wrapping for longer lines.
  * (Optional, but highly recommended) A detailed description. This describes
    what you have done and why. If the change isn't obvious, you might want to
-   motivate why it is needed. Lines need to be wrapped to 75 characters or
+   motivate why it is needed. Lines need to be wrapped to 72 characters or
    less.
  * Tags describing patch metadata. You are highly recommended to use
    tags to acknowledge reviewers for their work. Gerrit will automatically add
@@ -165,10 +178,14 @@ We currently use the following tags:
    automatically with a commit hook by git.
  * Tested-by: Used to acknowledge people who tested a patch. Sometimes added
    automatically by review systems that integrate with CI systems.
+ * Issue-On: Used to link a commit to an issue in gem5's [issue tracker]. The
+   format should be https://gem5.atlassian.net/browse/GEM5-<NUMBER>
 
-Other than the "Signed-off-by", "Reported-by", and "Tested-by" tags, you
-generally don't need to add these manually as they are added automatically by
-Gerrit.
+[issue tracker]: https://gem5.atlassian.net/
+
+Other than the "Signed-off-by", "Issue-On", "Reported-by", and "Tested-by"
+tags, you generally don't need to add these manually as they are added
+automatically by Gerrit.
 
 It is encouraged for the author of the patch and the submitter to add a
 Signed-off-by tag to the commit message. By adding this line, the contributor
@@ -186,7 +203,10 @@ both tags and in the author field of the changeset.
 For significant changes, authors are encouraged to add copyright information
 and their names at the beginning of the file. The main purpose of the author
 names on the file is to track who is most knowledgeable about the file (e.g.,
-who has contributed a significant amount of code to the file).
+who has contributed a significant amount of code to the file). The
+`util/update-copyright.py` helper script can help to keep your copyright dates
+up-to-date when you make further changes to files which already have your
+copyright but with older dates.
 
 Note: If you do not follow these guidelines, the gerrit review site will
 automatically reject your patch.
@@ -322,7 +342,7 @@ Branches
 ========
 
 By default, contributions to gem5 should be made on the develop branch. The
-master branch is maintained as a stable release branch (i.e., it can be pulled
+stable branch is maintained as a stable release branch (i.e., it can be pulled
 to obtain the latest official release of gem5). Creation of additional branches
 is generally discouraged due to their tendency to bloat git repositories with
 abandoned code. However, the creation of new branches is permitted for
@@ -491,7 +511,7 @@ release are submitted to the develop branch.
 2. When a release is ready, a new staging branch shall be created by a project
 maintainer, from develop, with the name "release-staging-{VERSION}". The
 gem5-dev mailing list will be notified that the staging branch will be merged
-into the master branch after two weeks, thus marking the new release.
+into the stable branch after two weeks, thus marking the new release.
 3. The staging branch will have the full suite of gem5 tests run on it to
 ensure all tests pass and the to-be-released code is in a decent state.
 4. If a user submits a changeset to the staging branch, it will be considered
@@ -504,8 +524,8 @@ change may be submitted directly to the staging branch. All other submissions
 to gem5 will continue to be made to the develop branch. Patches submitted
 into the staging branch do not need to be re-added to the develop branch.
 5. Once signed off by members of the PMC the staging branch shall be merged
-into the master and develop branch. The staging branch will then be deleted.
-6. The master branch shall be tagged with the correct version number for that
+into the stable and develop branch. The staging branch will then be deleted.
+6. The stable branch shall be tagged with the correct version number for that
 release. gem5 conforms to a "v{YY}.{MAJOR}.{MINOR}.{HOTFIX}" versioning system.
 E.g., the first major release of 2022 will be "v22.0.0.0", followed by
 "v22.1.0.0". All the releases (with the exception of hotfixes) are considered
@@ -527,14 +547,14 @@ whether the issue is worthy of a hotfix, and the final decision should be
 made by members of the PMC if there is no consensus. Assuming the hotfix is
 permitted, the following steps will be taken:
 
-1. A new branch with the prefix "hotfix-" will be created from the master
+1. A new branch with the prefix "hotfix-" will be created from the stable
 branch. Only gem5 maintainers can create branches. If a non-maintainer requires
 the creation of a hotfix branch then they should contact a gem5 maintainer.
 2. The change shall be submitted to the hotfix branch via gerrit. Full review,
 as with any other change, will be required.
 3. Once fully submitted, the hotfix branch shall be merged into both the
-develop and the master branch by a gem5 maintainer.
-4. The master branch will be tagged with the new version number; the same as
+develop and the stable branch by a gem5 maintainer.
+4. The stable branch will be tagged with the new version number; the same as
 the last but with an incremented hotfix number (e.g., "v20.2.0.0" would
 transition to "v20.2.0.1").
 4. The hotfix branch will then be deleted.

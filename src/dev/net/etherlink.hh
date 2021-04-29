@@ -46,6 +46,7 @@
 #define __DEV_NET_ETHERLINK_HH__
 
 #include <queue>
+#include <utility>
 
 #include "base/types.hh"
 #include "dev/net/etherint.hh"
@@ -139,15 +140,9 @@ class EtherLink : public SimObject
     Interface *interface[2];
 
   public:
-    typedef EtherLinkParams Params;
-    EtherLink(const Params *p);
+    using Params = EtherLinkParams;
+    EtherLink(const Params &p);
     virtual ~EtherLink();
-
-    const Params *
-    params() const
-    {
-        return dynamic_cast<const Params *>(_params);
-    }
 
     Port &getPort(const std::string &if_name,
                   PortID idx=InvalidPortID) override;

@@ -128,15 +128,9 @@ class PioDevice : public ClockedObject
     virtual Tick write(PacketPtr pkt) = 0;
 
   public:
-    typedef PioDeviceParams Params;
-    PioDevice(const Params *p);
+    using Params = PioDeviceParams;
+    PioDevice(const Params &p);
     virtual ~PioDevice();
-
-    const Params *
-    params() const
-    {
-        return dynamic_cast<const Params *>(_params);
-    }
 
     void init() override;
 
@@ -160,14 +154,8 @@ class BasicPioDevice : public PioDevice
     Tick pioDelay;
 
   public:
-    typedef BasicPioDeviceParams Params;
-    BasicPioDevice(const Params *p, Addr size);
-
-    const Params *
-    params() const
-    {
-        return dynamic_cast<const Params *>(_params);
-    }
+    PARAMS(BasicPioDevice);
+    BasicPioDevice(const Params &p, Addr size);
 
     /**
      * Determine the address ranges that this device responds to.

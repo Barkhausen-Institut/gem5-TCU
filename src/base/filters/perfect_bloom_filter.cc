@@ -32,7 +32,7 @@
 
 namespace BloomFilter {
 
-Perfect::Perfect(const BloomFilterPerfectParams* p)
+Perfect::Perfect(const BloomFilterPerfectParams &p)
     : Base(p)
 {
 }
@@ -79,10 +79,3 @@ Perfect::getTotalCount() const
 }
 
 } // namespace BloomFilter
-
-BloomFilter::Perfect*
-BloomFilterPerfectParams::create()
-{
-    return new BloomFilter::Perfect(this);
-}
-

@@ -49,9 +49,7 @@ const Addr PAddrImplMask = ULL(0x000000FFFFFFFFFF);
 
 class TLB : public BaseTLB
 {
-    // These faults need to be able to populate the tlb in SE mode.
-    friend class FastInstructionAccessMMUMiss;
-    friend class FastDataAccessMMUMiss;
+    friend class MMU;
 
     // TLB state
   protected:
@@ -154,7 +152,7 @@ class TLB : public BaseTLB
 
   public:
     typedef SparcTLBParams Params;
-    TLB(const Params *p);
+    TLB(const Params &p);
 
     void takeOverFrom(BaseTLB *otlb) override {}
 

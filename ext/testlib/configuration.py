@@ -1,4 +1,4 @@
-# Copyright (c) 2020 ARM Limited
+# Copyright (c) 2020-2021 ARM Limited
 # All rights reserved
 #
 # The license below extends only to copyright in the software and shall
@@ -83,8 +83,6 @@ import copy
 import os
 import re
 
-from six import add_metaclass
-from six.moves import configparser as ConfigParser
 from pickle import HIGHEST_PROTOCOL as highest_pickle_protocol
 
 from testlib.helper import absdirpath, AttrDict, FrozenAttrDict
@@ -130,11 +128,6 @@ class _Config(object):
     def _init(self, parser):
         self._parse_commandline_args(parser)
         self._run_post_processors()
-        self._initialized = True
-
-    def _init_with_dicts(self, config, defaults):
-        self._config = config
-        self._defaults = defaults
         self._initialized = True
 
     def _add_post_processor(self, attr, post_processor):
@@ -219,9 +212,12 @@ def define_defaults(defaults):
     defaults.base_dir = os.path.abspath(os.path.join(absdirpath(__file__),
                                                       os.pardir,
                                                       os.pardir))
-    defaults.result_path = os.path.join(os.getcwd(), '.testing-results')
-    defaults.list_only_failed = False
-    defaults.resource_url = 'http://dist.gem5.org/dist/v20'
+    defaults.result_path = os.path.join(os.getcwd(), 'testing-results')
+    defaults.resource_url = 'http://dist.gem5.org/dist/develop'
+    defaults.resource_path = os.path.abspath(os.path.join(defaults.base_dir,
+                                            'tests',
+                                            'gem5',
+                                            'resources'))
 
 def define_constants(constants):
     '''
@@ -236,6 +232,7 @@ def define_constants(constants):
 
     constants.isa_tag_type = 'isa'
     constants.x86_tag = 'X86'
+    constants.gcn3_x86_tag = 'GCN3_X86'
     constants.sparc_tag = 'SPARC'
     constants.riscv_tag = 'RISCV'
     constants.arm_tag = 'ARM'
@@ -254,12 +251,12 @@ def define_constants(constants):
 
     constants.host_isa_tag_type = 'host'
     constants.host_x86_64_tag = 'x86_64'
-    constants.host_i386_tag = 'i386'
     constants.host_arm_tag = 'aarch64'
 
     constants.supported_tags = {
         constants.isa_tag_type : (
             constants.x86_tag,
+            constants.gcn3_x86_tag,
             constants.sparc_tag,
             constants.riscv_tag,
             constants.arm_tag,
@@ -278,7 +275,6 @@ def define_constants(constants):
         ),
         constants.host_isa_tag_type: (
             constants.host_x86_64_tag,
-            constants.host_i386_tag,
             constants.host_arm_tag,
         ),
     }
@@ -287,11 +283,12 @@ def define_constants(constants):
     # case where host ISA and target ISA need to coincide
     constants.target_host = {
         constants.arm_tag   : (constants.host_arm_tag,),
-        constants.x86_tag   : (constants.host_x86_64_tag, constants.host_i386_tag),
-        constants.sparc_tag : (constants.host_x86_64_tag, constants.host_i386_tag),
-        constants.riscv_tag : (constants.host_x86_64_tag, constants.host_i386_tag),
-        constants.mips_tag  : (constants.host_x86_64_tag, constants.host_i386_tag),
-        constants.power_tag : (constants.host_x86_64_tag, constants.host_i386_tag),
+        constants.x86_tag   : (constants.host_x86_64_tag,),
+        constants.gcn3_x86_tag : (constants.host_x86_64_tag,),
+        constants.sparc_tag : (constants.host_x86_64_tag,),
+        constants.riscv_tag : (constants.host_x86_64_tag,),
+        constants.mips_tag  : (constants.host_x86_64_tag,),
+        constants.power_tag : (constants.host_x86_64_tag,),
         constants.null_tag  : (None,)
     }
 
@@ -491,13 +488,16 @@ def define_common_args(config):
     '''
     global common_args
 
+    parse_comma_separated_string = lambda st: st.split(',')
+
     # A list of common arguments/flags used across cli parsers.
     common_args = [
         Argument(
-            'directory',
-            nargs='?',
-            default=os.getcwd(),
-            help='Directory to start searching for tests in'),
+            'directories',
+            nargs='*',
+            default=[os.getcwd()],
+            help='Space separated list of directories to start searching '
+                 'for tests in'),
         Argument(
             '--exclude-tags',
             action=StorePositionalTagsAction,
@@ -508,20 +508,23 @@ def define_common_args(config):
             help='A tag comparison used to select tests.'),
         Argument(
             '--isa',
-            action='append',
+            action='extend',
             default=[],
+            type=parse_comma_separated_string,
             help="Only tests that are valid with one of these ISAs. "
                  "Comma separated."),
         Argument(
             '--variant',
-            action='append',
+            action='extend',
             default=[],
+            type=parse_comma_separated_string,
             help="Only tests that are valid with one of these binary variants"
                  "(e.g., opt, debug). Comma separated."),
         Argument(
             '--length',
-            action='append',
+            action='extend',
             default=[],
+            type=parse_comma_separated_string,
             help="Only tests that are one of these lengths. Comma separated."),
         Argument(
             '--host',
@@ -578,8 +581,8 @@ def define_common_args(config):
         Argument(
             '--bin-path',
             action='store',
-            default=None,
-            help='Path where binaries are stored (downloaded if not present)'
+            default=config._defaults.resource_path,
+            help='Path where resources are stored (downloaded if not present)'
         ),
         Argument(
             '--resource-url',
@@ -599,8 +602,12 @@ def define_common_args(config):
     # one in the list will be saved.
     common_args = AttrDict({arg.name:arg for arg in common_args})
 
-@add_metaclass(abc.ABCMeta)
-class ArgParser(object):
+class ArgParser(object, metaclass=abc.ABCMeta):
+    class ExtendAction(argparse.Action):
+        def __call__(self, parser, namespace, values, option_string=None):
+            items = getattr(namespace, self.dest, [])
+            items.extend(values)
+            setattr(namespace, self.dest, items)
 
     def __init__(self, parser):
         # Copy public methods of the parser.
@@ -608,6 +615,7 @@ class ArgParser(object):
             if not attr.startswith('_'):
                 setattr(self, attr, getattr(parser, attr))
         self.parser = parser
+        self.parser.register('action', 'extend', ArgParser.ExtendAction)
         self.add_argument = self.parser.add_argument
 
         # Argument will be added to all parsers and subparsers.
@@ -639,7 +647,7 @@ class RunParser(ArgParser):
 
         common_args.uid.add_to(parser)
         common_args.skip_build.add_to(parser)
-        common_args.directory.add_to(parser)
+        common_args.directories.add_to(parser)
         common_args.build_dir.add_to(parser)
         common_args.base_dir.add_to(parser)
         common_args.bin_path.add_to(parser)
@@ -696,7 +704,7 @@ class ListParser(ArgParser):
             help='Quiet output (machine readable).'
         ).add_to(parser)
 
-        common_args.directory.add_to(parser)
+        common_args.directories.add_to(parser)
         common_args.bin_path.add_to(parser)
         common_args.isa.add_to(parser)
         common_args.variant.add_to(parser)
@@ -715,7 +723,7 @@ class RerunParser(ArgParser):
         super(RerunParser, self).__init__(parser)
 
         common_args.skip_build.add_to(parser)
-        common_args.directory.add_to(parser)
+        common_args.directories.add_to(parser)
         common_args.build_dir.add_to(parser)
         common_args.base_dir.add_to(parser)
         common_args.bin_path.add_to(parser)

@@ -44,7 +44,7 @@ class TcuAccel : public ClockedObject
     static const unsigned EP_SYSS;
     static const unsigned EP_SYSR;
 
-    TcuAccel(const TcuAccelParams *p);
+    TcuAccel(const TcuAccelParams &p);
 
     Port& getPort(const std::string &if_name,
                   PortID idx = InvalidPortID) override;
@@ -128,7 +128,7 @@ class TcuAccel : public ClockedObject
     CpuPort port;
 
     /// Request id for all generated traffic
-    MasterID masterId;
+    RequestorID requestorId;
 
     unsigned int id;
 

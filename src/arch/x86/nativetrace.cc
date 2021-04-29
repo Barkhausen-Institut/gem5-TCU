@@ -94,8 +94,7 @@ X86NativeTrace::ThreadState::update(ThreadContext *tc)
 }
 
 
-X86NativeTrace::X86NativeTrace(const Params *p)
-    : NativeTrace(p)
+X86NativeTrace::X86NativeTrace(const Params &p) : NativeTrace(p)
 {
     checkRcx = true;
     checkR11 = true;
@@ -187,13 +186,3 @@ X86NativeTrace::check(NativeTraceRecord *record)
 }
 
 } // namespace Trace
-
-////////////////////////////////////////////////////////////////////////
-//
-//  ExeTracer Simulation Object
-//
-Trace::X86NativeTrace *
-X86NativeTraceParams::create()
-{
-    return new Trace::X86NativeTrace(this);
-}

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2013, 2016 ARM Limited
+ * Copyright (c) 2010-2013, 2016, 2020 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -63,8 +63,8 @@ using namespace Linux;
 namespace ArmISA
 {
 
-FsLinux::FsLinux(Params *p) : ArmISA::FsWorkload(p),
-    enableContextSwitchStatsDump(p->enable_context_switch_stats_dump)
+FsLinux::FsLinux(const Params &p) : ArmISA::FsWorkload(p),
+    enableContextSwitchStatsDump(p.enable_context_switch_stats_dump)
 {}
 
 void
@@ -75,37 +75,35 @@ FsLinux::initState()
     // Load symbols at physical address, we might not want
     // to do this permanently, for but early bootup work
     // it is helpful.
-    if (params()->early_kernel_symbols) {
-        kernelObj->loadGlobalSymbols(kernelSymtab, 0, 0, _loadAddrMask);
-        kernelObj->loadGlobalSymbols(
-                Loader::debugSymbolTable, 0, 0, _loadAddrMask);
+    if (params().early_kernel_symbols) {
+        auto phys_globals = kernelObj->symtab().globals()->mask(_loadAddrMask);
+        kernelSymtab.insert(*phys_globals);
+        Loader::debugSymbolTable.insert(*phys_globals);
     }
 
     // Setup boot data structure
-    Addr addr;
     // Check if the kernel image has a symbol that tells us it supports
     // device trees.
     bool kernel_has_fdt_support =
-        kernelSymtab->findAddress("unflatten_device_tree", addr);
-    bool dtb_file_specified = params()->dtb_filename != "";
+        kernelSymtab.find("unflatten_device_tree") != kernelSymtab.end();
+    bool dtb_file_specified = params().dtb_filename != "";
 
     if (kernel_has_fdt_support && dtb_file_specified) {
         // Kernel supports flattened device tree and dtb file specified.
         // Using Device Tree Blob to describe system configuration.
-        inform("Loading DTB file: %s at address %#x\n", params()->dtb_filename,
-                params()->atags_addr + _loadAddrOffset);
+        inform("Loading DTB file: %s at address %#x\n", params().dtb_filename,
+                params().dtb_addr);
 
-        auto *dtb_file = new ::Loader::DtbFile(params()->dtb_filename);
+        auto *dtb_file = new ::Loader::DtbFile(params().dtb_filename);
 
         if (!dtb_file->addBootCmdLine(
                     commandLine.c_str(), commandLine.size())) {
             warn("couldn't append bootargs to DTB file: %s\n",
-                 params()->dtb_filename);
+                 params().dtb_filename);
         }
 
-        dtb_file->buildImage().
-            offset(params()->atags_addr + _loadAddrOffset).
-            write(system->physProxy);
+        dtb_file->buildImage().offset(params().dtb_addr)
+            .write(system->physProxy);
         delete dtb_file;
     } else {
         // Using ATAGS
@@ -153,17 +151,27 @@ FsLinux::initState()
         DPRINTF(Loader, "Boot atags was %d bytes in total\n", size << 2);
         DDUMP(Loader, boot_data, size << 2);
 
-        system->physProxy.writeBlob(params()->atags_addr + _loadAddrOffset,
+        system->physProxy.writeBlob(params().dtb_addr,
                                     boot_data, size << 2);
 
         delete[] boot_data;
     }
 
-    // Kernel boot requirements to set up r0, r1 and r2 in ARMv7
-    for (auto tc: system->threadContexts) {
-        tc->setIntReg(0, 0);
-        tc->setIntReg(1, params()->machine_type);
-        tc->setIntReg(2, params()->atags_addr + _loadAddrOffset);
+    if (getArch() == Loader::Arm64) {
+        // We inform the bootloader of the kernel entry point. This was added
+        // originally done because the entry offset changed in kernel v5.8.
+        // Previously the bootloader just used a hardcoded address.
+        for (auto *tc: system->threads) {
+            tc->setIntReg(0, params().dtb_addr);
+            tc->setIntReg(5, params().cpu_release_addr);
+        }
+    } else {
+        // Kernel boot requirements to set up r0, r1 and r2 in ARMv7
+        for (auto *tc: system->threads) {
+            tc->setIntReg(0, 0);
+            tc->setIntReg(1, params().machine_type);
+            tc->setIntReg(2, params().dtb_addr);
+        }
     }
 }
 
@@ -176,7 +184,6 @@ FsLinux::~FsLinux()
     delete kernelPanic;
 
     delete dumpStats;
-    delete debugPrintk;
 }
 
 void
@@ -195,7 +202,7 @@ FsLinux::startup()
         std::string task_filename = "tasks.txt";
         taskFile = simout.create(name() + "." + task_filename);
 
-        for (const auto tc : system->threadContexts) {
+        for (auto *tc: system->threads) {
             uint32_t pid = tc->getCpuPtr()->getPid();
             if (pid != BaseCPU::invldPid) {
                 mapPid(tc, pid);
@@ -205,7 +212,7 @@ FsLinux::startup()
     }
 
     const std::string dmesg_output = name() + ".dmesg";
-    if (params()->panic_on_panic) {
+    if (params().panic_on_panic) {
         kernelPanic = addKernelFuncEventOrPanic<Linux::KernelPanic>(
             "panic", "Kernel panic in simulated kernel", dmesg_output);
     } else {
@@ -213,7 +220,7 @@ FsLinux::startup()
             "panic", "Kernel panic in simulated kernel", dmesg_output);
     }
 
-    if (params()->panic_on_oops) {
+    if (params().panic_on_oops) {
         kernelOops = addKernelFuncEventOrPanic<Linux::KernelPanic>(
             "oops_exit", "Kernel oops in guest", dmesg_output);
     } else {
@@ -223,28 +230,23 @@ FsLinux::startup()
 
     // With ARM udelay() is #defined to __udelay
     // newer kernels use __loop_udelay and __loop_const_udelay symbols
-    skipUDelay = addKernelFuncEvent<SkipUDelay<SkipFunc>>(
+    skipUDelay = addSkipFunc<SkipUDelay>(
         "__loop_udelay", "__udelay", 1000, 0);
-    if (!skipUDelay)
-        skipUDelay = addKernelFuncEventOrPanic<SkipUDelay<SkipFunc>>(
-         "__udelay", "__udelay", 1000, 0);
+    if (!skipUDelay) {
+        skipUDelay = addSkipFuncOrPanic<SkipUDelay>(
+                "__udelay", "__udelay", 1000, 0);
+    }
 
     // constant arguments to udelay() have some precomputation done ahead of
     // time. Constant comes from code.
-    skipConstUDelay = addKernelFuncEvent<SkipUDelay<SkipFunc>>(
+    skipConstUDelay = addSkipFunc<SkipUDelay>(
         "__loop_const_udelay", "__const_udelay", 1000, 107374);
     if (!skipConstUDelay) {
-        skipConstUDelay = addKernelFuncEventOrPanic<SkipUDelay<SkipFunc>>(
+        skipConstUDelay = addSkipFuncOrPanic<SkipUDelay>(
             "__const_udelay", "__const_udelay", 1000, 107374);
     }
 
-    if (getArch() == Loader::Arm64) {
-        debugPrintk = addKernelFuncEvent<
-            DebugPrintk<SkipFuncLinux64>>("dprintk");
-    } else {
-        debugPrintk = addKernelFuncEvent<
-            DebugPrintk<SkipFuncLinux32>>("dprintk");
-    }
+    debugPrintk = addSkipFunc<DebugPrintk>("dprintk");
 }
 
 void
@@ -266,7 +268,7 @@ FsLinux::mapPid(ThreadContext *tc, uint32_t pid)
 void
 FsLinux::dumpDmesg()
 {
-    Linux::dumpDmesg(system->getThreadContext(0), std::cout);
+    Linux::dumpDmesg(system->threads[0], std::cout);
 }
 
 /**
@@ -360,9 +362,3 @@ DumpStats::process(ThreadContext *tc)
 }
 
 } // namespace ArmISA
-
-FsLinux *
-ArmFsLinuxParams::create()
-{
-    return new FsLinux(this);
-}

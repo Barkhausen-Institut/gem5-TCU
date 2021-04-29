@@ -43,11 +43,15 @@
 #ifndef __CPU_TRAFFIC_GEN_BASE_GEN_HH__
 #define __CPU_TRAFFIC_GEN_BASE_GEN_HH__
 
-#include "base/bitfield.hh"
-#include "base/intmath.hh"
+#include <cstdint>
+#include <string>
+
+#include "base/types.hh"
 #include "mem/packet.hh"
+#include "mem/request.hh"
 
 class BaseTrafficGen;
+class SimObject;
 
 /**
  * Base class for all generators, with the shared functionality and
@@ -62,8 +66,8 @@ class BaseGen
     /** Name to use for status and debug printing */
     const std::string _name;
 
-    /** The MasterID used for generating requests */
-    const MasterID masterID;
+    /** The RequestorID used for generating requests */
+    const RequestorID requestorId;
 
     /**
      * Generate a new request and associated packet
@@ -85,10 +89,10 @@ class BaseGen
      * Create a base generator.
      *
      * @param obj simobject owning the generator
-     * @param master_id MasterID set on each request
+     * @param requestor_id RequestorID set on each request
      * @param _duration duration of this state before transitioning
      */
-    BaseGen(SimObject &obj, MasterID master_id, Tick _duration);
+    BaseGen(SimObject &obj, RequestorID requestor_id, Tick _duration);
 
     virtual ~BaseGen() { }
 
@@ -133,7 +137,7 @@ class StochasticGen : public BaseGen
 {
   public:
     StochasticGen(SimObject &obj,
-                  MasterID master_id, Tick _duration,
+                  RequestorID requestor_id, Tick _duration,
                   Addr start_addr, Addr end_addr,
                   Addr _blocksize, Addr cacheline_size,
                   Tick min_period, Tick max_period,

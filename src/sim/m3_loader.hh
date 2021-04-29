@@ -49,26 +49,26 @@ class M3Loader
     static const size_t HEAP_SIZE       = 0x8000;
     static const size_t MAX_MODNAME_LEN = 64;
 
-    struct BootModule
+    struct M5_ATTR_PACKED BootModule
     {
         uint64_t addr;
         uint64_t size;
         char name[MAX_MODNAME_LEN];
-    } M5_ATTR_PACKED;
+    };
 
-    struct MemMod
+    struct M5_ATTR_PACKED MemMod
     {
         uint64_t addr;
         uint64_t size;
-    } M5_ATTR_PACKED;
+    };
 
-    struct KernelEnv
+    struct M5_ATTR_PACKED KernelEnv
     {
         uint64_t mod_count;
         uint64_t pe_count;
         uint64_t mem_count;
         uint64_t serv_count;
-    } M5_ATTR_PACKED;
+    };
 
     enum Platform
     {
@@ -76,7 +76,7 @@ class M3Loader
         HW
     };
 
-    struct BootEnv
+    struct M5_ATTR_PACKED BootEnv
     {
         uint64_t platform;
         uint64_t pe_id;
@@ -86,7 +86,7 @@ class M3Loader
         uint64_t heap_size;
         uint64_t kenv;
         uint64_t lambda;
-    } M5_ATTR_PACKED;
+    };
 
     std::vector<Addr> pes;
     std::vector<std::string> mods;
@@ -112,15 +112,15 @@ class M3Loader
         return pes;
     }
 
-    void initState(System &sys, PEMemory &mem, MasterPort &noc);
+    void initState(System &sys, PEMemory &mem, RequestPort &noc);
 
   private:
     size_t getArgc() const;
     void writeArg(System &sys, Addr &args, size_t &i, Addr argv,
                   const char *cmd, const char *begin);
-    void writeRemote(MasterPort &noc, Addr dest,
+    void writeRemote(RequestPort &noc, Addr dest,
                      const uint8_t *data, size_t size);
-    Addr loadModule(MasterPort &noc, const std::string &filename, Addr addr);
+    Addr loadModule(RequestPort &noc, const std::string &filename, Addr addr);
 };
 
 #endif

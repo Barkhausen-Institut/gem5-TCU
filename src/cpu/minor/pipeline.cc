@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014 ARM Limited
+ * Copyright (c) 2013-2014, 2020 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -51,8 +51,8 @@
 namespace Minor
 {
 
-Pipeline::Pipeline(MinorCPU &cpu_, MinorCPUParams &params) :
-    Ticked(cpu_, &(cpu_.BaseCPU::numCycles)),
+Pipeline::Pipeline(MinorCPU &cpu_, const MinorCPUParams &params) :
+    Ticked(cpu_, &(cpu_.BaseCPU::baseStats.numCycles)),
     cpu(cpu_),
     allow_idling(params.enableIdling),
     f1ToF2(cpu.name() + ".f1ToF2", "lines",
@@ -104,14 +104,6 @@ Pipeline::Pipeline(MinorCPU &cpu_, MinorCPUParams &params) :
 }
 
 void
-Pipeline::regStats()
-{
-    Ticked::regStats();
-
-    fetch2.regStats();
-}
-
-void
 Pipeline::minorTrace() const
 {
     fetch1.minorTrace();
@@ -129,6 +121,9 @@ Pipeline::minorTrace() const
 void
 Pipeline::evaluate()
 {
+    /** We tick the CPU to update the BaseCPU cycle counters */
+    cpu.tick();
+
     /* Note that it's important to evaluate the stages in order to allow
      *  'immediate', 0-time-offset TimeBuffer activity to be visible from
      *  later stages to earlier ones in the same cycle */

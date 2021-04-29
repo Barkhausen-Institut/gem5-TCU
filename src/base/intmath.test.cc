@@ -33,10 +33,12 @@
 TEST(IntmathTest, isPowerOf2)
 {
     EXPECT_TRUE(isPowerOf2(1));
+    EXPECT_TRUE(isPowerOf2(32));
     EXPECT_TRUE(isPowerOf2(65536));
     EXPECT_TRUE(isPowerOf2(131072));
     EXPECT_TRUE(isPowerOf2(262144));
     EXPECT_FALSE(isPowerOf2(0));
+    EXPECT_FALSE(isPowerOf2(36));
     EXPECT_FALSE(isPowerOf2(2521));
     EXPECT_FALSE(isPowerOf2(1679616));
 }
@@ -72,11 +74,17 @@ TEST(IntmathTest, floorLog2)
     EXPECT_EQ(0, floorLog2((int64_t)1));
 }
 
+/* The IntmathDeathTest floorLog2 test is dependent on an assert being
+ * triggered. We therefore only run this test for .debug and .opt (where
+ * `TRACING_ON == 1`).
+ */
+#if TRACING_ON
 TEST(IntmathDeathTest, floorLog2)
 {
     // Verify a non-positive input triggers an assert.
     EXPECT_DEATH_IF_SUPPORTED(floorLog2(0), "x > 0");
 }
+#endif
 
 TEST(IntmathTest, ceilLog2)
 {

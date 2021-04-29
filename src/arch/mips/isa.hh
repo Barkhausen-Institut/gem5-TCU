@@ -54,7 +54,7 @@ namespace MipsISA
         // The MIPS name for this file is CP0 or Coprocessor 0
         typedef ISA CP0;
 
-        typedef MipsISAParams Params;
+        using Params = MipsISAParams;
 
       protected:
         // Number of threads and vpes an individual ISA state can handle
@@ -72,9 +72,6 @@ namespace MipsISA
         std::vector<BankType> bankType;
 
       public:
-        void clear(ThreadContext *tc) { clear(); }
-
-      protected:
         void clear();
 
       public:
@@ -94,15 +91,14 @@ namespace MipsISA
         RegVal readMiscRegNoEffect(int misc_reg, ThreadID tid = 0) const;
 
         //template <class TC>
-        RegVal readMiscReg(int misc_reg, ThreadContext *tc, ThreadID tid = 0);
+        RegVal readMiscReg(int misc_reg, ThreadID tid = 0);
 
         RegVal filterCP0Write(int misc_reg, int reg_sel, RegVal val);
         void setRegMask(int misc_reg, RegVal val, ThreadID tid = 0);
         void setMiscRegNoEffect(int misc_reg, RegVal val, ThreadID tid=0);
 
         //template <class TC>
-        void setMiscReg(int misc_reg, RegVal val,
-                        ThreadContext *tc, ThreadID tid=0);
+        void setMiscReg(int misc_reg, RegVal val, ThreadID tid=0);
 
         //////////////////////////////////////////////////////////
         //
@@ -132,60 +128,38 @@ namespace MipsISA
         static std::string miscRegNames[NumMiscRegs];
 
       public:
-        void startup(ThreadContext *tc) {}
-
-        /// Explicitly import the otherwise hidden startup
-        using BaseISA::startup;
-
-        const Params *params() const;
-
-        ISA(Params *p);
+        ISA(const Params &p);
 
         RegId flattenRegId(const RegId& regId) const { return regId; }
 
-        int
-        flattenIntIndex(int reg) const
-        {
-            return reg;
-        }
-
-        int
-        flattenFloatIndex(int reg) const
-        {
-            return reg;
-        }
-
-        int
-        flattenVecIndex(int reg) const
-        {
-            return reg;
-        }
-
-        int
-        flattenVecElemIndex(int reg) const
-        {
-            return reg;
-        }
-
-        int
-        flattenVecPredIndex(int reg) const
-        {
-            return reg;
-        }
-
+        int flattenIntIndex(int reg) const { return reg; }
+        int flattenFloatIndex(int reg) const { return reg; }
+        int flattenVecIndex(int reg) const { return reg; }
+        int flattenVecElemIndex(int reg) const { return reg; }
+        int flattenVecPredIndex(int reg) const { return reg; }
         // dummy
-        int
-        flattenCCIndex(int reg) const
-        {
-            return reg;
-        }
+        int flattenCCIndex(int reg) const { return reg; }
+        int flattenMiscIndex(int reg) const { return reg; }
 
-        int
-        flattenMiscIndex(int reg) const
+        bool
+        inUserMode() const override
         {
-            return reg;
-        }
+            RegVal Stat = readMiscRegNoEffect(MISCREG_STATUS);
+            RegVal Dbg = readMiscRegNoEffect(MISCREG_DEBUG);
 
+            if (// EXL, ERL or CU0 set, CP0 accessible
+                (Stat & 0x10000006) == 0 &&
+                // DM bit set, CP0 accessible
+                (Dbg & 0x40000000) == 0 &&
+                // KSU = 0, kernel mode is base mode
+                (Stat & 0x00000018) != 0) {
+                // Unable to use Status_CU0, etc directly,
+                // using bitfields & masks.
+                return true;
+            } else {
+                return false;
+            }
+        }
     };
 }
 

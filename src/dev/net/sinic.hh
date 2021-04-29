@@ -76,9 +76,8 @@ class Base : public EtherDevBase
  * Construction/Destruction/Parameters
  */
   public:
-    typedef SinicParams Params;
-    const Params *params() const { return (const Params *)_params; }
-    Base(const Params *p);
+    PARAMS(Sinic);
+    Base(const Params &p);
 };
 
 class Device : public Base
@@ -271,15 +270,20 @@ class Device : public Base
  * Statistics
  */
   private:
-    Stats::Scalar totalVnicDistance;
-    Stats::Scalar numVnicDistance;
-    Stats::Scalar maxVnicDistance;
-    Stats::Formula avgVnicDistance;
+    struct DeviceStats : public Stats::Group
+    {
+        DeviceStats(Stats::Group *parent);
 
-    int _maxVnicDistance;
+        Stats::Scalar totalVnicDistance;
+        Stats::Scalar numVnicDistance;
+        Stats::Scalar maxVnicDistance;
+        Stats::Formula avgVnicDistance;
+
+        int _maxVnicDistance;
+    } sinicDeviceStats;
+
 
   public:
-    void regStats() override;
     void resetStats() override;
 
 /**
@@ -290,7 +294,7 @@ class Device : public Base
     void unserialize(CheckpointIn &cp) override;
 
   public:
-    Device(const Params *p);
+    Device(const Params &p);
     ~Device();
 };
 

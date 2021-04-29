@@ -53,7 +53,7 @@ output header {{
                 uint64_t setFlags, Fault _fault, uint8_t _cc);
 
         std::string generateDisassembly(Addr pc,
-                const Loader::SymbolTable *symtab) const;
+                const Loader::SymbolTable *symtab) const override;
     };
 
     class MicroHalt : public X86ISA::X86MicroopBase
@@ -68,21 +68,24 @@ output header {{
         {
         }
 
-        Fault execute(ExecContext *, Trace::InstRecord *) const;
+        Fault execute(ExecContext *, Trace::InstRecord *) const override;
 
         std::string generateDisassembly(Addr pc,
-                const Loader::SymbolTable *symtab) const;
+                const Loader::SymbolTable *symtab) const override;
     };
 }};
 
 def template MicroFaultDeclare {{
     class %(class_name)s : public %(base_class)s
     {
+      private:
+        %(reg_idx_arr_decl)s;
+
       public:
         %(class_name)s(ExtMachInst _machInst, const char * instMnem,
                 uint64_t setFlags, Fault _fault, uint8_t _cc);
 
-        Fault execute(ExecContext *, Trace::InstRecord *) const;
+        Fault execute(ExecContext *, Trace::InstRecord *) const override;
     };
 }};
 
@@ -108,7 +111,7 @@ output exec {{
         ThreadContext *tc = xc->tcBase();
         auto *ic = tc->getCpuPtr()->getInterruptController(tc->threadId());
         // don't suspend with pending interrupts
-        if (!ic->checkInterrupts(tc))
+        if (!ic->checkInterrupts())
             xc->tcBase()->suspend();
         return NoFault;
     }
@@ -130,6 +133,7 @@ def template MicroFaultConstructor {{
             Fault _fault, uint8_t _cc) :
         %(base_class)s(machInst, instMnem, setFlags, _fault, _cc)
     {
+        %(set_reg_idx_arr)s;
         %(constructor)s;
     }
 }};
@@ -214,12 +218,15 @@ let {{
 def template MicroFenceOpDeclare {{
     class %(class_name)s : public X86ISA::X86MicroopBase
     {
+      private:
+        %(reg_idx_arr_decl)s;
+
       public:
         %(class_name)s(ExtMachInst _machInst,
                 const char * instMnem,
                 uint64_t setFlags);
 
-        Fault execute(ExecContext *, Trace::InstRecord *) const;
+        Fault execute(ExecContext *, Trace::InstRecord *) const override;
     };
 }};
 
@@ -229,6 +236,7 @@ def template MicroFenceOpConstructor {{
         %(base_class)s(machInst, "%(mnemonic)s", instMnem,
                 setFlags, %(op_class)s)
     {
+        %(set_reg_idx_arr)s;
         %(constructor)s;
     }
 }};
@@ -238,7 +246,8 @@ let {{
         def __init__(self):
             self.className = "Mfence"
             self.mnemonic = "mfence"
-            self.instFlags = "| (1ULL << StaticInst::IsMemBarrier)"
+            self.instFlags = "| (1ULL << StaticInst::IsReadBarrier)" + \
+                             "| (1ULL << StaticInst::IsWriteBarrier)"
 
         def getAllocator(self, microFlags):
             allocString = '''

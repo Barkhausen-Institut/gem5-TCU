@@ -38,6 +38,8 @@
 #ifndef __DEV_PIXELPUMP_HH__
 #define __DEV_PIXELPUMP_HH__
 
+#include <vector>
+
 #include "base/framebuffer.hh"
 #include "sim/clocked_object.hh"
 
@@ -65,37 +67,51 @@ struct DisplayTimings : public Serializable
     void unserialize(CheckpointIn &cp) override;
 
     /** How many pixel clocks are required for one line? */
-    Cycles cyclesPerLine() const {
+    Cycles
+    cyclesPerLine() const
+    {
         return Cycles(hSync + hBackPorch +  width + hBackPorch);
     }
 
     /** How many pixel clocks are required for one frame? */
-    Cycles cyclesPerFrame() const {
+    Cycles
+    cyclesPerFrame() const
+    {
         return Cycles(cyclesPerLine() * linesPerFrame());
     }
 
     /** Calculate the first line of the vsync signal */
-    unsigned lineVSyncStart() const {
+    unsigned
+    lineVSyncStart() const
+    {
         return 0;
     }
 
     /** Calculate the first line of the vertical back porch */
-    unsigned lineVBackPorchStart() const {
+    unsigned
+    lineVBackPorchStart() const
+    {
         return lineVSyncStart() + vSync;
     }
 
     /** Calculate the first line of the visible region */
-    unsigned lineFirstVisible() const {
+    unsigned
+    lineFirstVisible() const
+    {
         return lineVBackPorchStart() + vBackPorch;
     }
 
     /** Calculate the first line of the back porch */
-    unsigned lineFrontPorchStart() const {
+    unsigned
+    lineFrontPorchStart() const
+    {
         return lineFirstVisible() + height;
     }
 
     /** Calculate the total number of lines in a frame */
-    unsigned linesPerFrame() const {
+    unsigned
+    linesPerFrame() const
+    {
         return lineFrontPorchStart() + vFrontPorch;
     }
 
@@ -157,7 +173,7 @@ class BasePixelPump
     /** Update frame size using display timing */
     void updateTimings(const DisplayTimings &timings);
 
-    /** Render an entire frame in KVM execution mode */
+    /** Render an entire frame in non-caching mode */
     void renderFrame();
 
     /** Starting pushing pixels in timing mode */
@@ -176,7 +192,9 @@ class BasePixelPump
     bool underrun() const { return _underrun; }
 
     /** Is the current line within the visible range? */
-    bool visibleLine() const {
+    bool
+    visibleLine() const
+    {
         return line >= _timings.lineFirstVisible() &&
             line < _timings.lineFrontPorchStart();
     }
@@ -185,7 +203,9 @@ class BasePixelPump
     unsigned posX() const { return _posX; }
 
     /** Current pixel position within the visible area */
-    unsigned posY() const {
+    unsigned
+    posY() const
+    {
         return visibleLine() ? line - _timings.lineFirstVisible() : 0;
     }
 
@@ -200,6 +220,28 @@ class BasePixelPump
      * @return true on success, false on buffer underrun
      */
     virtual bool nextPixel(Pixel &p) = 0;
+
+    /**
+     * Get the next line of pixels directly from memory. This is for use from
+     * the renderFrame which is called in non-caching mode.
+     *
+     * The default implementation falls back to calling nextPixel over and
+     * over, but a more efficient implementation could retrieve the entire line
+     * of pixels all at once using fewer access to memory which bypass any
+     * intermediate structures like an incoming FIFO.
+     *
+     * @param ps          A vector iterator to store retrieved pixels into.
+     * @param line_length The number of pixels being requested.
+     * @return The number of pixels actually retrieved.
+     */
+    virtual size_t
+    nextLine(std::vector<Pixel>::iterator ps, size_t line_length)
+    {
+        size_t count = 0;
+        while (count < line_length && nextPixel(*ps++))
+            count++;
+        return count;
+    }
 
     /** First pixel clock of the first VSync line. */
     virtual void onVSyncBegin() {};
@@ -269,7 +311,10 @@ class BasePixelPump
         void unserialize(CheckpointIn &cp) override;
 
         const std::string name() const override { return _name; }
-        void process() override {
+
+        void
+        process() override
+        {
             (parent.*func)();
         }
 

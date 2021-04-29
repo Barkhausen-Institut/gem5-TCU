@@ -47,14 +47,8 @@ class MmDisk : public BasicPioDevice
     uint8_t diskData[SectorSize];
 
   public:
-    typedef MmDiskParams Params;
-    MmDisk(const Params *p);
-
-    const Params *
-    params() const
-    {
-        return dynamic_cast<const Params *>(_params);
-    }
+    using Params = MmDiskParams;
+    MmDisk(const Params &p);
 
     Tick read(PacketPtr pkt) override;
     Tick write(PacketPtr pkt) override;

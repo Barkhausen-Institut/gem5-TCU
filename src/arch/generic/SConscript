@@ -1,4 +1,4 @@
-# Copyright (c) 2016 ARM Limited
+# Copyright (c) 2016, 2020 ARM Limited
 # Copyright (c) 2020 Barkhausen Institut
 # All rights reserved.
 #
@@ -39,17 +39,18 @@
 
 Import('*')
 
-if env['TARGET_ISA'] == 'null':
-    Return()
-
-Source('decode_cache.cc')
+Source('htm.cc')
+Source('mmu.cc')
 
 SimObject('BaseInterrupts.py')
 SimObject('BaseISA.py')
+SimObject('BaseMMU.py')
 SimObject('BaseTLB.py')
 SimObject('ISACommon.py')
 
-DebugFlag('PageTableWalker', "Page table walker state machine debugging")
 DebugFlag('TLB')
-Source('pseudo_inst.cc')
-Source('pagetable_walker.cc')
+
+if env['TARGET_ISA'] == 'null':
+    Return()
+
+Source('decoder.cc')

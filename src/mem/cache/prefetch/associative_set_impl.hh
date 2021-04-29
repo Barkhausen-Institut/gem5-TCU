@@ -34,7 +34,7 @@
 
 template<class Entry>
 AssociativeSet<Entry>::AssociativeSet(int assoc, int num_entries,
-        BaseIndexingPolicy *idx_policy, BaseReplacementPolicy *rpl_policy,
+        BaseIndexingPolicy *idx_policy, ReplacementPolicy::Base *rpl_policy,
         Entry const &init_value)
   : associativity(assoc), numEntries(num_entries), indexingPolicy(idx_policy),
     replacementPolicy(rpl_policy), entries(numEntries, init_value)
@@ -109,9 +109,7 @@ template<class Entry>
 void
 AssociativeSet<Entry>::insertEntry(Addr addr, bool is_secure, Entry* entry)
 {
-   entry->setValid();
-   entry->setTag(indexingPolicy->extractTag(addr));
-   entry->setSecure(is_secure);
+   entry->insert(indexingPolicy->extractTag(addr), is_secure);
    replacementPolicy->reset(entry->replacementData);
 }
 

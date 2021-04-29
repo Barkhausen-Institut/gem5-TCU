@@ -61,6 +61,15 @@ def format IllegalExec() {{
 
 ////////////////////////////////////////////////////////////////////
 //
+// Debug Step handling
+//
+
+def format DebugStep() {{
+    decode_block = 'return new DebugStep(machInst);\n'
+}};
+
+////////////////////////////////////////////////////////////////////
+//
 // Unknown instruction handling
 //
 
@@ -74,11 +83,11 @@ def format Unknown() {{
 //
 
 def format FailUnimpl() {{
-    iop = InstObjParams(name, 'FailUnimplemented')
+    iop = ArmInstObjParams(name, 'FailUnimplemented')
     decode_block = BasicDecodeWithMnemonic.subst(iop)
 }};
 
 def format WarnUnimpl() {{
-    iop = InstObjParams(name, 'WarnUnimplemented')
+    iop = ArmInstObjParams(name, 'WarnUnimplemented')
     decode_block = BasicDecodeWithMnemonic.subst(iop)
 }};

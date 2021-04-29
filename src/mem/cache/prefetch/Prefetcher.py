@@ -80,7 +80,11 @@ class BasePrefetcher(ClockedObject):
     use_virtual_addresses = Param.Bool(False,
         "Use virtual addresses for prefetching")
 
-    _events = []
+    def __init__(self, **kwargs):
+        super(BasePrefetcher, self).__init__(**kwargs)
+        self._events = []
+        self._tlbs = []
+
     def addEvent(self, newObject):
         self._events.append(newObject)
 
@@ -90,7 +94,7 @@ class BasePrefetcher(ClockedObject):
         for tlb in self._tlbs:
             self.getCCObject().addTLB(tlb.getCCObject())
         for event in self._events:
-           event.register()
+            event.register()
         self.getCCObject().regProbeListeners()
 
     def listenFromProbe(self, simObj, *probeNames):
@@ -99,7 +103,7 @@ class BasePrefetcher(ClockedObject):
         if len(probeNames) <= 0:
             raise TypeError("probeNames must have at least one element")
         self.addEvent(HWPProbeEvent(self, simObj, *probeNames))
-    _tlbs = []
+
     def registerTLB(self, simObj):
         if not isinstance(simObj, SimObject):
             raise TypeError("argument must be a SimObject type")
@@ -159,7 +163,7 @@ class StridePrefetcher(QueuedPrefetcher):
     confidence_threshold = Param.Percent(50,
         "Prefetch generation confidence threshold")
 
-    use_master_id = Param.Bool(True, "Use master id based history")
+    use_requestor_id = Param.Bool(True, "Use requestor id based history")
 
     degree = Param.Int(4, "Number of prefetches to generate")
 
@@ -289,7 +293,7 @@ class AccessMapPatternMatching(ClockedObject):
         "Limit the strides checked up to -X/X, if 0, disable the limit")
     start_degree = Param.Unsigned(4,
         "Initial degree (Maximum number of prefetches generated")
-    hot_zone_size = Param.MemorySize("2kB", "Memory covered by a hot zone")
+    hot_zone_size = Param.MemorySize("2KiB", "Memory covered by a hot zone")
     access_map_table_entries = Param.MemorySize("256",
         "Number of entries in the access map table")
     access_map_table_assoc = Param.Unsigned(8,
@@ -452,7 +456,7 @@ class STeMSPrefetcher(QueuedPrefetcher):
     cxx_class = "Prefetcher::STeMS"
     cxx_header = "mem/cache/prefetch/spatio_temporal_memory_streaming.hh"
 
-    spatial_region_size = Param.MemorySize("2kB",
+    spatial_region_size = Param.MemorySize("2KiB",
         "Memory covered by a hot zone")
     active_generation_table_entries = Param.MemorySize("64",
         "Number of entries in the active generation table")

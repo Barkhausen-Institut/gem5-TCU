@@ -79,7 +79,7 @@ class SimpleMemory : public AbstractMemory
         { }
     };
 
-    class MemoryPort : public SlavePort
+    class MemoryPort : public ResponsePort
     {
       private:
         SimpleMemory& memory;
@@ -173,7 +173,7 @@ class SimpleMemory : public AbstractMemory
 
   public:
 
-    SimpleMemory(const SimpleMemoryParams *p);
+    SimpleMemory(const SimpleMemoryParams &p);
 
     DrainState drain() override;
 

@@ -28,8 +28,11 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "sim/eventq.hh"
+
 #include <cassert>
 #include <iostream>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -39,9 +42,6 @@
 #include "cpu/smt.hh"
 #include "debug/Checkpoint.hh"
 #include "sim/core.hh"
-#include "sim/eventq_impl.hh"
-
-using namespace std;
 
 Tick simQuantum = 0;
 
@@ -52,7 +52,7 @@ Tick simQuantum = 0;
 // cycle, before the pipeline simulation is performed.
 //
 uint32_t numMainEventQueues = 0;
-vector<EventQueue *> mainEventQueue;
+std::vector<EventQueue *> mainEventQueue;
 __thread EventQueue *_curEventQueue = NULL;
 bool inParallelMode = false;
 
@@ -417,7 +417,7 @@ Event::dump() const
     }
 }
 
-EventQueue::EventQueue(const string &n)
+EventQueue::EventQueue(const std::string &n)
     : objName(n), head(NULL), _curTick(0)
 {
 }

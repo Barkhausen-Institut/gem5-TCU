@@ -44,7 +44,7 @@
 #include "dev/io_device.hh"
 
 class ArmSystem;
-class FVPBasePwrCtrlParams;
+struct FVPBasePwrCtrlParams;
 class ThreadContext;
 
 /**
@@ -55,7 +55,7 @@ class ThreadContext;
 class FVPBasePwrCtrl : public BasicPioDevice
 {
   public:
-    FVPBasePwrCtrl(FVPBasePwrCtrlParams *const params);
+    FVPBasePwrCtrl(const FVPBasePwrCtrlParams &params);
 
     /**
      * Triggered by the ISA when a WFI instruction is executed and (1) there
@@ -88,7 +88,7 @@ class FVPBasePwrCtrl : public BasicPioDevice
      */
     void clearWakeRequest(ThreadContext *const tc);
 
-    void init() override;
+    void startup() override;
 
   protected:
     Tick read(PacketPtr pkt) override;

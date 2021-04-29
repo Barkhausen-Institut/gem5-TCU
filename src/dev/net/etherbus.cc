@@ -46,12 +46,10 @@
 #include "params/EtherBus.hh"
 #include "sim/core.hh"
 
-using namespace std;
-
-EtherBus::EtherBus(const Params *p)
-    : SimObject(p), ticksPerByte(p->speed), loopback(p->loopback),
+EtherBus::EtherBus(const Params &p)
+    : SimObject(p), ticksPerByte(p.speed), loopback(p.loopback),
       event([this]{ txDone(); }, "ethernet bus completion"),
-      sender(0), dump(p->dump)
+      sender(0), dump(p.dump)
 {
 }
 
@@ -104,10 +102,4 @@ EtherBus::send(EtherInt *sndr, EthPacketPtr &pkt)
     schedule(event, curTick() + delay);
 
     return true;
-}
-
-EtherBus *
-EtherBusParams::create()
-{
-    return new EtherBus(this);
 }

@@ -38,10 +38,8 @@
 #include "params/BadDevice.hh"
 #include "sim/system.hh"
 
-using namespace std;
-
-BadDevice::BadDevice(Params *p)
-    : BasicPioDevice(p, 0x10), devname(p->devicename)
+BadDevice::BadDevice(const Params &p)
+    : BasicPioDevice(p, 0x10), devname(p.devicename)
 {
 }
 
@@ -49,18 +47,10 @@ Tick
 BadDevice::read(PacketPtr pkt)
 {
     panic("Device %s not imlpmented\n", devname);
-    M5_DUMMY_RETURN
 }
 
 Tick
 BadDevice::write(PacketPtr pkt)
 {
     panic("Device %s not imlpmented\n", devname);
-    M5_DUMMY_RETURN
-}
-
-BadDevice *
-BadDeviceParams::create()
-{
-    return new BadDevice(this);
 }

@@ -64,20 +64,8 @@
 #include "mem/packet.hh"
 #include "mem/packet_access.hh"
 
-Gicv2m *
-Gicv2mParams::create()
-{
-    return new Gicv2m(this);
-}
-
-Gicv2mFrame *
-Gicv2mFrameParams::create()
-{
-    return new Gicv2mFrame(this);
-}
-
-Gicv2m::Gicv2m(const Params *p)
-    : PioDevice(p), pioDelay(p->pio_delay), frames(p->frames), gic(p->gic)
+Gicv2m::Gicv2m(const Params &p)
+    : PioDevice(p), pioDelay(p.pio_delay), frames(p.frames), gic(p.gic)
 {
     // Assert SPI ranges start at 32
     for (int i = 0; i < frames.size(); i++) {

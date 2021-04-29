@@ -33,18 +33,18 @@
 #include <libgen.h>
 
 M3System::NoCMasterPort::NoCMasterPort(M3System &_sys)
-  : QueuedMasterPort("noc_master_port", &_sys, reqQueue, snoopRespQueue),
+  : QueuedRequestPort("noc_master_port", &_sys, reqQueue, snoopRespQueue),
     reqQueue(_sys, *this),
     snoopRespQueue(_sys, *this)
 {}
 
-M3System::M3System(Params *p)
+M3System::M3System(const Params &p)
     : System(p),
-      PEMemory(this, p->memory_pe, p->memory_offset, p->memory_size,
+      PEMemory(this, p.memory_pe, p.memory_offset, p.memory_size,
                 physProxy),
       nocPort(*this),
-      loader(p->pes, p->mods, p->cmdline,
-             p->pe_id, p->mod_offset, p->mod_size, p->pe_size)
+      loader(p.pes, p.mods, p.cmdline,
+             p.pe_id, p.mod_offset, p.mod_size, p.pe_size)
 {
 }
 
@@ -69,10 +69,4 @@ M3System::initState()
     loader.initState(*this, *this, nocPort);
 
     workload->initState();
-}
-
-M3System *
-M3SystemParams::create()
-{
-    return new M3System(this);
 }

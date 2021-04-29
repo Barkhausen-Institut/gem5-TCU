@@ -37,9 +37,6 @@
 #include "base/cprintf.hh"
 #include "base/logging.hh"
 #include "base/output.hh"
-#include "sim/eventq.hh"
-
-using namespace std;
 
 namespace SimClock {
 /// The simulated frequency of curTick(). (In ticks per second)
@@ -118,7 +115,7 @@ setClockFrequency(Tick tps)
 Tick getClockFrequency() { return _ticksPerSecond; }
 
 void
-setOutputDir(const string &dir)
+setOutputDir(const std::string &dir)
 {
     simout.setDirectory(dir);
 }
@@ -137,9 +134,9 @@ exitCallbacks()
  * Register an exit callback.
  */
 void
-registerExitCallback(Callback *callback)
+registerExitCallback(const std::function<void()> &callback)
 {
-    exitCallbacks().add(callback);
+    exitCallbacks().push_back(callback);
 }
 
 /**
@@ -152,6 +149,6 @@ doExitCleanup()
     exitCallbacks().process();
     exitCallbacks().clear();
 
-    cout.flush();
+    std::cout.flush();
 }
 

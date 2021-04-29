@@ -35,15 +35,13 @@
  * information, output directory and exit events
  */
 
+#include <functional>
 #include <string>
 
 #include "base/types.hh"
-#include "sim/eventq.hh"
-
-/// The universal simulation clock.
-inline Tick curTick() { return _curEventQueue->getCurTick(); }
-
-const Tick retryTime = 1000;
+// @todo The next include is not needed in this file, but must be kept
+// until the transitive includes are fixed
+#include "sim/cur_tick.hh"
 
 /// These are variables that are set based on the simulator frequency
 ///@{
@@ -97,8 +95,7 @@ Tick getClockFrequency(); // Ticks per second.
 
 void setOutputDir(const std::string &dir);
 
-class Callback;
-void registerExitCallback(Callback *callback);
+void registerExitCallback(const std::function<void()> &callback);
 void doExitCleanup();
 
 #endif /* __SIM_CORE_HH__ */

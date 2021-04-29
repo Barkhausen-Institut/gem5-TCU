@@ -41,17 +41,18 @@
 #include "dev/ps2/keyboard.hh"
 
 #include "base/logging.hh"
+#include "base/trace.hh"
 #include "debug/PS2.hh"
 #include "dev/ps2/types.hh"
 #include "params/PS2Keyboard.hh"
 
-PS2Keyboard::PS2Keyboard(const PS2KeyboardParams *p)
+PS2Keyboard::PS2Keyboard(const PS2KeyboardParams &p)
     : PS2Device(p),
       shiftDown(false),
       enabled(false)
 {
-    if (p->vnc)
-        p->vnc->setKeyboard(this);
+    if (p.vnc)
+        p.vnc->setKeyboard(this);
 }
 
 void
@@ -169,11 +170,4 @@ PS2Keyboard::keyPress(uint32_t key, bool down)
     // Insert into our queue of characters
     for (uint8_t c : keys)
         send(c);
-}
-
-
-PS2Keyboard *
-PS2KeyboardParams::create()
-{
-    return new PS2Keyboard(this);
 }

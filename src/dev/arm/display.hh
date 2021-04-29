@@ -40,12 +40,12 @@
 
 #include "sim/sim_object.hh"
 
-class DisplayParams;
+struct DisplayParams;
 
 class Display : public SimObject
 {
   public:
-    Display(const DisplayParams *p);
+    Display(const DisplayParams &p);
 };
 
 #endif // __DEV_ARM_DISPLAY_H__

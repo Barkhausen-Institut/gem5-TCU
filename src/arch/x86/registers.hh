@@ -41,7 +41,6 @@
 
 #include "arch/generic/vec_pred_reg.hh"
 #include "arch/generic/vec_reg.hh"
-#include "arch/x86/generated/max_inst_regs.hh"
 #include "arch/x86/regs/int.hh"
 #include "arch/x86/regs/ccr.hh"
 #include "arch/x86/regs/misc.hh"
@@ -49,9 +48,7 @@
 
 namespace X86ISA
 {
-using X86ISAInst::MaxInstSrcRegs;
-using X86ISAInst::MaxInstDestRegs;
-using X86ISAInst::MaxMiscDestRegs;
+
 const int NumMiscRegs = NUM_MISCREGS;
 
 const int NumIntArchRegs = NUM_INTREGS;
@@ -83,14 +80,6 @@ const int NumVecPredRegs = 1;  // Not applicable to x86
 //There is no such register in X86
 const int ZeroReg = NUM_INTREGS;
 const int StackPointerReg = INTREG_RSP;
-//X86 doesn't seem to have a link register
-const int ReturnAddressReg = 0;
-const int ReturnValueReg = INTREG_RAX;
-const int FramePointerReg = INTREG_RBP;
-
-// Some OS syscalls use a second register (rdx) to return a second
-// value
-const int SyscallPseudoReturnReg = INTREG_RDX;
 
 // Not applicable to x86
 using VecElem = ::DummyVecElem;

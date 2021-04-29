@@ -43,22 +43,22 @@
 #include "proto/packet.pb.h"
 #include "sim/system.hh"
 
-MemTraceProbe::MemTraceProbe(MemTraceProbeParams *p)
+MemTraceProbe::MemTraceProbe(const MemTraceProbeParams &p)
     : BaseMemProbe(p),
       traceStream(nullptr),
-      system(p->system),
-      withPC(p->with_pc)
+      system(p.system),
+      withPC(p.with_pc)
 {
     std::string filename;
-    if (p->trace_file != "") {
+    if (p.trace_file != "") {
         // If the trace file is not specified as an absolute path,
         // append the current simulation output directory
-        filename = simout.resolve(p->trace_file);
+        filename = simout.resolve(p.trace_file);
 
         const std::string suffix = ".gz";
         // If trace_compress has been set, check the suffix. Append
         // accordingly.
-        if (p->trace_compress &&
+        if (p.trace_compress &&
             filename.compare(filename.size() - suffix.size(), suffix.size(),
                              suffix) != 0)
             filename = filename + suffix;
@@ -66,7 +66,7 @@ MemTraceProbe::MemTraceProbe(MemTraceProbeParams *p)
         // Generate a filename from the name of the SimObject. Append .trc
         // and .gz if we want compression enabled.
         filename = simout.resolve(name() + ".trc" +
-                                  (p->trace_compress ? ".gz" : ""));
+                                  (p.trace_compress ? ".gz" : ""));
     }
 
     traceStream = new ProtoOutputStream(filename);
@@ -74,8 +74,7 @@ MemTraceProbe::MemTraceProbe(MemTraceProbeParams *p)
     // Register a callback to compensate for the destructor not
     // being called. The callback forces the stream to flush and
     // closes the output file.
-    registerExitCallback(
-        new MakeCallback<MemTraceProbe, &MemTraceProbe::closeStreams>(this));
+    registerExitCallback([this]() { closeStreams(); });
 }
 
 void
@@ -87,10 +86,10 @@ MemTraceProbe::startup()
     header_msg.set_obj_id(name());
     header_msg.set_tick_freq(SimClock::Frequency);
 
-    for (int i = 0; i < system->maxMasters(); i++) {
+    for (int i = 0; i < system->maxRequestors(); i++) {
         auto id_string = header_msg.add_id_strings();
         id_string->set_key(i);
-        id_string->set_value(system->getMasterName(i));
+        id_string->set_value(system->getRequestorName(i));
     }
 
     traceStream->write(header_msg);
@@ -115,14 +114,7 @@ MemTraceProbe::handleRequest(const ProbePoints::PacketInfo &pkt_info)
     pkt_msg.set_size(pkt_info.size);
     if (withPC && pkt_info.pc != 0)
         pkt_msg.set_pc(pkt_info.pc);
-    pkt_msg.set_pkt_id(pkt_info.master);
+    pkt_msg.set_pkt_id(pkt_info.id);
 
     traceStream->write(pkt_msg);
-}
-
-
-MemTraceProbe *
-MemTraceProbeParams::create()
-{
-    return new MemTraceProbe(this);
 }

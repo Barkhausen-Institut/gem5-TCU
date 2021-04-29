@@ -74,7 +74,7 @@ static const char *stateNames[] =
     "EXIT",
 };
 
-TcuAccelStream::TcuAccelStream(const TcuAccelStreamParams *p)
+TcuAccelStream::TcuAccelStream(const TcuAccelStreamParams &p)
   : TcuAccel(p),
     irqPending(false),
     memPending(false),
@@ -82,10 +82,10 @@ TcuAccelStream::TcuAccelStream(const TcuAccelStreamParams *p)
     lastState(State::FETCH_MSG), // something different
     lastFlags(),
     ctx(),
-    bufSize(p->buf_size),
+    bufSize(p.buf_size),
     sysc(this),
     yield(this),
-    logic(p->logic),
+    logic(p.logic),
     ctxsw(this),
     ctxSwPerformed()
 {
@@ -884,10 +884,4 @@ TcuAccelStream::tick()
         memPending = true;
         sendPkt(pkt);
     }
-}
-
-TcuAccelStream*
-TcuAccelStreamParams::create()
-{
-    return new TcuAccelStream(this);
 }

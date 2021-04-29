@@ -107,25 +107,16 @@ buildRetPC(const PCState &curPC, const PCState &callPC)
     return retPC;
 }
 
-inline uint64_t
-getArgument(ThreadContext *tc, int &number, uint16_t size, bool fp)
-{
-    panic_if(fp, "getArgument(): Floating point arguments not implemented");
-    panic_if(size != 8, "getArgument(): Can only handle 64-bit arguments.");
-    panic_if(number >= ArgumentRegs.size(),
-             "getArgument(): Don't know how to handle stack arguments");
-
-    // The first 8 integer arguments are passed in registers, the rest
-    // are passed on the stack.
-    return tc->readIntReg(ArgumentRegs[number]);
-}
-
 inline void
 copyRegs(ThreadContext *src, ThreadContext *dest)
 {
     // First loop through the integer registers.
     for (int i = 0; i < NumIntRegs; ++i)
         dest->setIntReg(i, src->readIntReg(i));
+
+    // Second loop through the float registers.
+    for (int i = 0; i < NumFloatRegs; ++i)
+        dest->setFloatReg(i, src->readFloatReg(i));
 
     // Lastly copy PC/NPC
     dest->pcState(src->pcState());
@@ -164,18 +155,6 @@ inline void
 advancePC(PCState &pc, const StaticInstPtr &inst)
 {
     inst->advancePC(pc);
-}
-
-static inline bool
-inUserMode(ThreadContext *tc)
-{
-    return true;
-}
-
-inline uint64_t
-getExecutingAsid(ThreadContext *tc)
-{
-    return 0;
 }
 
 } // namespace RiscvISA

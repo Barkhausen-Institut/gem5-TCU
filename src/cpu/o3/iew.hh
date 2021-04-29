@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2012, 2014 ARM Limited
+ * Copyright (c) 2010-2012, 2014, 2019 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -131,13 +131,10 @@ class DefaultIEW
 
   public:
     /** Constructs a DefaultIEW with the given parameters. */
-    DefaultIEW(O3CPU *_cpu, DerivO3CPUParams *params);
+    DefaultIEW(O3CPU *_cpu, const DerivO3CPUParams &params);
 
     /** Returns the name of the DefaultIEW stage. */
     std::string name() const;
-
-    /** Registers statistics. */
-    void regStats();
 
     /** Registers probes. */
     void regProbePoints();
@@ -232,6 +229,16 @@ class DefaultIEW
 
     /** Check misprediction  */
     void checkMisprediction(const DynInstPtr &inst);
+
+    // hardware transactional memory
+    // For debugging purposes, it is useful to keep track of the most recent
+    // htmUid that has been committed (architecturally, not transactionally)
+    // to ensure that the core and the memory subsystem are observing
+    // correct ordering constraints.
+    void setLastRetiredHtmUid(ThreadID tid, uint64_t htmUid)
+    {
+        ldstQueue.setLastRetiredHtmUid(tid, htmUid);
+    }
 
   private:
     /** Sends commit proper information for a squash due to a branch
@@ -416,70 +423,81 @@ class DefaultIEW
     /** Maximum size of the skid buffer. */
     unsigned skidBufferMax;
 
-    /** Stat for total number of idle cycles. */
-    Stats::Scalar iewIdleCycles;
-    /** Stat for total number of squashing cycles. */
-    Stats::Scalar iewSquashCycles;
-    /** Stat for total number of blocking cycles. */
-    Stats::Scalar iewBlockCycles;
-    /** Stat for total number of unblocking cycles. */
-    Stats::Scalar iewUnblockCycles;
-    /** Stat for total number of instructions dispatched. */
-    Stats::Scalar iewDispatchedInsts;
-    /** Stat for total number of squashed instructions dispatch skips. */
-    Stats::Scalar iewDispSquashedInsts;
-    /** Stat for total number of dispatched load instructions. */
-    Stats::Scalar iewDispLoadInsts;
-    /** Stat for total number of dispatched store instructions. */
-    Stats::Scalar iewDispStoreInsts;
-    /** Stat for total number of dispatched non speculative instructions. */
-    Stats::Scalar iewDispNonSpecInsts;
-    /** Stat for number of times the IQ becomes full. */
-    Stats::Scalar iewIQFullEvents;
-    /** Stat for number of times the LSQ becomes full. */
-    Stats::Scalar iewLSQFullEvents;
-    /** Stat for total number of memory ordering violation events. */
-    Stats::Scalar memOrderViolationEvents;
-    /** Stat for total number of incorrect predicted taken branches. */
-    Stats::Scalar predictedTakenIncorrect;
-    /** Stat for total number of incorrect predicted not taken branches. */
-    Stats::Scalar predictedNotTakenIncorrect;
-    /** Stat for total number of mispredicted branches detected at execute. */
-    Stats::Formula branchMispredicts;
 
-    /** Stat for total number of executed instructions. */
-    Stats::Scalar iewExecutedInsts;
-    /** Stat for total number of executed load instructions. */
-    Stats::Vector iewExecLoadInsts;
-    /** Stat for total number of executed store instructions. */
-//    Stats::Scalar iewExecStoreInsts;
-    /** Stat for total number of squashed instructions skipped at execute. */
-    Stats::Scalar iewExecSquashedInsts;
-    /** Number of executed software prefetches. */
-    Stats::Vector iewExecutedSwp;
-    /** Number of executed nops. */
-    Stats::Vector iewExecutedNop;
-    /** Number of executed meomory references. */
-    Stats::Vector iewExecutedRefs;
-    /** Number of executed branches. */
-    Stats::Vector iewExecutedBranches;
-    /** Number of executed store instructions. */
-    Stats::Formula iewExecStoreInsts;
-    /** Number of instructions executed per cycle. */
-    Stats::Formula iewExecRate;
+    struct IEWStats : public Stats::Group
+    {
+        IEWStats(O3CPU *cpu);
 
-    /** Number of instructions sent to commit. */
-    Stats::Vector iewInstsToCommit;
-    /** Number of instructions that writeback. */
-    Stats::Vector writebackCount;
-    /** Number of instructions that wake consumers. */
-    Stats::Vector producerInst;
-    /** Number of instructions that wake up from producers. */
-    Stats::Vector consumerInst;
-    /** Number of instructions per cycle written back. */
-    Stats::Formula wbRate;
-    /** Average number of woken instructions per writeback. */
-    Stats::Formula wbFanout;
+        /** Stat for total number of idle cycles. */
+        Stats::Scalar idleCycles;
+        /** Stat for total number of squashing cycles. */
+        Stats::Scalar squashCycles;
+        /** Stat for total number of blocking cycles. */
+        Stats::Scalar blockCycles;
+        /** Stat for total number of unblocking cycles. */
+        Stats::Scalar unblockCycles;
+        /** Stat for total number of instructions dispatched. */
+        Stats::Scalar dispatchedInsts;
+        /** Stat for total number of squashed instructions dispatch skips. */
+        Stats::Scalar dispSquashedInsts;
+        /** Stat for total number of dispatched load instructions. */
+        Stats::Scalar dispLoadInsts;
+        /** Stat for total number of dispatched store instructions. */
+        Stats::Scalar dispStoreInsts;
+        /** Stat for total number of dispatched non speculative instructions. */
+        Stats::Scalar dispNonSpecInsts;
+        /** Stat for number of times the IQ becomes full. */
+        Stats::Scalar iqFullEvents;
+        /** Stat for number of times the LSQ becomes full. */
+        Stats::Scalar lsqFullEvents;
+        /** Stat for total number of memory ordering violation events. */
+        Stats::Scalar memOrderViolationEvents;
+        /** Stat for total number of incorrect predicted taken branches. */
+        Stats::Scalar predictedTakenIncorrect;
+        /** Stat for total number of incorrect predicted not taken branches. */
+        Stats::Scalar predictedNotTakenIncorrect;
+        /** Stat for total number of mispredicted branches detected at
+         *  execute. */
+        Stats::Formula branchMispredicts;
+
+        struct ExecutedInstStats : public Stats::Group
+        {
+            ExecutedInstStats(O3CPU* cpu);
+
+            /** Stat for total number of executed instructions. */
+            Stats::Scalar numInsts;
+            /** Stat for total number of executed load instructions. */
+            Stats::Vector numLoadInsts;
+            /** Stat for total number of squashed instructions skipped at
+             *  execute. */
+            Stats::Scalar numSquashedInsts;
+            /** Number of executed software prefetches. */
+            Stats::Vector numSwp;
+            /** Number of executed nops. */
+            Stats::Vector numNop;
+            /** Number of executed meomory references. */
+            Stats::Vector numRefs;
+            /** Number of executed branches. */
+            Stats::Vector numBranches;
+            /** Number of executed store instructions. */
+            Stats::Formula numStoreInsts;
+            /** Number of instructions executed per cycle. */
+            Stats::Formula numRate;
+        } executedInstStats;
+
+        /** Number of instructions sent to commit. */
+        Stats::Vector instsToCommit;
+        /** Number of instructions that writeback. */
+        Stats::Vector writebackCount;
+        /** Number of instructions that wake consumers. */
+        Stats::Vector producerInst;
+        /** Number of instructions that wake up from producers. */
+        Stats::Vector consumerInst;
+        /** Number of instructions per cycle written back. */
+        Stats::Formula wbRate;
+        /** Average number of woken instructions per writeback. */
+        Stats::Formula wbFanout;
+    } iewStats;
 };
 
 #endif // __CPU_O3_IEW_HH__

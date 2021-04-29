@@ -37,6 +37,7 @@
 #include "base/statistics.hh"
 #include "base/types.hh"
 #include "sim/core.hh"
+#include "sim/eventq.hh"
 #include "sim/init.hh"
 #include "sim/stat_control.hh"
 
@@ -49,7 +50,6 @@ const char *m5MainCommands[] = {
     0 // sentinel is required
 };
 
-using namespace std;
 using namespace Stats;
 
 double testfunc();
@@ -88,6 +88,7 @@ struct StatTest
     Vector2d s16;
     Value s17;
     Value s18;
+    Value s19;
     Histogram h01;
     Histogram h02;
     Histogram h03;
@@ -102,8 +103,8 @@ struct StatTest
     Histogram h12;
     SparseHistogram sh1;
 
-    Vector s19;
     Vector s20;
+    Vector s21;
 
     Formula f1;
     Formula f2;
@@ -254,6 +255,12 @@ StatTest::init()
         .desc("this is stat 18")
         ;
 
+    s19
+        .functor([]() { return 0; })
+        .name("Stat19")
+        .desc("this is stat 19")
+        ;
+
     h01
         .init(11)
         .name("Histogram01")
@@ -361,16 +368,16 @@ StatTest::init()
         .desc("this is formula 4")
         ;
 
-    s19
-        .init(2)
-        .name("Stat19")
-        .desc("this is statistic 19 for vector op testing")
-        .flags(total | nozero | nonan)
-    ;
     s20
         .init(2)
         .name("Stat20")
         .desc("this is statistic 20 for vector op testing")
+        .flags(total | nozero | nonan)
+    ;
+    s21
+        .init(2)
+        .name("Stat21")
+        .desc("this is statistic 21 for vector op testing")
         .flags(total | nozero | nonan)
     ;
 
@@ -386,7 +393,7 @@ StatTest::init()
     f4 += constant(10.0);
     f4 += s5[3];
     f5 = constant(1);
-    f6 = s19/s20;
+    f6 = s20/s21;
 }
 
 void
@@ -663,17 +670,17 @@ StatTest::run()
         sh1.sample(random() % 10000);
     }
 
-    s19[0] = 1;
-    s19[1] = 100000;
-    s20[0] = 100000;
-    s20[1] = 1;
+    s20[0] = 1;
+    s20[1] = 100000;
+    s21[0] = 100000;
+    s21[1] = 1;
 
 }
 
 static void
-stattest_init_pybind(py::module &m_internal)
+stattest_init_pybind(py::module_ &m_internal)
 {
-    py::module m = m_internal.def_submodule("stattest");
+    py::module_ m = m_internal.def_submodule("stattest");
 
     m
         .def("stattest_init", []() { __stattest().init(); })

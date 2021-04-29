@@ -38,19 +38,11 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from __future__ import print_function
-from __future__ import absolute_import
-
-import six
-
 import m5
 from m5.objects import *
 from m5.util import *
 from common.Benchmarks import *
 from common import ObjectList
-
-if six.PY3:
-    long = int
 
 # Populate to reflect supported os types per target ISA
 os_types = { 'mips'  : [ 'linux' ],
@@ -79,7 +71,7 @@ class MemBus(SystemXBar):
 def attach_9p(parent, bus):
     viopci = PciVirtIO()
     viopci.vio = VirtIO9PDiod()
-    viodir = os.path.join(m5.options.outdir, '9p')
+    viodir = os.path.realpath(os.path.join(m5.options.outdir, '9p'))
     viopci.vio.root = os.path.join(viodir, 'share')
     viopci.vio.socketPath = os.path.join(viodir, 'socket')
     if not os.path.exists(viopci.vio.root):
@@ -98,7 +90,7 @@ def fillInCmdline(mdesc, template, **kwargs):
 def makeCowDisks(disk_paths):
     disks = []
     for disk_path in disk_paths:
-        disk = CowIdeDisk(driveID='master')
+        disk = CowIdeDisk(driveID='device0')
         disk.childImage(disk_path);
         disks.append(disk)
     return disks
@@ -228,11 +220,11 @@ def makeArmSystem(mem_mode, machine_type, num_cpus=1, mdesc=None,
         pci_devices.append(self.pci_ide)
 
     self.mem_ranges = []
-    size_remain = long(Addr(mdesc.mem()))
+    size_remain = int(Addr(mdesc.mem()))
     for region in self.realview._mem_regions:
-        if size_remain > long(region.size()):
+        if size_remain > int(region.size()):
             self.mem_ranges.append(region)
-            size_remain = size_remain - long(region.size())
+            size_remain = size_remain - int(region.size())
         else:
             self.mem_ranges.append(AddrRange(region.start, size=size_remain))
             size_remain = 0
@@ -250,7 +242,7 @@ def makeArmSystem(mem_mode, machine_type, num_cpus=1, mdesc=None,
     if bare_metal:
         # EOT character on UART will end the simulation
         self.realview.uart[0].end_on_eot = True
-        self.workload = ArmFsWorkload(atags_addr=0)
+        self.workload = ArmFsWorkload(dtb_addr=0)
     else:
         workload = ArmFsLinux()
 
@@ -268,8 +260,6 @@ def makeArmSystem(mem_mode, machine_type, num_cpus=1, mdesc=None,
 
         if hasattr(self.realview.gic, 'cpu_addr'):
             self.gic_cpu_addr = self.realview.gic.cpu_addr
-
-        self.flags_addr = self.realview.realview_io.pio_addr + 0x30
 
         # This check is for users who have previously put 'android' in
         # the disk image filename to tell the config scripts to

@@ -35,9 +35,6 @@ IMPORTANT: If you modify this file, it's likely that the Learning gem5 book
 
 """
 
-from __future__ import print_function
-from __future__ import absolute_import
-
 from m5.defines import buildEnv
 from m5.util import fatal
 
@@ -76,7 +73,6 @@ class TestCacheSystem(RubySystem):
 
         self.sequencers = [RubySequencer(version = i,
                               # I/D cache is combined and grab from ctrl
-                              icache = self.controllers[i].cacheMemory,
                               dcache = self.controllers[i].cacheMemory,
                               clk_domain = self.clk_domain,
                               ) for i in range(num_testers)]

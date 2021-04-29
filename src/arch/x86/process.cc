@@ -48,6 +48,7 @@
 #include "arch/x86/isa_traits.hh"
 #include "arch/x86/regs/misc.hh"
 #include "arch/x86/regs/segment.hh"
+#include "arch/x86/se_workload.hh"
 #include "arch/x86/types.hh"
 #include "base/loader/elf_object.hh"
 #include "base/loader/object_file.hh"
@@ -64,7 +65,6 @@
 #include "sim/syscall_return.hh"
 #include "sim/system.hh"
 
-using namespace std;
 using namespace X86ISA;
 
 template class MultiLevelPageTable<LongModePTE<47, 39>,
@@ -76,12 +76,13 @@ typedef MultiLevelPageTable<LongModePTE<47, 39>,
                             LongModePTE<29, 21>,
                             LongModePTE<20, 12> > ArchPageTable;
 
-X86Process::X86Process(ProcessParams *params, ::Loader::ObjectFile *objFile) :
-    Process(params, params->useArchPT ?
+X86Process::X86Process(const ProcessParams &params,
+                       ::Loader::ObjectFile *objFile) :
+    Process(params, params.useArchPT ?
                     static_cast<EmulationPageTable *>(
-                            new ArchPageTable(params->name, params->pid,
-                                              params->system, PageBytes)) :
-                    new EmulationPageTable(params->name, params->pid,
+                            new ArchPageTable(params.name, params.pid,
+                                              params.system, PageBytes)) :
+                    new EmulationPageTable(params.name, params.pid,
                                            PageBytes),
             objFile)
 {
@@ -95,7 +96,7 @@ void X86Process::clone(ThreadContext *old_tc, ThreadContext *new_tc,
     *process = *this;
 }
 
-X86_64Process::X86_64Process(ProcessParams *params,
+X86_64Process::X86_64Process(const ProcessParams &params,
                              ::Loader::ObjectFile *objFile) :
     X86Process(params, objFile)
 {
@@ -110,13 +111,13 @@ X86_64Process::X86_64Process(ProcessParams *params,
     Addr next_thread_stack_base = stack_base - max_stack_size;
     Addr mmap_end = 0x7FFFF7FFF000ULL;
 
-    memState = make_shared<MemState>(this, brk_point, stack_base,
-                                     max_stack_size, next_thread_stack_base,
-                                     mmap_end);
+    memState = std::make_shared<MemState>(
+            this, brk_point, stack_base, max_stack_size,
+            next_thread_stack_base, mmap_end);
 }
 
 
-I386Process::I386Process(ProcessParams *params,
+I386Process::I386Process(const ProcessParams &params,
                          ::Loader::ObjectFile *objFile) :
     X86Process(params, objFile)
 {
@@ -137,9 +138,9 @@ I386Process::I386Process(ProcessParams *params,
     Addr next_thread_stack_base = stack_base - max_stack_size;
     Addr mmap_end = 0xB7FFF000ULL;
 
-    memState = make_shared<MemState>(this, brk_point, stack_base,
-                                     max_stack_size, next_thread_stack_base,
-                                     mmap_end);
+    memState = std::make_shared<MemState>(
+            this, brk_point, stack_base, max_stack_size,
+            next_thread_stack_base, mmap_end);
 }
 
 void
@@ -303,7 +304,7 @@ X86_64Process::initState()
         tss_attr.unusable = 0;
 
         for (int i = 0; i < contextIds.size(); i++) {
-            ThreadContext * tc = system->getThreadContext(contextIds[i]);
+            ThreadContext *tc = system->threads[contextIds[i]];
 
             tc->setMiscReg(MISCREG_CS, cs);
             tc->setMiscReg(MISCREG_DS, ds);
@@ -324,7 +325,7 @@ X86_64Process::initState()
 
             tc->setMiscReg(MISCREG_TR, tssSel);
             tc->setMiscReg(MISCREG_TR_BASE, tss_base_addr);
-            tc->setMiscReg(MISCREG_TR_EFF_BASE, 0);
+            tc->setMiscReg(MISCREG_TR_EFF_BASE, tss_base_addr);
             tc->setMiscReg(MISCREG_TR_LIMIT, tss_limit);
             tc->setMiscReg(MISCREG_TR_ATTR, tss_attr);
 
@@ -341,8 +342,8 @@ X86_64Process::initState()
             efer.lme = 1; // Enable long mode.
             efer.lma = 1; // Activate long mode.
             efer.nxe = 1; // Enable nx support.
-            efer.svme = 0; // Enable svm support for now.
-            efer.ffxsr = 0; // Turn on fast fxsave and fxrstor.
+            efer.svme = 0; // Disable svm support for now.
+            efer.ffxsr = 0; // Disable fast fxsave and fxrstor.
             tc->setMiscReg(MISCREG_EFER, efer);
 
             //Set up the registers that describe the operating mode.
@@ -350,8 +351,8 @@ X86_64Process::initState()
             cr0.pg = 1; // Turn on paging.
             cr0.cd = 0; // Don't disable caching.
             cr0.nw = 0; // This is bit is defined to be ignored.
-            cr0.am = 1; // No alignment checking
-            cr0.wp = 1; // Supervisor mode can write read only pages
+            cr0.am = 0; // No alignment checking
+            cr0.wp = 0; // Supervisor mode can write read only pages
             cr0.ne = 1;
             cr0.et = 1; // This should always be 1
             cr0.ts = 0; // We don't do task switching, so causing fp exceptions
@@ -370,7 +371,7 @@ X86_64Process::initState()
 
             CR4 cr4 = 0;
             //Turn on pae.
-            cr4.osxsave = 0; // Enable XSAVE and Proc Extended States
+            cr4.osxsave = 0; // Disable XSAVE and Proc Extended States
             cr4.osxmmexcpt = 0; // Operating System Unmasked Exception
             cr4.osfxsr = 1; // Operating System FXSave/FSRSTOR Support
             cr4.pce = 0; // Performance-Monitoring Counter Enable
@@ -385,7 +386,7 @@ X86_64Process::initState()
 
             tc->setMiscReg(MISCREG_CR4, cr4);
 
-            CR4 cr8 = 0;
+            CR8 cr8 = 0;
             tc->setMiscReg(MISCREG_CR8, cr8);
 
             tc->setMiscReg(MISCREG_MXCSR, 0x1f80);
@@ -473,8 +474,8 @@ X86_64Process::initState()
 
         /* System call handler */
         uint8_t syscallBlob[] = {
-            // mov    %rax, (0xffffc90000005600)
-            0x48, 0xa3, 0x00, 0x60, 0x00,
+            // mov    %rax, (0xffffc90000007000)
+            0x48, 0xa3, 0x00, 0x70, 0x00,
             0x00, 0x00, 0xc9, 0xff, 0xff,
             // sysret
             0x48, 0x0f, 0x07
@@ -485,8 +486,8 @@ X86_64Process::initState()
 
         /** Page fault handler */
         uint8_t faultBlob[] = {
-            // mov    %rax, (0xffffc90000005700)
-            0x48, 0xa3, 0x00, 0x61, 0x00,
+            // mov    %rax, (0xffffc90000007000)
+            0x48, 0xa3, 0x00, 0x70, 0x00,
             0x00, 0x00, 0xc9, 0xff, 0xff,
             // add    $0x8, %rsp # skip error
             0x48, 0x83, 0xc4, 0x08,
@@ -514,7 +515,7 @@ X86_64Process::initState()
                     16 * PageBytes, false);
     } else {
         for (int i = 0; i < contextIds.size(); i++) {
-            ThreadContext * tc = system->getThreadContext(contextIds[i]);
+            ThreadContext * tc = system->threads[contextIds[i]];
 
             SegAttr dataAttr = 0;
             dataAttr.dpl = 3;
@@ -625,7 +626,7 @@ I386Process::initState()
             vsysexitBlob, sizeof(vsysexitBlob));
 
     for (int i = 0; i < contextIds.size(); i++) {
-        ThreadContext * tc = system->getThreadContext(contextIds[i]);
+        ThreadContext * tc = system->threads[contextIds[i]];
 
         SegAttr dataAttr = 0;
         dataAttr.dpl = 3;
@@ -712,7 +713,7 @@ X86Process::argsInit(int pageSize,
 
     std::vector<AuxVector<IntType>> auxv = extraAuxvs;
 
-    string filename;
+    std::string filename;
     if (argv.size() < 1)
         filename = "";
     else
@@ -848,7 +849,7 @@ X86Process::argsInit(int pageSize,
     const int numRandomBytes = 16;
     int aux_data_size = numRandomBytes;
 
-    string platform = "x86_64";
+    std::string platform = "x86_64";
     aux_data_size += platform.size() + 1;
 
     int env_data_size = 0;
@@ -969,13 +970,13 @@ X86Process::argsInit(int pageSize,
     initVirtMem->writeString(aux_data_base, platform.c_str());
 
     copyStringArray(envp, envp_array_base, env_data_base,
-                    LittleEndianByteOrder, *initVirtMem);
+                    ByteOrder::little, *initVirtMem);
     copyStringArray(argv, argv_array_base, arg_data_base,
-                    LittleEndianByteOrder, *initVirtMem);
+                    ByteOrder::little, *initVirtMem);
 
     initVirtMem->writeBlob(argc_base, &guestArgc, intSize);
 
-    ThreadContext *tc = system->getThreadContext(contextIds[0]);
+    ThreadContext *tc = system->threads[contextIds[0]];
     // Set the stack pointer register
     tc->setIntReg(StackPointerReg, stack_min);
 

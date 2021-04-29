@@ -46,7 +46,7 @@ class MemSystem : public System
 
   public:
     typedef MemSystemParams Params;
-    MemSystem(Params *p);
+    MemSystem(const Params &p);
     ~MemSystem();
 
     void initState();

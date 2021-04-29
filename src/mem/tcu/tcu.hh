@@ -79,7 +79,7 @@ class Tcu : public BaseTcu
     struct MemSenderState : public Packet::SenderState
     {
         Addr data;
-        MasterID mid;
+        RequestorID mid;
     };
 
     struct NocSenderState : public Packet::SenderState
@@ -97,7 +97,7 @@ class Tcu : public BaseTcu
 
   public:
 
-    Tcu(TcuParams* p);
+    Tcu(const TcuParams &p);
 
     ~Tcu();
 
@@ -198,7 +198,7 @@ class Tcu : public BaseTcu
 
   private:
 
-    const MasterID masterId;
+    const RequestorID requestorId;
 
     System *system;
 

@@ -79,7 +79,7 @@ namespace Prefetcher {
     class Base;
 }
 class MSHR;
-class MasterPort;
+class RequestPort;
 class QueueEntry;
 struct BaseCacheParams;
 
@@ -108,10 +108,32 @@ class BaseCache : public ClockedObject
         NUM_BLOCKED_CAUSES
     };
 
+    /**
+     * A data contents update is composed of the updated block's address,
+     * the old contents, and the new contents.
+     * @sa ppDataUpdate
+     */
+    struct DataUpdate
+    {
+        /** The updated block's address. */
+        Addr addr;
+        /** Whether the block belongs to the secure address space. */
+        bool isSecure;
+        /** The stale data contents. If zero-sized this update is a fill. */
+        std::vector<uint64_t> oldData;
+        /** The new data contents. If zero-sized this is an invalidation. */
+        std::vector<uint64_t> newData;
+
+        DataUpdate(Addr _addr, bool is_secure)
+          : addr(_addr), isSecure(is_secure), oldData(), newData()
+        {
+        }
+    };
+
   protected:
 
     /**
-     * A cache master port is used for the memory-side port of the
+     * A cache request port is used for the memory-side port of the
      * cache, and in addition to the basic timing port that only sends
      * response packets through a transmit list, it also offers the
      * ability to schedule and send request packets (requests &
@@ -119,7 +141,7 @@ class BaseCache : public ClockedObject
      * and the sendDeferredPacket of the timing port is modified to
      * consider both the transmit list and the requests from the MSHR.
      */
-    class CacheMasterPort : public QueuedMasterPort
+    class CacheRequestPort : public QueuedRequestPort
     {
 
       public:
@@ -136,10 +158,10 @@ class BaseCache : public ClockedObject
 
       protected:
 
-        CacheMasterPort(const std::string &_name, BaseCache *_cache,
+        CacheRequestPort(const std::string &_name, BaseCache *_cache,
                         ReqPacketQueue &_reqQueue,
                         SnoopRespPacketQueue &_snoopRespQueue) :
-            QueuedMasterPort(_name, _cache, _reqQueue, _snoopRespQueue)
+            QueuedRequestPort(_name, _cache, _reqQueue, _snoopRespQueue)
         { }
 
         /**
@@ -166,7 +188,7 @@ class BaseCache : public ClockedObject
 
       public:
 
-        CacheReqPacketQueue(BaseCache &cache, MasterPort &port,
+        CacheReqPacketQueue(BaseCache &cache, RequestPort &port,
                             SnoopRespPacketQueue &snoop_resp_queue,
                             const std::string &label) :
             ReqPacketQueue(cache, port, label), cache(cache),
@@ -202,10 +224,10 @@ class BaseCache : public ClockedObject
 
 
     /**
-     * The memory-side port extends the base cache master port with
+     * The memory-side port extends the base cache request port with
      * access functions for functional, atomic and timing snoops.
      */
-    class MemSidePort : public CacheMasterPort
+    class MemSidePort : public CacheRequestPort
     {
       private:
 
@@ -234,14 +256,14 @@ class BaseCache : public ClockedObject
     };
 
     /**
-     * A cache slave port is used for the CPU-side port of the cache,
+     * A cache response port is used for the CPU-side port of the cache,
      * and it is basically a simple timing port that uses a transmit
-     * list for responses to the CPU (or connected master). In
+     * list for responses to the CPU (or connected requestor). In
      * addition, it has the functionality to block the port for
      * incoming requests. If blocked, the port will issue a retry once
      * unblocked.
      */
-    class CacheSlavePort : public QueuedSlavePort
+    class CacheResponsePort : public QueuedResponsePort
     {
 
       public:
@@ -256,7 +278,7 @@ class BaseCache : public ClockedObject
 
       protected:
 
-        CacheSlavePort(const std::string &_name, BaseCache *_cache,
+        CacheResponsePort(const std::string &_name, BaseCache *_cache,
                        const std::string &_label);
 
         /** A normal packet queue used to store responses. */
@@ -275,10 +297,10 @@ class BaseCache : public ClockedObject
     };
 
     /**
-     * The CPU-side port extends the base cache slave port with access
+     * The CPU-side port extends the base cache response port with access
      * functions for functional, atomic and timing requests.
      */
-    class CpuSidePort : public CacheSlavePort
+    class CpuSidePort : public CacheResponsePort
     {
       private:
 
@@ -320,7 +342,7 @@ class BaseCache : public ClockedObject
     BaseTags *tags;
 
     /** Compression method being used. */
-    BaseCacheCompressor* compressor;
+    Compressor::Base* compressor;
 
     /** Prefetcher */
     Prefetcher::Base *prefetcher;
@@ -333,6 +355,13 @@ class BaseCache : public ClockedObject
 
     /** To probe when a cache fill occurs */
     ProbePointArg<PacketPtr> *ppFill;
+
+    /**
+     * To probe when the contents of a block are updated. Content updates
+     * include data fills, overwrites, and invalidations, which means that
+     * this probe partially overlaps with other probes.
+     */
+    ProbePointArg<DataUpdate> *ppDataUpdate;
 
     /**
      * The writeAllocator drive optimizations for streaming writes.
@@ -575,6 +604,18 @@ class BaseCache : public ClockedObject
     virtual void functionalAccess(PacketPtr pkt, bool from_cpu_side);
 
     /**
+     * Update the data contents of a block. When no packet is provided no
+     * data will be written to the block, which means that this was likely
+     * triggered by an invalidation.
+     *
+     * @param blk The block being updated.
+     * @param cpkt The packet containing the new data.
+     * @param has_old_data Whether this block had data previously.
+     */
+    void updateBlockData(CacheBlk *blk, const PacketPtr cpkt,
+        bool has_old_data);
+
+    /**
      * Handle doing the Compare and Swap function for SPARC.
      */
     void cmpAndSwap(CacheBlk *blk, PacketPtr pkt);
@@ -677,7 +718,7 @@ class BaseCache : public ClockedObject
      * @param writebacks List for any writebacks that need to be performed.
      * @return Whether operation is successful or not.
      */
-    bool updateCompressionData(CacheBlk *blk, const uint64_t* data,
+    bool updateCompressionData(CacheBlk *&blk, const uint64_t* data,
                                PacketList &writebacks);
 
     /**
@@ -900,6 +941,22 @@ protected:
     const bool isReadOnly;
 
     /**
+     * when a data expansion of a compressed block happens it will not be
+     * able to co-allocate where it is at anymore. If true, the replacement
+     * policy is called to chose a new location for the block. Otherwise,
+     * all co-allocated blocks are evicted.
+     */
+    const bool replaceExpansions;
+
+    /**
+     * Similar to data expansions, after a block improves its compression,
+     * it may need to be moved elsewhere compatible with the new compression
+     * factor, or, if not required by the compaction method, it may be moved
+     * to co-allocate with an existing block and thus free an entry.
+     */
+    const bool moveContractions;
+
+    /**
      * Bit vector of the blocking reasons for the access path.
      * @sa #BlockedCause
      */
@@ -958,15 +1015,15 @@ protected:
         /** The average miss latency per command and thread. */
         Stats::Formula avgMissLatency;
         /** Number of misses that hit in the MSHRs per command and thread. */
-        Stats::Vector mshr_hits;
+        Stats::Vector mshrHits;
         /** Number of misses that miss in the MSHRs, per command and thread. */
-        Stats::Vector mshr_misses;
+        Stats::Vector mshrMisses;
         /** Number of misses that miss in the MSHRs, per command and thread. */
-        Stats::Vector mshr_uncacheable;
+        Stats::Vector mshrUncacheable;
         /** Total cycle latency of each MSHR miss, per command and thread. */
-        Stats::Vector mshr_miss_latency;
+        Stats::Vector mshrMissLatency;
         /** Total cycle latency of each MSHR miss, per command and thread. */
-        Stats::Vector mshr_uncacheable_lat;
+        Stats::Vector mshrUncacheableLatency;
         /** The miss rate in the MSHRs pre command and thread. */
         Stats::Formula mshrMissRate;
         /** The average latency of an MSHR miss, per command and thread. */
@@ -1018,12 +1075,12 @@ protected:
         Stats::Formula overallAvgMissLatency;
 
         /** The total number of cycles blocked for each blocked cause. */
-        Stats::Vector blocked_cycles;
+        Stats::Vector blockedCycles;
         /** The number of times this cache blocked for each blocked cause. */
-        Stats::Vector blocked_causes;
+        Stats::Vector blockedCauses;
 
         /** The average number of cycles blocked for each blocked cause. */
-        Stats::Formula avg_blocked;
+        Stats::Formula avgBlocked;
 
         /** The number of times a HW-prefetched block is evicted w/o
          * reference. */
@@ -1072,6 +1129,12 @@ protected:
         /** Number of data expansions. */
         Stats::Scalar dataExpansions;
 
+        /**
+         * Number of data contractions (blocks that had their compression
+         * factor improved).
+         */
+        Stats::Scalar dataContractions;
+
         /** Per-command statistics */
         std::vector<std::unique_ptr<CacheCmdStats>> cmd;
     } stats;
@@ -1080,7 +1143,7 @@ protected:
     void regProbePoints() override;
 
   public:
-    BaseCache(const BaseCacheParams *p, unsigned blk_size);
+    BaseCache(const BaseCacheParams &p, unsigned blk_size);
     ~BaseCache();
 
     void init() override;
@@ -1160,14 +1223,14 @@ protected:
 
     /**
      * Marks the access path of the cache as blocked for the given cause. This
-     * also sets the blocked flag in the slave interface.
+     * also sets the blocked flag in the response interface.
      * @param cause The reason for the cache blocking.
      */
     void setBlocked(BlockedCause cause)
     {
         uint8_t flag = 1 << cause;
         if (blocked == 0) {
-            stats.blocked_causes[cause]++;
+            stats.blockedCauses[cause]++;
             blockedCycle = curCycle();
             cpuSidePort.setBlocked();
         }
@@ -1188,7 +1251,7 @@ protected:
         blocked &= ~flag;
         DPRINTF(Cache,"Unblocking for cause %d, mask=%d\n", cause, blocked);
         if (blocked == 0) {
-            stats.blocked_cycles[cause] += curCycle() - blockedCycle;
+            stats.blockedCycles[cause] += curCycle() - blockedCycle;
             cpuSidePort.clearBlocked();
         }
     }
@@ -1225,8 +1288,8 @@ protected:
 
     void incMissCount(PacketPtr pkt)
     {
-        assert(pkt->req->masterId() < system->maxMasters());
-        stats.cmdStats(pkt).misses[pkt->req->masterId()]++;
+        assert(pkt->req->requestorId() < system->maxRequestors());
+        stats.cmdStats(pkt).misses[pkt->req->requestorId()]++;
         pkt->req->incAccessDepth();
         if (missCount) {
             --missCount;
@@ -1236,8 +1299,8 @@ protected:
     }
     void incHitCount(PacketPtr pkt)
     {
-        assert(pkt->req->masterId() < system->maxMasters());
-        stats.cmdStats(pkt).hits[pkt->req->masterId()]++;
+        assert(pkt->req->requestorId() < system->maxRequestors());
+        stats.cmdStats(pkt).hits[pkt->req->requestorId()]++;
     }
 
     /**
@@ -1307,11 +1370,11 @@ protected:
  */
 class WriteAllocator : public SimObject {
   public:
-    WriteAllocator(const WriteAllocatorParams *p) :
+    WriteAllocator(const WriteAllocatorParams &p) :
         SimObject(p),
-        coalesceLimit(p->coalesce_limit * p->block_size),
-        noAllocateLimit(p->no_allocate_limit * p->block_size),
-        delayThreshold(p->delay_threshold)
+        coalesceLimit(p.coalesce_limit * p.block_size),
+        noAllocateLimit(p.no_allocate_limit * p.block_size),
+        delayThreshold(p.delay_threshold)
     {
         reset();
     }

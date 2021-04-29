@@ -73,9 +73,6 @@
 #include "dev/platform.hh"
 #include "dev/serial/uart.hh"
 
-using namespace std;
-
-
 /*
  * Poll event for the listen socket
  */
@@ -115,19 +112,19 @@ Terminal::DataEvent::process(int revent)
 /*
  * Terminal code
  */
-Terminal::Terminal(const Params *p)
+Terminal::Terminal(const Params &p)
     : SerialDevice(p), listenEvent(NULL), dataEvent(NULL),
-      number(p->number), data_fd(-1), txbuf(16384), rxbuf(16384),
+      number(p.number), data_fd(-1), txbuf(16384), rxbuf(16384),
       outfile(terminalDump(p))
 #if TRACING_ON == 1
       , linebuf(16384)
 #endif
 {
     if (outfile)
-        outfile->stream()->setf(ios::unitbuf);
+        outfile->stream()->setf(std::ios::unitbuf);
 
-    if (p->port)
-        listen(p->port);
+    if (p.port)
+        listen(p.port);
 }
 
 Terminal::~Terminal()
@@ -143,9 +140,9 @@ Terminal::~Terminal()
 }
 
 OutputStream *
-Terminal::terminalDump(const TerminalParams* p)
+Terminal::terminalDump(const TerminalParams &p)
 {
-    switch (p->outfile) {
+    switch (p.outfile) {
       case TerminalDump::none:
         return nullptr;
       case TerminalDump::stdoutput:
@@ -153,7 +150,7 @@ Terminal::terminalDump(const TerminalParams* p)
       case TerminalDump::stderror:
         return simout.findOrCreate("stderr");
       case TerminalDump::file:
-        return simout.findOrCreate(p->name);
+        return simout.findOrCreate(p.name);
       default:
         panic("Invalid option\n");
     }
@@ -178,7 +175,7 @@ Terminal::listen(int port)
         port++;
     }
 
-    ccprintf(cerr, "%s: Listening for connections on port %d\n",
+    ccprintf(std::cerr, "%s: Listening for connections on port %d\n",
              name(), port);
 
     listenEvent = new ListenEvent(this, listener.getfd(), POLLIN);
@@ -203,8 +200,8 @@ Terminal::accept()
     dataEvent = new DataEvent(this, data_fd, POLLIN);
     pollQueue.schedule(dataEvent);
 
-    stringstream stream;
-    ccprintf(stream, "==== m5 slave terminal: Terminal %d ====", number);
+    std::stringstream stream;
+    ccprintf(stream, "==== m5 terminal: Terminal %d ====", number);
 
     // we need an actual carriage return followed by a newline for the
     // terminal
@@ -358,10 +355,4 @@ Terminal::writeData(uint8_t c)
     DPRINTF(TerminalVerbose, "out: \'%c\' %#02x\n",
             isprint(c) ? c : ' ', (int)c);
 
-}
-
-Terminal *
-TerminalParams::create()
-{
-    return new Terminal(this);
 }

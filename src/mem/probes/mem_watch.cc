@@ -32,9 +32,9 @@
 #include "base/trace.hh"
 #include "params/MemWatchProbe.hh"
 
-MemWatchProbe::MemWatchProbe(MemWatchProbeParams *p)
+MemWatchProbe::MemWatchProbe(const MemWatchProbeParams &p)
     : BaseMemProbe(p),
-      ranges(p->ranges)
+      ranges(p.ranges)
 {
 }
 
@@ -60,11 +60,4 @@ MemWatchProbe::handleRequest(const ProbePoints::PacketInfo &pkt_info)
             }
         }
     }
-}
-
-
-MemWatchProbe *
-MemWatchProbeParams::create()
-{
-    return new MemWatchProbe(this);
 }

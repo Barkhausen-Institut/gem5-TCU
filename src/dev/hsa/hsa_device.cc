@@ -29,11 +29,6 @@
  * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
- *
- * Authors: Sooraj Puthoor
- *          Michael LeBeane
- *          Eric van Tassell
- *          Anthony Gutierrez
  */
 
 #include "dev/hsa/hsa_device.hh"
@@ -101,7 +96,7 @@ HSADevice::translateOrDie(Addr vaddr, Addr &paddr)
      * with new extensions, it will likely be wrong to just arbitrarily
      * grab context zero.
      */
-    auto process = sys->getThreadContext(0)->getProcessPtr();
+    auto process = sys->threads[0]->getProcessPtr();
 
     if (!process->pTable->translate(vaddr, paddr)) {
         fatal("failed translation: vaddr 0x%x\n", vaddr);

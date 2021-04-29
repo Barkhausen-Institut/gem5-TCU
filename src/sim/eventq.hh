@@ -40,13 +40,16 @@
 #include <climits>
 #include <functional>
 #include <iosfwd>
+#include <list>
 #include <memory>
-#include <mutex>
 #include <string>
 
+#include "base/debug.hh"
 #include "base/flags.hh"
 #include "base/types.hh"
+#include "base/uncontended_mutex.hh"
 #include "debug/Event.hh"
+#include "sim/core.hh"
 #include "sim/serialize.hh"
 
 class EventQueue;       // forward declaration
@@ -80,7 +83,7 @@ extern bool inParallelMode;
 EventQueue *getEventQueue(uint32_t index);
 
 inline EventQueue *curEventQueue() { return _curEventQueue; }
-inline void curEventQueue(EventQueue *q) { _curEventQueue = q; }
+inline void curEventQueue(EventQueue *q);
 
 /**
  * Common base class for Event and GlobalEvent, so they can share flag
@@ -487,6 +490,9 @@ class Event : public EventBase, public Serializable
     bool isManaged() const { return flags.isSet(Managed); }
 
     /**
+     * The function returns true if the object is automatically
+     * deleted after the event is processed.
+     *
      * @ingroup api_eventq
      */
     bool isAutoDelete() const { return isManaged(); }
@@ -613,12 +619,14 @@ operator!=(const Event &l, const Event &r)
 class EventQueue
 {
   private:
+    friend void curEventQueue(EventQueue *);
+
     std::string objName;
     Event *head;
     Tick _curTick;
 
     //! Mutex to protect async queue.
-    std::mutex async_queue_mutex;
+    UncontendedMutex async_queue_mutex;
 
     //! List of events added by other threads to this event queue.
     std::list<Event*> async_queue;
@@ -643,7 +651,7 @@ class EventQueue
      * @see EventQueue::lock()
      * @see EventQueue::unlock()
      */
-    std::mutex service_mutex;
+    UncontendedMutex service_mutex;
 
     //! Insert / remove event from the queue. Should only be called
     //! by thread operating this queue.
@@ -658,22 +666,21 @@ class EventQueue
     EventQueue(const EventQueue &);
 
   public:
-    /**
-     * Temporarily migrate execution to a different event queue.
-     *
-     * An instance of this class temporarily migrates execution to a
-     * different event queue by releasing the current queue, locking
-     * the new queue, and updating curEventQueue(). This can, for
-     * example, be useful when performing IO across thread event
-     * queues when timing is not crucial (e.g., during fast
-     * forwarding).
-     *
-     * ScopedMigration does nothing if both eqs are the same
-     */
     class ScopedMigration
     {
       public:
-        /**
+         /**
+         * Temporarily migrate execution to a different event queue.
+         *
+         * An instance of this class temporarily migrates execution to
+         * different event queue by releasing the current queue, locking
+         * the new queue, and updating curEventQueue(). This can, for
+         * example, be useful when performing IO across thread event
+         * queues when timing is not crucial (e.g., during fast
+         * forwarding).
+         *
+         * ScopedMigration does nothing if both eqs are the same
+         *
          * @ingroup api_eventq
          */
         ScopedMigration(EventQueue *_new_eq, bool _doMigrate = true)
@@ -702,19 +709,19 @@ class EventQueue
         bool doMigrate;
     };
 
-    /**
-     * Temporarily release the event queue service lock.
-     *
-     * There are cases where it is desirable to temporarily release
-     * the event queue lock to prevent deadlocks. For example, when
-     * waiting on the global barrier, we need to release the lock to
-     * prevent deadlocks from happening when another thread tries to
-     * temporarily take over the event queue waiting on the barrier.
-     */
+
     class ScopedRelease
     {
       public:
         /**
+         * Temporarily release the event queue service lock.
+         *
+         * There are cases where it is desirable to temporarily release
+         * the event queue lock to prevent deadlocks. For example, when
+         * waiting on the global barrier, we need to release the lock to
+         * prevent deadlocks from happening when another thread tries to
+         * temporarily take over the event queue waiting on the barrier.
+         *
          * @group api_eventq
          */
         ScopedRelease(EventQueue *_eq)
@@ -750,14 +757,56 @@ class EventQueue
      *
      * @ingroup api_eventq
      */
-    void schedule(Event *event, Tick when, bool global = false);
+    void
+    schedule(Event *event, Tick when, bool global=false)
+    {
+        assert(when >= getCurTick());
+        assert(!event->scheduled());
+        assert(event->initialized());
+
+        event->setWhen(when, this);
+
+        // The check below is to make sure of two things
+        // a. A thread schedules local events on other queues through the
+        //    asyncq.
+        // b. A thread schedules global events on the asyncq, whether or not
+        //    this event belongs to this eventq. This is required to maintain
+        //    a total order amongst the global events. See global_event.{cc,hh}
+        //    for more explanation.
+        if (inParallelMode && (this != curEventQueue() || global)) {
+            asyncInsert(event);
+        } else {
+            insert(event);
+        }
+        event->flags.set(Event::Scheduled);
+        event->acquire();
+
+        if (DTRACE(Event))
+            event->trace("scheduled");
+    }
 
     /**
      * Deschedule the specified event. Should be called only from the owning
      * thread.
      * @ingroup api_eventq
      */
-    void deschedule(Event *event);
+    void
+    deschedule(Event *event)
+    {
+        assert(event->scheduled());
+        assert(event->initialized());
+        assert(!inParallelMode || this == curEventQueue());
+
+        remove(event);
+
+        event->flags.clear(Event::Squashed);
+        event->flags.clear(Event::Scheduled);
+
+        if (DTRACE(Event))
+            event->trace("descheduled");
+
+        event->release();
+    }
 
     /**
      * Reschedule the specified event. Should be called only from the owning
@@ -765,7 +814,28 @@ class EventQueue
      *
      * @ingroup api_eventq
      */
-    void reschedule(Event *event, Tick when, bool always = false);
+    void
+    reschedule(Event *event, Tick when, bool always=false)
+    {
+        assert(when >= getCurTick());
+        assert(always || event->scheduled());
+        assert(event->initialized());
+        assert(!inParallelMode || this == curEventQueue());
+
+        if (event->scheduled()) {
+            remove(event);
+        } else {
+            event->acquire();
+        }
+
+        event->setWhen(when, this);
+        insert(event);
+        event->flags.clear(Event::Squashed);
+        event->flags.set(Event::Scheduled);
+
+        if (DTRACE(Event))
+            event->trace("rescheduled");
+    }
 
     Tick nextTick() const { return head->when(); }
     void setCurTick(Tick newVal) { _curTick = newVal; }
@@ -775,6 +845,8 @@ class EventQueue
      * if an object that is assigned to another event queue (or a non-event
      * object) need to access the current tick of this event queue, this
      * function is used.
+     *
+     * Tick is the unit of time used in gem5.
      *
      * @return Tick The current tick of this event queue.
      * @ingroup api_eventq
@@ -900,6 +972,13 @@ class EventQueue
     }
 };
 
+inline void
+curEventQueue(EventQueue *q)
+{
+    _curEventQueue = q;
+    Gem5Internal::_curTickPtr = (q == nullptr) ? nullptr : &q->_curTick;
+}
+
 void dumpMainQueue();
 
 class EventManager
@@ -910,6 +989,9 @@ class EventManager
 
   public:
     /**
+     * Event manger manages events in the event queue. Where
+     * you can schedule and deschedule different events.
+     *
      * @ingroup api_eventq
      * @{
      */
@@ -982,6 +1064,9 @@ class EventManager
     }
 
     /**
+     * This function is not needed by the usual gem5 event loop
+     * but may be necessary in derived EventQueues which host gem5
+     * on other schedulers.
      * @ingroup api_eventq
      */
     void wakeupEventQueue(Tick when = (Tick)-1)
@@ -1032,6 +1117,9 @@ class EventFunctionWrapper : public Event
 
   public:
     /**
+     * This function wraps a function into an event, to be
+     * executed later.
+     *
      * @ingroup api_eventq
      */
     EventFunctionWrapper(const std::function<void(void)> &callback,

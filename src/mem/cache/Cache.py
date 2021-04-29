@@ -103,12 +103,19 @@ class BaseCache(ClockedObject):
         "Replacement policy")
 
     compressor = Param.BaseCacheCompressor(NULL, "Cache compressor.")
+    replace_expansions = Param.Bool(True, "Apply replacement policy to " \
+        "decide which blocks should be evicted on a data expansion")
+    # When a block passes from uncompressed to compressed, it may become
+    # co-allocatable with another existing entry of the same superblock,
+    # so try move the block to co-allocate it
+    move_contractions = Param.Bool(True, "Try to co-allocate blocks that "
+        "contract")
 
     sequential_access = Param.Bool(False,
         "Whether to access tags and data sequentially")
 
-    cpu_side = SlavePort("Upstream port closer to the CPU and/or device")
-    mem_side = MasterPort("Downstream port closer to memory")
+    cpu_side = ResponsePort("Upstream port closer to the CPU and/or device")
+    mem_side = RequestPort("Downstream port closer to memory")
 
     addr_ranges = VectorParam.AddrRange([AllMemory],
          "Address range for the CPU-side port (to allow striping)")

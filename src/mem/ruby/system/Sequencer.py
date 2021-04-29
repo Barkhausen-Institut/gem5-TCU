@@ -1,4 +1,17 @@
+# Copyright (c) 2020 ARM Limited
+# All rights reserved.
+#
+# The license below extends only to copyright in the software and shall
+# not be construed as granting a license to any other intellectual
+# property including but not limited to intellectual property relating
+# to a hardware implementation of the functionality of the software
+# licensed hereunder.  You may use the software subject to the license
+# terms below provided that you ensure that this notice is replicated
+# unmodified and in its entirety in all distributions of the software,
+# modified or unmodified, in source code or in binary form.
+#
 # Copyright (c) 2009 Advanced Micro Devices, Inc.
+# Copyright (c) 2020 ARM Limited
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -34,12 +47,29 @@ class RubyPort(ClockedObject):
    cxx_header = "mem/ruby/system/RubyPort.hh"
    version = Param.Int(0, "")
 
-   slave = VectorSlavePort("CPU slave port")
-   master = VectorMasterPort("CPU master port")
-   pio_master_port = MasterPort("Ruby mem master port")
-   mem_master_port = MasterPort("Ruby mem master port")
-   pio_slave_port = SlavePort("Ruby pio slave port")
-   mem_slave_port = SlavePort("Ruby memory port")
+   in_ports = VectorResponsePort("CPU side of this RubyPort/Sequencer. "
+               "The CPU request ports should be connected to this. If a CPU "
+               "has multiple ports (e.g., I/D ports) all of the ports for a "
+               "single CPU can connect to one RubyPort.")
+   slave    = DeprecatedParam(in_ports,
+                        '`slave` is now called `in_ports`')
+
+   interrupt_out_port = VectorRequestPort("Port to connect to x86 interrupt "
+                        "controller to send the CPU requests from outside.")
+   master             = DeprecatedParam(interrupt_out_port,
+                        '`master` is now called `interrupt_out_port`')
+
+   pio_request_port = RequestPort("Ruby pio request port")
+   pio_master_port  = DeprecatedParam(pio_request_port,
+                        '`pio_master_port` is now called `pio_request_port`')
+
+   mem_request_port = RequestPort("Ruby mem request port")
+   mem_master_port  = DeprecatedParam(mem_request_port,
+                        '`mem_master_port` is now called `mem_request_port`')
+
+   pio_response_port = ResponsePort("Ruby pio response port")
+   pio_slave_port    = DeprecatedParam(pio_response_port,
+                        '`pio_slave_port` is now called `pio_response_port`')
 
    using_ruby_tester = Param.Bool(False, "")
    no_retry_on_stall = Param.Bool(False, "")
@@ -58,7 +88,6 @@ class RubySequencer(RubyPort):
    cxx_class = 'Sequencer'
    cxx_header = "mem/ruby/system/Sequencer.hh"
 
-   icache = Param.RubyCache("")
    dcache = Param.RubyCache("")
 
    max_outstanding_requests = Param.Int(16,
@@ -69,6 +98,37 @@ class RubySequencer(RubyPort):
    # id used by protocols that support multiple sequencers per controller
    # 99 is the dummy default value
    coreid = Param.Int(99, "CorePair core id")
+
+   def connectCpuPorts(self, cpu):
+      """
+      Helper for connecting all cpu memory request output ports to this
+      object's in_ports.
+      This assumes the provided cpu object is an instance of BaseCPU. Non-cpu
+      objects should use connectInstPort and connectDataPort.
+      """
+      import m5.objects
+      assert(isinstance(cpu, m5.objects.BaseCPU))
+      # this connects all cpu mem-side ports to self.in_ports
+      cpu.connectAllPorts(self)
+
+   def connectIOPorts(self, piobus):
+      """
+      Helper for connecting this object's IO request and response ports to the
+      provided bus object. Usually a iobus object is used to wireup IO
+      components in a full system simulation. Incoming/Outgoing IO requests do
+      not go though the SLICC protocol so the iobus must be connected to the
+      sequencer directly.
+      """
+      import m5.defines
+      self.pio_request_port = piobus.cpu_side_ports
+      self.mem_request_port = piobus.cpu_side_ports
+      if m5.defines.buildEnv['TARGET_ISA'] == "x86":
+         self.pio_response_port = piobus.mem_side_ports
+
+class RubyHTMSequencer(RubySequencer):
+   type = 'RubyHTMSequencer'
+   cxx_class = 'HTMSequencer'
+   cxx_header = "mem/ruby/system/HTMSequencer.hh"
 
 class DMASequencer(RubyPort):
    type = 'DMASequencer'

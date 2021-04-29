@@ -50,16 +50,6 @@ buildRetPC(const PCState &curPC, const PCState &callPC)
     return ret;
 }
 
-uint64_t getArgument(ThreadContext *tc, int &number, uint16_t size, bool fp);
-
-static inline bool
-inUserMode(ThreadContext *tc)
-{
-    PSTATE pstate = tc->readMiscRegNoEffect(MISCREG_PSTATE);
-    HPSTATE hpstate = tc->readMiscRegNoEffect(MISCREG_HPSTATE);
-    return !(pstate.priv || hpstate.hpriv);
-}
-
 void copyRegs(ThreadContext *src, ThreadContext *dest);
 
 void copyMiscRegs(ThreadContext *src, ThreadContext *dest);
@@ -68,12 +58,6 @@ inline void
 advancePC(PCState &pc, const StaticInstPtr &inst)
 {
     inst->advancePC(pc);
-}
-
-inline uint64_t
-getExecutingAsid(ThreadContext *tc)
-{
-    return tc->readMiscRegNoEffect(MISCREG_MMU_P_CONTEXT);
 }
 
 } // namespace SparcISA

@@ -45,77 +45,79 @@ Test file for the util m5 exit assembly instruction.
 from testlib import *
 
 static_progs = {
-    'x86': ('hello64-static', 'hello32-static'),
-    'arm': ('hello64-static', 'hello32-static'),
-    'alpha': ('hello',),
-    'mips': ('hello',),
-    'riscv': ('hello',),
-    'sparc': ('hello',)
+    constants.gcn3_x86_tag : ('hello64-static', 'hello32-static'),
+    constants.arm_tag : ('hello64-static', 'hello32-static'),
+    constants.mips_tag : ('hello',),
+    constants.riscv_tag : ('hello',),
+    constants.sparc_tag : ('hello',)
 }
 
 dynamic_progs = {
-    'x86': ('hello64-dynamic',)
+    constants.gcn3_x86_tag : ('hello64-dynamic',)
 }
 
 cpu_types = {
-    'x86': ('TimingSimpleCPU', 'AtomicSimpleCPU', 'DerivO3CPU'),
-    'arm' :  ('TimingSimpleCPU', 'AtomicSimpleCPU','DerivO3CPU'),
-    'alpha': ('TimingSimpleCPU', 'AtomicSimpleCPU', 'DerivO3CPU', 'MinorCPU'),
-    'mips' : ('TimingSimpleCPU', 'AtomicSimpleCPU', 'DerivO3CPU'),
-    'riscv' : ('TimingSimpleCPU', 'AtomicSimpleCPU', 'DerivO3CPU', 'MinorCPU'),
-    'sparc' : ('TimingSimpleCPU', 'AtomicSimpleCPU')
+    constants.gcn3_x86_tag :
+        ('TimingSimpleCPU', 'AtomicSimpleCPU', 'DerivO3CPU'),
+    constants.arm_tag :  ('TimingSimpleCPU', 'AtomicSimpleCPU','DerivO3CPU'),
+    constants.mips_tag : ('TimingSimpleCPU', 'AtomicSimpleCPU', 'DerivO3CPU'),
+    constants.riscv_tag :
+        ('TimingSimpleCPU', 'AtomicSimpleCPU', 'DerivO3CPU', 'MinorCPU'),
+    constants.sparc_tag : ('TimingSimpleCPU', 'AtomicSimpleCPU')
 }
 
-supported_os = {
-    'x86': ('linux',),
-    'arm' : ('linux',),
-    'alpha' : ('linux',),
-    'mips' : ('linux',),
-    'riscv' : ('linux',),
-    'sparc' : ('linux',)
+# We only want to test x86, arm, and riscv on quick. Mips and sparc will be
+# left for long.
+os_length = {
+    constants.gcn3_x86_tag : constants.quick_tag,
+    constants.arm_tag : constants.quick_tag,
+    constants.mips_tag : constants.long_tag,
+    constants.riscv_tag : constants.quick_tag,
+    constants.sparc_tag : constants.long_tag,
 }
 
-if config.bin_path:
-    base_path = config.bin_path
-else:
-    base_path = joinpath(absdirpath(__file__), '..', 'test-progs', 'hello',
-        'bin')
+base_path = joinpath(config.bin_path, 'hello')
 
 urlbase = config.resource_url + '/test-progs/hello/bin/'
+
+isa_urls = {
+    constants.gcn3_x86_tag : urlbase + "x86/linux",
+    constants.arm_tag : urlbase + "arm/linux",
+    constants.mips_tag : urlbase + "mips/linux",
+    constants.riscv_tag : urlbase + "riscv/linux",
+    constants.sparc_tag : urlbase + "sparc/linux",
+}
 
 ref_path = joinpath(getcwd(), 'ref')
 verifiers = (
     verifier.MatchStdoutNoPerf(joinpath(ref_path, 'simout')),
 )
 
-def verify_config(isa, binary, operating_s, cpu, hosts):
-    url = urlbase + isa + '/' + operating_s + '/' + binary
-    path = joinpath(base_path, isa, operating_s)
+def verify_config(isa, binary, cpu, hosts):
+    url = isa_urls[isa] + '/' + binary
+    path = joinpath(base_path, isa.lower())
     hello_program = DownloadedProgram(url, path, binary)
 
     gem5_verify_config(
-        name='test-' + binary + '-' + operating_s + "-" + cpu,
+        name='test-' + binary + '-' + cpu,
         fixtures=(hello_program,),
         verifiers=verifiers,
         config=joinpath(config.base_dir, 'configs', 'example','se.py'),
         config_args=['--cmd', joinpath(path, binary), '--cpu-type', cpu,
             '--caches'],
-        valid_isas=(isa.upper(),),
+        valid_isas=(isa,),
         valid_hosts=hosts,
+        length = os_length[isa],
     )
 
 # Run statically linked hello worlds
 for isa in static_progs:
     for binary in static_progs[isa]:
-        for operating_s in supported_os[isa]:
-            for cpu in cpu_types[isa]:
-                verify_config(isa, binary, operating_s, cpu,
-                        constants.supported_hosts)
+        for cpu in cpu_types[isa]:
+            verify_config(isa, binary, cpu, constants.supported_hosts)
 
 # Run dynamically linked hello worlds
 for isa in dynamic_progs:
     for binary in dynamic_progs[isa]:
-        for operating_s in supported_os[isa]:
-            for cpu in cpu_types[isa]:
-               verify_config(isa, binary, operating_s, cpu,
-                       constants.target_host[isa.upper()])
+        for cpu in cpu_types[isa]:
+            verify_config(isa, binary, cpu, constants.target_host[isa])

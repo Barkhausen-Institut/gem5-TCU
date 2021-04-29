@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017,2019 ARM Limited
+ * Copyright (c) 2017,2019-2021 ARM Limited
  * All rights reserved.
  *
  * The license below extends only to copyright in the software and shall
@@ -43,52 +43,74 @@
 #include "debug/RubyQueue.hh"
 #include "mem/ruby/network/Network.hh"
 #include "mem/ruby/protocol/MemoryMsg.hh"
-#include "mem/ruby/system/GPUCoalescer.hh"
 #include "mem/ruby/system/RubySystem.hh"
 #include "mem/ruby/system/Sequencer.hh"
 #include "sim/system.hh"
 
-AbstractController::AbstractController(const Params *p)
-    : ClockedObject(p), Consumer(this), m_version(p->version),
-      m_clusterID(p->cluster_id),
-      m_masterId(p->system->getMasterId(this)), m_is_blocking(false),
-      m_number_of_TBEs(p->number_of_TBEs),
-      m_transitions_per_cycle(p->transitions_per_cycle),
-      m_buffer_size(p->buffer_size), m_recycle_latency(p->recycle_latency),
-      m_mandatory_queue_latency(p->mandatory_queue_latency),
-      memoryPort(csprintf("%s.memory", name()), this, ""),
-      addrRanges(p->addr_ranges.begin(), p->addr_ranges.end())
+AbstractController::AbstractController(const Params &p)
+    : ClockedObject(p), Consumer(this), m_version(p.version),
+      m_clusterID(p.cluster_id),
+      m_id(p.system->getRequestorId(this)), m_is_blocking(false),
+      m_number_of_TBEs(p.number_of_TBEs),
+      m_transitions_per_cycle(p.transitions_per_cycle),
+      m_buffer_size(p.buffer_size), m_recycle_latency(p.recycle_latency),
+      m_mandatory_queue_latency(p.mandatory_queue_latency),
+      memoryPort(csprintf("%s.memory", name()), this),
+      addrRanges(p.addr_ranges.begin(), p.addr_ranges.end()),
+      stats(this)
 {
     if (m_version == 0) {
         // Combine the statistics from all controllers
         // of this particular type.
-        Stats::registerDumpCallback(new StatsCallback(this));
+        Stats::registerDumpCallback([this]() { collateStats(); });
     }
 }
 
 void
 AbstractController::init()
 {
-    params()->ruby_system->registerAbstractController(this);
-    m_delayHistogram.init(10);
+    stats.delayHistogram.init(10);
     uint32_t size = Network::getNumberOfVirtualNetworks();
     for (uint32_t i = 0; i < size; i++) {
-        m_delayVCHistogram.push_back(new Stats::Histogram());
-        m_delayVCHistogram[i]->init(10);
+        stats.delayVCHistogram.push_back(new Stats::Histogram(this));
+        stats.delayVCHistogram[i]->init(10);
     }
 
     if (getMemReqQueue()) {
         getMemReqQueue()->setConsumer(this);
     }
+
+    // Initialize the addr->downstream machine mappings. Multiple machines
+    // in downstream_destinations can have the same address range if they have
+    // different types. If this is the case, mapAddressToDownstreamMachine
+    // needs to specify the machine type
+    downstreamDestinations.resize();
+    for (auto abs_cntrl : params().downstream_destinations) {
+        MachineID mid = abs_cntrl->getMachineID();
+        const AddrRangeList &ranges = abs_cntrl->getAddrRanges();
+        for (const auto &addr_range : ranges) {
+            auto i = downstreamAddrMap.intersects(addr_range);
+            if (i == downstreamAddrMap.end()) {
+                i = downstreamAddrMap.insert(addr_range, AddrMapEntry());
+            }
+            AddrMapEntry &entry = i->second;
+            fatal_if(entry.count(mid.getType()) > 0,
+                     "%s: %s mapped to multiple machines of the same type\n",
+                     name(), addr_range.to_string());
+            entry[mid.getType()] = mid;
+        }
+        downstreamDestinations.add(mid);
+    }
+
 }
 
 void
 AbstractController::resetStats()
 {
-    m_delayHistogram.reset();
+    stats.delayHistogram.reset();
     uint32_t size = Network::getNumberOfVirtualNetworks();
     for (uint32_t i = 0; i < size; i++) {
-        m_delayVCHistogram[i]->reset();
+        stats.delayVCHistogram[i]->reset();
     }
 }
 
@@ -96,19 +118,14 @@ void
 AbstractController::regStats()
 {
     ClockedObject::regStats();
-
-    m_fully_busy_cycles
-        .name(name() + ".fully_busy_cycles")
-        .desc("cycles for which number of transistions == max transitions")
-        .flags(Stats::nozero);
 }
 
 void
 AbstractController::profileMsgDelay(uint32_t virtualNetwork, Cycles delay)
 {
-    assert(virtualNetwork < m_delayVCHistogram.size());
-    m_delayHistogram.sample(delay);
-    m_delayVCHistogram[virtualNetwork]->sample(delay);
+    assert(virtualNetwork < stats.delayVCHistogram.size());
+    stats.delayHistogram.sample(delay);
+    stats.delayVCHistogram[virtualNetwork]->sample(delay);
 }
 
 void
@@ -123,6 +140,28 @@ AbstractController::stallBuffer(MessageBuffer* buf, Addr addr)
             addr);
     assert(m_in_ports > m_cur_in_port);
     (*(m_waiting_buffers[addr]))[m_cur_in_port] = buf;
+}
+
+void
+AbstractController::wakeUpBuffer(MessageBuffer* buf, Addr addr)
+{
+    auto iter = m_waiting_buffers.find(addr);
+    if (iter != m_waiting_buffers.end()) {
+        bool has_other_msgs = false;
+        MsgVecType* msgVec = iter->second;
+        for (unsigned int port = 0; port < msgVec->size(); ++port) {
+            if ((*msgVec)[port] == buf) {
+                buf->reanalyzeMessages(addr, clockEdge());
+                (*msgVec)[port] = NULL;
+            } else if ((*msgVec)[port] != NULL) {
+                has_other_msgs = true;
+            }
+        }
+        if (!has_other_msgs) {
+            delete msgVec;
+            m_waiting_buffers.erase(iter);
+        }
+    }
 }
 
 void
@@ -151,8 +190,7 @@ AbstractController::wakeUpAllBuffers(Addr addr)
 {
     if (m_waiting_buffers.count(addr) > 0) {
         //
-        // Wake up all possible lower rank (i.e. lower priority) buffers that could
-        // be waiting on this message.
+        // Wake up all possible buffers that could be waiting on this message.
         //
         for (int in_port_rank = m_in_ports - 1;
              in_port_rank >= 0;
@@ -222,7 +260,7 @@ AbstractController::serviceMemoryQueue()
     }
 
     RequestPtr req
-        = std::make_shared<Request>(mem_msg->m_addr, req_size, 0, m_masterId);
+        = std::make_shared<Request>(mem_msg->m_addr, req_size, 0, m_id);
     PacketPtr pkt;
     if (mem_msg->getType() == MemoryRequestType_MEMORY_WB) {
         pkt = Packet::createWrite(req);
@@ -250,12 +288,15 @@ AbstractController::serviceMemoryQueue()
         // to make more progress. Make sure it wakes up
         scheduleEvent(Cycles(1));
         recvTimingResp(pkt);
-    } else {
+    } else if (memoryPort.sendTimingReq(pkt)) {
         mem_queue->dequeue(clockEdge());
-        memoryPort.schedTimingReq(pkt, clockEdge());
         // Since the queue was popped the controller may be able
         // to make more progress. Make sure it wakes up
         scheduleEvent(Cycles(1));
+    } else {
+        scheduleEvent(Cycles(1));
+        delete pkt;
+        delete s;
     }
 
     return true;
@@ -298,18 +339,16 @@ AbstractController::getPort(const std::string &if_name, PortID idx)
 void
 AbstractController::functionalMemoryRead(PacketPtr pkt)
 {
-    memoryPort.sendFunctional(pkt);
+    // read from mem. req. queue if write data is pending there
+    MessageBuffer *req_queue = getMemReqQueue();
+    if (!req_queue || !req_queue->functionalRead(pkt))
+        memoryPort.sendFunctional(pkt);
 }
 
 int
 AbstractController::functionalMemoryWrite(PacketPtr pkt)
 {
     int num_functional_writes = 0;
-
-    // Check the buffer from the controller to the memory.
-    if (memoryPort.trySatisfyFunctional(pkt)) {
-        num_functional_writes++;
-    }
 
     // Update memory itself.
     memoryPort.sendFunctional(pkt);
@@ -362,6 +401,30 @@ AbstractController::mapAddressToMachine(Addr addr, MachineType mtype) const
     return mach;
 }
 
+MachineID
+AbstractController::mapAddressToDownstreamMachine(Addr addr, MachineType mtype)
+const
+{
+    const auto i = downstreamAddrMap.contains(addr);
+    fatal_if(i == downstreamAddrMap.end(),
+      "%s: couldn't find mapping for address %x\n", name(), addr);
+
+    const AddrMapEntry &entry = i->second;
+    assert(!entry.empty());
+
+    if (mtype == MachineType_NUM) {
+        fatal_if(entry.size() > 1,
+          "%s: address %x mapped to multiple machine types.\n", name(), addr);
+        return entry.begin()->second;
+    } else {
+        auto j = entry.find(mtype);
+        fatal_if(j == entry.end(),
+          "%s: couldn't find mapping for address %x\n", name(), addr);
+        return j->second;
+    }
+}
+
+
 bool
 AbstractController::MemoryPort::recvTimingResp(PacketPtr pkt)
 {
@@ -369,12 +432,28 @@ AbstractController::MemoryPort::recvTimingResp(PacketPtr pkt)
     return true;
 }
 
+void
+AbstractController::MemoryPort::recvReqRetry()
+{
+    controller->serviceMemoryQueue();
+}
+
 AbstractController::MemoryPort::MemoryPort(const std::string &_name,
                                            AbstractController *_controller,
-                                           const std::string &_label)
-    : QueuedMasterPort(_name, _controller, reqQueue, snoopRespQueue),
-      reqQueue(*_controller, *this, _label),
-      snoopRespQueue(*_controller, *this, false, _label),
-      controller(_controller)
+                                           PortID id)
+    : RequestPort(_name, _controller, id), controller(_controller)
 {
+}
+
+AbstractController::
+ControllerStats::ControllerStats(Stats::Group *parent)
+    : Stats::Group(parent),
+      ADD_STAT(fullyBusyCycles,
+               "cycles for which number of transistions == max transitions"),
+      ADD_STAT(delayHistogram, "delay_histogram")
+{
+    fullyBusyCycles
+        .flags(Stats::nozero);
+    delayHistogram
+        .flags(Stats::nozero);
 }

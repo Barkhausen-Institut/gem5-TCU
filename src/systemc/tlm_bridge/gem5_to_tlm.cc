@@ -58,6 +58,8 @@
 
 #include "systemc/tlm_bridge/gem5_to_tlm.hh"
 
+#include <utility>
+
 #include "params/Gem5ToTlmBridge32.hh"
 #include "params/Gem5ToTlmBridge64.hh"
 #include "sim/system.hh"
@@ -72,6 +74,27 @@ namespace sc_gem5
  * tlm transactions in the system.
  */
 Gem5SystemC::MemoryManager mm;
+
+namespace
+{
+/**
+ * Hold all the callbacks necessary to convert a gem5 packet to tlm payload.
+ */
+std::vector<PacketToPayloadConversionStep> extraPacketToPayloadSteps;
+}  // namespace
+
+/**
+ * Notify the Gem5ToTlm bridge that we need an extra step to properly convert a
+ * gem5 packet to tlm payload. This can be useful when there exists a SystemC
+ * extension that requires information in gem5 packet. For example, if a user
+ * defined a SystemC extension the carries stream_id, the user may add a step
+ * here to read stream_id out and set the extension properly.
+ */
+void
+addPacketToPayloadConversionStep(PacketToPayloadConversionStep step)
+{
+    extraPacketToPayloadSteps.push_back(std::move(step));
+}
 
 /**
  * Convert a gem5 packet to a TLM payload by copying all the relevant
@@ -110,6 +133,11 @@ packet2payload(PacketPtr packet)
     auto *extension = new Gem5SystemC::Gem5Extension(packet);
     trans->set_auto_extension(extension);
 
+    // Apply all conversion steps necessary in this specific setup.
+    for (auto &step : extraPacketToPayloadSteps) {
+        step(packet, *trans);
+    }
+
     return trans;
 }
 
@@ -128,7 +156,7 @@ Gem5ToTlmBridge<BITWIDTH>::pec(
         // Did another request arrive while blocked, schedule a retry.
         if (needToSendRequestRetry) {
             needToSendRequestRetry = false;
-            bsp.sendRetryReq();
+            bridgeResponsePort.sendRetryReq();
         }
     }
     if (phase == tlm::BEGIN_RESP) {
@@ -139,19 +167,15 @@ Gem5ToTlmBridge<BITWIDTH>::pec(
 
         bool need_retry = false;
 
-        /*
-         * If the packet was piped through and needs a response, we don't need
-         * to touch the packet and can forward it directly as a response.
-         * Otherwise, we need to make a response and send the transformed
-         * packet.
-         */
-        if (extension.isPipeThrough()) {
-            if (packet->isResponse()) {
-                need_retry = !bsp.sendTimingResp(packet);
-            }
-        } else if (packet->needsResponse()) {
+        // If there is another gem5 model under the receiver side, and already
+        // make a response packet back, we can simply send it back. Otherwise,
+        // we make a response packet before sending it back to the initiator
+        // side gem5 module.
+        if (packet->needsResponse()) {
             packet->makeResponse();
-            need_retry = !bsp.sendTimingResp(packet);
+        }
+        if (packet->isResponse()) {
+            need_retry = !bridgeResponsePort.sendTimingResp(packet);
         }
 
         if (need_retry) {
@@ -340,6 +364,8 @@ Gem5ToTlmBridge<BITWIDTH>::recvTimingReq(PacketPtr packet)
     } else if (status == tlm::TLM_UPDATED) {
         // The Timing annotation must be honored:
         sc_assert(phase == tlm::END_REQ || phase == tlm::BEGIN_RESP);
+        // Accepted but is now blocking until END_REQ (exclusion rule).
+        blockingRequest = trans;
         auto cb = [this, trans, phase]() { pec(*trans, phase); };
         system->schedule(new EventFunctionWrapper(cb, "pec", true),
                          curTick() + delay.value());
@@ -381,7 +407,7 @@ Gem5ToTlmBridge<BITWIDTH>::recvRespRetry()
     PacketPtr packet =
         Gem5SystemC::Gem5Extension::getExtension(trans).getPacket();
 
-    bool need_retry = !bsp.sendTimingResp(packet);
+    bool need_retry = !bridgeResponsePort.sendTimingResp(packet);
 
     sc_assert(!need_retry);
 
@@ -441,13 +467,14 @@ Gem5ToTlmBridge<BITWIDTH>::invalidate_direct_mem_ptr(
 
 template <unsigned int BITWIDTH>
 Gem5ToTlmBridge<BITWIDTH>::Gem5ToTlmBridge(
-        Params *params, const sc_core::sc_module_name &mn) :
-    Gem5ToTlmBridgeBase(mn), bsp(std::string(name()) + ".gem5", *this),
+        const Params &params, const sc_core::sc_module_name &mn) :
+    Gem5ToTlmBridgeBase(mn),
+    bridgeResponsePort(std::string(name()) + ".gem5", *this),
     socket("tlm_socket"),
     wrapper(socket, std::string(name()) + ".tlm", InvalidPortID),
-    system(params->system), blockingRequest(nullptr),
+    system(params.system), blockingRequest(nullptr),
     needToSendRequestRetry(false), blockingResponse(nullptr),
-    addrRanges(params->addr_ranges.begin(), params->addr_ranges.end())
+    addrRanges(params.addr_ranges.begin(), params.addr_ranges.end())
 {
 }
 
@@ -456,7 +483,7 @@ template <unsigned int BITWIDTH>
 Gem5ToTlmBridge<BITWIDTH>::gem5_getPort(const std::string &if_name, int idx)
 {
     if (if_name == "gem5")
-        return bsp;
+        return bridgeResponsePort;
     else if (if_name == "tlm")
         return wrapper;
 
@@ -467,7 +494,7 @@ template <unsigned int BITWIDTH>
 void
 Gem5ToTlmBridge<BITWIDTH>::before_end_of_elaboration()
 {
-    bsp.sendRangeChange();
+    bridgeResponsePort.sendRangeChange();
 
     socket.register_nb_transport_bw(this, &Gem5ToTlmBridge::nb_transport_bw);
     socket.register_invalidate_direct_mem_ptr(
@@ -478,15 +505,15 @@ Gem5ToTlmBridge<BITWIDTH>::before_end_of_elaboration()
 } // namespace sc_gem5
 
 sc_gem5::Gem5ToTlmBridge<32> *
-Gem5ToTlmBridge32Params::create()
+Gem5ToTlmBridge32Params::create() const
 {
     return new sc_gem5::Gem5ToTlmBridge<32>(
-            this, sc_core::sc_module_name(name.c_str()));
+            *this, sc_core::sc_module_name(name.c_str()));
 }
 
 sc_gem5::Gem5ToTlmBridge<64> *
-Gem5ToTlmBridge64Params::create()
+Gem5ToTlmBridge64Params::create() const
 {
     return new sc_gem5::Gem5ToTlmBridge<64>(
-            this, sc_core::sc_module_name(name.c_str()));
+            *this, sc_core::sc_module_name(name.c_str()));
 }

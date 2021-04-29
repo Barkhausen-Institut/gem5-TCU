@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Inria
+ * Copyright (c) 2019-2020 Inria
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -30,6 +30,7 @@
  * Implementation of the specialized sub-compressors used by BDI. @see BDI
  */
 
+#include "base/trace.hh"
 #include "mem/cache/compressors/base_delta_impl.hh"
 #include "params/Base16Delta8.hh"
 #include "params/Base32Delta16.hh"
@@ -38,68 +39,36 @@
 #include "params/Base64Delta32.hh"
 #include "params/Base64Delta8.hh"
 
-Base64Delta8::Base64Delta8(const Params *p)
+namespace Compressor {
+
+Base64Delta8::Base64Delta8(const Params &p)
     : BaseDelta<uint64_t, 8>(p)
 {
 }
 
-Base64Delta16::Base64Delta16(const Params *p)
+Base64Delta16::Base64Delta16(const Params &p)
     : BaseDelta<uint64_t, 16>(p)
 {
 }
 
-Base64Delta32::Base64Delta32(const Params *p)
+Base64Delta32::Base64Delta32(const Params &p)
     : BaseDelta<uint64_t, 32>(p)
 {
 }
 
-Base32Delta8::Base32Delta8(const Params *p)
+Base32Delta8::Base32Delta8(const Params &p)
     : BaseDelta<uint32_t, 8>(p)
 {
 }
 
-Base32Delta16::Base32Delta16(const Params *p)
+Base32Delta16::Base32Delta16(const Params &p)
     : BaseDelta<uint32_t, 16>(p)
 {
 }
 
-Base16Delta8::Base16Delta8(const Params *p)
+Base16Delta8::Base16Delta8(const Params &p)
     : BaseDelta<uint16_t, 8>(p)
 {
 }
 
-Base64Delta8*
-Base64Delta8Params::create()
-{
-    return new Base64Delta8(this);
-}
-
-Base64Delta16*
-Base64Delta16Params::create()
-{
-    return new Base64Delta16(this);
-}
-
-Base64Delta32*
-Base64Delta32Params::create()
-{
-    return new Base64Delta32(this);
-}
-
-Base32Delta8*
-Base32Delta8Params::create()
-{
-    return new Base32Delta8(this);
-}
-
-Base32Delta16*
-Base32Delta16Params::create()
-{
-    return new Base32Delta16(this);
-}
-
-Base16Delta8*
-Base16Delta8Params::create()
-{
-    return new Base16Delta8(this);
-}
+} // namespace Compressor

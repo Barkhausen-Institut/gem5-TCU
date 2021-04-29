@@ -72,20 +72,17 @@
 #include <string>
 #include <vector>
 
-#include "base/stats/group.hh"
-#include "base/stats/info.hh"
-#include "base/stats/output.hh"
-#include "base/stats/types.hh"
 #include "base/cast.hh"
 #include "base/cprintf.hh"
 #include "base/intmath.hh"
+#include "base/stats/group.hh"
+#include "base/stats/info.hh"
+#include "base/stats/output.hh"
+#include "base/stats/storage.hh"
+#include "base/stats/types.hh"
+#include "base/stats/units.hh"
 #include "base/str.hh"
 #include "base/types.hh"
-
-class Callback;
-
-/** The current simulated tick. */
-extern Tick curTick();
 
 /* A namespace for all of the Statistics */
 namespace Stats {
@@ -175,11 +172,6 @@ class Vector2dInfoProxy : public InfoProxy<Stat, Vector2dInfo>
     Result total() const { return this->s.total(); }
 };
 
-struct StorageParams
-{
-    virtual ~StorageParams();
-};
-
 class InfoAccess
 {
   private:
@@ -249,8 +241,8 @@ class DataWrap : public InfoAccess
     DataWrap(const DataWrap &) = delete;
     DataWrap &operator=(const DataWrap &) = delete;
 
-
-    DataWrap(Group *parent, const char *name, const char *desc)
+    DataWrap(Group *parent, const char *name, const Units::Base *unit,
+             const char *desc)
     {
         auto info = new Info(self());
         this->setInfo(parent, info);
@@ -262,6 +254,8 @@ class DataWrap : public InfoAccess
             info->setName(parent, name);
             info->flags.set(display);
         }
+
+        info->unit = unit;
 
         if (desc)
             info->desc = desc;
@@ -297,6 +291,18 @@ class DataWrap : public InfoAccess
     const std::string &setSeparator() const
     {
       return this->info()->separatorString;
+    }
+
+    /**
+     * Set the unit of the stat.
+     * @param unit The new unit.
+     * @return A reference to this stat.
+     */
+    Derived &
+    unit(const Units::Base *_unit)
+    {
+        this->info()->unit = _unit;
+        return this->self();
     }
 
     /**
@@ -358,8 +364,9 @@ class DataWrapVec : public DataWrap<Derived, InfoProxyType>
     typedef InfoProxyType<Derived> Info;
 
     DataWrapVec(Group *parent = nullptr, const char *name = nullptr,
+                const Units::Base *unit = UNIT_UNSPECIFIED,
                 const char *desc = nullptr)
-        : DataWrap<Derived, InfoProxyType>(parent, name, desc)
+        : DataWrap<Derived, InfoProxyType>(parent, name, unit, desc)
     {}
 
     // The following functions are specific to vectors.  If you use them
@@ -438,8 +445,9 @@ class DataWrapVec2d : public DataWrapVec<Derived, InfoProxyType>
   public:
     typedef InfoProxyType<Derived> Info;
 
-    DataWrapVec2d(Group *parent, const char *name, const char *desc)
-        : DataWrapVec<Derived, InfoProxyType>(parent, name, desc)
+    DataWrapVec2d(Group *parent, const char *name,
+                  const Units::Base *unit, const char *desc)
+        : DataWrapVec<Derived, InfoProxyType>(parent, name, unit, desc)
     {
     }
 
@@ -486,167 +494,6 @@ class DataWrapVec2d : public DataWrapVec<Derived, InfoProxyType>
 //////////////////////////////////////////////////////////////////////
 
 /**
- * Templatized storage and interface for a simple scalar stat.
- */
-class StatStor
-{
-  private:
-    /** The statistic value. */
-    Counter data;
-
-  public:
-    struct Params : public StorageParams {};
-
-  public:
-    /**
-     * Builds this storage element and calls the base constructor of the
-     * datatype.
-     */
-    StatStor(Info *info)
-        : data(Counter())
-    { }
-
-    /**
-     * The the stat to the given value.
-     * @param val The new value.
-     */
-    void set(Counter val) { data = val; }
-    /**
-     * Increment the stat by the given value.
-     * @param val The new value.
-     */
-    void inc(Counter val) { data += val; }
-    /**
-     * Decrement the stat by the given value.
-     * @param val The new value.
-     */
-    void dec(Counter val) { data -= val; }
-    /**
-     * Return the value of this stat as its base type.
-     * @return The value of this stat.
-     */
-    Counter value() const { return data; }
-    /**
-     * Return the value of this stat as a result type.
-     * @return The value of this stat.
-     */
-    Result result() const { return (Result)data; }
-    /**
-     * Prepare stat data for dumping or serialization
-     */
-    void prepare(Info *info) { }
-    /**
-     * Reset stat value to default
-     */
-    void reset(Info *info) { data = Counter(); }
-
-    /**
-     * @return true if zero value
-     */
-    bool zero() const { return data == Counter(); }
-};
-
-/**
- * Templatized storage and interface to a per-tick average stat. This keeps
- * a current count and updates a total (count * ticks) when this count
- * changes. This allows the quick calculation of a per tick count of the item
- * being watched. This is good for keeping track of residencies in structures
- * among other things.
- */
-class AvgStor
-{
-  private:
-    /** The current count. */
-    Counter current;
-    /** The tick of the last reset */
-    Tick lastReset;
-    /** The total count for all tick. */
-    mutable Result total;
-    /** The tick that current last changed. */
-    mutable Tick last;
-
-  public:
-    struct Params : public StorageParams {};
-
-  public:
-    /**
-     * Build and initializes this stat storage.
-     */
-    AvgStor(Info *info)
-        : current(0), lastReset(0), total(0), last(0)
-    { }
-
-    /**
-     * Set the current count to the one provided, update the total and last
-     * set values.
-     * @param val The new count.
-     */
-    void
-    set(Counter val)
-    {
-        total += current * (curTick() - last);
-        last = curTick();
-        current = val;
-    }
-
-    /**
-     * Increment the current count by the provided value, calls set.
-     * @param val The amount to increment.
-     */
-    void inc(Counter val) { set(current + val); }
-
-    /**
-     * Deccrement the current count by the provided value, calls set.
-     * @param val The amount to decrement.
-     */
-    void dec(Counter val) { set(current - val); }
-
-    /**
-     * Return the current count.
-     * @return The current count.
-     */
-    Counter value() const { return current; }
-
-    /**
-     * Return the current average.
-     * @return The current average.
-     */
-    Result
-    result() const
-    {
-        assert(last == curTick());
-        return (Result)(total + current) / (Result)(curTick() - lastReset + 1);
-    }
-
-    /**
-     * @return true if zero value
-     */
-    bool zero() const { return total == 0.0; }
-
-    /**
-     * Prepare stat data for dumping or serialization
-     */
-    void
-    prepare(Info *info)
-    {
-        total += current * (curTick() - last);
-        last = curTick();
-    }
-
-    /**
-     * Reset stat value to default
-     */
-    void
-    reset(Info *info)
-    {
-        total = 0.0;
-        last = curTick();
-        lastReset = curTick();
-    }
-
-};
-
-/**
  * Implementation of a scalar stat. The type of stat is determined by the
  * Storage template.
  */
@@ -659,7 +506,7 @@ class ScalarBase : public DataWrap<Derived, ScalarInfoProxy>
 
   protected:
     /** The storage of this stat. */
-    char storage[sizeof(Storage)] __attribute__ ((aligned (8)));
+    M5_ALIGNED(8) char storage[sizeof(Storage)];
 
   protected:
     /**
@@ -693,16 +540,10 @@ class ScalarBase : public DataWrap<Derived, ScalarInfoProxy>
     }
 
   public:
-    /**
-     * Return the current value of this stat as its base type.
-     * @return The current value.
-     */
-    Counter value() const { return data()->value(); }
-
-  public:
     ScalarBase(Group *parent = nullptr, const char *name = nullptr,
+               const Units::Base *unit = UNIT_UNSPECIFIED,
                const char *desc = nullptr)
-        : DataWrap<Derived, ScalarInfoProxy>(parent, name, desc)
+        : DataWrap<Derived, ScalarInfoProxy>(parent, name, unit, desc)
     {
         this->doInit();
     }
@@ -755,13 +596,17 @@ class ScalarBase : public DataWrap<Derived, ScalarInfoProxy>
      */
     size_type size() const { return 1; }
 
-    Counter value() { return data()->value(); }
+    /**
+     * Return the current value of this stat as its base type.
+     * @return The current value.
+     */
+    Counter value() const { return data()->value(); }
 
-    Result result() { return data()->result(); }
+    Result result() const { return data()->result(); }
 
-    Result total() { return result(); }
+    Result total() const { return result(); }
 
-    bool zero() { return result() == 0.0; }
+    bool zero() const { return result() == 0.0; }
 
     void reset() { data()->reset(this->info()); }
     void prepare() { data()->prepare(this->info()); }
@@ -793,7 +638,7 @@ class ValueProxy : public ProxyInfo
     Result total() const { return *scalar; }
 };
 
-template <class T>
+template <class T, class Enabled=void>
 class FunctorProxy : public ProxyInfo
 {
   private:
@@ -804,6 +649,27 @@ class FunctorProxy : public ProxyInfo
     Counter value() const { return (*functor)(); }
     Result result() const { return (*functor)(); }
     Result total() const { return (*functor)(); }
+};
+
+/**
+ * Template specialization for type std::function<Result()> which holds a copy
+ * of its target instead of a pointer to it. This makes it possible to use a
+ * lambda or other type inline without having to keep track of an instance
+ * somewhere else.
+ */
+template <class T>
+class FunctorProxy<T,
+    typename std::enable_if_t<std::is_constructible<std::function<Result()>,
+        const T &>::value>> : public ProxyInfo
+{
+  private:
+    std::function<Result()> functor;
+
+  public:
+    FunctorProxy(const T &func) : functor(func) {}
+    Counter value() const { return functor(); }
+    Result result() const { return functor(); }
+    Result total() const { return functor(); }
 };
 
 /**
@@ -832,8 +698,10 @@ class ValueBase : public DataWrap<Derived, ScalarInfoProxy>
     ProxyInfo *proxy;
 
   public:
-    ValueBase(Group *parent, const char *name, const char *desc)
-        : DataWrap<Derived, ScalarInfoProxy>(parent, name, desc),
+    ValueBase(Group *parent, const char *name,
+              const Units::Base *unit,
+              const char *desc)
+        : DataWrap<Derived, ScalarInfoProxy>(parent, name, unit, desc),
           proxy(NULL)
     {
     }
@@ -845,6 +713,15 @@ class ValueBase : public DataWrap<Derived, ScalarInfoProxy>
     scalar(T &value)
     {
         proxy = new ValueProxy<T>(value);
+        this->setInit();
+        return this->self();
+    }
+
+    template <class T>
+    Derived &
+    functor(const T &func)
+    {
+        proxy = new FunctorProxy<T>(func);
         this->setInit();
         return this->self();
     }
@@ -1125,8 +1002,10 @@ class VectorBase : public DataWrapVec<Derived, VectorInfoProxy>
     }
 
   public:
-    VectorBase(Group *parent, const char *name, const char *desc)
-        : DataWrapVec<Derived, VectorInfoProxy>(parent, name, desc),
+    VectorBase(Group *parent, const char *name,
+               const Units::Base *unit,
+               const char *desc)
+        : DataWrapVec<Derived, VectorInfoProxy>(parent, name, unit, desc),
           storage(nullptr), _size(0)
     {}
 
@@ -1161,7 +1040,7 @@ class VectorBase : public DataWrapVec<Derived, VectorInfoProxy>
     Proxy
     operator[](off_type index)
     {
-        assert (index >= 0 && index < size());
+        assert (index < size());
         return Proxy(this->self(), index);
     }
 };
@@ -1235,7 +1114,7 @@ class VectorProxy
     ScalarProxy<Stat>
     operator[](off_type index)
     {
-        assert (index >= 0 && index < size());
+        assert (index < size());
         return ScalarProxy<Stat>(stat, offset + index);
     }
 
@@ -1266,8 +1145,10 @@ class Vector2dBase : public DataWrapVec2d<Derived, Vector2dInfoProxy>
     const Storage *data(off_type index) const { return &storage[index]; }
 
   public:
-    Vector2dBase(Group *parent, const char *name, const char *desc)
-        : DataWrapVec2d<Derived, Vector2dInfoProxy>(parent, name, desc),
+    Vector2dBase(Group *parent, const char *name,
+                 const Units::Base *unit,
+                 const char *desc)
+        : DataWrapVec2d<Derived, Vector2dInfoProxy>(parent, name, unit, desc),
           x(0), y(0), _size(0), storage(nullptr)
     {}
 
@@ -1311,7 +1192,7 @@ class Vector2dBase : public DataWrapVec2d<Derived, Vector2dInfoProxy>
     operator[](off_type index)
     {
         off_type offset = index * y;
-        assert (index >= 0 && offset + y <= size());
+        assert (offset + y <= size());
         return Proxy(this->self(), offset, y);
     }
 
@@ -1379,462 +1260,6 @@ class Vector2dBase : public DataWrapVec2d<Derived, Vector2dInfoProxy>
 // Non formula statistics
 //
 //////////////////////////////////////////////////////////////////////
-/** The parameters for a distribution stat. */
-struct DistParams : public StorageParams
-{
-    const DistType type;
-    DistParams(DistType t) : type(t) {}
-};
-
-/**
- * Templatized storage and interface for a distribution stat.
- */
-class DistStor
-{
-  public:
-    /** The parameters for a distribution stat. */
-    struct Params : public DistParams
-    {
-        /** The minimum value to track. */
-        Counter min;
-        /** The maximum value to track. */
-        Counter max;
-        /** The number of entries in each bucket. */
-        Counter bucket_size;
-        /** The number of buckets. Equal to (max-min)/bucket_size. */
-        size_type buckets;
-
-        Params() : DistParams(Dist), min(0), max(0), bucket_size(0),
-                   buckets(0) {}
-    };
-
-  private:
-    /** The minimum value to track. */
-    Counter min_track;
-    /** The maximum value to track. */
-    Counter max_track;
-    /** The number of entries in each bucket. */
-    Counter bucket_size;
-
-    /** The smallest value sampled. */
-    Counter min_val;
-    /** The largest value sampled. */
-    Counter max_val;
-    /** The number of values sampled less than min. */
-    Counter underflow;
-    /** The number of values sampled more than max. */
-    Counter overflow;
-    /** The current sum. */
-    Counter sum;
-    /** The sum of squares. */
-    Counter squares;
-    /** The number of samples. */
-    Counter samples;
-    /** Counter for each bucket. */
-    VCounter cvec;
-
-  public:
-    DistStor(Info *info)
-        : cvec(safe_cast<const Params *>(info->storageParams)->buckets)
-    {
-        reset(info);
-    }
-
-    /**
-     * Add a value to the distribution for the given number of times.
-     * @param val The value to add.
-     * @param number The number of times to add the value.
-     */
-    void
-    sample(Counter val, int number)
-    {
-        if (val < min_track)
-            underflow += number;
-        else if (val > max_track)
-            overflow += number;
-        else {
-            size_type index =
-                (size_type)std::floor((val - min_track) / bucket_size);
-            assert(index < size());
-            cvec[index] += number;
-        }
-
-        if (val < min_val)
-            min_val = val;
-
-        if (val > max_val)
-            max_val = val;
-
-        sum += val * number;
-        squares += val * val * number;
-        samples += number;
-    }
-
-    /**
-     * Return the number of buckets in this distribution.
-     * @return the number of buckets.
-     */
-    size_type size() const { return cvec.size(); }
-
-    /**
-     * Returns true if any calls to sample have been made.
-     * @return True if any values have been sampled.
-     */
-    bool
-    zero() const
-    {
-        return samples == Counter();
-    }
-
-    void
-    prepare(Info *info, DistData &data)
-    {
-        const Params *params = safe_cast<const Params *>(info->storageParams);
-
-        assert(params->type == Dist);
-        data.type = params->type;
-        data.min = params->min;
-        data.max = params->max;
-        data.bucket_size = params->bucket_size;
-
-        data.min_val = (min_val == CounterLimits::max()) ? 0 : min_val;
-        data.max_val = (max_val == CounterLimits::min()) ? 0 : max_val;
-        data.underflow = underflow;
-        data.overflow = overflow;
-
-        data.cvec.resize(params->buckets);
-        for (off_type i = 0; i < params->buckets; ++i)
-            data.cvec[i] = cvec[i];
-
-        data.sum = sum;
-        data.squares = squares;
-        data.samples = samples;
-    }
-
-    /**
-     * Reset stat value to default
-     */
-    void
-    reset(Info *info)
-    {
-        const Params *params = safe_cast<const Params *>(info->storageParams);
-        min_track = params->min;
-        max_track = params->max;
-        bucket_size = params->bucket_size;
-
-        min_val = CounterLimits::max();
-        max_val = CounterLimits::min();
-        underflow = Counter();
-        overflow = Counter();
-
-        size_type size = cvec.size();
-        for (off_type i = 0; i < size; ++i)
-            cvec[i] = Counter();
-
-        sum = Counter();
-        squares = Counter();
-        samples = Counter();
-    }
-};
-
-/**
- * Templatized storage and interface for a histogram stat.
- */
-class HistStor
-{
-  public:
-    /** The parameters for a distribution stat. */
-    struct Params : public DistParams
-    {
-        /** The number of buckets.. */
-        size_type buckets;
-
-        Params() : DistParams(Hist), buckets(0) {}
-    };
-
-  private:
-    /** The minimum value to track. */
-    Counter min_bucket;
-    /** The maximum value to track. */
-    Counter max_bucket;
-    /** The number of entries in each bucket. */
-    Counter bucket_size;
-
-    /** The current sum. */
-    Counter sum;
-    /** The sum of logarithm of each sample, used to compute geometric mean. */
-    Counter logs;
-    /** The sum of squares. */
-    Counter squares;
-    /** The number of samples. */
-    Counter samples;
-    /** Counter for each bucket. */
-    VCounter cvec;
-
-  public:
-    HistStor(Info *info)
-        : cvec(safe_cast<const Params *>(info->storageParams)->buckets)
-    {
-        reset(info);
-    }
-
-    void grow_up();
-    void grow_out();
-    void grow_convert();
-    void add(HistStor *);
-
-    /**
-     * Add a value to the distribution for the given number of times.
-     * @param val The value to add.
-     * @param number The number of times to add the value.
-     */
-    void
-    sample(Counter val, int number)
-    {
-        assert(min_bucket < max_bucket);
-        if (val < min_bucket) {
-            if (min_bucket == 0)
-                grow_convert();
-
-            while (val < min_bucket)
-                grow_out();
-        } else if (val >= max_bucket + bucket_size) {
-            if (min_bucket == 0) {
-                while (val >= max_bucket + bucket_size)
-                    grow_up();
-            } else {
-                while (val >= max_bucket + bucket_size)
-                    grow_out();
-            }
-        }
-
-        size_type index =
-            (int64_t)std::floor((val - min_bucket) / bucket_size);
-
-        assert(index < size());
-        cvec[index] += number;
-
-        sum += val * number;
-        squares += val * val * number;
-        logs += log(val) * number;
-        samples += number;
-    }
-
-    /**
-     * Return the number of buckets in this distribution.
-     * @return the number of buckets.
-     */
-    size_type size() const { return cvec.size(); }
-
-    /**
-     * Returns true if any calls to sample have been made.
-     * @return True if any values have been sampled.
-     */
-    bool
-    zero() const
-    {
-        return samples == Counter();
-    }
-
-    void
-    prepare(Info *info, DistData &data)
-    {
-        const Params *params = safe_cast<const Params *>(info->storageParams);
-
-        assert(params->type == Hist);
-        data.type = params->type;
-        data.min = min_bucket;
-        data.max = max_bucket + bucket_size - 1;
-        data.bucket_size = bucket_size;
-
-        data.min_val = min_bucket;
-        data.max_val = max_bucket;
-
-        int buckets = params->buckets;
-        data.cvec.resize(buckets);
-        for (off_type i = 0; i < buckets; ++i)
-            data.cvec[i] = cvec[i];
-
-        data.sum = sum;
-        data.logs = logs;
-        data.squares = squares;
-        data.samples = samples;
-    }
-
-    /**
-     * Reset stat value to default
-     */
-    void
-    reset(Info *info)
-    {
-        const Params *params = safe_cast<const Params *>(info->storageParams);
-        min_bucket = 0;
-        max_bucket = params->buckets - 1;
-        bucket_size = 1;
-
-        size_type size = cvec.size();
-        for (off_type i = 0; i < size; ++i)
-            cvec[i] = Counter();
-
-        sum = Counter();
-        squares = Counter();
-        samples = Counter();
-        logs = Counter();
-    }
-};
-
-/**
- * Templatized storage and interface for a distribution that calculates mean
- * and variance.
- */
-class SampleStor
-{
-  public:
-    struct Params : public DistParams
-    {
-        Params() : DistParams(Deviation) {}
-    };
-
-  private:
-    /** The current sum. */
-    Counter sum;
-    /** The sum of squares. */
-    Counter squares;
-    /** The number of samples. */
-    Counter samples;
-
-  public:
-    /**
-     * Create and initialize this storage.
-     */
-    SampleStor(Info *info)
-        : sum(Counter()), squares(Counter()), samples(Counter())
-    { }
-
-    /**
-     * Add a value the given number of times to this running average.
-     * Update the running sum and sum of squares, increment the number of
-     * values seen by the given number.
-     * @param val The value to add.
-     * @param number The number of times to add the value.
-     */
-    void
-    sample(Counter val, int number)
-    {
-        sum += val * number;
-        squares += val * val * number;
-        samples += number;
-    }
-
-    /**
-     * Return the number of entries in this stat, 1
-     * @return 1.
-     */
-    size_type size() const { return 1; }
-
-    /**
-     * Return true if no samples have been added.
-     * @return True if no samples have been added.
-     */
-    bool zero() const { return samples == Counter(); }
-
-    void
-    prepare(Info *info, DistData &data)
-    {
-        const Params *params = safe_cast<const Params *>(info->storageParams);
-
-        assert(params->type == Deviation);
-        data.type = params->type;
-        data.sum = sum;
-        data.squares = squares;
-        data.samples = samples;
-    }
-
-    /**
-     * Reset stat value to default
-     */
-    void
-    reset(Info *info)
-    {
-        sum = Counter();
-        squares = Counter();
-        samples = Counter();
-    }
-};
-
-/**
- * Templatized storage for distribution that calculates per tick mean and
- * variance.
- */
-class AvgSampleStor
-{
-  public:
-    struct Params : public DistParams
-    {
-        Params() : DistParams(Deviation) {}
-    };
-
-  private:
-    /** Current total. */
-    Counter sum;
-    /** Current sum of squares. */
-    Counter squares;
-
-  public:
-    /**
-     * Create and initialize this storage.
-     */
-    AvgSampleStor(Info *info)
-        : sum(Counter()), squares(Counter())
-    {}
-
-    /**
-     * Add a value to the distribution for the given number of times.
-     * Update the running sum and sum of squares.
-     * @param val The value to add.
-     * @param number The number of times to add the value.
-     */
-    void
-    sample(Counter val, int number)
-    {
-        sum += val * number;
-        squares += val * val * number;
-    }
-
-    /**
-     * Return the number of entries, in this case 1.
-     * @return 1.
-     */
-    size_type size() const { return 1; }
-
-    /**
-     * Return true if no samples have been added.
-     * @return True if the sum is zero.
-     */
-    bool zero() const { return sum == Counter(); }
-
-    void
-    prepare(Info *info, DistData &data)
-    {
-        const Params *params = safe_cast<const Params *>(info->storageParams);
-
-        assert(params->type == Deviation);
-        data.type = params->type;
-        data.sum = sum;
-        data.squares = squares;
-        data.samples = curTick();
-    }
-
-    /**
-     * Reset stat value to default
-     */
-    void
-    reset(Info *info)
-    {
-        sum = Counter();
-        squares = Counter();
-    }
-};
 
 /**
  * Implementation of a distribution stat. The type of distribution is
@@ -1850,7 +1275,7 @@ class DistBase : public DataWrap<Derived, DistInfoProxy>
 
   protected:
     /** The storage for this stat. */
-    char storage[sizeof(Storage)] __attribute__ ((aligned (8)));
+    M5_ALIGNED(8) char storage[sizeof(Storage)];
 
   protected:
     /**
@@ -1881,8 +1306,10 @@ class DistBase : public DataWrap<Derived, DistInfoProxy>
     }
 
   public:
-    DistBase(Group *parent, const char *name, const char *desc)
-        : DataWrap<Derived, DistInfoProxy>(parent, name, desc)
+    DistBase(Group *parent, const char *name,
+             const Units::Base *unit,
+             const char *desc)
+        : DataWrap<Derived, DistInfoProxy>(parent, name, unit, desc)
     {
     }
 
@@ -1926,7 +1353,6 @@ class DistBase : public DataWrap<Derived, DistInfoProxy>
      *  Add the argument distribution to the this distribution.
      */
     void add(DistBase &d) { data()->add(d.data()); }
-
 };
 
 template <class Stat>
@@ -1978,8 +1404,10 @@ class VectorDistBase : public DataWrapVec<Derived, VectorDistInfoProxy>
     }
 
   public:
-    VectorDistBase(Group *parent, const char *name, const char *desc)
-        : DataWrapVec<Derived, VectorDistInfoProxy>(parent, name, desc),
+    VectorDistBase(Group *parent, const char *name,
+                   const Units::Base *unit,
+                   const char *desc)
+        : DataWrapVec<Derived, VectorDistInfoProxy>(parent, name, unit, desc),
           storage(NULL)
     {}
 
@@ -1995,7 +1423,7 @@ class VectorDistBase : public DataWrapVec<Derived, VectorDistInfoProxy>
 
     Proxy operator[](off_type index)
     {
-        assert(index >= 0 && index < size());
+        assert(index < size());
         return Proxy(this->self(), index);
     }
 
@@ -2507,9 +1935,20 @@ class Scalar : public ScalarBase<Scalar, StatStor>
   public:
     using ScalarBase<Scalar, StatStor>::operator=;
 
-    Scalar(Group *parent = nullptr, const char *name = nullptr,
+    Scalar(Group *parent = nullptr)
+        : ScalarBase<Scalar, StatStor>(parent, nullptr, UNIT_UNSPECIFIED,
+                                       nullptr)
+    {
+    }
+
+    Scalar(Group *parent, const char *name, const char *desc = nullptr)
+        : ScalarBase<Scalar, StatStor>(parent, name, UNIT_UNSPECIFIED, desc)
+    {
+    }
+
+    Scalar(Group *parent, const char *name, const Units::Base *unit,
            const char *desc = nullptr)
-        : ScalarBase<Scalar, StatStor>(parent, name, desc)
+        : ScalarBase<Scalar, StatStor>(parent, name, unit, desc)
     {
     }
 };
@@ -2523,9 +1962,20 @@ class Average : public ScalarBase<Average, AvgStor>
   public:
     using ScalarBase<Average, AvgStor>::operator=;
 
-    Average(Group *parent = nullptr, const char *name = nullptr,
+    Average(Group *parent = nullptr)
+        : ScalarBase<Average, AvgStor>(parent, nullptr, UNIT_UNSPECIFIED,
+                                       nullptr)
+    {
+    }
+
+    Average(Group *parent, const char *name, const char *desc = nullptr)
+        : ScalarBase<Average, AvgStor>(parent, name, UNIT_UNSPECIFIED, desc)
+    {
+    }
+
+    Average(Group *parent, const char *name, const Units::Base *unit,
             const char *desc = nullptr)
-        : ScalarBase<Average, AvgStor>(parent, name, desc)
+        : ScalarBase<Average, AvgStor>(parent, name, unit, desc)
     {
     }
 };
@@ -2533,9 +1983,19 @@ class Average : public ScalarBase<Average, AvgStor>
 class Value : public ValueBase<Value>
 {
   public:
-    Value(Group *parent = nullptr, const char *name = nullptr,
+    Value(Group *parent = nullptr)
+        : ValueBase<Value>(parent, nullptr, UNIT_UNSPECIFIED, nullptr)
+    {
+    }
+
+    Value(Group *parent, const char *name, const char *desc = nullptr)
+        : ValueBase<Value>(parent, name, UNIT_UNSPECIFIED, desc)
+    {
+    }
+
+    Value(Group *parent, const char *name, const Units::Base *unit,
           const char *desc = nullptr)
-        : ValueBase<Value>(parent, name, desc)
+        : ValueBase<Value>(parent, name, unit, desc)
     {
     }
 };
@@ -2547,9 +2007,20 @@ class Value : public ValueBase<Value>
 class Vector : public VectorBase<Vector, StatStor>
 {
   public:
-    Vector(Group *parent = nullptr, const char *name = nullptr,
+    Vector(Group *parent = nullptr)
+        : VectorBase<Vector, StatStor>(parent, nullptr, UNIT_UNSPECIFIED,
+                                       nullptr)
+    {
+    }
+
+    Vector(Group *parent, const char *name, const char *desc = nullptr)
+        : VectorBase<Vector, StatStor>(parent, name, UNIT_UNSPECIFIED, desc)
+    {
+    }
+
+    Vector(Group *parent, const char *name, const Units::Base *unit,
            const char *desc = nullptr)
-        : VectorBase<Vector, StatStor>(parent, name, desc)
+        : VectorBase<Vector, StatStor>(parent, name, unit, desc)
     {
     }
 };
@@ -2561,9 +2032,21 @@ class Vector : public VectorBase<Vector, StatStor>
 class AverageVector : public VectorBase<AverageVector, AvgStor>
 {
   public:
-    AverageVector(Group *parent = nullptr, const char *name = nullptr,
+    AverageVector(Group *parent = nullptr)
+        : VectorBase<AverageVector, AvgStor>(parent, nullptr, UNIT_UNSPECIFIED,
+                                             nullptr)
+    {
+    }
+
+    AverageVector(Group *parent, const char *name, const char *desc = nullptr)
+        : VectorBase<AverageVector, AvgStor>(parent, name, UNIT_UNSPECIFIED,
+                                             desc)
+    {
+    }
+
+    AverageVector(Group *parent, const char *name, const Units::Base *unit,
                   const char *desc = nullptr)
-        : VectorBase<AverageVector, AvgStor>(parent, name, desc)
+        : VectorBase<AverageVector, AvgStor>(parent, name, unit, desc)
     {
     }
 };
@@ -2575,9 +2058,21 @@ class AverageVector : public VectorBase<AverageVector, AvgStor>
 class Vector2d : public Vector2dBase<Vector2d, StatStor>
 {
   public:
-    Vector2d(Group *parent = nullptr, const char *name = nullptr,
+    Vector2d(Group *parent = nullptr)
+        : Vector2dBase<Vector2d, StatStor>(parent, nullptr, UNIT_UNSPECIFIED,
+                                           nullptr)
+    {
+    }
+
+    Vector2d(Group *parent, const char *name, const char *desc = nullptr)
+        : Vector2dBase<Vector2d, StatStor>(parent, name, UNIT_UNSPECIFIED,
+                                           desc)
+    {
+    }
+
+    Vector2d(Group *parent, const char *name, const Units::Base *unit,
              const char *desc = nullptr)
-        : Vector2dBase<Vector2d, StatStor>(parent, name, desc)
+        : Vector2dBase<Vector2d, StatStor>(parent, name, unit, desc)
     {
     }
 };
@@ -2589,9 +2084,21 @@ class Vector2d : public Vector2dBase<Vector2d, StatStor>
 class Distribution : public DistBase<Distribution, DistStor>
 {
   public:
-    Distribution(Group *parent = nullptr, const char *name = nullptr,
+    Distribution(Group *parent = nullptr)
+        : DistBase<Distribution, DistStor>(parent, nullptr, UNIT_UNSPECIFIED,
+                                           nullptr)
+    {
+    }
+
+    Distribution(Group *parent, const char *name, const char *desc = nullptr)
+        : DistBase<Distribution, DistStor>(parent, name, UNIT_UNSPECIFIED,
+                                           desc)
+    {
+    }
+
+    Distribution(Group *parent, const char *name, const Units::Base *unit,
                  const char *desc = nullptr)
-        : DistBase<Distribution, DistStor>(parent, name, desc)
+        : DistBase<Distribution, DistStor>(parent, name, unit, desc)
     {
     }
 
@@ -2605,14 +2112,7 @@ class Distribution : public DistBase<Distribution, DistStor>
     Distribution &
     init(Counter min, Counter max, Counter bkt)
     {
-        DistStor::Params *params = new DistStor::Params;
-        params->min = min;
-        params->max = max;
-        params->bucket_size = bkt;
-        // Division by zero is especially serious in an Aarch64 host,
-        // where it gets rounded to allocate 32GiB RAM.
-        assert(bkt > 0);
-        params->buckets = (size_type)ceil((max - min + 1.0) / bkt);
+        DistStor::Params *params = new DistStor::Params(min, max, bkt);
         this->setParams(params);
         this->doInit();
         return this->self();
@@ -2626,9 +2126,21 @@ class Distribution : public DistBase<Distribution, DistStor>
 class Histogram : public DistBase<Histogram, HistStor>
 {
   public:
-    Histogram(Group *parent = nullptr, const char *name = nullptr,
+    Histogram(Group *parent = nullptr)
+        : DistBase<Histogram, HistStor>(parent, nullptr, UNIT_UNSPECIFIED,
+                                        nullptr)
+    {
+    }
+
+    Histogram(Group *parent, const char *name,
               const char *desc = nullptr)
-        : DistBase<Histogram, HistStor>(parent, name, desc)
+        : DistBase<Histogram, HistStor>(parent, name, UNIT_UNSPECIFIED, desc)
+    {
+    }
+
+    Histogram(Group *parent, const char *name, const Units::Base *unit,
+              const char *desc = nullptr)
+        : DistBase<Histogram, HistStor>(parent, name, unit, desc)
     {
     }
 
@@ -2640,8 +2152,7 @@ class Histogram : public DistBase<Histogram, HistStor>
     Histogram &
     init(size_type size)
     {
-        HistStor::Params *params = new HistStor::Params;
-        params->buckets = size;
+        HistStor::Params *params = new HistStor::Params(size);
         this->setParams(params);
         this->doInit();
         return this->self();
@@ -2658,9 +2169,28 @@ class StandardDeviation : public DistBase<StandardDeviation, SampleStor>
     /**
      * Construct and initialize this distribution.
      */
-    StandardDeviation(Group *parent = nullptr, const char *name = nullptr,
+    StandardDeviation(Group *parent = nullptr)
+        : DistBase<StandardDeviation, SampleStor>(parent, nullptr,
+                                                  UNIT_UNSPECIFIED, nullptr)
+    {
+        SampleStor::Params *params = new SampleStor::Params;
+        this->doInit();
+        this->setParams(params);
+    }
+
+    StandardDeviation(Group *parent, const char *name,
                       const char *desc = nullptr)
-        : DistBase<StandardDeviation, SampleStor>(parent, name, desc)
+        : DistBase<StandardDeviation, SampleStor>(parent, name,
+                                                  UNIT_UNSPECIFIED, desc)
+    {
+        SampleStor::Params *params = new SampleStor::Params;
+        this->doInit();
+        this->setParams(params);
+    }
+
+    StandardDeviation(Group *parent, const char *name, const Units::Base *unit,
+                      const char *desc = nullptr)
+        : DistBase<StandardDeviation, SampleStor>(parent, name, unit, desc)
     {
         SampleStor::Params *params = new SampleStor::Params;
         this->doInit();
@@ -2678,9 +2208,28 @@ class AverageDeviation : public DistBase<AverageDeviation, AvgSampleStor>
     /**
      * Construct and initialize this distribution.
      */
-    AverageDeviation(Group *parent = nullptr, const char *name = nullptr,
+    AverageDeviation(Group *parent = nullptr)
+        : DistBase<AverageDeviation, AvgSampleStor>(parent, nullptr,
+                                                    UNIT_UNSPECIFIED, nullptr)
+    {
+        AvgSampleStor::Params *params = new AvgSampleStor::Params;
+        this->doInit();
+        this->setParams(params);
+    }
+
+    AverageDeviation(Group *parent, const char *name,
                      const char *desc = nullptr)
-        : DistBase<AverageDeviation, AvgSampleStor>(parent, name, desc)
+        : DistBase<AverageDeviation, AvgSampleStor>(parent, name,
+                                                    UNIT_UNSPECIFIED, desc)
+    {
+        AvgSampleStor::Params *params = new AvgSampleStor::Params;
+        this->doInit();
+        this->setParams(params);
+    }
+
+    AverageDeviation(Group *parent, const char *name, const Units::Base *unit,
+                     const char *desc = nullptr)
+        : DistBase<AverageDeviation, AvgSampleStor>(parent, name, unit, desc)
     {
         AvgSampleStor::Params *params = new AvgSampleStor::Params;
         this->doInit();
@@ -2695,9 +2244,24 @@ class AverageDeviation : public DistBase<AverageDeviation, AvgSampleStor>
 class VectorDistribution : public VectorDistBase<VectorDistribution, DistStor>
 {
   public:
-    VectorDistribution(Group *parent = nullptr, const char *name = nullptr,
+    VectorDistribution(Group *parent = nullptr)
+        : VectorDistBase<VectorDistribution, DistStor>(parent, nullptr,
+            UNIT_UNSPECIFIED, nullptr)
+    {
+    }
+
+    VectorDistribution(Group *parent, const char *name,
                        const char *desc = nullptr)
-        : VectorDistBase<VectorDistribution, DistStor>(parent, name, desc)
+        : VectorDistBase<VectorDistribution, DistStor>(parent, name,
+                                                       UNIT_UNSPECIFIED, desc)
+    {
+    }
+
+    VectorDistribution(Group *parent, const char *name,
+                       const Units::Base *unit,
+                       const char *desc = nullptr)
+        : VectorDistBase<VectorDistribution, DistStor>(parent, name, unit,
+                                                       desc)
     {
     }
 
@@ -2712,11 +2276,7 @@ class VectorDistribution : public VectorDistBase<VectorDistribution, DistStor>
     VectorDistribution &
     init(size_type size, Counter min, Counter max, Counter bkt)
     {
-        DistStor::Params *params = new DistStor::Params;
-        params->min = min;
-        params->max = max;
-        params->bucket_size = bkt;
-        params->buckets = (size_type)ceil((max - min + 1.0) / bkt);
+        DistStor::Params *params = new DistStor::Params(min, max, bkt);
         this->setParams(params);
         this->doInit(size);
         return this->self();
@@ -2731,10 +2291,24 @@ class VectorStandardDeviation
     : public VectorDistBase<VectorStandardDeviation, SampleStor>
 {
   public:
-    VectorStandardDeviation(Group *parent = nullptr, const char *name = nullptr,
+    VectorStandardDeviation(Group *parent = nullptr)
+        : VectorDistBase<VectorStandardDeviation, SampleStor>(parent, nullptr,
+            UNIT_UNSPECIFIED, nullptr)
+    {
+    }
+
+    VectorStandardDeviation(Group *parent, const char *name,
                             const char *desc = nullptr)
         : VectorDistBase<VectorStandardDeviation, SampleStor>(parent, name,
-                                                              desc)
+            UNIT_UNSPECIFIED, desc)
+    {
+    }
+
+    VectorStandardDeviation(Group *parent, const char *name,
+                            const Units::Base *unit,
+                            const char *desc = nullptr)
+        : VectorDistBase<VectorStandardDeviation, SampleStor>(parent, name,
+                                                              unit, desc)
     {
     }
 
@@ -2761,10 +2335,24 @@ class VectorAverageDeviation
     : public VectorDistBase<VectorAverageDeviation, AvgSampleStor>
 {
   public:
-    VectorAverageDeviation(Group *parent = nullptr, const char *name = nullptr,
+    VectorAverageDeviation(Group *parent = nullptr)
+        : VectorDistBase<VectorAverageDeviation, AvgSampleStor>(parent,
+            nullptr, UNIT_UNSPECIFIED, nullptr)
+    {
+    }
+
+    VectorAverageDeviation(Group *parent, const char *name,
                            const char *desc = nullptr)
         : VectorDistBase<VectorAverageDeviation, AvgSampleStor>(parent, name,
-                                                                desc)
+            UNIT_UNSPECIFIED, desc)
+    {
+    }
+
+    VectorAverageDeviation(Group *parent, const char *name,
+                           const Units::Base *unit,
+                           const char *desc = nullptr)
+        : VectorDistBase<VectorAverageDeviation, AvgSampleStor>(parent, name,
+            unit, desc)
     {
     }
 
@@ -2859,8 +2447,10 @@ class SparseHistBase : public DataWrap<Derived, SparseHistInfoProxy>
     }
 
   public:
-    SparseHistBase(Group *parent, const char *name, const char *desc)
-        : DataWrap<Derived, SparseHistInfoProxy>(parent, name, desc)
+    SparseHistBase(Group *parent, const char *name,
+                   const Units::Base *unit,
+                   const char *desc)
+        : DataWrap<Derived, SparseHistInfoProxy>(parent, name, unit, desc)
     {
     }
 
@@ -2901,87 +2491,26 @@ class SparseHistBase : public DataWrap<Derived, SparseHistInfoProxy>
     }
 };
 
-/**
- * Templatized storage and interface for a sparse histogram stat.
- */
-class SparseHistStor
-{
-  public:
-    /** The parameters for a sparse histogram stat. */
-    struct Params : public DistParams
-    {
-        Params() : DistParams(Hist) {}
-    };
-
-  private:
-    /** Counter for number of samples */
-    Counter samples;
-    /** Counter for each bucket. */
-    MCounter cmap;
-
-  public:
-    SparseHistStor(Info *info)
-    {
-        reset(info);
-    }
-
-    /**
-     * Add a value to the distribution for the given number of times.
-     * @param val The value to add.
-     * @param number The number of times to add the value.
-     */
-    void
-    sample(Counter val, int number)
-    {
-        cmap[val] += number;
-        samples += number;
-    }
-
-    /**
-     * Return the number of buckets in this distribution.
-     * @return the number of buckets.
-     */
-    size_type size() const { return cmap.size(); }
-
-    /**
-     * Returns true if any calls to sample have been made.
-     * @return True if any values have been sampled.
-     */
-    bool
-    zero() const
-    {
-        return samples == Counter();
-    }
-
-    void
-    prepare(Info *info, SparseHistData &data)
-    {
-        MCounter::iterator it;
-        data.cmap.clear();
-        for (it = cmap.begin(); it != cmap.end(); it++) {
-            data.cmap[(*it).first] = (*it).second;
-        }
-
-        data.samples = samples;
-    }
-
-    /**
-     * Reset stat value to default
-     */
-    void
-    reset(Info *info)
-    {
-        cmap.clear();
-        samples = 0;
-    }
-};
-
 class SparseHistogram : public SparseHistBase<SparseHistogram, SparseHistStor>
 {
   public:
-    SparseHistogram(Group *parent = nullptr, const char *name = nullptr,
+    SparseHistogram(Group *parent = nullptr)
+        : SparseHistBase<SparseHistogram, SparseHistStor>(parent, nullptr,
+            UNIT_UNSPECIFIED, nullptr)
+    {
+    }
+
+    SparseHistogram(Group *parent, const char *name,
                     const char *desc = nullptr)
-        : SparseHistBase<SparseHistogram, SparseHistStor>(parent, name, desc)
+        : SparseHistBase<SparseHistogram, SparseHistStor>(parent, name,
+            UNIT_UNSPECIFIED, desc)
+    {
+    }
+
+    SparseHistogram(Group *parent, const char *name, const Units::Base *unit,
+                    const char *desc = nullptr)
+        : SparseHistBase<SparseHistogram, SparseHistStor>(parent, name, unit,
+                                                          desc)
     {
     }
 
@@ -3020,8 +2549,14 @@ class Formula : public DataWrapVec<Formula, FormulaInfoProxy>
     Formula(Group *parent = nullptr, const char *name = nullptr,
             const char *desc = nullptr);
 
+    Formula(Group *parent, const char *name, const Units::Base *unit,
+            const char *desc = nullptr);
+
     Formula(Group *parent, const char *name, const char *desc,
             const Temp &r);
+
+    Formula(Group *parent, const char *name, const Units::Base *unit,
+            const char *desc, const Temp &r);
 
     /**
      * Set an unitialized Formula to the given root.
@@ -3364,13 +2899,13 @@ void registerHandlers(Handler reset_handler, Handler dump_handler);
  * Register a callback that should be called whenever statistics are
  * reset
  */
-void registerResetCallback(Callback *cb);
+void registerResetCallback(const std::function<void()> &callback);
 
 /**
  * Register a callback that should be called whenever statistics are
  * about to be dumped
  */
-void registerDumpCallback(Callback *cb);
+void registerDumpCallback(const std::function<void()> &callback);
 
 /**
  * Process all the callbacks in the reset callbacks queue
@@ -3386,11 +2921,6 @@ std::list<Info *> &statsList();
 
 typedef std::map<const void *, Info *> MapType;
 MapType &statsMap();
-
-typedef std::map<std::string, Info *> NameMapType;
-NameMapType &nameMap();
-
-bool validateStatName(const std::string &name);
 
 } // namespace Stats
 

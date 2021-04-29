@@ -136,13 +136,13 @@
 
 #include <string>
 
+#include "blobs/gdb_xml_power.hh"
 #include "cpu/thread_state.hh"
 #include "debug/GDBAcc.hh"
 #include "debug/GDBMisc.hh"
 #include "mem/page_table.hh"
 #include "sim/byteswap.hh"
 
-using namespace std;
 using namespace PowerISA;
 
 RemoteGDB::RemoteGDB(System *_system, ThreadContext *tc, int _port)
@@ -213,3 +213,19 @@ RemoteGDB::gdbRegs()
     return &regCache;
 }
 
+bool
+RemoteGDB::getXferFeaturesRead(const std::string &annex, std::string &output)
+{
+#define GDB_XML(x, s) \
+        { x, std::string(reinterpret_cast<const char *>(Blobs::s), \
+        Blobs::s ## _len) }
+    static const std::map<std::string, std::string> annexMap {
+        GDB_XML("target.xml", gdb_xml_power),
+    };
+#undef GDB_XML
+    auto it = annexMap.find(annex);
+    if (it == annexMap.end())
+        return false;
+    output = it->second;
+    return true;
+}

@@ -41,7 +41,7 @@ struct MemWatchProbeParams;
 class MemWatchProbe : public BaseMemProbe
 {
   public:
-    MemWatchProbe(MemWatchProbeParams *params);
+    MemWatchProbe(const MemWatchProbeParams &params);
 
   protected:
     void handleRequest(const ProbePoints::PacketInfo &pkt_info) override;

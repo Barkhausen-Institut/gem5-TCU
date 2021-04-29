@@ -58,14 +58,8 @@ TAGE_SC_L_LoopPredictor::optionalAgeInc() const
     return (random_mt.random<int>() & 7) == 0;
 }
 
-TAGE_SC_L_LoopPredictor *
-TAGE_SC_L_LoopPredictorParams::create()
-{
-    return new TAGE_SC_L_LoopPredictor(this);
-}
-
-TAGE_SC_L::TAGE_SC_L(const TAGE_SC_LParams *p)
-  : LTAGE(p), statisticalCorrector(p->statistical_corrector)
+TAGE_SC_L::TAGE_SC_L(const TAGE_SC_LParams &p)
+  : LTAGE(p), statisticalCorrector(p.statistical_corrector)
 {
 }
 
@@ -463,10 +457,4 @@ TAGE_SC_L::update(ThreadID tid, Addr branch_pc, bool taken, void *bp_history,
     }
 
     delete bi;
-}
-
-void
-TAGE_SC_L::regStats()
-{
-    LTAGE::regStats();
 }

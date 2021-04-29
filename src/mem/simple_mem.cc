@@ -44,10 +44,10 @@
 #include "base/trace.hh"
 #include "debug/Drain.hh"
 
-SimpleMemory::SimpleMemory(const SimpleMemoryParams* p) :
+SimpleMemory::SimpleMemory(const SimpleMemoryParams &p) :
     AbstractMemory(p),
-    port(name() + ".port", *this), latency(p->latency),
-    latency_var(p->latency_var), bandwidth(p->bandwidth), isBusy(false),
+    port(name() + ".port", *this), latency(p.latency),
+    latency_var(p.latency_var), bandwidth(p.bandwidth), isBusy(false),
     retryReq(false), retryResp(false),
     releaseEvent([this]{ release(); }, name()),
     dequeueEvent([this]{ dequeue(); }, name())
@@ -80,9 +80,7 @@ Tick
 SimpleMemory::recvAtomicBackdoor(PacketPtr pkt, MemBackdoorPtr &_backdoor)
 {
     Tick latency = recvAtomic(pkt);
-
-    if (backdoor.ptr())
-        _backdoor = &backdoor;
+    getBackdoor(_backdoor);
     return latency;
 }
 
@@ -154,7 +152,7 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
     // queue if there is one
     bool needsResponse = pkt->needsResponse();
     recvAtomic(pkt);
-    // turn packet around to go back to requester if response expected
+    // turn packet around to go back to requestor if response expected
     if (needsResponse) {
         // recvAtomic() should already have turned packet into
         // atomic response
@@ -260,7 +258,7 @@ SimpleMemory::drain()
 
 SimpleMemory::MemoryPort::MemoryPort(const std::string& _name,
                                      SimpleMemory& _memory)
-    : SlavePort(_name, &_memory), memory(_memory)
+    : ResponsePort(_name, &_memory), memory(_memory)
 { }
 
 AddrRangeList
@@ -300,10 +298,4 @@ void
 SimpleMemory::MemoryPort::recvRespRetry()
 {
     memory.recvRespRetry();
-}
-
-SimpleMemory*
-SimpleMemoryParams::create()
-{
-    return new SimpleMemory(this);
 }

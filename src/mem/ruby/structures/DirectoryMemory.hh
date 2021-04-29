@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017 ARM Limited
+ * Copyright (c) 2017,2019 ARM Limited
  * All rights reserved.
  *
  * The license below extends only to copyright in the software and shall
@@ -55,7 +55,7 @@ class DirectoryMemory : public SimObject
 {
   public:
     typedef RubyDirectoryMemoryParams Params;
-    DirectoryMemory(const Params *p);
+    DirectoryMemory(const Params &p);
     ~DirectoryMemory();
 
     void init();
@@ -78,6 +78,9 @@ class DirectoryMemory : public SimObject
     bool isPresent(Addr address);
     AbstractCacheEntry *lookup(Addr address);
     AbstractCacheEntry *allocate(Addr address, AbstractCacheEntry* new_entry);
+
+    // Explicitly free up this address
+    void deallocate(Addr address);
 
     void print(std::ostream& out) const;
     void recordRequestType(DirectoryRequestType requestType);

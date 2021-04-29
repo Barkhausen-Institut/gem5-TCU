@@ -50,13 +50,13 @@
 #include "params/Pl011.hh"
 #include "sim/sim_exit.hh"
 
-Pl011::Pl011(const Pl011Params *p)
+Pl011::Pl011(const Pl011Params &p)
     : Uart(p, 0x1000),
       intEvent([this]{ generateInterrupt(); }, name()),
       control(0x300), fbrd(0), ibrd(0), lcrh(0), ifls(0x12),
       imsc(0), rawInt(0),
-      gic(p->gic), endOnEOT(p->end_on_eot), intNum(p->int_num),
-      intDelay(p->int_delay)
+      endOnEOT(p.end_on_eot), interrupt(p.interrupt->get()),
+      intDelay(p.int_delay)
 {
 }
 
@@ -64,6 +64,7 @@ Tick
 Pl011::read(PacketPtr pkt)
 {
     assert(pkt->getAddr() >= pioAddr && pkt->getAddr() < pioAddr + pioSize);
+    assert(pkt->getSize() <= 4);
 
     Addr daddr = pkt->getAddr() - pioAddr;
 
@@ -137,7 +138,7 @@ Pl011::read(PacketPtr pkt)
       default:
         if (readId(pkt, AMBA_ID, pioAddr)) {
             // Hack for variable size accesses
-            data = pkt->getLE<uint32_t>();
+            data = pkt->getUintX(ByteOrder::little);
             break;
         }
 
@@ -145,22 +146,7 @@ Pl011::read(PacketPtr pkt)
         break;
     }
 
-    switch(pkt->getSize()) {
-      case 1:
-        pkt->setLE<uint8_t>(data);
-        break;
-      case 2:
-        pkt->setLE<uint16_t>(data);
-        break;
-      case 4:
-        pkt->setLE<uint32_t>(data);
-        break;
-      default:
-        panic("Uart read size too big?\n");
-        break;
-    }
-
-
+    pkt->setUintX(data, ByteOrder::little);
     pkt->makeAtomicResponse();
     return pioDelay;
 }
@@ -170,6 +156,7 @@ Pl011::write(PacketPtr pkt)
 {
 
     assert(pkt->getAddr() >= pioAddr && pkt->getAddr() < pioAddr + pioSize);
+    assert(pkt->getSize() <= 4);
 
     Addr daddr = pkt->getAddr() - pioAddr;
 
@@ -179,23 +166,7 @@ Pl011::write(PacketPtr pkt)
     // use a temporary data since the uart registers are read/written with
     // different size operations
     //
-    uint32_t data = 0;
-
-    switch(pkt->getSize()) {
-      case 1:
-        data = pkt->getLE<uint8_t>();
-        break;
-      case 2:
-        data = pkt->getLE<uint16_t>();
-        break;
-      case 4:
-        data = pkt->getLE<uint32_t>();
-        break;
-      default:
-        panic("Uart write size too big?\n");
-        break;
-    }
-
+    const uint32_t data = pkt->getUintX(ByteOrder::little);
 
     switch (daddr) {
         case UART_DR:
@@ -272,7 +243,7 @@ Pl011::generateInterrupt()
             imsc, rawInt, maskInt());
 
     if (maskInt()) {
-        gic->sendInt(intNum);
+        interrupt->raise();
         DPRINTF(Uart, " -- Generated\n");
     }
 }
@@ -289,7 +260,7 @@ Pl011::setInterrupts(uint16_t ints, uint16_t mask)
         if (!intEvent.scheduled())
             schedule(intEvent, curTick() + intDelay);
     } else if (old_ints && !maskInt()) {
-        gic->clearInt(intNum);
+        interrupt->clear();
     }
 }
 
@@ -324,10 +295,4 @@ Pl011::unserialize(CheckpointIn &cp)
     // Preserve backwards compatibility by giving these silly names.
     paramIn(cp, "imsc_serial", imsc);
     paramIn(cp, "rawInt_serial", rawInt);
-}
-
-Pl011 *
-Pl011Params::create()
-{
-    return new Pl011(this);
 }

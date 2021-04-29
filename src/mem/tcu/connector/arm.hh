@@ -38,7 +38,7 @@ class ArmConnector : public CoreConnector
 {
   public:
 
-    ArmConnector(const ArmConnectorParams *p);
+    ArmConnector(const ArmConnectorParams &p);
 
   private:
 

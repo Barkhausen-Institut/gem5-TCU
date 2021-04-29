@@ -39,14 +39,8 @@
 
 #include "arch/arm/system.hh"
 
-ArmISA::Interrupts *
-ArmInterruptsParams::create()
-{
-    return new ArmISA::Interrupts(this);
-}
-
 bool
-ArmISA::Interrupts::takeInt(ThreadContext *tc, InterruptTypes int_type) const
+ArmISA::Interrupts::takeInt(InterruptTypes int_type) const
 {
     // Table G1-17~19 of ARM V8 ARM
     InterruptMask mask;
@@ -64,7 +58,7 @@ ArmISA::Interrupts::takeInt(ThreadContext *tc, InterruptTypes int_type) const
     else
         scr = tc->readMiscReg(MISCREG_SCR_EL3);
 
-    bool is_secure = inSecureState(tc);
+    bool is_secure = isSecure(tc);
 
     switch(int_type) {
       case INT_FIQ:

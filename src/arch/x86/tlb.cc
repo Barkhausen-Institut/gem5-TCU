@@ -59,9 +59,9 @@
 
 namespace X86ISA {
 
-TLB::TLB(const Params *p)
-    : BaseTLB(p), configAddress(0), size(p->size),
-      tlb(size), lruSeq(0), m5opRange(p->system->m5opRange())
+TLB::TLB(const Params &p)
+    : BaseTLB(p), configAddress(0), size(p.size),
+      tlb(size), lruSeq(0), m5opRange(p.system->m5opRange()), stats(this)
 {
     if (!size)
         fatal("TLBs must have a non-zero size.\n");
@@ -71,7 +71,7 @@ TLB::TLB(const Params *p)
         freeList.push_back(&tlb[x]);
     }
 
-    walker = p->walker;
+    walker = p.walker;
     walker->setTLB(this);
 }
 
@@ -268,7 +268,7 @@ TLB::finalizePhysical(const RequestPtr &req,
             [func, mode](ThreadContext *tc, PacketPtr pkt) -> Cycles
             {
                 uint64_t ret;
-                PseudoInst::pseudoInst<X86PseudoInstABI>(tc, func, ret);
+                PseudoInst::pseudoInst<X86PseudoInstABI, true>(tc, func, ret);
                 if (mode == Read)
                     pkt->setLE(ret);
                 return Cycles(1);
@@ -373,18 +373,18 @@ TLB::translate(const RequestPtr &req,
             // The vaddr already has the segment base applied.
             TlbEntry *entry = lookup(vaddr);
             if (mode == Read) {
-                rdAccesses++;
+                stats.rdAccesses++;
             } else {
-                wrAccesses++;
+                stats.wrAccesses++;
             }
             if (!entry) {
                 DPRINTF(TLB, "Handling a TLB miss for "
                         "address %#x at pc %#x.\n",
                         vaddr, tc->instAddr());
                 if (mode == Read) {
-                    rdMisses++;
+                    stats.rdMisses++;
                 } else {
-                    wrMisses++;
+                    stats.wrMisses++;
                 }
                 if (FullSystem) {
                     Fault fault = walker->start(tc, translation, req, mode);
@@ -518,27 +518,13 @@ TLB::getWalker()
     return walker;
 }
 
-void
-TLB::regStats()
+TLB::TlbStats::TlbStats(Stats::Group *parent)
+  : Stats::Group(parent),
+    ADD_STAT(rdAccesses, UNIT_COUNT, "TLB accesses on read requests"),
+    ADD_STAT(wrAccesses, UNIT_COUNT, "TLB accesses on write requests"),
+    ADD_STAT(rdMisses, UNIT_COUNT, "TLB misses on read requests"),
+    ADD_STAT(wrMisses, UNIT_COUNT, "TLB misses on write requests")
 {
-    using namespace Stats;
-    BaseTLB::regStats();
-    rdAccesses
-        .name(name() + ".rdAccesses")
-        .desc("TLB accesses on read requests");
-
-    wrAccesses
-        .name(name() + ".wrAccesses")
-        .desc("TLB accesses on write requests");
-
-    rdMisses
-        .name(name() + ".rdMisses")
-        .desc("TLB misses on read requests");
-
-    wrMisses
-        .name(name() + ".wrMisses")
-        .desc("TLB misses on write requests");
-
 }
 
 void
@@ -585,9 +571,3 @@ TLB::getTableWalkerPort()
 }
 
 } // namespace X86ISA
-
-X86ISA::TLB *
-X86TLBParams::create()
-{
-    return new X86ISA::TLB(this);
-}

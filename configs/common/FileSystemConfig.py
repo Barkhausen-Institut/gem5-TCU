@@ -36,12 +36,11 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from __future__ import print_function
-
 import m5
 from m5.objects import *
 from m5.util.convert import *
 
+from functools import reduce
 import operator, os, platform, getpass
 from os import mkdir, makedirs, getpid, listdir, stat, access
 from pwd import getpwuid

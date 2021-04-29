@@ -44,6 +44,8 @@
 #include <memory>
 #include <vector>
 
+#include "arch/arm/aapcs32.hh"
+#include "arch/arm/aapcs64.hh"
 #include "kern/linux/events.hh"
 #include "params/ArmFsWorkload.hh"
 #include "sim/kernel_workload.hh"
@@ -86,13 +88,36 @@ class FsWorkload : public KernelWorkload
      */
     Loader::ObjectFile *getBootLoader(Loader::ObjectFile *const obj);
 
-  public:
-    typedef ArmFsWorkloadParams Params;
-    const Params *
-    params() const
+    template <template <class ABI, class Base> class FuncEvent,
+             typename... Args>
+    PCEvent *
+    addSkipFunc(Args... args)
     {
-        return dynamic_cast<const Params *>(&_params);
+        if (getArch() == Loader::Arm64) {
+            return addKernelFuncEvent<FuncEvent<Aapcs64, SkipFunc>>(
+                    std::forward<Args>(args)...);
+        } else {
+            return addKernelFuncEvent<FuncEvent<Aapcs32, SkipFunc>>(
+                    std::forward<Args>(args)...);
+        }
     }
+
+    template <template <class ABI, class Base> class FuncEvent,
+             typename... Args>
+    PCEvent *
+    addSkipFuncOrPanic(Args... args)
+    {
+        if (getArch() == Loader::Arm64) {
+            return addKernelFuncEventOrPanic<FuncEvent<Aapcs64, SkipFunc>>(
+                    std::forward<Args>(args)...);
+        } else {
+            return addKernelFuncEventOrPanic<FuncEvent<Aapcs32, SkipFunc>>(
+                    std::forward<Args>(args)...);
+        }
+    }
+
+  public:
+    PARAMS(ArmFsWorkload);
 
     Addr
     getEntry() const override
@@ -114,7 +139,7 @@ class FsWorkload : public KernelWorkload
             return Loader::Arm64;
     }
 
-    FsWorkload(Params *p);
+    FsWorkload(const Params &p);
 
     void initState() override;
 

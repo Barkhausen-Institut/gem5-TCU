@@ -80,18 +80,18 @@ TcuAccel::CpuPort::recvReqRetry()
     tcuaccel.recvRetry();
 }
 
-TcuAccel::TcuAccel(const TcuAccelParams *p)
+TcuAccel::TcuAccel(const TcuAccelParams &p)
   : ClockedObject(p),
-    system(p->system),
+    system(p.system),
     tickEvent(this),
     chunkSize(system->cacheLineSize()),
-    maxDataSize(p->max_data_size),
-    offset(p->offset),
+    maxDataSize(p.max_data_size),
+    offset(p.offset),
     port("port", this),
-    masterId(system->getMasterId(this, name())),
-    id(p->id),
+    requestorId(system->getRequestorId(this, name())),
+    id(p.id),
     atomic(system->isAtomicMode()),
-    reg_base(p->regfile_base_addr),
+    reg_base(p.regfile_base_addr),
     retryPkt(nullptr),
     connector()
 {
@@ -155,7 +155,7 @@ TcuAccel::createPacket(Addr paddr,
 {
     Request::Flags flags;
 
-    auto req = std::make_shared<Request>(paddr, size, flags, masterId);
+    auto req = std::make_shared<Request>(paddr, size, flags, requestorId);
     req->setContext(id);
 
     auto pkt = new Packet(req, cmd);

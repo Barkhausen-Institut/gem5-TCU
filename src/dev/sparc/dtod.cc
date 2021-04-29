@@ -44,12 +44,10 @@
 #include "mem/port.hh"
 #include "sim/system.hh"
 
-using namespace std;
-
-DumbTOD::DumbTOD(const Params *p)
+DumbTOD::DumbTOD(const Params &p)
     : BasicPioDevice(p, 0x08)
 {
-    struct tm tm = p->time;
+    struct tm tm = p.time;
     todTime = mkutctime(&tm);
 
     DPRINTFN("Real-time clock set to %s\n", asctime(&tm));
@@ -85,10 +83,4 @@ void
 DumbTOD::unserialize(CheckpointIn &cp)
 {
     UNSERIALIZE_SCALAR(todTime);
-}
-
-DumbTOD *
-DumbTODParams::create()
-{
-    return new DumbTOD(this);
 }

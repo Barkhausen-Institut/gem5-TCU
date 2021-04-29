@@ -43,6 +43,7 @@
 #ifndef __CPU_BASE_DYN_INST_HH__
 #define __CPU_BASE_DYN_INST_HH__
 
+#include <algorithm>
 #include <array>
 #include <bitset>
 #include <deque>
@@ -61,6 +62,7 @@
 #include "cpu/op_class.hh"
 #include "cpu/static_inst.hh"
 #include "cpu/translation.hh"
+#include "debug/HtmCpu.hh"
 #include "mem/packet.hh"
 #include "mem/request.hh"
 #include "sim/byteswap.hh"
@@ -78,7 +80,6 @@ class BaseDynInst : public ExecContext, public RefCounted
     // Typedef for the CPU.
     typedef typename Impl::CPUType ImplCPU;
     typedef typename ImplCPU::ImplState ImplState;
-    using VecRegContainer = TheISA::VecRegContainer;
 
     using LSQRequestPtr = typename Impl::CPUPol::LSQ::LSQRequest*;
     using LQIterator = typename Impl::CPUPol::LSQUnit::LQIterator;
@@ -90,11 +91,6 @@ class BaseDynInst : public ExecContext, public RefCounted
 
     // The list of instructions iterator type.
     typedef typename std::list<DynInstPtr>::iterator ListIt;
-
-    enum {
-        MaxInstSrcRegs = TheISA::MaxInstSrcRegs,        /// Max source regs
-        MaxInstDestRegs = TheISA::MaxInstDestRegs       /// Max dest regs
-    };
 
   protected:
     enum Status {
@@ -140,6 +136,7 @@ class BaseDynInst : public ExecContext, public RefCounted
         IsStrictlyOrdered,
         ReqMade,
         MemOpDone,
+        HtmFromTransaction,
         MaxFlags
     };
 
@@ -181,12 +178,168 @@ class BaseDynInst : public ExecContext, public RefCounted
     std::bitset<NumStatus> status;
 
   protected:
-     /** Whether or not the source register is ready.
-     *  @todo: Not sure this should be here vs the derived class.
+    /**
+     * Collect register related information into a single struct. The number of
+     * source and destination registers can vary, and storage for information
+     * about them needs to be allocated dynamically. This class figures out
+     * how much space is needed and allocates it all at once, and then
+     * trivially divies it up for each type of per-register array.
      */
-    std::bitset<MaxInstSrcRegs> _readySrcRegIdx;
+    struct Regs
+    {
+      private:
+        size_t _numSrcs;
+        size_t _numDests;
+
+        size_t srcsReady = 0;
+
+        using BackingStorePtr = std::unique_ptr<uint8_t[]>;
+        using BufCursor = BackingStorePtr::pointer;
+
+        BackingStorePtr buf;
+
+        // Members should be ordered based on required alignment so that they
+        // can be allocated contiguously.
+
+        // Flattened register index of the destination registers of this
+        // instruction.
+        RegId *_flatDestIdx;
+
+        // Physical register index of the destination registers of this
+        // instruction.
+        PhysRegIdPtr *_destIdx;
+
+        // Physical register index of the previous producers of the
+        // architected destinations.
+        PhysRegIdPtr *_prevDestIdx;
+
+        static inline size_t
+        bytesForDests(size_t num)
+        {
+            return (sizeof(RegId) + 2 * sizeof(PhysRegIdPtr)) * num;
+        }
+
+        // Physical register index of the source registers of this instruction.
+        PhysRegIdPtr *_srcIdx;
+
+        // Whether or not the source register is ready, one bit per register.
+        uint8_t *_readySrcIdx;
+
+        static inline size_t
+        bytesForSources(size_t num)
+        {
+            return sizeof(PhysRegIdPtr) * num +
+                sizeof(uint8_t) * ((num + 7) / 8);
+        }
+
+        template <class T>
+        static inline void
+        allocate(T *&ptr, BufCursor &cur, size_t count)
+        {
+            ptr = new (cur) T[count];
+            cur += sizeof(T) * count;
+        }
+
+      public:
+        size_t numSrcs() const { return _numSrcs; }
+        size_t numDests() const { return _numDests; }
+
+        void
+        init()
+        {
+            std::fill(_readySrcIdx, _readySrcIdx + (numSrcs() + 7) / 8, 0);
+        }
+
+        Regs(size_t srcs, size_t dests) : _numSrcs(srcs), _numDests(dests),
+            buf(new uint8_t[bytesForSources(srcs) + bytesForDests(dests)])
+        {
+            BufCursor cur = buf.get();
+            allocate(_flatDestIdx, cur, dests);
+            allocate(_destIdx, cur, dests);
+            allocate(_prevDestIdx, cur, dests);
+            allocate(_srcIdx, cur, srcs);
+            allocate(_readySrcIdx, cur, (srcs + 7) / 8);
+
+            init();
+        }
+
+        // Returns the flattened register index of the idx'th destination
+        // register.
+        const RegId &
+        flattenedDestIdx(int idx) const
+        {
+            return _flatDestIdx[idx];
+        }
+
+        // Flattens a destination architectural register index into a logical
+        // index.
+        void
+        flattenedDestIdx(int idx, const RegId &reg_id)
+        {
+            _flatDestIdx[idx] = reg_id;
+        }
+
+        // Returns the physical register index of the idx'th destination
+        // register.
+        PhysRegIdPtr
+        renamedDestIdx(int idx) const
+        {
+            return _destIdx[idx];
+        }
+
+        // Set the renamed dest register id.
+        void
+        renamedDestIdx(int idx, PhysRegIdPtr phys_reg_id)
+        {
+            _destIdx[idx] = phys_reg_id;
+        }
+
+        // Returns the physical register index of the previous physical
+        // register that remapped to the same logical register index.
+        PhysRegIdPtr
+        prevDestIdx(int idx) const
+        {
+            return _prevDestIdx[idx];
+        }
+
+        // Set the previous renamed dest register id.
+        void
+        prevDestIdx(int idx, PhysRegIdPtr phys_reg_id)
+        {
+            _prevDestIdx[idx] = phys_reg_id;
+        }
+
+        // Returns the physical register index of the i'th source register.
+        PhysRegIdPtr
+        renamedSrcIdx(int idx) const
+        {
+            return _srcIdx[idx];
+        }
+
+        void
+        renamedSrcIdx(int idx, PhysRegIdPtr phys_reg_id)
+        {
+            _srcIdx[idx] = phys_reg_id;
+        }
+
+        bool
+        readySrcIdx(int idx) const
+        {
+            uint8_t &byte = _readySrcIdx[idx / 8];
+            return bits(byte, idx % 8);
+        }
+
+        void
+        readySrcIdx(int idx, bool ready)
+        {
+            uint8_t &byte = _readySrcIdx[idx / 8];
+            replaceBits(byte, idx % 8, ready ? 1 : 0);
+        }
+    };
 
   public:
+    Regs regs;
+
     /** The thread this instruction is from. */
     ThreadID threadNumber;
 
@@ -221,11 +374,11 @@ class BaseDynInst : public ExecContext, public RefCounted
     uint8_t *memData;
 
     /** Load queue index. */
-    int16_t lqIdx;
+    ssize_t lqIdx;
     LQIterator lqIt;
 
     /** Store queue index. */
-    int16_t sqIdx;
+    ssize_t sqIdx;
     SQIterator sqIt;
 
 
@@ -240,27 +393,10 @@ class BaseDynInst : public ExecContext, public RefCounted
     // Need a copy of main request pointer to verify on writes.
     RequestPtr reqToVerify;
 
-  protected:
-    /** Flattened register index of the destination registers of this
-     *  instruction.
-     */
-    std::array<RegId, TheISA::MaxInstDestRegs> _flatDestRegIdx;
-
-    /** Physical register index of the destination registers of this
-     *  instruction.
-     */
-    std::array<PhysRegIdPtr, TheISA::MaxInstDestRegs> _destRegIdx;
-
-    /** Physical register index of the source registers of this
-     *  instruction.
-     */
-    std::array<PhysRegIdPtr, TheISA::MaxInstSrcRegs> _srcRegIdx;
-
-    /** Physical register index of the previous producers of the
-     *  architected destinations.
-     */
-    std::array<PhysRegIdPtr, TheISA::MaxInstDestRegs> _prevDestRegIdx;
-
+  private:
+    // hardware transactional memory
+    uint64_t htmUid;
+    uint64_t htmDepth;
 
   public:
     /** Records changes to result? */
@@ -284,28 +420,23 @@ class BaseDynInst : public ExecContext, public RefCounted
     //
     ////////////////////////////////////////////
 
-    void demapPage(Addr vaddr, uint64_t asn)
-    {
-        cpu->demapPage(vaddr, asn);
-    }
-    void demapInstPage(Addr vaddr, uint64_t asn)
-    {
-        cpu->demapPage(vaddr, asn);
-    }
-    void demapDataPage(Addr vaddr, uint64_t asn)
+    void
+    demapPage(Addr vaddr, uint64_t asn) override
     {
         cpu->demapPage(vaddr, asn);
     }
 
     Fault initiateMemRead(Addr addr, unsigned size, Request::Flags flags,
-            const std::vector<bool>& byte_enable = std::vector<bool>());
+            const std::vector<bool> &byte_enable) override;
+
+    Fault initiateHtmCmd(Request::Flags flags) override;
 
     Fault writeMem(uint8_t *data, unsigned size, Addr addr,
                    Request::Flags flags, uint64_t *res,
-                   const std::vector<bool>& byte_enable = std::vector<bool>());
+                   const std::vector<bool> &byte_enable) override;
 
     Fault initiateMemAMO(Addr addr, unsigned size, Request::Flags flags,
-                         AtomicOpFunctorPtr amo_op);
+                         AtomicOpFunctorPtr amo_op) override;
 
     /** True if the DTB address translation has started. */
     bool translationStarted() const { return instFlags[TranslationStarted]; }
@@ -320,8 +451,16 @@ class BaseDynInst : public ExecContext, public RefCounted
      * snoop invalidate modifies the line, in which case we need to squash.
      * If nothing modified the line the order doesn't matter.
      */
-    bool possibleLoadViolation() const { return instFlags[PossibleLoadViolation]; }
-    void possibleLoadViolation(bool f) { instFlags[PossibleLoadViolation] = f; }
+    bool
+    possibleLoadViolation() const
+    {
+        return instFlags[PossibleLoadViolation];
+    }
+    void
+    possibleLoadViolation(bool f)
+    {
+        instFlags[PossibleLoadViolation] = f;
+    }
 
     /** True if the address hit a external snoop while sitting in the LSQ.
      * If this is true and a older instruction sees it, this instruction must
@@ -334,7 +473,8 @@ class BaseDynInst : public ExecContext, public RefCounted
      * Returns true if the DTB address translation is being delayed due to a hw
      * page table walk.
      */
-    bool isTranslationDelayed() const
+    bool
+    isTranslationDelayed() const
     {
         return (translationStarted() && !translationCompleted());
     }
@@ -344,46 +484,15 @@ class BaseDynInst : public ExecContext, public RefCounted
     void dumpSNList();
 #endif
 
-    /** Returns the physical register index of the i'th destination
-     *  register.
-     */
-    PhysRegIdPtr renamedDestRegIdx(int idx) const
-    {
-        return _destRegIdx[idx];
-    }
-
-    /** Returns the physical register index of the i'th source register. */
-    PhysRegIdPtr renamedSrcRegIdx(int idx) const
-    {
-        assert(TheISA::MaxInstSrcRegs > idx);
-        return _srcRegIdx[idx];
-    }
-
-    /** Returns the flattened register index of the i'th destination
-     *  register.
-     */
-    const RegId& flattenedDestRegIdx(int idx) const
-    {
-        return _flatDestRegIdx[idx];
-    }
-
-    /** Returns the physical register index of the previous physical register
-     *  that remapped to the same logical register index.
-     */
-    PhysRegIdPtr prevDestRegIdx(int idx) const
-    {
-        return _prevDestRegIdx[idx];
-    }
-
     /** Renames a destination register to a physical register.  Also records
      *  the previous physical register that the logical register mapped to.
      */
-    void renameDestReg(int idx,
-                       PhysRegIdPtr renamed_dest,
-                       PhysRegIdPtr previous_rename)
+    void
+    renameDestReg(int idx, PhysRegIdPtr renamed_dest,
+                  PhysRegIdPtr previous_rename)
     {
-        _destRegIdx[idx] = renamed_dest;
-        _prevDestRegIdx[idx] = previous_rename;
+        regs.renamedDestIdx(idx, renamed_dest);
+        regs.prevDestIdx(idx, previous_rename);
         if (renamed_dest->isPinned())
             setPinnedRegsRenamed();
     }
@@ -392,18 +501,12 @@ class BaseDynInst : public ExecContext, public RefCounted
      *  has/will produce that logical register's result.
      *  @todo: add in whether or not the source register is ready.
      */
-    void renameSrcReg(int idx, PhysRegIdPtr renamed_src)
+    void
+    renameSrcReg(int idx, PhysRegIdPtr renamed_src)
     {
-        _srcRegIdx[idx] = renamed_src;
+        regs.renamedSrcIdx(idx, renamed_src);
     }
 
-    /** Flattens a destination architectural register index into a logical
-     * index.
-     */
-    void flattenDestReg(int idx, const RegId& flattened_dest)
-    {
-        _flatDestRegIdx[idx] = flattened_dest;
-    }
     /** BaseDynInst constructor given a binary instruction.
      *  @param staticInst A StaticInstPtr to the underlying instruction.
      *  @param pc The PC state for the instruction.
@@ -441,7 +544,7 @@ class BaseDynInst : public ExecContext, public RefCounted
     uint32_t socketId() const { return cpu->socketId(); }
 
     /** Read this CPU's data requestor ID */
-    MasterID masterId() const { return cpu->dataMasterId(); }
+    RequestorID requestorId() const { return cpu->dataRequestorId(); }
 
     /** Read this context's system-wide ID **/
     ContextID contextId() const { return thread->contextId(); }
@@ -460,10 +563,7 @@ class BaseDynInst : public ExecContext, public RefCounted
     bool doneTargCalc() { return false; }
 
     /** Set the predicted target of this current instruction. */
-    void setPredTarg(const TheISA::PCState &_predPC)
-    {
-        predPC = _predPC;
-    }
+    void setPredTarg(const TheISA::PCState &_predPC) { predPC = _predPC; }
 
     const TheISA::PCState &readPredTarg() { return predPC; }
 
@@ -477,18 +577,17 @@ class BaseDynInst : public ExecContext, public RefCounted
     Addr predMicroPC() { return predPC.microPC(); }
 
     /** Returns whether the instruction was predicted taken or not. */
-    bool readPredTaken()
-    {
-        return instFlags[PredTaken];
-    }
+    bool readPredTaken() { return instFlags[PredTaken]; }
 
-    void setPredTaken(bool predicted_taken)
+    void
+    setPredTaken(bool predicted_taken)
     {
         instFlags[PredTaken] = predicted_taken;
     }
 
     /** Returns whether the instruction mispredicted. */
-    bool mispredicted()
+    bool
+    mispredicted()
     {
         TheISA::PCState tempPC = pc;
         TheISA::advancePC(tempPC, staticInst);
@@ -517,19 +616,23 @@ class BaseDynInst : public ExecContext, public RefCounted
     bool isIndirectCtrl() const { return staticInst->isIndirectCtrl(); }
     bool isCondCtrl()     const { return staticInst->isCondCtrl(); }
     bool isUncondCtrl()   const { return staticInst->isUncondCtrl(); }
-    bool isCondDelaySlot() const { return staticInst->isCondDelaySlot(); }
-    bool isThreadSync()   const { return staticInst->isThreadSync(); }
     bool isSerializing()  const { return staticInst->isSerializing(); }
-    bool isSerializeBefore() const
-    { return staticInst->isSerializeBefore() || status[SerializeBefore]; }
-    bool isSerializeAfter() const
-    { return staticInst->isSerializeAfter() || status[SerializeAfter]; }
+    bool
+    isSerializeBefore() const
+    {
+        return staticInst->isSerializeBefore() || status[SerializeBefore];
+    }
+    bool
+    isSerializeAfter() const
+    {
+        return staticInst->isSerializeAfter() || status[SerializeAfter];
+    }
     bool isSquashAfter() const { return staticInst->isSquashAfter(); }
-    bool isMemBarrier()   const { return staticInst->isMemBarrier(); }
+    bool isFullMemBarrier()   const { return staticInst->isFullMemBarrier(); }
+    bool isReadBarrier() const { return staticInst->isReadBarrier(); }
     bool isWriteBarrier() const { return staticInst->isWriteBarrier(); }
     bool isNonSpeculative() const { return staticInst->isNonSpeculative(); }
     bool isQuiesce() const { return staticInst->isQuiesce(); }
-    bool isIprAccess() const { return staticInst->isIprAccess(); }
     bool isUnverifiable() const { return staticInst->isUnverifiable(); }
     bool isSyscall() const { return staticInst->isSyscall(); }
     bool isMacroop() const { return staticInst->isMacroop(); }
@@ -537,7 +640,62 @@ class BaseDynInst : public ExecContext, public RefCounted
     bool isDelayedCommit() const { return staticInst->isDelayedCommit(); }
     bool isLastMicroop() const { return staticInst->isLastMicroop(); }
     bool isFirstMicroop() const { return staticInst->isFirstMicroop(); }
-    bool isMicroBranch() const { return staticInst->isMicroBranch(); }
+    // hardware transactional memory
+    bool isHtmStart() const { return staticInst->isHtmStart(); }
+    bool isHtmStop() const { return staticInst->isHtmStop(); }
+    bool isHtmCancel() const { return staticInst->isHtmCancel(); }
+    bool isHtmCmd() const { return staticInst->isHtmCmd(); }
+
+    uint64_t
+    getHtmTransactionUid() const override
+    {
+        assert(instFlags[HtmFromTransaction]);
+        return this->htmUid;
+    }
+
+    uint64_t
+    newHtmTransactionUid() const override
+    {
+        panic("Not yet implemented\n");
+        return 0;
+    }
+
+    bool
+    inHtmTransactionalState() const override
+    {
+        return instFlags[HtmFromTransaction];
+    }
+
+    uint64_t
+    getHtmTransactionalDepth() const override
+    {
+        if (inHtmTransactionalState())
+            return this->htmDepth;
+        else
+            return 0;
+    }
+
+    void
+    setHtmTransactionalState(uint64_t htm_uid, uint64_t htm_depth)
+    {
+        instFlags.set(HtmFromTransaction);
+        htmUid = htm_uid;
+        htmDepth = htm_depth;
+    }
+
+    void
+    clearHtmTransactionalState()
+    {
+        if (inHtmTransactionalState()) {
+            DPRINTF(HtmCpu,
+                "clearing instuction's transactional state htmUid=%u\n",
+                getHtmTransactionUid());
+
+            instFlags.reset(HtmFromTransaction);
+            htmUid = -1;
+            htmDepth = 0;
+        }
+    }
 
     /** Temporarily sets this instruction as a serialize before instruction. */
     void setSerializeBefore() { status.set(SerializeBefore); }
@@ -575,10 +733,10 @@ class BaseDynInst : public ExecContext, public RefCounted
     { return staticInst->branchTarget(pc); }
 
     /** Returns the number of source registers. */
-    int8_t numSrcRegs() const { return staticInst->numSrcRegs(); }
+    size_t numSrcRegs() const { return regs.numSrcs(); }
 
     /** Returns the number of destination registers. */
-    int8_t numDestRegs() const { return staticInst->numDestRegs(); }
+    size_t numDestRegs() const { return regs.numDests(); }
 
     // the following are used to track physical register usage
     // for machines with separate int & FP reg files
@@ -586,7 +744,8 @@ class BaseDynInst : public ExecContext, public RefCounted
     int8_t numIntDestRegs() const { return staticInst->numIntDestRegs(); }
     int8_t numCCDestRegs() const { return staticInst->numCCDestRegs(); }
     int8_t numVecDestRegs() const { return staticInst->numVecDestRegs(); }
-    int8_t numVecElemDestRegs() const
+    int8_t
+    numVecElemDestRegs() const
     {
         return staticInst->numVecElemDestRegs();
     }
@@ -608,7 +767,8 @@ class BaseDynInst : public ExecContext, public RefCounted
     /** Pops a result off the instResult queue.
      * If the result stack is empty, return the default value.
      * */
-    InstResult popResult(InstResult dflt = InstResult())
+    InstResult
+    popResult(InstResult dflt=InstResult())
     {
         if (!instResult.empty()) {
             InstResult t = instResult.front();
@@ -622,7 +782,8 @@ class BaseDynInst : public ExecContext, public RefCounted
     /** @{ */
     /** Scalar result. */
     template<typename T>
-    void setScalarResult(T&& t)
+    void
+    setScalarResult(T &&t)
     {
         if (instFlags[RecordResult]) {
             instResult.push(InstResult(std::forward<T>(t),
@@ -632,7 +793,8 @@ class BaseDynInst : public ExecContext, public RefCounted
 
     /** Full vector result. */
     template<typename T>
-    void setVecResult(T&& t)
+    void
+    setVecResult(T &&t)
     {
         if (instFlags[RecordResult]) {
             instResult.push(InstResult(std::forward<T>(t),
@@ -642,7 +804,8 @@ class BaseDynInst : public ExecContext, public RefCounted
 
     /** Vector element result. */
     template<typename T>
-    void setVecElemResult(T&& t)
+    void
+    setVecElemResult(T &&t)
     {
         if (instFlags[RecordResult]) {
             instResult.push(InstResult(std::forward<T>(t),
@@ -652,7 +815,8 @@ class BaseDynInst : public ExecContext, public RefCounted
 
     /** Predicate result. */
     template<typename T>
-    void setVecPredResult(T&& t)
+    void
+    setVecPredResult(T &&t)
     {
         if (instFlags[RecordResult]) {
             instResult.push(InstResult(std::forward<T>(t),
@@ -662,40 +826,46 @@ class BaseDynInst : public ExecContext, public RefCounted
     /** @} */
 
     /** Records an integer register being set to a value. */
-    void setIntRegOperand(const StaticInst *si, int idx, RegVal val)
+    void
+    setIntRegOperand(const StaticInst *si, int idx, RegVal val) override
     {
         setScalarResult(val);
     }
 
     /** Records a CC register being set to a value. */
-    void setCCRegOperand(const StaticInst *si, int idx, RegVal val)
+    void
+    setCCRegOperand(const StaticInst *si, int idx, RegVal val) override
     {
         setScalarResult(val);
     }
 
     /** Record a vector register being set to a value */
-    void setVecRegOperand(const StaticInst *si, int idx,
-            const VecRegContainer& val)
+    void
+    setVecRegOperand(const StaticInst *si, int idx,
+                     const TheISA::VecRegContainer &val) override
     {
         setVecResult(val);
     }
 
     /** Records an fp register being set to an integer value. */
     void
-    setFloatRegOperandBits(const StaticInst *si, int idx, RegVal val)
+    setFloatRegOperandBits(const StaticInst *si, int idx, RegVal val) override
     {
         setScalarResult(val);
     }
 
     /** Record a vector register being set to a value */
-    void setVecElemOperand(const StaticInst *si, int idx, const VecElem val)
+    void
+    setVecElemOperand(const StaticInst *si, int idx,
+                      const TheISA::VecElem val) override
     {
         setVecElemResult(val);
     }
 
     /** Record a vector register being set to a value */
-    void setVecPredRegOperand(const StaticInst *si, int idx,
-                              const VecPredRegContainer& val)
+    void
+    setVecPredRegOperand(const StaticInst *si, int idx,
+                         const TheISA::VecPredRegContainer &val) override
     {
         setVecPredResult(val);
     }
@@ -705,12 +875,6 @@ class BaseDynInst : public ExecContext, public RefCounted
 
     /** Marks a specific register as ready. */
     void markSrcRegReady(RegIndex src_idx);
-
-    /** Returns if a source register is ready. */
-    bool isReadySrcRegIdx(int idx) const
-    {
-        return this->_readySrcRegIdx[idx];
-    }
 
     /** Sets this instruction as completed. */
     void setCompleted() { status.set(Completed); }
@@ -862,10 +1026,10 @@ class BaseDynInst : public ExecContext, public RefCounted
     }
 
     /** Read the PC state of this instruction. */
-    TheISA::PCState pcState() const { return pc; }
+    TheISA::PCState pcState() const override { return pc; }
 
     /** Set the PC state of this instruction. */
-    void pcState(const TheISA::PCState &val) { pc = val; }
+    void pcState(const TheISA::PCState &val) override { pc = val; }
 
     /** Read the PC of this instruction. */
     Addr instAddr() const { return pc.instAddr(); }
@@ -876,12 +1040,10 @@ class BaseDynInst : public ExecContext, public RefCounted
     /**Read the micro PC of this instruction. */
     Addr microPC() const { return pc.microPC(); }
 
-    bool readPredicate() const
-    {
-        return instFlags[Predicate];
-    }
+    bool readPredicate() const override { return instFlags[Predicate]; }
 
-    void setPredicate(bool val)
+    void
+    setPredicate(bool val) override
     {
         instFlags[Predicate] = val;
 
@@ -891,13 +1053,13 @@ class BaseDynInst : public ExecContext, public RefCounted
     }
 
     bool
-    readMemAccPredicate() const
+    readMemAccPredicate() const override
     {
         return instFlags[MemAccPredicate];
     }
 
     void
-    setMemAccPredicate(bool val)
+    setMemAccPredicate(bool val) override
     {
         instFlags[MemAccPredicate] = val;
     }
@@ -909,7 +1071,7 @@ class BaseDynInst : public ExecContext, public RefCounted
     void setThreadState(ImplState *state) { thread = state; }
 
     /** Returns the thread context. */
-    ThreadContext *tcBase() const { return thread->getTC(); }
+    ThreadContext *tcBase() const override { return thread->getTC(); }
 
   public:
     /** Returns whether or not the eff. addr. source registers are ready. */
@@ -932,47 +1094,76 @@ class BaseDynInst : public ExecContext, public RefCounted
 
   public:
     /** Returns the number of consecutive store conditional failures. */
-    unsigned int readStCondFailures() const
-    { return thread->storeCondFailures; }
+    unsigned int
+    readStCondFailures() const override
+    {
+        return thread->storeCondFailures;
+    }
 
     /** Sets the number of consecutive store conditional failures. */
-    void setStCondFailures(unsigned int sc_failures)
-    { thread->storeCondFailures = sc_failures; }
+    void
+    setStCondFailures(unsigned int sc_failures) override
+    {
+        thread->storeCondFailures = sc_failures;
+    }
 
   public:
     // monitor/mwait funtions
-    void armMonitor(Addr address) { cpu->armMonitor(threadNumber, address); }
-    bool mwait(PacketPtr pkt) { return cpu->mwait(threadNumber, pkt); }
-    void mwaitAtomic(ThreadContext *tc)
-    { return cpu->mwaitAtomic(threadNumber, tc, cpu->dtb); }
-    AddressMonitor *getAddrMonitor()
-    { return cpu->getCpuAddrMonitor(threadNumber); }
+    void
+    armMonitor(Addr address) override
+    {
+        cpu->armMonitor(threadNumber, address);
+    }
+    bool
+    mwait(PacketPtr pkt) override
+    {
+        return cpu->mwait(threadNumber, pkt);
+    }
+    void
+    mwaitAtomic(ThreadContext *tc) override
+    {
+        return cpu->mwaitAtomic(threadNumber, tc, cpu->mmu);
+    }
+    AddressMonitor *
+    getAddrMonitor() override
+    {
+        return cpu->getCpuAddrMonitor(threadNumber);
+    }
 };
 
 template<class Impl>
 Fault
 BaseDynInst<Impl>::initiateMemRead(Addr addr, unsigned size,
                                    Request::Flags flags,
-                                   const std::vector<bool>& byte_enable)
+                                   const std::vector<bool> &byte_enable)
 {
-    assert(byte_enable.empty() || byte_enable.size() == size);
+    assert(byte_enable.size() == size);
+    return cpu->pushRequest(
+        dynamic_cast<typename DynInstPtr::PtrType>(this),
+        /* ld */ true, nullptr, size, addr, flags, nullptr, nullptr,
+        byte_enable);
+}
+
+template<class Impl>
+Fault
+BaseDynInst<Impl>::initiateHtmCmd(Request::Flags flags)
+{
     return cpu->pushRequest(
             dynamic_cast<typename DynInstPtr::PtrType>(this),
-            /* ld */ true, nullptr, size, addr, flags, nullptr, nullptr,
-            byte_enable);
+            /* ld */ true, nullptr, 8, 0x0ul, flags, nullptr, nullptr);
 }
 
 template<class Impl>
 Fault
 BaseDynInst<Impl>::writeMem(uint8_t *data, unsigned size, Addr addr,
                             Request::Flags flags, uint64_t *res,
-                            const std::vector<bool>& byte_enable)
+                            const std::vector<bool> &byte_enable)
 {
-    assert(byte_enable.empty() || byte_enable.size() == size);
+    assert(byte_enable.size() == size);
     return cpu->pushRequest(
-            dynamic_cast<typename DynInstPtr::PtrType>(this),
-            /* st */ false, data, size, addr, flags, res, nullptr,
-            byte_enable);
+        dynamic_cast<typename DynInstPtr::PtrType>(this),
+        /* st */ false, data, size, addr, flags, res, nullptr,
+        byte_enable);
 }
 
 template<class Impl>
@@ -989,7 +1180,7 @@ BaseDynInst<Impl>::initiateMemAMO(Addr addr, unsigned size,
     return cpu->pushRequest(
             dynamic_cast<typename DynInstPtr::PtrType>(this),
             /* atomic */ false, nullptr, size, addr, flags, nullptr,
-            std::move(amo_op));
+            std::move(amo_op), std::vector<bool>(size, true));
 }
 
 #endif // __CPU_BASE_DYN_INST_HH__

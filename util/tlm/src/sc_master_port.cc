@@ -47,7 +47,7 @@ SCMasterPort::generatePacket(tlm::tlm_generic_payload& trans)
     Request::Flags flags;
     auto req = std::make_shared<Request>(
         trans.get_address(), trans.get_data_length(), flags,
-        owner.masterId);
+        owner.id);
 
     MemCmd cmd;
 
@@ -83,7 +83,7 @@ SCMasterPort::SCMasterPort(const std::string& name_,
                            const std::string& systemc_name,
                            ExternalMaster& owner_,
                            Gem5SimControl& simControl)
-  : ExternalMaster::Port(name_, owner_),
+  : ExternalMaster::ExternalPort(name_, owner_),
     peq(this, &SCMasterPort::peq_cb),
     waitForRetry(false),
     pendingRequest(nullptr),
@@ -93,8 +93,7 @@ SCMasterPort::SCMasterPort(const std::string& name_,
     transactor(nullptr),
     simControl(simControl)
 {
-    system =
-        dynamic_cast<const ExternalMasterParams*>(owner_.params())->system;
+    system = dynamic_cast<const ExternalMasterParams&>(owner_.params()).system;
 }
 
 void
@@ -206,7 +205,6 @@ SCMasterPort::handleBeginReq(tlm::tlm_generic_payload& trans)
     // world and we can pipe through the original packet. Otherwise, we
     // generate a new packet based on the transaction.
     if (extension != nullptr) {
-        extension->setPipeThrough();
         pkt = extension->getPacket();
     } else {
         pkt = generatePacket(trans);
@@ -263,7 +261,6 @@ SCMasterPort::b_transport(tlm::tlm_generic_payload& trans,
     // If there is an extension, this transaction was initiated by the gem5
     // world and we can pipe through the original packet.
     if (extension != nullptr) {
-        extension->setPipeThrough();
         pkt = extension->getPacket();
     } else {
         pkt = generatePacket(trans);
@@ -297,7 +294,6 @@ SCMasterPort::transport_dbg(tlm::tlm_generic_payload& trans)
     // If there is an extension, this transaction was initiated by the gem5
     // world and we can pipe through the original packet.
     if (extension != nullptr) {
-        extension->setPipeThrough();
         sendFunctional(extension->getPacket());
     } else {
         auto pkt = generatePacket(trans);
@@ -353,8 +349,6 @@ SCMasterPort::recvTimingResp(PacketPtr pkt)
     // delete it. The packet travels back with the transaction.
     if (extension == nullptr)
         destroyPacket(pkt);
-    else
-        sc_assert(extension->isPipeThrough());
 
     sendBeginResp(trans, delay);
     trans.release();
@@ -410,7 +404,7 @@ SCMasterPort::recvRangeChange()
                       "received address range change but ignored it");
 }
 
-ExternalMaster::Port*
+ExternalMaster::ExternalPort*
 SCMasterPortHandler::getExternalPort(const std::string &name,
                                      ExternalMaster &owner,
                                      const std::string &port_data)

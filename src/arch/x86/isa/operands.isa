@@ -64,7 +64,7 @@ let {{
     def floatReg(idx, id):
         return ('FloatReg', 'df', idx, 'IsFloating', id)
     def ccReg(idx, id):
-        return ('CCReg', 'uqw', idx, 'IsCC', id)
+        return ('CCReg', 'uqw', idx, None, id)
     def controlReg(idx, id, ctype = 'uqw'):
         return ('ControlReg', ctype, idx,
                 (None, None, ['IsSerializeAfter',
@@ -112,10 +112,12 @@ def operands {{
         'Rbp':           intReg('(INTREG_RBP)', 17),
         'Rsi':           intReg('(INTREG_RSI)', 18),
         'Rdi':           intReg('(INTREG_RDI)', 19),
-        'FpSrcReg1':     floatReg('src1', 20),
-        'FpSrcReg2':     floatReg('src2', 21),
-        'FpDestReg':     floatReg('dest', 22),
-        'FpData':        floatReg('data', 23),
+        'R8':            intReg('(INTREG_R8)', 20),
+        'R9':            intReg('(INTREG_R9)', 21),
+        'FpSrcReg1':     floatReg('src1', 22),
+        'FpSrcReg2':     floatReg('src2', 23),
+        'FpDestReg':     floatReg('dest', 24),
+        'FpData':        floatReg('data', 25),
         'RIP':           ('PCState', 'uqw', 'pc',
                           (None, None, 'IsControl'), 50),
         'NRIP':          ('PCState', 'uqw', 'npc',
@@ -145,20 +147,20 @@ def operands {{
         # would be retained, the write predicate checks if any of the bits
         # are being written.
 
-        'PredccFlagBits': ('CCReg', 'uqw', '(CCREG_ZAPS)', 'IsCC',
+        'PredccFlagBits': ('CCReg', 'uqw', '(CCREG_ZAPS)', None,
                 60, None, None, '''(((ext & (PFBit | AFBit | ZFBit | SFBit
                 )) != (PFBit | AFBit | ZFBit | SFBit )) &&
                 ((ext & (PFBit | AFBit | ZFBit | SFBit )) != 0))''',
                 '((ext & (PFBit | AFBit | ZFBit | SFBit )) != 0)'),
-        'PredcfofBits':   ('CCReg', 'uqw', '(CCREG_CFOF)', 'IsCC',
+        'PredcfofBits':   ('CCReg', 'uqw', '(CCREG_CFOF)', None,
                 61, None, None, '''(((ext & CFBit) == 0 ||
                 (ext & OFBit) == 0) && ((ext & (CFBit | OFBit)) != 0))''',
                 '((ext & (CFBit | OFBit)) != 0)'),
-        'PreddfBit':   ('CCReg', 'uqw', '(CCREG_DF)', 'IsCC',
+        'PreddfBit':   ('CCReg', 'uqw', '(CCREG_DF)', None,
                 62, None, None, '(false)', '((ext & DFBit) != 0)'),
-        'PredecfBit':   ('CCReg', 'uqw', '(CCREG_ECF)', 'IsCC',
+        'PredecfBit':   ('CCReg', 'uqw', '(CCREG_ECF)', None,
                 63, None, None, '(false)', '((ext & ECFBit) != 0)'),
-        'PredezfBit':   ('CCReg', 'uqw', '(CCREG_EZF)', 'IsCC',
+        'PredezfBit':   ('CCReg', 'uqw', '(CCREG_EZF)', None,
                 64, None, None, '(false)', '((ext & EZFBit) != 0)'),
 
         # These register should needs to be more protected so that later
@@ -205,5 +207,5 @@ def operands {{
         'TscOp':         controlReg('MISCREG_TSC', 212),
         'M5Reg':         squashCReg('MISCREG_M5_REG', 213),
         'Mem':           ('Mem', 'uqw', None, \
-                          ('IsMemRef', 'IsLoad', 'IsStore'), 300)
+                          (None, 'IsLoad', 'IsStore'), 300)
 }};

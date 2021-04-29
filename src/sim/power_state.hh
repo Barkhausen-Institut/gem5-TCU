@@ -44,6 +44,7 @@
 #define __SIM_POWER_STATE_HH__
 
 #include <set>
+#include <vector>
 
 #include "base/callback.hh"
 #include "base/statistics.hh"
@@ -61,14 +62,10 @@ class PowerDomain;
 class PowerState : public SimObject
 {
   public:
-    PowerState(const PowerStateParams *p);
+    PowerState(const PowerStateParams &p);
 
     /** Parameters of PowerState object */
-    typedef PowerStateParams Params;
-    const Params* params() const
-    {
-        return reinterpret_cast<const Params*>(_params);
-    }
+    PARAMS(PowerState);
 
     virtual void addFollower(PowerState* pwr_obj) {};
     void setControlledDomain(PowerDomain* pwr_dom);
@@ -149,14 +146,6 @@ class PowerState : public SimObject
         /** Tracks the time spent in each of the power states */
         Stats::Vector pwrStateResidencyTicks;
     } stats;
-};
-
-class PowerStateDumpCallback : public Callback
-{
-    PowerState *co;
-  public:
-    PowerStateDumpCallback(PowerState *co_t) : co(co_t) {}
-    virtual void process() { co->computeStats(); };
 };
 
 #endif //__SIM_POWER_STATE_HH__

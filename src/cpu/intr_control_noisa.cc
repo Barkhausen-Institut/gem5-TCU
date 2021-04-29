@@ -28,10 +28,8 @@
 
 #include "cpu/intr_control.hh"
 
-using namespace std;
-
-IntrControl::IntrControl(const Params *p)
-    : SimObject(p), sys(p->sys)
+IntrControl::IntrControl(const Params &p)
+    : SimObject(p), sys(p.sys)
 {}
 
 void
@@ -42,10 +40,4 @@ IntrControl::post(int cpu_id, int int_num, int index)
 void
 IntrControl::clear(int cpu_id, int int_num, int index)
 {
-}
-
-IntrControl *
-IntrControlParams::create()
-{
-    return new IntrControl(this);
 }

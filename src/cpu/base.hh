@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2013, 2017 ARM Limited
+ * Copyright (c) 2011-2013, 2017, 2020 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -48,12 +48,11 @@
 // and if so stop here
 #include "config/the_isa.hh"
 #if THE_ISA == NULL_ISA
-#include "arch/null/cpu_dummy.hh"
+#error Including BaseCPU in a system without CPU support
 #else
 #include "arch/generic/interrupts.hh"
-#include "arch/isa_traits.hh"
-#include "arch/microcode_rom.hh"
 #include "base/statistics.hh"
+#include "mem/port_proxy.hh"
 #include "sim/clocked_object.hh"
 #include "sim/eventq.hh"
 #include "sim/full_system.hh"
@@ -124,10 +123,10 @@ class BaseCPU : public ClockedObject
     const uint32_t _socketId;
 
     /** instruction side request id that must be placed in all requests */
-    MasterID _instMasterId;
+    RequestorID _instRequestorId;
 
     /** data side request id that must be placed in all requests */
-    MasterID _dataMasterId;
+    RequestorID _dataRequestorId;
 
     /** An intrenal representation of a task identifier within gem5. This is
      * used so the CPU can add which taskId (which is an internal representation
@@ -146,6 +145,23 @@ class BaseCPU : public ClockedObject
     /** Cache the cache line size that we get from the system */
     const unsigned int _cacheLineSize;
 
+    /** Global CPU statistics that are merged into the Root object. */
+    struct GlobalStats : public Stats::Group {
+        GlobalStats(::Stats::Group *parent);
+
+        ::Stats::Value simInsts;
+        ::Stats::Value simOps;
+
+        ::Stats::Formula hostInstRate;
+        ::Stats::Formula hostOpRate;
+    };
+
+    /**
+     * Pointer to the global stat structure. This needs to be
+     * constructed from regStats since we merge it into the root
+     * group. */
+    static std::unique_ptr<GlobalStats> globalStats;
+
   public:
 
     /**
@@ -162,7 +178,7 @@ class BaseCPU : public ClockedObject
     virtual PortProxy::SendFunctionalFunc
     getSendFunctional()
     {
-        auto port = dynamic_cast<MasterPort *>(&getDataPort());
+        auto port = dynamic_cast<RequestPort *>(&getDataPort());
         assert(port);
         return [port](PacketPtr pkt)->void { port->sendFunctional(pkt); };
     }
@@ -182,9 +198,9 @@ class BaseCPU : public ClockedObject
     uint32_t socketId() const { return _socketId; }
 
     /** Reads this CPU's unique data requestor ID */
-    MasterID dataMasterId() const { return _dataMasterId; }
+    RequestorID dataRequestorId() const { return _dataRequestorId; }
     /** Reads this CPU's unique instruction requestor ID */
-    MasterID instMasterId() const { return _instMasterId; }
+    RequestorID instRequestorId() const { return _instRequestorId; }
 
     /**
      * Get a port on this CPU. All CPUs have a data and
@@ -207,12 +223,10 @@ class BaseCPU : public ClockedObject
     uint32_t getPid() const { return _pid; }
     void setPid(uint32_t pid) { _pid = pid; }
 
-    inline void workItemBegin() { numWorkItemsStarted++; }
-    inline void workItemEnd() { numWorkItemsCompleted++; }
+    inline void workItemBegin() { baseStats.numWorkItemsStarted++; }
+    inline void workItemEnd() { baseStats.numWorkItemsCompleted++; }
     // @todo remove me after debugging with legion done
     Tick instCount() { return instCnt; }
-
-    TheISA::MicrocodeRom microcodeRom;
 
   protected:
     std::vector<BaseInterrupts*> interrupts;
@@ -231,12 +245,7 @@ class BaseCPU : public ClockedObject
     virtual void wakeup(ThreadID tid) = 0;
 
     void
-    postInterrupt(ThreadID tid, int int_num, int index)
-    {
-        interrupts[tid]->post(int_num, index);
-        if (FullSystem)
-            wakeup(tid);
-    }
+    postInterrupt(ThreadID tid, int int_num, int index);
 
     void
     clearInterrupt(ThreadID tid, int int_num, int index)
@@ -251,13 +260,10 @@ class BaseCPU : public ClockedObject
     }
 
     bool
-    checkInterrupts(ThreadContext *tc) const
+    checkInterrupts(ThreadID tid) const
     {
-        return FullSystem && interrupts[tc->threadId()]->checkInterrupts(tc);
+        return FullSystem && interrupts[tid]->checkInterrupts();
     }
-
-    void processProfileEvent();
-    EventFunctionWrapper * profileEvent;
 
   protected:
     std::vector<ThreadContext *> threadContexts;
@@ -303,10 +309,8 @@ class BaseCPU : public ClockedObject
     { return static_cast<ThreadID>(cid - threadContexts[0]->contextId()); }
 
   public:
-    typedef BaseCPUParams Params;
-    const Params *params() const
-    { return reinterpret_cast<const Params *>(_params); }
-    BaseCPU(Params *params, bool is_checker = false);
+    PARAMS(BaseCPU);
+    BaseCPU(const Params &params, bool is_checker = false);
     virtual ~BaseCPU();
 
     void init() override;
@@ -559,13 +563,13 @@ class BaseCPU : public ClockedObject
     Addr currentFunctionEnd;
     Tick functionEntryTick;
     void enableFunctionTrace();
-    void traceFunctionsInternal(const Loader::SymbolTable *symtab, Addr pc);
+    void traceFunctionsInternal(const Loader::SymbolTable &symtab, Addr pc);
 
   private:
     static std::vector<BaseCPU *> cpuList;   //!< Static global cpu list
 
   public:
-    void traceFunctions(const Loader::SymbolTable *symtab, Addr pc)
+    void traceFunctions(const Loader::SymbolTable &symtab, Addr pc)
     {
         if (functionTracingEnabled)
             traceFunctionsInternal(symtab, pc);
@@ -595,10 +599,14 @@ class BaseCPU : public ClockedObject
     }
 
   public:
-    // Number of CPU cycles simulated
-    Stats::Scalar numCycles;
-    Stats::Scalar numWorkItemsStarted;
-    Stats::Scalar numWorkItemsCompleted;
+    struct BaseCPUStats : public Stats::Group
+    {
+        BaseCPUStats(Stats::Group *parent);
+        // Number of CPU cycles simulated
+        Stats::Scalar numCycles;
+        Stats::Scalar numWorkItemsStarted;
+        Stats::Scalar numWorkItemsCompleted;
+    } baseStats;
 
   private:
     std::vector<AddressMonitor> addressMonitor;
@@ -606,7 +614,7 @@ class BaseCPU : public ClockedObject
   public:
     void armMonitor(ThreadID tid, Addr address);
     bool mwait(ThreadID tid, PacketPtr pkt);
-    void mwaitAtomic(ThreadID tid, ThreadContext *tc, BaseTLB *dtb);
+    void mwaitAtomic(ThreadID tid, ThreadContext *tc, BaseMMU *mmu);
     AddressMonitor *getCpuAddrMonitor(ThreadID tid)
     {
         assert(tid < numThreads);

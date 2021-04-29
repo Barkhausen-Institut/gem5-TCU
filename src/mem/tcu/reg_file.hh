@@ -34,7 +34,7 @@
 #include <vector>
 
 #include "base/types.hh"
-#include "base/bitfield.hh"
+#include "base/bitunion.hh"
 #include "mem/tcu/error.hh"
 #include "mem/packet.hh"
 
@@ -387,7 +387,7 @@ BitUnion64(ForeignCoreResp)
     Bitfield<1, 0> type;
 EndBitUnion(ForeignCoreResp)
 
-struct MessageHeader
+struct M5_ATTR_PACKED MessageHeader
 {
     uint8_t flags : 2,
             replySize: 6;
@@ -401,7 +401,7 @@ struct MessageHeader
     // should be large enough for pointers.
     uint32_t replyLabel;
     uint32_t label;
-} M5_ATTR_PACKED;
+};
 
 class Tcu;
 class EpFile;

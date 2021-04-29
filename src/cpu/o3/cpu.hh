@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2013, 2016-2019 ARM Limited
+ * Copyright (c) 2011-2013, 2016-2020 ARM Limited
  * Copyright (c) 2013 Advanced Micro Devices, Inc.
  * All rights reserved
  *
@@ -61,7 +61,6 @@
 #include "cpu/base.hh"
 #include "cpu/simple_thread.hh"
 #include "cpu/timebuf.hh"
-//#include "cpu/o3/thread_context.hh"
 #include "params/DerivO3CPU.hh"
 #include "sim/process.hh"
 
@@ -80,9 +79,7 @@ class BaseO3CPU : public BaseCPU
 {
     //Stuff that's pretty ISA independent will go here.
   public:
-    BaseO3CPU(BaseCPUParams *params);
-
-    void regStats();
+    BaseO3CPU(const BaseCPUParams &params);
 };
 
 /**
@@ -98,11 +95,6 @@ class FullO3CPU : public BaseO3CPU
     typedef typename Impl::CPUPol CPUPolicy;
     typedef typename Impl::DynInstPtr DynInstPtr;
     typedef typename Impl::O3CPU O3CPU;
-
-    using VecElem =  TheISA::VecElem;
-    using VecRegContainer =  TheISA::VecRegContainer;
-
-    using VecPredRegContainer = TheISA::VecPredRegContainer;
 
     typedef O3ThreadState<Impl> ImplState;
     typedef O3ThreadState<Impl> Thread;
@@ -120,8 +112,7 @@ class FullO3CPU : public BaseO3CPU
         SwitchedOut
     };
 
-    BaseTLB *itb;
-    BaseTLB *dtb;
+    BaseMMU *mmu;
     using LSQRequest = typename LSQ<Impl>::LSQRequest;
 
     /** Overall CPU status. */
@@ -180,12 +171,9 @@ class FullO3CPU : public BaseO3CPU
 
   public:
     /** Constructs a CPU with the given parameters. */
-    FullO3CPU(DerivO3CPUParams *params);
+    FullO3CPU(const DerivO3CPUParams &params);
     /** Destructor. */
     ~FullO3CPU();
-
-    /** Registers statistics. */
-    void regStats() override;
 
     ProbePointArg<PacketPtr> *ppInstAccessComplete;
     ProbePointArg<std::pair<DynInstPtr, PacketPtr> > *ppDataAccessComplete;
@@ -193,20 +181,10 @@ class FullO3CPU : public BaseO3CPU
     /** Register probe points. */
     void regProbePoints() override;
 
-    void demapPage(Addr vaddr, uint64_t asn)
+    void
+    demapPage(Addr vaddr, uint64_t asn)
     {
-        this->itb->demapPage(vaddr, asn);
-        this->dtb->demapPage(vaddr, asn);
-    }
-
-    void demapInstPage(Addr vaddr, uint64_t asn)
-    {
-        this->itb->demapPage(vaddr, asn);
-    }
-
-    void demapDataPage(Addr vaddr, uint64_t asn)
-    {
-        this->dtb->demapPage(vaddr, asn);
+        mmu->demapPage(vaddr, asn);
     }
 
     /** Ticks CPU, calling tick() on each stage, and checking the overall
@@ -277,11 +255,6 @@ class FullO3CPU : public BaseO3CPU
     void exitThreads();
 
   public:
-    /** Executes a syscall.
-     * @todo: Determine if this needs to be virtual.
-     */
-    void syscall(ThreadID tid, Fault *fault);
-
     /** Starts draining the CPU's pipeline of all instructions in
      * order to stop all memory accesses. */
     DrainState drain() override;
@@ -358,12 +331,12 @@ class FullO3CPU : public BaseO3CPU
 
     RegVal readFloatReg(PhysRegIdPtr phys_reg);
 
-    const VecRegContainer& readVecReg(PhysRegIdPtr reg_idx) const;
+    const TheISA::VecRegContainer& readVecReg(PhysRegIdPtr reg_idx) const;
 
     /**
      * Read physical vector register for modification.
      */
-    VecRegContainer& getWritableVecReg(PhysRegIdPtr reg_idx);
+    TheISA::VecRegContainer& getWritableVecReg(PhysRegIdPtr reg_idx);
 
     /** Returns current vector renaming mode */
     Enums::VecRegRenameMode vecRenameMode() const { return vecMode; }
@@ -375,23 +348,23 @@ class FullO3CPU : public BaseO3CPU
     /**
      * Read physical vector register lane
      */
-    template<typename VecElem, int LaneIdx>
-    VecLaneT<VecElem, true>
+    template<typename VE, int LaneIdx>
+    VecLaneT<VE, true>
     readVecLane(PhysRegIdPtr phys_reg) const
     {
-        vecRegfileReads++;
-        return regFile.readVecLane<VecElem, LaneIdx>(phys_reg);
+        cpuStats.vecRegfileReads++;
+        return regFile.readVecLane<VE, LaneIdx>(phys_reg);
     }
 
     /**
      * Read physical vector register lane
      */
-    template<typename VecElem>
-    VecLaneT<VecElem, true>
+    template<typename VE>
+    VecLaneT<VE, true>
     readVecLane(PhysRegIdPtr phys_reg) const
     {
-        vecRegfileReads++;
-        return regFile.readVecLane<VecElem>(phys_reg);
+        cpuStats.vecRegfileReads++;
+        return regFile.readVecLane<VE>(phys_reg);
     }
 
     /** Write a lane of the destination vector register. */
@@ -399,15 +372,16 @@ class FullO3CPU : public BaseO3CPU
     void
     setVecLane(PhysRegIdPtr phys_reg, const LD& val)
     {
-        vecRegfileWrites++;
+        cpuStats.vecRegfileWrites++;
         return regFile.setVecLane(phys_reg, val);
     }
 
-    const VecElem& readVecElem(PhysRegIdPtr reg_idx) const;
+    const TheISA::VecElem& readVecElem(PhysRegIdPtr reg_idx) const;
 
-    const VecPredRegContainer& readVecPredReg(PhysRegIdPtr reg_idx) const;
+    const TheISA::VecPredRegContainer&
+        readVecPredReg(PhysRegIdPtr reg_idx) const;
 
-    VecPredRegContainer& getWritableVecPredReg(PhysRegIdPtr reg_idx);
+    TheISA::VecPredRegContainer& getWritableVecPredReg(PhysRegIdPtr reg_idx);
 
     RegVal readCCReg(PhysRegIdPtr phys_reg);
 
@@ -415,11 +389,12 @@ class FullO3CPU : public BaseO3CPU
 
     void setFloatReg(PhysRegIdPtr phys_reg, RegVal val);
 
-    void setVecReg(PhysRegIdPtr reg_idx, const VecRegContainer& val);
+    void setVecReg(PhysRegIdPtr reg_idx, const TheISA::VecRegContainer& val);
 
-    void setVecElem(PhysRegIdPtr reg_idx, const VecElem& val);
+    void setVecElem(PhysRegIdPtr reg_idx, const TheISA::VecElem& val);
 
-    void setVecPredReg(PhysRegIdPtr reg_idx, const VecPredRegContainer& val);
+    void setVecPredReg(PhysRegIdPtr reg_idx,
+            const TheISA::VecPredRegContainer& val);
 
     void setCCReg(PhysRegIdPtr phys_reg, RegVal val);
 
@@ -427,18 +402,19 @@ class FullO3CPU : public BaseO3CPU
 
     RegVal readArchFloatReg(int reg_idx, ThreadID tid);
 
-    const VecRegContainer& readArchVecReg(int reg_idx, ThreadID tid) const;
+    const TheISA::VecRegContainer&
+        readArchVecReg(int reg_idx, ThreadID tid) const;
     /** Read architectural vector register for modification. */
-    VecRegContainer& getWritableArchVecReg(int reg_idx, ThreadID tid);
+    TheISA::VecRegContainer& getWritableArchVecReg(int reg_idx, ThreadID tid);
 
     /** Read architectural vector register lane. */
-    template<typename VecElem>
-    VecLaneT<VecElem, true>
+    template<typename VE>
+    VecLaneT<VE, true>
     readArchVecLane(int reg_idx, int lId, ThreadID tid) const
     {
         PhysRegIdPtr phys_reg = commitRenameMap[tid].lookup(
                     RegId(VecRegClass, reg_idx));
-        return readVecLane<VecElem>(phys_reg);
+        return readVecLane<VE>(phys_reg);
     }
 
 
@@ -452,13 +428,14 @@ class FullO3CPU : public BaseO3CPU
         setVecLane(phys_reg, val);
     }
 
-    const VecElem& readArchVecElem(const RegIndex& reg_idx,
-                                   const ElemIndex& ldx, ThreadID tid) const;
+    const TheISA::VecElem& readArchVecElem(const RegIndex& reg_idx,
+            const ElemIndex& ldx, ThreadID tid) const;
 
-    const VecPredRegContainer& readArchVecPredReg(int reg_idx,
-                                                  ThreadID tid) const;
+    const TheISA::VecPredRegContainer& readArchVecPredReg(
+            int reg_idx, ThreadID tid) const;
 
-    VecPredRegContainer& getWritableArchVecPredReg(int reg_idx, ThreadID tid);
+    TheISA::VecPredRegContainer&
+        getWritableArchVecPredReg(int reg_idx, ThreadID tid);
 
     RegVal readArchCCReg(int reg_idx, ThreadID tid);
 
@@ -471,13 +448,14 @@ class FullO3CPU : public BaseO3CPU
 
     void setArchFloatReg(int reg_idx, RegVal val, ThreadID tid);
 
-    void setArchVecPredReg(int reg_idx, const VecPredRegContainer& val,
+    void setArchVecPredReg(int reg_idx, const TheISA::VecPredRegContainer& val,
                            ThreadID tid);
 
-    void setArchVecReg(int reg_idx, const VecRegContainer& val, ThreadID tid);
+    void setArchVecReg(int reg_idx, const TheISA::VecRegContainer& val,
+            ThreadID tid);
 
     void setArchVecElem(const RegIndex& reg_idx, const ElemIndex& ldx,
-                        const VecElem& val, ThreadID tid);
+                        const TheISA::VecElem& val, ThreadID tid);
 
     void setArchCCReg(int reg_idx, RegVal val, ThreadID tid);
 
@@ -750,44 +728,55 @@ class FullO3CPU : public BaseO3CPU
         return this->iew.ldstQueue.getDataPort();
     }
 
-    /** Stat for total number of times the CPU is descheduled. */
-    Stats::Scalar timesIdled;
-    /** Stat for total number of cycles the CPU spends descheduled. */
-    Stats::Scalar idleCycles;
-    /** Stat for total number of cycles the CPU spends descheduled due to a
-     * quiesce operation or waiting for an interrupt. */
-    Stats::Scalar quiesceCycles;
-    /** Stat for the number of committed instructions per thread. */
-    Stats::Vector committedInsts;
-    /** Stat for the number of committed ops (including micro ops) per thread. */
-    Stats::Vector committedOps;
-    /** Stat for the CPI per thread. */
-    Stats::Formula cpi;
-    /** Stat for the total CPI. */
-    Stats::Formula totalCpi;
-    /** Stat for the IPC per thread. */
-    Stats::Formula ipc;
-    /** Stat for the total IPC. */
-    Stats::Formula totalIpc;
+    struct FullO3CPUStats : public Stats::Group
+    {
+        FullO3CPUStats(FullO3CPU *cpu);
 
-    //number of integer register file accesses
-    Stats::Scalar intRegfileReads;
-    Stats::Scalar intRegfileWrites;
-    //number of float register file accesses
-    Stats::Scalar fpRegfileReads;
-    Stats::Scalar fpRegfileWrites;
-    //number of vector register file accesses
-    mutable Stats::Scalar vecRegfileReads;
-    Stats::Scalar vecRegfileWrites;
-    //number of predicate register file accesses
-    mutable Stats::Scalar vecPredRegfileReads;
-    Stats::Scalar vecPredRegfileWrites;
-    //number of CC register file accesses
-    Stats::Scalar ccRegfileReads;
-    Stats::Scalar ccRegfileWrites;
-    //number of misc
-    Stats::Scalar miscRegfileReads;
-    Stats::Scalar miscRegfileWrites;
+        /** Stat for total number of times the CPU is descheduled. */
+        Stats::Scalar timesIdled;
+        /** Stat for total number of cycles the CPU spends descheduled. */
+        Stats::Scalar idleCycles;
+        /** Stat for total number of cycles the CPU spends descheduled due to a
+         * quiesce operation or waiting for an interrupt. */
+        Stats::Scalar quiesceCycles;
+        /** Stat for the number of committed instructions per thread. */
+        Stats::Vector committedInsts;
+        /** Stat for the number of committed ops (including micro ops) per
+         *  thread. */
+        Stats::Vector committedOps;
+        /** Stat for the CPI per thread. */
+        Stats::Formula cpi;
+        /** Stat for the total CPI. */
+        Stats::Formula totalCpi;
+        /** Stat for the IPC per thread. */
+        Stats::Formula ipc;
+        /** Stat for the total IPC. */
+        Stats::Formula totalIpc;
+
+        //number of integer register file accesses
+        Stats::Scalar intRegfileReads;
+        Stats::Scalar intRegfileWrites;
+        //number of float register file accesses
+        Stats::Scalar fpRegfileReads;
+        Stats::Scalar fpRegfileWrites;
+        //number of vector register file accesses
+        mutable Stats::Scalar vecRegfileReads;
+        Stats::Scalar vecRegfileWrites;
+        //number of predicate register file accesses
+        mutable Stats::Scalar vecPredRegfileReads;
+        Stats::Scalar vecPredRegfileWrites;
+        //number of CC register file accesses
+        Stats::Scalar ccRegfileReads;
+        Stats::Scalar ccRegfileWrites;
+        //number of misc
+        Stats::Scalar miscRegfileReads;
+        Stats::Scalar miscRegfileWrites;
+    } cpuStats;
+
+  public:
+    // hardware transactional memory
+    void htmSendAbortSignal(ThreadID tid, uint64_t htm_uid,
+                            HtmFailureFaultCause cause);
 };
 
 #endif // __CPU_O3_CPU_HH__

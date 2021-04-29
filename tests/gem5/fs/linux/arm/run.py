@@ -36,8 +36,6 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from __future__ import print_function
-
 import sys
 import os
 import os.path
@@ -57,17 +55,18 @@ def run_test(root):
 
 config = sys.argv[1]
 os.environ['M5_PATH'] = sys.argv[2]
+gem5_root = sys.argv[3]
 
 # path setup
-gem5_root = joinpath(os.path.dirname(__file__), '..', '..', '..', '..', '..')
 sys.path.append(joinpath(gem5_root, 'configs'))
 tests_root = joinpath(gem5_root, 'tests')
-sys.path.append(joinpath(tests_root, 'configs'))
+sys.path.append(joinpath(tests_root, 'gem5', 'configs'))
+
 
 exec(compile(open(config).read(), config, 'exec'))
 
 system = root.system
-system.readfile = os.path.join(tests_root, 'halt.sh')
+system.readfile = os.path.join(gem5_root, 'configs', 'boot', 'halt.sh')
 
 # The CPU can either be a list of CPUs or a single object.
 if isinstance(system.cpu, list):

@@ -38,7 +38,7 @@ class RiscvConnector : public CoreConnector
 {
   public:
 
-    RiscvConnector(const RiscvConnectorParams *p);
+    RiscvConnector(const RiscvConnectorParams &p);
 
   private:
 

@@ -34,11 +34,12 @@
 #define __ARCH_ARM_FREEBSD_FREEBSD_HH__
 
 #include "kern/freebsd/freebsd.hh"
+#include "sim/byteswap.hh"
 
 class ArmFreebsd : public FreeBSD
 {
   public:
-    static const ByteOrder byteOrder = LittleEndianByteOrder;
+    static const ByteOrder byteOrder = ByteOrder::little;
 };
 
 class ArmFreebsd32 : public ArmFreebsd
