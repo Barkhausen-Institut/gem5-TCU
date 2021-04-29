@@ -496,23 +496,16 @@ def createStoragePE(noc, options, no, memPE, epCount, img0=None, img1=None):
     disks = []
     for img in [img0, img1]:
         if img is not None:
-            disk = IdeDisk(driveID='master')
+            disk = IdeDisk(driveID='device0')
             disk.image = RawDiskImage(image_file = img)
             disks.append(disk)
 
     pe.idectrl = IdeController(disks=disks,
         pci_func=0, pci_dev=0, pci_bus=0)
-    pe.idectrl.BAR0 = 0x1f0
-    pe.idectrl.BAR0LegacyIO = True
-    pe.idectrl.BAR1 = 0x3f4
-    pe.idectrl.BAR1Size = '3B'
-    pe.idectrl.BAR1LegacyIO = True
-    pe.idectrl.BAR2 = 0x170
-    pe.idectrl.BAR2LegacyIO = True
-    pe.idectrl.BAR3 = 0x374
-    pe.idectrl.BAR3Size = '3B'
-    pe.idectrl.BAR3LegacyIO = True
-    pe.idectrl.BAR4 = 1
+    pe.idectrl.BAR0 = PciLegacyIoBar(addr=0x1f0, size='8B')
+    pe.idectrl.BAR1 = PciLegacyIoBar(addr=0x3f4, size='3B')
+    pe.idectrl.BAR2 = PciLegacyIoBar(addr=0x170, size='8B')
+    pe.idectrl.BAR3 = PciLegacyIoBar(addr=0x374, size='3B')
     pe.idectrl.Command = 1
     pe.idectrl.io_shift = 0
     pe.idectrl.InterruptPin = 1
@@ -520,7 +513,7 @@ def createStoragePE(noc, options, no, memPE, epCount, img0=None, img1=None):
     pe.idectrl.ctrl_offset = 0
 
     pe.idectrl.pio = pe.iobus.default
-    pe.idectrl.dma = pe.dmabridge.cpu_side_ports
+    pe.idectrl.dma = pe.dmabridge.cpu_side_port
 
     print('pe%02d: %s' % (no, img0))
     printConfig(pe, 0)
