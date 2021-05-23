@@ -124,9 +124,9 @@ def generateDtb(system):
 parser = optparse.OptionParser()
 Options.addCommonOptions(parser)
 Options.addFSOptions(parser)
-parser.add_argument("--bare-metal", action="store_true",
+parser.add_option("--bare-metal", action="store_true",
     help="Provide the raw system without the linux specific bits")
-parser.add_argument("--dtb-filename", action="store", type=str,
+parser.add_option("--dtb-filename", action="store", type=str,
     help="Specifies device tree blob file to use with device-tree-"\
         "enabled kernels")
 
@@ -151,12 +151,12 @@ mdesc = SysConfig(disks=options.disk_image, rootdev=options.root_device,
 system.mem_mode = mem_mode
 system.mem_ranges = [AddrRange(start=0x80000000, size=mdesc.mem())]
 
-if args.bare_metal:
+if options.bare_metal:
     system.workload = RiscvBareMetal()
-    system.workload.bootloader = args.kernel
+    system.workload.bootloader = options.kernel
 else:
     system.workload = RiscvLinux()
-    system.workload.object_file = args.kernel
+    system.workload.object_file = options.kernel
 
 system.iobus = IOXBar()
 system.membus = MemBus()
@@ -171,7 +171,7 @@ system.platform.rtc = RiscvRTC(frequency=Frequency("100MHz"))
 system.platform.clint.int_pin = system.platform.rtc.int_pin
 
 # VirtIOMMIO
-if args.disk_image:
+if options.disk_image:
     image = CowDiskImage(child=RawDiskImage(read_only=True), read_only=False)
     image.child.image_file = mdesc.disks()[0]
     system.platform.disk = MmioVirtIO(
@@ -189,6 +189,7 @@ system.bridge.ranges = system.platform._off_chip_ranges()
 system.platform.attachOnChipIO(system.membus)
 system.platform.attachOffChipIO(system.iobus)
 system.platform.attachPlic()
+system.platform.intrctrl = IntrControl()
 
 # ---------------------------- Default Setup --------------------------- #
 
@@ -269,9 +270,9 @@ for cpu in system.cpu:
 
 # --------------------------- DTB Generation --------------------------- #
 
-if not args.bare_metal:
-    if args.dtb_filename:
-        system.workload.dtb_filename = args.dtb_filename
+if not options.bare_metal:
+    if options.dtb_filename:
+        system.workload.dtb_filename = options.dtb_filename
     else:
         generateDtb(system)
         system.workload.dtb_filename = path.join(
@@ -281,8 +282,8 @@ if not args.bare_metal:
     system.workload.dtb_addr = 0x87e00000
 
 # Linux boot command flags
-    if args.command_line:
-        system.workload.command_line = args.command_line
+    if options.command_line:
+        system.workload.command_line = options.command_line
     else:
         kernel_cmd = [
             "console=ttyS0",
