@@ -115,6 +115,12 @@ def generateDtb(system):
             else:
                 root.append(node)
 
+    # add "compatible" entry to UART for gem5-specific UART in bbl
+    soc_idx = root.index('soc')
+    uart_idx = root[soc_idx].index('uart@10000000')
+    root[soc_idx][uart_idx].remove('compatible')
+    root[soc_idx][uart_idx].append(FdtPropertyStrings('compatible', ['ns8250', 'gem5,uart0']))
+
     fdt = Fdt()
     fdt.add_rootnode(root)
     fdt.writeDtsFile(path.join(m5.options.outdir, 'device.dts'))
