@@ -311,6 +311,18 @@ CacheConfig.config_cache(options, system)
 
 MemConfig.config_mem(options, system)
 
+# configure caches like M³ does
+system.cpu[0].icache.tag_latency = 4
+system.cpu[0].icache.data_latency = 4
+system.cpu[0].icache.response_latency = 4
+system.cpu[0].dcache.tag_latency = 4
+system.cpu[0].dcache.data_latency = 4
+system.cpu[0].dcache.response_latency = 4
+system.l2.tag_latency = 12
+system.l2.data_latency = 12
+system.l2.response_latency = 12
+system.l2.prefetcher = StridePrefetcher(degree = 16)
+
 root = Root(full_system=True, system=system)
 
 Simulation.setWorkCountOptions(system, options)
