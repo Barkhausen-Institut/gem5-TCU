@@ -127,8 +127,9 @@ class HiFive(Platform):
         """Returns a list of off-chip peripherals
         """
         devices = [self.uart]
-        if hasattr(self, "disk"):
-            devices.append(self.disk)
+        if hasattr(self, "disks"):
+            for d in self.disks:
+                devices.append(d)
         return devices
 
     def _on_chip_ranges(self):

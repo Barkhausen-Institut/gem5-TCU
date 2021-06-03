@@ -178,14 +178,17 @@ system.platform.clint.int_pin = system.platform.rtc.int_pin
 
 # VirtIOMMIO
 if options.disk_image:
-    image = CowDiskImage(child=RawDiskImage(read_only=True), read_only=False)
-    image.child.image_file = mdesc.disks()[0]
-    system.platform.disk = MmioVirtIO(
-        vio=VirtIOBlock(image=image),
-        interrupt_id=0x8,
-        pio_size=4096,
-        pio_addr=0x10008000
-    )
+    disks = []
+    for (i, disk) in enumerate(mdesc.disks()):
+        image = CowDiskImage(child=RawDiskImage(read_only=True), read_only=False)
+        image.child.image_file = disk
+        disks.append(MmioVirtIO(
+            vio=VirtIOBlock(image=image),
+            interrupt_id=0x8 + i,
+            pio_size=4096,
+            pio_addr=0x10008000 + i * 4096
+        ))
+    system.platform.disks = disks
 
 system.bridge = Bridge(delay='50ns')
 system.bridge.mem_side_port = system.iobus.cpu_side_ports
