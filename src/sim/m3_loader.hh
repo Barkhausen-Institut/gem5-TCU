@@ -42,7 +42,7 @@ class M3Loader
   protected:
     static const size_t ENV_SIZE        = 0x1000;
 #if THE_ISA == RISCV_ISA
-    static const uintptr_t ENV_START    = 0x10100000;
+    static const uintptr_t ENV_START    = 0x10000008;
 #else
     static const uintptr_t ENV_START    = 0x100000;
 #endif
