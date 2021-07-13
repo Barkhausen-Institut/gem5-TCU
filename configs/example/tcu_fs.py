@@ -451,6 +451,27 @@ def createCorePE(noc, options, no, cmdline, memPE, epCount,
 
     return pe
 
+def createKecAccPE(noc, options, no, cmdline, memPE, epCount, spmsize='8MB'):
+    pe = createCorePE(noc, options, no, cmdline, memPE, epCount,
+                      spmsize=spmsize)
+
+    # Disable extra PIO latency since it causes quite some overhead that should
+    # not be present in reality if the accelerator is very close to the CPU.
+    pe.kecacc = KecAcc(pio_addr=0xF4200000, pio_latency='0')
+    pe.kecacc.pio = pe.xbar.mem_side_ports
+
+    # FIXME: KecAcc and TCU work in parallel to implement double buffering.
+    # In real hardware this would likely be implemented using separate SPMs for
+    # code/data of the Core and the buffers. For simplicity this is currently
+    # simulated with a single SPM here. Unfortunately this seems to cause
+    # unintended delays in the XBar when both access the SPM at the same time.
+    # To avoid this, connect KecAcc directly to a separate port on the SPM
+    # for now. It looks like a separate port was used for the TCU at some point
+    # (but not anymore), so we can "abuse" it here as second port on the SPM.
+    pe.kecacc.port = pe.spm.tcu_port
+
+    return pe
+
 def createSerialPE(noc, options, no, memPE, epCount):
     pe = createPE(
         noc=noc, options=options, no=no, systemType=SpuSystem,
@@ -741,6 +762,9 @@ def runSimulation(root, options, pes):
                 size = 8 << 3
             elif hasattr(pe, 'serial'):
                 size = 9 << 3
+
+            if hasattr(pe, 'kecacc'):
+                size |= 0x8 << 7 # PEAttr::KECACC
         pemems.append(size)
 
     # give that to the PEs
