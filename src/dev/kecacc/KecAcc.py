@@ -27,13 +27,20 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Import('*')
+from m5.params import *
+from m5.objects.Device import BasicPioDevice
 
-DebugFlag('KecAcc')
-SimObject('KecAcc.py')
-Source('kecacc.cc')
+class KecAcc(BasicPioDevice):
+    type = 'KecAcc'
+    cxx_header = "dev/kecacc/kecacc.hh"
 
-# C++17 is needed for template<auto ...>
-# FIXME: Drop CXXFLAGS after updating to gem5 v21.1.0.0 (C++17 is default)
-Source('kecacc-xkcp.cc', append={'CXXFLAGS': '-std=c++17'})
-Source('xkcp/KeccakP-1600-opt64.c')
+    port = RequestPort("Port to the memory system")
+    buf_size = Param.MemorySize('512KiB', "Maximum size of processable buffers")
+
+    mem_width = Param.Unsigned(16, "Memory width (bytes read/written per cycle)")
+    pipeline_cycles = Param.Cycles(2, "Cycles for load pipeline overhead")
+    init_cycles = Param.Cycles(1, "Cycles for initializing state")
+    load_cycles = Param.Cycles(1, "Cycles for loading state (without memory)")
+    save_cycles = Param.Cycles(1, "Cycles for saving state (without memory)")
+    permute_cycles = Param.Cycles(24, "Cycles for Keccak-p[1600, 24]")
+    pad_cycles = Param.Cycles(1, "Cycles for padding")
