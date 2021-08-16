@@ -541,7 +541,7 @@ TcuAbortTest::tick()
         case State::STOP:
         {
             Tick when = curTick() + SimClock::Int::ns;
-            inform("[kernel  @0] Shutting down\n");
+            inform("[PE0:kernel @ 0] Shutting down\n");
             exitSimLoop("All tests done", 0, when, 0, false);
             return;
         }
