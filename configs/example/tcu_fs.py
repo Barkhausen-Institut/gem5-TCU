@@ -435,8 +435,8 @@ def createCorePE(noc, options, no, cmdline, memPE, epCount,
 
     if options.isa == 'x86_64':
         pe.cpu.interrupts[0].pio = pe.xbar.mem_side_ports
-        pe.cpu.interrupts[0].int_slave = pe.tcu.connector.irq_master_port
-        pe.cpu.interrupts[0].int_master = pe.xbar.cpu_side_ports
+        pe.cpu.interrupts[0].int_responder = pe.tcu.connector.irq_master_port
+        pe.cpu.interrupts[0].int_requestor = pe.xbar.cpu_side_ports
 
     pe.cpu.itb_walker_cache = PageTableWalkerCache()
     pe.cpu.dtb_walker_cache = PageTableWalkerCache()
