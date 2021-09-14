@@ -451,6 +451,31 @@ def createCorePE(noc, options, no, cmdline, memPE, epCount,
 
     return pe
 
+def createSerialPE(noc, options, no, memPE, epCount):
+    pe = createPE(
+        noc=noc, options=options, no=no, systemType=SpuSystem,
+        l1size=None, l2size=None, spmsize=None, memPE=memPE,
+        tcupos=0, epCount=epCount
+    )
+    pe.tcu.connector = BaseConnector()
+
+    # the serial device reads from the host's stdin and sends the read bytes
+    # via TCU to some defined receive EP
+    pe.serial = TcuSerialInput()
+    pe.serial.id = no
+    pe.serial.clk_domain = SrcClockDomain(clock=options.sys_clock,
+                                         voltage_domain=pe.voltage_domain)
+
+    connectCuToMem(pe, options, pe.serial.tcu_master_port)
+    pe.serial.tcu_slave_port = pe.xbar.mem_side_ports
+
+    print('PE%02d: SerialInput' % (no))
+    printConfig(pe, 0)
+    print('      Comp =TCU -> SerialInput')
+    print()
+
+    return pe
+
 def createDevicePE(noc, options, no, memPE, epCount):
     pe = createPE(
         noc=noc, options=options, no=no, systemType=SpuSystem,
@@ -714,6 +739,8 @@ def runSimulation(root, options, pes):
                 size = 7 << 3
             elif hasattr(pe, 'nic'):
                 size = 8 << 3
+            elif hasattr(pe, 'serial'):
+                size = 9 << 3
         pemems.append(size)
 
     # give that to the PEs

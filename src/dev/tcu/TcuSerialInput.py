@@ -1,4 +1,4 @@
-# Copyright (c) 2017 Georg Kotheimer
+# Copyright (c) 2021 Nils Asmussen
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -25,22 +25,18 @@
 # of the authors and should not be interpreted as representing official policies,
 # either expressed or implied, of the FreeBSD Project.
 
-Import('*')
+from m5.objects.ClockedObject import ClockedObject
+from m5.params import *
+from m5.proxy import *
 
-SimObject('TcuPciProxy.py')
-SimObject('TcuSerialInput.py')
+class TcuSerialInput(ClockedObject):
+    type = 'TcuSerialInput'
+    cxx_header = "dev/tcu/serial_input.hh"
 
-Source("cmd_sm.cc")
-Source("pci_proxy.cc")
-Source("pci_host.cc")
-Source("serial_input.cc")
+    tcu_master_port = MasterPort("Port to send requests to the TCU")
+    tcu_slave_port = SlavePort("Port that receives memory requests "
+                                "from the TCU")
 
-DebugFlag('TcuPciProxy')
-DebugFlag('TcuPciProxyCmd')
-DebugFlag('TcuPciProxyInt')
-DebugFlag('TcuPciProxyDma')
-DebugFlag('TcuPciProxyDevMem')
-DebugFlag('TcuSerialInput')
-
-CompoundFlag('TcuPciProxyAll', [ 'TcuPciProxy', 'TcuPciProxyCmd',
-    'TcuPciProxyInt', 'TcuPciProxyDma' , 'TcuPciProxyDevMem' ])
+    system = Param.System(Parent.any, "System the PCI proxy is part of")
+    id = Param.Unsigned("Core ID")
+    tcu_regfile_base_addr = Param.Addr(0xF0000000, "TCU register file address")
