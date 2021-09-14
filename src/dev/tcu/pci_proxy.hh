@@ -36,8 +36,9 @@
 #include "mem/tcu/reg_file.hh"
 #include "mem/mem_object.hh"
 #include "params/TcuPciProxy.hh"
+#include "cmd_sm.hh"
 
-class TcuPciProxy : public ClockedObject
+class TcuPciProxy : public ClockedObject, public CommandExecutor
 {
   public:
     TcuPciProxy(const TcuPciProxyParams &p);
@@ -51,6 +52,11 @@ class TcuPciProxy : public ClockedObject
 
     void signalInterrupt();
 
+    std::string execName() override { return name(); }
+    void commandFinished() override;
+    void scheduleCommand(Cycles delay) override;
+    void sendMemoryReq(PacketPtr pkt, Cycles delay) override;
+
   private:
     static Addr encodePciAddress(PciBusAddr const& busAddr, Addr offset);
     PacketPtr createPciConfigPacket(PciBusAddr busAddr, Addr offset,
@@ -59,7 +65,6 @@ class TcuPciProxy : public ClockedObject
     bool findDevice();
 
     void executeCommand(PacketPtr cmdPkt);
-    void commandExecutionFinished();
 
     void sendInterruptCmd();
     void handleInterruptMessageContent(PacketPtr pkt);
@@ -189,42 +194,6 @@ class TcuPciProxy : public ClockedObject
         TcuPciProxyEvent(TcuPciProxy& _pciProxy) : pciProxy(_pciProxy) {}
 
         const std::string name() const override { return pciProxy.name(); }
-    };
-
-    class CommandSM
-    {
-      public:
-        enum State
-        {
-            CMD_IDLE,
-            CMD_SEND,
-            CMD_WAIT
-        };
-
-        explicit CommandSM(TcuPciProxy* _pciProxy)
-            : pciProxy(_pciProxy), state(CMD_IDLE), cmd(nullptr)
-        {
-        }
-
-        const std::string name() const
-        {
-            return pciProxy->name() + "::CommandSM";
-        }
-
-        std::string stateName() const;
-
-        bool isIdle() const { return state == CMD_IDLE; }
-
-        void executeCommand(PacketPtr cmdPkt);
-
-        void handleMemResp(PacketPtr pkt);
-
-        void tick();
-
-      private:
-        TcuPciProxy* pciProxy;
-        State state;
-        PacketPtr cmd;
     };
 
   private:

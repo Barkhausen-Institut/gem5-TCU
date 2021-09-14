@@ -77,7 +77,7 @@ TcuPciProxy::TcuPciProxy(const TcuPciProxyParams &p)
       tcu(p.tcu_regfile_base_addr, p.system->getRequestorId(this, name()), p.id),
       deviceBusAddr(0, 0, 0),
       tickEvent(this),
-      cmdSM(this),
+      cmdSM(tcu, this),
       cmdRunning(false),
       interruptPending(false),
       pendingDmaReq(nullptr),
@@ -143,7 +143,25 @@ TcuPciProxy::executeCommand(PacketPtr cmdPkt)
 }
 
 void
-TcuPciProxy::commandExecutionFinished()
+TcuPciProxy::tick()
+{
+    cmdSM.tick();
+}
+
+void
+TcuPciProxy::scheduleCommand(Cycles delay)
+{
+    schedule(tickEvent, clockEdge(delay));
+}
+
+void
+TcuPciProxy::sendMemoryReq(PacketPtr pkt, Cycles delay)
+{
+    tcuMasterPort.schedTimingReq(pkt, clockEdge(delay));
+}
+
+void
+TcuPciProxy::commandFinished()
 {
     cmdRunning = false;
     DPRINTF(TcuPciProxyCmd, "Finished TCU command execution.\n");
@@ -309,91 +327,6 @@ TcuPciProxy::handleDmaContent(PacketPtr pkt)
             tcuSlavePort.schedTimingResp(pkt, clockEdge(Cycles(1)));
         }
     }
-}
-
-void
-TcuPciProxy::tick()
-{
-    cmdSM.tick();
-}
-
-std::string
-TcuPciProxy::CommandSM::stateName() const
-{
-    const char* names[] = { "IDLE", "SEND", "WAIT" };
-    return names[static_cast<size_t>(state)];
-}
-
-void
-TcuPciProxy::CommandSM::executeCommand(PacketPtr cmdPkt)
-{
-    assert(isIdle());
-    assert(!cmd);
-    state = CMD_SEND;
-    cmd = cmdPkt;
-    tick();
-}
-
-void
-TcuPciProxy::CommandSM::tick()
-{
-    PacketPtr pkt = nullptr;
-
-    switch (state) {
-        case State::CMD_IDLE: {
-            pciProxy->commandExecutionFinished();
-            break;
-        }
-        case State::CMD_SEND: {
-            pkt = cmd;
-            break;
-        }
-        case State::CMD_WAIT: {
-            Addr regAddr = getRegAddr(UnprivReg::COMMAND);
-            pkt = pciProxy->createTcuRegPkt(regAddr, 0, MemCmd::ReadReq);
-            break;
-        }
-    }
-
-    if (pkt != nullptr) {
-        pciProxy->tcuMasterPort.schedTimingReq(
-            pkt, pciProxy->clockEdge(Cycles(1)));
-    }
-}
-
-void
-TcuPciProxy::CommandSM::handleMemResp(PacketPtr pkt)
-{
-    RequestPtr req = pkt->req;
-
-    Cycles delay(1);
-    if (pkt->isError()) {
-        warn("%s access failed at %#x\n", pkt->isWrite() ? "Write" : "Read",
-            req->getPaddr());
-    } else {
-        switch (state) {
-            case State::CMD_IDLE: {
-                assert(false);
-                break;
-            }
-            case State::CMD_SEND: {
-                cmd = nullptr;
-                state = State::CMD_WAIT;
-                break;
-            }
-            case State::CMD_WAIT: {
-                RegFile::reg_t reg = *pkt->getConstPtr<RegFile::reg_t>();
-                if ((reg & 0xF) == 0)
-                    state = State::CMD_IDLE;
-                break;
-            }
-        }
-    }
-
-    freePacket(pkt);
-
-    // kick things into action again
-    pciProxy->schedule(pciProxy->tickEvent, pciProxy->clockEdge(delay));
 }
 
 bool

@@ -29,6 +29,7 @@ Import('*')
 
 SimObject('TcuPciProxy.py')
 
+Source("cmd_sm.cc")
 Source("pci_proxy.cc")
 Source("pci_host.cc")
 
