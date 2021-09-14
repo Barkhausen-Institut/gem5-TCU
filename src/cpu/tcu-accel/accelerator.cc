@@ -39,34 +39,6 @@
 const unsigned TcuAccel::EP_SYSS       = 8;
 const unsigned TcuAccel::EP_SYSR       = 9;
 
-Addr
-TcuAccel::getRegAddr(PrivReg reg)
-{
-    return TcuTlb::PAGE_SIZE * 2 + static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
-}
-
-Addr
-TcuAccel::getRegAddr(UnprivReg reg)
-{
-    Addr result = sizeof(RegFile::reg_t) * numExtRegs;
-
-    result += static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
-
-    return result;
-}
-
-Addr
-TcuAccel::getRegAddr(unsigned reg, unsigned epid)
-{
-    Addr result = sizeof(RegFile::reg_t) * (numExtRegs + numUnprivRegs);
-
-    result += epid * numEpRegs * sizeof(RegFile::reg_t);
-
-    result += reg * sizeof(RegFile::reg_t);
-
-    return result;
-}
-
 bool
 TcuAccel::CpuPort::recvTimingResp(PacketPtr pkt)
 {
@@ -88,10 +60,9 @@ TcuAccel::TcuAccel(const TcuAccelParams &p)
     maxDataSize(p.max_data_size),
     offset(p.offset),
     port("port", this),
-    requestorId(system->getRequestorId(this, name())),
+    tcu(p.regfile_base_addr, system->getRequestorId(this, name()), p.id),
     id(p.id),
     atomic(system->isAtomicMode()),
-    reg_base(p.regfile_base_addr),
     retryPkt(nullptr),
     connector()
 {
@@ -137,65 +108,4 @@ TcuAccel::recvRetry()
     assert(retryPkt);
     if (port.sendTimingReq(retryPkt))
         retryPkt = nullptr;
-}
-
-PacketPtr
-TcuAccel::createPacket(Addr paddr,
-                       size_t size,
-                       MemCmd cmd = MemCmd::WriteReq)
-{
-    return createPacket(paddr, new uint8_t[size], size, cmd);
-}
-
-PacketPtr
-TcuAccel::createPacket(Addr paddr,
-                       const void *data,
-                       size_t size,
-                       MemCmd cmd = MemCmd::WriteReq)
-{
-    Request::Flags flags;
-
-    auto req = std::make_shared<Request>(paddr, size, flags, requestorId);
-    req->setContext(id);
-
-    auto pkt = new Packet(req, cmd);
-    pkt->dataDynamic(data);
-
-    return pkt;
-}
-
-PacketPtr
-TcuAccel::createTcuRegPkt(Addr reg,
-                          RegFile::reg_t value,
-                          MemCmd cmd = MemCmd::WriteReq)
-{
-    auto pkt = createPacket(reg_base + reg, sizeof(RegFile::reg_t), cmd);
-    *pkt->getPtr<RegFile::reg_t>() = value;
-    return pkt;
-}
-
-PacketPtr
-TcuAccel::createTcuCmdPkt(CmdCommand::Bits cmd, CmdData::Bits data,
-                          uint64_t offset)
-{
-    static_assert(static_cast<int>(UnprivReg::COMMAND) == 0, "");
-    static_assert(static_cast<int>(UnprivReg::DATA) == 1, "");
-    static_assert(static_cast<int>(UnprivReg::ARG1) == 2, "");
-
-    auto pkt = createPacket(reg_base + getRegAddr(UnprivReg::COMMAND),
-                            sizeof(RegFile::reg_t) * 3,
-                            MemCmd::WriteReq);
-
-    RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
-    regs[0] = cmd;
-    regs[1] = data;
-    regs[2] = offset;
-    return pkt;
-}
-
-void
-TcuAccel::freePacket(PacketPtr pkt)
-{
-    // the packet will delete the data
-    delete pkt;
 }

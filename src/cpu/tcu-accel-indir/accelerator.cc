@@ -209,7 +209,7 @@ TcuAccelInDir::completeRequest(PacketPtr pkt)
     }
 
     memPending = false;
-    freePacket(pkt);
+    tcuif().freePacket(pkt);
 
     // kick things into action again
     schedule(tickEvent, clockEdge(delay));
@@ -274,7 +274,7 @@ TcuAccelInDir::tick()
             }
             else
             {
-                pkt = createTcuCmdPkt(
+                pkt = tcuif().createTcuCmdPkt(
                     CmdCommand::create(CmdCommand::FETCH_MSG, EP_RECV),
                     0
                 );
@@ -283,19 +283,19 @@ TcuAccelInDir::tick()
         }
         case State::READ_MSG_ADDR:
         {
-            Addr regAddr = getRegAddr(UnprivReg::ARG1);
-            pkt = createTcuRegPkt(regAddr, 0, MemCmd::ReadReq);
+            Addr regAddr = TcuIf::getRegAddr(UnprivReg::ARG1);
+            pkt = tcuif().createTcuRegPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }
         case State::READ_MSG:
         {
-            pkt = createPacket(msgAddr, MSG_SIZE, MemCmd::ReadReq);
+            pkt = tcuif().createPacket(msgAddr, MSG_SIZE, MemCmd::ReadReq);
             break;
         }
 
         case State::WRITE_DATA:
         {
-            pkt = createTcuCmdPkt(
+            pkt = tcuif().createTcuCmdPkt(
                 CmdCommand::create(CmdCommand::WRITE, EP_OUT),
                 CmdData::create(bufferAddr(), dataSize)
             );
@@ -304,15 +304,15 @@ TcuAccelInDir::tick()
 
         case State::STORE_REPLY:
         {
-            pkt = createPacket(bufferAddr(),
-                               sizeof(reply),
-                               MemCmd::WriteReq);
+            pkt = tcuif().createPacket(bufferAddr(),
+                                       sizeof(reply),
+                                       MemCmd::WriteReq);
             memcpy(pkt->getPtr<uint8_t>(), (char*)&reply, sizeof(reply));
             break;
         }
         case State::SEND_REPLY:
         {
-            pkt = createTcuCmdPkt(
+            pkt = tcuif().createTcuCmdPkt(
                 CmdCommand::create(CmdCommand::REPLY, EP_RECV,
                                    msgAddr - rbufAddr()),
                 CmdData::create(bufferAddr(), sizeof(reply))
@@ -324,8 +324,8 @@ TcuAccelInDir::tick()
         case State::WRITE_DATA_WAIT:
         case State::REPLY_WAIT:
         {
-            Addr regAddr = getRegAddr(UnprivReg::COMMAND);
-            pkt = createTcuRegPkt(regAddr, 0, MemCmd::ReadReq);
+            Addr regAddr = TcuIf::getRegAddr(UnprivReg::COMMAND);
+            pkt = tcuif().createTcuRegPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }
     }

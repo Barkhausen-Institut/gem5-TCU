@@ -32,6 +32,7 @@
 
 #include "dev/tcu/pci_host.hh"
 #include "mem/tcu/tcu.hh"
+#include "mem/tcu/tcuif.hh"
 #include "mem/tcu/reg_file.hh"
 #include "mem/mem_object.hh"
 #include "params/TcuPciProxy.hh"
@@ -51,16 +52,6 @@ class TcuPciProxy : public ClockedObject
     void signalInterrupt();
 
   private:
-    PacketPtr createPacket(Addr paddr, size_t size, MemCmd cmd);
-    PacketPtr createPacket(
-        Addr paddr, const void* data, size_t size, MemCmd cmd);
-    static void freePacket(PacketPtr pkt);
-
-    PacketPtr createTcuRegPkt(Addr reg, RegFile::reg_t value, MemCmd cmd);
-
-    static Addr getRegAddr(UnprivReg reg);
-    PacketPtr createTcuCmdPkt(CmdCommand::Bits cmd, CmdData::Bits data,
-        uint64_t arg1);
     static Addr encodePciAddress(PciBusAddr const& busAddr, Addr offset);
     PacketPtr createPciConfigPacket(PciBusAddr busAddr, Addr offset,
         const void* data, size_t size, MemCmd cmd);
@@ -249,9 +240,7 @@ class TcuPciProxy : public ClockedObject
     PioPort pioPort;
     DmaPort dmaPort;
 
-    RequestorID requestorId;
-    unsigned int id;
-    Addr tcuRegBase;
+    TcuIf tcu;
 
     PciBusAddr deviceBusAddr;
 

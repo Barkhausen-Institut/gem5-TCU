@@ -52,6 +52,7 @@ Source('msg_unit.cc')
 Source('reg_file.cc')
 Source('tcu.cc')
 Source('tlb.cc')
+Source('tcuif.cc')
 Source('xfer_unit.cc')
 
 DebugFlag('Tcu')

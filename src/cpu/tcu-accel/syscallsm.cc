@@ -49,7 +49,7 @@ SyscallSM::tick()
     {
         case State::SYSC_SEND:
         {
-            pkt = accel->createTcuCmdPkt(
+            pkt = accel->tcuif().createTcuCmdPkt(
                 CmdCommand::create(CmdCommand::SEND, TcuAccel::EP_SYSS,
                                    TcuAccel::EP_SYSR),
                 CmdData::create(accel->sendMsgAddr(), syscallSize)
@@ -61,7 +61,7 @@ SyscallSM::tick()
             if (fetched)
                 return nullptr;
 
-            pkt = accel->createTcuCmdPkt(
+            pkt = accel->tcuif().createTcuCmdPkt(
                 CmdCommand::create(CmdCommand::FETCH_MSG, TcuAccel::EP_SYSR),
                 0
             );
@@ -69,13 +69,13 @@ SyscallSM::tick()
         }
         case State::SYSC_READ_ADDR:
         {
-            Addr regAddr = accel->getRegAddr(UnprivReg::ARG1);
-            pkt = accel->createTcuRegPkt(regAddr, 0, MemCmd::ReadReq);
+            Addr regAddr = TcuIf::getRegAddr(UnprivReg::ARG1);
+            pkt = accel->tcuif().createTcuRegPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }
         case State::SYSC_ACK:
         {
-            pkt = accel->createTcuCmdPkt(
+            pkt = accel->tcuif().createTcuCmdPkt(
                 CmdCommand::create(CmdCommand::ACK_MSG, TcuAccel::EP_SYSR,
                                    replyAddr - (RBUF_ADDR + accel->offset)),
                 0
@@ -87,8 +87,8 @@ SyscallSM::tick()
         case State::SYSC_FETCH_WAIT:
         case State::SYSC_ACK_WAIT:
         {
-            Addr regAddr = accel->getRegAddr(UnprivReg::COMMAND);
-            pkt = accel->createTcuRegPkt(regAddr, 0, MemCmd::ReadReq);
+            Addr regAddr = TcuIf::getRegAddr(UnprivReg::COMMAND);
+            pkt = accel->tcuif().createTcuRegPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }
     }

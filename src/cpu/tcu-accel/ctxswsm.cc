@@ -60,7 +60,7 @@ AccelCtxSwSM::tick()
     {
         case State::FETCH_MSG:
         {
-            pkt = accel->createTcuCmdPkt(
+            pkt = accel->tcuif().createTcuCmdPkt(
                 CmdCommand::create(CmdCommand::FETCH_MSG, EP_RECV),
                 0
             );
@@ -68,13 +68,14 @@ AccelCtxSwSM::tick()
         }
         case State::READ_MSG_ADDR:
         {
-            Addr regAddr = accel->getRegAddr(UnprivReg::ARG1);
-            pkt = accel->createTcuRegPkt(regAddr, 0, MemCmd::ReadReq);
+            Addr regAddr = TcuIf::getRegAddr(UnprivReg::ARG1);
+            pkt = accel->tcuif().createTcuRegPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }
         case State::READ_MSG:
         {
-            pkt = accel->createPacket(msgAddr, MSG_SIZE, MemCmd::ReadReq);
+            pkt = accel->tcuif().createPacket(msgAddr, MSG_SIZE,
+                                              MemCmd::ReadReq);
             break;
         }
 
@@ -82,13 +83,14 @@ AccelCtxSwSM::tick()
         {
             reply.res = 0;
             reply.val = 0;
-            pkt = accel->createPacket(msgAddr, sizeof(reply), MemCmd::WriteReq);
+            pkt = accel->tcuif().createPacket(msgAddr, sizeof(reply),
+                                              MemCmd::WriteReq);
             memcpy(pkt->getPtr<uint8_t>(), (char*)&reply, sizeof(reply));
             break;
         }
         case State::SEND_REPLY:
         {
-            pkt = accel->createTcuCmdPkt(
+            pkt = accel->tcuif().createTcuCmdPkt(
                 CmdCommand::create(CmdCommand::REPLY, EP_RECV,
                                    msgAddr - (RBUF_ADDR + accel->offset)),
                 CmdData::create(msgAddr, sizeof(reply))
@@ -99,8 +101,8 @@ AccelCtxSwSM::tick()
         case State::FETCH_MSG_WAIT:
         case State::REPLY_WAIT:
         {
-            Addr regAddr = accel->getRegAddr(UnprivReg::COMMAND);
-            pkt = accel->createTcuRegPkt(regAddr, 0, MemCmd::ReadReq);
+            Addr regAddr = TcuIf::getRegAddr(UnprivReg::COMMAND);
+            pkt = accel->tcuif().createTcuRegPkt(regAddr, 0, MemCmd::ReadReq);
             break;
         }
     }

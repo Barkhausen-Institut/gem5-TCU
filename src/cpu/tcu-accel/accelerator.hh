@@ -35,6 +35,7 @@
 #include "mem/tcu/connector/base.hh"
 #include "mem/tcu/reg_file.hh"
 #include "mem/tcu/tcu.hh"
+#include "mem/tcu/tcuif.hh"
 #include "sim/system.hh"
 
 class TcuAccel : public ClockedObject
@@ -52,6 +53,10 @@ class TcuAccel : public ClockedObject
     void setConnector(BaseConnector *con)
     {
         connector = con;
+    }
+
+    TcuIf &tcuif() {
+      return tcu;
     }
 
     virtual void wakeup() {
@@ -92,26 +97,9 @@ class TcuAccel : public ClockedObject
         SIGNAL      = 1 << 2, // used to signal completion to the kernel
     };
 
-    PacketPtr createPacket(Addr paddr, size_t size, MemCmd cmd);
-
-    PacketPtr createPacket(Addr paddr, const void *data, size_t size, MemCmd cmd);
-
-    PacketPtr createTcuRegPkt(Addr reg, RegFile::reg_t value, MemCmd cmd);
-
-    PacketPtr createTcuCmdPkt(CmdCommand::Bits cmd, CmdData::Bits data,
-                              uint64_t offset = 0);
-
-    void freePacket(PacketPtr pkt);
-
     bool sendPkt(PacketPtr pkt);
 
     void recvRetry();
-
-    static Addr getRegAddr(PrivReg reg);
-
-    static Addr getRegAddr(UnprivReg reg);
-
-    static Addr getRegAddr(unsigned reg, unsigned epid);
 
     System *system;
 
@@ -127,14 +115,11 @@ class TcuAccel : public ClockedObject
 
     CpuPort port;
 
-    /// Request id for all generated traffic
-    RequestorID requestorId;
+    TcuIf tcu;
 
     unsigned int id;
 
     const bool atomic;
-
-    Addr reg_base;
 
     /// Stores the Packet for later retry
     PacketPtr retryPkt;

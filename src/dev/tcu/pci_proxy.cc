@@ -44,72 +44,6 @@ const Addr TcuPciProxy::REG_ADDR = 0x4000;
 const Addr TcuPciProxy::INT_ADDR = 0x10000000;
 const Addr TcuPciProxy::DMA_ADDR = 0x20000000;
 
-PacketPtr
-TcuPciProxy::createPacket(
-    Addr paddr, size_t size, MemCmd cmd = MemCmd::WriteReq)
-{
-    return createPacket(paddr, new uint8_t[size], size, cmd);
-}
-
-PacketPtr
-TcuPciProxy::createPacket(
-    Addr paddr, const void* data, size_t size, MemCmd cmd = MemCmd::WriteReq)
-{
-    Request::Flags flags;
-
-    auto req = std::make_shared<Request>(paddr, size, flags, requestorId);
-    req->setContext(id);
-
-    auto pkt = new Packet(req, cmd);
-    pkt->dataDynamic(data);
-
-    return pkt;
-}
-
-void
-TcuPciProxy::freePacket(PacketPtr pkt)
-{
-    // the packet will delete the data
-    delete pkt;
-}
-
-PacketPtr
-TcuPciProxy::createTcuRegPkt(
-    Addr reg, RegFile::reg_t value, MemCmd cmd = MemCmd::WriteReq)
-{
-    auto pkt = createPacket(tcuRegBase + reg, sizeof(RegFile::reg_t), cmd);
-    *pkt->getPtr<RegFile::reg_t>() = value;
-    return pkt;
-}
-
-Addr
-TcuPciProxy::getRegAddr(UnprivReg reg)
-{
-    Addr result = sizeof(RegFile::reg_t) * numExtRegs;
-
-    result += static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
-
-    return result;
-}
-
-PacketPtr
-TcuPciProxy::createTcuCmdPkt(CmdCommand::Bits cmd, CmdData::Bits data,
-                             uint64_t arg1)
-{
-    static_assert(static_cast<int>(UnprivReg::COMMAND) == 0, "");
-    static_assert(static_cast<int>(UnprivReg::DATA) == 1, "");
-    static_assert(static_cast<int>(UnprivReg::ARG1) == 2, "");
-
-    auto pkt = createPacket(tcuRegBase + getRegAddr(UnprivReg::COMMAND),
-        sizeof(RegFile::reg_t) * 3, MemCmd::WriteReq);
-
-    RegFile::reg_t* regs = pkt->getPtr<RegFile::reg_t>();
-    regs[0] = cmd;
-    regs[1] = data;
-    regs[2] = arg1;
-    return pkt;
-}
-
 Addr
 TcuPciProxy::encodePciAddress(PciBusAddr const& busAddr, Addr offset)
 {
@@ -126,7 +60,7 @@ TcuPciProxy::createPciConfigPacket(
     Request::Flags flags;
 
     Addr addr = encodePciAddress(busAddr, offset);
-    auto req = std::make_shared<Request>(addr, size, flags, requestorId);
+    auto req = std::make_shared<Request>(addr, size, flags, tcu.reqId());
 
     auto pkt = new Packet(req, cmd);
     pkt->dataStatic(data);
@@ -140,9 +74,7 @@ TcuPciProxy::TcuPciProxy(const TcuPciProxyParams &p)
       tcuSlavePort(name() + ".tcu_slave_port", this),
       pioPort(name() + ".pio_port", this),
       dmaPort(name() + ".dma_port", this),
-      requestorId(p.system->getRequestorId(this, name())),
-      id(p.id),
-      tcuRegBase(p.tcu_regfile_base_addr),
+      tcu(p.tcu_regfile_base_addr, p.system->getRequestorId(this, name()), p.id),
       deviceBusAddr(0, 0, 0),
       tickEvent(this),
       cmdSM(this),
@@ -252,7 +184,7 @@ TcuPciProxy::sendInterruptCmd()
     DPRINTF(
         TcuPciProxyInt, "Send interrupt message using endpoint %u\n", EP_INT);
 
-    PacketPtr cmdPkt = createTcuCmdPkt(
+    PacketPtr cmdPkt = tcu.createTcuCmdPkt(
         CmdCommand::create(CmdCommand::SEND, EP_INT, Tcu::INVALID_EP_ID),
         CmdData::create(INT_ADDR, 0x4),
         0
@@ -333,7 +265,7 @@ TcuPciProxy::sendDmaCmd()
     // Translate to TCU read/write command
     auto cmd
         = pendingDmaReq->isRead() ? CmdCommand::READ : CmdCommand::WRITE;
-    PacketPtr cmdPkt = createTcuCmdPkt(
+    PacketPtr cmdPkt = tcu.createTcuCmdPkt(
         CmdCommand::create(cmd, EP_DMA, 0),
         CmdData::create(DMA_ADDR, pendingDmaReq->getSize()),
         pendingDmaReq->getAddr()
