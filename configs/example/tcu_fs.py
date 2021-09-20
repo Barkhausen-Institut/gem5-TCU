@@ -460,9 +460,12 @@ def createKecAccPE(noc, options, no, cmdline, memPE, epCount, spmsize='8MB'):
     pe = createCorePE(noc, options, no, cmdline, memPE, epCount,
                       spmsize=spmsize)
 
+    # The MMIO address of the accelerator
+    addr = 0xF4200000
+
     # Disable extra PIO latency since it causes quite some overhead that should
     # not be present in reality if the accelerator is very close to the CPU.
-    pe.kecacc = KecAcc(pio_addr=0xF4200000, pio_latency='0')
+    pe.kecacc = KecAcc(pio_addr=addr, pio_latency='0')
     pe.kecacc.pio = pe.xbar.mem_side_ports
 
     # FIXME: KecAcc and TCU work in parallel to implement double buffering.
@@ -474,6 +477,10 @@ def createKecAccPE(noc, options, no, cmdline, memPE, epCount, spmsize='8MB'):
     # for now. It looks like a separate port was used for the TCU at some point
     # (but not anymore), so we can "abuse" it here as second port on the SPM.
     pe.kecacc.port = pe.spm.tcu_port
+
+    # Make sure accelerator is accessed uncached and without speculation
+    if options.isa == 'riscv':
+        pe.cpu.mmu.pma_checker.uncacheable.append(AddrRange(addr, size=0x1000))
 
     return pe
 
