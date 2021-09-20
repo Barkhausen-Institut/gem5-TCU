@@ -442,6 +442,11 @@ def createCorePE(noc, options, no, cmdline, memPE, epCount,
     pe.cpu.dtb_walker_cache = PageTableWalkerCache()
     pe.cpu.mmu.connectWalkerPorts(pe.cpu.itb_walker_cache.cpu_side, pe.cpu.dtb_walker_cache.cpu_side)
 
+    if options.isa == 'riscv':
+        pe.cpu.mmu.pma_checker = PMAChecker(uncacheable = [
+            pe.tcu.mmio_region,
+        ])
+
     if not l2size is None:
         pe.cpu.itb_walker_cache.mem_side = pe.tol2bus.cpu_side_ports
         pe.cpu.dtb_walker_cache.mem_side = pe.tol2bus.cpu_side_ports
