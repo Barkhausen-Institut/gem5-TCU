@@ -61,8 +61,10 @@ class SyscallSM
         DERIVE_PE,
         DERIVE_SRV,
         GET_SESS,
+        MGATE_REGION,
         KMEM_QUOTA,
         PE_QUOTA,
+        PE_SET_QUOTA,
         SEM_CTRL,
 
         // capability exchange
@@ -72,6 +74,7 @@ class SyscallSM
         REVOKE,
 
         // misc
+        RESET_STATS,
         NOOP,
     };
 

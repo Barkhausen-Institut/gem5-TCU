@@ -82,7 +82,8 @@ AccelCtxSwSM::tick()
         case State::STORE_REPLY:
         {
             reply.res = 0;
-            reply.val = 0;
+            reply.val1 = 0;
+            reply.val2 = 0;
             pkt = accel->tcuif().createPacket(msgAddr, sizeof(reply),
                                               MemCmd::WriteReq);
             memcpy(pkt->getPtr<uint8_t>(), (char*)&reply, sizeof(reply));
@@ -152,11 +153,14 @@ AccelCtxSwSM::handleMemResp(PacketPtr pkt)
             const uint64_t *args =
                 reinterpret_cast<const uint64_t*>(pkt_data + sizeof(MessageHeader));
 
-            vpe_id = args[1];
-            if (args[0] == Operation::VPE_CTRL && args[2] == VPECtrl::START)
-                switched = true;
-            else if (args[0] == Operation::VPE_CTRL && args[2] == VPECtrl::STOP)
-                vpe_id = OUR_VPE;
+            if(args[0] == Operation::VPE_CTRL)
+            {
+                vpe_id = args[1];
+                if (args[2] == VPECtrl::START)
+                    switched = true;
+                else if (args[2] == VPECtrl::STOP)
+                    vpe_id = OUR_VPE;
+            }
             state = State::STORE_REPLY;
             break;
         }

@@ -44,15 +44,21 @@ class AccelCtxSwSM
 
     enum Operation
     {
+        VPE_INIT,
         VPE_CTRL,
         MAP,
         TRANSLATE,
         REM_MSGS,
+        EP_INVAL,
+        DERIVE_QUOTA,
+        GET_QUOTA,
+        SET_QUOTA,
+        REMOVE_QUOTAS,
+        RESET_STATS,
     };
 
     enum VPECtrl
     {
-        INIT,
         START,
         STOP,
     };
@@ -72,7 +78,8 @@ class AccelCtxSwSM
     struct M5_ATTR_PACKED
     {
         uint64_t res;
-        uint64_t val;
+        uint64_t val1;
+        uint64_t val2;
     } reply;
 
   public:
