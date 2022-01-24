@@ -397,6 +397,10 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
         //If we didn't return, we're setting up another read.
         RequestPtr request = std::make_shared<Request>(
             nextRead, oldRead->getSize(), flags, walker->requestorId);
+
+        delete oldRead;
+        oldRead = nullptr;
+
         read = new Packet(request, MemCmd::ReadReq);
         read->allocate();
 
@@ -472,6 +476,8 @@ Walker::WalkerState::recvPacket(PacketPtr pkt)
         }
         sendPackets();
     } else {
+        delete pkt;
+
         sendPackets();
     }
     if (inflight == 0 && read == NULL && writes.size() == 0) {
