@@ -32,7 +32,7 @@ class MemSystem(System):
     type = 'MemSystem'
     cxx_header = 'sim/mem_system.hh'
 
-    pe_id = Param.Unsigned("The PE id")
+    tile_id = Param.Unsigned("The tile id")
 
     mem_file = Param.String("", "The file to load into memory")
     mem_file_num = Param.Unsigned(1, "The number of times to load the file into memory")

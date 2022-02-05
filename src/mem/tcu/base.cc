@@ -246,11 +246,11 @@ BaseTcu::NocSlavePort::getAddrRanges() const
 {
     AddrRangeList ranges;
 
-    Addr baseNocAddr = NocAddr(tcu.peId, 0).getAddr();
-    Addr topNocAddr  = NocAddr(tcu.peId + 1, 0).getAddr() - 1;
+    Addr baseNocAddr = NocAddr(tcu.tileId, 0).getAddr();
+    Addr topNocAddr  = NocAddr(tcu.tileId + 1, 0).getAddr() - 1;
 
     DPRINTF(TcuSlavePort, "Tcu %u covers %#x to %#x\n",
-                          tcu.peId,
+                          tcu.tileId,
                           baseNocAddr,
                           topNocAddr);
 
@@ -280,7 +280,7 @@ BaseTcu::BaseTcu(const BaseTcuParams &p)
     cacheMemSlavePort(*this),
     caches(p.caches),
     nocReqFinishedEvent(*this),
-    peId(p.pe_id),
+    tileId(p.tile_id),
     mmioRegion(p.mmio_region),
     slaveRegion(p.slave_region)
 {
@@ -296,7 +296,7 @@ BaseTcu::init()
 
     nocSlavePort.sendRangeChange();
 
-    // for memory-PEs, the icache/dcache slaves are not connected
+    // for memory tiles, the icache/dcache slaves are not connected
     if (icacheSlavePort.isConnected())
         icacheSlavePort.sendRangeChange();
     if (dcacheSlavePort.isConnected())

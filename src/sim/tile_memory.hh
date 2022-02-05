@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Nils Asmussen
+ * Copyright (c) 2016, Nils Asmussen
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,19 +27,43 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
-#include "sim/pe_memory.hh"
-#include "mem/port_proxy.hh"
-#include "mem/tcu/tlb.hh"
+#ifndef __SIM_TCU_MEMORY_HH__
+#define __SIM_TCU_MEMORY_HH__
 
-PEMemory::PEMemory(SimObject *obj,
-                   peid_t memPe,
-                   Addr memOffset,
-                   Addr memSize,
-                   PortProxy &phys)
-    : obj(obj),
-      physp(phys),
-      memPe(memPe),
-      memOffset(memOffset),
-      memSize(memSize)
+#include "sim/system.hh"
+#include "mem/tcu/noc_addr.hh"
+
+class TileMemory
 {
-}
+  private:
+
+    SimObject *obj;
+
+    PortProxy &physp;
+
+  public:
+
+    const tileid_t memTile;
+    const Addr memOffset;
+    const Addr memSize;
+
+    TileMemory(SimObject *obj,
+               tileid_t memTile,
+               Addr memOffset,
+               Addr memSize,
+               PortProxy &phys);
+
+    bool hasMem(tileid_t tile) const
+    {
+        return (tileDesc(tile) & 0x7) != 1;
+    }
+
+    virtual uint32_t tileDesc(tileid_t tile) const = 0;
+
+    NocAddr getPhys(Addr offset) const
+    {
+        return NocAddr(memTile, memOffset + offset);
+    }
+};
+
+#endif

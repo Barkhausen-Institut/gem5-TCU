@@ -40,7 +40,7 @@
 class MemSystem : public System
 {
   protected:
-    peid_t peId;
+    tileid_t tileId;
     std::string memFile;
     size_t memFileNum;
 

@@ -60,18 +60,18 @@ CoreRequests::regStats()
 
 size_t
 CoreRequests::startForeignReceive(epid_t epId,
-                                  vpeid_t vpeId)
+                                  actid_t actId)
 {
     size_t id = nextId();
 
     auto req = new ForeignRecvRequest(id, *this);
     req->epId = epId;
-    req->vpeId = vpeId;
+    req->actId = actId;
     reqs.push_back(req);
 
     DPRINTFS(TcuCoreReqs, (&tcu),
-        "CoreRequest[%lu] = recvForeign(ep=%u, vpe=%u)\n",
-        id, epId, vpeId);
+        "CoreRequest[%lu] = recvForeign(ep=%u, act=%u)\n",
+        id, epId, actId);
     coreReqs++;
 
     if(reqs.size() == 1)
@@ -94,7 +94,7 @@ CoreRequests::ForeignRecvRequest::start()
     ForeignCoreReq freq = 0;
     freq.type = CoreMsgType::FOREIGN_REQ;
     freq.ep = epId;
-    freq.vpe = vpeId;
+    freq.act = actId;
     req.tcu.regs().set(PrivReg::CORE_REQ, freq);
     waiting = false;
 

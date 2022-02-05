@@ -32,7 +32,7 @@
 #include "debug/TcuConnector.hh"
 #include "mem/tcu/tcu.hh"
 #include "mem/tcu/reg_file.hh"
-#include "sim/pe_memory.hh"
+#include "sim/tile_memory.hh"
 
 #include <iomanip>
 
@@ -66,7 +66,7 @@ TcuAccel::TcuAccel(const TcuAccelParams &p)
     retryPkt(nullptr),
     connector()
 {
-    PEMemory *sys = dynamic_cast<PEMemory*>(system);
+    TileMemory *sys = dynamic_cast<TileMemory*>(system);
     haveVM = !sys->hasMem(id);
     // if we don't have VM, we have an SPM, which supports larger chunks
     if (!haveVM)

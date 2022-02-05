@@ -56,7 +56,7 @@ if args:
 # checking
 
 if not options.num_pes > 0:
-    print "Error: Must have at least one PE"
+    print "Error: Must have at least one tile"
     sys.exit(1)
 
 # Set up the system
@@ -75,37 +75,37 @@ system.noc = NoncoherentXBar(forward_latency  = 0,
                              width = 8,
                              )
 
-# A PE (processing element) consists of a CPU, a Scratchpad-Memory, and a TCU.
+# A tile consists of a CPU, a Scratchpad-Memory, and a TCU.
 # These elements are connected via a simple non-coherent XBar. The TCU ports
-# mem_side_slave and mem_side_master are the PE's interface to the outside
+# mem_side_slave and mem_side_master are the tile's interface to the outside
 # world.
 for i in range(0, options.num_pes):
 
-    # each PE is represented by it's own subsystem
-    pe = SubSystem()
-    setattr(system, 'pe%d' % i, pe)
+    # each tile is represented by it's own subsystem
+    tile = SubSystem()
+    setattr(system, 'tile%d' % i, tile)
 
     # TODO set latencies
-    pe.xbar = NoncoherentXBar(forward_latency  = 0,
+    tile.xbar = NoncoherentXBar(forward_latency  = 0,
                               frontend_latency = 0,
                               response_latency = 1,
                               width = 8,
                              )
 
-    pe.cpu = TcuTest()
-    pe.cpu.port = pe.xbar.slave
-    pe.cpu.id = i;
+    tile.cpu = TcuTest()
+    tile.cpu.port = tile.xbar.slave
+    tile.cpu.id = i;
 
-    pe.scratchpad = Scratchpad()
-    pe.scratchpad.cpu_port = pe.xbar.master
+    tile.scratchpad = Scratchpad()
+    tile.scratchpad.cpu_port = tile.xbar.master
 
-    pe.tcu = Tcu()
-    pe.tcu.pe_id = i
-    pe.tcu.spm_master_port = pe.scratchpad.tcu_port
-    pe.tcu.cpu_slave_port = pe.xbar.master
+    tile.tcu = Tcu()
+    tile.tcu.pe_id = i
+    tile.tcu.spm_master_port = tile.scratchpad.tcu_port
+    tile.tcu.cpu_slave_port = tile.xbar.master
 
-    pe.tcu.noc_master_port = system.noc.slave
-    pe.tcu.noc_slave_port  = system.noc.master
+    tile.tcu.noc_master_port = system.noc.slave
+    tile.tcu.noc_slave_port  = system.noc.master
 
 #system.badaddr1 = IsaFake(pio_addr=0x10000, pio_size=0x0FFEFFFF)
 #system.badaddr1.warn_access="warn"

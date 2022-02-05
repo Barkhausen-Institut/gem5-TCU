@@ -35,7 +35,7 @@
 
 #include "sim/system.hh"
 #include "mem/tcu/noc_addr.hh"
-#include "sim/pe_memory.hh"
+#include "sim/tile_memory.hh"
 
 class M3Loader
 {
@@ -65,7 +65,7 @@ class M3Loader
     struct M5_ATTR_PACKED KernelEnv
     {
         uint64_t mod_count;
-        uint64_t pe_count;
+        uint64_t tile_count;
         uint64_t mem_count;
         uint64_t serv_count;
     };
@@ -79,8 +79,8 @@ class M3Loader
     struct M5_ATTR_PACKED BootEnv
     {
         uint64_t platform;
-        uint64_t pe_id;
-        uint64_t pe_desc;
+        uint64_t tile_id;
+        uint64_t tile_desc;
         uint64_t argc;
         uint64_t argv;
         uint64_t heap_size;
@@ -88,31 +88,31 @@ class M3Loader
         uint64_t lambda;
     };
 
-    std::vector<Addr> pes;
+    std::vector<Addr> tiles;
     std::vector<std::string> mods;
     std::string commandLine;
 
   public:
-    const uint coreId;
+    const uint tileId;
     const Addr modOffset;
     const Addr modSize;
-    const Addr peSize;
+    const Addr tileSize;
 
   public:
-    M3Loader(const std::vector<Addr> &pes,
+    M3Loader(const std::vector<Addr> &tiles,
              const std::vector<std::string> &mods,
              const std::string &cmdline,
-             uint coreId,
+             uint tileId,
              Addr modOffset,
              Addr modSize,
-             Addr peSize);
+             Addr tileSize);
 
-    const std::vector<Addr> &pe_attr() const
+    const std::vector<Addr> &tile_attr() const
     {
-        return pes;
+        return tiles;
     }
 
-    void initState(System &sys, PEMemory &mem, RequestPort &noc);
+    void initState(System &sys, TileMemory &mem, RequestPort &noc);
 
   private:
     size_t getArgc() const;

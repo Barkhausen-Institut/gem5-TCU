@@ -68,9 +68,9 @@ MemoryUnit::regStats()
         .name(tcu.name() + ".mem.receivedBytes")
         .desc("Received read/write requests (in bytes)")
         .flags(Stats::nozero);
-    wrongVPE
-        .name(tcu.name() + ".mem.wrongVPE")
-        .desc("Number of received requests that targeted the wrong VPE")
+    wrongAct
+        .name(tcu.name() + ".mem.wrongAct")
+        .desc("Number of received requests that targeted the wrong activity")
         .flags(Stats::nozero);
 }
 
@@ -98,7 +98,7 @@ MemoryUnit::startReadWithEP(EpFile::EpCache &eps)
 
     const MemEp mep = ep.mem;
 
-    if(mep.r0.vpe != tcu.regs().getCurVPE().id)
+    if(mep.r0.act != tcu.regs().getCurAct().id)
     {
         DPRINTFS(Tcu, (&tcu), "EP%u: foreign EP\n", cmd.epid);
         tcu.scheduleCmdFinish(Cycles(1), TcuError::FOREIGN_EP);
@@ -119,7 +119,7 @@ MemoryUnit::startReadWithEP(EpFile::EpCache &eps)
 
     DPRINTFS(Tcu, (&tcu),
         "\e[1m[rd -> %u]\e[0m at %#018lx+%#lx with EP%u into %#018lx:%lu\n",
-        mep.r0.targetPe, mep.r1.remoteAddr, offset,
+        mep.r0.targetTile, mep.r1.remoteAddr, offset,
         cmd.epid, data.addr, size);
 
     if(size == 0)
@@ -143,7 +143,7 @@ MemoryUnit::startReadWithEP(EpFile::EpCache &eps)
         return;
     }
 
-    NocAddr nocAddr(mep.r0.targetPe, mep.r1.remoteAddr + offset);
+    NocAddr nocAddr(mep.r0.targetTile, mep.r1.remoteAddr + offset);
 
     auto pkt = tcu.generateRequest(nocAddr.getAddr(),
                                    size,
@@ -190,7 +190,7 @@ MemoryUnit::readComplete(const CmdCommand::Bits& cmd, PacketPtr pkt, TcuError er
     NocAddr phys(data.addr);
     if (tcu.tlb())
     {
-        auto asid = tcu.regs().getCurVPE().id;
+        auto asid = tcu.regs().getCurAct().id;
         if (tcu.tlb()->lookup(data.addr, asid, TcuTlb::WRITE, &phys) != TcuTlb::HIT)
         {
             DPRINTFS(Tcu, (&tcu), "EP%u: TLB miss for data address\n", cmd.epid);
@@ -246,7 +246,7 @@ MemoryUnit::startWriteWithEP(EpFile::EpCache &eps)
 
     const MemEp mep = ep.mem;
 
-    if(mep.r0.vpe != tcu.regs().getCurVPE().id)
+    if(mep.r0.act != tcu.regs().getCurAct().id)
     {
         DPRINTFS(Tcu, (&tcu), "EP%u: foreign EP\n", cmd.epid);
         tcu.scheduleCmdFinish(Cycles(1), TcuError::FOREIGN_EP);
@@ -267,7 +267,7 @@ MemoryUnit::startWriteWithEP(EpFile::EpCache &eps)
 
     DPRINTFS(Tcu, (&tcu),
         "\e[1m[wr -> %u]\e[0m at %#018lx+%#lx with EP%u from %#018lx:%lu\n",
-        mep.r0.targetPe, mep.r1.remoteAddr, offset,
+        mep.r0.targetTile, mep.r1.remoteAddr, offset,
         cmd.epid, data.addr, size);
 
     if(size == 0)
@@ -294,7 +294,7 @@ MemoryUnit::startWriteWithEP(EpFile::EpCache &eps)
     NocAddr phys(data.addr);
     if (tcu.tlb())
     {
-        auto asid = tcu.regs().getCurVPE().id;
+        auto asid = tcu.regs().getCurAct().id;
         if (tcu.tlb()->lookup(data.addr, asid, TcuTlb::READ, &phys) != TcuTlb::HIT)
         {
             DPRINTFS(Tcu, (&tcu), "EP%u: TLB miss for data address\n", cmd.epid);
@@ -303,7 +303,7 @@ MemoryUnit::startWriteWithEP(EpFile::EpCache &eps)
         }
     }
 
-    NocAddr dest(mep.r0.targetPe, mep.r1.remoteAddr + offset);
+    NocAddr dest(mep.r0.targetTile, mep.r1.remoteAddr + offset);
 
     auto xfer = new WriteTransferEvent(phys, size, 0, dest);
     tcu.startTransfer(xfer, Cycles(0));

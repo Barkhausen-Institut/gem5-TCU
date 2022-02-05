@@ -55,9 +55,9 @@ MessageUnit::regStats()
         .name(tcu.name() + ".msg.receivedBytes")
         .desc("Received messages (in bytes)")
         .flags(Stats::nozero);
-    wrongVPE
-        .name(tcu.name() + ".msg.wrongVPE")
-        .desc("Number of received messages that targeted the wrong VPE")
+    wrongAct
+        .name(tcu.name() + ".msg.wrongAct")
+        .desc("Number of received messages that targeted the wrong activity")
         .flags(Stats::nozero);
     noSpace
         .name(tcu.name() + ".msg.noSpace")
@@ -99,7 +99,7 @@ MessageUnit::startReplyWithEP(EpFile::EpCache &eps)
 
     const RecvEp &rep = ep.recv;
 
-    if(rep.r0.vpe != tcu.regs().getCurVPE().id)
+    if(rep.r0.act != tcu.regs().getCurAct().id)
     {
         DPRINTFS(Tcu, (&tcu), "EP%u: foreign EP\n", cmd.epid);
         tcu.scheduleCmdFinish(Cycles(1), TcuError::FOREIGN_EP);
@@ -160,7 +160,7 @@ MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
 
     const SendEp &sep = ep.send;
 
-    if(sep.r0.vpe != tcu.regs().getCurVPE().id)
+    if(sep.r0.act != tcu.regs().getCurAct().id)
     {
         DPRINTFS(Tcu, (&tcu), "EP%u: foreign EP\n", epid);
         tcu.scheduleCmdFinish(Cycles(1), TcuError::FOREIGN_EP);
@@ -209,7 +209,7 @@ MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
     NocAddr phys(data.addr);
     if (tcu.tlb())
     {
-        auto asid = tcu.regs().getCurVPE().id;
+        auto asid = tcu.regs().getCurAct().id;
         if (tcu.tlb()->lookup(data.addr, asid, TcuTlb::READ, &phys) != TcuTlb::HIT)
         {
             DPRINTFS(Tcu, (&tcu), "EP%u: TLB miss for data address\n", epid);
@@ -235,7 +235,7 @@ MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
 
             const RecvEp &rep = replyEp.recv;
 
-            if(rep.r0.vpe != tcu.regs().getCurVPE().id)
+            if(rep.r0.act != tcu.regs().getCurAct().id)
             {
                 DPRINTFS(Tcu, (&tcu), "EP%u: foreign EP\n", cmd.arg0);
                 tcu.scheduleCmdFinish(Cycles(1), TcuError::FOREIGN_EP);
@@ -253,7 +253,7 @@ MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
     }
     else
     {
-        assert(sep.r0.vpe == tcu.regs().getCurVPE().id);
+        assert(sep.r0.act == tcu.regs().getCurAct().id);
 
         if (sep.r0.crdEp != Tcu::INVALID_EP_ID &&
             sep.r0.crdEp >= tcu.numEndpoints)
@@ -275,7 +275,7 @@ MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
 
     DPRINTFS(Tcu, (&tcu), "\e[1m[%s -> %u]\e[0m with EP%u of %#018lx:%lu\n",
              cmd.opcode == CmdCommand::REPLY ? "rp" : "sd",
-             sep.r1.tgtPe,
+             sep.r1.tgtTile,
              cmd.epid,
              data.addr,
              data.size);
@@ -287,7 +287,7 @@ MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
     else
         header->flags = 0; // normal message
 
-    header->senderPeId   = tcu.peId;
+    header->senderTileId   = tcu.tileId;
     header->senderEpId   = sep.r0.curCrd == Tcu::CREDITS_UNLIM
                            ? Tcu::INVALID_EP_ID
                            : cmd.epid;
@@ -298,18 +298,18 @@ MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
     header->replySize    = replySize;
 
     DPRINTFS(Tcu, (&tcu),
-        "  src: pe=%u ep=%u rpep=%u rplbl=%#018lx rpsize=%#x flags=%#x%s\n",
-        header->senderPeId, header->senderEpId, header->replyEpId,
+        "  src: tile=%u ep=%u rpep=%u rplbl=%#018lx rpsize=%#x flags=%#x%s\n",
+        header->senderTileId, header->senderEpId, header->replyEpId,
         header->replyLabel, 1 << header->replySize, header->flags,
-        header->senderPeId != tcu.peId ? " (on behalf)" : "");
+        header->senderTileId != tcu.tileId ? " (on behalf)" : "");
 
     DPRINTFS(Tcu, (&tcu),
-        "  dst: pe=%u ep=%u lbl=%#018lx\n",
-        sep.r1.tgtPe, sep.r1.tgtEp, header->label);
+        "  dst: tile=%u ep=%u lbl=%#018lx\n",
+        sep.r1.tgtTile, sep.r1.tgtEp, header->label);
 
     assert(data.size + sizeof(MessageHeader) <= tcu.maxNocPacketSize);
 
-    NocAddr nocAddr(sep.r1.tgtPe, sep.r1.tgtEp);
+    NocAddr nocAddr(sep.r1.tgtTile, sep.r1.tgtEp);
     uint flags = XferUnit::MESSAGE;
 
     // start the transfer of the payload
@@ -489,16 +489,16 @@ MessageUnit::fetchWithEP(EpFile::EpCache &eps)
     }
 
     RecvEp &rep = ep.recv;
-    if (rep.r0.vpe != tcu.regs().getCurVPE().id)
+    if (rep.r0.act != tcu.regs().getCurAct().id)
     {
         tcu.scheduleCmdFinish(Cycles(1), TcuError::FOREIGN_EP);
         return;
     }
 
-    // check if the current VPE has unread messages at all. note that this is
+    // check if the current activity has unread messages at all. note that this is
     // important in case it is out of sync with the receive EPs, i.e., if we
     // have ongoing foreignRecv core requests.
-    if (rep.r2.unread == 0 || tcu.regs().getCurVPE().msgs == 0)
+    if (rep.r2.unread == 0 || tcu.regs().getCurAct().msgs == 0)
     {
         tcu.regs().set(UnprivReg::ARG1, -1);
         tcu.scheduleCmdFinish(Cycles(1), TcuError::NONE);
@@ -560,7 +560,7 @@ MessageUnit::startAckWithEP(EpFile::EpCache &eps)
     }
 
     RecvEp &rep = ep.recv;
-    if (rep.r0.vpe != tcu.regs().getCurVPE().id)
+    if (rep.r0.act != tcu.regs().getCurAct().id)
     {
         tcu.scheduleCmdFinish(Cycles(1), TcuError::FOREIGN_EP);
         return;
@@ -689,12 +689,12 @@ MessageUnit::finishMsgReceive(EpFile::EpCache &eps,
             SendEp rep;
             rep.id = ep.r0.rplEps + idx;
             rep.r0.type = static_cast<uint>(EpType::SEND);
-            rep.r0.vpe = ep.r0.vpe;
+            rep.r0.act = ep.r0.act;
             rep.r0.msgSize = header->replySize;
             rep.r0.maxCrd = rep.r0.curCrd = 1;
             rep.r0.crdEp = header->senderEpId;
             rep.r0.reply = 1;
-            rep.r1.tgtPe = header->senderPeId;
+            rep.r1.tgtTile = header->senderTileId;
             rep.r1.tgtEp = header->replyEpId;
             rep.r2.label = header->replyLabel;
             eps.updateEp(rep);
@@ -746,7 +746,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
 
     DPRINTFS(Tcu, (&tcu),
         "\e[1m[rv <- %u]\e[0m %lu bytes on EP%u\n",
-        header->senderPeId, header->length, epId);
+        header->senderTileId, header->length, epId);
     tcu.printPacket(pkt);
 
     if (DTRACE(TcuMsgs))
@@ -843,13 +843,13 @@ MessageUnit::ReceiveTransferEvent::transferDone(TcuError result)
 
     RecvEp rep = eps->getEp(epid).recv;
 
-    bool foreign = rep.r0.vpe != tcu().regs().getCurVPE().id;
+    bool foreign = rep.r0.act != tcu().regs().getCurAct().id;
     result = msgUnit->finishMsgReceive(*eps, rep, msgAddr.getAddr(), header,
                                        result, flags(), !foreign);
 
-    // notify SW if we received a message for a different VPE
+    // notify SW if we received a message for a different activity
     if(foreign)
-        tcu().startForeignReceive(rep.id, rep.r0.vpe);
+        tcu().startForeignReceive(rep.id, rep.r0.act);
 
     MemoryUnit::ReceiveTransferEvent::transferDone(result);
 

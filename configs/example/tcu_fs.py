@@ -44,18 +44,19 @@ from common import ObjectList
 from common.Caches import *
 from common import Options
 
-# Each PE is represented as an instance of System. Whereas each PE has a CPU,
-# a Scratchpad, and a TCU. Because it seems that the gem5 crossbar is not able
-# to handle requests from the icache/dcache ports of the CPU if using the O3 model,
-# we're connecting the icache/dcache ports to the TCU. The TCU forwards the request
-# either to its own register file or the scratchpad, depending on the address range.
-# The PEs are connected via a global crossbar.
+# Each tile is represented as an instance of System. Whereas each tile has a
+# CPU, a Scratchpad, and a TCU. Because it seems that the gem5 crossbar is not
+# able to handle requests from the icache/dcache ports of the CPU if using the
+# O3 model, we're connecting the icache/dcache ports to the TCU. The TCU
+# forwards the request either to its own register file or the scratchpad,
+# depending on the address range. The tiles are connected via a global
+# crossbar.
 
 ###############################################################################
 # root                                                                        #
 #                                                                             #
 # |-----------------|    |-----------------|    |-----------------|           #
-# | pe0             |    | pe1             |    | pe2             |           #
+# | T0              |    | T1              |    | T2              |           #
 # |         cpu     |    |         cpu     |    |         cpu     |           #
 # |          ||     |    |          ||     |    |          ||     |           #
 # |   regs--tcu--+  |    |   regs--tcu--+  |    |   regs--tcu--+  |           #
@@ -77,8 +78,8 @@ APIC_range_size                 = 1 << 12;
 base_offset                     = 768 * 1024 * 1024
 mod_offset                      = base_offset
 mod_size                        = 64 * 1024 * 1024
-pe_offset                       = mod_offset + mod_size
-pe_size                         = 16 * 1024 * 1024
+tile_offset                     = mod_offset + mod_size
+tile_size                       = 16 * 1024 * 1024
 
 class PcPciHost(GenericPciHost):
     conf_base = 0x30000000
@@ -112,8 +113,8 @@ def getOptions():
     parser.add_option("--mem-ranks", type="int", default=None,
                       help="number of memory ranks per channel")
 
-    parser.add_option("--pausepe", default=-1, type="int",
-                      help="the PE to pause until GDB connects")
+    parser.add_option("--pausetile", default=-1, type="int",
+                      help="the tile to pause until GDB connects")
 
     parser.add_option("--sys-voltage", action="store", type="string",
                       default='1.0V',
@@ -149,207 +150,208 @@ def getCacheStr(cache):
         cache.size.value / 1024, cache.assoc, cache.tag_latency
     )
 
-def printConfig(pe, tcupos):
-    print('      TCU  =eps:%d, bufsz:%d B, blocksz:%d B, count:%d, tlb:%d' % \
-        (pe.tcu.num_endpoints, pe.tcu.buf_size.value, pe.tcu.block_size.value,
-         pe.tcu.buf_count, pe.tcu.tlb_entries))
+def printConfig(tile, tcupos):
+    print('     TCU  =eps:%d, bufsz:%d B, blocksz:%d B, count:%d, tlb:%d' % \
+        (tile.tcu.num_endpoints, tile.tcu.buf_size.value, tile.tcu.block_size.value,
+         tile.tcu.buf_count, tile.tcu.tlb_entries))
 
     try:
-        print('      L1i$ =%s' % (getCacheStr(pe.l1icache)))
-        print('      L1d$ =%s' % (getCacheStr(pe.l1dcache)))
+        print('     L1i$ =%s' % (getCacheStr(tile.l1icache)))
+        print('     L1d$ =%s' % (getCacheStr(tile.l1dcache)))
         try:
-            print('      L2$  =%s' % (getCacheStr(pe.l2cache)))
+            print('     L2$  =%s' % (getCacheStr(tile.l2cache)))
         except:
             pass
         try:
-            print('      IO$  =%s' % (getCacheStr(pe.iocache)))
+            print('     IO$  =%s' % (getCacheStr(tile.iocache)))
         except:
             pass
 
-        str = '      Comp =Core -> '
+        str = '     Comp =Core -> '
         if tcupos == 0:
             str += 'TCU -> L1$'
         elif tcupos == 1:
             str += 'L1$ -> TCU'
         else:
             str += 'L1$'
-        if hasattr(pe, 'l2cache'):
+        if hasattr(tile, 'l2cache'):
             str += ' -> L2$'
         if tcupos == 2:
             str += ' -> IO$ -> TCU'
         print(str)
     except:
         try:
-            print('      imem =%d KiB' % (int(pe.spm.range.end) / 1024))
-            print('      Comp =Core -> TCU -> SPM')
+            print('     imem =%d KiB' % (int(tile.spm.range.end) / 1024))
+            print('     Comp =Core -> TCU -> SPM')
         except:
             pass
 
-def interpose(pe, options, name, port):
-    if int(pe.pe_id) in options.mem_watches:
-        watch = options.mem_watches[int(pe.pe_id)]
+def interpose(tile, options, name, port):
+    if int(tile.tile_id) in options.mem_watches:
+        watch = options.mem_watches[int(tile.tile_id)]
         mon = CommMonitor()
         mon.trace = MemWatchProbe(probe_name="PktResponse", ranges=watch)
         mon.cpu_side_ports = port
-        setattr(pe, name, mon)
+        setattr(tile, name, mon)
         return mon.master
     return port
 
-def connectTcuToMem(pe, options, l1size, tcupos):
-    dport = interpose(pe, options, 'tcudmon', pe.tcu.dcache_master_port)
+def connectTcuToMem(tile, options, l1size, tcupos):
+    dport = interpose(tile, options, 'tcudmon', tile.tcu.dcache_master_port)
     if l1size is None or tcupos == 0:
-        iport = interpose(pe, options, 'tcuimon', pe.tcu.icache_master_port)
+        iport = interpose(tile, options, 'tcuimon', tile.tcu.icache_master_port)
 
     if not l1size is None:
         if tcupos == 0:
-            pe.l1icache.cpu_side = iport
-            pe.l1dcache.cpu_side = dport
+            tile.l1icache.cpu_side = iport
+            tile.l1dcache.cpu_side = dport
         else:
-            pe.iocache.cpu_side = dport
+            tile.iocache.cpu_side = dport
     else:
-        pe.xbar.cpu_side_ports = iport
-        pe.xbar.cpu_side_ports = dport
+        tile.xbar.cpu_side_ports = iport
+        tile.xbar.cpu_side_ports = dport
 
-def connectCuToMem(pe, options, dport, iport=None, l1size=None, tcupos=0):
-    dport = interpose(pe, options, 'cu_dmon', dport)
+def connectCuToMem(tile, options, dport, iport=None, l1size=None, tcupos=0):
+    dport = interpose(tile, options, 'cu_dmon', dport)
     if not iport is None:
-        iport = interpose(pe, options, 'cu_imon', iport)
+        iport = interpose(tile, options, 'cu_imon', iport)
 
     if not l1size is None and tcupos > 0:
         if not iport is None:
-            pe.l1icache.cpu_side = iport
-        pe.l1dcache.cpu_side = dport
+            tile.l1icache.cpu_side = iport
+        tile.l1dcache.cpu_side = dport
     else:
         if not iport is None:
-            pe.tcu.icache_slave_port = iport
-        pe.tcu.dcache_slave_port = dport
+            tile.tcu.icache_slave_port = iport
+        tile.tcu.dcache_slave_port = dport
 
-def createPE(noc, options, no, systemType, l1size, l2size, spmsize, tcupos, memPE, epCount):
+def createTile(noc, options, no, systemType, l1size, l2size, spmsize,
+               tcupos, memTile, epCount):
     CPUClass = ObjectList.cpu_list.get(options.cpu_type)
 
-    # each PE is represented by it's own subsystem
-    pe = systemType(mem_mode=CPUClass.memory_mode())
-    pe.voltage_domain = VoltageDomain(voltage=options.sys_voltage)
-    pe.clk_domain = SrcClockDomain(clock=options.cpu_clock,
-                                   voltage_domain=pe.voltage_domain)
-    pe.pe_id = no
+    # each tile is represented by it's own subsystem
+    tile = systemType(mem_mode=CPUClass.memory_mode())
+    tile.voltage_domain = VoltageDomain(voltage=options.sys_voltage)
+    tile.clk_domain = SrcClockDomain(clock=options.cpu_clock,
+                                   voltage_domain=tile.voltage_domain)
+    tile.tile_id = no
 
     if not l2size is None:
-        pe.xbar = SystemXBar()
+        tile.xbar = SystemXBar()
     else:
-        pe.xbar = L2XBar()
-    pe.xbar.point_of_coherency = True
+        tile.xbar = L2XBar()
+    tile.xbar.point_of_coherency = True
 
-    pe.tcu = Tcu(max_noc_packet_size='2kB', buf_size='2kB')
-    pe.tcu.pe_id = no
+    tile.tcu = Tcu(max_noc_packet_size='2kB', buf_size='2kB')
+    tile.tcu.tile_id = no
 
-    pe.tcu.num_endpoints = epCount
+    tile.tcu.num_endpoints = epCount
     if tcupos > 0:
-        pe.tcu.tlb_entries = 32
+        tile.tcu.tlb_entries = 32
     else:
-        pe.tcu.tlb_entries = 128
+        tile.tcu.tlb_entries = 128
 
     # connection to noc
-    pe.tcu.noc_master_port = noc.cpu_side_ports
-    pe.tcu.noc_slave_port  = noc.mem_side_ports
+    tile.tcu.noc_master_port = noc.cpu_side_ports
+    tile.tcu.noc_slave_port  = noc.mem_side_ports
 
-    pe.tcu.slave_region = [AddrRange(0, pe.tcu.mmio_region.start - 1)]
+    tile.tcu.slave_region = [AddrRange(0, tile.tcu.mmio_region.start - 1)]
 
     # for some reason, we need to initialize that here explicitly
-    pe.tcu.caches = []
+    tile.tcu.caches = []
 
     # create caches
     if not l1size is None:
-        pe.l1icache = L1_ICache(size=l1size)
-        pe.l1icache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
-        pe.l1icache.tag_latency = 4
-        pe.l1icache.data_latency = 4
-        pe.l1icache.response_latency = 4
-        pe.tcu.caches.append(pe.l1icache)
+        tile.l1icache = L1_ICache(size=l1size)
+        tile.l1icache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
+        tile.l1icache.tag_latency = 4
+        tile.l1icache.data_latency = 4
+        tile.l1icache.response_latency = 4
+        tile.tcu.caches.append(tile.l1icache)
 
-        pe.l1dcache = L1_DCache(size=l1size)
-        pe.l1dcache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
-        pe.l1dcache.tag_latency = 4
-        pe.l1dcache.data_latency = 4
-        pe.l1dcache.response_latency = 4
-        pe.tcu.caches.append(pe.l1dcache)
+        tile.l1dcache = L1_DCache(size=l1size)
+        tile.l1dcache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
+        tile.l1dcache.tag_latency = 4
+        tile.l1dcache.data_latency = 4
+        tile.l1dcache.response_latency = 4
+        tile.tcu.caches.append(tile.l1dcache)
 
         if not l2size is None:
-            pe.l2cache = L2Cache(size=l2size)
-            pe.l2cache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
-            pe.l2cache.tag_latency = 12
-            pe.l2cache.data_latency = 12
-            pe.l2cache.response_latency = 12
-            pe.tcu.caches.append(pe.l2cache)
+            tile.l2cache = L2Cache(size=l2size)
+            tile.l2cache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
+            tile.l2cache.tag_latency = 12
+            tile.l2cache.data_latency = 12
+            tile.l2cache.response_latency = 12
+            tile.tcu.caches.append(tile.l2cache)
 
-            pe.l2cache.prefetcher = StridePrefetcher(degree = 16)
+            tile.l2cache.prefetcher = StridePrefetcher(degree = 16)
 
             # use a crossbar to connect l1icache and l1dcache to l2cache
-            pe.tol2bus = L2XBar()
-            pe.l2cache.cpu_side = pe.tol2bus.default
-            pe.l2cache.mem_side = pe.xbar.cpu_side_ports
+            tile.tol2bus = L2XBar()
+            tile.l2cache.cpu_side = tile.tol2bus.default
+            tile.l2cache.mem_side = tile.xbar.cpu_side_ports
 
-            pe.l1icache.mem_side = pe.tol2bus.cpu_side_ports
-            pe.l1dcache.mem_side = pe.tol2bus.cpu_side_ports
+            tile.l1icache.mem_side = tile.tol2bus.cpu_side_ports
+            tile.l1dcache.mem_side = tile.tol2bus.cpu_side_ports
         else:
-            pe.l1dcache.prefetcher = StridePrefetcher(degree = 16)
+            tile.l1dcache.prefetcher = StridePrefetcher(degree = 16)
 
-            pe.l1icache.mem_side = pe.xbar.cpu_side_ports
-            pe.l1dcache.mem_side = pe.xbar.cpu_side_ports
+            tile.l1icache.mem_side = tile.xbar.cpu_side_ports
+            tile.l1dcache.mem_side = tile.xbar.cpu_side_ports
 
         if tcupos > 0:
-            pe.iocache = L1_DCache(size='8kB')
-            pe.iocache.tag_latency = 4
-            pe.iocache.data_latency = 4
-            pe.iocache.response_latency = 4
-            pe.tcu.caches.append(pe.iocache)
+            tile.iocache = L1_DCache(size='8kB')
+            tile.iocache.tag_latency = 4
+            tile.iocache.data_latency = 4
+            tile.iocache.response_latency = 4
+            tile.tcu.caches.append(tile.iocache)
             if not l2size is None and tcupos == 1:
-                pe.iocache.mem_side = pe.tol2bus.cpu_side_ports
+                tile.iocache.mem_side = tile.tol2bus.cpu_side_ports
             else:
-                pe.iocache.mem_side = pe.xbar.cpu_side_ports
+                tile.iocache.mem_side = tile.xbar.cpu_side_ports
 
         # the TCU handles LLC misses
-        pe.tcu.cache_mem_slave_port = pe.xbar.default
+        tile.tcu.cache_mem_slave_port = tile.xbar.default
 
-        # don't check whether the kernel is in memory because a PE does not have memory in this
-        # case, but just a cache that is connected to a different PE
-        pe.workload.addr_check = False
+        # don't check whether the kernel is in memory because a tile does not have memory in this
+        # case, but just a cache that is connected to a different tile
+        tile.workload.addr_check = False
     elif not spmsize is None:
-        pe.spm = Scratchpad(in_addr_map="true")
-        pe.spm.cpu_port = pe.xbar.default
-        pe.spm.range = spmsize
+        tile.spm = Scratchpad(in_addr_map="true")
+        tile.spm.cpu_port = tile.xbar.default
+        tile.spm.range = spmsize
 
     if options.isa == 'riscv':
-        pe.tcu.pe_mem_offset = 0x10000000
+        tile.tcu.tile_mem_offset = 0x10000000
         if l1size is None and not spmsize is None:
-            pe.spm.offset = pe.tcu.pe_mem_offset
+            tile.spm.offset = tile.tcu.tile_mem_offset
 
     if systemType != MemSystem:
-        pe.memory_pe = memPE
-        pe.memory_offset = pe_offset + (pe_size * no)
-        pe.memory_size = pe_size
+        tile.memory_tile = memTile
+        tile.memory_offset = tile_offset + (tile_size * no)
+        tile.memory_size = tile_size
 
     if systemType == MemSystem or l1size is None:
-        # for memory PEs or PEs with SPM, we do not need a buffer. for the sake of
-        # an easy implementation we just make the buffer very large and the block
-        # size as well, so that we can read a packet from SPM/DRAM into the buffer
-        # and send it from there. Since that costs no simulated time, it is the
-        # same as having no buffer.
-        pe.tcu.block_size = pe.tcu.max_noc_packet_size
-        pe.tcu.buf_size = pe.tcu.max_noc_packet_size
+        # for memory tiles or tiles with SPM, we do not need a buffer. for the
+        # sake of an easy implementation we just make the buffer very large and
+        # the block size as well, so that we can read a packet from SPM/DRAM
+        # into the buffer and send it from there. Since that costs no simulated
+        # time, it is the same as having no buffer.
+        tile.tcu.block_size = tile.tcu.max_noc_packet_size
+        tile.tcu.buf_size = tile.tcu.max_noc_packet_size
 
         # disable the TLB
-        pe.tcu.tlb_entries = 0
-        pe.tcu.cpu_to_cache_latency = 0
+        tile.tcu.tlb_entries = 0
+        tile.tcu.cpu_to_cache_latency = 0
 
-    connectTcuToMem(pe, options, l1size, tcupos)
+    connectTcuToMem(tile, options, l1size, tcupos)
 
-    pe.system_port = pe.xbar.cpu_side_ports
+    tile.system_port = tile.xbar.cpu_side_ports
 
-    return pe
+    return tile
 
-def createCorePE(noc, options, no, cmdline, memPE, epCount,
-                 l1size=None, l2size=None, tcupos=0, spmsize='8MB'):
+def createCoreTile(noc, options, no, cmdline, memTile, epCount,
+                   l1size=None, l2size=None, tcupos=0, spmsize='8MB'):
     CPUClass = ObjectList.cpu_list.get(options.cpu_type)
 
     if options.isa == 'arm':
@@ -362,61 +364,61 @@ def createCorePE(noc, options, no, cmdline, memPE, epCount,
         sysType = M3System
         con = X86Connector
 
-    pe = createPE(
+    tile = createTile(
         noc=noc, options=options, no=no, systemType=sysType,
         l1size=l1size, l2size=l2size, spmsize=spmsize, tcupos=tcupos,
-        memPE=memPE, epCount=epCount
+        memTile=memTile, epCount=epCount
     )
-    pe.tcu.connector = con()
-    pe.readfile = "/dev/stdin"
+    tile.tcu.connector = con()
+    tile.readfile = "/dev/stdin"
 
     # connection to the NoC for initialization
-    pe.noc_master_port = noc.cpu_side_ports
+    tile.noc_master_port = noc.cpu_side_ports
 
-    pe.cpu = CPUClass()
-    pe.cpu.cpu_id = 0
+    tile.cpu = CPUClass()
+    tile.cpu.cpu_id = 0
 
-    connectCuToMem(pe, options,
-                   pe.cpu.dcache_port,
-                   pe.cpu.icache_port,
+    connectCuToMem(tile, options,
+                   tile.cpu.dcache_port,
+                   tile.cpu.icache_port,
                    l1size, tcupos)
 
     # cache misses to MMIO region go to TCU
     if not l1size is None and tcupos > 0:
-        pe.tcu.dcache_slave_port = pe.xbar.mem_side_ports
-        pe.tcu.slave_region = [pe.tcu.mmio_region]
+        tile.tcu.dcache_slave_port = tile.xbar.mem_side_ports
+        tile.tcu.slave_region = [tile.tcu.mmio_region]
 
     if "kernel" in cmdline:
-        pe.mod_offset = mod_offset
-        pe.mod_size = mod_size
-        pe.pe_size = pe_size
+        tile.mod_offset = mod_offset
+        tile.mod_size = mod_size
+        tile.tile_size = tile_size
 
     # workload and command line
     if options.isa == 'riscv':
-        pe.workload = RiscvBareMetal(bootloader = cmdline.split(' ')[0])
+        tile.workload = RiscvBareMetal(bootloader = cmdline.split(' ')[0])
     elif options.isa == 'arm':
-        pe.workload = ArmFsWorkload(object_file = cmdline.split(' ')[0])
-        pe.highest_el_is_64 = False
+        tile.workload = ArmFsWorkload(object_file = cmdline.split(' ')[0])
+        tile.highest_el_is_64 = False
     else:
-        pe.workload = X86FsWorkload(object_file = cmdline.split(' ')[0])
-    pe.cmdline = cmdline
+        tile.workload = X86FsWorkload(object_file = cmdline.split(' ')[0])
+    tile.cmdline = cmdline
 
-    print("PE%02d: %s" % (no, cmdline))
-    print('      Core =%s %s @ %s' % (type(pe.cpu), options.isa, options.cpu_clock))
-    printConfig(pe, tcupos)
+    print("T%02d: %s" % (no, cmdline))
+    print('     Core =%s %s @ %s' % (type(tile.cpu), options.isa, options.cpu_clock))
+    printConfig(tile, tcupos)
 
-    # if specified, let this PE wait for GDB
-    if options.pausepe == no:
+    # if specified, let this tile wait for GDB
+    if options.pausetile == no:
         print('      waiting for GDB')
-        pe.cpu.wait_for_remote_gdb = True
+        tile.cpu.wait_for_remote_gdb = True
 
     print()
 
     # connect the IO space via bridge to the root NoC
-    pe.bridge = Bridge(delay='50ns')
-    pe.bridge.mem_side_port = noc.cpu_side_ports
-    pe.bridge.cpu_side_port = pe.xbar.mem_side_ports
-    pe.bridge.ranges = \
+    tile.bridge = Bridge(delay='50ns')
+    tile.bridge.mem_side_port = noc.cpu_side_ports
+    tile.bridge.cpu_side_port = tile.xbar.mem_side_ports
+    tile.bridge.ranges = \
         [
         AddrRange(IO_address_space_base,
                   interrupts_address_space_base - 1)
@@ -424,49 +426,49 @@ def createCorePE(noc, options, no, cmdline, memPE, epCount,
 
     # if not l1size is None:
     #     # connect legacy devices
-    #     pe.pc = Pc()
-    #     pe.intrctrl = IntrControl()
-    #     pe.iobus = IOXBar()
-    #     pe.xbar.mem_side_ports = pe.iobus.cpu_side_ports
-    #     pe.pc.attachIO(pe.iobus)
+    #     tile.pc = Pc()
+    #     tile.intrctrl = IntrControl()
+    #     tile.iobus = IOXBar()
+    #     tile.xbar.mem_side_ports = tile.iobus.cpu_side_ports
+    #     tile.pc.attachIO(tile.iobus)
 
-    pe.cpu.createThreads()
-    pe.cpu.createInterruptController()
+    tile.cpu.createThreads()
+    tile.cpu.createInterruptController()
 
     if options.isa == 'x86_64':
-        pe.cpu.interrupts[0].pio = pe.xbar.mem_side_ports
-        pe.cpu.interrupts[0].int_responder = pe.tcu.connector.irq_master_port
-        pe.cpu.interrupts[0].int_requestor = pe.xbar.cpu_side_ports
+        tile.cpu.interrupts[0].pio = tile.xbar.mem_side_ports
+        tile.cpu.interrupts[0].int_responder = tile.tcu.connector.irq_master_port
+        tile.cpu.interrupts[0].int_requestor = tile.xbar.cpu_side_ports
 
-    pe.cpu.itb_walker_cache = PageTableWalkerCache()
-    pe.cpu.dtb_walker_cache = PageTableWalkerCache()
-    pe.cpu.mmu.connectWalkerPorts(pe.cpu.itb_walker_cache.cpu_side, pe.cpu.dtb_walker_cache.cpu_side)
+    tile.cpu.itb_walker_cache = PageTableWalkerCache()
+    tile.cpu.dtb_walker_cache = PageTableWalkerCache()
+    tile.cpu.mmu.connectWalkerPorts(tile.cpu.itb_walker_cache.cpu_side, tile.cpu.dtb_walker_cache.cpu_side)
 
     if options.isa == 'riscv':
-        pe.cpu.mmu.pma_checker = PMAChecker(uncacheable = [
-            pe.tcu.mmio_region,
+        tile.cpu.mmu.pma_checker = PMAChecker(uncacheable = [
+            tile.tcu.mmio_region,
         ])
 
     if not l2size is None:
-        pe.cpu.itb_walker_cache.mem_side = pe.tol2bus.cpu_side_ports
-        pe.cpu.dtb_walker_cache.mem_side = pe.tol2bus.cpu_side_ports
+        tile.cpu.itb_walker_cache.mem_side = tile.tol2bus.cpu_side_ports
+        tile.cpu.dtb_walker_cache.mem_side = tile.tol2bus.cpu_side_ports
     else:
-        pe.cpu.itb_walker_cache.mem_side = pe.xbar.cpu_side_ports
-        pe.cpu.dtb_walker_cache.mem_side = pe.xbar.cpu_side_ports
+        tile.cpu.itb_walker_cache.mem_side = tile.xbar.cpu_side_ports
+        tile.cpu.dtb_walker_cache.mem_side = tile.xbar.cpu_side_ports
 
-    return pe
+    return tile
 
-def createKecAccPE(noc, options, no, cmdline, memPE, epCount, spmsize='8MB'):
-    pe = createCorePE(noc, options, no, cmdline, memPE, epCount,
-                      spmsize=spmsize)
+def createKecAccTile(noc, options, no, cmdline, memTile, epCount, spmsize='8MB'):
+    tile = createCoreTile(noc, options, no, cmdline, memTile, epCount,
+                          spmsize=spmsize)
 
     # The MMIO address of the accelerator
     addr = 0xF4200000
 
     # Disable extra PIO latency since it causes quite some overhead that should
     # not be present in reality if the accelerator is very close to the CPU.
-    pe.kecacc = KecAcc(pio_addr=addr, pio_latency='0')
-    pe.kecacc.pio = pe.xbar.mem_side_ports
+    tile.kecacc = KecAcc(pio_addr=addr, pio_latency='0')
+    tile.kecacc.pio = tile.xbar.mem_side_ports
 
     # FIXME: KecAcc and TCU work in parallel to implement double buffering.
     # In real hardware this would likely be implemented using separate SPMs for
@@ -476,79 +478,79 @@ def createKecAccPE(noc, options, no, cmdline, memPE, epCount, spmsize='8MB'):
     # To avoid this, connect KecAcc directly to a separate port on the SPM
     # for now. It looks like a separate port was used for the TCU at some point
     # (but not anymore), so we can "abuse" it here as second port on the SPM.
-    pe.kecacc.port = pe.spm.tcu_port
+    tile.kecacc.port = tile.spm.tcu_port
 
     # Make sure accelerator is accessed uncached and without speculation
     if options.isa == 'riscv':
-        pe.cpu.mmu.pma_checker.uncacheable.append(AddrRange(addr, size=0x1000))
+        tile.cpu.mmu.pma_checker.uncacheable.append(AddrRange(addr, size=0x1000))
 
-    return pe
+    return tile
 
-def createSerialPE(noc, options, no, memPE, epCount):
-    pe = createPE(
+def createSerialTile(noc, options, no, memTile, epCount):
+    tile = createTile(
         noc=noc, options=options, no=no, systemType=SpuSystem,
-        l1size=None, l2size=None, spmsize=None, memPE=memPE,
+        l1size=None, l2size=None, spmsize=None, memTile=memTile,
         tcupos=0, epCount=epCount
     )
-    pe.tcu.connector = BaseConnector()
+    tile.tcu.connector = BaseConnector()
 
     # the serial device reads from the host's stdin and sends the read bytes
     # via TCU to some defined receive EP
-    pe.serial = TcuSerialInput()
-    pe.serial.id = no
-    pe.serial.clk_domain = SrcClockDomain(clock=options.sys_clock,
-                                         voltage_domain=pe.voltage_domain)
+    tile.serial = TcuSerialInput()
+    tile.serial.id = no
+    tile.serial.clk_domain = SrcClockDomain(clock=options.sys_clock,
+                                            voltage_domain=tile.voltage_domain)
 
-    connectCuToMem(pe, options, pe.serial.tcu_master_port)
-    pe.serial.tcu_slave_port = pe.xbar.mem_side_ports
+    connectCuToMem(tile, options, tile.serial.tcu_master_port)
+    tile.serial.tcu_slave_port = tile.xbar.mem_side_ports
 
-    print('PE%02d: SerialInput' % (no))
-    printConfig(pe, 0)
-    print('      Comp =TCU -> SerialInput')
+    print('T%02d: SerialInput' % (no))
+    printConfig(tile, 0)
+    print('     Comp =TCU -> SerialInput')
     print()
 
-    return pe
+    return tile
 
-def createDevicePE(noc, options, no, memPE, epCount):
-    pe = createPE(
+def createDeviceTile(noc, options, no, memTile, epCount):
+    tile = createTile(
         noc=noc, options=options, no=no, systemType=SpuSystem,
-        l1size=None, l2size=None, spmsize=None, memPE=memPE,
+        l1size=None, l2size=None, spmsize=None, memTile=memTile,
         tcupos=0, epCount=epCount
     )
-    pe.tcu.connector = BaseConnector()
+    tile.tcu.connector = BaseConnector()
 
     # the proxy sits between the device and the TCU to translate interrupts
     # and DMA to the TCU's mechanisms
-    pe.proxy = TcuPciProxy()
-    pe.proxy.id = no
-    pe.proxy.clk_domain = SrcClockDomain(clock=options.sys_clock,
-                                         voltage_domain=pe.voltage_domain)
+    tile.proxy = TcuPciProxy()
+    tile.proxy.id = no
+    tile.proxy.clk_domain = SrcClockDomain(clock=options.sys_clock,
+                                           voltage_domain=tile.voltage_domain)
 
-    connectCuToMem(pe, options, pe.proxy.tcu_master_port)
-    pe.proxy.tcu_slave_port = pe.xbar.mem_side_ports
+    connectCuToMem(tile, options, tile.proxy.tcu_master_port)
+    tile.proxy.tcu_slave_port = tile.xbar.mem_side_ports
 
     # for the PCI config space
-    pe.pci_host = TcuPciHost()
-    pe.pci_host.pci_proxy = pe.proxy
-    pe.pci_host.conf_base = 0xf000000
-    pe.pci_host.conf_size = 0x1000000
+    tile.pci_host = TcuPciHost()
+    tile.pci_host.pci_proxy = tile.proxy
+    tile.pci_host.conf_base = 0xf000000
+    tile.pci_host.conf_size = 0x1000000
 
     # use bridges to simulate the latency to the I/O devices
-    pe.iobus = IOXBar()
+    tile.iobus = IOXBar()
     # I/O bridge for requests from the host to the device
-    pe.iobridge = Bridge(delay='50ns')
-    pe.iobridge.mem_side_port = pe.iobus.cpu_side_ports
-    pe.proxy.pio_port = pe.iobridge.cpu_side_port
-    pe.pci_host.pio = pe.iobus.mem_side_ports
+    tile.iobridge = Bridge(delay='50ns')
+    tile.iobridge.mem_side_port = tile.iobus.cpu_side_ports
+    tile.proxy.pio_port = tile.iobridge.cpu_side_port
+    tile.pci_host.pio = tile.iobus.mem_side_ports
 
     # DMA bridge for requests from the device to the host
-    pe.dmabridge = Bridge(delay='50ns')
-    pe.dmabridge.mem_side_port = pe.proxy.dma_port
+    tile.dmabridge = Bridge(delay='50ns')
+    tile.dmabridge.mem_side_port = tile.proxy.dma_port
 
-    return pe
+    return tile
 
-def createStoragePE(noc, options, no, memPE, epCount, img0=None, img1=None):
-    pe = createDevicePE(noc, options, no, memPE, epCount)
+def createStorageTile(noc, options, no, memTile, epCount, img0=None, img1=None):
+    tile = createDeviceTile(noc, options, no, memTile, epCount)
 
     # create disks
     disks = []
@@ -558,51 +560,51 @@ def createStoragePE(noc, options, no, memPE, epCount, img0=None, img1=None):
             disk.image = RawDiskImage(image_file = img)
             disks.append(disk)
 
-    pe.idectrl = IdeController(disks=disks,
+    tile.idectrl = IdeController(disks=disks,
         pci_func=0, pci_dev=0, pci_bus=0)
-    pe.idectrl.BAR0 = PciLegacyIoBar(addr=0x1f0, size='8B')
-    pe.idectrl.BAR1 = PciLegacyIoBar(addr=0x3f4, size='3B')
-    pe.idectrl.BAR2 = PciLegacyIoBar(addr=0x170, size='8B')
-    pe.idectrl.BAR3 = PciLegacyIoBar(addr=0x374, size='3B')
-    pe.idectrl.Command = 1
-    pe.idectrl.io_shift = 0
-    pe.idectrl.InterruptPin = 1
-    pe.idectrl.InterruptLine = 14
-    pe.idectrl.ctrl_offset = 0
+    tile.idectrl.BAR0 = PciLegacyIoBar(addr=0x1f0, size='8B')
+    tile.idectrl.BAR1 = PciLegacyIoBar(addr=0x3f4, size='3B')
+    tile.idectrl.BAR2 = PciLegacyIoBar(addr=0x170, size='8B')
+    tile.idectrl.BAR3 = PciLegacyIoBar(addr=0x374, size='3B')
+    tile.idectrl.Command = 1
+    tile.idectrl.io_shift = 0
+    tile.idectrl.InterruptPin = 1
+    tile.idectrl.InterruptLine = 14
+    tile.idectrl.ctrl_offset = 0
 
-    pe.idectrl.pio = pe.iobus.default
-    pe.idectrl.dma = pe.dmabridge.cpu_side_port
+    tile.idectrl.pio = tile.iobus.default
+    tile.idectrl.dma = tile.dmabridge.cpu_side_port
 
-    print('pe%02d: %s' % (no, img0))
-    printConfig(pe, 0)
-    print('      Comp =TCU -> Proxy -> IDE')
+    print('tile%02d: %s' % (no, img0))
+    printConfig(tile, 0)
+    print('     Comp =TCU -> Proxy -> IDE')
     print()
 
-    return pe
+    return tile
 
-def createEtherPE(noc, options, no, memPE, epCount):
-    pe = createDevicePE(noc, options, no, memPE, epCount)
+def createEtherTile(noc, options, no, memTile, epCount):
+    tile = createDeviceTile(noc, options, no, memTile, epCount)
 
-    pe.nic = IGbE_e1000()
-    pe.nic.clk_domain = SrcClockDomain(clock=options.sys_clock,
-                                       voltage_domain=pe.voltage_domain)
+    tile.nic = IGbE_e1000()
+    tile.nic.clk_domain = SrcClockDomain(clock=options.sys_clock,
+                                         voltage_domain=tile.voltage_domain)
 
-    pe.nic.host = pe.pci_host
-    pe.nic.pci_bus = 0
-    pe.nic.pci_dev = 0
-    pe.nic.pci_func = 0
+    tile.nic.host = tile.pci_host
+    tile.nic.pci_bus = 0
+    tile.nic.pci_dev = 0
+    tile.nic.pci_func = 0
 
-    pe.nic.pio = pe.iobus.default
-    pe.nic.dma = pe.dmabridge.cpu_side_port
+    tile.nic.pio = tile.iobus.default
+    tile.nic.dma = tile.dmabridge.cpu_side_port
 
-    print('PE%02d: IGbE_e1000' % (no))
-    printConfig(pe, 0)
-    print('      Comp =TCU -> Proxy -> NIC')
+    print('T%02d: IGbE_e1000' % (no))
+    printConfig(tile, 0)
+    print('     Comp =TCU -> Proxy -> NIC')
     print()
 
-    return pe
+    return tile
 
-def linkEtherPEs(ether0, ether1):
+def linkEthertiles(ether0, ether1):
     link = EtherLink()
     link.int0 = ether0.nic.interface
     link.int1 = ether1.nic.interface
@@ -610,105 +612,105 @@ def linkEtherPEs(ether0, ether1):
     ether0.etherlink = link
     ether1.etherlink = link
 
-def createAccelPE(noc, options, no, accel, memPE, epCount,
-                  l1size=None, l2size=None, spmsize='64kB'):
-    pe = createPE(
+def createAccelTile(noc, options, no, accel, memTile, epCount,
+                    l1size=None, l2size=None, spmsize='64kB'):
+    tile = createTile(
         noc=noc, options=options, no=no, systemType=SpuSystem,
-        l1size=l1size, l2size=l2size, spmsize=spmsize, memPE=memPE,
+        l1size=l1size, l2size=l2size, spmsize=spmsize, memTile=memTile,
         tcupos=0, epCount=epCount
     )
-    pe.tcu.connector = TcuAccelConnector()
+    tile.tcu.connector = TcuAccelConnector()
 
     if accel == 'indir':
-        pe.accel = TcuAccelInDir()
+        tile.accel = TcuAccelInDir()
     elif accel == 'copy' or accel == 'rot13':
         algos = {
             'copy'   : 0,
             'rot13'  : 1,
         }
-        pe.accel = TcuAccelStream()
-        pe.accel.logic = AccelLogic()
-        pe.accel.logic.algorithm = algos.get(accel)
-        pe.accel.logic.port = pe.xbar.cpu_side_ports
-        pe.accel.buf_size = "4kB"
+        tile.accel = TcuAccelStream()
+        tile.accel.logic = AccelLogic()
+        tile.accel.logic.algorithm = algos.get(accel)
+        tile.accel.logic.port = tile.xbar.cpu_side_ports
+        tile.accel.buf_size = "4kB"
     else:
         print('Accelerator "%s" does not exist' % (accel))
         sys.exit(1)
-    pe.tcu.connector.accelerator = pe.accel
-    pe.accel.id = no;
-    pe.accel.offset = pe.tcu.pe_mem_offset
+    tile.tcu.connector.accelerator = tile.accel
+    tile.accel.id = no;
+    tile.accel.offset = tile.tcu.tile_mem_offset
 
-    connectCuToMem(pe, options, pe.accel.port)
+    connectCuToMem(tile, options, tile.accel.port)
 
-    print('PE%02d: %s accelerator @ %s' % (no, accel, options.cpu_clock))
-    printConfig(pe, 0)
+    print('T%02d: %s accelerator @ %s' % (no, accel, options.cpu_clock))
+    printConfig(tile, 0)
     print()
 
-    return pe
+    return tile
 
-def createAbortTestPE(noc, options, no, memPE, epCount,
-                      l1size=None, l2size=None, spmsize='8MB'):
-    pe = createPE(
+def createAbortTestTile(noc, options, no, memTile, epCount,
+                        l1size=None, l2size=None, spmsize='8MB'):
+    tile = createTile(
         noc=noc, options=options, no=no, systemType=SpuSystem,
-        l1size=l1size, l2size=l2size, spmsize=spmsize, memPE=memPE,
+        l1size=l1size, l2size=l2size, spmsize=spmsize, memTile=memTile,
         tcupos=0, epCount=epCount
     )
-    pe.tcu.connector = BaseConnector()
+    tile.tcu.connector = BaseConnector()
 
-    pe.cpu = TcuAbortTest()
-    pe.cpu.id = no;
+    tile.cpu = TcuAbortTest()
+    tile.cpu.id = no;
 
-    connectCuToMem(pe, options, pe.cpu.port)
+    connectCuToMem(tile, options, tile.cpu.port)
 
-    print('PE%02d: aborttest core' % (no))
-    printConfig(pe, 0)
+    print('T%02d: aborttest core' % (no))
+    printConfig(tile, 0)
     print()
 
-    return pe
+    return tile
 
-def createMemPE(noc, options, no, size, epCount,
-                dram=True, image=None, imageNum=0):
-    pe = createPE(
+def createMemTile(noc, options, no, size, epCount,
+                  dram=True, image=None, imageNum=0):
+    tile = createTile(
         noc=noc, options=options, no=no, systemType=MemSystem,
-        l1size=None, l2size=None, spmsize=None, memPE=0,
+        l1size=None, l2size=None, spmsize=None, memTile=0,
         tcupos=0, epCount=epCount
     )
-    pe.clk_domain = SrcClockDomain(clock=options.sys_clock,
-                                   voltage_domain=pe.voltage_domain)
-    pe.tcu.connector = BaseConnector()
+    tile.clk_domain = SrcClockDomain(clock=options.sys_clock,
+                                     voltage_domain=tile.voltage_domain)
+    tile.tcu.connector = BaseConnector()
 
     # use many buffers to prevent that this is a bottleneck (this is just a
     # simulation artefact anyway)
-    pe.tcu.buf_count = 8
+    tile.tcu.buf_count = 8
 
     size_bytes = MemorySize(size).value
     if dram:
-        pe.mem_ctrl = MemCtrl()
-        pe.mem_ctrl.dram = DDR3_1600_8x8()
-        pe.mem_ctrl.dram.device_size = size
-        pe.mem_ctrl.dram.range = size_bytes
-        pe.mem_ctrl.port = pe.xbar.mem_side_ports
+        tile.mem_ctrl = MemCtrl()
+        tile.mem_ctrl.dram = DDR3_1600_8x8()
+        tile.mem_ctrl.dram.device_size = size
+        tile.mem_ctrl.dram.range = size_bytes
+        tile.mem_ctrl.port = tile.xbar.mem_side_ports
     else:
-        pe.mem_ctrl = Scratchpad(in_addr_map="true")
-        pe.mem_ctrl.cpu_port = pe.xbar.mem_side_ports
-        pe.mem_ctrl.range = size_bytes
+        tile.mem_ctrl = Scratchpad(in_addr_map="true")
+        tile.mem_ctrl.cpu_port = tile.xbar.mem_side_ports
+        tile.mem_ctrl.range = size_bytes
 
     if not image is None:
         if os.stat(image).st_size * imageNum > base_offset:
             print('File "%s" is too large for memory layout (%u x %u vs %u)' \
               % (image, imageNum, os.stat(image).st_size, base_offset))
             sys.exit(1)
-        pe.mem_file = image
-        pe.mem_file_num = imageNum
+        tile.mem_file = image
+        tile.mem_file_num = imageNum
 
-    print('PE%02d: %s x %d' % (no, image, imageNum))
-    printConfig(pe, 0)
-    print('      imem =%d KiB' % (int(size_bytes) / 1024))
-    name = 'SPM' if type(pe.mem_ctrl).__name__ == 'Scratchpad' else 'DRAM'
-    print('      Comp =TCU -> %s' % (name))
+    print('T%02d: %s x %d' % (no, image, imageNum))
+    printConfig(tile, 0)
+    print('     imem =%d KiB' % (int(size_bytes) / 1024))
+    name = 'SPM' if type(tile.mem_ctrl).__name__ == 'Scratchpad' else 'DRAM'
+    print('     Comp =TCU -> %s' % (name))
     print()
 
-    return pe
+    return tile
 
 def createRoot(options):
     root = Root(full_system=True)
@@ -720,7 +722,7 @@ def createRoot(options):
     root.clk_domain = SrcClockDomain(clock=options.sys_clock,
                                      voltage_domain=root.voltage_domain)
 
-    # All PEs are connected to a NoC (Network on Chip). In this case it's just
+    # All tiles are connected to a NoC (Network on Chip). In this case it's just
     # a simple XBar.
     root.noc = IOXBar()
 
@@ -738,28 +740,28 @@ def createRoot(options):
 
     return root
 
-def runSimulation(root, options, pes):
-    # determine types of PEs and their internal memory size
-    pemems = []
-    for pe in pes:
+def runSimulation(root, options, tiles):
+    # determine types of tiles and their internal memory size
+    tile_mems = []
+    for tile in tiles:
         size = 0
-        if hasattr(pe, 'mem_ctrl'):
-            size = int(pe.mem_ctrl.dram.device_size)
+        if hasattr(tile, 'mem_ctrl'):
+            size = int(tile.mem_ctrl.dram.device_size)
             assert size % 4096 == 0, "Memory size not page aligned"
             size |= 2   # mem
         else:
-            if hasattr(pe, 'spm'):
-                size = int(pe.spm.range.end)
+            if hasattr(tile, 'spm'):
+                size = int(tile.spm.range.end)
                 assert size % 4096 == 0, "Memory size not page aligned"
             else:
                 size |= 1 # emem
 
-            if hasattr(pe, 'accel'):
-                if type(pe.accel).__name__ == 'TcuAccelInDir':
+            if hasattr(tile, 'accel'):
+                if type(tile.accel).__name__ == 'TcuAccelInDir':
                     size |= 4 << 3 # indir accelerator
-                elif int(pe.accel.logic.algorithm) == 0:
+                elif int(tile.accel.logic.algorithm) == 0:
                     size |= 5 << 3 # copy accelerator
-                elif int(pe.accel.logic.algorithm) == 1:
+                elif int(tile.accel.logic.algorithm) == 1:
                     size |= 6 << 3 # rot13 accelerator
             elif options.isa == 'arm':
                 size |= 2 << 3 # arm
@@ -768,23 +770,23 @@ def runSimulation(root, options, pes):
             else:
                 size |= 1 << 3 # x86
 
-            if hasattr(pe, 'idectrl'):
+            if hasattr(tile, 'idectrl'):
                 size = 7 << 3
-            elif hasattr(pe, 'nic'):
+            elif hasattr(tile, 'nic'):
                 size = 8 << 3
-            elif hasattr(pe, 'serial'):
+            elif hasattr(tile, 'serial'):
                 size = 9 << 3
 
-            if hasattr(pe, 'kecacc'):
-                size |= 0x8 << 7 # PEAttr::KECACC
-        pemems.append(size)
+            if hasattr(tile, 'kecacc'):
+                size |= 0x8 << 7 # TileAttr::KECACC
+        tile_mems.append(size)
 
-    # give that to the PEs
-    for pe in pes:
-        setattr(root, 'pe%02d' % pe.pe_id, pe)
+    # give that to the tiles
+    for tile in tiles:
+        setattr(root, 'T%02d' % tile.tile_id, tile)
         try:
-            pe.mods = options.mods
-            pe.pes = pemems
+            tile.mods = options.mods
+            tile.tiles = tile_mems
         except:
             pass
 

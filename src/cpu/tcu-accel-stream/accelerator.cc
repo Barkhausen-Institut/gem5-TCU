@@ -32,7 +32,6 @@
 #include "debug/TcuAccelStreamState.hh"
 #include "mem/tcu/tcu.hh"
 #include "mem/tcu/reg_file.hh"
-#include "sim/pe_memory.hh"
 
 #include <iomanip>
 

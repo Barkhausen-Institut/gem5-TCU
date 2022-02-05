@@ -34,21 +34,21 @@
 #include <vector>
 
 #include "sim/system.hh"
-#include "sim/pe_memory.hh"
+#include "sim/tile_memory.hh"
 #include "params/SpuSystem.hh"
 
-class SpuSystem : public System, public PEMemory
+class SpuSystem : public System, public TileMemory
 {
   protected:
-    std::vector<Addr> pes;
-    peid_t peId;
+    std::vector<Addr> tiles;
+    tileid_t tileId;
 
   public:
     typedef SpuSystemParams Params;
     SpuSystem(const Params &p);
     ~SpuSystem();
 
-    uint32_t pedesc(peid_t pe) const override;
+    uint32_t tileDesc(tileid_t tile) const override;
 };
 
 #endif

@@ -34,7 +34,7 @@
 
 MemSystem::MemSystem(const Params &p)
     : System(p),
-      peId(p.pe_id),
+      tileId(p.tile_id),
       memFile(p.mem_file),
       memFileNum(p.mem_file_num)
 {

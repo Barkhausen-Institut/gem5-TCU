@@ -56,7 +56,7 @@ enum class PrivReg : Addr
     CORE_REQ,
     PRIV_CMD,
     PRIV_CMD_ARG1,
-    CUR_VPE,
+    CUR_ACT,
     CLEAR_IRQ,
 };
 
@@ -77,9 +77,9 @@ constexpr unsigned numEpRegs = 3;
 // buffer for prints (32 * 8 bytes)
 constexpr unsigned numBufRegs = 32;
 
-typedef uint16_t vpeid_t;
+typedef uint16_t actid_t;
 typedef uint16_t epid_t;
-typedef uint8_t peid_t;
+typedef uint8_t tileid_t;
 
 enum class EpType
 {
@@ -151,7 +151,7 @@ struct PrivCommand
         INV_PAGE        = 1,
         INV_TLB         = 2,
         INS_TLB         = 3,
-        XCHG_VPE        = 4,
+        XCHG_ACT        = 4,
         SET_TIMER       = 5,
         ABORT_CMD       = 6,
         FLUSH_CACHE     = 7,
@@ -198,12 +198,12 @@ struct SendEp
         Bitfield<36, 31> msgSize;
         Bitfield<30, 25> maxCrd;
         Bitfield<24, 19> curCrd;
-        Bitfield<18, 3> vpe;
+        Bitfield<18, 3> act;
         Bitfield<2, 0> type;
     EndBitUnion(R0)
 
     BitUnion64(R1)
-        Bitfield<23, 16> tgtPe;
+        Bitfield<23, 16> tgtTile;
         Bitfield<15, 0> tgtEp;
     EndBitUnion(R1)
 
@@ -270,7 +270,7 @@ struct RecvEp
         Bitfield<46, 41> slotSize;
         Bitfield<40, 35> slots;
         Bitfield<34, 19> rplEps;
-        Bitfield<18, 3> vpe;
+        Bitfield<18, 3> act;
         Bitfield<2, 0> type;
     EndBitUnion(R0)
 
@@ -298,9 +298,9 @@ struct MemEp
                RegAccess access) const;
 
     BitUnion64(R0)
-        Bitfield<30, 23> targetPe;
+        Bitfield<30, 23> targetTile;
         Bitfield<22, 19> flags;
-        Bitfield<18, 3> vpe;
+        Bitfield<18, 3> act;
         Bitfield<2, 0> type;
     EndBitUnion(R0)
 
@@ -361,10 +361,10 @@ union Ep
     MemEp mem;
 };
 
-BitUnion64(VPEState)
+BitUnion64(ActState)
     Bitfield<31, 16> msgs;
     Bitfield<15, 0> id;
-EndBitUnion(VPEState)
+EndBitUnion(ActState)
 
 enum CoreMsgType
 {
@@ -380,7 +380,7 @@ EndBitUnion(CoreMsg)
 BitUnion64(ForeignCoreReq)
     Bitfield<1, 0> type;
     Bitfield<17, 2> ep;
-    Bitfield<63, 48> vpe;
+    Bitfield<63, 48> act;
 EndBitUnion(ForeignCoreReq)
 
 BitUnion64(ForeignCoreResp)
@@ -391,7 +391,7 @@ struct M5_ATTR_PACKED MessageHeader
 {
     uint8_t flags : 2,
             replySize: 6;
-    uint8_t senderPeId;
+    uint8_t senderTileId;
     uint16_t senderEpId;
     // for a normal message this is the reply epId
     // for a reply this is the enpoint that receives credits
@@ -439,14 +439,14 @@ class RegFile
 
     void rem_msg();
 
-    VPEState getVPE(PrivReg reg) const
+    ActState getAct(PrivReg reg) const
     {
         return get(reg);
     }
 
-    VPEState getCurVPE() const
+    ActState getCurAct() const
     {
-        return getVPE(PrivReg::CUR_VPE);
+        return getAct(PrivReg::CUR_ACT);
     }
 
     reg_t get(ExtReg reg, RegAccess access = RegAccess::TCU) const;

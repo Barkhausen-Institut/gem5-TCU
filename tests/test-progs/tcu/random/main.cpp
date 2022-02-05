@@ -18,11 +18,11 @@ enum {
 	BUF_SIZE	= MSG_SIZE * BUF_SLOTS,
 };
 
-void pe_printf(const char *format, ...)
+void tile_printf(const char *format, ...)
 {
 	va_list args;
 
-	printf("PE%d: ", PE_ID);
+	printf("T%d: ", PE_ID);
 
 	va_start(args, format);
 	vprintf(format, args);
@@ -47,7 +47,7 @@ void printMessage(uint8_t* message, unsigned ep)
 		}
 	}
 
-	pe_printf("ep%u, Received %s of %d bytes @ %p from PE%d (ep %d): %s",
+	tile_printf("ep%u, Received %s of %d bytes @ %p from T%d (ep %d): %s",
 	       ep,
 	       header->flags & 1 ? "reply" : "message",
 	       header->length,
@@ -58,7 +58,7 @@ void printMessage(uint8_t* message, unsigned ep)
 
 	if (!valid)
 	{
-		printf("PE%u: ep%u, invalid message:", PE_ID, ep);
+		printf("T%u: ep%u, invalid message:", PE_ID, ep);
 		for (int i = 0; i < header->length; i++)
 			printf( " %2.2x", message[i]);
 		printf("\n");
@@ -67,11 +67,11 @@ void printMessage(uint8_t* message, unsigned ep)
 
 int main()
 {
-	pe_printf("Hello World!");
+	tile_printf("Hello World!");
 
 	srand(PE_ID);
 
-	pe_printf("setup endpoints");
+	tile_printf("setup endpoints");
 
 	uint8_t* messageBuffer = (uint8_t*) memalign(4096, MSG_SIZE - sizeof(MessageHeader));
 	// ringbuffers
@@ -144,9 +144,9 @@ int main()
 					for (unsigned i = 0; i < tcuEndpoints[ep].messageSize; i++)
 						messageBuffer[i] = start + i;
 
-					pe_printf("ep %u: Send reply of %u bytes",
-					          ep,
-					          tcuEndpoints[ep].messageSize);
+					tile_printf("ep %u: Send reply of %u bytes",
+					            ep,
+					            tcuEndpoints[ep].messageSize);
 
 					*tcuCommandPtr = Command::START_OPERATION | (ep << COMMAND_OPCODE_BITS);
 
@@ -176,12 +176,12 @@ int main()
 				for (unsigned i = 0; i < tcuEndpoints[ep].messageSize; i++)
 					messageBuffer[i] = start + i;
 
-				pe_printf("ep %d: Send message of %u bytes to PE%u (ep %u, reply %d)",
-						  ep,
-						  tcuEndpoints[ep].messageSize,
-						  tcuEndpoints[ep].targetCoreId,
-						  tcuEndpoints[ep].targetEpId,
-						  tcuEndpoints[ep].replyEpId);
+				tile_printf("ep %d: Send message of %u bytes to T%u (ep %u, reply %d)",
+						    ep,
+						    tcuEndpoints[ep].messageSize,
+						    tcuEndpoints[ep].targetCoreId,
+						    tcuEndpoints[ep].targetEpId,
+						    tcuEndpoints[ep].replyEpId);
 
 				*tcuCommandPtr = Command::START_OPERATION | (ep << COMMAND_OPCODE_BITS);
 

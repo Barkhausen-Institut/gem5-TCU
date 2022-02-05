@@ -40,17 +40,17 @@ M3ArmSystem::NoCMasterPort::NoCMasterPort(M3ArmSystem &_sys)
 
 M3ArmSystem::M3ArmSystem(const Params &p)
     : ArmSystem(p),
-      PEMemory(this, p.memory_pe, p.memory_offset, p.memory_size,
-                physProxy),
+      TileMemory(this, p.memory_tile, p.memory_offset, p.memory_size,
+                 physProxy),
       nocPort(*this),
-      loader(p.pes, p.mods, p.cmdline,
-             p.pe_id, p.mod_offset, p.mod_size, p.pe_size)
+      loader(p.tiles, p.mods, p.cmdline,
+             p.tile_id, p.mod_offset, p.mod_size, p.tile_size)
 {
 }
 
-uint32_t M3ArmSystem::pedesc(peid_t pe) const
+uint32_t M3ArmSystem::tileDesc(tileid_t tile) const
 {
-    return loader.pe_attr()[pe];
+    return loader.tile_attr()[tile];
 }
 
 Port&

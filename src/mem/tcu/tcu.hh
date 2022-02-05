@@ -52,7 +52,7 @@ class Tcu : public BaseTcu
 
   public:
 
-    static const uint16_t INVALID_VPE_ID    = 0xFFFF;
+    static const uint16_t INVALID_ACT_ID    = 0xFFFF;
     static const size_t CREDITS_UNLIM       = 0x3F;
     static const uint16_t INVALID_EP_ID     = 0xFFFF;
 
@@ -111,7 +111,7 @@ class Tcu : public BaseTcu
 
     TcuTlb *tlb() { return tlBuf; }
 
-    bool isMemPE(unsigned pe) const;
+    bool isMemTile(unsigned tile) const;
 
     PacketPtr generateRequest(Addr addr, Addr size, MemCmd cmd);
     void freeRequest(PacketPtr pkt);
@@ -174,7 +174,7 @@ class Tcu : public BaseTcu
 
     void startTransfer(void *event, Cycles delay);
 
-    size_t startForeignReceive(epid_t epId, vpeid_t vpeId);
+    size_t startForeignReceive(epid_t epId, actid_t actId);
 
     void printPacket(PacketPtr pkt) const;
 
@@ -230,7 +230,7 @@ class Tcu : public BaseTcu
 
   public:
 
-    const Addr peMemOffset;
+    const Addr tileMemOffset;
 
     const bool atomicMode;
 

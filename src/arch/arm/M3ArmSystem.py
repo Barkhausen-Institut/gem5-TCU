@@ -34,17 +34,17 @@ class M3ArmSystem(ArmSystem):
 
     cmdline = Param.String("", "The command line arguments")
 
-    pe_id = Param.Unsigned("The PE id")
+    tile_id = Param.Unsigned("The tile id")
 
-    memory_pe = Param.Unsigned(0, "The memory PE to use")
-    memory_offset = Param.Addr(0, "The offset in the memory PE")
-    memory_size = Param.Addr(0, "The size in the memory PE")
+    memory_tile = Param.Unsigned(0, "The memory tile to use")
+    memory_offset = Param.Addr(0, "The offset in the memory tile")
+    memory_size = Param.Addr(0, "The size in the memory tile")
 
-    mod_offset = Param.Addr(0, "The offset of the boot modules (only for kernel PE)")
-    mod_size = Param.Addr(0, "The max. size of the boot modules (only for kernel PE)")
-    pe_size = Param.Addr(0, "The size of the reserved memory region for each PE (only for kernel PE)")
+    mod_offset = Param.Addr(0, "The offset of the boot modules (only for kernel tile)")
+    mod_size = Param.Addr(0, "The max. size of the boot modules (only for kernel tile)")
+    tile_size = Param.Addr(0, "The size of the reserved memory region for each tile (only for kernel tile)")
 
     mods = VectorParam.String([], "The boot modules")
-    pes = VectorParam.Addr([], "All PEs in the system with their type and mem size")
+    tiles = VectorParam.Addr([], "All tiles in the system with their type and mem size")
 
     noc_master_port = MasterPort("Port that connects to the global NoC (only for initialization)")

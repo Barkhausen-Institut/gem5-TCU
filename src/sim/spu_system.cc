@@ -33,10 +33,10 @@
 
 SpuSystem::SpuSystem(const Params &p)
     : System(p),
-      PEMemory(this, p.memory_pe, p.memory_offset, p.memory_size,
+      TileMemory(this, p.memory_tile, p.memory_offset, p.memory_size,
                 physProxy),
-      pes(p.pes),
-      peId(p.pe_id)
+      tiles(p.tiles),
+      tileId(p.tile_id)
 {
 }
 
@@ -44,7 +44,7 @@ SpuSystem::~SpuSystem()
 {
 }
 
-uint32_t SpuSystem::pedesc(peid_t pe) const
+uint32_t SpuSystem::tileDesc(tileid_t tile) const
 {
-    return pes[pe];
+    return tiles[tile];
 }

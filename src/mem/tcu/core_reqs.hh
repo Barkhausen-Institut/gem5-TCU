@@ -68,7 +68,7 @@ class CoreRequests
         void complete(RegFile::reg_t) override {}
 
         epid_t epId;
-        vpeid_t vpeId;
+        actid_t actId;
     };
 
     explicit CoreRequests(Tcu &tcu, size_t bufCount);
@@ -78,7 +78,7 @@ class CoreRequests
     void regStats();
 
     size_t startForeignReceive(epid_t epId,
-                               vpeid_t vpeId);
+                               actid_t actId);
 
     void completeReqs();
 

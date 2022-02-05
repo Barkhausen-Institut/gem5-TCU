@@ -173,7 +173,7 @@ class MessageUnit
     Stats::Histogram sentBytes;
     Stats::Histogram repliedBytes;
     Stats::Histogram receivedBytes;
-    Stats::Scalar wrongVPE;
+    Stats::Scalar wrongAct;
     Stats::Scalar noSpace;
 
 };

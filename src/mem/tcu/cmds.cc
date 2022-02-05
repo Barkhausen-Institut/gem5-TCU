@@ -52,7 +52,7 @@ static const char *privCmdNames[] =
     "INV_PAGE",
     "INV_TLB",
     "INS_TLB",
-    "XCHG_VPE",
+    "XCHG_ACT",
     "SET_TIMER",
     "ABORT_CMD",
     "FLUSH_CACHE",
@@ -375,11 +375,11 @@ TcuCommands::executePrivCommand(PacketPtr pkt)
                     res = TcuError::TLB_FULL;
             }
             break;
-        case PrivCommand::XCHG_VPE:
+        case PrivCommand::XCHG_ACT:
         {
-            RegFile::reg_t old = tcu.regs().get(PrivReg::CUR_VPE);
+            RegFile::reg_t old = tcu.regs().get(PrivReg::CUR_ACT);
             tcu.regs().set(PrivReg::PRIV_CMD_ARG1, old);
-            tcu.regs().set(PrivReg::CUR_VPE, cmd.arg0 & 0xFFFFFFFF);
+            tcu.regs().set(PrivReg::CUR_ACT, cmd.arg0 & 0xFFFFFFFF);
             break;
         }
         case PrivCommand::FLUSH_CACHE:

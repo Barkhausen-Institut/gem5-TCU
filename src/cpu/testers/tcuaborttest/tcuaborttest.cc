@@ -33,7 +33,7 @@
 #include "debug/TcuAbortTestAccess.hh"
 #include "mem/tcu/tcu.hh"
 #include "mem/tcu/reg_file.hh"
-#include "sim/pe_memory.hh"
+#include "sim/tile_memory.hh"
 #include "sim/sim_exit.hh"
 
 #define ARRAY_SIZE(a)   (sizeof((a)) / sizeof((a)[0]))
@@ -396,9 +396,9 @@ TcuAbortTest::tick()
 
             MemEp ep;
             ep.r0.type = static_cast<RegFile::reg_t>(EpType::MEMORY);
-            ep.r0.vpe = Tcu::INVALID_VPE_ID;
+            ep.r0.act = Tcu::INVALID_ACT_ID;
             ep.r0.flags = Tcu::MemoryFlags::READ | Tcu::MemoryFlags::WRITE;
-            ep.r0.targetPe = id;
+            ep.r0.targetTile = id;
             ep.r1.remoteAddr = 0;
             ep.r2.remoteSize = 0xFFFFFFFFFFFFFFFF;
 
@@ -417,11 +417,11 @@ TcuAbortTest::tick()
 
             SendEp ep;
             ep.r0.type = static_cast<RegFile::reg_t>(EpType::SEND);
-            ep.r0.vpe = Tcu::INVALID_VPE_ID;
+            ep.r0.act = Tcu::INVALID_ACT_ID;
             ep.r0.curCrd = Tcu::CREDITS_UNLIM;
             ep.r0.maxCrd = Tcu::CREDITS_UNLIM;
             ep.r0.msgSize = 10;
-            ep.r1.tgtPe = id;
+            ep.r1.tgtTile = id;
             ep.r1.tgtEp = EP_RECV;
             ep.r2.label = 0;
 
@@ -440,7 +440,7 @@ TcuAbortTest::tick()
 
             RecvEp ep;
             ep.r0.type = static_cast<RegFile::reg_t>(EpType::RECEIVE);
-            ep.r0.vpe = Tcu::INVALID_VPE_ID;
+            ep.r0.act = Tcu::INVALID_ACT_ID;
             ep.r0.rplEps = EP_REPLY;
             ep.r0.slots = 1;
             ep.r0.slotSize = 10;

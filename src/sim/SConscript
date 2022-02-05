@@ -88,7 +88,7 @@ Source('power_domain.cc')
 Source('stats.cc')
 Source('mem_system.cc')
 Source('spu_system.cc')
-Source('pe_memory.cc')
+Source('tile_memory.cc')
 Source('m3_loader.cc')
 Source('m3_system.cc')
 

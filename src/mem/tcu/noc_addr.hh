@@ -38,40 +38,40 @@
  *
  *  64 63        56            0
  *   ---------------------------
- *   |V|   peId  | offset      |
+ *   |V|   tileId  | offset      |
  *   ---------------------------
  */
 class NocAddr
 {
   public:
 
-    explicit NocAddr() : valid(), peId(), offset()
+    explicit NocAddr() : valid(), tileId(), offset()
     {}
 
     explicit NocAddr(Addr addr)
         : valid(addr >> 63),
-          peId((addr >> 56) & ((1 << 7) - 1)),
+          tileId((addr >> 56) & ((1 << 7) - 1)),
           offset(addr & ((static_cast<Addr>(1) << 56) - 1))
     {}
 
-    explicit NocAddr(peid_t _peId, Addr _offset)
-        : valid(1), peId(_peId), offset(_offset)
+    explicit NocAddr(tileid_t _tileId, Addr _offset)
+        : valid(1), tileId(_tileId), offset(_offset)
     {}
 
     Addr getAddr() const
     {
-        assert((peId & ~((1 << 7) - 1)) == 0);
+        assert((tileId & ~((1 << 7) - 1)) == 0);
         assert((offset & ~((static_cast<Addr>(1) << 56) - 1)) == 0);
 
         Addr res = static_cast<Addr>(valid) << 63;
-        res |= static_cast<Addr>(peId) << 56;
+        res |= static_cast<Addr>(tileId) << 56;
         res |= offset;
         return res;
     }
 
     bool valid;
 
-    peid_t peId;
+    tileid_t tileId;
 
     Addr offset;
 };

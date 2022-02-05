@@ -37,10 +37,10 @@
 #include "params/M3ArmSystem.hh"
 #include "mem/qport.hh"
 #include "mem/tcu/noc_addr.hh"
-#include "sim/pe_memory.hh"
+#include "sim/tile_memory.hh"
 #include "sim/m3_loader.hh"
 
-class M3ArmSystem : public ArmSystem, public PEMemory
+class M3ArmSystem : public ArmSystem, public TileMemory
 {
     class NoCMasterPort : public QueuedRequestPort
     {
@@ -67,7 +67,7 @@ class M3ArmSystem : public ArmSystem, public PEMemory
     typedef M3ArmSystemParams Params;
     M3ArmSystem(const Params &p);
 
-    uint32_t pedesc(peid_t pe) const override;
+    uint32_t tileDesc(tileid_t tile) const override;
 
     Port& getPort(const std::string &if_name,
                   PortID idx = InvalidPortID) override;

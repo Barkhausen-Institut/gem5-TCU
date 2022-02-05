@@ -34,7 +34,7 @@
 #include "debug/TcuRegRange.hh"
 #include "mem/tcu/reg_file.hh"
 #include "mem/tcu/tcu.hh"
-#include "sim/pe_memory.hh"
+#include "sim/tile_memory.hh"
 
 #define DPRINTFNS(name, ...) do {                                       \
     Trace::getDebugLogger()->dprintf(curTick(), name, __VA_ARGS__);     \
@@ -49,7 +49,7 @@ const char *RegFile::privRegNames[] = {
     "CORE_REQ",
     "PRIV_CMD",
     "PRIV_CMD_ARG",
-    "CUR_VPE",
+    "CUR_ACT",
     "CLEAR_IRQ",
 };
 
@@ -106,16 +106,16 @@ RegFile::RegFile(Tcu &_tcu, const std::string& name, unsigned numEndpoints)
     for(unsigned i = 0; i < numEndpoints; ++i)
         eps.push_back(Ep(i));
 
-    // at boot, all PEs are privileged
+    // at boot, all tiles are privileged
     reg_t feat = static_cast<reg_t>(Features::PRIV);
     set(ExtReg::FEATURES, feat);
 
-    // and no VPE is running (the id might stay invalid for PEs that don't
-    // support multiple VPEs though)
-    VPEState vpe = 0;
-    vpe.id = Tcu::INVALID_VPE_ID;
-    vpe.msgs = 0;
-    set(PrivReg::CUR_VPE, vpe);
+    // and no activity is running (the id might stay invalid for tiles that don't
+    // support multiple activities though)
+    ActState act = 0;
+    act.id = Tcu::INVALID_ACT_ID;
+    act.msgs = 0;
+    set(PrivReg::CUR_ACT, act);
 
     initMemEp();
 }
@@ -123,17 +123,17 @@ RegFile::RegFile(Tcu &_tcu, const std::string& name, unsigned numEndpoints)
 void
 RegFile::initMemEp()
 {
-    PEMemory *sys = dynamic_cast<PEMemory*>(tcu.systemObject());
+    TileMemory *sys = dynamic_cast<TileMemory*>(tcu.systemObject());
     if (sys)
     {
         NocAddr phys = sys->getPhys(0);
 
         MemEp ep;
         ep.r0.type = static_cast<RegFile::reg_t>(EpType::MEMORY);
-        ep.r0.vpe = Tcu::INVALID_VPE_ID;
+        ep.r0.act = Tcu::INVALID_ACT_ID;
         // TODO exec
         ep.r0.flags = Tcu::MemoryFlags::READ | Tcu::MemoryFlags::WRITE;
-        ep.r0.targetPe = phys.peId;
+        ep.r0.targetTile = phys.tileId;
         ep.r1.remoteAddr = phys.offset;
         ep.r2.remoteSize = sys->memSize;
 
@@ -144,17 +144,17 @@ RegFile::initMemEp()
 void
 RegFile::add_msg()
 {
-    VPEState cur = getVPE(PrivReg::CUR_VPE);
+    ActState cur = getAct(PrivReg::CUR_ACT);
     cur.msgs = cur.msgs + 1;
-    set(PrivReg::CUR_VPE, cur);
+    set(PrivReg::CUR_ACT, cur);
 }
 
 void
 RegFile::rem_msg()
 {
-    VPEState cur = getVPE(PrivReg::CUR_VPE);
+    ActState cur = getAct(PrivReg::CUR_ACT);
     cur.msgs = cur.msgs - 1;
-    set(PrivReg::CUR_VPE, cur);
+    set(PrivReg::CUR_ACT, cur);
 }
 
 RegFile::reg_t
@@ -264,11 +264,11 @@ SendEp::print(const RegFile &rf,
               RegAccess access) const
 {
     DPRINTFNS(rf.name(),
-        "%s%s EP%-3u%12s: Send[vpe=%u, pe=%u ep=%u crdep=%u maxcrd=%u "
+        "%s%s EP%-3u%12s: Send[act=%u, tile=%u ep=%u crdep=%u maxcrd=%u "
                               "curcrd=%u max=%#x lbl=%#llx rpl=%d]\n",
         regAccessName(access), read ? "<-" : "->",
-        id, "", r0.vpe,
-        r1.tgtPe, r1.tgtEp, r0.crdEp,
+        id, "", r0.act,
+        r1.tgtTile, r1.tgtEp, r0.crdEp,
         r0.maxCrd, r0.curCrd, 1 << r0.msgSize,
         r2.label, r0.reply);
 }
@@ -279,10 +279,10 @@ RecvEp::print(const RegFile &rf,
               RegAccess access) const
 {
     DPRINTFNS(rf.name(),
-        "%s%s EP%-3u%12s: Recv[vpe=%u, buf=%p msz=%#x bsz=%#x rpl=%u msgs=%u "
+        "%s%s EP%-3u%12s: Recv[act=%u, buf=%p msz=%#x bsz=%#x rpl=%u msgs=%u "
                               "occ=%#010x unr=%#010x rd=%u wr=%u]\n",
         regAccessName(access), read ? "<-" : "->",
-        id, "", r0.vpe,
+        id, "", r0.act,
         r1.buffer, 1 << r0.slotSize, 1 << r0.slots, r0.rplEps,
         unreadMsgs(), r2.occupied, r2.unread, r0.rpos, r0.wpos);
 }
@@ -293,10 +293,10 @@ MemEp::print(const RegFile &rf,
              RegAccess access) const
 {
     DPRINTFNS(rf.name(),
-        "%s%s EP%-3u%12s: Mem[vpe=%u, pe=%u addr=%#llx "
+        "%s%s EP%-3u%12s: Mem[act=%u, tile=%u addr=%#llx "
                              "size=%#llx flags=%#x]\n",
         regAccessName(access), read ? "<-" : "->",
-        id, "", r0.vpe, r0.targetPe,
+        id, "", r0.act, r0.targetTile,
         r1.remoteAddr, r2.remoteSize,
         r0.flags);
 }

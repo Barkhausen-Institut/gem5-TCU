@@ -40,7 +40,7 @@
 #include "mem/tcu/mem_unit.hh"
 #include "mem/tcu/xfer_unit.hh"
 #include "mem/cache/cache.hh"
-#include "sim/pe_memory.hh"
+#include "sim/tile_memory.hh"
 #include "sim/system.hh"
 
 Tcu::Tcu(const TcuParams &p)
@@ -60,7 +60,7 @@ Tcu::Tcu(const TcuParams &p)
     fireTimerEvent(*this),
     completeCoreReqEvent(coreReqs),
     wakeupEp(0xFFFF),
-    peMemOffset(p.pe_mem_offset),
+    tileMemOffset(p.tile_mem_offset),
     atomicMode(p.system->isAtomicMode()),
     numEndpoints(p.num_endpoints),
     maxNocPacketSize(p.max_noc_packet_size),
@@ -131,10 +131,10 @@ Tcu::regStats()
 }
 
 bool
-Tcu::isMemPE(unsigned pe) const
+Tcu::isMemTile(unsigned tile) const
 {
-    PEMemory *sys = dynamic_cast<PEMemory*>(system);
-    return !sys || sys->hasMem(pe);
+    TileMemory *sys = dynamic_cast<TileMemory*>(system);
+    return !sys || sys->hasMem(tile);
 }
 
 PacketPtr
@@ -168,7 +168,7 @@ Tcu::startWaitEP(const CmdCommand::Bits &cmd)
 
     if (ep == INVALID_EP_ID)
     {
-        if (regs().getVPE(PrivReg::CUR_VPE).msgs > 0)
+        if (regs().getAct(PrivReg::CUR_ACT).msgs > 0)
         {
             scheduleCmdFinish(Cycles(1), TcuError::NONE);
             return;
@@ -311,7 +311,7 @@ Tcu::sendMemRequest(PacketPtr pkt,
     senderState->mid = pkt->req->requestorId();
 
     // ensure that this packet has our master id (not the id of a master in
-    // a different PE)
+    // a different tile)
     pkt->req->setRequestorId(requestorId);
 
     pkt->pushSenderState(senderState);
@@ -389,13 +389,13 @@ Tcu::startTransfer(void *event, Cycles delay)
 }
 
 size_t
-Tcu::startForeignReceive(epid_t epId, vpeid_t vpeId)
+Tcu::startForeignReceive(epid_t epId, actid_t actId)
 {
     // if a command is running, send the response now to finish its memory
     // write instruction to the COMMAND register
     cmds.stopCommand();
 
-    return coreReqs.startForeignReceive(epId, vpeId);
+    return coreReqs.startForeignReceive(epId, actId);
 }
 
 void
@@ -405,7 +405,7 @@ Tcu::completeNocRequest(PacketPtr pkt)
 
     if (senderState->packetType == NocPacketType::CACHE_MEM_REQ)
     {
-        // as these target memory PEs, there can't be any error
+        // as these target memory tiles, there can't be any error
         assert(senderState->result == TcuError::NONE);
 
         if (auto state = dynamic_cast<InitSenderState*>(pkt->senderState))
@@ -555,14 +555,14 @@ Tcu::handleCoreMemRequest(PacketPtr pkt,
 NocAddr
 Tcu::translatePhysToNoC(Addr phys, bool write)
 {
-    Addr physAddr = phys - peMemOffset;
+    Addr physAddr = phys - tileMemOffset;
     Addr physOff = physAddr & 0x3FFFFFFF;
     epid_t epid = physAddr >> 30;
 
     if (epid >= numEndpoints || regs().getEp(epid).type() != EpType::MEMORY)
     {
         DPRINTFS(Tcu, this, "PMP-EP%u: invalid EP (phys=%#x)\n", epid, phys);
-        warn("PE%u,PMP-EP%u: invalid EP", peId, epid);
+        warn("T%u,PMP-EP%u: invalid EP", tileId, epid);
         return NocAddr();
     }
 
@@ -573,7 +573,7 @@ Tcu::translatePhysToNoC(Addr phys, bool write)
         DPRINTFS(Tcu, this,
                  "PMP-EP%u: out of bounds (%#x vs. %#x)\n",
                  epid, physOff, mep.r2.remoteSize);
-        warn("PE%u,PMP-EP%u: out of bounds", peId, epid);
+        warn("T%u,PMP-EP%u: out of bounds", tileId, epid);
         return NocAddr();
     }
     if ((!write && !(mep.r0.flags & MemoryFlags::READ)) ||
@@ -582,12 +582,12 @@ Tcu::translatePhysToNoC(Addr phys, bool write)
         DPRINTFS(Tcu, this,
                  "PMP-EP%u: permission denied (flags=%#x, write=%d)\n",
                  epid, mep.r0.flags, write);
-        warn("PE%u,PMP-EP%u: permission denied", peId, epid);
+        warn("T%u,PMP-EP%u: permission denied", tileId, epid);
         return NocAddr();
     }
 
     // translate to NoC address
-    return NocAddr(mep.r0.targetPe, mep.r1.remoteAddr + physOff);
+    return NocAddr(mep.r0.targetTile, mep.r1.remoteAddr + physOff);
 }
 
 bool
@@ -615,7 +615,7 @@ Tcu::handleCacheMemRequest(PacketPtr pkt, bool functional)
     pkt->setAddr(noc.getAddr());
 
     DPRINTF(TcuMem, "Sending LLC request for %#x to %d:%#x\n",
-                    pktAddr, noc.peId, noc.offset);
+                    pktAddr, noc.tileId, noc.offset);
 
     if(pkt->isWrite())
         printPacket(pkt);
@@ -626,7 +626,7 @@ Tcu::handleCacheMemRequest(PacketPtr pkt, bool functional)
 
     auto type = functional ? Tcu::NocPacketType::CACHE_MEM_REQ_FUNC
                            : Tcu::NocPacketType::CACHE_MEM_REQ;
-    // this does always target a memory PE, so vpeId is invalid
+    // this does always target a memory tile, so actId is invalid
     sendNocRequest(type,
                    pkt,
                    Cycles(1),
@@ -698,7 +698,7 @@ Tcu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
 void
 Tcu::sendFunctionalMemRequest(PacketPtr pkt)
 {
-    // set our master id (it might be from a different PE)
+    // set our master id (it might be from a different tile)
     pkt->req->setRequestorId(requestorId);
 
     dcacheMasterPort.sendFunctional(pkt);

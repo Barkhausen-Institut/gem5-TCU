@@ -40,20 +40,20 @@
 #include <libgen.h>
 #include <sstream>
 
-M3Loader::M3Loader(const std::vector<Addr> &pes,
+M3Loader::M3Loader(const std::vector<Addr> &tiles,
                    const std::vector<std::string> &mods,
                    const std::string &cmdline,
-                   unsigned coreId,
+                   unsigned tileId,
                    Addr modOffset,
                    Addr modSize,
-                   Addr peSize)
-    : pes(pes),
+                   Addr tileSize)
+    : tiles(tiles),
       mods(mods),
       commandLine(cmdline),
-      coreId(coreId),
+      tileId(tileId),
       modOffset(modOffset),
       modSize(modSize),
-      peSize(peSize)
+      tileSize(tileSize)
 {
 }
 
@@ -139,13 +139,13 @@ M3Loader::loadModule(RequestPort &noc, const std::string &filename, Addr addr)
 }
 
 void
-M3Loader::initState(System &sys, PEMemory &mem, RequestPort &noc)
+M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
 {
     BootEnv env;
     memset(&env, 0, sizeof(env));
     env.platform = Platform::GEM5;
-    env.pe_id = coreId;
-    env.pe_desc = pes[coreId];
+    env.tile_id = tileId;
+    env.tile_desc = tiles[tileId];
     env.argc = getArgc();
     Addr argv = ENV_START + sizeof(env);
     // the kernel gets the kernel env behind the normal env
@@ -155,7 +155,7 @@ M3Loader::initState(System &sys, PEMemory &mem, RequestPort &noc)
     env.argv = argv;
 
     // with paging, the kernel gets an initial heap mapped
-    if ((pes[coreId] & 0x7) == 1 || (pes[coreId] & 0x7) == 2)
+    if ((tiles[tileId] & 0x7) == 1 || (tiles[tileId] & 0x7) == 2)
         env.heap_size = HEAP_SIZE;
     // otherwise, he should use all internal memory
     else
@@ -192,7 +192,7 @@ M3Loader::initState(System &sys, PEMemory &mem, RequestPort &noc)
         BootModule *bmods = new BootModule[mods.size()]();
 
         i = 0;
-        Addr addr = NocAddr(mem.memPe, modOffset).getAddr();
+        Addr addr = NocAddr(mem.memTile, modOffset).getAddr();
         for (const std::string &mod : mods)
         {
             Addr size = loadModule(noc, mod, addr);
@@ -220,19 +220,19 @@ M3Loader::initState(System &sys, PEMemory &mem, RequestPort &noc)
 
         // determine memory regions
         size_t mem_count = 0;
-        MemMod *bmems = new MemMod[pes.size()];
-        auto avail_mem_start = modOffset + modSize + pes.size() * peSize;
-        bmems[0].size = pes[mem.memPe] & ~static_cast<Addr>(0xFFF);
+        MemMod *bmems = new MemMod[tiles.size()];
+        auto avail_mem_start = modOffset + modSize + tiles.size() * tileSize;
+        bmems[0].size = tiles[mem.memTile] & ~static_cast<Addr>(0xFFF);
         if (bmems[0].size < avail_mem_start)
-            panic("Not enough DRAM for modules and PEs");
-        bmems[0].addr = NocAddr(mem.memPe, avail_mem_start).getAddr();
+            panic("Not enough DRAM for modules and tiles");
+        bmems[0].addr = NocAddr(mem.memTile, avail_mem_start).getAddr();
         bmems[0].size -= avail_mem_start;
         mem_count++;
 
-        for (size_t i = 0; i < pes.size(); ++i) {
-            if (i != mem.memPe && (pes[i] & 0x7) == 2) {
+        for (size_t i = 0; i < tiles.size(); ++i) {
+            if (i != mem.memTile && (tiles[i] & 0x7) == 2) {
                 bmems[mem_count].addr = NocAddr(i, 0).getAddr();
-                bmems[mem_count].size = pes[i] & ~static_cast<Addr>(0xFFF);
+                bmems[mem_count].size = tiles[i] & ~static_cast<Addr>(0xFFF);
                 mem_count++;
             }
         }
@@ -241,7 +241,7 @@ M3Loader::initState(System &sys, PEMemory &mem, RequestPort &noc)
         env.kenv = addr;
         KernelEnv kenv;
         kenv.mod_count = mods.size();
-        kenv.pe_count  = pes.size();
+        kenv.tile_count  = tiles.size();
         kenv.mem_count = mem_count;
         kenv.serv_count = 0;
         writeRemote(noc, addr, reinterpret_cast<uint8_t*>(&kenv),
@@ -255,12 +255,12 @@ M3Loader::initState(System &sys, PEMemory &mem, RequestPort &noc)
         addr += bmodsize;
 
         // write PEs to memory
-        uint64_t *kpes = new uint64_t[kenv.pe_count]();
-        for (size_t i = 0; i < kenv.pe_count; ++i)
-            kpes[i] = pes[i];
-        size_t bpesize = kenv.pe_count * sizeof(uint64_t);
-        writeRemote(noc, addr, reinterpret_cast<uint8_t*>(kpes), bpesize);
-        delete[] kpes;
+        uint64_t *ktiles = new uint64_t[kenv.tile_count]();
+        for (size_t i = 0; i < kenv.tile_count; ++i)
+            ktiles[i] = tiles[i];
+        size_t bpesize = kenv.tile_count * sizeof(uint64_t);
+        writeRemote(noc, addr, reinterpret_cast<uint8_t*>(ktiles), bpesize);
+        delete[] ktiles;
         addr += bpesize;
 
         // write memory regions to memory
@@ -270,11 +270,11 @@ M3Loader::initState(System &sys, PEMemory &mem, RequestPort &noc)
         addr += bmemsize;
 
         // check size
-        Addr end = NocAddr(mem.memPe, modOffset + modSize).getAddr();
+        Addr end = NocAddr(mem.memTile, modOffset + modSize).getAddr();
         if (addr > end)
         {
             panic("Modules are too large (have: %lu, need: %lu)",
-                modSize, addr - NocAddr(mem.memPe, modOffset).getAddr());
+                modSize, addr - NocAddr(mem.memTile, modOffset).getAddr());
         }
     }
 
