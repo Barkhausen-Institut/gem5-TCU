@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, Nils Asmussen
+ * Copyright (C) 2021 Nils Asmussen, Barkhausen Institut
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without

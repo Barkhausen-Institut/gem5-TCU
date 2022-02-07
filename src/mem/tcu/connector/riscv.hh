@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2016, Nils Asmussen
+ * Copyright (C) 2015-2018 Nils Asmussen <nils@os.inf.tu-dresden.de>
+ * Copyright (C) 2019-2021 Nils Asmussen, Barkhausen Institut
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
