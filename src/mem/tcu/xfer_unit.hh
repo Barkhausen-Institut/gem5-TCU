@@ -142,6 +142,8 @@ class XferUnit
 
         Tcu &tcu() { return xfer->tcu; }
 
+        NocAddr address() const { return phys; }
+
         int bufId() const { return buf->id; }
 
         uint flags() const { return xferFlags; }

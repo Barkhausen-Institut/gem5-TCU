@@ -116,13 +116,6 @@ MemoryUnit::startReadWithEP(EpFile::EpCache &eps)
     Addr offset = tcu.regs().get(UnprivReg::ARG1);
     Addr size = std::min(static_cast<Addr>(data.size), tcu.maxNocPacketSize);
 
-    readBytes.sample(size);
-
-    DPRINTFS(Tcu, (&tcu),
-        "\e[1m[rd -> %u]\e[0m at %#018lx+%#lx with EP%u into %#018lx:%lu\n",
-        mep.r0.targetTile, mep.r1.remoteAddr, offset,
-        cmd.epid, data.addr, size);
-
     if(size == 0)
     {
         tcu.scheduleCmdFinish(Cycles(1), TcuError::NONE);
@@ -143,6 +136,13 @@ MemoryUnit::startReadWithEP(EpFile::EpCache &eps)
         tcu.scheduleCmdFinish(Cycles(1), TcuError::PAGE_BOUNDARY);
         return;
     }
+
+    readBytes.sample(size);
+
+    DPRINTFS(Tcu, (&tcu),
+        "\e[1m[rd -> %u]\e[0m at %#018lx+%#lx with EP%u into %#018lx:%lu\n",
+        mep.r0.targetTile, mep.r1.remoteAddr, offset,
+        cmd.epid, data.addr, size);
 
     NocAddr nocAddr(mep.r0.targetTile, mep.r1.remoteAddr + offset);
 
@@ -264,13 +264,6 @@ MemoryUnit::startWriteWithEP(EpFile::EpCache &eps)
     Addr offset = tcu.regs().get(UnprivReg::ARG1);
     Addr size = std::min(static_cast<Addr>(data.size), tcu.maxNocPacketSize);
 
-    writtenBytes.sample(size);
-
-    DPRINTFS(Tcu, (&tcu),
-        "\e[1m[wr -> %u]\e[0m at %#018lx+%#lx with EP%u from %#018lx:%lu\n",
-        mep.r0.targetTile, mep.r1.remoteAddr, offset,
-        cmd.epid, data.addr, size);
-
     if(size == 0)
     {
         tcu.scheduleCmdFinish(Cycles(1), TcuError::NONE);
@@ -333,6 +326,17 @@ MemoryUnit::WriteTransferEvent::transferDone(TcuError result)
         else
             pktType = Tcu::NocPacketType::WRITE_REQ;
 
+        const CmdCommand::Bits cmd = tcu().regs().getCommand();
+        if (cmd.opcode == CmdCommand::WRITE)
+        {
+            const CmdData::Bits data = tcu().regs().getData();
+            Addr offset = tcu().regs().get(UnprivReg::ARG1);
+            DPRINTFS(Tcu, (&tcu()),
+                "\e[1m[wr -> %u]\e[0m at %#018lx+%#lx with EP%u from %#018lx:%lu\n",
+                dest.tileId, dest.offset - offset, offset,
+                cmd.epid, data.addr, size());
+        }
+
         tcu().sendNocRequest(pktType, pkt, delay);
     }
 }
@@ -341,7 +345,10 @@ void
 MemoryUnit::writeComplete(const CmdCommand::Bits& cmd, PacketPtr pkt, TcuError error)
 {
     if (cmd.opcode == CmdCommand::WRITE && error == TcuError::NONE)
+    {
+        writtenBytes.sample(pkt->getSize());
         finishReadWrite(tcu, pkt->getSize());
+    }
 
     // we don't need to pay the payload delay here because the message
     // basically has no payload since we only receive an ACK back for

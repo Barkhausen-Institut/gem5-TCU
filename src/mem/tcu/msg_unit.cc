@@ -274,13 +274,6 @@ MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
     else
         sentBytes.sample(data.size);
 
-    DPRINTFS(Tcu, (&tcu), "\e[1m[%s -> %u]\e[0m with EP%u of %#018lx:%lu\n",
-             cmd.opcode == CmdCommand::REPLY ? "rp" : "sd",
-             sep.r1.tgtTile,
-             cmd.epid,
-             data.addr,
-             data.size);
-
     // build header
     MessageHeader* header = new MessageHeader;
     if (cmd.opcode == CmdCommand::REPLY)
@@ -297,16 +290,6 @@ MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
     header->label        = sep.r2.label;
     header->replyLabel   = tcu.regs().get(UnprivReg::ARG1);
     header->replySize    = replySize;
-
-    DPRINTFS(Tcu, (&tcu),
-        "  src: tile=%u ep=%u rpep=%u rplbl=%#018lx rpsize=%#x flags=%#x%s\n",
-        header->senderTileId, header->senderEpId, header->replyEpId,
-        header->replyLabel, 1 << header->replySize, header->flags,
-        header->senderTileId != tcu.tileId ? " (on behalf)" : "");
-
-    DPRINTFS(Tcu, (&tcu),
-        "  dst: tile=%u ep=%u lbl=%#018lx\n",
-        sep.r1.tgtTile, sep.r1.tgtEp, header->label);
 
     assert(data.size + sizeof(MessageHeader) <= tcu.maxNocPacketSize);
 
@@ -333,9 +316,6 @@ MessageUnit::SendTransferEvent::transferStart()
 
     // for the header
     size(sizeof(*header));
-
-    delete header;
-    header = nullptr;
 }
 
 void
@@ -345,10 +325,10 @@ MessageUnit::SendTransferEvent::transferDone(TcuError result)
     {
         CmdCommand::Bits cmd = tcu().regs().getCommand();
 
+        SendEp sep = msgUnit->cmdEps.getEp(sepid).send;
+
         if (cmd.opcode != CmdCommand::REPLY)
         {
-            SendEp sep = msgUnit->cmdEps.getEp(sepid).send;
-
             if (sep.r0.curCrd != Tcu::CREDITS_UNLIM)
             {
                 // check if we have enough credits
@@ -375,8 +355,33 @@ MessageUnit::SendTransferEvent::transferDone(TcuError result)
 
         // if no error occurred, finishMsgSend is called afterwards
         if (result == TcuError::NONE)
+        {
             msgUnit->sendReplyFinished = false;
+
+            const CmdData::Bits data = tcu().regs().getData();
+
+            DPRINTFS(Tcu, (&tcu()),
+                     "\e[1m[%s -> %u]\e[0m with EP%u of %#018lx:%lu\n",
+                     cmd.opcode == CmdCommand::REPLY ? "rp" : "sd",
+                     sep.r1.tgtTile,
+                     cmd.epid,
+                     data.addr,
+                     data.size);
+
+            DPRINTFS(Tcu, (&tcu()),
+                "  src: tile=%u ep=%u rpep=%u rplbl=%#018lx rpsize=%#x flags=%#x%s\n",
+                header->senderTileId, header->senderEpId, header->replyEpId,
+                header->replyLabel, 1 << header->replySize, header->flags,
+                header->senderTileId != tcu().tileId ? " (on behalf)" : "");
+
+            DPRINTFS(Tcu, (&tcu()),
+                "  dst: tile=%u ep=%u lbl=%#018lx\n",
+                sep.r1.tgtTile, sep.r1.tgtEp, header->label);
+        }
     }
+
+    delete header;
+    header = nullptr;
 
     MemoryUnit::WriteTransferEvent::transferDone(result);
 
