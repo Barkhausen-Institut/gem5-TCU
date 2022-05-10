@@ -78,7 +78,7 @@ APIC_range_size                 = 1 << 12;
 
 base_offset                     = 768 * 1024 * 1024
 mod_offset                      = base_offset
-mod_size                        = 64 * 1024 * 1024
+mod_size                        = 128 * 1024 * 1024
 tile_offset                     = mod_offset + mod_size
 tile_size                       = 16 * 1024 * 1024
 
