@@ -859,7 +859,7 @@ IGbE::DescCache<T>::writeback(Addr aMask)
     // Check if this writeback is less restrictive that the previous
     // and if so setup another one immediately following it
     if (wbOut) {
-        if (aMask < wbAlignment) {
+        if (!moreToWb || aMask < wbAlignment) {
             moreToWb = true;
             wbAlignment = aMask;
         }
