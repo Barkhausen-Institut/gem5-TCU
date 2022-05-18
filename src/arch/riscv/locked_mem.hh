@@ -56,6 +56,7 @@
 #include "debug/LLSC.hh"
 #include "mem/packet.hh"
 #include "mem/request.hh"
+#include "sim/m3_system.hh"
 
 /*
  * ISA-specific helper functions for locked memory accesses.
@@ -64,15 +65,27 @@ namespace RiscvISA
 {
 
 const int WARN_FAILURE = 10000;
+const int MAX_TILES = 1024;
 
 // RISC-V allows multiple locks per hart, but each SC has to unlock the most
 // recent one, so we use a stack here.
 extern std::unordered_map<int, std::stack<Addr>> locked_addrs;
 
+template <class XC>
+int get_tile_id(XC *xc)
+{
+    int tile = 0;
+    M3System *m3sys;
+    if((m3sys = dynamic_cast<M3System*>(xc->getCpuPtr()->system)) != nullptr)
+        tile = m3sys->tile();
+    return tile;
+}
+
 template <class XC> inline void
 handleLockedSnoop(XC *xc, PacketPtr pkt, Addr cacheBlockMask)
 {
-    std::stack<Addr>& locked_addr_stack = locked_addrs[xc->contextId()];
+    int tile = get_tile_id(xc);
+    std::stack<Addr>& locked_addr_stack = locked_addrs[tile * MAX_TILES + xc->contextId()];
 
     if (locked_addr_stack.empty())
         return;
@@ -86,7 +99,8 @@ handleLockedSnoop(XC *xc, PacketPtr pkt, Addr cacheBlockMask)
 template <class XC> inline void
 handleLockedRead(XC *xc, const RequestPtr &req)
 {
-    std::stack<Addr>& locked_addr_stack = locked_addrs[xc->contextId()];
+    int tile = get_tile_id(xc);
+    std::stack<Addr>& locked_addr_stack = locked_addrs[tile * MAX_TILES + xc->contextId()];
 
     locked_addr_stack.push(req->getPaddr() & ~0xF);
     DPRINTF(LLSC, "[cid:%d]: Reserved address %x.\n",
@@ -100,7 +114,8 @@ handleLockedSnoopHit(XC *xc)
 template <class XC> inline bool
 handleLockedWrite(XC *xc, const RequestPtr &req, Addr cacheBlockMask)
 {
-    std::stack<Addr>& locked_addr_stack = locked_addrs[xc->contextId()];
+    int tile = get_tile_id(xc);
+    std::stack<Addr>& locked_addr_stack = locked_addrs[tile * MAX_TILES + xc->contextId()];
 
     // Normally RISC-V uses zero to indicate success and nonzero to indicate
     // failure (right now only 1 is reserved), but in gem5 zero indicates
