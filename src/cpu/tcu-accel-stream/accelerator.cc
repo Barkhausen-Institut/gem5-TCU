@@ -337,7 +337,7 @@ TcuAccelStream::completeRequest(PacketPtr pkt)
                             DPRINTF(
                                 TcuAccelStream,
                                 "MSG: received output request(commit=%#llx); state: (in=%d)\n",
-                                args[1], ctx.inAvail
+                                args[2], ctx.inAvail
                             );
                         }
 
@@ -349,7 +349,7 @@ TcuAccelStream::completeRequest(PacketPtr pkt)
                             if(!(ctx.flags & Flags::OUTPUT))
                                 ctx.flags &= ~Flags::WAIT;
                             ctx.commitOff = 0;
-                            ctx.commitLen = args[1] == NO_COMMIT ? 0 : args[1];
+                            ctx.commitLen = args[2] == NO_COMMIT ? 0 : args[2];
                         }
 
                         if (ctx.inAvail == 0)
@@ -682,6 +682,7 @@ TcuAccelStream::tick()
             rdwr_msg.cmd = static_cast<uint64_t>(
                 (ctx.flags & Flags::OUTPUT) ? Command::NEXT_OUT : Command::NEXT_IN
             );
+            rdwr_msg.fid = 0;
             rdwr_msg.commit = 0;
 
             DPRINTF(TcuAccelStream,
@@ -801,6 +802,7 @@ TcuAccelStream::tick()
         case State::COMMIT_START:
         {
             rdwr_msg.cmd = static_cast<uint64_t>(Command::COMMIT);
+            rdwr_msg.fid = 0;
             rdwr_msg.commit = ctx.outPos ? ctx.outPos : NO_COMMIT;
 
             DPRINTF(TcuAccelStream,

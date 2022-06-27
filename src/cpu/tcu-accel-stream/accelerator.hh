@@ -186,6 +186,7 @@ class TcuAccelStream : public TcuAccel
     struct M5_ATTR_PACKED
     {
         uint64_t cmd;
+        uint64_t fid;
         uint64_t commit;
     } rdwr_msg;
 
