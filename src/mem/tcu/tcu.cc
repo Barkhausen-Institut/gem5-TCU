@@ -58,6 +58,8 @@ Tcu::Tcu(const TcuParams &p)
     coreReqs(*this, p.buf_count),
     epFile(*this),
     cmds(*this),
+    bandwidthOverflow(),
+    refillNoCBWEvent(*this),
     completeCoreReqEvent(coreReqs),
     tileMemOffset(p.tile_mem_offset),
     numEndpoints(p.num_endpoints),
@@ -102,6 +104,16 @@ Tcu::regStats()
     nocWriteRecvs
         .name(name() + ".nocWriteRecvs")
         .desc("Number of received write requests");
+    nocBytes
+        .name(name() + ".nocBytes")
+        .desc("Number of bytes transferred over the NoC");
+    nocBw
+        .name(name() + ".nocBw")
+        .desc("Achieved NoC bandwidth (bytes / second)")
+        .precision(0)
+        .prereq(nocBytes)
+        .flags(Stats::total | Stats::nozero | Stats::nonan);
+    nocBw = nocBytes / simSeconds;
 
     regFileReqs
         .name(name() + ".regFileReqs")
@@ -287,11 +299,6 @@ Tcu::sendNocRequest(NocPacketType type,
     auto senderState = new NocSenderState();
     senderState->packetType = type;
     senderState->result = TcuError::NONE;
-
-    if (type == NocPacketType::MESSAGE || type == NocPacketType::READ_REQ ||
-        type == NocPacketType::WRITE_REQ)
-        cmds.setRemoteCommand(true);
-
     pkt->pushSenderState(senderState);
 
     if (functional)
@@ -300,7 +307,114 @@ Tcu::sendNocRequest(NocPacketType type,
         completeNocRequest(pkt);
     }
     else
-        schedNocRequest(pkt, clockEdge(delay));
+    {
+        // respect the configured NoC bandwidth of this TCU
+        ActState cur = regs().getAct(PrivReg::CUR_ACT);
+        ExtReg bwReg;
+        switch (cur.bw)
+        {
+            case 0: bwReg = ExtReg::NOC_BW_0; break;
+            case 1: bwReg = ExtReg::NOC_BW_1; break;
+            case 2: bwReg = ExtReg::NOC_BW_2; break;
+            case 3: bwReg = ExtReg::NOC_BW_3; break;
+        }
+
+        NoCBandwidth bandwidth = regs().get(bwReg);
+        if (bandwidth.rate != NOC_BW_UNLIMITED)
+        {
+            assert(bandwidth.rate != 0);
+            if (bandwidth.amount < pkt->getSize())
+            {
+                // rate is in bytes per ms; convert it to bytes per picosec
+                auto b_per_ps = 1000000000. / static_cast<double>(bandwidth.rate);
+                auto missing = pkt->getSize() - bandwidth.amount;
+                delay += ticksToCycles(
+                    static_cast<Tick>((bandwidthOverflow + missing) * b_per_ps));
+                DPRINTF(Tcu, "Delaying %ub transfer by %u cycles\n",
+                        pkt->getSize(), delay);
+
+                // we cannot pay for these bytes now; therefore, remember them
+                // and pay them bit by bit in refillNoCBW().
+                bandwidthOverflow += missing;
+                if (bandwidth.amount > 0)
+                {
+                    bandwidth.amount = 0;
+                    regs().set(bwReg, bandwidth);
+                }
+            }
+            else
+            {
+                // enough bandwidth, just pay for it
+                bandwidth.amount = bandwidth.amount - pkt->getSize();
+                regs().set(bwReg, bandwidth);
+            }
+        }
+
+        nocBytes += pkt->getSize();
+
+        schedule(new NocDelayEvent(*this, type, pkt), clockEdge(delay));
+    }
+}
+
+void
+Tcu::sendDelayedNocRequest(NocPacketType type, PacketPtr pkt)
+{
+    if (type == NocPacketType::MESSAGE || type == NocPacketType::READ_REQ ||
+        type == NocPacketType::WRITE_REQ)
+        cmds.setRemoteCommand(true);
+
+    schedNocRequest(pkt, clockEdge(Cycles(1)));
+}
+
+void
+Tcu::refillNoCBW()
+{
+    bool needRefillEvent = false;
+    const ExtReg bwRegs[] = {
+        ExtReg::NOC_BW_0, ExtReg::NOC_BW_1, ExtReg::NOC_BW_2, ExtReg::NOC_BW_3
+    };
+    for (auto bwReg : bwRegs)
+    {
+        NoCBandwidth bandwidth = regs().get(bwReg);
+
+        if (bandwidth.rate != NOC_BW_UNLIMITED)
+        {
+            assert(bandwidth.rate != 0);
+            // stop filling up at the limit
+            if (bandwidth.amount < bandwidth.limit)
+            {
+                // determine the increment for the refill period
+                auto period = cyclesToTicks(Cycles(BW_REFILL_PERIOD));
+                auto factor = static_cast<double>(bandwidth.rate) / 1000000000.;
+                auto inc = static_cast<uint64_t>(period * factor);
+
+                // if there is some overflow left, pay that first
+                if (bandwidthOverflow > 0)
+                {
+                    auto overflow = std::min(bandwidthOverflow, inc);
+                    bandwidthOverflow -= overflow;
+                    inc -= overflow;
+                }
+
+                // increment bandwidth; ensure that we don't exceed the limit
+                if (bandwidth.amount + inc < bandwidth.limit)
+                    bandwidth.amount = bandwidth.amount + inc;
+                else
+                    bandwidth.amount = bandwidth.limit;
+                regs().set(bwReg, bandwidth);
+            }
+
+            needRefillEvent = true;
+        }
+    }
+
+    // if the rate is "unlimited", we don't need the event. we will call this
+    // function again upon writes to the NOC_BANDWIDTH register and recheck
+    // whether we need the event
+    if (needRefillEvent && !refillNoCBWEvent.scheduled())
+        schedule(refillNoCBWEvent, clockEdge(Cycles(BW_REFILL_PERIOD)));
+    else if (!needRefillEvent && refillNoCBWEvent.scheduled())
+        deschedule(&refillNoCBWEvent);
 }
 
 void
@@ -492,7 +606,6 @@ Tcu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
 
     if (~result & RegFile::WROTE_EXT_CMD)
     {
-        assert(isCpuRequest || result == RegFile::WROTE_NONE);
         pkt->headerDelay = 0;
         pkt->payloadDelay = 0;
 
@@ -502,6 +615,8 @@ Tcu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
         else if(!isCpuRequest)
             schedNocResponse(pkt, when);
 
+        if (result & RegFile::WROTE_NOC_BW)
+            refillNoCBW();
         if (result & RegFile::WROTE_CORE_REQ)
             schedule(completeCoreReqEvent, when);
         if (result & RegFile::WROTE_PRINT)
