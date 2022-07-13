@@ -43,6 +43,7 @@
 
 const char *RegFile::extRegNames[] = {
     "FEATURES",
+    "MEM_BANDWIDTH",
     "EXT_CMD",
 };
 
@@ -385,6 +386,8 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
             {
                 if (reg == ExtReg::EXT_CMD)
                     res |= WROTE_EXT_CMD;
+                else if (reg == ExtReg::MEM_BANDWIDTH)
+                    res |= WROTE_MEM_BW;
                 set(reg, data[offset / sizeof(reg_t)], access);
             }
         }

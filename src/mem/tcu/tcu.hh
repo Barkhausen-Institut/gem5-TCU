@@ -56,6 +56,7 @@ class Tcu : public BaseTcu
     static const uint16_t INVALID_ACT_ID    = 0xFFFF;
     static const size_t CREDITS_UNLIM       = 0x3F;
     static const uint16_t INVALID_EP_ID     = 0xFFFF;
+    static const uint64_t BW_REFILL_PERIOD  = 1000; // in cycles
 
     enum MemoryFlags : uint8_t
     {
@@ -94,6 +95,30 @@ class Tcu : public BaseTcu
         explicit InitSenderState(Addr _oldAddr) : oldAddr(_oldAddr) {}
 
         Addr oldAddr;
+    };
+
+  private:
+
+    struct NocDelayEvent : public Event
+    {
+        Tcu& tcu;
+        NocPacketType type;
+        PacketPtr pkt;
+
+        NocDelayEvent(Tcu& _tcu, NocPacketType _type, PacketPtr _pkt)
+            : tcu(_tcu),
+              type(_type),
+              pkt(_pkt)
+        {}
+
+        void process() override
+        {
+            tcu.sendDelayedNocRequest(type, pkt);
+            setFlags(AutoDelete);
+        }
+
+        const std::string name() const override { return tcu.name(); }
+        const char* description() const override { return "NocDelayEvent"; }
     };
 
   public:
@@ -169,6 +194,8 @@ class Tcu : public BaseTcu
                         Cycles delay,
                         bool functional = false);
 
+    void sendDelayedNocRequest(NocPacketType type, PacketPtr pkt);
+
     void sendNocResponse(PacketPtr pkt, TcuError result = TcuError::NONE);
 
     NocAddr translatePhysToNoC(Addr phys, bool write);
@@ -194,6 +221,8 @@ class Tcu : public BaseTcu
                               TcuMasterPort &mport,
                               bool icache,
                               bool functional) override;
+
+    void refillMemBandwidth();
 
     bool handleCacheMemRequest(PacketPtr pkt, bool functional) override;
 
@@ -221,7 +250,11 @@ class Tcu : public BaseTcu
 
     EpFile::EpCache sleepEPs;
 
+    uint64_t bandwidthOverflow;
+
     TcuCommands cmds;
+
+    EventWrapper<Tcu, &Tcu::refillMemBandwidth> refillMemBandwidthEvent;
 
     EventWrapper<Tcu, &Tcu::fireTimer> fireTimerEvent;
 
@@ -262,6 +295,8 @@ class Tcu : public BaseTcu
     Stats::Scalar nocMsgRecvs;
     Stats::Scalar nocReadRecvs;
     Stats::Scalar nocWriteRecvs;
+    Stats::Scalar nocBytes;
+    Stats::Formula nocBw;
 
     // other
     Stats::Scalar regFileReqs;
