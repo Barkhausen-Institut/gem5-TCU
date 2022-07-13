@@ -65,6 +65,7 @@ class Tcu : public BaseTcu
     static const uint16_t INVALID_ACT_ID    = 0xFFFF;
     static const size_t CREDITS_UNLIM       = 0x3F;
     static const uint16_t INVALID_EP_ID     = 0xFFFF;
+    static const uint64_t BW_REFILL_PERIOD  = 1000; // in cycles
 
     enum MemoryFlags : uint8_t
     {
@@ -157,6 +158,30 @@ class Tcu : public BaseTcu
         bool isSquashed() const { return false; }
     };
 
+  private:
+
+    struct NocDelayEvent : public Event
+    {
+        Tcu& tcu;
+        NocPacketType type;
+        PacketPtr pkt;
+
+        NocDelayEvent(Tcu& _tcu, NocPacketType _type, PacketPtr _pkt)
+            : tcu(_tcu),
+              type(_type),
+              pkt(_pkt)
+        {}
+
+        void process() override
+        {
+            tcu.sendDelayedNocRequest(type, pkt);
+            setFlags(AutoDelete);
+        }
+
+        const std::string name() const override { return tcu.name(); }
+        const char* description() const override { return "NocDelayEvent"; }
+    };
+
   public:
 
     Tcu(const TcuParams &p);
@@ -216,6 +241,8 @@ class Tcu : public BaseTcu
                         Cycles delay,
                         bool functional = false);
 
+    void sendDelayedNocRequest(NocPacketType type, PacketPtr pkt);
+
     void sendNocResponse(PacketPtr pkt, TcuError result = TcuError::NONE);
 
     NocAddr translatePhysToNoC(Addr phys, bool write);
@@ -244,6 +271,8 @@ class Tcu : public BaseTcu
 
     bool handleLLCRequest(PacketPtr pkt, bool functional) override;
 
+    void refillNoCBW();
+
   private:
 
     RegFile regFile;
@@ -263,6 +292,10 @@ class Tcu : public BaseTcu
     EpFile epFile;
 
     TcuCommands cmds;
+
+    uint64_t bandwidthOverflow;
+
+    EventWrapper<Tcu, &Tcu::refillNoCBW> refillNoCBWEvent;
 
     EventWrapper<CoreRequests, &CoreRequests::completeReqs> completeCoreReqEvent;
 
@@ -298,6 +331,8 @@ class Tcu : public BaseTcu
     statistics::Scalar nocMsgRecvs;
     statistics::Scalar nocReadRecvs;
     statistics::Scalar nocWriteRecvs;
+    statistics::Scalar nocBytes;
+    statistics::Formula nocBw;
 
     // other
     statistics::Scalar regFileReqs;

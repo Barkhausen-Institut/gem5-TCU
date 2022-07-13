@@ -51,6 +51,10 @@ enum class ExtReg : Addr
 {
     FEATURES,
     EXT_CMD,
+    NOC_BW_0,
+    NOC_BW_1,
+    NOC_BW_2,
+    NOC_BW_3,
 };
 
 enum class Features
@@ -81,7 +85,7 @@ enum class UnprivReg : Addr
     PRINT,
 };
 
-constexpr unsigned numExtRegs = 2;
+constexpr unsigned numExtRegs = 6;
 constexpr unsigned numPrivRegs = 5;
 constexpr unsigned numUnprivRegs = 6;
 constexpr unsigned numEpRegs = 3;
@@ -413,7 +417,16 @@ union Ep
     MemEp mem;
 };
 
+static const Addr NOC_BW_UNLIMITED = 0xFFFFFFFF;
+
+BitUnion64(NoCBandwidth)
+    Bitfield<63, 32> rate;  // bytes per millisecond
+    Bitfield<31, 16> limit; // max. available bandwidth we can accumulate
+    Bitfield<15, 0> amount; // currently available bandwidth
+EndBitUnion(NoCBandwidth)
+
 BitUnion64(ActState)
+    Bitfield<33, 32> bw;
     Bitfield<31, 16> msgs;
     Bitfield<15, 0> id;
 EndBitUnion(ActState)
@@ -486,6 +499,7 @@ class RegFile
         WROTE_CORE_REQ  = 8,
         WROTE_CLEAR_IRQ = 16,
         WROTE_PRINT     = 32,
+        WROTE_NOC_BW    = 64,
     };
 
     RegFile(Tcu &tcu, const std::string& name, unsigned numEndpoints);

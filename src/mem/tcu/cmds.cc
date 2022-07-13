@@ -383,7 +383,7 @@ TcuCommands::executePrivCommand(PacketPtr pkt)
         {
             RegFile::reg_t old = tcu.regs().get(PrivReg::CUR_ACT);
             tcu.regs().set(PrivReg::PRIV_CMD_ARG1, old);
-            tcu.regs().set(PrivReg::CUR_ACT, cmd.arg0 & 0xFFFFFFFF);
+            tcu.regs().set(PrivReg::CUR_ACT, cmd.arg0 & 0x3FFFFFFFF);
             break;
         }
         case PrivCommand::SET_TIMER:
