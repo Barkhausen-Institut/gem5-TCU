@@ -43,8 +43,11 @@
 
 const char *RegFile::extRegNames[] = {
     "FEATURES",
-    "MEM_BANDWIDTH",
     "EXT_CMD",
+    "MEM_BW_0",
+    "MEM_BW_1",
+    "MEM_BW_2",
+    "MEM_BW_3",
 };
 
 const char *RegFile::privRegNames[] = {
@@ -111,6 +114,12 @@ RegFile::RegFile(Tcu &_tcu, const std::string& name, unsigned numEndpoints)
     // at boot, all tiles are privileged
     reg_t feat = static_cast<reg_t>(Features::PRIV);
     set(ExtReg::FEATURES, feat);
+
+    // set all memory bandwidths to "unlimited"
+    set(ExtReg::MEM_BW_0, MEM_BW_UNLIMITED << 32);
+    set(ExtReg::MEM_BW_1, MEM_BW_UNLIMITED << 32);
+    set(ExtReg::MEM_BW_2, MEM_BW_UNLIMITED << 32);
+    set(ExtReg::MEM_BW_3, MEM_BW_UNLIMITED << 32);
 
     // and no activity is running (the id might stay invalid for tiles that don't
     // support multiple activities though)
@@ -386,7 +395,7 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
             {
                 if (reg == ExtReg::EXT_CMD)
                     res |= WROTE_EXT_CMD;
-                else if (reg == ExtReg::MEM_BANDWIDTH)
+                else if (reg >= ExtReg::MEM_BW_0)
                     res |= WROTE_MEM_BW;
                 set(reg, data[offset / sizeof(reg_t)], access);
             }

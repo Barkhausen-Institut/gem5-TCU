@@ -44,7 +44,10 @@ enum class ExtReg : Addr
 {
     FEATURES,
     EXT_CMD,
-    MEM_BANDWIDTH,
+    MEM_BW_0,
+    MEM_BW_1,
+    MEM_BW_2,
+    MEM_BW_3,
 };
 
 enum class Features
@@ -72,7 +75,7 @@ enum class UnprivReg : Addr
     PRINT,
 };
 
-constexpr unsigned numExtRegs = 3;
+constexpr unsigned numExtRegs = 6;
 constexpr unsigned numPrivRegs = 5;
 constexpr unsigned numUnprivRegs = 5;
 constexpr unsigned numEpRegs = 3;
@@ -363,6 +366,8 @@ union Ep
     MemEp mem;
 };
 
+static const Addr MEM_BW_UNLIMITED = 0xFFFFFFFF;
+
 BitUnion64(MemBandwidth)
     Bitfield<63, 32> rate;  // bytes per millisecond
     Bitfield<31, 16> limit; // max. available bandwidth we can accumulate
@@ -370,6 +375,7 @@ BitUnion64(MemBandwidth)
 EndBitUnion(MemBandwidth)
 
 BitUnion64(ActState)
+    Bitfield<33, 32> bw;
     Bitfield<31, 16> msgs;
     Bitfield<15, 0> id;
 EndBitUnion(ActState)

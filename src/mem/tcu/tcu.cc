@@ -364,9 +364,20 @@ Tcu::sendNocRequest(NocPacketType type,
     else
     {
         // respect the configured memory bandwidth of this TCU
-        MemBandwidth bandwidth = regs().get(ExtReg::MEM_BANDWIDTH);
-        if (bandwidth.rate != 0)
+        ActState cur = regs().getAct(PrivReg::CUR_ACT);
+        ExtReg bwReg;
+        switch (cur.bw)
         {
+            case 0: bwReg = ExtReg::MEM_BW_0; break;
+            case 1: bwReg = ExtReg::MEM_BW_1; break;
+            case 2: bwReg = ExtReg::MEM_BW_2; break;
+            case 3: bwReg = ExtReg::MEM_BW_3; break;
+        }
+
+        MemBandwidth bandwidth = regs().get(bwReg);
+        if (bandwidth.rate != MEM_BW_UNLIMITED)
+        {
+            assert(bandwidth.rate != 0);
             if (bandwidth.amount < pkt->getSize())
             {
                 // rate is in bytes per ms; convert it to bytes per picosec
@@ -383,14 +394,14 @@ Tcu::sendNocRequest(NocPacketType type,
                 if (bandwidth.amount > 0)
                 {
                     bandwidth.amount = 0;
-                    regs().set(ExtReg::MEM_BANDWIDTH, bandwidth);
+                    regs().set(bwReg, bandwidth);
                 }
             }
             else
             {
                 // enough bandwidth, just pay for it
                 bandwidth.amount = bandwidth.amount - pkt->getSize();
-                regs().set(ExtReg::MEM_BANDWIDTH, bandwidth);
+                regs().set(bwReg, bandwidth);
             }
         }
 
@@ -413,40 +424,51 @@ Tcu::sendDelayedNocRequest(NocPacketType type, PacketPtr pkt)
 void
 Tcu::refillMemBandwidth()
 {
-    MemBandwidth bandwidth = regs().get(ExtReg::MEM_BANDWIDTH);
-
-    if (bandwidth.rate != 0)
+    bool needRefillEvent = false;
+    const ExtReg bwRegs[] = {
+        ExtReg::MEM_BW_0, ExtReg::MEM_BW_1, ExtReg::MEM_BW_2, ExtReg::MEM_BW_3
+    };
+    for (auto bwReg : bwRegs)
     {
-        // stop filling up at the limit
-        if (bandwidth.amount < bandwidth.limit)
-        {
-            // determine the increment for the refill period
-            auto period = cyclesToTicks(Cycles(BW_REFILL_PERIOD));
-            auto factor = static_cast<double>(bandwidth.rate) / 1000000000.;
-            auto inc = static_cast<uint64_t>(period * factor);
+        MemBandwidth bandwidth = regs().get(bwReg);
 
-            // if there is some overflow left, pay that first
-            if (bandwidthOverflow > 0)
+        if (bandwidth.rate != MEM_BW_UNLIMITED)
+        {
+            assert(bandwidth.rate != 0);
+            // stop filling up at the limit
+            if (bandwidth.amount < bandwidth.limit)
             {
-                auto overflow = std::min(bandwidthOverflow, inc);
-                bandwidthOverflow -= overflow;
-                inc -= overflow;
+                // determine the increment for the refill period
+                auto period = cyclesToTicks(Cycles(BW_REFILL_PERIOD));
+                auto factor = static_cast<double>(bandwidth.rate) / 1000000000.;
+                auto inc = static_cast<uint64_t>(period * factor);
+
+                // if there is some overflow left, pay that first
+                if (bandwidthOverflow > 0)
+                {
+                    auto overflow = std::min(bandwidthOverflow, inc);
+                    bandwidthOverflow -= overflow;
+                    inc -= overflow;
+                }
+
+                // increment bandwidth; ensure that we don't exceed the limit
+                if (bandwidth.amount + inc < bandwidth.limit)
+                    bandwidth.amount = bandwidth.amount + inc;
+                else
+                    bandwidth.amount = bandwidth.limit;
+                regs().set(bwReg, bandwidth);
             }
 
-            // increment bandwidth; ensure that we don't exceed the limit
-            if (bandwidth.amount + inc < bandwidth.limit)
-                bandwidth.amount = bandwidth.amount + inc;
-            else
-                bandwidth.amount = bandwidth.limit;
-            regs().set(ExtReg::MEM_BANDWIDTH, bandwidth);
+            needRefillEvent = true;
         }
-
-        schedule(refillMemBandwidthEvent, clockEdge(Cycles(BW_REFILL_PERIOD)));
     }
-    // if the rate is 0, we don't need the event. we will call this function
-    // again upon writes to the MEM_BANDWIDTH register and recheck whether we
-    // need the event
-    else if (refillMemBandwidthEvent.scheduled())
+
+    // if the rate is "unlimited", we don't need the event. we will call this
+    // function again upon writes to the MEM_BANDWIDTH register and recheck
+    // whether we need the event
+    if (needRefillEvent && !refillMemBandwidthEvent.scheduled())
+        schedule(refillMemBandwidthEvent, clockEdge(Cycles(BW_REFILL_PERIOD)));
+    else if (!needRefillEvent && refillMemBandwidthEvent.scheduled())
         deschedule(&refillMemBandwidthEvent);
 }
 
