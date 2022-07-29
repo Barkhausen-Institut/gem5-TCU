@@ -196,6 +196,7 @@ system.bridge.ranges = system.platform._off_chip_ranges()
 
 system.platform.attachOnChipIO(system.membus)
 system.platform.attachOffChipIO(system.iobus)
+system.platform.pci_host.pio = system.membus.mem_side_ports
 system.platform.attachPlic()
 system.platform.setNumCores(np)
 
