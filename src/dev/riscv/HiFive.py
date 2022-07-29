@@ -145,6 +145,10 @@ class HiFive(Platform):
         devices = [self.uart]
         if hasattr(self, "disk"):
             devices.append(self.disk)
+        if hasattr(self, "disk0"):
+            devices.append(self.disk0)
+        if hasattr(self, "disk1"):
+            devices.append(self.disk1)
         if hasattr(self, "rng"):
             devices.append(self.rng)
         return devices
