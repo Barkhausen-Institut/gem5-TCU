@@ -116,7 +116,7 @@ class Fetch
         finish(const Fault &fault, const RequestPtr &req,
             gem5::ThreadContext *tc, BaseMMU::Mode mode)
         {
-            assert(mode == BaseMMU::Execute);
+            // assert(mode == BaseMMU::Execute);
             fetch->finishTranslation(fault, req);
             delete this;
         }
