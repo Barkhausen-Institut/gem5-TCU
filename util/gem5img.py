@@ -318,7 +318,7 @@ newCom = Command('new', 'File creation part of "init".',
 
 def newImage(file, mb):
     (cylinders, heads, sectors) = chsFromSize((mb * MB) / BlockSize)
-    size = cylinders * heads * sectors * BlockSize
+    size = int(cylinders * heads * sectors * BlockSize)
 
     # We lseek to the end of the file and only write one byte there. This
     # leaves a "hole" which many file systems are smart enough not to actually
