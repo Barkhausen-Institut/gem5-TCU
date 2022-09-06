@@ -347,8 +347,8 @@ tracePacket(System *sys, const char *label, PacketPtr pkt)
     if (size == 1 || size == 2 || size == 4 || size == 8) {
         ByteOrder byte_order = sys->getGuestByteOrder();
         DPRINTF(MemoryAccess, "%s from %s of size %i on address %#x data "
-                "%#x %c\n", label, sys->getRequestorName(pkt->req->
-                requestorId()), size, pkt->getAddr(),
+                "%#x %c\n",
+                label, sys->getRequestorName(pkt->req->requestorId()),
                 size, pkt->getAddr(), pkt->getUintX(byte_order),
                 pkt->req->isUncacheable() ? 'U' : 'C');
         return;
