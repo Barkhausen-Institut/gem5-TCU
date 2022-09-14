@@ -32,6 +32,8 @@
 #ifndef __MEM_TCU_TCU_HH__
 #define __MEM_TCU_TCU_HH__
 
+#include "base/chunk_generator.hh"
+#include "base/output.hh"
 #include "mem/tcu/connector/base.hh"
 #include "mem/tcu/base.hh"
 #include "mem/tcu/cmds.hh"
@@ -81,6 +83,7 @@ class Tcu : public BaseTcu
     {
         Addr data;
         RequestorID mid;
+        bool coverage;
     };
 
     struct NocSenderState : public Packet::SenderState
@@ -94,6 +97,37 @@ class Tcu : public BaseTcu
         explicit InitSenderState(Addr _oldAddr) : oldAddr(_oldAddr) {}
 
         Addr oldAddr;
+    };
+
+    struct WriteCoverageEvent : public Event
+    {
+        Tcu &_tcu;
+        uint16_t _act;
+        uint8_t *_buffer;
+        ChunkGenerator _gen;
+        OutputStream *_out;
+        std::ostream *_os;
+
+        WriteCoverageEvent(Tcu& tcu, uint16_t act, Addr address, Addr size)
+            : Event(),
+              _tcu(tcu),
+              _act(act),
+              _buffer(new uint8_t[tcu.blockSize]),
+              _gen(address, size, tcu.blockSize),
+              _out(),
+              _os()
+        {}
+        ~WriteCoverageEvent()
+        {
+            if (_out)
+                simout.close(_out);
+            delete[] _buffer;
+        }
+
+        void process() override;
+        void completed(PacketPtr pkt);
+        const std::string name() const override;
+        const char* description() const override { return "WriteCoverageEvent"; }
     };
 
   public:
@@ -118,6 +152,8 @@ class Tcu : public BaseTcu
     void freeRequest(PacketPtr pkt);
 
     void printLine(Addr len);
+
+    void writeCoverage(PrintReg pr);
 
     void startWaitEP(const CmdCommand::Bits &cmd);
 
@@ -162,7 +198,8 @@ class Tcu : public BaseTcu
 
     void sendMemRequest(PacketPtr pkt,
                         Addr data,
-                        Cycles delay);
+                        Cycles delay,
+                        bool coverage);
 
     void sendNocRequest(NocPacketType type,
                         PacketPtr pkt,

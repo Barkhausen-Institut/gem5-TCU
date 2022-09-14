@@ -31,7 +31,10 @@
 
 #include <iomanip>
 #include <sstream>
+#include <ostream>
 
+#include "arch/generic/mmu.hh"
+#include "base/output.hh"
 #include "debug/Tcu.hh"
 #include "debug/TcuPackets.hh"
 #include "debug/TcuMem.hh"
@@ -300,16 +303,91 @@ Tcu::printLine(Addr len)
 {
     const char *buffer = regs().getBuffer(len);
     DPRINTF(Tcu, "PRINT: %s\n", buffer);
+    regs().set(UnprivReg::PRINT, 0);
+}
+
+void
+Tcu::writeCoverage(PrintReg pr)
+{
+    auto writeCovEvent = new WriteCoverageEvent(*this, pr.cov_act,
+                                                pr.cov_addr, pr.size);
+    schedule(writeCovEvent, clockEdge(Cycles(1)));
+
+    startSleep(INVALID_EP_ID);
+}
+
+const std::string
+Tcu::WriteCoverageEvent::name() const
+{
+    return _tcu.name();
+}
+
+void
+Tcu::WriteCoverageEvent::process()
+{
+    auto tc = _tcu.system->threads[0];
+    BaseMMU *mmu = tc->getMMUPtr();
+    Request::Flags flags;
+
+    auto tmpReq = std::make_shared<Request>(_gen.addr(), _gen.size(), flags,
+                                            _tcu.requestorId, 0,
+                                            tc->contextId());
+
+    if (mmu->translateFunctional(tmpReq, tc, BaseTLB::Read) != NoFault)
+        panic("Translation of address %u failed", _gen.addr());
+
+    auto req = std::make_shared<Request>(tmpReq->getPaddr(), _gen.size(),
+                                         flags, _tcu.requestorId);
+    auto pkt = new Packet(req, MemCmd::ReadReq);
+    pkt->dataStatic(_buffer);
+
+    _tcu.sendMemRequest(pkt, reinterpret_cast<Addr>(this), Cycles(1), true);
+}
+
+void
+Tcu::WriteCoverageEvent::completed(PacketPtr pkt)
+{
+    if (!_out)
+    {
+        std::ostringstream filename;
+        filename << "coverage-" << (int)_tcu.tileId << "-" << _act << ".profraw";
+
+        DPRINTF(Tcu, "Writing coverage: opening %s\n", filename.str().c_str());
+
+        _out = simout.open(filename.str(),
+                           std::ios::app | std::ios::out | std::ios::binary,
+                           false, true);
+        _os = _out->stream();
+        if (!_os)
+            panic("could not open file %s\n", filename.str().c_str());
+    }
+
+    DPRINTF(Tcu, "Writing coverage: %d bytes from %#x:%#x\n",
+        pkt->getSize(), _gen.addr(), pkt->getAddr());
+
+    _os->write(pkt->getPtr<char>(), pkt->getSize());
+
+    _gen.next();
+    if(_gen.done())
+    {
+        _tcu.regs().set(UnprivReg::PRINT, 0);
+        _tcu.stopSleep();
+        delete this;
+    }
+    else
+        _tcu.schedule(this, _tcu.clockEdge(Cycles(1)));
 }
 
 void
 Tcu::sendMemRequest(PacketPtr pkt,
                     Addr data,
-                    Cycles delay)
+                    Cycles delay,
+                    bool coverage)
 {
     auto senderState = new MemSenderState();
     senderState->data = data;
     senderState->mid = pkt->req->requestorId();
+    senderState->coverage = coverage;
 
     // ensure that this packet has our master id (not the id of a master in
     // a different tile)
@@ -460,7 +538,13 @@ Tcu::completeMemRequest(PacketPtr pkt)
     // set the old requestor id again
     pkt->req->setRequestorId(senderState->mid);
 
-    xferUnit->recvMemResponse(senderState->data, pkt);
+    if (senderState->coverage)
+    {
+        auto ev = reinterpret_cast<WriteCoverageEvent*>(senderState->data);
+        ev->completed(pkt);
+    }
+    else
+        xferUnit->recvMemResponse(senderState->data, pkt);
 
     delete senderState;
     freeRequest(pkt);
@@ -686,8 +770,11 @@ Tcu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
             schedule(completeCoreReqEvent, when);
         if (result & RegFile::WROTE_PRINT)
         {
-            printLine(regs().get(UnprivReg::PRINT));
-            regs().set(UnprivReg::PRINT, 0);
+            PrintReg pr = regs().get(UnprivReg::PRINT);
+            if (pr.cov_addr == 0)
+                printLine(pr.size);
+            else
+                writeCoverage(pr);
         }
         if (result & RegFile::WROTE_CLEAR_IRQ)
             clearIrq((BaseConnector::IRQ)regs().get(PrivReg::CLEAR_IRQ));

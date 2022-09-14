@@ -199,7 +199,7 @@ XferUnit::TransferEvent::process()
             memcpy(pkt->getPtr<uint8_t>(), buf->bytes + buf->offset, reqSize);
         }
 
-        xfer->tcu.sendMemRequest(pkt, buf->id | (buf->offset << 32), lat);
+        xfer->tcu.sendMemRequest(pkt, buf->id | (buf->offset << 32), lat, false);
 
         // to next block
         buf->offset += reqSize;

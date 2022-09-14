@@ -388,6 +388,12 @@ BitUnion64(ForeignCoreResp)
     Bitfield<1, 0> type;
 EndBitUnion(ForeignCoreResp)
 
+BitUnion64(PrintReg)
+    Bitfield<23, 0> size;
+    Bitfield<55, 24> cov_addr;
+    Bitfield<63, 56> cov_act;
+EndBitUnion(PrintReg)
+
 struct M5_ATTR_PACKED MessageHeader
 {
     uint8_t flags : 2,
