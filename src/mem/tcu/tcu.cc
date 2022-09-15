@@ -312,8 +312,6 @@ Tcu::writeCoverage(PrintReg pr)
     auto writeCovEvent = new WriteCoverageEvent(*this, pr.cov_act,
                                                 pr.cov_addr, pr.size);
     schedule(writeCovEvent, clockEdge(Cycles(1)));
-
-    startSleep(INVALID_EP_ID);
 }
 
 const std::string
@@ -371,7 +369,6 @@ Tcu::WriteCoverageEvent::completed(PacketPtr pkt)
     if(_gen.done())
     {
         _tcu.regs().set(UnprivReg::PRINT, 0);
-        _tcu.stopSleep();
         delete this;
     }
     else
