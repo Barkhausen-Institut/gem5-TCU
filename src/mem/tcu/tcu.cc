@@ -493,6 +493,7 @@ Tcu::completeNocRequest(PacketPtr pkt)
             pkt->setAddr(state->oldAddr);
             pkt->req->setPaddr(state->oldAddr);
             pkt->popSenderState();
+            delete state;
         }
 
         DPRINTF(TcuMem,
@@ -511,7 +512,10 @@ Tcu::completeNocRequest(PacketPtr pkt)
         // if the current command should be aborted, just ignore the packet
         // and finish the command
         if (cmds.isCommandAborting())
+        {
+            freeRequest(pkt);
             scheduleCmdFinish(Cycles(1), TcuError::ABORT);
+        }
         else
         {
             auto cmd = regs().getCommand();
