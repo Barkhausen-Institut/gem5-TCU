@@ -29,6 +29,7 @@
  */
 
 #include "cpu/tcu-accel/ctxswsm.hh"
+#include "debug/TcuAccel.hh"
 
 AccelCtxSwSM::AccelCtxSwSM(TcuAccel *_accel)
     : accel(_accel),
@@ -153,6 +154,10 @@ AccelCtxSwSM::handleMemResp(PacketPtr pkt)
         {
             const uint64_t *args =
                 reinterpret_cast<const uint64_t*>(pkt_data + sizeof(MessageHeader));
+
+            DPRINTF(TcuAccel,
+                    "Received side call with op=%u, act=%u, ctrl=%u\n",
+                    args[0], args[1], args[2]);
 
             if(args[0] == Operation::VPE_CTRL)
             {

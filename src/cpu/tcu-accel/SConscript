@@ -35,3 +35,5 @@ Source('connector.cc')
 Source('ctxswsm.cc')
 Source('syscallsm.cc')
 Source('yieldsm.cc')
+
+DebugFlag('TcuAccel')
