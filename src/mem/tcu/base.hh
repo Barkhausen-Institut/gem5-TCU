@@ -43,6 +43,7 @@ class BaseTcu : public ClockedObject
 {
   protected:
 
+    // All ports to
     class TcuMasterPort : public QueuedRequestPort
     {
       protected:
@@ -198,19 +199,19 @@ class BaseTcu : public ClockedObject
         {
             bool res = tcu.handleCoreMemRequest(pkt, *this, port, icache, functional);
             if (!res)
-                tcu.sendDummyResponse(*this, pkt, functional);
+                tcu.schedDummyResponse(*this, pkt, functional);
             return true;
         }
     };
 
-    class CacheMemSlavePort : public TcuSlavePort
+    class LLCSlavePort : public TcuSlavePort
     {
         friend class NocMasterPort;
 
       public:
 
-        CacheMemSlavePort(BaseTcu& _tcu)
-          : TcuSlavePort(_tcu.name() + ".cache_mem_slave_port", _tcu)
+        LLCSlavePort(BaseTcu& _tcu)
+          : TcuSlavePort(_tcu.name() + ".llc_slave_port", _tcu)
         { }
 
       protected:
@@ -230,23 +231,37 @@ class BaseTcu : public ClockedObject
 
     Port& getPort(const std::string &n, PortID idx) override;
 
-    void schedNocResponse(PacketPtr pkt, Tick when);
+    void schedNocRequestFinished(Tick when);
 
-    void schedCpuResponse(PacketPtr pkt, Tick when);
+    // requests
+
+    PacketPtr generateRequest(Addr addr, Addr size, MemCmd cmd);
+
+    void freeRequest(PacketPtr pkt);
 
     void schedNocRequest(PacketPtr pkt, Tick when);
 
     void schedMemRequest(PacketPtr pkt, Tick when);
 
-    void schedNocRequestFinished(Tick when);
-
     void sendFunctionalNocRequest(PacketPtr pkt);
 
-    void sendCacheMemResponse(PacketPtr pkt, bool success);
+    void sendFunctionalMemRequest(PacketPtr pkt);
+
+    // responses
+
+    void schedNocResponse(PacketPtr pkt, Tick when);
+
+    void schedCpuResponse(PacketPtr pkt, Tick when);
+
+    void schedLLCResponse(PacketPtr pkt, bool success);
+
+    // completions of our requests
 
     virtual void completeNocRequest(PacketPtr pkt) = 0;
 
     virtual void completeMemRequest(PacketPtr pkt) = 0;
+
+    // requests that are sent to us
 
     virtual void handleNocRequest(PacketPtr pkt) = 0;
 
@@ -256,15 +271,19 @@ class BaseTcu : public ClockedObject
                                       bool icache,
                                       bool functional) = 0;
 
-    virtual bool handleCacheMemRequest(PacketPtr pkt, bool functional) = 0;
+    virtual bool handleLLCRequest(PacketPtr pkt, bool functional) = 0;
 
   protected:
 
     void nocRequestFinished();
 
-    void sendDummyResponse(TcuSlavePort &port, PacketPtr pkt, bool functional);
+    void schedDummyResponse(TcuSlavePort &port, PacketPtr pkt, bool functional);
 
     void printNocRequest(PacketPtr pkt, const char *type);
+
+    System *system;
+
+    const RequestorID requestorId;
 
     NocMasterPort  nocMasterPort;
 
@@ -278,7 +297,7 @@ class BaseTcu : public ClockedObject
 
     CacheSlavePort<DCacheMasterPort> dcacheSlavePort;
 
-    CacheMemSlavePort cacheMemSlavePort;
+    LLCSlavePort llcSlavePort;
 
     std::vector<Cache*> caches;
 

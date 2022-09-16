@@ -46,6 +46,7 @@ elif env['TARGET_ISA'] == 'riscv':
 
 Source('base.cc')
 Source('cmds.cc')
+Source('connector.cc')
 Source('core_reqs.cc')
 Source('ep_file.cc')
 Source('mem_unit.cc')

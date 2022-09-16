@@ -312,7 +312,7 @@ def createTile(noc, options, no, systemType, l1size, l2size, spmsize,
                 tile.iocache.mem_side = tile.xbar.cpu_side_ports
 
         # the TCU handles LLC misses
-        tile.tcu.cache_mem_slave_port = tile.xbar.default
+        tile.tcu.llc_slave_port = tile.xbar.default
 
         # don't check whether the kernel is in memory because a tile does not have memory in this
         # case, but just a cache that is connected to a different tile

@@ -85,7 +85,7 @@ void
 CoreRequests::Request::start()
 {
     DPRINTFS(TcuCoreReqs, (&req.tcu), "CoreRequest[%lu] started\n", id);
-    req.tcu.setIrq(BaseConnector::IRQ::CORE_REQ);
+    req.tcu.con().setIrq(BaseConnector::IRQ::CORE_REQ);
 }
 
 void

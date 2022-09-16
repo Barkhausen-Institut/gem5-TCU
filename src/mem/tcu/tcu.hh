@@ -34,9 +34,9 @@
 
 #include "base/chunk_generator.hh"
 #include "base/output.hh"
-#include "mem/tcu/connector/base.hh"
 #include "mem/tcu/base.hh"
 #include "mem/tcu/cmds.hh"
+#include "mem/tcu/connector.hh"
 #include "mem/tcu/ep_file.hh"
 #include "mem/tcu/reg_file.hh"
 #include "mem/tcu/noc_addr.hh"
@@ -144,42 +144,21 @@ class Tcu : public BaseTcu
 
     EpFile &eps() { return epFile; }
 
+    TcuConnector &con() { return connector; };
+
     TcuTlb *tlb() { return tlBuf; }
 
     bool isMemTile(unsigned tile) const;
-
-    PacketPtr generateRequest(Addr addr, Addr size, MemCmd cmd);
-    void freeRequest(PacketPtr pkt);
 
     void printLine(Addr len);
 
     void writeCoverage(PrintReg pr);
 
-    void startWaitEP(const CmdCommand::Bits &cmd);
-
-    void startWaitEPWithEP(EpFile::EpCache &eps, epid_t epid);
-
-    bool startSleep(epid_t wakeupEp);
-
-    void stopSleep();
-
-    void wakeupCore(bool force, epid_t rep);
-
     Cycles reset(bool flushInval);
 
     Cycles flushInvalCaches(bool invalidate);
 
-    void setIrq(BaseConnector::IRQ irq);
-
-    void clearIrq(BaseConnector::IRQ irq);
-
-    void fireTimer();
-
-    void restartTimer(uint64_t nanos);
-
     void forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest);
-
-    void sendFunctionalMemRequest(PacketPtr pkt);
 
     bool isCommandAborting() const
     {
@@ -232,17 +211,13 @@ class Tcu : public BaseTcu
                               bool icache,
                               bool functional) override;
 
-    bool handleCacheMemRequest(PacketPtr pkt, bool functional) override;
+    bool handleLLCRequest(PacketPtr pkt, bool functional) override;
 
   private:
 
-    const RequestorID requestorId;
-
-    System *system;
-
     RegFile regFile;
 
-    BaseConnector *connector;
+    TcuConnector connector;
 
     TcuTlb *tlBuf;
 
@@ -256,15 +231,9 @@ class Tcu : public BaseTcu
 
     EpFile epFile;
 
-    EpFile::EpCache sleepEPs;
-
     TcuCommands cmds;
 
-    EventWrapper<Tcu, &Tcu::fireTimer> fireTimerEvent;
-
     EventWrapper<CoreRequests, &CoreRequests::completeReqs> completeCoreReqEvent;
-
-    int wakeupEp;
 
   public:
 
@@ -302,7 +271,6 @@ class Tcu : public BaseTcu
     Stats::Scalar regFileReqs;
     Stats::Scalar intMemReqs;
     Stats::Scalar extMemReqs;
-    Stats::Scalar irqInjects;
     Stats::Scalar resets;
 
 };

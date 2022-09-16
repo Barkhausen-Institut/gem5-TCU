@@ -37,6 +37,8 @@ class BaseTcu(ClockedObject):
     abstract = True
     cxx_header = "mem/tcu/base.hh"
 
+    system = Param.System(Parent.any, "System we belong to")
+
     noc_master_port = MasterPort("TCU master port")
     noc_slave_port  = SlavePort("TCU slave port")
 
@@ -47,7 +49,7 @@ class BaseTcu(ClockedObject):
     icache_master_port = MasterPort("Port that connects the icache")
     dcache_master_port = MasterPort("Port that connects the dcache")
 
-    cache_mem_slave_port = SlavePort("Port that performs memory requests on behalf of the cache")
+    llc_slave_port = SlavePort("Port that performs memory requests on behalf of the cache")
 
     tile_mem_offset = Param.Unsigned(0, "The offset that all accesses have to go above")
 
@@ -65,7 +67,6 @@ class BaseTcu(ClockedObject):
 class Tcu(BaseTcu):
     type = 'Tcu'
     cxx_header = "mem/tcu/tcu.hh"
-    system = Param.System(Parent.any, "System we belong to")
     num_endpoints = Param.Unsigned(8, "Number of endpoints per TCU")
 
     connector = Param.BaseConnector("The connector to the CPU")

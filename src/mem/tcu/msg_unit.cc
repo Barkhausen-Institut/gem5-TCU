@@ -722,7 +722,7 @@ MessageUnit::finishMsgReceive(EpFile::EpCache &eps,
     if (error == TcuError::NONE && addMsg)
     {
         tcu.regs().add_msg();
-        tcu.wakeupCore(false, ep.id);
+        tcu.con().wakeupCore(false, ep.id);
     }
 
     return error;

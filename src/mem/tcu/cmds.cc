@@ -146,7 +146,7 @@ TcuCommands::stopCommand()
 {
     if (cmdPkt)
     {
-        tcu.stopSleep();
+        tcu.connector.stopSleep();
         tcu.schedCpuResponse(cmdPkt, tcu.clockEdge(Cycles(1)));
         cmdPkt = NULL;
     }
@@ -193,7 +193,7 @@ TcuCommands::executeCommand(PacketPtr pkt)
             tcu.msgUnit->startAck(cmd);
             break;
         case CmdCommand::SLEEP:
-            tcu.startWaitEP(cmd);
+            tcu.connector.startWaitEP(cmd);
             break;
         default:
             finishCommand(TcuError::UNKNOWN_CMD);
@@ -202,8 +202,8 @@ TcuCommands::executeCommand(PacketPtr pkt)
 
     if (cmdPkt && cmd.opcode != CmdCommand::SLEEP)
     {
-        if (tcu.connector->canSuspendCmds())
-            tcu.startSleep(Tcu::INVALID_EP_ID);
+        if (tcu.connector.canSuspendCmds())
+            tcu.connector.startSleep(Tcu::INVALID_EP_ID);
         else
         {
             tcu.schedCpuResponse(cmdPkt, tcu.clockEdge(Cycles(1)));
@@ -312,7 +312,7 @@ TcuCommands::finishCommand(TcuError error)
     }
 
     if (cmdPkt || cmd.opcode == CmdCommand::SLEEP)
-        tcu.stopSleep();
+        tcu.connector.stopSleep();
 
     DPRINTF(TcuCmd, "Finished command %s with EP=%u -> %u\n",
             COMMAND_NAME(cmdNames, cmd.opcode), cmd.epid,
@@ -386,7 +386,7 @@ TcuCommands::executePrivCommand(PacketPtr pkt)
             delay += tcu.flushInvalCaches(true);
             break;
         case PrivCommand::SET_TIMER:
-            tcu.restartTimer(cmd.arg0);
+            tcu.connector.restartTimer(cmd.arg0);
             break;
         case PrivCommand::ABORT_CMD:
             privCmdPkt = pkt;

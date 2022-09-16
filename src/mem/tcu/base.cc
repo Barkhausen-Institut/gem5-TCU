@@ -35,6 +35,7 @@
 #include "base/trace.hh"
 #include "mem/tcu/base.hh"
 #include "mem/tcu/noc_addr.hh"
+#include "sim/system.hh"
 
 BaseTcu::TcuMasterPort::TcuMasterPort(const std::string& _name, BaseTcu& _tcu)
   : QueuedRequestPort(_name, &_tcu, reqQueue, snoopRespQueue),
@@ -256,23 +257,51 @@ BaseTcu::NocSlavePort::getAddrRanges() const
     return ranges;
 }
 
+bool
+BaseTcu::NocSlavePort::handleRequest(PacketPtr pkt,
+                                     bool *busy,
+                                     bool functional)
+{
+    *busy = true;
+
+    tcu.handleNocRequest(pkt);
+
+    return true;
+}
+
 AddrRangeList
-BaseTcu::CacheMemSlavePort::getAddrRanges() const
+BaseTcu::LLCSlavePort::getAddrRanges() const
 {
     AddrRangeList ranges;
     ranges.push_back(AddrRange(0, -1));
     return ranges;
 }
 
+bool
+BaseTcu::LLCSlavePort::handleRequest(PacketPtr pkt,
+                                          bool *busy,
+                                          bool functional)
+{
+    // if that failed, it was an invalid request (probably due to speculative
+    // execution)
+    if (!tcu.handleLLCRequest(pkt, functional))
+        tcu.schedDummyResponse(*this, pkt, functional);
+
+    // in general, pretend that everything is fine
+    return true;
+}
+
 BaseTcu::BaseTcu(const BaseTcuParams &p)
   : ClockedObject(p),
+    system(p.system),
+    requestorId(p.system->getRequestorId(this, name())),
     nocMasterPort(*this),
     nocSlavePort(*this),
     icacheMasterPort(*this),
     dcacheMasterPort(*this),
     icacheSlavePort(icacheMasterPort, *this, true),
     dcacheSlavePort(dcacheMasterPort, *this, false),
-    cacheMemSlavePort(*this),
+    llcSlavePort(*this),
     caches(p.caches),
     nocReqFinishedEvent(*this),
     tileId(p.tile_id),
@@ -298,38 +327,138 @@ BaseTcu::init()
         dcacheSlavePort.sendRangeChange();
 
     // the cache-mem slave port is only used if we have a cache
-    if (cacheMemSlavePort.isConnected())
-        cacheMemSlavePort.sendRangeChange();
+    if (llcSlavePort.isConnected())
+        llcSlavePort.sendRangeChange();
 }
 
-bool
-BaseTcu::NocSlavePort::handleRequest(PacketPtr pkt,
-                                     bool *busy,
-                                     bool functional)
+Port&
+BaseTcu::getPort(const std::string &if_name, PortID idx)
 {
-    *busy = true;
-
-    tcu.handleNocRequest(pkt);
-
-    return true;
+    if (if_name == "icache_master_port")
+        return icacheMasterPort;
+    else if (if_name == "dcache_master_port")
+        return dcacheMasterPort;
+    else if (if_name == "noc_master_port")
+        return nocMasterPort;
+    else if (if_name == "icache_slave_port")
+        return icacheSlavePort;
+    else if (if_name == "dcache_slave_port")
+        return dcacheSlavePort;
+    else if (if_name == "noc_slave_port")
+        return nocSlavePort;
+    else if (if_name == "llc_slave_port")
+        return llcSlavePort;
+    else
+        return SimObject::getPort(if_name, idx);
 }
 
-bool
-BaseTcu::CacheMemSlavePort::handleRequest(PacketPtr pkt,
-                                          bool *busy,
-                                          bool functional)
-{
-    // if that failed, it was an invalid request (probably due to speculative
-    // execution)
-    if (!tcu.handleCacheMemRequest(pkt, functional))
-        tcu.sendDummyResponse(*this, pkt, functional);
+// -- requests --
 
-    // in general, pretend that everything is fine
-    return true;
+PacketPtr
+BaseTcu::generateRequest(Addr paddr, Addr size, MemCmd cmd)
+{
+    Request::Flags flags;
+
+    auto req = std::make_shared<Request>(paddr, size, flags, requestorId);
+
+    auto pkt = new Packet(req, cmd);
+
+    if (size)
+    {
+        auto pktData = new uint8_t[size];
+        pkt->dataDynamic(pktData);
+    }
+
+    return pkt;
 }
 
 void
-BaseTcu::sendDummyResponse(TcuSlavePort &port, PacketPtr pkt, bool functional)
+BaseTcu::freeRequest(PacketPtr pkt)
+{
+    delete pkt;
+}
+
+void
+BaseTcu::schedNocRequest(PacketPtr pkt, Tick when)
+{
+    printNocRequest(pkt, "timing");
+    nocMasterPort.schedTimingReq(pkt, when);
+}
+
+void
+BaseTcu::schedMemRequest(PacketPtr pkt, Tick when)
+{
+    // ensure that this packet has our master id (not the id of a master in
+    // a different tile)
+    pkt->req->setRequestorId(requestorId);
+
+    dcacheMasterPort.schedTimingReq(pkt, when);
+}
+
+void
+BaseTcu::sendFunctionalNocRequest(PacketPtr pkt)
+{
+    printNocRequest(pkt, "functional");
+    nocMasterPort.sendFunctional(pkt);
+}
+
+void
+BaseTcu::sendFunctionalMemRequest(PacketPtr pkt)
+{
+    // set our master id (it might be from a different tile)
+    pkt->req->setRequestorId(requestorId);
+
+    dcacheMasterPort.sendFunctional(pkt);
+}
+
+// -- responses --
+
+void
+BaseTcu::schedNocResponse(PacketPtr pkt, Tick when)
+{
+    assert(pkt->isResponse());
+
+    nocSlavePort.schedTimingResp(pkt, when);
+}
+
+void
+BaseTcu::schedCpuResponse(PacketPtr pkt, Tick when)
+{
+    assert(pkt->isResponse());
+
+    dcacheSlavePort.schedTimingResp(pkt, when);
+}
+
+void
+BaseTcu::schedLLCResponse(PacketPtr pkt, bool success)
+{
+    DPRINTF(TcuSlavePort, "Send %s response at %#x (%u bytes)\n",
+            pkt->cmd.toString(),
+            pkt->getAddr(),
+            pkt->getSize());
+
+    if (!success)
+        schedDummyResponse(llcSlavePort, pkt, false);
+    else
+        llcSlavePort.schedTimingResp(pkt, clockEdge(Cycles(1)));
+}
+
+// -- misc --
+
+void
+BaseTcu::schedNocRequestFinished(Tick when)
+{
+    schedule(nocReqFinishedEvent, when);
+}
+
+void
+BaseTcu::nocRequestFinished()
+{
+    nocSlavePort.requestFinished();
+}
+
+void
+BaseTcu::schedDummyResponse(TcuSlavePort &port, PacketPtr pkt, bool functional)
 {
     // invalid reads just get zeros
     if (pkt->isRead())
@@ -352,89 +481,6 @@ BaseTcu::sendDummyResponse(TcuSlavePort &port, PacketPtr pkt, bool functional)
             port.schedTimingResp(pkt, clockEdge(Cycles(1)));
         }
     }
-}
-
-Port&
-BaseTcu::getPort(const std::string &if_name, PortID idx)
-{
-    if (if_name == "icache_master_port")
-        return icacheMasterPort;
-    else if (if_name == "dcache_master_port")
-        return dcacheMasterPort;
-    else if (if_name == "noc_master_port")
-        return nocMasterPort;
-    else if (if_name == "icache_slave_port")
-        return icacheSlavePort;
-    else if (if_name == "dcache_slave_port")
-        return dcacheSlavePort;
-    else if (if_name == "noc_slave_port")
-        return nocSlavePort;
-    else if (if_name == "cache_mem_slave_port")
-        return cacheMemSlavePort;
-    else
-        return SimObject::getPort(if_name, idx);
-}
-
-void
-BaseTcu::schedNocResponse(PacketPtr pkt, Tick when)
-{
-    assert(pkt->isResponse());
-
-    nocSlavePort.schedTimingResp(pkt, when);
-}
-
-void
-BaseTcu::schedNocRequestFinished(Tick when)
-{
-    schedule(nocReqFinishedEvent, when);
-}
-
-void
-BaseTcu::nocRequestFinished()
-{
-    nocSlavePort.requestFinished();
-}
-
-void
-BaseTcu::schedCpuResponse(PacketPtr pkt, Tick when)
-{
-    assert(pkt->isResponse());
-
-    dcacheSlavePort.schedTimingResp(pkt, when);
-}
-
-void
-BaseTcu::sendCacheMemResponse(PacketPtr pkt, bool success)
-{
-    DPRINTF(TcuSlavePort, "Send %s response at %#x (%u bytes)\n",
-            pkt->cmd.toString(),
-            pkt->getAddr(),
-            pkt->getSize());
-
-    if (!success)
-        sendDummyResponse(cacheMemSlavePort, pkt, false);
-    else
-        cacheMemSlavePort.schedTimingResp(pkt, clockEdge(Cycles(1)));
-}
-
-void
-BaseTcu::schedNocRequest(PacketPtr pkt, Tick when)
-{
-    printNocRequest(pkt, "timing");
-    nocMasterPort.schedTimingReq(pkt, when);
-}
-
-void
-BaseTcu::schedMemRequest(PacketPtr pkt, Tick when)
-{
-    dcacheMasterPort.schedTimingReq(pkt, when);
-}
-
-void
-BaseTcu::sendFunctionalNocRequest(PacketPtr pkt)
-{
-    printNocRequest(pkt, "functional");
-    nocMasterPort.sendFunctional(pkt);
 }
 
 void
