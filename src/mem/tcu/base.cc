@@ -137,13 +137,7 @@ BaseTcu::TcuSlavePort::schedTimingResp(PacketPtr pkt, Tick when)
 Tick
 BaseTcu::TcuSlavePort::recvAtomic(PacketPtr pkt)
 {
-    DPRINTF(TcuSlavePort, "Receive atomic %s request at %#x (%u bytes)\n",
-                          pkt->cmd.toString(),
-                          pkt->getAddr(),
-                          pkt->getSize());
-
-    handleRequest(pkt, &busy, false);
-
+    panic("Atomic mode is not supported by the TCU!");
     return 0;
 }
 
@@ -444,13 +438,6 @@ BaseTcu::sendFunctionalNocRequest(PacketPtr pkt)
 }
 
 void
-BaseTcu::sendAtomicNocRequest(PacketPtr pkt)
-{
-    printNocRequest(pkt, "atomic");
-    nocMasterPort.sendAtomic(pkt);
-}
-
-void
 BaseTcu::printNocRequest(PacketPtr pkt, const char *type)
 {
     DPRINTFS(TcuMasterPort,
@@ -460,10 +447,4 @@ BaseTcu::printNocRequest(PacketPtr pkt, const char *type)
              pkt->cmd.toString(),
              pkt->getAddr(),
              pkt->getSize());
-}
-
-void
-BaseTcu::sendAtomicMemRequest(PacketPtr pkt)
-{
-    dcacheMasterPort.sendAtomic(pkt);
 }

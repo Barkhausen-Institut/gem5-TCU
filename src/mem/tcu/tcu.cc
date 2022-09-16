@@ -65,7 +65,6 @@ Tcu::Tcu(const TcuParams &p)
     completeCoreReqEvent(coreReqs),
     wakeupEp(0xFFFF),
     tileMemOffset(p.tile_mem_offset),
-    atomicMode(p.system->isAtomicMode()),
     numEndpoints(p.num_endpoints),
     maxNocPacketSize(p.max_noc_packet_size),
     blockSize(p.block_size),
@@ -392,15 +391,7 @@ Tcu::sendMemRequest(PacketPtr pkt,
 
     pkt->pushSenderState(senderState);
 
-    if (atomicMode)
-    {
-        sendAtomicMemRequest(pkt);
-        completeMemRequest(pkt);
-    }
-    else
-    {
-        schedMemRequest(pkt, clockEdge(delay));
-    }
+    schedMemRequest(pkt, clockEdge(delay));
 }
 
 void
@@ -424,15 +415,8 @@ Tcu::sendNocRequest(NocPacketType type,
         sendFunctionalNocRequest(pkt);
         completeNocRequest(pkt);
     }
-    else if (atomicMode)
-    {
-        sendAtomicNocRequest(pkt);
-        completeNocRequest(pkt);
-    }
     else
-    {
         schedNocRequest(pkt, clockEdge(delay));
-    }
 }
 
 void
@@ -443,18 +427,15 @@ Tcu::sendNocResponse(PacketPtr pkt, TcuError result)
 
     pkt->makeResponse();
 
-    if (!atomicMode)
-    {
-        Cycles delay = ticksToCycles(
-            pkt->headerDelay + pkt->payloadDelay);
-        delay += nocToTransferLatency;
+    Cycles delay = ticksToCycles(
+        pkt->headerDelay + pkt->payloadDelay);
+    delay += nocToTransferLatency;
 
-        pkt->headerDelay = 0;
-        pkt->payloadDelay = 0;
+    pkt->headerDelay = 0;
+    pkt->payloadDelay = 0;
 
-        schedNocRequestFinished(clockEdge(Cycles(1)));
-        schedNocResponse(pkt, clockEdge(delay));
-    }
+    schedNocRequestFinished(clockEdge(Cycles(1)));
+    schedNocResponse(pkt, clockEdge(delay));
 }
 
 void

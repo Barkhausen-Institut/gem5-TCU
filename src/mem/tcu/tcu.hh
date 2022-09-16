@@ -270,8 +270,6 @@ class Tcu : public BaseTcu
 
     const Addr tileMemOffset;
 
-    const bool atomicMode;
-
     const unsigned numEndpoints;
 
     const Addr maxNocPacketSize;

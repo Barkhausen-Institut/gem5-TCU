@@ -242,10 +242,6 @@ class BaseTcu : public ClockedObject
 
     void sendFunctionalNocRequest(PacketPtr pkt);
 
-    void sendAtomicNocRequest(PacketPtr pkt);
-
-    void sendAtomicMemRequest(PacketPtr pkt);
-
     void sendCacheMemResponse(PacketPtr pkt, bool success);
 
     virtual void completeNocRequest(PacketPtr pkt) = 0;
