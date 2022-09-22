@@ -459,7 +459,121 @@ def createCoreTile(noc, options, no, cmdline, memTile, epCount,
 
     return tile
 
-def createKecAccTile(noc, options, no, cmdline, memTile, epCount, spmsize='8MB'):
+
+def createOSTile(noc, options, no, memTile, epCount, kernel, clParams,
+                 l1size=None, l2size=None, tcupos=0, spmsize='8MB'):
+    CPUClass = ObjectList.cpu_list.get(options.cpu_type)
+
+    if options.isa == 'arm':
+        sysType = M3ArmSystem
+        con = ArmConnector
+    elif options.isa == 'riscv':
+        sysType = M3System
+        con = RiscvConnector
+    else:
+        sysType = M3System
+        con = X86Connector
+
+    tile = createTile(
+        noc=noc, options=options, no=no, systemType=sysType,
+        l1size=l1size, l2size=l2size, spmsize=spmsize, tcupos=tcupos,
+        memTile=memTile, epCount=epCount
+    )
+    tile.tcu.connector = con()
+    tile.readfile = "/dev/stdin"
+
+    # connection to the NoC for initialization
+    tile.noc_master_port = noc.cpu_side_ports
+
+    tile.cpu = CPUClass()
+    tile.cpu.cpu_id = 0
+
+    connectCuToMem(tile, options,
+                   tile.cpu.dcache_port,
+                   tile.cpu.icache_port,
+                   l1size, tcupos)
+
+    # cache misses to MMIO region go to TCU
+    if not l1size is None and tcupos > 0:
+        tile.tcu.dcache_slave_port = tile.xbar.mem_side_ports
+        tile.tcu.slave_region = [tile.tcu.mmio_region]
+
+    # if "kernel" in cmdline:
+    #     tile.mod_offset = mod_offset
+    #     tile.mod_size = mod_size
+    #     tile.tile_size = tile_size
+
+    # workload and command line
+    if options.isa == 'riscv':
+        tile.workload = RiscvLinux(object_file=kernel, command_line=clParams)
+    elif options.isa == 'arm':
+        tile.workload = ArmFsWorkload(
+            object_file=kernel, command_line=clParams)
+        tile.highest_el_is_64 = False
+    else:
+        tile.workload = X86FsWorkload(
+            object_file=kernel, command_line=clParams)
+
+    print("T%02d: %s" % (no, kernel))
+    print('     Core =%s %s @ %s' %
+          (type(tile.cpu), options.isa, options.cpu_clock))
+    printConfig(tile, tcupos)
+
+    # if specified, let this tile wait for GDB
+    if options.pausetile == no:
+        print('      waiting for GDB')
+        tile.cpu.wait_for_remote_gdb = True
+
+    print()
+
+    # connect the IO space via bridge to the root NoC
+    tile.bridge = Bridge(delay='50ns')
+    tile.bridge.mem_side_port = noc.cpu_side_ports
+    tile.bridge.cpu_side_port = tile.xbar.mem_side_ports
+    tile.bridge.ranges = \
+        [
+            AddrRange(IO_address_space_base,
+                      interrupts_address_space_base - 1)
+        ]
+
+    # if not l1size is None:
+    #     # connect legacy devices
+    #     tile.pc = Pc()
+    #     tile.intrctrl = IntrControl()
+    #     tile.iobus = IOXBar()
+    #     tile.xbar.mem_side_ports = tile.iobus.cpu_side_ports
+    #     tile.pc.attachIO(tile.iobus)
+
+    tile.cpu.createThreads()
+    tile.cpu.createInterruptController()
+
+    if options.isa == 'x86_64':
+        tile.cpu.interrupts[0].pio = tile.xbar.mem_side_ports
+        tile.cpu.interrupts[0].int_responder = tile
+            .tcu.connector.irq_master_port
+        tile.cpu.interrupts[0].int_requestor = tile.xbar.cpu_side_ports
+
+    tile.cpu.itb_walker_cache = PageTableWalkerCache()
+    tile.cpu.dtb_walker_cache = PageTableWalkerCache()
+    tile.cpu.mmu.connectWalkerPorts(
+        tile.cpu.itb_walker_cache.cpu_side, tile.cpu.dtb_walker_cache.cpu_side)
+
+    if options.isa == 'riscv':
+        tile.cpu.mmu.pma_checker = PMAChecker(uncacheable=[
+            tile.tcu.mmio_region,
+        ])
+
+    if not l2size is None:
+        tile.cpu.itb_walker_cache.mem_side = tile.tol2bus.cpu_side_ports
+        tile.cpu.dtb_walker_cache.mem_side = tile.tol2bus.cpu_side_ports
+    else:
+        tile.cpu.itb_walker_cache.mem_side = tile.xbar.cpu_side_ports
+        tile.cpu.dtb_walker_cache.mem_side = tile.xbar.cpu_side_ports
+
+    return tile
+
+def createKecAccTile(noc, options, no, cmdline,
+    memTile, epCount, spmsize='8MB'):
     tile = createCoreTile(noc, options, no, cmdline, memTile, epCount,
                           spmsize=spmsize)
 
