@@ -92,7 +92,8 @@ TcuTlb::regStats()
 }
 
 TcuTlb::Result
-TcuTlb::lookup(Addr virt, uint16_t asid, uint access, NocAddr *phys)
+TcuTlb::lookup(Addr virt, uint16_t asid, uint access, NocAddr *phys,
+               Cycles *delay)
 {
     static const char *results[] =
     {
@@ -101,6 +102,7 @@ TcuTlb::lookup(Addr virt, uint16_t asid, uint access, NocAddr *phys)
         "PAGEFAULT",
     };
 
+    *delay = Cycles(tcu.tlbLatency);
     TcuTlb::Result res = do_lookup(virt, asid, access, phys);
 
     DPRINTFS(TcuTlbRead, (&tcu),

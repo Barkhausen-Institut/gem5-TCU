@@ -66,13 +66,14 @@ Tcu::Tcu(const TcuParams &p)
     bufCount(p.buf_count),
     bufSize(p.buf_size),
     reqCount(p.req_count),
-    registerAccessLatency(p.register_access_latency),
+    mmioLatency(p.mmio_latency),
     cpuToCacheLatency(p.cpu_to_cache_latency),
-    commandToNocRequestLatency(p.command_to_noc_request_latency),
-    startMsgTransferDelay(p.start_msg_transfer_delay),
-    transferToMemRequestLatency(p.transfer_to_mem_request_latency),
-    transferToNocLatency(p.transfer_to_noc_latency),
-    nocToTransferLatency(p.noc_to_transfer_latency)
+    tlbLatency(p.tlb_latency),
+    cmdReadLatency(p.cmd_read_latency),
+    cmdWriteLatency(p.cmd_write_latency),
+    cmdSendLatency(p.cmd_send_latency),
+    cmdReplyLatency(p.cmd_reply_latency),
+    cmdRecvLatency(p.cmd_recv_latency)
 {
     assert(p.buf_size >= maxNocPacketSize);
 }
@@ -364,7 +365,6 @@ Tcu::sendNocResponse(PacketPtr pkt, TcuError result)
 
     Cycles delay = ticksToCycles(
         pkt->headerDelay + pkt->payloadDelay);
-    delay += nocToTransferLatency;
 
     pkt->headerDelay = 0;
     pkt->payloadDelay = 0;
@@ -483,7 +483,7 @@ Tcu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
     Cycles transportDelay =
         ticksToCycles(pkt->headerDelay + pkt->payloadDelay);
 
-    Tick when = clockEdge(transportDelay + registerAccessLatency);
+    Tick when = clockEdge(transportDelay + mmioLatency);
 
     if (!isCpuRequest)
         schedNocRequestFinished(clockEdge(Cycles(1)));

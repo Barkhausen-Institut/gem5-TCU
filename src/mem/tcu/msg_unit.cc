@@ -89,11 +89,14 @@ MessageUnit::startReplyWithEP(EpFile::EpCache &eps)
 {
     const CmdCommand::Bits cmd = tcu.regs().getCommand();
 
+    Cycles delay(cmd.opcode == CmdCommand::REPLY ? tcu.cmdReplyLatency
+                                                 : tcu.cmdSendLatency);
+
     const Ep ep = eps.getEp(cmd.epid);
 
     if (ep.type() != EpType::RECEIVE)
     {
-        return tcu.schedCmdError(Cycles(1), TcuError::NO_REP,
+        return tcu.schedCmdError(delay, TcuError::NO_REP,
                                  "EP%u: invalid EP\n", cmd.epid);
     }
 
@@ -101,27 +104,27 @@ MessageUnit::startReplyWithEP(EpFile::EpCache &eps)
 
     if(rep.r0.act != tcu.regs().getCurAct().id)
     {
-        return tcu.schedCmdError(Cycles(1), TcuError::FOREIGN_EP,
+        return tcu.schedCmdError(delay, TcuError::FOREIGN_EP,
                                  "EP%u: foreign EP\n", cmd.epid);
     }
 
     if (rep.r0.rplEps == Tcu::INVALID_EP_ID)
     {
-        return tcu.schedCmdError(Cycles(1), TcuError::REPLIES_DISABLED,
+        return tcu.schedCmdError(delay, TcuError::REPLIES_DISABLED,
                                  "EP%u: no reply EPs, cannot reply on msg %p\n",
                                  cmd.epid, cmd.arg0);
     }
 
     if ((rep.r0.rplEps + (1 << rep.r0.slots)) > tcu.numEndpoints)
     {
-        return tcu.schedCmdError(Cycles(1), TcuError::RECV_INV_RPL_EPS,
+        return tcu.schedCmdError(delay, TcuError::RECV_INV_RPL_EPS,
                                  "EP%u: reply EPs out of bounds\n", cmd.epid);
     }
 
     int msgidx = rep.offsetToIdx(cmd.arg0);
     if (msgidx == RecvEp::MAX_MSGS)
     {
-        return tcu.schedCmdError(Cycles(1), TcuError::INV_MSG_OFF,
+        return tcu.schedCmdError(delay, TcuError::INV_MSG_OFF,
                                  "EP%u: offset out of bounds (%#x)\n",
                                  cmd.epid, cmd.arg0);
     }
@@ -138,6 +141,9 @@ MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
     const CmdCommand::Bits cmd = tcu.regs().getCommand();
     const CmdData::Bits data = tcu.regs().getData();
 
+    Cycles delay(cmd.opcode == CmdCommand::REPLY ? tcu.cmdReplyLatency
+                                                 : tcu.cmdSendLatency);
+
     const Ep ep = eps.getEp(epid);
 
     Ep replyEp(0);
@@ -146,7 +152,7 @@ MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
 
     if(ep.type() != EpType::SEND)
     {
-        return tcu.schedCmdError(Cycles(1), TcuError::NO_SEP,
+        return tcu.schedCmdError(delay, TcuError::NO_SEP,
                                  "EP%u: invalid EP\n", epid);
     }
 
@@ -154,33 +160,33 @@ MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
 
     if(sep.r0.act != tcu.regs().getCurAct().id)
     {
-        return tcu.schedCmdError(Cycles(1), TcuError::FOREIGN_EP,
+        return tcu.schedCmdError(delay, TcuError::FOREIGN_EP,
                                  "EP%u: foreign EP\n", epid);
     }
 
     if ((cmd.opcode == CmdCommand::SEND && sep.r0.reply) ||
         (cmd.opcode == CmdCommand::REPLY && !sep.r0.reply))
     {
-        return tcu.schedCmdError(Cycles(1), TcuError::SEND_REPLY_EP,
+        return tcu.schedCmdError(delay, TcuError::SEND_REPLY_EP,
                                  "EP%u: send vs. reply\n", epid);
     }
 
     // check message size
     if (sep.r0.msgSize > 11)
     {
-        return tcu.schedCmdError(Cycles(1), TcuError::SEND_INV_MSG_SZ,
+        return tcu.schedCmdError(delay, TcuError::SEND_INV_MSG_SZ,
                                  "EP%u: invalid msgSize\n", epid);
     }
 
     if (data.size + sizeof(MessageHeader) > (1 << sep.r0.msgSize))
     {
-        return tcu.schedCmdError(Cycles(1), TcuError::OUT_OF_BOUNDS,
+        return tcu.schedCmdError(delay, TcuError::OUT_OF_BOUNDS,
                                  "EP%u: message too large\n", epid);
     }
 
     if (data.addr & 0xF)
     {
-        return tcu.schedCmdError(Cycles(1), TcuError::MSG_UNALIGNED,
+        return tcu.schedCmdError(delay, TcuError::MSG_UNALIGNED,
                                  "EP%u: message is not 16-byte aligned\n",
                                  epid);
     }
@@ -189,7 +195,7 @@ MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
     if(data.size != 0 && data_page !=
        ((data.addr + data.size - 1) & ~static_cast<Addr>(TcuTlb::PAGE_MASK)))
     {
-        return tcu.schedCmdError(Cycles(1), TcuError::PAGE_BOUNDARY,
+        return tcu.schedCmdError(delay, TcuError::PAGE_BOUNDARY,
                                  "EP%u: message contains page boundary\n",
                                  epid);
     }
@@ -197,10 +203,15 @@ MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
     NocAddr phys(data.addr);
     if (tcu.tlb())
     {
+        Cycles tlbLatency;
         auto asid = tcu.regs().getCurAct().id;
-        if (tcu.tlb()->lookup(data.addr, asid, TcuTlb::READ, &phys) != TcuTlb::HIT)
+        auto res = tcu.tlb()->lookup(data.addr, asid, TcuTlb::READ,
+                                     &phys, &tlbLatency);
+        delay += tlbLatency;
+
+        if (res != TcuTlb::HIT)
         {
-            return tcu.schedCmdError(Cycles(1), TcuError::TRANSLATION_FAULT,
+            return tcu.schedCmdError(delay, TcuError::TRANSLATION_FAULT,
                                      "EP%u: TLB miss for data address\n",
                                      epid);
         }
@@ -216,7 +227,7 @@ MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
         {
             if(replyEp.type() != EpType::RECEIVE)
             {
-                return tcu.schedCmdError(Cycles(1), TcuError::NO_REP,
+                return tcu.schedCmdError(delay, TcuError::NO_REP,
                                          "EP%u: invalid EP\n", cmd.arg0);
             }
 
@@ -224,7 +235,7 @@ MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
 
             if(rep.r0.act != tcu.regs().getCurAct().id)
             {
-                return tcu.schedCmdError(Cycles(1), TcuError::FOREIGN_EP,
+                return tcu.schedCmdError(delay, TcuError::FOREIGN_EP,
                                          "EP%u: foreign EP\n", cmd.arg0);
             }
 
@@ -244,7 +255,7 @@ MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
         if (sep.r0.crdEp != Tcu::INVALID_EP_ID &&
             sep.r0.crdEp >= tcu.numEndpoints)
         {
-            return tcu.schedCmdError(Cycles(1), TcuError::SEND_INV_CRD_EP,
+            return tcu.schedCmdError(delay, TcuError::SEND_INV_CRD_EP,
                                      "EP%u: credit EP invalid\n", cmd.arg0);
         }
 
@@ -283,7 +294,7 @@ MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
     // start the transfer of the payload
     auto *ev = new SendTransferEvent(
         this, sep.id, phys, data.size, flags, nocAddr, header);
-    tcu.startTransfer(ev, tcu.startMsgTransferDelay);
+    tcu.startTransfer(ev, delay);
 
     eps.setAutoFinish(false);
 }
@@ -810,7 +821,7 @@ MessageUnit::recvFromNocWithEP(EpFile::EpCache &eps, PacketPtr pkt)
     // we have the header
     Cycles delay = tcu.ticksToCycles(pkt->headerDelay);
     pkt->headerDelay = 0;
-    delay += tcu.nocToTransferLatency;
+    delay += tcu.cmdRecvLatency;
 
     uint rflags = XferUnit::XferFlags::MSGRECV;
     Addr physAddr = rep.r1.buffer + (msgidx << rep.r0.slotSize);

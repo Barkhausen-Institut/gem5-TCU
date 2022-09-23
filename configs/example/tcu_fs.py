@@ -247,10 +247,6 @@ def createTile(noc, options, no, systemType, l1size, l2size, spmsize,
     tile.tcu.tile_id = no
 
     tile.tcu.num_endpoints = epCount
-    if tcupos > 0:
-        tile.tcu.tlb_entries = 32
-    else:
-        tile.tcu.tlb_entries = 128
 
     # connection to noc
     tile.tcu.noc_master_port = noc.cpu_side_ports
@@ -719,6 +715,9 @@ def createRoot(options):
     # All tiles are connected to a NoC (Network on Chip). In this case it's just
     # a simple XBar.
     root.noc = IOXBar()
+    root.noc.frontend_latency = 4
+    root.noc.forward_latency = 2
+    root.noc.response_latency = 4
 
     # create a dummy platform and system for the UART
     root.platform = IOPlatform()

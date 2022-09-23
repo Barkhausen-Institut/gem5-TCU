@@ -60,8 +60,6 @@ class BaseTcu(ClockedObject):
     watch_range_start = Param.Addr(0x0, "The start address of the address range to watch")
     watch_range_end = Param.Addr(0x0, "The end address of the address range to watch (exclusive)")
 
-    tlb_entries = Param.Unsigned(512, "The number of TLB entries")
-
 class Tcu(BaseTcu):
     type = 'Tcu'
     cxx_header = "mem/tcu/tcu.hh"
@@ -71,19 +69,20 @@ class Tcu(BaseTcu):
 
     max_noc_packet_size = Param.MemorySize("1kB", "Maximum size of a NoC packet (needs to be the same for all TCUs)")
 
+    tlb_entries = Param.Unsigned(32, "The number of TLB entries")
+
     block_size = Param.MemorySize("64B", "The block size with which to access the local memory")
 
     buf_count = Param.Unsigned(4, "The number of temporary buffers for transfers")
     buf_size = Param.MemorySize("1kB", "The size of a temporary buffer")
     req_count = Param.Unsigned(4, "The number of parallel requests to memory")
 
-    register_access_latency = Param.Cycles(1, "Latency for CPU register accesses")
+    mmio_latency = Param.Cycles(1, "Latency for MMIO-based register accesses")
+    cpu_to_cache_latency = Param.Cycles(1, "Latency for cache access for the CPU")
+    tlb_latency = Param.Cycles(3, "Latency to access the TLB")
 
-    cpu_to_cache_latency = Param.Cycles(1, "Latency for cache access for the CPU (for the TCU's address translation)")
-
-    command_to_noc_request_latency = Param.Cycles(1, "Number of cycles passed from writing a command to the register to starting the command")
-    start_msg_transfer_delay = Param.Cycles(2, "Number of cycles passed to build the header and start the message transfer")
-
-    transfer_to_mem_request_latency = Param.Cycles(1, "Number of cycles passed for requesting something from local memory, when transferring")
-    transfer_to_noc_latency = Param.Cycles(3, "Number of cycles passed from collecting the data in the buffer until sending it to the NoC");
-    noc_to_transfer_latency = Param.Cycles(3, "Number of cycles passed from receiving data from the NoC until starting to transfer it to the local memory");
+    cmd_read_latency = Param.Cycles(20, "Latency for the READ command (start until NoC request)")
+    cmd_write_latency = Param.Cycles(14, "Latency for the WRITE command (start until NoC request)")
+    cmd_send_latency = Param.Cycles(21, "Latency for the SEND command (start until NoC request)")
+    cmd_reply_latency = Param.Cycles(25, "Latency for the REPLY command (start until NoC request)")
+    cmd_recv_latency = Param.Cycles(20, "Latency for receiving a message")

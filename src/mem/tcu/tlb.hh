@@ -114,7 +114,8 @@ class TcuTlb
 
     void regStats();
 
-    Result lookup(Addr virt, uint16_t asid, uint access, NocAddr *phys);
+    Result lookup(Addr virt, uint16_t asid, uint access, NocAddr *phys,
+                  Cycles *delay);
 
     bool insert(Addr virt, uint16_t asid, NocAddr phys, uint flags);
 

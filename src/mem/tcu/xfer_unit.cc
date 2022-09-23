@@ -190,8 +190,6 @@ XferUnit::TransferEvent::process()
             reqSize,
             physAddr);
 
-        Cycles lat = xfer->tcu.transferToMemRequestLatency;
-
         if (isWrite())
         {
             assert(buf->offset + reqSize <= xfer->bufSize);
@@ -199,7 +197,8 @@ XferUnit::TransferEvent::process()
             memcpy(pkt->getPtr<uint8_t>(), buf->bytes + buf->offset, reqSize);
         }
 
-        xfer->tcu.sendMemRequest(pkt, buf->id | (buf->offset << 32), lat, false);
+        xfer->tcu.sendMemRequest(pkt, buf->id | (buf->offset << 32),
+                                 Cycles(1), false);
 
         // to next block
         buf->offset += reqSize;

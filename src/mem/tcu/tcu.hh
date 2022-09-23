@@ -256,16 +256,15 @@ class Tcu : public BaseTcu
     const size_t bufSize;
     const size_t reqCount;
 
-    const Cycles registerAccessLatency;
-
+    const Cycles mmioLatency;
     const Cycles cpuToCacheLatency;
+    const Cycles tlbLatency;
 
-    const Cycles commandToNocRequestLatency;
-    const Cycles startMsgTransferDelay;
-
-    const Cycles transferToMemRequestLatency;
-    const Cycles transferToNocLatency;
-    const Cycles nocToTransferLatency;
+    const Cycles cmdReadLatency;
+    const Cycles cmdWriteLatency;
+    const Cycles cmdSendLatency;
+    const Cycles cmdReplyLatency;
+    const Cycles cmdRecvLatency;
 
     // NoC receives
     Stats::Scalar nocMsgRecvs;

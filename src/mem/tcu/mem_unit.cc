@@ -86,13 +86,14 @@ MemoryUnit::startRead(const CmdCommand::Bits& cmd)
 void
 MemoryUnit::startReadWithEP(EpFile::EpCache &eps)
 {
+    Cycles delay(tcu.cmdReadLatency);
     CmdCommand::Bits cmd = tcu.regs().getCommand();
 
     const Ep ep = eps.getEp(cmd.epid);
 
     if(ep.type() != EpType::MEMORY)
     {
-        return tcu.schedCmdError(Cycles(1), TcuError::NO_MEP,
+        return tcu.schedCmdError(delay, TcuError::NO_MEP,
                                  "EP%u: invalid EP\n", cmd.epid);
     }
 
@@ -100,13 +101,13 @@ MemoryUnit::startReadWithEP(EpFile::EpCache &eps)
 
     if(mep.r0.act != tcu.regs().getCurAct().id)
     {
-        return tcu.schedCmdError(Cycles(1), TcuError::FOREIGN_EP,
+        return tcu.schedCmdError(delay, TcuError::FOREIGN_EP,
                                  "EP%u: foreign EP\n", cmd.epid);
     }
 
     if(!(mep.r0.flags & Tcu::MemoryFlags::READ))
     {
-        return tcu.schedCmdError(Cycles(1), TcuError::NO_PERM,
+        return tcu.schedCmdError(delay, TcuError::NO_PERM,
                                  "EP%u: no permission\n", cmd.epid);
     }
 
@@ -116,13 +117,13 @@ MemoryUnit::startReadWithEP(EpFile::EpCache &eps)
 
     if(size == 0)
     {
-        tcu.scheduleCmdFinish(Cycles(1), TcuError::NONE);
+        tcu.scheduleCmdFinish(delay, TcuError::NONE);
         return;
     }
 
     if(size + offset < size || size + offset > mep.r2.remoteSize)
     {
-        return tcu.schedCmdError(Cycles(1), TcuError::OUT_OF_BOUNDS,
+        return tcu.schedCmdError(delay, TcuError::OUT_OF_BOUNDS,
                                  "EP%u: out of bounds\n", cmd.epid);
     }
 
@@ -130,7 +131,7 @@ MemoryUnit::startReadWithEP(EpFile::EpCache &eps)
     if(data_page !=
        ((data.addr + size - 1) & ~static_cast<Addr>(TcuTlb::PAGE_MASK)))
     {
-        return tcu.schedCmdError(Cycles(1), TcuError::PAGE_BOUNDARY,
+        return tcu.schedCmdError(delay, TcuError::PAGE_BOUNDARY,
                                  "EP%u: data contains page boundary\n", cmd.epid);
     }
 
@@ -149,7 +150,7 @@ MemoryUnit::startReadWithEP(EpFile::EpCache &eps)
 
     tcu.sendNocRequest(Tcu::NocPacketType::READ_REQ,
                        pkt,
-                       tcu.commandToNocRequestLatency);
+                       delay);
 }
 
 void
@@ -188,8 +189,13 @@ MemoryUnit::readComplete(const CmdCommand::Bits& cmd, PacketPtr pkt, TcuError er
     NocAddr phys(data.addr);
     if (tcu.tlb())
     {
+        Cycles tlbLatency;
         auto asid = tcu.regs().getCurAct().id;
-        if (tcu.tlb()->lookup(data.addr, asid, TcuTlb::WRITE, &phys) != TcuTlb::HIT)
+        auto res = tcu.tlb()->lookup(data.addr, asid, TcuTlb::WRITE,
+                                     &phys, &tlbLatency);
+        delay += tlbLatency;
+
+        if (res != TcuTlb::HIT)
         {
             return tcu.schedCmdError(Cycles(1), TcuError::TRANSLATION_FAULT,
                                      "EP%u: TLB miss for data address\n",
@@ -231,13 +237,14 @@ MemoryUnit::startWrite(const CmdCommand::Bits& cmd)
 void
 MemoryUnit::startWriteWithEP(EpFile::EpCache &eps)
 {
+    Cycles delay(tcu.cmdWriteLatency);
     CmdCommand::Bits cmd = tcu.regs().getCommand();
 
     const Ep ep = eps.getEp(cmd.epid);
 
     if(ep.type() != EpType::MEMORY)
     {
-        return tcu.schedCmdError(Cycles(1), TcuError::NO_MEP,
+        return tcu.schedCmdError(delay, TcuError::NO_MEP,
                                  "EP%u: invalid EP\n", cmd.epid);
     }
 
@@ -245,13 +252,13 @@ MemoryUnit::startWriteWithEP(EpFile::EpCache &eps)
 
     if(mep.r0.act != tcu.regs().getCurAct().id)
     {
-        return tcu.schedCmdError(Cycles(1), TcuError::FOREIGN_EP,
+        return tcu.schedCmdError(delay, TcuError::FOREIGN_EP,
                                  "EP%u: foreign EP\n", cmd.epid);
     }
 
     if(!(mep.r0.flags & Tcu::MemoryFlags::WRITE))
     {
-        return tcu.schedCmdError(Cycles(1), TcuError::NO_PERM,
+        return tcu.schedCmdError(delay, TcuError::NO_PERM,
                                  "EP%u: no permission\n", cmd.epid);
     }
 
@@ -261,13 +268,13 @@ MemoryUnit::startWriteWithEP(EpFile::EpCache &eps)
 
     if(size == 0)
     {
-        tcu.scheduleCmdFinish(Cycles(1), TcuError::NONE);
+        tcu.scheduleCmdFinish(delay, TcuError::NONE);
         return;
     }
 
     if(size + offset < size || size + offset > mep.r2.remoteSize)
     {
-        return tcu.schedCmdError(Cycles(1), TcuError::OUT_OF_BOUNDS,
+        return tcu.schedCmdError(delay, TcuError::OUT_OF_BOUNDS,
                                  "EP%u: out of bounds\n", cmd.epid);
     }
 
@@ -275,7 +282,7 @@ MemoryUnit::startWriteWithEP(EpFile::EpCache &eps)
     if(data_page !=
         ((data.addr + size - 1) & ~static_cast<Addr>(TcuTlb::PAGE_MASK)))
     {
-        return tcu.schedCmdError(Cycles(1), TcuError::PAGE_BOUNDARY,
+        return tcu.schedCmdError(delay, TcuError::PAGE_BOUNDARY,
                                  "EP%u: data contains page boundary\n",
                                  cmd.epid);
     }
@@ -283,10 +290,15 @@ MemoryUnit::startWriteWithEP(EpFile::EpCache &eps)
     NocAddr phys(data.addr);
     if (tcu.tlb())
     {
+        Cycles tlbLatency;
         auto asid = tcu.regs().getCurAct().id;
-        if (tcu.tlb()->lookup(data.addr, asid, TcuTlb::READ, &phys) != TcuTlb::HIT)
+        auto res = tcu.tlb()->lookup(data.addr, asid, TcuTlb::READ,
+                                     &phys, &tlbLatency);
+        delay += tlbLatency;
+
+        if (res != TcuTlb::HIT)
         {
-            return tcu.schedCmdError(Cycles(1), TcuError::TRANSLATION_FAULT,
+            return tcu.schedCmdError(delay, TcuError::TRANSLATION_FAULT,
                                      "EP%u: TLB miss for data address\n",
                                      cmd.epid);
         }
@@ -295,7 +307,7 @@ MemoryUnit::startWriteWithEP(EpFile::EpCache &eps)
     NocAddr dest(mep.r0.targetTile, mep.r1.remoteAddr + offset);
 
     auto xfer = new WriteTransferEvent(phys, size, 0, dest);
-    tcu.startTransfer(xfer, Cycles(0));
+    tcu.startTransfer(xfer, delay);
 }
 
 void
@@ -312,7 +324,6 @@ MemoryUnit::WriteTransferEvent::transferDone(TcuError result)
                                          MemCmd::WriteReq);
         memcpy(pkt->getPtr<uint8_t>(), data(), size());
 
-        Cycles delay = tcu().transferToNocLatency;
         tcu().printPacket(pkt);
 
         Tcu::NocPacketType pktType;
@@ -332,7 +343,7 @@ MemoryUnit::WriteTransferEvent::transferDone(TcuError result)
                 cmd.epid, data.addr, size());
         }
 
-        tcu().sendNocRequest(pktType, pkt, delay);
+        tcu().sendNocRequest(pktType, pkt, Cycles(1));
     }
 }
 
@@ -429,7 +440,6 @@ MemoryUnit::ReceiveTransferEvent::transferDone(TcuError result)
         auto state = dynamic_cast<Tcu::NocSenderState*>(pkt->senderState);
         state->result = result;
 
-        Cycles delay = tcu().transferToNocLatency;
-        tcu().schedNocResponse(pkt, tcu().clockEdge(delay));
+        tcu().schedNocResponse(pkt, tcu().clockEdge(Cycles(1)));
     }
 }
