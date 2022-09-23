@@ -37,7 +37,7 @@
 #include "base/output.hh"
 #include "debug/Tcu.hh"
 #include "debug/TcuPackets.hh"
-#include "debug/TcuMem.hh"
+#include "debug/TcuLLCMemAcc.hh"
 #include "debug/TcuCoreMemAcc.hh"
 #include "mem/tcu/tcu.hh"
 #include "mem/tcu/msg_unit.hh"
@@ -319,7 +319,7 @@ Tcu::completeNocRequest(PacketPtr pkt)
             delete state;
         }
 
-        DPRINTF(TcuMem,
+        DPRINTF(TcuLLCMemAcc,
             "Finished %s request of LLC for %u bytes @ %#x\n",
             pkt->isRead() ? "read" : "write",
             pkt->getSize(), pkt->getAddr());
@@ -582,7 +582,7 @@ Tcu::handleLLCRequest(PacketPtr pkt, bool functional)
 
     pkt->setAddr(noc.getAddr());
 
-    DPRINTF(TcuMem, "Sending LLC request for %#x to %d:%#x\n",
+    DPRINTF(TcuLLCMemAcc, "Sending LLC request for %#x to %d:%#x\n",
                     pktAddr, noc.tileId, noc.offset);
 
     if(pkt->isWrite())
