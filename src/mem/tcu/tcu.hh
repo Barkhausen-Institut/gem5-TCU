@@ -34,6 +34,7 @@
 
 #include "base/chunk_generator.hh"
 #include "base/output.hh"
+#include "debug/Tcu.hh"
 #include "mem/tcu/base.hh"
 #include "mem/tcu/cmds.hh"
 #include "mem/tcu/connector.hh"
@@ -161,6 +162,14 @@ class Tcu : public BaseTcu
     bool isCommandAborting() const
     {
         return cmds.isCommandAborting();
+    }
+
+    template <typename ...Args>
+    void schedCmdError(Cycles delay, TcuError error,
+                       const char *msg, const Args &...args)
+    {
+        DPRINTF(Tcu, msg, args...);
+        cmds.scheduleCmdFinish(delay, error);
     }
 
     void scheduleCmdFinish(Cycles delay, TcuError error = TcuError::NONE)

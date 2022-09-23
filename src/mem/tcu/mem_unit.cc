@@ -92,24 +92,22 @@ MemoryUnit::startReadWithEP(EpFile::EpCache &eps)
 
     if(ep.type() != EpType::MEMORY)
     {
-        DPRINTFS(Tcu, (&tcu), "EP%u: invalid EP\n", cmd.epid);
-        tcu.scheduleCmdFinish(Cycles(1), TcuError::NO_MEP);
-        return;
+        return tcu.schedCmdError(Cycles(1), TcuError::NO_MEP,
+                                 "EP%u: invalid EP\n", cmd.epid);
     }
 
     const MemEp mep = ep.mem;
 
     if(mep.r0.act != tcu.regs().getCurAct().id)
     {
-        DPRINTFS(Tcu, (&tcu), "EP%u: foreign EP\n", cmd.epid);
-        tcu.scheduleCmdFinish(Cycles(1), TcuError::FOREIGN_EP);
-        return;
+        return tcu.schedCmdError(Cycles(1), TcuError::FOREIGN_EP,
+                                 "EP%u: foreign EP\n", cmd.epid);
     }
 
     if(!(mep.r0.flags & Tcu::MemoryFlags::READ))
     {
-        tcu.scheduleCmdFinish(Cycles(1), TcuError::NO_PERM);
-        return;
+        return tcu.schedCmdError(Cycles(1), TcuError::NO_PERM,
+                                 "EP%u: no permission\n", cmd.epid);
     }
 
     CmdData::Bits data = tcu.regs().getData();
@@ -124,17 +122,16 @@ MemoryUnit::startReadWithEP(EpFile::EpCache &eps)
 
     if(size + offset < size || size + offset > mep.r2.remoteSize)
     {
-        tcu.scheduleCmdFinish(Cycles(1), TcuError::OUT_OF_BOUNDS);
-        return;
+        return tcu.schedCmdError(Cycles(1), TcuError::OUT_OF_BOUNDS,
+                                 "EP%u: out of bounds\n", cmd.epid);
     }
 
     auto data_page = data.addr & ~static_cast<Addr>(TcuTlb::PAGE_MASK);
     if(data_page !=
        ((data.addr + size - 1) & ~static_cast<Addr>(TcuTlb::PAGE_MASK)))
     {
-        DPRINTFS(Tcu, (&tcu), "EP%u: data contains page boundary\n", cmd.epid);
-        tcu.scheduleCmdFinish(Cycles(1), TcuError::PAGE_BOUNDARY);
-        return;
+        return tcu.schedCmdError(Cycles(1), TcuError::PAGE_BOUNDARY,
+                                 "EP%u: data contains page boundary\n", cmd.epid);
     }
 
     readBytes.sample(size);
@@ -194,9 +191,9 @@ MemoryUnit::readComplete(const CmdCommand::Bits& cmd, PacketPtr pkt, TcuError er
         auto asid = tcu.regs().getCurAct().id;
         if (tcu.tlb()->lookup(data.addr, asid, TcuTlb::WRITE, &phys) != TcuTlb::HIT)
         {
-            DPRINTFS(Tcu, (&tcu), "EP%u: TLB miss for data address\n", cmd.epid);
-            tcu.scheduleCmdFinish(delay, TcuError::TRANSLATION_FAULT);
-            return;
+            return tcu.schedCmdError(Cycles(1), TcuError::TRANSLATION_FAULT,
+                                     "EP%u: TLB miss for data address\n",
+                                     cmd.epid);
         }
     }
 
@@ -240,24 +237,22 @@ MemoryUnit::startWriteWithEP(EpFile::EpCache &eps)
 
     if(ep.type() != EpType::MEMORY)
     {
-        DPRINTFS(Tcu, (&tcu), "EP%u: invalid EP\n", cmd.epid);
-        tcu.scheduleCmdFinish(Cycles(1), TcuError::NO_MEP);
-        return;
+        return tcu.schedCmdError(Cycles(1), TcuError::NO_MEP,
+                                 "EP%u: invalid EP\n", cmd.epid);
     }
 
     const MemEp mep = ep.mem;
 
     if(mep.r0.act != tcu.regs().getCurAct().id)
     {
-        DPRINTFS(Tcu, (&tcu), "EP%u: foreign EP\n", cmd.epid);
-        tcu.scheduleCmdFinish(Cycles(1), TcuError::FOREIGN_EP);
-        return;
+        return tcu.schedCmdError(Cycles(1), TcuError::FOREIGN_EP,
+                                 "EP%u: foreign EP\n", cmd.epid);
     }
 
     if(!(mep.r0.flags & Tcu::MemoryFlags::WRITE))
     {
-        tcu.scheduleCmdFinish(Cycles(1), TcuError::NO_PERM);
-        return;
+        return tcu.schedCmdError(Cycles(1), TcuError::NO_PERM,
+                                 "EP%u: no permission\n", cmd.epid);
     }
 
     CmdData::Bits data = tcu.regs().getData();
@@ -272,17 +267,17 @@ MemoryUnit::startWriteWithEP(EpFile::EpCache &eps)
 
     if(size + offset < size || size + offset > mep.r2.remoteSize)
     {
-        tcu.scheduleCmdFinish(Cycles(1), TcuError::OUT_OF_BOUNDS);
-        return;
+        return tcu.schedCmdError(Cycles(1), TcuError::OUT_OF_BOUNDS,
+                                 "EP%u: out of bounds\n", cmd.epid);
     }
 
     auto data_page = data.addr & ~static_cast<Addr>(TcuTlb::PAGE_MASK);
     if(data_page !=
         ((data.addr + size - 1) & ~static_cast<Addr>(TcuTlb::PAGE_MASK)))
     {
-        DPRINTFS(Tcu, (&tcu), "EP%u: data contains page boundary\n", cmd.epid);
-        tcu.scheduleCmdFinish(Cycles(1), TcuError::PAGE_BOUNDARY);
-        return;
+        return tcu.schedCmdError(Cycles(1), TcuError::PAGE_BOUNDARY,
+                                 "EP%u: data contains page boundary\n",
+                                 cmd.epid);
     }
 
     NocAddr phys(data.addr);
@@ -291,9 +286,9 @@ MemoryUnit::startWriteWithEP(EpFile::EpCache &eps)
         auto asid = tcu.regs().getCurAct().id;
         if (tcu.tlb()->lookup(data.addr, asid, TcuTlb::READ, &phys) != TcuTlb::HIT)
         {
-            DPRINTFS(Tcu, (&tcu), "EP%u: TLB miss for data address\n", cmd.epid);
-            tcu.scheduleCmdFinish(Cycles(1), TcuError::TRANSLATION_FAULT);
-            return;
+            return tcu.schedCmdError(Cycles(1), TcuError::TRANSLATION_FAULT,
+                                     "EP%u: TLB miss for data address\n",
+                                     cmd.epid);
         }
     }
 
