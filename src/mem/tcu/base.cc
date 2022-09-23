@@ -302,7 +302,6 @@ BaseTcu::BaseTcu(const BaseTcuParams &p)
     icacheSlavePort(icacheMasterPort, *this, true),
     dcacheSlavePort(dcacheMasterPort, *this, false),
     llcSlavePort(*this),
-    caches(p.caches),
     nocReqFinishedEvent(*this),
     tileId(p.tile_id),
     mmioRegion(p.mmio_region),

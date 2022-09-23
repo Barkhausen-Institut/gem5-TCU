@@ -155,7 +155,6 @@ struct PrivCommand
         XCHG_ACT        = 4,
         SET_TIMER       = 5,
         ABORT_CMD       = 6,
-        FLUSH_CACHE     = 7,
     };
 
     BitUnion64(Bits)

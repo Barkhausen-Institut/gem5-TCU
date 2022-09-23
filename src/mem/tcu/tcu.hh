@@ -154,9 +154,7 @@ class Tcu : public BaseTcu
 
     void writeCoverage(PrintReg pr);
 
-    Cycles reset(bool flushInval);
-
-    Cycles flushInvalCaches(bool invalidate);
+    void reset();
 
     void forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest);
 
@@ -248,8 +246,6 @@ class Tcu : public BaseTcu
     const size_t bufCount;
     const size_t bufSize;
     const size_t reqCount;
-
-    const unsigned cacheBlocksPerCycle;
 
     const Cycles registerAccessLatency;
 

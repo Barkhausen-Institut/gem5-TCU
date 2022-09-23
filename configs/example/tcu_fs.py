@@ -258,9 +258,6 @@ def createTile(noc, options, no, systemType, l1size, l2size, spmsize,
 
     tile.tcu.slave_region = [AddrRange(0, tile.tcu.mmio_region.start - 1)]
 
-    # for some reason, we need to initialize that here explicitly
-    tile.tcu.caches = []
-
     # create caches
     if not l1size is None:
         tile.l1icache = L1_ICache(size=l1size)
@@ -268,14 +265,12 @@ def createTile(noc, options, no, systemType, l1size, l2size, spmsize,
         tile.l1icache.tag_latency = 4
         tile.l1icache.data_latency = 4
         tile.l1icache.response_latency = 4
-        tile.tcu.caches.append(tile.l1icache)
 
         tile.l1dcache = L1_DCache(size=l1size)
         tile.l1dcache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
         tile.l1dcache.tag_latency = 4
         tile.l1dcache.data_latency = 4
         tile.l1dcache.response_latency = 4
-        tile.tcu.caches.append(tile.l1dcache)
 
         if not l2size is None:
             tile.l2cache = L2Cache(size=l2size)
@@ -283,7 +278,6 @@ def createTile(noc, options, no, systemType, l1size, l2size, spmsize,
             tile.l2cache.tag_latency = 12
             tile.l2cache.data_latency = 12
             tile.l2cache.response_latency = 12
-            tile.tcu.caches.append(tile.l2cache)
 
             tile.l2cache.prefetcher = StridePrefetcher(degree = 16)
 
@@ -305,7 +299,6 @@ def createTile(noc, options, no, systemType, l1size, l2size, spmsize,
             tile.iocache.tag_latency = 4
             tile.iocache.data_latency = 4
             tile.iocache.response_latency = 4
-            tile.tcu.caches.append(tile.iocache)
             if not l2size is None and tcupos == 1:
                 tile.iocache.mem_side = tile.tol2bus.cpu_side_ports
             else:

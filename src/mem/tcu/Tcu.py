@@ -53,8 +53,6 @@ class BaseTcu(ClockedObject):
 
     tile_mem_offset = Param.Unsigned(0, "The offset that all accesses have to go above")
 
-    caches = VectorParam.Cache([], "The caches that need to be flushed/invalidated")
-
     mmio_region = Param.AddrRange(AddrRange(0xF0000000, 0xF0003FFF), "MMIO region of the TCU")
 
     tile_id = Param.Unsigned("ID of the tile this TCU belongs to")
@@ -78,8 +76,6 @@ class Tcu(BaseTcu):
     buf_count = Param.Unsigned(4, "The number of temporary buffers for transfers")
     buf_size = Param.MemorySize("1kB", "The size of a temporary buffer")
     req_count = Param.Unsigned(4, "The number of parallel requests to memory")
-
-    cache_blocks_per_cycle = Param.Unsigned(8, "The number of cache blocks that can be invalidated per cycle")
 
     register_access_latency = Param.Cycles(1, "Latency for CPU register accesses")
 

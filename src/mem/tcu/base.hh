@@ -299,8 +299,6 @@ class BaseTcu : public ClockedObject
 
     LLCSlavePort llcSlavePort;
 
-    std::vector<Cache*> caches;
-
     EventWrapper<BaseTcu, &BaseTcu::nocRequestFinished> nocReqFinishedEvent;
 
   public:

@@ -55,7 +55,6 @@ static const char *privCmdNames[] =
     "XCHG_ACT",
     "SET_TIMER",
     "ABORT_CMD",
-    "FLUSH_CACHE",
 };
 
 static const char *extCmdNames[] =
@@ -91,7 +90,7 @@ TcuCommands::TcuCommands(Tcu &_tcu)
     static_assert(sizeof(cmdNames) / sizeof(cmdNames[0]) ==
         CmdCommand::SLEEP + 1, "cmdNames out of sync");
     static_assert(sizeof(privCmdNames) / sizeof(privCmdNames[0]) ==
-        PrivCommand::FLUSH_CACHE + 1, "privCmdNames out of sync");
+        PrivCommand::ABORT_CMD + 1, "privCmdNames out of sync");
     static_assert(sizeof(extCmdNames) / sizeof(extCmdNames[0]) ==
         ExtCommand::RESET + 1, "extCmdNames out of sync");
 }
@@ -382,9 +381,6 @@ TcuCommands::executePrivCommand(PacketPtr pkt)
             tcu.regs().set(PrivReg::CUR_ACT, cmd.arg0 & 0xFFFFFFFF);
             break;
         }
-        case PrivCommand::FLUSH_CACHE:
-            delay += tcu.flushInvalCaches(true);
-            break;
         case PrivCommand::SET_TIMER:
             tcu.connector.restartTimer(cmd.arg0);
             break;
@@ -453,11 +449,9 @@ TcuCommands::executeExtCommand(PacketPtr pkt)
             tcu.msgUnit->startInvalidate(cmd);
             break;
         case ExtCommand::RESET:
-        {
-            Cycles delay = tcu.reset(cmd.arg != 0);
-            scheduleExtCmdFinish(delay, TcuError::NONE, 0);
+            tcu.reset();
+            scheduleExtCmdFinish(Cycles(1), TcuError::NONE, 0);
             break;
-        }
         default:
             scheduleExtCmdFinish(Cycles(1), TcuError::UNKNOWN_CMD, 0);
             break;

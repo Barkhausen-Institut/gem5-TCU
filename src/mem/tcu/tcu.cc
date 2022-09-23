@@ -66,7 +66,6 @@ Tcu::Tcu(const TcuParams &p)
     bufCount(p.buf_count),
     bufSize(p.buf_size),
     reqCount(p.req_count),
-    cacheBlocksPerCycle(p.cache_blocks_per_cycle),
     registerAccessLatency(p.register_access_latency),
     cpuToCacheLatency(p.cpu_to_cache_latency),
     commandToNocRequestLatency(p.command_to_noc_request_latency),
@@ -131,32 +130,14 @@ Tcu::isMemTile(unsigned tile) const
     return !sys || sys->hasMem(tile);
 }
 
-Cycles
-Tcu::reset(bool flushInval)
+void
+Tcu::reset()
 {
-    Cycles delay = flushInval ? flushInvalCaches(true) : Cycles(0);
-
     if (tlb())
         tlb()->clear();
 
     connector.reset();
-
     resets++;
-    return delay;
-}
-
-Cycles
-Tcu::flushInvalCaches(bool invalidate)
-{
-    Cycles delay(0);
-    for (auto &c : caches)
-    {
-        c->memWriteback();
-        if (invalidate)
-            c->memInvalidate();
-        delay += Cycles(c->getBlockCount() / cacheBlocksPerCycle);
-    }
-    return delay;
 }
 
 void
