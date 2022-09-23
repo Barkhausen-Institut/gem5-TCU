@@ -47,18 +47,11 @@ static const char *decode_access(uint access)
     return buf;
 }
 
-static Addr build_key(uint16_t asid, Addr virt)
-{
-    return (static_cast<Addr>(asid) << 48) | virt;
-}
-
 TcuTlb::TcuTlb(Tcu &_tcu, size_t _num)
-    : tcu(_tcu), trie(), entries(), free(), num(_num), lru_seq()
+    : tcu(_tcu), entries(), num(_num), lru_seq()
 {
     for (size_t i = 0; i < num; ++i)
         entries.push_back(Entry());
-    for (size_t i = 0; i < num; ++i)
-        free.push_back(&entries[i]);
 }
 
 void
@@ -102,99 +95,100 @@ TcuTlb::lookup(Addr virt, uint16_t asid, uint access, NocAddr *phys,
         "PAGEFAULT",
     };
 
-    *delay = Cycles(tcu.tlbLatency);
-    TcuTlb::Result res = do_lookup(virt, asid, access, phys);
+    size_t iters;
+    Entry *e = do_lookup(virt, asid, &iters);
+
+    *delay = Cycles(tcu.tlbLatency + iters);
+    *phys = NocAddr();
+
+    Result res;
+    if (!e)
+    {
+        misses++;
+        res = MISS;
+    }
+    else if ((e->flags & access) != access)
+    {
+        pagefaults++;
+        res = PAGEFAULT;
+    }
+    else
+    {
+        assert(e->flags != 0);
+        *phys = e->phys;
+        e->lru_seq = ++lru_seq;
+        Addr mask = (e->flags & LARGE) ? LPAGE_MASK : PAGE_MASK;
+        phys->offset += virt & mask;
+        hits++;
+        res = HIT;
+    }
 
     DPRINTFS(TcuTlbRead, (&tcu),
              "TLB lookup for virt=%p asid=%#x perm=%s -> %s (%p)\n",
-             virt, asid, decode_access(access), results[res], phys->getAddr());
+             virt, asid, decode_access(access), results[res],
+             phys->getAddr());
 
     return res;
 }
 
-TcuTlb::Result
-TcuTlb::do_lookup(Addr virt, uint16_t asid, uint access, NocAddr *phys)
+TcuTlb::Entry *
+TcuTlb::do_lookup(Addr virt, uint16_t asid, size_t *iters)
 {
-    assert((virt & 0xFFFF000000000000) == 0);
-    Entry *e = trie.lookup(build_key(asid, virt));
-    if (!e)
+    for(size_t i = 0; i < num; ++i)
     {
-        misses++;
-        return MISS;
-    }
+        if (entries[i].flags == 0 || entries[i].asid != asid)
+            continue;
 
-    assert(e->flags != 0);
-    if ((e->flags & access) != access)
-    {
-        pagefaults++;
-        return PAGEFAULT;
+        Addr offMask = (entries[i].flags & LARGE) ? LPAGE_MASK : PAGE_MASK;
+        Addr pgMask = ~offMask;
+        if ((virt & pgMask) == entries[i].virt)
+        {
+            *iters = i + 1;
+            return &entries[i];
+        }
     }
-
-    e->lru_seq = ++lru_seq;
-    *phys = e->phys;
-    Addr mask = (e->flags & LARGE) ? LPAGE_MASK : PAGE_MASK;
-    phys->offset += virt & mask;
-    hits++;
-    return HIT;
+    *iters = num;
+    return nullptr;
 }
 
-bool
-TcuTlb::evict()
+TcuTlb::Entry *
+TcuTlb::find_free()
 {
     uint min = std::numeric_limits<uint>::max();
     Entry *minEntry = NULL;
-    for (Entry &e : entries)
+    for (size_t i = 0; i < num; ++i)
     {
-        if (e.lru_seq < min && !(e.flags & FIXED))
+        if (entries[i].flags == 0)
+            return &entries[i];
+
+        if (entries[i].lru_seq < min && !(entries[i].flags & FIXED))
         {
-            min = e.lru_seq;
-            minEntry = &e;
+            min = entries[i].lru_seq;
+            minEntry = &entries[i];
         }
     }
 
-    if (!minEntry)
-        return false;
-
-    trie.remove(minEntry->handle);
-    minEntry->handle = NULL;
-    free.push_back(minEntry);
     evicts++;
-    return true;
+    return minEntry;
 }
 
 bool
 TcuTlb::insert(Addr virt, uint16_t asid, NocAddr phys, uint flags)
 {
     assert(flags != 0);
-
-    uint width = (flags & LARGE) ? (64 - (PAGE_BITS + LEVEL_BITS))
-                                 : (64 - PAGE_BITS);
     Addr mask = (flags & LARGE) ? LPAGE_MASK : PAGE_MASK;
 
-    Addr key = build_key(asid, virt);
-    Entry *e = trie.lookup(key);
+    size_t iters;
+    Entry *e = do_lookup(virt, asid, &iters);
     if (!e)
     {
-        if (free.empty()) {
-            if (!evict())
-                return false;
-        }
-
-        assert(!free.empty());
-        e = free.back();
-        e->asid = asid;
-        e->virt = virt & ~mask;
-        e->handle = trie.insert(key, width, e);
-        free.pop_back();
-    }
-    else if((e->flags & LARGE) != (flags & LARGE))
-    {
-        trie.remove(key);
-        e->asid = asid;
-        e->virt = virt & ~mask;
-        e->handle = trie.insert(key, width, e);
+        e = find_free();
+        if (!e)
+            return false;
     }
 
+    e->asid = asid;
+    e->virt = virt & ~mask;
     e->phys = NocAddr(phys.getAddr() & ~mask);
     e->flags = flags;
 
@@ -208,7 +202,8 @@ TcuTlb::insert(Addr virt, uint16_t asid, NocAddr phys, uint flags)
 bool
 TcuTlb::remove(Addr virt, uint16_t asid)
 {
-    Entry *e = trie.lookup(build_key(asid, virt));
+    size_t iters;
+    Entry *e = do_lookup(virt, asid, &iters);
     if (!e)
         return false;
 
@@ -216,9 +211,7 @@ TcuTlb::remove(Addr virt, uint16_t asid)
              "TLB invalidate for virt=%p asid=%#x perm=%s -> %p\n",
              virt, asid, decode_access(e->flags), e->phys.getAddr());
 
-    trie.remove(e->handle);
-    e->handle = NULL;
-    free.push_back(e);
+    e->flags = 0;
     invalidates++;
     return true;
 }
@@ -230,12 +223,8 @@ TcuTlb::clear()
 
     for (size_t i = 0; i < num; ++i)
     {
-        if (entries[i].handle && !(entries[i].flags & FIXED))
-        {
-            trie.remove(entries[i].handle);
-            entries[i].handle = NULL;
-            free.push_back(&entries[i]);
-        }
+        if (entries[i].flags != 0 && !(entries[i].flags & FIXED))
+            entries[i].flags = 0;
     }
     flushes++;
 }
