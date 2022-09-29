@@ -30,6 +30,7 @@
 import optparse
 import sys
 import os
+from os import path
 
 import m5
 from m5.defines import buildEnv
@@ -186,6 +187,44 @@ def printConfig(tile, tcupos):
             print('     Comp =Core -> TCU -> SPM')
         except:
             pass
+
+def generateMemNode(state, mem_range):
+    node = FdtNode("memory@%x" % int(mem_range.start))
+    node.append(FdtPropertyStrings("device_type", ["memory"]))
+    node.append(FdtPropertyWords("reg",
+        state.addrCells(mem_range.start) +
+        state.sizeCells(mem_range.size()) ))
+    return node
+
+def generateDtb(system):
+    state = FdtState(addr_cells=2, size_cells=2, cpu_cells=1)
+    root = FdtNode('/')
+    root.append(state.addrCellsProperty())
+    root.append(state.sizeCellsProperty())
+    root.appendCompatible(["riscv-virtio"])
+
+    for mem_range in system.mem_ranges:
+        root.append(generateMemNode(state, mem_range))
+
+    sections = [*system.cpu, system.platform]
+
+    for section in sections:
+        for node in section.generateDeviceTree(state):
+            if node.get_name() == root.get_name():
+                root.merge(node)
+            else:
+                root.append(node)
+
+    # add "compatible" entry to UART for gem5-specific UART in bbl
+    soc_idx = root.index('soc')
+    uart_idx = root[soc_idx].index('uart@10000000')
+    root[soc_idx][uart_idx].remove('compatible')
+    root[soc_idx][uart_idx].append(FdtPropertyStrings('compatible', ['ns8250', 'gem5,uart0']))
+
+    fdt = Fdt()
+    fdt.add_rootnode(root)
+    fdt.writeDtsFile(path.join(m5.options.outdir, 'device.dts'))
+    fdt.writeDtbFile(path.join(m5.options.outdir, 'device.dtb'))
 
 def interpose(tile, options, name, port):
     if int(tile.tile_id) in options.mem_watches:
@@ -526,15 +565,29 @@ def createOSTile(noc, options, no, memTile, epCount, kernel, clParams,
 
     print()
 
+    tile.iobus = IOXBar()
     # connect the IO space via bridge to the root NoC
     tile.bridge = Bridge(delay='50ns')
-    tile.bridge.mem_side_port = noc.cpu_side_ports
+    tile.bridge.mem_side_port = tile.iobus.cpu_side_ports
     tile.bridge.cpu_side_port = tile.xbar.mem_side_ports
     tile.bridge.ranges = \
         [
             AddrRange(IO_address_space_base,
                       interrupts_address_space_base - 1)
         ]
+
+    tile.platform = HiFive()
+    # RTCCLK (Set to 100MHz for faster simulation)
+    tile.platform.rtc = RiscvRTC(frequency=Frequency("100MHz"))
+    tile.platform.clint.int_pin = tile.platform.rtc.int_pin
+
+    tile.platform.attachOnChipIO(tile.xbar)
+
+    # tile.platform.attachOffChipIO(tile.xbar) # wrong, connect to an iobus instead
+    tile.platform.attachOffChipIO(tile.iobus)
+
+    tile.platform.attachPlic()
+    tile.platform.intrctrl = IntrControl()
 
     # if not l1size is None:
     #     # connect legacy devices
@@ -549,8 +602,7 @@ def createOSTile(noc, options, no, memTile, epCount, kernel, clParams,
 
     if options.isa == 'x86_64':
         tile.cpu.interrupts[0].pio = tile.xbar.mem_side_ports
-        tile.cpu.interrupts[0].int_responder = tile
-            .tcu.connector.irq_master_port
+        tile.cpu.interrupts[0].int_responder = tile.tcu.connector.irq_master_port
         tile.cpu.interrupts[0].int_requestor = tile.xbar.cpu_side_ports
 
     tile.cpu.itb_walker_cache = PageTableWalkerCache()
@@ -569,6 +621,9 @@ def createOSTile(noc, options, no, memTile, epCount, kernel, clParams,
     else:
         tile.cpu.itb_walker_cache.mem_side = tile.xbar.cpu_side_ports
         tile.cpu.dtb_walker_cache.mem_side = tile.xbar.cpu_side_ports
+
+    generateDtb(tile)
+    tile.workload.dtb_filename = path.join(m5.options.outdir, 'device.dtb')
 
     return tile
 
