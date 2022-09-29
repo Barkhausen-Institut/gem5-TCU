@@ -203,7 +203,7 @@ class HiFive(Platform):
         int_node.appendCompatible("riscv,cpu-intc")
 
         cpus = self.system.unproxy(self).cpu
-        phandle = int_state.phandle(cpus[self.cpu_count])
+        phandle = int_state.phandle(cpus[int(self.cpu_count)])
         self.cpu_count += 1
         int_node.append(FdtPropertyWords("phandle", [phandle]))
 
