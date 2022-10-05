@@ -265,6 +265,8 @@ class Tcu : public BaseTcu
     const Cycles cmdSendLatency;
     const Cycles cmdReplyLatency;
     const Cycles cmdRecvLatency;
+    const Cycles cmdFetchLatency;
+    const Cycles cmdAckLatency;
 
     // NoC receives
     Stats::Scalar nocMsgRecvs;

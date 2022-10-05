@@ -86,3 +86,5 @@ class Tcu(BaseTcu):
     cmd_send_latency = Param.Cycles(21, "Latency for the SEND command (start until NoC request)")
     cmd_reply_latency = Param.Cycles(25, "Latency for the REPLY command (start until NoC request)")
     cmd_recv_latency = Param.Cycles(20, "Latency for receiving a message")
+    cmd_fetch_latency = Param.Cycles(8, "Latency for fetching a message")
+    cmd_ack_latency = Param.Cycles(10, "Latency for finishing a message processing")

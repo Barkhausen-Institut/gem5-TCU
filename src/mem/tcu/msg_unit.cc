@@ -482,17 +482,19 @@ MessageUnit::fetchWithEP(EpFile::EpCache &eps)
 {
     CmdCommand::Bits cmd = tcu.regs().getCommand();
 
+    Cycles delay(tcu.cmdFetchLatency);
+
     Ep ep = eps.getEp(cmd.epid);
     if (ep.type() != EpType::RECEIVE)
     {
-        return tcu.schedCmdError(Cycles(1), TcuError::NO_REP,
+        return tcu.schedCmdError(delay, TcuError::NO_REP,
                                  "EP%u: invalid EP\n", cmd.epid);
     }
 
     RecvEp &rep = ep.recv;
     if (rep.r0.act != tcu.regs().getCurAct().id)
     {
-        return tcu.schedCmdError(Cycles(1), TcuError::FOREIGN_EP,
+        return tcu.schedCmdError(delay, TcuError::FOREIGN_EP,
                                  "EP%u: foreign EP\n", cmd.epid);
     }
 
@@ -502,18 +504,20 @@ MessageUnit::fetchWithEP(EpFile::EpCache &eps)
     if (rep.r2.unread == 0 || tcu.regs().getCurAct().msgs == 0)
     {
         tcu.regs().set(UnprivReg::ARG1, -1);
-        tcu.scheduleCmdFinish(Cycles(1), TcuError::NONE);
+        tcu.scheduleCmdFinish(delay, TcuError::NONE);
         return;
     }
 
     int i;
     for (i = rep.r0.rpos; i < (1 << rep.r0.slots); ++i)
     {
+        ++delay;
         if (rep.isUnread(i))
             goto found;
     }
     for (i = 0; i < rep.r0.rpos; ++i)
     {
+        ++delay;
         if (rep.isUnread(i))
             goto found;
     }
@@ -534,9 +538,10 @@ found:
     eps.updateEp(rep);
     tcu.regs().rem_msg();
     tcu.regs().set(UnprivReg::ARG1, i << rep.r0.slotSize);
+    delay = delay + Cycles(3);
 
-    eps.onFinished([this](EpFile::EpCache &) {
-        tcu.scheduleCmdFinish(Cycles(1), TcuError::NONE);
+    eps.onFinished([this, delay](EpFile::EpCache &) {
+        tcu.scheduleCmdFinish(delay, TcuError::NONE);
     });
 }
 
@@ -553,38 +558,40 @@ MessageUnit::startAckWithEP(EpFile::EpCache &eps)
 {
     CmdCommand::Bits cmd = tcu.regs().getCommand();
 
+    Cycles delay(tcu.cmdAckLatency);
+
     Ep ep = eps.getEp(cmd.epid);
     if (ep.type() != EpType::RECEIVE)
     {
-        return tcu.schedCmdError(Cycles(1), TcuError::NO_REP,
+        return tcu.schedCmdError(delay, TcuError::NO_REP,
                                  "EP%u: invalid EP\n", cmd.epid);
     }
 
     RecvEp &rep = ep.recv;
     if (rep.r0.act != tcu.regs().getCurAct().id)
     {
-        return tcu.schedCmdError(Cycles(1), TcuError::FOREIGN_EP,
+        return tcu.schedCmdError(delay, TcuError::FOREIGN_EP,
                                  "EP%u: foreign EP\n", cmd.epid);
     }
 
     if (rep.r0.rplEps != Tcu::INVALID_EP_ID &&
         (rep.r0.rplEps + (1 << rep.r0.slots)) > tcu.numEndpoints)
     {
-        return tcu.schedCmdError(Cycles(1), TcuError::RECV_INV_RPL_EPS,
+        return tcu.schedCmdError(delay, TcuError::RECV_INV_RPL_EPS,
                                  "EP%u: invalid reply EPs\n", cmd.epid);
     }
 
     int msgidx = rep.offsetToIdx(cmd.arg0);
     if (msgidx == RecvEp::MAX_MSGS)
     {
-        return tcu.schedCmdError(Cycles(1), TcuError::INV_MSG_OFF,
+        return tcu.schedCmdError(delay, TcuError::INV_MSG_OFF,
                                  "EP%u: invalid message offset\n", cmd.epid);
     }
 
     ackMessage(rep, msgidx);
 
-    eps.onFinished([this](EpFile::EpCache &) {
-        tcu.scheduleCmdFinish(Cycles(1), TcuError::NONE);
+    eps.onFinished([this, delay](EpFile::EpCache &) {
+        tcu.scheduleCmdFinish(delay, TcuError::NONE);
     });
 }
 
