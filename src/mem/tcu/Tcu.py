@@ -77,7 +77,7 @@ class Tcu(BaseTcu):
     buf_size = Param.MemorySize("1kB", "The size of a temporary buffer")
     req_count = Param.Unsigned(4, "The number of parallel requests to memory")
 
-    mmio_latency = Param.Cycles(1, "Latency for MMIO-based register accesses")
+    mmio_latency = Param.Cycles(6, "Latency for MMIO-based register accesses")
     cpu_to_cache_latency = Param.Cycles(1, "Latency for cache access for the CPU")
     tlb_latency = Param.Cycles(3, "Latency to access the TLB")
 
