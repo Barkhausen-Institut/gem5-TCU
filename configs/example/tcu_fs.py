@@ -151,7 +151,7 @@ def getCacheStr(cache):
         cache.size.value / 1024, cache.assoc, cache.tag_latency
     )
 
-def printConfig(tile, tcupos):
+def printConfig(tile):
     print('     TCU  =eps:%d, bufsz:%d B, blocksz:%d B, count:%d, tlb:%d' % \
         (tile.tcu.num_endpoints, tile.tcu.buf_size.value, tile.tcu.block_size.value,
          tile.tcu.buf_count, tile.tcu.tlb_entries))
@@ -159,26 +159,12 @@ def printConfig(tile, tcupos):
     try:
         print('     L1i$ =%s' % (getCacheStr(tile.l1icache)))
         print('     L1d$ =%s' % (getCacheStr(tile.l1dcache)))
-        try:
+        if hasattr(tile, 'l2cache'):
             print('     L2$  =%s' % (getCacheStr(tile.l2cache)))
-        except:
-            pass
-        try:
-            print('     IO$  =%s' % (getCacheStr(tile.iocache)))
-        except:
-            pass
 
-        str = '     Comp =Core -> '
-        if tcupos == 0:
-            str += 'TCU -> L1$'
-        elif tcupos == 1:
-            str += 'L1$ -> TCU'
-        else:
-            str += 'L1$'
+        str = '     Comp =Core -> TCU -> L1$'
         if hasattr(tile, 'l2cache'):
             str += ' -> L2$'
-        if tcupos == 2:
-            str += ' -> IO$ -> TCU'
         print(str)
     except:
         try:
@@ -197,37 +183,23 @@ def interpose(tile, options, name, port):
         return mon.master
     return port
 
-def connectTcuToMem(tile, options, l1size, tcupos):
+def connectTcuToMem(tile, options, l1size):
     dport = interpose(tile, options, 'tcudmon', tile.tcu.dcache_master_port)
-    if l1size is None or tcupos == 0:
-        iport = interpose(tile, options, 'tcuimon', tile.tcu.icache_master_port)
-
+    iport = interpose(tile, options, 'tcuimon', tile.tcu.icache_master_port)
     if not l1size is None:
-        if tcupos == 0:
-            tile.l1icache.cpu_side = iport
-            tile.l1dcache.cpu_side = dport
-        else:
-            tile.iocache.cpu_side = dport
+        tile.l1icache.cpu_side = iport
+        tile.l1dcache.cpu_side = dport
     else:
         tile.xbar.cpu_side_ports = iport
         tile.xbar.cpu_side_ports = dport
 
-def connectCuToMem(tile, options, dport, iport=None, l1size=None, tcupos=0):
-    dport = interpose(tile, options, 'cu_dmon', dport)
+def connectCuToMem(tile, options, dport, iport=None, l1size=None):
     if not iport is None:
-        iport = interpose(tile, options, 'cu_imon', iport)
-
-    if not l1size is None and tcupos > 0:
-        if not iport is None:
-            tile.l1icache.cpu_side = iport
-        tile.l1dcache.cpu_side = dport
-    else:
-        if not iport is None:
-            tile.tcu.icache_slave_port = iport
-        tile.tcu.dcache_slave_port = dport
+        tile.tcu.icache_slave_port = interpose(tile, options, 'cu_imon', iport)
+    tile.tcu.dcache_slave_port = interpose(tile, options, 'cu_dmon', dport)
 
 def createTile(noc, options, no, systemType, l1size, l2size, spmsize,
-               tcupos, memTile, epCount):
+               memTile, epCount):
     CPUClass = ObjectList.cpu_list.get(options.cpu_type)
 
     # each tile is represented by it's own subsystem
@@ -290,16 +262,6 @@ def createTile(noc, options, no, systemType, l1size, l2size, spmsize,
             tile.l1icache.mem_side = tile.xbar.cpu_side_ports
             tile.l1dcache.mem_side = tile.xbar.cpu_side_ports
 
-        if tcupos > 0:
-            tile.iocache = L1_DCache(size='8kB')
-            tile.iocache.tag_latency = 4
-            tile.iocache.data_latency = 4
-            tile.iocache.response_latency = 4
-            if not l2size is None and tcupos == 1:
-                tile.iocache.mem_side = tile.tol2bus.cpu_side_ports
-            else:
-                tile.iocache.mem_side = tile.xbar.cpu_side_ports
-
         # the TCU handles LLC misses
         tile.tcu.llc_slave_port = tile.xbar.default
 
@@ -334,14 +296,14 @@ def createTile(noc, options, no, systemType, l1size, l2size, spmsize,
         tile.tcu.tlb_entries = 0
         tile.tcu.cpu_to_cache_latency = 0
 
-    connectTcuToMem(tile, options, l1size, tcupos)
+    connectTcuToMem(tile, options, l1size)
 
     tile.system_port = tile.xbar.cpu_side_ports
 
     return tile
 
 def createCoreTile(noc, options, no, cmdline, memTile, epCount,
-                   l1size=None, l2size=None, tcupos=0, spmsize='8MB'):
+                   l1size=None, l2size=None, spmsize='8MB'):
     CPUClass = ObjectList.cpu_list.get(options.cpu_type)
 
     if options.isa == 'arm':
@@ -356,7 +318,7 @@ def createCoreTile(noc, options, no, cmdline, memTile, epCount,
 
     tile = createTile(
         noc=noc, options=options, no=no, systemType=sysType,
-        l1size=l1size, l2size=l2size, spmsize=spmsize, tcupos=tcupos,
+        l1size=l1size, l2size=l2size, spmsize=spmsize,
         memTile=memTile, epCount=epCount
     )
     tile.tcu.connector = con()
@@ -371,12 +333,7 @@ def createCoreTile(noc, options, no, cmdline, memTile, epCount,
     connectCuToMem(tile, options,
                    tile.cpu.dcache_port,
                    tile.cpu.icache_port,
-                   l1size, tcupos)
-
-    # cache misses to MMIO region go to TCU
-    if not l1size is None and tcupos > 0:
-        tile.tcu.dcache_slave_port = tile.xbar.mem_side_ports
-        tile.tcu.slave_region = [tile.tcu.mmio_region]
+                   l1size)
 
     if "kernel" in cmdline:
         tile.mod_offset = mod_offset
@@ -395,7 +352,7 @@ def createCoreTile(noc, options, no, cmdline, memTile, epCount,
 
     print("T%02d: %s" % (no, cmdline))
     print('     Core =%s %s @ %s' % (type(tile.cpu), options.isa, options.cpu_clock))
-    printConfig(tile, tcupos)
+    printConfig(tile)
 
     # if specified, let this tile wait for GDB
     if options.pausetile == no:
@@ -480,7 +437,7 @@ def createSerialTile(noc, options, no, memTile, epCount):
     tile = createTile(
         noc=noc, options=options, no=no, systemType=SpuSystem,
         l1size=None, l2size=None, spmsize=None, memTile=memTile,
-        tcupos=0, epCount=epCount
+        epCount=epCount
     )
     tile.tcu.connector = BaseConnector()
 
@@ -505,7 +462,7 @@ def createDeviceTile(noc, options, no, memTile, epCount):
     tile = createTile(
         noc=noc, options=options, no=no, systemType=SpuSystem,
         l1size=None, l2size=None, spmsize=None, memTile=memTile,
-        tcupos=0, epCount=epCount
+        epCount=epCount
     )
     tile.tcu.connector = BaseConnector()
 
@@ -607,7 +564,7 @@ def createAccelTile(noc, options, no, accel, memTile, epCount,
     tile = createTile(
         noc=noc, options=options, no=no, systemType=SpuSystem,
         l1size=l1size, l2size=l2size, spmsize=spmsize, memTile=memTile,
-        tcupos=0, epCount=epCount
+        epCount=epCount
     )
     tile.tcu.connector = TcuAccelConnector()
 
@@ -643,7 +600,7 @@ def createAbortTestTile(noc, options, no, memTile, epCount,
     tile = createTile(
         noc=noc, options=options, no=no, systemType=SpuSystem,
         l1size=l1size, l2size=l2size, spmsize=spmsize, memTile=memTile,
-        tcupos=0, epCount=epCount
+        epCount=epCount
     )
     tile.tcu.connector = BaseConnector()
 
@@ -663,7 +620,7 @@ def createMemTile(noc, options, no, size, epCount,
     tile = createTile(
         noc=noc, options=options, no=no, systemType=MemSystem,
         l1size=None, l2size=None, spmsize=None, memTile=0,
-        tcupos=0, epCount=epCount
+        epCount=epCount
     )
     tile.clk_domain = SrcClockDomain(clock=options.sys_clock,
                                      voltage_domain=tile.voltage_domain)
