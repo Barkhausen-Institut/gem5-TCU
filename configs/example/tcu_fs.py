@@ -78,7 +78,9 @@ interrupts_address_space_base   = 0xff40000000000000
 APIC_range_size                 = 1 << 12;
 
 base_offset                     = 768 * 1024 * 1024
-mod_offset                      = base_offset
+linux_tile_offset               = base_offset // 2
+linux_tile_size                 = base_offset // 2
+mod_offset                      = linux_tile_offset + linux_tile_size
 mod_size                        = 128 * 1024 * 1024
 tile_offset                     = mod_offset + mod_size
 tile_size                       = 16 * 1024 * 1024
@@ -188,12 +190,12 @@ def printConfig(tile, tcupos):
         except:
             pass
 
-def generateMemNode(state, mem_range):
-    node = FdtNode("memory@%x" % int(mem_range.start))
+def generateMemNode(state, memory_offset, memory_size):
+    node = FdtNode("memory@%x" % int(memory_offset))
     node.append(FdtPropertyStrings("device_type", ["memory"]))
     node.append(FdtPropertyWords("reg",
-        state.addrCells(mem_range.start) +
-        state.sizeCells(mem_range.size()) ))
+        state.addrCells(memory_offset) +
+        state.sizeCells(memory_size) ))
     return node
 
 def generateDtb(system):
@@ -203,8 +205,7 @@ def generateDtb(system):
     root.append(state.sizeCellsProperty())
     root.appendCompatible(["riscv-virtio"])
 
-    for mem_range in system.mem_ranges:
-        root.append(generateMemNode(state, mem_range))
+    root.append(generateMemNode(state, 0x1000_0000, 0x1800_0000))
 
     sections = [*system.cpu, system.platform]
 
@@ -518,6 +519,10 @@ def createOSTile(noc, options, no, memTile, epCount, kernel, clParams,
         l1size=l1size, l2size=l2size, spmsize=spmsize, tcupos=tcupos,
         memTile=memTile, epCount=epCount
     )
+    tile.memory_offset = linux_tile_offset
+    tile.memory_size = linux_tile_size
+    print(f"linux tile mem offset: 0x{linux_tile_offset:_x}, memory_size: {linux_tile_size/2**20} MiB")
+
     tile.tcu.connector = con()
     tile.readfile = "/dev/stdin"
 
@@ -565,10 +570,9 @@ def createOSTile(noc, options, no, memTile, epCount, kernel, clParams,
 
     print()
 
-    tile.iobus = IOXBar()
     # connect the IO space via bridge to the root NoC
     tile.bridge = Bridge(delay='50ns')
-    tile.bridge.mem_side_port = tile.iobus.cpu_side_ports
+    tile.bridge.mem_side_port = noc.cpu_side_ports
     tile.bridge.cpu_side_port = tile.xbar.mem_side_ports
     tile.bridge.ranges = \
         [
@@ -583,8 +587,7 @@ def createOSTile(noc, options, no, memTile, epCount, kernel, clParams,
 
     tile.platform.attachOnChipIO(tile.xbar)
 
-    # tile.platform.attachOffChipIO(tile.xbar) # wrong, connect to an iobus instead
-    tile.platform.attachOffChipIO(tile.iobus)
+    tile.platform.attachOffChipIO(tile.xbar)
 
     tile.platform.attachPlic()
     tile.platform.intrctrl = IntrControl()
@@ -624,6 +627,7 @@ def createOSTile(noc, options, no, memTile, epCount, kernel, clParams,
 
     generateDtb(tile)
     tile.workload.dtb_filename = path.join(m5.options.outdir, 'device.dtb')
+    tile.workload.dtb_addr = 0x17e00000
 
     return tile
 
