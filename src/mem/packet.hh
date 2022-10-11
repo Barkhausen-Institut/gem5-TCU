@@ -1004,7 +1004,7 @@ class Packet : public Printable
     void
     makeResponse()
     {
-        assert(needsResponse());
+        // assert(needsResponse());
         assert(isRequest());
         cmd = cmd.responseCommand();
 
