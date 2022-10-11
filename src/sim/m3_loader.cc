@@ -196,6 +196,10 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
         Addr addr = NocAddr(mem.memTile, modOffset).getAddr();
         for (const std::string &mod : mods)
         {
+            // default --mods parameter leads to empty mod string
+            if (mod.empty()) {
+                continue;
+            }
             Addr size = loadModule(noc, mod, addr);
 
             // determine module name
