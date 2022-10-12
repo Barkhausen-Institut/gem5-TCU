@@ -78,6 +78,8 @@
 
 #define M5OP_DIST_TOGGLE_SYNC   0x62
 
+#define M5OP_GET_CYCLES         0x63
+
 #define M5OP_WORKLOAD           0x70
 
 
@@ -107,6 +109,7 @@
     M5OP(m5_work_begin, M5OP_WORK_BEGIN)                        \
     M5OP(m5_work_end, M5OP_WORK_END)                            \
     M5OP(m5_dist_toggle_sync, M5OP_DIST_TOGGLE_SYNC)            \
+    M5OP(m5_get_cycles, M5OP_GET_CYCLES)                        \
     M5OP(m5_workload, M5OP_WORKLOAD)                            \
 
 #define M5OP_MERGE_TOKENS_I(a, b) a##b

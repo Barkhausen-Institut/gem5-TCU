@@ -595,5 +595,12 @@ workend(ThreadContext *tc, uint64_t workid, uint64_t threadid)
     }
 }
 
+uint64_t
+get_cycles(ThreadContext *tc, uint64_t msg)
+{
+    DPRINTFS(PseudoInst, tc->getCpuPtr(), "DEBUG %#x\n", msg);
+    return tc->getCpuPtr()->curCycle();
+}
+
 } // namespace pseudo_inst
 } // namespace gem5

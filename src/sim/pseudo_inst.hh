@@ -95,6 +95,7 @@ void workend(ThreadContext *tc, uint64_t workid, uint64_t threadid);
 void m5Syscall(ThreadContext *tc);
 void togglesync(ThreadContext *tc);
 void triggerWorkloadEvent(ThreadContext *tc);
+uint64_t get_cycles(ThreadContext *tc, uint64_t msg);
 
 /**
  * Execute a decoded M5 pseudo instruction
@@ -229,6 +230,11 @@ pseudoInstWork(ThreadContext *tc, uint8_t func, uint64_t &result)
 
       case M5OP_WORKLOAD:
         invokeSimcall<ABI>(tc, triggerWorkloadEvent);
+        return true;
+
+      /* print current timestamp */
+      case M5OP_GET_CYCLES:
+        result = invokeSimcall<ABI, store_ret>(tc, get_cycles);
         return true;
 
       default:
