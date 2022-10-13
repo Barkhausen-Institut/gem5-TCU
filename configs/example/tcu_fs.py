@@ -452,7 +452,7 @@ def createSerialTile(noc, options, no, memTile, epCount):
     tile.serial.tcu_slave_port = tile.xbar.mem_side_ports
 
     print('T%02d: SerialInput' % (no))
-    printConfig(tile, 0)
+    printConfig(tile)
     print('     Comp =TCU -> SerialInput')
     print()
 
@@ -523,7 +523,7 @@ def createStorageTile(noc, options, no, memTile, epCount, img0=None, img1=None):
     tile.idectrl.dma = tile.dmabridge.cpu_side_port
 
     print('tile%02d: %s' % (no, img0))
-    printConfig(tile, 0)
+    printConfig(tile)
     print('     Comp =TCU -> Proxy -> IDE')
     print()
 
@@ -545,7 +545,7 @@ def createEtherTile(noc, options, no, memTile, epCount):
     tile.nic.dma = tile.dmabridge.cpu_side_port
 
     print('T%02d: IGbE_e1000' % (no))
-    printConfig(tile, 0)
+    printConfig(tile)
     print('     Comp =TCU -> Proxy -> NIC')
     print()
 
@@ -590,7 +590,7 @@ def createAccelTile(noc, options, no, accel, memTile, epCount,
     connectCuToMem(tile, options, tile.accel.port)
 
     print('T%02d: %s accelerator @ %s' % (no, accel, options.cpu_clock))
-    printConfig(tile, 0)
+    printConfig(tile)
     print()
 
     return tile
@@ -610,7 +610,7 @@ def createAbortTestTile(noc, options, no, memTile, epCount,
     connectCuToMem(tile, options, tile.cpu.port)
 
     print('T%02d: aborttest core' % (no))
-    printConfig(tile, 0)
+    printConfig(tile)
     print()
 
     return tile
@@ -651,7 +651,7 @@ def createMemTile(noc, options, no, size, epCount,
         tile.mem_file_num = imageNum
 
     print('T%02d: %s x %d' % (no, image, imageNum))
-    printConfig(tile, 0)
+    printConfig(tile)
     print('     imem =%d KiB' % (int(size_bytes) / 1024))
     name = 'SPM' if type(tile.mem_ctrl).__name__ == 'Scratchpad' else 'DRAM'
     print('     Comp =TCU -> %s' % (name))
