@@ -42,6 +42,8 @@ addToPath('../platform/gem5/configs')
 from common.FSConfig import *
 from common import Simulation
 from common import CacheConfig
+from common import CpuConfig
+from common import MemConfig
 from common import ObjectList
 from common.Caches import *
 from common import Options
@@ -85,58 +87,23 @@ mod_size                        = 128 * 1024 * 1024
 tile_offset                     = mod_offset + mod_size
 tile_size                       = 16 * 1024 * 1024
 
-class PcPciHost(GenericPciHost):
-    conf_base = 0x30000000
-    conf_size = "16MB"
-
-    pci_pio_base = 0
-
 # reads the options and returns them
 def getOptions():
     parser = optparse.OptionParser()
 
-    parser.add_option("--cpu-type", type="choice", default="DerivO3CPU",
-                      choices=ObjectList.cpu_list.get_names(),
-                      help="type of cpu to run with")
-
-    parser.add_option("--isa", type="choice", default="x86_64",
-                      choices=['arm', 'riscv', 'x86_64'],
-                      help="The ISA to use")
-
-    parser.add_option("-c", "--cmd", default="", type="string",
-                      help="comma separated list of binaries")
-
-    parser.add_option("--mods", default="", type="string",
-                      help="comma separated list of boot modules")
-
-    parser.add_option("--mem-type", type="choice", default="DDR3_1600_8x8",
-                      choices=ObjectList.mem_list.get_names(),
-                      help="type of memory to use")
-    parser.add_option("--mem-channels", type="int", default=1,
-                      help="number of memory channels")
-    parser.add_option("--mem-ranks", type="int", default=None,
-                      help="number of memory ranks per channel")
-
-    parser.add_option("--pausetile", default=-1, type="int",
-                      help="the tile to pause until GDB connects")
-
-    parser.add_option("--sys-voltage", action="store", type="string",
-                      default='1.0V',
-                      help="""Top-level voltage for blocks running at system
-                      power supply""")
-    parser.add_option("--sys-clock", action="store", type="string",
-                      default='1GHz',
-                      help="""Top-level clock for blocks running at system
-                      speed""")
-    parser.add_option("--cpu-clock", action="store", type="string",
-                      default='2GHz',
-                      help="Clock for blocks running at CPU speed")
-
-    parser.add_option("-m", "--maxtick", type="int", default=m5.MaxTick,
-                      metavar="T",
-                      help="Stop after T ticks")
-
+    Options.addCommonOptions(parser)
     Options.addFSOptions(parser)
+
+    parser.add_option("--isa", type="choice", default="riscv",
+                        choices=['arm', 'riscv', 'x86_64'],
+                        help="The ISA to use")
+    parser.add_option("--mods", default="", type="string",
+                        help="comma separated list of boot modules")
+    parser.add_option("--bare-metal", action="store_true",
+        help="Provide the raw system without the linux specific bits")
+    parser.add_option("--dtb-filename", action="store", type=str,
+        help="Specifies device tree blob file to use with device-tree-"\
+            "enabled kernels")
 
     (options, args) = parser.parse_args()
 
@@ -226,6 +193,46 @@ def generateDtb(system):
     fdt.add_rootnode(root)
     fdt.writeDtsFile(path.join(m5.options.outdir, 'device.dts'))
     fdt.writeDtbFile(path.join(m5.options.outdir, 'device.dtb'))
+
+
+def generateMemNode2(state, mem_range):
+    node = FdtNode("memory@%x" % int(mem_range.start))
+    node.append(FdtPropertyStrings("device_type", ["memory"]))
+    node.append(FdtPropertyWords("reg",
+        state.addrCells(mem_range.start) +
+        state.sizeCells(mem_range.size()) ))
+    return node
+
+def generateDtb2(system):
+    state = FdtState(addr_cells=2, size_cells=2, cpu_cells=1)
+    root = FdtNode('/')
+    root.append(state.addrCellsProperty())
+    root.append(state.sizeCellsProperty())
+    root.appendCompatible(["riscv-virtio"])
+
+    for mem_range in system.mem_ranges:
+        root.append(generateMemNode2(state, mem_range))
+
+    sections = [*system.cpu, system.platform]
+
+    for section in sections:
+        for node in section.generateDeviceTree(state):
+            if node.get_name() == root.get_name():
+                root.merge(node)
+            else:
+                root.append(node)
+
+    # add "compatible" entry to UART for gem5-specific UART in bbl
+    soc_idx = root.index('soc')
+    uart_idx = root[soc_idx].index('uart@10000000')
+    root[soc_idx][uart_idx].remove('compatible')
+    root[soc_idx][uart_idx].append(FdtPropertyStrings('compatible', ['ns8250', 'gem5,uart0']))
+
+    fdt = Fdt()
+    fdt.add_rootnode(root)
+    fdt.writeDtsFile(path.join(m5.options.outdir, 'device.dts'))
+    fdt.writeDtbFile(path.join(m5.options.outdir, 'device.dtb'))
+
 
 def interpose(tile, options, name, port):
     if int(tile.tile_id) in options.mem_watches:
@@ -631,6 +638,195 @@ def createOSTile(noc, options, no, memTile, epCount, kernel, clParams,
 
     return tile
 
+
+def createOSTile2(options):
+    # CPU and Memory
+    (CPUClass, mem_mode, FutureClass) = Simulation.setCPUClass(options)
+    MemClass = Simulation.setMemClass(options)
+
+    np = options.num_cpus
+
+    # ---------------------------- Setup System ---------------------------- #
+    # Default Setup
+    system = System()
+    mdesc = SysConfig(disks=options.disk_image, rootdev=options.root_device,
+                            mem=options.mem_size, os_type=options.os_type)
+    system.mem_mode = mem_mode
+    system.mem_ranges = [AddrRange(start=0x80000000, size=mdesc.mem())]
+
+    if options.bare_metal:
+        system.workload = RiscvBareMetal()
+        system.workload.bootloader = options.kernel
+    else:
+        system.workload = RiscvLinux()
+        system.workload.object_file = options.kernel
+
+    system.iobus = IOXBar()
+    system.membus = MemBus()
+
+    system.system_port = system.membus.cpu_side_ports
+
+    # HiFive Platform
+    system.platform = HiFive()
+
+    # RTCCLK (Set to 100MHz for faster simulation)
+    system.platform.rtc = RiscvRTC(frequency=Frequency("100MHz"))
+    system.platform.clint.int_pin = system.platform.rtc.int_pin
+
+    # VirtIOMMIO
+    if options.disk_image:
+        disks = []
+        for (i, disk) in enumerate(mdesc.disks()):
+            image = CowDiskImage(child=RawDiskImage(read_only=True), read_only=False)
+            image.child.image_file = disk
+            disks.append(MmioVirtIO(
+                vio=VirtIOBlock(image=image),
+                interrupt_id=0x8 + i,
+                pio_size=4096,
+                pio_addr=0x10008000 + i * 4096
+            ))
+        system.platform.disks = disks
+
+    system.bridge = Bridge(delay='50ns')
+    system.bridge.mem_side_port = system.iobus.cpu_side_ports
+    system.bridge.cpu_side_port = system.membus.mem_side_ports
+    system.bridge.ranges = system.platform._off_chip_ranges()
+
+    system.platform.attachOnChipIO(system.membus)
+    system.platform.attachOffChipIO(system.iobus)
+    system.platform.attachPlic()
+    system.platform.intrctrl = IntrControl()
+
+    # ---------------------------- Default Setup --------------------------- #
+
+    # Set the cache line size for the entire system
+    system.cache_line_size = options.cacheline_size
+
+    # Create a top-level voltage domain
+    system.voltage_domain = VoltageDomain(voltage = options.sys_voltage)
+
+    # Create a source clock for the system and set the clock period
+    system.clk_domain = SrcClockDomain(clock =  options.sys_clock,
+            voltage_domain = system.voltage_domain)
+
+    # Create a CPU voltage domain
+    system.cpu_voltage_domain = VoltageDomain()
+
+    # Create a source clock for the CPUs and set the clock period
+    system.cpu_clk_domain = SrcClockDomain(clock = options.cpu_clock,
+                                                voltage_domain =
+                                                system.cpu_voltage_domain)
+
+    system.workload.object_file = options.kernel
+
+    # NOTE: Not yet tested
+    if options.script is not None:
+        system.readfile = options.script
+
+    system.init_param = options.init_param
+
+    system.cpu = [CPUClass(clk_domain=system.cpu_clk_domain, cpu_id=i)
+                    for i in range(np)]
+
+    if options.caches or options.l2cache:
+        # By default the IOCache runs at the system clock
+        system.iocache = IOCache(addr_ranges = system.mem_ranges)
+        system.iocache.cpu_side = system.iobus.mem_side_ports
+        system.iocache.mem_side = system.membus.cpu_side_ports
+    elif not options.external_memory_system:
+        system.iobridge = Bridge(delay='50ns', ranges = system.mem_ranges)
+        system.iobridge.cpu_side_port = system.iobus.mem_side_ports
+        system.iobridge.mem_side_port = system.membus.cpu_side_ports
+
+    # Sanity check
+    if options.simpoint_profile:
+        if not ObjectList.is_noncaching_cpu(CPUClass):
+            fatal("SimPoint generation should be done with atomic cpu")
+        if np > 1:
+            fatal("SimPoint generation not supported with more than one CPUs")
+
+    for i in range(np):
+        if options.simpoint_profile:
+            system.cpu[i].addSimPointProbe(options.simpoint_interval)
+        if options.checker:
+            system.cpu[i].addCheckerCpu()
+        if not ObjectList.is_kvm_cpu(CPUClass):
+            if options.bp_type:
+                bpClass = ObjectList.bp_list.get(options.bp_type)
+                system.cpu[i].branchPred = bpClass()
+            if options.indirect_bp_type:
+                IndirectBPClass = ObjectList.indirect_bp_list.get(
+                    options.indirect_bp_type)
+                system.cpu[i].branchPred.indirectBranchPred = \
+                    IndirectBPClass()
+        system.cpu[i].createThreads()
+
+    # ----------------------------- PMA Checker ---------------------------- #
+
+    uncacheable_range = [
+        *system.platform._on_chip_ranges(),
+        *system.platform._off_chip_ranges()
+    ]
+
+    # PMA checker can be defined at system-level (system.pma_checker)
+    # or MMU-level (system.cpu[0].mmu.pma_checker). It will be resolved
+    # by RiscvTLB's Parent.any proxy
+    for cpu in system.cpu:
+        cpu.mmu.pma_checker = PMAChecker(uncacheable=uncacheable_range)
+
+    # --------------------------- DTB Generation --------------------------- #
+
+    if not options.bare_metal:
+        if options.dtb_filename:
+            system.workload.dtb_filename = options.dtb_filename
+        else:
+            generateDtb2(system)
+            system.workload.dtb_filename = path.join(
+                m5.options.outdir, 'device.dtb')
+
+        # Default DTB address if bbl is bulit with --with-dts option
+        system.workload.dtb_addr = 0x87e00000
+
+    # Linux boot command flags
+        if options.command_line:
+            system.workload.command_line = options.command_line
+        else:
+            kernel_cmd = [
+                "console=ttyS0",
+                "root=/dev/vda",
+                "ro"
+            ]
+            system.workload.command_line = " ".join(kernel_cmd)
+
+    # ---------------------------- Default Setup --------------------------- #
+
+    if options.elastic_trace_en and options.checkpoint_restore == None and \
+        not options.fast_forward:
+        CpuConfig.config_etrace(CPUClass, system.cpu, options)
+
+    CacheConfig.config_cache(options, system)
+
+    MemConfig.config_mem(options, system)
+
+    # configure caches like M³ does
+    system.cpu[0].icache.tag_latency = 4
+    system.cpu[0].icache.data_latency = 4
+    system.cpu[0].icache.response_latency = 4
+    system.cpu[0].dcache.tag_latency = 4
+    system.cpu[0].dcache.data_latency = 4
+    system.cpu[0].dcache.response_latency = 4
+    system.l2.tag_latency = 12
+    system.l2.data_latency = 12
+    system.l2.response_latency = 12
+    system.l2.prefetcher = StridePrefetcher(degree = 16)
+
+
+    Simulation.setWorkCountOptions(system, options)
+
+    return system
+
+
+
 def createKecAccTile(noc, options, no, cmdline,
     memTile, epCount, spmsize='8MB'):
     tile = createCoreTile(noc, options, no, cmdline, memTile, epCount,
@@ -957,7 +1153,7 @@ def runSimulation(root, options, tiles):
 
     # give that to the tiles
     for tile in tiles:
-        setattr(root, 'T%02d' % tile.tile_id, tile)
+        setattr(root, 'T%02d' % getattr(tile, 'tile_id', 0), tile)
         try:
             tile.mods = options.mods
             tile.tiles = tile_mems
@@ -968,8 +1164,17 @@ def runSimulation(root, options, tiles):
 
     # Instantiate configuration
     m5.instantiate()
+    exit_event = m5.simulate()
 
     # Simulate until program terminates
-    exit_event = m5.simulate(options.maxtick)
+    safe_tick = 287682115000
+    checkpoint_name = f"run/checkpoint-{safe_tick}"
+    
+    # m5.instantiate(checkpoint_name)
+    # exit_event = m5.simulate()
+
+    # m5.instantiate()
+    # exit_event = m5.simulate(safe_tick)
+    # m5.checkpoint(checkpoint_name)
 
     print('Exiting @ tick', m5.curTick(), 'because', exit_event.getCause())
