@@ -161,12 +161,12 @@ def printConfig(tile, tcupos):
         except:
             pass
 
-def generateMemNode(state, memory_offset, memory_size):
-    node = FdtNode("memory@%x" % int(memory_offset))
+def generateMemNode(state, mem_range):
+    node = FdtNode("memory@%x" % int(mem_range.start))
     node.append(FdtPropertyStrings("device_type", ["memory"]))
     node.append(FdtPropertyWords("reg",
-        state.addrCells(memory_offset) +
-        state.sizeCells(memory_size) ))
+        state.addrCells(mem_range.start) +
+        state.sizeCells(mem_range.size()) ))
     return node
 
 def generateDtb(system):
@@ -176,46 +176,8 @@ def generateDtb(system):
     root.append(state.sizeCellsProperty())
     root.appendCompatible(["riscv-virtio"])
 
-    root.append(generateMemNode(state, 0x1000_0000, 0x1800_0000))
-
-    sections = [*system.cpu, system.platform]
-
-    for section in sections:
-        for node in section.generateDeviceTree(state):
-            if node.get_name() == root.get_name():
-                root.merge(node)
-            else:
-                root.append(node)
-
-    # add "compatible" entry to UART for gem5-specific UART in bbl
-    soc_idx = root.index('soc')
-    uart_idx = root[soc_idx].index('uart@10000000')
-    root[soc_idx][uart_idx].remove('compatible')
-    root[soc_idx][uart_idx].append(FdtPropertyStrings('compatible', ['ns8250', 'gem5,uart0']))
-
-    fdt = Fdt()
-    fdt.add_rootnode(root)
-    fdt.writeDtsFile(path.join(m5.options.outdir, 'device.dts'))
-    fdt.writeDtbFile(path.join(m5.options.outdir, 'device.dtb'))
-
-
-def generateMemNode2(state, mem_range):
-    node = FdtNode("memory@%x" % int(mem_range.start))
-    node.append(FdtPropertyStrings("device_type", ["memory"]))
-    node.append(FdtPropertyWords("reg",
-        state.addrCells(mem_range.start) +
-        state.sizeCells(mem_range.size()) ))
-    return node
-
-def generateDtb2(system):
-    state = FdtState(addr_cells=2, size_cells=2, cpu_cells=1)
-    root = FdtNode('/')
-    root.append(state.addrCellsProperty())
-    root.append(state.sizeCellsProperty())
-    root.appendCompatible(["riscv-virtio"])
-
     for mem_range in system.mem_ranges:
-        root.append(generateMemNode2(state, mem_range))
+        root.append(generateMemNode(state, mem_range))
 
     sections = [*system.cpu, system.platform]
 
@@ -511,139 +473,7 @@ def createCoreTile(noc, options, no, cmdline, memTile, epCount,
     return tile
 
 
-def createOSTile(noc, options, no, memTile, epCount, kernel, clParams,
-                 l1size=None, l2size=None, tcupos=0, spmsize='8MB'):
-    CPUClass = ObjectList.cpu_list.get(options.cpu_type)
-
-    if options.isa == 'arm':
-        sysType = M3ArmSystem
-        con = ArmConnector
-    elif options.isa == 'riscv':
-        sysType = M3System
-        con = RiscvConnector
-    else:
-        sysType = M3System
-        con = X86Connector
-
-    tile = createTile(
-        noc=noc, options=options, no=no, systemType=sysType,
-        l1size=l1size, l2size=l2size, spmsize=spmsize, tcupos=tcupos,
-        memTile=memTile, epCount=epCount
-    )
-    tile.memory_offset = linux_tile_offset
-    tile.memory_size = linux_tile_size
-    print(f"linux tile mem offset: 0x{linux_tile_offset:_x}, memory_size: {linux_tile_size/2**20} MiB")
-
-    tile.tcu.connector = con()
-    tile.readfile = "/dev/stdin"
-
-    # connection to the NoC for initialization
-    tile.noc_master_port = noc.cpu_side_ports
-
-    tile.cpu = CPUClass()
-    tile.cpu.cpu_id = 0
-
-    connectCuToMem(tile, options,
-                   tile.cpu.dcache_port,
-                   tile.cpu.icache_port,
-                   l1size, tcupos)
-
-    # cache misses to MMIO region go to TCU
-    if not l1size is None and tcupos > 0:
-        tile.tcu.dcache_slave_port = tile.xbar.mem_side_ports
-        tile.tcu.slave_region = [tile.tcu.mmio_region]
-
-    # if "kernel" in cmdline:
-    #     tile.mod_offset = mod_offset
-    #     tile.mod_size = mod_size
-    #     tile.tile_size = tile_size
-
-    # workload and command line
-    if options.isa == 'riscv':
-        tile.workload = RiscvLinux(object_file=kernel, command_line=clParams)
-    elif options.isa == 'arm':
-        tile.workload = ArmFsWorkload(
-            object_file=kernel, command_line=clParams)
-        tile.highest_el_is_64 = False
-    else:
-        tile.workload = X86FsWorkload(
-            object_file=kernel, command_line=clParams)
-
-    print("T%02d: %s" % (no, kernel))
-    print('     Core =%s %s @ %s' %
-          (type(tile.cpu), options.isa, options.cpu_clock))
-    printConfig(tile, tcupos)
-
-    # if specified, let this tile wait for GDB
-    if options.pausetile == no:
-        print('      waiting for GDB')
-        tile.cpu.wait_for_remote_gdb = True
-
-    print()
-
-    # connect the IO space via bridge to the root NoC
-    tile.bridge = Bridge(delay='50ns')
-    tile.bridge.mem_side_port = noc.cpu_side_ports
-    tile.bridge.cpu_side_port = tile.xbar.mem_side_ports
-    tile.bridge.ranges = \
-        [
-            AddrRange(IO_address_space_base,
-                      interrupts_address_space_base - 1)
-        ]
-
-    tile.platform = HiFive()
-    # RTCCLK (Set to 100MHz for faster simulation)
-    tile.platform.rtc = RiscvRTC(frequency=Frequency("100MHz"))
-    tile.platform.clint.int_pin = tile.platform.rtc.int_pin
-
-    tile.platform.attachOnChipIO(tile.xbar)
-
-    tile.platform.attachOffChipIO(tile.xbar)
-
-    tile.platform.attachPlic()
-    tile.platform.intrctrl = IntrControl()
-
-    # if not l1size is None:
-    #     # connect legacy devices
-    #     tile.pc = Pc()
-    #     tile.intrctrl = IntrControl()
-    #     tile.iobus = IOXBar()
-    #     tile.xbar.mem_side_ports = tile.iobus.cpu_side_ports
-    #     tile.pc.attachIO(tile.iobus)
-
-    tile.cpu.createThreads()
-    tile.cpu.createInterruptController()
-
-    if options.isa == 'x86_64':
-        tile.cpu.interrupts[0].pio = tile.xbar.mem_side_ports
-        tile.cpu.interrupts[0].int_responder = tile.tcu.connector.irq_master_port
-        tile.cpu.interrupts[0].int_requestor = tile.xbar.cpu_side_ports
-
-    tile.cpu.itb_walker_cache = PageTableWalkerCache()
-    tile.cpu.dtb_walker_cache = PageTableWalkerCache()
-    tile.cpu.mmu.connectWalkerPorts(
-        tile.cpu.itb_walker_cache.cpu_side, tile.cpu.dtb_walker_cache.cpu_side)
-
-    if options.isa == 'riscv':
-        tile.cpu.mmu.pma_checker = PMAChecker(uncacheable=[
-            tile.tcu.mmio_region,
-        ])
-
-    if not l2size is None:
-        tile.cpu.itb_walker_cache.mem_side = tile.tol2bus.cpu_side_ports
-        tile.cpu.dtb_walker_cache.mem_side = tile.tol2bus.cpu_side_ports
-    else:
-        tile.cpu.itb_walker_cache.mem_side = tile.xbar.cpu_side_ports
-        tile.cpu.dtb_walker_cache.mem_side = tile.xbar.cpu_side_ports
-
-    generateDtb(tile)
-    tile.workload.dtb_filename = path.join(m5.options.outdir, 'device.dtb')
-    tile.workload.dtb_addr = 0x17e00000
-
-    return tile
-
-
-def createOSTile2(options, noc, memTile, kernel):
+def createOSTile(options, noc, memTile, kernel):
     # CPU and Memory
     (CPUClass, mem_mode, FutureClass) = Simulation.setCPUClass(options)
     MemClass = Simulation.setMemClass(options)
@@ -809,7 +639,7 @@ def createOSTile2(options, noc, memTile, kernel):
         if options.dtb_filename:
             system.workload.dtb_filename = options.dtb_filename
         else:
-            generateDtb2(system)
+            generateDtb(system)
             system.workload.dtb_filename = path.join(
                 m5.options.outdir, 'device.dtb')
 
