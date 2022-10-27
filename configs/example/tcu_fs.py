@@ -99,8 +99,6 @@ def getOptions():
                         help="The ISA to use")
     parser.add_option("--mods", default="", type="string",
                         help="comma separated list of boot modules")
-    parser.add_option("--bare-metal", action="store_true",
-        help="Provide the raw system without the linux specific bits")
     parser.add_option("--dtb-filename", action="store", type=str,
         help="Specifies device tree blob file to use with device-tree-"\
             "enabled kernels")
@@ -179,7 +177,7 @@ def generateDtb(system):
     for mem_range in system.mem_ranges:
         root.append(generateMemNode(state, mem_range))
 
-    sections = [*system.cpu, system.platform]
+    sections = [system.cpu, system.platform]
 
     for section in sections:
         for node in section.generateDeviceTree(state):
@@ -473,17 +471,25 @@ def createCoreTile(noc, options, no, cmdline, memTile, epCount,
     return tile
 
 
-def createOSTile(options, noc, memTile, kernel):
-    # CPU and Memory
-    (CPUClass, mem_mode, FutureClass) = Simulation.setCPUClass(options)
-    MemClass = Simulation.setMemClass(options)
+def createLinuxTile(options, noc, no, memTile, kernel, fsImage, commandLine='earlycon=sbi console=ttyS0 root=/dev/vda1', cpuType='TimingSimpleCPU'):
+    assert options.isa == 'riscv'
+    assert options.num_cpus == 1
+    assert options.external_memory_system is None
+    assert options.cpu_type != "O3_ARM_v7a_3"
+    assert options.cpu_type != "HPI"
+    assert options.simpoint_profile is None
+    assert options.root_device is None
+    assert not options.simpoint
+    assert not options.memchecker
+    assert not options.elastic_trace_en
+    assert not options.checker
 
-    np = options.num_cpus
+    CPUClass = ObjectList.cpu_list.get(cpuType)
 
     # ---------------------------- Setup System ---------------------------- #
     # Default Setup
     system = M3System()
-    system.tile_id = 0
+    system.tile_id = no
     system.memory_tile = memTile
     system.memory_offset = linux_tile_offset
     system.memory_size = linux_tile_size
@@ -492,6 +498,8 @@ def createOSTile(options, noc, memTile, kernel):
     system.tcu = Tcu(max_noc_packet_size='2kB', buf_size='2kB')
     system.tcu.connector = RiscvConnector()
     system.tcu.tile_id = system.tile_id
+
+    system.tcu.tile_mem_offset = 0x10000000
 
     system.tcu.num_endpoints = 192
     system.tcu.tlb_entries = 128
@@ -502,23 +510,14 @@ def createOSTile(options, noc, memTile, kernel):
 
     system.tcu.slave_region = [AddrRange(0, system.tcu.mmio_region.start - 1)]
 
-    system.tcu.caches = []
-
     system.noc_master_port = noc.cpu_side_ports
 
-    ############# other stuff
-
-    mdesc = SysConfig(disks=options.disk_image, rootdev=options.root_device,
-                            mem=options.mem_size, os_type=options.os_type)
-    system.mem_mode = mem_mode
+    mdesc = SysConfig(disks=fsImage, mem='512MB', os_type='linux')
+    system.mem_mode = CPUClass.memory_mode()
     system.mem_ranges = [AddrRange(start=0x80000000, size=mdesc.mem())]
 
-    if options.bare_metal:
-        system.workload = RiscvBareMetal()
-        system.workload.bootloader = kernel
-    else:
-        system.workload = RiscvLinux()
-        system.workload.object_file = kernel
+    system.workload = RiscvLinux()
+    system.workload.object_file = kernel
 
     system.iobus = IOXBar()
     system.membus = MemBus()
@@ -534,7 +533,7 @@ def createOSTile(options, noc, memTile, kernel):
     system.platform.clint.int_pin = system.platform.rtc.int_pin
 
     # VirtIOMMIO
-    if options.disk_image:
+    if fsImage:
         disks = []
         for (i, disk) in enumerate(mdesc.disks()):
             image = CowDiskImage(child=RawDiskImage(read_only=True), read_only=False)
@@ -559,66 +558,24 @@ def createOSTile(options, noc, memTile, kernel):
 
     # ---------------------------- Default Setup --------------------------- #
 
-    # Set the cache line size for the entire system
-    system.cache_line_size = options.cacheline_size
-
-    # Create a top-level voltage domain
-    system.voltage_domain = VoltageDomain(voltage = options.sys_voltage)
-
-    # Create a source clock for the system and set the clock period
-    system.clk_domain = SrcClockDomain(clock =  options.sys_clock,
-            voltage_domain = system.voltage_domain)
-
-    # Create a CPU voltage domain
+    system.cache_line_size = 64
+    system.voltage_domain = VoltageDomain(voltage=options.sys_voltage)
+    system.clk_domain = SrcClockDomain(clock=options.sys_clock,
+            voltage_domain=system.voltage_domain)
     system.cpu_voltage_domain = VoltageDomain()
-
-    # Create a source clock for the CPUs and set the clock period
-    system.cpu_clk_domain = SrcClockDomain(clock = options.cpu_clock,
-                                                voltage_domain =
+    system.cpu_clk_domain = SrcClockDomain(clock=options.cpu_clock,
+                                                voltage_domain=
                                                 system.cpu_voltage_domain)
 
-    # NOTE: Not yet tested
-    if options.script is not None:
-        system.readfile = options.script
+    system.readfile = '/dev/stdin'
 
-    system.init_param = options.init_param
+    system.cpu = CPUClass(clk_domain=system.cpu_clk_domain, cpu_id=0)
 
-    system.cpu = [CPUClass(clk_domain=system.cpu_clk_domain, cpu_id=i)
-                    for i in range(np)]
-
-    if options.caches or options.l2cache:
-        # By default the IOCache runs at the system clock
-        system.iocache = IOCache(addr_ranges = system.mem_ranges)
-        system.iocache.cpu_side = system.iobus.mem_side_ports
-        system.iocache.mem_side = system.membus.cpu_side_ports
-        system.tcu.caches.append(system.iocache)
-    elif not options.external_memory_system:
-        system.iobridge = Bridge(delay='50ns', ranges = system.mem_ranges)
-        system.iobridge.cpu_side_port = system.iobus.mem_side_ports
-        system.iobridge.mem_side_port = system.membus.cpu_side_ports
-
-    # Sanity check
-    if options.simpoint_profile:
-        if not ObjectList.is_noncaching_cpu(CPUClass):
-            fatal("SimPoint generation should be done with atomic cpu")
-        if np > 1:
-            fatal("SimPoint generation not supported with more than one CPUs")
-
-    for i in range(np):
-        if options.simpoint_profile:
-            system.cpu[i].addSimPointProbe(options.simpoint_interval)
-        if options.checker:
-            system.cpu[i].addCheckerCpu()
-        if not ObjectList.is_kvm_cpu(CPUClass):
-            if options.bp_type:
-                bpClass = ObjectList.bp_list.get(options.bp_type)
-                system.cpu[i].branchPred = bpClass()
-            if options.indirect_bp_type:
-                IndirectBPClass = ObjectList.indirect_bp_list.get(
-                    options.indirect_bp_type)
-                system.cpu[i].branchPred.indirectBranchPred = \
-                    IndirectBPClass()
-        system.cpu[i].createThreads()
+    # By default the IOCache runs at the system clock
+    system.iocache = IOCache(addr_ranges = system.mem_ranges)
+    system.iocache.cpu_side = system.iobus.mem_side_ports
+    system.iocache.mem_side = system.membus.cpu_side_ports
+    system.cpu.createThreads()
 
     # ----------------------------- PMA Checker ---------------------------- #
 
@@ -630,215 +587,68 @@ def createOSTile(options, noc, memTile, kernel):
     # PMA checker can be defined at system-level (system.pma_checker)
     # or MMU-level (system.cpu[0].mmu.pma_checker). It will be resolved
     # by RiscvTLB's Parent.any proxy
-    for cpu in system.cpu:
-        cpu.mmu.pma_checker = PMAChecker(uncacheable=uncacheable_range)
+    system.cpu.mmu.pma_checker = PMAChecker(uncacheable=uncacheable_range)
 
     # --------------------------- DTB Generation --------------------------- #
 
-    if not options.bare_metal:
-        if options.dtb_filename:
-            system.workload.dtb_filename = options.dtb_filename
-        else:
-            generateDtb(system)
-            system.workload.dtb_filename = path.join(
-                m5.options.outdir, 'device.dtb')
+    generateDtb(system)
+    system.workload.dtb_filename = path.join(
+        m5.options.outdir, 'device.dtb')
 
-        # Default DTB address if bbl is bulit with --with-dts option
-        system.workload.dtb_addr = 0x87e00000
+    # Default DTB address if bbl is bulit with --with-dts option
+    system.workload.dtb_addr = 0x87e00000
 
     # Linux boot command flags
-        if options.command_line:
-            system.workload.command_line = options.command_line
-        else:
-            kernel_cmd = [
-                "console=ttyS0",
-                "root=/dev/vda",
-                "ro"
-            ]
-            system.workload.command_line = " ".join(kernel_cmd)
+    system.workload.command_line = commandLine
 
-    # ---------------------------- Default Setup --------------------------- #
+    # ---------------------------- start CacheConfig.config_cache ---------- #
 
-    if options.elastic_trace_en and options.checkpoint_restore == None and \
-        not options.fast_forward:
-        CpuConfig.config_etrace(CPUClass, system.cpu, options)
+    # Provide a clock for the L2 and the L1-to-L2 bus here as they
+    # are not connected using addTwoLevelCacheHierarchy. Use the
+    # same clock as the CPUs.
+    system.l2 = L2Cache(clk_domain=system.cpu_clk_domain, size='512kB')
 
-    # ---------------------------- CacheConfig.config_cache ---------------- #
-    if options.external_memory_system and (options.caches or options.l2cache):
-        print("External caches and internal caches are exclusive options.\n")
-        sys.exit(1)
+    system.tol2bus = L2XBar(clk_domain = system.cpu_clk_domain)
+    system.l2.cpu_side = system.tol2bus.master
+    system.l2.mem_side = system.membus.slave
 
-    if options.external_memory_system:
-        ExternalCache = ExternalCacheFactory(options.external_memory_system)
+    system.cpu.icache = L1_ICache(size='32kB')
+    system.cpu.dcache = L1_DCache(size='32kB')
+    system.cpu.icache.cpu_side = system.tcu.icache_master_port
+    system.cpu.dcache.cpu_side = system.tcu.dcache_master_port
+    system.cpu.icache_port = system.tcu.icache_slave_port
+    system.cpu.dcache_port = system.tcu.dcache_slave_port
+    system.cpu._cached_ports = ['icache.mem_side', 'dcache.mem_side']
 
-    if options.cpu_type == "O3_ARM_v7a_3":
-        try:
-            import cores.arm.O3_ARM_v7a as core
-        except:
-            print("O3_ARM_v7a_3 is unavailable. Did you compile the O3 model?")
-            sys.exit(1)
+    system.cpu.itb_walker_cache = PageTableWalkerCache()
+    system.cpu.dtb_walker_cache = PageTableWalkerCache()
+    system.cpu.mmu.connectWalkerPorts(
+        system.cpu.itb_walker_cache.cpu_side, system.cpu.dtb_walker_cache.cpu_side)
+    system.cpu._cached_ports += ["itb_walker_cache.mem_side", \
+                        "dtb_walker_cache.mem_side"]
 
-        dcache_class, icache_class, l2_cache_class, walk_cache_class = \
-            core.O3_ARM_v7a_DCache, core.O3_ARM_v7a_ICache, \
-            core.O3_ARM_v7aL2, \
-            core.O3_ARM_v7aWalkCache
-    elif options.cpu_type == "HPI":
-        try:
-            import cores.arm.HPI as core
-        except:
-            print("HPI is unavailable.")
-            sys.exit(1)
-
-        dcache_class, icache_class, l2_cache_class, walk_cache_class = \
-            core.HPI_DCache, core.HPI_ICache, core.HPI_L2, core.HPI_WalkCache
-    else:
-        dcache_class, icache_class, l2_cache_class, walk_cache_class = \
-            L1_DCache, L1_ICache, L2Cache, None
-
-        if buildEnv['TARGET_ISA'] in ['x86', 'riscv']:
-            walk_cache_class = PageTableWalkerCache
-
-    # Set the cache line size of the system
-    system.cache_line_size = options.cacheline_size
-
-    # If elastic trace generation is enabled, make sure the memory system is
-    # minimal so that compute delays do not include memory access latencies.
-    # Configure the compulsory L1 caches for the O3CPU, do not configure
-    # any more caches.
-    if options.l2cache and options.elastic_trace_en:
-        fatal("When elastic trace is enabled, do not configure L2 caches.")
-
-    if options.l2cache:
-        # Provide a clock for the L2 and the L1-to-L2 bus here as they
-        # are not connected using addTwoLevelCacheHierarchy. Use the
-        # same clock as the CPUs.
-        system.l2 = l2_cache_class(clk_domain=system.cpu_clk_domain,
-                                   **_get_cache_opts('l2', options))
-
-        system.tol2bus = L2XBar(clk_domain = system.cpu_clk_domain)
-        system.l2.cpu_side = system.tol2bus.master
-        system.l2.mem_side = system.membus.slave
-
-        system.tcu.caches.append(system.l2)
-
-    if options.memchecker:
-        system.memchecker = MemChecker()
-
-    for i in range(options.num_cpus):
-        if options.caches:
-            icache = icache_class(**_get_cache_opts('l1i', options))
-            dcache = dcache_class(**_get_cache_opts('l1d', options))
-
-            system.tcu.caches.append(icache)
-            system.tcu.caches.append(dcache)
-
-            icache.cpu_side = system.tcu.icache_master_port
-            dcache.cpu_side = system.tcu.dcache_master_port
-
-            # If we have a walker cache specified, instantiate two
-            # instances here
-            if walk_cache_class:
-                iwalkcache = walk_cache_class()
-                dwalkcache = walk_cache_class()
-            else:
-                iwalkcache = None
-                dwalkcache = None
-
-            if options.memchecker:
-                dcache_mon = MemCheckerMonitor(warn_only=True)
-                dcache_real = dcache
-
-                # Do not pass the memchecker into the constructor of
-                # MemCheckerMonitor, as it would create a copy; we require
-                # exactly one MemChecker instance.
-                dcache_mon.memchecker = system.memchecker
-
-                # Connect monitor
-                dcache_mon.mem_side = dcache.cpu_side
-
-                # Let CPU connect to monitors
-                dcache = dcache_mon
-
-                                                
-            # ---------------- start addPrivateSplitL1Caches
-
-            system.cpu[i].icache = icache
-            system.cpu[i].dcache = dcache
-            system.cpu[i].icache_port = system.tcu.icache_slave_port
-            system.cpu[i].dcache_port = system.tcu.dcache_slave_port
-            system.cpu[i]._cached_ports = ['icache.mem_side', 'dcache.mem_side']
-            if buildEnv['TARGET_ISA'] in ['x86', 'arm', 'riscv']:
-                if iwalkcache and dwalkcache:
-                    system.cpu[i].itb_walker_cache = iwalkcache
-                    system.cpu[i].dtb_walker_cache = dwalkcache
-                    system.cpu[i].mmu.connectWalkerPorts(
-                        iwalkcache.cpu_side, dwalkcache.cpu_side)
-                    system.cpu[i]._cached_ports += ["itb_walker_cache.mem_side", \
-                                        "dtb_walker_cache.mem_side"]
-                else:
-                    system.cpu[i]._cached_ports += ArchMMU.walkerPorts()
-
-                # Checker doesn't need its own tlb caches because it does
-                # functional accesses only
-                if system.cpu[i].checker != NULL:
-                    system.cpu[i]._cached_ports += [ ".".join("checker", port) \
-                        for port in ArchMMU.walkerPorts() ]
-            
-            # ---------------- stop addPrivateSplitL1Caches
-            
-
-            if options.memchecker:
-                # The mem_side ports of the caches haven't been connected yet.
-                # Make sure connectAllPorts connects the right objects.
-                system.cpu[i].dcache = dcache_real
-                system.cpu[i].dcache_mon = dcache_mon
-
-        elif options.external_memory_system:
-            # These port names are presented to whatever 'external' system
-            # gem5 is connecting to.  Its configuration will likely depend
-            # on these names.  For simplicity, we would advise configuring
-            # it to use this naming scheme; if this isn't possible, change
-            # the names below.
-            if buildEnv['TARGET_ISA'] in ['x86', 'arm', 'riscv']:
-                system.cpu[i].addPrivateSplitL1Caches(
-                        ExternalCache("cpu%d.icache" % i),
-                        ExternalCache("cpu%d.dcache" % i),
-                        ExternalCache("cpu%d.itb_walker_cache" % i),
-                        ExternalCache("cpu%d.dtb_walker_cache" % i))
-            else:
-                system.cpu[i].addPrivateSplitL1Caches(
-                        ExternalCache("cpu%d.icache" % i),
-                        ExternalCache("cpu%d.dcache" % i))
-
-        system.cpu[i].createInterruptController()
-        if options.l2cache:
-            system.cpu[i].connectAllPorts(system.tol2bus, system.membus)
-        elif options.external_memory_system:
-            system.cpu[i].connectUncachedPorts(system.membus)
-        else:
-            system.cpu[i].connectAllPorts(system.membus)
+    system.cpu.createInterruptController()
+    system.cpu.connectAllPorts(system.tol2bus, system.membus)
 
     # ---------------------------- end CacheConfig.config_cache ------------ #
 
     MemConfig.config_mem(options, system)
 
     # configure caches like M³ does
-    system.cpu[0].icache.tag_latency = 4
-    system.cpu[0].icache.data_latency = 4
-    system.cpu[0].icache.response_latency = 4
-    system.cpu[0].dcache.tag_latency = 4
-    system.cpu[0].dcache.data_latency = 4
-    system.cpu[0].dcache.response_latency = 4
+    system.cpu.icache.tag_latency = 4
+    system.cpu.icache.data_latency = 4
+    system.cpu.icache.response_latency = 4
+    system.cpu.dcache.tag_latency = 4
+    system.cpu.dcache.data_latency = 4
+    system.cpu.dcache.response_latency = 4
     system.l2.tag_latency = 12
     system.l2.data_latency = 12
     system.l2.response_latency = 12
     system.l2.prefetcher = StridePrefetcher(degree = 16)
 
-
-    Simulation.setWorkCountOptions(system, options)
+    system.tcu.caches = [system.iocache, system.l2, system.cpu.icache, system.cpu.dcache]
 
     return system
-
 
 
 def createKecAccTile(noc, options, no, cmdline,
