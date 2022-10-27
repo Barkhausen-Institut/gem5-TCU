@@ -42,6 +42,7 @@ addToPath('../platform/gem5/configs')
 from common.FSConfig import *
 from common import Simulation
 from common import CacheConfig
+from common.CacheConfig import _get_cache_opts
 from common import CpuConfig
 from common import MemConfig
 from common import ObjectList
@@ -77,7 +78,6 @@ from common import Options
 # global constants
 IO_address_space_base           = 0xff20000000000000
 interrupts_address_space_base   = 0xff40000000000000
-APIC_range_size                 = 1 << 12;
 
 base_offset                     = 768 * 1024 * 1024
 linux_tile_offset               = base_offset // 2
@@ -639,7 +639,7 @@ def createOSTile(noc, options, no, memTile, epCount, kernel, clParams,
     return tile
 
 
-def createOSTile2(options):
+def createOSTile2(options, noc):
     # CPU and Memory
     (CPUClass, mem_mode, FutureClass) = Simulation.setCPUClass(options)
     MemClass = Simulation.setMemClass(options)
@@ -648,7 +648,32 @@ def createOSTile2(options):
 
     # ---------------------------- Setup System ---------------------------- #
     # Default Setup
-    system = System()
+    system = M3System()
+    system.tile_id = 0
+    system.memory_tile = 1
+    system.memory_offset = linux_tile_offset
+    system.memory_size = linux_tile_size
+
+
+    system.tcu = Tcu(max_noc_packet_size='2kB', buf_size='2kB')
+    system.tcu.connector = RiscvConnector()
+    system.tcu.tile_id = system.tile_id
+
+    system.tcu.num_endpoints = 192
+    system.tcu.tlb_entries = 128
+
+    # connection to noc
+    system.tcu.noc_master_port = noc.cpu_side_ports
+    system.tcu.noc_slave_port  = noc.mem_side_ports
+
+    system.tcu.slave_region = [AddrRange(0, system.tcu.mmio_region.start - 1)]
+
+    system.tcu.caches = []
+
+    system.noc_master_port = noc.cpu_side_ports
+
+    ############# other stuff
+
     mdesc = SysConfig(disks=options.disk_image, rootdev=options.root_device,
                             mem=options.mem_size, os_type=options.os_type)
     system.mem_mode = mem_mode
@@ -665,6 +690,7 @@ def createOSTile2(options):
     system.membus = MemBus()
 
     system.system_port = system.membus.cpu_side_ports
+    # system.membus.default = system.tcu.cache_mem_slave_port
 
     # HiFive Platform
     system.platform = HiFive()
@@ -683,7 +709,7 @@ def createOSTile2(options):
                 vio=VirtIOBlock(image=image),
                 interrupt_id=0x8 + i,
                 pio_size=4096,
-                pio_addr=0x10008000 + i * 4096
+                pio_addr=0xa0008000 + i * 4096
             ))
         system.platform.disks = disks
 
@@ -733,6 +759,7 @@ def createOSTile2(options):
         system.iocache = IOCache(addr_ranges = system.mem_ranges)
         system.iocache.cpu_side = system.iobus.mem_side_ports
         system.iocache.mem_side = system.membus.cpu_side_ports
+        system.tcu.caches.append(system.iocache)
     elif not options.external_memory_system:
         system.iobridge = Bridge(delay='50ns', ranges = system.mem_ranges)
         system.iobridge.cpu_side_port = system.iobus.mem_side_ports
@@ -804,7 +831,162 @@ def createOSTile2(options):
         not options.fast_forward:
         CpuConfig.config_etrace(CPUClass, system.cpu, options)
 
-    CacheConfig.config_cache(options, system)
+    # ---------------------------- CacheConfig.config_cache ---------------- #
+    if options.external_memory_system and (options.caches or options.l2cache):
+        print("External caches and internal caches are exclusive options.\n")
+        sys.exit(1)
+
+    if options.external_memory_system:
+        ExternalCache = ExternalCacheFactory(options.external_memory_system)
+
+    if options.cpu_type == "O3_ARM_v7a_3":
+        try:
+            import cores.arm.O3_ARM_v7a as core
+        except:
+            print("O3_ARM_v7a_3 is unavailable. Did you compile the O3 model?")
+            sys.exit(1)
+
+        dcache_class, icache_class, l2_cache_class, walk_cache_class = \
+            core.O3_ARM_v7a_DCache, core.O3_ARM_v7a_ICache, \
+            core.O3_ARM_v7aL2, \
+            core.O3_ARM_v7aWalkCache
+    elif options.cpu_type == "HPI":
+        try:
+            import cores.arm.HPI as core
+        except:
+            print("HPI is unavailable.")
+            sys.exit(1)
+
+        dcache_class, icache_class, l2_cache_class, walk_cache_class = \
+            core.HPI_DCache, core.HPI_ICache, core.HPI_L2, core.HPI_WalkCache
+    else:
+        dcache_class, icache_class, l2_cache_class, walk_cache_class = \
+            L1_DCache, L1_ICache, L2Cache, None
+
+        if buildEnv['TARGET_ISA'] in ['x86', 'riscv']:
+            walk_cache_class = PageTableWalkerCache
+
+    # Set the cache line size of the system
+    system.cache_line_size = options.cacheline_size
+
+    # If elastic trace generation is enabled, make sure the memory system is
+    # minimal so that compute delays do not include memory access latencies.
+    # Configure the compulsory L1 caches for the O3CPU, do not configure
+    # any more caches.
+    if options.l2cache and options.elastic_trace_en:
+        fatal("When elastic trace is enabled, do not configure L2 caches.")
+
+    if options.l2cache:
+        # Provide a clock for the L2 and the L1-to-L2 bus here as they
+        # are not connected using addTwoLevelCacheHierarchy. Use the
+        # same clock as the CPUs.
+        system.l2 = l2_cache_class(clk_domain=system.cpu_clk_domain,
+                                   **_get_cache_opts('l2', options))
+
+        system.tol2bus = L2XBar(clk_domain = system.cpu_clk_domain)
+        system.l2.cpu_side = system.tol2bus.master
+        system.l2.mem_side = system.membus.slave
+
+        system.tcu.caches.append(system.l2)
+
+    if options.memchecker:
+        system.memchecker = MemChecker()
+
+    for i in range(options.num_cpus):
+        if options.caches:
+            icache = icache_class(**_get_cache_opts('l1i', options))
+            dcache = dcache_class(**_get_cache_opts('l1d', options))
+
+            system.tcu.caches.append(icache)
+            system.tcu.caches.append(dcache)
+
+            icache.cpu_side = system.tcu.icache_master_port
+            dcache.cpu_side = system.tcu.dcache_master_port
+
+            # If we have a walker cache specified, instantiate two
+            # instances here
+            if walk_cache_class:
+                iwalkcache = walk_cache_class()
+                dwalkcache = walk_cache_class()
+            else:
+                iwalkcache = None
+                dwalkcache = None
+
+            if options.memchecker:
+                dcache_mon = MemCheckerMonitor(warn_only=True)
+                dcache_real = dcache
+
+                # Do not pass the memchecker into the constructor of
+                # MemCheckerMonitor, as it would create a copy; we require
+                # exactly one MemChecker instance.
+                dcache_mon.memchecker = system.memchecker
+
+                # Connect monitor
+                dcache_mon.mem_side = dcache.cpu_side
+
+                # Let CPU connect to monitors
+                dcache = dcache_mon
+
+                                                
+            # ---------------- start addPrivateSplitL1Caches
+
+            system.cpu[i].icache = icache
+            system.cpu[i].dcache = dcache
+            system.cpu[i].icache_port = system.tcu.icache_slave_port
+            system.cpu[i].dcache_port = system.tcu.dcache_slave_port
+            system.cpu[i]._cached_ports = ['icache.mem_side', 'dcache.mem_side']
+            if buildEnv['TARGET_ISA'] in ['x86', 'arm', 'riscv']:
+                if iwalkcache and dwalkcache:
+                    system.cpu[i].itb_walker_cache = iwalkcache
+                    system.cpu[i].dtb_walker_cache = dwalkcache
+                    system.cpu[i].mmu.connectWalkerPorts(
+                        iwalkcache.cpu_side, dwalkcache.cpu_side)
+                    system.cpu[i]._cached_ports += ["itb_walker_cache.mem_side", \
+                                        "dtb_walker_cache.mem_side"]
+                else:
+                    system.cpu[i]._cached_ports += ArchMMU.walkerPorts()
+
+                # Checker doesn't need its own tlb caches because it does
+                # functional accesses only
+                if system.cpu[i].checker != NULL:
+                    system.cpu[i]._cached_ports += [ ".".join("checker", port) \
+                        for port in ArchMMU.walkerPorts() ]
+            
+            # ---------------- stop addPrivateSplitL1Caches
+            
+
+            if options.memchecker:
+                # The mem_side ports of the caches haven't been connected yet.
+                # Make sure connectAllPorts connects the right objects.
+                system.cpu[i].dcache = dcache_real
+                system.cpu[i].dcache_mon = dcache_mon
+
+        elif options.external_memory_system:
+            # These port names are presented to whatever 'external' system
+            # gem5 is connecting to.  Its configuration will likely depend
+            # on these names.  For simplicity, we would advise configuring
+            # it to use this naming scheme; if this isn't possible, change
+            # the names below.
+            if buildEnv['TARGET_ISA'] in ['x86', 'arm', 'riscv']:
+                system.cpu[i].addPrivateSplitL1Caches(
+                        ExternalCache("cpu%d.icache" % i),
+                        ExternalCache("cpu%d.dcache" % i),
+                        ExternalCache("cpu%d.itb_walker_cache" % i),
+                        ExternalCache("cpu%d.dtb_walker_cache" % i))
+            else:
+                system.cpu[i].addPrivateSplitL1Caches(
+                        ExternalCache("cpu%d.icache" % i),
+                        ExternalCache("cpu%d.dcache" % i))
+
+        system.cpu[i].createInterruptController()
+        if options.l2cache:
+            system.cpu[i].connectAllPorts(system.tol2bus, system.membus)
+        elif options.external_memory_system:
+            system.cpu[i].connectUncachedPorts(system.membus)
+        else:
+            system.cpu[i].connectAllPorts(system.membus)
+
+    # ---------------------------- end CacheConfig.config_cache ------------ #
 
     MemConfig.config_mem(options, system)
 
