@@ -104,6 +104,10 @@ def getOptions():
     parser.add_option("--dtb-filename", action="store", type=str,
         help="Specifies device tree blob file to use with device-tree-"\
             "enabled kernels")
+    parser.add_option("-c", "--cmd", default="", type="string",
+                      help="comma separated list of binaries")
+    parser.add_option("--pausetile", default=-1, type="int",
+                      help="the tile to pause until GDB connects")
 
     (options, args) = parser.parse_args()
 
@@ -639,7 +643,7 @@ def createOSTile(noc, options, no, memTile, epCount, kernel, clParams,
     return tile
 
 
-def createOSTile2(options, noc):
+def createOSTile2(options, noc, memTile, kernel):
     # CPU and Memory
     (CPUClass, mem_mode, FutureClass) = Simulation.setCPUClass(options)
     MemClass = Simulation.setMemClass(options)
@@ -650,7 +654,7 @@ def createOSTile2(options, noc):
     # Default Setup
     system = M3System()
     system.tile_id = 0
-    system.memory_tile = 1
+    system.memory_tile = memTile
     system.memory_offset = linux_tile_offset
     system.memory_size = linux_tile_size
 
@@ -681,10 +685,10 @@ def createOSTile2(options, noc):
 
     if options.bare_metal:
         system.workload = RiscvBareMetal()
-        system.workload.bootloader = options.kernel
+        system.workload.bootloader = kernel
     else:
         system.workload = RiscvLinux()
-        system.workload.object_file = options.kernel
+        system.workload.object_file = kernel
 
     system.iobus = IOXBar()
     system.membus = MemBus()
@@ -742,8 +746,6 @@ def createOSTile2(options, noc):
     system.cpu_clk_domain = SrcClockDomain(clock = options.cpu_clock,
                                                 voltage_domain =
                                                 system.cpu_voltage_domain)
-
-    system.workload.object_file = options.kernel
 
     # NOTE: Not yet tested
     if options.script is not None:
