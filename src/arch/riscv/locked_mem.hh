@@ -132,10 +132,6 @@ handleLockedWrite(XC *xc, const RequestPtr &req, Addr cacheBlockMask)
     }
     if (locked_addr_stack.empty()
             || locked_addr_stack.top() != ((req->getPaddr() & ~0xF))) {
-        if (!locked_addr_stack.empty()) {
-            DPRINTF(LLSC, "locked_addr_stack.top(): 0x%x, req->getPaddr(): 0x%x\n", locked_addr_stack.top(), req->getPaddr());
-            DPRINTF(LLSC, "tile id: %d\n", tile);
-        }
         req->setExtraData(0);
         int stCondFailures = xc->readStCondFailures();
         xc->setStCondFailures(++stCondFailures);
@@ -145,7 +141,6 @@ handleLockedWrite(XC *xc, const RequestPtr &req, Addr cacheBlockMask)
         }
         return false;
     }
-    locked_addr_stack.pop();
     if (req->isUncacheable()) {
         req->setExtraData(2);
     }
