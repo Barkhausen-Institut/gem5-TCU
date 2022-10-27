@@ -31,6 +31,12 @@
 
 #include "mem/scratchpad.hh"
 
+namespace gem5
+{
+
+namespace memory
+{
+
 Scratchpad::Scratchpad(const ScratchpadParams &p)
   : AbstractMemory(p),
     cpuPort(name() + ".cpu_port", *this),
@@ -135,4 +141,7 @@ Tick
 Scratchpad::ScratchpadPort::recvAtomic(PacketPtr pkt)
 {
     return scratchpad.recvAtomic(pkt);
+}
+
+}
 }

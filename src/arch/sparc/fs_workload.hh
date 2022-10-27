@@ -30,8 +30,12 @@
 #define __ARCH_SPARC_FS_WORKLOAD_HH__
 
 #include "arch/sparc/faults.hh"
+#include "arch/sparc/remote_gdb.hh"
 #include "params/SparcFsWorkload.hh"
 #include "sim/workload.hh"
+
+namespace gem5
+{
 
 namespace SparcISA
 {
@@ -39,11 +43,18 @@ namespace SparcISA
 class FsWorkload : public Workload
 {
   protected:
-    Loader::SymbolTable defaultSymtab;
+    loader::SymbolTable defaultSymtab;
 
   public:
     FsWorkload(const SparcFsWorkloadParams &params) : Workload(params) {}
     void initState() override;
+
+    void
+    setSystem(System *sys) override
+    {
+        Workload::setSystem(sys);
+        gdb = BaseRemoteGDB::build<RemoteGDB>(system);
+    }
 
     Addr
     getEntry() const override
@@ -52,21 +63,23 @@ class FsWorkload : public Workload
         getREDVector(0x001, pc, npc);
         return pc;
     }
-    Loader::Arch getArch() const override { return Loader::SPARC64; }
+    loader::Arch getArch() const override { return loader::SPARC64; }
+    ByteOrder byteOrder() const override { return ByteOrder::big; }
 
-    const Loader::SymbolTable &
+    const loader::SymbolTable &
     symtab(ThreadContext *tc) override
     {
         return defaultSymtab;
     }
 
     bool
-    insertSymbol(const Loader::Symbol &symbol) override
+    insertSymbol(const loader::Symbol &symbol) override
     {
         return defaultSymtab.insert(symbol);
     }
 };
 
 } // namespace SparcISA
+} // namespace gem5
 
 #endif // __ARCH_SPARC_FS_WORKLOAD_HH__

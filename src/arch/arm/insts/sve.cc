@@ -39,6 +39,9 @@
 
 #include "arch/arm/insts/sve.hh"
 
+namespace gem5
+{
+
 namespace ArmISA {
 
 const char*
@@ -56,7 +59,7 @@ svePredTypeToStr(SvePredType pt)
 
 std::string
 SvePredCountPredOp::generateDisassembly(Addr pc,
-        const Loader::SymbolTable *symtab) const
+        const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -70,7 +73,7 @@ SvePredCountPredOp::generateDisassembly(Addr pc,
 
 std::string
 SvePredCountOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -91,7 +94,7 @@ SvePredCountOp::generateDisassembly(
 
 std::string
 SveIndexIIOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -102,7 +105,7 @@ SveIndexIIOp::generateDisassembly(
 
 std::string
 SveIndexIROp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -114,7 +117,7 @@ SveIndexIROp::generateDisassembly(
 
 std::string
 SveIndexRIOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -127,7 +130,7 @@ SveIndexRIOp::generateDisassembly(
 
 std::string
 SveIndexRROp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -141,7 +144,7 @@ SveIndexRROp::generateDisassembly(
 
 std::string
 SveWhileOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -160,7 +163,7 @@ SveWhileOp::generateDisassembly(
 
 std::string
 SveCompTermOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -172,7 +175,7 @@ SveCompTermOp::generateDisassembly(
 
 std::string
 SveUnaryPredOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -186,7 +189,7 @@ SveUnaryPredOp::generateDisassembly(
 
 std::string
 SveUnaryUnpredOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -198,7 +201,7 @@ SveUnaryUnpredOp::generateDisassembly(
 
 std::string
 SveUnaryWideImmUnpredOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -210,7 +213,7 @@ SveUnaryWideImmUnpredOp::generateDisassembly(
 
 std::string
 SveUnaryWideImmPredOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -225,7 +228,7 @@ SveUnaryWideImmPredOp::generateDisassembly(
 
 std::string
 SveBinImmUnpredConstrOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -239,7 +242,7 @@ SveBinImmUnpredConstrOp::generateDisassembly(
 
 std::string
 SveBinImmPredOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -255,7 +258,7 @@ SveBinImmPredOp::generateDisassembly(
 
 std::string
 SveBinWideImmUnpredOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -269,7 +272,7 @@ SveBinWideImmUnpredOp::generateDisassembly(
 
 std::string
 SveBinDestrPredOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -285,7 +288,7 @@ SveBinDestrPredOp::generateDisassembly(
 
 std::string
 SveBinConstrPredOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -304,7 +307,7 @@ SveBinConstrPredOp::generateDisassembly(
 
 std::string
 SveBinUnpredOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -318,7 +321,7 @@ SveBinUnpredOp::generateDisassembly(
 
 std::string
 SveBinIdxUnpredOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -335,7 +338,7 @@ SveBinIdxUnpredOp::generateDisassembly(
 
 std::string
 SvePredLogicalOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -355,7 +358,7 @@ SvePredLogicalOp::generateDisassembly(
 
 std::string
 SvePredBinPermOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -368,7 +371,7 @@ SvePredBinPermOp::generateDisassembly(
 }
 
 std::string
-SveCmpOp::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
+SveCmpOp::generateDisassembly(Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -384,7 +387,7 @@ SveCmpOp::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
 
 std::string
 SveCmpImmOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -400,7 +403,7 @@ SveCmpImmOp::generateDisassembly(
 
 std::string
 SveTerPredOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -416,7 +419,7 @@ SveTerPredOp::generateDisassembly(
 
 std::string
 SveTerImmUnpredOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -432,7 +435,7 @@ SveTerImmUnpredOp::generateDisassembly(
 
 std::string
 SveReducOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -446,7 +449,7 @@ SveReducOp::generateDisassembly(
 
 std::string
 SveOrdReducOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -462,7 +465,7 @@ SveOrdReducOp::generateDisassembly(
 
 std::string
 SvePtrueOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -476,7 +479,7 @@ SvePtrueOp::generateDisassembly(
 
 std::string
 SveIntCmpOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -496,7 +499,7 @@ SveIntCmpOp::generateDisassembly(
 
 std::string
 SveIntCmpImmOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -511,7 +514,7 @@ SveIntCmpImmOp::generateDisassembly(
 }
 
 std::string
-SveAdrOp::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
+SveAdrOp::generateDisassembly(Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -536,7 +539,7 @@ SveAdrOp::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
 
 std::string
 SveElemCountOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     static const char suffix[9] =
         {'\0', 'b', 'h', '\0', 'w', '\0', '\0', '\0', 'd'};
@@ -564,7 +567,7 @@ SveElemCountOp::generateDisassembly(
 
 std::string
 SvePartBrkOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -578,7 +581,7 @@ SvePartBrkOp::generateDisassembly(
 
 std::string
 SvePartBrkPropOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -594,7 +597,7 @@ SvePartBrkPropOp::generateDisassembly(
 
 std::string
 SveSelectOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -620,7 +623,7 @@ SveSelectOp::generateDisassembly(
 
 std::string
 SveUnaryPredPredOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -633,7 +636,7 @@ SveUnaryPredPredOp::generateDisassembly(
 }
 
 std::string
-SveTblOp::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
+SveTblOp::generateDisassembly(Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -647,7 +650,7 @@ SveTblOp::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
 
 std::string
 SveUnpackOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -659,7 +662,7 @@ SveUnpackOp::generateDisassembly(
 
 std::string
 SvePredTestOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -671,7 +674,7 @@ SvePredTestOp::generateDisassembly(
 
 std::string
 SvePredUnaryWImplicitSrcOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -681,7 +684,7 @@ SvePredUnaryWImplicitSrcOp::generateDisassembly(
 
 std::string
 SvePredUnaryWImplicitSrcPredOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -694,7 +697,7 @@ SvePredUnaryWImplicitSrcPredOp::generateDisassembly(
 
 std::string
 SvePredUnaryWImplicitDstOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -704,7 +707,7 @@ SvePredUnaryWImplicitDstOp::generateDisassembly(
 
 std::string
 SveWImplicitSrcDstOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -713,7 +716,7 @@ SveWImplicitSrcDstOp::generateDisassembly(
 
 std::string
 SveBinImmUnpredDestrOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -729,7 +732,7 @@ SveBinImmUnpredDestrOp::generateDisassembly(
 
 std::string
 SveBinImmIdxUnpredOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -744,7 +747,7 @@ SveBinImmIdxUnpredOp::generateDisassembly(
 
 std::string
 SveUnarySca2VecUnpredOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -760,7 +763,7 @@ SveUnarySca2VecUnpredOp::generateDisassembly(
 
 std::string
 SveDotProdIdxOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -777,7 +780,7 @@ SveDotProdIdxOp::generateDisassembly(
 
 std::string
 SveDotProdOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -791,7 +794,7 @@ SveDotProdOp::generateDisassembly(
 
 std::string
 SveComplexOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -811,7 +814,7 @@ SveComplexOp::generateDisassembly(
 
 std::string
 SveComplexIdxOp::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -966,4 +969,5 @@ sveExpandFpImmMul(uint8_t imm, uint8_t size)
     }
 }
 
-}  // namespace ArmISA
+} // namespace ArmISA
+} // namespace gem5

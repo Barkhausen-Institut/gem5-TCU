@@ -34,10 +34,13 @@
 #include "arch/x86/regs/misc.hh"
 #include "base/types.hh"
 
+namespace gem5
+{
+
 namespace X86ISA
 {
 
-typedef std::unordered_map<Addr, MiscRegIndex> MsrMap;
+typedef std::unordered_map<Addr, RegIndex> MsrMap;
 
 /**
  * Map between MSR addresses and their corresponding misc registers.
@@ -59,8 +62,9 @@ extern const MsrMap msrMap;
  * @param addr MSR address
  * @return True if the MSR was found, false otherwise.
  */
-bool msrAddrToIndex(MiscRegIndex &regNum, Addr addr);
+bool msrAddrToIndex(RegIndex &regNum, Addr addr);
 
 } // namespace X86ISA
+} // namespace gem5
 
 #endif // __ARCH_X86_REG_MSR_HH__

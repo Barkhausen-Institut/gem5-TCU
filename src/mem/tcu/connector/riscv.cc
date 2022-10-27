@@ -35,6 +35,11 @@
 #include "mem/tcu/tcu.hh"
 #include "sim/process.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 static int translate(RiscvConnector::IRQ irq)
 {
     if (irq == RiscvConnector::CORE_REQ)
@@ -65,4 +70,7 @@ RiscvConnector::doClearIrq(IRQ irq)
 
     ThreadContext *tc = system->threads[0];
     tc->getCpuPtr()->getInterruptController(0)->clear(vector, 0);
+}
+
+}
 }

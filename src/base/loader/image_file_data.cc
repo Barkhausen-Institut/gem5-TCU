@@ -39,7 +39,11 @@
 
 #include "base/logging.hh"
 
-namespace Loader
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Loader, loader);
+namespace loader
 {
 
 static bool
@@ -104,7 +108,9 @@ ImageFileData::ImageFileData(const std::string &fname)
 
     // Open the file.
     int fd = open(fname.c_str(), O_RDONLY);
-    panic_if(fd < 0, "Failed to open file %s.\n", fname);
+    fatal_if(fd < 0, "Failed to open file %s.\n"
+        "This error typically occurs when the file path specified is "
+        "incorrect.\n", fname);
 
     // Decompress GZ files.
     if (hasGzipMagic(fd)) {
@@ -129,4 +135,5 @@ ImageFileData::~ImageFileData()
     munmap((void *)_data, _len);
 }
 
-} // namespace Loader
+} // namespace loader
+} // namespace gem5

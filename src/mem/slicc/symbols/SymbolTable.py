@@ -25,12 +25,21 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from m5.util import makeDir
+import os
 
 from slicc.generate import html
 from slicc.symbols.StateMachine import StateMachine
 from slicc.symbols.Type import Type
 from slicc.util import Location
+
+def makeDir(path):
+    """Make a directory if it doesn't exist.  If the path does exist,
+    ensure that it is a directory"""
+    if os.path.exists(path):
+        if not os.path.isdir(path):
+            raise AttributeError("%s exists but is not directory" % path)
+    else:
+        os.mkdir(path)
 
 class SymbolTable(object):
     def __init__(self, slicc):
@@ -126,7 +135,6 @@ class SymbolTable(object):
         makeDir(path)
 
         code = self.codeFormatter()
-        code('/** Auto generated C++ code started by $__file__:$__line__ */')
 
         for include_path in includes:
             code('#include "${{include_path}}"')

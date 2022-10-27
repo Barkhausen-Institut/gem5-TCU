@@ -29,6 +29,14 @@
 
 #include "arch/sparc/insts/static_inst.hh"
 
+#include "arch/sparc/pcstate.hh"
+#include "arch/sparc/regs/int.hh"
+#include "arch/sparc/regs/misc.hh"
+#include "base/bitunion.hh"
+
+namespace gem5
+{
+
 namespace SparcISA
 {
 
@@ -72,9 +80,17 @@ SparcStaticInst::printRegArray(std::ostream &os, const RegId *indexArray,
 }
 
 void
-SparcStaticInst::advancePC(SparcISA::PCState &pcState) const
+SparcStaticInst::advancePC(PCStateBase &pcState) const
 {
-    pcState.advance();
+    pcState.as<PCState>().advance();
+}
+
+void
+SparcStaticInst::advancePC(ThreadContext *tc) const
+{
+    PCState pc = tc->pcState().as<PCState>();
+    pc.advance();
+    tc->pcState(pc);
 }
 
 void
@@ -100,7 +116,7 @@ SparcStaticInst::printReg(std::ostream &os, RegId reg)
     const int MaxInput = 32;
     const int MaxMicroReg = 40;
     RegIndex reg_idx = reg.index();
-    if (reg.isIntReg()) {
+    if (reg.is(IntRegClass)) {
         // If we used a register from the next or previous window,
         // take out the offset.
         while (reg_idx >= MaxMicroReg)
@@ -145,7 +161,7 @@ SparcStaticInst::printReg(std::ostream &os, RegId reg)
                 break;
             }
         }
-    } else if (reg.isFloatReg()) {
+    } else if (reg.is(FloatRegClass)) {
         ccprintf(os, "%%f%d", reg_idx);
     } else {
         switch (reg_idx) {
@@ -247,7 +263,7 @@ SparcStaticInst::printReg(std::ostream &os, RegId reg)
 
 std::string
 SparcStaticInst::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
 
@@ -368,4 +384,5 @@ SparcStaticInst::passesCondition(uint32_t codes, uint32_t condition)
             "condition code %d", condition);
 }
 
-}
+} // namespace SparcISA
+} // namespace gem5

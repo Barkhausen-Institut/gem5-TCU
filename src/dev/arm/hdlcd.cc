@@ -53,6 +53,8 @@
 
 using std::vector;
 
+namespace gem5
+{
 
 // initialize hdlcd registers
 HDLcd::HDLcd(const HDLcdParams &p)
@@ -78,12 +80,12 @@ HDLcd::HDLcd(const HDLcdParams &p)
     imgWriter = createImgWriter(imgFormat, &pixelPump.fb);
 }
 
-HDLcd::
-HDLcdStats::HDLcdStats(Stats::Group *parent)
-    : Stats::Group(parent, "HDLcd"),
-      ADD_STAT(underruns, UNIT_COUNT, "Number of buffer underruns")
+HDLcd::HDLcdStats::HDLcdStats(statistics::Group *parent)
+    : statistics::Group(parent, "HDLcd"),
+      ADD_STAT(underruns, statistics::units::Count::get(),
+               "Number of buffer underruns")
 {
-    using namespace Stats;
+    using namespace statistics;
 
     underruns.flags(nozero);
 }
@@ -688,3 +690,5 @@ HDLcd::PixelPump::dumpSettings()
     inform("PixelPump vertical fron porch: %u", t.vFrontPorch);
     inform("PixelPump vertical fron porch: %u", t.vSync);
 }
+
+} // namespace gem5

@@ -28,9 +28,13 @@
 
 #include "learning_gem5/part2/simple_cache.hh"
 
+#include "base/compiler.hh"
 #include "base/random.hh"
 #include "debug/SimpleCache.hh"
 #include "sim/system.hh"
+
+namespace gem5
+{
 
 SimpleCache::SimpleCache(const SimpleCacheParams &params) :
     ClockedObject(params),
@@ -229,7 +233,7 @@ SimpleCache::handleResponse(PacketPtr pkt)
         DPRINTF(SimpleCache, "Copying data from new packet to old\n");
         // We had to upgrade a previous packet. We can functionally deal with
         // the cache access now. It better be a hit.
-        M5_VAR_USED bool hit = accessFunctional(originalPacket);
+        [[maybe_unused]] bool hit = accessFunctional(originalPacket);
         panic_if(!hit, "Should always hit after inserting");
         originalPacket->makeResponse();
         delete pkt; // We may need to delay this, I'm not sure.
@@ -421,14 +425,17 @@ SimpleCache::sendRangeChange() const
     }
 }
 
-SimpleCache::SimpleCacheStats::SimpleCacheStats(Stats::Group *parent)
-      : Stats::Group(parent),
-      ADD_STAT(hits, UNIT_COUNT, "Number of hits"),
-      ADD_STAT(misses, UNIT_COUNT, "Number of misses"),
-      ADD_STAT(missLatency, UNIT_TICK, "Ticks for misses to the cache"),
-      ADD_STAT(hitRatio, UNIT_RATIO,
+SimpleCache::SimpleCacheStats::SimpleCacheStats(statistics::Group *parent)
+      : statistics::Group(parent),
+      ADD_STAT(hits, statistics::units::Count::get(), "Number of hits"),
+      ADD_STAT(misses, statistics::units::Count::get(), "Number of misses"),
+      ADD_STAT(missLatency, statistics::units::Tick::get(),
+               "Ticks for misses to the cache"),
+      ADD_STAT(hitRatio, statistics::units::Ratio::get(),
                "The ratio of hits to the total accesses to the cache",
                hits / (hits + misses))
 {
     missLatency.init(16); // number of buckets
 }
+
+} // namespace gem5

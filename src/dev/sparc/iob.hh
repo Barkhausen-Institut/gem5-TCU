@@ -37,7 +37,8 @@
 #include "dev/io_device.hh"
 #include "params/Iob.hh"
 
-class IntrControl;
+namespace gem5
+{
 
 const int  MaxNiagaraProcs = 32;
 // IOB Managment Addresses
@@ -71,14 +72,14 @@ const uint64_t JIntBusyMask = 0x0003F;
 class Iob : public PioDevice
 {
   private:
-    IntrControl *ic;
     Addr iobManAddr;
     Addr iobManSize;
     Addr iobJBusAddr;
     Addr iobJBusSize;
     Tick pioDelay;
 
-    enum DeviceId {
+    enum DeviceId
+    {
         Interal = 0,
         Error = 1,
         SSI = 2,
@@ -86,22 +87,26 @@ class Iob : public PioDevice
         NumDeviceIds
     };
 
-    struct IntMan {
+    struct IntMan
+    {
         int cpu;
         int vector;
     };
 
-    struct IntCtl {
+    struct IntCtl
+    {
         bool mask;
         bool pend;
     };
 
-    struct IntBusy {
+    struct IntBusy
+    {
         bool busy;
         int source;
     };
 
-    enum Type {
+    enum Type
+    {
         Interrupt,
         Reset,
         Idle,
@@ -137,5 +142,6 @@ class Iob : public PioDevice
     void unserialize(CheckpointIn &cp) override;
 };
 
-#endif //__DEV_SPARC_IOB_HH__
+} // namespace gem5
 
+#endif //__DEV_SPARC_IOB_HH__

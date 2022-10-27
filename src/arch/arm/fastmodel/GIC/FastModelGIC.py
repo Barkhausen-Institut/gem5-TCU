@@ -41,6 +41,7 @@ from m5.SimObject import SimObject
 
 from m5.objects.FastModel import AmbaInitiatorSocket, AmbaTargetSocket
 from m5.objects.Gic import BaseGic
+from m5.objects.IntPin import VectorIntSourcePin
 from m5.objects.SystemC import SystemC_ScModule
 
 GICV3_COMMS_TARGET_ROLE = 'GICV3 COMMS TARGET'
@@ -50,23 +51,20 @@ Port.compat(GICV3_COMMS_TARGET_ROLE, GICV3_COMMS_INITIATOR_ROLE)
 
 class Gicv3CommsTargetSocket(Port):
     def __init__(self, desc):
-        super(Gicv3CommsTargetSocket, self).__init__(
-                GICV3_COMMS_INITIATOR_ROLE, desc)
+        super().__init__(GICV3_COMMS_INITIATOR_ROLE, desc)
 
 class Gicv3CommsInitiatorSocket(Port):
     def __init__(self, desc):
-        super(Gicv3CommsInitiatorSocket, self).__init__(
-                GICV3_COMMS_TARGET_ROLE, desc, is_source=True)
+        super().__init__(GICV3_COMMS_TARGET_ROLE, desc, is_source=True)
 
 class VectorGicv3CommsInitiatorSocket(VectorPort):
     def __init__(self, desc):
-        super(VectorGicv3CommsInitiatorSocket, self).__init__(
-                GICV3_COMMS_TARGET_ROLE, desc, is_source=True)
+        super().__init__(GICV3_COMMS_TARGET_ROLE, desc, is_source=True)
 
 
 class SCFastModelGIC(SystemC_ScModule):
     type = 'SCFastModelGIC'
-    cxx_class = 'FastModel::SCGIC'
+    cxx_class = 'gem5::fastmodel::SCGIC'
     cxx_header = 'arch/arm/fastmodel/GIC/gic.hh'
 
     enabled = Param.Bool(True, "Enable GICv3 functionality; when false the "
@@ -464,7 +462,7 @@ class SCFastModelGIC(SystemC_ScModule):
 
 class FastModelGIC(BaseGic):
     type = 'FastModelGIC'
-    cxx_class = 'FastModel::GIC'
+    cxx_class = 'gem5::fastmodel::GIC'
     cxx_header = 'arch/arm/fastmodel/GIC/gic.hh'
 
     sc_gic = Param.SCFastModelGIC(SCFastModelGIC(),
@@ -475,6 +473,8 @@ class FastModelGIC(BaseGic):
 
     redistributor = VectorGicv3CommsInitiatorSocket(
             'GIC communication initiator')
+
+    wake_request = VectorIntSourcePin('GIC wake request initiator')
 
     # Used for DTB autogeneration
     _state = FdtState(addr_cells=2, size_cells=2, interrupt_cells=3)

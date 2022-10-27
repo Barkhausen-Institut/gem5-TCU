@@ -51,9 +51,12 @@
 #include "sim/serialize.hh"
 #include "sim/voltage_domain.hh"
 
+namespace gem5
+{
+
 ClockDomain::ClockDomainStats::ClockDomainStats(ClockDomain &cd)
-    : Stats::Group(&cd),
-    ADD_STAT(clock, UNIT_TICK, "Clock period in ticks")
+    : statistics::Group(&cd),
+    ADD_STAT(clock, statistics::units::Tick::get(), "Clock period in ticks")
 {
     // Expose the current clock period as a stat for observability in
     // the dumps
@@ -223,3 +226,5 @@ DerivedClockDomain::updateClockPeriod()
         (*c)->updateClockPeriod();
     }
 }
+
+} // namespace gem5

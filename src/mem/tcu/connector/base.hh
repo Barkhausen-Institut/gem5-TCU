@@ -32,10 +32,15 @@
 #define __MEM_TCU_BASE_CONNECTOR__
 
 #include "params/BaseConnector.hh"
-#include "mem/mem_object.hh"
+#include "sim/clocked_object.hh"
 #include "sim/system.hh"
 
 #include <queue>
+
+namespace gem5
+{
+namespace tcu
+{
 
 class Tcu;
 
@@ -87,5 +92,8 @@ class BaseConnector : public ClockedObject
     Tcu *_tcu;
     std::queue<IRQ> _pending;
 };
+
+}
+}
 
 #endif // __MEM_TCU_BASE_CONNECTOR__

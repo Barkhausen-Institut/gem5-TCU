@@ -35,6 +35,11 @@
 #include "cpu/simple/base.hh"
 #include "sim/process.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 X86Connector::X86Connector(const X86ConnectorParams &p)
   : CoreConnector(p),
     irqPort("irq_master_port", this)
@@ -95,4 +100,7 @@ X86Connector::doSetIrq(IRQ irq)
 
     PacketPtr pkt = X86ISA::buildIntTriggerPacket(APIC_ID, message);
     irqPort.sendPacket(pkt);
+}
+
+}
 }

@@ -40,10 +40,13 @@
 #include <algorithm>
 
 #include "base/logging.hh"
+#include "base/named.hh"
 #include "base/trace.hh"
 #include "debug/Drain.hh"
 #include "sim/sim_exit.hh"
-#include "sim/sim_object.hh"
+
+namespace gem5
+{
 
 DrainManager DrainManager::_instance;
 
@@ -70,8 +73,8 @@ DrainManager::tryDrain()
     _state = DrainState::Draining;
     for (auto *obj : _allDrainable) {
         DrainState status = obj->dmDrain();
-        if (DTRACE(Drain) && status != DrainState::Drained) {
-            SimObject *temp = dynamic_cast<SimObject*>(obj);
+        if (debug::Drain && status != DrainState::Drained) {
+            Named *temp = dynamic_cast<Named*>(obj);
             if (temp)
                 DPRINTF(Drain, "Failed to drain %s\n", temp->name());
         }
@@ -224,3 +227,5 @@ Drainable::dmDrainResume()
     _drainState = DrainState::Running;
     drainResume();
 }
+
+} // namespace gem5

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 ARM Limited
+ * Copyright (c) 2015, 2021 Arm Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -41,8 +41,8 @@
 #ifndef __CPU_MEMTEST_MEMTEST_HH__
 #define __CPU_MEMTEST_MEMTEST_HH__
 
-#include <set>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "base/statistics.hh"
 #include "mem/port.hh"
@@ -50,6 +50,9 @@
 #include "sim/clocked_object.hh"
 #include "sim/eventq.hh"
 #include "sim/stats.hh"
+
+namespace gem5
+{
 
 /**
  * The MemTest class tests a cache coherent memory system by
@@ -117,6 +120,10 @@ class MemTest : public ClockedObject
 
     PacketPtr retryPkt;
 
+    // Set if reached the maximum number of outstanding requests.
+    // Won't tick until a response is received.
+    bool waitResponse;
+
     const unsigned size;
 
     const Cycles interval;
@@ -130,7 +137,7 @@ class MemTest : public ClockedObject
 
     unsigned int id;
 
-    std::set<Addr> outstandingAddrs;
+    std::unordered_set<Addr> outstandingAddrs;
 
     // store the expected value for the addresses we have touched
     std::unordered_map<Addr, uint8_t> referenceData;
@@ -138,6 +145,8 @@ class MemTest : public ClockedObject
     const unsigned blockSize;
 
     const Addr blockAddrMask;
+
+    const unsigned sizeBlocks;
 
     /**
      * Get the block aligned address.
@@ -150,9 +159,9 @@ class MemTest : public ClockedObject
         return (addr & ~blockAddrMask);
     }
 
-    Addr baseAddr1;
-    Addr baseAddr2;
-    Addr uncacheAddr;
+    const Addr baseAddr1;
+    const Addr baseAddr2;
+    const Addr uncacheAddr;
 
     const unsigned progressInterval;  // frequency of progress reports
     const Cycles progressCheck;
@@ -166,11 +175,11 @@ class MemTest : public ClockedObject
 
     const bool suppressFuncErrors;
   protected:
-    struct MemTestStats : public Stats::Group
+    struct MemTestStats : public statistics::Group
     {
-        MemTestStats(Stats::Group *parent);
-        Stats::Scalar numReads;
-        Stats::Scalar numWrites;
+        MemTestStats(statistics::Group *parent);
+        statistics::Scalar numReads;
+        statistics::Scalar numWrites;
     } stats;
 
     /**
@@ -186,5 +195,7 @@ class MemTest : public ClockedObject
     void recvRetry();
 
 };
+
+} // namespace gem5
 
 #endif // __CPU_MEMTEST_MEMTEST_HH__

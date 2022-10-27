@@ -46,6 +46,7 @@
 
 #include <algorithm>
 
+#include "base/compiler.hh"
 #include "base/trace.hh"
 #include "debug/DMACopyEngine.hh"
 #include "debug/Drain.hh"
@@ -55,7 +56,10 @@
 #include "sim/stats.hh"
 #include "sim/system.hh"
 
-using namespace CopyEngineReg;
+namespace gem5
+{
+
+using namespace copy_engine_reg;
 
 CopyEngine::CopyEngine(const Params &p)
     : PciDevice(p),
@@ -306,19 +310,19 @@ CopyEngine::write(PacketPtr pkt)
     ///
 
     if (size == sizeof(uint64_t)) {
-        M5_VAR_USED uint64_t val = pkt->getLE<uint64_t>();
+        [[maybe_unused]] uint64_t val = pkt->getLE<uint64_t>();
         DPRINTF(DMACopyEngine, "Wrote device register %#X value %#X\n",
                 daddr, val);
     } else if (size == sizeof(uint32_t)) {
-        M5_VAR_USED uint32_t val = pkt->getLE<uint32_t>();
+        [[maybe_unused]] uint32_t val = pkt->getLE<uint32_t>();
         DPRINTF(DMACopyEngine, "Wrote device register %#X value %#X\n",
                 daddr, val);
     } else if (size == sizeof(uint16_t)) {
-        M5_VAR_USED uint16_t val = pkt->getLE<uint16_t>();
+        [[maybe_unused]] uint16_t val = pkt->getLE<uint16_t>();
         DPRINTF(DMACopyEngine, "Wrote device register %#X value %#X\n",
                 daddr, val);
     } else if (size == sizeof(uint8_t)) {
-        M5_VAR_USED uint8_t val = pkt->getLE<uint8_t>();
+        [[maybe_unused]] uint8_t val = pkt->getLE<uint8_t>();
         DPRINTF(DMACopyEngine, "Wrote device register %#X value %#X\n",
                 daddr, val);
     } else {
@@ -427,21 +431,21 @@ CopyEngine::CopyEngineChannel::channelWrite(Packet *pkt, Addr daddr, int size)
 }
 
 CopyEngine::
-CopyEngineStats::CopyEngineStats(Stats::Group *parent,
+CopyEngineStats::CopyEngineStats(statistics::Group *parent,
                                  const uint8_t &channel_count)
-    : Stats::Group(parent, "CopyEngine"),
-      ADD_STAT(bytesCopied, UNIT_BYTE,
+    : statistics::Group(parent, "CopyEngine"),
+      ADD_STAT(bytesCopied, statistics::units::Byte::get(),
                "Number of bytes copied by each engine"),
-      ADD_STAT(copiesProcessed, UNIT_COUNT,
+      ADD_STAT(copiesProcessed, statistics::units::Count::get(),
                "Number of copies processed by each engine")
 {
     bytesCopied
         .init(channel_count)
-        .flags(Stats::total)
+        .flags(statistics::total)
         ;
     copiesProcessed
         .init(channel_count)
-        .flags(Stats::total)
+        .flags(statistics::total)
         ;
 }
 
@@ -730,3 +734,5 @@ CopyEngine::CopyEngineChannel::drainResume()
     DPRINTF(DMACopyEngine, "Restarting state machine at state %d\n", nextState);
     restartStateMachine();
 }
+
+} // namespace gem5

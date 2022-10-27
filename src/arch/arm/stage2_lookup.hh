@@ -43,7 +43,11 @@
 #include "arch/arm/system.hh"
 #include "arch/arm/table_walker.hh"
 #include "arch/arm/tlb.hh"
+#include "arch/generic/mmu.hh"
 #include "mem/request.hh"
+
+namespace gem5
+{
 
 class ThreadContext;
 
@@ -52,18 +56,17 @@ class Translation;
 class TLB;
 
 
-class Stage2LookUp : public BaseTLB::Translation
+class Stage2LookUp : public BaseMMU::Translation
 {
   private:
-    TLB                     *stage1Tlb;
-    TLB               *stage2Tlb;
+    MMU                     *mmu;
     TlbEntry                stage1Te;
     RequestPtr              s1Req;
-    TLB::Translation        *transState;
-    BaseTLB::Mode           mode;
+    BaseMMU::Translation    *transState;
+    BaseMMU::Mode           mode;
     bool                    timing;
     bool                    functional;
-    TLB::ArmTranslationType tranType;
+    MMU::ArmTranslationType tranType;
     TlbEntry                *stage2Te;
     RequestPtr              req;
     Fault                   fault;
@@ -72,22 +75,22 @@ class Stage2LookUp : public BaseTLB::Translation
     bool                    secure;
 
   public:
-    Stage2LookUp(TLB *s1Tlb, TLB *s2Tlb, TlbEntry s1Te, const RequestPtr &_req,
-        TLB::Translation *_transState, BaseTLB::Mode _mode, bool _timing,
-        bool _functional, bool _secure, TLB::ArmTranslationType _tranType) :
-        stage1Tlb(s1Tlb), stage2Tlb(s2Tlb), stage1Te(s1Te), s1Req(_req),
+    Stage2LookUp(MMU *_mmu, TlbEntry s1_te, const RequestPtr &_req,
+        MMU::Translation *_transState, BaseMMU::Mode _mode, bool _timing,
+        bool _functional, bool _secure, MMU::ArmTranslationType _tranType) :
+        mmu(_mmu), stage1Te(s1_te), s1Req(_req),
         transState(_transState), mode(_mode), timing(_timing),
         functional(_functional), tranType(_tranType), stage2Te(nullptr),
         fault(NoFault), complete(false), selfDelete(false), secure(_secure)
     {
         req = std::make_shared<Request>();
-        req->setVirt(s1Te.pAddr(s1Req->getVaddr()), s1Req->getSize(),
+        req->setVirt(s1_te.pAddr(s1Req->getVaddr()), s1Req->getSize(),
                      s1Req->getFlags(), s1Req->requestorId(), 0);
     }
 
     Fault getTe(ThreadContext *tc, TlbEntry *destTe);
 
-    void mergeTe(const RequestPtr &req, BaseTLB::Mode mode);
+    void mergeTe(BaseMMU::Mode mode);
 
     void setSelfDelete() { selfDelete = true; }
 
@@ -96,11 +99,10 @@ class Stage2LookUp : public BaseTLB::Translation
     void markDelayed() {}
 
     void finish(const Fault &fault, const RequestPtr &req, ThreadContext *tc,
-                BaseTLB::Mode mode);
+                BaseMMU::Mode mode);
 };
 
-
 } // namespace ArmISA
+} // namespace gem5
 
 #endif //__ARCH_ARM_STAGE2_LOOKUP_HH__
-

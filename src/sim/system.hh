@@ -48,7 +48,6 @@
 #include <utility>
 #include <vector>
 
-#include "arch/isa_traits.hh"
 #include "base/loader/memory_image.hh"
 #include "base/loader/symtab.hh"
 #include "base/statistics.hh"
@@ -65,6 +64,9 @@
 #include "sim/se_signal.hh"
 #include "sim/sim_object.hh"
 #include "sim/workload.hh"
+
+namespace gem5
+{
 
 class BaseRemoteGDB;
 class GDBListener;
@@ -91,17 +93,26 @@ class System : public SimObject, public PCEventScope
         SystemPort(const std::string &_name, SimObject *_owner)
             : RequestPort(_name, _owner)
         { }
-        bool recvTimingResp(PacketPtr pkt) override
-        { panic("SystemPort does not receive timing!\n"); return false; }
-        void recvReqRetry() override
-        { panic("SystemPort does not expect retry!\n"); }
+
+        bool
+        recvTimingResp(PacketPtr pkt) override
+        {
+            panic("SystemPort does not receive timing!");
+        }
+
+        void
+        recvReqRetry() override
+        {
+            panic("SystemPort does not expect retry!");
+        }
     };
 
     std::list<PCEvent *> liveEvents;
     SystemPort _systemPort;
 
     // Map of memory address ranges for devices with their own backing stores
-    std::unordered_map<RequestorID, AbstractMemory *> deviceMemMap;
+    std::unordered_map<RequestorID, std::vector<memory::AbstractMemory *>>
+        deviceMemMap;
 
   public:
 
@@ -112,7 +123,6 @@ class System : public SimObject, public PCEventScope
         {
             ThreadContext *context = nullptr;
             bool active = false;
-            BaseRemoteGDB *gdb = nullptr;
             Event *resumeEvent = nullptr;
 
             void resume();
@@ -136,7 +146,7 @@ class System : public SimObject, public PCEventScope
             return threads[id];
         }
 
-        ContextID insert(ThreadContext *tc, ContextID id=InvalidContextID);
+        void insert(ThreadContext *tc);
         void replace(ThreadContext *tc, ContextID id);
 
         friend class System;
@@ -224,8 +234,6 @@ class System : public SimObject, public PCEventScope
         const_iterator end() const { return const_iterator(*this, size()); }
     };
 
-    void startup() override;
-
     /**
      * Get a reference to the system port that can be used by
      * non-structural simulation objects like processes or threads, or
@@ -252,9 +260,11 @@ class System : public SimObject, public PCEventScope
      * CPUs. SimObjects are expected to use Port::sendAtomic() and
      * Port::recvAtomic() when accessing memory in this mode.
      */
-    bool isAtomicMode() const {
-        return memoryMode == Enums::atomic ||
-            memoryMode == Enums::atomic_noncaching;
+    bool
+    isAtomicMode() const
+    {
+        return memoryMode == enums::atomic ||
+            memoryMode == enums::atomic_noncaching;
     }
 
     /**
@@ -263,9 +273,7 @@ class System : public SimObject, public PCEventScope
      * SimObjects are expected to use Port::sendTiming() and
      * Port::recvTiming() when accessing memory in this mode.
      */
-    bool isTimingMode() const {
-        return memoryMode == Enums::timing;
-    }
+    bool isTimingMode() const { return memoryMode == enums::timing; }
 
     /**
      * Should caches be bypassed?
@@ -273,8 +281,10 @@ class System : public SimObject, public PCEventScope
      * Some CPUs need to bypass caches to allow direct memory
      * accesses, which is required for hardware virtualization.
      */
-    bool bypassCaches() const {
-        return memoryMode == Enums::atomic_noncaching;
+    bool
+    bypassCaches() const
+    {
+        return memoryMode == enums::atomic_noncaching;
     }
     /** @} */
 
@@ -286,7 +296,7 @@ class System : public SimObject, public PCEventScope
      * world should use one of the query functions above
      * (isAtomicMode(), isTimingMode(), bypassCaches()).
      */
-    Enums::MemoryMode getMemoryMode() const { return memoryMode; }
+    enums::MemoryMode getMemoryMode() const { return memoryMode; }
 
     /**
      * Change the memory mode of the system.
@@ -295,7 +305,7 @@ class System : public SimObject, public PCEventScope
      *
      * @param mode Mode to change to (atomic/timing/...)
      */
-    void setMemoryMode(Enums::MemoryMode mode);
+    void setMemoryMode(enums::MemoryMode mode);
     /** @} */
 
     /**
@@ -312,8 +322,6 @@ class System : public SimObject, public PCEventScope
     bool schedule(PCEvent *event) override;
     bool remove(PCEvent *event) override;
 
-    Addr pagePtr;
-
     uint64_t init_param;
 
     /** Port to physical memory used for writing object files into ram at
@@ -328,18 +336,17 @@ class System : public SimObject, public PCEventScope
      * Get a pointer to the Kernel Virtual Machine (KVM) SimObject,
      * if present.
      */
-    KvmVM* getKvmVM() {
-        return kvmVM;
-    }
+    KvmVM *getKvmVM() const { return kvmVM; }
 
-    /** Verify gem5 configuration will support KVM emulation */
-    bool validKvmEnvironment() const;
+    /**
+     * Set the pointer to the Kernel Virtual Machine (KVM) SimObject. For use
+     * by that object to declare itself to the system.
+     */
+    void setKvmVM(KvmVM *const vm) { kvmVM = vm; }
 
     /** Get a pointer to access the physical memory of the system */
-    PhysicalMemory& getPhysMem() { return physmem; }
-
-    /** Amount of physical memory that is still free */
-    Addr freeMemSize() const;
+    memory::PhysicalMemory& getPhysMem() { return physmem; }
+    const memory::PhysicalMemory& getPhysMem() const { return physmem; }
 
     /** Amount of physical memory that exists */
     Addr memSize() const;
@@ -359,24 +366,26 @@ class System : public SimObject, public PCEventScope
      * and range match something in the device memory map.
      */
     void addDeviceMemory(RequestorID requestorId,
-                      AbstractMemory *deviceMemory);
+        memory::AbstractMemory *deviceMemory);
 
     /**
      * Similar to isMemAddr but for devices. Checks if a physical address
      * of the packet match an address range of a device corresponding to the
      * RequestorId of the request.
      */
-    bool isDeviceMemAddr(PacketPtr pkt) const;
+    bool isDeviceMemAddr(const PacketPtr& pkt) const;
 
     /**
      * Return a pointer to the device memory.
      */
-    AbstractMemory *getDeviceMemory(RequestorID _id) const;
+    memory::AbstractMemory *getDeviceMemory(const PacketPtr& pkt) const;
 
-    /**
-     * Get the architecture.
+    /*
+     * Return the list of address ranges backed by a shadowed ROM.
+     *
+     * @return List of address ranges backed by a shadowed ROM
      */
-    Arch getArch() const { return Arch::TheISA; }
+    AddrRangeList getShadowRomRanges() const { return ShadowRomRanges; }
 
     /**
      * Get the guest byte order.
@@ -384,18 +393,8 @@ class System : public SimObject, public PCEventScope
     ByteOrder
     getGuestByteOrder() const
     {
-        return params().byte_order;
+        return workload->byteOrder();
     }
-
-     /**
-     * Get the page bytes for the ISA.
-     */
-    Addr getPageBytes() const { return TheISA::PageBytes; }
-
-    /**
-     * Get the number of bits worth of in-page address for the ISA.
-     */
-    Addr getPageShift() const { return TheISA::PageShift; }
 
     /**
      * The thermal model used for this system (if any).
@@ -404,16 +403,18 @@ class System : public SimObject, public PCEventScope
 
   protected:
 
-    KvmVM *const kvmVM;
+    KvmVM *kvmVM = nullptr;
 
-    PhysicalMemory physmem;
+    memory::PhysicalMemory physmem;
 
-    Enums::MemoryMode memoryMode;
+    AddrRangeList ShadowRomRanges;
+
+    enums::MemoryMode memoryMode;
 
     const unsigned int _cacheLineSize;
 
-    uint64_t workItemsBegin;
-    uint64_t workItemsEnd;
+    uint64_t workItemsBegin = 0;
+    uint64_t workItemsEnd = 0;
     uint32_t numWorkIds;
 
     /** This array is a per-system list of all devices capable of issuing a
@@ -467,7 +468,7 @@ class System : public SimObject, public PCEventScope
      * @return the requestor's ID.
      */
     RequestorID getRequestorId(const SimObject* requestor,
-                         std::string subrequestor = std::string());
+                         std::string subrequestor={});
 
     /**
      * Registers a GLOBAL RequestorID, which is a RequestorID not related
@@ -546,13 +547,17 @@ class System : public SimObject, public PCEventScope
         return threads.numActive();
     }
 
-    inline void workItemBegin(uint32_t tid, uint32_t workid)
+    void
+    workItemBegin(uint32_t tid, uint32_t workid)
     {
-        std::pair<uint32_t,uint32_t> p(tid, workid);
+        std::pair<uint32_t, uint32_t> p(tid, workid);
         lastWorkItemStarted[p] = curTick();
     }
 
     void workItemEnd(uint32_t tid, uint32_t workid);
+
+    /* Returns whether we successfully trapped into GDB. */
+    bool trapToGdb(int signal, ContextID ctx_id) const;
 
   public:
     int rgdb_wait;
@@ -579,20 +584,15 @@ class System : public SimObject, public PCEventScope
 
   public:
 
-    /// Allocate npages contiguous unused physical pages
-    /// @return Starting address of first page
-    Addr allocPhysPages(int npages);
-
-    ContextID registerThreadContext(
-            ThreadContext *tc, ContextID assigned=InvalidContextID);
+    void registerThreadContext(ThreadContext *tc);
     void replaceThreadContext(ThreadContext *tc, ContextID context_id);
 
     void serialize(CheckpointOut &cp) const override;
     void unserialize(CheckpointIn &cp) override;
 
   public:
-    std::map<std::pair<uint32_t,uint32_t>, Tick>  lastWorkItemStarted;
-    std::map<uint32_t, Stats::Histogram*> workItemStats;
+    std::map<std::pair<uint32_t, uint32_t>, Tick>  lastWorkItemStarted;
+    std::map<uint32_t, statistics::Histogram*> workItemStats;
 
     ////////////////////////////////////////////
     //
@@ -623,5 +623,7 @@ class System : public SimObject, public PCEventScope
 };
 
 void printSystems();
+
+} // namespace gem5
 
 #endif // __SYSTEM_HH__

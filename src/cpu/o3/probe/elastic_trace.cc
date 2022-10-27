@@ -40,9 +40,16 @@
 #include "base/callback.hh"
 #include "base/output.hh"
 #include "base/trace.hh"
+#include "cpu/o3/dyn_inst.hh"
 #include "cpu/reg_class.hh"
 #include "debug/ElasticTrace.hh"
 #include "mem/packet.hh"
+
+namespace gem5
+{
+
+namespace o3
+{
 
 ElasticTrace::ElasticTrace(const ElasticTraceParams &params)
     :  ProbeListenerObject(params),
@@ -57,7 +64,8 @@ ElasticTrace::ElasticTrace(const ElasticTraceParams &params)
        traceVirtAddr(params.traceVirtAddr),
        stats(this)
 {
-    cpu = dynamic_cast<FullO3CPU<O3CPUImpl>*>(params.manager);
+    cpu = dynamic_cast<CPU *>(params.manager);
+
     fatal_if(!cpu, "Manager of %s is not of type O3CPU and thus does not "\
                 "support dependency tracing.\n", name());
 
@@ -79,13 +87,13 @@ ElasticTrace::ElasticTrace(const ElasticTraceParams &params)
     // Create a protobuf message for the header and write it to the stream
     ProtoMessage::PacketHeader inst_pkt_header;
     inst_pkt_header.set_obj_id(name());
-    inst_pkt_header.set_tick_freq(SimClock::Frequency);
+    inst_pkt_header.set_tick_freq(sim_clock::Frequency);
     instTraceStream->write(inst_pkt_header);
     // Create a protobuf message for the header and write it to
     // the stream
     ProtoMessage::InstDepRecordHeader data_rec_header;
     data_rec_header.set_obj_id(name());
-    data_rec_header.set_tick_freq(SimClock::Frequency);
+    data_rec_header.set_tick_freq(sim_clock::Frequency);
     data_rec_header.set_window_size(depWindowSize);
     dataTraceStream->write(data_rec_header);
     // Register a callback to flush trace records and close the output streams.
@@ -240,10 +248,9 @@ ElasticTrace::updateRegDep(const DynInstConstPtr& dyn_inst)
     for (int src_idx = 0; src_idx < max_regs; src_idx++) {
 
         const RegId& src_reg = dyn_inst->srcRegIdx(src_idx);
-        if (!src_reg.isMiscReg() &&
-            !src_reg.isZeroReg()) {
+        if (!src_reg.is(MiscRegClass) && !src_reg.is(InvalidRegClass)) {
             // Get the physical register index of the i'th source register.
-            PhysRegIdPtr phys_src_reg = dyn_inst->regs.renamedSrcIdx(src_idx);
+            PhysRegIdPtr phys_src_reg = dyn_inst->renamedSrcIdx(src_idx);
             DPRINTFR(ElasticTrace, "[sn:%lli] Check map for src reg"
                      " %i (%s)\n", seq_num,
                      phys_src_reg->flatIndex(), phys_src_reg->className());
@@ -272,12 +279,11 @@ ElasticTrace::updateRegDep(const DynInstConstPtr& dyn_inst)
         // For data dependency tracking the register must be an int, float or
         // CC register and not a Misc register.
         const RegId& dest_reg = dyn_inst->destRegIdx(dest_idx);
-        if (!dest_reg.isMiscReg() &&
-            !dest_reg.isZeroReg()) {
+        if (!dest_reg.is(MiscRegClass) && !dest_reg.is(InvalidRegClass)) {
             // Get the physical register index of the i'th destination
             // register.
             PhysRegIdPtr phys_dest_reg =
-                dyn_inst->regs.renamedDestIdx(dest_idx);
+                dyn_inst->renamedDestIdx(dest_idx);
             DPRINTFR(ElasticTrace, "[sn:%lli] Update map for dest reg"
                      " %i (%s)\n", seq_num, phys_dest_reg->flatIndex(),
                      dest_reg.className());
@@ -407,7 +413,7 @@ ElasticTrace::addDepTraceRecord(const DynInstConstPtr& head_inst,
     new_record->physAddr = head_inst->physEffAddr;
     // Currently the tracing does not support split requests.
     new_record->size = head_inst->effSize;
-    new_record->pc = head_inst->instAddr();
+    new_record->pc = head_inst->pcState().instAddr();
 
     // Assign the timing information stored in the execution info object
     new_record->executeTick = exec_info_ptr->executeTick;
@@ -876,29 +882,29 @@ ElasticTrace::writeDepTrace(uint32_t num_to_write)
     depTrace.erase(dep_trace_itr_start, dep_trace_itr);
 }
 
-ElasticTrace::ElasticTraceStats::ElasticTraceStats(Stats::Group *parent)
-    : Stats::Group(parent),
-      ADD_STAT(numRegDep, UNIT_COUNT,
+ElasticTrace::ElasticTraceStats::ElasticTraceStats(statistics::Group *parent)
+    : statistics::Group(parent),
+      ADD_STAT(numRegDep, statistics::units::Count::get(),
                "Number of register dependencies recorded during tracing"),
-      ADD_STAT(numOrderDepStores, UNIT_COUNT,
+      ADD_STAT(numOrderDepStores, statistics::units::Count::get(),
                "Number of commit order (rob) dependencies for a store "
                "recorded on a past load/store during tracing"),
-      ADD_STAT(numIssueOrderDepLoads, UNIT_COUNT,
+      ADD_STAT(numIssueOrderDepLoads, statistics::units::Count::get(),
                "Number of loads that got assigned issue order dependency "
                "because they were dependency-free"),
-      ADD_STAT(numIssueOrderDepStores, UNIT_COUNT,
+      ADD_STAT(numIssueOrderDepStores, statistics::units::Count::get(),
                "Number of stores that got assigned issue order dependency "
                "because they were dependency-free"),
-      ADD_STAT(numIssueOrderDepOther, UNIT_COUNT,
+      ADD_STAT(numIssueOrderDepOther, statistics::units::Count::get(),
                "Number of non load/store insts that got assigned issue order "
                "dependency because they were dependency-free"),
-      ADD_STAT(numFilteredNodes, UNIT_COUNT,
+      ADD_STAT(numFilteredNodes, statistics::units::Count::get(),
                "No. of nodes filtered out before writing the output trace"),
-      ADD_STAT(maxNumDependents, UNIT_COUNT,
+      ADD_STAT(maxNumDependents, statistics::units::Count::get(),
                "Maximum number or dependents on any instruction"),
-      ADD_STAT(maxTempStoreSize, UNIT_COUNT,
+      ADD_STAT(maxTempStoreSize, statistics::units::Count::get(),
                "Maximum size of the temporary store during the run"),
-      ADD_STAT(maxPhysRegDepMapSize, UNIT_COUNT,
+      ADD_STAT(maxPhysRegDepMapSize, statistics::units::Count::get(),
                "Maximum size of register dependency map")
 {
 }
@@ -907,12 +913,6 @@ const std::string&
 ElasticTrace::TraceInfo::typeToStr() const
 {
     return Record::RecordType_Name(type);
-}
-
-const std::string
-ElasticTrace::name() const
-{
-    return ProbeListenerObject::name();
 }
 
 void
@@ -924,3 +924,6 @@ ElasticTrace::flushTraces()
     delete dataTraceStream;
     delete instTraceStream;
 }
+
+} // namespace o3
+} // namespace gem5

@@ -34,6 +34,11 @@
 #include "cpu/simple/base.hh"
 #include "sim/process.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 ArmConnector::ArmConnector(const ArmConnectorParams &p)
   : CoreConnector(p)
 {
@@ -55,4 +60,7 @@ ArmConnector::doClearIrq(IRQ irq)
 
     ThreadContext *tc = system->threads[0];
     tc->getCpuPtr()->getInterruptController(0)->clear(2, 0);
+}
+
+}
 }

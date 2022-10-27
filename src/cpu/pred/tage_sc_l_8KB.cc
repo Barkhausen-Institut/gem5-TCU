@@ -44,6 +44,12 @@
 #include "base/random.hh"
 #include "debug/TageSCL.hh"
 
+namespace gem5
+{
+
+namespace branch_prediction
+{
+
 TAGE_SC_L_8KB_StatisticalCorrector::TAGE_SC_L_8KB_StatisticalCorrector(
     const TAGE_SC_L_8KB_StatisticalCorrectorParams &p)
   : StatisticalCorrector(p),
@@ -176,7 +182,7 @@ TAGE_SC_L_TAGE_8KB::gtag(ThreadID tid, Addr pc, int bank) const
            (threadHistory[tid].computeTags[1][bank].comp << 1);
 
     return ((tag ^ (tag >> tagTableTagWidths[bank]))
-            & ((ULL(1) << tagTableTagWidths[bank]) - 1));
+            & ((1ULL << tagTableTagWidths[bank]) - 1));
 }
 
 void
@@ -310,3 +316,6 @@ TAGE_SC_L_TAGE_8KB::handleTAGEUpdate(Addr branch_pc, bool taken,
             gtable[bi->hitBank][bi->hitBankIndex].u++;
     }
 }
+
+} // namespace branch_prediction
+} // namespace gem5

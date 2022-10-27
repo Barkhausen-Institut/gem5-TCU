@@ -2,8 +2,6 @@
  * Copyright (c) 2014-2015 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -43,6 +41,9 @@
 #include "base/statistics.hh"
 #include "base/stats/group.hh"
 
+namespace gem5
+{
+
 class ComputeUnit;
 class ScoreboardCheckToSchedule;
 class Wavefront;
@@ -60,7 +61,8 @@ struct ComputeUnitParams;
 class ScoreboardCheckStage
 {
   public:
-    enum nonrdytype_e {
+    enum nonrdytype_e
+    {
         NRDY_ILLEGAL,
         NRDY_WF_STOP,
         NRDY_IB_EMPTY,
@@ -98,12 +100,14 @@ class ScoreboardCheckStage
     const std::string _name;
 
   protected:
-    struct ScoreboardCheckStageStats : public Stats::Group
+    struct ScoreboardCheckStageStats : public statistics::Group
     {
-        ScoreboardCheckStageStats(Stats::Group *parent);
+        ScoreboardCheckStageStats(statistics::Group *parent);
 
-        Stats::Vector stallCycles;
+        statistics::Vector stallCycles;
     } stats;
 };
+
+} // namespace gem5
 
 #endif // __SCOREBOARD_CHECK_STAGE_HH__

@@ -1,8 +1,6 @@
 # Copyright (c) 2015-2017 Advanced Micro Devices, Inc.
 # All rights reserved.
 #
-# For use for simulation and test purposes only
-#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #
@@ -99,12 +97,10 @@ class CPCntrl(AMD_Base_Controller, CntrlBase):
             self.recycle_latency = options.recycle_latency
 
 def define_options(parser):
-    parser.add_option("--cpu-to-dir-latency", type="int", default=15)
+    parser.add_argument("--cpu-to-dir-latency", type=int, default=15)
 
 def construct(options, system, ruby_system):
-    if (buildEnv['PROTOCOL'] != 'GPU_VIPER' or
-        buildEnv['PROTOCOL'] != 'GPU_VIPER_Region' or
-        buildEnv['PROTOCOL'] != 'GPU_VIPER_Baseline'):
+    if buildEnv['PROTOCOL'] != 'GPU_VIPER':
         panic("This script requires VIPER based protocols \
         to be built.")
     cpu_sequencers = []
@@ -116,11 +112,11 @@ def construct(options, system, ruby_system):
         cp_cntrl.create(options, ruby_system, system)
 
         # Connect the CP controllers to the ruby network
-        cp_cntrl.requestFromCore = ruby_system.network.slave
-        cp_cntrl.responseFromCore = ruby_system.network.slave
-        cp_cntrl.unblockFromCore = ruby_system.network.slave
-        cp_cntrl.probeToCore = ruby_system.network.master
-        cp_cntrl.responseToCore = ruby_system.network.master
+        cp_cntrl.requestFromCore = ruby_system.network.in_port
+        cp_cntrl.responseFromCore = ruby_system.network.in_port
+        cp_cntrl.unblockFromCore = ruby_system.network.in_port
+        cp_cntrl.probeToCore = ruby_system.network.out_port
+        cp_cntrl.responseToCore = ruby_system.network.out_port
 
         exec("system.cp_cntrl%d = cp_cntrl" % i)
         #

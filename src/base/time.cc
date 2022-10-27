@@ -38,6 +38,9 @@
 #include "sim/core.hh"
 #include "sim/serialize.hh"
 
+namespace gem5
+{
+
 void
 Time::_set(bool monotonic)
 {
@@ -53,17 +56,17 @@ Time::_set(bool monotonic)
 void
 Time::setTick(Tick ticks)
 {
-    uint64_t secs = ticks / SimClock::Frequency;
-    ticks -= secs * SimClock::Frequency;
-    uint64_t nsecs = static_cast<uint64_t>(ticks * SimClock::Float::GHz);
+    uint64_t secs = ticks / sim_clock::Frequency;
+    ticks -= secs * sim_clock::Frequency;
+    uint64_t nsecs = static_cast<uint64_t>(ticks * sim_clock::as_float::GHz);
     set(secs, nsecs);
 }
 
 Tick
 Time::getTick() const
 {
-    return sec() * SimClock::Frequency +
-        static_cast<uint64_t>(nsec() * SimClock::Float::ns);
+    return sec() * sim_clock::Frequency +
+        static_cast<uint64_t>(nsec() * sim_clock::as_float::ns);
 }
 
 std::string
@@ -179,3 +182,4 @@ mkutctime(struct tm *time)
     return ret;
 }
 
+} // namespace gem5

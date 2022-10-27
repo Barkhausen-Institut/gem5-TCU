@@ -33,6 +33,9 @@
 #include "base/bitfield.hh"
 #include "base/cprintf.hh"
 
+namespace gem5
+{
+
 namespace PowerISA
 {
 
@@ -43,11 +46,12 @@ class FloatOp : public PowerStaticInst
 {
   protected:
 
-    bool rcSet;
+    bool rc;
 
     /// Constructor
     FloatOp(const char *mnem, MachInst _machInst, OpClass __opClass)
-      : PowerStaticInst(mnem, _machInst, __opClass)
+      : PowerStaticInst(mnem, _machInst, __opClass),
+        rc(machInst.rc)
     {
     }
 
@@ -143,9 +147,10 @@ class FloatOp : public PowerStaticInst
     }
 
     std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+            Addr pc, const loader::SymbolTable *symtab) const override;
 };
 
 } // namespace PowerISA
+} // namespace gem5
 
 #endif //__ARCH_POWER_INSTS_FLOATING_HH__

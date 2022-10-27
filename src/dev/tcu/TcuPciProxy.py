@@ -33,6 +33,7 @@ from m5.objects.PciHost import *
 class TcuPciHost(PciHost):
     type = 'TcuPciHost'
     cxx_header = "dev/tcu/pci_proxy.hh"
+    cxx_class = 'gem5::tcu::TcuPciHost'
 
     pci_proxy = Param.TcuPciProxy("The PCI proxy")
 
@@ -49,6 +50,7 @@ class TcuPciHost(PciHost):
 class TcuPciProxy(ClockedObject):
     type = 'TcuPciProxy'
     cxx_header = "dev/tcu/pci_proxy.hh"
+    cxx_class = 'gem5::tcu::TcuPciProxy'
 
     tcu_master_port = MasterPort("Port to send requests to the TCU")
     tcu_slave_port = SlavePort("Port that receives memory requests "

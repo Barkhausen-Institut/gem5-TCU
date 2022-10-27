@@ -35,10 +35,12 @@ Import('*')
 # When this dependency is removed, the ruby tester should be compiled
 # independently from Ruby
 #
-if env['PROTOCOL'] == 'None':
+if env['CONF']['PROTOCOL'] == 'None':
     Return()
 
-SimObject('RubyDirectedTester.py')
+SimObject('RubyDirectedTester.py', sim_objects=[
+    'DirectedGenerator', 'SeriesRequestGenerator', 'InvalidateGenerator',
+    'RubyDirectedTester'])
 
 Source('RubyDirectedTester.cc')
 Source('DirectedGenerator.cc')

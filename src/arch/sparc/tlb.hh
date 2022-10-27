@@ -36,16 +36,19 @@
 #include "mem/request.hh"
 #include "params/SparcTLB.hh"
 
+namespace gem5
+{
+
 class ThreadContext;
 class Packet;
 
 namespace SparcISA
 {
 
-const Addr StartVAddrHole = ULL(0x0000800000000000);
-const Addr EndVAddrHole = ULL(0xFFFF7FFFFFFFFFFF);
-const Addr VAddrAMask = ULL(0xFFFFFFFF);
-const Addr PAddrImplMask = ULL(0x000000FFFFFFFFFF);
+const Addr StartVAddrHole = 0x0000800000000000ULL;
+const Addr EndVAddrHole = 0xFFFF7FFFFFFFFFFFULL;
+const Addr VAddrAMask = 0xFFFFFFFFULL;
+const Addr PAddrImplMask = 0x000000FFFFFFFFFFULL;
 
 class TLB : public BaseTLB
 {
@@ -79,7 +82,8 @@ class TLB : public BaseTLB
 
     std::list<TlbEntry*> freeList;
 
-    enum FaultTypes {
+    enum FaultTypes
+    {
         OtherFault = 0,
         PrivViolation = 0x1,
         SideEffect = 0x2,
@@ -90,13 +94,15 @@ class TLB : public BaseTLB
         VaOutOfRangeJmp = 0x40
     };
 
-    enum ContextType {
+    enum ContextType
+    {
         Primary = 0,
         Secondary = 1,
         Nucleus = 2
     };
 
-    enum TsbPageSize {
+    enum TsbPageSize
+    {
         Ps0,
         Ps1
     };
@@ -165,15 +171,15 @@ class TLB : public BaseTLB
     void dumpAll();
 
     Fault translateAtomic(
-            const RequestPtr &req, ThreadContext *tc, Mode mode) override;
+        const RequestPtr &req, ThreadContext *tc, BaseMMU::Mode mode) override;
     Fault translateFunctional(
-            const RequestPtr &req, ThreadContext *tc, Mode mode) override;
+        const RequestPtr &req, ThreadContext *tc, BaseMMU::Mode mode) override;
     void translateTiming(
-            const RequestPtr &req, ThreadContext *tc,
-            Translation *translation, Mode mode) override;
+        const RequestPtr &req, ThreadContext *tc,
+        BaseMMU::Translation *translation, BaseMMU::Mode mode) override;
     Fault finalizePhysical(
-            const RequestPtr &req,
-            ThreadContext *tc, Mode mode) const override;
+        const RequestPtr &req,
+        ThreadContext *tc, BaseMMU::Mode mode) const override;
     Cycles doMmuRegRead(ThreadContext *tc, Packet *pkt);
     Cycles doMmuRegWrite(ThreadContext *tc, Packet *pkt);
     void GetTsbPtr(ThreadContext *tc, Addr addr, int ctx, Addr *ptrs);
@@ -197,6 +203,7 @@ class TLB : public BaseTLB
     ASI cacheAsi[2];
 };
 
-}
+} // namespace SparcISA
+} // namespace gem5
 
 #endif // __ARCH_SPARC_TLB_HH__

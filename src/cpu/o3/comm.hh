@@ -44,78 +44,77 @@
 
 #include <vector>
 
-#include "arch/types.hh"
+#include "arch/generic/pcstate.hh"
 #include "base/types.hh"
+#include "config/the_isa.hh"
 #include "cpu/inst_seq.hh"
+#include "cpu/o3/dyn_inst_ptr.hh"
+#include "cpu/o3/limits.hh"
 #include "sim/faults.hh"
 
-/** Struct that defines the information passed from fetch to decode. */
-template<class Impl>
-struct DefaultFetchDefaultDecode {
-    typedef typename Impl::DynInstPtr DynInstPtr;
+namespace gem5
+{
 
+namespace o3
+{
+
+/** Struct that defines the information passed from fetch to decode. */
+struct FetchStruct
+{
     int size;
 
-    DynInstPtr insts[Impl::MaxWidth];
+    DynInstPtr insts[MaxWidth];
     Fault fetchFault;
     InstSeqNum fetchFaultSN;
     bool clearFetchFault;
 };
 
 /** Struct that defines the information passed from decode to rename. */
-template<class Impl>
-struct DefaultDecodeDefaultRename {
-    typedef typename Impl::DynInstPtr DynInstPtr;
-
+struct DecodeStruct
+{
     int size;
 
-    DynInstPtr insts[Impl::MaxWidth];
+    DynInstPtr insts[MaxWidth];
 };
 
 /** Struct that defines the information passed from rename to IEW. */
-template<class Impl>
-struct DefaultRenameDefaultIEW {
-    typedef typename Impl::DynInstPtr DynInstPtr;
-
+struct RenameStruct
+{
     int size;
 
-    DynInstPtr insts[Impl::MaxWidth];
+    DynInstPtr insts[MaxWidth];
 };
 
 /** Struct that defines the information passed from IEW to commit. */
-template<class Impl>
-struct DefaultIEWDefaultCommit {
-    typedef typename Impl::DynInstPtr DynInstPtr;
-
+struct IEWStruct
+{
     int size;
 
-    DynInstPtr insts[Impl::MaxWidth];
-    DynInstPtr mispredictInst[Impl::MaxThreads];
-    Addr mispredPC[Impl::MaxThreads];
-    InstSeqNum squashedSeqNum[Impl::MaxThreads];
-    TheISA::PCState pc[Impl::MaxThreads];
+    DynInstPtr insts[MaxWidth];
+    DynInstPtr mispredictInst[MaxThreads];
+    Addr mispredPC[MaxThreads];
+    InstSeqNum squashedSeqNum[MaxThreads];
+    std::unique_ptr<PCStateBase> pc[MaxThreads];
 
-    bool squash[Impl::MaxThreads];
-    bool branchMispredict[Impl::MaxThreads];
-    bool branchTaken[Impl::MaxThreads];
-    bool includeSquashInst[Impl::MaxThreads];
+    bool squash[MaxThreads];
+    bool branchMispredict[MaxThreads];
+    bool branchTaken[MaxThreads];
+    bool includeSquashInst[MaxThreads];
 };
 
-template<class Impl>
-struct IssueStruct {
-    typedef typename Impl::DynInstPtr DynInstPtr;
-
+struct IssueStruct
+{
     int size;
 
-    DynInstPtr insts[Impl::MaxWidth];
+    DynInstPtr insts[MaxWidth];
 };
 
 /** Struct that defines all backwards communication. */
-template<class Impl>
-struct TimeBufStruct {
-    typedef typename Impl::DynInstPtr DynInstPtr;
-    struct decodeComm {
-        TheISA::PCState nextPC;
+struct TimeStruct
+{
+    struct DecodeComm
+    {
+        std::unique_ptr<PCStateBase> nextPC;
         DynInstPtr mispredictInst;
         DynInstPtr squashInst;
         InstSeqNum doneSeqNum;
@@ -128,14 +127,14 @@ struct TimeBufStruct {
         bool branchTaken;
     };
 
-    decodeComm decodeInfo[Impl::MaxThreads];
+    DecodeComm decodeInfo[MaxThreads];
 
-    struct renameComm {
-    };
+    struct RenameComm {};
 
-    renameComm renameInfo[Impl::MaxThreads];
+    RenameComm renameInfo[MaxThreads];
 
-    struct iewComm {
+    struct IewComm
+    {
         // Also eventually include skid buffer space.
         unsigned freeIQEntries;
         unsigned freeLQEntries;
@@ -151,9 +150,10 @@ struct TimeBufStruct {
         bool usedLSQ;
     };
 
-    iewComm iewInfo[Impl::MaxThreads];
+    IewComm iewInfo[MaxThreads];
 
-    struct commitComm {
+    struct CommitComm
+    {
         /////////////////////////////////////////////////////////////////////
         // This code has been re-structured for better packing of variables
         // instead of by stage which is the more logical way to arrange the
@@ -169,7 +169,7 @@ struct TimeBufStruct {
         /// The pc of the next instruction to execute. This is the next
         /// instruction for a branch mispredict, but the same instruction for
         /// order violation and the like
-        TheISA::PCState pc; // *F
+        std::unique_ptr<PCStateBase> pc; // *F
 
         /// Provide fetch the instruction that mispredicted, if this
         /// pointer is not-null a misprediction occured
@@ -216,14 +216,17 @@ struct TimeBufStruct {
 
     };
 
-    commitComm commitInfo[Impl::MaxThreads];
+    CommitComm commitInfo[MaxThreads];
 
-    bool decodeBlock[Impl::MaxThreads];
-    bool decodeUnblock[Impl::MaxThreads];
-    bool renameBlock[Impl::MaxThreads];
-    bool renameUnblock[Impl::MaxThreads];
-    bool iewBlock[Impl::MaxThreads];
-    bool iewUnblock[Impl::MaxThreads];
+    bool decodeBlock[MaxThreads];
+    bool decodeUnblock[MaxThreads];
+    bool renameBlock[MaxThreads];
+    bool renameUnblock[MaxThreads];
+    bool iewBlock[MaxThreads];
+    bool iewUnblock[MaxThreads];
 };
+
+} // namespace o3
+} // namespace gem5
 
 #endif //__CPU_O3_COMM_HH__

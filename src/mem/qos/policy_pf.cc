@@ -33,15 +33,24 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Author: Giacomo Travaglini
  */
 
 #include "mem/qos/policy_pf.hh"
 
-#include "mem/request.hh"
+#include <algorithm>
 
-namespace QoS {
+#include "base/logging.hh"
+#include "params/QoSPropFairPolicy.hh"
+
+namespace gem5
+{
+
+namespace memory
+{
+
+GEM5_DEPRECATED_NAMESPACE(QoS, qos);
+namespace qos
+{
 
 PropFairPolicy::PropFairPolicy(const Params &p)
   : Policy(p), weight(p.weight)
@@ -121,4 +130,6 @@ PropFairPolicy::schedule(const RequestorID pkt_id, const uint64_t pkt_size)
     return pkt_priority;
 }
 
-} // namespace QoS
+} // namespace qos
+} // namespace memory
+} // namespace gem5

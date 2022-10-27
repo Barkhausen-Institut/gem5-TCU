@@ -33,6 +33,11 @@
 #include "mem/tcu/connector.hh"
 #include "mem/tcu/tcu.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 TcuConnector::TcuConnector(Tcu &_tcu, BaseConnector *_connector)
     : tcu(_tcu),
       connector(_connector),
@@ -160,4 +165,7 @@ TcuConnector::restartTimer(uint64_t nanos)
         Cycles sleep_time = tcu.ticksToCycles(nanos * 1000);
         tcu.schedule(&fireTimerEvent, tcu.clockEdge(sleep_time));
     }
+}
+
+}
 }

@@ -34,13 +34,16 @@
 #include "cpu/testers/directedtest/RubyDirectedTester.hh"
 #include "debug/DirectedTest.hh"
 
+namespace gem5
+{
+
 InvalidateGenerator::InvalidateGenerator(const Params &p)
     : DirectedGenerator(p)
 {
     //
     // First, issue loads to bring the block into S state
     //
-    m_status = InvalidateGeneratorStatus_Load_Waiting;
+    m_status = ruby::InvalidateGeneratorStatus_Load_Waiting;
     m_active_read_node = 0;
     m_active_inv_node = 0;
     m_address = 0x0;
@@ -66,12 +69,12 @@ InvalidateGenerator::initiate()
     //
     // Based on the current state, issue a load or a store
     //
-    if (m_status == InvalidateGeneratorStatus_Load_Waiting) {
+    if (m_status == ruby::InvalidateGeneratorStatus_Load_Waiting) {
         DPRINTF(DirectedTest, "initiating read\n");
         cmd = MemCmd::ReadReq;
         port = m_directed_tester->getCpuPort(m_active_read_node);
         pkt = new Packet(req, cmd);
-    } else if (m_status == InvalidateGeneratorStatus_Inv_Waiting) {
+    } else if (m_status == ruby::InvalidateGeneratorStatus_Inv_Waiting) {
         DPRINTF(DirectedTest, "initiating invalidating write\n");
         cmd = MemCmd::WriteReq;
         port = m_directed_tester->getCpuPort(m_active_inv_node);
@@ -83,10 +86,10 @@ InvalidateGenerator::initiate()
 
     if (port->sendTimingReq(pkt)) {
         DPRINTF(DirectedTest, "initiating request - successful\n");
-        if (m_status == InvalidateGeneratorStatus_Load_Waiting) {
-            m_status = InvalidateGeneratorStatus_Load_Pending;
+        if (m_status == ruby::InvalidateGeneratorStatus_Load_Waiting) {
+            m_status = ruby::InvalidateGeneratorStatus_Load_Pending;
         } else {
-            m_status = InvalidateGeneratorStatus_Inv_Pending;
+            m_status = ruby::InvalidateGeneratorStatus_Inv_Pending;
         }
         return true;
     } else {
@@ -105,19 +108,19 @@ InvalidateGenerator::performCallback(uint32_t proc, Addr address)
 {
     assert(m_address == address);
 
-    if (m_status == InvalidateGeneratorStatus_Load_Pending) {
+    if (m_status == ruby::InvalidateGeneratorStatus_Load_Pending) {
         assert(m_active_read_node == proc);
         m_active_read_node++;
         //
         // Once all cpus have the block in S state, issue the invalidate
         //
         if (m_active_read_node == m_num_cpus) {
-            m_status = InvalidateGeneratorStatus_Inv_Waiting;
+            m_status = ruby::InvalidateGeneratorStatus_Inv_Waiting;
             m_active_read_node = 0;
         } else {
-            m_status = InvalidateGeneratorStatus_Load_Waiting;
+            m_status = ruby::InvalidateGeneratorStatus_Load_Waiting;
         }
-    } else if (m_status == InvalidateGeneratorStatus_Inv_Pending) {
+    } else if (m_status == ruby::InvalidateGeneratorStatus_Inv_Pending) {
         assert(m_active_inv_node == proc);
         m_active_inv_node++;
         if (m_active_inv_node == m_num_cpus) {
@@ -129,7 +132,9 @@ InvalidateGenerator::performCallback(uint32_t proc, Addr address)
         // the cycle
         //
         m_directed_tester->incrementCycleCompletions();
-        m_status = InvalidateGeneratorStatus_Load_Waiting;
+        m_status = ruby::InvalidateGeneratorStatus_Load_Waiting;
     }
 
 }
+
+} // namespace gem5

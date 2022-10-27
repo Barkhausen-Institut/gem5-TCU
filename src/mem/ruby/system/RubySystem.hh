@@ -46,6 +46,17 @@
 #include "params/RubySystem.hh"
 #include "sim/clocked_object.hh"
 
+namespace gem5
+{
+
+namespace memory
+{
+class SimpleMemory;
+} // namespace memory
+
+namespace ruby
+{
+
 class Network;
 class AbstractController;
 
@@ -64,7 +75,7 @@ class RubySystem : public ClockedObject
     static bool getWarmupEnabled() { return m_warmup_enabled; }
     static bool getCooldownEnabled() { return m_cooldown_enabled; }
 
-    SimpleMemory *getPhysMem() { return m_phys_mem; }
+    memory::SimpleMemory *getPhysMem() { return m_phys_mem; }
     Cycles getStartCycle() { return m_start_cycle; }
     bool getAccessBackingStore() { return m_access_backing_store; }
 
@@ -131,7 +142,7 @@ class RubySystem : public ClockedObject
     static bool m_warmup_enabled;
     static unsigned m_systems_to_warmup;
     static bool m_cooldown_enabled;
-    SimpleMemory *m_phys_mem;
+    memory::SimpleMemory *m_phys_mem;
     const bool m_access_backing_store;
 
     //std::vector<Network *> m_networks;
@@ -148,5 +159,8 @@ class RubySystem : public ClockedObject
     CacheRecorder* m_cache_recorder;
     std::vector<std::map<uint32_t, AbstractController *> > m_abstract_controls;
 };
+
+} // namespace ruby
+} // namespace gem5
 
 #endif //__MEM_RUBY_SYSTEM_RUBYSYSTEM_HH__

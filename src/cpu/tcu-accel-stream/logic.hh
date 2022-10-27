@@ -36,6 +36,11 @@
 #include "cpu/tcu-accel-stream/algorithm.hh"
 #include "sim/system.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 class TcuAccelStream;
 
 class AccelLogic : public ClockedObject
@@ -105,5 +110,8 @@ class AccelLogic : public ClockedObject
     Addr pullSize;
     uint8_t *pullData;
 };
+
+}
+}
 
 #endif /* __CPU_TCU_ACCEL_STREAM_LOGIC_HH__ */

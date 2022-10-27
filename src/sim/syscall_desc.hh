@@ -53,6 +53,9 @@
 #include "sim/process.hh"
 #include "sim/syscall_return.hh"
 
+namespace gem5
+{
+
 class SyscallDesc;
 
 SyscallReturn unimplementedFunc(SyscallDesc *desc, ThreadContext *tc);
@@ -63,7 +66,8 @@ SyscallReturn unimplementedFunc(SyscallDesc *desc, ThreadContext *tc);
  * bound to the ISAs in the architecture specific code
  * (i.e. arch/X86/linux/process.cc).
  */
-class SyscallDesc {
+class SyscallDesc
+{
   public:
     /**
      * Interface for invoking the system call funcion pointer. Note that
@@ -91,10 +95,15 @@ class SyscallDesc {
         _name(name), _num(num), executor(exec), dumper(dump)
     {}
 
+    void retrySyscall(ThreadContext *tc);
+
   private:
     /** System call name (e.g., open, mmap, clone, socket, etc.) */
     std::string _name;
     int _num;
+
+    void setupRetry(ThreadContext *tc);
+    void handleReturn(ThreadContext *tc, const SyscallReturn &ret);
 
     /** Mechanism for ISAs to connect to the emul function definitions */
     Executor executor;
@@ -104,7 +113,7 @@ class SyscallDesc {
 /*
  * This SyscallDesc subclass template adapts a given syscall implementation so
  * that some arguments can come from the simulator (desc, num and tc) while the
- * rest can come from the guest using the GuestABI mechanism.
+ * rest can come from the guest using the guest_abi mechanism.
  */
 template <typename ABI>
 class SyscallDescABI : public SyscallDesc
@@ -137,7 +146,7 @@ class SyscallDescABI : public SyscallDesc
 
             // Use invokeSimcall to gather the other arguments based on the
             // given ABI and pass them to the syscall implementation.
-            return invokeSimcall<ABI, SyscallReturn, Args...>(tc,
+            return invokeSimcall<ABI, false, SyscallReturn, Args...>(tc,
                     std::function<SyscallReturn(ThreadContext *, Args...)>(
                         partial));
         };
@@ -172,7 +181,7 @@ class SyscallDescABI : public SyscallDesc
     void
     returnInto(ThreadContext *tc, const SyscallReturn &ret) override
     {
-        GuestABI::Result<ABI, SyscallReturn>::store(tc, ret);
+        guest_abi::Result<ABI, SyscallReturn>::store(tc, ret);
     }
 };
 
@@ -204,5 +213,7 @@ class SyscallDescTable
         return &it->second;
     }
 };
+
+} // namespace gem5
 
 #endif // __SIM_SYSCALL_DESC_HH__

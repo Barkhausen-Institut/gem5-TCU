@@ -2,8 +2,6 @@
  * Copyright (c) 2014-2015 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -41,6 +39,9 @@
 #include "gpu-compute/vector_register_file.hh"
 #include "gpu-compute/wavefront.hh"
 
+namespace gem5
+{
+
 LocalMemPipeline::LocalMemPipeline(const ComputeUnitParams &p, ComputeUnit &cu)
     : computeUnit(cu), _name(cu.name() + ".LocalMemPipeline"),
       lmQueueSize(p.local_mem_queue_size), stats(&cu)
@@ -72,6 +73,11 @@ LocalMemPipeline::exec()
 
         lmReturnedRequests.pop();
         w = m->wavefront();
+
+        if (m->isFlat() && !m->isMemSync() && !m->isEndOfKernel()
+            && m->allLanesZero()) {
+            computeUnit.getTokenManager()->recvTokens(1);
+        }
 
         DPRINTF(GPUMem, "CU%d: WF[%d][%d]: Completing local mem instr %s\n",
                 m->cu_id, m->simdId, m->wfSlotId, m->disassemble());
@@ -120,15 +126,35 @@ LocalMemPipeline::exec()
 void
 LocalMemPipeline::issueRequest(GPUDynInstPtr gpuDynInst)
 {
+    Wavefront *wf = gpuDynInst->wavefront();
+    if (gpuDynInst->isLoad()) {
+        wf->rdLmReqsInPipe--;
+        wf->outstandingReqsRdLm++;
+    } else if (gpuDynInst->isStore()) {
+        wf->wrLmReqsInPipe--;
+        wf->outstandingReqsWrLm++;
+    } else {
+        // Atomic, both read and write
+        wf->rdLmReqsInPipe--;
+        wf->outstandingReqsRdLm++;
+        wf->wrLmReqsInPipe--;
+        wf->outstandingReqsWrLm++;
+    }
+
+    wf->outstandingReqs++;
+    wf->validateRequestCounters();
+
     gpuDynInst->setAccessTime(curTick());
     lmIssuedRequests.push(gpuDynInst);
 }
 
 
 LocalMemPipeline::
-LocalMemPipelineStats::LocalMemPipelineStats(Stats::Group *parent)
-    : Stats::Group(parent, "LocalMemPipeline"),
+LocalMemPipelineStats::LocalMemPipelineStats(statistics::Group *parent)
+    : statistics::Group(parent, "LocalMemPipeline"),
       ADD_STAT(loadVrfBankConflictCycles, "total number of cycles LDS data "
                "are delayed before updating the VRF")
 {
 }
+
+} // namespace gem5

@@ -38,8 +38,9 @@
 #include <vector>
 
 #include "arch/riscv/isa.hh"
-#include "arch/riscv/isa_traits.hh"
-#include "arch/riscv/registers.hh"
+#include "arch/riscv/page_size.hh"
+#include "arch/riscv/regs/int.hh"
+#include "arch/riscv/regs/misc.hh"
 #include "base/loader/elf_object.hh"
 #include "base/loader/object_file.hh"
 #include "base/logging.hh"
@@ -54,10 +55,13 @@
 #include "sim/syscall_return.hh"
 #include "sim/system.hh"
 
+namespace gem5
+{
+
 using namespace RiscvISA;
 
 RiscvProcess::RiscvProcess(const ProcessParams &params,
-        ::Loader::ObjectFile *objFile) :
+        loader::ObjectFile *objFile) :
         Process(params,
                 new EmulationPageTable(params.name, params.pid, PageBytes),
                 objFile)
@@ -66,7 +70,7 @@ RiscvProcess::RiscvProcess(const ProcessParams &params,
 }
 
 RiscvProcess64::RiscvProcess64(const ProcessParams &params,
-        ::Loader::ObjectFile *objFile) :
+        loader::ObjectFile *objFile) :
         RiscvProcess(params, objFile)
 {
     const Addr stack_base = 0x7FFFFFFFFFFFFFFFL;
@@ -79,7 +83,7 @@ RiscvProcess64::RiscvProcess64(const ProcessParams &params,
 }
 
 RiscvProcess32::RiscvProcess32(const ProcessParams &params,
-        ::Loader::ObjectFile *objFile) :
+        loader::ObjectFile *objFile) :
         RiscvProcess(params, objFile)
 {
     const Addr stack_base = 0x7FFFFFFF;
@@ -110,7 +114,7 @@ RiscvProcess32::initState()
     for (ContextID ctx: contextIds) {
         auto *tc = system->threads[ctx];
         tc->setMiscRegNoEffect(MISCREG_PRV, PRV_U);
-        PCState pc = tc->pcState();
+        PCState pc = tc->pcState().as<PCState>();
         pc.rv32(true);
         tc->pcState(pc);
     }
@@ -122,7 +126,7 @@ RiscvProcess::argsInit(int pageSize)
     const int RandomBytes = 16;
     const int addrSize = sizeof(IntType);
 
-    auto *elfObject = dynamic_cast<::Loader::ElfObject*>(objFile);
+    auto *elfObject = dynamic_cast<loader::ElfObject*>(objFile);
     memState->setStackMin(memState->getStackBase());
 
     // Determine stack size and populate auxv
@@ -134,16 +138,16 @@ RiscvProcess::argsInit(int pageSize)
         stack_top -= env.size() + 1;
     stack_top &= -addrSize;
 
-    std::vector<AuxVector<IntType>> auxv;
+    std::vector<gem5::auxv::AuxVector<IntType>> auxv;
     if (elfObject != nullptr) {
-        auxv.emplace_back(M5_AT_ENTRY, objFile->entryPoint());
-        auxv.emplace_back(M5_AT_PHNUM, elfObject->programHeaderCount());
-        auxv.emplace_back(M5_AT_PHENT, elfObject->programHeaderSize());
-        auxv.emplace_back(M5_AT_PHDR, elfObject->programHeaderTable());
-        auxv.emplace_back(M5_AT_PAGESZ, PageBytes);
-        auxv.emplace_back(M5_AT_SECURE, 0);
-        auxv.emplace_back(M5_AT_RANDOM, stack_top);
-        auxv.emplace_back(M5_AT_NULL, 0);
+        auxv.emplace_back(gem5::auxv::Entry, objFile->entryPoint());
+        auxv.emplace_back(gem5::auxv::Phnum, elfObject->programHeaderCount());
+        auxv.emplace_back(gem5::auxv::Phent, elfObject->programHeaderSize());
+        auxv.emplace_back(gem5::auxv::Phdr, elfObject->programHeaderTable());
+        auxv.emplace_back(gem5::auxv::Pagesz, PageBytes);
+        auxv.emplace_back(gem5::auxv::Secure, 0);
+        auxv.emplace_back(gem5::auxv::Random, stack_top);
+        auxv.emplace_back(gem5::auxv::Null, 0);
     }
     stack_top -= (1 + argv.size()) * addrSize +
                    (1 + envp.size()) * addrSize +
@@ -166,7 +170,7 @@ RiscvProcess::argsInit(int pageSize)
         memState->setStackMin(memState->getStackMin() - (arg.size() + 1));
         initVirtMem->writeString(memState->getStackMin(), arg.c_str());
         argPointers.push_back(memState->getStackMin());
-        if (DTRACE(Stack)) {
+        if (debug::Stack) {
             std::string wrote;
             initVirtMem->readString(wrote, argPointers.back());
             DPRINTFN("Wrote arg \"%s\" to address %p\n",
@@ -198,7 +202,7 @@ RiscvProcess::argsInit(int pageSize)
     Addr sp = memState->getStackMin();
     const auto pushOntoStack =
         [this, &sp](IntType data) {
-            initVirtMem->write(sp, data, GuestByteOrder);
+            initVirtMem->write(sp, data, ByteOrder::little);
             sp += sizeof(data);
         };
 
@@ -222,14 +226,14 @@ RiscvProcess::argsInit(int pageSize)
 
     // Push aux vector onto stack
     std::map<IntType, std::string> aux_keys = {
-        {M5_AT_ENTRY, "M5_AT_ENTRY"},
-        {M5_AT_PHNUM, "M5_AT_PHNUM"},
-        {M5_AT_PHENT, "M5_AT_PHENT"},
-        {M5_AT_PHDR, "M5_AT_PHDR"},
-        {M5_AT_PAGESZ, "M5_AT_PAGESZ"},
-        {M5_AT_SECURE, "M5_AT_SECURE"},
-        {M5_AT_RANDOM, "M5_AT_RANDOM"},
-        {M5_AT_NULL, "M5_AT_NULL"}
+        {gem5::auxv::Entry, "gem5::auxv::Entry"},
+        {gem5::auxv::Phnum, "gem5::auxv::Phnum"},
+        {gem5::auxv::Phent, "gem5::auxv::Phent"},
+        {gem5::auxv::Phdr, "gem5::auxv::Phdr"},
+        {gem5::auxv::Pagesz, "gem5::auxv::Pagesz"},
+        {gem5::auxv::Secure, "gem5::auxv::Secure"},
+        {gem5::auxv::Random, "gem5::auxv::Random"},
+        {gem5::auxv::Null, "gem5::auxv::Null"}
     };
     for (const auto &aux: auxv) {
         DPRINTF(Stack, "Wrote aux key %s to address %#x\n",
@@ -245,3 +249,5 @@ RiscvProcess::argsInit(int pageSize)
 
     memState->setStackMin(roundDown(memState->getStackMin(), pageSize));
 }
+
+} // namespace gem5

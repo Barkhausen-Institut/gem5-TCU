@@ -2,8 +2,6 @@
  * Copyright (c) 2014-2015 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -41,6 +39,9 @@
 
 #include "base/statistics.hh"
 #include "base/stats/group.hh"
+
+namespace gem5
+{
 
 class ComputeUnit;
 class ScheduleToExecute;
@@ -97,28 +98,30 @@ class ExecStage
     const std::string _name;
 
   protected:
-    struct ExecStageStats : public Stats::Group
+    struct ExecStageStats : public statistics::Group
     {
-        ExecStageStats(Stats::Group *parent);
+        ExecStageStats(statistics::Group *parent);
 
         // number of transitions from active to idle
-        Stats::Scalar numTransActiveIdle;
+        statistics::Scalar numTransActiveIdle;
         // number of idle cycles
-        Stats::Scalar numCyclesWithNoIssue;
+        statistics::Scalar numCyclesWithNoIssue;
         // number of busy cycles
-        Stats::Scalar numCyclesWithInstrIssued;
+        statistics::Scalar numCyclesWithInstrIssued;
         // SIMDs active per cycle
-        Stats::Distribution spc;
+        statistics::Distribution spc;
         // duration of idle periods in cycles
-        Stats::Distribution idleDur;
+        statistics::Distribution idleDur;
         // number of cycles during which at least one
         // instruction was issued to an execution resource type
-        Stats::Vector numCyclesWithInstrTypeIssued;
+        statistics::Vector numCyclesWithInstrTypeIssued;
         // number of idle cycles during which the scheduler
         // issued no instructions targeting a specific
         // execution resource type
-        Stats::Vector numCyclesWithNoInstrTypeIssued;
+        statistics::Vector numCyclesWithNoInstrTypeIssued;
     } stats;
 };
+
+} // namespace gem5
 
 #endif // __EXEC_STAGE_HH__

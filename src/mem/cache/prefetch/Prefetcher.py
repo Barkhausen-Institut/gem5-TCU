@@ -59,7 +59,7 @@ class HWPProbeEvent(object):
 class BasePrefetcher(ClockedObject):
     type = 'BasePrefetcher'
     abstract = True
-    cxx_class = 'Prefetcher::Base'
+    cxx_class = 'gem5::prefetch::Base'
     cxx_header = "mem/cache/prefetch/base.hh"
     cxx_exports = [
         PyBindMethod("addEventProbe"),
@@ -77,11 +77,15 @@ class BasePrefetcher(ClockedObject):
     on_inst  = Param.Bool(True, "Notify prefetcher on instruction accesses")
     prefetch_on_access = Param.Bool(Parent.prefetch_on_access,
         "Notify the hardware prefetcher on every access (not just misses)")
+    prefetch_on_pf_hit = Param.Bool(Parent.prefetch_on_pf_hit,
+        "Notify the hardware prefetcher on hit on prefetched lines")
     use_virtual_addresses = Param.Bool(False,
         "Use virtual addresses for prefetching")
+    page_bytes = Param.MemorySize('4KiB',
+            "Size of pages for virtual addresses")
 
     def __init__(self, **kwargs):
-        super(BasePrefetcher, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self._events = []
         self._tlbs = []
 
@@ -111,7 +115,7 @@ class BasePrefetcher(ClockedObject):
 
 class MultiPrefetcher(BasePrefetcher):
     type = 'MultiPrefetcher'
-    cxx_class = 'Prefetcher::Multi'
+    cxx_class = 'gem5::prefetch::Multi'
     cxx_header = 'mem/cache/prefetch/multi.hh'
 
     prefetchers = VectorParam.BasePrefetcher([], "Array of prefetchers")
@@ -119,7 +123,7 @@ class MultiPrefetcher(BasePrefetcher):
 class QueuedPrefetcher(BasePrefetcher):
     type = "QueuedPrefetcher"
     abstract = True
-    cxx_class = "Prefetcher::Queued"
+    cxx_class = 'gem5::prefetch::Queued'
     cxx_header = "mem/cache/prefetch/queued.hh"
     latency = Param.Int(1, "Latency for generated prefetches")
     queue_size = Param.Int(32, "Maximum number of queued prefetches")
@@ -145,12 +149,12 @@ class QueuedPrefetcher(BasePrefetcher):
 
 class StridePrefetcherHashedSetAssociative(SetAssociative):
     type = 'StridePrefetcherHashedSetAssociative'
-    cxx_class = 'Prefetcher::StridePrefetcherHashedSetAssociative'
+    cxx_class = 'gem5::prefetch::StridePrefetcherHashedSetAssociative'
     cxx_header = "mem/cache/prefetch/stride.hh"
 
 class StridePrefetcher(QueuedPrefetcher):
     type = 'StridePrefetcher'
-    cxx_class = 'Prefetcher::Stride'
+    cxx_class = 'gem5::prefetch::Stride'
     cxx_header = "mem/cache/prefetch/stride.hh"
 
     # Do not consult stride prefetcher on instruction accesses
@@ -178,14 +182,14 @@ class StridePrefetcher(QueuedPrefetcher):
 
 class TaggedPrefetcher(QueuedPrefetcher):
     type = 'TaggedPrefetcher'
-    cxx_class = 'Prefetcher::Tagged'
+    cxx_class = 'gem5::prefetch::Tagged'
     cxx_header = "mem/cache/prefetch/tagged.hh"
 
     degree = Param.Int(2, "Number of prefetches to generate")
 
 class IndirectMemoryPrefetcher(QueuedPrefetcher):
     type = 'IndirectMemoryPrefetcher'
-    cxx_class = 'Prefetcher::IndirectMemory'
+    cxx_class = 'gem5::prefetch::IndirectMemory'
     cxx_header = "mem/cache/prefetch/indirect_memory.hh"
     pt_table_entries = Param.MemorySize("16",
         "Number of entries of the Prefetch Table")
@@ -220,7 +224,7 @@ class IndirectMemoryPrefetcher(QueuedPrefetcher):
 
 class SignaturePathPrefetcher(QueuedPrefetcher):
     type = 'SignaturePathPrefetcher'
-    cxx_class = 'Prefetcher::SignaturePath'
+    cxx_class = 'gem5::prefetch::SignaturePath'
     cxx_header = "mem/cache/prefetch/signature_path.hh"
 
     signature_shift = Param.UInt8(3,
@@ -260,7 +264,7 @@ class SignaturePathPrefetcher(QueuedPrefetcher):
 
 class SignaturePathPrefetcherV2(SignaturePathPrefetcher):
     type = 'SignaturePathPrefetcherV2'
-    cxx_class = 'Prefetcher::SignaturePathV2'
+    cxx_class = 'gem5::prefetch::SignaturePathV2'
     cxx_header = "mem/cache/prefetch/signature_path_v2.hh"
 
     signature_table_entries = "256"
@@ -283,7 +287,7 @@ class SignaturePathPrefetcherV2(SignaturePathPrefetcher):
 
 class AccessMapPatternMatching(ClockedObject):
     type = 'AccessMapPatternMatching'
-    cxx_class = 'Prefetcher::AccessMapPatternMatching'
+    cxx_class = 'gem5::prefetch::AccessMapPatternMatching'
     cxx_header = "mem/cache/prefetch/access_map_pattern_matching.hh"
 
     block_size = Param.Unsigned(Parent.block_size,
@@ -322,14 +326,14 @@ class AccessMapPatternMatching(ClockedObject):
 
 class AMPMPrefetcher(QueuedPrefetcher):
     type = 'AMPMPrefetcher'
-    cxx_class = 'Prefetcher::AMPM'
+    cxx_class = 'gem5::prefetch::AMPM'
     cxx_header = "mem/cache/prefetch/access_map_pattern_matching.hh"
     ampm = Param.AccessMapPatternMatching( AccessMapPatternMatching(),
         "Access Map Pattern Matching object")
 
 class DeltaCorrelatingPredictionTables(SimObject):
     type = 'DeltaCorrelatingPredictionTables'
-    cxx_class = 'Prefetcher::DeltaCorrelatingPredictionTables'
+    cxx_class = 'gem5::prefetch::DeltaCorrelatingPredictionTables'
     cxx_header = "mem/cache/prefetch/delta_correlating_prediction_tables.hh"
     deltas_per_entry = Param.Unsigned(20,
         "Number of deltas stored in each table entry")
@@ -349,7 +353,7 @@ class DeltaCorrelatingPredictionTables(SimObject):
 
 class DCPTPrefetcher(QueuedPrefetcher):
     type = 'DCPTPrefetcher'
-    cxx_class = 'Prefetcher::DCPT'
+    cxx_class = 'gem5::prefetch::DCPT'
     cxx_header = "mem/cache/prefetch/delta_correlating_prediction_tables.hh"
     dcpt = Param.DeltaCorrelatingPredictionTables(
         DeltaCorrelatingPredictionTables(),
@@ -357,7 +361,7 @@ class DCPTPrefetcher(QueuedPrefetcher):
 
 class IrregularStreamBufferPrefetcher(QueuedPrefetcher):
     type = "IrregularStreamBufferPrefetcher"
-    cxx_class = "Prefetcher::IrregularStreamBuffer"
+    cxx_class = 'gem5::prefetch::IrregularStreamBuffer'
     cxx_header = "mem/cache/prefetch/irregular_stream_buffer.hh"
 
     num_counter_bits = Param.Unsigned(2,
@@ -410,7 +414,7 @@ class SlimDeltaCorrelatingPredictionTables(DeltaCorrelatingPredictionTables):
 
 class SlimAMPMPrefetcher(QueuedPrefetcher):
     type = 'SlimAMPMPrefetcher'
-    cxx_class = 'Prefetcher::SlimAMPM'
+    cxx_class = 'gem5::prefetch::SlimAMPM'
     cxx_header = "mem/cache/prefetch/slim_ampm.hh"
 
     ampm = Param.AccessMapPatternMatching(SlimAccessMapPatternMatching(),
@@ -421,7 +425,7 @@ class SlimAMPMPrefetcher(QueuedPrefetcher):
 
 class BOPPrefetcher(QueuedPrefetcher):
     type = "BOPPrefetcher"
-    cxx_class = "Prefetcher::BOP"
+    cxx_class = 'gem5::prefetch::BOP'
     cxx_header = "mem/cache/prefetch/bop.hh"
     score_max = Param.Unsigned(31, "Max. score to update the best offset")
     round_max = Param.Unsigned(100, "Max. round to update the best offset")
@@ -443,7 +447,7 @@ class BOPPrefetcher(QueuedPrefetcher):
 
 class SBOOEPrefetcher(QueuedPrefetcher):
     type = 'SBOOEPrefetcher'
-    cxx_class = 'Prefetcher::SBOOE'
+    cxx_class = 'gem5::prefetch::SBOOE'
     cxx_header = "mem/cache/prefetch/sbooe.hh"
     latency_buffer_size = Param.Int(32, "Entries in the latency buffer")
     sequential_prefetchers = Param.Int(9, "Number of sequential prefetchers")
@@ -453,7 +457,7 @@ class SBOOEPrefetcher(QueuedPrefetcher):
 
 class STeMSPrefetcher(QueuedPrefetcher):
     type = "STeMSPrefetcher"
-    cxx_class = "Prefetcher::STeMS"
+    cxx_class = 'gem5::prefetch::STeMS'
     cxx_header = "mem/cache/prefetch/spatio_temporal_memory_streaming.hh"
 
     spatial_region_size = Param.MemorySize("2KiB",
@@ -484,6 +488,8 @@ class STeMSPrefetcher(QueuedPrefetcher):
 
     region_miss_order_buffer_entries = Param.Unsigned(131072,
         "Number of entries of the Region Miss Order Buffer")
+    add_duplicate_entries_to_rmob = Param.Bool(True,
+        "Add duplicate entries to RMOB")
     reconstruction_entries = Param.Unsigned(256,
         "Number of reconstruction entries")
 
@@ -496,7 +502,7 @@ class HWPProbeEventRetiredInsts(HWPProbeEvent):
 
 class PIFPrefetcher(QueuedPrefetcher):
     type = 'PIFPrefetcher'
-    cxx_class = 'Prefetcher::PIF'
+    cxx_class = 'gem5::prefetch::PIF'
     cxx_header = "mem/cache/prefetch/pif.hh"
     cxx_exports = [
         PyBindMethod("addEventProbeRetiredInsts"),

@@ -44,7 +44,6 @@
 #include <set>
 #include <unordered_map>
 
-#include "arch/registers.hh"
 #include "base/statistics.hh"
 #include "cpu/base.hh"
 #include "debug/TraceCPUData.hh"
@@ -54,6 +53,9 @@
 #include "proto/packet.pb.h"
 #include "proto/protoio.hh"
 #include "sim/sim_events.hh"
+
+namespace gem5
+{
 
 /**
  * The trace cpu replays traces generated using the elastic trace probe
@@ -507,18 +509,18 @@ class TraceCPU : public BaseCPU
         /** Store an element read from the trace to send as the next packet. */
         TraceElement currElement;
       protected:
-        struct FixedRetryGenStatGroup : public Stats::Group
+        struct FixedRetryGenStatGroup : public statistics::Group
         {
             /** name is the extension to the name for these stats */
-            FixedRetryGenStatGroup(Stats::Group *parent,
+            FixedRetryGenStatGroup(statistics::Group *parent,
                                    const std::string& _name);
             /** Stats for instruction accesses replayed. */
-            Stats::Scalar numSendAttempted;
-            Stats::Scalar numSendSucceeded;
-            Stats::Scalar numSendFailed;
-            Stats::Scalar numRetrySucceeded;
+            statistics::Scalar numSendAttempted;
+            statistics::Scalar numSendSucceeded;
+            statistics::Scalar numSendFailed;
+            statistics::Scalar numRetrySucceeded;
             /** Last simulated tick by the FixedRetryGen */
-            Stats::Scalar instLastTick;
+            statistics::Scalar instLastTick;
         } fixedStats;
 
     };
@@ -1005,23 +1007,23 @@ class TraceCPU : public BaseCPU
 
       protected:
         // Defining the a stat group
-        struct ElasticDataGenStatGroup : public Stats::Group
+        struct ElasticDataGenStatGroup : public statistics::Group
         {
             /** name is the extension to the name for these stats */
-            ElasticDataGenStatGroup(Stats::Group *parent,
+            ElasticDataGenStatGroup(statistics::Group *parent,
                                     const std::string& _name);
             /** Stats for data memory accesses replayed. */
-            Stats::Scalar maxDependents;
-            Stats::Scalar maxReadyListSize;
-            Stats::Scalar numSendAttempted;
-            Stats::Scalar numSendSucceeded;
-            Stats::Scalar numSendFailed;
-            Stats::Scalar numRetrySucceeded;
-            Stats::Scalar numSplitReqs;
-            Stats::Scalar numSOLoads;
-            Stats::Scalar numSOStores;
+            statistics::Scalar maxDependents;
+            statistics::Scalar maxReadyListSize;
+            statistics::Scalar numSendAttempted;
+            statistics::Scalar numSendSucceeded;
+            statistics::Scalar numSendFailed;
+            statistics::Scalar numRetrySucceeded;
+            statistics::Scalar numSplitReqs;
+            statistics::Scalar numSOLoads;
+            statistics::Scalar numSOStores;
             /** Tick when ElasticDataGen completes execution */
-            Stats::Scalar dataLastTick;
+            statistics::Scalar dataLastTick;
         } elasticStats;
     };
 
@@ -1102,17 +1104,17 @@ class TraceCPU : public BaseCPU
      * message is printed.
      */
     uint64_t progressMsgThreshold;
-    struct TraceStats : public Stats::Group
+    struct TraceStats : public statistics::Group
     {
         TraceStats(TraceCPU *trace);
-        Stats::Scalar numSchedDcacheEvent;
-        Stats::Scalar numSchedIcacheEvent;
+        statistics::Scalar numSchedDcacheEvent;
+        statistics::Scalar numSchedIcacheEvent;
 
         /** Stat for number of simulated micro-ops. */
-        Stats::Scalar numOps;
+        statistics::Scalar numOps;
         /** Stat for the CPI. This is really cycles per
          *  micro-op and not inst. */
-        Stats::Formula cpi;
+        statistics::Formula cpi;
     } traceStats;
 
   public:
@@ -1124,4 +1126,7 @@ class TraceCPU : public BaseCPU
     Port &getDataPort() { return dcachePort; }
 
 };
+
+} // namespace gem5
+
 #endif // __CPU_TRACE_TRACE_CPU_HH__

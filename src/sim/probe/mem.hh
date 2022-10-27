@@ -43,14 +43,20 @@
 #include "mem/packet.hh"
 #include "sim/probe/probe.hh"
 
-namespace ProbePoints {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(ProbePoints, probing);
+namespace probing
+{
 
 /**
  * A struct to hold on to the essential fields from a packet, so that
  * the packet and underlying request can be safely passed on, and
  * consequently modified or even deleted.
  */
-struct PacketInfo {
+struct PacketInfo
+{
     MemCmd cmd;
     Addr addr;
     Addr virt;
@@ -119,6 +125,8 @@ struct PacketInfo {
 typedef ProbePointArg<PacketInfo> Packet;
 typedef std::unique_ptr<Packet> PacketUPtr;
 
-}
+} // namespace probing
+
+} // namespace gem5
 
 #endif

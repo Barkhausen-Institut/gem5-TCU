@@ -40,8 +40,8 @@
  * It consits of a TAGE + a statistical corrector (SC) + a loop predictor (L)
  */
 
-#ifndef __CPU_PRED_TAGE_SC_L
-#define __CPU_PRED_TAGE_SC_L
+#ifndef __CPU_PRED_TAGE_SC_L_HH__
+#define __CPU_PRED_TAGE_SC_L_HH__
 
 #include "cpu/pred/ltage.hh"
 #include "cpu/pred/statistical_corrector.hh"
@@ -49,7 +49,14 @@
 #include "params/TAGE_SC_L_LoopPredictor.hh"
 #include "params/TAGE_SC_L_TAGE.hh"
 
-class TAGE_SC_L_TAGE : public TAGEBase {
+namespace gem5
+{
+
+namespace branch_prediction
+{
+
+class TAGE_SC_L_TAGE : public TAGEBase
+{
     const unsigned firstLongTagTable;
     const unsigned longTagsSize;
     const unsigned shortTagsSize;
@@ -62,7 +69,8 @@ class TAGE_SC_L_TAGE : public TAGEBase {
     const bool truncatePathHist;
 
   public:
-    struct BranchInfo : public TAGEBase::BranchInfo {
+    struct BranchInfo : public TAGEBase::BranchInfo
+    {
         bool lowConf;
         bool highConf;
         bool altConf;
@@ -176,11 +184,14 @@ class TAGE_SC_L: public LTAGE
     };
 
     // more provider types
-    enum {
+    enum
+    {
         SC = LAST_LTAGE_PROVIDER_TYPE + 1
     };
 
 };
 
-#endif // __CPU_PRED_TAGE_SC_L
+} // namespace branch_prediction
+} // namespace gem5
 
+#endif // __CPU_PRED_TAGE_SC_L_HH__

@@ -38,92 +38,40 @@
 #include "sim/serialize.hh"
 #include "sim/system.hh"
 
+namespace gem5
+{
+
 ThreadState::ThreadState(BaseCPU *cpu, ThreadID _tid, Process *_process)
     : numInst(0), numOp(0), threadStats(cpu, _tid),
       numLoad(0), startNumLoad(0),
       _status(ThreadContext::Halted), baseCpu(cpu),
       _contextId(0), _threadId(_tid), lastActivate(0), lastSuspend(0),
-      process(_process), physProxy(NULL), virtProxy(NULL),
-      funcExeInst(0), storeCondFailures(0)
+      process(_process), storeCondFailures(0)
 {
-}
-
-ThreadState::~ThreadState()
-{
-    if (physProxy != NULL)
-        delete physProxy;
-    if (virtProxy != NULL)
-        delete virtProxy;
 }
 
 void
 ThreadState::serialize(CheckpointOut &cp) const
 {
     SERIALIZE_ENUM(_status);
-    // thread_num and cpu_id are deterministic from the config
-    SERIALIZE_SCALAR(funcExeInst);
-
-    if (!FullSystem)
-        return;
 }
 
 void
 ThreadState::unserialize(CheckpointIn &cp)
 {
-
     UNSERIALIZE_ENUM(_status);
-    // thread_num and cpu_id are deterministic from the config
-    UNSERIALIZE_SCALAR(funcExeInst);
-
-    if (!FullSystem)
-        return;
-}
-
-void
-ThreadState::initMemProxies(ThreadContext *tc)
-{
-    // The port proxies only refer to the data port on the CPU side
-    // and can safely be done at init() time even if the CPU is not
-    // connected, i.e. when restoring from a checkpoint and later
-    // switching the CPU in.
-    if (FullSystem) {
-        assert(physProxy == NULL);
-        // This cannot be done in the constructor as the thread state
-        // itself is created in the base cpu constructor and the
-        // getSendFunctional is a virtual function
-        physProxy = new PortProxy(baseCpu->getSendFunctional(),
-                                  baseCpu->cacheLineSize());
-
-        assert(virtProxy == NULL);
-        virtProxy = new TranslatingPortProxy(tc);
-    } else {
-        assert(virtProxy == NULL);
-        virtProxy = new SETranslatingPortProxy(
-                tc, SETranslatingPortProxy::NextPage);
-    }
-}
-
-PortProxy &
-ThreadState::getPhysProxy()
-{
-    assert(FullSystem);
-    assert(physProxy != NULL);
-    return *physProxy;
-}
-
-PortProxy &
-ThreadState::getVirtProxy()
-{
-    assert(virtProxy != NULL);
-    return *virtProxy;
 }
 
 ThreadState::ThreadStateStats::ThreadStateStats(BaseCPU *cpu,
                                                 const ThreadID& tid)
-      : Stats::Group(cpu, csprintf("thread_%i", tid).c_str()),
-      ADD_STAT(numInsts, UNIT_COUNT, "Number of Instructions committed"),
-      ADD_STAT(numOps, UNIT_COUNT, "Number of Ops committed"),
-      ADD_STAT(numMemRefs, UNIT_COUNT, "Number of Memory References")
+      : statistics::Group(cpu, csprintf("thread_%i", tid).c_str()),
+      ADD_STAT(numInsts, statistics::units::Count::get(),
+               "Number of Instructions committed"),
+      ADD_STAT(numOps, statistics::units::Count::get(),
+        "Number of Ops committed"),
+      ADD_STAT(numMemRefs, statistics::units::Count::get(),
+               "Number of Memory References")
 {
-
 }
+
+} // namespace gem5

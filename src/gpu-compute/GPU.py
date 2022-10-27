@@ -1,8 +1,6 @@
 # Copyright (c) 2015-2018 Advanced Micro Devices, Inc.
 # All rights reserved.
 #
-# For use for simulation and test purposes only
-#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #
@@ -36,11 +34,10 @@ from m5.SimObject import SimObject
 
 from m5.objects.Bridge import Bridge
 from m5.objects.ClockedObject import ClockedObject
-from m5.objects.Device import DmaDevice
-from m5.objects.HSADevice import HSADevice
-from m5.objects.HSADriver import HSADriver
+from m5.objects.Device import DmaVirtDevice
 from m5.objects.LdsState import LdsState
 from m5.objects.Process import EmulatedDriver
+from m5.objects.VegaGPUTLB import VegaPagetableWalker
 
 class PrefetchType(Enum): vals = [
     'PF_CU',
@@ -50,9 +47,17 @@ class PrefetchType(Enum): vals = [
     'PF_END',
     ]
 
+class GfxVersion(ScopedEnum): vals = [
+    'gfx801',
+    'gfx803',
+    'gfx900',
+    'gfx902',
+    ]
+
 class PoolManager(SimObject):
     type = 'PoolManager'
     abstract = True
+    cxx_class = 'gem5::PoolManager'
     cxx_header = "gpu-compute/pool_manager.hh"
 
     min_alloc = Param.Int(4, 'min number of VGPRs allocated per WF')
@@ -62,18 +67,18 @@ class PoolManager(SimObject):
 # be executing on a CU at any given time.
 class SimplePoolManager(PoolManager):
     type = 'SimplePoolManager'
-    cxx_class = 'SimplePoolManager'
+    cxx_class = 'gem5::SimplePoolManager'
     cxx_header = "gpu-compute/simple_pool_manager.hh"
 
 ## This is for allowing multiple workgroups on one CU
 class DynPoolManager(PoolManager):
     type = 'DynPoolManager'
-    cxx_class = 'DynPoolManager'
+    cxx_class = 'gem5::DynPoolManager'
     cxx_header = "gpu-compute/dyn_pool_manager.hh"
 
 class RegisterFile(SimObject):
     type = 'RegisterFile'
-    cxx_class = 'RegisterFile'
+    cxx_class = 'gem5::RegisterFile'
     cxx_header = 'gpu-compute/register_file.hh'
 
     simd_id = Param.Int(-1, 'SIMD ID associated with this Register File')
@@ -82,17 +87,17 @@ class RegisterFile(SimObject):
 
 class ScalarRegisterFile(RegisterFile):
     type = 'ScalarRegisterFile'
-    cxx_class = 'ScalarRegisterFile'
+    cxx_class = 'gem5::ScalarRegisterFile'
     cxx_header = 'gpu-compute/scalar_register_file.hh'
 
 class VectorRegisterFile(RegisterFile):
     type = 'VectorRegisterFile'
-    cxx_class = 'VectorRegisterFile'
+    cxx_class = 'gem5::VectorRegisterFile'
     cxx_header = 'gpu-compute/vector_register_file.hh'
 
 class RegisterManager(SimObject):
     type = 'RegisterManager'
-    cxx_class = 'RegisterManager'
+    cxx_class = 'gem5::RegisterManager'
     cxx_header = 'gpu-compute/register_manager.hh'
 
     policy = Param.String("static", "Register Manager Policy")
@@ -101,7 +106,7 @@ class RegisterManager(SimObject):
 
 class Wavefront(SimObject):
     type = 'Wavefront'
-    cxx_class = 'Wavefront'
+    cxx_class = 'gem5::Wavefront'
     cxx_header = 'gpu-compute/wavefront.hh'
 
     simdId = Param.Int('SIMD id (0-ComputeUnit.num_SIMDs)')
@@ -114,7 +119,7 @@ class Wavefront(SimObject):
 # AMD Graphics Core Next (GCN) Architecture whitepaper.
 class ComputeUnit(ClockedObject):
     type = 'ComputeUnit'
-    cxx_class = 'ComputeUnit'
+    cxx_class = 'gem5::ComputeUnit'
     cxx_header = 'gpu-compute/compute_unit.hh'
 
     wavefronts = VectorParam.Wavefront('Number of wavefronts')
@@ -214,11 +219,12 @@ class ComputeUnit(ClockedObject):
 
 class Shader(ClockedObject):
     type = 'Shader'
-    cxx_class = 'Shader'
+    cxx_class = 'gem5::Shader'
     cxx_header = 'gpu-compute/shader.hh'
     CUs = VectorParam.ComputeUnit('Number of compute units')
     gpu_cmd_proc = Param.GPUCommandProcessor('Command processor for GPU')
     dispatcher = Param.GPUDispatcher('GPU workgroup dispatcher')
+    system_hub = Param.AMDGPUSystemHub(NULL, 'GPU System Hub (FS Mode only)')
     n_wf = Param.Int(10, 'Number of wavefront slots per SIMD')
     impl_kern_launch_acq = Param.Bool(True, """Insert acq packet into
                                          ruby at kernel launch""")
@@ -233,18 +239,43 @@ class Shader(ClockedObject):
     idlecu_timeout = Param.Tick(0, "Idle CU watchdog timeout threshold")
     max_valu_insts = Param.Int(0, "Maximum vALU insts before exiting")
 
-class GPUComputeDriver(HSADriver):
+class GPUComputeDriver(EmulatedDriver):
     type = 'GPUComputeDriver'
+    cxx_class = 'gem5::GPUComputeDriver'
     cxx_header = 'gpu-compute/gpu_compute_driver.hh'
+    device = Param.GPUCommandProcessor('GPU controlled by this driver')
+    isdGPU = Param.Bool(False, 'Driver is for a dGPU')
+    gfxVersion = Param.GfxVersion('gfx801', 'ISA of gpu to model')
+    dGPUPoolID = Param.Int(0, 'Pool ID for dGPU.')
+    # Default Mtype for caches
+    #--     1   1   1   C_RW_S  (Cached-ReadWrite-Shared)
+    #--     1   1   0   C_RW_US (Cached-ReadWrite-Unshared)
+    #--     1   0   1   C_RO_S  (Cached-ReadOnly-Shared)
+    #--     1   0   0   C_RO_US (Cached-ReadOnly-Unshared)
+    #--     0   1   x   UC_L2   (Uncached_GL2)
+    #--     0   0   x   UC_All  (Uncached_All_Load)
+    # default value: 5/C_RO_S (only allow caching in GL2 for read. Shared)
+    m_type = Param.Int("Default MTYPE for cache. Valid values between 0-7");
+
+class GPURenderDriver(EmulatedDriver):
+    type = 'GPURenderDriver'
+    cxx_class = 'gem5::GPURenderDriver'
+    cxx_header = 'gpu-compute/gpu_render_driver.hh'
 
 class GPUDispatcher(SimObject):
     type = 'GPUDispatcher'
+    cxx_class = 'gem5::GPUDispatcher'
     cxx_header = 'gpu-compute/dispatcher.hh'
 
-class GPUCommandProcessor(HSADevice):
+class GPUCommandProcessor(DmaVirtDevice):
     type = 'GPUCommandProcessor'
+    cxx_class = 'gem5::GPUCommandProcessor'
     cxx_header = 'gpu-compute/gpu_command_processor.hh'
     dispatcher = Param.GPUDispatcher('workgroup dispatcher for the GPU')
+
+    hsapp = Param.HSAPacketProcessor('PP attached to this device')
+    walker = Param.VegaPagetableWalker(VegaPagetableWalker(),
+            "Page table walker")
 
 class StorageClassType(Enum): vals = [
     'SC_SPILL',

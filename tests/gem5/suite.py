@@ -59,7 +59,9 @@ def gem5_verify_config(name,
                        valid_variants=constants.supported_variants,
                        length=constants.supported_lengths[0],
                        valid_hosts=constants.supported_hosts,
-                       protocol=None):
+                       protocol=None,
+                       uses_kvm=False,
+                    ):
     '''
     Helper class to generate common gem5 tests using verifiers.
 
@@ -84,6 +86,9 @@ def gem5_verify_config(name,
 
     :param valid_variants: An iterable with the variant levels that
         this test can be ran for. (E.g. opt, debug)
+
+    :param uses_kvm: States if this verifier uses KVM. If so, the "kvm" tag
+        will be included.
     '''
     fixtures = list(fixtures)
     testsuites = []
@@ -122,6 +127,9 @@ def gem5_verify_config(name,
 
                 # Add the isa and variant to tags list.
                 tags = [isa, opt, length, host]
+
+                if uses_kvm:
+                    tags.append(constants.kvm_tag)
 
                 # Create the gem5 target for the specific architecture and
                 # variant.
@@ -168,9 +176,10 @@ def _create_test_run_gem5(config, config_args, gem5_args):
         gem5 = fixtures[constants.gem5_binary_fixture_name].path
         command = [
             gem5,
-            '-d',  # Set redirect dir to tempdir.
+            '-d', # Set redirect dir to tempdir.
             tempdir,
-            '-re',# TODO: Change to const. Redirect stdout and stderr
+            '-re', # TODO: Change to const. Redirect stdout and stderr
+            '--silent-redirect',
         ]
         command.extend(_gem5_args)
         command.append(config)

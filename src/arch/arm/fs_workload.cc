@@ -48,24 +48,27 @@
 #include "kern/system_events.hh"
 #include "params/ArmFsWorkload.hh"
 
+namespace gem5
+{
+
 namespace ArmISA
 {
 
 void
 SkipFunc::returnFromFuncIn(ThreadContext *tc)
 {
-    PCState newPC = tc->pcState();
+    PCState new_pc = tc->pcState().as<PCState>();
     if (inAArch64(tc)) {
-        newPC.set(tc->readIntReg(INTREG_X30));
+        new_pc.set(tc->getReg(int_reg::X30));
     } else {
-        newPC.set(tc->readIntReg(ReturnAddressReg) & ~ULL(1));
+        new_pc.set(tc->getReg(ReturnAddressReg) & ~1ULL);
     }
 
     CheckerCPU *checker = tc->getCheckerCpuPtr();
     if (checker) {
-        tc->pcStateNoRecord(newPC);
+        tc->pcStateNoRecord(new_pc);
     } else {
-        tc->pcState(newPC);
+        tc->pcState(new_pc);
     }
 }
 
@@ -78,8 +81,8 @@ FsWorkload::FsWorkload(const Params &p) : KernelWorkload(p)
 
     bootLoaders.reserve(p.boot_loader.size());
     for (const auto &bl : p.boot_loader) {
-        std::unique_ptr<Loader::ObjectFile> bl_obj;
-        bl_obj.reset(Loader::createObjectFile(bl));
+        std::unique_ptr<loader::ObjectFile> bl_obj;
+        bl_obj.reset(loader::createObjectFile(bl));
 
         fatal_if(!bl_obj, "Could not read bootloader: %s", bl);
         bootLoaders.emplace_back(std::move(bl_obj));
@@ -91,7 +94,7 @@ FsWorkload::FsWorkload(const Params &p) : KernelWorkload(p)
              "Can't find a matching boot loader / kernel combination!");
 
     if (bootldr)
-        Loader::debugSymbolTable.insert(*bootldr->symtab().globals());
+        loader::debugSymbolTable.insert(*bootldr->symtab().globals());
 }
 
 void
@@ -127,11 +130,11 @@ FsWorkload::initState()
                  "gic_cpu_addr must be set with bootloader");
 
         for (auto *tc: arm_sys->threads) {
-            tc->setIntReg(3, kernelEntry);
+            tc->setReg(int_reg::R3, kernelEntry);
             if (is_gic_v2)
-                tc->setIntReg(4, arm_sys->params().gic_cpu_addr);
-            if (getArch() == Loader::Arm)
-                tc->setIntReg(5, params().cpu_release_addr);
+                tc->setReg(int_reg::R4, arm_sys->params().gic_cpu_addr);
+            if (getArch() == loader::Arm)
+                tc->setReg(int_reg::R5, params().cpu_release_addr);
         }
         inform("Using kernel entry physical address at %#x\n", kernelEntry);
     } else {
@@ -141,8 +144,8 @@ FsWorkload::initState()
     }
 }
 
-    Loader::ObjectFile *
-FsWorkload::getBootLoader(Loader::ObjectFile *const obj)
+loader::ObjectFile *
+FsWorkload::getBootLoader(loader::ObjectFile *const obj)
 {
     if (obj) {
         for (auto &bl : bootLoaders) {
@@ -157,3 +160,4 @@ FsWorkload::getBootLoader(Loader::ObjectFile *const obj)
 }
 
 } // namespace ArmISA
+} // namespace gem5

@@ -32,9 +32,14 @@
 #include <memory>
 
 #include "params/LRURP.hh"
-#include "sim/core.hh"
+#include "sim/cur_tick.hh"
 
-namespace ReplacementPolicy {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(ReplacementPolicy, replacement_policy);
+namespace replacement_policy
+{
 
 LRU::LRU(const Params &p)
   : Base(p)
@@ -43,7 +48,6 @@ LRU::LRU(const Params &p)
 
 void
 LRU::invalidate(const std::shared_ptr<ReplacementData>& replacement_data)
-const
 {
     // Reset last touch timestamp
     std::static_pointer_cast<LRUReplData>(
@@ -93,4 +97,5 @@ LRU::instantiateEntry()
     return std::shared_ptr<ReplacementData>(new LRUReplData());
 }
 
-} // namespace ReplacementPolicy
+} // namespace replacement_policy
+} // namespace gem5

@@ -46,6 +46,12 @@
 
 #include "mem/ruby/common/Address.hh"
 
+namespace gem5
+{
+
+namespace ruby
+{
+
 template<class ENTRY>
 class TBETable
 {
@@ -70,8 +76,8 @@ class TBETable
     // Print cache contents
     void print(std::ostream& out) const;
 
-  private:
-    // Private copy constructor and assignment operator
+  protected:
+    // Protected copy constructor and assignment operator
     TBETable(const TBETable& obj);
     TBETable& operator=(const TBETable& obj);
 
@@ -140,5 +146,8 @@ inline void
 TBETable<ENTRY>::print(std::ostream& out) const
 {
 }
+
+} // namespace ruby
+} // namespace gem5
 
 #endif // __MEM_RUBY_STRUCTURES_TBETABLE_HH__

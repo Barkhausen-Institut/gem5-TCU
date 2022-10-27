@@ -35,6 +35,11 @@
 #include "cpu/minor/cpu.hh"
 #include "sim/process.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 CoreConnector::CoreConnector(const CoreConnectorParams &p)
   : BaseConnector(p),
     system(p.system)
@@ -67,4 +72,7 @@ CoreConnector::suspend()
         DPRINTF(TcuConnector, "Suspending core\n");
         system->threads[0]->suspend();
     }
+}
+
+}
 }

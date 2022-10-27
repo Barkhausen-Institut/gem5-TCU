@@ -46,6 +46,11 @@
 #include "mem/tcu/error.hh"
 #include "params/Tcu.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 class MessageUnit;
 class MemoryUnit;
 class XferUnit;
@@ -269,16 +274,19 @@ class Tcu : public BaseTcu
     const Cycles cmdAckLatency;
 
     // NoC receives
-    Stats::Scalar nocMsgRecvs;
-    Stats::Scalar nocReadRecvs;
-    Stats::Scalar nocWriteRecvs;
+    statistics::Scalar nocMsgRecvs;
+    statistics::Scalar nocReadRecvs;
+    statistics::Scalar nocWriteRecvs;
 
     // other
-    Stats::Scalar regFileReqs;
-    Stats::Scalar intMemReqs;
-    Stats::Scalar extMemReqs;
-    Stats::Scalar resets;
+    statistics::Scalar regFileReqs;
+    statistics::Scalar intMemReqs;
+    statistics::Scalar extMemReqs;
+    statistics::Scalar resets;
 
 };
+
+}
+}
 
 #endif // __MEM_TCU_TCU_HH__

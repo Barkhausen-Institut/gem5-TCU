@@ -37,9 +37,14 @@
 
 #include "mem/cache/replacement_policies/base.hh"
 
+namespace gem5
+{
+
 struct LRURPParams;
 
-namespace ReplacementPolicy {
+GEM5_DEPRECATED_NAMESPACE(ReplacementPolicy, replacement_policy);
+namespace replacement_policy
+{
 
 class LRU : public Base
 {
@@ -68,7 +73,7 @@ class LRU : public Base
      * @param replacement_data Replacement data to be invalidated.
      */
     void invalidate(const std::shared_ptr<ReplacementData>& replacement_data)
-                                                              const override;
+                                                                    override;
 
     /**
      * Touch an entry to update its replacement data.
@@ -105,6 +110,7 @@ class LRU : public Base
     std::shared_ptr<ReplacementData> instantiateEntry() override;
 };
 
-} // namespace ReplacementPolicy
+} // namespace replacement_policy
+} // namespace gem5
 
 #endif // __MEM_CACHE_REPLACEMENT_POLICIES_LRU_RP_HH__

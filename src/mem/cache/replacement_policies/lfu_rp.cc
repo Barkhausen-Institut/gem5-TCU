@@ -33,7 +33,12 @@
 
 #include "params/LFURP.hh"
 
-namespace ReplacementPolicy {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(ReplacementPolicy, replacement_policy);
+namespace replacement_policy
+{
 
 LFU::LFU(const Params &p)
   : Base(p)
@@ -42,7 +47,6 @@ LFU::LFU(const Params &p)
 
 void
 LFU::invalidate(const std::shared_ptr<ReplacementData>& replacement_data)
-const
 {
     // Reset reference count
     std::static_pointer_cast<LFUReplData>(replacement_data)->refCount = 0;
@@ -89,4 +93,5 @@ LFU::instantiateEntry()
     return std::shared_ptr<ReplacementData>(new LFUReplData());
 }
 
-} // namespace ReplacementPolicy
+} // namespace replacement_policy
+} // namespace gem5

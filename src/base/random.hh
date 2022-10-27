@@ -53,16 +53,20 @@
 #include "base/types.hh"
 #include "sim/serialize.hh"
 
+namespace gem5
+{
+
 class Checkpoint;
 
 class Random : public Serializable
 {
 
-  private:
-
-    std::mt19937_64 gen;
-
   public:
+
+    /**
+     * @ingroup api_base_utils
+     */
+    std::mt19937_64 gen;
 
     /**
      * @ingroup api_base_utils
@@ -82,7 +86,7 @@ class Random : public Serializable
      * @ingroup api_base_utils
      */
     template <typename T>
-    typename std::enable_if_t<std::is_integral<T>::value, T>
+    typename std::enable_if_t<std::is_integral_v<T>, T>
     random()
     {
         // [0, max_value] for integer types
@@ -94,7 +98,7 @@ class Random : public Serializable
      * @ingroup api_base_utils
      */
     template <typename T>
-    typename std::enable_if_t<std::is_floating_point<T>::value, T>
+    typename std::enable_if_t<std::is_floating_point_v<T>, T>
     random()
     {
         // [0, 1) for real types
@@ -105,7 +109,7 @@ class Random : public Serializable
      * @ingroup api_base_utils
      */
     template <typename T>
-    typename std::enable_if_t<std::is_integral<T>::value, T>
+    typename std::enable_if_t<std::is_integral_v<T>, T>
     random(T min, T max)
     {
         std::uniform_int_distribution<T> dist(min, max);
@@ -120,5 +124,7 @@ class Random : public Serializable
  * @ingroup api_base_utils
  */
 extern Random random_mt;
+
+} // namespace gem5
 
 #endif // __BASE_RANDOM_HH__

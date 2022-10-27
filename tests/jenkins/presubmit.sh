@@ -37,9 +37,10 @@
 
 set -e
 
-DOCKER_IMAGE_ALL_DEP=gcr.io/gem5-test/ubuntu-20.04_all-dependencies
-DOCKER_IMAGE_CLANG_COMPILE=gcr.io/gem5-test/clang-version-9
+DOCKER_IMAGE_ALL_DEP=gcr.io/gem5-test/ubuntu-20.04_all-dependencies:latest
+DOCKER_IMAGE_CLANG_COMPILE=gcr.io/gem5-test/clang-version-11:latest
 PRESUBMIT_STAGE2=tests/jenkins/presubmit-stage2.sh
+GEM5ART_TESTS=tests/jenkins/gem5art-tests.sh
 
 # Move the docker base directory to tempfs.
 sudo /etc/init.d/docker stop
@@ -50,16 +51,21 @@ sudo /etc/init.d/docker start
 # Move the CWD to the gem5 checkout.
 cd git/jenkins-gem5-prod/
 
+#  Using a docker image with all the dependencies, we run the gem5art tests.
+docker run -u $UID:$GID --volume $(pwd):$(pwd) -w $(pwd) --rm \
+    "${DOCKER_IMAGE_ALL_DEP}" "${GEM5ART_TESTS}"
+
 #  Using a docker image with all the dependencies, we run the presubmit tests.
 docker run -u $UID:$GID --volume $(pwd):$(pwd) -w $(pwd) --rm \
     "${DOCKER_IMAGE_ALL_DEP}" "${PRESUBMIT_STAGE2}"
 
 # DOCKER_IMAGE_ALL_DEP compiles gem5.opt with GCC. We run a compilation of
 # gem5.fast on the Clang compiler to ensure changes are compilable with the
-# clang compiler. Due to the costs of compilation, we only compile X86
-# at this point. Further compiler tests are carried out as part of our weekly
-# "Compiler Checks" tests: http://jenkins.gem5.org/job/Compiler-Checks.
+# clang compiler. Due to the costs of compilation, we only compile
+# ARM_MESI_Three_Level_HTM at this point. Further compiler tests are carried
+# out as part of our weekly "Compiler Checks" tests:
+# http://jenkins.gem5.org/job/Compiler-Checks.
 rm -rf build
 docker run -u $UID:$GID --volume $(pwd):$(pwd) -w $(pwd) --rm \
     "${DOCKER_IMAGE_CLANG_COMPILE}" /usr/bin/env python3 /usr/bin/scons \
-    build/X86/gem5.fast -j4 --no-compress-debug
+    build/ARM_MESI_Three_Level_HTM/gem5.fast -j4 --no-compress-debug

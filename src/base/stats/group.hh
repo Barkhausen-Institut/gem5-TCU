@@ -42,25 +42,29 @@
 #include <string>
 #include <vector>
 
+#include "base/compiler.hh"
 #include "base/stats/units.hh"
+
+namespace gem5
+{
 
 /**
  * Convenience macro to add a stat to a statistics group.
  *
- * This macro is used to add a stat to a Stats::Group in the
+ * This macro is used to add a stat to a statistics::Group in the
  * initilization list in the Group's constructor. The macro
  * automatically assigns the stat to the current group and gives it
  * the same name as in the class. For example:
  *
  * \code
- * struct MyStats : public Stats::Group
+ * struct MyStats : public statistics::Group
  * {
- *     Stats::Scalar scalar0;
- *     Stats::Scalar scalar1;
+ *     statistics::Scalar scalar0;
+ *     statistics::Scalar scalar1;
  *
  *     Group()
  *         : ADD_STAT(scalar0, "Description of scalar0"),
- *           scalar1(this, "scalar1", UNIT_UNSPECIFIED,
+ *           scalar1(this, "scalar1", statistics::units::Unspecified::get(),
  *                   "Description of scalar1")
  *     {
  *     }
@@ -70,7 +74,9 @@
 
 #define ADD_STAT(n, ...) n(this, #n, __VA_ARGS__)
 
-namespace Stats {
+GEM5_DEPRECATED_NAMESPACE(Stats, statistics);
+namespace statistics
+{
 
 class Info;
 
@@ -155,7 +161,7 @@ class Group
      *
      * @ingroup api_stats
      */
-    void addStat(Stats::Info *info);
+    void addStat(statistics::Info *info);
 
     /**
      * Get all child groups associated with this object.
@@ -215,6 +221,7 @@ class Group
     std::vector<Info *> stats;
 };
 
-} // namespace Stats
+} // namespace statistics
+} // namespace gem5
 
 #endif // __BASE_STATS_GROUP_HH__

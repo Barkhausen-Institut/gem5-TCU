@@ -37,7 +37,12 @@
 #include "mem/cache/compressors/base_delta.hh"
 #include "mem/cache/compressors/dictionary_compressor_impl.hh"
 
-namespace Compressor {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Compressor, compression);
+namespace compression
+{
 
 template <class BaseType, std::size_t DeltaSizeBits>
 BaseDelta<BaseType, DeltaSizeBits>::BaseDelta(const Params &p)
@@ -93,6 +98,7 @@ BaseDelta<BaseType, DeltaSizeBits>::compress(
     return comp_data;
 }
 
-} // namespace Compressor
+} // namespace compression
+} // namespace gem5
 
 #endif //__MEM_CACHE_COMPRESSORS_BASE_DELTA_IMPL_HH__

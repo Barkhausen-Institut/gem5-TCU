@@ -37,12 +37,15 @@
 #include "params/KernelWorkload.hh"
 #include "sim/workload.hh"
 
+namespace gem5
+{
+
 class System;
 
 class KernelWorkload : public Workload
 {
   protected:
-    Loader::MemoryImage image;
+    loader::MemoryImage image;
 
     /** Mask that should be anded for binary/symbol loading.
      * This allows one two different OS requirements for the same ISA to be
@@ -61,12 +64,12 @@ class KernelWorkload : public Workload
 
     Addr _start, _end;
 
-    std::vector<Loader::ObjectFile *> extras;
+    std::vector<loader::ObjectFile *> extras;
 
-    Loader::ObjectFile *kernelObj = nullptr;
+    loader::ObjectFile *kernelObj = nullptr;
     // Keep a separate copy of the kernel's symbol table so we can add things
     // to it.
-    Loader::SymbolTable kernelSymtab;
+    loader::SymbolTable kernelSymtab;
 
     const std::string commandLine;
 
@@ -81,20 +84,21 @@ class KernelWorkload : public Workload
     KernelWorkload(const Params &p);
 
     Addr getEntry() const override { return kernelObj->entryPoint(); }
-    Loader::Arch
+    ByteOrder byteOrder() const override { return kernelObj->getByteOrder(); }
+    loader::Arch
     getArch() const override
     {
         return kernelObj->getArch();
     }
 
-    const Loader::SymbolTable &
+    const loader::SymbolTable &
     symtab(ThreadContext *tc) override
     {
         return kernelSymtab;
     }
 
     bool
-    insertSymbol(const Loader::Symbol &symbol) override
+    insertSymbol(const loader::Symbol &symbol) override
     {
         return kernelSymtab.insert(symbol);
     }
@@ -136,5 +140,7 @@ class KernelWorkload : public Workload
     }
     /** @} */
 };
+
+} // namespace gem5
 
 #endif // __SIM_KERNEL_WORKLOAD_HH__

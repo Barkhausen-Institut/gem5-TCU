@@ -34,6 +34,7 @@ from m5.proxy import *
 class TcuAccelStream(TcuAccel):
     type = 'TcuAccelStream'
     cxx_header = "cpu/tcu-accel-stream/accelerator.hh"
+    cxx_class = 'gem5::tcu::TcuAccelStream'
 
     logic = Param.AccelLogic("The accelerator logic")
     buf_size = Param.MemorySize("4kB", "The size of the buffer")

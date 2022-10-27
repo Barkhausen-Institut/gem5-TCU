@@ -2,8 +2,6 @@
  * Copyright (c) 2020 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -36,6 +34,9 @@
 #include "base/trace.hh"
 #include "debug/GPUVRF.hh"
 #include "gpu-compute/dyn_pool_manager.hh"
+
+namespace gem5
+{
 
 // return the min number of elements that the manager can reserve given
 // a request for "size" elements
@@ -92,8 +93,24 @@ bool
 DynPoolManager::canAllocate(uint32_t numRegions, uint32_t size)
 {
     uint32_t actualSize = minAllocatedElements(size);
-    DPRINTF(GPUVRF,"Can Allocate %d\n",actualSize);
-    return (_totRegSpaceAvailable >= actualSize);
+    uint32_t numAvailChunks = 0;
+    DPRINTF(GPUVRF, "Checking if we can allocate %d regions of size %d "
+                    "registers\n", numRegions, actualSize);
+    for (auto it : freeSpaceRecord) {
+        numAvailChunks += (it.second - it.first)/actualSize;
+    }
+
+    if (numAvailChunks >= numRegions) {
+        DPRINTF(GPUVRF, "Able to allocate %d regions of size %d; "
+                        "number of available regions: %d\n",
+                        numRegions, actualSize, numAvailChunks);
+        return true;
+    } else {
+        DPRINTF(GPUVRF, "Unable to allocate %d regions of size %d; "
+                        "number of available regions: %d\n",
+                        numRegions, actualSize, numAvailChunks);
+        return false;
+    }
 }
 
 uint32_t
@@ -104,7 +121,8 @@ DynPoolManager::allocateRegion(const uint32_t size,
     uint32_t actualSize = minAllocatedElements(size);
     auto it = freeSpaceRecord.begin();
     while (it != freeSpaceRecord.end()) {
-        if (it->second >= actualSize) {
+        uint32_t curChunkSize = it->second - it->first;
+        if (curChunkSize >= actualSize) {
             // assign the next block starting from here
             startIdx = it->first;
             _regionSize = actualSize;
@@ -114,14 +132,13 @@ DynPoolManager::allocateRegion(const uint32_t size,
             // This case sees if this chunk size is exactly equal to
             // the size of the requested chunk. If yes, then this can't
             // contribute to future requests and hence, should be removed
-            if (it->second == actualSize) {
+            if (curChunkSize == actualSize) {
                 it = freeSpaceRecord.erase(it);
                 // once entire freeSpaceRecord allocated, increment
                 // reservedSpaceRecord count
                 ++reservedSpaceRecord;
             } else {
                 it->first += actualSize;
-                it->second -= actualSize;
             }
             break;
         }
@@ -143,7 +160,32 @@ DynPoolManager::freeRegion(uint32_t firstIdx,
     // Current dynamic register allocation does not handle wraparound
     assert(firstIdx < lastIdx);
     _totRegSpaceAvailable += lastIdx-firstIdx;
-    freeSpaceRecord.push_back(std::make_pair(firstIdx,lastIdx-firstIdx));
+
+    // Consolidate with other regions. Need to check if firstIdx or lastIdx
+    // already exist
+    auto firstIt = std::find_if(
+            freeSpaceRecord.begin(),
+            freeSpaceRecord.end(),
+            [&](const std::pair<int, int>& element){
+                return element.second == firstIdx;} );
+
+    auto lastIt = std::find_if(
+            freeSpaceRecord.begin(),
+            freeSpaceRecord.end(),
+            [&](const std::pair<int, int>& element){
+                return element.first == lastIdx;} );
+
+    if (firstIt != freeSpaceRecord.end() && lastIt != freeSpaceRecord.end()) {
+        firstIt->second = lastIt->second;
+        freeSpaceRecord.erase(lastIt);
+    } else if (firstIt != freeSpaceRecord.end()) {
+        firstIt->second = lastIdx;
+    } else if (lastIt != freeSpaceRecord.end()) {
+        lastIt->first = firstIdx;
+    } else {
+        freeSpaceRecord.push_back(std::make_pair(firstIdx, lastIdx));
+    }
+
     // remove corresponding entry from reservedSpaceRecord too
     --reservedSpaceRecord;
 }
@@ -158,3 +200,5 @@ DynPoolManager::regionSize(std::pair<uint32_t, uint32_t> &region)
         return region.second + poolSize() - region.first + 1;
     }
 }
+
+} // namespace gem5

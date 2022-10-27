@@ -39,12 +39,15 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import os
+import pickle
 import sys
 import tempfile
 import textwrap
 
 from gem5_scons.util import get_termcap
 from gem5_scons.configure import Configure
+from gem5_scons.defaults import EnvDefaults
+import SCons.Node.Python
 import SCons.Script
 
 termcap = get_termcap()
@@ -237,4 +240,33 @@ def parse_build_path(target):
 
     return os.path.join('/', *path_dirs), variant_dir
 
-__all__ = ['Configure', 'Transform', 'warning', 'error', 'parse_build_dir']
+# The MakeAction wrapper, and a SCons tool to set up the *COMSTR variables.
+if SCons.Script.GetOption('verbose'):
+    def MakeAction(action, string, *args, **kwargs):
+        return SCons.Script.Action(action, *args, **kwargs)
+
+    def MakeActionTool(env):
+        pass
+else:
+    MakeAction = SCons.Script.Action
+
+    def MakeActionTool(env):
+        env['CCCOMSTR']        = Transform("CC")
+        env['CXXCOMSTR']       = Transform("CXX")
+        env['ASCOMSTR']        = Transform("AS")
+        env['ARCOMSTR']        = Transform("AR", 0)
+        env['LINKCOMSTR']      = Transform("LINK", 0)
+        env['SHLINKCOMSTR']    = Transform("SHLINK", 0)
+        env['RANLIBCOMSTR']    = Transform("RANLIB", 0)
+        env['M4COMSTR']        = Transform("M4")
+        env['SHCCCOMSTR']      = Transform("SHCC")
+        env['SHCXXCOMSTR']     = Transform("SHCXX")
+
+def ToValue(obj):
+    return SCons.Node.Python.Value(pickle.dumps(obj))
+
+def FromValue(node):
+    return pickle.loads(node.read())
+
+__all__ = ['Configure', 'EnvDefaults', 'Transform', 'warning', 'error',
+           'MakeAction', 'MakeActionTool', 'ToValue', 'FromValue']

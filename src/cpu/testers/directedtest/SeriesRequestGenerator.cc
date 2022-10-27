@@ -35,12 +35,15 @@
 #include "cpu/testers/directedtest/RubyDirectedTester.hh"
 #include "debug/DirectedTest.hh"
 
+namespace gem5
+{
+
 SeriesRequestGenerator::SeriesRequestGenerator(const Params &p)
     : DirectedGenerator(p),
       m_addr_increment_size(p.addr_increment_size),
       m_percent_writes(p.percent_writes)
 {
-    m_status = SeriesRequestGeneratorStatus_Thinking;
+    m_status = ruby::SeriesRequestGeneratorStatus_Thinking;
     m_active_node = 0;
     m_address = 0x0;
 }
@@ -53,7 +56,7 @@ bool
 SeriesRequestGenerator::initiate()
 {
     DPRINTF(DirectedTest, "initiating request\n");
-    assert(m_status == SeriesRequestGeneratorStatus_Thinking);
+    assert(m_status == ruby::SeriesRequestGeneratorStatus_Thinking);
 
     RequestPort* port = m_directed_tester->getCpuPort(m_active_node);
 
@@ -76,7 +79,7 @@ SeriesRequestGenerator::initiate()
 
     if (port->sendTimingReq(pkt)) {
         DPRINTF(DirectedTest, "initiating request - successful\n");
-        m_status = SeriesRequestGeneratorStatus_Request_Pending;
+        m_status = ruby::SeriesRequestGeneratorStatus_Request_Pending;
         return true;
     } else {
         // If the packet did not issue, must delete
@@ -94,9 +97,9 @@ SeriesRequestGenerator::performCallback(uint32_t proc, Addr address)
 {
     assert(m_active_node == proc);
     assert(m_address == address);
-    assert(m_status == SeriesRequestGeneratorStatus_Request_Pending);
+    assert(m_status == ruby::SeriesRequestGeneratorStatus_Request_Pending);
 
-    m_status = SeriesRequestGeneratorStatus_Thinking;
+    m_status = ruby::SeriesRequestGeneratorStatus_Thinking;
     m_active_node++;
     if (m_active_node == m_num_cpus) {
         //
@@ -108,3 +111,5 @@ SeriesRequestGenerator::performCallback(uint32_t proc, Addr address)
         m_active_node = 0;
     }
 }
+
+} // namespace gem5

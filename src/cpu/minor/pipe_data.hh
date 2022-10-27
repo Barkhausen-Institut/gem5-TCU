@@ -54,7 +54,11 @@
 #include "cpu/minor/dyn_inst.hh"
 #include "cpu/base.hh"
 
-namespace Minor
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Minor, minor);
+namespace minor
 {
 
 /** Forward data betwen Execute and Fetch1 carrying change-of-address/stream
@@ -106,42 +110,54 @@ class BranchData /* : public ReportIF, public BubbleIF */
 
   public:
     /** Explanation for this branch */
-    Reason reason;
+    Reason reason = NoBranch;
 
     /** ThreadID associated with branch */
-    ThreadID threadId;
+    ThreadID threadId = InvalidThreadID;
 
     /** Sequence number of new stream/prediction to be adopted */
-    InstSeqNum newStreamSeqNum;
-    InstSeqNum newPredictionSeqNum;
+    InstSeqNum newStreamSeqNum = 0;
+    InstSeqNum newPredictionSeqNum = 0;
 
     /** Starting PC of that stream */
-    TheISA::PCState target;
+    std::unique_ptr<PCStateBase> target;
 
     /** Instruction which caused this branch */
-    MinorDynInstPtr inst;
+    MinorDynInstPtr inst = MinorDynInst::bubble();
 
   public:
-    BranchData() :
-        reason(NoBranch), threadId(InvalidThreadID), newStreamSeqNum(0),
-        newPredictionSeqNum(0), target(TheISA::PCState(0)),
-        inst(MinorDynInst::bubble())
-    { }
+    BranchData() {}
 
-    BranchData(
-        Reason reason_,
-        ThreadID thread_id,
-        InstSeqNum new_stream_seq_num,
-        InstSeqNum new_prediction_seq_num,
-        TheISA::PCState target,
-        MinorDynInstPtr inst_) :
-        reason(reason_),
-        threadId(thread_id),
+    BranchData(Reason reason_, ThreadID thread_id,
+            InstSeqNum new_stream_seq_num, InstSeqNum new_prediction_seq_num,
+            const PCStateBase &_target, MinorDynInstPtr inst_) :
+        reason(reason_), threadId(thread_id),
         newStreamSeqNum(new_stream_seq_num),
         newPredictionSeqNum(new_prediction_seq_num),
-        target(target),
         inst(inst_)
-    { }
+    {
+        set(target, _target);
+    }
+
+    BranchData(const BranchData &other) :
+        reason(other.reason), threadId(other.threadId),
+        newStreamSeqNum(other.newStreamSeqNum),
+        newPredictionSeqNum(other.newPredictionSeqNum),
+        inst(other.inst)
+    {
+        set(target, other.target);
+    }
+    BranchData &
+    operator=(const BranchData &other)
+    {
+        reason = other.reason;
+        threadId = other.threadId;
+        newStreamSeqNum = other.newStreamSeqNum;
+        newPredictionSeqNum = other.newPredictionSeqNum;
+        set(target, other.target);
+        inst = other.inst;
+        return *this;
+    }
 
     /** BubbleIF interface */
     static BranchData bubble() { return BranchData(); }
@@ -172,45 +188,60 @@ class ForwardLineData /* : public ReportIF, public BubbleIF */
 {
   private:
     /** This line is a bubble.  No other data member is required to be valid
-     *  if this is true */
-    bool bubbleFlag;
+     *  if this is true
+     *  Make lines bubbles by default */
+    bool bubbleFlag = true;
 
   public:
     /** First byte address in the line.  This is allowed to be
      *  <= pc.instAddr() */
-    Addr lineBaseAddr;
+    Addr lineBaseAddr = 0;
 
-    /** PC of the first requested inst within this line */
-    TheISA::PCState pc;
+    /** PC of the first inst within this sequence */
+    std::unique_ptr<PCStateBase> pc;
+
+    /** Address of this line of data */
+    Addr fetchAddr;
 
     /** Explicit line width, don't rely on data.size */
-    unsigned int lineWidth;
+    unsigned int lineWidth = 0;
 
   public:
     /** This line has a fault.  The bubble flag will be false and seqNums
      *  will be valid but no data will */
-    Fault fault;
+    Fault fault = NoFault;
 
     /** Thread, stream, prediction ... id of this line */
     InstId id;
 
     /** Line data.  line[0] is the byte at address pc.instAddr().  Data is
      *  only valid upto lineWidth - 1. */
-    uint8_t *line;
+    uint8_t *line = nullptr;
 
     /** Packet from which the line is taken */
-    Packet *packet;
+    Packet *packet = nullptr;
 
   public:
-    ForwardLineData() :
-        bubbleFlag(true),
-        lineBaseAddr(0),
-        lineWidth(0),
-        fault(NoFault),
-        line(NULL),
-        packet(NULL)
+    ForwardLineData() {}
+    ForwardLineData(const ForwardLineData &other) :
+        bubbleFlag(other.bubbleFlag), lineBaseAddr(other.lineBaseAddr),
+        pc(other.pc->clone()), fetchAddr(other.fetchAddr),
+        lineWidth(other.lineWidth), fault(other.fault), id(other.id),
+        line(other.line), packet(other.packet)
+    {}
+    ForwardLineData &
+    operator=(const ForwardLineData &other)
     {
-        /* Make lines bubbles by default */
+        bubbleFlag = other.bubbleFlag;
+        lineBaseAddr = other.lineBaseAddr;
+        set(pc, other.pc);
+        fetchAddr = other.fetchAddr;
+        lineWidth = other.lineWidth;
+        fault = other.fault;
+        id = other.id;
+        line = other.line;
+        packet = other.packet;
+        return *this;
     }
 
     ~ForwardLineData() { line = NULL; }
@@ -288,6 +319,7 @@ class ForwardInstData /* : public ReportIF, public BubbleIF */
     void reportData(std::ostream &os) const;
 };
 
-}
+} // namespace minor
+} // namespace gem5
 
 #endif /* __CPU_MINOR_PIPE_DATA_HH__ */

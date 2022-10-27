@@ -41,6 +41,9 @@
 #include "sim/tile_memory.hh"
 #include "sim/m3_loader.hh"
 
+namespace gem5
+{
+
 class M3ArmSystem : public ArmSystem, public TileMemory
 {
     class NoCMasterPort : public QueuedRequestPort
@@ -68,7 +71,7 @@ class M3ArmSystem : public ArmSystem, public TileMemory
     typedef M3ArmSystemParams Params;
     M3ArmSystem(const Params &p);
 
-    uint32_t tileDesc(tileid_t tile) const override;
+    uint32_t tileDesc(tcu::tileid_t tile) const override;
 
     Port& getPort(const std::string &if_name,
                   PortID idx = InvalidPortID) override;
@@ -79,5 +82,7 @@ class M3ArmSystem : public ArmSystem, public TileMemory
 
     M3Loader loader;
 };
+
+}
 
 #endif

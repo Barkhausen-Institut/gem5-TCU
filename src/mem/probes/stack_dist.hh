@@ -43,6 +43,9 @@
 #include "mem/stack_dist_calc.hh"
 #include "sim/stats.hh"
 
+namespace gem5
+{
+
 struct StackDistProbeParams;
 
 class StackDistProbe : public BaseMemProbe
@@ -51,7 +54,7 @@ class StackDistProbe : public BaseMemProbe
     StackDistProbe(const StackDistProbeParams &params);
 
   protected:
-    void handleRequest(const ProbePoints::PacketInfo &pkt_info) override;
+    void handleRequest(const probing::PacketInfo &pkt_info) override;
 
   protected:
     // Cache line size to simulate
@@ -66,26 +69,27 @@ class StackDistProbe : public BaseMemProbe
   protected:
     StackDistCalc calc;
 
-    struct StackDistProbeStats : public Stats::Group
+    struct StackDistProbeStats : public statistics::Group
     {
         StackDistProbeStats(StackDistProbe* parent);
 
         // Reads linear histogram
-        Stats::Histogram readLinearHist;
+        statistics::Histogram readLinearHist;
 
         // Reads logarithmic histogram
-        Stats::SparseHistogram readLogHist;
+        statistics::SparseHistogram readLogHist;
 
         // Writes linear histogram
-        Stats::Histogram writeLinearHist;
+        statistics::Histogram writeLinearHist;
 
         // Writes logarithmic histogram
-        Stats::SparseHistogram writeLogHist;
+        statistics::SparseHistogram writeLogHist;
 
         // Writes logarithmic histogram
-        Stats::Scalar infiniteSD;
+        statistics::Scalar infiniteSD;
     } stats;
 };
 
+} // namespace gem5
 
 #endif //__MEM_PROBES_STACK_DIST_HH__

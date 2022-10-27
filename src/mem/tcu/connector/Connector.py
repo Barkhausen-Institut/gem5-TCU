@@ -33,8 +33,10 @@ from m5.proxy import *
 class BaseConnector(ClockedObject):
     type = 'BaseConnector'
     cxx_header = "mem/tcu/connector/base.hh"
+    cxx_class = 'gem5::tcu::BaseConnector'
 
 class CoreConnector(BaseConnector):
     type = 'CoreConnector'
     cxx_header = "mem/tcu/connector/core.hh"
+    cxx_class = 'gem5::tcu::CoreConnector'
     system = Param.System(Parent.any, "System we belong to")

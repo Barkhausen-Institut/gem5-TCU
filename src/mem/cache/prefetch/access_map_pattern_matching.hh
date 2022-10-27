@@ -43,10 +43,15 @@
 #include "mem/packet.hh"
 #include "sim/clocked_object.hh"
 
+namespace gem5
+{
+
 struct AccessMapPatternMatchingParams;
 struct AMPMPrefetcherParams;
 
-namespace Prefetcher {
+GEM5_DEPRECATED_NAMESPACE(Prefetcher, prefetch);
+namespace prefetch
+{
 
 class AccessMapPatternMatching : public ClockedObject
 {
@@ -200,6 +205,7 @@ class AMPM : public Queued
                            std::vector<AddrPriority> &addresses) override;
 };
 
-} // namespace Prefetcher
+} // namespace prefetch
+} // namespace gem5
 
 #endif//__MEM_CACHE_PREFETCH_ACCESS_MAP_PATTERN_MATCHING_HH__

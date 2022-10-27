@@ -55,9 +55,14 @@
 #include "mem/ruby/system/RubySystem.hh"
 #include "params/RubyPrefetcher.hh"
 #include "sim/sim_object.hh"
-#include "sim/system.hh"
 
 #define MAX_PF_INFLIGHT 8
+
+namespace gem5
+{
+
+namespace ruby
+{
 
 class PrefetchEntry
 {
@@ -232,27 +237,30 @@ class RubyPrefetcher : public SimObject
 
         AbstractController *m_controller;
 
-        const Addr m_page_shift;
+        const unsigned pageShift;
 
-        struct RubyPrefetcherStats : public Stats::Group
+        struct RubyPrefetcherStats : public statistics::Group
         {
-            RubyPrefetcherStats(Stats::Group *parent);
+            RubyPrefetcherStats(statistics::Group *parent);
 
             //! Count of accesses to the prefetcher
-            Stats::Scalar numMissObserved;
+            statistics::Scalar numMissObserved;
             //! Count of prefetch streams allocated
-            Stats::Scalar numAllocatedStreams;
+            statistics::Scalar numAllocatedStreams;
             //! Count of prefetch requests made
-            Stats::Scalar numPrefetchRequested;
+            statistics::Scalar numPrefetchRequested;
             //! Count of successful prefetches
-            Stats::Scalar numHits;
+            statistics::Scalar numHits;
             //! Count of partial successful prefetches
-            Stats::Scalar numPartialHits;
+            statistics::Scalar numPartialHits;
             //! Count of pages crossed
-            Stats::Scalar numPagesCrossed;
+            statistics::Scalar numPagesCrossed;
             //! Count of misses incurred for blocks that were prefetched
-            Stats::Scalar numMissedPrefetchedBlocks;
+            statistics::Scalar numMissedPrefetchedBlocks;
         } rubyPrefetcherStats;
 };
+
+} // namespace ruby
+} // namespace gem5
 
 #endif // __MEM_RUBY_STRUCTURES_PREFETCHER_HH__

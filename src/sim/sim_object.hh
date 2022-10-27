@@ -49,6 +49,7 @@
 #include <string>
 #include <vector>
 
+#include "base/named.hh"
 #include "base/stats/group.hh"
 #include "params/SimObject.hh"
 #include "sim/drain.hh"
@@ -56,8 +57,12 @@
 #include "sim/port.hh"
 #include "sim/serialize.hh"
 
+namespace gem5
+{
+
 class EventManager;
 class ProbeManager;
+class SimObjectResolver;
 
 /**
  * Abstract superclass for simulation objects.  Represents things that
@@ -139,13 +144,16 @@ class ProbeManager;
  * \endcode
  */
 class SimObject : public EventManager, public Serializable, public Drainable,
-                  public Stats::Group
+                  public statistics::Group, public Named
 {
   private:
     typedef std::vector<SimObject *> SimObjectList;
 
     /** List of all instantiated simulation objects. */
     static SimObjectList simObjectList;
+
+    /** Helper to resolve an object given its name. */
+    static SimObjectResolver *_objNameResolver;
 
     /** Manager coordinates hooking up probe points with listeners. */
     ProbeManager *probeManager;
@@ -175,12 +183,6 @@ class SimObject : public EventManager, public Serializable, public Drainable,
     virtual ~SimObject();
 
   public:
-
-    /**
-     * @ingroup api_simobject
-     */
-    virtual const std::string name() const { return params().name; }
-
     /**
      * init() is called after all C++ SimObjects have been created and
      * all ports are connected.  Initializations that are independent
@@ -314,9 +316,18 @@ class SimObject : public EventManager, public Serializable, public Drainable,
     void unserialize(CheckpointIn &cp) override {};
 
     /**
-     * Serialize all SimObjects in the system.
+     * Create a checkpoint by serializing all SimObjects in the system.
+     *
+     * This is the entry point in the process of checkpoint creation,
+     * so it will create the checkpoint file and then unfold into
+     * the serialization of all the sim objects declared.
+     *
+     * Each SimObject instance is explicitly and individually serialized
+     * in its own section. As such, the serialization functions should not
+     * be called on sim objects anywhere else; otherwise, these objects
+     * would be needlessly serialized more than once.
      */
-    static void serializeAll(CheckpointOut &cp);
+    static void serializeAll(const std::string &cpt_dir);
 
 #ifdef DEBUG
   public:
@@ -332,6 +343,22 @@ class SimObject : public EventManager, public Serializable, public Drainable,
      * @ingroup api_simobject
      */
     static SimObject *find(const char *name);
+
+    /**
+     * There is a single object name resolver, and it is only set when
+     * simulation is restoring from checkpoints.
+     *
+     * @param Pointer to the single sim object name resolver.
+     */
+    static void setSimObjectResolver(SimObjectResolver *resolver);
+
+    /**
+     * There is a single object name resolver, and it is only set when
+     * simulation is restoring from checkpoints.
+     *
+     * @return Pointer to the single sim object name resolver.
+     */
+    static SimObjectResolver *getSimObjectResolver();
 };
 
 /* Add PARAMS(ClassName) to every descendant of SimObject that needs
@@ -371,5 +398,17 @@ class SimObjectResolver
 #ifdef DEBUG
 void debugObjectBreak(const char *objs);
 #endif
+
+/**
+ * To avoid circular dependencies the unserialization of SimObjects must be
+ * implemented here.
+ *
+ * @ingroup api_serialize
+ */
+void objParamIn(CheckpointIn &cp, const std::string &name, SimObject * &param);
+
+void debug_serialize(const std::string &cpt_dir);
+
+} // namespace gem5
 
 #endif // __SIM_OBJECT_HH__

@@ -43,6 +43,12 @@
 #include "base/bitfield.hh"
 #include "base/intmath.hh"
 
+namespace gem5
+{
+
+namespace branch_prediction
+{
+
 TournamentBP::TournamentBP(const TournamentBPParams &params)
     : BPredUnit(params),
       localPredictorSize(params.localPredictorSize),
@@ -113,9 +119,9 @@ TournamentBP::TournamentBP(const TournamentBPParams &params)
 
     // Set thresholds for the three predictors' counters
     // This is equivalent to (2^(Ctr))/2 - 1
-    localThreshold  = (ULL(1) << (localCtrBits  - 1)) - 1;
-    globalThreshold = (ULL(1) << (globalCtrBits - 1)) - 1;
-    choiceThreshold = (ULL(1) << (choiceCtrBits - 1)) - 1;
+    localThreshold  = (1ULL << (localCtrBits  - 1)) - 1;
+    globalThreshold = (1ULL << (globalCtrBits - 1)) - 1;
+    choiceThreshold = (1ULL << (choiceCtrBits - 1)) - 1;
 }
 
 inline
@@ -164,10 +170,10 @@ TournamentBP::btbUpdate(ThreadID tid, Addr branch_addr, void * &bp_history)
 {
     unsigned local_history_idx = calcLocHistIdx(branch_addr);
     //Update Global History to Not Taken (clear LSB)
-    globalHistory[tid] &= (historyRegisterMask & ~ULL(1));
+    globalHistory[tid] &= (historyRegisterMask & ~1ULL);
     //Update Local History to Not Taken
     localHistoryTable[local_history_idx] =
-       localHistoryTable[local_history_idx] & (localPredictorMask & ~ULL(1));
+       localHistoryTable[local_history_idx] & (localPredictorMask & ~1ULL);
 }
 
 bool
@@ -347,3 +353,6 @@ TournamentBP::squash(ThreadID tid, void *bp_history)
 int
 TournamentBP::BPHistory::newCount = 0;
 #endif
+
+} // namespace branch_prediction
+} // namespace gem5

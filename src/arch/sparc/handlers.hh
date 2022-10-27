@@ -29,9 +29,11 @@
 #ifndef __ARCH_SPARC_HANDLERS_HH__
 #define __ARCH_SPARC_HANDLERS_HH__
 
-#include "arch/sparc/isa_traits.hh"
 #include "arch/sparc/types.hh"
 #include "sim/byteswap.hh"
+
+namespace gem5
+{
 
 namespace SparcISA {
 
@@ -185,4 +187,6 @@ const MachInst spillHandler32[numSpillInsts] =
 };
 
 } // namespace SparcISA
+} // namespace gem5
+
 #endif // __ARCH_SPARC_HANDLERS_HH__

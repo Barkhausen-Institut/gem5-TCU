@@ -37,9 +37,13 @@
 #include "sim/port.hh"
 #include "systemc/ext/core/sc_module.hh"
 
+namespace gem5
+{
+
 class BaseCPU;
 
-namespace FastModel
+GEM5_DEPRECATED_NAMESPACE(FastModel, fastmodel);
+namespace fastmodel
 {
 
 // The fast model exports a class called scx_evs_CortexR52x1 which represents
@@ -67,6 +71,8 @@ class CortexR52 : public Iris::CPU<CortexR52TC>
     void set_evs_param(const std::string &n, T val);
 
     void setCluster(CortexR52Cluster *_cluster, int _num);
+
+    void setResetAddr(Addr addr, bool secure = false) override;
 
     Port &getPort(const std::string &if_name,
             PortID idx=InvalidPortID) override;
@@ -104,6 +110,7 @@ CortexR52::set_evs_param(const std::string &n, T val)
         cluster->set_evs_param(path + "." + n, val);
 }
 
-} // namespace FastModel
+} // namespace fastmodel
+} // namespace gem5
 
 #endif // __ARCH_ARM_FASTMODEL_CORTEXR52_CORETEX_R52_HH__

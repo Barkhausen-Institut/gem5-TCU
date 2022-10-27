@@ -2,8 +2,6 @@
  * Copyright (c) 2015-2017 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -41,6 +39,9 @@
 #include "debug/GPUSRF.hh"
 #include "gpu-compute/register_file.hh"
 #include "gpu-compute/wavefront.hh"
+
+namespace gem5
+{
 
 struct ScalarRegisterFileParams;
 
@@ -97,5 +98,7 @@ class ScalarRegisterFile : public RegisterFile
   private:
     std::vector<ScalarRegU32> regFile;
 };
+
+} // namespace gem5
 
 #endif // __GPU_COMPUTE_SCALAR_REGISTER_FILE_HH__

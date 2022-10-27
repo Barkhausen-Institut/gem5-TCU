@@ -47,6 +47,7 @@
 #include <utility>
 #include <vector>
 
+#include "base/compiler.hh"
 #include "base/types.hh"
 #include "dev/net/etherpkt.hh"
 #include "dnet/os.h"
@@ -64,7 +65,12 @@
 #include "dnet/blob.h"
 #include "dnet/rand.h"
 
-namespace Net {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Net, networking);
+namespace networking
+{
 
 /*
  * Ethernet Stuff
@@ -550,30 +556,33 @@ class Ip6Ptr
 // Dnet supplied ipv6 opt header is incomplete and
 // newer NIC card filters expect a more robust
 // ipv6 header option declaration.
-struct ip6_opt_fragment {
+struct ip6_opt_fragment
+{
     uint16_t offlg;
     uint32_t ident;
 };
 
-struct ip6_opt_routing_type2 {
+struct ip6_opt_routing_type2
+{
     uint8_t type;
     uint8_t segleft;
     uint32_t reserved;
     ip6_addr_t addr;
 };
 
-#define HOME_ADDRESS_OPTION 0xC9
-struct M5_ATTR_PACKED ip6_opt_dstopts {
+struct GEM5_PACKED ip6_opt_dstopts
+{
     uint8_t type;
     uint8_t length;
     ip6_addr_t addr;
 };
 
-struct M5_ATTR_PACKED ip6_opt_hdr
+struct GEM5_PACKED ip6_opt_hdr
 {
     uint8_t ext_nxt;
     uint8_t ext_len;
-    union {
+    union
+    {
         struct ip6_opt_fragment fragment;
         struct ip6_opt_routing_type2 rtType2;
         struct ip6_opt_dstopts dstOpts;
@@ -824,6 +833,7 @@ uint16_t cksum(const UdpPtr &ptr);
  */
 int hsplit(const EthPacketPtr &ptr);
 
-} // namespace Net
+} // namespace networking
+} // namespace gem5
 
 #endif // __BASE_INET_HH__

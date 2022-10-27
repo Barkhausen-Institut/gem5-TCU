@@ -1,4 +1,4 @@
-# Copyright (c) 2012-2020 ARM Limited
+# Copyright (c) 2012-2021 Arm Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -38,6 +38,7 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+from m5.objects.MemCtrl import MemCtrl
 from m5.objects.MemInterface import *
 
 # Enum for the page policy, either open, open_adaptive, close, or
@@ -47,7 +48,8 @@ class PageManage(Enum): vals = ['open', 'open_adaptive', 'close',
 
 class DRAMInterface(MemInterface):
     type = 'DRAMInterface'
-    cxx_header = "mem/mem_interface.hh"
+    cxx_header = "mem/dram_interface.hh"
+    cxx_class = 'gem5::memory::DRAMInterface'
 
     # scheduler page policy
     page_policy = Param.PageManage('open_adaptive', "Page management policy")
@@ -77,11 +79,18 @@ class DRAMInterface(MemInterface):
     # timing behaviour and constraints - all in nanoseconds
 
     # the amount of time in nanoseconds from issuing an activate command
-    # to the data being available in the row buffer for a read/write
-    tRCD = Param.Latency("RAS to CAS delay")
+    # to the data being available in the row buffer for a read
+    tRCD = Param.Latency("RAS to Read CAS delay")
 
-    # the time from issuing a read/write command to seeing the actual data
-    tCL = Param.Latency("CAS latency")
+    # the amount of time in nanoseconds from issuing an activate command
+    # to the data being available in the row buffer for a write
+    tRCD_WR = Param.Latency(Self.tRCD, "RAS to Write CAS delay")
+
+    # the time from issuing a read command to seeing the actual data
+    tCL = Param.Latency("Read CAS latency")
+
+    # the time from issuing a write command to seeing the actual data
+    tCWL = Param.Latency(Self.tCL, "Write CAS latency")
 
     # minimum time between a precharge and subsequent activate
     tRP = Param.Latency("Row precharge time")
@@ -254,6 +263,15 @@ class DRAMInterface(MemInterface):
     # Second voltage range defined by some DRAMs
     VDD2 = Param.Voltage("0V", "2nd Voltage Range")
 
+    def controller(self):
+        """
+        Instantiate the memory controller and bind it to
+        the current interface.
+        """
+        controller = MemCtrl()
+        controller.dram = self
+        return controller
+
 # A single DDR3-1600 x64 channel (one command and address bus), with
 # timings based on a DDR3-1600 4 Gbit datasheet (Micron MT41J512M8) in
 # an 8x8 configuration.
@@ -423,6 +441,17 @@ class HMC_2500_1x32(DDR3_1600_8x8):
     # bandwidth similar to the cycle-accurate model in [2]
     write_buffer_size = 32
     read_buffer_size = 32
+
+    def controller(self):
+        """
+        Instantiate the memory controller and bind it to
+        the current interface.
+        """
+        controller = MemCtrl(min_writes_per_switch = 8,
+            static_backend_latency = '4ns',
+            static_frontend_latency = '4ns')
+        controller.dram = self
+        return controller
 
 # A single DDR3-2133 x64 channel refining a selected subset of the
 # options for the DDR-1600 configuration, based on the same DDR3-1600
@@ -1122,6 +1151,87 @@ class HBM_1000_4H_1x64(HBM_1000_4H_1x128):
 
     # self refresh exit time
     tXS = '65ns'
+
+# A single HBM2 x64 interface (tested with HBMCtrl in gem5)
+# to be used as a single pseudo channel. The timings are based
+# on HBM gen2 specifications. 4H stack, 8Gb per die and total capacity
+# of 4GiB.
+class HBM_2000_4H_1x64(DRAMInterface):
+
+    # 64-bit interface for a single pseudo channel
+    device_bus_width = 64
+
+    # HBM2 supports BL4
+    burst_length = 4
+
+    # size of channel in bytes, 4H stack of 8Gb dies is 4GiB per stack;
+    # with 16 pseudo channels, 256MiB per pseudo channel
+    device_size = "256MiB"
+
+    device_rowbuffer_size = "1KiB"
+
+    # 1x128 configuration
+    devices_per_rank = 1
+
+    ranks_per_channel = 1
+
+    banks_per_rank = 16
+    bank_groups_per_rank = 4
+
+    # 1000 MHz for 2Gbps DDR data rate
+    tCK = "1ns"
+
+    tRP = "14ns"
+
+    tCCD_L = "3ns"
+
+    tRCD = "12ns"
+    tRCD_WR = "6ns"
+    tCL = "18ns"
+    tCWL = "7ns"
+    tRAS = "28ns"
+
+    # BL4 in pseudo channel mode
+    # DDR @ 1000 MHz means 4 * 1ns / 2 = 2ns
+    tBURST = "2ns"
+
+    # value for 2Gb device from JEDEC spec
+    tRFC = "220ns"
+
+    # value for 2Gb device from JEDEC spec
+    tREFI = "3.9us"
+
+    tWR = "14ns"
+    tRTP = "5ns"
+    tWTR = "4ns"
+    tWTR_L = "9ns"
+    tRTW = "18ns"
+
+    #tAAD from RBus
+    tAAD = "1ns"
+
+    # single rank device, set to 0
+    tCS = "0ns"
+
+    tRRD = "4ns"
+    tRRD_L = "6ns"
+
+    # for a single pseudo channel
+    tXAW = "16ns"
+    activation_limit = 4
+
+    # 4tCK
+    tXP = "8ns"
+
+    # start with tRFC + tXP -> 160ns + 8ns = 168ns
+    tXS = "216ns"
+
+    page_policy = 'close_adaptive'
+
+    read_buffer_size = 64
+    write_buffer_size = 64
+
+    two_cycle_activate = True
 
 # A single LPDDR5 x16 interface (one command/address bus)
 # for a single x16 channel with default timings based on

@@ -27,10 +27,13 @@
 
 #include "arch/arm/fastmodel/iris/isa.hh"
 
-#include "arch/arm/miscregs.hh"
+#include "arch/arm/regs/misc.hh"
+#include "base/logging.hh"
 #include "cpu/thread_context.hh"
-#include "params/IrisISA.hh"
 #include "sim/serialize.hh"
+
+namespace gem5
+{
 
 void
 Iris::ISA::serialize(CheckpointOut &cp) const
@@ -40,3 +43,11 @@ Iris::ISA::serialize(CheckpointOut &cp) const
         miscRegs[i] = tc->readMiscRegNoEffect(i);
     SERIALIZE_ARRAY(miscRegs, ArmISA::NUM_PHYS_MISCREGS);
 }
+
+void
+Iris::ISA::copyRegsFrom(ThreadContext *src)
+{
+    panic("copyRegsFrom not implemented");
+}
+
+} // namespace gem5

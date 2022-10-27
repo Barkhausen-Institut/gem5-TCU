@@ -42,6 +42,15 @@
 #include "mem/ruby/network/garnet/flitBuffer.hh"
 #include "mem/ruby/slicc_interface/Message.hh"
 
+namespace gem5
+{
+
+namespace ruby
+{
+
+namespace garnet
+{
+
 NetworkInterface::NetworkInterface(const Params &p)
   : ClockedObject(p), Consumer(this), m_id(p.id),
     m_virtual_networks(p.virt_nets), m_vc_per_vnet(0),
@@ -426,9 +435,12 @@ NetworkInterface::flitisizeMessage(MsgPtr msg_ptr, int vnet)
         route.hops_traversed = -1;
 
         m_net_ptr->increment_injected_packets(vnet);
+        m_net_ptr->update_traffic_distribution(route);
+        int packet_id = m_net_ptr->getNextPacketID();
         for (int i = 0; i < num_flits; i++) {
             m_net_ptr->increment_injected_flits(vnet);
-            flit *fl = new flit(i, vc, vnet, route, num_flits, new_msg_ptr,
+            flit *fl = new flit(packet_id,
+                i, vc, vnet, route, num_flits, new_msg_ptr,
                 m_net_ptr->MessageSizeType_to_int(
                 net_msg_ptr->getMessageSize()),
                 oPort->bitWidth(), curTick());
@@ -669,3 +681,7 @@ NetworkInterface::functionalWrite(Packet *pkt)
     }
     return num_functional_writes;
 }
+
+} // namespace garnet
+} // namespace ruby
+} // namespace gem5

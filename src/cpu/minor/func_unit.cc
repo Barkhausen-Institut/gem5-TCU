@@ -41,9 +41,13 @@
 #include <sstream>
 #include <typeinfo>
 
+#include "base/named.hh"
 #include "base/trace.hh"
 #include "debug/MinorTiming.hh"
 #include "enums/OpClass.hh"
+
+namespace gem5
+{
 
 MinorOpClassSet::MinorOpClassSet(const MinorOpClassSetParams &params) :
     SimObject(params),
@@ -70,7 +74,8 @@ MinorFUTiming::MinorFUTiming(
     opClasses(params.opClasses)
 { }
 
-namespace Minor
+GEM5_DEPRECATED_NAMESPACE(Minor, minor);
+namespace minor
 {
 
 void
@@ -104,7 +109,7 @@ FUPipeline::FUPipeline(const std::string &name, const MinorFU &description_,
     for (unsigned int i = 0; i < description.timings.size(); i++) {
         MinorFUTiming &timing = *(description.timings[i]);
 
-        if (DTRACE(MinorTiming)) {
+        if (debug::MinorTiming) {
             std::ostringstream lats;
 
             unsigned int num_lats = timing.srcRegsRelativeLats.size();
@@ -208,4 +213,5 @@ FUPipeline::findTiming(const StaticInstPtr &inst)
     return NULL;
 }
 
-}
+} // namespace minor
+} // namespace gem5

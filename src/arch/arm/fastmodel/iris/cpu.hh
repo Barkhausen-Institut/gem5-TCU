@@ -35,8 +35,13 @@
 #include "systemc/ext/core/sc_event.hh"
 #include "systemc/ext/core/sc_module.hh"
 
+namespace gem5
+{
+
 namespace Iris
 {
+
+class ThreadContext;
 
 // The base interface of the EVS used by gem5 BaseCPU below.
 class BaseCpuEvs
@@ -46,13 +51,14 @@ class BaseCpuEvs
     virtual void setClkPeriod(Tick clk_period) = 0;
     virtual void setSysCounterFrq(uint64_t sys_counter_frq) = 0;
     virtual void setCluster(SimObject *cluster) = 0;
+    virtual void setResetAddr(int core, Addr addr, bool secure) = 0;
 };
 
 // This CPU class adds some mechanisms which help attach the gem5 and fast
 // model CPUs to each other. It acts as a base class for the gem5 CPU, and
 // holds a pointer to the EVS. It also has some methods for setting up some
 // attributes in the fast model CPU to control its clock rate.
-class BaseCPU : public ::BaseCPU
+class BaseCPU : public gem5::BaseCPU
 {
   public:
     BaseCPU(const BaseCPUParams &params, sc_core::sc_module *_evs);
@@ -74,17 +80,17 @@ class BaseCPU : public ::BaseCPU
     wakeup(ThreadID tid) override
     {
         auto *tc = threadContexts.at(tid);
-        if (tc->status() == ::ThreadContext::Suspended)
+        if (tc->status() == gem5::ThreadContext::Suspended)
             tc->activate();
     }
 
     Counter totalInsts() const override;
     Counter totalOps() const override { return totalInsts(); }
 
-    PortProxy::SendFunctionalFunc
-    getSendFunctional() override
+    virtual void
+    setResetAddr(Addr addr, bool secure = false)
     {
-        return [this] (PacketPtr pkt) { evs_base_cpu->sendFunc(pkt); };
+        panic("%s not implemented.", __FUNCTION__);
     }
 
   protected:
@@ -93,13 +99,13 @@ class BaseCPU : public ::BaseCPU
     Iris::BaseCpuEvs *evs_base_cpu;
 
   protected:
+    friend ThreadContext;
+
     void
     clockPeriodUpdated() override
     {
         evs_base_cpu->setClkPeriod(clockPeriod());
     }
-
-    void init() override;
 
     void serializeThread(CheckpointOut &cp, ThreadID tid) const override;
 };
@@ -131,5 +137,6 @@ class CPU : public Iris::BaseCPU
 };
 
 } // namespace Iris
+} // namespace gem5
 
 #endif // __ARCH_ARM_FASTMODEL_IRIS_CPU_HH__

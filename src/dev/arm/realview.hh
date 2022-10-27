@@ -50,27 +50,20 @@
 #include "dev/platform.hh"
 #include "params/RealView.hh"
 
+namespace gem5
+{
+
 class BaseGic;
 class IdeController;
-class System;
 
 class RealView : public Platform
 {
   public:
-    /** Pointer to the system */
-    System *system;
-
     BaseGic *gic;
 
   public:
     using Params = RealViewParams;
 
-    /**
-     * Constructor for the Tsunami Class.
-     * @param name name of the object
-     * @param s system the object belongs to
-     * @param intctrl pointer to the interrupt controller
-     */
     RealView(const Params &p);
 
     /** Give platform a pointer to interrupt controller */
@@ -83,5 +76,7 @@ class RealView : public Platform
     void postPciInt(int line) override;
     void clearPciInt(int line) override;
 };
+
+} // namespace gem5
 
 #endif // __DEV_ARM_RealView_HH__

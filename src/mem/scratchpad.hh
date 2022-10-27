@@ -36,6 +36,12 @@
 #include "mem/tport.hh"
 #include "params/Scratchpad.hh"
 
+namespace gem5
+{
+
+namespace memory
+{
+
 class Scratchpad : public AbstractMemory
 {
   private:
@@ -80,5 +86,8 @@ class Scratchpad : public AbstractMemory
     Port& getPort(const std::string& if_name,
                   PortID idx = InvalidPortID) override;
 };
+
+}
+}
 
 #endif // __SCRATCHPAD_HH_

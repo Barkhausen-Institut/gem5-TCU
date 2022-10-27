@@ -30,6 +30,11 @@
 
 #include "cpu/tcu-accel/syscallsm.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 std::string
 SyscallSM::stateName() const
 {
@@ -170,4 +175,7 @@ SyscallSM::handleMemResp(PacketPtr pkt)
     stateChanged = state != lastState;
 
     return false;
+}
+
+}
 }

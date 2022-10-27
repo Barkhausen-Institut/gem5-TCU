@@ -47,6 +47,9 @@
 #include "params/FVPBasePwrCtrl.hh"
 #include "sim/system.hh"
 
+namespace gem5
+{
+
 FVPBasePwrCtrl::FVPBasePwrCtrl(const FVPBasePwrCtrlParams &params)
     : BasicPioDevice(params, 0x1000),
       regs(),
@@ -280,7 +283,7 @@ FVPBasePwrCtrl::powerCoreOn(ThreadContext *const tc, PwrStatus *const pwrs)
             npwrs->pc = 0;
         }
     }
-    tc->getCpuPtr()->powerState->set(Enums::PwrState::ON);
+    tc->getCpuPtr()->powerState->set(enums::PwrState::ON);
 }
 
 void
@@ -295,7 +298,7 @@ FVPBasePwrCtrl::powerCoreOff(ThreadContext *const tc, PwrStatus *const pwrs)
     pwrs->pc = 0;
     // Clear power-on reason
     pwrs->wk = 0;
-    tc->getCpuPtr()->powerState->set(Enums::PwrState::OFF);
+    tc->getCpuPtr()->powerState->set(enums::PwrState::OFF);
 }
 
 void
@@ -310,3 +313,5 @@ FVPBasePwrCtrl::startCoreUp(ThreadContext *const tc)
     ArmISA::Reset().invoke(tc);
     tc->activate();
 }
+
+} // namespace gem5

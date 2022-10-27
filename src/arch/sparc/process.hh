@@ -33,10 +33,13 @@
 #include <string>
 #include <vector>
 
-#include "arch/sparc/isa_traits.hh"
+#include "arch/sparc/page_size.hh"
 #include "base/loader/object_file.hh"
 #include "mem/page_table.hh"
 #include "sim/process.hh"
+
+namespace gem5
+{
 
 class SparcProcess : public Process
 {
@@ -47,7 +50,7 @@ class SparcProcess : public Process
     // The locations of the fill and spill handlers
     Addr fillStart, spillStart;
 
-    SparcProcess(const ProcessParams &params, ::Loader::ObjectFile *objFile,
+    SparcProcess(const ProcessParams &params, loader::ObjectFile *objFile,
                  Addr _StackBias);
 
     void initState() override;
@@ -69,7 +72,7 @@ class Sparc32Process : public SparcProcess
 
   public:
 
-    Sparc32Process(const ProcessParams &params, ::Loader::ObjectFile *objFile)
+    Sparc32Process(const ProcessParams &params, loader::ObjectFile *objFile)
         : SparcProcess(params, objFile, 0)
     {
         Addr brk_point = image.maxAddr();
@@ -104,7 +107,7 @@ class Sparc64Process : public SparcProcess
 
   public:
 
-    Sparc64Process(const ProcessParams &params, ::Loader::ObjectFile *objFile)
+    Sparc64Process(const ProcessParams &params, loader::ObjectFile *objFile)
         : SparcProcess(params, objFile, 2047)
     {
         Addr brk_point = image.maxAddr();
@@ -130,5 +133,7 @@ class Sparc64Process : public SparcProcess
 
     void argsInit(int intSize, int pageSize);
 };
+
+} // namespace gem5
 
 #endif // __SPARC_PROCESS_HH__

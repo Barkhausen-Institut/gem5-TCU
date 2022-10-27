@@ -47,6 +47,11 @@
 #include "sim/tile_memory.hh"
 #include "sim/system.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 Tcu::Tcu(const TcuParams &p)
   : BaseTcu(p),
     regFile(*this, name() + ".regFile", p.num_endpoints),
@@ -176,7 +181,7 @@ Tcu::WriteCoverageEvent::process()
                                             _tcu.requestorId, 0,
                                             tc->contextId());
 
-    if (mmu->translateFunctional(tmpReq, tc, BaseTLB::Read) != NoFault)
+    if (mmu->translateFunctional(tmpReq, tc, BaseMMU::Read) != NoFault)
         panic("Translation of address %u failed", _gen.addr());
 
     auto req = std::make_shared<Request>(tmpReq->getPaddr(), _gen.size(),
@@ -615,4 +620,7 @@ Tcu::printPacket(PacketPtr pkt) const
     DPRINTF(TcuPackets, "Dumping packet %s @ %p with %lu bytes\n",
         pkt->cmdString(), pkt->getAddr(), pkt->getSize());
     DDUMP(TcuPackets, pkt->getPtr<uint8_t>(), pkt->getSize());
+}
+
+}
 }

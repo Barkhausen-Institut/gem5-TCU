@@ -31,6 +31,11 @@
 #include "cpu/tcu-accel/ctxswsm.hh"
 #include "debug/TcuAccel.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 AccelCtxSwSM::AccelCtxSwSM(TcuAccel *_accel)
     : accel(_accel),
       state(FETCH_MSG), stateChanged(), switched(), vpe_id(OUR_VPE)
@@ -203,4 +208,7 @@ AccelCtxSwSM::handleMemResp(PacketPtr pkt)
     stateChanged = state != lastState;
 
     return false;
+}
+
+}
 }

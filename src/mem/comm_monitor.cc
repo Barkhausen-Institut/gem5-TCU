@@ -41,7 +41,12 @@
 
 #include "base/trace.hh"
 #include "debug/CommMonitor.hh"
+#include "sim/core.hh"
+#include "sim/cur_tick.hh"
 #include "sim/stats.hh"
+
+namespace gem5
+{
 
 CommMonitor::CommMonitor(const Params &params)
     : SimObject(params),
@@ -49,7 +54,7 @@ CommMonitor::CommMonitor(const Params &params)
       cpuSidePort(name() + "-cpu_side_port", *this),
       samplePeriodicEvent([this]{ samplePeriodic(); }, name()),
       samplePeriodTicks(params.sample_period),
-      samplePeriod(params.sample_period / SimClock::Float::s),
+      samplePeriod(params.sample_period / sim_clock::as_float::s),
       stats(this, params)
 {
     DPRINTF(CommMonitor,
@@ -68,8 +73,8 @@ CommMonitor::init()
 void
 CommMonitor::regProbePoints()
 {
-    ppPktReq.reset(new ProbePoints::Packet(getProbeManager(), "PktRequest"));
-    ppPktResp.reset(new ProbePoints::Packet(getProbeManager(), "PktResponse"));
+    ppPktReq.reset(new probing::Packet(getProbeManager(), "PktRequest"));
+    ppPktResp.reset(new probing::Packet(getProbeManager(), "PktResponse"));
 }
 
 Port &
@@ -96,74 +101,80 @@ CommMonitor::recvFunctionalSnoop(PacketPtr pkt)
     cpuSidePort.sendFunctionalSnoop(pkt);
 }
 
-CommMonitor::MonitorStats::MonitorStats(Stats::Group *parent,
+CommMonitor::MonitorStats::MonitorStats(statistics::Group *parent,
                                         const CommMonitorParams &params)
-    : Stats::Group(parent),
+    : statistics::Group(parent),
 
       disableBurstLengthHists(params.disable_burst_length_hists),
-      ADD_STAT(readBurstLengthHist, UNIT_BYTE,
+      ADD_STAT(readBurstLengthHist, statistics::units::Byte::get(),
                "Histogram of burst lengths of transmitted packets"),
-      ADD_STAT(writeBurstLengthHist, UNIT_BYTE,
+      ADD_STAT(writeBurstLengthHist, statistics::units::Byte::get(),
                "Histogram of burst lengths of transmitted packets"),
 
       disableBandwidthHists(params.disable_bandwidth_hists),
       readBytes(0),
-      ADD_STAT(readBandwidthHist,
-               UNIT_RATE(Stats::Units::Byte, Stats::Units::Second),
+      ADD_STAT(readBandwidthHist, statistics::units::Rate<
+                    statistics::units::Byte, statistics::units::Second>::get(),
                "Histogram of read bandwidth per sample period"),
-      ADD_STAT(totalReadBytes, UNIT_BYTE, "Number of bytes read"),
-      ADD_STAT(averageReadBandwidth,
-               UNIT_RATE(Stats::Units::Byte, Stats::Units::Second),
+      ADD_STAT(totalReadBytes, statistics::units::Byte::get(),
+               "Number of bytes read"),
+      ADD_STAT(averageReadBandwidth, statistics::units::Rate<
+                    statistics::units::Byte, statistics::units::Second>::get(),
                "Average read bandwidth",
                totalReadBytes / simSeconds),
 
       writtenBytes(0),
-      ADD_STAT(writeBandwidthHist,
-               UNIT_RATE(Stats::Units::Byte, Stats::Units::Second),
+      ADD_STAT(writeBandwidthHist, statistics::units::Rate<
+                    statistics::units::Byte, statistics::units::Second>::get(),
                "Histogram of write bandwidth"),
-      ADD_STAT(totalWrittenBytes,
-               UNIT_RATE(Stats::Units::Byte, Stats::Units::Second),
+      ADD_STAT(totalWrittenBytes, statistics::units::Rate<
+                    statistics::units::Byte, statistics::units::Second>::get(),
                "Number of bytes written"),
-      ADD_STAT(averageWriteBandwidth,
-               UNIT_RATE(Stats::Units::Byte, Stats::Units::Second),
+      ADD_STAT(averageWriteBandwidth, statistics::units::Rate<
+                    statistics::units::Byte, statistics::units::Second>::get(),
                "Average write bandwidth",
                totalWrittenBytes / simSeconds),
 
       disableLatencyHists(params.disable_latency_hists),
-      ADD_STAT(readLatencyHist, UNIT_TICK, "Read request-response latency"),
-      ADD_STAT(writeLatencyHist, UNIT_TICK, "Write request-response latency"),
+      ADD_STAT(readLatencyHist, statistics::units::Tick::get(),
+               "Read request-response latency"),
+      ADD_STAT(writeLatencyHist, statistics::units::Tick::get(),
+               "Write request-response latency"),
 
       disableITTDists(params.disable_itt_dists),
-      ADD_STAT(ittReadRead, UNIT_TICK, "Read-to-read inter transaction time"),
-      ADD_STAT(ittWriteWrite, UNIT_TICK,
+      ADD_STAT(ittReadRead, statistics::units::Tick::get(),
+               "Read-to-read inter transaction time"),
+      ADD_STAT(ittWriteWrite, statistics::units::Tick::get(),
                "Write-to-write inter transaction time"),
-      ADD_STAT(ittReqReq, UNIT_TICK,
+      ADD_STAT(ittReqReq, statistics::units::Tick::get(),
                "Request-to-request inter transaction time"),
       timeOfLastRead(0), timeOfLastWrite(0), timeOfLastReq(0),
 
       disableOutstandingHists(params.disable_outstanding_hists),
-      ADD_STAT(outstandingReadsHist, UNIT_COUNT,
+      ADD_STAT(outstandingReadsHist, statistics::units::Count::get(),
                "Outstanding read transactions"),
       outstandingReadReqs(0),
-      ADD_STAT(outstandingWritesHist, UNIT_COUNT,
+      ADD_STAT(outstandingWritesHist, statistics::units::Count::get(),
                "Outstanding write transactions"),
       outstandingWriteReqs(0),
 
       disableTransactionHists(params.disable_transaction_hists),
-      ADD_STAT(readTransHist, UNIT_COUNT,
+      ADD_STAT(readTransHist, statistics::units::Count::get(),
                "Histogram of read transactions per sample period"),
       readTrans(0),
-      ADD_STAT(writeTransHist, UNIT_COUNT,
+      ADD_STAT(writeTransHist, statistics::units::Count::get(),
                "Histogram of write transactions per sample period"),
       writeTrans(0),
 
       disableAddrDists(params.disable_addr_dists),
       readAddrMask(params.read_addr_mask),
       writeAddrMask(params.write_addr_mask),
-      ADD_STAT(readAddrDist, UNIT_COUNT, "Read address distribution"),
-      ADD_STAT(writeAddrDist, UNIT_COUNT, "Write address distribution")
+      ADD_STAT(readAddrDist, statistics::units::Count::get(),
+               "Read address distribution"),
+      ADD_STAT(writeAddrDist, statistics::units::Count::get(),
+               "Write address distribution")
 {
-    using namespace Stats;
+    using namespace statistics;
 
     readBurstLengthHist
         .init(params.burst_length_bins)
@@ -246,7 +257,7 @@ CommMonitor::MonitorStats::MonitorStats(Stats::Group *parent,
 
 void
 CommMonitor::MonitorStats::updateReqStats(
-    const ProbePoints::PacketInfo& pkt_info, bool is_atomic,
+    const probing::PacketInfo& pkt_info, bool is_atomic,
     bool expects_response)
 {
     if (pkt_info.cmd.isRead()) {
@@ -313,7 +324,7 @@ CommMonitor::MonitorStats::updateReqStats(
 
 void
 CommMonitor::MonitorStats::updateRespStats(
-    const ProbePoints::PacketInfo& pkt_info, Tick latency, bool is_atomic)
+    const probing::PacketInfo& pkt_info, Tick latency, bool is_atomic)
 {
     if (pkt_info.cmd.isRead()) {
         // Decrement number of outstanding read requests
@@ -348,7 +359,7 @@ CommMonitor::recvAtomic(PacketPtr pkt)
 {
     const bool expects_response(pkt->needsResponse() &&
                                 !pkt->cacheResponding());
-    ProbePoints::PacketInfo req_pkt_info(pkt);
+    probing::PacketInfo req_pkt_info(pkt);
     ppPktReq->notify(req_pkt_info);
 
     const Tick delay(memSidePort.sendAtomic(pkt));
@@ -359,7 +370,7 @@ CommMonitor::recvAtomic(PacketPtr pkt)
 
     // Some packets, such as WritebackDirty, don't need response.
     assert(pkt->isResponse() || !expects_response);
-    ProbePoints::PacketInfo resp_pkt_info(pkt);
+    probing::PacketInfo resp_pkt_info(pkt);
     ppPktResp->notify(resp_pkt_info);
     return delay;
 }
@@ -378,7 +389,7 @@ CommMonitor::recvTimingReq(PacketPtr pkt)
 
     // Store relevant fields of packet, because packet may be modified
     // or even deleted when sendTiming() is called.
-    const ProbePoints::PacketInfo pkt_info(pkt);
+    const probing::PacketInfo pkt_info(pkt);
 
     const bool expects_response(pkt->needsResponse() &&
                                 !pkt->cacheResponding());
@@ -419,7 +430,7 @@ CommMonitor::recvTimingResp(PacketPtr pkt)
 
     // Store relevant fields of packet, because packet may be modified
     // or even deleted when sendTiming() is called.
-    const ProbePoints::PacketInfo pkt_info(pkt);
+    const probing::PacketInfo pkt_info(pkt);
 
     Tick latency = 0;
     CommMonitorSenderState* received_state =
@@ -559,3 +570,5 @@ CommMonitor::startup()
 {
     schedule(samplePeriodicEvent, curTick() + samplePeriodTicks);
 }
+
+} // namespace gem5

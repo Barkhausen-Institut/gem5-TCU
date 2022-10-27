@@ -39,7 +39,11 @@
 
 #include "base/statistics.hh"
 
-namespace Stats
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Stats, statistics);
+namespace statistics
 {
 
 extern void pythonDump();
@@ -50,4 +54,5 @@ void registerPythonStatsHandlers()
     registerHandlers(pythonReset, pythonDump);
 }
 
-} // namespace Stats
+} // namespace statistics
+} // namespace gem5

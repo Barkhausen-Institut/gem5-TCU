@@ -43,11 +43,15 @@
 
 #include "mem/translating_port_proxy.hh"
 
+namespace gem5
+{
+
 class SETranslatingPortProxy : public TranslatingPortProxy
 {
 
   public:
-    enum AllocType {
+    enum AllocType
+    {
         Always,
         Never,
         NextPage
@@ -57,11 +61,14 @@ class SETranslatingPortProxy : public TranslatingPortProxy
     AllocType allocating;
 
   protected:
-    bool fixupAddr(Addr addr, BaseTLB::Mode mode) const override;
+    bool fixupRange(const TranslationGen::Range &range,
+            BaseMMU::Mode mode) const override;
 
   public:
     SETranslatingPortProxy(ThreadContext *tc, AllocType alloc=NextPage,
                            Request::Flags _flags=0);
 };
+
+} // namespace gem5
 
 #endif // __MEM_SE_TRANSLATING_PORT_PROXY_HH__

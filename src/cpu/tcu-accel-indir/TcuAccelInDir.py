@@ -33,5 +33,6 @@ from m5.proxy import *
 class TcuAccelInDir(TcuAccel):
     type = 'TcuAccelInDir'
     cxx_header = "cpu/tcu-accel-indir/accelerator.hh"
+    cxx_class = 'gem5::tcu::TcuAccelInDir'
 
     buf_size = Param.MemorySize("4kB", "The size of the buffer")

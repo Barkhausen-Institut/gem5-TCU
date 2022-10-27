@@ -38,166 +38,153 @@
 #ifndef __CPU_INST_RES_HH__
 #define __CPU_INST_RES_HH__
 
+#include <any>
 #include <type_traits>
 
-#include "arch/generic/types.hh"
-#include "arch/generic/vec_reg.hh"
+#include "base/logging.hh"
+#include "base/types.hh"
+
+namespace gem5
+{
 
 class InstResult
 {
-  public:
-    union MultiResult {
-        uint64_t integer;
-        double dbl;
-        TheISA::VecRegContainer vector;
-        TheISA::VecElem vecElem;
-        TheISA::VecPredRegContainer pred;
-        MultiResult() {}
-    };
-
-    enum class ResultType {
-        Scalar,
-        VecElem,
-        VecReg,
-        VecPredReg,
-        NumResultTypes,
-        Invalid
-    };
-
   private:
-    MultiResult result;
-    ResultType type;
+    std::any result;
+    std::function<bool(const std::any &a, const std::any &b)> equals;
 
   public:
     /** Default constructor creates an invalid result. */
-    InstResult() : type(ResultType::Invalid) { }
+    InstResult() :
+        // This InstResult is empty, and will only equal other InstResults
+        // which are also empty.
+        equals([](const std::any &a, const std::any &b) -> bool {
+            gem5_assert(!a.has_value());
+            return !b.has_value();
+        })
+    {}
     InstResult(const InstResult &) = default;
-    /** Scalar result from scalar. */
-    template<typename T>
-    explicit InstResult(T i, const ResultType& t) : type(t) {
-        static_assert(std::is_integral<T>::value ^
-                        std::is_floating_point<T>::value,
-                "Parameter type is neither integral nor fp, or it is both");
-        if (std::is_integral<T>::value) {
-            result.integer = i;
-        } else if (std::is_floating_point<T>::value) {
-            result.dbl = i;
-        }
+
+    template <typename T>
+    explicit InstResult(T val) : result(val),
+
+        // Set equals so it knows how to compare results of type T.
+        equals([](const std::any &a, const std::any &b) -> bool {
+            // If one has a value but the other doesn't, not equal.
+            if (a.has_value() != b.has_value())
+                return false;
+            // If they are both empty, equal.
+            if (!a.has_value())
+                return true;
+            // At least the local object should be of the right type.
+            gem5_assert(a.type() == typeid(T));
+            // If these aren't the same type, not equal.
+            if (a.type() != b.type())
+                return false;
+            // We now know these both hold a result of the right type.
+            return std::any_cast<const T&>(a) == std::any_cast<const T&>(b);
+        })
+    {
+        static_assert(!std::is_pointer_v<T>,
+                "InstResult shouldn't point to external data.");
+        // Floating point values should be converted to/from ints using
+        // floatToBits and bitsToFloat, and not stored in InstResult directly.
+        static_assert(!std::is_floating_point_v<T>,
+                "Floating point values should be converted to/from ints.");
     }
-    /** Vector result. */
-    explicit InstResult(const TheISA::VecRegContainer& v, const ResultType& t)
-        : type(t) { result.vector = v; }
-    /** Predicate result. */
-    explicit InstResult(const TheISA::VecPredRegContainer& v,
-            const ResultType& t)
-        : type(t) { result.pred = v; }
 
-    InstResult& operator=(const InstResult& that) {
-        type = that.type;
-        switch (type) {
-        /* Given that misc regs are not written to, there may be invalids in
-         * the result stack. */
-        case ResultType::Invalid:
-            break;
-        case ResultType::Scalar:
-            result.integer = that.result.integer;
-            break;
-        case ResultType::VecElem:
-            result.vecElem = that.result.vecElem;
-            break;
-        case ResultType::VecReg:
-            result.vector = that.result.vector;
-            break;
-        case ResultType::VecPredReg:
-            result.pred = that.result.pred;
-            break;
+    // Convert floating point values to integers.
+    template <typename T,
+             std::enable_if_t<std::is_floating_point_v<T>, int> = 0>
+    explicit InstResult(T val) : InstResult(floatToBits(val)) {}
 
-        default:
-            panic("Assigning result from unknown result type");
-            break;
-        }
+    // Convert all integer types to RegVal.
+    template <typename T,
+        std::enable_if_t<std::is_integral_v<T> && !std::is_same_v<T, RegVal>,
+                         int> = 0>
+    explicit InstResult(T val) : InstResult(static_cast<RegVal>(val)) {}
+
+    InstResult &
+    operator=(const InstResult& that)
+    {
+        result = that.result;
+        equals = that.equals;
         return *this;
     }
+
     /**
      * Result comparison
      * Two invalid results always differ.
      */
-    bool operator==(const InstResult& that) const {
-        if (this->type != that.type)
-            return false;
-        switch (type) {
-        case ResultType::Scalar:
-            return result.integer == that.result.integer;
-        case ResultType::VecElem:
-            return result.vecElem == that.result.vecElem;
-        case ResultType::VecReg:
-            return result.vector == that.result.vector;
-        case ResultType::VecPredReg:
-            return result.pred == that.result.pred;
-        case ResultType::Invalid:
-            return false;
-        default:
-            panic("Unknown type of result: %d\n", (int)type);
-        }
+    bool
+    operator==(const InstResult& that) const
+    {
+        return equals(result, that.result);
     }
 
-    bool operator!=(const InstResult& that) const {
+    bool
+    operator!=(const InstResult& that) const
+    {
         return !operator==(that);
     }
 
     /** Checks */
     /** @{ */
-    /** Is this a scalar result?. */
-    bool isScalar() const { return type == ResultType::Scalar; }
-    /** Is this a vector result?. */
-    bool isVector() const { return type == ResultType::VecReg; }
-    /** Is this a vector element result?. */
-    bool isVecElem() const { return type == ResultType::VecElem; }
-    /** Is this a predicate result?. */
-    bool isPred() const { return type == ResultType::VecPredReg; }
+
+    template <typename T>
+    bool
+    is() const
+    {
+        static_assert(!std::is_floating_point_v<T>,
+                "Floating point values should be converted to/from ints.");
+        return result.type() == typeid(T);
+    }
+
+    template <typename T>
+    std::enable_if_t<std::is_integral_v<T> && !std::is_same_v<T, RegVal>, bool>
+    is() const
+    {
+        return is<RegVal>();
+    }
+
     /** Is this a valid result?. */
-    bool isValid() const { return type != ResultType::Invalid; }
+    bool isValid() const { return result.has_value(); }
     /** @} */
 
     /** Explicit cast-like operations. */
     /** @{ */
-    const uint64_t&
-    asInteger() const
+    template <typename T>
+    T
+    as() const
     {
-        assert(isScalar());
-        return result.integer;
+        assert(is<T>());
+        return std::any_cast<T>(result);
+    }
+
+    template <typename T>
+    std::enable_if_t<std::is_integral_v<T> && !std::is_same_v<T, RegVal>,
+                     RegVal>
+    as() const
+    {
+        return as<RegVal>();
     }
 
     /** Cast to integer without checking type.
      * This is required to have the o3 cpu checker happy, as it
      * compares results as integers without being fully aware of
      * their nature. */
-    const uint64_t&
-    asIntegerNoAssert() const
+    template <typename T>
+    T
+    asNoAssert() const
     {
-        return result.integer;
-    }
-    const TheISA::VecRegContainer&
-    asVector() const
-    {
-        panic_if(!isVector(), "Converting scalar (or invalid) to vector!!");
-        return result.vector;
-    }
-    const TheISA::VecElem&
-    asVectorElem() const
-    {
-        panic_if(!isVecElem(), "Converting scalar (or invalid) to vector!!");
-        return result.vecElem;
-    }
-
-    const TheISA::VecPredRegContainer&
-    asPred() const
-    {
-        panic_if(!isPred(), "Converting scalar (or invalid) to predicate!!");
-        return result.pred;
+        if (!is<T>())
+            return T{};
+        return as<T>();
     }
 
     /** @} */
 };
+
+} // namespace gem5
 
 #endif // __CPU_INST_RES_HH__

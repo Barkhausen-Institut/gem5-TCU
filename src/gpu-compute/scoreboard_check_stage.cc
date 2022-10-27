@@ -2,8 +2,6 @@
  * Copyright (c) 2014-2015 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -43,6 +41,9 @@
 #include "gpu-compute/vector_register_file.hh"
 #include "gpu-compute/wavefront.hh"
 #include "params/ComputeUnit.hh"
+
+namespace gem5
+{
 
 ScoreboardCheckStage::ScoreboardCheckStage(const ComputeUnitParams &p,
                                            ComputeUnit &cu,
@@ -153,7 +154,7 @@ ScoreboardCheckStage::ready(Wavefront *w, nonrdytype_e *rdyStatus,
     if (!(ii->isBarrier() || ii->isNop() || ii->isReturn() || ii->isBranch() ||
          ii->isALU() || ii->isLoad() || ii->isStore() || ii->isAtomic() ||
          ii->isEndOfKernel() || ii->isMemSync() || ii->isFlat() ||
-         ii->isSleep())) {
+         ii->isFlatGlobal() || ii->isSleep())) {
         panic("next instruction: %s is of unknown type\n", ii->disassemble());
     }
 
@@ -277,8 +278,8 @@ ScoreboardCheckStage::exec()
 }
 
 ScoreboardCheckStage::
-ScoreboardCheckStageStats::ScoreboardCheckStageStats(Stats::Group *parent)
-    : Stats::Group(parent, "ScoreboardCheckStage"),
+ScoreboardCheckStageStats::ScoreboardCheckStageStats(statistics::Group *parent)
+    : statistics::Group(parent, "ScoreboardCheckStage"),
       ADD_STAT(stallCycles, "number of cycles wave stalled in SCB")
 {
     stallCycles.init(NRDY_CONDITIONS);
@@ -291,3 +292,5 @@ ScoreboardCheckStageStats::ScoreboardCheckStageStats(Stats::Group *parent)
     stallCycles.subname(NRDY_SGPR_NRDY, csprintf("SgprBusy"));
     stallCycles.subname(INST_RDY, csprintf("InstrReady"));
 }
+
+} // namespace gem5

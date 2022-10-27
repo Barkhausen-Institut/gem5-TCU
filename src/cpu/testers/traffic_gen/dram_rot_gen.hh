@@ -50,6 +50,9 @@
 #include "enums/AddrMap.hh"
 #include "mem/packet.hh"
 
+namespace gem5
+{
+
 class DramRotGen : public DramGen
 {
 
@@ -89,7 +92,7 @@ class DramRotGen : public DramGen
             uint8_t read_percent, Addr data_limit,
             unsigned int num_seq_pkts, unsigned int page_size,
             unsigned int nbr_of_banks_DRAM, unsigned int nbr_of_banks_util,
-            Enums::AddrMap addr_mapping,
+            enums::AddrMap addr_mapping,
             unsigned int nbr_of_ranks,
             unsigned int max_seq_count_per_rank)
         : DramGen(obj, requestor_id, _duration, start_addr, end_addr,
@@ -122,5 +125,7 @@ class DramRotGen : public DramGen
         packet series       */
     unsigned int nextSeqCount;
 };
+
+} // namespace gem5
 
 #endif

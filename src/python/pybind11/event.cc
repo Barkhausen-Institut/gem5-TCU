@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017 ARM Limited
+ * Copyright (c) 2017, 2021 Arm Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -51,6 +51,8 @@
 
 namespace py = pybind11;
 
+namespace gem5
+{
 
 /**
  * PyBind wrapper for Events
@@ -105,6 +107,7 @@ pybind_init_event(py::module_ &m_native)
 
     m.def("simulate", &simulate,
           py::arg("ticks") = MaxTick);
+    m.def("terminateEventQueueThreads", &terminateEventQueueThreads);
     m.def("exitSimLoop", &exitSimLoop);
     m.def("getEventQueue", []() { return curEventQueue(); },
           py::return_value_policy::reference);
@@ -132,18 +135,7 @@ pybind_init_event(py::module_ &m_native)
                std::unique_ptr<GlobalSimLoopExitEvent, py::nodelete>>(
                m, "GlobalSimLoopExitEvent")
         .def("getCause", &GlobalSimLoopExitEvent::getCause)
-#if PY_MAJOR_VERSION >= 3
         .def("getCode", &GlobalSimLoopExitEvent::getCode)
-#else
-        // Workaround for an issue where PyBind11 converts the exit
-        // code to a long. This is normally fine, but sys.exit treats
-        // any non-int type as an error and exits with status 1 if it
-        // is passed a long.
-        .def("getCode", [](GlobalSimLoopExitEvent *e) {
-                return py::reinterpret_steal<py::object>(
-                    PyInt_FromLong(e->getCode()));
-            })
-#endif
         ;
 
     // Event base class. These should never be returned directly to
@@ -183,3 +175,5 @@ pybind_init_event(py::module_ &m_native)
     PRIO(Sim_Exit_Pri);
     PRIO(Maximum_Pri);
 }
+
+} // namespace gem5

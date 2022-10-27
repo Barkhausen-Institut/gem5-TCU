@@ -60,6 +60,9 @@
 #include "params/BaseTags.hh"
 #include "sim/clocked_object.hh"
 
+namespace gem5
+{
+
 class System;
 class IndexingPolicy;
 class ReplaceableEntry;
@@ -105,7 +108,7 @@ class BaseTags : public ClockedObject
     /**
      * TODO: It would be good if these stats were acquired after warmup.
      */
-    struct BaseTagStats : public Stats::Group
+    struct BaseTagStats : public statistics::Group
     {
         BaseTagStats(BaseTags &tags);
 
@@ -115,46 +118,46 @@ class BaseTags : public ClockedObject
         BaseTags &tags;
 
         /** Per tick average of the number of tags that hold valid data. */
-        Stats::Average tagsInUse;
+        statistics::Average tagsInUse;
 
         /** The total number of references to a block before it is replaced. */
-        Stats::Scalar totalRefs;
+        statistics::Scalar totalRefs;
 
         /**
          * The number of reference counts sampled. This is different
          * from replacements because we sample all the valid blocks
          * when the simulator exits.
          */
-        Stats::Scalar sampledRefs;
+        statistics::Scalar sampledRefs;
 
         /**
          * Average number of references to a block before is was replaced.
          * @todo This should change to an average stat once we have them.
          */
-        Stats::Formula avgRefs;
+        statistics::Formula avgRefs;
 
         /** The tick that the warmup percentage was hit. 0 on failure. */
-        Stats::Scalar warmupTick;
+        statistics::Scalar warmupTick;
 
         /** Average occupancy of each requestor using the cache */
-        Stats::AverageVector occupancies;
+        statistics::AverageVector occupancies;
 
         /** Average occ % of each requestor using the cache */
-        Stats::Formula avgOccs;
+        statistics::Formula avgOccs;
 
         /** Occupancy of each context/cpu using the cache */
-        Stats::Vector occupanciesTaskId;
+        statistics::Vector occupanciesTaskId;
 
         /** Occupancy of each context/cpu using the cache */
-        Stats::Vector2d ageTaskId;
+        statistics::Vector2d ageTaskId;
 
         /** Occ ratio of each context/cpu using the cache */
-        Stats::Formula ratioOccsTaskId;
+        statistics::Formula ratioOccsTaskId;
 
         /** Number of tags consulted over all accesses. */
-        Stats::Scalar tagAccesses;
+        statistics::Scalar tagAccesses;
         /** Number of data blocks consulted over all accesses. */
-        Stats::Scalar dataAccesses;
+        statistics::Scalar dataAccesses;
     } stats;
 
   public:
@@ -288,12 +291,11 @@ class BaseTags : public ClockedObject
      * should only be used as such. Returns the tag lookup latency as a side
      * effect.
      *
-     * @param addr The address to find.
-     * @param is_secure True if the target memory space is secure.
+     * @param pkt The packet holding the address to find.
      * @param lat The latency of the tag lookup.
      * @return Pointer to the cache block if found.
      */
-    virtual CacheBlk* accessBlock(Addr addr, bool is_secure, Cycles &lat) = 0;
+    virtual CacheBlk* accessBlock(const PacketPtr pkt, Cycles &lat) = 0;
 
     /**
      * Generate the tag from the given address.
@@ -365,5 +367,7 @@ class BaseTags : public ClockedObject
      */
     void computeStatsVisitor(CacheBlk &blk);
 };
+
+} // namespace gem5
 
 #endif //__MEM_CACHE_TAGS_BASE_HH__

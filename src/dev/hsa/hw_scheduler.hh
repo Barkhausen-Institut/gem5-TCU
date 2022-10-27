@@ -2,8 +2,6 @@
  * Copyright (c) 2016-2017 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -34,11 +32,20 @@
 #ifndef __DEV_HSA_HW_SCHEDULER_HH__
 #define __DEV_HSA_HW_SCHEDULER_HH__
 
+#include <cstdint>
+#include <map>
+
+#include "base/types.hh"
 #include "dev/hsa/hsa_packet_processor.hh"
+#include "enums/GfxVersion.hh"
+#include "sim/eventq.hh"
 
 // We allocate one PIO page for doorbells and each
 // address is 8 bytes
 #define MAX_ACTIVE_QUEUES (PAGE_SIZE/8)
+
+namespace gem5
+{
 
 class HWScheduler
 {
@@ -47,12 +54,14 @@ class HWScheduler
                : hsaPP(hsa_pp), nextALId(0), nextRLId(0),
                  wakeupDelay(wakeup_delay), schedWakeupEvent(this)
     {}
-    void write(Addr db_addr, uint32_t doorbell_reg);
+    void write(Addr db_addr, uint64_t doorbell_reg);
     void registerNewQueue(uint64_t hostReadIndexPointer,
                           uint64_t basePointer,
                           uint64_t queue_id,
-                          uint32_t size);
-    void unregisterQueue(uint64_t queue_id);
+                          uint32_t size, int doorbellSize,
+                          GfxVersion gfxVersion,
+                          Addr offset = 0, uint64_t rd_idx = 0);
+    void unregisterQueue(uint64_t queue_id, int doorbellSize);
     void wakeup();
     void schedWakeup();
     class SchedulerWakeupEvent : public Event
@@ -82,8 +91,10 @@ class HWScheduler
     // Active list keeps track of all queues created
     std::map<uint32_t, QCntxt> activeList;
     //TODO: Modify this to support multi-process in the future.
-    // doorbell map, maps doorbells to active list entry
+    // doorbell map, maps doorbell offsets to queue ID
     std::map<Addr, uint32_t> dbMap;
+    // Reverse of doorbell map, maps queue ID to doorbell offset
+    std::map<uint64_t, Addr> qidMap;
     // regdListMap keeps track of the mapping of queues to
     // registered list. regdListMap is indexed with active
     // list index (which is same as queue ID)
@@ -100,5 +111,7 @@ class HWScheduler
     const Tick wakeupDelay;
     SchedulerWakeupEvent schedWakeupEvent;
 };
+
+} // namespace gem5
 
 #endif // __DEV_HSA_HW_SCHEDULER_HH__

@@ -42,7 +42,12 @@
 #define __ARCH_ARM_MACROMEM_HH__
 
 #include "arch/arm/insts/pred_inst.hh"
+#include "arch/arm/pcstate.hh"
 #include "arch/arm/tlb.hh"
+#include "cpu/thread_context.hh"
+
+namespace gem5
+{
 
 namespace ArmISA
 {
@@ -72,15 +77,30 @@ class MicroOp : public PredOp
 
   public:
     void
-    advancePC(PCState &pcState) const override
+    advancePC(PCStateBase &pcState) const override
     {
+        auto &apc = pcState.as<PCState>();
         if (flags[IsLastMicroop]) {
-            pcState.uEnd();
+            apc.uEnd();
         } else if (flags[IsMicroop]) {
-            pcState.uAdvance();
+            apc.uAdvance();
         } else {
-            pcState.advance();
+            apc.advance();
         }
+    }
+
+    void
+    advancePC(ThreadContext *tc) const override
+    {
+        PCState pc = tc->pcState().as<PCState>();
+        if (flags[IsLastMicroop]) {
+            pc.uEnd();
+        } else if (flags[IsMicroop]) {
+            pc.uAdvance();
+        } else {
+            pc.advance();
+        }
+        tc->pcState(pc);
     }
 };
 
@@ -93,15 +113,30 @@ class MicroOpX : public ArmStaticInst
 
   public:
     void
-    advancePC(PCState &pcState) const override
+    advancePC(PCStateBase &pcState) const override
     {
+        auto &apc = pcState.as<PCState>();
         if (flags[IsLastMicroop]) {
-            pcState.uEnd();
+            apc.uEnd();
         } else if (flags[IsMicroop]) {
-            pcState.uAdvance();
+            apc.uAdvance();
         } else {
-            pcState.advance();
+            apc.advance();
         }
+    }
+
+    void
+    advancePC(ThreadContext *tc) const override
+    {
+        PCState pc = tc->pcState().as<PCState>();
+        if (flags[IsLastMicroop]) {
+            pc.uEnd();
+        } else if (flags[IsMicroop]) {
+            pc.uAdvance();
+        } else {
+            pc.advance();
+        }
+        tc->pcState(pc);
     }
 };
 
@@ -252,17 +287,17 @@ class VstSingleOp64 : public PredMacroOp
 class MicroSetPCCPSR : public MicroOp
 {
     protected:
-    IntRegIndex ura, urb, urc;
+    RegIndex ura, urb, urc;
 
     MicroSetPCCPSR(const char *mnem, ExtMachInst machInst, OpClass __opClass,
-                   IntRegIndex _ura, IntRegIndex _urb, IntRegIndex _urc)
+                   RegIndex _ura, RegIndex _urb, RegIndex _urc)
         : MicroOp(mnem, machInst, __opClass),
           ura(_ura), urb(_urb), urc(_urc)
     {
     }
 
     std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+            Addr pc, const loader::SymbolTable *symtab) const override;
 };
 
 /**
@@ -281,7 +316,7 @@ class MicroIntMov : public MicroOp
     }
 
     std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+            Addr pc, const loader::SymbolTable *symtab) const override;
 };
 
 /**
@@ -301,7 +336,7 @@ class MicroIntImmOp : public MicroOp
     }
 
     std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+            Addr pc, const loader::SymbolTable *symtab) const override;
 };
 
 class MicroIntImmXOp : public MicroOpX
@@ -318,7 +353,7 @@ class MicroIntImmXOp : public MicroOpX
     }
 
     std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+            Addr pc, const loader::SymbolTable *symtab) const override;
 };
 
 /**
@@ -337,7 +372,7 @@ class MicroIntOp : public MicroOp
     }
 
     std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+            Addr pc, const loader::SymbolTable *symtab) const override;
 };
 
 class MicroIntRegXOp : public MicroOp
@@ -357,7 +392,7 @@ class MicroIntRegXOp : public MicroOp
     }
 
     std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+            Addr pc, const loader::SymbolTable *symtab) const override;
 };
 
 /**
@@ -392,12 +427,12 @@ class MicroMemOp : public MicroIntImmOp
     MicroMemOp(const char *mnem, ExtMachInst machInst, OpClass __opClass,
                RegIndex _ura, RegIndex _urb, bool _up, uint8_t _imm)
             : MicroIntImmOp(mnem, machInst, __opClass, _ura, _urb, _imm),
-              up(_up), memAccessFlags(TLB::AlignWord)
+              up(_up), memAccessFlags(MMU::AlignWord)
     {
     }
 
     std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+            Addr pc, const loader::SymbolTable *symtab) const override;
 };
 
 class MicroMemPairOp : public MicroOp
@@ -413,12 +448,12 @@ class MicroMemPairOp : public MicroOp
             bool _up, uint8_t _imm)
         : MicroOp(mnem, machInst, __opClass),
         dest(_dreg1), dest2(_dreg2), urb(_base), up(_up), imm(_imm),
-        memAccessFlags(TLB::AlignWord)
+        memAccessFlags(MMU::AlignWord)
     {
     }
 
     std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+            Addr pc, const loader::SymbolTable *symtab) const override;
 };
 
 /**
@@ -428,7 +463,7 @@ class MacroMemOp : public PredMacroOp
 {
   protected:
     MacroMemOp(const char *mnem, ExtMachInst machInst, OpClass __opClass,
-               IntRegIndex rn, bool index, bool up, bool user,
+               RegIndex rn, bool index, bool up, bool user,
                bool writeback, bool load, uint32_t reglist);
 };
 
@@ -438,7 +473,8 @@ class MacroMemOp : public PredMacroOp
 class PairMemOp : public PredMacroOp
 {
   public:
-    enum AddrMode {
+    enum AddrMode
+    {
         AddrMd_Offset,
         AddrMd_PreIndex,
         AddrMd_PostIndex
@@ -448,43 +484,43 @@ class PairMemOp : public PredMacroOp
     PairMemOp(const char *mnem, ExtMachInst machInst, OpClass __opClass,
               uint32_t size, bool fp, bool load, bool noAlloc, bool signExt,
               bool exclusive, bool acrel, int64_t imm, AddrMode mode,
-              IntRegIndex rn, IntRegIndex rt, IntRegIndex rt2);
+              RegIndex rn, RegIndex rt, RegIndex rt2);
 };
 
 class BigFpMemImmOp : public PredMacroOp
 {
   protected:
     BigFpMemImmOp(const char *mnem, ExtMachInst machInst, OpClass __opClass,
-                  bool load, IntRegIndex dest, IntRegIndex base, int64_t imm);
+                  bool load, RegIndex dest, RegIndex base, int64_t imm);
 };
 
 class BigFpMemPostOp : public PredMacroOp
 {
   protected:
     BigFpMemPostOp(const char *mnem, ExtMachInst machInst, OpClass __opClass,
-                   bool load, IntRegIndex dest, IntRegIndex base, int64_t imm);
+                   bool load, RegIndex dest, RegIndex base, int64_t imm);
 };
 
 class BigFpMemPreOp : public PredMacroOp
 {
   protected:
     BigFpMemPreOp(const char *mnem, ExtMachInst machInst, OpClass __opClass,
-                  bool load, IntRegIndex dest, IntRegIndex base, int64_t imm);
+                  bool load, RegIndex dest, RegIndex base, int64_t imm);
 };
 
 class BigFpMemRegOp : public PredMacroOp
 {
   protected:
     BigFpMemRegOp(const char *mnem, ExtMachInst machInst, OpClass __opClass,
-                  bool load, IntRegIndex dest, IntRegIndex base,
-                  IntRegIndex offset, ArmExtendType type, int64_t imm);
+                  bool load, RegIndex dest, RegIndex base,
+                  RegIndex offset, ArmExtendType type, int64_t imm);
 };
 
 class BigFpMemLitOp : public PredMacroOp
 {
   protected:
     BigFpMemLitOp(const char *mnem, ExtMachInst machInst, OpClass __opClass,
-                  IntRegIndex dest, int64_t imm);
+                  RegIndex dest, int64_t imm);
 };
 
 /**
@@ -534,10 +570,11 @@ class MacroVFPMemOp : public PredMacroOp
 {
   protected:
     MacroVFPMemOp(const char *mnem, ExtMachInst machInst, OpClass __opClass,
-                  IntRegIndex rn, RegIndex vd, bool single, bool up,
+                  RegIndex rn, RegIndex vd, bool single, bool up,
                   bool writeback, bool load, uint32_t offset);
 };
 
-}
+} // namespace ArmISA
+} // namespace gem5
 
 #endif //__ARCH_ARM_INSTS_MACROMEM_HH__

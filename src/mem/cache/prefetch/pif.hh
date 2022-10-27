@@ -44,9 +44,14 @@
 #include "mem/cache/prefetch/associative_set.hh"
 #include "mem/cache/prefetch/queued.hh"
 
+namespace gem5
+{
+
 struct PIFPrefetcherParams;
 
-namespace Prefetcher {
+GEM5_DEPRECATED_NAMESPACE(Prefetcher, prefetch);
+namespace prefetch
+{
 
 class PIF : public Queued
 {
@@ -71,7 +76,8 @@ class PIF : public Queued
          * The temporal compactor tracks a small number of the
          * most-recently-observed spatial region records.
          */
-        struct CompactorEntry {
+        struct CompactorEntry
+        {
             Addr trigger;
             std::vector<bool> prec;
             std::vector<bool> succ;
@@ -187,6 +193,7 @@ class PIF : public Queued
         void addEventProbeRetiredInsts(SimObject *obj, const char *name);
 };
 
-} // namespace Prefetcher
+} // namespace prefetch
+} // namespace gem5
 
 #endif // __MEM_CACHE_PREFETCH_PIF_HH__

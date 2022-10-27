@@ -2,8 +2,6 @@
  * Copyright (c) 2017-2021 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -34,6 +32,9 @@
 #include "cpu/testers/gpu_ruby_test/cpu_thread.hh"
 
 #include "debug/ProtocolTest.hh"
+
+namespace gem5
+{
 
 CpuThread::CpuThread(const Params &p)
     : TesterThread(p)
@@ -115,3 +116,5 @@ CpuThread::hitCallback(PacketPtr pkt)
 {
     fatal("CpuThread::hitCallback - not yet implemented");
 }
+
+} // namespace gem5

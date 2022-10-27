@@ -41,6 +41,11 @@
 #include "dev/tcu/pci_proxy.hh"
 #include "dev/pci/device.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 TcuPciHost::TcuPciHost(const TcuPciHostParams &p)
     : PciHost(p),
       pciProxy(p.pci_proxy),
@@ -128,4 +133,7 @@ void
 TcuPciHost::clearInt(const PciBusAddr& addr, PciIntPin pin)
 {
     // We don't care
+}
+
+}
 }

@@ -44,6 +44,14 @@ component CortexR52x3
         core.llpp_m => self.llpp;
         core.flash_m => self.flash;
         core.pvbus_core_m => self.amba;
+        self.ext_slave => core.ext_slave_s;
+
+        // Reset signals.
+        self.core_reset => core.reset;
+        self.poweron_reset => core.cpuporeset;
+        self.top_reset => core.topreset;
+        self.dbg_reset => core.presetdbg;
+        self.halt => core.cpuhalt;
 
         // Clocks.
         clock1Hz.clk_out => clockDiv.clk_in;
@@ -56,6 +64,9 @@ component CortexR52x3
         self.ppi_2 => core.extppi_in_2;
 
         self.spi => core.spi_in;
+
+        // Core reset addrs.
+        self.cfgvectable => core.cfgvectable;
     }
 
     properties
@@ -66,6 +77,13 @@ component CortexR52x3
     master port<PVBus> llpp[3];
     master port<PVBus> flash[3];
     master port<PVBus> amba[3];
+    slave port<PVBus> ext_slave;
+    slave port<Signal> core_reset[3];
+    slave port<Signal> poweron_reset[3];
+    slave port<Signal> halt[3];
+    slave port<Signal> top_reset;
+    slave port<Signal> dbg_reset;
+    slave port<Value_64> cfgvectable[3];
 
     slave port<ExportedClockRateControl> clock_rate_s
     {

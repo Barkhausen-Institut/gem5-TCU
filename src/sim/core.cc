@@ -38,11 +38,18 @@
 #include "base/logging.hh"
 #include "base/output.hh"
 
-namespace SimClock {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(SimClock, sim_clock);
+namespace sim_clock
+{
 /// The simulated frequency of curTick(). (In ticks per second)
 Tick Frequency;
 
-namespace Float {
+GEM5_DEPRECATED_NAMESPACE(Float, as_float);
+namespace as_float
+{
 double s;
 double ms;
 double us;
@@ -53,17 +60,19 @@ double Hz;
 double kHz;
 double MHz;
 double GHz;
-} // namespace Float
+} // namespace as_float
 
-namespace Int {
+GEM5_DEPRECATED_NAMESPACE(Int, as_int);
+namespace as_int
+{
 Tick s;
 Tick ms;
 Tick us;
 Tick ns;
 Tick ps;
-} // namespace Float
+} // namespace as_float
 
-} // namespace SimClock
+} // namespace sim_clock
 
 namespace {
 
@@ -80,24 +89,24 @@ fixClockFrequency()
     if (_clockFrequencyFixed)
         return;
 
-    using namespace SimClock;
+    using namespace sim_clock;
     Frequency = _ticksPerSecond;
-    Float::s = static_cast<double>(Frequency);
-    Float::ms = Float::s / 1.0e3;
-    Float::us = Float::s / 1.0e6;
-    Float::ns = Float::s / 1.0e9;
-    Float::ps = Float::s / 1.0e12;
+    as_float::s = static_cast<double>(Frequency);
+    as_float::ms = as_float::s / 1.0e3;
+    as_float::us = as_float::s / 1.0e6;
+    as_float::ns = as_float::s / 1.0e9;
+    as_float::ps = as_float::s / 1.0e12;
 
-    Float::Hz  = 1.0 / Float::s;
-    Float::kHz = 1.0 / Float::ms;
-    Float::MHz = 1.0 / Float::us;
-    Float::GHz = 1.0 / Float::ns;
+    as_float::Hz  = 1.0 / as_float::s;
+    as_float::kHz = 1.0 / as_float::ms;
+    as_float::MHz = 1.0 / as_float::us;
+    as_float::GHz = 1.0 / as_float::ns;
 
-    Int::s  = Frequency;
-    Int::ms = Int::s / 1000;
-    Int::us = Int::ms / 1000;
-    Int::ns = Int::us / 1000;
-    Int::ps = Int::ns / 1000;
+    as_int::s  = Frequency;
+    as_int::ms = as_int::s / 1000;
+    as_int::us = as_int::ms / 1000;
+    as_int::ns = as_int::us / 1000;
+    as_int::ps = as_int::ns / 1000;
 
     cprintf("Global frequency set at %d ticks per second\n", _ticksPerSecond);
 
@@ -152,3 +161,4 @@ doExitCleanup()
     std::cout.flush();
 }
 
+} // namespace gem5

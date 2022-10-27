@@ -32,6 +32,9 @@
 
 #include "sim/faults.hh"
 
+namespace gem5
+{
+
 namespace PowerISA
 {
 
@@ -60,6 +63,9 @@ class UnimplementedOpcodeFault : public PowerFault
         : PowerFault("Unimplemented Opcode")
     {
     }
+
+    void invoke(ThreadContext *tc, const StaticInstPtr &inst =
+                nullStaticInstPtr) override;
 };
 
 
@@ -75,13 +81,32 @@ class MachineCheckFault : public PowerFault
 
 class AlignmentFault : public PowerFault
 {
+  private:
+    Addr vaddr;
   public:
-    AlignmentFault()
-        : PowerFault("Alignment")
+    AlignmentFault(Addr va)
+        : PowerFault("Alignment"), vaddr(va)
     {
     }
+
+    void invoke(ThreadContext *tc, const StaticInstPtr &inst =
+                nullStaticInstPtr) override;
+};
+
+
+class TrapFault : public PowerFault
+{
+  public:
+    TrapFault()
+        : PowerFault("Trap")
+    {
+    }
+
+    void invoke(ThreadContext *tc, const StaticInstPtr &inst =
+                nullStaticInstPtr) override;
 };
 
 } // namespace PowerISA
+} // namespace gem5
 
 #endif // __ARCH_POWER_FAULTS_HH__

@@ -55,9 +55,14 @@
 #include "base/sat_counter.hh"
 #include "mem/cache/replacement_policies/base.hh"
 
+namespace gem5
+{
+
 struct BRRIPRPParams;
 
-namespace ReplacementPolicy {
+GEM5_DEPRECATED_NAMESPACE(ReplacementPolicy, replacement_policy);
+namespace replacement_policy
+{
 
 class BRRIP : public Base
 {
@@ -119,7 +124,7 @@ class BRRIP : public Base
      * @param replacement_data Replacement data to be invalidated.
      */
     void invalidate(const std::shared_ptr<ReplacementData>& replacement_data)
-                                                              const override;
+                                                                    override;
 
     /**
      * Touch an entry to update its replacement data.
@@ -155,6 +160,7 @@ class BRRIP : public Base
     std::shared_ptr<ReplacementData> instantiateEntry() override;
 };
 
-} // namespace ReplacementPolicy
+} // namespace replacement_policy
+} // namespace gem5
 
 #endif // __MEM_CACHE_REPLACEMENT_POLICIES_BRRIP_RP_HH__

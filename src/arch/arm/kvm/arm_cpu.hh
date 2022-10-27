@@ -41,8 +41,12 @@
 #include <set>
 #include <vector>
 
+#include "arch/arm/pcstate.hh"
 #include "cpu/kvm/base.hh"
 #include "params/ArmKvmCPU.hh"
+
+namespace gem5
+{
 
 /**
  * ARM implementation of a KVM-based hardware virtualized CPU.
@@ -67,16 +71,18 @@ class ArmKvmCPU : public BaseKvmCPU
     void dump();
 
   protected:
-    struct KvmIntRegInfo {
+    struct KvmIntRegInfo
+    {
         /** KVM ID */
         const uint64_t id;
         /** gem5 index */
-        const ArmISA::IntRegIndex idx;
+        const RegIndex idx;
         /** Name in debug output */
         const char *name;
     };
 
-    struct KvmCoreMiscRegInfo {
+    struct KvmCoreMiscRegInfo
+    {
         /** KVM ID */
         const uint64_t id;
         /** gem5 index */
@@ -91,6 +97,11 @@ class ArmKvmCPU : public BaseKvmCPU
 
     void updateKvmState();
     void updateThreadContext();
+    void
+    stutterPC(PCStateBase &pc) const
+    {
+        pc.as<X86ISA::PCState>().setNPC(pc->instAddr());
+    }
 
     /**
      * Get a list of registers supported by getOneReg() and setOneReg().
@@ -162,5 +173,7 @@ class ArmKvmCPU : public BaseKvmCPU
      */
     static const std::set<uint64_t> invariant_regs;
 };
+
+} // namespace gem5
 
 #endif // __ARCH_ARM_KVM_ARM_CPU_HH__

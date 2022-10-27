@@ -30,6 +30,9 @@
 
 #include "base/types.hh"
 
+namespace gem5
+{
+
 namespace X86ISA
 {
 
@@ -42,8 +45,8 @@ const Addr TSSPhysAddr = 0x63000;
 const Addr ISTVirtAddr = 0xffff800000004000;
 const Addr PFHandlerVirtAddr = 0xffff800000005000;
 const Addr MMIORegionVirtAddr = 0xffffc90000000000;
-const Addr MMIORegionPhysAddr = 0xffff0000;
 
 } // namespace X86ISA
+} // namespace gem5
 
 #endif // __ARCH_X86_SE_WORKLOAD_HH__

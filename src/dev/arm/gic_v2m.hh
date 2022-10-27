@@ -45,12 +45,14 @@
 #define __DEV_ARM_GIC_V2M_H__
 
 #include "base/bitunion.hh"
-#include "cpu/intr_control.hh"
 #include "dev/arm/base_gic.hh"
 #include "dev/io_device.hh"
 #include "dev/platform.hh"
 #include "params/Gicv2m.hh"
 #include "params/Gicv2mFrame.hh"
+
+namespace gem5
+{
 
 /**
  * Ultimately this class should be embedded in the Gicv2m class, but
@@ -115,5 +117,7 @@ class Gicv2m : public PioDevice
      */
     int frameFromAddr(Addr a) const;
 };
+
+} // namespace gem5
 
 #endif //__DEV_ARM_GIC_V2M_H__

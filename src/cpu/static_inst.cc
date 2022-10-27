@@ -30,67 +30,10 @@
 
 #include <iostream>
 
-#include "sim/core.hh"
+#include "cpu/thread_context.hh"
 
-namespace {
-
-static TheISA::ExtMachInst nopMachInst;
-
-class NopStaticInst : public StaticInst
+namespace gem5
 {
-  public:
-    NopStaticInst() : StaticInst("gem5 nop", nopMachInst, No_OpClass)
-    {}
-
-    Fault
-    execute(ExecContext *xc, Trace::InstRecord *traceData) const override
-    {
-        return NoFault;
-    }
-
-    void
-    advancePC(TheISA::PCState &pcState) const override
-    {
-        pcState.advance();
-    }
-
-    std::string
-    generateDisassembly(Addr pc,
-            const Loader::SymbolTable *symtab) const override
-    {
-        return mnemonic;
-    }
-
-  private:
-};
-
-}
-
-StaticInstPtr StaticInst::nullStaticInstPtr;
-StaticInstPtr StaticInst::nopStaticInstPtr = new NopStaticInst;
-
-StaticInst::~StaticInst()
-{
-    if (cachedDisassembly)
-        delete cachedDisassembly;
-}
-
-bool
-StaticInst::hasBranchTarget(const TheISA::PCState &pc, ThreadContext *tc,
-                            TheISA::PCState &tgt) const
-{
-    if (isDirectCtrl()) {
-        tgt = branchTarget(pc);
-        return true;
-    }
-
-    if (isIndirectCtrl()) {
-        tgt = branchTarget(tc);
-        return true;
-    }
-
-    return false;
-}
 
 StaticInstPtr
 StaticInst::fetchMicroop(MicroPC upc) const
@@ -99,14 +42,14 @@ StaticInst::fetchMicroop(MicroPC upc) const
           "that is not microcoded.");
 }
 
-TheISA::PCState
-StaticInst::branchTarget(const TheISA::PCState &pc) const
+std::unique_ptr<PCStateBase>
+StaticInst::branchTarget(const PCStateBase &pc) const
 {
     panic("StaticInst::branchTarget() called on instruction "
           "that is not a PC-relative branch.");
 }
 
-TheISA::PCState
+std::unique_ptr<PCStateBase>
 StaticInst::branchTarget(ThreadContext *tc) const
 {
     panic("StaticInst::branchTarget() called on instruction "
@@ -114,10 +57,12 @@ StaticInst::branchTarget(ThreadContext *tc) const
 }
 
 const std::string &
-StaticInst::disassemble(Addr pc, const Loader::SymbolTable *symtab) const
+StaticInst::disassemble(Addr pc, const loader::SymbolTable *symtab) const
 {
-    if (!cachedDisassembly)
-        cachedDisassembly = new std::string(generateDisassembly(pc, symtab));
+    if (!cachedDisassembly) {
+        cachedDisassembly =
+            std::make_unique<std::string>(generateDisassembly(pc, symtab));
+    }
 
     return *cachedDisassembly;
 }
@@ -138,3 +83,13 @@ StaticInst::printFlags(std::ostream &outs,
         }
     }
 }
+
+void
+StaticInst::advancePC(ThreadContext *tc) const
+{
+    std::unique_ptr<PCStateBase> pc(tc->pcState().clone());
+    advancePC(*pc);
+    tc->pcState(*pc);
+}
+
+} // namespace gem5

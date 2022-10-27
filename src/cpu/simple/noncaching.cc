@@ -39,7 +39,13 @@
 
 #include <cassert>
 
-NonCachingSimpleCPU::NonCachingSimpleCPU(const NonCachingSimpleCPUParams &p)
+#include "arch/generic/decoder.hh"
+
+namespace gem5
+{
+
+NonCachingSimpleCPU::NonCachingSimpleCPU(
+        const BaseNonCachingSimpleCPUParams &p)
     : AtomicSimpleCPU(p)
 {
     assert(p.numThreads == 1);
@@ -88,8 +94,12 @@ NonCachingSimpleCPU::fetchInstMem()
     if (bd_it == memBackdoors.end())
         return AtomicSimpleCPU::fetchInstMem();
 
+    auto &decoder = threadInfo[curThread]->thread->decoder;
+
     auto *bd = bd_it->second;
     Addr offset = ifetch_req->getPaddr() - bd->range().start();
-    memcpy(&inst, bd->ptr() + offset, ifetch_req->getSize());
+    memcpy(decoder->moreBytesPtr(), bd->ptr() + offset, ifetch_req->getSize());
     return 0;
 }
+
+} // namespace gem5

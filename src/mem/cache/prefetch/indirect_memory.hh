@@ -45,9 +45,14 @@
 #include "mem/cache/prefetch/associative_set.hh"
 #include "mem/cache/prefetch/queued.hh"
 
+namespace gem5
+{
+
 struct IndirectMemoryPrefetcherParams;
 
-namespace Prefetcher {
+GEM5_DEPRECATED_NAMESPACE(Prefetcher, prefetch);
+namespace prefetch
+{
 
 class IndirectMemory : public Queued
 {
@@ -200,6 +205,7 @@ class IndirectMemory : public Queued
                            std::vector<AddrPriority> &addresses) override;
 };
 
-} // namespace Prefetcher
+} // namespace prefetch
+} // namespace gem5
 
 #endif//__MEM_CACHE_PREFETCH_INDIRECT_MEMORY_HH__

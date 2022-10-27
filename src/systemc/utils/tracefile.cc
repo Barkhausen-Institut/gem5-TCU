@@ -30,8 +30,7 @@
 #include <ctime>
 #include <iomanip>
 
-#include "base/output.hh"
-#include "sim/core.hh"
+#include "systemc/core/scheduler.hh"
 #include "systemc/core/time.hh"
 #include "systemc/ext/core/sc_main.hh"
 #include "systemc/ext/core/sc_time.hh"
@@ -41,13 +40,16 @@ namespace sc_gem5
 {
 
 TraceFile::TraceFile(const std::string &name) :
-    _os(simout.create(name, true, true)), timeUnitTicks(0),
+    _os(gem5::simout.create(name, true, true)), timeUnitTicks(0),
     timeUnitValue(0.0), timeUnitUnit(::sc_core::SC_PS), _traceDeltas(false)
-{}
+{
+    ::sc_gem5::scheduler.registerTraceFile(this);
+}
 
 TraceFile::~TraceFile()
 {
-    simout.close(_os);
+    ::sc_gem5::scheduler.unregisterTraceFile(this);
+    gem5::simout.close(_os);
 }
 
 std::ostream &TraceFile::stream() { return *_os->stream(); }

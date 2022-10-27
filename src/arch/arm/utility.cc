@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009-2014, 2016-2020 ARM Limited
+ * Copyright (c) 2009-2014, 2016-2020, 2022 Arm Limited
  * All rights reserved.
  *
  * The license below extends only to copyright in the software and shall
@@ -41,63 +41,24 @@
 
 #include "arch/arm/faults.hh"
 #include "arch/arm/interrupts.hh"
-#include "arch/arm/isa_traits.hh"
 #include "arch/arm/mmu.hh"
+#include "arch/arm/page_size.hh"
+#include "arch/arm/regs/cc.hh"
+#include "arch/arm/regs/int.hh"
+#include "arch/arm/regs/vec.hh"
 #include "arch/arm/system.hh"
+#include "base/compiler.hh"
 #include "cpu/base.hh"
 #include "cpu/checker/cpu.hh"
 #include "cpu/thread_context.hh"
 #include "mem/port_proxy.hh"
 #include "sim/full_system.hh"
 
+namespace gem5
+{
+
 namespace ArmISA
 {
-
-static void
-copyVecRegs(ThreadContext *src, ThreadContext *dest)
-{
-    auto src_mode = RenameMode<ArmISA::ISA>::mode(src->pcState());
-
-    // The way vector registers are copied (VecReg vs VecElem) is relevant
-    // in the O3 model only.
-    if (src_mode == Enums::Full) {
-        for (auto idx = 0; idx < NumVecRegs; idx++)
-            dest->setVecRegFlat(idx, src->readVecRegFlat(idx));
-    } else {
-        for (auto idx = 0; idx < NumVecRegs; idx++)
-            for (auto elem_idx = 0; elem_idx < NumVecElemPerVecReg; elem_idx++)
-                dest->setVecElemFlat(
-                    idx, elem_idx, src->readVecElemFlat(idx, elem_idx));
-    }
-}
-
-void
-copyRegs(ThreadContext *src, ThreadContext *dest)
-{
-    for (int i = 0; i < NumIntRegs; i++)
-        dest->setIntRegFlat(i, src->readIntRegFlat(i));
-
-    for (int i = 0; i < NumFloatRegs; i++)
-        dest->setFloatRegFlat(i, src->readFloatRegFlat(i));
-
-    for (int i = 0; i < NumCCRegs; i++)
-        dest->setCCReg(i, src->readCCReg(i));
-
-    for (int i = 0; i < NumMiscRegs; i++)
-        dest->setMiscRegNoEffect(i, src->readMiscRegNoEffect(i));
-
-    copyVecRegs(src, dest);
-
-    // setMiscReg "with effect" will set the misc register mapping correctly.
-    // e.g. updateRegMap(val)
-    dest->setMiscReg(MISCREG_CPSR, src->readMiscRegNoEffect(MISCREG_CPSR));
-
-    // Copy over the PC State
-    dest->pcState(src->pcState());
-
-    // Invalidate the tlb misc register cache
-    static_cast<MMU *>(dest->getMMUPtr())->invalidateMiscReg();
-}
 
 void
 sendEvent(ThreadContext *tc)
@@ -123,15 +84,16 @@ isSecure(ThreadContext *tc)
 bool
 isSecureBelowEL3(ThreadContext *tc)
 {
-    SCR scr = tc->readMiscReg(MISCREG_SCR_EL3);
-    return ArmSystem::haveEL(tc, EL3) && scr.ns == 0;
+    return ArmSystem::haveEL(tc, EL3) &&
+        static_cast<SCR>(tc->readMiscRegNoEffect(MISCREG_SCR)).ns == 0;
 }
 
 ExceptionLevel
 debugTargetFrom(ThreadContext *tc, bool secure)
 {
     bool route_to_el2;
-    if (ArmSystem::haveEL(tc, EL2) && (!secure || HaveSecureEL2Ext(tc))) {
+    if (ArmSystem::haveEL(tc, EL2) &&
+        (!secure || HaveExt(tc, ArmExtension::FEAT_SEL2))) {
         if (ELIs32(tc, EL2)) {
             const HCR hcr = tc->readMiscReg(MISCREG_HCR);
             const HDCR hdcr = tc->readMiscRegNoEffect(MISCREG_HDCR);
@@ -163,11 +125,18 @@ inAArch64(ThreadContext *tc)
     return opModeIs64((OperatingMode) (uint8_t) cpsr.mode);
 }
 
+ExceptionLevel
+currEL(const ThreadContext *tc)
+{
+    return static_cast<ArmISA::ISA *>(
+        const_cast<ThreadContext *>(tc)->getIsaPtr())->currEL();
+}
+
 bool
 longDescFormatInUse(ThreadContext *tc)
 {
     TTBCR ttbcr = tc->readMiscReg(MISCREG_TTBCR);
-    return ArmSystem::haveLPAE(tc) && ttbcr.eae;
+    return ArmSystem::has(ArmExtension::LPAE, tc) && ttbcr.eae;
 }
 
 RegVal
@@ -184,7 +153,7 @@ readMPIDR(ArmSystem *arm_sys, ThreadContext *tc)
         // be part of the table even if MPIDR is not accessible in user
         // mode.
         warn_once("Trying to read MPIDR at EL0\n");
-        M5_FALLTHROUGH;
+        [[fallthrough]];
       case EL1:
         if (ArmSystem::haveEL(tc, EL2) && !is_secure)
             return tc->readMiscReg(MISCREG_VMPIDR_EL2);
@@ -231,13 +200,13 @@ getMPIDR(ArmSystem *arm_sys, ThreadContext *tc)
 static RegVal
 getAff2(ArmSystem *arm_sys, ThreadContext *tc)
 {
-    return arm_sys->multiThread ? tc->socketId() << 16 : 0;
+    return arm_sys->multiThread ? tc->socketId() : 0;
 }
 
 static RegVal
 getAff1(ArmSystem *arm_sys, ThreadContext *tc)
 {
-    return arm_sys->multiThread ? tc->cpuId() << 8 : tc->socketId() << 8;
+    return arm_sys->multiThread ? tc->cpuId() : tc->socketId();
 }
 
 static RegVal
@@ -246,64 +215,45 @@ getAff0(ArmSystem *arm_sys, ThreadContext *tc)
     return arm_sys->multiThread ? tc->threadId() : tc->cpuId();
 }
 
-RegVal
+Affinity
 getAffinity(ArmSystem *arm_sys, ThreadContext *tc)
 {
-    return getAff2(arm_sys, tc) | getAff1(arm_sys, tc) | getAff0(arm_sys, tc);
+    Affinity aff = 0;
+    aff.aff0 = getAff0(arm_sys, tc);
+    aff.aff1 = getAff1(arm_sys, tc);
+    aff.aff2 = getAff2(arm_sys, tc);
+    return aff;
 }
 
 bool
-HavePACExt(ThreadContext *tc)
+HaveExt(ThreadContext* tc, ArmExtension ext)
 {
-    AA64ISAR1 id_aa64isar1 = tc->readMiscReg(MISCREG_ID_AA64ISAR1_EL1);
-    return id_aa64isar1.api | id_aa64isar1.apa |
-        id_aa64isar1.gpi | id_aa64isar1.gpa;
-}
-
-bool
-HaveVirtHostExt(ThreadContext *tc)
-{
-    AA64MMFR1 id_aa64mmfr1 = tc->readMiscReg(MISCREG_ID_AA64MMFR1_EL1);
-    return id_aa64mmfr1.vh;
-}
-
-bool
-HaveLVA(ThreadContext *tc)
-{
-    const AA64MMFR2 mm_fr2 = tc->readMiscReg(MISCREG_ID_AA64MMFR2_EL1);
-    return (bool)mm_fr2.varange;
+    auto *isa = static_cast<ArmISA::ISA *>(tc->getIsaPtr());
+    return isa->getRelease()->has(ext);
 }
 
 ExceptionLevel
 s1TranslationRegime(ThreadContext* tc, ExceptionLevel el)
 {
-
-    SCR scr = tc->readMiscReg(MISCREG_SCR);
     if (el != EL0)
         return el;
-    else if (ArmSystem::haveEL(tc, EL3) && ELIs32(tc, EL3) && scr.ns == 0)
+    else if (ArmSystem::haveEL(tc, EL3) && ELIs32(tc, EL3) &&
+             static_cast<SCR>(tc->readMiscRegNoEffect(MISCREG_SCR)).ns == 0)
         return EL3;
-    else if (HaveVirtHostExt(tc) && ELIsInHost(tc, el))
+    else if (HaveExt(tc, ArmExtension::FEAT_VHE) && ELIsInHost(tc, el))
         return EL2;
     else
         return EL1;
 }
 
 bool
-HaveSecureEL2Ext(ThreadContext *tc)
-{
-    AA64PFR0 id_aa64pfr0 = tc->readMiscReg(MISCREG_ID_AA64PFR0_EL1);
-    return id_aa64pfr0.sel2;
-}
-
-bool
 IsSecureEL2Enabled(ThreadContext *tc)
 {
-    SCR scr = tc->readMiscReg(MISCREG_SCR_EL3);
-    if (ArmSystem::haveEL(tc, EL2) && HaveSecureEL2Ext(tc) &&
+    if (ArmSystem::haveEL(tc, EL2) && HaveExt(tc, ArmExtension::FEAT_SEL2) &&
         !ELIs32(tc, EL2)) {
         if (ArmSystem::haveEL(tc, EL3))
-            return !ELIs32(tc, EL3) && scr.eel2;
+            return !ELIs32(tc, EL3) && static_cast<SCR>(
+                tc->readMiscRegNoEffect(MISCREG_SCR_EL3)).eel2;
         else
             return isSecure(tc);
     }
@@ -313,9 +263,10 @@ IsSecureEL2Enabled(ThreadContext *tc)
 bool
 EL2Enabled(ThreadContext *tc)
 {
-    SCR scr = tc->readMiscReg(MISCREG_SCR_EL3);
     return ArmSystem::haveEL(tc, EL2) &&
-           (!ArmSystem::haveEL(tc, EL3) || scr.ns || IsSecureEL2Enabled(tc));
+           (!ArmSystem::haveEL(tc, EL3) || static_cast<SCR>(
+                tc->readMiscRegNoEffect(MISCREG_SCR_EL3)).ns ||
+            IsSecureEL2Enabled(tc));
 }
 
 bool
@@ -327,8 +278,7 @@ ELIs64(ThreadContext *tc, ExceptionLevel el)
 bool
 ELIs32(ThreadContext *tc, ExceptionLevel el)
 {
-    bool known, aarch32;
-    std::tie(known, aarch32) = ELUsingAArch32K(tc, el);
+    auto [known, aarch32] = ELUsingAArch32K(tc, el);
     panic_if(!known, "EL state is UNKNOWN");
     return aarch32;
 }
@@ -339,14 +289,15 @@ ELIsInHost(ThreadContext *tc, ExceptionLevel el)
     const HCR hcr = tc->readMiscReg(MISCREG_HCR_EL2);
     return (ArmSystem::haveEL(tc, EL2) &&
             (IsSecureEL2Enabled(tc) || !isSecureBelowEL3(tc)) &&
-            HaveVirtHostExt(tc) && !ELIs32(tc, EL2) && hcr.e2h == 1 &&
+            HaveExt(tc, ArmExtension::FEAT_VHE) &&
+            !ELIs32(tc, EL2) && hcr.e2h == 1 &&
             (el == EL2 || (el == EL0 && hcr.tge == 1)));
 }
 
 std::pair<bool, bool>
 ELUsingAArch32K(ThreadContext *tc, ExceptionLevel el)
 {
-    bool secure  = isSecureBelowEL3(tc);
+    bool secure = isSecureBelowEL3(tc);
     return ELStateUsingAArch32K(tc, el, secure);
 }
 
@@ -368,8 +319,8 @@ std::pair<bool, bool>
 ELStateUsingAArch32K(ThreadContext *tc, ExceptionLevel el, bool secure)
 {
     // Return true if the specified EL is in aarch32 state.
-    const bool have_el3 = ArmSystem::haveSecurity(tc);
-    const bool have_el2 = ArmSystem::haveVirtualization(tc);
+    const bool have_el3 = ArmSystem::haveEL(tc, EL3);
+    const bool have_el2 = ArmSystem::haveEL(tc, EL2);
 
     panic_if(el == EL2 && !have_el2, "Asking for EL2 when it doesn't exist");
     panic_if(el == EL3 && !have_el3, "Asking for EL3 when it doesn't exist");
@@ -390,14 +341,15 @@ ELStateUsingAArch32K(ThreadContext *tc, ExceptionLevel el, bool secure)
     } else {
         SCR scr = tc->readMiscReg(MISCREG_SCR_EL3);
         bool aarch32_below_el3 = have_el3 && scr.rw == 0 &&
-                            (!secure || !HaveSecureEL2Ext(tc) || !scr.eel2);
+            (!secure || !HaveExt(tc, ArmExtension::FEAT_SEL2) || !scr.eel2);
 
         HCR hcr = tc->readMiscReg(MISCREG_HCR_EL2);
-        bool sec_el2 = HaveSecureEL2Ext(tc) && scr.eel2;
+        bool sec_el2 = HaveExt(tc, ArmExtension::FEAT_SEL2) && scr.eel2;
         bool aarch32_at_el1 = (aarch32_below_el3 ||
                                (have_el2 && (sec_el2 || !secure) &&
-                                hcr.rw == 0 && !(hcr.e2h && hcr.tge &&
-                                                 HaveVirtHostExt(tc))));
+                                hcr.rw == 0 &&
+                                !(hcr.e2h && hcr.tge &&
+                                 HaveExt(tc, ArmExtension::FEAT_VHE))));
 
         // Only know if EL0 using AArch32 from PSTATE
         if (el == EL0 && !aarch32_at_el1) {
@@ -407,19 +359,18 @@ ELStateUsingAArch32K(ThreadContext *tc, ExceptionLevel el, bool secure)
             aarch32 = (cpsr.width == 1);
         } else {
             known = true;
-            aarch32 = (aarch32_below_el3 && el != EL3)
-                      || (aarch32_at_el1 && (el == EL0 || el == EL1) );
+            aarch32 = (aarch32_below_el3 && el != EL3) ||
+                (aarch32_at_el1 && (el == EL0 || el == EL1) );
         }
     }
 
     return std::make_pair(known, aarch32);
 }
 
-bool ELStateUsingAArch32(ThreadContext *tc, ExceptionLevel el, bool secure)
+bool
+ELStateUsingAArch32(ThreadContext *tc, ExceptionLevel el, bool secure)
 {
-
-    bool known, aarch32;
-    std::tie(known, aarch32) = ELStateUsingAArch32K(tc, el, secure);
+    auto [known, aarch32] = ELStateUsingAArch32K(tc, el, secure);
     panic_if(!known, "EL state is UNKNOWN");
     return aarch32;
 }
@@ -455,7 +406,7 @@ badMode(ThreadContext *tc, OperatingMode mode)
 }
 
 int
-computeAddrTop(ThreadContext *tc, bool selbit, bool isInstr,
+computeAddrTop(ThreadContext *tc, bool selbit, bool is_instr,
                TCR tcr, ExceptionLevel el)
 {
     bool tbi = false;
@@ -475,7 +426,7 @@ computeAddrTop(ThreadContext *tc, bool selbit, bool isInstr,
           case EL2:
           {
             TCR tcr = tc->readMiscReg(MISCREG_TCR_EL2);
-            if (HaveVirtHostExt(tc) && ELIsInHost(tc, el)) {
+            if (HaveExt(tc, ArmExtension::FEAT_VHE) && ELIsInHost(tc, el)) {
                 tbi = selbit? tcr.tbi1 : tcr.tbi0;
                 tbid = selbit? tcr.tbid1 : tcr.tbid0;
             } else {
@@ -496,19 +447,17 @@ computeAddrTop(ThreadContext *tc, bool selbit, bool isInstr,
         }
 
     }
-    int res = (tbi && (!tbid || !isInstr))? 55: 63;
+    int res = (tbi && (!tbid || !is_instr))? 55: 63;
     return res;
 }
-Addr
-purifyTaggedAddr(Addr addr, ThreadContext *tc, ExceptionLevel el,
-                 TCR tcr, bool isInstr)
-{
-    bool selbit = bits(addr, 55);
-    int topbit = computeAddrTop(tc, selbit, isInstr, tcr, el);
 
+Addr
+maskTaggedAddr(Addr addr, ThreadContext *tc, ExceptionLevel el,
+               int topbit)
+{
     if (topbit == 63) {
         return addr;
-    } else if (selbit && (el == EL1 || el == EL0 || ELIsInHost(tc, el))) {
+    } else if (bits(addr,55) && (el <= EL1 || ELIsInHost(tc, el))) {
         uint64_t mask = ((uint64_t)0x1 << topbit) -1;
         addr = addr | ~mask;
     } else {
@@ -519,11 +468,21 @@ purifyTaggedAddr(Addr addr, ThreadContext *tc, ExceptionLevel el,
 
 Addr
 purifyTaggedAddr(Addr addr, ThreadContext *tc, ExceptionLevel el,
-                 bool isInstr)
+                 TCR tcr, bool is_instr)
+{
+    bool selbit = bits(addr, 55);
+    int topbit = computeAddrTop(tc, selbit, is_instr, tcr, el);
+
+    return maskTaggedAddr(addr, tc, el, topbit);
+}
+
+Addr
+purifyTaggedAddr(Addr addr, ThreadContext *tc, ExceptionLevel el,
+                 bool is_instr)
 {
 
     TCR tcr = tc->readMiscReg(MISCREG_TCR_EL1);
-    return purifyTaggedAddr(addr, tc, el, tcr, isInstr);
+    return purifyTaggedAddr(addr, tc, el, tcr, is_instr);
 }
 
 Addr
@@ -539,59 +498,57 @@ roundPage(Addr addr)
 }
 
 Fault
-mcrMrc15Trap(const MiscRegIndex miscReg, ExtMachInst machInst,
+mcrMrc15Trap(const MiscRegIndex misc_reg, ExtMachInst mach_inst,
              ThreadContext *tc, uint32_t imm)
 {
     ExceptionClass ec = EC_TRAPPED_CP15_MCR_MRC;
-    if (mcrMrc15TrapToHyp(miscReg, tc, imm, &ec))
-        return std::make_shared<HypervisorTrap>(machInst, imm, ec);
-    return AArch64AArch32SystemAccessTrap(miscReg, machInst, tc, imm, ec);
+    if (mcrMrc15TrapToHyp(misc_reg, tc, imm, &ec))
+        return std::make_shared<HypervisorTrap>(mach_inst, imm, ec);
+    return AArch64AArch32SystemAccessTrap(misc_reg, mach_inst, tc, imm, ec);
 }
 
 bool
-mcrMrc15TrapToHyp(const MiscRegIndex miscReg, ThreadContext *tc, uint32_t iss,
+mcrMrc15TrapToHyp(const MiscRegIndex misc_reg, ThreadContext *tc, uint32_t iss,
                   ExceptionClass *ec)
 {
-    bool        isRead;
-    uint32_t    crm;
-    IntRegIndex rt;
-    uint32_t    crn;
-    uint32_t    opc1;
-    uint32_t    opc2;
-    bool        trapToHype = false;
+    bool is_read;
+    uint32_t crm;
+    RegIndex rt;
+    uint32_t crn;
+    uint32_t opc1;
+    uint32_t opc2;
+    bool trap_to_hyp = false;
 
-    const CPSR cpsr = tc->readMiscReg(MISCREG_CPSR);
     const HCR hcr = tc->readMiscReg(MISCREG_HCR);
-    const SCR scr = tc->readMiscReg(MISCREG_SCR);
     const HDCR hdcr = tc->readMiscReg(MISCREG_HDCR);
     const HSTR hstr = tc->readMiscReg(MISCREG_HSTR);
     const HCPTR hcptr = tc->readMiscReg(MISCREG_HCPTR);
 
-    if (!inSecureState(scr, cpsr) && (cpsr.mode != MODE_HYP)) {
-        mcrMrcIssExtract(iss, isRead, crm, rt, crn, opc1, opc2);
-        trapToHype  = ((uint32_t) hstr) & (1 << crn);
-        trapToHype |= hdcr.tpm  && (crn == 9) && (crm >= 12);
-        trapToHype |= hcr.tidcp && (
+    if (EL2Enabled(tc) && (currEL(tc) < EL2)) {
+        mcrMrcIssExtract(iss, is_read, crm, rt, crn, opc1, opc2);
+        trap_to_hyp  = ((uint32_t) hstr) & (1 << crn);
+        trap_to_hyp |= hdcr.tpm  && (crn == 9) && (crm >= 12);
+        trap_to_hyp |= hcr.tidcp && (
             ((crn ==  9) && ((crm <= 2) || ((crm >= 5) && (crm <= 8)))) ||
-            ((crn == 10) && ((crm <= 1) ||  (crm == 4) || (crm == 8)))  ||
-            ((crn == 11) && ((crm <= 8) ||  (crm == 15)))               );
+            ((crn == 10) && ((crm <= 1) || (crm == 4) || (crm == 8))) ||
+            ((crn == 11) && ((crm <= 8) || (crm == 15))));
 
-        if (!trapToHype) {
-            switch (unflattenMiscReg(miscReg)) {
+        if (!trap_to_hyp) {
+            switch (unflattenMiscReg(misc_reg)) {
               case MISCREG_CPACR:
-                trapToHype = hcptr.tcpac;
+                trap_to_hyp = hcptr.tcpac;
                 break;
               case MISCREG_REVIDR:
               case MISCREG_TCMTR:
               case MISCREG_TLBTR:
               case MISCREG_AIDR:
-                trapToHype = hcr.tid1;
+                trap_to_hyp = hcr.tid1;
                 break;
               case MISCREG_CTR:
               case MISCREG_CCSIDR:
               case MISCREG_CLIDR:
               case MISCREG_CSSELR:
-                trapToHype = hcr.tid2;
+                trap_to_hyp = hcr.tid2;
                 break;
               case MISCREG_ID_PFR0:
               case MISCREG_ID_PFR1:
@@ -609,23 +566,23 @@ mcrMrc15TrapToHyp(const MiscRegIndex miscReg, ThreadContext *tc, uint32_t iss,
               case MISCREG_ID_ISAR4:
               case MISCREG_ID_ISAR5:
               case MISCREG_ID_ISAR6:
-                trapToHype = hcr.tid3;
+                trap_to_hyp = hcr.tid3;
                 break;
               case MISCREG_DCISW:
               case MISCREG_DCCSW:
               case MISCREG_DCCISW:
-                trapToHype = hcr.tsw;
+                trap_to_hyp = hcr.tsw;
                 break;
               case MISCREG_DCIMVAC:
               case MISCREG_DCCIMVAC:
               case MISCREG_DCCMVAC:
-                trapToHype = hcr.tpc;
+                trap_to_hyp = hcr.tpc;
                 break;
               case MISCREG_ICIMVAU:
               case MISCREG_ICIALLU:
               case MISCREG_ICIALLUIS:
               case MISCREG_DCCMVAU:
-                trapToHype = hcr.tpu;
+                trap_to_hyp = hcr.tpu;
                 break;
               case MISCREG_TLBIALLIS:
               case MISCREG_TLBIMVAIS:
@@ -645,10 +602,10 @@ mcrMrc15TrapToHyp(const MiscRegIndex miscReg, ThreadContext *tc, uint32_t iss,
               case MISCREG_TLBIMVAL:
               case MISCREG_TLBIMVAAL:
               case MISCREG_TLBIASID:
-                trapToHype = hcr.ttlb;
+                trap_to_hyp = hcr.ttlb;
                 break;
               case MISCREG_ACTLR:
-                trapToHype = hcr.tac;
+                trap_to_hyp = hcr.tac;
                 break;
               case MISCREG_SCTLR:
               case MISCREG_TTBR0:
@@ -666,17 +623,17 @@ mcrMrc15TrapToHyp(const MiscRegIndex miscReg, ThreadContext *tc, uint32_t iss,
               case MISCREG_MAIR0:
               case MISCREG_MAIR1:
               case MISCREG_CONTEXTIDR:
-                trapToHype = hcr.tvm & !isRead;
+                trap_to_hyp = hcr.tvm & !is_read;
                 break;
               case MISCREG_PMCR:
-                trapToHype = hdcr.tpmcr;
+                trap_to_hyp = hdcr.tpmcr;
                 break;
               // GICv3 regs
               case MISCREG_ICC_SGI0R:
                 {
                     auto *isa = static_cast<ArmISA::ISA *>(tc->getIsaPtr());
                     if (isa->haveGICv3CpuIfc())
-                        trapToHype = hcr.fmo;
+                        trap_to_hyp = hcr.fmo;
                 }
                 break;
               case MISCREG_ICC_SGI1R:
@@ -684,16 +641,16 @@ mcrMrc15TrapToHyp(const MiscRegIndex miscReg, ThreadContext *tc, uint32_t iss,
                 {
                     auto *isa = static_cast<ArmISA::ISA *>(tc->getIsaPtr());
                     if (isa->haveGICv3CpuIfc())
-                        trapToHype = hcr.imo;
+                        trap_to_hyp = hcr.imo;
                 }
                 break;
               case MISCREG_CNTFRQ ... MISCREG_CNTV_TVAL:
                 // CNTFRQ may be trapped only on reads
                 // CNTPCT and CNTVCT are read-only
-                if (MISCREG_CNTFRQ <= miscReg && miscReg <= MISCREG_CNTVCT &&
-                    !isRead)
+                if (MISCREG_CNTFRQ <= misc_reg && misc_reg <= MISCREG_CNTVCT &&
+                    !is_read)
                     break;
-                trapToHype = isGenericTimerHypTrap(miscReg, tc, ec);
+                trap_to_hyp = isGenericTimerHypTrap(misc_reg, tc, ec);
                 break;
               // No default action needed
               default:
@@ -701,50 +658,55 @@ mcrMrc15TrapToHyp(const MiscRegIndex miscReg, ThreadContext *tc, uint32_t iss,
             }
         }
     }
-    return trapToHype;
+    return trap_to_hyp;
 }
 
 
 bool
-mcrMrc14TrapToHyp(const MiscRegIndex miscReg, HCR hcr, CPSR cpsr, SCR scr,
-                  HDCR hdcr, HSTR hstr, HCPTR hcptr, uint32_t iss)
+mcrMrc14TrapToHyp(const MiscRegIndex misc_reg, ThreadContext *tc, uint32_t iss)
 {
-    bool        isRead;
-    uint32_t    crm;
-    IntRegIndex rt;
-    uint32_t    crn;
-    uint32_t    opc1;
-    uint32_t    opc2;
-    bool        trapToHype = false;
+    bool is_read;
+    uint32_t crm;
+    RegIndex rt;
+    uint32_t crn;
+    uint32_t opc1;
+    uint32_t opc2;
 
-    if (!inSecureState(scr, cpsr) && (cpsr.mode != MODE_HYP)) {
-        mcrMrcIssExtract(iss, isRead, crm, rt, crn, opc1, opc2);
+    const HCR hcr = tc->readMiscReg(MISCREG_HCR);
+    const HDCR hdcr = tc->readMiscReg(MISCREG_HDCR);
+    const HSTR hstr = tc->readMiscReg(MISCREG_HSTR);
+    const HCPTR hcptr = tc->readMiscReg(MISCREG_HCPTR);
+
+    bool trap_to_hyp = false;
+
+    if (EL2Enabled(tc) && (currEL(tc) < EL2)) {
+        mcrMrcIssExtract(iss, is_read, crm, rt, crn, opc1, opc2);
         inform("trap check M:%x N:%x 1:%x 2:%x hdcr %x, hcptr %x, hstr %x\n",
                 crm, crn, opc1, opc2, hdcr, hcptr, hstr);
-        trapToHype  = hdcr.tda  && (opc1 == 0);
-        trapToHype |= hcptr.tta && (opc1 == 1);
-        if (!trapToHype) {
-            switch (unflattenMiscReg(miscReg)) {
+        trap_to_hyp  = hdcr.tda  && (opc1 == 0);
+        trap_to_hyp |= hcptr.tta && (opc1 == 1);
+        if (!trap_to_hyp) {
+            switch (unflattenMiscReg(misc_reg)) {
               case MISCREG_DBGOSLSR:
               case MISCREG_DBGOSLAR:
               case MISCREG_DBGOSDLR:
               case MISCREG_DBGPRCR:
-                trapToHype = hdcr.tdosa;
+                trap_to_hyp = hdcr.tdosa;
                 break;
               case MISCREG_DBGDRAR:
               case MISCREG_DBGDSAR:
-                trapToHype = hdcr.tdra;
+                trap_to_hyp = hdcr.tdra;
                 break;
               case MISCREG_JIDR:
-                trapToHype = hcr.tid0;
+                trap_to_hyp = hcr.tid0;
                 break;
               case MISCREG_JOSCR:
               case MISCREG_JMCR:
-                trapToHype = hstr.tjdbx;
+                trap_to_hyp = hstr.tjdbx;
                 break;
               case MISCREG_TEECR:
               case MISCREG_TEEHBR:
-                trapToHype = hstr.ttee;
+                trap_to_hyp = hstr.ttee;
                 break;
               // No default action needed
               default:
@@ -752,45 +714,43 @@ mcrMrc14TrapToHyp(const MiscRegIndex miscReg, HCR hcr, CPSR cpsr, SCR scr,
             }
         }
     }
-    return trapToHype;
+    return trap_to_hyp;
 }
 
 Fault
-mcrrMrrc15Trap(const MiscRegIndex miscReg, ExtMachInst machInst,
+mcrrMrrc15Trap(const MiscRegIndex misc_reg, ExtMachInst mach_inst,
                ThreadContext *tc, uint32_t imm)
 {
     ExceptionClass ec = EC_TRAPPED_CP15_MCRR_MRRC;
-    if (mcrrMrrc15TrapToHyp(miscReg, tc, imm, &ec))
-        return std::make_shared<HypervisorTrap>(machInst, imm, ec);
-    return AArch64AArch32SystemAccessTrap(miscReg, machInst, tc, imm, ec);
+    if (mcrrMrrc15TrapToHyp(misc_reg, tc, imm, &ec))
+        return std::make_shared<HypervisorTrap>(mach_inst, imm, ec);
+    return AArch64AArch32SystemAccessTrap(misc_reg, mach_inst, tc, imm, ec);
 }
 
 bool
-mcrrMrrc15TrapToHyp(const MiscRegIndex miscReg, ThreadContext *tc,
+mcrrMrrc15TrapToHyp(const MiscRegIndex misc_reg, ThreadContext *tc,
                     uint32_t iss, ExceptionClass *ec)
 {
-    uint32_t    crm;
-    IntRegIndex rt;
-    uint32_t    crn;
-    uint32_t    opc1;
-    uint32_t    opc2;
-    bool        isRead;
-    bool        trapToHype = false;
+    uint32_t crm;
+    RegIndex rt;
+    uint32_t crn;
+    uint32_t opc1;
+    uint32_t opc2;
+    bool is_read;
+    bool trap_to_hyp = false;
 
-    const CPSR cpsr = tc->readMiscReg(MISCREG_CPSR);
     const HCR hcr = tc->readMiscReg(MISCREG_HCR);
-    const SCR scr = tc->readMiscReg(MISCREG_SCR);
     const HSTR hstr = tc->readMiscReg(MISCREG_HSTR);
 
-    if (!inSecureState(scr, cpsr) && (cpsr.mode != MODE_HYP)) {
+    if (EL2Enabled(tc) && (currEL(tc) < EL2)) {
         // This is technically the wrong function, but we can re-use it for
         // the moment because we only need one field, which overlaps with the
         // mcrmrc layout
-        mcrMrcIssExtract(iss, isRead, crm, rt, crn, opc1, opc2);
-        trapToHype = ((uint32_t) hstr) & (1 << crm);
+        mcrMrcIssExtract(iss, is_read, crm, rt, crn, opc1, opc2);
+        trap_to_hyp = ((uint32_t)hstr) & (1 << crm);
 
-        if (!trapToHype) {
-            switch (unflattenMiscReg(miscReg)) {
+        if (!trap_to_hyp) {
+            switch (unflattenMiscReg(misc_reg)) {
               case MISCREG_SCTLR:
               case MISCREG_TTBR0:
               case MISCREG_TTBR1:
@@ -807,15 +767,16 @@ mcrrMrrc15TrapToHyp(const MiscRegIndex miscReg, ThreadContext *tc,
               case MISCREG_MAIR0:
               case MISCREG_MAIR1:
               case MISCREG_CONTEXTIDR:
-                trapToHype = hcr.tvm & !isRead;
+                trap_to_hyp = hcr.tvm & !is_read;
                 break;
               case MISCREG_CNTFRQ ... MISCREG_CNTV_TVAL:
                 // CNTFRQ may be trapped only on reads
                 // CNTPCT and CNTVCT are read-only
-                if (MISCREG_CNTFRQ <= miscReg && miscReg <= MISCREG_CNTVCT &&
-                    !isRead)
+                if (MISCREG_CNTFRQ <= misc_reg && misc_reg <= MISCREG_CNTVCT &&
+                    !is_read) {
                     break;
-                trapToHype = isGenericTimerHypTrap(miscReg, tc, ec);
+                }
+                trap_to_hyp = isGenericTimerHypTrap(misc_reg, tc, ec);
                 break;
               // No default action needed
               default:
@@ -823,31 +784,31 @@ mcrrMrrc15TrapToHyp(const MiscRegIndex miscReg, ThreadContext *tc,
             }
         }
     }
-    return trapToHype;
+    return trap_to_hyp;
 }
 
 Fault
-AArch64AArch32SystemAccessTrap(const MiscRegIndex miscReg,
-                               ExtMachInst machInst, ThreadContext *tc,
+AArch64AArch32SystemAccessTrap(const MiscRegIndex misc_reg,
+                               ExtMachInst mach_inst, ThreadContext *tc,
                                uint32_t imm, ExceptionClass ec)
 {
     if (currEL(tc) <= EL1 && !ELIs32(tc, EL1) &&
-        isAArch64AArch32SystemAccessTrapEL1(miscReg, tc))
-        return std::make_shared<SupervisorTrap>(machInst, imm, ec);
+        isAArch64AArch32SystemAccessTrapEL1(misc_reg, tc))
+        return std::make_shared<SupervisorTrap>(mach_inst, imm, ec);
     if (currEL(tc) <= EL2 && EL2Enabled(tc) && !ELIs32(tc, EL2) &&
-        isAArch64AArch32SystemAccessTrapEL2(miscReg, tc))
-        return std::make_shared<HypervisorTrap>(machInst, imm, ec);
+        isAArch64AArch32SystemAccessTrapEL2(misc_reg, tc))
+        return std::make_shared<HypervisorTrap>(mach_inst, imm, ec);
     return NoFault;
 }
 
 bool
-isAArch64AArch32SystemAccessTrapEL1(const MiscRegIndex miscReg,
+isAArch64AArch32SystemAccessTrapEL1(const MiscRegIndex misc_reg,
                                     ThreadContext *tc)
 {
-    switch (miscReg) {
+    switch (misc_reg) {
       case MISCREG_CNTFRQ ... MISCREG_CNTVOFF:
         return currEL(tc) == EL0 &&
-               isGenericTimerSystemAccessTrapEL1(miscReg, tc);
+               isGenericTimerSystemAccessTrapEL1(misc_reg, tc);
       default:
         break;
     }
@@ -855,20 +816,20 @@ isAArch64AArch32SystemAccessTrapEL1(const MiscRegIndex miscReg,
 }
 
 bool
-isGenericTimerHypTrap(const MiscRegIndex miscReg, ThreadContext *tc,
+isGenericTimerHypTrap(const MiscRegIndex misc_reg, ThreadContext *tc,
                       ExceptionClass *ec)
 {
     if (currEL(tc) <= EL2 && EL2Enabled(tc) && ELIs32(tc, EL2)) {
-        switch (miscReg) {
+        switch (misc_reg) {
           case MISCREG_CNTFRQ ... MISCREG_CNTV_TVAL:
             if (currEL(tc) == EL0 &&
-                isGenericTimerCommonEL0HypTrap(miscReg, tc, ec))
+                isGenericTimerCommonEL0HypTrap(misc_reg, tc, ec))
                 return true;
-            switch (miscReg) {
+            switch (misc_reg) {
               case MISCREG_CNTPCT:
               case MISCREG_CNTP_CTL ... MISCREG_CNTP_TVAL_S:
                 return currEL(tc) <= EL1 &&
-                       isGenericTimerPhysHypTrap(miscReg, tc, ec);
+                       isGenericTimerPhysHypTrap(misc_reg, tc, ec);
               default:
                 break;
             }
@@ -881,11 +842,11 @@ isGenericTimerHypTrap(const MiscRegIndex miscReg, ThreadContext *tc,
 }
 
 bool
-isGenericTimerCommonEL0HypTrap(const MiscRegIndex miscReg, ThreadContext *tc,
+isGenericTimerCommonEL0HypTrap(const MiscRegIndex misc_reg, ThreadContext *tc,
                                ExceptionClass *ec)
 {
     const HCR hcr = tc->readMiscReg(MISCREG_HCR_EL2);
-    bool trap_cond = condGenericTimerSystemAccessTrapEL1(miscReg, tc);
+    bool trap_cond = condGenericTimerSystemAccessTrapEL1(misc_reg, tc);
     if (ELIs32(tc, EL1) && trap_cond && hcr.tge) {
         // As per the architecture, this hyp trap should have uncategorized
         // exception class
@@ -897,17 +858,17 @@ isGenericTimerCommonEL0HypTrap(const MiscRegIndex miscReg, ThreadContext *tc,
 }
 
 bool
-isGenericTimerPhysHypTrap(const MiscRegIndex miscReg, ThreadContext *tc,
+isGenericTimerPhysHypTrap(const MiscRegIndex misc_reg, ThreadContext *tc,
                           ExceptionClass *ec)
 {
-    return condGenericTimerPhysHypTrap(miscReg, tc);
+    return condGenericTimerPhysHypTrap(misc_reg, tc);
 }
 
 bool
-condGenericTimerPhysHypTrap(const MiscRegIndex miscReg, ThreadContext *tc)
+condGenericTimerPhysHypTrap(const MiscRegIndex misc_reg, ThreadContext *tc)
 {
     const CNTHCTL cnthctl = tc->readMiscReg(MISCREG_CNTHCTL_EL2);
-    switch (miscReg) {
+    switch (misc_reg) {
       case MISCREG_CNTPCT:
         return !cnthctl.el1pcten;
       case MISCREG_CNTP_CTL ... MISCREG_CNTP_TVAL_S:
@@ -919,15 +880,15 @@ condGenericTimerPhysHypTrap(const MiscRegIndex miscReg, ThreadContext *tc)
 }
 
 bool
-isGenericTimerSystemAccessTrapEL1(const MiscRegIndex miscReg,
+isGenericTimerSystemAccessTrapEL1(const MiscRegIndex misc_reg,
                                   ThreadContext *tc)
 {
-    switch (miscReg) {
+    switch (misc_reg) {
       case MISCREG_CNTFRQ ... MISCREG_CNTV_TVAL:
       case MISCREG_CNTFRQ_EL0 ... MISCREG_CNTV_TVAL_EL0:
       {
         const HCR hcr = tc->readMiscReg(MISCREG_HCR_EL2);
-        bool trap_cond = condGenericTimerSystemAccessTrapEL1(miscReg, tc);
+        bool trap_cond = condGenericTimerSystemAccessTrapEL1(misc_reg, tc);
         return !(EL2Enabled(tc) && hcr.e2h && hcr.tge) && trap_cond &&
                !(EL2Enabled(tc) && !ELIs32(tc, EL2) && hcr.tge);
       }
@@ -938,11 +899,11 @@ isGenericTimerSystemAccessTrapEL1(const MiscRegIndex miscReg,
 }
 
 bool
-condGenericTimerSystemAccessTrapEL1(const MiscRegIndex miscReg,
+condGenericTimerSystemAccessTrapEL1(const MiscRegIndex misc_reg,
                                     ThreadContext *tc)
 {
     const CNTKCTL cntkctl = tc->readMiscReg(MISCREG_CNTKCTL_EL1);
-    switch (miscReg) {
+    switch (misc_reg) {
       case MISCREG_CNTFRQ:
       case MISCREG_CNTFRQ_EL0:
         return !cntkctl.el0pcten && !cntkctl.el0vcten;
@@ -965,13 +926,13 @@ condGenericTimerSystemAccessTrapEL1(const MiscRegIndex miscReg,
 }
 
 bool
-isAArch64AArch32SystemAccessTrapEL2(const MiscRegIndex miscReg,
+isAArch64AArch32SystemAccessTrapEL2(const MiscRegIndex misc_reg,
                                     ThreadContext *tc)
 {
-    switch (miscReg) {
+    switch (misc_reg) {
       case MISCREG_CNTFRQ ... MISCREG_CNTVOFF:
         return currEL(tc) <= EL1 &&
-               isGenericTimerSystemAccessTrapEL2(miscReg, tc);
+               isGenericTimerSystemAccessTrapEL2(misc_reg, tc);
       default:
         break;
     }
@@ -979,29 +940,29 @@ isAArch64AArch32SystemAccessTrapEL2(const MiscRegIndex miscReg,
 }
 
 bool
-isGenericTimerSystemAccessTrapEL2(const MiscRegIndex miscReg,
+isGenericTimerSystemAccessTrapEL2(const MiscRegIndex misc_reg,
                                   ThreadContext *tc)
 {
-    switch (miscReg) {
+    switch (misc_reg) {
       case MISCREG_CNTFRQ ... MISCREG_CNTV_TVAL:
       case MISCREG_CNTFRQ_EL0 ... MISCREG_CNTV_TVAL_EL0:
         if (currEL(tc) == EL0 &&
-            isGenericTimerCommonEL0SystemAccessTrapEL2(miscReg, tc))
+            isGenericTimerCommonEL0SystemAccessTrapEL2(misc_reg, tc))
             return true;
-        switch (miscReg) {
+        switch (misc_reg) {
           case MISCREG_CNTPCT:
           case MISCREG_CNTPCT_EL0:
           case MISCREG_CNTP_CTL ... MISCREG_CNTP_TVAL_S:
           case MISCREG_CNTP_CTL_EL0 ... MISCREG_CNTP_TVAL_EL0:
             return (currEL(tc) == EL0 &&
-                    isGenericTimerPhysEL0SystemAccessTrapEL2(miscReg, tc)) ||
+                    isGenericTimerPhysEL0SystemAccessTrapEL2(misc_reg, tc)) ||
                    (currEL(tc) == EL1 &&
-                    isGenericTimerPhysEL1SystemAccessTrapEL2(miscReg, tc));
+                    isGenericTimerPhysEL1SystemAccessTrapEL2(misc_reg, tc));
           case MISCREG_CNTVCT:
           case MISCREG_CNTVCT_EL0:
           case MISCREG_CNTV_CTL ... MISCREG_CNTV_TVAL:
           case MISCREG_CNTV_CTL_EL0 ... MISCREG_CNTV_TVAL_EL0:
-            return isGenericTimerVirtSystemAccessTrapEL2(miscReg, tc);
+            return isGenericTimerVirtSystemAccessTrapEL2(misc_reg, tc);
           default:
             break;
         }
@@ -1013,12 +974,12 @@ isGenericTimerSystemAccessTrapEL2(const MiscRegIndex miscReg,
 }
 
 bool
-isGenericTimerCommonEL0SystemAccessTrapEL2(const MiscRegIndex miscReg,
+isGenericTimerCommonEL0SystemAccessTrapEL2(const MiscRegIndex misc_reg,
                                            ThreadContext *tc)
 {
     const HCR hcr = tc->readMiscReg(MISCREG_HCR_EL2);
-    bool trap_cond_el1 = condGenericTimerSystemAccessTrapEL1(miscReg, tc);
-    bool trap_cond_el2 = condGenericTimerCommonEL0SystemAccessTrapEL2(miscReg,
+    bool trap_cond_el1 = condGenericTimerSystemAccessTrapEL1(misc_reg, tc);
+    bool trap_cond_el2 = condGenericTimerCommonEL0SystemAccessTrapEL2(misc_reg,
                                                                       tc);
     return (!ELIs32(tc, EL1) && !hcr.e2h && trap_cond_el1 && hcr.tge) ||
            (ELIs32(tc, EL1) && trap_cond_el1 && hcr.tge) ||
@@ -1026,14 +987,16 @@ isGenericTimerCommonEL0SystemAccessTrapEL2(const MiscRegIndex miscReg,
 }
 
 bool
-isGenericTimerPhysEL0SystemAccessTrapEL2(const MiscRegIndex miscReg,
+isGenericTimerPhysEL0SystemAccessTrapEL2(const MiscRegIndex misc_reg,
                                          ThreadContext *tc)
 {
     const HCR hcr = tc->readMiscReg(MISCREG_HCR_EL2);
-    bool trap_cond_0 = condGenericTimerPhysEL1SystemAccessTrapEL2(miscReg, tc);
-    bool trap_cond_1 = condGenericTimerCommonEL1SystemAccessTrapEL2(miscReg,
-                                                                    tc);
-    switch (miscReg) {
+    bool trap_cond_0 = condGenericTimerPhysEL1SystemAccessTrapEL2(
+        misc_reg, tc);
+    bool trap_cond_1 = condGenericTimerCommonEL1SystemAccessTrapEL2(
+        misc_reg, tc);
+
+    switch (misc_reg) {
       case MISCREG_CNTPCT:
       case MISCREG_CNTPCT_EL0:
         return !hcr.e2h && trap_cond_1;
@@ -1049,14 +1012,16 @@ isGenericTimerPhysEL0SystemAccessTrapEL2(const MiscRegIndex miscReg,
 }
 
 bool
-isGenericTimerPhysEL1SystemAccessTrapEL2(const MiscRegIndex miscReg,
+isGenericTimerPhysEL1SystemAccessTrapEL2(const MiscRegIndex misc_reg,
                                          ThreadContext *tc)
 {
     const HCR hcr = tc->readMiscReg(MISCREG_HCR_EL2);
-    bool trap_cond_0 = condGenericTimerPhysEL1SystemAccessTrapEL2(miscReg, tc);
-    bool trap_cond_1 = condGenericTimerCommonEL1SystemAccessTrapEL2(miscReg,
-                                                                    tc);
-    switch (miscReg) {
+    bool trap_cond_0 = condGenericTimerPhysEL1SystemAccessTrapEL2(
+        misc_reg, tc);
+    bool trap_cond_1 = condGenericTimerCommonEL1SystemAccessTrapEL2(
+        misc_reg, tc);
+
+    switch (misc_reg) {
       case MISCREG_CNTPCT:
       case MISCREG_CNTPCT_EL0:
         return trap_cond_1;
@@ -1071,20 +1036,21 @@ isGenericTimerPhysEL1SystemAccessTrapEL2(const MiscRegIndex miscReg,
 }
 
 bool
-isGenericTimerVirtSystemAccessTrapEL2(const MiscRegIndex miscReg,
+isGenericTimerVirtSystemAccessTrapEL2(const MiscRegIndex misc_reg,
                                       ThreadContext *tc)
 {
     const HCR hcr = tc->readMiscReg(MISCREG_HCR_EL2);
-    bool trap_cond = condGenericTimerCommonEL1SystemAccessTrapEL2(miscReg, tc);
+    bool trap_cond = condGenericTimerCommonEL1SystemAccessTrapEL2(
+        misc_reg, tc);
     return !ELIs32(tc, EL1) && !(hcr.e2h && hcr.tge) && trap_cond;
 }
 
 bool
-condGenericTimerCommonEL0SystemAccessTrapEL2(const MiscRegIndex miscReg,
+condGenericTimerCommonEL0SystemAccessTrapEL2(const MiscRegIndex misc_reg,
                                              ThreadContext *tc)
 {
     const CNTHCTL_E2H cnthctl = tc->readMiscReg(MISCREG_CNTHCTL_EL2);
-    switch (miscReg) {
+    switch (misc_reg) {
       case MISCREG_CNTFRQ:
       case MISCREG_CNTFRQ_EL0:
         return !cnthctl.el0pcten && !cnthctl.el0vcten;
@@ -1107,7 +1073,7 @@ condGenericTimerCommonEL0SystemAccessTrapEL2(const MiscRegIndex miscReg,
 }
 
 bool
-condGenericTimerCommonEL1SystemAccessTrapEL2(const MiscRegIndex miscReg,
+condGenericTimerCommonEL1SystemAccessTrapEL2(const MiscRegIndex misc_reg,
                                              ThreadContext *tc)
 {
     const AA64MMFR0 mmfr0 = tc->readMiscRegNoEffect(MISCREG_ID_AA64MMFR0_EL1);
@@ -1115,7 +1081,7 @@ condGenericTimerCommonEL1SystemAccessTrapEL2(const MiscRegIndex miscReg,
     const RegVal cnthctl_val = tc->readMiscReg(MISCREG_CNTHCTL_EL2);
     const CNTHCTL cnthctl = cnthctl_val;
     const CNTHCTL_E2H cnthctl_e2h = cnthctl_val;
-    switch (miscReg) {
+    switch (misc_reg) {
       case MISCREG_CNTPCT:
       case MISCREG_CNTPCT_EL0:
         return hcr.e2h ? !cnthctl_e2h.el1pcten : !cnthctl.el1pcten;
@@ -1141,7 +1107,7 @@ condGenericTimerCommonEL1SystemAccessTrapEL2(const MiscRegIndex miscReg,
 }
 
 bool
-condGenericTimerPhysEL1SystemAccessTrapEL2(const MiscRegIndex miscReg,
+condGenericTimerPhysEL1SystemAccessTrapEL2(const MiscRegIndex misc_reg,
                                            ThreadContext *tc)
 {
     const CNTHCTL cnthctl = tc->readMiscReg(MISCREG_CNTHCTL_EL2);
@@ -1149,10 +1115,10 @@ condGenericTimerPhysEL1SystemAccessTrapEL2(const MiscRegIndex miscReg,
 }
 
 bool
-isGenericTimerSystemAccessTrapEL3(const MiscRegIndex miscReg,
+isGenericTimerSystemAccessTrapEL3(const MiscRegIndex misc_reg,
                                   ThreadContext *tc)
 {
-    switch (miscReg) {
+    switch (misc_reg) {
       case MISCREG_CNTPS_CTL_EL1 ... MISCREG_CNTPS_TVAL_EL1:
       {
         const SCR scr = tc->readMiscReg(MISCREG_SCR_EL3);
@@ -1176,35 +1142,34 @@ decodeMrsMsrBankedReg(uint8_t sysM, bool r, bool &isIntReg, int &regIdx,
     isIntReg = !r;
     // Loosely based on ARM ARM issue C section B9.3.10
     if (r) {
-        switch (sysM)
-        {
+        switch (sysM) {
           case 0xE:
             regIdx = MISCREG_SPSR_FIQ;
-            mode   = MODE_FIQ;
+            mode = MODE_FIQ;
             break;
           case 0x10:
             regIdx = MISCREG_SPSR_IRQ;
-            mode   = MODE_IRQ;
+            mode = MODE_IRQ;
             break;
           case 0x12:
             regIdx = MISCREG_SPSR_SVC;
-            mode   = MODE_SVC;
+            mode = MODE_SVC;
             break;
           case 0x14:
             regIdx = MISCREG_SPSR_ABT;
-            mode   = MODE_ABORT;
+            mode = MODE_ABORT;
             break;
           case 0x16:
             regIdx = MISCREG_SPSR_UND;
-            mode   = MODE_UNDEFINED;
+            mode = MODE_UNDEFINED;
             break;
           case 0x1C:
             regIdx = MISCREG_SPSR_MON;
-            mode   = MODE_MON;
+            mode = MODE_MON;
             break;
           case 0x1E:
             regIdx = MISCREG_SPSR_HYP;
-            mode   = MODE_HYP;
+            mode = MODE_HYP;
             break;
           default:
             ok = false;
@@ -1215,52 +1180,51 @@ decodeMrsMsrBankedReg(uint8_t sysM, bool r, bool &isIntReg, int &regIdx,
 
         if (sysM4To3 == 0) {
             mode = MODE_USER;
-            regIdx = intRegInMode(mode, bits(sysM, 2, 0) + 8);
+            regIdx = int_reg::regInMode(mode, bits(sysM, 2, 0) + 8);
         } else if (sysM4To3 == 1) {
             mode = MODE_FIQ;
-            regIdx = intRegInMode(mode, bits(sysM, 2, 0) + 8);
+            regIdx = int_reg::regInMode(mode, bits(sysM, 2, 0) + 8);
         } else if (sysM4To3 == 3) {
             if (bits(sysM, 1) == 0) {
                 mode = MODE_MON;
-                regIdx = intRegInMode(mode, 14 - bits(sysM, 0));
+                regIdx = int_reg::regInMode(mode, 14 - bits(sysM, 0));
             } else {
                 mode = MODE_HYP;
                 if (bits(sysM, 0) == 1) {
-                    regIdx = intRegInMode(mode, 13); // R13 in HYP
+                    regIdx = int_reg::regInMode(mode, 13); // R13 in HYP
                 } else {
                     isIntReg = false;
-                    regIdx   = MISCREG_ELR_HYP;
+                    regIdx = MISCREG_ELR_HYP;
                 }
             }
         } else { // Other Banked registers
             int sysM2 = bits(sysM, 2);
             int sysM1 = bits(sysM, 1);
 
-            mode  = (OperatingMode) ( ((sysM2 ||  sysM1) << 0) |
-                                      (1                 << 1) |
-                                      ((sysM2 && !sysM1) << 2) |
-                                      ((sysM2 &&  sysM1) << 3) |
-                                      (1                 << 4) );
-            regIdx = intRegInMode(mode, 14 - bits(sysM, 0));
+            mode  = (OperatingMode)(((sysM2 || sysM1) << 0) |
+                                    (1 << 1) |
+                                    ((sysM2 && !sysM1) << 2) |
+                                    ((sysM2 && sysM1) << 3) |
+                                    (1 << 4));
+            regIdx = int_reg::regInMode(mode, 14 - bits(sysM, 0));
             // Don't flatten the register here. This is going to go through
-            // setIntReg() which will do the flattening
+            // setReg() which will do the flattening
             ok &= mode != cpsr.mode;
         }
     }
 
     // Check that the requested register is accessable from the current mode
     if (ok && checkSecurity && mode != cpsr.mode) {
-        switch (cpsr.mode)
-        {
+        switch (cpsr.mode) {
           case MODE_USER:
             ok = false;
             break;
           case MODE_FIQ:
-            ok &=  mode != MODE_HYP;
+            ok &= mode != MODE_HYP;
             ok &= (mode != MODE_MON) || !scr.ns;
             break;
           case MODE_HYP:
-            ok &=  mode != MODE_MON;
+            ok &= mode != MODE_MON;
             ok &= (mode != MODE_FIQ) || !nsacr.rfr;
             break;
           case MODE_IRQ:
@@ -1268,7 +1232,7 @@ decodeMrsMsrBankedReg(uint8_t sysM, bool r, bool &isIntReg, int &regIdx,
           case MODE_ABORT:
           case MODE_UNDEFINED:
           case MODE_SYSTEM:
-            ok &=  mode != MODE_HYP;
+            ok &= mode != MODE_HYP;
             ok &= (mode != MODE_MON) || !scr.ns;
             ok &= (mode != MODE_FIQ) || !nsacr.rfr;
             break;
@@ -1280,38 +1244,39 @@ decodeMrsMsrBankedReg(uint8_t sysM, bool r, bool &isIntReg, int &regIdx,
             break;
         }
     }
-    return (ok);
+    return ok;
 }
 
 bool
-isUnpriviledgeAccess(ThreadContext * tc)
+isUnpriviledgeAccess(ThreadContext *tc)
 {
     const HCR hcr = tc->readMiscReg(MISCREG_HCR_EL2);
+    const CPSR cpsr = tc->readMiscReg(MISCREG_CPSR);
+
     // NV Extension not implemented yet
     bool have_nv_ext = false;
     bool unpriv_el1 = currEL(tc) == EL1 &&
-                               !(ArmSystem::haveVirtualization(tc) &&
-                                 have_nv_ext && hcr.nv == 1 && hcr.nv1 == 1);
-    bool unpriv_el2 = ArmSystem::haveEL(tc, EL2) && HaveVirtHostExt(tc) &&
+        !(ArmSystem::haveEL(tc, EL2) &&
+            have_nv_ext && hcr.nv == 1 && hcr.nv1 == 1);
+    bool unpriv_el2 = ArmSystem::haveEL(tc, EL2) &&
+                      HaveExt(tc, ArmExtension::FEAT_VHE) &&
                       currEL(tc) == EL2 && hcr.e2h == 1 && hcr.tge == 1;
 
-    // User Access override, or UAO not implemented yet.
-    bool user_access_override = false;
-    return (unpriv_el1 || unpriv_el2) && !user_access_override;
+    return (unpriv_el1 || unpriv_el2) && !cpsr.uao;
 }
 
 bool
-SPAlignmentCheckEnabled(ThreadContext* tc)
+SPAlignmentCheckEnabled(ThreadContext *tc)
 {
     ExceptionLevel regime = s1TranslationRegime(tc, currEL(tc));
 
     switch (currEL(tc)) {
       case EL3:
-        return ((SCTLR) tc->readMiscReg(MISCREG_SCTLR_EL3)).sa;
+        return ((SCTLR)tc->readMiscReg(MISCREG_SCTLR_EL3)).sa;
       case EL2:
-        return ((SCTLR) tc->readMiscReg(MISCREG_SCTLR_EL2)).sa;
+        return ((SCTLR)tc->readMiscReg(MISCREG_SCTLR_EL2)).sa;
       case EL1:
-        return ((SCTLR) tc->readMiscReg(MISCREG_SCTLR_EL1)).sa;
+        return ((SCTLR)tc->readMiscReg(MISCREG_SCTLR_EL1)).sa;
       case EL0:
         {
           SCTLR sc = (regime == EL2) ? tc->readMiscReg(MISCREG_SCTLR_EL2):
@@ -1370,4 +1335,35 @@ encodePhysAddrRange64(int pa_size)
     }
 }
 
+void
+syncVecRegsToElems(ThreadContext *tc)
+{
+    int ei = 0;
+    for (int ri = 0; ri < NumVecRegs; ri++) {
+        RegId reg_id(VecRegClass, ri);
+        VecRegContainer reg;
+        tc->getReg(reg_id, &reg);
+        for (int j = 0; j < NumVecElemPerVecReg; j++, ei++) {
+            RegId elem_id(VecElemClass, ei);
+            tc->setReg(elem_id, reg.as<VecElem>()[j]);
+        }
+    }
+}
+
+void
+syncVecElemsToRegs(ThreadContext *tc)
+{
+    int ei = 0;
+    for (int ri = 0; ri < NumVecRegs; ri++) {
+        VecRegContainer reg;
+        for (int j = 0; j < NumVecElemPerVecReg; j++, ei++) {
+            RegId elem_id(VecElemClass, ei);
+            reg.as<VecElem>()[j] = tc->getReg(elem_id);
+        }
+        RegId reg_id(VecRegClass, ri);
+        tc->setReg(reg_id, &reg);
+    }
+}
+
 } // namespace ArmISA
+} // namespace gem5

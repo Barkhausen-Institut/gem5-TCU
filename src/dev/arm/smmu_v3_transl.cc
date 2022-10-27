@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2018-2019 ARM Limited
+ * Copyright (c) 2013, 2018-2019, 2021 Arm Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -37,11 +37,17 @@
 
 #include "dev/arm/smmu_v3_transl.hh"
 
+#include "arch/arm/pagetable.hh"
 #include "debug/SMMUv3.hh"
 #include "debug/SMMUv3Hazard.hh"
 #include "dev/arm/amba.hh"
 #include "dev/arm/smmu_v3.hh"
 #include "sim/system.hh"
+
+namespace gem5
+{
+
+using namespace ArmISA;
 
 SMMUTranslRequest
 SMMUTranslRequest::fromPacket(PacketPtr pkt, bool ats)
@@ -654,10 +660,11 @@ SMMUTranslationProcess::walkCacheLookup(
     const char *indent = stage==2 ? "  " : "";
     (void) indent; // this is only used in DPRINTFs
 
-    const PageTableOps *pt_ops =
-        stage == 1 ?
-            smmu.getPageTableOps(context.stage1TranslGranule) :
-            smmu.getPageTableOps(context.stage2TranslGranule);
+    const auto tg = stage == 1 ?
+        GrainMap_tg0[context.stage1TranslGranule] :
+        GrainMap_tg0[context.stage2TranslGranule];
+
+    const auto *pt_ops = getPageTableOps(tg);
 
     unsigned walkCacheLevels =
         smmu.walkCacheEnable ?
@@ -738,7 +745,8 @@ SMMUTranslationProcess::walkStage1And2(Yield &yield, Addr addr,
     doSemaphoreUp(smmu.cycleSem);
 
     for (; level <= pt_ops->lastLevel(); level++) {
-        Addr pte_addr = walkPtr + pt_ops->index(addr, level);
+        Addr pte_addr = walkPtr + pt_ops->index(
+            addr, level, 64 - context.t0sz);
 
         DPRINTF(SMMUv3, "Fetching S1 L%d PTE from pa=%#08x\n",
                 level, pte_addr);
@@ -822,7 +830,8 @@ SMMUTranslationProcess::walkStage2(Yield &yield, Addr addr, bool final_tr,
     doSemaphoreUp(smmu.cycleSem);
 
     for (; level <= pt_ops->lastLevel(); level++) {
-        Addr pte_addr = walkPtr + pt_ops->index(addr, level);
+        Addr pte_addr = walkPtr + pt_ops->index(
+            addr, level, 64 - context.s2t0sz);
 
         DPRINTF(SMMUv3, "  Fetching S2 L%d PTE from pa=%#08x\n",
                 level, pte_addr);
@@ -879,8 +888,8 @@ SMMUTranslationProcess::walkStage2(Yield &yield, Addr addr, bool final_tr,
 SMMUTranslationProcess::TranslResult
 SMMUTranslationProcess::translateStage1And2(Yield &yield, Addr addr)
 {
-    const PageTableOps *pt_ops =
-        smmu.getPageTableOps(context.stage1TranslGranule);
+    const auto tg = GrainMap_tg0[context.stage1TranslGranule];
+    const auto *pt_ops = getPageTableOps(tg);
 
     const WalkCache::Entry *walk_ep = NULL;
     unsigned level;
@@ -935,8 +944,8 @@ SMMUTranslationProcess::translateStage1And2(Yield &yield, Addr addr)
 SMMUTranslationProcess::TranslResult
 SMMUTranslationProcess::translateStage2(Yield &yield, Addr addr, bool final_tr)
 {
-    const PageTableOps *pt_ops =
-            smmu.getPageTableOps(context.stage2TranslGranule);
+    const auto tg = GrainMap_tg0[context.stage2TranslGranule];
+    const auto *pt_ops = getPageTableOps(tg);
 
     const IPACache::Entry *ipa_ep = NULL;
     if (smmu.ipaCacheEnable) {
@@ -1477,3 +1486,5 @@ SMMUTranslationProcess::doReadPTE(Yield &yield, Addr va, Addr addr,
 
     doRead(yield, base, ptr, pte_size);
 }
+
+} // namespace gem5

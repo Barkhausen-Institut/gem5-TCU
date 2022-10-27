@@ -48,10 +48,14 @@
 #include "debug/MinorTrace.hh"
 #include "debug/Quiesce.hh"
 
-namespace Minor
+namespace gem5
 {
 
-Pipeline::Pipeline(MinorCPU &cpu_, const MinorCPUParams &params) :
+GEM5_DEPRECATED_NAMESPACE(Minor, minor);
+namespace minor
+{
+
+Pipeline::Pipeline(MinorCPU &cpu_, const BaseMinorCPUParams &params) :
     Ticked(cpu_, &(cpu_.BaseCPU::baseStats.numCycles)),
     cpu(cpu_),
     allow_idling(params.enableIdling),
@@ -132,7 +136,7 @@ Pipeline::evaluate()
     fetch2.evaluate();
     fetch1.evaluate();
 
-    if (DTRACE(MinorTrace))
+    if (debug::MinorTrace)
         minorTrace();
 
     /* Update the time buffers after the stages */
@@ -254,4 +258,5 @@ Pipeline::isDrained()
     return ret;
 }
 
-}
+} // namespace minor
+} // namespace gem5

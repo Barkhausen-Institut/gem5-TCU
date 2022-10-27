@@ -40,12 +40,16 @@
 
 #include "pybind11/pybind11.h"
 
+#include "base/compiler.hh"
 #include "cpu/testers/traffic_gen/base.hh"
 #include "cpu/testers/traffic_gen/base_gen.hh"
 
+namespace gem5
+{
+
 struct PyTrafficGenParams;
 
-class M5_LOCAL PyTrafficGen : public BaseTrafficGen
+class GEM5_LOCAL PyTrafficGen : public BaseTrafficGen
 {
   public:
     PyTrafficGen(const PyTrafficGenParams &p);
@@ -60,5 +64,7 @@ class M5_LOCAL PyTrafficGen : public BaseTrafficGen
   protected: // Internal state
     pybind11::iterator metaGenerator;
 };
+
+} // namespace gem5
 
 #endif //__CPU_TRAFFIC_GEN_PYGEN_HH__

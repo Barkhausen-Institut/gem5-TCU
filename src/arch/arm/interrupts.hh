@@ -42,14 +42,16 @@
 #define __ARCH_ARM_INTERRUPT_HH__
 
 #include "arch/arm/faults.hh"
-#include "arch/arm/isa_traits.hh"
-#include "arch/arm/miscregs.hh"
-#include "arch/arm/registers.hh"
+#include "arch/arm/regs/misc.hh"
 #include "arch/arm/utility.hh"
 #include "arch/generic/interrupts.hh"
 #include "cpu/thread_context.hh"
 #include "debug/Interrupt.hh"
+#include "enums/ArmExtension.hh"
 #include "params/ArmInterrupts.hh"
+
+namespace gem5
+{
 
 namespace ArmISA
 {
@@ -93,7 +95,7 @@ class Interrupts : public BaseInterrupts
             panic("No support for other interrupt indexes\n");
 
         interrupts[int_num] = true;
-        intStatus |= ULL(1) << int_num;
+        intStatus |= 1ULL << int_num;
     }
 
     void
@@ -108,7 +110,7 @@ class Interrupts : public BaseInterrupts
             panic("No support for other interrupt indexes\n");
 
         interrupts[int_num] = false;
-        intStatus &= ~(ULL(1) << int_num);
+        intStatus &= ~(1ULL << int_num);
     }
 
     void
@@ -119,7 +121,8 @@ class Interrupts : public BaseInterrupts
         memset(interrupts, 0, sizeof(interrupts));
     }
 
-    enum InterruptMask {
+    enum InterruptMask
+    {
         INT_MASK_M, // masked (subject to PSTATE.{A,I,F} mask bit
         INT_MASK_T, // taken regardless of mask
         INT_MASK_P  // pending
@@ -137,7 +140,7 @@ class Interrupts : public BaseInterrupts
 
         CPSR cpsr = tc->readMiscReg(MISCREG_CPSR);
 
-        bool no_vhe = !HaveVirtHostExt(tc);
+        bool no_vhe = !HaveExt(tc, ArmExtension::FEAT_VHE);
         bool amo, fmo, imo;
         if (hcr.tge == 1){
             amo =  (no_vhe || hcr.e2h == 0);
@@ -236,7 +239,7 @@ class Interrupts : public BaseInterrupts
         HCR  hcr  = tc->readMiscReg(MISCREG_HCR);
         CPSR cpsr = tc->readMiscReg(MISCREG_CPSR);
 
-        bool no_vhe = !HaveVirtHostExt(tc);
+        bool no_vhe = !HaveExt(tc, ArmExtension::FEAT_VHE);
         bool amo, fmo, imo;
         if (hcr.tge == 1){
             amo =  (no_vhe || hcr.e2h == 0);
@@ -299,6 +302,8 @@ class Interrupts : public BaseInterrupts
         UNSERIALIZE_SCALAR(intStatus);
     }
 };
+
 } // namespace ARM_ISA
+} // namespace gem5
 
 #endif // __ARCH_ARM_INTERRUPT_HH__

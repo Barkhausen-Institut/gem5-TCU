@@ -31,7 +31,7 @@ from slicc.symbols import Var
 
 class PeekStatementAST(StatementAST):
     def __init__(self, slicc, queue_name, type_ast, pairs, statements, method):
-        super(PeekStatementAST, self).__init__(slicc, pairs)
+        super().__init__(slicc, pairs)
 
         self.queue_name = queue_name
         self.type_ast = type_ast
@@ -61,7 +61,7 @@ class PeekStatementAST(StatementAST):
         code('''
 {
     // Declare message
-    M5_VAR_USED const $mtid* in_msg_ptr;
+    [[maybe_unused]] const $mtid* in_msg_ptr;
     in_msg_ptr = dynamic_cast<const $mtid *>(($qcode).${{self.method}}());
     if (in_msg_ptr == NULL) {
         // If the cast fails, this is the wrong inport (wrong message type).

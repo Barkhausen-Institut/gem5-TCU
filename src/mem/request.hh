@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2013,2017-2020 ARM Limited
+ * Copyright (c) 2012-2013,2017-2022 Arm Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -57,11 +57,15 @@
 #include <vector>
 
 #include "base/amo.hh"
+#include "base/compiler.hh"
 #include "base/flags.hh"
 #include "base/types.hh"
 #include "cpu/inst_seq.hh"
 #include "mem/htm.hh"
-#include "sim/core.hh"
+#include "sim/cur_tick.hh"
+
+namespace gem5
+{
 
 /**
  * Special TaskIds that are used for per-context-switch stats dumps
@@ -70,9 +74,11 @@
  * doesn't cause a problem with stats and is large enough to realistic
  * benchmarks (Linux/Android boot, BBench, etc.)
  */
-
-namespace ContextSwitchTaskId {
-    enum TaskId {
+GEM5_DEPRECATED_NAMESPACE(ContextSwitchTaskId, context_switch_task_id);
+namespace context_switch_task_id
+{
+    enum TaskId
+    {
         MaxNormalTaskId = 1021, /* Maximum number of normal tasks */
         Prefetcher = 1022, /* For cache lines brought in by prefetcher */
         DMA = 1023, /* Mostly Table Walker */
@@ -93,9 +99,10 @@ class Request
   public:
     typedef uint64_t FlagsType;
     typedef uint8_t ArchFlagsType;
-    typedef ::Flags<FlagsType> Flags;
+    typedef gem5::Flags<FlagsType> Flags;
 
-    enum : FlagsType {
+    enum : FlagsType
+    {
         /**
          * Architecture specific flags.
          *
@@ -150,6 +157,8 @@ class Request
         /** This request is for a memory swap. */
         MEM_SWAP                    = 0x00400000,
         MEM_SWAP_COND               = 0x00800000,
+        /** This request is a read which will be followed by a write. */
+        READ_MODIFY_WRITE           = 0x00020000,
 
         /** The request is a prefetch. */
         PREFETCH                    = 0x01000000,
@@ -228,6 +237,20 @@ class Request
         // This separation is necessary to ensure the disjoint components
         // of the system work correctly together.
 
+        /** The Request is a TLB shootdown */
+        TLBI                        = 0x0000100000000000,
+
+        /** The Request is a TLB shootdown sync */
+        TLBI_SYNC                   = 0x0000200000000000,
+
+        /** The Request tells the CPU model that a
+            remote TLB Sync has been requested */
+        TLBI_EXT_SYNC               = 0x0000400000000000,
+
+        /** The Request tells the interconnect that a
+            remote TLB Sync request has completed */
+        TLBI_EXT_SYNC_COMP          = 0x0000800000000000,
+
         /**
          * These flags are *not* cleared when a Request object is
          * reused (assigned a new address).
@@ -240,9 +263,13 @@ class Request
     static const FlagsType HTM_CMD = HTM_START | HTM_COMMIT |
         HTM_CANCEL | HTM_ABORT;
 
+    static const FlagsType TLBI_CMD = TLBI | TLBI_SYNC |
+        TLBI_EXT_SYNC | TLBI_EXT_SYNC_COMP;
+
     /** Requestor Ids that are statically allocated
      * @{*/
-    enum : RequestorID {
+    enum : RequestorID
+    {
         /** This requestor id is used for writeback requests by the caches */
         wbRequestorId = 0,
         /**
@@ -261,7 +288,7 @@ class Request
     /** @} */
 
     typedef uint64_t CacheCoherenceFlagsType;
-    typedef ::Flags<CacheCoherenceFlagsType> CacheCoherenceFlags;
+    typedef gem5::Flags<CacheCoherenceFlagsType> CacheCoherenceFlags;
 
     /**
      * These bits are used to set the coherence policy for the GPU and are
@@ -290,13 +317,26 @@ class Request
      * For atomics, the GLC bit is used to distinguish between between atomic
      * return/no-return operations. These flags are used by GPUDynInst.
      */
-    enum : CacheCoherenceFlagsType {
+    enum : CacheCoherenceFlagsType
+    {
         /** mem_sync_op flags */
-        INV_L1                  = 0x00000001,
+        I_CACHE_INV             = 0x00000001,
+        INV_L1                  = I_CACHE_INV,
+        V_CACHE_INV             = 0x00000002,
+        K_CACHE_INV             = 0x00000004,
+        GL1_CACHE_INV           = 0x00000008,
+        K_CACHE_WB              = 0x00000010,
         FLUSH_L2                = 0x00000020,
+        GL2_CACHE_INV           = 0x00000040,
         /** user-policy flags */
         SLC_BIT                 = 0x00000080,
-        GLC_BIT                 = 0x00000100,
+        DLC_BIT                 = 0x00000100,
+        GLC_BIT                 = 0x00000200,
+        /** mtype flags */
+        CACHED                  = 0x00000400,
+        READ_WRITE              = 0x00000800,
+        SHARED                  = 0x00001000,
+
     };
 
     using LocalAccessor =
@@ -304,9 +344,10 @@ class Request
 
   private:
     typedef uint16_t PrivateFlagsType;
-    typedef ::Flags<PrivateFlagsType> PrivateFlags;
+    typedef gem5::Flags<PrivateFlagsType> PrivateFlags;
 
-    enum : PrivateFlagsType {
+    enum : PrivateFlagsType
+    {
         /** Whether or not the size is valid. */
         VALID_SIZE           = 0x00000001,
         /** Whether or not paddr is valid (has been written yet). */
@@ -378,7 +419,7 @@ class Request
     /**
      * The task id associated with this request
      */
-    uint32_t _taskId = ContextSwitchTaskId::Unknown;
+    uint32_t _taskId = context_switch_task_id::Unknown;
 
     /**
      * The stream ID uniquely identifies a device behind the
@@ -394,6 +435,12 @@ class Request
      * substream ID is optional.
      */
     uint32_t _substreamId = 0;
+
+    /**
+     * For fullsystem GPU simulation, this determines if a requests
+     * destination is system (host) memory or dGPU (device) memory.
+     */
+    bool _systemReq = 0;
 
     /** The virtual address of the request. */
     Addr _vaddr = MaxAddr;
@@ -474,6 +521,22 @@ class Request
     }
 
     ~Request() {}
+
+    /**
+     * Factory method for creating memory management requests, with
+     * unspecified addr and size.
+     */
+    static RequestPtr
+    createMemManagement(Flags flags, RequestorID id)
+    {
+        auto mgmt_req = std::make_shared<Request>();
+        mgmt_req->_flags.set(flags);
+        mgmt_req->_requestorId = id;
+        mgmt_req->_time = curTick();
+
+        assert(mgmt_req->isMemMgmt());
+        return mgmt_req;
+    }
 
     /**
      * Set up Context numbers.
@@ -737,11 +800,26 @@ class Request
     }
 
     void
+    clearFlags(Flags flags)
+    {
+        assert(hasPaddr() || hasVaddr());
+        _flags.clear(flags);
+    }
+
+    void
     setCacheCoherenceFlags(CacheCoherenceFlags extraFlags)
     {
         // TODO: do mem_sync_op requests have valid paddr/vaddr?
         assert(hasPaddr() || hasVaddr());
         _cacheCoherenceFlags.set(extraFlags);
+    }
+
+    void
+    clearCacheCoherenceFlags(CacheCoherenceFlags extraFlags)
+    {
+        // TODO: do mem_sync_op requests have valid paddr/vaddr?
+        assert(hasPaddr() || hasVaddr());
+        _cacheCoherenceFlags.clear(extraFlags);
     }
 
     /** Accessor function for vaddr.*/
@@ -765,6 +843,12 @@ class Request
         return _requestorId;
     }
     void setRequestorId(RequestorID rid) {
+        _requestorId = rid;
+    }
+
+    void
+    requestorId(RequestorID rid)
+    {
         _requestorId = rid;
     }
 
@@ -823,6 +907,10 @@ class Request
         assert(hasContextId());
         return _contextId;
     }
+
+    /* For GPU fullsystem mark this request is not to device memory. */
+    void setSystemReq(bool sysReq) { _systemReq = sysReq; }
+    bool systemReq() const { return _systemReq; }
 
     bool
     hasStreamId() const
@@ -920,14 +1008,22 @@ class Request
     bool isUncacheable() const { return _flags.isSet(UNCACHEABLE); }
     bool isStrictlyOrdered() const { return _flags.isSet(STRICT_ORDER); }
     bool isInstFetch() const { return _flags.isSet(INST_FETCH); }
-    bool isPrefetch() const { return (_flags.isSet(PREFETCH) ||
-                                      _flags.isSet(PF_EXCLUSIVE)); }
+    bool
+    isPrefetch() const
+    {
+        return (_flags.isSet(PREFETCH | PF_EXCLUSIVE));
+    }
     bool isPrefetchEx() const { return _flags.isSet(PF_EXCLUSIVE); }
     bool isLLSC() const { return _flags.isSet(LLSC); }
     bool isPriv() const { return _flags.isSet(PRIVILEGED); }
     bool isLockedRMW() const { return _flags.isSet(LOCKED_RMW); }
-    bool isSwap() const { return _flags.isSet(MEM_SWAP|MEM_SWAP_COND); }
+    bool isSwap() const { return _flags.isSet(MEM_SWAP | MEM_SWAP_COND); }
     bool isCondSwap() const { return _flags.isSet(MEM_SWAP_COND); }
+    bool
+    isReadModifyWrite() const
+    {
+        return _flags.isSet(LOCKED_RMW | READ_MODIFY_WRITE);
+    }
     bool isSecure() const { return _flags.isSet(SECURE); }
     bool isPTWalk() const { return _flags.isSet(PT_WALK); }
     bool isRelease() const { return _flags.isSet(RELEASE); }
@@ -945,6 +1041,18 @@ class Request
         return (isHTMStart() || isHTMCommit() ||
                 isHTMCancel() || isHTMAbort());
     }
+
+    bool isTlbi() const { return _flags.isSet(TLBI); }
+    bool isTlbiSync() const { return _flags.isSet(TLBI_SYNC); }
+    bool isTlbiExtSync() const { return _flags.isSet(TLBI_EXT_SYNC); }
+    bool isTlbiExtSyncComp() const { return _flags.isSet(TLBI_EXT_SYNC_COMP); }
+    bool
+    isTlbiCmd() const
+    {
+        return (isTlbi() || isTlbiSync() ||
+                isTlbiExtSync() || isTlbiExtSyncComp());
+    }
+    bool isMemMgmt() const { return isTlbiCmd() || isHTMCmd(); }
 
     bool
     isAtomic() const
@@ -996,5 +1104,7 @@ class Request
     bool isCacheMaintenance() const { return _flags.isSet(CLEAN|INVALIDATE); }
     /** @} */
 };
+
+} // namespace gem5
 
 #endif // __MEM_REQUEST_HH__

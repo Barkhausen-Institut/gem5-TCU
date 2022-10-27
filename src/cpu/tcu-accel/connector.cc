@@ -32,6 +32,11 @@
 #include "cpu/tcu-accel/connector.hh"
 #include "debug/TcuConnector.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 TcuAccelConnector::TcuAccelConnector(const TcuAccelConnectorParams &p)
   : BaseConnector(p),
     acc(p.accelerator)
@@ -59,4 +64,7 @@ TcuAccelConnector::reset()
 {
     DPRINTF(TcuConnector, "Resetting accelerator\n");
     acc->reset();
+}
+
+}
 }

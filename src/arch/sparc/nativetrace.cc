@@ -28,11 +28,14 @@
 
 #include "arch/sparc/nativetrace.hh"
 
-#include "arch/sparc/isa_traits.hh"
-#include "arch/sparc/registers.hh"
+#include "arch/sparc/pcstate.hh"
+#include "arch/sparc/regs/int.hh"
 #include "cpu/thread_context.hh"
 #include "params/SparcNativeTrace.hh"
 #include "sim/byteswap.hh"
+
+namespace gem5
+{
 
 namespace Trace {
 
@@ -66,7 +69,7 @@ Trace::SparcNativeTrace::check(NativeTraceRecord *record)
         checkReg(*(regName++), regVal, realRegVal);
     }
 
-    SparcISA::PCState pc = tc->pcState();
+    auto &pc = tc->pcState().as<SparcISA::PCState>();
     // PC
     read(&realRegVal, sizeof(realRegVal));
     realRegVal = betoh(realRegVal);
@@ -76,7 +79,7 @@ Trace::SparcNativeTrace::check(NativeTraceRecord *record)
     // NPC
     read(&realRegVal, sizeof(realRegVal));
     realRegVal = betoh(realRegVal);
-    pc.nnpc();
+    regVal = pc.nnpc();
     checkReg("npc", regVal, realRegVal);
 
     // CCR
@@ -87,3 +90,4 @@ Trace::SparcNativeTrace::check(NativeTraceRecord *record)
 }
 
 } // namespace Trace
+} // namespace gem5

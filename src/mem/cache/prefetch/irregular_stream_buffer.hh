@@ -43,9 +43,14 @@
 #include "mem/cache/prefetch/associative_set.hh"
 #include "mem/cache/prefetch/queued.hh"
 
+namespace gem5
+{
+
 struct IrregularStreamBufferPrefetcherParams;
 
-namespace Prefetcher {
+GEM5_DEPRECATED_NAMESPACE(Prefetcher, prefetch);
+namespace prefetch
+{
 
 class IrregularStreamBuffer : public Queued
 {
@@ -60,7 +65,8 @@ class IrregularStreamBuffer : public Queued
      * Training Unit Entry datatype, it holds the last accessed address and
      * its secure flag
      */
-    struct TrainingUnitEntry : public TaggedEntry {
+    struct TrainingUnitEntry : public TaggedEntry
+    {
         Addr lastAddress;
         bool lastAddressSecure;
     };
@@ -68,7 +74,8 @@ class IrregularStreamBuffer : public Queued
     AssociativeSet<TrainingUnitEntry> trainingUnit;
 
     /** Address Mapping entry, holds an address and a confidence counter */
-    struct AddressMapping {
+    struct AddressMapping
+    {
         Addr address;
         SatCounter8 counter;
         AddressMapping(unsigned bits) : address(0), counter(bits)
@@ -134,6 +141,7 @@ class IrregularStreamBuffer : public Queued
                            std::vector<AddrPriority> &addresses) override;
 };
 
-} // namespace Prefetcher
+} // namespace prefetch
+} // namespace gem5
 
 #endif//__MEM_CACHE_PREFETCH_IRREGULAR_STREAM_BUFFER_HH__

@@ -27,11 +27,20 @@
 
 #include "arch/power/se_workload.hh"
 
+namespace gem5
+{
+
 namespace PowerISA
 {
 
 const std::vector<int> SEWorkload::SyscallABI::ArgumentRegs = {
-    3, 4, 5, 6, 7, 8
+    ArgumentReg0,
+    ArgumentReg1,
+    ArgumentReg2,
+    ArgumentReg3,
+    ArgumentReg4,
+    ArgumentReg5
 };
 
 } // namespace PowerISA
+} // namespace gem5

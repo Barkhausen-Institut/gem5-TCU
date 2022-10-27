@@ -32,9 +32,14 @@
 
 #include "base/random.hh"
 #include "params/BIPRP.hh"
-#include "sim/core.hh"
+#include "sim/cur_tick.hh"
 
-namespace ReplacementPolicy {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(ReplacementPolicy, replacement_policy);
+namespace replacement_policy
+{
 
 BIP::BIP(const Params &p)
   : LRU(p), btp(p.btp)
@@ -56,4 +61,5 @@ BIP::reset(const std::shared_ptr<ReplacementData>& replacement_data) const
     }
 }
 
-} // namespace ReplacementPolicy
+} // namespace replacement_policy
+} // namespace gem5

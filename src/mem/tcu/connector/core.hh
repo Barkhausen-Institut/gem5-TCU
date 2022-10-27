@@ -35,6 +35,11 @@
 #include "mem/tcu/connector/base.hh"
 #include "sim/system.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 class CoreConnector : public BaseConnector
 {
   public:
@@ -54,5 +59,8 @@ class CoreConnector : public BaseConnector
 
     System *system;
 };
+
+}
+}
 
 #endif // __MEM_TCU_CORE_CONNECTOR__

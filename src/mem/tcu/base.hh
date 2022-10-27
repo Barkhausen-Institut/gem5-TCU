@@ -34,10 +34,15 @@
 
 #include <queue>
 
-#include "mem/mem_object.hh"
+#include "sim/clocked_object.hh"
 #include "mem/qport.hh"
 #include "params/BaseTcu.hh"
 #include "mem/tcu/tlb.hh"
+
+namespace gem5
+{
+namespace tcu
+{
 
 class BaseTcu : public ClockedObject
 {
@@ -310,5 +315,8 @@ class BaseTcu : public ClockedObject
     const std::vector<AddrRange> slaveRegion;
 
 };
+
+}
+}
 
 #endif // __MEM_TCU_BASE_HH__

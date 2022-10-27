@@ -2,8 +2,6 @@
  * Copyright (c) 2018 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -33,18 +31,68 @@
 
 #include "gpu-compute/gpu_command_processor.hh"
 
+#include <cassert>
+
+#include "arch/amdgpu/vega/pagetable_walker.hh"
+#include "base/chunk_generator.hh"
 #include "debug/GPUCommandProc.hh"
 #include "debug/GPUKernelInfo.hh"
+#include "dev/amdgpu/amdgpu_device.hh"
 #include "gpu-compute/dispatcher.hh"
+#include "mem/abstract_mem.hh"
+#include "mem/packet_access.hh"
+#include "mem/se_translating_port_proxy.hh"
+#include "mem/translating_port_proxy.hh"
 #include "params/GPUCommandProcessor.hh"
+#include "sim/full_system.hh"
 #include "sim/process.hh"
 #include "sim/proxy_ptr.hh"
 #include "sim/syscall_emul_buf.hh"
 
-GPUCommandProcessor::GPUCommandProcessor(const Params &p)
-    : HSADevice(p), dispatcher(*p.dispatcher), driver(nullptr)
+namespace gem5
 {
+
+GPUCommandProcessor::GPUCommandProcessor(const Params &p)
+    : DmaVirtDevice(p), dispatcher(*p.dispatcher), _driver(nullptr),
+      walker(p.walker), hsaPP(p.hsapp)
+{
+    assert(hsaPP);
+    hsaPP->setDevice(this);
     dispatcher.setCommandProcessor(this);
+}
+
+HSAPacketProcessor&
+GPUCommandProcessor::hsaPacketProc()
+{
+    return *hsaPP;
+}
+
+/**
+ * Forward the VRAM requestor ID needed for device memory from GPU device.
+ */
+RequestorID
+GPUCommandProcessor::vramRequestorId()
+{
+    return gpuDevice->vramRequestorId();
+}
+
+TranslationGenPtr
+GPUCommandProcessor::translate(Addr vaddr, Addr size)
+{
+    if (!FullSystem) {
+        // Grab the process and try to translate the virtual address with it;
+        // with new extensions, it will likely be wrong to just arbitrarily
+        // grab context zero.
+        auto process = sys->threads[0]->getProcessPtr();
+
+        return process->pTable->translateRange(vaddr, size);
+    }
+
+    // In full system use the page tables setup by the kernel driver rather
+    // than the CPU page tables.
+    return TranslationGenPtr(
+        new AMDGPUVM::UserTranslationGen(&gpuDevice->getVM(), walker,
+                                         1 /* vmid */, vaddr, size));
 }
 
 /**
@@ -76,7 +124,31 @@ GPUCommandProcessor::submitDispatchPkt(void *raw_pkt, uint32_t queue_id,
      * space to pull out the kernel code descriptor.
      */
     auto *tc = sys->threads[0];
-    auto &virt_proxy = tc->getVirtProxy();
+
+    TranslatingPortProxy fs_proxy(tc);
+    SETranslatingPortProxy se_proxy(tc);
+    PortProxy &virt_proxy = FullSystem ? fs_proxy : se_proxy;
+
+    /**
+     * In full system mode, the page table entry may point to a system page
+     * or a device page. System pages use the proxy as normal, but a device
+     * page needs to be read from device memory. Check what type it is here.
+     */
+    bool is_system_page = true;
+    Addr phys_addr = disp_pkt->kernel_object;
+    if (FullSystem) {
+        /**
+         * Full system currently only supports running on single VMID (one
+         * virtual memory space), i.e., one application running on GPU at a
+         * time. Because of this, for now we know the VMID is always 1. Later
+         * the VMID would have to be passed on to the command processor.
+         */
+        int vmid = 1;
+        unsigned tmp_bytes;
+        walker->startFunctional(gpuDevice->getVM().getPageTableBase(vmid),
+                                phys_addr, tmp_bytes, BaseMMU::Mode::Read,
+                                is_system_page);
+    }
 
     /**
      * The kernel_object is a pointer to the machine code, whose entry
@@ -88,8 +160,28 @@ GPUCommandProcessor::submitDispatchPkt(void *raw_pkt, uint32_t queue_id,
      * instructions.
      */
     AMDKernelCode akc;
-    virt_proxy.readBlob(disp_pkt->kernel_object, (uint8_t*)&akc,
-        sizeof(AMDKernelCode));
+    if (is_system_page) {
+        DPRINTF(GPUCommandProc, "kernel_object in system, using proxy\n");
+        virt_proxy.readBlob(disp_pkt->kernel_object, (uint8_t*)&akc,
+            sizeof(AMDKernelCode));
+    } else {
+        assert(FullSystem);
+        DPRINTF(GPUCommandProc, "kernel_object in device, using device mem\n");
+        // Read from GPU memory manager
+        uint8_t raw_akc[sizeof(AMDKernelCode)];
+        for (int i = 0; i < sizeof(AMDKernelCode) / sizeof(uint8_t); ++i) {
+            Addr mmhubAddr = phys_addr + i*sizeof(uint8_t);
+            Request::Flags flags = Request::PHYSICAL;
+            RequestPtr request = std::make_shared<Request>(
+                mmhubAddr, sizeof(uint8_t), flags, walker->getDevRequestor());
+            Packet *readPkt = new Packet(request, MemCmd::ReadReq);
+            readPkt->allocate();
+            system()->getDeviceMemory(readPkt)->access(readPkt);
+            raw_akc[i] = readPkt->getLE<uint8_t>();
+            delete readPkt;
+        }
+        memcpy(&akc, &raw_akc, sizeof(AMDKernelCode));
+    }
 
     DPRINTF(GPUCommandProc, "GPU machine code is %lli bytes from start of the "
         "kernel object\n", akc.kernel_code_entry_byte_offset);
@@ -104,7 +196,6 @@ GPUCommandProcessor::submitDispatchPkt(void *raw_pkt, uint32_t queue_id,
     DPRINTF(GPUCommandProc, "Machine code starts at addr: %#x\n",
         machine_code_addr);
 
-    Addr kern_name_addr(0);
     std::string kernel_name;
 
     /**
@@ -117,10 +208,7 @@ GPUCommandProcessor::submitDispatchPkt(void *raw_pkt, uint32_t queue_id,
      * host memory.  I have no idea what BLIT stands for.
      * */
     if (akc.runtime_loader_kernel_symbol) {
-        virt_proxy.readBlob(akc.runtime_loader_kernel_symbol + 0x10,
-            (uint8_t*)&kern_name_addr, 0x8);
-
-        virt_proxy.readString(kernel_name, kern_name_addr);
+        kernel_name = "Some kernel";
     } else {
         kernel_name = "Blit kernel";
     }
@@ -157,7 +245,8 @@ GPUCommandProcessor::functionalReadHsaSignal(Addr signal_handle)
 }
 
 void
-GPUCommandProcessor::updateHsaSignal(Addr signal_handle, uint64_t signal_value)
+GPUCommandProcessor::updateHsaSignal(Addr signal_handle, uint64_t signal_value,
+                                     HsaSignalCallbackFunction function)
 {
     // The signal value is aligned 8 bytes from
     // the actual handle in the runtime
@@ -166,10 +255,9 @@ GPUCommandProcessor::updateHsaSignal(Addr signal_handle, uint64_t signal_value)
     Addr event_addr = getHsaSignalEventAddr(signal_handle);
     DPRINTF(GPUCommandProc, "Triggering completion signal: %x!\n", value_addr);
 
-    Addr *new_signal = new Addr;
-    *new_signal = signal_value;
+    auto cb = new DmaVirtCallback<uint64_t>(function, signal_value);
 
-    dmaWriteVirt(value_addr, sizeof(Addr), nullptr, new_signal, 0);
+    dmaWriteVirt(value_addr, sizeof(Addr), cb, &cb->dmaBuffer, 0);
 
     auto tc = system()->threads[0];
     ConstVPtr<uint64_t> mailbox_ptr(mailbox_addr, tc);
@@ -187,15 +275,34 @@ GPUCommandProcessor::updateHsaSignal(Addr signal_handle, uint64_t signal_value)
 
         DPRINTF(GPUCommandProc, "Calling signal wakeup event on "
                 "signal event value %d\n", *event_val);
-        signalWakeupEvent(*event_val);
+
+        // The mailbox/wakeup signal uses the SE mode proxy port to write
+        // the event value. This is not available in full system mode so
+        // instead we need to issue a DMA write to the address. The value of
+        // *event_val clears the event.
+        if (FullSystem) {
+            auto cb = new DmaVirtCallback<uint64_t>(function, *event_val);
+            dmaWriteVirt(mailbox_addr, sizeof(Addr), cb, &cb->dmaBuffer, 0);
+        } else {
+            signalWakeupEvent(*event_val);
+        }
     }
 }
 
 void
-GPUCommandProcessor::attachDriver(HSADriver *hsa_driver)
+GPUCommandProcessor::attachDriver(GPUComputeDriver *gpu_driver)
 {
-    fatal_if(driver, "Should not overwrite driver.");
-    driver = hsa_driver;
+    fatal_if(_driver, "Should not overwrite driver.");
+    // TODO: GPU Driver inheritance hierarchy doesn't really make sense.
+    // Should get rid of the base class.
+    _driver = gpu_driver;
+    assert(_driver);
+}
+
+GPUComputeDriver*
+GPUCommandProcessor::driver()
+{
+    return _driver;
 }
 
 /**
@@ -285,7 +392,7 @@ GPUCommandProcessor::dispatchPkt(HSAQueueEntry *task)
 void
 GPUCommandProcessor::signalWakeupEvent(uint32_t event_id)
 {
-    driver->signalWakeupEvent(event_id);
+    _driver->signalWakeupEvent(event_id);
 }
 
 /**
@@ -297,14 +404,15 @@ GPUCommandProcessor::signalWakeupEvent(uint32_t event_id)
 void
 GPUCommandProcessor::initABI(HSAQueueEntry *task)
 {
-    auto *readDispIdOffEvent = new ReadDispIdOffsetDmaEvent(*this, task);
+    auto cb = new DmaVirtCallback<uint32_t>(
+        [ = ] (const uint32_t &readDispIdOffset)
+            { ReadDispIdOffsetDmaEvent(task, readDispIdOffset); }, 0);
 
     Addr hostReadIdxPtr
         = hsaPP->getQueueDesc(task->queueId())->hostReadIndexPtr;
 
     dmaReadVirt(hostReadIdxPtr + sizeof(hostReadIdxPtr),
-        sizeof(readDispIdOffEvent->readDispIdOffset), readDispIdOffEvent,
-            &readDispIdOffEvent->readDispIdOffset);
+        sizeof(uint32_t), cb, &cb->dmaBuffer);
 }
 
 System*
@@ -321,6 +429,13 @@ GPUCommandProcessor::getAddrRanges() const
 }
 
 void
+GPUCommandProcessor::setGPUDevice(AMDGPUDevice *gpu_device)
+{
+    gpuDevice = gpu_device;
+    walker->setDevRequestor(gpuDevice->vramRequestorId());
+}
+
+void
 GPUCommandProcessor::setShader(Shader *shader)
 {
     _shader = shader;
@@ -331,3 +446,5 @@ GPUCommandProcessor::shader()
 {
     return _shader;
 }
+
+} // namespace gem5

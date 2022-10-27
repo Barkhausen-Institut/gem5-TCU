@@ -38,6 +38,12 @@
 #include "debug/LTage.hh"
 #include "params/LoopPredictor.hh"
 
+namespace gem5
+{
+
+namespace branch_prediction
+{
+
 LoopPredictor::LoopPredictor(const LoopPredictorParams &p)
   : SimObject(p), logSizeLoopPred(p.logSizeLoopPred),
     loopTableAgeBits(p.loopTableAgeBits),
@@ -73,7 +79,7 @@ LoopPredictor::init()
 
     assert(logSizeLoopPred >= logLoopTableAssoc);
 
-    ltable = new LoopEntry[ULL(1) << logSizeLoopPred];
+    ltable = new LoopEntry[1ULL << logSizeLoopPred];
 }
 
 LoopPredictor::BranchInfo*
@@ -345,12 +351,13 @@ LoopPredictor::condBranchUpdate(ThreadID tid, Addr branch_pc, bool taken,
     loopUpdate(branch_pc, taken, bi, tage_pred);
 }
 
-LoopPredictor::LoopPredictorStats::LoopPredictorStats(Stats::Group *parent)
-    : Stats::Group(parent),
-      ADD_STAT(correct, UNIT_COUNT,
+LoopPredictor::LoopPredictorStats::LoopPredictorStats(
+    statistics::Group *parent)
+    : statistics::Group(parent),
+      ADD_STAT(correct, statistics::units::Count::get(),
                "Number of times the loop predictor is the provider and the "
                "prediction is correct"),
-      ADD_STAT(wrong, UNIT_COUNT,
+      ADD_STAT(wrong, statistics::units::Count::get(),
                "Number of times the loop predictor is the provider and the "
                "prediction is wrong")
 {
@@ -364,3 +371,6 @@ LoopPredictor::getSizeInBits() const
         loopTableConfidenceBits + loopTableTagBits +
         loopTableAgeBits + useDirectionBit);
 }
+
+} // namespace branch_prediction
+} // namespace gem5

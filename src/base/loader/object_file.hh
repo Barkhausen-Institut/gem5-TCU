@@ -1,4 +1,16 @@
 /*
+ * Copyright (c) 2022 Arm Limited
+ * All rights reserved
+ *
+ * The license below extends only to copyright in the software and shall
+ * not be construed as granting a license to any other intellectual
+ * property including but not limited to intellectual property relating
+ * to a hardware implementation of the functionality of the software
+ * licensed hereunder.  You may use the software subject to the license
+ * terms below provided that you ensure that this notice is replicated
+ * unmodified and in its entirety in all distributions of the software,
+ * modified or unmodified, in source code or in binary form.
+ *
  * Copyright (c) 2002-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
@@ -31,17 +43,24 @@
 
 #include <string>
 
+#include "base/compiler.hh"
 #include "base/loader/image_file.hh"
 #include "base/loader/image_file_data.hh"
 #include "base/loader/memory_image.hh"
 #include "base/loader/symtab.hh"
 #include "base/logging.hh"
 #include "base/types.hh"
+#include "enums/ByteOrder.hh"
 
-namespace Loader
+namespace gem5
 {
 
-enum Arch {
+GEM5_DEPRECATED_NAMESPACE(Loader, loader);
+namespace loader
+{
+
+enum Arch
+{
     UnknownArch,
     SPARC64,
     SPARC32,
@@ -52,18 +71,22 @@ enum Arch {
     Arm,
     Thumb,
     Power,
+    Power64,
     Riscv64,
     Riscv32
 };
 
 const char *archToString(Arch arch);
 
-enum OpSys {
+enum OpSys
+{
     UnknownOpSys,
     Tru64,
     Linux,
     Solaris,
     LinuxArmOABI,
+    LinuxPower64ABIv1,
+    LinuxPower64ABIv2,
     FreeBSD
 };
 
@@ -76,6 +99,7 @@ class ObjectFile : public ImageFile
   protected:
     Arch arch = UnknownArch;
     OpSys opSys = UnknownOpSys;
+    ByteOrder byteOrder = ByteOrder::little;
 
     SymbolTable _symtab;
 
@@ -102,6 +126,7 @@ class ObjectFile : public ImageFile
 
     Arch  getArch()  const { return arch; }
     OpSys getOpSys() const { return opSys; }
+    ByteOrder getByteOrder() const { return byteOrder; }
 
     const SymbolTable &symtab() const { return _symtab; }
 
@@ -126,6 +151,11 @@ class ObjectFileFormat
 
 ObjectFile *createObjectFile(const std::string &fname, bool raw=false);
 
-} // namespace Loader
+/** Determine whether the loader::Arch is 64-bit or 32-bit. */
+bool
+archIs64Bit(const Arch arch);
+
+} // namespace loader
+} // namespace gem5
 
 #endif // __BASE_LOADER_OBJECT_FILE_HH__

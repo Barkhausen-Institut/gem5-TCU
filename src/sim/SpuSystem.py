@@ -32,6 +32,7 @@ from m5.objects.System import System
 class SpuSystem(System):
     type = 'SpuSystem'
     cxx_header = 'sim/spu_system.hh'
+    cxx_class = 'gem5::SpuSystem'
 
     tile_id = Param.Unsigned("The tile id")
 

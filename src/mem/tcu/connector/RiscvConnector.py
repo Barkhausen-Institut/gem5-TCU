@@ -33,3 +33,4 @@ from m5.proxy import *
 class RiscvConnector(CoreConnector):
     type = 'RiscvConnector'
     cxx_header = "mem/tcu/connector/riscv.hh"
+    cxx_class = 'gem5::tcu::RiscvConnector'

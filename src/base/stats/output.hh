@@ -44,7 +44,14 @@
 #include <list>
 #include <string>
 
-namespace Stats {
+#include "base/compiler.hh"
+
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Stats, statistics);
+namespace statistics
+{
 
 class Info;
 class ScalarInfo;
@@ -75,6 +82,7 @@ struct Output
     virtual void visit(const SparseHistInfo &info) = 0; // Sparse histogram
 };
 
-} // namespace Stats
+} // namespace statistics
+} // namespace gem5
 
 #endif // __BASE_STATS_OUTPUT_HH__

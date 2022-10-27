@@ -38,14 +38,13 @@
 #include <inttypes.h>
 
 #include <cassert>
+#include <limits>
 #include <memory>
 #include <ostream>
 #include <stdexcept>
 
-/** uint64_t constant */
-#define ULL(N)          ((uint64_t)N##ULL)
-/** int64_t constant */
-#define LL(N)           ((int64_t)N##LL)
+namespace gem5
+{
 
 /** Statistics counter type.  Not much excuse for not using a 64-bit
  * integer here, but if you're desperate and only run short
@@ -58,7 +57,7 @@ typedef int64_t Counter;
  */
 typedef uint64_t Tick;
 
-const Tick MaxTick = ULL(0xffffffffffffffff);
+const Tick MaxTick = 0xffffffffffffffffULL;
 
 /**
  * Cycles is a wrapper class for representing cycle counts, i.e. a
@@ -171,7 +170,10 @@ isRomMicroPC(MicroPC upc)
 
 const Addr MaxAddr = (Addr)-1;
 
-typedef uint64_t RegVal;
+using RegVal = uint64_t;
+
+// Logical register index type.
+using RegIndex = uint16_t;
 
 static inline uint32_t
 floatToBits32(float val)
@@ -249,5 +251,7 @@ typedef std::shared_ptr<FaultBase> Fault;
 // Rather than creating a shared_ptr instance and assigning it nullptr,
 // we just create an alias.
 constexpr decltype(nullptr) NoFault = nullptr;
+
+} // namespace gem5
 
 #endif // __BASE_TYPES_HH__

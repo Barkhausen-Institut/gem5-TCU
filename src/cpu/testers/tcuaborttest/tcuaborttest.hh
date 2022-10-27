@@ -37,6 +37,11 @@
 #include "mem/tcu/reg_file.hh"
 #include "sim/system.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 class TcuAbortTest : public ClockedObject
 {
   public:
@@ -132,5 +137,8 @@ class TcuAbortTest : public ClockedObject
 
     static Addr getRegAddr(unsigned reg, unsigned epid);
 };
+
+}
+}
 
 #endif // __CPU_TCUABORTTEST_TCUABORTTEST_HH__

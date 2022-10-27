@@ -38,15 +38,21 @@
 
 #include <cstdint>
 
+#include "base/compiler.hh"
 #include "base/statistics.hh"
 #include "base/types.hh"
 #include "sim/sim_object.hh"
+
+namespace gem5
+{
 
 class BaseCache;
 class CacheBlk;
 struct BaseCacheCompressorParams;
 
-namespace Compressor {
+GEM5_DEPRECATED_NAMESPACE(Compressor, compression);
+namespace compression
+{
 
 /**
  * Base cache compressor interface. Every cache compressor must implement a
@@ -123,7 +129,7 @@ class Base : public SimObject
     /** Pointer to the parent cache. */
     BaseCache* cache;
 
-    struct BaseStats : public Stats::Group
+    struct BaseStats : public statistics::Group
     {
         const Base& compressor;
 
@@ -132,22 +138,22 @@ class Base : public SimObject
         void regStats() override;
 
         /** Number of compressions performed. */
-        Stats::Scalar compressions;
+        statistics::Scalar compressions;
 
         /** Number of failed compressions. */
-        Stats::Scalar failedCompressions;
+        statistics::Scalar failedCompressions;
 
         /** Number of blocks that were compressed to this power of two size. */
-        Stats::Vector compressionSize;
+        statistics::Vector compressionSize;
 
         /** Total compressed data size, in number of bits. */
-        Stats::Scalar compressionSizeBits;
+        statistics::Scalar compressionSizeBits;
 
         /** Average data size after compression, in number of bits. */
-        Stats::Formula avgCompressionSizeBits;
+        statistics::Formula avgCompressionSizeBits;
 
         /** Number of decompressions performed. */
-        Stats::Scalar decompressions;
+        statistics::Scalar decompressions;
     } stats;
 
     /**
@@ -278,6 +284,7 @@ class Base::CompressionData
     std::size_t getSize() const;
 };
 
-} // namespace Compressor
+} // namespace compression
+} // namespace gem5
 
 #endif //__MEM_CACHE_COMPRESSORS_BASE_HH__

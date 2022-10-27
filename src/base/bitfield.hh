@@ -46,6 +46,9 @@
 #include <cstdint>
 #include <type_traits>
 
+namespace gem5
+{
+
 extern const uint8_t reverseBitsLookUpTable[];
 
 /**
@@ -56,7 +59,7 @@ extern const uint8_t reverseBitsLookUpTable[];
  *
  * @ingroup api_bitfield
  */
-constexpr inline uint64_t
+constexpr uint64_t
 mask(unsigned nbits)
 {
     return (nbits >= 64) ? (uint64_t)-1LL : (1ULL << nbits) - 1;
@@ -69,7 +72,7 @@ mask(unsigned nbits)
  * @ingroup api_bitfield
  */
 template <class T>
-constexpr inline T
+constexpr T
 bits(T val, unsigned first, unsigned last)
 {
     assert(first >= last);
@@ -83,7 +86,7 @@ bits(T val, unsigned first, unsigned last)
  * @ingroup api_bitfield
  */
 template <class T>
-constexpr inline T
+constexpr T
 bits(T val, unsigned bit)
 {
     return bits(val, bit, bit);
@@ -96,7 +99,7 @@ bits(T val, unsigned bit)
  * @ingroup api_bitfield
  */
 template <class T>
-constexpr inline T
+constexpr T
 mbits(T val, unsigned first, unsigned last)
 {
     return val & (mask(first + 1) & ~mask(last));
@@ -105,24 +108,44 @@ mbits(T val, unsigned first, unsigned last)
 /**
  * @ingroup api_bitfield
  */
-constexpr inline uint64_t
+constexpr uint64_t
 mask(unsigned first, unsigned last)
 {
     return mbits((uint64_t)-1LL, first, last);
 }
 
 /**
- * Sign-extend an N-bit value to 64 bits.
+ * Sign-extend an N-bit value to 64 bits. Assumes all bits past the sign are
+ * currently zero. For true sign extension regardless of the value of the sign
+ * bit, see szext.
  *
  * @ingroup api_bitfield
  */
 template <int N>
-constexpr inline uint64_t
+constexpr uint64_t
 sext(uint64_t val)
 {
     bool sign_bit = bits(val, N - 1);
     if (sign_bit)
         val |= ~mask(N);
+    return val;
+}
+
+/**
+ * Sign-extend an N-bit value to 64 bits. Zero any bits past the sign if
+ * necessary.
+ *
+ * @ingroup api_bitfield
+ */
+template <int N>
+constexpr uint64_t
+szext(uint64_t val)
+{
+    bool sign_bit = bits(val, N - 1);
+    if (sign_bit)
+        val |= ~mask(N);
+    else
+        val &= mask(N);
     return val;
 }
 
@@ -139,7 +162,7 @@ sext(uint64_t val)
  * @ingroup api_bitfield
  */
 template <class T, class B>
-constexpr inline T
+constexpr T
 insertBits(T val, unsigned first, unsigned last, B bit_val)
 {
     assert(first >= last);
@@ -155,7 +178,7 @@ insertBits(T val, unsigned first, unsigned last, B bit_val)
  * @ingroup api_bitfield
  */
 template <class T, class B>
-constexpr inline T
+constexpr T
 insertBits(T val, unsigned bit, B bit_val)
 {
     return insertBits(val, bit, bit, bit_val);
@@ -170,7 +193,7 @@ insertBits(T val, unsigned bit, B bit_val)
  * @ingroup api_bitfield
  */
 template <class T, class B>
-constexpr inline void
+constexpr void
 replaceBits(T& val, unsigned first, unsigned last, B bit_val)
 {
     val = insertBits(val, first, last, bit_val);
@@ -182,7 +205,7 @@ replaceBits(T& val, unsigned first, unsigned last, B bit_val)
  * @ingroup api_bitfield
  */
 template <class T, class B>
-constexpr inline void
+constexpr void
 replaceBits(T& val, unsigned bit, B bit_val)
 {
     val = insertBits(val, bit, bit, bit_val);
@@ -209,26 +232,23 @@ replaceBits(T& val, unsigned bit, B bit_val)
  * @ingroup api_bitfield
  */
 template <class T>
-std::enable_if_t<std::is_integral<T>::value && sizeof(T) != 1, T>
+std::enable_if_t<std::is_integral_v<T>, T>
 reverseBits(T val, size_t size=sizeof(T))
 {
     assert(size <= sizeof(T));
 
-    T output = {};
-    for (size_t byte = 0; byte < size; byte++) {
-        output = (output << 8) | reverseBitsLookUpTable[val & mask(8)];
-        val >>= 8;
+    if constexpr (sizeof(T) == 1) {
+        return reverseBitsLookUpTable[val];
+    } else {
+        T output = {};
+
+        for (size_t byte = 0; byte < size; byte++) {
+            output = (output << 8) | reverseBitsLookUpTable[val & mask(8)];
+            val >>= 8;
+        }
+
+        return output;
     }
-
-    return output;
-}
-
-template <class T>
-std::enable_if_t<std::is_integral<T>::value && sizeof(T) == 1, T>
-reverseBits(T val, size_t size=sizeof(T))
-{
-    assert(size == 1);
-    return reverseBitsLookUpTable[val];
 }
 
 /**
@@ -236,7 +256,7 @@ reverseBits(T val, size_t size=sizeof(T))
  *
  * @ingroup api_bitfield
  */
-constexpr inline int
+constexpr int
 findMsbSet(uint64_t val)
 {
     int msb = 0;
@@ -272,7 +292,7 @@ findMsbSet(uint64_t val)
  *
  * @ingroup api_bitfield
  */
-constexpr inline int
+constexpr int
 findLsbSet(uint64_t val)
 {
     int lsb = 0;
@@ -310,7 +330,7 @@ findLsbSet(uint64_t val)
  *
  * @ingroup api_bitfield
  */
-constexpr inline int
+constexpr int
 popCount(uint64_t val)
 {
 #ifndef __has_builtin
@@ -345,7 +365,7 @@ popCount(uint64_t val)
  *
  * @ingroup api_bitfield
  */
-constexpr inline uint64_t
+constexpr uint64_t
 alignToPowerOfTwo(uint64_t val)
 {
     val--;
@@ -368,7 +388,7 @@ alignToPowerOfTwo(uint64_t val)
  *
  * @ingroup api_bitfield
  */
-constexpr inline int
+constexpr int
 ctz32(uint32_t value)
 {
     return value ? __builtin_ctzl(value) : 32;
@@ -382,10 +402,40 @@ ctz32(uint32_t value)
  *
  * @ingroup api_bitfield
  */
-constexpr inline int
+constexpr int
 ctz64(uint64_t value)
 {
     return value ? __builtin_ctzll(value) : 64;
 }
+
+/**
+ * Count leading zeros in a 32-bit value.
+ *
+ * @param An input value
+ * @return The number of trailing zeros or 32 if the value is zero.
+ *
+ * @ingroup api_bitfield
+ */
+constexpr inline int
+clz32(uint32_t value)
+{
+    return value ? __builtin_clz(value) : 32;
+}
+
+/**
+ * Count leading zeros in a 64-bit value.
+ *
+ * @param An input value
+ * @return The number of trailing zeros or 64 if the value is zero.
+ *
+ * @ingroup api_bitfield
+ */
+constexpr inline int
+clz64(uint64_t value)
+{
+    return value ? __builtin_clzll(value) : 64;
+}
+
+} // namespace gem5
 
 #endif // __BASE_BITFIELD_HH__

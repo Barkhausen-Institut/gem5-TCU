@@ -41,9 +41,14 @@
 #include "base/types.hh"
 #include "mem/cache/compressors/dictionary_compressor.hh"
 
+namespace gem5
+{
+
 struct CPackParams;
 
-namespace Compressor {
+GEM5_DEPRECATED_NAMESPACE(Compressor, compression);
+namespace compression
+{
 
 class CPack : public DictionaryCompressor<uint32_t>
 {
@@ -64,9 +69,10 @@ class CPack : public DictionaryCompressor<uint32_t>
      * These are used as indexes to reference the pattern data. If a new
      * pattern is added, it must be done before NUM_PATTERNS.
      */
-    typedef enum {
+    enum PatternNumber
+    {
         ZZZZ, XXXX, MMMM, MMXX, ZZZX, MMMX, NUM_PATTERNS
-    } PatternNumber;
+    };
 
     /**
      * Convenience factory declaration. The templates must be organized by
@@ -169,6 +175,7 @@ class CPack::PatternMMMX : public MaskedPattern<0xFFFFFF00>
     }
 };
 
-} // namespace Compressor
+} // namespace compression
+} // namespace gem5
 
 #endif //__MEM_CACHE_COMPRESSORS_CPACK_HH__

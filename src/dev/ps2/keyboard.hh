@@ -44,9 +44,15 @@
 #include "base/vnc/vncinput.hh"
 #include "dev/ps2/device.hh"
 
+namespace gem5
+{
+
 struct PS2KeyboardParams;
 
-class PS2Keyboard : public PS2Device, VncKeyboard
+namespace ps2
+{
+
+class PS2Keyboard : public Device, VncKeyboard
 {
   protected:
     /** is the shift key currently down */
@@ -61,12 +67,14 @@ class PS2Keyboard : public PS2Device, VncKeyboard
     void serialize(CheckpointOut &cp) const override;
     void unserialize(CheckpointIn &cp) override;
 
-  protected: // PS2Device
+  protected: // from Device
     bool recv(const std::vector<uint8_t> &data) override;
 
   public: // VncKeyboard
     void keyPress(uint32_t key, bool down) override;
 };
 
-#endif // __DEV_PS2_KEYBOARD_hH__
+} // namespace ps2
+} // namespace gem5
 
+#endif // __DEV_PS2_KEYBOARD_hH__

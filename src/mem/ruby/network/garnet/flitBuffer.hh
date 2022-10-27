@@ -38,6 +38,15 @@
 #include "mem/ruby/network/garnet/CommonTypes.hh"
 #include "mem/ruby/network/garnet/flit.hh"
 
+namespace gem5
+{
+
+namespace ruby
+{
+
+namespace garnet
+{
+
 class flitBuffer
 {
   public:
@@ -55,8 +64,7 @@ class flitBuffer
     getTopFlit()
     {
         flit *f = m_buffer.front();
-        std::pop_heap(m_buffer.begin(), m_buffer.end(), flit::greater);
-        m_buffer.pop_back();
+        m_buffer.pop_front();
         return f;
     }
 
@@ -70,13 +78,12 @@ class flitBuffer
     insert(flit *flt)
     {
         m_buffer.push_back(flt);
-        std::push_heap(m_buffer.begin(), m_buffer.end(), flit::greater);
     }
 
     uint32_t functionalWrite(Packet *pkt);
 
   private:
-    std::vector<flit *> m_buffer;
+    std::deque<flit *> m_buffer;
     int max_size;
 };
 
@@ -87,5 +94,9 @@ operator<<(std::ostream& out, const flitBuffer& obj)
     out << std::flush;
     return out;
 }
+
+} // namespace garnet
+} // namespace ruby
+} // namespace gem5
 
 #endif // __MEM_RUBY_NETWORK_GARNET_0_FLITBUFFER_HH__

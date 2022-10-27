@@ -2,8 +2,6 @@
  * Copyright (c) 2013-2015 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -33,9 +31,9 @@
 
 #include "mem/ruby/system/GPUCoalescer.hh"
 
+#include "base/compiler.hh"
 #include "base/logging.hh"
 #include "base/str.hh"
-#include "config/the_isa.hh"
 #include "cpu/testers/rubytest/RubyTester.hh"
 #include "debug/GPUCoalescer.hh"
 #include "debug/MemoryAccess.hh"
@@ -53,6 +51,12 @@
 #include "mem/ruby/structures/CacheMemory.hh"
 #include "mem/ruby/system/RubySystem.hh"
 #include "params/RubyGPUCoalescer.hh"
+
+namespace gem5
+{
+
+namespace ruby
+{
 
 UncoalescedTable::UncoalescedTable(GPUCoalescer *gc)
     : coalescer(gc)
@@ -222,35 +226,39 @@ GPUCoalescer::GPUCoalescer(const Params &p)
     m_missLatencyHist.init(10);
 
     for (int i = 0; i < RubyRequestType_NUM; i++) {
-        m_typeLatencyHist.push_back(new Stats::Histogram());
+        m_typeLatencyHist.push_back(new statistics::Histogram());
         m_typeLatencyHist[i]->init(10);
 
-        m_missTypeLatencyHist.push_back(new Stats::Histogram());
+        m_missTypeLatencyHist.push_back(new statistics::Histogram());
         m_missTypeLatencyHist[i]->init(10);
     }
 
     for (int i = 0; i < MachineType_NUM; i++) {
-        m_missMachLatencyHist.push_back(new Stats::Histogram());
+        m_missMachLatencyHist.push_back(new statistics::Histogram());
         m_missMachLatencyHist[i]->init(10);
 
-        m_IssueToInitialDelayHist.push_back(new Stats::Histogram());
+        m_IssueToInitialDelayHist.push_back(new statistics::Histogram());
         m_IssueToInitialDelayHist[i]->init(10);
 
-        m_InitialToForwardDelayHist.push_back(new Stats::Histogram());
+        m_InitialToForwardDelayHist.push_back(new statistics::Histogram());
         m_InitialToForwardDelayHist[i]->init(10);
 
-        m_ForwardToFirstResponseDelayHist.push_back(new Stats::Histogram());
+        m_ForwardToFirstResponseDelayHist.push_back(
+            new statistics::Histogram());
         m_ForwardToFirstResponseDelayHist[i]->init(10);
 
-        m_FirstResponseToCompletionDelayHist.push_back(new Stats::Histogram());
+        m_FirstResponseToCompletionDelayHist.push_back(
+            new statistics::Histogram());
         m_FirstResponseToCompletionDelayHist[i]->init(10);
     }
 
     for (int i = 0; i < RubyRequestType_NUM; i++) {
-        m_missTypeMachLatencyHist.push_back(std::vector<Stats::Histogram *>());
+        m_missTypeMachLatencyHist.push_back(
+            std::vector<statistics::Histogram *>());
 
         for (int j = 0; j < MachineType_NUM; j++) {
-            m_missTypeMachLatencyHist[i].push_back(new Stats::Histogram());
+            m_missTypeMachLatencyHist[i].push_back(
+                new statistics::Histogram());
             m_missTypeMachLatencyHist[i][j]->init(10);
         }
     }
@@ -532,7 +540,8 @@ GPUCoalescer::hitCallback(CoalescedRequest* crequest,
 {
     PacketPtr pkt = crequest->getFirstPkt();
     Addr request_address = pkt->getAddr();
-    M5_VAR_USED Addr request_line_address = makeLineAddress(request_address);
+    [[maybe_unused]] Addr request_line_address =
+        makeLineAddress(request_address);
 
     RubyRequestType type = crequest->getRubyType();
 
@@ -635,7 +644,10 @@ GPUCoalescer::makeRequest(PacketPtr pkt)
         // of the exec_mask.
         int num_packets = 1;
         if (!m_usingRubyTester) {
-            num_packets = getDynInst(pkt)->exec_mask.count();
+            num_packets = 0;
+            for (int i = 0; i < TheGpuISA::NumVecElemPerVecReg; i++) {
+                num_packets += getDynInst(pkt)->getLaneStatus(i);
+            }
         }
 
         // the pkt is temporarily stored in the uncoalesced table until
@@ -948,3 +960,5 @@ GPUCoalescer::recordMissLatency(CoalescedRequest* crequest,
 {
 }
 
+} // namespace ruby
+} // namespace gem5

@@ -41,6 +41,11 @@
 #include "mem/tcu/reg_file.hh"
 #include "sim/system.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 class TcuAccelStream : public TcuAccel
 {
   public:
@@ -215,5 +220,8 @@ class TcuAccelStream : public TcuAccel
     AccelCtxSwSM ctxsw;
     bool ctxSwPerformed;
 };
+
+}
+}
 
 #endif // __CPU_TCU_ACCEL_STREAM_ACCELERATOR_HH__

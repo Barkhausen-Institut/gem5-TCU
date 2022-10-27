@@ -33,8 +33,6 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Author: Matteo Andreozzi
  */
 
 #include "mem/qos/q_policy.hh"
@@ -42,21 +40,31 @@
 #include <unordered_map>
 #include <utility>
 
+#include "base/logging.hh"
+#include "base/trace.hh"
 #include "debug/QOS.hh"
 #include "enums/QoSQPolicy.hh"
-#include "mem/qos/mem_ctrl.hh"
+#include "mem/request.hh"
 
-namespace QoS {
+namespace gem5
+{
+
+namespace memory
+{
+
+GEM5_DEPRECATED_NAMESPACE(QoS, qos);
+namespace qos
+{
 
 QueuePolicy*
 QueuePolicy::create(const QoSMemCtrlParams &p)
 {
     switch (p.qos_q_policy) {
-      case Enums::QoSQPolicy::fifo:
+      case enums::QoSQPolicy::fifo:
         return new FifoQueuePolicy(p);
-      case Enums::QoSQPolicy::lrg:
+      case enums::QoSQPolicy::lrg:
         return new LrgQueuePolicy(p);
-      case Enums::QoSQPolicy::lifo:
+      case enums::QoSQPolicy::lifo:
       default:
         return new LifoQueuePolicy(p);
     }
@@ -144,4 +152,6 @@ LrgQueuePolicy::enqueuePacket(PacketPtr pkt)
     }
 };
 
-} // namespace QoS
+} // namespace qos
+} // namespace memory
+} // namespace gem5

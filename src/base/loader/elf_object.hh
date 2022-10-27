@@ -44,10 +44,15 @@
 #include <set>
 #include <vector>
 
+#include "base/compiler.hh"
 #include "base/loader/object_file.hh"
 #include "gelf.h"
 
-namespace Loader
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Loader, loader);
+namespace loader
 {
 
 class ElfObjectFormat : public ObjectFileFormat
@@ -64,6 +69,7 @@ class ElfObject : public ObjectFile
 
     void determineArch();
     void determineOpSys();
+    void determineByteOrder();
     void handleLoadableSegment(GElf_Phdr phdr, int seg_num);
 
     // These values are provided to a linux process by the kernel, so we
@@ -130,6 +136,7 @@ class ElfObject : public ObjectFile
  */
 void setInterpDir(const std::string &dirname);
 
-} // namespace Loader
+} // namespace loader
+} // namespace gem5
 
 #endif // __BASE_LOADER_ELF_OBJECT_HH__

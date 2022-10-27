@@ -136,17 +136,23 @@
 #include <string>
 
 #include "arch/mips/decoder.hh"
-#include "blobs/gdb_xml_mips.hh"
+#include "arch/mips/gdb-xml/gdb_xml_mips.hh"
+#include "arch/mips/regs/float.hh"
+#include "arch/mips/regs/int.hh"
+#include "arch/mips/regs/misc.hh"
 #include "cpu/thread_state.hh"
 #include "debug/GDBAcc.hh"
 #include "debug/GDBMisc.hh"
 #include "mem/page_table.hh"
 #include "sim/full_system.hh"
 
+namespace gem5
+{
+
 using namespace MipsISA;
 
-RemoteGDB::RemoteGDB(System *_system, ThreadContext *tc, int _port)
-    : BaseRemoteGDB(_system, tc, _port), regCache(this)
+RemoteGDB::RemoteGDB(System *_system, int _port)
+    : BaseRemoteGDB(_system, _port), regCache(this)
 {
 }
 
@@ -173,7 +179,7 @@ RemoteGDB::MipsGdbRegCache::getRegs(ThreadContext *context)
     r.hi = context->readIntReg(INTREG_HI);
     r.badvaddr = context->readMiscRegNoEffect(MISCREG_BADVADDR);
     r.cause = context->readMiscRegNoEffect(MISCREG_CAUSE);
-    r.pc = context->pcState().pc();
+    r.pc = context->pcState().instAddr();
     for (int i = 0; i < 32; i++) r.fpr[i] = context->readFloatReg(i);
     r.fsr = context->readFloatReg(FLOATREG_FCCR);
     r.fir = context->readFloatReg(FLOATREG_FIR);
@@ -218,3 +224,5 @@ RemoteGDB::getXferFeaturesRead(const std::string &annex, std::string &output)
     output = it->second;
     return true;
 }
+
+} // namespace gem5

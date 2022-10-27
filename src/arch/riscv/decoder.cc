@@ -29,48 +29,51 @@
 
 #include "arch/riscv/decoder.hh"
 #include "arch/riscv/types.hh"
+#include "base/bitfield.hh"
 #include "debug/Decode.hh"
+
+namespace gem5
+{
 
 namespace RiscvISA
 {
-
-static const MachInst LowerBitMask = (1 << sizeof(MachInst) * 4) - 1;
-static const MachInst UpperBitMask = LowerBitMask << sizeof(MachInst) * 4;
 
 void Decoder::reset()
 {
     aligned = true;
     mid = false;
-    more = true;
     emi = 0;
-    instDone = false;
 }
 
 void
-Decoder::moreBytes(const PCState &pc, Addr fetchPC, MachInst inst)
+Decoder::moreBytes(const PCStateBase &pc, Addr fetchPC)
 {
-    inst = letoh(inst);
+    // The MSB of the upper and lower halves of a machine instruction.
+    constexpr size_t max_bit = sizeof(machInst) * 8 - 1;
+    constexpr size_t mid_bit = sizeof(machInst) * 4 - 1;
+
+    auto inst = letoh(machInst);
     DPRINTF(Decode, "Requesting bytes 0x%08x from address %#x\n", inst,
             fetchPC);
 
-    bool aligned = pc.pc() % sizeof(MachInst) == 0;
+    bool aligned = pc.instAddr() % sizeof(machInst) == 0;
     if (aligned) {
         emi = inst;
         if (compressed(emi))
-            emi &= LowerBitMask;
-        more = !compressed(emi);
+            emi = bits(emi, mid_bit, 0);
+        outOfBytes = !compressed(emi);
         instDone = true;
     } else {
         if (mid) {
-            assert((emi & UpperBitMask) == 0);
-            emi |= (inst & LowerBitMask) << sizeof(MachInst)*4;
+            assert(bits(emi, max_bit, mid_bit + 1) == 0);
+            replaceBits(emi, max_bit, mid_bit + 1, inst);
             mid = false;
-            more = false;
+            outOfBytes = false;
             instDone = true;
         } else {
-            emi = (inst & UpperBitMask) >> sizeof(MachInst)*4;
+            emi = bits(inst, max_bit, mid_bit + 1);
             mid = !compressed(emi);
-            more = true;
+            outOfBytes = true;
             instDone = compressed(emi);
         }
     }
@@ -92,19 +95,24 @@ Decoder::decode(ExtMachInst mach_inst, Addr addr)
 }
 
 StaticInstPtr
-Decoder::decode(RiscvISA::PCState &nextPC)
+Decoder::decode(PCStateBase &_next_pc)
 {
     if (!instDone)
         return nullptr;
     instDone = false;
 
+    auto &next_pc = _next_pc.as<PCState>();
+
     if (compressed(emi)) {
-        nextPC.npc(nextPC.instAddr() + sizeof(MachInst) / 2);
+        next_pc.npc(next_pc.instAddr() + sizeof(machInst) / 2);
+        next_pc.compressed(true);
     } else {
-        nextPC.npc(nextPC.instAddr() + sizeof(MachInst));
+        next_pc.npc(next_pc.instAddr() + sizeof(machInst));
+        next_pc.compressed(false);
     }
 
-    return decode(emi, nextPC.instAddr());
+    return decode(emi, next_pc.instAddr());
 }
 
-}
+} // namespace RiscvISA
+} // namespace gem5

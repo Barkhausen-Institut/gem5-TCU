@@ -32,6 +32,7 @@ from m5.objects.System import System
 class MemSystem(System):
     type = 'MemSystem'
     cxx_header = 'sim/mem_system.hh'
+    cxx_class = 'gem5::MemSystem'
 
     tile_id = Param.Unsigned("The tile id")
 

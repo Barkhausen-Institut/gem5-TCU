@@ -47,7 +47,7 @@ let {{
 
         def __init__(self, mnem, post, add, writeback, size=4,
                      sign=False, user=False, flavor="normal"):
-            super(StoreInst, self).__init__()
+            super().__init__()
 
             self.name = mnem
             self.post = post
@@ -88,7 +88,7 @@ let {{
         decConstBase = 'Srs'
 
         def __init__(self, mnem, post, add, writeback):
-            super(SrsInst, self).__init__()
+            super().__init__()
             self.name = mnem
             self.post = post
             self.add = add
@@ -130,14 +130,16 @@ let {{
             wbDecl = None
             if self.writeback:
                 wbDecl = '''MicroAddiUop(machInst,
-                              intRegInMode((OperatingMode)regMode, INTREG_SP),
-                              intRegInMode((OperatingMode)regMode, INTREG_SP),
+                              int_reg::regInMode((OperatingMode)regMode,
+                                  int_reg::Sp),
+                              int_reg::regInMode((OperatingMode)regMode,
+                                  int_reg::Sp),
                               %d);''' % wbDiff
 
             (newHeader,
              newDecoder,
              newExec) = self.fillTemplates(self.name, self.Name, codeBlobs,
-                 ["ArmISA::TLB::AlignWord"], [], 'SrsOp', wbDecl)
+                 ["ArmISA::MMU::AlignWord"], [], 'SrsOp', wbDecl)
 
             header_output += newHeader
             decoder_output += newDecoder
@@ -145,7 +147,7 @@ let {{
 
     class StoreImmInst(StoreInst):
         def __init__(self, *args, **kargs):
-            super(StoreImmInst, self).__init__(*args, **kargs)
+            super().__init__(*args, **kargs)
             self.offset = self.op + " imm"
 
             if self.add:
@@ -155,7 +157,7 @@ let {{
 
     class StoreRegInst(StoreInst):
         def __init__(self, *args, **kargs):
-            super(StoreRegInst, self).__init__(*args, **kargs)
+            super().__init__(*args, **kargs)
             self.offset = self.op + " shift_rm_imm(Index, shiftAmt," + \
                                     " shiftType, OptShiftRmCondCodesC)"
             if self.add:
@@ -169,7 +171,7 @@ let {{
 
     class StoreSingle(StoreInst):
         def __init__(self, *args, **kargs):
-            super(StoreSingle, self).__init__(*args, **kargs)
+            super().__init__(*args, **kargs)
 
             # Build the default class name
             self.Name = self.nameFunc(self.post, self.add, self.writeback,
@@ -178,13 +180,13 @@ let {{
             # Add memory request flags where necessary
             self.memFlags.append("%d" % int(math.log(self.size, 2)))
             if self.user:
-                self.memFlags.append("ArmISA::TLB::UserMode")
+                self.memFlags.append("ArmISA::MMU::UserMode")
 
             if self.flavor in ("exclusive", "relex"):
                 self.instFlags.append("IsStoreConditional")
                 self.memFlags.append("Request::LLSC")
             elif self.flavor != "fp":
-                self.memFlags.append("ArmISA::TLB::AllowUnaligned")
+                self.memFlags.append("ArmISA::MMU::AllowUnaligned")
 
             if self.flavor in ("release", "relex"):
                 self.instFlags.extend(["IsWriteBarrier",
@@ -235,7 +237,7 @@ let {{
         nameFunc = staticmethod(storeImmClassName)
 
         def __init__(self, *args, **kargs):
-            super(StoreImmEx, self).__init__(*args, **kargs)
+            super().__init__(*args, **kargs)
             self.codeBlobs["postacc_code"] = \
                   "Result = !writeResult; SevMailbox = 1; LLSCLock = 0;"
 
@@ -254,7 +256,7 @@ let {{
 
     class StoreDouble(StoreInst):
         def __init__(self, *args, **kargs):
-            super(StoreDouble, self).__init__(*args, **kargs)
+            super().__init__(*args, **kargs)
 
             # Build the default class name
             self.Name = self.nameFunc(self.post, self.add, self.writeback)
@@ -263,9 +265,9 @@ let {{
             if self.flavor in ("exclusive", "relex"):
                 self.instFlags.append("IsStoreConditional")
                 self.memFlags.append("Request::LLSC")
-                self.memFlags.append("ArmISA::TLB::AlignDoubleWord")
+                self.memFlags.append("ArmISA::MMU::AlignDoubleWord")
             else:
-                self.memFlags.append("ArmISA::TLB::AlignWord")
+                self.memFlags.append("ArmISA::MMU::AlignWord")
 
             if self.flavor in ("release", "relex"):
                 self.instFlags.extend(["IsWriteBarrier",
@@ -321,7 +323,7 @@ let {{
         nameFunc = staticmethod(storeDoubleImmClassName)
 
         def __init__(self, *args, **kargs):
-            super(StoreDoubleImmEx, self).__init__(*args, **kargs)
+            super().__init__(*args, **kargs)
             self.codeBlobs["postacc_code"] = \
                   "Result = !writeResult; SevMailbox = 1; LLSCLock = 0;"
 

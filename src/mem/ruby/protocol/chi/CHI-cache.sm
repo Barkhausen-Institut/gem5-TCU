@@ -70,6 +70,7 @@ machine(MachineType:Cache, "Cache coherency protocol") :
   Cycles response_latency := 1;
   Cycles snoop_latency := 1;
   Cycles data_latency := 1;
+  Cycles dvm_ext_tlbi_latency := 6;
 
   // When an SC fails, unique lines are locked to this controller for a period
   // proportional to the number of consecutive failed SC requests. See
@@ -87,10 +88,12 @@ machine(MachineType:Cache, "Cache coherency protocol") :
   // sequencer is not null and handled LL/SC request types.
   bool send_evictions;
 
-  // Number of entries in the snoop and replacement TBE tables
+  // Number of entries in the snoop, replacement, and DVM TBE tables
   // notice the "number_of_TBEs" parameter is defined by AbstractController
   int number_of_snoop_TBEs;
   int number_of_repl_TBEs;
+  int number_of_DVM_TBEs;
+  int number_of_DVM_snoop_TBEs;
 
   // replacements use the same TBE slot as the request that triggered it
   // in this case the number_of_repl_TBEs parameter is ignored
@@ -206,7 +209,7 @@ machine(MachineType:Cache, "Cache coherency protocol") :
   state_declaration(State, default="Cache_State_null") {
     // Stable states
 
-    I, AccessPermission:Invalid,    desk="Invalid / not present locally or upstream";
+    I, AccessPermission:Invalid,    desc="Invalid / not present locally or upstream";
 
     // States when block is present in local cache only
     SC, AccessPermission:Read_Only,     desc="Shared Clean";
@@ -216,21 +219,35 @@ machine(MachineType:Cache, "Cache coherency protocol") :
     UD_T, AccessPermission:Read_Write,  desc="UD with use timeout";
 
     // Invalid in local cache but present in upstream caches
-    RU, AccessPermission:Invalid,   desk="Upstream requester has line in UD/UC";
-    RSC, AccessPermission:Invalid,  desk="Upstream requester has line in SC";
-    RSD, AccessPermission:Invalid,  desk="Upstream requester has line in SD and maybe SC";
-    RUSC, AccessPermission:Invalid, desk="RSC + this node stills has exclusive access";
-    RUSD, AccessPermission:Invalid, desk="RSD + this node stills has exclusive access";
+    RU, AccessPermission:Invalid,   desc="Upstream requester has line in UD/UC";
+    RSC, AccessPermission:Invalid,  desc="Upstream requester has line in SC";
+    RSD, AccessPermission:Invalid,  desc="Upstream requester has line in SD and maybe SC";
+    RUSC, AccessPermission:Invalid, desc="RSC + this node stills has exclusive access";
+    RUSD, AccessPermission:Invalid, desc="RSD + this node stills has exclusive access";
 
     // Both in local and upstream caches. In some cases local maybe stale
-    SC_RSC, AccessPermission:Read_Only,    desk="SC + RSC";
-    SD_RSC, AccessPermission:Read_Only,    desk="SD + RSC";
-    SD_RSD, AccessPermission:Read_Only,    desk="SD + RSD";
-    UC_RSC, AccessPermission:Read_Write,   desk="UC + RSC";
-    UC_RU, AccessPermission:Invalid,       desk="UC + RU";
-    UD_RU, AccessPermission:Invalid,       desk="UD + RU";
-    UD_RSD, AccessPermission:Read_Write,   desk="UD + RSD";
-    UD_RSC, AccessPermission:Read_Write,   desk="UD + RSC";
+    SC_RSC, AccessPermission:Read_Only,    desc="SC + RSC";
+    SD_RSC, AccessPermission:Read_Only,    desc="SD + RSC";
+    SD_RSD, AccessPermission:Read_Only,    desc="SD + RSD";
+    UC_RSC, AccessPermission:Read_Write,   desc="UC + RSC";
+    UC_RU, AccessPermission:Invalid,       desc="UC + RU";
+    UD_RU, AccessPermission:Invalid,       desc="UD + RU";
+    UD_RSD, AccessPermission:Read_Write,   desc="UD + RSD";
+    UD_RSC, AccessPermission:Read_Write,   desc="UD + RSC";
+
+    // DVM states - use AccessPermission:Invalid because this prevents "functional reads"
+    DvmTlbi_Unconfirmed, AccessPermission:Invalid,  desc="DVM TLBI waiting for confirmation from MN";
+    DvmSync_Unsent, AccessPermission:Invalid,  desc="DVM Sync waiting for previous TLBIs to complete";
+    DvmSync_Unconfirmed, AccessPermission:Invalid,  desc="DVM Sync waiting for confirmation from MN";
+    DvmTlbi_Waiting, AccessPermission:Invalid,  desc="DVM TLBI confirmed by MN, waiting for completion";
+    DvmSync_Waiting, AccessPermission:Invalid,  desc="DVM Sync confirmed by MN, waiting for completion";
+    DvmOp_Finished, AccessPermission:Invalid,  desc="DVM operation that has completed, about to be deallocated";
+
+    DvmExtTlbi_Partial, AccessPermission:Invalid, desc="External DVM TLBI waiting for second packet from MN";
+    DvmExtTlbi_Executing, AccessPermission:Invalid, desc="External DVM TLBI being executed by this machine";
+    DvmExtSync_Partial, AccessPermission:Invalid, desc="External DVM Sync waiting for second packet from MN";
+    DvmExtSync_Executing, AccessPermission:Invalid, desc="External DVM Sync being executed by this machine";
+    DvmExtOp_Finished, AccessPermission:Invalid, desc="External DVM operation that has completed, about to be deallocated";
 
     // Generic transient state
     // There is only a transient "BUSY" state. The actions taken at this state
@@ -256,95 +273,109 @@ machine(MachineType:Cache, "Cache coherency protocol") :
     AllocRequest,           desc="Allocates a TBE for a request. Triggers a retry if table is full";
     AllocRequestWithCredit, desc="Allocates a TBE for a request. Always succeeds.";
     AllocSeqRequest,        desc="Allocates a TBE for a sequencer request. Stalls requests if table is full";
+    AllocSeqDvmRequest,     desc="Allocates a TBE for a sequencer DVM request. Stalls requests if table is full";
     AllocPfRequest,         desc="Allocates a TBE for a prefetch request. Stalls requests if table is full";
     AllocSnoop,             desc="Allocates a TBE for a snoop. Stalls snoop if table is full";
+    AllocDvmSnoop,          desc="Allocated a TBE for a DVM snoop. Stalls snoop if table is full";
 
     // Events triggered by sequencer requests or snoops in the rdy queue
     // See CHIRequestType in CHi-msg.sm for descriptions
-    Load;
-    Store;
-    Prefetch;
-    ReadShared;
-    ReadNotSharedDirty;
-    ReadUnique;
-    ReadUnique_PoC;
-    ReadOnce;
-    CleanUnique;
-    Evict;
-    WriteBackFull;
-    WriteEvictFull;
-    WriteCleanFull;
-    WriteUnique;
-    WriteUniquePtl_PoC;
-    WriteUniqueFull_PoC;
-    WriteUniqueFull_PoC_Alloc;
-    SnpCleanInvalid;
-    SnpShared;
-    SnpSharedFwd;
-    SnpNotSharedDirtyFwd;
-    SnpUnique;
-    SnpUniqueFwd;
-    SnpOnce;
-    SnpOnceFwd;
-    SnpStalled; // A snoop stall triggered from the inport
+    Load,                        desc="";
+    Store,                       desc="";
+    Prefetch,                    desc="";
+    ReadShared,                  desc="";
+    ReadNotSharedDirty,          desc="";
+    ReadUnique,                  desc="";
+    ReadUnique_PoC,              desc="";
+    ReadOnce,                    desc="";
+    CleanUnique,                 desc="";
+    Evict,                       desc="";
+    WriteBackFull,               desc="";
+    WriteEvictFull,              desc="";
+    WriteCleanFull,              desc="";
+    WriteUnique,                 desc="";
+    WriteUniquePtl_PoC,          desc="";
+    WriteUniqueFull_PoC,         desc="";
+    WriteUniqueFull_PoC_Alloc,   desc="";
+    SnpCleanInvalid,             desc="";
+    SnpShared,                   desc="";
+    SnpSharedFwd,                desc="";
+    SnpNotSharedDirtyFwd,        desc="";
+    SnpUnique,                   desc="";
+    SnpUniqueFwd,                desc="";
+    SnpOnce,                     desc="";
+    SnpOnceFwd,                  desc="";
+    SnpStalled, desc=""; // A snoop stall triggered from the inport
+
+    // DVM sequencer requests
+    DvmTlbi_Initiate, desc=""; // triggered when a CPU core wants to send a TLBI
+    // TLBIs are handled entirely within Ruby, so there's no ExternCompleted message
+    DvmSync_Initiate, desc=""; // triggered when a CPU core wants to send a sync
+    DvmSync_ExternCompleted, desc=""; // triggered when an externally requested Sync is completed
 
     // Events triggered by incoming response messages
     // See CHIResponseType in CHi-msg.sm for descriptions
-    CompAck;
-    Comp_I;
-    Comp_UC;
-    Comp_SC;
-    CompDBIDResp;
-    DBIDResp;
-    Comp;
-    ReadReceipt;
-    RespSepData;
-    SnpResp_I;
-    SnpResp_I_Fwded_UC;
-    SnpResp_I_Fwded_UD_PD;
-    SnpResp_SC;
-    SnpResp_SC_Fwded_SC;
-    SnpResp_SC_Fwded_SD_PD;
-    SnpResp_UC_Fwded_I;
-    SnpResp_UD_Fwded_I;
-    SnpResp_SC_Fwded_I;
-    SnpResp_SD_Fwded_I;
-    RetryAck;
-    RetryAck_PoC;
-    PCrdGrant;
-    PCrdGrant_PoC;
-    RetryAck_Hazard;
-    RetryAck_PoC_Hazard;
-    PCrdGrant_Hazard;
-    PCrdGrant_PoC_Hazard;
+    CompAck,                 desc="";
+    Comp_I,                  desc="";
+    Comp_UC,                 desc="";
+    Comp_SC,                 desc="";
+    CompDBIDResp,            desc="";
+    DBIDResp,                desc="";
+    Comp,                    desc="";
+    ReadReceipt,             desc="";
+    RespSepData,             desc="";
+    SnpResp_I,               desc="";
+    SnpResp_I_Fwded_UC,      desc="";
+    SnpResp_I_Fwded_UD_PD,   desc="";
+    SnpResp_SC,              desc="";
+    SnpResp_SC_Fwded_SC,     desc="";
+    SnpResp_SC_Fwded_SD_PD,  desc="";
+    SnpResp_UC_Fwded_I,      desc="";
+    SnpResp_UD_Fwded_I,      desc="";
+    SnpResp_SC_Fwded_I,      desc="";
+    SnpResp_SD_Fwded_I,      desc="";
+    RetryAck,                desc="";
+    RetryAck_PoC,            desc="";
+    PCrdGrant,               desc="";
+    PCrdGrant_PoC,           desc="";
+    RetryAck_Hazard,         desc="";
+    RetryAck_PoC_Hazard,     desc="";
+    PCrdGrant_Hazard,        desc="";
+    PCrdGrant_PoC_Hazard,    desc="";
+
+    // Events triggered by incoming DVM messages
+    SnpDvmOpSync_P1;
+    SnpDvmOpSync_P2;
+    SnpDvmOpNonSync_P1;
+    SnpDvmOpNonSync_P2;
 
     // Events triggered by incoming data response messages
     // See CHIDataType in CHi-msg.sm for descriptions
-    CompData_I;
-    CompData_UC;
-    CompData_SC;
-    CompData_UD_PD;
-    CompData_SD_PD;
-    DataSepResp_UC;
-    CBWrData_I;
-    CBWrData_UC;
-    CBWrData_SC;
-    CBWrData_UD_PD;
-    CBWrData_SD_PD;
-    NCBWrData;
-    SnpRespData_I;
-    SnpRespData_I_PD;
-    SnpRespData_SC;
-    SnpRespData_SC_PD;
-    SnpRespData_SD;
-    SnpRespData_UC;
-    SnpRespData_UD;
-    SnpRespData_SC_Fwded_SC;
-    SnpRespData_SC_Fwded_SD_PD;
-    SnpRespData_SC_PD_Fwded_SC;
-    SnpRespData_I_Fwded_SD_PD;
-    SnpRespData_I_PD_Fwded_SC;
-    SnpRespData_I_Fwded_SC;
+    CompData_I,                    desc="";
+    CompData_UC,                   desc="";
+    CompData_SC,                   desc="";
+    CompData_UD_PD,                desc="";
+    CompData_SD_PD,                desc="";
+    DataSepResp_UC,                desc="";
+    CBWrData_I,                    desc="";
+    CBWrData_UC,                   desc="";
+    CBWrData_SC,                   desc="";
+    CBWrData_UD_PD,                desc="";
+    CBWrData_SD_PD,                desc="";
+    NCBWrData,                     desc="";
+    SnpRespData_I,                 desc="";
+    SnpRespData_I_PD,              desc="";
+    SnpRespData_SC,                desc="";
+    SnpRespData_SC_PD,             desc="";
+    SnpRespData_SD,                desc="";
+    SnpRespData_UC,                desc="";
+    SnpRespData_UD,                desc="";
+    SnpRespData_SC_Fwded_SC,       desc="";
+    SnpRespData_SC_Fwded_SD_PD,    desc="";
+    SnpRespData_SC_PD_Fwded_SC,    desc="";
+    SnpRespData_I_Fwded_SD_PD,     desc="";
+    SnpRespData_I_PD_Fwded_SC,     desc="";
+    SnpRespData_I_Fwded_SC,        desc="";
 
     // We use special events for requests that we detect to be stale. This is
     // done for debugging only. We sent a stale response so the requester can
@@ -352,10 +383,11 @@ machine(MachineType:Cache, "Cache coherency protocol") :
     // A Write or Evict becomes stale when the requester receives a snoop that
     // changes the state of the data while the request was pending.
     // Actual CHI implementations don't have this check.
-    Evict_Stale;
-    WriteBackFull_Stale;
-    WriteEvictFull_Stale;
-    WriteCleanFull_Stale;
+    Evict_Stale,            desc="";
+    WriteBackFull_Stale,    desc="";
+    WriteEvictFull_Stale,   desc="";
+    WriteCleanFull_Stale,   desc="";
+    CleanUnique_Stale,   desc="";
 
     // Cache fill handling
     CheckCacheFill,   desc="Check if need to write or update the cache and trigger any necessary allocation and evictions";
@@ -425,6 +457,7 @@ machine(MachineType:Cache, "Cache coherency protocol") :
     SendCompIResp,  desc="Ack Evict with Comp_I";
     SendCleanUnique,desc="Send a CleanUnique";
     SendCompUCResp, desc="Ack CleanUnique with Comp_UC";
+    SendCompUCRespStale, desc="Ack stale CleanUnique with Comp_UC";
 
     // Checks if an upgrade using a CleanUnique was sucessfull
     CheckUpgrade_FromStore, desc="Upgrade needed by a Store";
@@ -454,6 +487,9 @@ machine(MachineType:Cache, "Cache coherency protocol") :
     SendSnpFwdedData,                 desc="Send SnpResp for a forwarding snoop";
     SendSnpFwdedResp,                 desc="Send SnpRespData for a forwarding snoop";
 
+    // DVM sends
+    DvmSync_Send, desc="Send an unstarted DVM Sync";
+
     // Retry handling
     SendRetryAck,   desc="Send RetryAck";
     SendPCrdGrant,  desc="Send PCrdGrant";
@@ -468,15 +504,16 @@ machine(MachineType:Cache, "Cache coherency protocol") :
     TX_Data, desc="Transmit pending data messages";
     MaintainCoherence, desc="Queues a WriteBack or Evict before droping the only valid copy of the block";
     FinishCleanUnique, desc="Sends acks and perform any writeback after a CleanUnique";
+    FinishCopyBack_Stale, desc="Check if a Evict needs to be sent";
     ActionStalledOnHazard, desc="Stall a trigger action because until finish handling snoop hazard";
 
     // This is triggered once a transaction doesn't have
     // any queued action and is not expecting responses/data. The transaction
     // is finalized and the next stable state is stored in the cache/directory
     // See the processNextState and makeFinalState functions
-    Final;
+    Final, desc="";
 
-    null;
+    null, desc="";
   }
 
   ////////////////////////////////////////////////////////////////////////////
@@ -523,6 +560,7 @@ machine(MachineType:Cache, "Cache coherency protocol") :
   // Tracks a pending retry
   structure(RetryQueueEntry) {
     Addr addr,           desc="Line address";
+    bool usesTxnId,      desc="Uses a transaction ID instead of a memory address";
     MachineID retryDest, desc="Retry destination";
   }
 
@@ -541,7 +579,7 @@ machine(MachineType:Cache, "Cache coherency protocol") :
     void pushFrontNB(Event);
     void pop();
     // For the retry queue
-    void emplace(Addr,MachineID);
+    void emplace(Addr,bool,MachineID);
     RetryQueueEntry next(); //SLICC won't allow to reuse front()
   }
 
@@ -551,6 +589,8 @@ machine(MachineType:Cache, "Cache coherency protocol") :
     bool is_req_tbe, desc="Allocated in the request table";
     bool is_snp_tbe, desc="Allocated in the snoop table";
     bool is_repl_tbe, desc="Allocated in the replacements table";
+    bool is_dvm_tbe, desc="Allocated in the DVM table";
+    bool is_dvm_snp_tbe, desc="Allocated in the DVM snoop table";
 
     int storSlot, desc="Slot in the storage tracker occupied by this entry";
 
@@ -717,6 +757,22 @@ machine(MachineType:Cache, "Cache coherency protocol") :
   TBETable snpTBEs,      template="<Cache_TBE>", constructor="m_number_of_snoop_TBEs";
   TBEStorage storSnpTBEs, constructor="this, m_number_of_snoop_TBEs";
 
+  // TBE table for outgoing DVM requests
+  TBETable dvmTBEs,      template="<Cache_TBE>", constructor="m_number_of_DVM_TBEs";
+  TBEStorage storDvmTBEs, constructor="this, m_number_of_DVM_TBEs";
+
+  // TBE table for incoming DVM snoops
+  TBETable dvmSnpTBEs,      template="<Cache_TBE>", constructor="m_number_of_DVM_snoop_TBEs";
+  TBEStorage storDvmSnpTBEs, constructor="this, m_number_of_DVM_snoop_TBEs";
+
+  // DVM data
+  // Queue of non-sync operations that haven't been Comp-d yet.
+  // Before a Sync operation can start, this queue must be emptied
+  TriggerQueue dvmPendingNonSyncsBlockingSync, template="<Cache_Event>";
+  // Used to record if a Sync op is pending
+  bool dvmHasPendingSyncOp, default="false";
+  Addr dvmPendingSyncOp, default="0";
+
   // Retry handling
 
   // Destinations that will be sent PCrdGrant when a TBE becomes available
@@ -728,6 +784,7 @@ machine(MachineType:Cache, "Cache coherency protocol") :
     Addr addr;
     Event event;
     MachineID retryDest;
+    bool usesTxnId;
 
     bool functionalRead(Packet *pkt) { return false; }
     bool functionalRead(Packet *pkt, WriteMask &mask) { return false; }
@@ -742,6 +799,7 @@ machine(MachineType:Cache, "Cache coherency protocol") :
   // Pending transaction actions (generated by TBE:actions)
   structure(TriggerMsg, interface="Message") {
     Addr addr;
+    bool usesTxnId;
     bool from_hazard; // this actions was generate during a snoop hazard
     bool functionalRead(Packet *pkt) { return false; }
     bool functionalRead(Packet *pkt, WriteMask &mask) { return false; }

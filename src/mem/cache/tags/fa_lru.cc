@@ -49,10 +49,14 @@
 #include <cassert>
 #include <sstream>
 
+#include "base/compiler.hh"
 #include "base/intmath.hh"
 #include "base/logging.hh"
 #include "mem/cache/base.hh"
 #include "mem/cache/replacement_policies/replaceable_entry.hh"
+
+namespace gem5
+{
 
 std::string
 FALRUBlk::print() const
@@ -110,7 +114,7 @@ void
 FALRU::invalidate(CacheBlk *blk)
 {
     // Erase block entry reference in the hash table
-    M5_VAR_USED auto num_erased =
+    [[maybe_unused]] auto num_erased =
         tagHash.erase(std::make_pair(blk->getTag(), blk->isSecure()));
 
     // Sanity check; only one block reference should be erased
@@ -127,17 +131,18 @@ FALRU::invalidate(CacheBlk *blk)
 }
 
 CacheBlk*
-FALRU::accessBlock(Addr addr, bool is_secure, Cycles &lat)
+FALRU::accessBlock(const PacketPtr pkt, Cycles &lat)
 {
-    return accessBlock(addr, is_secure, lat, 0);
+    return accessBlock(pkt, lat, 0);
 }
 
 CacheBlk*
-FALRU::accessBlock(Addr addr, bool is_secure, Cycles &lat,
+FALRU::accessBlock(const PacketPtr pkt, Cycles &lat,
                    CachesMask *in_caches_mask)
 {
     CachesMask mask = 0;
-    FALRUBlk* blk = static_cast<FALRUBlk*>(findBlock(addr, is_secure));
+    FALRUBlk* blk =
+        static_cast<FALRUBlk*>(findBlock(pkt->getAddr(), pkt->isSecure()));
 
     // If a cache hit
     if (blk && blk->isValid()) {
@@ -291,17 +296,19 @@ printSize(std::ostream &stream, size_t size)
 }
 
 FALRU::CacheTracking::CacheTracking(unsigned min_size, unsigned max_size,
-                                    unsigned block_size, Stats::Group *parent)
-    : Stats::Group(parent),
+    unsigned block_size, statistics::Group *parent)
+    : statistics::Group(parent),
       blkSize(block_size),
       minTrackedSize(min_size),
       numTrackedCaches(max_size > min_size ?
                        floorLog2(max_size) - floorLog2(min_size) : 0),
       inAllCachesMask(mask(numTrackedCaches)),
       boundaries(numTrackedCaches),
-      ADD_STAT(hits, UNIT_COUNT, "The number of hits in each cache size."),
-      ADD_STAT(misses, UNIT_COUNT, "The number of misses in each cache size."),
-      ADD_STAT(accesses, UNIT_COUNT,
+      ADD_STAT(hits, statistics::units::Count::get(),
+               "The number of hits in each cache size."),
+      ADD_STAT(misses, statistics::units::Count::get(),
+               "The number of misses in each cache size."),
+      ADD_STAT(accesses, statistics::units::Count::get(),
                "The number of accesses to the FA LRU cache.")
 {
     fatal_if(numTrackedCaches > sizeof(CachesMask) * 8,
@@ -451,3 +458,4 @@ FALRU::CacheTracking::recordAccess(FALRUBlk *blk)
     accesses++;
 }
 
+} // namespace gem5

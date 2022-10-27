@@ -40,6 +40,12 @@
 
 #include "base/random.hh"
 
+namespace gem5
+{
+
+namespace branch_prediction
+{
+
 void
 MPP_TAGE::calculateParameters()
 {
@@ -135,10 +141,10 @@ MPP_TAGE::handleUReset()
         tCounter = 0;
     }
 
-    if (tCounter >= ((ULL(1) << logUResetPeriod))) {
+    if (tCounter >= ((1ULL << logUResetPeriod))) {
         // Update the u bits for the short tags table
         for (int i = 1; i <= nHistoryTables; i++) {
-            for (int j = 0; j < (ULL(1) << logTagTableSizes[i]); j++) {
+            for (int j = 0; j < (1ULL << logTagTableSizes[i]); j++) {
                 resetUctr(gtable[i][j].u);
             }
         }
@@ -161,8 +167,7 @@ int
 MPP_TAGE::bindex(Addr pc_in) const
 {
     uint32_t pc = (uint32_t) pc_in;
-    return ((pc ^ (pc >> 4)) &
-            ((ULL(1) << (logTagTableSizes[0])) - 1));
+    return ((pc ^ (pc >> 4)) & ((1ULL << (logTagTableSizes[0])) - 1));
 }
 
 unsigned
@@ -323,11 +328,9 @@ MPP_StatisticalCorrector::gUpdate(Addr branch_pc, bool taken, int64_t hist,
                    int nbr, int logs, std::vector<int8_t> & w,
                    StatisticalCorrector::BranchInfo* bi)
 {
-    int percsum = 0;
     for (int i = 0; i < nbr; i++) {
         int64_t bhist = hist & ((int64_t) ((1 << length[i]) - 1));
         int64_t index = gIndex(branch_pc, bhist, logs, nbr, i);
-        percsum += (2 * tab[i][index] + 1);
         ctrUpdate(tab[i][index], taken, scCountersWidth - (i < (nbr - 1)));
     }
 }
@@ -681,3 +684,6 @@ MultiperspectivePerceptronTAGE::squash(ThreadID tid, void *bp_history)
     MPPTAGEBranchInfo *bi = static_cast<MPPTAGEBranchInfo*>(bp_history);
     delete bi;
 }
+
+} // namespace branch_prediction
+} // namespace gem5

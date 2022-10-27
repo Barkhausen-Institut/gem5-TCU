@@ -2,8 +2,6 @@
  * Copyright (c) 2020 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -41,6 +39,9 @@
 #include "gpu-compute/pool_manager.hh"
 #include "params/DynPoolManager.hh"
 
+namespace gem5
+{
+
 // Dynamic Pool Manager: allows multiple WGs on the same pool
 class DynPoolManager : public PoolManager
 {
@@ -71,5 +72,7 @@ class DynPoolManager : public PoolManager
     // total registers to be allocated -- treat as a const
     int totalRegSpace;
 };
+
+} // namespace gem5
 
 #endif // __DYN_POOL_MANAGER_HH__

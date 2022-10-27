@@ -34,9 +34,14 @@
 
 #include "base/filters/base.hh"
 
+namespace gem5
+{
+
 struct BloomFilterBlockParams;
 
-namespace BloomFilter {
+GEM5_DEPRECATED_NAMESPACE(BloomFilter, bloom_filter);
+namespace bloom_filter
+{
 
 /**
  * Simple deletable (with false negatives) bloom filter that extracts
@@ -68,6 +73,7 @@ class Block : public Base
     std::vector<unsigned> masksSizes;
 };
 
-} // namespace BloomFilter
+} // namespace bloom_filter
+} // namespace gem5
 
 #endif // __BASE_FILTERS_BLOCK_BLOOM_FILTER_HH__

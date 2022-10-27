@@ -38,6 +38,11 @@
 #ifndef __ARCH_NULL_REMOTE_GDB_HH__
 #define __ARCH_NULL_REMOTE_GDB_HH__
 
+#include "base/types.hh"
+
+namespace gem5
+{
+
 class ThreadContext;
 
 class BaseRemoteGDB
@@ -47,8 +52,11 @@ class BaseRemoteGDB
 
     bool breakpoint() { return false; }
     void replaceThreadContext(ThreadContext *tc) {}
+    bool trap(ContextID id, int type) { return true; }
 
     virtual ~BaseRemoteGDB() {}
 };
+
+} // namespace gem5
 
 #endif // __ARCH_NULL_REMOTE_GDB_H__

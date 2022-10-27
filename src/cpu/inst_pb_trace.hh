@@ -38,7 +38,7 @@
 #ifndef __CPU_INST_PB_TRACE_HH__
 #define __CPU_INST_PB_TRACE_HH__
 
-#include "arch/types.hh"
+#include "arch/generic/pcstate.hh"
 #include "base/trace.hh"
 #include "base/types.hh"
 #include "cpu/static_inst_fwd.hh"
@@ -46,11 +46,14 @@
 #include "proto/protoio.hh"
 #include "sim/insttracer.hh"
 
-class ThreadContext;
-
 namespace ProtoMessage {
 class Inst;
 }
+
+namespace gem5
+{
+
+class ThreadContext;
 
 namespace Trace {
 
@@ -64,7 +67,7 @@ class InstPBTraceRecord : public InstRecord
 {
   public:
     InstPBTraceRecord(InstPBTrace& _tracer, Tick when, ThreadContext *tc,
-                      const StaticInstPtr si, TheISA::PCState pc,
+                      const StaticInstPtr si, const PCStateBase &pc,
                       const StaticInstPtr mi = NULL)
         : InstRecord(when, tc, si, pc, mi), tracer(_tracer)
     {}
@@ -87,8 +90,8 @@ class InstPBTrace : public InstTracer
     virtual ~InstPBTrace();
 
     InstPBTraceRecord* getInstRecord(Tick when, ThreadContext *tc, const
-                                    StaticInstPtr si, TheISA::PCState pc, const
-                                    StaticInstPtr mi = NULL) override;
+                                    StaticInstPtr si, const PCStateBase &pc,
+                                    const StaticInstPtr mi = NULL) override;
 
   protected:
     std::unique_ptr<uint8_t []> buf;
@@ -120,7 +123,7 @@ class InstPBTrace : public InstTracer
      * @param si for the machInst and opClass
      * @param pc for the PC Addr
      */
-    void traceInst(ThreadContext *tc, StaticInstPtr si, TheISA::PCState pc);
+    void traceInst(ThreadContext *tc, StaticInstPtr si, const PCStateBase &pc);
 
     /** Write a memory request to the trace file as part of the cur instruction
      * @param si for the machInst and opClass
@@ -132,5 +135,8 @@ class InstPBTrace : public InstTracer
 
     friend class InstPBTraceRecord;
 };
+
 } // namespace Trace
+} // namespace gem5
+
 #endif // __CPU_INST_PB_TRACE_HH__

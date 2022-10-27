@@ -39,10 +39,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "pybind11/operators.h"
 #include "pybind11/pybind11.h"
 #include "pybind11/stl.h"
-
-#include "python/pybind11/core.hh"
 
 #include <ctime>
 
@@ -55,11 +54,15 @@
 #include "base/temperature.hh"
 #include "base/types.hh"
 #include "sim/core.hh"
+#include "sim/cur_tick.hh"
 #include "sim/drain.hh"
 #include "sim/serialize.hh"
 #include "sim/sim_object.hh"
 
 namespace py = pybind11;
+
+namespace gem5
+{
 
 /** Resolve a SimObject name using the Pybind configuration */
 class PybindSimObjectResolver : public SimObjectResolver
@@ -81,18 +84,6 @@ PybindSimObjectResolver::resolveSimObject(const std::string &name)
 
 extern const char *compileDate;
 extern const char *gem5Version;
-
-#ifdef DEBUG
-const bool flag_DEBUG = true;
-#else
-const bool flag_DEBUG = false;
-#endif
-#ifdef NDEBUG
-const bool flag_NDEBUG = true;
-#else
-const bool flag_NDEBUG = false;
-#endif
-const bool flag_TRACING_ON = TRACING_ON;
 
 static void
 init_drain(py::module_ &m_native)
@@ -163,11 +154,9 @@ init_range(py::module_ &m_native)
         .def("mergesWith", &AddrRange::mergesWith)
         .def("intersects", &AddrRange::intersects)
         .def("isSubset", &AddrRange::isSubset)
+        .def("exclude", static_cast<AddrRangeList (AddrRange::*)(
+                    const AddrRangeList &) const>(&AddrRange::exclude))
         ;
-
-    // We need to make vectors of AddrRange opaque to avoid weird
-    // memory allocation issues in PyBind's STL wrappers.
-    py::bind_vector<std::vector<AddrRange>>(m, "AddrRangeVector");
 
     m.def("RangeEx", &RangeEx);
     m.def("RangeIn", &RangeIn);
@@ -179,22 +168,22 @@ init_net(py::module_ &m_native)
 {
     py::module_ m = m_native.def_submodule("net");
 
-    py::class_<Net::EthAddr>(m, "EthAddr")
+    py::class_<networking::EthAddr>(m, "EthAddr")
         .def(py::init<>())
         .def(py::init<const std::string &>())
         ;
 
-    py::class_<Net::IpAddress>(m, "IpAddress")
+    py::class_<networking::IpAddress>(m, "IpAddress")
         .def(py::init<>())
         .def(py::init<uint32_t>())
         ;
 
-    py::class_<Net::IpNetmask, Net::IpAddress>(m, "IpNetmask")
+    py::class_<networking::IpNetmask, networking::IpAddress>(m, "IpNetmask")
         .def(py::init<>())
         .def(py::init<uint32_t, uint8_t>())
         ;
 
-    py::class_<Net::IpWithPort, Net::IpAddress>(m, "IpWithPort")
+    py::class_<networking::IpWithPort, networking::IpAddress>(m, "IpWithPort")
         .def(py::init<>())
         .def(py::init<uint32_t, uint16_t>())
         ;
@@ -205,7 +194,7 @@ init_loader(py::module_ &m_native)
 {
     py::module_ m = m_native.def_submodule("loader");
 
-    m.def("setInterpDir", &Loader::setInterpDir);
+    m.def("setInterpDir", &loader::setInterpDir);
 }
 
 void
@@ -296,10 +285,7 @@ pybind_init_core(py::module_ &m_native)
     m_core.attr("compileDate") = py::cast(compileDate);
     m_core.attr("gem5Version") = py::cast(gem5Version);
 
-    m_core.attr("flag_DEBUG") = py::cast(flag_DEBUG);
-    m_core.attr("flag_DEBUG") = py::cast(flag_DEBUG);
-    m_core.attr("flag_NDEBUG") = py::cast(flag_NDEBUG);
-    m_core.attr("flag_TRACING_ON") = py::cast(flag_TRACING_ON);
+    m_core.attr("TRACING_ON") = py::cast(TRACING_ON);
 
     m_core.attr("MaxTick") = py::cast(MaxTick);
 
@@ -307,10 +293,10 @@ pybind_init_core(py::module_ &m_native)
      * Serialization helpers
      */
     m_core
-        .def("serializeAll", &Serializable::serializeAll)
-        .def("unserializeGlobals", &Serializable::unserializeGlobals)
+        .def("serializeAll", &SimObject::serializeAll)
         .def("getCheckpoint", [](const std::string &cpt_dir) {
-            return new CheckpointIn(cpt_dir, pybindSimObjectResolver);
+            SimObject::setSimObjectResolver(&pybindSimObjectResolver);
+            return new CheckpointIn(cpt_dir);
         })
 
         ;
@@ -323,3 +309,4 @@ pybind_init_core(py::module_ &m_native)
     init_loader(m_native);
 }
 
+} // namespace gem5

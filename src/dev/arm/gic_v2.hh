@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2013, 2015-2020 ARM Limited
+ * Copyright (c) 2010, 2013, 2015-2022 Arm Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -51,17 +51,49 @@
 #include "arch/arm/interrupts.hh"
 #include "base/addr_range.hh"
 #include "base/bitunion.hh"
-#include "cpu/intr_control.hh"
 #include "dev/arm/base_gic.hh"
 #include "dev/io_device.hh"
 #include "dev/platform.hh"
 #include "params/GicV2.hh"
 
-class GicV2 : public BaseGic, public BaseGicRegisters
+namespace gem5
+{
+
+class GicV2Registers
+{
+  public:
+    virtual uint32_t readDistributor(ContextID ctx, Addr daddr) = 0;
+    virtual uint32_t readCpu(ContextID ctx, Addr daddr) = 0;
+
+    virtual void writeDistributor(ContextID ctx, Addr daddr,
+                                  uint32_t data) = 0;
+    virtual void writeCpu(ContextID ctx, Addr daddr, uint32_t data) = 0;
+
+  protected:
+    static void copyDistRegister(GicV2Registers* from,
+                                 GicV2Registers* to,
+                                 ContextID ctx, Addr daddr);
+    static void copyCpuRegister(GicV2Registers* from,
+                                GicV2Registers* to,
+                                ContextID ctx, Addr daddr);
+    static void copyBankedDistRange(System *sys,
+                                    GicV2Registers* from,
+                                    GicV2Registers* to,
+                                    Addr daddr, size_t size);
+    static void clearBankedDistRange(System *sys, GicV2Registers* to,
+                                     Addr daddr, size_t size);
+    static void copyDistRange(GicV2Registers* from,
+                              GicV2Registers* to,
+                              Addr daddr, size_t size);
+    static void clearDistRange(GicV2Registers* to, Addr daddr, size_t size);
+};
+
+class GicV2 : public BaseGic, public GicV2Registers
 {
   protected:
     // distributor memory addresses
-    enum {
+    enum
+    {
         GICD_CTLR          = 0x000, // control register
         GICD_TYPER         = 0x004, // controller type
         GICD_IIDR          = 0x008, // implementer id
@@ -90,7 +122,8 @@ class GicV2 : public BaseGic, public BaseGicRegisters
     static const AddrRange GICD_ICFGR;      // interrupt config registers
 
     // cpu memory addresses
-    enum {
+    enum
+    {
         GICC_CTLR  = 0x00, // CPU control register
         GICC_PMR   = 0x04, // Interrupt priority mask
         GICC_BPR   = 0x08, // binary point register
@@ -176,7 +209,8 @@ class GicV2 : public BaseGic, public BaseGicRegisters
     uint32_t itLines;
 
     /** Registers "banked for each connected processor" per ARM IHI0048B */
-    struct BankedRegs : public Serializable {
+    struct BankedRegs : public Serializable
+    {
         /** GICD_I{S,C}ENABLER0
          * interrupt enable bits for first 32 interrupts, 1b per interrupt */
         uint32_t intEnabled;
@@ -443,7 +477,7 @@ class GicV2 : public BaseGic, public BaseGicRegisters
     /** See if some processor interrupt flags need to be enabled/disabled
      * @param hint which set of interrupts needs to be checked
      */
-    virtual void updateIntState(int hint);
+    void updateIntState(int hint);
 
     /** Update the register that records priority of the highest priority
      *  active interrupt*/
@@ -507,7 +541,9 @@ class GicV2 : public BaseGic, public BaseGicRegisters
 
     bool supportsVersion(GicVersion version) override;
 
-  protected:
+  protected: /** GIC state transfer */
+    void copyGicState(GicV2Registers* from, GicV2Registers* to);
+
     /** Handle a read to the distributor portion of the GIC
      * @param pkt packet to respond to
      */
@@ -544,5 +580,7 @@ class GicV2 : public BaseGic, public BaseGicRegisters
     Tick writeCpu(PacketPtr pkt);
     void writeCpu(ContextID ctx, Addr daddr, uint32_t data) override;
 };
+
+} // namespace gem5
 
 #endif //__DEV_ARM_GIC_H__

@@ -41,8 +41,15 @@
 #include "base/compiler.hh"
 #include "dev/arm/smmu_v3_deviceifc.hh"
 #include "dev/arm/smmu_v3_proc.hh"
-#include "dev/arm/smmu_v3_ptops.hh"
 #include "mem/packet.hh"
+
+namespace gem5
+{
+
+namespace ArmISA
+{
+struct PageTableOps;
+}
 
 struct SMMUTranslRequest
 {
@@ -97,7 +104,7 @@ class SMMUTranslationProcess : public SMMUProcess
     TranslContext context;
 
     Tick recvTick;
-    M5_CLASS_VAR_USED Tick faultTick;
+    GEM5_CLASS_VAR_USED Tick faultTick;
 
     virtual void main(Yield &yield);
 
@@ -126,11 +133,11 @@ class SMMUTranslationProcess : public SMMUProcess
                          bool leaf, uint8_t permissions);
 
     TranslResult walkStage1And2(Yield &yield, Addr addr,
-                                const PageTableOps *pt_ops,
+                                const ArmISA::PageTableOps *pt_ops,
                                 unsigned level, Addr walkPtr);
 
     TranslResult walkStage2(Yield &yield, Addr addr, bool final_tr,
-                            const PageTableOps *pt_ops,
+                            const ArmISA::PageTableOps *pt_ops,
                             unsigned level, Addr walkPtr);
 
     TranslResult translateStage1And2(Yield &yield, Addr addr);
@@ -181,5 +188,7 @@ class SMMUTranslationProcess : public SMMUProcess
     void beginTransaction(const SMMUTranslRequest &req);
     void resumeTransaction();
 };
+
+} // namespace gem5
 
 #endif /* __DEV_ARM_SMMU_V3_TRANSL_HH__ */

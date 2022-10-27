@@ -32,6 +32,9 @@
 #include "arch/x86/linux/syscalls.hh"
 #include "sim/syscall_emul.hh"
 
+namespace gem5
+{
+
 namespace X86ISA
 {
 
@@ -121,15 +124,15 @@ SyscallDescTable<EmuLinux::SyscallABI32> EmuLinux::syscallDescs32 = {
     {  82, "select", selectFunc<X86Linux32> },
     {  83, "symlink" },
     {  84, "oldlstat" },
-    {  85, "readlink", readlinkFunc },
+    {  85, "readlink", readlinkFunc<X86Linux32> },
     {  86, "uselib" },
     {  87, "swapon" },
     {  88, "reboot" },
     {  89, "readdir" },
     {  90, "mmap" },
-    {  91, "munmap", munmapFunc },
-    {  92, "truncate", truncateFunc },
-    {  93, "ftruncate", ftruncateFunc },
+    {  91, "munmap", munmapFunc<X86Linux32> },
+    {  92, "truncate", truncateFunc<X86Linux32> },
+    {  93, "ftruncate", ftruncateFunc<X86Linux32> },
     {  94, "fchmod" },
     {  95, "fchown" },
     {  96, "getpriority" },
@@ -261,7 +264,11 @@ SyscallDescTable<EmuLinux::SyscallABI32> EmuLinux::syscallDescs32 = {
     { 218, "mincore" },
     { 219, "madvise", ignoreFunc },
     { 220, "madvise1" },
+#if defined(SYS_getdents64)
+    { 221, "getdents64", getdents64Func },
+#else
     { 221, "getdents64" },
+#endif
     { 222, "fcntl64" },
     { 223, "unused" },
     { 224, "gettid", gettidFunc },
@@ -345,7 +352,7 @@ SyscallDescTable<EmuLinux::SyscallABI32> EmuLinux::syscallDescs32 = {
     { 302, "renameat" },
     { 303, "linkat" },
     { 304, "symlinkat" },
-    { 305, "readlinkat", readlinkFunc },
+    { 305, "readlinkat", readlinkFunc<X86Linux32> },
     { 306, "fchmodat" },
     { 307, "faccessat" },
     { 308, "pselect6" },
@@ -363,7 +370,9 @@ SyscallDescTable<EmuLinux::SyscallABI32> EmuLinux::syscallDescs32 = {
     { 320, "utimensat" },
     { 321, "signalfd" },
     { 322, "timerfd" },
-    { 323, "eventfd", eventfdFunc<X86Linux32> }
+    { 323, "eventfd", eventfdFunc<X86Linux32> },
+    { 355, "getrandom", getrandomFunc<X86Linux32>}
 };
 
 } // namespace X86ISA
+} // namespace gem5

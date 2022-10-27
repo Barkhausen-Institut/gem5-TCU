@@ -38,6 +38,11 @@
 #include "mem/tcu/noc_addr.hh"
 #include "mem/tcu/xfer_unit.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 void
 MessageUnit::regStats()
 {
@@ -45,25 +50,25 @@ MessageUnit::regStats()
         .init(8)
         .name(tcu.name() + ".msg.sentBytes")
         .desc("Sent messages (in bytes)")
-        .flags(Stats::nozero);
+        .flags(statistics::nozero);
     repliedBytes
         .init(8)
         .name(tcu.name() + ".msg.repliedBytes")
         .desc("Sent replies (in bytes)")
-        .flags(Stats::nozero);
+        .flags(statistics::nozero);
     receivedBytes
         .init(8)
         .name(tcu.name() + ".msg.receivedBytes")
         .desc("Received messages (in bytes)")
-        .flags(Stats::nozero);
+        .flags(statistics::nozero);
     wrongAct
         .name(tcu.name() + ".msg.wrongAct")
         .desc("Number of received messages that targeted the wrong activity")
-        .flags(Stats::nozero);
+        .flags(statistics::nozero);
     noSpace
         .name(tcu.name() + ".msg.noSpace")
         .desc("Number of received messages we dropped")
-        .flags(Stats::nozero);
+        .flags(statistics::nozero);
 }
 
 void
@@ -757,7 +762,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
         header->senderTileId, header->length, epId);
     tcu.printPacket(pkt);
 
-    if (DTRACE(TcuMsgs))
+    if (debug::TcuMsgs)
     {
         uint64_t *words = reinterpret_cast<uint64_t*>(header + 1);
         for(size_t i = 0; i < header->length / sizeof(uint64_t); ++i)
@@ -864,4 +869,7 @@ MessageUnit::ReceiveTransferEvent::transferDone(TcuError result)
     eps->onFinished([](EpFile::EpCache &eps) {
         delete &eps;
     });
+}
+
+}
 }

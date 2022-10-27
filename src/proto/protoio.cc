@@ -37,6 +37,8 @@
 
 #include "proto/protoio.hh"
 
+#include <string>
+
 #include "base/logging.hh"
 
 using namespace google::protobuf;

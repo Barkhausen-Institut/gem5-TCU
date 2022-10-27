@@ -36,6 +36,10 @@
 #include "base/trace.hh"
 #include "debug/EthernetAll.hh"
 #include "sim/core.hh"
+#include "sim/cur_tick.hh"
+
+namespace gem5
+{
 
 EtherSwitch::EtherSwitch(const Params &p)
     : SimObject(p), ttl(p.time_to_live)
@@ -133,8 +137,8 @@ EtherSwitch::Interface::Interface(const std::string &name,
 bool
 EtherSwitch::Interface::recvPacket(EthPacketPtr packet)
 {
-    Net::EthAddr destMacAddr(packet->data);
-    Net::EthAddr srcMacAddr(&packet->data[6]);
+    networking::EthAddr destMacAddr(packet->data);
+    networking::EthAddr srcMacAddr(&packet->data[6]);
 
     learnSenderAddr(srcMacAddr, this);
     Interface *receiver = lookupDestPort(destMacAddr);
@@ -182,7 +186,7 @@ EtherSwitch::Interface::transmit()
     if (!sendPacket(outputFifo.front())) {
         DPRINTF(Ethernet, "output port busy...retry later\n");
         if (!txEvent.scheduled())
-            parent->schedule(txEvent, curTick() + SimClock::Int::ns);
+            parent->schedule(txEvent, curTick() + sim_clock::as_int::ns);
     } else {
         DPRINTF(Ethernet, "packet sent: len=%d\n", outputFifo.front()->length);
         outputFifo.pop();
@@ -206,7 +210,7 @@ EtherSwitch::Interface::switchingDelay()
 }
 
 EtherSwitch::Interface*
-EtherSwitch::Interface::lookupDestPort(Net::EthAddr destMacAddr)
+EtherSwitch::Interface::lookupDestPort(networking::EthAddr destMacAddr)
 {
     auto it = parent->forwardingTable.find(uint64_t(destMacAddr));
 
@@ -230,7 +234,7 @@ EtherSwitch::Interface::lookupDestPort(Net::EthAddr destMacAddr)
 }
 
 void
-EtherSwitch::Interface::learnSenderAddr(Net::EthAddr srcMacAddr,
+EtherSwitch::Interface::learnSenderAddr(networking::EthAddr srcMacAddr,
                                           Interface *sender)
 {
     // learn the port for the sending MAC address
@@ -343,3 +347,5 @@ EtherSwitch::Interface::PortFifo::unserialize(CheckpointIn &cp)
 
     }
 }
+
+} // namespace gem5

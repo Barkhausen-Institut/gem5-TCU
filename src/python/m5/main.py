@@ -45,7 +45,6 @@ import sys
 __all__ = [ 'options', 'arguments', 'main' ]
 
 usage="%prog [gem5 options] script.py [script options]"
-version="%prog 2.0"
 brief_copyright=\
     "gem5 is copyrighted software; use the --copyright option for details."
 
@@ -62,11 +61,9 @@ def _stats_help(option, opt, value, parser):
 
 
 def parse_options():
-    from . import config
     from .options import OptionParser
 
-    options = OptionParser(usage=usage, version=version,
-                           description=brief_copyright)
+    options = OptionParser(usage=usage, description=brief_copyright)
     option = options.add_option
     group = options.set_group
 
@@ -87,6 +84,8 @@ def parse_options():
         help="Redirect stdout (& stderr, without -e) to file")
     option('-e', "--redirect-stderr", action="store_true", default=False,
         help="Redirect stderr to file")
+    option("--silent-redirect", action="store_true", default=False,
+        help="Suppress printing a message when redirecting stdout or stderr")
     option("--stdout-file", metavar="FILE", default="simout",
         help="Filename for -r redirection [Default: %default]")
     option("--stderr-file", metavar="FILE", default="simerr",
@@ -143,7 +142,8 @@ def parse_options():
     option("--debug-end", metavar="TICK", type='int',
         help="End debug output at TICK")
     option("--debug-file", metavar="FILE", default="cout",
-        help="Sets the output file for debug [Default: %default]")
+        help="Sets the output file for debug. Append '.gz' to the name for it"
+              " to be compressed automatically [Default: %default]")
     option("--debug-ignore", metavar="EXPR", action='append', split=':',
         help="Ignore EXPR sim objects")
     option("--remote-gdb-port", type='int', default=7000,
@@ -153,13 +153,6 @@ def parse_options():
     group("Help Options")
     option("--list-sim-objects", action='store_true', default=False,
         help="List all built-in SimObjects, their params and default values")
-
-    # load the options.py config file to allow people to set their own
-    # default options
-    options_file = config.get('options.py')
-    if options_file:
-        scope = { 'options' : options }
-        exec(compile(open(options_file).read(), options_file, 'exec'), scope)
 
     arguments = options.parse_args()
     return options,arguments
@@ -171,29 +164,18 @@ def interact(scope):
     prompt_in1 = "gem5 \\#> "
     prompt_out = "gem5 \\#: "
 
-    # Is IPython version 0.10 or earlier available?
     try:
-        from IPython.Shell import IPShellEmbed
-        ipshell = IPShellEmbed(argv=["-prompt_in1", prompt_in1,
-                                     "-prompt_out", prompt_out],
-                               banner=banner, user_ns=scope)
+        import IPython
+        from IPython.config.loader import Config
+        from IPython.terminal.embed import InteractiveShellEmbed
+
+        cfg = Config()
+        cfg.PromptManager.in_template = prompt_in1
+        cfg.PromptManager.out_template = prompt_out
+        ipshell = InteractiveShellEmbed(config=cfg, user_ns=scope,
+                                        banner1=banner)
     except ImportError:
         pass
-
-    # Is IPython version 0.11 or later available?
-    if not ipshell:
-        try:
-            import IPython
-            from IPython.config.loader import Config
-            from IPython.terminal.embed import InteractiveShellEmbed
-
-            cfg = Config()
-            cfg.PromptManager.in_template = prompt_in1
-            cfg.PromptManager.out_template = prompt_out
-            ipshell = InteractiveShellEmbed(config=cfg, user_ns=scope,
-                                            banner1=banner)
-        except ImportError:
-            pass
 
     if ipshell:
         ipshell()
@@ -204,15 +186,16 @@ def interact(scope):
 
 
 def _check_tracing():
-    from . import defines
+    import _m5.core
 
-    if defines.TRACING_ON:
+    if _m5.core.TRACING_ON:
         return
 
     fatal("Tracing is not enabled.  Compile with TRACING_ON")
 
-def main(*args):
+def main():
     import m5
+    import _m5.core
 
     from . import core
     from . import debug
@@ -225,12 +208,7 @@ def main(*args):
     from .util import inform, fatal, panic, isInteractive
     from m5.util.terminal_formatter import TerminalFormatter
 
-    if len(args) == 0:
-        options, arguments = parse_options()
-    elif len(args) == 2:
-        options, arguments = args
-    else:
-        raise TypeError("main() takes 0 or 2 arguments (%d given)" % len(args))
+    options, arguments = parse_options()
 
     m5.options = options
 
@@ -245,14 +223,15 @@ def main(*args):
     stdout_file = os.path.join(options.outdir, options.stdout_file)
     stderr_file = os.path.join(options.outdir, options.stderr_file)
 
-    # Print redirection notices here before doing any redirection
-    if options.redirect_stdout and not options.redirect_stderr:
-        print("Redirecting stdout and stderr to", stdout_file)
-    else:
-        if options.redirect_stdout:
-            print("Redirecting stdout to", stdout_file)
-        if options.redirect_stderr:
-            print("Redirecting stderr to", stderr_file)
+    if not options.silent_redirect:
+        # Print redirection notices here before doing any redirection
+        if options.redirect_stdout and not options.redirect_stderr:
+            print("Redirecting stdout and stderr to", stdout_file)
+        else:
+            if options.redirect_stdout:
+                print("Redirecting stdout to", stdout_file)
+            if options.redirect_stderr:
+                print("Redirecting stderr to", stderr_file)
 
     # Now redirect stdout/stderr as desired
     if options.redirect_stdout:
@@ -331,12 +310,12 @@ def main(*args):
 
     verbose = options.verbose - options.quiet
     if verbose >= 0:
-        print("gem5 Simulator System.  http://gem5.org")
+        print("gem5 Simulator System.  https://www.gem5.org")
         print(brief_copyright)
         print()
 
-        print("gem5 version %s" % defines.gem5Version)
-        print("gem5 compiled %s" % defines.compileDate)
+        print("gem5 version %s" % _m5.core.gem5Version)
+        print("gem5 compiled %s" % _m5.core.compileDate)
 
         print("gem5 started %s" %
               datetime.datetime.now().strftime("%b %e %Y %X"))
@@ -457,15 +436,3 @@ def main(*args):
     # once the script is done
     if options.interactive:
         interact(scope)
-
-if __name__ == '__main__':
-    from pprint import pprint
-
-    options, arguments = parse_options()
-
-    print('opts:')
-    pprint(options, indent=4)
-    print()
-
-    print('args:')
-    pprint(arguments, indent=4)

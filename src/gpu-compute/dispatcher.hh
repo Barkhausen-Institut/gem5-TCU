@@ -2,8 +2,6 @@
  * Copyright (c) 2011-2015,2018 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -53,6 +51,9 @@
 #include "params/GPUDispatcher.hh"
 #include "sim/sim_object.hh"
 
+namespace gem5
+{
+
 class GPUCommandProcessor;
 class HSAQueueEntry;
 class Shader;
@@ -93,13 +94,15 @@ class GPUDispatcher : public SimObject
     bool dispatchActive;
 
   protected:
-    struct GPUDispatcherStats : public Stats::Group
+    struct GPUDispatcherStats : public statistics::Group
     {
-        GPUDispatcherStats(Stats::Group *parent);
+        GPUDispatcherStats(statistics::Group *parent);
 
-        Stats::Scalar numKernelLaunched;
-        Stats::Scalar cyclesWaitingForDispatch;
+        statistics::Scalar numKernelLaunched;
+        statistics::Scalar cyclesWaitingForDispatch;
     } stats;
 };
+
+} // namespace gem5
 
 #endif // __GPU_COMPUTE_DISPATCHER_HH__

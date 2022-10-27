@@ -56,39 +56,11 @@ from m5.objects.Platform import Platform
 
 default_tracer = ExeTracer()
 
-if buildEnv['TARGET_ISA'] == 'sparc':
-    from m5.objects.SparcMMU import SparcMMU as ArchMMU
-    from m5.objects.SparcInterrupts import SparcInterrupts as ArchInterrupts
-    from m5.objects.SparcISA import SparcISA as ArchISA
-elif buildEnv['TARGET_ISA'] == 'x86':
-    from m5.objects.X86MMU import X86MMU as ArchMMU
-    from m5.objects.X86LocalApic import X86LocalApic as ArchInterrupts
-    from m5.objects.X86ISA import X86ISA as ArchISA
-elif buildEnv['TARGET_ISA'] == 'mips':
-    from m5.objects.MipsMMU import MipsMMU as ArchMMU
-    from m5.objects.MipsInterrupts import MipsInterrupts as ArchInterrupts
-    from m5.objects.MipsISA import MipsISA as ArchISA
-elif buildEnv['TARGET_ISA'] == 'arm':
-    from m5.objects.ArmMMU import ArmMMU as ArchMMU
-    from m5.objects.ArmInterrupts import ArmInterrupts as ArchInterrupts
-    from m5.objects.ArmISA import ArmISA as ArchISA
-elif buildEnv['TARGET_ISA'] == 'power':
-    from m5.objects.PowerMMU import PowerMMU as ArchMMU
-    from m5.objects.PowerInterrupts import PowerInterrupts as ArchInterrupts
-    from m5.objects.PowerISA import PowerISA as ArchISA
-elif buildEnv['TARGET_ISA'] == 'riscv':
-    from m5.objects.RiscvMMU import RiscvMMU as ArchMMU
-    from m5.objects.RiscvInterrupts import RiscvInterrupts as ArchInterrupts
-    from m5.objects.RiscvISA import RiscvISA as ArchISA
-else:
-    print("Don't know what object types to use for ISA %s" %
-            buildEnv['TARGET_ISA'])
-    sys.exit(1)
-
 class BaseCPU(ClockedObject):
     type = 'BaseCPU'
     abstract = True
     cxx_header = "cpu/base.hh"
+    cxx_class = 'gem5::BaseCPU'
 
     cxx_exports = [
         PyBindMethod("switchOut"),
@@ -146,16 +118,12 @@ class BaseCPU(ClockedObject):
     do_statistics_insts = Param.Bool(True,
         "enable statistics pseudo instructions")
 
-    wait_for_remote_gdb = Param.Bool(False,
-        "Wait for a remote GDB connection");
-
     workload = VectorParam.Process([], "processes to run")
 
-    mmu = Param.BaseMMU(ArchMMU(), "CPU memory management unit")
-    if buildEnv['TARGET_ISA'] == 'power':
-        UnifiedTLB = Param.Bool(True, "Is this a Unified TLB?")
+    mmu = Param.BaseMMU(NULL, "CPU memory management unit")
     interrupts = VectorParam.BaseInterrupts([], "Interrupt Controller")
     isa = VectorParam.BaseISA([], "ISA instance")
+    decoder = VectorParam.InstDecoder([], "Decoder instance")
 
     max_insts_all_threads = Param.Counter(0,
         "terminate when all threads have reached this inst count")
@@ -176,33 +144,30 @@ class BaseCPU(ClockedObject):
     dcache_port = RequestPort("Data Port")
     _cached_ports = ['icache_port', 'dcache_port']
 
-    _cached_ports += ArchMMU.walkerPorts()
-
     _uncached_interrupt_response_ports = []
     _uncached_interrupt_request_ports = []
-    if buildEnv['TARGET_ISA'] == 'x86':
-        _uncached_interrupt_response_ports += ["interrupts[0].pio",
-                                  "interrupts[0].int_responder"]
-        _uncached_interrupt_request_ports += ["interrupts[0].int_requestor"]
 
     def createInterruptController(self):
-        self.interrupts = [ArchInterrupts() for i in range(self.numThreads)]
+        self.interrupts = [
+                self.ArchInterrupts() for i in range(self.numThreads)]
 
-    def connectCachedPorts(self, bus):
+    def connectCachedPorts(self, in_ports):
         for p in self._cached_ports:
-            exec('self.%s = bus.slave' % p)
+            exec('self.%s = in_ports' % p)
 
-    def connectUncachedPorts(self, bus):
+    def connectUncachedPorts(self, in_ports, out_ports):
         for p in self._uncached_interrupt_response_ports:
-            exec('self.%s = bus.master' % p)
+            exec('self.%s = out_ports' % p)
         for p in self._uncached_interrupt_request_ports:
-            exec('self.%s = bus.slave' % p)
+            exec('self.%s = in_ports' % p)
 
-    def connectAllPorts(self, cached_bus, uncached_bus = None):
-        self.connectCachedPorts(cached_bus)
-        if not uncached_bus:
-            uncached_bus = cached_bus
-        self.connectUncachedPorts(uncached_bus)
+    def connectAllPorts(self, cached_in, uncached_in, uncached_out):
+        self.connectCachedPorts(cached_in)
+        self.connectUncachedPorts(uncached_in, uncached_out)
+
+    def connectBus(self, bus):
+        self.connectAllPorts(bus.cpu_side_ports,
+            bus.cpu_side_ports, bus.mem_side_ports)
 
     def addPrivateSplitL1Caches(self, ic, dc, iwc = None, dwc = None):
         self.icache = ic
@@ -210,28 +175,27 @@ class BaseCPU(ClockedObject):
         self.icache_port = ic.cpu_side
         self.dcache_port = dc.cpu_side
         self._cached_ports = ['icache.mem_side', 'dcache.mem_side']
-        if buildEnv['TARGET_ISA'] in ['x86', 'arm', 'riscv']:
-            if iwc and dwc:
-                self.itb_walker_cache = iwc
-                self.dtb_walker_cache = dwc
-                self.mmu.connectWalkerPorts(
-                    iwc.cpu_side, dwc.cpu_side)
-                self._cached_ports += ["itb_walker_cache.mem_side", \
-                                       "dtb_walker_cache.mem_side"]
-            else:
-                self._cached_ports += ArchMMU.walkerPorts()
+        if iwc and dwc:
+            self.itb_walker_cache = iwc
+            self.dtb_walker_cache = dwc
+            self.mmu.connectWalkerPorts(
+                iwc.cpu_side, dwc.cpu_side)
+            self._cached_ports += ["itb_walker_cache.mem_side", \
+                                   "dtb_walker_cache.mem_side"]
+        else:
+            self._cached_ports += self.ArchMMU.walkerPorts()
 
-            # Checker doesn't need its own tlb caches because it does
-            # functional accesses only
-            if self.checker != NULL:
-                self._cached_ports += [ ".".join("checker", port) \
-                    for port in ArchMMU.walkerPorts() ]
+        # Checker doesn't need its own tlb caches because it does
+        # functional accesses only
+        if self.checker != NULL:
+            self._cached_ports += [ "checker." + port
+                for port in self.ArchMMU.walkerPorts() ]
 
     def addTwoLevelCacheHierarchy(self, ic, dc, l2c, iwc=None, dwc=None,
                                   xbar=None):
         self.addPrivateSplitL1Caches(ic, dc, iwc, dwc)
         self.toL2Bus = xbar if xbar else L2XBar()
-        self.connectCachedPorts(self.toL2Bus)
+        self.connectCachedPorts(self.toL2Bus.cpu_side_ports)
         self.l2cache = l2c
         self.toL2Bus.mem_side_ports = self.l2cache.cpu_side
         self._cached_ports = ['l2cache.mem_side']
@@ -240,11 +204,14 @@ class BaseCPU(ClockedObject):
         # If no ISAs have been created, assume that the user wants the
         # default ISA.
         if len(self.isa) == 0:
-            self.isa = [ ArchISA() for i in range(self.numThreads) ]
+            self.isa = [ self.ArchISA() for i in range(self.numThreads) ]
         else:
             if len(self.isa) != int(self.numThreads):
                 raise RuntimeError("Number of ISA instances doesn't "
                                    "match thread count")
+        if len(self.decoder) != 0:
+            raise RuntimeError("Decoders should not be set up manually")
+        self.decoder = list([ self.ArchDecoder(isa=isa) for isa in self.isa ])
         if self.checker != NULL:
             self.checker.createThreads()
 
@@ -304,5 +271,21 @@ class BaseCPU(ClockedObject):
             yield child_node
 
     def __init__(self, **kwargs):
-        super(BaseCPU, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.power_state.possible_states=['ON', 'CLK_GATED', 'OFF']
+
+        self._cached_ports = self._cached_ports + self.ArchMMU.walkerPorts()
+
+        # Practically speaking, these ports will exist on the x86 interrupt
+        # controller class.
+        if "pio" in self.ArchInterrupts._ports:
+            self._uncached_interrupt_response_ports = \
+                self._uncached_interrupt_response_ports + ["interrupts[0].pio"]
+        if "int_responder" in self.ArchInterrupts._ports:
+            self._uncached_interrupt_response_ports = \
+                    self._uncached_interrupt_response_ports + [
+                    "interrupts[0].int_responder"]
+        if "int_requestor" in self.ArchInterrupts._ports:
+            self._uncached_interrupt_request_ports = \
+                    self._uncached_interrupt_request_ports + [
+                    "interrupts[0].int_requestor"]

@@ -40,7 +40,9 @@
 
 #include "arch/arm/process.hh"
 
-#include "arch/arm/isa_traits.hh"
+#include "arch/arm/page_size.hh"
+#include "arch/arm/regs/cc.hh"
+#include "arch/arm/regs/misc.hh"
 #include "arch/arm/types.hh"
 #include "base/loader/elf_object.hh"
 #include "base/loader/object_file.hh"
@@ -55,10 +57,13 @@
 #include "sim/syscall_return.hh"
 #include "sim/system.hh"
 
+namespace gem5
+{
+
 using namespace ArmISA;
 
 ArmProcess::ArmProcess(const ProcessParams &params,
-                       ::Loader::ObjectFile *objFile, ::Loader::Arch _arch)
+                       loader::ObjectFile *objFile, loader::Arch _arch)
     : Process(params,
               new EmulationPageTable(params.name, params.pid, PageBytes),
               objFile),
@@ -68,7 +73,7 @@ ArmProcess::ArmProcess(const ProcessParams &params,
 }
 
 ArmProcess32::ArmProcess32(const ProcessParams &params,
-        ::Loader::ObjectFile *objFile, ::Loader::Arch _arch)
+        loader::ObjectFile *objFile, loader::Arch _arch)
     : ArmProcess(params, objFile, _arch)
 {
     Addr brk_point = roundUp(image.maxAddr(), PageBytes);
@@ -83,8 +88,8 @@ ArmProcess32::ArmProcess32(const ProcessParams &params,
 }
 
 ArmProcess64::ArmProcess64(
-        const ProcessParams &params, ::Loader::ObjectFile *objFile,
-        ::Loader::Arch _arch)
+        const ProcessParams &params, loader::ObjectFile *objFile,
+        loader::Arch _arch)
     : ArmProcess(params, objFile, _arch)
 {
     Addr brk_point = roundUp(image.maxAddr(), PageBytes);
@@ -102,7 +107,7 @@ void
 ArmProcess32::initState()
 {
     Process::initState();
-    argsInit<uint32_t>(PageBytes, INTREG_SP);
+    argsInit<uint32_t>(PageBytes, int_reg::Sp);
     for (auto id: contextIds) {
         ThreadContext *tc = system->threads[id];
         CPACR cpacr = tc->readMiscReg(MISCREG_CPACR);
@@ -121,7 +126,7 @@ void
 ArmProcess64::initState()
 {
     Process::initState();
-    argsInit<uint64_t>(PageBytes, INTREG_SP0);
+    argsInit<uint64_t>(PageBytes, int_reg::Sp0);
     for (auto id: contextIds) {
         ThreadContext *tc = system->threads[id];
         CPSR cpsr = tc->readMiscReg(MISCREG_CPSR);
@@ -144,7 +149,8 @@ ArmProcess64::initState()
 uint32_t
 ArmProcess32::armHwcapImpl() const
 {
-    enum ArmCpuFeature {
+    enum ArmCpuFeature
+    {
         Arm_Swp = 1 << 0,
         Arm_Half = 1 << 1,
         Arm_Thumb = 1 << 2,
@@ -172,7 +178,8 @@ ArmProcess64::armHwcapImpl() const
 {
     // In order to know what these flags mean, please refer to Linux
     // /Documentation/arm64/elf_hwcaps.txt text file.
-    enum ArmCpuFeature {
+    enum ArmCpuFeature
+    {
         Arm_Fp = 1 << 0,
         Arm_Asimd = 1 << 1,
         Arm_Evtstrm = 1 << 2,
@@ -250,11 +257,11 @@ ArmProcess64::armHwcapImpl() const
 
 template <class IntType>
 void
-ArmProcess::argsInit(int pageSize, IntRegIndex spIndex)
+ArmProcess::argsInit(int pageSize, const RegId &spId)
 {
     int intSize = sizeof(IntType);
 
-    std::vector<AuxVector<IntType>> auxv;
+    std::vector<gem5::auxv::AuxVector<IntType>> auxv;
 
     std::string filename;
     if (argv.size() < 1)
@@ -267,49 +274,49 @@ ArmProcess::argsInit(int pageSize, IntRegIndex spIndex)
 
     //Setup the auxilliary vectors. These will already have endian conversion.
     //Auxilliary vectors are loaded only for elf formatted executables.
-    auto *elfObject = dynamic_cast<::Loader::ElfObject *>(objFile);
+    auto *elfObject = dynamic_cast<loader::ElfObject *>(objFile);
     if (elfObject) {
 
-        if (objFile->getOpSys() == ::Loader::Linux) {
+        if (objFile->getOpSys() == loader::Linux) {
             IntType features = armHwcap<IntType>();
 
             //Bits which describe the system hardware capabilities
             //XXX Figure out what these should be
-            auxv.emplace_back(M5_AT_HWCAP, features);
+            auxv.emplace_back(gem5::auxv::Hwcap, features);
             //Frequency at which times() increments
-            auxv.emplace_back(M5_AT_CLKTCK, 0x64);
+            auxv.emplace_back(gem5::auxv::Clktck, 0x64);
             //Whether to enable "secure mode" in the executable
-            auxv.emplace_back(M5_AT_SECURE, 0);
+            auxv.emplace_back(gem5::auxv::Secure, 0);
             // Pointer to 16 bytes of random data
-            auxv.emplace_back(M5_AT_RANDOM, 0);
+            auxv.emplace_back(gem5::auxv::Random, 0);
             //The filename of the program
-            auxv.emplace_back(M5_AT_EXECFN, 0);
+            auxv.emplace_back(gem5::auxv::Execfn, 0);
             //The string "v71" -- ARM v7 architecture
-            auxv.emplace_back(M5_AT_PLATFORM, 0);
+            auxv.emplace_back(gem5::auxv::Platform, 0);
         }
 
         //The system page size
-        auxv.emplace_back(M5_AT_PAGESZ, ArmISA::PageBytes);
+        auxv.emplace_back(gem5::auxv::Pagesz, ArmISA::PageBytes);
         // For statically linked executables, this is the virtual address of
         // the program header tables if they appear in the executable image
-        auxv.emplace_back(M5_AT_PHDR, elfObject->programHeaderTable());
+        auxv.emplace_back(gem5::auxv::Phdr, elfObject->programHeaderTable());
         // This is the size of a program header entry from the elf file.
-        auxv.emplace_back(M5_AT_PHENT, elfObject->programHeaderSize());
+        auxv.emplace_back(gem5::auxv::Phent, elfObject->programHeaderSize());
         // This is the number of program headers from the original elf file.
-        auxv.emplace_back(M5_AT_PHNUM, elfObject->programHeaderCount());
+        auxv.emplace_back(gem5::auxv::Phnum, elfObject->programHeaderCount());
         // This is the base address of the ELF interpreter; it should be
         // zero for static executables or contain the base address for
         // dynamic executables.
-        auxv.emplace_back(M5_AT_BASE, getBias());
+        auxv.emplace_back(gem5::auxv::Base, getBias());
         //XXX Figure out what this should be.
-        auxv.emplace_back(M5_AT_FLAGS, 0);
+        auxv.emplace_back(gem5::auxv::Flags, 0);
         //The entry point to the program
-        auxv.emplace_back(M5_AT_ENTRY, objFile->entryPoint());
+        auxv.emplace_back(gem5::auxv::Entry, objFile->entryPoint());
         //Different user and group IDs
-        auxv.emplace_back(M5_AT_UID, uid());
-        auxv.emplace_back(M5_AT_EUID, euid());
-        auxv.emplace_back(M5_AT_GID, gid());
-        auxv.emplace_back(M5_AT_EGID, egid());
+        auxv.emplace_back(gem5::auxv::Uid, uid());
+        auxv.emplace_back(gem5::auxv::Euid, euid());
+        auxv.emplace_back(gem5::auxv::Gid, gid());
+        auxv.emplace_back(gem5::auxv::Egid, egid());
     }
 
     //Figure out how big the initial stack nedes to be
@@ -410,13 +417,13 @@ ArmProcess::argsInit(int pageSize, IntRegIndex spIndex)
 
     //Fix up the aux vectors which point to other data
     for (int i = auxv.size() - 1; i >= 0; i--) {
-        if (auxv[i].type == M5_AT_PLATFORM) {
+        if (auxv[i].type == gem5::auxv::Platform) {
             auxv[i].val = platform_base;
             initVirtMem->writeString(platform_base, platform.c_str());
-        } else if (auxv[i].type == M5_AT_EXECFN) {
+        } else if (auxv[i].type == gem5::auxv::Execfn) {
             auxv[i].val = aux_data_base;
             initVirtMem->writeString(aux_data_base, filename.c_str());
-        } else if (auxv[i].type == M5_AT_RANDOM) {
+        } else if (auxv[i].type == gem5::auxv::Random) {
             auxv[i].val = aux_random_base;
             // Just leave the value 0, we don't want randomness
         }
@@ -425,11 +432,11 @@ ArmProcess::argsInit(int pageSize, IntRegIndex spIndex)
     //Copy the aux stuff
     Addr auxv_array_end = auxv_array_base;
     for (const auto &aux: auxv) {
-        initVirtMem->write(auxv_array_end, aux, GuestByteOrder);
+        initVirtMem->write(auxv_array_end, aux, ByteOrder::little);
         auxv_array_end += sizeof(aux);
     }
     //Write out the terminating zeroed auxillary vector
-    const AuxVector<IntType> zero(0, 0);
+    const gem5::auxv::AuxVector<IntType> zero(0, 0);
     initVirtMem->write(auxv_array_end, zero);
     auxv_array_end += sizeof(zero);
 
@@ -442,28 +449,28 @@ ArmProcess::argsInit(int pageSize, IntRegIndex spIndex)
 
     ThreadContext *tc = system->threads[contextIds[0]];
     //Set the stack pointer register
-    tc->setIntReg(spIndex, memState->getStackMin());
+    tc->setReg(spId, memState->getStackMin());
     //A pointer to a function to run when the program exits. We'll set this
     //to zero explicitly to make sure this isn't used.
-    tc->setIntReg(ArgumentReg0, 0);
+    tc->setReg(ArgumentReg0, (RegVal)0);
     //Set argument regs 1 and 2 to argv[0] and envp[0] respectively
     if (argv.size() > 0) {
-        tc->setIntReg(ArgumentReg1, arg_data_base + arg_data_size -
-                                    argv[argv.size() - 1].size() - 1);
+        tc->setReg(ArgumentReg1, arg_data_base + arg_data_size -
+                                 argv[argv.size() - 1].size() - 1);
     } else {
-        tc->setIntReg(ArgumentReg1, 0);
+        tc->setReg(ArgumentReg1, (RegVal)0);
     }
     if (envp.size() > 0) {
-        tc->setIntReg(ArgumentReg2, env_data_base + env_data_size -
-                                    envp[envp.size() - 1].size() - 1);
+        tc->setReg(ArgumentReg2, env_data_base + env_data_size -
+                                 envp[envp.size() - 1].size() - 1);
     } else {
-        tc->setIntReg(ArgumentReg2, 0);
+        tc->setReg(ArgumentReg2, (RegVal)0);
     }
 
     PCState pc;
-    pc.thumb(arch == ::Loader::Thumb);
+    pc.thumb(arch == loader::Thumb);
     pc.nextThumb(pc.thumb());
-    pc.aarch64(arch == ::Loader::Arm64);
+    pc.aarch64(arch == loader::Arm64);
     pc.nextAArch64(pc.aarch64());
     pc.set(getStartPC() & ~mask(1));
     tc->pcState(pc);
@@ -471,3 +478,5 @@ ArmProcess::argsInit(int pageSize, IntRegIndex spIndex)
     //Align the "stackMin" to a page boundary.
     memState->setStackMin(roundDown(memState->getStackMin(), pageSize));
 }
+
+} // namespace gem5

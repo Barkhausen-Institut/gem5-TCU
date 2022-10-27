@@ -39,9 +39,13 @@
 #define __ARCH_X86_MMU_HH__
 
 #include "arch/generic/mmu.hh"
+#include "arch/x86/page_size.hh"
 #include "arch/x86/tlb.hh"
 
 #include "params/X86MMU.hh"
+
+namespace gem5
+{
 
 namespace X86ISA {
 
@@ -64,8 +68,17 @@ class MMU : public BaseMMU
     {
         return static_cast<TLB*>(dtb)->getWalker();
     }
+
+    TranslationGenPtr
+    translateFunctional(Addr start, Addr size, ThreadContext *tc,
+            Mode mode, Request::Flags flags) override
+    {
+        return TranslationGenPtr(new MMUTranslationGen(
+                PageBytes, start, size, tc, this, mode, flags));
+    }
 };
 
 } // namespace X86ISA
+} // namespace gem5
 
 #endif // __ARCH_X86_MMU_HH__

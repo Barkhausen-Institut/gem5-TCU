@@ -29,14 +29,15 @@ from m5.SimObject import SimObject
 
 from m5.objects.ArmInterrupts import ArmInterrupts
 from m5.objects.ArmISA import ArmISA
-from m5.objects.FastModel import AmbaInitiatorSocket
-from m5.objects.IntPin import VectorIntSinkPin
+from m5.objects.FastModel import AmbaInitiatorSocket, AmbaTargetSocket
+from m5.objects.ResetPort import ResetResponsePort
+from m5.objects.IntPin import IntSinkPin, VectorIntSinkPin
 from m5.objects.Iris import IrisBaseCPU
 from m5.objects.SystemC import SystemC_ScModule
 
 class FastModelCortexR52(IrisBaseCPU):
     type = 'FastModelCortexR52'
-    cxx_class = 'FastModel::CortexR52'
+    cxx_class = 'gem5::fastmodel::CortexR52'
     cxx_header = 'arch/arm/fastmodel/CortexR52/cortex_r52.hh'
 
     evs = Parent.evs
@@ -46,6 +47,11 @@ class FastModelCortexR52(IrisBaseCPU):
     llpp = AmbaInitiatorSocket(64, 'Low Latency Peripheral Port')
     flash = AmbaInitiatorSocket(64, 'Flash')
     amba = AmbaInitiatorSocket(64, 'AMBA initiator socket')
+    core_reset = IntSinkPin('Raising this signal will put the core into ' \
+                            'reset mode.')
+    poweron_reset = IntSinkPin('Power on reset. Initializes all the ' \
+                               'processor logic, including debug logic.')
+    halt = IntSinkPin('Raising this signal will put the core into halt mode.')
 
     CFGEND = Param.Bool(False, "Endianness configuration at reset.  0, " \
             "little endian. 1, big endian.")
@@ -96,7 +102,7 @@ class FastModelCortexR52(IrisBaseCPU):
 
 class FastModelCortexR52Cluster(SimObject):
     type = 'FastModelCortexR52Cluster'
-    cxx_class = 'FastModel::CortexR52Cluster'
+    cxx_class = 'gem5::fastmodel::CortexR52Cluster'
     cxx_header = 'arch/arm/fastmodel/CortexR52/cortex_r52.hh'
 
     cores = VectorParam.FastModelCortexR52(
@@ -106,6 +112,12 @@ class FastModelCortexR52Cluster(SimObject):
             "Fast mo0del exported virtual subsystem holding cores")
 
     spi = VectorIntSinkPin('SPI inputs (0-959)')
+
+    ext_slave = AmbaTargetSocket(64, 'AMBA target socket')
+    top_reset = IntSinkPin('This signal resets timer and interrupt controller.')
+    dbg_reset = IntSinkPin('Initialize the shared debug APB, Cross Trigger ' \
+            'Interface (CTI), and Cross Trigger Matrix (CTM) logic.')
+    model_reset = ResetResponsePort('A reset port to reset the whole cluster.')
 
     CLUSTER_ID = Param.UInt16(0, "CLUSTER_ID[15:8] equivalent to " \
             "CFGMPIDRAFF2, CLUSTER_ID[7:0] equivalent to CFGMPIDRAFF1")
@@ -171,7 +183,8 @@ class FastModelCortexR52Cluster(SimObject):
 
 class FastModelScxEvsCortexR52x1(SystemC_ScModule):
     type = 'FastModelScxEvsCortexR52x1'
-    cxx_class = 'FastModel::ScxEvsCortexR52<FastModel::ScxEvsCortexR52x1Types>'
+    cxx_class = 'gem5::fastmodel::ScxEvsCortexR52<' \
+                    'gem5::fastmodel::ScxEvsCortexR52x1Types>'
     cxx_template_params = [ 'class Types' ]
     cxx_header = 'arch/arm/fastmodel/CortexR52/evs.hh'
 
@@ -182,7 +195,8 @@ class FastModelCortexR52x1(FastModelCortexR52Cluster):
 
 class FastModelScxEvsCortexR52x2(SystemC_ScModule):
     type = 'FastModelScxEvsCortexR52x2'
-    cxx_class = 'FastModel::ScxEvsCortexR52<FastModel::ScxEvsCortexR52x2Types>'
+    cxx_class = 'gem5::fastmodel::ScxEvsCortexR52<' \
+                    'gem5::fastmodel::ScxEvsCortexR52x2Types>'
     cxx_template_params = [ 'class Types' ]
     cxx_header = 'arch/arm/fastmodel/CortexR52/evs.hh'
 
@@ -194,7 +208,8 @@ class FastModelCortexR52x2(FastModelCortexR52Cluster):
 
 class FastModelScxEvsCortexR52x3(SystemC_ScModule):
     type = 'FastModelScxEvsCortexR52x3'
-    cxx_class = 'FastModel::ScxEvsCortexR52<FastModel::ScxEvsCortexR52x3Types>'
+    cxx_class = 'gem5::fastmodel::ScxEvsCortexR52<' \
+                    'gem5::fastmodel::ScxEvsCortexR52x3Types>'
     cxx_template_params = [ 'class Types' ]
     cxx_header = 'arch/arm/fastmodel/CortexR52/evs.hh'
 
@@ -207,7 +222,8 @@ class FastModelCortexR52x3(FastModelCortexR52Cluster):
 
 class FastModelScxEvsCortexR52x4(SystemC_ScModule):
     type = 'FastModelScxEvsCortexR52x4'
-    cxx_class = 'FastModel::ScxEvsCortexR52<FastModel::ScxEvsCortexR52x4Types>'
+    cxx_class = 'gem5::fastmodel::ScxEvsCortexR52<' \
+                    'gem5::fastmodel::ScxEvsCortexR52x4Types>'
     cxx_template_params = [ 'class Types' ]
     cxx_header = 'arch/arm/fastmodel/CortexR52/evs.hh'
 

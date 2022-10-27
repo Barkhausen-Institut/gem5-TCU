@@ -41,7 +41,9 @@
 #include "base/trace.hh"
 #include "cpu/smt.hh"
 #include "debug/Checkpoint.hh"
-#include "sim/core.hh"
+
+namespace gem5
+{
 
 Tick simQuantum = 0;
 
@@ -216,7 +218,7 @@ EventQueue::serviceOne()
     if (!event->squashed()) {
         // forward current cycle to the time when this event occurs.
         setCurTick(event->when());
-        if (DTRACE(Event))
+        if (debug::Event)
             event->trace("executed");
         event->process();
         if (event->isExitEvent()) {
@@ -376,16 +378,12 @@ Event::description() const
 void
 Event::trace(const char *action)
 {
-    // This DPRINTF is unconditional because calls to this function
-    // are protected by an 'if (DTRACE(Event))' in the inlined Event
-    // methods.
-    //
     // This is just a default implementation for derived classes where
     // it's not worth doing anything special.  If you want to put a
     // more informative message in the trace, override this method on
     // the particular subclass where you have the information that
     // needs to be printed.
-    DPRINTF_UNCONDITIONAL(Event, "%s %s %s @ %d\n",
+    DPRINTF(Event, "%s %s %s @ %d\n",
             description(), instanceString(), action, when());
 }
 
@@ -443,3 +441,5 @@ EventQueue::handleAsyncInsertions()
 
     async_queue_mutex.unlock();
 }
+
+} // namespace gem5

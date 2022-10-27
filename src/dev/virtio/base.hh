@@ -43,11 +43,15 @@
 #include <vector>
 
 #include "base/bitunion.hh"
+#include "base/compiler.hh"
 #include "base/types.hh"
 #include "dev/virtio/virtio_ring.h"
 #include "mem/port_proxy.hh"
 #include "sim/serialize.hh"
 #include "sim/sim_object.hh"
+
+namespace gem5
+{
 
 struct VirtIODeviceBaseParams;
 struct VirtIODummyDeviceParams;
@@ -67,16 +71,19 @@ class VirtQueue;
  * of byte swapping.
  */
 
-
-template <> inline vring_used_elem
-swap_byte(vring_used_elem v) {
+template <typename T>
+inline std::enable_if_t<std::is_same_v<T, vring_used_elem>, T>
+swap_byte(T v)
+{
     v.id = swap_byte(v.id);
     v.len = swap_byte(v.len);
     return v;
 }
 
-template <> inline vring_desc
-swap_byte(vring_desc v) {
+template <typename T>
+inline std::enable_if_t<std::is_same_v<T, vring_desc>, T>
+swap_byte(T v)
+{
     v.addr = swap_byte(v.addr);
     v.len = swap_byte(v.len);
     v.flags = swap_byte(v.flags);
@@ -292,8 +299,9 @@ class VirtDescriptor
  * @note Queues must be registered with
  * VirtIODeviceBase::registerQueue() to be active.
  */
-class VirtQueue : public Serializable {
-public:
+class VirtQueue : public Serializable
+{
+  public:
     virtual ~VirtQueue() {};
 
     /** @{
@@ -463,7 +471,8 @@ public:
         typedef uint16_t Flags;
         typedef uint16_t Index;
 
-        struct M5_ATTR_PACKED Header {
+        struct GEM5_PACKED Header
+        {
             Flags flags;
             Index index;
         };
@@ -903,5 +912,7 @@ class VirtIODummyDevice : public VirtIODeviceBase
     /** VirtIO device ID */
     static const DeviceId ID_INVALID = 0x00;
 };
+
+} // namespace gem5
 
 #endif // __DEV_VIRTIO_BASE_HH__

@@ -53,12 +53,15 @@
 #include "params/Pl111.hh"
 #include "sim/serialize.hh"
 
+namespace gem5
+{
+
 class VncInput;
 
 class Pl111: public AmbaDmaDevice
 {
   protected:
-    static const uint64_t AMBA_ID       = ULL(0xb105f00d00141111);
+    static const uint64_t AMBA_ID       = 0xb105f00d00141111ULL;
     /** ARM PL111 register map*/
     static const int LcdTiming0       = 0x000;
     static const int LcdTiming1       = 0x004;
@@ -97,7 +100,8 @@ class Pl111: public AmbaDmaDevice
 
     static const int buffer_size = LcdMaxWidth * LcdMaxHeight * sizeof(uint32_t);
 
-    enum LcdMode {
+    enum LcdMode
+    {
         bpp1 = 0,
         bpp2,
         bpp4,
@@ -373,5 +377,7 @@ class Pl111: public AmbaDmaDevice
      */
     AddrRangeList getAddrRanges() const override;
 };
+
+} // namespace gem5
 
 #endif

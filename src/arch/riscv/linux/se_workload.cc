@@ -38,6 +38,9 @@
 #include "cpu/thread_context.hh"
 #include "sim/syscall_emul.hh"
 
+namespace gem5
+{
+
 namespace
 {
 
@@ -45,30 +48,30 @@ class LinuxLoader : public Process::Loader
 {
   public:
     Process *
-    load(const ProcessParams &params, ::Loader::ObjectFile *obj) override
+    load(const ProcessParams &params, loader::ObjectFile *obj) override
     {
         auto arch = obj->getArch();
         auto opsys = obj->getOpSys();
 
-        if (arch != ::Loader::Riscv64 && arch != ::Loader::Riscv32)
+        if (arch != loader::Riscv64 && arch != loader::Riscv32)
             return nullptr;
 
-        if (opsys == ::Loader::UnknownOpSys) {
+        if (opsys == loader::UnknownOpSys) {
             warn("Unknown operating system; assuming Linux.");
-            opsys = ::Loader::Linux;
+            opsys = loader::Linux;
         }
 
-        if (opsys != ::Loader::Linux)
+        if (opsys != loader::Linux)
             return nullptr;
 
-        if (arch == ::Loader::Riscv64)
+        if (arch == loader::Riscv64)
             return new RiscvProcess64(params, obj);
         else
             return new RiscvProcess32(params, obj);
     }
 };
 
-LinuxLoader loader;
+LinuxLoader linuxLoader;
 
 } // anonymous namespace
 
@@ -154,8 +157,8 @@ SyscallDescTable<SEWorkload::SyscallABI> EmuLinux::syscallDescs64 = {
     { 30,   "ioprio_get" },
     { 31,   "ioprio_set" },
     { 32,   "flock" },
-    { 33,   "mknodat" },
-    { 34,   "mkdirat" },
+    { 33,   "mknodat", mknodatFunc<RiscvLinux64> },
+    { 34,   "mkdirat", mkdiratFunc<RiscvLinux64> },
     { 35,   "unlinkat", unlinkatFunc<RiscvLinux64> },
     { 36,   "symlinkat" },
     { 37,   "linkat" },
@@ -166,11 +169,11 @@ SyscallDescTable<SEWorkload::SyscallABI> EmuLinux::syscallDescs64 = {
     { 42,   "nfsservctl" },
     { 43,   "statfs", statfsFunc<RiscvLinux64> },
     { 44,   "fstatfs", fstatfsFunc<RiscvLinux64> },
-    { 45,   "truncate", truncateFunc },
+    { 45,   "truncate", truncateFunc<RiscvLinux64> },
     { 46,   "ftruncate", ftruncate64Func },
-    { 47,   "fallocate", fallocateFunc },
+    { 47,   "fallocate", fallocateFunc<RiscvLinux64> },
     { 48,   "faccessat", faccessatFunc<RiscvLinux64> },
-    { 49,   "chdir" },
+    { 49,   "chdir", chdirFunc },
     { 50,   "fchdir" },
     { 51,   "chroot" },
     { 52,   "fchmod", fchmodFunc<RiscvLinux64> },
@@ -180,14 +183,18 @@ SyscallDescTable<SEWorkload::SyscallABI> EmuLinux::syscallDescs64 = {
     { 56,   "openat", openatFunc<RiscvLinux64> },
     { 57,   "close", closeFunc },
     { 58,   "vhangup" },
-    { 59,   "pipe2" },
+    { 59,   "pipe2", pipe2Func },
     { 60,   "quotactl" },
+#if defined(SYS_getdents64)
+    { 61,   "getdents64", getdents64Func },
+#else
     { 61,   "getdents64" },
+#endif
     { 62,   "lseek", lseekFunc },
     { 63,   "read", readFunc<RiscvLinux64> },
     { 64,   "write", writeFunc<RiscvLinux64> },
     { 66,   "writev", writevFunc<RiscvLinux64> },
-    { 67,   "pread64" },
+    { 67,   "pread64", pread64Func<RiscvLinux64> },
     { 68,   "pwrite64", pwrite64Func<RiscvLinux64> },
     { 69,   "preadv" },
     { 70,   "pwritev" },
@@ -243,7 +250,7 @@ SyscallDescTable<SEWorkload::SyscallABI> EmuLinux::syscallDescs64 = {
     { 120,  "sched_getscheduler" },
     { 121,  "sched_getparam" },
     { 122,  "sched_setaffinity" },
-    { 123,  "sched_getaffinity" },
+    { 123,  "sched_getaffinity", schedGetaffinityFunc<RiscvLinux64> },
     { 124,  "sched_yield", ignoreWarnOnceFunc },
     { 125,  "sched_get_priority_max" },
     { 126,  "sched_get_priority_min" },
@@ -288,7 +295,7 @@ SyscallDescTable<SEWorkload::SyscallABI> EmuLinux::syscallDescs64 = {
     { 165,  "getrusage", getrusageFunc<RiscvLinux64> },
     { 166,  "umask", umaskFunc },
     { 167,  "prctl" },
-    { 168,  "getcpu" },
+    { 168,  "getcpu", getcpuFunc },
     { 169,  "gettimeofday", gettimeofdayFunc<RiscvLinux64> },
     { 170,  "settimeofday" },
     { 171,  "adjtimex" },
@@ -318,24 +325,24 @@ SyscallDescTable<SEWorkload::SyscallABI> EmuLinux::syscallDescs64 = {
     { 195,  "shmctl" },
     { 196,  "shmat" },
     { 197,  "shmdt" },
-    { 198,  "socket" },
-    { 199,  "socketpair" },
-    { 200,  "bind" },
-    { 201,  "listen" },
-    { 202,  "accept" },
-    { 203,  "connect" },
-    { 204,  "getsockname" },
-    { 205,  "getpeername" },
-    { 206,  "sendo" },
-    { 207,  "recvfrom" },
-    { 208,  "setsockopt" },
-    { 209,  "getsockopt" },
-    { 210,  "shutdown" },
-    { 211,  "sendmsg" },
-    { 212,  "recvmsg" },
+    { 198,  "socket", socketFunc<RiscvLinux64> },
+    { 199,  "socketpair", socketpairFunc<RiscvLinux64> },
+    { 200,  "bind", bindFunc },
+    { 201,  "listen", listenFunc },
+    { 202,  "accept", acceptFunc<RiscvLinux64> },
+    { 203,  "connect", connectFunc },
+    { 204,  "getsockname", getsocknameFunc },
+    { 205,  "getpeername", getpeernameFunc },
+    { 206,  "sendto", sendtoFunc<RiscvLinux64> },
+    { 207,  "recvfrom", recvfromFunc<RiscvLinux64> },
+    { 208,  "setsockopt", setsockoptFunc },
+    { 209,  "getsockopt", getsockoptFunc },
+    { 210,  "shutdown", shutdownFunc },
+    { 211,  "sendmsg", sendmsgFunc },
+    { 212,  "recvmsg", recvmsgFunc },
     { 213,  "readahead" },
     { 214,  "brk", brkFunc },
-    { 215,  "munmap", munmapFunc },
+    { 215,  "munmap", munmapFunc<RiscvLinux64> },
     { 216,  "mremap", mremapFunc<RiscvLinux64> },
     { 217,  "add_key" },
     { 218,  "request_key" },
@@ -364,7 +371,7 @@ SyscallDescTable<SEWorkload::SyscallABI> EmuLinux::syscallDescs64 = {
     { 241,  "perf_event_open" },
     { 242,  "accept4" },
     { 243,  "recvmmsg" },
-    { 260,  "wait4" },
+    { 260,  "wait4", wait4Func<RiscvLinux64> },
     { 261,  "prlimit64", prlimitFunc<RiscvLinux64> },
     { 262,  "fanotify_init" },
     { 263,  "fanotify_mark" },
@@ -382,7 +389,7 @@ SyscallDescTable<SEWorkload::SyscallABI> EmuLinux::syscallDescs64 = {
     { 275,  "sched_getattr" },
     { 276,  "renameat2" },
     { 277,  "seccomp" },
-    { 278,  "getrandom" },
+    { 278,  "getrandom", getrandomFunc<RiscvLinux64> },
     { 279,  "memfd_create" },
     { 280,  "bpf" },
     { 281,  "execveat" },
@@ -393,18 +400,18 @@ SyscallDescTable<SEWorkload::SyscallABI> EmuLinux::syscallDescs64 = {
     { 286,  "preadv2" },
     { 287,  "pwritev2" },
     { 1024, "open", openFunc<RiscvLinux64> },
-    { 1025, "link" },
+    { 1025, "link", linkFunc },
     { 1026, "unlink", unlinkFunc },
-    { 1027, "mknod" },
+    { 1027, "mknod", mknodFunc },
     { 1028, "chmod", chmodFunc<RiscvLinux64> },
     { 1029, "chown", chownFunc },
     { 1030, "mkdir", mkdirFunc },
-    { 1031, "rmdir" },
+    { 1031, "rmdir", rmdirFunc },
     { 1032, "lchown" },
     { 1033, "access", accessFunc },
     { 1034, "rename", renameFunc },
-    { 1035, "readlink", readlinkFunc },
-    { 1036, "symlink" },
+    { 1035, "readlink", readlinkFunc<RiscvLinux64> },
+    { 1036, "symlink", symlinkFunc },
     { 1037, "utimes", utimesFunc<RiscvLinux64> },
     { 1038, "stat", stat64Func<RiscvLinux64> },
     { 1039, "lstat", lstat64Func<RiscvLinux64> },
@@ -412,7 +419,7 @@ SyscallDescTable<SEWorkload::SyscallABI> EmuLinux::syscallDescs64 = {
     { 1041, "dup2", dup2Func },
     { 1042, "epoll_create" },
     { 1043, "inotifiy_init" },
-    { 1044, "eventfd" },
+    { 1044, "eventfd", eventfdFunc<RiscvLinux64> },
     { 1045, "signalfd" },
     { 1046, "sendfile" },
     { 1047, "ftruncate", ftruncate64Func },
@@ -422,21 +429,25 @@ SyscallDescTable<SEWorkload::SyscallABI> EmuLinux::syscallDescs64 = {
     { 1051, "fstat", fstat64Func<RiscvLinux64> },
     { 1052, "fcntl", fcntl64Func },
     { 1053, "fadvise64" },
-    { 1054, "newfstatat" },
+    { 1054, "newfstatat", newfstatatFunc<RiscvLinux64> },
     { 1055, "fstatfs", fstatfsFunc<RiscvLinux64> },
     { 1056, "statfs", statfsFunc<RiscvLinux64> },
     { 1057, "lseek", lseekFunc },
     { 1058, "mmap", mmapFunc<RiscvLinux64> },
     { 1059, "alarm" },
-    { 1060, "getpgrp" },
+    { 1060, "getpgrp", getpgrpFunc },
     { 1061, "pause" },
     { 1062, "time", timeFunc<RiscvLinux64> },
     { 1063, "utime" },
     { 1064, "creat" },
+#if defined(SYS_getdents)
+    { 1065, "getdents", getdentsFunc },
+#else
     { 1065, "getdents" },
+#endif
     { 1066, "futimesat" },
-    { 1067, "select" },
-    { 1068, "poll" },
+    { 1067, "select", selectFunc<RiscvLinux64> },
+    { 1068, "poll", pollFunc<RiscvLinux64> },
     { 1069, "epoll_wait" },
     { 1070, "ustat" },
     { 1071, "vfork" },
@@ -485,8 +496,8 @@ SyscallDescTable<SEWorkload::SyscallABI> EmuLinux::syscallDescs32 = {
     { 30,   "ioprio_get" },
     { 31,   "ioprio_set" },
     { 32,   "flock" },
-    { 33,   "mknodat" },
-    { 34,   "mkdirat" },
+    { 33,   "mknodat", mknodatFunc<RiscvLinux32> },
+    { 34,   "mkdirat", mkdiratFunc<RiscvLinux32> },
     { 35,   "unlinkat", unlinkatFunc<RiscvLinux32> },
     { 36,   "symlinkat" },
     { 37,   "linkat" },
@@ -497,11 +508,11 @@ SyscallDescTable<SEWorkload::SyscallABI> EmuLinux::syscallDescs32 = {
     { 42,   "nfsservctl" },
     { 43,   "statfs", statfsFunc<RiscvLinux32> },
     { 44,   "fstatfs", fstatfsFunc<RiscvLinux32> },
-    { 45,   "truncate", truncateFunc },
-    { 46,   "ftruncate", ftruncateFunc },
-    { 47,   "fallocate", fallocateFunc },
+    { 45,   "truncate", truncateFunc<RiscvLinux32> },
+    { 46,   "ftruncate", ftruncateFunc<RiscvLinux32> },
+    { 47,   "fallocate", fallocateFunc<RiscvLinux32> },
     { 48,   "faccessat", faccessatFunc<RiscvLinux32> },
-    { 49,   "chdir" },
+    { 49,   "chdir", chdirFunc },
     { 50,   "fchdir" },
     { 51,   "chroot" },
     { 52,   "fchmod", fchmodFunc<RiscvLinux32> },
@@ -511,14 +522,18 @@ SyscallDescTable<SEWorkload::SyscallABI> EmuLinux::syscallDescs32 = {
     { 56,   "openat", openatFunc<RiscvLinux32> },
     { 57,   "close", closeFunc },
     { 58,   "vhangup" },
-    { 59,   "pipe2" },
+    { 59,   "pipe2", pipe2Func },
     { 60,   "quotactl" },
+#if defined(SYS_getdents64)
+    { 61,   "getdents64", getdents64Func },
+#else
     { 61,   "getdents64" },
+#endif
     { 62,   "lseek", lseekFunc },
     { 63,   "read", readFunc<RiscvLinux32> },
     { 64,   "write", writeFunc<RiscvLinux32> },
     { 66,   "writev", writevFunc<RiscvLinux32> },
-    { 67,   "pread64" },
+    { 67,   "pread64", pread64Func<RiscvLinux32> },
     { 68,   "pwrite64", pwrite64Func<RiscvLinux32> },
     { 69,   "preadv" },
     { 70,   "pwritev" },
@@ -574,7 +589,7 @@ SyscallDescTable<SEWorkload::SyscallABI> EmuLinux::syscallDescs32 = {
     { 120,  "sched_getscheduler" },
     { 121,  "sched_getparam" },
     { 122,  "sched_setaffinity" },
-    { 123,  "sched_getaffinity" },
+    { 123,  "sched_getaffinity", schedGetaffinityFunc<RiscvLinux32> },
     { 124,  "sched_yield", ignoreWarnOnceFunc },
     { 125,  "sched_get_priority_max" },
     { 126,  "sched_get_priority_min" },
@@ -619,7 +634,7 @@ SyscallDescTable<SEWorkload::SyscallABI> EmuLinux::syscallDescs32 = {
     { 165,  "getrusage", getrusageFunc<RiscvLinux32> },
     { 166,  "umask", umaskFunc },
     { 167,  "prctl" },
-    { 168,  "getcpu" },
+    { 168,  "getcpu", getcpuFunc },
     { 169,  "gettimeofday", gettimeofdayFunc<RiscvLinux32> },
     { 170,  "settimeofday" },
     { 171,  "adjtimex" },
@@ -649,24 +664,24 @@ SyscallDescTable<SEWorkload::SyscallABI> EmuLinux::syscallDescs32 = {
     { 195,  "shmctl" },
     { 196,  "shmat" },
     { 197,  "shmdt" },
-    { 198,  "socket" },
-    { 199,  "socketpair" },
-    { 200,  "bind" },
-    { 201,  "listen" },
-    { 202,  "accept" },
-    { 203,  "connect" },
-    { 204,  "getsockname" },
-    { 205,  "getpeername" },
-    { 206,  "sendo" },
-    { 207,  "recvfrom" },
-    { 208,  "setsockopt" },
-    { 209,  "getsockopt" },
-    { 210,  "shutdown" },
-    { 211,  "sendmsg" },
-    { 212,  "recvmsg" },
+    { 198,  "socket", socketFunc<RiscvLinux32> },
+    { 199,  "socketpair", socketpairFunc<RiscvLinux32> },
+    { 200,  "bind", bindFunc },
+    { 201,  "listen", listenFunc },
+    { 202,  "accept", acceptFunc<RiscvLinux32> },
+    { 203,  "connect", connectFunc },
+    { 204,  "getsockname", getsocknameFunc },
+    { 205,  "getpeername", getpeernameFunc },
+    { 206,  "sendto", sendtoFunc<RiscvLinux32> },
+    { 207,  "recvfrom", recvfromFunc<RiscvLinux32> },
+    { 208,  "setsockopt", setsockoptFunc },
+    { 209,  "getsockopt", getsockoptFunc },
+    { 210,  "shutdown", shutdownFunc },
+    { 211,  "sendmsg", sendmsgFunc },
+    { 212,  "recvmsg", recvmsgFunc },
     { 213,  "readahead" },
     { 214,  "brk", brkFunc },
-    { 215,  "munmap", munmapFunc },
+    { 215,  "munmap", munmapFunc<RiscvLinux32> },
     { 216,  "mremap", mremapFunc<RiscvLinux32> },
     { 217,  "add_key" },
     { 218,  "request_key" },
@@ -695,7 +710,7 @@ SyscallDescTable<SEWorkload::SyscallABI> EmuLinux::syscallDescs32 = {
     { 241,  "perf_event_open" },
     { 242,  "accept4" },
     { 243,  "recvmmsg" },
-    { 260,  "wait4" },
+    { 260,  "wait4", wait4Func<RiscvLinux32> },
     { 261,  "prlimit64", prlimitFunc<RiscvLinux32> },
     { 262,  "fanotify_init" },
     { 263,  "fanotify_mark" },
@@ -713,7 +728,7 @@ SyscallDescTable<SEWorkload::SyscallABI> EmuLinux::syscallDescs32 = {
     { 275,  "sched_getattr" },
     { 276,  "renameat2" },
     { 277,  "seccomp" },
-    { 278,  "getrandom" },
+    { 278,  "getrandom", getrandomFunc<RiscvLinux32> },
     { 279,  "memfd_create" },
     { 280,  "bpf" },
     { 281,  "execveat" },
@@ -724,18 +739,18 @@ SyscallDescTable<SEWorkload::SyscallABI> EmuLinux::syscallDescs32 = {
     { 286,  "preadv2" },
     { 287,  "pwritev2" },
     { 1024, "open", openFunc<RiscvLinux32> },
-    { 1025, "link" },
+    { 1025, "link", linkFunc },
     { 1026, "unlink", unlinkFunc },
-    { 1027, "mknod" },
+    { 1027, "mknod", mknodFunc },
     { 1028, "chmod", chmodFunc<RiscvLinux32> },
     { 1029, "chown", chownFunc },
     { 1030, "mkdir", mkdirFunc },
-    { 1031, "rmdir" },
+    { 1031, "rmdir", rmdirFunc },
     { 1032, "lchown" },
     { 1033, "access", accessFunc },
     { 1034, "rename", renameFunc },
-    { 1035, "readlink", readlinkFunc },
-    { 1036, "symlink" },
+    { 1035, "readlink", readlinkFunc<RiscvLinux32> },
+    { 1036, "symlink", symlinkFunc },
     { 1037, "utimes", utimesFunc<RiscvLinux32> },
     { 1038, "stat", statFunc<RiscvLinux32> },
     { 1039, "lstat", lstatFunc<RiscvLinux32> },
@@ -743,31 +758,35 @@ SyscallDescTable<SEWorkload::SyscallABI> EmuLinux::syscallDescs32 = {
     { 1041, "dup2", dup2Func },
     { 1042, "epoll_create" },
     { 1043, "inotifiy_init" },
-    { 1044, "eventfd" },
+    { 1044, "eventfd", eventfdFunc<RiscvLinux32> },
     { 1045, "signalfd" },
     { 1046, "sendfile" },
-    { 1047, "ftruncate", ftruncateFunc },
-    { 1048, "truncate", truncateFunc },
+    { 1047, "ftruncate", ftruncateFunc<RiscvLinux32> },
+    { 1048, "truncate", truncateFunc<RiscvLinux32> },
     { 1049, "stat", statFunc<RiscvLinux32> },
     { 1050, "lstat", lstatFunc<RiscvLinux32> },
     { 1051, "fstat", fstatFunc<RiscvLinux32> },
     { 1052, "fcntl", fcntlFunc },
     { 1053, "fadvise64" },
-    { 1054, "newfstatat" },
+    { 1054, "newfstatat", newfstatatFunc<RiscvLinux32> },
     { 1055, "fstatfs", fstatfsFunc<RiscvLinux32> },
     { 1056, "statfs", statfsFunc<RiscvLinux32> },
     { 1057, "lseek", lseekFunc },
     { 1058, "mmap", mmapFunc<RiscvLinux32> },
     { 1059, "alarm" },
-    { 1060, "getpgrp" },
+    { 1060, "getpgrp", getpgrpFunc },
     { 1061, "pause" },
     { 1062, "time", timeFunc<RiscvLinux32> },
     { 1063, "utime" },
     { 1064, "creat" },
+#if defined(SYS_getdents)
+    { 1065, "getdents", getdentsFunc },
+#else
     { 1065, "getdents" },
+#endif
     { 1066, "futimesat" },
-    { 1067, "select" },
-    { 1068, "poll" },
+    { 1067, "select", selectFunc<RiscvLinux32> },
+    { 1068, "poll", pollFunc<RiscvLinux32> },
     { 1069, "epoll_wait" },
     { 1070, "ustat" },
     { 1071, "vfork" },
@@ -783,3 +802,4 @@ SyscallDescTable<SEWorkload::SyscallABI> EmuLinux::syscallDescs32 = {
 };
 
 } // namespace RiscvISA
+} // namespace gem5

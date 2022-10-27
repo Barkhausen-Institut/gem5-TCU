@@ -52,6 +52,12 @@
 #include "mem/ruby/protocol/RubyAccessMode.hh"
 #include "mem/ruby/protocol/RubyRequestType.hh"
 
+namespace gem5
+{
+
+namespace ruby
+{
+
 class RubyRequest : public Message
 {
   public:
@@ -70,6 +76,9 @@ class RubyRequest : public Message
     uint64_t m_instSeqNum;
     bool m_htmFromTransaction;
     uint64_t m_htmTransactionUid;
+    bool m_isTlbi;
+    // Should be uint64, but SLICC complains about casts
+    Addr m_tlbiTransactionUid;
 
     RubyRequest(Tick curTime, uint64_t _paddr, int _len,
         uint64_t _pc, RubyRequestType _type, RubyAccessMode _access_mode,
@@ -85,9 +94,32 @@ class RubyRequest : public Message
           m_pkt(_pkt),
           m_contextId(_core_id),
           m_htmFromTransaction(false),
-          m_htmTransactionUid(0)
+          m_htmTransactionUid(0),
+          m_isTlbi(false),
+          m_tlbiTransactionUid(0)
     {
         m_LineAddress = makeLineAddress(m_PhysicalAddress);
+    }
+
+    /** RubyRequest for memory management commands */
+    RubyRequest(Tick curTime,
+        uint64_t _pc, RubyRequestType _type, RubyAccessMode _access_mode,
+        PacketPtr _pkt, ContextID _proc_id, ContextID _core_id)
+        : Message(curTime),
+          m_PhysicalAddress(0),
+          m_Type(_type),
+          m_ProgramCounter(_pc),
+          m_AccessMode(_access_mode),
+          m_Size(0),
+          m_Prefetch(PrefetchBit_No),
+          m_pkt(_pkt),
+          m_contextId(_core_id),
+          m_htmFromTransaction(false),
+          m_htmTransactionUid(0),
+          m_isTlbi(false),
+          m_tlbiTransactionUid(0)
+    {
+        assert(m_pkt->req->isMemMgmt());
     }
 
     RubyRequest(Tick curTime, uint64_t _paddr, int _len,
@@ -111,7 +143,9 @@ class RubyRequest : public Message
           m_wfid(_proc_id),
           m_instSeqNum(_instSeqNum),
           m_htmFromTransaction(false),
-          m_htmTransactionUid(0)
+          m_htmTransactionUid(0),
+          m_isTlbi(false),
+          m_tlbiTransactionUid(0)
     {
         m_LineAddress = makeLineAddress(m_PhysicalAddress);
     }
@@ -138,7 +172,9 @@ class RubyRequest : public Message
           m_wfid(_proc_id),
           m_instSeqNum(_instSeqNum),
           m_htmFromTransaction(false),
-          m_htmTransactionUid(0)
+          m_htmTransactionUid(0),
+          m_isTlbi(false),
+          m_tlbiTransactionUid(0)
     {
         m_LineAddress = makeLineAddress(m_PhysicalAddress);
     }
@@ -169,5 +205,8 @@ operator<<(std::ostream& out, const RubyRequest& obj)
   out << std::flush;
   return out;
 }
+
+} // namespace ruby
+} // namespace gem5
 
 #endif  //__MEM_RUBY_SLICC_INTERFACE_RUBYREQUEST_HH__

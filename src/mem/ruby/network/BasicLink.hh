@@ -40,6 +40,12 @@
 #include "params/BasicLink.hh"
 #include "sim/sim_object.hh"
 
+namespace gem5
+{
+
+namespace ruby
+{
+
 class Topology;
 
 class BasicLink : public SimObject
@@ -83,5 +89,8 @@ class BasicIntLink : public BasicLink
 
     friend class Topology;
 };
+
+} // namespace ruby
+} // namespace gem5
 
 #endif //__MEM_RUBY_NETWORK_BASICLINK_HH__

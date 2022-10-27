@@ -40,7 +40,6 @@
 
 #include "arch/arm/linux/fs_workload.hh"
 
-#include "arch/arm/isa_traits.hh"
 #include "arch/arm/linux/atag.hh"
 #include "arch/arm/system.hh"
 #include "arch/arm/utility.hh"
@@ -58,7 +57,10 @@
 #include "mem/physical.hh"
 #include "sim/stat_control.hh"
 
-using namespace Linux;
+namespace gem5
+{
+
+using namespace linux;
 
 namespace ArmISA
 {
@@ -78,7 +80,7 @@ FsLinux::initState()
     if (params().early_kernel_symbols) {
         auto phys_globals = kernelObj->symtab().globals()->mask(_loadAddrMask);
         kernelSymtab.insert(*phys_globals);
-        Loader::debugSymbolTable.insert(*phys_globals);
+        loader::debugSymbolTable.insert(*phys_globals);
     }
 
     // Setup boot data structure
@@ -89,15 +91,30 @@ FsLinux::initState()
     bool dtb_file_specified = params().dtb_filename != "";
 
     if (kernel_has_fdt_support && dtb_file_specified) {
+        bool initrd_file_specified = params().initrd_filename != "";
+        size_t initrd_len = 0;
+
+        if (initrd_file_specified) {
+            inform("Loading initrd file: %s at address %#x\n",
+                    params().initrd_filename, params().initrd_addr);
+
+            loader::ImageFileDataPtr initrd_file_data(
+                new loader::ImageFileData(params().initrd_filename));
+            system->physProxy.writeBlob(params().initrd_addr,
+                                        initrd_file_data->data(),
+                                        initrd_file_data->len());
+            initrd_len = initrd_file_data->len();
+        }
+
         // Kernel supports flattened device tree and dtb file specified.
         // Using Device Tree Blob to describe system configuration.
         inform("Loading DTB file: %s at address %#x\n", params().dtb_filename,
                 params().dtb_addr);
 
-        auto *dtb_file = new ::Loader::DtbFile(params().dtb_filename);
+        auto *dtb_file = new loader::DtbFile(params().dtb_filename);
 
-        if (!dtb_file->addBootCmdLine(
-                    commandLine.c_str(), commandLine.size())) {
+        if (!dtb_file->addBootData(commandLine.c_str(), commandLine.size(),
+                                   params().initrd_addr, initrd_len)) {
             warn("couldn't append bootargs to DTB file: %s\n",
                  params().dtb_filename);
         }
@@ -157,20 +174,20 @@ FsLinux::initState()
         delete[] boot_data;
     }
 
-    if (getArch() == Loader::Arm64) {
+    if (getArch() == loader::Arm64) {
         // We inform the bootloader of the kernel entry point. This was added
         // originally done because the entry offset changed in kernel v5.8.
         // Previously the bootloader just used a hardcoded address.
         for (auto *tc: system->threads) {
-            tc->setIntReg(0, params().dtb_addr);
-            tc->setIntReg(5, params().cpu_release_addr);
+            tc->setReg(int_reg::X0, params().dtb_addr);
+            tc->setReg(int_reg::X5, params().cpu_release_addr);
         }
     } else {
         // Kernel boot requirements to set up r0, r1 and r2 in ARMv7
         for (auto *tc: system->threads) {
-            tc->setIntReg(0, 0);
-            tc->setIntReg(1, params().machine_type);
-            tc->setIntReg(2, params().dtb_addr);
+            tc->setReg(int_reg::R0, (RegVal)0);
+            tc->setReg(int_reg::R1, params().machine_type);
+            tc->setReg(int_reg::R2, params().dtb_addr);
         }
     }
 }
@@ -192,7 +209,7 @@ FsLinux::startup()
     FsWorkload::startup();
 
     if (enableContextSwitchStatsDump) {
-        if (getArch() == Loader::Arm64)
+        if (getArch() == loader::Arm64)
             dumpStats = addKernelFuncEvent<DumpStats64>("__switch_to");
         else
             dumpStats = addKernelFuncEvent<DumpStats>("__switch_to");
@@ -213,18 +230,18 @@ FsLinux::startup()
 
     const std::string dmesg_output = name() + ".dmesg";
     if (params().panic_on_panic) {
-        kernelPanic = addKernelFuncEventOrPanic<Linux::KernelPanic>(
+        kernelPanic = addKernelFuncEventOrPanic<linux::KernelPanic>(
             "panic", "Kernel panic in simulated kernel", dmesg_output);
     } else {
-        kernelPanic = addKernelFuncEventOrPanic<Linux::DmesgDump>(
+        kernelPanic = addKernelFuncEventOrPanic<linux::DmesgDump>(
             "panic", "Kernel panic in simulated kernel", dmesg_output);
     }
 
     if (params().panic_on_oops) {
-        kernelOops = addKernelFuncEventOrPanic<Linux::KernelPanic>(
+        kernelOops = addKernelFuncEventOrPanic<linux::KernelPanic>(
             "oops_exit", "Kernel oops in guest", dmesg_output);
     } else {
-        kernelOops = addKernelFuncEventOrPanic<Linux::DmesgDump>(
+        kernelOops = addKernelFuncEventOrPanic<linux::DmesgDump>(
             "oops_exit", "Kernel oops in guest", dmesg_output);
     }
 
@@ -256,9 +273,9 @@ FsLinux::mapPid(ThreadContext *tc, uint32_t pid)
     std::map<uint32_t, uint32_t>::iterator itr = taskMap.find(pid);
     if (itr == taskMap.end()) {
         uint32_t map_size = taskMap.size();
-        if (map_size > ContextSwitchTaskId::MaxNormalTaskId + 1) {
+        if (map_size > context_switch_task_id::MaxNormalTaskId + 1) {
             warn_once("Error out of identifiers for cache occupancy stats");
-            taskMap[pid] = ContextSwitchTaskId::Unknown;
+            taskMap[pid] = context_switch_task_id::Unknown;
         } else {
             taskMap[pid] = map_size;
         }
@@ -268,7 +285,7 @@ FsLinux::mapPid(ThreadContext *tc, uint32_t pid)
 void
 FsLinux::dumpDmesg()
 {
-    Linux::dumpDmesg(system->threads[0], std::cout);
+    linux::dumpDmesg(system->threads[0], std::cout);
 }
 
 /**
@@ -283,8 +300,8 @@ void
 DumpStats::getTaskDetails(ThreadContext *tc, uint32_t &pid,
     uint32_t &tgid, std::string &next_task_str, int32_t &mm) {
 
-    Linux::ThreadInfo ti(tc);
-    Addr task_descriptor = tc->readIntReg(2);
+    linux::ThreadInfo ti(tc);
+    Addr task_descriptor = tc->getReg(int_reg::R2);
     pid = ti.curTaskPID(task_descriptor);
     tgid = ti.curTaskTGID(task_descriptor);
     next_task_str = ti.curTaskName(task_descriptor);
@@ -305,8 +322,8 @@ void
 DumpStats64::getTaskDetails(ThreadContext *tc, uint32_t &pid,
     uint32_t &tgid, std::string &next_task_str, int32_t &mm) {
 
-    Linux::ThreadInfo ti(tc);
-    Addr task_struct = tc->readIntReg(1);
+    linux::ThreadInfo ti(tc);
+    Addr task_struct = tc->getReg(int_reg::X1);
     pid = ti.curTaskPIDFromTaskStruct(task_struct);
     tgid = ti.curTaskTGIDFromTaskStruct(task_struct);
     next_task_str = ti.curTaskNameFromTaskStruct(task_struct);
@@ -358,7 +375,8 @@ DumpStats::process(ThreadContext *tc)
     taskFile->stream()->flush();
 
     // Dump and reset statistics
-    Stats::schedStatEvent(true, true, curTick(), 0);
+    statistics::schedStatEvent(true, true, curTick(), 0);
 }
 
 } // namespace ArmISA
+} // namespace gem5

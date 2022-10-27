@@ -46,14 +46,23 @@
 #include "sim/aux_vector.hh"
 #include "sim/process.hh"
 
+namespace gem5
+{
+
 class SyscallDesc;
 
 namespace X86ISA
 {
-    enum X86AuxiliaryVectorTypes {
-        M5_AT_SYSINFO = 32,
-        M5_AT_SYSINFO_EHDR = 33
+    namespace auxv
+    {
+
+    enum X86AuxiliaryVectorTypes
+    {
+        Sysinfo = 32,
+        SysinfoEhdr = 33
     };
+
+    } // namespace auxv
 
     class X86Process : public Process
     {
@@ -61,11 +70,11 @@ namespace X86ISA
         Addr _gdtStart;
         Addr _gdtSize;
 
-        X86Process(const ProcessParams &params, ::Loader::ObjectFile *objFile);
+        X86Process(const ProcessParams &params, loader::ObjectFile *objFile);
 
         template<class IntType>
         void argsInit(int pageSize,
-                      std::vector<AuxVector<IntType> > extraAuxvs);
+                      std::vector<gem5::auxv::AuxVector<IntType>> extraAuxvs);
 
       public:
         Addr gdtStart() const { return _gdtStart; }
@@ -116,7 +125,7 @@ namespace X86ISA
 
       public:
         X86_64Process(const ProcessParams &params,
-                      ::Loader::ObjectFile *objFile);
+                      loader::ObjectFile *objFile);
 
         void argsInit(int pageSize);
         void initState() override;
@@ -154,7 +163,7 @@ namespace X86ISA
 
       public:
         I386Process(const ProcessParams &params,
-                    ::Loader::ObjectFile *objFile);
+                    loader::ObjectFile *objFile);
 
         const VSyscallPage &getVSyscallPage() const { return vsyscallPage; }
 
@@ -165,6 +174,7 @@ namespace X86ISA
                    Process *process, RegVal flags) override;
     };
 
-}
+} // namespace X86ISA
+} // namespace gem5
 
 #endif // __ARCH_X86_PROCESS_HH__

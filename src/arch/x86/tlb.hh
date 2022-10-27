@@ -48,6 +48,9 @@
 #include "params/X86TLB.hh"
 #include "sim/stats.hh"
 
+namespace gem5
+{
+
 class ThreadContext;
 
 namespace X86ISA
@@ -101,19 +104,20 @@ namespace X86ISA
 
         AddrRange m5opRange;
 
-        struct TlbStats : public Stats::Group {
-            TlbStats(Stats::Group *parent);
+        struct TlbStats : public statistics::Group
+        {
+            TlbStats(statistics::Group *parent);
 
-            Stats::Scalar rdAccesses;
-            Stats::Scalar wrAccesses;
-            Stats::Scalar rdMisses;
-            Stats::Scalar wrMisses;
+            statistics::Scalar rdAccesses;
+            statistics::Scalar wrAccesses;
+            statistics::Scalar rdMisses;
+            statistics::Scalar wrMisses;
         } stats;
 
         Fault translateInt(bool read, RequestPtr req, ThreadContext *tc);
 
         Fault translate(const RequestPtr &req, ThreadContext *tc,
-                Translation *translation, Mode mode,
+                BaseMMU::Translation *translation, BaseMMU::Mode mode,
                 bool &delayedResponse, bool timing);
 
       public:
@@ -127,12 +131,14 @@ namespace X86ISA
         }
 
         Fault translateAtomic(
-            const RequestPtr &req, ThreadContext *tc, Mode mode) override;
+            const RequestPtr &req, ThreadContext *tc,
+            BaseMMU::Mode mode) override;
         Fault translateFunctional(
-            const RequestPtr &req, ThreadContext *tc, Mode mode) override;
+            const RequestPtr &req, ThreadContext *tc,
+            BaseMMU::Mode mode) override;
         void translateTiming(
             const RequestPtr &req, ThreadContext *tc,
-            Translation *translation, Mode mode) override;
+            BaseMMU::Translation *translation, BaseMMU::Mode mode) override;
 
         /**
          * Do post-translation physical address finalization.
@@ -148,7 +154,7 @@ namespace X86ISA
          * @return A fault on failure, NoFault otherwise.
          */
         Fault finalizePhysical(const RequestPtr &req, ThreadContext *tc,
-                               Mode mode) const override;
+                               BaseMMU::Mode mode) const override;
 
         TlbEntry *insert(Addr vpn, const TlbEntry &entry);
 
@@ -168,6 +174,8 @@ namespace X86ISA
          */
         Port *getTableWalkerPort() override;
     };
-}
+
+} // namespace X86ISA
+} // namespace gem5
 
 #endif // __ARCH_X86_TLB_HH__

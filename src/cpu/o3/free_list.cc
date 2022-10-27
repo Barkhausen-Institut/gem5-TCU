@@ -29,10 +29,14 @@
 
 #include "cpu/o3/free_list.hh"
 
-#include "arch/registers.hh"
 #include "base/trace.hh"
-#include "config/the_isa.hh"
 #include "debug/FreeList.hh"
+
+namespace gem5
+{
+
+namespace o3
+{
 
 UnifiedFreeList::UnifiedFreeList(const std::string &_my_name,
                                  PhysRegFile *_regFile)
@@ -44,3 +48,6 @@ UnifiedFreeList::UnifiedFreeList(const std::string &_my_name,
     // about its internal organization
     regFile->initFreeList(this);
 }
+
+} // namespace o3
+} // namespace gem5

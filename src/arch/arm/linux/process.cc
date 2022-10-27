@@ -43,16 +43,20 @@
 
 #include <sys/syscall.h>
 
-#include "arch/arm/isa_traits.hh"
 #include "arch/arm/linux/linux.hh"
+#include "arch/arm/page_size.hh"
 #include "base/loader/object_file.hh"
 #include "base/trace.hh"
 #include "cpu/thread_context.hh"
 #include "kern/linux/linux.hh"
+#include "mem/se_translating_port_proxy.hh"
 #include "sim/process.hh"
 #include "sim/syscall_desc.hh"
 #include "sim/syscall_emul.hh"
 #include "sim/system.hh"
+
+namespace gem5
+{
 
 using namespace ArmISA;
 
@@ -69,10 +73,10 @@ ArmLinuxProcess32::initState()
         0xff, 0xff, 0xff, 0xef  // swi -1
     };
 
+    SETranslatingPortProxy proxy(tc);
     // Fill this page with swi -1 so we'll no if we land in it somewhere.
     for (Addr addr = 0; addr < PageBytes; addr += sizeof(swiNeg1)) {
-        tc->getVirtProxy().writeBlob(commPage + addr,
-                                     swiNeg1, sizeof(swiNeg1));
+        proxy.writeBlob(commPage + addr, swiNeg1, sizeof(swiNeg1));
     }
 
     uint8_t memory_barrier[] =
@@ -80,8 +84,7 @@ ArmLinuxProcess32::initState()
         0x5f, 0xf0, 0x7f, 0xf5, // dmb
         0x0e, 0xf0, 0xa0, 0xe1  // return
     };
-    tc->getVirtProxy().writeBlob(commPage + 0x0fa0, memory_barrier,
-                                 sizeof(memory_barrier));
+    proxy.writeBlob(commPage + 0x0fa0, memory_barrier, sizeof(memory_barrier));
 
     uint8_t cmpxchg[] =
     {
@@ -94,7 +97,7 @@ ArmLinuxProcess32::initState()
         0x5f, 0xf0, 0x7f, 0xf5,  // dmb
         0x0e, 0xf0, 0xa0, 0xe1   // return
     };
-    tc->getVirtProxy().writeBlob(commPage + 0x0fc0, cmpxchg, sizeof(cmpxchg));
+    proxy.writeBlob(commPage + 0x0fc0, cmpxchg, sizeof(cmpxchg));
 
     uint8_t get_tls[] =
     {
@@ -102,7 +105,7 @@ ArmLinuxProcess32::initState()
         0x70, 0x0f, 0x1d, 0xee, // mrc p15, 0, r0, c13, c0, 3
         0x0e, 0xf0, 0xa0, 0xe1  // return
     };
-    tc->getVirtProxy().writeBlob(commPage + 0x0fe0, get_tls, sizeof(get_tls));
+    proxy.writeBlob(commPage + 0x0fe0, get_tls, sizeof(get_tls));
 }
 
 void
@@ -111,3 +114,5 @@ ArmLinuxProcess64::initState()
     ArmProcess64::initState();
     // The 64 bit equivalent of the comm page would be set up here.
 }
+
+} // namespace gem5

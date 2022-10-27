@@ -1,4 +1,4 @@
-# Copyright (c) 2016, 2020 ARM Limited
+# Copyright (c) 2016, 2020-2021 Arm Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -41,13 +41,11 @@ import os
 import re
 import sys
 
-from itertools import zip_longest
+from functools import wraps
 
 from . import convert
-from . import jobfile
 
 from .attrdict import attrdict, multiattrdict, optiondict
-from .code_formatter import code_formatter
 from .multidict import multidict
 
 # panic() should be called when something happens that should never
@@ -75,12 +73,42 @@ def warn(fmt, *args):
 def inform(fmt, *args):
     print('info:', fmt % args, file=sys.stdout)
 
+def callOnce(func):
+    """Decorator that enables to run a given function only once. Subsequent
+    calls are discarded."""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if not wrapper.has_run:
+            wrapper.has_run = True
+            return func(*args, **kwargs)
+    wrapper.has_run = False
+    return wrapper
+
+def deprecated(replacement=None, logger=warn):
+    """This decorator warns the user about a deprecated function."""
+    def decorator(func):
+        @callOnce
+        def notifyDeprecation():
+            try:
+                func_name = lambda f: f.__module__ + '.' +  f.__qualname__
+                message = f'Function {func_name(func)} is deprecated.'
+                if replacement:
+                    message += f' Prefer {func_name(replacement)} instead.'
+            except AttributeError:
+                message = f'Function {func} is deprecated.'
+                if replacement:
+                    message += f' Prefer {replacement} instead.'
+            logger(message)
+        notifyDeprecation()
+        return func
+    return decorator
+
 class Singleton(type):
     def __call__(cls, *args, **kwargs):
         if hasattr(cls, '_instance'):
             return cls._instance
 
-        cls._instance = super(Singleton, cls).__call__(*args, **kwargs)
+        cls._instance = super().__call__(*args, **kwargs)
         return cls._instance
 
 def addToPath(path):
@@ -97,6 +125,17 @@ def addToPath(path):
     # so place the new dir right after that.
     sys.path.insert(1, path)
 
+def repoPath():
+    """
+    Return the abspath of the gem5 repository.
+    This is relying on the following structure:
+
+    <gem5-repo>/build/<ISA>/gem5.[opt,debug...]
+    """
+    return os.path.dirname(
+        os.path.dirname(
+            os.path.dirname(sys.executable)))
+
 # Apply method to object.
 # applyMethod(obj, 'meth', <args>) is equivalent to obj.meth(<args>)
 def applyMethod(obj, meth, *args, **kwargs):
@@ -111,31 +150,6 @@ def applyOrMap(objOrSeq, meth, *args, **kwargs):
         return applyMethod(objOrSeq, meth, *args, **kwargs)
     else:
         return [applyMethod(o, meth, *args, **kwargs) for o in objOrSeq]
-
-def compareVersions(v1, v2):
-    """helper function: compare arrays or strings of version numbers.
-    E.g., compare_version((1,3,25), (1,4,1)')
-    returns -1, 0, 1 if v1 is <, ==, > v2
-    """
-    def make_version_list(v):
-        if isinstance(v, (list,tuple)):
-            return v
-        elif isinstance(v, str):
-            return list(map(lambda x: int(re.match('\d+', x).group()),
-                            v.split('.')))
-        else:
-            raise TypeError()
-
-    v1 = make_version_list(v1)
-    v2 = make_version_list(v2)
-
-    # Compare corresponding elements of lists
-    # The shorter list is filled with 0 till the lists have the same length
-    for n1,n2 in zip_longest(v1, v2, fillvalue=0):
-        if n1 < n2: return -1
-        if n1 > n2: return  1
-
-    return 0
 
 def crossproduct(items):
     if len(items) == 1:
@@ -172,59 +186,6 @@ def printList(items, indent=4):
         else:
             line += item
             print(line)
-
-def readCommandWithReturn(cmd, **kwargs):
-    """
-    run the command cmd, read the results and return them
-    this is sorta like `cmd` in shell
-
-    :param cmd: command to run with Popen
-    :type cmd: string, list
-    :returns: pair consisting on Popen retcode and the command stdout
-    :rtype: (int, string)
-    """
-    from subprocess import Popen, PIPE, STDOUT
-
-    if isinstance(cmd, str):
-        cmd = cmd.split()
-
-    no_exception = 'exception' in kwargs
-    exception = kwargs.pop('exception', None)
-
-    kwargs.setdefault('shell', False)
-    kwargs.setdefault('stdout', PIPE)
-    kwargs.setdefault('stderr', STDOUT)
-    kwargs.setdefault('close_fds', True)
-    try:
-        subp = Popen(cmd, **kwargs)
-    except Exception as e:
-        if no_exception:
-            return -1, exception
-        raise
-
-    output = subp.communicate()[0].decode('utf-8')
-    return subp.returncode, output
-
-def readCommand(cmd, **kwargs):
-    """
-    run the command cmd, read the results and return them
-    this is sorta like `cmd` in shell
-
-    :param cmd: command to run with Popen
-    :type cmd: string, list
-    :returns: command stdout
-    :rtype: string
-    """
-    return readCommandWithReturn(cmd, **kwargs)[1]
-
-def makeDir(path):
-    """Make a directory if it doesn't exist.  If the path does exist,
-    ensure that it is a directory"""
-    if os.path.exists(path):
-        if not os.path.isdir(path):
-            raise AttributeError("%s exists but is not directory" % path)
-    else:
-        os.mkdir(path)
 
 def isInteractive():
     """Check if the simulator is run interactively or in a batch environment"""

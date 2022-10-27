@@ -39,12 +39,17 @@ from m5.objects.E820 import X86E820Table, X86E820Entry
 from m5.objects.SMBios import X86SMBiosSMBiosTable
 from m5.objects.IntelMP import X86IntelMPFloatingPointer, X86IntelMPConfigTable
 from m5.objects.ACPI import X86ACPIRSDP
-from m5.objects.Workload import KernelWorkload
+from m5.objects.Workload import KernelWorkload, Workload
+
+class X86BareMetalWorkload(Workload):
+    type = 'X86BareMetalWorkload'
+    cxx_header = 'arch/x86/bare_metal/workload.hh'
+    cxx_class = 'gem5::X86ISA::BareMetalWorkload'
 
 class X86FsWorkload(KernelWorkload):
     type = 'X86FsWorkload'
     cxx_header = 'arch/x86/fs_workload.hh'
-    cxx_class = 'X86ISA::FsWorkload'
+    cxx_class = 'gem5::X86ISA::FsWorkload'
 
     smbios_table = Param.X86SMBiosSMBiosTable(
             X86SMBiosSMBiosTable(), 'table of smbios/dmi information')
@@ -60,7 +65,7 @@ class X86FsWorkload(KernelWorkload):
 class X86FsLinux(X86FsWorkload):
     type = 'X86FsLinux'
     cxx_header = 'arch/x86/linux/fs_workload.hh'
-    cxx_class = 'X86ISA::FsLinux'
+    cxx_class = 'gem5::X86ISA::FsLinux'
 
     e820_table = Param.X86E820Table(
             X86E820Table(), 'E820 map of physical memory')

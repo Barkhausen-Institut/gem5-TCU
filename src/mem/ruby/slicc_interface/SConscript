@@ -28,10 +28,10 @@
 
 Import('*')
 
-if env['PROTOCOL'] == 'None':
+if env['CONF']['PROTOCOL'] == 'None':
     Return()
 
-SimObject('Controller.py')
+SimObject('Controller.py', sim_objects=['RubyController'])
 
 Source('AbstractController.cc')
 Source('AbstractCacheEntry.cc')

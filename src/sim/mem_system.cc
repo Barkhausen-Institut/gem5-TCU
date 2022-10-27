@@ -33,6 +33,9 @@
 #include "mem/tcu/tlb.hh"
 #include "params/MemSystem.hh"
 
+namespace gem5
+{
+
 MemSystem::MemSystem(const Params &p)
     : System(p),
       tileId(p.tile_id),
@@ -79,4 +82,6 @@ MemSystem::initState()
         delete[] data;
         fclose(f);
     }
+}
+
 }

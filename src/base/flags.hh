@@ -32,6 +32,9 @@
 
 #include <type_traits>
 
+namespace gem5
+{
+
 /**
  * Wrapper that groups a few flag bits under the same undelying container.
  *
@@ -41,7 +44,7 @@ template <typename T>
 class Flags
 {
   private:
-    static_assert(std::is_unsigned<T>::value, "Flag type must be unsigned");
+    static_assert(std::is_unsigned_v<T>, "Flag type must be unsigned");
 
     /** The undelying container of the flags' bits. */
     T _flags;
@@ -141,5 +144,7 @@ class Flags
     }
     /** @} */ // end of api_flags
 };
+
+} // namespace gem5
 
 #endif // __BASE_FLAGS_HH__

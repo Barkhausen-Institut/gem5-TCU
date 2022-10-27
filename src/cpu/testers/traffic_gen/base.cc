@@ -64,6 +64,8 @@
 #include "cpu/testers/traffic_gen/trace_gen.hh"
 #endif
 
+namespace gem5
+{
 
 BaseTrafficGen::BaseTrafficGen(const BaseTrafficGenParams &p)
     : ClockedObject(p),
@@ -330,32 +332,36 @@ BaseTrafficGen::noProgress()
           name(), progressCheck);
 }
 
-BaseTrafficGen::StatGroup::StatGroup(Stats::Group *parent)
-    : Stats::Group(parent),
-      ADD_STAT(numSuppressed, UNIT_COUNT,
+BaseTrafficGen::StatGroup::StatGroup(statistics::Group *parent)
+    : statistics::Group(parent),
+      ADD_STAT(numSuppressed, statistics::units::Count::get(),
                "Number of suppressed packets to non-memory space"),
-      ADD_STAT(numPackets, UNIT_COUNT, "Number of packets generated"),
-      ADD_STAT(numRetries, UNIT_COUNT, "Number of retries"),
-      ADD_STAT(retryTicks, UNIT_TICK,
+      ADD_STAT(numPackets, statistics::units::Count::get(),
+               "Number of packets generated"),
+      ADD_STAT(numRetries, statistics::units::Count::get(), "Number of retries"),
+      ADD_STAT(retryTicks, statistics::units::Tick::get(),
                "Time spent waiting due to back-pressure"),
-      ADD_STAT(bytesRead, UNIT_BYTE, "Number of bytes read"),
-      ADD_STAT(bytesWritten, UNIT_BYTE, "Number of bytes written"),
-      ADD_STAT(totalReadLatency, UNIT_TICK,
+      ADD_STAT(bytesRead, statistics::units::Byte::get(), "Number of bytes read"),
+      ADD_STAT(bytesWritten, statistics::units::Byte::get(),
+               "Number of bytes written"),
+      ADD_STAT(totalReadLatency, statistics::units::Tick::get(),
                "Total latency of read requests"),
-      ADD_STAT(totalWriteLatency, UNIT_TICK,
+      ADD_STAT(totalWriteLatency, statistics::units::Tick::get(),
                "Total latency of write requests"),
-      ADD_STAT(totalReads, UNIT_COUNT, "Total num of reads"),
-      ADD_STAT(totalWrites, UNIT_COUNT, "Total num of writes"),
-      ADD_STAT(avgReadLatency,
-               UNIT_RATE(Stats::Units::Tick, Stats::Units::Count),
+      ADD_STAT(totalReads, statistics::units::Count::get(), "Total num of reads"),
+      ADD_STAT(totalWrites, statistics::units::Count::get(), "Total num of writes"),
+      ADD_STAT(avgReadLatency, statistics::units::Rate<
+                    statistics::units::Tick, statistics::units::Count>::get(),
                "Avg latency of read requests", totalReadLatency / totalReads),
-      ADD_STAT(avgWriteLatency,
-               UNIT_RATE(Stats::Units::Tick, Stats::Units::Count),
+      ADD_STAT(avgWriteLatency, statistics::units::Rate<
+                    statistics::units::Tick, statistics::units::Count>::get(),
                "Avg latency of write requests",
                totalWriteLatency / totalWrites),
-      ADD_STAT(readBW, UNIT_RATE(Stats::Units::Byte, Stats::Units::Second),
+      ADD_STAT(readBW, statistics::units::Rate<
+                    statistics::units::Byte, statistics::units::Second>::get(),
                "Read bandwidth", bytesRead / simSeconds),
-      ADD_STAT(writeBW, UNIT_RATE(Stats::Units::Byte, Stats::Units::Second),
+      ADD_STAT(writeBW, statistics::units::Rate<
+                    statistics::units::Byte, statistics::units::Second>::get(),
                "Write bandwidth", bytesWritten / simSeconds)
 {
 }
@@ -410,7 +416,7 @@ BaseTrafficGen::createDram(Tick duration,
                            unsigned int num_seq_pkts, unsigned int page_size,
                            unsigned int nbr_of_banks,
                            unsigned int nbr_of_banks_util,
-                           Enums::AddrMap addr_mapping,
+                           enums::AddrMap addr_mapping,
                            unsigned int nbr_of_ranks)
 {
     return std::shared_ptr<BaseGen>(new DramGen(*this, requestorId,
@@ -435,7 +441,7 @@ BaseTrafficGen::createDramRot(Tick duration,
                               unsigned int page_size,
                               unsigned int nbr_of_banks,
                               unsigned int nbr_of_banks_util,
-                              Enums::AddrMap addr_mapping,
+                              enums::AddrMap addr_mapping,
                               unsigned int nbr_of_ranks,
                               unsigned int max_seq_count_per_rank)
 {
@@ -469,7 +475,7 @@ BaseTrafficGen::createHybrid(Tick duration,
                            unsigned int buffer_size_nvm,
                            unsigned int nbr_of_banks_nvm,
                            unsigned int nbr_of_banks_util_nvm,
-                           Enums::AddrMap addr_mapping,
+                           enums::AddrMap addr_mapping,
                            unsigned int nbr_of_ranks_dram,
                            unsigned int nbr_of_ranks_nvm,
                            uint8_t nvm_percent)
@@ -504,7 +510,7 @@ BaseTrafficGen::createNvm(Tick duration,
                            unsigned int num_seq_pkts, unsigned int buffer_size,
                            unsigned int nbr_of_banks,
                            unsigned int nbr_of_banks_util,
-                           Enums::AddrMap addr_mapping,
+                           enums::AddrMap addr_mapping,
                            unsigned int nbr_of_ranks)
 {
     return std::shared_ptr<BaseGen>(new NvmGen(*this, requestorId,
@@ -581,3 +587,5 @@ BaseTrafficGen::recvTimingResp(PacketPtr pkt)
 
     return true;
 }
+
+} // namespace gem5

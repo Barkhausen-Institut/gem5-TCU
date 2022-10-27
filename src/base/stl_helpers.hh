@@ -31,40 +31,26 @@
 
 #include <algorithm>
 #include <iostream>
+#include <type_traits>
+#include <vector>
 
-namespace m5 {
-namespace stl_helpers {
+#include "base/compiler.hh"
 
-template <class T>
-class ContainerPrint
+GEM5_DEPRECATED_NAMESPACE(m5, gem5);
+namespace gem5
 {
-  private:
-    std::ostream &out;
-    bool first;
 
-  public:
-    /**
-     * @ingroup api_base_utils
-     */
-    ContainerPrint(std::ostream &out)
-        : out(out), first(true)
-    {}
+namespace stl_helpers
+{
 
-    /**
-     * @ingroup api_base_utils
-     */
-    void
-    operator()(const T &elem)
-    {
-        // First one doesn't get a space before it.  The rest do.
-        if (first)
-            first = false;
-        else
-            out << " ";
+template <typename T, typename Enabled=void>
+struct IsHelpedContainer : public std::false_type {};
 
-        out << elem;
-    }
-};
+template <typename ...Types>
+struct IsHelpedContainer<std::vector<Types...>> : public std::true_type {};
+
+template <typename ...Types>
+constexpr bool IsHelpedContainerV = IsHelpedContainer<Types...>::value;
 
 /**
  * Write out all elements in an stl container as a space separated
@@ -72,18 +58,26 @@ class ContainerPrint
  *
  * @ingroup api_base_utils
  */
-template <template <typename T, typename A> class C, typename T, typename A>
-std::ostream &
-operator<<(std::ostream& out, const C<T,A> &vec)
+
+template <typename T>
+std::enable_if_t<IsHelpedContainerV<T>, std::ostream &>
+operator<<(std::ostream& out, const T &t)
 {
     out << "[ ";
-    std::for_each(vec.begin(), vec.end(), ContainerPrint<T>(out));
+    bool first = true;
+    auto printer = [&first, &out](const auto &elem) {
+        if (first)
+            out << elem;
+        else
+            out << " " << elem;
+    };
+    std::for_each(t.begin(), t.end(), printer);
     out << " ]";
     out << std::flush;
     return out;
 }
 
 } // namespace stl_helpers
-} // namespace m5
+} // namespace gem5
 
 #endif // __BASE_STL_HELPERS_HH__

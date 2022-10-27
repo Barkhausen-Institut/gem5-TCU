@@ -2,8 +2,6 @@
  * Copyright (c) 2015 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -45,15 +43,20 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "enums/GPUStaticInstFlags.hh"
 #include "enums/StorageClassType.hh"
 #include "gpu-compute/gpu_dyn_inst.hh"
 #include "gpu-compute/misc.hh"
+#include "gpu-compute/operand_info.hh"
+#include "gpu-compute/wavefront.hh"
+
+namespace gem5
+{
 
 class BaseOperand;
 class BaseRegOperand;
-class Wavefront;
 
 class GPUStaticInst : public GPUStaticInstFlags
 {
@@ -74,32 +77,33 @@ class GPUStaticInst : public GPUStaticInstFlags
 
     virtual TheGpuISA::ScalarRegU32 srcLiteral() const { return 0; }
 
+    void initDynOperandInfo(Wavefront *wf, ComputeUnit *cu);
+
+    virtual void initOperandInfo() = 0;
     virtual void execute(GPUDynInstPtr gpuDynInst) = 0;
     virtual void generateDisassembly() = 0;
     const std::string& disassemble();
     virtual int getNumOperands() = 0;
-    virtual bool isScalarRegister(int operandIndex) = 0;
-    virtual bool isVectorRegister(int operandIndex) = 0;
-    virtual bool isSrcOperand(int operandIndex) = 0;
-    virtual bool isDstOperand(int operandIndex) = 0;
     virtual bool isFlatScratchRegister(int opIdx) = 0;
     virtual bool isExecMaskRegister(int opIdx) = 0;
     virtual int getOperandSize(int operandIndex) = 0;
 
-    virtual int getRegisterIndex(int operandIndex,
-                                 GPUDynInstPtr gpuDynInst) = 0;
-
     virtual int numDstRegOperands() = 0;
     virtual int numSrcRegOperands() = 0;
 
-    virtual int coalescerTokenCount() const { return 0; }
-
-    int numDstVecOperands();
     int numSrcVecOperands();
-    int numDstVecDWORDs();
-    int numSrcVecDWORDs();
+    int numDstVecOperands();
+    int numSrcVecDWords();
+    int numDstVecDWords();
 
-    int numOpdDWORDs(int operandIdx);
+    int numSrcScalarOperands();
+    int numDstScalarOperands();
+    int numSrcScalarDWords();
+    int numDstScalarDWords();
+
+    int maxOperandSize();
+
+    virtual int coalescerTokenCount() const { return 0; }
 
     bool isALU() const { return _flags[ALU]; }
     bool isBranch() const { return _flags[Branch]; }
@@ -125,6 +129,7 @@ class GPUStaticInst : public GPUStaticInstFlags
     bool isMemSync() const { return _flags[MemSync]; }
     bool isMemRef() const { return _flags[MemoryRef]; }
     bool isFlat() const { return _flags[Flat]; }
+    bool isFlatGlobal() const { return _flags[FlatGlobal]; }
     bool isLoad() const { return _flags[Load]; }
     bool isStore() const { return _flags[Store]; }
 
@@ -173,7 +178,7 @@ class GPUStaticInst : public GPUStaticInstFlags
     {
         return _flags[MemoryRef] && (_flags[GlobalSegment] ||
                _flags[PrivateSegment] || _flags[ReadOnlySegment] ||
-               _flags[SpillSegment]);
+               _flags[SpillSegment] || _flags[FlatGlobal]);
     }
 
     bool
@@ -234,38 +239,81 @@ class GPUStaticInst : public GPUStaticInstFlags
     static uint64_t dynamic_id_count;
 
     // For flat memory accesses
-    Enums::StorageClassType executed_as;
+    enums::StorageClassType executed_as;
 
     void setFlag(Flags flag) {
         _flags[flag] = true;
 
         if (isGroupSeg()) {
-            executed_as = Enums::SC_GROUP;
+            executed_as = enums::SC_GROUP;
         } else if (isGlobalSeg()) {
-            executed_as = Enums::SC_GLOBAL;
+            executed_as = enums::SC_GLOBAL;
         } else if (isPrivateSeg()) {
-            executed_as = Enums::SC_PRIVATE;
+            executed_as = enums::SC_PRIVATE;
         } else if (isSpillSeg()) {
-            executed_as = Enums::SC_SPILL;
+            executed_as = enums::SC_SPILL;
         } else if (isReadOnlySeg()) {
-            executed_as = Enums::SC_READONLY;
+            executed_as = enums::SC_READONLY;
         } else if (isKernArgSeg()) {
-            executed_as = Enums::SC_KERNARG;
+            executed_as = enums::SC_KERNARG;
         } else if (isArgSeg()) {
-            executed_as = Enums::SC_ARG;
+            executed_as = enums::SC_ARG;
         }
     }
     const std::string& opcode() const { return _opcode; }
+
+    const std::vector<OperandInfo>& srcOperands() const { return srcOps; }
+    const std::vector<OperandInfo>& dstOperands() const { return dstOps; }
+
+    const std::vector<OperandInfo>&
+    srcVecRegOperands() const
+    {
+        return srcVecRegOps;
+    }
+
+    const std::vector<OperandInfo>&
+    dstVecRegOperands() const
+    {
+        return dstVecRegOps;
+    }
+
+    const std::vector<OperandInfo>&
+    srcScalarRegOperands() const
+    {
+        return srcScalarRegOps;
+    }
+
+    const std::vector<OperandInfo>&
+    dstScalarRegOperands() const
+    {
+        return dstScalarRegOps;
+    }
+
+    // These next 2 lines are used in initDynOperandInfo to let the lambda
+    // function work
+    typedef int (RegisterManager::*MapRegFn)(Wavefront *, int);
+    enum OpType { SRC_VEC, SRC_SCALAR, DST_VEC, DST_SCALAR };
 
   protected:
     const std::string _opcode;
     std::string disassembly;
     int _instNum;
     int _instAddr;
-    int srcVecOperands;
-    int dstVecOperands;
-    int srcVecDWORDs;
-    int dstVecDWORDs;
+    std::vector<OperandInfo> srcOps;
+    std::vector<OperandInfo> dstOps;
+
+  private:
+    int srcVecDWords;
+    int dstVecDWords;
+    int srcScalarDWords;
+    int dstScalarDWords;
+    int maxOpSize;
+
+    std::vector<OperandInfo> srcVecRegOps;
+    std::vector<OperandInfo> dstVecRegOps;
+    std::vector<OperandInfo> srcScalarRegOps;
+    std::vector<OperandInfo> dstScalarRegOps;
+
     /**
      * Identifier of the immediate post-dominator instruction.
      */
@@ -298,26 +346,19 @@ class KernelLaunchStaticInst : public GPUStaticInst
         disassembly = _opcode;
     }
 
+    void initOperandInfo() override { return; }
     int getNumOperands() override { return 0; }
     bool isFlatScratchRegister(int opIdx) override { return false; }
     // return true if the Execute mask is explicitly used as a source
     // register operand
     bool isExecMaskRegister(int opIdx) override { return false; }
-    bool isScalarRegister(int operandIndex) override { return false; }
-    bool isVectorRegister(int operandIndex) override { return false; }
-    bool isSrcOperand(int operandIndex) override { return false; }
-    bool isDstOperand(int operandIndex) override { return false; }
     int getOperandSize(int operandIndex) override { return 0; }
-
-    int
-    getRegisterIndex(int operandIndex, GPUDynInstPtr gpuDynInst) override
-    {
-        return 0;
-    }
 
     int numDstRegOperands() override { return 0; }
     int numSrcRegOperands() override { return 0; }
     int instSize() const override { return 0; }
 };
+
+} // namespace gem5
 
 #endif // __GPU_STATIC_INST_HH__

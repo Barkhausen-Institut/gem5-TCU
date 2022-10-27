@@ -41,6 +41,7 @@
 
 #include "mem/ruby/structures/CacheMemory.hh"
 
+#include "base/compiler.hh"
 #include "base/intmath.hh"
 #include "base/logging.hh"
 #include "debug/HtmMem.hh"
@@ -51,6 +52,12 @@
 #include "mem/cache/replacement_policies/weighted_lru_rp.hh"
 #include "mem/ruby/protocol/AccessPermission.hh"
 #include "mem/ruby/system/RubySystem.hh"
+
+namespace gem5
+{
+
+namespace ruby
+{
 
 std::ostream&
 operator<<(std::ostream& out, const CacheMemory& obj)
@@ -75,7 +82,7 @@ CacheMemory::CacheMemory(const Params &p)
     m_is_instruction_only_cache = p.is_icache;
     m_resource_stalls = p.resourceStalls;
     m_block_size = p.block_size;  // may be 0 at this point. Updated in init()
-    m_use_occupancy = dynamic_cast<ReplacementPolicy::WeightedLRU*>(
+    m_use_occupancy = dynamic_cast<replacement_policy::WeightedLRU*>(
                                     m_replacementPolicy_ptr) ? true : false;
 }
 
@@ -380,7 +387,7 @@ CacheMemory::setMRU(Addr address, int occupancy)
         // replacement policy. Depending on different replacement policies,
         // use different touch() function.
         if (m_use_occupancy) {
-            static_cast<ReplacementPolicy::WeightedLRU*>(
+            static_cast<replacement_policy::WeightedLRU*>(
                 m_replacementPolicy_ptr)->touch(
                 entry->replacementData, occupancy);
         } else {
@@ -408,8 +415,8 @@ void
 CacheMemory::recordCacheContents(int cntrl, CacheRecorder* tr) const
 {
     uint64_t warmedUpBlocks = 0;
-    M5_VAR_USED uint64_t totalBlocks = (uint64_t)m_cache_num_sets *
-                                       (uint64_t)m_cache_assoc;
+    [[maybe_unused]] uint64_t totalBlocks = (uint64_t)m_cache_num_sets *
+                                         (uint64_t)m_cache_assoc;
 
     for (int i = 0; i < m_cache_num_sets; i++) {
         for (int j = 0; j < m_cache_assoc; j++) {
@@ -514,8 +521,8 @@ CacheMemory::isLocked(Addr address, int context)
 }
 
 CacheMemory::
-CacheMemoryStats::CacheMemoryStats(Stats::Group *parent)
-    : Stats::Group(parent),
+CacheMemoryStats::CacheMemoryStats(statistics::Group *parent)
+    : statistics::Group(parent),
       ADD_STAT(numDataArrayReads, "Number of data array reads"),
       ADD_STAT(numDataArrayWrites, "Number of data array writes"),
       ADD_STAT(numTagArrayReads, "Number of tag array reads"),
@@ -540,56 +547,60 @@ CacheMemoryStats::CacheMemoryStats(Stats::Group *parent)
       ADD_STAT(m_accessModeType, "")
 {
     numDataArrayReads
-        .flags(Stats::nozero);
+        .flags(statistics::nozero);
 
     numDataArrayWrites
-        .flags(Stats::nozero);
+        .flags(statistics::nozero);
 
     numTagArrayReads
-        .flags(Stats::nozero);
+        .flags(statistics::nozero);
 
     numTagArrayWrites
-        .flags(Stats::nozero);
+        .flags(statistics::nozero);
 
     numTagArrayStalls
-        .flags(Stats::nozero);
+        .flags(statistics::nozero);
 
     numDataArrayStalls
-        .flags(Stats::nozero);
+        .flags(statistics::nozero);
 
     htmTransCommitReadSet
         .init(8)
-        .flags(Stats::pdf | Stats::dist | Stats::nozero | Stats::nonan);
+        .flags(statistics::pdf | statistics::dist | statistics::nozero |
+            statistics::nonan);
 
     htmTransCommitWriteSet
         .init(8)
-        .flags(Stats::pdf | Stats::dist | Stats::nozero | Stats::nonan);
+        .flags(statistics::pdf | statistics::dist | statistics::nozero |
+            statistics::nonan);
 
     htmTransAbortReadSet
         .init(8)
-        .flags(Stats::pdf | Stats::dist | Stats::nozero | Stats::nonan);
+        .flags(statistics::pdf | statistics::dist | statistics::nozero |
+            statistics::nonan);
 
     htmTransAbortWriteSet
         .init(8)
-        .flags(Stats::pdf | Stats::dist | Stats::nozero | Stats::nonan);
+        .flags(statistics::pdf | statistics::dist | statistics::nozero |
+            statistics::nonan);
 
     m_prefetch_hits
-        .flags(Stats::nozero);
+        .flags(statistics::nozero);
 
     m_prefetch_misses
-        .flags(Stats::nozero);
+        .flags(statistics::nozero);
 
     m_prefetch_accesses
-        .flags(Stats::nozero);
+        .flags(statistics::nozero);
 
     m_accessModeType
         .init(RubyRequestType_NUM)
-        .flags(Stats::pdf | Stats::total);
+        .flags(statistics::pdf | statistics::total);
 
     for (int i = 0; i < RubyAccessMode_NUM; i++) {
         m_accessModeType
             .subname(i, RubyAccessMode_to_string(RubyAccessMode(i)))
-            .flags(Stats::nozero)
+            .flags(statistics::nozero)
             ;
     }
 }
@@ -760,3 +771,5 @@ CacheMemory::profilePrefetchMiss()
     cacheMemoryStats.m_prefetch_misses++;
 }
 
+} // namespace ruby
+} // namespace gem5

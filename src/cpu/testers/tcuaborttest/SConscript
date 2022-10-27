@@ -28,7 +28,7 @@
 
 Import('*')
 
-SimObject('TcuAbortTest.py')
+SimObject('TcuAbortTest.py', sim_objects=['TcuAbortTest'])
 
 Source('tcuaborttest.cc')
 

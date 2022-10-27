@@ -49,6 +49,9 @@
 #include "sim/sim_exit.hh"
 #include "sim/system.hh"
 
+namespace gem5
+{
+
 RubyTester::RubyTester(const Params &p)
   : ClockedObject(p),
     checkStartEvent([this]{ wakeup(); }, "RubyTester tick",
@@ -179,7 +182,7 @@ RubyTester::CpuPort::recvTimingResp(PacketPtr pkt)
     // retrieve the subblock and call hitCallback
     RubyTester::SenderState* senderState =
         safe_cast<RubyTester::SenderState*>(pkt->senderState);
-    SubBlock& subblock = senderState->subBlock;
+    ruby::SubBlock& subblock = senderState->subBlock;
 
     tester->hitCallback(globalIdx, &subblock);
 
@@ -220,7 +223,7 @@ RubyTester::getWritableCpuPort(int idx)
 }
 
 void
-RubyTester::hitCallback(NodeID proc, SubBlock* data)
+RubyTester::hitCallback(ruby::NodeID proc, ruby::SubBlock* data)
 {
     // Mark that we made progress
     m_last_progress_vector[proc] = curCycle();
@@ -278,3 +281,5 @@ RubyTester::print(std::ostream& out) const
 {
     out << "[RubyTester]" << std::endl;
 }
+
+} // namespace gem5

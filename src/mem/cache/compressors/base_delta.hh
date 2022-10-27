@@ -41,6 +41,9 @@
 #include "base/bitfield.hh"
 #include "mem/cache/compressors/dictionary_compressor.hh"
 
+namespace gem5
+{
+
 struct BaseDictionaryCompressorParams;
 struct Base64Delta8Params;
 struct Base64Delta16Params;
@@ -49,7 +52,9 @@ struct Base32Delta8Params;
 struct Base32Delta16Params;
 struct Base16Delta8Params;
 
-namespace Compressor {
+GEM5_DEPRECATED_NAMESPACE(Compressor, compression);
+namespace compression
+{
 
 /**
  * Base class for all base-delta-immediate compressors. Although not proposed
@@ -80,9 +85,10 @@ class BaseDelta : public DictionaryCompressor<BaseType>
      * These are used as indexes to reference the pattern data. If a new
      * pattern is added, it must be done before NUM_PATTERNS.
      */
-    typedef enum {
+    enum PatternNumber
+    {
         X, M, NUM_PATTERNS
-    } PatternNumber;
+    };
 
     uint64_t getNumPatterns() const override { return NUM_PATTERNS; }
 
@@ -203,6 +209,7 @@ class Base16Delta8 : public BaseDelta<uint16_t, 8>
     ~Base16Delta8() = default;
 };
 
-} // namespace Compressor
+} // namespace compression
+} // namespace gem5
 
 #endif //__MEM_CACHE_COMPRESSORS_BASE_DELTA_HH__

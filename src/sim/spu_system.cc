@@ -32,6 +32,9 @@
 #include "mem/port_proxy.hh"
 #include "params/SpuSystem.hh"
 
+namespace gem5
+{
+
 SpuSystem::SpuSystem(const Params &p)
     : System(p),
       TileMemory(this, p.memory_tile, p.memory_offset, p.memory_size,
@@ -45,7 +48,9 @@ SpuSystem::~SpuSystem()
 {
 }
 
-uint32_t SpuSystem::tileDesc(tileid_t tile) const
+uint32_t SpuSystem::tileDesc(tcu::tileid_t tile) const
 {
     return tiles[tile];
+}
+
 }

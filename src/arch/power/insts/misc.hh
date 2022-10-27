@@ -31,6 +31,9 @@
 
 #include "arch/power/insts/static_inst.hh"
 
+namespace gem5
+{
+
 namespace PowerISA
 {
 
@@ -43,9 +46,10 @@ class MiscOp : public PowerStaticInst
     using PowerStaticInst::PowerStaticInst;
 
     std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+            Addr pc, const loader::SymbolTable *symtab) const override;
 };
 
 } // namespace PowerISA
+} // namespace gem5
 
 #endif //__ARCH_POWER_INSTS_MISC_HH__

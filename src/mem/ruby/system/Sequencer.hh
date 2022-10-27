@@ -53,6 +53,12 @@
 #include "mem/ruby/system/RubyPort.hh"
 #include "params/RubySequencer.hh"
 
+namespace gem5
+{
+
+namespace ruby
+{
+
 struct SequencerRequest
 {
     PacketPtr pkt;
@@ -120,6 +126,13 @@ class Sequencer : public RubyPort
                       const Cycles forwardRequestTime = Cycles(0),
                       const Cycles firstResponseTime = Cycles(0));
 
+    void unaddressedCallback(Addr unaddressedReqId,
+                             RubyRequestType requestType,
+                             const MachineType mach = MachineType_NUM,
+                             const Cycles initialRequestTime = Cycles(0),
+                             const Cycles forwardRequestTime = Cycles(0),
+                             const Cycles firstResponseTime = Cycles(0));
+
     RequestStatus makeRequest(PacketPtr pkt) override;
     virtual bool empty() const;
     int outstandingCount() const override { return m_outstanding_count; }
@@ -139,50 +152,50 @@ class Sequencer : public RubyPort
     virtual int functionalWrite(Packet *func_pkt) override;
 
     void recordRequestType(SequencerRequestType requestType);
-    Stats::Histogram& getOutstandReqHist() { return m_outstandReqHist; }
+    statistics::Histogram& getOutstandReqHist() { return m_outstandReqHist; }
 
-    Stats::Histogram& getLatencyHist() { return m_latencyHist; }
-    Stats::Histogram& getTypeLatencyHist(uint32_t t)
+    statistics::Histogram& getLatencyHist() { return m_latencyHist; }
+    statistics::Histogram& getTypeLatencyHist(uint32_t t)
     { return *m_typeLatencyHist[t]; }
 
-    Stats::Histogram& getHitLatencyHist() { return m_hitLatencyHist; }
-    Stats::Histogram& getHitTypeLatencyHist(uint32_t t)
+    statistics::Histogram& getHitLatencyHist() { return m_hitLatencyHist; }
+    statistics::Histogram& getHitTypeLatencyHist(uint32_t t)
     { return *m_hitTypeLatencyHist[t]; }
 
-    Stats::Histogram& getHitMachLatencyHist(uint32_t t)
+    statistics::Histogram& getHitMachLatencyHist(uint32_t t)
     { return *m_hitMachLatencyHist[t]; }
 
-    Stats::Histogram& getHitTypeMachLatencyHist(uint32_t r, uint32_t t)
+    statistics::Histogram& getHitTypeMachLatencyHist(uint32_t r, uint32_t t)
     { return *m_hitTypeMachLatencyHist[r][t]; }
 
-    Stats::Histogram& getMissLatencyHist()
+    statistics::Histogram& getMissLatencyHist()
     { return m_missLatencyHist; }
-    Stats::Histogram& getMissTypeLatencyHist(uint32_t t)
+    statistics::Histogram& getMissTypeLatencyHist(uint32_t t)
     { return *m_missTypeLatencyHist[t]; }
 
-    Stats::Histogram& getMissMachLatencyHist(uint32_t t) const
+    statistics::Histogram& getMissMachLatencyHist(uint32_t t) const
     { return *m_missMachLatencyHist[t]; }
 
-    Stats::Histogram&
+    statistics::Histogram&
     getMissTypeMachLatencyHist(uint32_t r, uint32_t t) const
     { return *m_missTypeMachLatencyHist[r][t]; }
 
-    Stats::Histogram& getIssueToInitialDelayHist(uint32_t t) const
+    statistics::Histogram& getIssueToInitialDelayHist(uint32_t t) const
     { return *m_IssueToInitialDelayHist[t]; }
 
-    Stats::Histogram&
+    statistics::Histogram&
     getInitialToForwardDelayHist(const MachineType t) const
     { return *m_InitialToForwardDelayHist[t]; }
 
-    Stats::Histogram&
+    statistics::Histogram&
     getForwardRequestToFirstResponseHist(const MachineType t) const
     { return *m_ForwardToFirstResponseDelayHist[t]; }
 
-    Stats::Histogram&
+    statistics::Histogram&
     getFirstResponseToCompletionDelayHist(const MachineType t) const
     { return *m_FirstResponseToCompletionDelayHist[t]; }
 
-    Stats::Counter getIncompleteTimes(const MachineType t) const
+    statistics::Counter getIncompleteTimes(const MachineType t) const
     { return m_IncompleteTimes[t]; }
 
   private:
@@ -209,6 +222,9 @@ class Sequencer : public RubyPort
   protected:
     // RequestTable contains both read and write requests, handles aliasing
     std::unordered_map<Addr, std::list<SequencerRequest>> m_RequestTable;
+    // UnadressedRequestTable contains "unaddressed" requests,
+    // guaranteed not to alias each other
+    std::unordered_map<uint64_t, SequencerRequest> m_UnaddressedRequestTable;
 
     Cycles m_deadlock_threshold;
 
@@ -234,41 +250,44 @@ class Sequencer : public RubyPort
 
     int m_coreId;
 
+    uint64_t m_unaddressedTransactionCnt;
+
     bool m_runningGarnetStandalone;
 
     //! Histogram for number of outstanding requests per cycle.
-    Stats::Histogram m_outstandReqHist;
+    statistics::Histogram m_outstandReqHist;
 
     //! Histogram for holding latency profile of all requests.
-    Stats::Histogram m_latencyHist;
-    std::vector<Stats::Histogram *> m_typeLatencyHist;
+    statistics::Histogram m_latencyHist;
+    std::vector<statistics::Histogram *> m_typeLatencyHist;
 
     //! Histogram for holding latency profile of all requests that
     //! hit in the controller connected to this sequencer.
-    Stats::Histogram m_hitLatencyHist;
-    std::vector<Stats::Histogram *> m_hitTypeLatencyHist;
+    statistics::Histogram m_hitLatencyHist;
+    std::vector<statistics::Histogram *> m_hitTypeLatencyHist;
 
     //! Histograms for profiling the latencies for requests that
     //! did not required external messages.
-    std::vector<Stats::Histogram *> m_hitMachLatencyHist;
-    std::vector< std::vector<Stats::Histogram *> > m_hitTypeMachLatencyHist;
+    std::vector<statistics::Histogram *> m_hitMachLatencyHist;
+    std::vector<std::vector<statistics::Histogram *>> m_hitTypeMachLatencyHist;
 
     //! Histogram for holding latency profile of all requests that
     //! miss in the controller connected to this sequencer.
-    Stats::Histogram m_missLatencyHist;
-    std::vector<Stats::Histogram *> m_missTypeLatencyHist;
+    statistics::Histogram m_missLatencyHist;
+    std::vector<statistics::Histogram *> m_missTypeLatencyHist;
 
     //! Histograms for profiling the latencies for requests that
     //! required external messages.
-    std::vector<Stats::Histogram *> m_missMachLatencyHist;
-    std::vector< std::vector<Stats::Histogram *> > m_missTypeMachLatencyHist;
+    std::vector<statistics::Histogram *> m_missMachLatencyHist;
+    std::vector<std::vector<statistics::Histogram *>>
+        m_missTypeMachLatencyHist;
 
     //! Histograms for recording the breakdown of miss latency
-    std::vector<Stats::Histogram *> m_IssueToInitialDelayHist;
-    std::vector<Stats::Histogram *> m_InitialToForwardDelayHist;
-    std::vector<Stats::Histogram *> m_ForwardToFirstResponseDelayHist;
-    std::vector<Stats::Histogram *> m_FirstResponseToCompletionDelayHist;
-    std::vector<Stats::Counter> m_IncompleteTimes;
+    std::vector<statistics::Histogram *> m_IssueToInitialDelayHist;
+    std::vector<statistics::Histogram *> m_InitialToForwardDelayHist;
+    std::vector<statistics::Histogram *> m_ForwardToFirstResponseDelayHist;
+    std::vector<statistics::Histogram *> m_FirstResponseToCompletionDelayHist;
+    std::vector<statistics::Counter> m_IncompleteTimes;
 
     EventFunctionWrapper deadlockCheckEvent;
 
@@ -296,6 +315,18 @@ class Sequencer : public RubyPort
      */
     bool llscStoreConditional(const Addr);
 
+
+    /**
+     * Increment the unaddressed transaction counter
+     */
+    void incrementUnaddressedTransactionCnt();
+
+    /**
+     * Generate the current unaddressed transaction ID based on the counter
+     * and the Sequencer object's version id.
+     */
+    uint64_t getCurrentUnaddressedTransactionID() const;
+
   public:
     /**
      * Searches for cache line address in the global monitor
@@ -320,5 +351,8 @@ operator<<(std::ostream& out, const Sequencer& obj)
     out << std::flush;
     return out;
 }
+
+} // namespace ruby
+} // namespace gem5
 
 #endif // __MEM_RUBY_SYSTEM_SEQUENCER_HH__

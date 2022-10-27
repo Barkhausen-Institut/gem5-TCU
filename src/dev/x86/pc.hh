@@ -38,16 +38,15 @@
 #include "dev/platform.hh"
 #include "params/Pc.hh"
 
-class IdeController;
-class System;
+namespace gem5
+{
+
 class SouthBridge;
 
 class Pc : public Platform
 {
   public:
-    /** Pointer to the system */
-    System *system;
-    SouthBridge *southBridge;
+    SouthBridge *southBridge = nullptr;
 
   public:
     typedef PcParams Params;
@@ -66,5 +65,7 @@ class Pc : public Platform
     void postPciInt(int line) override;
     void clearPciInt(int line) override;
 };
+
+} // namespace gem5
 
 #endif // __DEV_PC_HH__

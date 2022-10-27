@@ -52,7 +52,12 @@
 #include "dev/arm/amba_device.hh"
 #include "params/Pl050.hh"
 
-class PS2Device;
+namespace gem5
+{
+
+namespace ps2 {
+class Device;
+} // namespace ps2
 
 class Pl050 : public AmbaIntDevice
 {
@@ -123,7 +128,7 @@ class Pl050 : public AmbaIntDevice
     InterruptReg getInterrupt() const;
 
     /** PS2 device connected to this KMI interface */
-    PS2Device *ps2;
+    ps2::Device *ps2Device;
 
   public:
     Pl050(const Pl050Params &p);
@@ -134,5 +139,7 @@ class Pl050 : public AmbaIntDevice
     void serialize(CheckpointOut &cp) const override;
     void unserialize(CheckpointIn &cp) override;
 };
+
+} // namespace gem5
 
 #endif // __DEV_ARM_PL050_HH__

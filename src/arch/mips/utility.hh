@@ -29,25 +29,21 @@
 
 #ifndef __ARCH_MIPS_UTILITY_HH__
 #define __ARCH_MIPS_UTILITY_HH__
-#include "arch/mips/isa_traits.hh"
+
+#include "arch/mips/page_size.hh"
+#include "arch/mips/regs/misc.hh"
 #include "arch/mips/types.hh"
 #include "base/logging.hh"
 #include "base/types.hh"
 #include "cpu/static_inst.hh"
 #include "cpu/thread_context.hh"
 
+namespace gem5
+{
+
 class ThreadContext;
 
 namespace MipsISA {
-
-inline PCState
-buildRetPC(const PCState &curPC, const PCState &callPC)
-{
-    PCState ret = callPC;
-    ret.advance();
-    ret.pc(curPC.npc());
-    return ret;
-}
 
 ////////////////////////////////////////////////////////////////////////
 //
@@ -81,16 +77,7 @@ RoundPage(Addr addr)
     return (addr + PageBytes - 1) & ~(PageBytes - 1);
 }
 
-void copyRegs(ThreadContext *src, ThreadContext *dest);
-void copyMiscRegs(ThreadContext *src, ThreadContext *dest);
-
-inline void
-advancePC(PCState &pc, const StaticInstPtr &inst)
-{
-    pc.advance();
-}
-
-};
-
+} // namespace MipsISA
+} // namespace gem5
 
 #endif

@@ -35,6 +35,15 @@
 #include "mem/ruby/network/garnet/NetworkBridge.hh"
 #include "mem/ruby/network/garnet/NetworkLink.hh"
 
+namespace gem5
+{
+
+namespace ruby
+{
+
+namespace garnet
+{
+
 GarnetIntLink::GarnetIntLink(const Params &p)
     : BasicIntLink(p)
 {
@@ -153,3 +162,7 @@ GarnetExtLink::print(std::ostream& out) const
 {
     out << name();
 }
+
+} // namespace garnet
+} // namespace ruby
+} // namespace gem5

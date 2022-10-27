@@ -36,7 +36,6 @@ output header {{
 #include <iostream>
 #include <sstream>
 
-#include "arch/mips/isa_traits.hh"
 #include "arch/mips/mt_constants.hh"
 #include "arch/mips/pra_constants.hh"
 #include "cpu/static_inst.hh"
@@ -51,10 +50,12 @@ output decoder {{
 #include "arch/mips/dsp.hh"
 #include "arch/mips/dt_constants.hh"
 #include "arch/mips/faults.hh"
-#include "arch/mips/isa_traits.hh"
 #include "arch/mips/mt_constants.hh"
 #include "arch/mips/pagetable.hh"
 #include "arch/mips/pra_constants.hh"
+#include "arch/mips/regs/float.hh"
+#include "arch/mips/regs/int.hh"
+#include "arch/mips/regs/misc.hh"
 #include "arch/mips/tlb.hh"
 #include "arch/mips/utility.hh"
 #include "base/cprintf.hh"
@@ -63,7 +64,10 @@ output decoder {{
 #include "mem/packet.hh"
 #include "sim/full_system.hh"
 
+namespace gem5::MipsISAInst
+{
 using namespace MipsISA;
+} // namespace gem5::MipsISAInst
 }};
 
 output exec {{
@@ -73,12 +77,14 @@ output exec {{
 #include "arch/mips/dsp.hh"
 #include "arch/mips/dt_constants.hh"
 #include "arch/mips/faults.hh"
-#include "arch/mips/isa_traits.hh"
 #include "arch/mips/mmu.hh"
 #include "arch/mips/mt.hh"
 #include "arch/mips/mt_constants.hh"
 #include "arch/mips/pagetable.hh"
 #include "arch/mips/pra_constants.hh"
+#include "arch/mips/regs/float.hh"
+#include "arch/mips/regs/int.hh"
+#include "arch/mips/regs/misc.hh"
 #include "arch/mips/tlb.hh"
 #include "arch/mips/utility.hh"
 #include "base/condcodes.hh"
@@ -92,6 +98,8 @@ output exec {{
 #include "sim/sim_events.hh"
 #include "sim/sim_exit.hh"
 
+namespace gem5::MipsISAInst
+{
 using namespace MipsISA;
+} // namespace gem5::MipsISAInst
 }};
-

@@ -53,6 +53,7 @@
 #include <memory>
 
 #include "arch/riscv/faults.hh"
+#include "arch/riscv/page_size.hh"
 #include "arch/riscv/pagetable.hh"
 #include "arch/riscv/tlb.hh"
 #include "base/bitfield.hh"
@@ -63,11 +64,14 @@
 #include "mem/packet_access.hh"
 #include "mem/request.hh"
 
+namespace gem5
+{
+
 namespace RiscvISA {
 
 Fault
-Walker::start(ThreadContext * _tc, BaseTLB::Translation *_translation,
-              const RequestPtr &_req, BaseTLB::Mode _mode)
+Walker::start(ThreadContext * _tc, BaseMMU::Translation *_translation,
+              const RequestPtr &_req, BaseMMU::Mode _mode)
 {
     // TODO: in timing mode, instead of blocking when there are other
     // outstanding requests, see if this request can be coalesced with
@@ -92,7 +96,7 @@ Walker::start(ThreadContext * _tc, BaseTLB::Translation *_translation,
 
 Fault
 Walker::startFunctional(ThreadContext * _tc, Addr &addr, unsigned &logBytes,
-              BaseTLB::Mode _mode)
+              BaseMMU::Mode _mode)
 {
     funcState.initState(_tc, _mode);
     return funcState.startFunctional(addr, logBytes);
@@ -177,7 +181,7 @@ Walker::getPort(const std::string &if_name, PortID idx)
 
 void
 Walker::WalkerState::initState(ThreadContext * _tc,
-        BaseTLB::Mode _mode, bool _isTiming)
+        BaseMMU::Mode _mode, bool _isTiming)
 {
     assert(state == Ready);
     started = false;
@@ -295,76 +299,101 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
 
     DPRINTF(PageTableWalker, "Got level%d PTE: %#x\n", level, pte);
 
-    // step 2: TODO check PMA and PMP
+    // step 2:
+    // Performing PMA/PMP checks on physical address of PTE
 
-    // step 3:
-    if (!pte.v || (!pte.r && pte.w)) {
-        doEndWalk = true;
-        DPRINTF(PageTableWalker, "PTE invalid, raising PF\n");
-        fault = pageFault(pte.v);
-    }
-    else {
-        // step 4:
-        if (pte.r || pte.x) {
-            // step 5: leaf PTE
+    walker->pma->check(read->req);
+    // Effective privilege mode for pmp checks for page table
+    // walks is S mode according to specs
+    fault = walker->pmp->pmpCheck(read->req, BaseMMU::Read,
+                    RiscvISA::PrivilegeMode::PRV_S, tc, entry.vaddr);
+
+    if (fault == NoFault) {
+        // step 3:
+        if (!pte.v || (!pte.r && pte.w)) {
             doEndWalk = true;
-            fault = walker->tlb->checkPermissions(status, pmode,
-                                                  entry.vaddr, mode, pte);
-
-            // step 6
-            if (fault == NoFault) {
-                if (level >= 1 && pte.ppn0 != 0) {
-                    DPRINTF(PageTableWalker,
-                            "PTE has misaligned PPN, raising PF\n");
-                    fault = pageFault(true);
-                }
-                else if (level == 2 && pte.ppn1 != 0) {
-                    DPRINTF(PageTableWalker,
-                            "PTE has misaligned PPN, raising PF\n");
-                    fault = pageFault(true);
-                }
-            }
-
-            if (fault == NoFault) {
-                // step 7
-                if (!pte.a) {
-                    pte.a = 1;
-                    doWrite = true;
-                }
-                if (!pte.d && mode == TLB::Write) {
-                    pte.d = 1;
-                    doWrite = true;
-                }
-                // TODO check if this violates a PMA or PMP
-
-                // step 8
-                entry.logBytes = PageShift + (level * LEVEL_BITS);
-                entry.paddr = pte.ppn;
-                entry.vaddr &= ~((1 << entry.logBytes) - 1);
-                entry.pte = pte;
-                // put it non-writable into the TLB to detect writes and redo
-                // the page table walk in order to update the dirty flag.
-                if (!pte.d && mode != TLB::Write)
-                    entry.pte.w = 0;
-                doTLBInsert = true;
-            }
+            DPRINTF(PageTableWalker, "PTE invalid, raising PF\n");
+            fault = pageFault(pte.v);
         }
         else {
-            level--;
-            if (level < 0) {
-                DPRINTF(PageTableWalker, "No leaf PTE found, raising PF\n");
+            // step 4:
+            if (pte.r || pte.x) {
+                // step 5: leaf PTE
                 doEndWalk = true;
-                fault = pageFault(true);
-            }
-            else {
-                Addr shift = (PageShift + LEVEL_BITS * level);
-                Addr idx = (entry.vaddr >> shift) & LEVEL_MASK;
-                nextRead = (pte.ppn << PageShift) + (idx * sizeof(pte));
-                nextState = Translate;
+                fault = walker->tlb->checkPermissions(status, pmode,
+                                                    entry.vaddr, mode, pte);
+
+                // step 6
+                if (fault == NoFault) {
+                    if (level >= 1 && pte.ppn0 != 0) {
+                        DPRINTF(PageTableWalker,
+                                "PTE has misaligned PPN, raising PF\n");
+                        fault = pageFault(true);
+                    }
+                    else if (level == 2 && pte.ppn1 != 0) {
+                        DPRINTF(PageTableWalker,
+                                "PTE has misaligned PPN, raising PF\n");
+                        fault = pageFault(true);
+                    }
+                }
+
+                if (fault == NoFault) {
+                    // step 7
+                    if (!pte.a) {
+                        pte.a = 1;
+                        doWrite = true;
+                    }
+                    if (!pte.d && mode == BaseMMU::Write) {
+                        pte.d = 1;
+                        doWrite = true;
+                    }
+                    // Performing PMA/PMP checks
+
+                    if (doWrite) {
+
+                        // this read will eventually become write
+                        // if doWrite is True
+
+                        walker->pma->check(read->req);
+
+                        fault = walker->pmp->pmpCheck(read->req,
+                                            BaseMMU::Write, pmode, tc, entry.vaddr);
+
+                    }
+                    // perform step 8 only if pmp checks pass
+                    if (fault == NoFault) {
+
+                        // step 8
+                        entry.logBytes = PageShift + (level * LEVEL_BITS);
+                        entry.paddr = pte.ppn;
+                        entry.vaddr &= ~((1 << entry.logBytes) - 1);
+                        entry.pte = pte;
+                        // put it non-writable into the TLB to detect
+                        // writes and redo the page table walk in order
+                        // to update the dirty flag.
+                        if (!pte.d && mode != BaseMMU::Write)
+                            entry.pte.w = 0;
+                        doTLBInsert = true;
+                    }
+                }
+            } else {
+                level--;
+                if (level < 0) {
+                    DPRINTF(PageTableWalker, "No leaf PTE found,"
+                                                  "raising PF\n");
+                    doEndWalk = true;
+                    fault = pageFault(true);
+                } else {
+                    Addr shift = (PageShift + LEVEL_BITS * level);
+                    Addr idx = (entry.vaddr >> shift) & LEVEL_MASK;
+                    nextRead = (pte.ppn << PageShift) + (idx * sizeof(pte));
+                    nextState = Translate;
+                }
             }
         }
+    } else {
+        doEndWalk = true;
     }
-
     PacketPtr oldRead = read;
     Request::Flags flags = oldRead->req->getFlags();
 
@@ -422,7 +451,7 @@ Walker::WalkerState::endWalk()
 void
 Walker::WalkerState::setupWalk(Addr vaddr)
 {
-    vaddr &= (static_cast<Addr>(1) << VADDR_BITS) - 1;
+    vaddr = Addr(sext<VADDR_BITS>(vaddr));
 
     Addr shift = PageShift + LEVEL_BITS * 2;
     Addr idx = (vaddr >> shift) & LEVEL_MASK;
@@ -492,12 +521,18 @@ Walker::WalkerState::recvPacket(PacketPtr pkt)
              * well.
              */
             Addr vaddr = req->getVaddr();
-            vaddr &= (static_cast<Addr>(1) << VADDR_BITS) - 1;
+            vaddr = Addr(sext<VADDR_BITS>(vaddr));
             Addr paddr = walker->tlb->translateWithTLB(vaddr, satp.asid, mode);
             req->setPaddr(paddr);
             walker->pma->check(req);
+
+            // do pmp check if any checking condition is met.
+            // timingFault will be NoFault if pmp checks are
+            // passed, otherwise an address fault will be returned.
+            timingFault = walker->pmp->pmpCheck(req, mode, pmode, tc);
+
             // Let the CPU continue.
-            translation->finish(NoFault, req, tc, mode);
+            translation->finish(timingFault, req, tc, mode);
         } else {
             // There was a fault during the walk. Let the CPU know.
             translation->finish(timingFault, req, tc, mode);
@@ -585,4 +620,5 @@ Walker::WalkerState::pageFault(bool present)
     return walker->tlb->createPagefault(entry.vaddr, mode);
 }
 
-} /* end namespace RiscvISA */
+} // namespace RiscvISA
+} // namespace gem5

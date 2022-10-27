@@ -33,6 +33,12 @@
 #include "mem/ruby/system/RubySystem.hh"
 #include "mem/ruby/system/Sequencer.hh"
 
+namespace gem5
+{
+
+namespace ruby
+{
+
 void
 TraceRecord::print(std::ostream& out) const
 {
@@ -200,3 +206,6 @@ CacheRecorder::aggregateRecords(uint8_t **buf, uint64_t total_size)
     m_records.clear();
     return current_size;
 }
+
+} // namespace ruby
+} // namespace gem5

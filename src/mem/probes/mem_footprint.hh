@@ -47,6 +47,9 @@
 #include "sim/stats.hh"
 #include "sim/system.hh"
 
+namespace gem5
+{
+
 struct MemFootprintProbeParams;
 
 /// Probe to track footprint of accessed memory
@@ -69,20 +72,20 @@ class MemFootprintProbe : public BaseMemProbe
     const uint64_t totalPagesInMem;
 
     void insertAddr(Addr addr, AddrSet *set, uint64_t limit);
-    void handleRequest(const ProbePoints::PacketInfo &pkt_info) override;
+    void handleRequest(const probing::PacketInfo &pkt_info) override;
 
-    struct MemFootprintProbeStats : public Stats::Group
+    struct MemFootprintProbeStats : public statistics::Group
     {
         MemFootprintProbeStats(MemFootprintProbe *parent);
 
         /// Footprint at cache line size granularity
-        Stats::Scalar cacheLine;
+        statistics::Scalar cacheLine;
         /// Footprint at cache line size granularity, since simulation begin
-        Stats::Scalar cacheLineTotal;
+        statistics::Scalar cacheLineTotal;
         /// Footprint at page granularity
-        Stats::Scalar page;
+        statistics::Scalar page;
         /// Footprint at page granularity, since simulation begin
-        Stats::Scalar pageTotal;
+        statistics::Scalar pageTotal;
     };
 
     // Addr set to track unique cache lines accessed
@@ -97,5 +100,7 @@ class MemFootprintProbe : public BaseMemProbe
 
     MemFootprintProbeStats stats;
 };
+
+} // namespace gem5
 
 #endif  //__MEM_PROBES_MEM_FOOTPRINT_HH__

@@ -62,6 +62,9 @@
 #include "mem/packet.hh"
 #include "params/FALRU.hh"
 
+namespace gem5
+{
+
 // Uncomment to enable sanity checks for the FALRU cache and the
 // TrackedCaches class
 //#define FALRU_DEBUG
@@ -173,19 +176,18 @@ class FALRU : public BaseTags
      * cache access and should only be used as such.
      * Returns tag lookup latency and the inCachesMask flags as a side effect.
      *
-     * @param addr The address to look for.
-     * @param is_secure True if the target memory space is secure.
+     * @param pkt The packet holding the address to find.
      * @param lat The latency of the tag lookup.
      * @param in_cache_mask Mask indicating the caches in which the blk fits.
      * @return Pointer to the cache block.
      */
-    CacheBlk* accessBlock(Addr addr, bool is_secure, Cycles &lat,
+    CacheBlk* accessBlock(const PacketPtr pkt, Cycles &lat,
                           CachesMask *in_cache_mask);
 
     /**
      * Just a wrapper of above function to conform with the base interface.
      */
-    CacheBlk* accessBlock(Addr addr, bool is_secure, Cycles &lat) override;
+    CacheBlk* accessBlock(const PacketPtr pkt, Cycles &lat) override;
 
     /**
      * Find the block in the cache, do not update the replacement data.
@@ -273,11 +275,11 @@ class FALRU : public BaseTags
      * caches from a set minimum size of interest up to the actual
      * cache size.
      */
-    class CacheTracking : public Stats::Group
+    class CacheTracking : public statistics::Group
     {
       public:
         CacheTracking(unsigned min_size, unsigned max_size,
-                      unsigned block_size, Stats::Group *parent);
+                      unsigned block_size, statistics::Group *parent);
 
         /**
          * Initialiaze cache blocks and the tracking mechanism
@@ -356,11 +358,11 @@ class FALRU : public BaseTags
          */
 
         /** Hits in each cache */
-        Stats::Vector hits;
+        statistics::Vector hits;
         /** Misses in each cache */
-        Stats::Vector misses;
+        statistics::Vector misses;
         /** Total number of accesses */
-        Stats::Scalar accesses;
+        statistics::Scalar accesses;
 
         /**
          * @}
@@ -368,5 +370,7 @@ class FALRU : public BaseTags
     };
     CacheTracking cacheTracking;
 };
+
+} // namespace gem5
 
 #endif // __MEM_CACHE_TAGS_FA_LRU_HH__

@@ -2,8 +2,6 @@
  * Copyright (c) 2015-2017 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -33,18 +31,24 @@
 
 #include "gpu-compute/gpu_dyn_inst.hh"
 
+#include "debug/GPUInst.hh"
 #include "debug/GPUMem.hh"
 #include "gpu-compute/gpu_static_inst.hh"
 #include "gpu-compute/scalar_register_file.hh"
 #include "gpu-compute/shader.hh"
 #include "gpu-compute/wavefront.hh"
 
+namespace gem5
+{
+
 GPUDynInst::GPUDynInst(ComputeUnit *_cu, Wavefront *_wf,
                        GPUStaticInst *static_inst, InstSeqNum instSeqNum)
     : GPUExecContext(_cu, _wf), scalarAddr(0), addr(computeUnit()->wfSize(),
       (Addr)0), numScalarReqs(0), isSaveRestore(false),
-      _staticInst(static_inst), _seqNum(instSeqNum)
+      _staticInst(static_inst), _seqNum(instSeqNum),
+      maxSrcVecRegOpSize(-1), maxSrcScalarRegOpSize(-1)
 {
+    _staticInst->initOperandInfo();
     statusVector.assign(TheGpuISA::NumVecElemPerVecReg, 0);
     tlbHitLevel.assign(computeUnit()->wfSize(), -1);
     // vector instructions can have up to 4 source/destination operands
@@ -80,6 +84,13 @@ GPUDynInst::GPUDynInst(ComputeUnit *_cu, Wavefront *_wf,
         wg_id = -1;
         wfSlotId = -1;
     }
+
+
+    DPRINTF(GPUInst, "%s: generating operand info for %d operands\n",
+            disassemble(), getNumOperands());
+
+    _staticInst->initDynOperandInfo(wavefront(), computeUnit());
+
 }
 
 GPUDynInst::~GPUDynInst()
@@ -97,6 +108,30 @@ GPUDynInst::execute(GPUDynInstPtr gpuDynInst)
     _staticInst->execute(gpuDynInst);
 }
 
+const std::vector<OperandInfo>&
+GPUDynInst::srcVecRegOperands() const
+{
+    return _staticInst->srcVecRegOperands();
+}
+
+const std::vector<OperandInfo>&
+GPUDynInst::dstVecRegOperands() const
+{
+    return _staticInst->dstVecRegOperands();
+}
+
+const std::vector<OperandInfo>&
+GPUDynInst::srcScalarRegOperands() const
+{
+    return _staticInst->srcScalarRegOperands();
+}
+
+const std::vector<OperandInfo>&
+GPUDynInst::dstScalarRegOperands() const
+{
+    return _staticInst->dstScalarRegOperands();
+}
+
 int
 GPUDynInst::numSrcRegOperands()
 {
@@ -110,130 +145,115 @@ GPUDynInst::numDstRegOperands()
 }
 
 int
-GPUDynInst::numSrcVecOperands()
+GPUDynInst::numSrcVecRegOperands() const
 {
     return _staticInst->numSrcVecOperands();
 }
 
 int
-GPUDynInst::numDstVecOperands()
+GPUDynInst::numDstVecRegOperands() const
 {
     return _staticInst->numDstVecOperands();
 }
 
 int
-GPUDynInst::numSrcVecDWORDs()
+GPUDynInst::maxSrcVecRegOperandSize()
 {
-    return _staticInst->numSrcVecDWORDs();
+    if (maxSrcVecRegOpSize != -1)
+        return maxSrcVecRegOpSize;
+
+    maxSrcVecRegOpSize = 0;
+    for (const auto& srcVecOp : srcVecRegOperands())
+        if (srcVecOp.sizeInDWords() > maxSrcVecRegOpSize)
+            maxSrcVecRegOpSize = srcVecOp.sizeInDWords();
+
+    return maxSrcVecRegOpSize;
 }
 
 int
-GPUDynInst::numDstVecDWORDs()
+GPUDynInst::numSrcVecDWords()
 {
-    return _staticInst->numDstVecDWORDs();
+    return _staticInst->numSrcVecDWords();
 }
 
 int
-GPUDynInst::numOpdDWORDs(int operandIdx)
+GPUDynInst::numDstVecDWords()
 {
-    return _staticInst->numOpdDWORDs(operandIdx);
+    return _staticInst->numDstVecDWords();
 }
 
 int
-GPUDynInst::getNumOperands()
+GPUDynInst::numSrcScalarRegOperands() const
+{
+    return _staticInst->numSrcScalarOperands();
+}
+
+int
+GPUDynInst::numDstScalarRegOperands() const
+{
+    return _staticInst->numDstScalarOperands();
+}
+
+int
+GPUDynInst::maxSrcScalarRegOperandSize()
+{
+    if (maxSrcScalarRegOpSize != -1)
+        return maxSrcScalarRegOpSize;
+
+    maxSrcScalarRegOpSize = 0;
+    for (const auto& srcScOp : srcScalarRegOperands())
+        if (srcScOp.sizeInDWords() > maxSrcScalarRegOpSize)
+            maxSrcScalarRegOpSize = srcScOp.sizeInDWords();
+
+    return maxSrcScalarRegOpSize;
+}
+
+int
+GPUDynInst::numSrcScalarDWords()
+{
+    return _staticInst->numSrcScalarDWords();
+}
+
+int
+GPUDynInst::numDstScalarDWords()
+{
+    return _staticInst->numDstScalarDWords();
+}
+
+int
+GPUDynInst::maxOperandSize()
+{
+    return _staticInst->maxOperandSize();
+}
+
+int
+GPUDynInst::getNumOperands() const
 {
     return _staticInst->getNumOperands();
 }
 
 bool
-GPUDynInst::isVectorRegister(int operandIdx)
-{
-    return _staticInst->isVectorRegister(operandIdx);
-}
-
-bool
-GPUDynInst::isScalarRegister(int operandIdx)
-{
-    return _staticInst->isScalarRegister(operandIdx);
-}
-
-int
-GPUDynInst::getRegisterIndex(int operandIdx, GPUDynInstPtr gpuDynInst)
-{
-    return _staticInst->getRegisterIndex(operandIdx, gpuDynInst);
-}
-
-int
-GPUDynInst::getOperandSize(int operandIdx)
-{
-    return _staticInst->getOperandSize(operandIdx);
-}
-
-bool
-GPUDynInst::isDstOperand(int operandIdx)
-{
-    return _staticInst->isDstOperand(operandIdx);
-}
-
-bool
-GPUDynInst::isSrcOperand(int operandIdx)
-{
-    return _staticInst->isSrcOperand(operandIdx);
-}
-
-bool
-GPUDynInst::hasSourceSgpr() const
-{
-    for (int i = 0; i < _staticInst->getNumOperands(); ++i) {
-        if (_staticInst->isScalarRegister(i) && _staticInst->isSrcOperand(i)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-bool
 GPUDynInst::hasSourceVgpr() const
 {
-    for (int i = 0; i < _staticInst->getNumOperands(); ++i) {
-        if (_staticInst->isVectorRegister(i) && _staticInst->isSrcOperand(i)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-bool
-GPUDynInst::hasDestinationSgpr() const
-{
-    for (int i = 0; i < _staticInst->getNumOperands(); ++i) {
-        if (_staticInst->isScalarRegister(i) && _staticInst->isDstOperand(i)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-bool
-GPUDynInst::srcIsVgpr(int index) const
-{
-    assert(index >= 0 && index < _staticInst->getNumOperands());
-    if (_staticInst->isVectorRegister(index) &&
-        _staticInst->isSrcOperand(index)) {
-        return true;
-    }
-    return false;
+    return !srcVecRegOperands().empty();
 }
 
 bool
 GPUDynInst::hasDestinationVgpr() const
 {
-    for (int i = 0; i < _staticInst->getNumOperands(); ++i) {
-        if (_staticInst->isVectorRegister(i) && _staticInst->isDstOperand(i)) {
-            return true;
-        }
-    }
-    return false;
+    return !dstVecRegOperands().empty();
+}
+
+bool
+GPUDynInst::hasSourceSgpr() const
+{
+    return !srcScalarRegOperands().empty();
+}
+
+bool
+GPUDynInst::hasDestinationSgpr() const
+{
+    return !dstScalarRegOperands().empty();
 }
 
 bool
@@ -262,44 +282,22 @@ GPUDynInst::seqNum() const
     return _seqNum;
 }
 
-Enums::StorageClassType
+Addr
+GPUDynInst::pc()
+{
+    return wavefront()->pc();
+}
+
+void
+GPUDynInst::pc(Addr _pc)
+{
+    wavefront()->pc(_pc);
+}
+
+enums::StorageClassType
 GPUDynInst::executedAs()
 {
     return _staticInst->executed_as;
-}
-
-bool
-GPUDynInst::hasVgprRawDependence(GPUDynInstPtr s)
-{
-    assert(s);
-    for (int i = 0; i < getNumOperands(); ++i) {
-        if (isVectorRegister(i) && isSrcOperand(i)) {
-            for (int j = 0; j < s->getNumOperands(); ++j) {
-                if (s->isVectorRegister(j) && s->isDstOperand(j)) {
-                    if (i == j)
-                        return true;
-                }
-            }
-        }
-    }
-    return false;
-}
-
-bool
-GPUDynInst::hasSgprRawDependence(GPUDynInstPtr s)
-{
-    assert(s);
-    for (int i = 0; i < getNumOperands(); ++i) {
-        if (isScalarRegister(i) && isSrcOperand(i)) {
-            for (int j = 0; j < s->getNumOperands(); ++j) {
-                if (s->isScalarRegister(j) && s->isDstOperand(j)) {
-                    if (i == j)
-                        return true;
-                }
-            }
-        }
-    }
-    return false;
 }
 
 // Process a memory instruction and (if necessary) submit timing request
@@ -429,6 +427,12 @@ GPUDynInst::isFlat() const
 }
 
 bool
+GPUDynInst::isFlatGlobal() const
+{
+    return _staticInst->isFlatGlobal();
+}
+
+bool
 GPUDynInst::isLoad() const
 {
     return _staticInst->isLoad();
@@ -485,12 +489,20 @@ GPUDynInst::writesSCC() const
 bool
 GPUDynInst::readsVCC() const
 {
+    for (const auto& srcOp : _staticInst->srcOperands())
+        if (srcOp.isVcc())
+            return true;
+
     return _staticInst->readsVCC();
 }
 
 bool
 GPUDynInst::writesVCC() const
 {
+    for (const auto& dstOp : _staticInst->dstOperands())
+        if (dstOp.isVcc())
+            return true;
+
     return _staticInst->writesVCC();
 }
 
@@ -507,13 +519,13 @@ GPUDynInst::writesMode() const
 }
 
 bool
-GPUDynInst::readsEXEC() const
+GPUDynInst::readsExec() const
 {
     return _staticInst->readsEXEC();
 }
 
 bool
-GPUDynInst::writesEXEC() const
+GPUDynInst::writesExec() const
 {
     return _staticInst->writesEXEC();
 }
@@ -527,42 +539,40 @@ GPUDynInst::ignoreExec() const
 bool
 GPUDynInst::writesExecMask() const
 {
-    for (int i = 0; i < _staticInst->getNumOperands(); ++i) {
-        return _staticInst->isDstOperand(i) &&
-            _staticInst->isExecMaskRegister(i);
-    }
-    return false;
+    for (const auto& dstOp : _staticInst->dstOperands())
+        if (dstOp.isExec())
+            return true;
+
+    return _staticInst->writesEXEC();
 }
 
 bool
 GPUDynInst::readsExecMask() const
 {
-    for (int i = 0; i < _staticInst->getNumOperands(); ++i) {
-        return _staticInst->isSrcOperand(i) &&
-            _staticInst->isExecMaskRegister(i);
-    }
-    return false;
+    for (const auto& srcOp : _staticInst->srcOperands())
+        if (srcOp.isExec())
+            return true;
+
+    return _staticInst->readsEXEC();
 }
 
 bool
 GPUDynInst::writesFlatScratch() const
 {
-    for (int i = 0; i < _staticInst->getNumOperands(); ++i) {
-        if (_staticInst->isScalarRegister(i) && _staticInst->isDstOperand(i)) {
-            return _staticInst->isFlatScratchRegister(i);
-        }
-    }
+    for (const auto& dstScalarOp : dstScalarRegOperands())
+        if (dstScalarOp.isFlatScratch())
+            return true;
+
     return false;
 }
 
 bool
 GPUDynInst::readsFlatScratch() const
 {
-    for (int i = 0; i < _staticInst->getNumOperands(); ++i) {
-        if (_staticInst->isScalarRegister(i) && _staticInst->isSrcOperand(i)) {
-            return _staticInst->isFlatScratchRegister(i);
-        }
-    }
+    for (const auto& srcScalarOp : srcScalarRegOperands())
+        if (srcScalarOp.isFlatScratch())
+            return true;
+
     return false;
 }
 
@@ -750,11 +760,11 @@ GPUDynInst::doApertureCheck(const VectorMask &mask)
         if (mask[lane]) {
             if (computeUnit()->shader->isLdsApe(addr[lane])) {
                 // group segment
-                staticInstruction()->executed_as = Enums::SC_GROUP;
+                staticInstruction()->executed_as = enums::SC_GROUP;
                 break;
             } else if (computeUnit()->shader->isScratchApe(addr[lane])) {
                 // private segment
-                staticInstruction()->executed_as = Enums::SC_PRIVATE;
+                staticInstruction()->executed_as = enums::SC_PRIVATE;
                 break;
             } else if (computeUnit()->shader->isGpuVmApe(addr[lane])) {
                 // we won't support GPUVM
@@ -766,18 +776,18 @@ GPUDynInst::doApertureCheck(const VectorMask &mask)
                       addr[lane]);
             } else {
                 // global memory segment
-                staticInstruction()->executed_as = Enums::SC_GLOBAL;
+                staticInstruction()->executed_as = enums::SC_GLOBAL;
                 break;
             }
         }
     }
 
     // we should have found the segment
-    assert(executedAs() != Enums::SC_NONE);
+    assert(executedAs() != enums::SC_NONE);
 
     // flat accesses should not straddle multiple APEs so we
     // must check that all addresses fall within the same APE
-    if (executedAs() == Enums::SC_GROUP) {
+    if (executedAs() == enums::SC_GROUP) {
         for (int lane = 0; lane < computeUnit()->wfSize(); ++lane) {
             if (mask[lane]) {
                 // if the first valid addr we found above was LDS,
@@ -785,7 +795,7 @@ GPUDynInst::doApertureCheck(const VectorMask &mask)
                 assert(computeUnit()->shader->isLdsApe(addr[lane]));
             }
         }
-    } else if (executedAs() == Enums::SC_PRIVATE) {
+    } else if (executedAs() == enums::SC_PRIVATE) {
         for (int lane = 0; lane < computeUnit()->wfSize(); ++lane) {
             if (mask[lane]) {
                 // if the first valid addr we found above was private,
@@ -822,7 +832,7 @@ GPUDynInst::resolveFlatSegment(const VectorMask &mask)
     // 2. Set the execUnitId based an the aperture check.
     // 3. Decrement any extra resources that were reserved. Other
     //    resources are released as normal, below.
-    if (executedAs() == Enums::SC_GLOBAL) {
+    if (executedAs() == enums::SC_GLOBAL) {
         // no transormation for global segment
         wavefront()->execUnitId =  wavefront()->flatGmUnitId;
         if (isLoad()) {
@@ -835,12 +845,15 @@ GPUDynInst::resolveFlatSegment(const VectorMask &mask)
         } else {
             panic("Invalid memory operation!\n");
         }
-    } else if (executedAs() == Enums::SC_GROUP) {
+    } else if (executedAs() == enums::SC_GROUP) {
         for (int lane = 0; lane < wavefront()->computeUnit->wfSize(); ++lane) {
             if (mask[lane]) {
                 // flat address calculation goes here.
                 // addr[lane] = segmented address
-                panic("Flat group memory operation is unimplemented!\n");
+                addr[lane] = addr[lane] -
+                    wavefront()->computeUnit->shader->ldsApe().base;
+                assert(addr[lane] <
+                  wavefront()->computeUnit->getLds().getAddrRange().size());
             }
         }
         wavefront()->execUnitId =  wavefront()->flatLmUnitId;
@@ -855,7 +868,7 @@ GPUDynInst::resolveFlatSegment(const VectorMask &mask)
         } else {
             panic("Invalid memory operation!\n");
         }
-    } else if (executedAs() == Enums::SC_PRIVATE) {
+    } else if (executedAs() == enums::SC_PRIVATE) {
         /**
          * Flat instructions may resolve to the private segment (scratch),
          * which is backed by main memory and provides per-lane scratch
@@ -996,3 +1009,5 @@ GPUDynInst::profileLineAddressTime(Addr addr, Tick currentTime, int hopId)
         lineAddressTime.insert(std::make_pair(addr, addressTimeVec));
     }
 }
+
+} // namespace gem5

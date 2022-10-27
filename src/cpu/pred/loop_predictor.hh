@@ -38,7 +38,13 @@
 #include "base/types.hh"
 #include "sim/sim_object.hh"
 
+namespace gem5
+{
+
 struct LoopPredictorParams;
+
+namespace branch_prediction
+{
 
 class LoopPredictor : public SimObject
 {
@@ -83,10 +89,11 @@ class LoopPredictor : public SimObject
     const unsigned initialLoopAge;
     const bool optionalAgeReset;
 
-    struct LoopPredictorStats : public Stats::Group {
-        LoopPredictorStats(Stats::Group *parent);
-        Stats::Scalar correct;
-        Stats::Scalar wrong;
+    struct LoopPredictorStats : public statistics::Group
+    {
+        LoopPredictorStats(statistics::Group *parent);
+        statistics::Scalar correct;
+        statistics::Scalar wrong;
     } stats;
 
     /**
@@ -256,4 +263,8 @@ class LoopPredictor : public SimObject
 
     size_t getSizeInBits() const;
 };
+
+} // namespace branch_prediction
+} // namespace gem5
+
 #endif//__CPU_PRED_LOOP_PREDICTOR_HH__

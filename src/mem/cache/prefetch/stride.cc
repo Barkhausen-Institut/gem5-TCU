@@ -57,7 +57,12 @@
 #include "mem/cache/replacement_policies/base.hh"
 #include "params/StridePrefetcher.hh"
 
-namespace Prefetcher {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Prefetcher, prefetch);
+namespace prefetch
+{
 
 Stride::StrideEntry::StrideEntry(const SatCounter8& init_confidence)
   : TaggedEntry(), confidence(init_confidence)
@@ -201,4 +206,5 @@ StridePrefetcherHashedSetAssociative::extractTag(const Addr addr) const
     return addr;
 }
 
-} // namespace Prefetcher
+} // namespace prefetch
+} // namespace gem5

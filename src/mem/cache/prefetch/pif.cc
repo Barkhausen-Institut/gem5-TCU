@@ -34,7 +34,12 @@
 #include "mem/cache/prefetch/associative_set_impl.hh"
 #include "params/PIFPrefetcher.hh"
 
-namespace Prefetcher {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Prefetcher, prefetch);
+namespace prefetch
+{
 
 PIF::PIF(const PIFPrefetcherParams &p)
     : Queued(p),
@@ -243,4 +248,5 @@ PIF::addEventProbeRetiredInsts(SimObject *obj, const char *name)
     listenersPC.push_back(new PrefetchListenerPC(*this, pm, name));
 }
 
-} // namespace Prefetcher
+} // namespace prefetch
+} // namespace gem5

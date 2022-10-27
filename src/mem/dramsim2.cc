@@ -44,6 +44,12 @@
 #include "debug/Drain.hh"
 #include "sim/system.hh"
 
+namespace gem5
+{
+
+namespace memory
+{
+
 DRAMSim2::DRAMSim2(const Params &p) :
     AbstractMemory(p),
     port(name() + ".port", *this),
@@ -144,7 +150,8 @@ DRAMSim2::tick()
         port.sendRetryReq();
     }
 
-    schedule(tickEvent, curTick() + wrapper.clockPeriod() * SimClock::Int::ns);
+    schedule(tickEvent,
+        curTick() + wrapper.clockPeriod() * sim_clock::as_int::ns);
 }
 
 Tick
@@ -283,7 +290,7 @@ DRAMSim2::accessAndRespond(PacketPtr pkt)
 void DRAMSim2::readComplete(unsigned id, uint64_t addr, uint64_t cycle)
 {
     assert(cycle == divCeil(curTick() - startTick,
-                            wrapper.clockPeriod() * SimClock::Int::ns));
+                            wrapper.clockPeriod() * sim_clock::as_int::ns));
 
     DPRINTF(DRAMSim2, "Read to address %lld complete\n", addr);
 
@@ -311,7 +318,7 @@ void DRAMSim2::readComplete(unsigned id, uint64_t addr, uint64_t cycle)
 void DRAMSim2::writeComplete(unsigned id, uint64_t addr, uint64_t cycle)
 {
     assert(cycle == divCeil(curTick() - startTick,
-                            wrapper.clockPeriod() * SimClock::Int::ns));
+                            wrapper.clockPeriod() * sim_clock::as_int::ns));
 
     DPRINTF(DRAMSim2, "Write to address %lld complete\n", addr);
 
@@ -352,38 +359,41 @@ DRAMSim2::drain()
 
 DRAMSim2::MemoryPort::MemoryPort(const std::string& _name,
                                  DRAMSim2& _memory)
-    : ResponsePort(_name, &_memory), memory(_memory)
+    : ResponsePort(_name, &_memory), mem(_memory)
 { }
 
 AddrRangeList
 DRAMSim2::MemoryPort::getAddrRanges() const
 {
     AddrRangeList ranges;
-    ranges.push_back(memory.getAddrRange());
+    ranges.push_back(mem.getAddrRange());
     return ranges;
 }
 
 Tick
 DRAMSim2::MemoryPort::recvAtomic(PacketPtr pkt)
 {
-    return memory.recvAtomic(pkt);
+    return mem.recvAtomic(pkt);
 }
 
 void
 DRAMSim2::MemoryPort::recvFunctional(PacketPtr pkt)
 {
-    memory.recvFunctional(pkt);
+    mem.recvFunctional(pkt);
 }
 
 bool
 DRAMSim2::MemoryPort::recvTimingReq(PacketPtr pkt)
 {
     // pass it to the memory controller
-    return memory.recvTimingReq(pkt);
+    return mem.recvTimingReq(pkt);
 }
 
 void
 DRAMSim2::MemoryPort::recvRespRetry()
 {
-    memory.recvRespRetry();
+    mem.recvRespRetry();
 }
+
+} // namespace memory
+} // namespace gem5

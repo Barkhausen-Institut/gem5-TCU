@@ -49,10 +49,14 @@
 #ifndef __MEM_CACHE_NONCOHERENT_CACHE_HH__
 #define __MEM_CACHE_NONCOHERENT_CACHE_HH__
 
+#include "base/compiler.hh"
 #include "base/logging.hh"
 #include "base/types.hh"
 #include "mem/cache/base.hh"
 #include "mem/packet.hh"
+
+namespace gem5
+{
 
 class CacheBlk;
 class MSHR;
@@ -116,10 +120,12 @@ class NoncoherentCache : public BaseCache
                                bool needs_writable,
                                bool is_whole_line_write) const override;
 
-    M5_NODISCARD PacketPtr evictBlock(CacheBlk *blk) override;
+    [[nodiscard]] PacketPtr evictBlock(CacheBlk *blk) override;
 
   public:
     NoncoherentCache(const NoncoherentCacheParams &p);
 };
+
+} // namespace gem5
 
 #endif // __MEM_CACHE_NONCOHERENTCACHE_HH__

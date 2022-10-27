@@ -71,6 +71,9 @@
 // Hack
 #include "sim/stat_control.hh"
 
+namespace gem5
+{
+
 std::unique_ptr<BaseCPU::GlobalStats> BaseCPU::globalStats;
 
 std::vector<BaseCPU *> BaseCPU::cpuList;
@@ -94,10 +97,10 @@ CPUProgressEvent::process()
     Counter temp = cpu->totalOps();
 
     if (_repeatEvent)
-      cpu->schedule(this, curTick() + _interval);
+        cpu->schedule(this, curTick() + _interval);
 
     if (cpu->switchedOut()) {
-      return;
+        return;
     }
 
 #ifndef NDEBUG
@@ -125,7 +128,7 @@ BaseCPU::BaseCPU(const Params &p, bool is_checker)
     : ClockedObject(p), instCnt(0), _cpuId(p.cpu_id), _socketId(p.socket_id),
       _instRequestorId(p.system->getRequestorId(this, "inst")),
       _dataRequestorId(p.system->getRequestorId(this, "data")),
-      _taskId(ContextSwitchTaskId::Unknown), _pid(invldPid),
+      _taskId(context_switch_task_id::Unknown), _pid(invldPid),
       _switchedOut(p.switched_out), _cacheLineSize(p.system->cacheLineSize()),
       interrupts(p.interrupts), numThreads(p.numThreads), system(p.system),
       previousCycle(0), previousState(CPU_STATE_SLEEP),
@@ -147,7 +150,7 @@ BaseCPU::BaseCPU(const Params &p, bool is_checker)
     cpuList.push_back(this);
 
     DPRINTF(SyscallVerbose, "Constructing CPU with id %d, socket id %d\n",
-                _cpuId, _socketId);
+            _cpuId, _socketId);
 
     if (numThreads > maxThreadsPerCPU)
         maxThreadsPerCPU = numThreads;
@@ -193,7 +196,7 @@ BaseCPU::postInterrupt(ThreadID tid, int int_num, int index)
     interrupts[tid]->post(int_num, index);
     // Only wake up syscall emulation if it is not waiting on a futex.
     // This is to model the fact that instructions such as ARM SEV
-    // should wake up a WFE sleep, but not a futex syscall WAIT. */
+    // should wake up a WFE sleep, but not a futex syscall WAIT.
     if (FullSystem || !system->futexMap.is_waiting(threadContexts[tid]))
         wakeup(tid);
 }
@@ -207,7 +210,7 @@ BaseCPU::armMonitor(ThreadID tid, Addr address)
     monitor.armed = true;
     monitor.vAddr = address;
     monitor.pAddr = 0x0;
-    DPRINTF(Mwait,"[tid:%d] Armed monitor (vAddr=0x%lx)\n", tid, address);
+    DPRINTF(Mwait, "[tid:%d] Armed monitor (vAddr=0x%lx)\n", tid, address);
 }
 
 bool
@@ -224,7 +227,7 @@ BaseCPU::mwait(ThreadID tid, PacketPtr pkt)
         monitor.pAddr = pkt->getAddr() & mask;
         monitor.waiting = true;
 
-        DPRINTF(Mwait,"[tid:%d] mwait called (vAddr=0x%lx, "
+        DPRINTF(Mwait, "[tid:%d] mwait called (vAddr=0x%lx, "
                 "line's paddr=0x%lx)\n", tid, monitor.vAddr, monitor.pAddr);
         return true;
     } else {
@@ -252,16 +255,17 @@ BaseCPU::mwaitAtomic(ThreadID tid, ThreadContext *tc, BaseMMU *mmu)
     if (secondAddr > addr)
         size = secondAddr - addr;
 
-    req->setVirt(addr, size, 0x0, dataRequestorId(), tc->instAddr());
+    req->setVirt(addr, size, 0x0, dataRequestorId(),
+            tc->pcState().instAddr());
 
     // translate to physical address
-    Fault fault = mmu->translateAtomic(req, tc, BaseTLB::Read);
+    Fault fault = mmu->translateAtomic(req, tc, BaseMMU::Read);
     assert(fault == NoFault);
 
     monitor.pAddr = req->getPaddr() & mask;
     monitor.waiting = true;
 
-    DPRINTF(Mwait,"[tid:%d] mwait called (vAddr=0x%lx, line's paddr=0x%lx)\n",
+    DPRINTF(Mwait, "[tid:%d] mwait called (vAddr=0x%lx, line's paddr=0x%lx)\n",
             tid, monitor.vAddr, monitor.pAddr);
 }
 
@@ -316,19 +320,19 @@ BaseCPU::startup()
     }
 
     if (_switchedOut)
-        powerState->set(Enums::PwrState::OFF);
+        powerState->set(enums::PwrState::OFF);
 
     // Assumption CPU start to operate instantaneously without any latency
-    if (powerState->get() == Enums::PwrState::UNDEFINED)
-        powerState->set(Enums::PwrState::ON);
+    if (powerState->get() == enums::PwrState::UNDEFINED)
+        powerState->set(enums::PwrState::ON);
 
 }
 
-ProbePoints::PMUUPtr
+probing::PMUUPtr
 BaseCPU::pmuProbePoint(const char *name)
 {
-    ProbePoints::PMUUPtr ptr;
-    ptr.reset(new ProbePoints::PMU(getProbeManager(), name));
+    probing::PMUUPtr ptr;
+    ptr.reset(new probing::PMU(getProbeManager(), name));
 
     return ptr;
 }
@@ -368,12 +372,13 @@ BaseCPU::probeInstCommit(const StaticInstPtr &inst, Addr pc)
 }
 
 BaseCPU::
-BaseCPUStats::BaseCPUStats(Stats::Group *parent)
-    : Stats::Group(parent),
-      ADD_STAT(numCycles, UNIT_CYCLE, "Number of cpu cycles simulated"),
-      ADD_STAT(numWorkItemsStarted, UNIT_COUNT,
+BaseCPUStats::BaseCPUStats(statistics::Group *parent)
+    : statistics::Group(parent),
+      ADD_STAT(numCycles, statistics::units::Cycle::get(),
+               "Number of cpu cycles simulated"),
+      ADD_STAT(numWorkItemsStarted, statistics::units::Count::get(),
                "Number of work items this cpu started"),
-      ADD_STAT(numWorkItemsCompleted, UNIT_COUNT,
+      ADD_STAT(numWorkItemsCompleted, statistics::units::Count::get(),
                "Number of work items this cpu completed")
 {
 }
@@ -389,7 +394,7 @@ BaseCPU::regStats()
         globalStats.reset(new GlobalStats(Root::root()));
     }
 
-    using namespace Stats;
+    using namespace statistics;
 
     int size = threadContexts.size();
     if (size > 1) {
@@ -426,15 +431,10 @@ BaseCPU::registerThreadContexts()
              "per thread (%i)\n",
              name(), interrupts.size(), numThreads);
 
-    ThreadID size = threadContexts.size();
-    for (ThreadID tid = 0; tid < size; ++tid) {
+    for (ThreadID tid = 0; tid < threadContexts.size(); ++tid) {
         ThreadContext *tc = threadContexts[tid];
 
-        if (system->multiThread) {
-            tc->setContextId(system->registerThreadContext(tc));
-        } else {
-            tc->setContextId(system->registerThreadContext(tc, _cpuId));
-        }
+        system->registerThreadContext(tc);
 
         if (!FullSystem)
             tc->getProcessPtr()->assignThreadContext(tc->contextId());
@@ -460,7 +460,7 @@ BaseCPU::schedulePowerGatingEvent()
             return;
     }
 
-    if (powerState->get() == Enums::PwrState::CLK_GATED &&
+    if (powerState->get() == enums::PwrState::CLK_GATED &&
         powerGatingOnIdle) {
         assert(!enterPwrGatingEvent.scheduled());
         // Schedule a power gating event when clock gated for the specified
@@ -489,7 +489,7 @@ BaseCPU::activateContext(ThreadID thread_num)
     if (enterPwrGatingEvent.scheduled())
         deschedule(enterPwrGatingEvent);
     // For any active thread running, update CPU power state to active (ON)
-    powerState->set(Enums::PwrState::ON);
+    powerState->set(enums::PwrState::ON);
 
     updateCycleCounters(CPU_STATE_WAKEUP);
 }
@@ -510,7 +510,7 @@ BaseCPU::suspendContext(ThreadID thread_num)
     updateCycleCounters(CPU_STATE_SLEEP);
 
     // All CPU threads suspended, enter lower power state for the CPU
-    powerState->set(Enums::PwrState::CLK_GATED);
+    powerState->set(enums::PwrState::CLK_GATED);
 
     // If pwrGatingLatency is set to 0 then this mechanism is disabled
     if (powerGatingOnIdle) {
@@ -529,7 +529,7 @@ BaseCPU::haltContext(ThreadID thread_num)
 void
 BaseCPU::enterPwrGating(void)
 {
-    powerState->set(Enums::PwrState::OFF);
+    powerState->set(enums::PwrState::OFF);
 }
 
 void
@@ -543,7 +543,7 @@ BaseCPU::switchOut()
     flushTLBs();
 
     // Go to the power gating state
-    powerState->set(Enums::PwrState::OFF);
+    powerState->set(enums::PwrState::OFF);
 }
 
 void
@@ -579,7 +579,7 @@ BaseCPU::takeOverFrom(BaseCPU *oldCPU)
         /* This code no longer works since the zero register (e.g.,
          * r31 on Alpha) doesn't necessarily contain zero at this
          * point.
-           if (DTRACE(Context))
+           if (debug::Context)
             ThreadContext::compare(oldTC, newTC);
         */
 
@@ -675,17 +675,20 @@ BaseCPU::getCurrentInstCount(ThreadID tid)
     return threadContexts[tid]->getCurrentInstCount();
 }
 
-AddressMonitor::AddressMonitor() {
+AddressMonitor::AddressMonitor()
+{
     armed = false;
     waiting = false;
     gotWakeup = false;
 }
 
-bool AddressMonitor::doMonitor(PacketPtr pkt) {
+bool
+AddressMonitor::doMonitor(PacketPtr pkt)
+{
     assert(pkt->req->hasPaddr());
     if (armed && waiting) {
         if (pAddr == pkt->getAddr()) {
-            DPRINTF(Mwait,"pAddr=0x%lx invalidated: waking up core\n",
+            DPRINTF(Mwait, "pAddr=0x%lx invalidated: waking up core\n",
                     pkt->getAddr());
             waiting = false;
             return true;
@@ -707,7 +710,7 @@ BaseCPU::traceFunctionsInternal(const Loader::SymbolTable &symtab, Addr pc)
         auto it = symtab.findNearest(pc, currentFunctionEnd);
 
         std::string sym_str;
-        if (it == Loader::debugSymbolTable.end()) {
+        if (it == loader::debugSymbolTable.end()) {
             // no symbol found: use addr as label
             sym_str = csprintf("%#x", pc);
             currentFunctionStart = pc;
@@ -723,23 +726,18 @@ BaseCPU::traceFunctionsInternal(const Loader::SymbolTable &symtab, Addr pc)
     }
 }
 
-bool
-BaseCPU::waitForRemoteGDB() const
-{
-    return params().wait_for_remote_gdb;
-}
 
-
-BaseCPU::GlobalStats::GlobalStats(::Stats::Group *parent)
-    : ::Stats::Group(parent),
-    ADD_STAT(simInsts, UNIT_COUNT, "Number of instructions simulated"),
-    ADD_STAT(simOps, UNIT_COUNT,
+BaseCPU::GlobalStats::GlobalStats(statistics::Group *parent)
+    : statistics::Group(parent),
+    ADD_STAT(simInsts, statistics::units::Count::get(),
+             "Number of instructions simulated"),
+    ADD_STAT(simOps, statistics::units::Count::get(),
              "Number of ops (including micro ops) simulated"),
-    ADD_STAT(hostInstRate,
-             UNIT_RATE(Stats::Units::Count, Stats::Units::Second),
+    ADD_STAT(hostInstRate, statistics::units::Rate<
+                statistics::units::Count, statistics::units::Second>::get(),
              "Simulator instruction rate (inst/s)"),
-    ADD_STAT(hostOpRate,
-             UNIT_RATE(Stats::Units::Count, Stats::Units::Second),
+    ADD_STAT(hostOpRate, statistics::units::Rate<
+                statistics::units::Count, statistics::units::Second>::get(),
              "Simulator op (including micro ops) rate (op/s)")
 {
     simInsts
@@ -767,3 +765,5 @@ BaseCPU::GlobalStats::GlobalStats(::Stats::Group *parent)
     hostInstRate = simInsts / hostSeconds;
     hostOpRate = simOps / hostSeconds;
 }
+
+} // namespace gem5

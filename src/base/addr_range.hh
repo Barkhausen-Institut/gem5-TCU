@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, 2017-2019 ARM Limited
+ * Copyright (c) 2012, 2014, 2017-2019, 2021 Arm Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -42,6 +42,7 @@
 #define __BASE_ADDR_RANGE_HH__
 
 #include <algorithm>
+#include <iterator>
 #include <list>
 #include <vector>
 
@@ -49,6 +50,18 @@
 #include "base/cprintf.hh"
 #include "base/logging.hh"
 #include "base/types.hh"
+
+namespace gem5
+{
+
+class AddrRange;
+
+/**
+ * Convenience typedef for a collection of address ranges
+ *
+ * @ingroup api_addr_range
+ */
+typedef std::list<AddrRange> AddrRangeList;
 
 /**
  * The AddrRange class encapsulates an address range, and supports a
@@ -85,6 +98,48 @@ class AddrRange
 
     /** The value to compare sel with. */
     uint8_t intlvMatch;
+
+  protected:
+    struct Dummy {};
+
+    // The dummy parameter Dummy distinguishes this from the other two argument
+    // constructor which takes two Addrs.
+    template <class Iterator>
+    AddrRange(Dummy, Iterator begin_it, Iterator end_it)
+        : _start(1), _end(0), intlvMatch(0)
+    {
+        if (begin_it != end_it) {
+            // get the values from the first one and check the others
+            _start = begin_it->_start;
+            _end = begin_it->_end;
+            masks = begin_it->masks;
+            intlvMatch = begin_it->intlvMatch;
+        }
+
+        auto count = std::distance(begin_it, end_it);
+        // either merge if got all ranges or keep this equal to the single
+        // interleaved range
+        if (count > 1) {
+            fatal_if(count != (1ULL << masks.size()),
+                    "Got %d ranges spanning %d interleaving bits.",
+                    count, masks.size());
+
+            uint8_t match = 0;
+            for (auto it = begin_it; it != end_it; it++) {
+                fatal_if(!mergesWith(*it),
+                        "Can only merge ranges with the same start, end "
+                        "and interleaving bits, %s %s.", to_string(),
+                        it->to_string());
+
+                fatal_if(it->intlvMatch != match,
+                        "Expected interleave match %d but got %d when "
+                        "merging.", match, it->intlvMatch);
+                ++match;
+            }
+            masks.clear();
+            intlvMatch = 0;
+        }
+    }
 
   public:
 
@@ -131,7 +186,7 @@ class AddrRange
           intlvMatch(_intlv_match)
     {
         // sanity checks
-        fatal_if(!masks.empty() && _intlv_match >= ULL(1) << masks.size(),
+        fatal_if(!masks.empty() && _intlv_match >= 1ULL << masks.size(),
                  "Match value %d does not fit in %d interleaving bits\n",
                  _intlv_match, masks.size());
     }
@@ -169,7 +224,7 @@ class AddrRange
           intlvMatch(_intlv_match)
     {
         // sanity checks
-        fatal_if(_intlv_bits && _intlv_match >= ULL(1) << _intlv_bits,
+        fatal_if(_intlv_bits && _intlv_match >= 1ULL << _intlv_bits,
                  "Match value %d does not fit in %d interleaving bits\n",
                  _intlv_match, _intlv_bits);
 
@@ -212,40 +267,12 @@ class AddrRange
      *
      * @ingroup api_addr_range
      */
-    AddrRange(const std::vector<AddrRange>& ranges)
-        : _start(1), _end(0), intlvMatch(0)
-    {
-        if (!ranges.empty()) {
-            // get the values from the first one and check the others
-            _start = ranges.front()._start;
-            _end = ranges.front()._end;
-            masks = ranges.front().masks;
-            intlvMatch = ranges.front().intlvMatch;
-        }
-        // either merge if got all ranges or keep this equal to the single
-        // interleaved range
-        if (ranges.size() > 1) {
-
-            if (ranges.size() != (ULL(1) << masks.size()))
-                fatal("Got %d ranges spanning %d interleaving bits\n",
-                      ranges.size(), masks.size());
-
-            uint8_t match = 0;
-            for (const auto& r : ranges) {
-                if (!mergesWith(r))
-                    fatal("Can only merge ranges with the same start, end "
-                          "and interleaving bits, %s %s\n", to_string(),
-                          r.to_string());
-
-                if (r.intlvMatch != match)
-                    fatal("Expected interleave match %d but got %d when "
-                          "merging\n", match, r.intlvMatch);
-                ++match;
-            }
-            masks.clear();
-            intlvMatch = 0;
-        }
-    }
+    AddrRange(std::vector<AddrRange> ranges)
+        : AddrRange(Dummy{}, ranges.begin(), ranges.end())
+    {}
+    AddrRange(std::list<AddrRange> ranges)
+        : AddrRange(Dummy{}, ranges.begin(), ranges.end())
+    {}
 
     /**
      * Determine if the range is interleaved or not.
@@ -263,7 +290,8 @@ class AddrRange
      *
      * @ingroup api_addr_range
      */
-    uint64_t granularity() const
+    uint64_t
+    granularity() const
     {
         if (interleaved()) {
             auto combined_mask = 0;
@@ -271,7 +299,7 @@ class AddrRange
                 combined_mask |= mask;
             }
             const uint8_t lowest_bit = ctz64(combined_mask);
-            return ULL(1) << lowest_bit;
+            return 1ULL << lowest_bit;
         } else {
             return size();
         }
@@ -285,7 +313,7 @@ class AddrRange
      *
      * @ingroup api_addr_range
      */
-    uint32_t stripes() const { return ULL(1) << masks.size(); }
+    uint32_t stripes() const { return 1ULL << masks.size(); }
 
     /**
      * Get the size of the address range. For a case where
@@ -294,7 +322,8 @@ class AddrRange
      *
      * @ingroup api_addr_range
      */
-    Addr size() const
+    Addr
+    size() const
     {
         return (_end - _start) >> masks.size();
     }
@@ -327,11 +356,12 @@ class AddrRange
      *
      * @ingroup api_addr_range
      */
-    std::string to_string() const
+    std::string
+    to_string() const
     {
         if (interleaved()) {
             std::string str;
-            for (int i = 0; i < masks.size(); i++) {
+            for (unsigned int i = 0; i < masks.size(); i++) {
                 str += " ";
                 Addr mask = masks[i];
                 while (mask) {
@@ -357,7 +387,8 @@ class AddrRange
      *
      * @ingroup api_addr_range
      */
-    bool mergesWith(const AddrRange& r) const
+    bool
+    mergesWith(const AddrRange& r) const
     {
         return r._start == _start && r._end == _end &&
             r.masks == masks;
@@ -373,28 +404,31 @@ class AddrRange
      *
      * @ingroup api_addr_range
      */
-    bool intersects(const AddrRange& r) const
+    bool
+    intersects(const AddrRange& r) const
     {
-        if (_start >= r._end || _end <= r._start)
+        if (_start >= r._end || _end <= r._start) {
             // start with the simple case of no overlap at all,
             // applicable even if we have interleaved ranges
             return false;
-        else if (!interleaved() && !r.interleaved())
+        } else if (!interleaved() && !r.interleaved()) {
             // if neither range is interleaved, we are done
             return true;
+        }
 
         // now it gets complicated, focus on the cases we care about
-        if (r.size() == 1)
+        if (r.size() == 1) {
             // keep it simple and check if the address is within
             // this range
             return contains(r.start());
-        else if (mergesWith(r))
+        } else if (mergesWith(r)) {
             // restrict the check to ranges that belong to the
             // same chunk
             return intlvMatch == r.intlvMatch;
-        else
+        } else {
             panic("Cannot test intersection of %s and %s\n",
                   to_string(), r.to_string());
+        }
     }
 
     /**
@@ -407,7 +441,8 @@ class AddrRange
      *
      * @ingroup api_addr_range
      */
-    bool isSubset(const AddrRange& r) const
+    bool
+    isSubset(const AddrRange& r) const
     {
         if (interleaved())
             panic("Cannot test subset of interleaved range %s\n", to_string());
@@ -432,7 +467,8 @@ class AddrRange
      *
      * @ingroup api_addr_range
      */
-    bool contains(const Addr& a) const
+    bool
+    contains(const Addr& a) const
     {
         // check if the address is in the range and if there is either
         // no interleaving, or with interleaving also if the selected
@@ -440,7 +476,7 @@ class AddrRange
         bool in_range = a >= _start && a < _end;
         if (in_range) {
             auto sel = 0;
-            for (int i = 0; i < masks.size(); i++) {
+            for (unsigned int i = 0; i < masks.size(); i++) {
                 Addr masked = a & masks[i];
                 // The result of an xor operation is 1 if the number
                 // of bits set is odd or 0 othersize, thefore it
@@ -477,7 +513,8 @@ class AddrRange
      *
      * @ingroup api_addr_range
      */
-    inline Addr removeIntlvBits(Addr a) const
+    inline Addr
+    removeIntlvBits(Addr a) const
     {
         // Directly return the address if the range is not interleaved
         // to prevent undefined behavior.
@@ -487,7 +524,7 @@ class AddrRange
 
         // Get the LSB set from each mask
         int masks_lsb[masks.size()];
-        for (int i = 0; i < masks.size(); i++) {
+        for (unsigned int i = 0; i < masks.size(); i++) {
             masks_lsb[i] = ctz64(masks[i]);
         }
 
@@ -495,7 +532,7 @@ class AddrRange
         // discard them one by one starting.
         std::sort(masks_lsb, masks_lsb + masks.size());
 
-        for (int i = 0; i < masks.size(); i++) {
+        for (unsigned int i = 0; i < masks.size(); i++) {
             const int intlv_bit = masks_lsb[i];
             if (intlv_bit > 0) {
                 // on every iteration we remove one bit from the input
@@ -515,7 +552,8 @@ class AddrRange
      *
      * @ingroup api_addr_range
      */
-    inline Addr addIntlvBits(Addr a) const
+    inline Addr
+    addIntlvBits(Addr a) const
     {
         // Directly return the address if the range is not interleaved
         // to prevent undefined behavior.
@@ -525,13 +563,13 @@ class AddrRange
 
         // Get the LSB set from each mask
         int masks_lsb[masks.size()];
-        for (int i = 0; i < masks.size(); i++) {
+        for (unsigned int i = 0; i < masks.size(); i++) {
             masks_lsb[i] = ctz64(masks[i]);
         }
 
         // Add bits one-by-one from the LSB side.
         std::sort(masks_lsb, masks_lsb + masks.size());
-        for (int i = 0; i < masks.size(); i++) {
+        for (unsigned int i = 0; i < masks.size(); i++) {
             const int intlv_bit = masks_lsb[i];
             if (intlv_bit > 0) {
                 // on every iteration we add one bit from the input
@@ -544,7 +582,7 @@ class AddrRange
             }
         }
 
-        for (int i = 0; i < masks.size(); i++) {
+        for (unsigned int i = 0; i < masks.size(); i++) {
             const int lsb = ctz64(masks[i]);
             const Addr intlv_bit = bits(intlvMatch, i);
             // Calculate the mask ignoring the LSB
@@ -569,7 +607,8 @@ class AddrRange
      *
      * @ingroup api_addr_range
      */
-    Addr getOffset(const Addr& a) const
+    Addr
+    getOffset(const Addr& a) const
     {
         bool in_range = a >= _start && a < _end;
         if (!in_range) {
@@ -583,6 +622,68 @@ class AddrRange
     }
 
     /**
+     * Subtract a list of intervals from the range and return
+     * the resulting collection of ranges, so that the union
+     * of the two lists cover the original range
+     *
+     * The exclusion list can contain overlapping ranges
+     * Interleaving ranges are not supported and will fail the
+     * assertion.
+     *
+     * @param the input exclusion list
+     * @return the resulting collection of ranges
+     *
+     * @ingroup api_addr_range
+     */
+    AddrRangeList
+    exclude(const AddrRangeList &exclude_ranges) const
+    {
+        assert(!interleaved());
+
+        auto sorted_ranges = exclude_ranges;
+        sorted_ranges.sort();
+
+        std::list<AddrRange> ranges;
+
+        Addr next_start = start();
+        for (const auto &e : sorted_ranges) {
+            assert(!e.interleaved());
+            if (!intersects(e)) {
+                continue;
+            }
+
+            if (e.start() <= next_start) {
+                if (e.end() < end()) {
+                    if (next_start < e.end()) {
+                        next_start = e.end();
+                    }
+                } else {
+                    return ranges;
+                }
+            } else {
+                ranges.push_back(AddrRange(next_start, e.start()));
+                if (e.end() < end()) {
+                    next_start = e.end();
+                } else {
+                    return ranges;
+                }
+            }
+        }
+
+        if (next_start < end()) {
+            ranges.push_back(AddrRange(next_start, end()));
+        }
+
+        return ranges;
+    }
+
+    AddrRangeList
+    exclude(const AddrRange &excluded_range) const
+    {
+        return exclude(AddrRangeList{excluded_range});
+    }
+
+    /**
      * Less-than operator used to turn an STL map into a binary search
      * tree of non-overlapping address ranges.
      *
@@ -591,20 +692,29 @@ class AddrRange
      *
      * @ingroup api_addr_range
      */
-    bool operator<(const AddrRange& r) const
+    bool
+    operator<(const AddrRange& r) const
     {
-        if (_start != r._start)
+        if (_start != r._start) {
             return _start < r._start;
-        else
-            // for now assume that the end is also the same, and that
-            // we are looking at the same interleaving bits
-            return intlvMatch < r.intlvMatch;
+        } else {
+            // For now assume that the end is also the same.
+            // If both regions are interleaved, assume same interleaving,
+            // and compare intlvMatch values.
+            // Otherwise, return true if this address range is interleaved.
+            if (interleaved() && r.interleaved()) {
+                return intlvMatch < r.intlvMatch;
+            } else {
+                return interleaved();
+            }
+        }
     }
 
     /**
      * @ingroup api_addr_range
      */
-    bool operator==(const AddrRange& r) const
+    bool
+    operator==(const AddrRange& r) const
     {
         if (_start != r._start)    return false;
         if (_end != r._end)      return false;
@@ -617,38 +727,96 @@ class AddrRange
     /**
      * @ingroup api_addr_range
      */
-    bool operator!=(const AddrRange& r) const
+    bool
+    operator!=(const AddrRange& r) const
     {
         return !(*this == r);
     }
 };
 
-/**
- * Convenience typedef for a collection of address ranges
- *
- * @ingroup api_addr_range
- */
-typedef std::list<AddrRange> AddrRangeList;
+static inline AddrRangeList
+operator-(const AddrRange &range, const AddrRangeList &to_exclude)
+{
+    return range.exclude(to_exclude);
+}
+
+static inline AddrRangeList
+operator-(const AddrRange &range, const AddrRange &to_exclude)
+{
+    return range.exclude(to_exclude);
+}
+
+static inline AddrRangeList
+exclude(const AddrRangeList &base, AddrRangeList to_exclude)
+{
+    to_exclude.sort();
+
+    AddrRangeList ret;
+    for (const auto &range: base)
+        ret.splice(ret.end(), range.exclude(to_exclude));
+
+    return ret;
+}
+
+static inline AddrRangeList
+exclude(const AddrRangeList &base, const AddrRange &to_exclude)
+{
+    return exclude(base, AddrRangeList{to_exclude});
+}
+
+static inline AddrRangeList
+operator-(const AddrRangeList &base, const AddrRangeList &to_exclude)
+{
+    return exclude(base, to_exclude);
+}
+
+static inline AddrRangeList
+operator-=(AddrRangeList &base, const AddrRangeList &to_exclude)
+{
+    base = base - to_exclude;
+    return base;
+}
+
+static inline AddrRangeList
+operator-(const AddrRangeList &base, const AddrRange &to_exclude)
+{
+    return exclude(base, to_exclude);
+}
+
+static inline AddrRangeList
+operator-=(AddrRangeList &base, const AddrRange &to_exclude)
+{
+    base = base - to_exclude;
+    return base;
+}
 
 /**
  * @ingroup api_addr_range
  */
 inline AddrRange
 RangeEx(Addr start, Addr end)
-{ return AddrRange(start, end); }
+{
+    return AddrRange(start, end);
+}
 
 /**
  * @ingroup api_addr_range
  */
 inline AddrRange
 RangeIn(Addr start, Addr end)
-{ return AddrRange(start, end + 1); }
+{
+    return AddrRange(start, end + 1);
+}
 
 /**
  * @ingroup api_addr_range
  */
 inline AddrRange
 RangeSize(Addr start, Addr size)
-{ return AddrRange(start, start + size); }
+{
+    return AddrRange(start, start + size);
+}
+
+} // namespace gem5
 
 #endif // __BASE_ADDR_RANGE_HH__

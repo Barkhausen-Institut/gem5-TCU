@@ -41,7 +41,12 @@
 #include "base/output.hh"
 #include "params/MemTraceProbe.hh"
 #include "proto/packet.pb.h"
+#include "sim/core.hh"
+#include "sim/cur_tick.hh"
 #include "sim/system.hh"
+
+namespace gem5
+{
 
 MemTraceProbe::MemTraceProbe(const MemTraceProbeParams &p)
     : BaseMemProbe(p),
@@ -84,7 +89,7 @@ MemTraceProbe::startup()
     // the stream
     ProtoMessage::PacketHeader header_msg;
     header_msg.set_obj_id(name());
-    header_msg.set_tick_freq(SimClock::Frequency);
+    header_msg.set_tick_freq(sim_clock::Frequency);
 
     for (int i = 0; i < system->maxRequestors(); i++) {
         auto id_string = header_msg.add_id_strings();
@@ -103,7 +108,7 @@ MemTraceProbe::closeStreams()
 }
 
 void
-MemTraceProbe::handleRequest(const ProbePoints::PacketInfo &pkt_info)
+MemTraceProbe::handleRequest(const probing::PacketInfo &pkt_info)
 {
     ProtoMessage::Packet pkt_msg;
 
@@ -118,3 +123,5 @@ MemTraceProbe::handleRequest(const ProbePoints::PacketInfo &pkt_info)
 
     traceStream->write(pkt_msg);
 }
+
+} // namespace gem5

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 ARM Limited
+ * Copyright (c) 2012, 2021 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -54,6 +54,16 @@
 
 /** Signal to use to trigger exits from KVM */
 #define KVM_KICK_SIGNAL SIGRTMIN
+
+struct kvm_coalesced_mmio_ring;
+struct kvm_fpu;
+struct kvm_interrupt;
+struct kvm_regs;
+struct kvm_run;
+struct kvm_sregs;
+
+namespace gem5
+{
 
 // forward declarations
 class ThreadContext;
@@ -147,7 +157,7 @@ class BaseKvmCPU : public BaseCPU
      */
     ThreadContext *tc;
 
-    KvmVM &vm;
+    KvmVM *vm;
 
   protected:
     /**
@@ -175,7 +185,8 @@ class BaseKvmCPU : public BaseCPU
      *   }
      * @enddot
      */
-    enum Status {
+    enum Status
+    {
         /** Context not scheduled in KVM.
          *
          * The CPU generally enters this state when the guest execute
@@ -248,6 +259,15 @@ class BaseKvmCPU : public BaseCPU
      * point in the past.
      */
     virtual uint64_t getHostCycles() const;
+
+    /**
+     * Modify a PCStatePtr's value so that its next PC is the current PC.
+     *
+     * This needs to be implemented in KVM base classes since modifying the
+     * next PC value is an ISA specific operation. This is only used in
+     * doMMIOAccess, for reasons explained in a comment there.
+     */
+    virtual void stutterPC(PCStateBase &pc) const = 0;
 
     /**
      * Request KVM to run the guest for a given number of ticks. The
@@ -424,7 +444,7 @@ class BaseKvmCPU : public BaseCPU
      * this queue when accessing devices. By convention, devices and
      * the VM use the same event queue.
      */
-    EventQueue *deviceEventQueue() { return vm.eventQueue(); }
+    EventQueue *deviceEventQueue() { return vm->eventQueue(); }
 
     /**
      * Update the KVM if the thread context is dirty.
@@ -569,6 +589,8 @@ class BaseKvmCPU : public BaseCPU
     }
     /** @} */
 
+    /** Execute the KVM_RUN ioctl */
+    virtual void ioctlRun();
 
     /**
      * KVM memory port.  Uses default RequestPort behavior and provides an
@@ -632,7 +654,7 @@ class BaseKvmCPU : public BaseCPU
     bool kvmStateDirty;
 
     /** KVM internal ID of the vCPU */
-    const long vcpuID;
+    long vcpuID;
 
     /** ID of the vCPU thread */
     pthread_t vcpuThread;
@@ -669,17 +691,15 @@ class BaseKvmCPU : public BaseCPU
      * example, when setting up timers, we need to know the TID of the
      * thread executing in KVM in order to deliver the timer signal to
      * that thread. This method is called as the first event in this
-     * SimObject's event queue.
+     * SimObject's event queue and after drainResume to handle changes
+     * to event queue service threads.
      *
      * @see startup
      */
-    void startupThread();
+    void restartEqThread();
 
     /** Try to drain the CPU if a drain is pending */
     bool tryDrain();
-
-    /** Execute the KVM_RUN ioctl */
-    void ioctlRun();
 
     /** KVM vCPU file descriptor */
     int vcpuFD;
@@ -781,23 +801,26 @@ class BaseKvmCPU : public BaseCPU
 
   public:
     /* @{ */
-    struct StatGroup : public Stats::Group {
-        StatGroup(Stats::Group *parent);
-        Stats::Scalar committedInsts;
-        Stats::Scalar numVMExits;
-        Stats::Scalar numVMHalfEntries;
-        Stats::Scalar numExitSignal;
-        Stats::Scalar numMMIO;
-        Stats::Scalar numCoalescedMMIO;
-        Stats::Scalar numIO;
-        Stats::Scalar numHalt;
-        Stats::Scalar numInterrupts;
-        Stats::Scalar numHypercalls;
+    struct StatGroup : public statistics::Group
+    {
+        StatGroup(statistics::Group *parent);
+        statistics::Scalar committedInsts;
+        statistics::Scalar numVMExits;
+        statistics::Scalar numVMHalfEntries;
+        statistics::Scalar numExitSignal;
+        statistics::Scalar numMMIO;
+        statistics::Scalar numCoalescedMMIO;
+        statistics::Scalar numIO;
+        statistics::Scalar numHalt;
+        statistics::Scalar numInterrupts;
+        statistics::Scalar numHypercalls;
     } stats;
     /* @} */
 
     /** Number of instructions executed by the CPU */
     Counter ctrInsts;
 };
+
+} // namespace gem5
 
 #endif

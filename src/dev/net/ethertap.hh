@@ -37,11 +37,11 @@
 #include <string>
 
 #include "base/pollevent.hh"
-#include "config/use_tuntap.hh"
+#include "config/have_tuntap.hh"
 #include "dev/net/etherint.hh"
 #include "dev/net/etherpkt.hh"
 
-#if USE_TUNTAP
+#if HAVE_TUNTAP
 #include "params/EtherTap.hh"
 
 #endif
@@ -49,6 +49,9 @@
 #include "params/EtherTapStub.hh"
 #include "sim/eventq.hh"
 #include "sim/sim_object.hh"
+
+namespace gem5
+{
 
 class TapEvent;
 class EtherTapInt;
@@ -155,7 +158,7 @@ class EtherTapStub : public EtherTapBase
 };
 
 
-#if USE_TUNTAP
+#if HAVE_TUNTAP
 class EtherTap : public EtherTapBase
 {
   public:
@@ -172,5 +175,6 @@ class EtherTap : public EtherTapBase
 };
 #endif
 
+} // namespace gem5
 
 #endif // __DEV_NET_ETHERTAP_HH__

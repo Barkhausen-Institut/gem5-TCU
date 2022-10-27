@@ -37,7 +37,7 @@
 
 #endif
 
-#if USE_TUNTAP && defined(__linux__)
+#if HAVE_TUNTAP && defined(__linux__)
 #if 1 // Hide from the style checker since these have to be out of order.
 #include <sys/socket.h> // Has to be included before if.h for some reason.
 
@@ -66,6 +66,11 @@
 #include "dev/net/etherdump.hh"
 #include "dev/net/etherint.hh"
 #include "dev/net/etherpkt.hh"
+#include "sim/core.hh"
+#include "sim/cur_tick.hh"
+
+namespace gem5
+{
 
 class TapEvent : public PollEvent
 {
@@ -194,7 +199,7 @@ EtherTapBase::sendSimulated(void *data, size_t len)
         DPRINTF(Ethernet, "bus busy...buffer for retransmission\n");
         packetBuffer.push(packet);
         if (!txEvent.scheduled())
-            schedule(txEvent, curTick() + SimClock::Int::ns);
+            schedule(txEvent, curTick() + sim_clock::as_int::ns);
     } else if (dump) {
         dump->dump(packet);
     }
@@ -216,7 +221,7 @@ EtherTapBase::retransmit()
     }
 
     if (!packetBuffer.empty() && !txEvent.scheduled())
-        schedule(txEvent, curTick() + SimClock::Int::ns);
+        schedule(txEvent, curTick() + sim_clock::as_int::ns);
 }
 
 
@@ -395,7 +400,7 @@ EtherTapStub::sendReal(const void *data, size_t len)
 }
 
 
-#if USE_TUNTAP
+#if HAVE_TUNTAP
 
 EtherTap::EtherTap(const Params &p) : EtherTapBase(p)
 {
@@ -467,4 +472,6 @@ EtherTap::sendReal(const void *data, size_t len)
     return true;
 }
 
-#endif
+#endif // HAVE_TUNTAP
+
+} // namespace gem5

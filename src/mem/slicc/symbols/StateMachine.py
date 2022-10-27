@@ -69,7 +69,7 @@ python_class_map = {
 
 class StateMachine(Symbol):
     def __init__(self, symtab, ident, location, pairs, config_parameters):
-        super(StateMachine, self).__init__(symtab, ident, location, pairs)
+        super().__init__(symtab, ident, location, pairs)
         self.table = None
 
         # Data members in the State Machine that have been declared before
@@ -106,6 +106,8 @@ class StateMachine(Symbol):
         self.objects = []
         self.TBEType   = None
         self.EntryType = None
+        # Python's sets are not sorted so we have to be careful when using
+        # this to generate deterministic output.
         self.debug_flags = set()
         self.debug_flags.add('RubyGenerated')
         self.debug_flags.add('RubySlicc')
@@ -245,6 +247,7 @@ from m5.objects.Controller import RubyController
 class $py_ident(RubyController):
     type = '$py_ident'
     cxx_header = 'mem/ruby/protocol/${c_ident}.hh'
+    cxx_class = 'gem5::ruby::$py_ident'
 ''')
         code.indent()
         for param in self.config_parameters:
@@ -273,11 +276,7 @@ class $py_ident(RubyController):
         c_ident = "%s_Controller" % self.ident
 
         code('''
-/** \\file $c_ident.hh
- *
- * Auto generated C++ code started by $__file__:$__line__
- * Created by slicc definition of Module "${{self.short}}"
- */
+// Created by slicc definition of Module "${{self.short}}"
 
 #ifndef __${ident}_CONTROLLER_HH__
 #define __${ident}_CONTROLLER_HH__
@@ -302,6 +301,12 @@ class $py_ident(RubyController):
 
         # for adding information to the protocol debug trace
         code('''
+namespace gem5
+{
+
+namespace ruby
+{
+
 extern std::stringstream ${ident}_transitionComment;
 
 class $c_ident : public AbstractController
@@ -392,8 +397,8 @@ int m_counters[${ident}_State_NUM][${ident}_Event_NUM];
 int m_event_counters[${ident}_Event_NUM];
 bool m_possible[${ident}_State_NUM][${ident}_Event_NUM];
 
-static std::vector<Stats::Vector *> eventVec;
-static std::vector<std::vector<Stats::Vector *> > transVec;
+static std::vector<statistics::Vector *> eventVec;
+static std::vector<std::vector<statistics::Vector *> > transVec;
 static int m_num_controllers;
 
 // Internal functions
@@ -456,8 +461,15 @@ void unset_tbe(${{self.TBEType.c_ident}}*& m_tbe_ptr);
             code('${{var.type.c_ident}}$th* m_${{var.ident}}_ptr;')
 
         code.dedent()
-        code('};')
-        code('#endif // __${ident}_CONTROLLER_H__')
+        code('''
+};
+
+} // namespace ruby
+} // namespace gem5
+
+#endif // __${ident}_CONTROLLER_H__
+''')
+
         code.write(path, '%s.hh' % c_ident)
 
     def printControllerCC(self, path, includes):
@@ -493,11 +505,7 @@ void unset_tbe(${{self.TBEType.c_ident}}*& m_tbe_ptr);
 '''
 
         code('''
-/** \\file $c_ident.cc
- *
- * Auto generated C++ code started by $__file__:$__line__
- * Created by slicc definition of Module "${{self.short}}"
- */
+// Created by slicc definition of Module "${{self.short}}"
 
 #include <sys/types.h>
 #include <unistd.h>
@@ -511,8 +519,9 @@ void unset_tbe(${{self.TBEType.c_ident}}*& m_tbe_ptr);
 
         code(boolvec_include)
         code(base_include)
-
-        for f in self.debug_flags:
+        # We have to sort self.debug_flags in order to produce deterministic
+        # output and avoid unnecessary rebuilds of the generated files.
+        for f in sorted(self.debug_flags):
             code('#include "debug/${{f}}.hh"')
         code('''
 #include "mem/ruby/network/Network.hh"
@@ -536,9 +545,15 @@ void unset_tbe(${{self.TBEType.c_ident}}*& m_tbe_ptr);
         num_in_ports = len(self.in_ports)
 
         code('''
+namespace gem5
+{
+
+namespace ruby
+{
+
 int $c_ident::m_num_controllers = 0;
-std::vector<Stats::Vector *>  $c_ident::eventVec;
-std::vector<std::vector<Stats::Vector *> >  $c_ident::transVec;
+std::vector<statistics::Vector *>  $c_ident::eventVec;
+std::vector<std::vector<statistics::Vector *> >  $c_ident::transVec;
 
 // for adding information to the protocol debug trace
 std::stringstream ${ident}_transitionComment;
@@ -602,7 +617,7 @@ void
 $c_ident::initNetQueues()
 {
     MachineType machine_type = string_to_MachineType("${{self.ident}}");
-    M5_VAR_USED int base = MachineType_base_number(machine_type);
+    [[maybe_unused]] int base = MachineType_base_number(machine_type);
 
 ''')
         code.indent()
@@ -817,17 +832,17 @@ $c_ident::regStats()
     if (m_version == 0) {
 
         Profiler *profiler = params().ruby_system->getProfiler();
-        Stats::Group *profilerStatsPtr = &profiler->rubyProfilerStats;
+        statistics::Group *profilerStatsPtr = &profiler->rubyProfilerStats;
 
         for (${ident}_Event event = ${ident}_Event_FIRST;
              event < ${ident}_Event_NUM; ++event) {
             std::string stat_name =
                 "${c_ident}." + ${ident}_Event_to_string(event);
-            Stats::Vector *t =
-                new Stats::Vector(profilerStatsPtr, stat_name.c_str());
+            statistics::Vector *t =
+                new statistics::Vector(profilerStatsPtr, stat_name.c_str());
             t->init(m_num_controllers);
-            t->flags(Stats::pdf | Stats::total | Stats::oneline |
-                     Stats::nozero);
+            t->flags(statistics::pdf | statistics::total |
+                statistics::oneline | statistics::nozero);
 
             eventVec.push_back(t);
         }
@@ -835,18 +850,18 @@ $c_ident::regStats()
         for (${ident}_State state = ${ident}_State_FIRST;
              state < ${ident}_State_NUM; ++state) {
 
-            transVec.push_back(std::vector<Stats::Vector *>());
+            transVec.push_back(std::vector<statistics::Vector *>());
 
             for (${ident}_Event event = ${ident}_Event_FIRST;
                  event < ${ident}_Event_NUM; ++event) {
                 std::string stat_name = "${c_ident}." +
                     ${ident}_State_to_string(state) +
                     "." + ${ident}_Event_to_string(event);
-                Stats::Vector *t =
-                    new Stats::Vector(profilerStatsPtr, stat_name.c_str());
+                statistics::Vector *t = new statistics::Vector(
+                    profilerStatsPtr, stat_name.c_str());
                 t->init(m_num_controllers);
-                t->flags(Stats::pdf | Stats::total | Stats::oneline |
-                         Stats::nozero);
+                t->flags(statistics::pdf | statistics::total |
+                    statistics::oneline | statistics::nozero);
                 transVec[state].push_back(t);
             }
         }
@@ -856,31 +871,32 @@ $c_ident::regStats()
                  event < ${ident}_Event_NUM; ++event) {
         std::string stat_name =
             "outTransLatHist." + ${ident}_Event_to_string(event);
-        Stats::Histogram* t = new Stats::Histogram(&stats, stat_name.c_str());
+        statistics::Histogram* t =
+            new statistics::Histogram(&stats, stat_name.c_str());
         stats.outTransLatHist.push_back(t);
         t->init(5);
-        t->flags(Stats::pdf | Stats::total |
-                 Stats::oneline | Stats::nozero);
+        t->flags(statistics::pdf | statistics::total |
+                 statistics::oneline | statistics::nozero);
 
-        Stats::Scalar* r = new Stats::Scalar(&stats,
+        statistics::Scalar* r = new statistics::Scalar(&stats,
                                              (stat_name + ".retries").c_str());
         stats.outTransLatHistRetries.push_back(r);
-        r->flags(Stats::nozero);
+        r->flags(statistics::nozero);
     }
 
     for (${ident}_Event event = ${ident}_Event_FIRST;
                  event < ${ident}_Event_NUM; ++event) {
-        std::string stat_name = ".inTransLatHist." +
+        std::string stat_name = "inTransLatHist." +
                                 ${ident}_Event_to_string(event);
-        Stats::Scalar* r = new Stats::Scalar(&stats,
+        statistics::Scalar* r = new statistics::Scalar(&stats,
                                              (stat_name + ".total").c_str());
         stats.inTransLatTotal.push_back(r);
-        r->flags(Stats::nozero);
+        r->flags(statistics::nozero);
 
-        r = new Stats::Scalar(&stats,
+        r = new statistics::Scalar(&stats,
                               (stat_name + ".retries").c_str());
         stats.inTransLatRetries.push_back(r);
-        r->flags(Stats::nozero);
+        r->flags(statistics::nozero);
 
         stats.inTransLatHist.emplace_back();
         for (${ident}_State initial_state = ${ident}_State_FIRST;
@@ -892,12 +908,12 @@ $c_ident::regStats()
                     ${ident}_Event_to_string(event) + "." +
                     ${ident}_State_to_string(initial_state) + "." +
                     ${ident}_State_to_string(final_state);
-                Stats::Histogram* t =
-                    new Stats::Histogram(&stats, stat_name.c_str());
+                statistics::Histogram* t =
+                    new statistics::Histogram(&stats, stat_name.c_str());
                 stats.inTransLatHist.back().back().push_back(t);
                 t->init(5);
-                t->flags(Stats::pdf | Stats::total |
-                         Stats::oneline | Stats::nozero);
+                t->flags(statistics::pdf | statistics::total |
+                         statistics::oneline | statistics::nozero);
             }
         }
     }
@@ -1205,6 +1221,9 @@ $c_ident::functionalReadBuffers(PacketPtr& pkt, WriteMask &mask)
         code('''
     return read;
 }
+
+} // namespace ruby
+} // namespace gem5
 ''')
 
         code.write(path, "%s.cc" % c_ident)
@@ -1220,7 +1239,6 @@ $c_ident::functionalReadBuffers(PacketPtr& pkt, WriteMask &mask)
             outputRequest_types = False
 
         code('''
-// Auto generated C++ code started by $__file__:$__line__
 // ${ident}: ${{self.short}}
 
 #include <sys/types.h>
@@ -1232,7 +1250,9 @@ $c_ident::functionalReadBuffers(PacketPtr& pkt, WriteMask &mask)
 #include "base/logging.hh"
 
 ''')
-        for f in self.debug_flags:
+        # We have to sort self.debug_flags in order to produce deterministic
+        # output and avoid unnecessary rebuilds of the generated files.
+        for f in sorted(self.debug_flags):
             code('#include "debug/${{f}}.hh"')
         code('''
 #include "mem/ruby/protocol/${ident}_Controller.hh"
@@ -1257,6 +1277,11 @@ $c_ident::functionalReadBuffers(PacketPtr& pkt, WriteMask &mask)
         port_to_buf_map, in_msg_bufs, msg_bufs = self.getBufferMaps(ident)
 
         code('''
+namespace gem5
+{
+
+namespace ruby
+{
 
 void
 ${ident}_Controller::wakeup()
@@ -1332,6 +1357,9 @@ ${ident}_Controller::wakeup()
         break;
     }
 }
+
+} // namespace ruby
+} // namespace gem5
 ''')
 
         code.write(path, "%s_Wakeup.cc" % self.ident)
@@ -1343,7 +1371,6 @@ ${ident}_Controller::wakeup()
         ident = self.ident
 
         code('''
-// Auto generated C++ code started by $__file__:$__line__
 // ${ident}: ${{self.short}}
 
 #include <cassert>
@@ -1362,6 +1389,12 @@ ${ident}_Controller::wakeup()
 
 #define GET_TRANSITION_COMMENT() (${ident}_transitionComment.str())
 #define CLEAR_TRANSITION_COMMENT() (${ident}_transitionComment.str(""))
+
+namespace gem5
+{
+
+namespace ruby
+{
 
 TransitionResult
 ${ident}_Controller::doTransition(${ident}_Event event,
@@ -1590,6 +1623,9 @@ if (!checkResourceAvailable(%s_RequestType_%s, addr)) {
 
     return TransitionResult_Valid;
 }
+
+} // namespace ruby
+} // namespace gem5
 ''')
         code.write(path, "%s_Transitions.cc" % self.ident)
 

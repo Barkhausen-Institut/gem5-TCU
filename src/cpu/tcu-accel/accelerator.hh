@@ -39,6 +39,11 @@
 #include "mem/tcu/tcuif.hh"
 #include "sim/system.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 class TcuAccel : public ClockedObject
 {
   public:
@@ -127,5 +132,8 @@ class TcuAccel : public ClockedObject
 
     BaseConnector *connector;
 };
+
+}
+}
 
 #endif // __CPU_TCU_ACCEL_HH__

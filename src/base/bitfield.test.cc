@@ -39,6 +39,8 @@
 
 #include "base/bitfield.hh"
 
+using namespace gem5;
+
 /*
  * The following tests the "mask(N)" function. It is assumed that the mask
  * returned is a 64 bit value with the N LSBs set to one.
@@ -164,7 +166,8 @@ TEST(BitfieldTest, MbitsEntireRange)
 
 /*
  * The following tests the "sext<N>(X)" function. sext carries out a sign
- * extention from N bits to 64 bits on value X.
+ * extention from N bits to 64 bits on value X. It does not zero bits past the
+ * sign bit if it was zero.
  */
 TEST(BitfieldTest, SignExtendPositiveInput)
 {
@@ -190,6 +193,36 @@ TEST(BitfieldTest, SignExtendNegativeInputOutsideRange)
     uint64_t val = 0x4800000010000008;
     uint64_t output = 0xF800000010000008;
     EXPECT_EQ(output, sext<60>(val));
+}
+/*
+ * The following tests the "szext<N>(X)" function. szext carries out a sign
+ * extention from N bits to 64 bits on value X. Will zero bits past the sign
+ * bit if it was zero.
+ */
+TEST(BitfieldTest, SignZeroExtendPositiveInput)
+{
+    int8_t val = 14;
+    int64_t output = 14;
+    EXPECT_EQ(output, szext<8>(val));
+}
+
+TEST(BitfieldTest, SignZeroExtendNegativeInput)
+{
+    int8_t val = -14;
+    uint64_t output = -14;
+    EXPECT_EQ(output, szext<8>(val));
+}
+
+TEST(BitfieldTest, SignZeroExtendPositiveInputOutsideRange)
+{
+    EXPECT_EQ(0, szext<8>(1 << 10));
+}
+
+TEST(BitfieldTest, SignZeroExtendNegativeInputOutsideRange)
+{
+    uint64_t val = 0x4800000010000008;
+    uint64_t output = 0xF800000010000008;
+    EXPECT_EQ(output, szext<60>(val));
 }
 
 /* The following tests "insertBits(A, B, C, D)". insertBits returns A
@@ -387,3 +420,40 @@ TEST(BitfieldTest, CountTrailingZero64AllZeros)
     uint64_t value = 0;
     EXPECT_EQ(64, ctz64(value));
 }
+
+/*
+ * The following tests test clz32/64. The value returned in all cases should
+ * be equal to the number of leading zeros (i.e., the number of zeroes before
+ * the first bit set to one counting from the MSB).
+ */
+
+TEST(BitfieldTest, CountLeadingZeros32BitsNoTrailing)
+{
+    int32_t value = 1;
+    EXPECT_EQ(31, clz32(value));
+}
+
+TEST(BitfieldTest, CountLeadingZeros32Bits)
+{
+    uint32_t value = (1 << 30) + (1 << 29);
+    EXPECT_EQ(1, clz32(value));
+}
+
+TEST(BitfieldTest, CountLeadingZeros64BitsNoTrailing)
+{
+    uint64_t value = (1 << 29) + 1;
+    EXPECT_EQ(34, clz64(value));
+}
+
+TEST(BitfieldTest, CountLeadingZeros64Bits)
+{
+    uint64_t value = 1ULL << 63;
+    EXPECT_EQ(0, clz64(value));
+}
+
+TEST(BitfieldTest, CountLeadingZero64AllZeros)
+{
+    uint64_t value = 0;
+    EXPECT_EQ(64, clz64(value));
+}
+

@@ -54,20 +54,17 @@ output header {{
         }
 
         std::string generateDisassembly(Addr pc,
-                const Loader::SymbolTable *symtab) const override;
+                const loader::SymbolTable *symtab) const override;
     };
 }};
 
 output decoder {{
     std::string
     SyscallInst::generateDisassembly(
-            Addr PC, const Loader::SymbolTable *symtab) const
+            Addr PC, const loader::SymbolTable *symtab) const
     {
         std::stringstream response;
-
         printMnemonic(response, mnemonic);
-        ccprintf(response, " ");
-        printReg(response, srcRegIdx(0), machInst.opSize);
         return response.str();
     }
 }};

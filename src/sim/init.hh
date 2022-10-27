@@ -47,36 +47,8 @@
 #include <map>
 #include <string>
 
-#include <inttypes.h>
-
-#ifndef PyObject_HEAD
-struct _object;
-typedef _object PyObject;
-#endif
-
-/*
- * Data structure describing an embedded python file.
- */
-struct EmbeddedPython
+namespace gem5
 {
-    const char *filename;
-    const char *abspath;
-    const char *modpath;
-    const uint8_t *code;
-    int zlen;
-    int len;
-
-    EmbeddedPython(const char *filename, const char *abspath,
-                   const char *modpath, const uint8_t *code, int zlen, int len);
-
-    PyObject *getCode() const;
-    bool addModule() const;
-
-    static EmbeddedPython *importer;
-    static PyObject *importerModule;
-    static std::list<EmbeddedPython *> &getList();
-    static int initAll();
-};
 
 class EmbeddedPyBind
 {
@@ -88,27 +60,29 @@ class EmbeddedPyBind
     EmbeddedPyBind(const char *_name,
                    void (*init_func)(pybind11::module_ &));
 
-#if PY_MAJOR_VERSION >= 3
-    static PyObject *initAll();
-#else
-    static void initAll();
-#endif
+    static void initAll(pybind11::module_ &_m5);
 
   private:
     void (*initFunc)(pybind11::module_ &);
 
-    bool depsReady() const;
-    void init(pybind11::module_ &m);
+    void init();
 
-    bool registered;
+    bool registered = false;
     const std::string name;
     const std::string base;
 
-    static std::map<std::string, EmbeddedPyBind *> &getMap();
+    // The _m5 module.
+    static pybind11::module_ *mod;
+
+    // A map from initialized module names to their descriptors.
+    static std::map<std::string, EmbeddedPyBind *> &getReady();
+    // A map to pending modules from the name of what they're waiting on.
+    static std::multimap<std::string, EmbeddedPyBind *> &getPending();
+
+    // Initialize all modules waiting on "finished".
+    static void initPending(const std::string &finished);
 };
 
-void registerNativeModules();
-
-int m5Main(int argc, char **argv);
+} // namespace gem5
 
 #endif // __SIM_INIT_HH__

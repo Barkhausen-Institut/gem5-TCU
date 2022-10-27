@@ -1,8 +1,6 @@
 # Copyright (c) 2017-2021 Advanced Micro Devices, Inc.
 # All rights reserved.
 #
-# For use for simulation and test purposes only
-#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #
@@ -37,6 +35,8 @@ class TesterThread(ClockedObject):
     type = 'TesterThread'
     abstract = True
     cxx_header = "cpu/testers/gpu_ruby_test/tester_thread.hh"
+    cxx_class = 'gem5::TesterThread'
+
     thread_id = Param.Int("Unique TesterThread ID")
     num_lanes = Param.Int("Number of lanes this thread has")
     deadlock_threshold = Param.Cycles(1000000000, "Deadlock threshold")

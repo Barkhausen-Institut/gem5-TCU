@@ -31,16 +31,23 @@
 
 #include <memory>
 
+#include "base/compiler.hh"
 #include "mem/cache/replacement_policies/replaceable_entry.hh"
+#include "mem/packet.hh"
 #include "params/BaseReplacementPolicy.hh"
 #include "sim/sim_object.hh"
+
+namespace gem5
+{
 
 /**
  * Replacement candidates as chosen by the indexing policy.
  */
 typedef std::vector<ReplaceableEntry*> ReplacementCandidates;
 
-namespace ReplacementPolicy {
+GEM5_DEPRECATED_NAMESPACE(ReplacementPolicy, replacement_policy);
+namespace replacement_policy
+{
 
 /**
  * A common base class of cache replacement policy objects.
@@ -58,23 +65,35 @@ class Base : public SimObject
      * @param replacement_data Replacement data to be invalidated.
      */
     virtual void invalidate(const std::shared_ptr<ReplacementData>&
-                                                replacement_data) const = 0;
+        replacement_data) = 0;
 
     /**
      * Update replacement data.
      *
      * @param replacement_data Replacement data to be touched.
+     * @param pkt Packet that generated this access.
      */
     virtual void touch(const std::shared_ptr<ReplacementData>&
-                                                replacement_data) const = 0;
+        replacement_data, const PacketPtr pkt)
+    {
+        touch(replacement_data);
+    }
+    virtual void touch(const std::shared_ptr<ReplacementData>&
+        replacement_data) const = 0;
 
     /**
      * Reset replacement data. Used when it's holder is inserted/validated.
      *
      * @param replacement_data Replacement data to be reset.
+     * @param pkt Packet that generated this access.
      */
     virtual void reset(const std::shared_ptr<ReplacementData>&
-                                                replacement_data) const = 0;
+        replacement_data, const PacketPtr pkt)
+    {
+        reset(replacement_data);
+    }
+    virtual void reset(const std::shared_ptr<ReplacementData>&
+        replacement_data) const = 0;
 
     /**
      * Find replacement victim among candidates.
@@ -93,6 +112,7 @@ class Base : public SimObject
     virtual std::shared_ptr<ReplacementData> instantiateEntry() = 0;
 };
 
-} // namespace ReplacementPolicy
+} // namespace replacement_policy
+} // namespace gem5
 
 #endif // __MEM_CACHE_REPLACEMENT_POLICIES_BASE_HH__

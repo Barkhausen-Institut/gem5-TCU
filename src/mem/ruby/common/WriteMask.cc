@@ -32,6 +32,12 @@
 
 #include "mem/ruby/system/RubySystem.hh"
 
+namespace gem5
+{
+
+namespace ruby
+{
+
 WriteMask::WriteMask()
     : mSize(RubySystem::getBlockSizeBytes()), mMask(mSize, false),
       mAtomic(false)
@@ -49,3 +55,5 @@ WriteMask::print(std::ostream& out) const
         << std::flush;
 }
 
+} // namespace ruby
+} // namespace gem5

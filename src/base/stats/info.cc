@@ -42,15 +42,19 @@
 #include "base/stats/info.hh"
 
 #include <cctype>
-#include <map>
-#include <string>
 
 #include "base/cprintf.hh"
 #include "base/debug.hh"
 #include "base/logging.hh"
+#include "base/stats/storage.hh"
 #include "base/str.hh"
 
-namespace Stats {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Stats, statistics);
+namespace statistics
+{
 
 std::string Info::separatorString = "::";
 
@@ -66,15 +70,27 @@ nameMap()
 }
 
 Info::Info()
-    : flags(none), precision(-1), prereq(0), storageParams(NULL)
+    : flags(none), precision(-1), prereq(0), storageParams()
 {
     id = id_count++;
     if (debug_break_id >= 0 and debug_break_id == id)
-        Debug::breakpoint();
+        debug::breakpoint();
 }
 
 Info::~Info()
 {
+}
+
+StorageParams const*
+Info::getStorageParams() const
+{
+    return storageParams.get();
+}
+
+void
+Info::setStorageParams(const StorageParams *const params)
+{
+    return storageParams.reset(params);
 }
 
 bool
@@ -84,7 +100,7 @@ validateStatName(const std::string &name)
         return false;
 
     std::vector<std::string> vec;
-    tokenize(vec, name, '.');
+    tokenize(vec, name, '.', false);
     std::vector<std::string>::const_iterator item = vec.begin();
     while (item != vec.end()) {
         if (item->empty())
@@ -109,13 +125,7 @@ validateStatName(const std::string &name)
 }
 
 void
-Info::setName(const std::string &name)
-{
-    setName(nullptr, name);
-}
-
-void
-Info::setName(const Group *parent, const std::string &name)
+Info::setName(const std::string &name, bool old_style)
 {
     if (!validateStatName(name))
         panic("invalid stat name '%s'", name);
@@ -124,12 +134,10 @@ Info::setName(const Group *parent, const std::string &name)
     // old-style stats without a parent group. New-style stats should
     // be unique since their names should correspond to a member
     // variable.
-    if (!parent) {
+    if (old_style) {
         auto p = nameMap().insert(make_pair(name, this));
 
-        if (!p.second)
-            panic("same statistic name used twice! name=%s\n",
-                  name);
+        panic_if(!p.second, "same statistic name used twice! name=%s\n", name);
     }
 
     this->name = name;
@@ -164,7 +172,7 @@ Info::less(Info *stat1, Info *stat2)
 bool
 Info::baseCheck() const
 {
-    if (!(flags & Stats::init)) {
+    if (!(flags & statistics::init)) {
 #ifdef DEBUG
         cprintf("this is stat number %d\n", id);
 #endif
@@ -219,4 +227,5 @@ Vector2dInfo::enable()
         y_subnames.resize(y);
 }
 
-} // namespace Stats
+} // namespace statistics
+} // namespace gem5

@@ -31,6 +31,9 @@
 
 #include "arch/sparc/insts/static_inst.hh"
 
+namespace gem5
+{
+
 ////////////////////////////////////////////////////////////////////
 //
 // Branch instructions
@@ -48,7 +51,7 @@ class Branch : public SparcStaticInst
     using SparcStaticInst::SparcStaticInst;
 
     std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+            Addr pc, const loader::SymbolTable *symtab) const override;
 };
 
 /**
@@ -63,7 +66,7 @@ class BranchDisp : public Branch
     {}
 
     std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+            Addr pc, const loader::SymbolTable *symtab) const override;
 
     int32_t disp;
 };
@@ -77,8 +80,7 @@ class BranchNBits : public BranchDisp
   protected:
     // Constructor
     BranchNBits(const char *mnem, ExtMachInst _machInst, OpClass __opClass) :
-        BranchDisp(mnem, _machInst, __opClass,
-                   sext<bits + 2>((_machInst & mask(bits)) << 2))
+        BranchDisp(mnem, _machInst, __opClass, szext<bits>(_machInst) << 2)
     {}
 };
 
@@ -105,16 +107,16 @@ class BranchImm13 : public Branch
   protected:
     // Constructor
     BranchImm13(const char *mnem, ExtMachInst _machInst, OpClass __opClass) :
-        Branch(mnem, _machInst, __opClass),
-        imm(sext<13>(bits(_machInst, 12, 0)))
+        Branch(mnem, _machInst, __opClass), imm(szext<13>(_machInst))
     {}
 
     std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+            Addr pc, const loader::SymbolTable *symtab) const override;
 
     int32_t imm;
 };
 
-}
+} // namespace SparcISA
+} // namespace gem5
 
 #endif // __ARCH_SPARC_INSTS_BRANCH_HH__

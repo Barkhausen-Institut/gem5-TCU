@@ -33,13 +33,21 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Author: Matteo Andreozzi
  */
 
-#include "policy.hh"
+#include "mem/qos/policy.hh"
 
-namespace QoS {
+#include "params/QoSPolicy.hh"
+
+namespace gem5
+{
+
+namespace memory
+{
+
+GEM5_DEPRECATED_NAMESPACE(QoS, qos);
+namespace qos
+{
 
 Policy::Policy(const Params &p)
   : SimObject(p)
@@ -54,4 +62,6 @@ Policy::schedule(const PacketPtr pkt)
     return schedule(pkt->req->requestorId(), pkt->getSize());
 }
 
-} // namespace QoS
+} // namespace qos
+} // namespace memory
+} // namespace gem5

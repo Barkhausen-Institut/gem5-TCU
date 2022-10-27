@@ -38,6 +38,12 @@
 #include "base/stl_helpers.hh"
 #include "mem/ruby/system/RubySystem.hh"
 
+namespace gem5
+{
+
+namespace ruby
+{
+
 // Output operator definition
 
 std::ostream&
@@ -140,3 +146,6 @@ void
 WireBuffer::wakeup()
 {
 }
+
+} // namespace ruby
+} // namespace gem5

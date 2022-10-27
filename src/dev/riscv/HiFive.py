@@ -1,4 +1,5 @@
 # Copyright (c) 2021 Huawei International
+# Copyright (c) 2022 EXAscale Performance SYStems (EXAPSYS)
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -38,11 +39,25 @@ from m5.objects.PMAChecker import PMAChecker
 from m5.objects.Clint import Clint
 from m5.objects.Plic import Plic
 from m5.objects.RTC import RiscvRTC
-from m5.objects.Uart import Uart8250
+from m5.objects.Uart import RiscvUart8250
 from m5.objects.Terminal import Terminal
 from m5.params import *
 from m5.proxy import *
 from m5.util.fdthelper import *
+
+from m5.objects.PciHost import GenericPciHost
+
+class GenericRiscvPciHost(GenericPciHost):
+    type = 'GenericRiscvPciHost'
+    cxx_header = "dev/riscv/pci_host.hh"
+    cxx_class = 'gem5::GenericRiscvPciHost'
+    int_base = Param.Int(0x10,
+                        "Base number used as interrupt line and PLIC source.")
+    int_count = Param.Unsigned(4,
+                        "Maximum number of interrupts used by this host")
+    # This python parameter can be used in configuration scripts to turn
+    # on/off the fdt dma-coherent flag when doing dtb autogeneration
+    _dma_coherent = True
 
 class HiFive(Platform):
     """HiFive Platform
@@ -97,7 +112,7 @@ class HiFive(Platform):
     """
     type = 'HiFive'
     cxx_header = "dev/riscv/hifive.hh"
-    system = Param.System(Parent.any, "system")
+    cxx_class = 'gem5::HiFive'
 
     # CLINT
     clint = Param.Clint(Clint(pio_addr=0x2000000), "CLINT")
@@ -105,15 +120,16 @@ class HiFive(Platform):
     # PLIC
     plic = Param.Plic(Plic(pio_addr=0xc000000), "PLIC")
 
+    #PCI
+    pci_host = GenericRiscvPciHost(conf_base=0x30000000, conf_size='256MB',
+        conf_device_bits=12, pci_pio_base=0x2f000000, pci_mem_base=0x40000000)
+
     # Uart
-    uart = Uart8250(pio_addr=0x10000000)
+    uart = RiscvUart8250(pio_addr=0x10000000)
     # Int source ID to redirect console interrupts to
     # Set to 0 if using a pci interrupt for Uart instead
     uart_int_id = Param.Int(0xa, "PLIC Uart interrupt ID")
     terminal = Terminal()
-
-    # Dummy param for generating devicetree
-    cpu_count = Param.Int(0, "dummy")
 
     def _on_chip_devices(self):
         """Returns a list of on-chip peripherals
@@ -130,6 +146,8 @@ class HiFive(Platform):
         if hasattr(self, "disks"):
             for d in self.disks:
                 devices.append(d)
+        if hasattr(self, "rng"):
+            devices.append(self.rng)
         return devices
 
     def _on_chip_ranges(self):
@@ -153,7 +171,8 @@ class HiFive(Platform):
     def attachPlic(self):
         """Count number of PLIC interrupt sources
         """
-        plic_srcs = [self.uart_int_id]
+        plic_srcs = [self.uart_int_id, self.pci_host.int_base
+                     + self.pci_host.int_count]
         for device in self._off_chip_devices():
             if hasattr(device, "interrupt_id"):
                 plic_srcs.append(device.interrupt_id)
@@ -161,17 +180,24 @@ class HiFive(Platform):
 
     def attachOnChipIO(self, bus):
         """Attach on-chip IO devices, needs modification
-            to support DMA and PCI
+            to support DMA
         """
         for device in self._on_chip_devices():
             device.pio = bus.mem_side_ports
 
     def attachOffChipIO(self, bus):
         """Attach off-chip IO devices, needs modification
-            to support DMA and PCI
+            to support DMA
         """
         for device in self._off_chip_devices():
             device.pio = bus.mem_side_ports
+
+    def setNumCores(self, num_cpu):
+        """ Sets the PLIC and CLINT to have the right number of threads and
+            contexts. Assumes that the cores have a single hardware thread.
+        """
+        self.plic.n_contexts = num_cpu * 2
+        self.clint.num_threads = num_cpu
 
     def generateDeviceTree(self, state):
         cpus_node = FdtNode("cpus")
@@ -190,6 +216,8 @@ class HiFive(Platform):
 
         yield node
 
+    # For generating devicetree
+    _cpu_count = 0
     def annotateCpuDeviceNode(self, cpu, state):
         cpu.append(FdtPropertyStrings('mmu-type', 'riscv,sv48'))
         cpu.append(FdtPropertyStrings('status', 'okay'))
@@ -203,8 +231,8 @@ class HiFive(Platform):
         int_node.appendCompatible("riscv,cpu-intc")
 
         cpus = self.system.unproxy(self).cpu
-        phandle = int_state.phandle(cpus[self.cpu_count])
-        self.cpu_count += 1
+        phandle = int_state.phandle(cpus[self._cpu_count])
+        self._cpu_count += 1
         int_node.append(FdtPropertyWords("phandle", [phandle]))
 
         cpu.append(int_node)

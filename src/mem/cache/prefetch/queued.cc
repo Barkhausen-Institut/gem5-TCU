@@ -43,11 +43,17 @@
 #include "base/logging.hh"
 #include "base/trace.hh"
 #include "debug/HWPrefetch.hh"
+#include "debug/HWPrefetchQueue.hh"
 #include "mem/cache/base.hh"
 #include "mem/request.hh"
 #include "params/QueuedPrefetcher.hh"
 
-namespace Prefetcher {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Prefetcher, prefetch);
+namespace prefetch
+{
 
 void
 Queued::DeferredPacket::createPkt(Addr paddr, unsigned blk_size,
@@ -61,7 +67,7 @@ Queued::DeferredPacket::createPkt(Addr paddr, unsigned blk_size,
     if (pfInfo.isSecure()) {
         req->setFlags(Request::SECURE);
     }
-    req->taskId(ContextSwitchTaskId::Prefetcher);
+    req->taskId(context_switch_task_id::Prefetcher);
     pkt = new Packet(req, MemCmd::HardPFReq);
     pkt->allocate();
     if (tag_prefetch && pfInfo.hasPC()) {
@@ -78,13 +84,13 @@ Queued::DeferredPacket::startTranslation(BaseTLB *tlb)
     if (!ongoingTranslation) {
         ongoingTranslation = true;
         // Prefetchers only operate in Timing mode
-        tlb->translateTiming(translationRequest, tc, this, BaseTLB::Read);
+        tlb->translateTiming(translationRequest, tc, this, BaseMMU::Read);
     }
 }
 
 void
 Queued::DeferredPacket::finish(const Fault &fault,
-    const RequestPtr &req, ThreadContext *tc, BaseTLB::Mode mode)
+    const RequestPtr &req, ThreadContext *tc, BaseMMU::Mode mode)
 {
     assert(ongoingTranslation);
     ongoingTranslation = false;
@@ -108,6 +114,28 @@ Queued::~Queued()
     // Delete the queued prefetch packets
     for (DeferredPacket &p : pfq) {
         delete p.pkt;
+    }
+}
+
+void
+Queued::printQueue(const std::list<DeferredPacket> &queue) const
+{
+    int pos = 0;
+    std::string queue_name = "";
+    if (&queue == &pfq) {
+        queue_name = "PFQ";
+    } else {
+        assert(&queue == &pfqMissingTranslation);
+        queue_name = "PFTransQ";
+    }
+
+    for (const_iterator it = queue.cbegin(); it != queue.cend();
+                                                            it++, pos++) {
+        Addr vaddr = it->pfInfo.getAddr();
+        /* Set paddr to 0 if not yet translated */
+        Addr paddr = it->pkt ? it->pkt->getAddr() : 0;
+        DPRINTF(HWPrefetchQueue, "%s[%d]: Prefetch Req VA: %#x PA: %#x "
+                "prio: %3d\n", queue_name, pos, vaddr, paddr, it->priority);
     }
 }
 
@@ -153,8 +181,13 @@ Queued::notify(const PacketPtr &pkt, const PrefetchInfo &pfi)
         while (itr != pfq.end()) {
             if (itr->pfInfo.getAddr() == blk_addr &&
                 itr->pfInfo.isSecure() == is_secure) {
+                DPRINTF(HWPrefetch, "Removing pf candidate addr: %#x "
+                        "(cl: %#x), demand request going to the same addr\n",
+                        itr->pfInfo.getAddr(),
+                        blockAddress(itr->pfInfo.getAddr()));
                 delete itr->pkt;
                 itr = pfq.erase(itr);
+                statsQueued.pfRemovedDemand++;
             } else {
                 ++itr;
             }
@@ -177,6 +210,10 @@ Queued::notify(const PacketPtr &pkt, const PrefetchInfo &pfi)
 
         if (!samePage(addr_prio.first, pfi.getAddr())) {
             statsQueued.pfSpanPage += 1;
+
+            if (hasBeenPrefetched(pkt->getAddr(), pkt->isSecure())) {
+                statsQueued.pfUsefulSpanPage += 1;
+            }
         }
 
         bool can_cross_page = (tlb != nullptr);
@@ -224,18 +261,24 @@ Queued::getPacket()
     processMissingTranslations(queueSize - pfq.size());
     return pkt;
 }
-Queued::QueuedStats::QueuedStats(Stats::Group *parent)
-    : Stats::Group(parent),
-    ADD_STAT(pfIdentified, UNIT_COUNT,
+
+Queued::QueuedStats::QueuedStats(statistics::Group *parent)
+    : statistics::Group(parent),
+    ADD_STAT(pfIdentified, statistics::units::Count::get(),
              "number of prefetch candidates identified"),
-    ADD_STAT(pfBufferHit, UNIT_COUNT,
+    ADD_STAT(pfBufferHit, statistics::units::Count::get(),
              "number of redundant prefetches already in prefetch queue"),
-    ADD_STAT(pfInCache, UNIT_COUNT,
+    ADD_STAT(pfInCache, statistics::units::Count::get(),
              "number of redundant prefetches already in cache/mshr dropped"),
-    ADD_STAT(pfRemovedFull, UNIT_COUNT,
+    ADD_STAT(pfRemovedDemand, statistics::units::Count::get(),
+             "number of prefetches dropped due to a demand for the same "
+             "address"),
+    ADD_STAT(pfRemovedFull, statistics::units::Count::get(),
              "number of prefetches dropped due to prefetch queue size"),
-    ADD_STAT(pfSpanPage, UNIT_COUNT,
-             "number of prefetches that crossed the page")
+    ADD_STAT(pfSpanPage, statistics::units::Count::get(),
+             "number of prefetches that crossed the page"),
+    ADD_STAT(pfUsefulSpanPage, statistics::units::Count::get(),
+             "number of prefetches that is useful and crossed the page")
 {
 }
 
@@ -280,8 +323,8 @@ Queued::translationComplete(DeferredPacket *dp, bool failed)
                     "cache/MSHR prefetch addr:%#x\n", target_paddr);
         } else {
             Tick pf_time = curTick() + clockPeriod() * latency;
-            it->createPkt(it->translationRequest->getPaddr(), blkSize,
-                    requestorId, tagPrefetch, pf_time);
+            it->createPkt(target_paddr, blkSize, requestorId, tagPrefetch,
+                          pf_time);
             addToQueue(pfq, *it);
         }
     } else {
@@ -469,7 +512,7 @@ Queued::addToQueue(std::list<DeferredPacket> &queue,
         queue.erase(it);
     }
 
-    if (queue.size() == 0) {
+    if ((queue.size() == 0) || (dpp <= queue.back())) {
         queue.emplace_back(dpp);
     } else {
         iterator it = queue.end();
@@ -482,6 +525,10 @@ Queued::addToQueue(std::list<DeferredPacket> &queue,
             it++;
         queue.insert(it, dpp);
     }
+
+    if (debug::HWPrefetchQueue)
+        printQueue(queue);
 }
 
-} // namespace Prefetcher
+} // namespace prefetch
+} // namespace gem5

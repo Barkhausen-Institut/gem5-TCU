@@ -73,6 +73,9 @@
 #include "dev/platform.hh"
 #include "dev/serial/uart.hh"
 
+namespace gem5
+{
+
 /*
  * Poll event for the listen socket
  */
@@ -283,10 +286,10 @@ Terminal::write(const uint8_t *buf, size_t len)
     return ret;
 }
 
-#define MORE_PENDING (ULL(1) << 61)
-#define RECEIVE_SUCCESS (ULL(0) << 62)
-#define RECEIVE_NONE (ULL(2) << 62)
-#define RECEIVE_ERROR (ULL(3) << 62)
+#define MORE_PENDING (1ULL << 61)
+#define RECEIVE_SUCCESS (0ULL << 62)
+#define RECEIVE_NONE (2ULL << 62)
+#define RECEIVE_ERROR (3ULL << 62)
 
 uint8_t
 Terminal::readData()
@@ -324,7 +327,7 @@ void
 Terminal::writeData(uint8_t c)
 {
 #if TRACING_ON == 1
-    if (DTRACE(Terminal)) {
+    if (debug::Terminal) {
         static char last = '\0';
 
         if ((c != '\n' && c != '\r') || (last != '\n' && last != '\r')) {
@@ -356,3 +359,5 @@ Terminal::writeData(uint8_t c)
             isprint(c) ? c : ' ', (int)c);
 
 }
+
+} // namespace gem5

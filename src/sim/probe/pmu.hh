@@ -42,7 +42,12 @@
 
 #include "sim/probe/probe.hh"
 
-namespace ProbePoints {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(ProbePoints, probing);
+namespace probing
+{
 
 /**
  * PMU probe point
@@ -56,5 +61,7 @@ typedef ProbePointArg<uint64_t> PMU;
 typedef std::unique_ptr<PMU> PMUUPtr;
 
 }
+
+} // namespace gem5
 
 #endif

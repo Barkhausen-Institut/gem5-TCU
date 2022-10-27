@@ -2,8 +2,6 @@
  * Copyright (c) 2013-2015 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -36,29 +34,25 @@
 #include <cassert>
 
 #include "params/WeightedLRURP.hh"
-#include "sim/core.hh"
+#include "sim/cur_tick.hh"
 
-namespace ReplacementPolicy {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(ReplacementPolicy, replacement_policy);
+namespace replacement_policy
+{
 
 WeightedLRU::WeightedLRU(const Params &p)
-  : Base(p)
+  : LRU(p)
 {
 }
 
 void
-WeightedLRU::touch(const std::shared_ptr<ReplacementData>&
-                                                  replacement_data) const
+WeightedLRU::touch(const std::shared_ptr<ReplacementData>& replacement_data,
+    int occupancy) const
 {
-    std::static_pointer_cast<WeightedLRUReplData>(replacement_data)->
-                                                 last_touch_tick = curTick();
-}
-
-void
-WeightedLRU::touch(const std::shared_ptr<ReplacementData>&
-                        replacement_data, int occupancy) const
-{
-    std::static_pointer_cast<WeightedLRUReplData>(replacement_data)->
-                                                  last_touch_tick = curTick();
+    LRU::touch(replacement_data);
     std::static_pointer_cast<WeightedLRUReplData>(replacement_data)->
                                                   last_occ_ptr = occupancy;
 }
@@ -88,8 +82,8 @@ WeightedLRU::getVictim(const ReplacementCandidates& candidates) const
         } else if (candidate_replacement_data->last_occ_ptr ==
                     victim_replacement_data->last_occ_ptr) {
             // Evict the block with a smaller tick.
-            Tick time = candidate_replacement_data->last_touch_tick;
-            if (time < victim_replacement_data->last_touch_tick) {
+            Tick time = candidate_replacement_data->lastTouchTick;
+            if (time < victim_replacement_data->lastTouchTick) {
                 victim = candidate;
             }
         }
@@ -103,22 +97,5 @@ WeightedLRU::instantiateEntry()
     return std::shared_ptr<ReplacementData>(new WeightedLRUReplData);
 }
 
-void
-WeightedLRU::reset(const std::shared_ptr<ReplacementData>&
-                                                    replacement_data) const
-{
-    // Set last touch timestamp
-    std::static_pointer_cast<WeightedLRUReplData>(
-        replacement_data)->last_touch_tick = curTick();
-}
-
-void
-WeightedLRU::invalidate(const std::shared_ptr<ReplacementData>&
-                                                    replacement_data) const
-{
-    // Reset last touch timestamp
-    std::static_pointer_cast<WeightedLRUReplData>(
-        replacement_data)->last_touch_tick = Tick(0);
-}
-
-} // namespace ReplacementPolicy
+} // namespace replacement_policy
+} // namespace gem5

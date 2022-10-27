@@ -31,11 +31,18 @@
 
 #include "arch/mips/linux/hwrpb.hh"
 
-namespace Linux {
-    struct thread_info {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Linux, linux);
+namespace linux
+{
+    struct thread_info
+    {
         struct pcb_struct       pcb;
         Addr_a                  task;
     };
-}
+} // namespace linux
+} // namespace gem5
 
 #endif // __ARCH_MIPS_LINUX_THREAD_INFO_H__

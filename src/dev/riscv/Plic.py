@@ -48,9 +48,11 @@ class Plic(BasicPioDevice):
     """
     type = 'Plic'
     cxx_header = 'dev/riscv/plic.hh'
-    intrctrl = Param.IntrControl(Parent.any, "interrupt controller")
+    cxx_class = 'gem5::Plic'
     pio_size = Param.Addr(0x4000000, "PIO Size")
     n_src = Param.Int("Number of interrupt sources")
+    n_contexts = Param.Int("Number of interrupt contexts. Usually the number "
+                           "of threads * 2. One for M mode, one for S mode")
 
     def generateDeviceTree(self, state):
         node = self.generateBasicPioDeviceNode(state, "plic", self.pio_addr,

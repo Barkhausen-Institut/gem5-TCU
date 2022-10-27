@@ -55,7 +55,6 @@
 #include "base/loader/object_file.hh"
 #include "base/loader/symtab.hh"
 #include "base/statistics.hh"
-#include "config/the_isa.hh"
 #include "cpu/thread_context.hh"
 #include "mem/page_table.hh"
 #include "mem/se_translating_port_proxy.hh"
@@ -64,8 +63,12 @@
 #include "sim/fd_array.hh"
 #include "sim/fd_entry.hh"
 #include "sim/redirect_path.hh"
+#include "sim/se_workload.hh"
 #include "sim/syscall_desc.hh"
 #include "sim/system.hh"
+
+namespace gem5
+{
 
 namespace
 {
@@ -88,10 +91,10 @@ Process::Loader::Loader()
 
 Process *
 Process::tryLoaders(const ProcessParams &params,
-                    ::Loader::ObjectFile *obj_file)
+                    loader::ObjectFile *obj_file)
 {
-    for (auto &loader: process_loaders()) {
-        Process *p = loader->load(params, obj_file);
+    for (auto &loader_it : process_loaders()) {
+        Process *p = loader_it->load(params, obj_file);
         if (p)
             return p;
     }
@@ -108,8 +111,9 @@ normalize(const std::string& directory)
 }
 
 Process::Process(const ProcessParams &params, EmulationPageTable *pTable,
-                 ::Loader::ObjectFile *obj_file)
+                 loader::ObjectFile *obj_file)
     : SimObject(params), system(params.system),
+      seWorkload(dynamic_cast<SEWorkload *>(system->workload)),
       useArchPT(params.useArchPT),
       kvmInSE(params.kvmInSE),
       useForClone(false),
@@ -127,14 +131,14 @@ Process::Process(const ProcessParams &params, EmulationPageTable *pTable,
       fds(std::make_shared<FDArray>(
                   params.input, params.output, params.errout)),
       childClearTID(0),
-      ADD_STAT(numSyscalls, UNIT_COUNT, "Number of system calls")
+      ADD_STAT(numSyscalls, statistics::units::Count::get(),
+               "Number of system calls")
 {
-    if (_pid >= System::maxPID)
-        fatal("_pid is too large: %d", _pid);
+    fatal_if(!seWorkload, "Couldn't find appropriate workload object.");
+    fatal_if(_pid >= System::maxPID, "_pid is too large: %d", _pid);
 
     auto ret_pair = system->PIDs.emplace(_pid);
-    if (!ret_pair.second)
-        fatal("_pid %d is already used", _pid);
+    fatal_if(!ret_pair.second, "_pid %d is already used", _pid);
 
     /**
      * Linux bundles together processes into this concept called a thread
@@ -155,7 +159,7 @@ Process::Process(const ProcessParams &params, EmulationPageTable *pTable,
 
     image = objFile->buildImage();
 
-    symtab = new ::Loader::SymbolTable();
+    symtab = new loader::SymbolTable();
     *symtab = objFile->symtab();
 }
 
@@ -171,6 +175,9 @@ Process::clone(ThreadContext *otc, ThreadContext *ntc,
 #endif
 #ifndef CLONE_THREAD
 #define CLONE_THREAD 0
+#endif
+#ifndef CLONE_VFORK
+#define CLONE_VFORK 0
 #endif
     if (CLONE_VM & flags) {
         /**
@@ -246,6 +253,10 @@ Process::clone(ThreadContext *otc, ThreadContext *ntc,
         np->exitGroup = exitGroup;
     }
 
+    if (CLONE_VFORK & flags) {
+        np->vforkContexts.push_back(otc->contextId());
+    }
+
     np->argv.insert(np->argv.end(), argv.begin(), argv.end());
     np->envp.insert(np->envp.end(), envp.begin(), envp.end());
 }
@@ -305,6 +316,10 @@ Process::drain()
 void
 Process::allocateMem(Addr vaddr, int64_t size, bool clobber)
 {
+    const auto page_size = pTable->pageSize();
+
+    const Addr page_addr = roundDown(vaddr, page_size);
+
     // Check if the page has been mapped by other cores if not to clobber.
     // When running multithreaded programs in SE-mode with DerivO3CPU model,
     // there are cases where two or more cores have page faults on the same
@@ -313,16 +328,17 @@ Process::allocateMem(Addr vaddr, int64_t size, bool clobber)
     // a physical page frame to map with the virtual page. Other cores can
     // return if the page has been mapped and `!clobber`.
     if (!clobber) {
-        const EmulationPageTable::Entry *pte = pTable->lookup(vaddr);
+        const EmulationPageTable::Entry *pte = pTable->lookup(page_addr);
         if (pte) {
             warn("Process::allocateMem: addr %#x already mapped\n", vaddr);
             return;
         }
     }
 
-    int npages = divCeil(size, pTable->pageSize());
-    Addr paddr = system->allocPhysPages(npages);
-    pTable->map(vaddr, paddr, size,
+    const int npages = divCeil(size, page_size);
+    const Addr paddr = seWorkload->allocPhysPages(npages);
+    const Addr pages_size = npages * page_size;
+    pTable->map(page_addr, paddr, pages_size,
                 clobber ? EmulationPageTable::Clobber :
                           EmulationPageTable::MappingFlags(0));
 }
@@ -332,17 +348,17 @@ Process::replicatePage(Addr vaddr, Addr new_paddr, ThreadContext *old_tc,
                        ThreadContext *new_tc, bool allocate_page)
 {
     if (allocate_page)
-        new_paddr = system->allocPhysPages(1);
+        new_paddr = seWorkload->allocPhysPages(1);
 
     // Read from old physical page.
     uint8_t buf_p[pTable->pageSize()];
-    old_tc->getVirtProxy().readBlob(vaddr, buf_p, sizeof(buf_p));
+    SETranslatingPortProxy(old_tc).readBlob(vaddr, buf_p, sizeof(buf_p));
 
     // Create new mapping in process address space by clobbering existing
     // mapping (if any existed) and then write to the new physical page.
     bool clobber = true;
     pTable->map(vaddr, new_paddr, sizeof(buf_p), clobber);
-    new_tc->getVirtProxy().writeBlob(vaddr, buf_p, sizeof(buf_p));
+    SETranslatingPortProxy(new_tc).writeBlob(vaddr, buf_p, sizeof(buf_p));
 }
 
 bool
@@ -356,12 +372,14 @@ Process::serialize(CheckpointOut &cp) const
 {
     memState->serialize(cp);
     pTable->serialize(cp);
+    fds->serialize(cp);
+
     /**
-     * Checkpoints for file descriptors currently do not work. Need to
-     * come back and fix them at a later date.
+     * Checkpoints for pipes, device drivers or sockets currently
+     * do not work. Need to come back and fix them at a later date.
      */
 
-    warn("Checkpoints for file descriptors currently do not work.");
+    warn("Checkpoints for pipes, device drivers and sockets do not work.");
 }
 
 void
@@ -369,11 +387,13 @@ Process::unserialize(CheckpointIn &cp)
 {
     memState->unserialize(cp);
     pTable->unserialize(cp);
+    fds->unserialize(cp);
+
     /**
-     * Checkpoints for file descriptors currently do not work. Need to
-     * come back and fix them at a later date.
+     * Checkpoints for pipes, device drivers or sockets currently
+     * do not work. Need to come back and fix them at a later date.
      */
-    warn("Checkpoints for file descriptors currently do not work.");
+    warn("Checkpoints for pipes, device drivers and sockets do not work.");
     // The above returns a bool so that you could do something if you don't
     // find the param in the checkpoint if you wanted to, like set a default
     // but in this case we'll just stick with the instantiated value if not
@@ -459,7 +479,7 @@ Process::updateBias()
     interp->updateBias(ld_bias);
 }
 
-Loader::ObjectFile *
+loader::ObjectFile *
 Process::getInterpreter()
 {
     return objFile->getInterpreter();
@@ -515,7 +535,7 @@ ProcessParams::create() const
     // simulated system's zeroth command line parameter
     const std::string &exec = (executable == "") ? cmd[0] : executable;
 
-    auto *obj_file = Loader::createObjectFile(exec);
+    auto *obj_file = loader::createObjectFile(exec);
     fatal_if(!obj_file, "Cannot load object file %s.", exec);
 
     Process *process = Process::tryLoaders(*this, obj_file);
@@ -523,3 +543,5 @@ ProcessParams::create() const
 
     return process;
 }
+
+} // namespace gem5

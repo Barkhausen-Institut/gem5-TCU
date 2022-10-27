@@ -33,7 +33,12 @@
 #include "params/AMPMPrefetcher.hh"
 #include "params/AccessMapPatternMatching.hh"
 
-namespace Prefetcher {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Prefetcher, prefetch);
+namespace prefetch
+{
 
 AccessMapPatternMatching::AccessMapPatternMatching(
     const AccessMapPatternMatchingParams &p)
@@ -78,7 +83,7 @@ AccessMapPatternMatching::processEpochEvent()
     double num_requests = (double) (numRawCacheMisses - numGoodPrefetches +
         numTotalPrefetches);
     double memory_bandwidth = num_requests * offChipMemoryLatency /
-        clockEdge(epochCycles);
+        cyclesToTicks(epochCycles);
 
     if (prefetch_coverage > highCoverageThreshold &&
         (prefetch_accuracy > highAccuracyThreshold ||
@@ -263,4 +268,5 @@ AMPM::calculatePrefetch(const PrefetchInfo &pfi,
     ampm.calculatePrefetch(pfi, addresses);
 }
 
-} // namespace Prefetcher
+} // namespace prefetch
+} // namespace gem5

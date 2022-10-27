@@ -34,51 +34,56 @@
 #include "enums/X86I8259CascadeMode.hh"
 #include "params/I8259.hh"
 
+namespace gem5
+{
+
 namespace X86ISA
 {
 
 class I8259 : public BasicPioDevice
 {
   protected:
-    static const int NumLines = 8;
-    bool pinStates[NumLines];
+    static const inline int NumLines = 8;
+    bool pinStates[NumLines] = {};
 
     void init() override;
 
     Tick latency;
     std::vector<IntSourcePin<I8259> *> output;
     std::vector<IntSinkPin<I8259> *> inputs;
-    Enums::X86I8259CascadeMode mode;
-    I8259 *slave;
+    enums::X86I8259CascadeMode mode;
+    I8259 *slave = nullptr;
 
     // Interrupt Request Register
-    uint8_t IRR;
+    uint8_t IRR = 0;
     // In Service Register
-    uint8_t ISR;
+    uint8_t ISR = 0;
     // Interrupt Mask Register
-    uint8_t IMR;
+    uint8_t IMR = 0;
 
     // The higher order bits of the vector to return
-    uint8_t vectorOffset;
+    uint8_t vectorOffset = 0;
 
-    bool cascadeMode;
+    bool cascadeMode = false;
     // A bit vector of lines with responders attached, or the
     // responder id, depending
     // on if this is a requestor or responder PIC.
-    uint8_t cascadeBits;
+    uint8_t cascadeBits = 0;
 
-    bool edgeTriggered;
-    bool readIRR;
+    bool edgeTriggered = true;
+    bool readIRR = true;
 
     // State machine information for reading in initialization control words.
-    bool expectICW4;
-    int initControlWord;
+    bool expectICW4 = false;
+    int initControlWord = 0;
 
     // Whether or not the PIC is in auto EOI mode.
-    bool autoEOI;
+    bool autoEOI = false;
 
     void requestInterrupt(int line);
     void handleEOI(int line);
+
+    int getVector();
 
   public:
     using Params = I8259Params;
@@ -95,6 +100,8 @@ class I8259 : public BasicPioDevice
         else
             return BasicPioDevice::getPort(if_name, idx);
     }
+
+    AddrRangeList getAddrRanges() const override;
 
     Tick read(PacketPtr pkt) override;
     Tick write(PacketPtr pkt) override;
@@ -114,12 +121,12 @@ class I8259 : public BasicPioDevice
     void signalInterrupt(int line);
     void raiseInterruptPin(int number);
     void lowerInterruptPin(int number);
-    int getVector();
 
     void serialize(CheckpointOut &cp) const override;
     void unserialize(CheckpointIn &cp) override;
 };
 
 } // namespace X86ISA
+} // namespace gem5
 
 #endif //__DEV_X86_I8259_HH__

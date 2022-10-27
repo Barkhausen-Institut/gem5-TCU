@@ -28,11 +28,13 @@
 
 #include "arch/mips/dsp.hh"
 
-#include "arch/mips/isa_traits.hh"
 #include "base/bitfield.hh"
 #include "base/logging.hh"
 #include "cpu/static_inst.hh"
 #include "sim/serialize.hh"
+
+namespace gem5
+{
 
 using namespace MipsISA;
 
@@ -125,7 +127,7 @@ MipsISA::signExtend(uint64_t value, int32_t fmt)
 uint64_t
 MipsISA::addHalfLsb(uint64_t value, int32_t lsbpos)
 {
-    return value += ULL(1) << (lsbpos - 1);
+    return value += 1ULL << (lsbpos - 1);
 }
 
 int32_t
@@ -1186,3 +1188,5 @@ MipsISA::readDSPControl(uint32_t *dspctl, uint32_t mask)
 
     return *dspctl & fmask;
 }
+
+} // namespace gem5

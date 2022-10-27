@@ -51,6 +51,9 @@ extern "C"
 
 #include "base/logging.hh"
 
+namespace gem5
+{
+
 const char* PngWriter::_imgExtension = "png";
 
 /**
@@ -73,7 +76,8 @@ writePng(png_structp pngPtr, png_bytep data, png_size_t length)
     strmPtr->write(reinterpret_cast<const char *>(data), length);
 }
 
-struct PngWriter::PngStructHandle {
+struct PngWriter::PngStructHandle
+{
   private:
     // Make PngStructHandle uncopyable
     PngStructHandle(const PngStructHandle&) = delete;
@@ -171,3 +175,4 @@ PngWriter::write(std::ostream &png) const
     png_write_end(pngPtr, NULL);
 }
 
+} // namespace gem5

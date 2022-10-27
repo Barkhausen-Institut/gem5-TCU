@@ -43,7 +43,10 @@
 #include "dev/arm/doorbell.hh"
 #include "mem/packet_access.hh"
 
-using namespace SCMI;
+namespace gem5
+{
+
+using namespace scmi;
 
 AgentChannel::AgentChannel(const ScmiChannelParams &p)
   : VirtualChannel(p),
@@ -303,3 +306,5 @@ Platform::find(AgentChannel* agent) const
 
     return nullptr;
 }
+
+} // namespace gem5

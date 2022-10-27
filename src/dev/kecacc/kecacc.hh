@@ -36,6 +36,9 @@
 #include "dev/kecacc/kecacc-xkcp.hh"
 #include "params/KecAcc.hh"
 
+namespace gem5
+{
+
 class KecAcc : public BasicPioDevice
 {
   public:
@@ -91,5 +94,7 @@ class KecAcc : public BasicPioDevice
     std::unique_ptr<uint8_t[]> buffer;
     Cycles start;
 };
+
+}
 
 #endif // __DEV_KECACC_HH__

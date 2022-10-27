@@ -30,11 +30,17 @@ from m5.SimObject import SimObject
 class BasicLink(SimObject):
     type = 'BasicLink'
     cxx_header = "mem/ruby/network/BasicLink.hh"
+    cxx_class = 'gem5::ruby::BasicLink'
+
     link_id = Param.Int("ID in relation to other links")
     latency = Param.Cycles(1, "latency")
     # Width of the link in bytes
     # Only used by simple network.
     # Garnet models this by flit size
+    # For the simple links, the bandwidth factor translates to the
+    # bandwidth multiplier.  The multipiler, in combination with the
+    # endpoint bandwidth multiplier - message size multiplier ratio,
+    # determines the link bandwidth in bytes
     bandwidth_factor = Param.Int("generic bandwidth factor, usually in bytes")
     weight = Param.Int(1, "used to restrict routing in shortest path analysis")
     supported_vnets = VectorParam.Int([], "Vnets supported Default:All([])")
@@ -42,6 +48,8 @@ class BasicLink(SimObject):
 class BasicExtLink(BasicLink):
     type = 'BasicExtLink'
     cxx_header = "mem/ruby/network/BasicLink.hh"
+    cxx_class = 'gem5::ruby::BasicExtLink'
+
     ext_node = Param.RubyController("External node")
     int_node = Param.BasicRouter("ID of internal node")
     bandwidth_factor = 16 # only used by simple network
@@ -49,6 +57,8 @@ class BasicExtLink(BasicLink):
 class BasicIntLink(BasicLink):
     type = 'BasicIntLink'
     cxx_header = "mem/ruby/network/BasicLink.hh"
+    cxx_class = 'gem5::ruby::BasicIntLink'
+
     src_node = Param.BasicRouter("Router on src end")
     dst_node = Param.BasicRouter("Router on dst end")
 

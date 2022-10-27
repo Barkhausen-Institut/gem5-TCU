@@ -29,7 +29,11 @@
 
 #include "params/AmbaFromTlmBridge64.hh"
 
-namespace FastModel
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(FastModel, fastmodel);
+namespace fastmodel
 {
 
 AmbaFromTlmBridge64::AmbaFromTlmBridge64(const char *name) :
@@ -51,10 +55,12 @@ AmbaFromTlmBridge64::gem5_getPort(const std::string &if_name, int idx)
     }
 }
 
-} // namespace FastModel
+} // namespace fastmodel
 
-FastModel::AmbaFromTlmBridge64 *
+fastmodel::AmbaFromTlmBridge64 *
 AmbaFromTlmBridge64Params::create() const
 {
-    return new FastModel::AmbaFromTlmBridge64(name.c_str());
+    return new fastmodel::AmbaFromTlmBridge64(name.c_str());
 }
+
+} // namespace gem5

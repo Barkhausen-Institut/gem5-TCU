@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2020 ARM Limited
+# Copyright (c) 2019-2022 Arm Limited
 # All rights reserved
 #
 # The license below extends only to copyright in the software and shall
@@ -41,8 +41,11 @@ from os.path import join as joinpath
 
 from testlib import *
 
+import re
+
 arm_fs_kvm_tests = [
     'realview64-kvm',
+    'realview64-kvm-dual',
 ]
 
 arm_fs_quick_tests = [
@@ -67,6 +70,7 @@ arm_fs_long_tests = [
     'realview-switcheroo-o3',
     'realview-switcheroo-full',
     'realview64-o3',
+    'realview64-o3-checker',
     'realview64-o3-dual',
     'realview64-minor',
     'realview64-minor-dual',
@@ -75,10 +79,11 @@ arm_fs_long_tests = [
     'realview-simple-timing-ruby',
     'realview64-simple-timing-ruby',
     'realview64-simple-timing-dual-ruby',
+    'realview64-o3-dual-ruby',
 
 
-    # The following tests fail. These are recorded in the GEM5-640 and GEM5-364
-    # Jira issues.
+    # The following tests fail. These are recorded in the GEM5-640
+    # Jira issue.
     #
     # https://gem5.atlassian.net/browse/GEM5-640
     #'realview-simple-atomic-dual',
@@ -86,13 +91,9 @@ arm_fs_long_tests = [
     #'realview-o3-dual',
     #'realview-minor-dual',
     #'realview-simple-timing-dual-ruby',
-    #
-    # https://gem5.atlassian.net/browse/GEM5-364
-    #'realview-o3-checker',
-    #'realview64-o3-checker',
 ]
 
-tarball = 'aarch-system-20200611.tar.bz2'
+tarball = 'aarch-system-20220505.tar.bz2'
 url = config.resource_url + "/arm/" + tarball
 filepath = os.path.dirname(os.path.abspath(__file__))
 path = joinpath(config.bin_path, 'arm')
@@ -100,6 +101,15 @@ arm_fs_binaries = DownloadedArchive(url, path, tarball)
 
 def support_kvm():
     return os.access("/dev/kvm", os.R_OK | os.W_OK)
+
+def verifier_list(name):
+    verifiers=[]
+    if "dual" in name:
+        verifiers.append(verifier.MatchFileRegex(
+            re.compile(r'.*CPU1: Booted secondary processor.*'),
+            ["system.terminal"]))
+
+    return verifiers
 
 for name in arm_fs_quick_tests:
     if name in arm_fs_kvm_tests:
@@ -120,13 +130,14 @@ for name in arm_fs_quick_tests:
     ]
     gem5_verify_config(
         name=name,
-        verifiers=(), # Add basic stat verifiers
+        verifiers=verifier_list(name), # Add basic stat verifiers
         config=joinpath(filepath, 'run.py'),
         config_args=args,
         valid_isas=(constants.arm_tag,),
         length=constants.quick_tag,
         valid_hosts=valid_hosts,
-        fixtures=(arm_fs_binaries,)
+        fixtures=(arm_fs_binaries,),
+        uses_kvm= name in arm_fs_kvm_tests,
     )
 
 for name in arm_fs_long_tests:
@@ -137,10 +148,11 @@ for name in arm_fs_long_tests:
     ]
     gem5_verify_config(
         name=name,
-        verifiers=(), # TODO: Add basic stat verifiers
+        verifiers=verifier_list(name), # TODO: Add basic stat verifiers
         config=joinpath(filepath, 'run.py'),
         config_args=args,
         valid_isas=(constants.arm_tag,),
         length=constants.long_tag,
-        fixtures=(arm_fs_binaries,)
+        fixtures=(arm_fs_binaries,),
+        uses_kvm= name in arm_fs_kvm_tests,
     )

@@ -42,6 +42,7 @@
 
 #include "base/bitfield.hh"
 #include "base/cast.hh"
+#include "base/compiler.hh"
 #include "base/logging.hh"
 #include "base/trace.hh"
 #include "base/types.hh"
@@ -50,6 +51,9 @@
 #include "dev/arm/smmu_v3_transl.hh"
 #include "mem/packet_access.hh"
 #include "sim/system.hh"
+
+namespace gem5
+{
 
 SMMUv3::SMMUv3(const SMMUv3Params &params) :
     ClockedObject(params),
@@ -249,7 +253,7 @@ SMMUv3::runProcessAtomic(SMMUProcess *proc, PacketPtr pkt)
                     pkt = action.pkt;
                     break;
                 }
-                M5_FALLTHROUGH;
+                [[fallthrough]];
             case ACTION_SEND_REQ_FINAL:
                 delay += requestPort.sendAtomic(action.pkt);
                 pkt = action.pkt;
@@ -305,7 +309,7 @@ SMMUv3::runProcessTiming(SMMUProcess *proc, PacketPtr pkt)
 
                 break;
             }
-            M5_FALLTHROUGH;
+            [[fallthrough]];
         case ACTION_SEND_REQ_FINAL:
             action.pkt->pushSenderState(proc);
 
@@ -563,22 +567,6 @@ SMMUv3::processCommand(const SMMUCommand &cmd)
     }
 }
 
-const PageTableOps*
-SMMUv3::getPageTableOps(uint8_t trans_granule)
-{
-    static V8PageTableOps4k  ptOps4k;
-    static V8PageTableOps16k ptOps16k;
-    static V8PageTableOps64k ptOps64k;
-
-    switch (trans_granule) {
-    case TRANS_GRANULE_4K:  return &ptOps4k;
-    case TRANS_GRANULE_16K: return &ptOps16k;
-    case TRANS_GRANULE_64K: return &ptOps64k;
-    default:
-        panic("Unknown translation granule size %d", trans_granule);
-    }
-}
-
 Tick
 SMMUv3::readControl(PacketPtr pkt)
 {
@@ -744,16 +732,18 @@ SMMUv3::init()
         controlPort.sendRangeChange();
 }
 
-SMMUv3::SMMUv3Stats::SMMUv3Stats(Stats::Group *parent)
-    : Stats::Group(parent),
-      ADD_STAT(steL1Fetches, UNIT_COUNT, "STE L1 fetches"),
-      ADD_STAT(steFetches, UNIT_COUNT, "STE fetches"),
-      ADD_STAT(cdL1Fetches, UNIT_COUNT, "CD L1 fetches"),
-      ADD_STAT(cdFetches, UNIT_COUNT, "CD fetches"),
-      ADD_STAT(translationTimeDist, UNIT_TICK, "Time to translate address"),
-      ADD_STAT(ptwTimeDist, UNIT_TICK, "Time to walk page tables")
+SMMUv3::SMMUv3Stats::SMMUv3Stats(statistics::Group *parent)
+  : statistics::Group(parent),
+    ADD_STAT(steL1Fetches, statistics::units::Count::get(), "STE L1 fetches"),
+    ADD_STAT(steFetches, statistics::units::Count::get(), "STE fetches"),
+    ADD_STAT(cdL1Fetches, statistics::units::Count::get(), "CD L1 fetches"),
+    ADD_STAT(cdFetches, statistics::units::Count::get(), "CD fetches"),
+    ADD_STAT(translationTimeDist, statistics::units::Tick::get(),
+        "Time to translate address"),
+    ADD_STAT(ptwTimeDist, statistics::units::Tick::get(),
+        "Time to walk page tables")
 {
-    using namespace Stats;
+    using namespace statistics;
 
     steL1Fetches
         .flags(pdf);
@@ -815,3 +805,5 @@ SMMUv3::getPort(const std::string &name, PortID id)
         return ClockedObject::getPort(name, id);
     }
 }
+
+} // namespace gem5

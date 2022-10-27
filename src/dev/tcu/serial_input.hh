@@ -38,6 +38,11 @@
 
 #include <termios.h>
 
+namespace gem5
+{
+namespace tcu
+{
+
 class TcuSerialInput : public ClockedObject, public CommandExecutor
 {
   static const int EP_INPUT = 4;
@@ -141,5 +146,8 @@ class TcuSerialInput : public ClockedObject, public CommandExecutor
     void scheduleCommand(Cycles delay) override;
     void sendMemoryReq(PacketPtr pkt, Cycles delay) override;
 };
+
+}
+}
 
 #endif // __DEV_TCU_SERIAL_INPUT_HH__

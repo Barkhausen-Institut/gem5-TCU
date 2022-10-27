@@ -43,11 +43,15 @@
 #include "sim/clocked_object.hh"
 #include "sim/sub_system.hh"
 
+namespace gem5
+{
+
 PowerModelState::PowerModelState(const Params &p)
     : SimObject(p), _temp(0), clocked_object(NULL),
-      ADD_STAT(dynamicPower, UNIT_WATT,
+      ADD_STAT(dynamicPower, statistics::units::Watt::get(),
                "Dynamic power for this object (Watts)"),
-      ADD_STAT(staticPower, UNIT_WATT, "Static power for this object (Watts)")
+      ADD_STAT(staticPower, statistics::units::Watt::get(),
+               "Static power for this object (Watts)")
 {
     dynamicPower
       .method(this, &PowerModelState::getDynamicPower);
@@ -58,9 +62,9 @@ PowerModelState::PowerModelState(const Params &p)
 PowerModel::PowerModel(const Params &p)
     : SimObject(p), states_pm(p.pm), subsystem(p.subsystem),
       clocked_object(NULL), power_model_type(p.pm_type),
-      ADD_STAT(dynamicPower, UNIT_WATT,
+      ADD_STAT(dynamicPower, statistics::units::Watt::get(),
                          "Dynamic power for this power state"),
-      ADD_STAT(staticPower, UNIT_WATT,
+      ADD_STAT(staticPower, statistics::units::Watt::get(),
                          "Static power for this power state")
 {
     panic_if(subsystem == NULL,
@@ -108,7 +112,7 @@ PowerModel::getDynamicPower() const
 {
     assert(clocked_object);
 
-    if (power_model_type == Enums::PMType::Static) {
+    if (power_model_type == enums::PMType::Static) {
         // This power model only collects static data
         return 0;
     }
@@ -118,7 +122,7 @@ PowerModel::getDynamicPower() const
     assert(w.size() - 1 == states_pm.size());
 
     // Make sure we have no UNDEFINED state
-    warn_if(w[Enums::PwrState::UNDEFINED] > 0,
+    warn_if(w[enums::PwrState::UNDEFINED] > 0,
         "SimObject in UNDEFINED power state! Power figures might be wrong!\n");
 
     double power = 0;
@@ -136,7 +140,7 @@ PowerModel::getStaticPower() const
 
     std::vector<double> w = clocked_object->powerState->getWeights();
 
-    if (power_model_type == Enums::PMType::Dynamic) {
+    if (power_model_type == enums::PMType::Dynamic) {
         // This power model only collects dynamic data
         return 0;
     }
@@ -159,3 +163,5 @@ PowerModel::getStaticPower() const
 
     return power;
 }
+
+} // namespace gem5

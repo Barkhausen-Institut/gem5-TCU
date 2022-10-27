@@ -1,4 +1,17 @@
+# Copyright (c) 2021 Arm Limited
+# All rights reserved
+#
+# The license below extends only to copyright in the software and shall
+# not be construed as granting a license to any other intellectual
+# property including but not limited to intellectual property relating
+# to a hardware implementation of the functionality of the software
+# licensed hereunder.  You may use the software subject to the license
+# terms below provided that you ensure that this notice is replicated
+# unmodified and in its entirety in all distributions of the software,
+# modified or unmodified, in source code or in binary form.
+#
 # Copyright (c) 2017 Mark D. Hill and David A. Wood
+# Copyright (c) 2021 Huawei International
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -28,6 +41,7 @@
 Built in test cases that verify particular details about a gem5 run.
 '''
 import re
+import os
 
 from testlib import test_util
 from testlib.configuration import constants
@@ -46,6 +60,17 @@ class Verifier(object):
         name = '-'.join([name_pfx, self.__class__.__name__])
         return test_util.TestFunction(self._test,
                 name=name, fixtures=self.fixtures)
+
+class CheckH5StatsExist(Verifier):
+    def __init__(self, stats_file='stats.h5'):
+        super(CheckH5StatsExist, self).__init__()
+        self.stats_file = stats_file
+
+    def test(self, params):
+        tempdir = params.fixtures[constants.tempdir_fixture_name].path
+        h5_file = joinpath(tempdir, self.stats_file)
+        if not os.path.isfile(h5_file):
+            test_util.fail('Could not find h5 stats file %s', h5_file)
 
 class MatchGoldStandard(Verifier):
     '''
@@ -129,6 +154,8 @@ class MatchStdout(DerivedGoldStandard):
             re.compile("^info: Standard input is not a terminal"),
             re.compile("^Couldn't unlink "),
             re.compile("^Using GPU kernel code file\(s\) "),
+            re.compile("^.* not found locally\. Downloading"),
+            re.compile("^Finished downloading"),
         ]
 
 class MatchStdoutNoPerf(MatchStdout):
@@ -161,33 +188,61 @@ class MatchConfigJSON(DerivedGoldStandard):
             re.compile(r'''^\s*"(cwd|input|codefile)":'''),
             )
 
-class MatchRegex(Verifier):
-    def __init__(self, regex, match_stderr=True, match_stdout=True):
-        super(MatchRegex, self).__init__()
+class MatchFileRegex(Verifier):
+    """
+    Looking for a match between a regex pattern and the content of a list
+    of files. Verifier will pass as long as the pattern is found in at least
+    one of the files.
+    """
+    def __init__(self, regex, filenames):
+        super(MatchFileRegex, self).__init__()
         self.regex = _iterable_regex(regex)
-        self.match_stderr = match_stderr
-        self.match_stdout = match_stdout
+        self.filenames = filenames
+
+    def parse_file(self, fname):
+        with open(fname, 'r') as file_:
+            for line in file_:
+                for regex in self.regex:
+                    if re.match(regex, line):
+                        return True
 
     def test(self, params):
         fixtures = params.fixtures
         # Get the file from the tempdir of the test.
         tempdir = fixtures[constants.tempdir_fixture_name].path
 
-        def parse_file(fname):
-            with open(fname, 'r') as file_:
-                for line in file_:
-                    for regex in self.regex:
-                        if re.match(regex, line):
-                            return True
-        if self.match_stdout:
-            if parse_file(joinpath(tempdir,
-                                   constants.gem5_simulation_stdout)):
+        for fname in self.filenames:
+            if self.parse_file(joinpath(tempdir, fname)):
                 return # Success
-        if self.match_stderr:
-            if parse_file(joinpath(tempdir,
-                                   constants.gem5_simulation_stderr)):
-                return # Success
+
         test_util.fail('Could not match regex.')
+
+class MatchRegex(MatchFileRegex):
+    """
+    Looking for a match between a regex pattern and stdout/stderr.
+    """
+    def __init__(self, regex, match_stderr=True, match_stdout=True):
+        filenames = list()
+        if match_stdout:
+            filenames.append(constants.gem5_simulation_stdout)
+        if match_stderr:
+            filenames.append(constants.gem5_simulation_stderr)
+        super(MatchRegex, self).__init__(regex, filenames)
+
+class NoMatchRegex(MatchRegex):
+    """
+    Checks that the given pattern does *not* match
+    """
+    def __init__(self, regex, match_stderr=True, match_stdout=True):
+        super(NoMatchRegex, self).__init__(regex, match_stderr, match_stdout)
+
+    def test(self, params):
+        fixtures = params.fixtures
+        tempdir = fixtures[constants.tempdir_fixture_name].path
+
+        for fname in self.filenames:
+            if self.parse_file(joinpath(tempdir, fname)):
+                test_util.fail('Could not match regex.')
 
 _re_type = type(re.compile(''))
 def _iterable_regex(regex):

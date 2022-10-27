@@ -36,13 +36,18 @@
 #include <string>
 #include <vector>
 
+#include "base/compiler.hh"
 #include "base/loader/image_file_data.hh"
 #include "base/logging.hh"
 #include "base/types.hh"
 
+namespace gem5
+{
+
 class PortProxy;
 
-namespace Loader
+GEM5_DEPRECATED_NAMESPACE(Loader, loader);
+namespace loader
 {
 
 class MemoryImage
@@ -165,6 +170,7 @@ operator << (std::ostream &os, const MemoryImage::Segment &seg)
     return os;
 }
 
-} // namespace Loader
+} // namespace loader
+} // namespace gem5
 
 #endif // __BASE_LOADER_MEMORY_IMAGE_HH__

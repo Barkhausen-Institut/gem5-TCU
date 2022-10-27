@@ -2,8 +2,6 @@
  * Copyright (c) 2014-2015 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -41,6 +39,9 @@
 #include "base/stats/group.hh"
 #include "gpu-compute/fetch_unit.hh"
 
+namespace gem5
+{
+
 // Instruction fetch stage.
 // All dispatched wavefronts for all SIMDS are analyzed for the
 // need to fetch instructions. From the fetch eligible waves,
@@ -74,12 +75,14 @@ class FetchStage
     const std::string _name;
 
   protected:
-    struct FetchStageStats : public Stats::Group
+    struct FetchStageStats : public statistics::Group
     {
-        FetchStageStats(Stats::Group *parent);
+        FetchStageStats(statistics::Group *parent);
 
-        Stats::Distribution instFetchInstReturned;
+        statistics::Distribution instFetchInstReturned;
     } stats;
 };
+
+} // namespace gem5
 
 #endif // __FETCH_STAGE_HH__

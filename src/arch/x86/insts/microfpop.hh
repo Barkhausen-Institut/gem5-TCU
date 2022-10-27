@@ -40,38 +40,32 @@
 
 #include "arch/x86/insts/microop.hh"
 
+namespace gem5
+{
+
 namespace X86ISA
 {
 
-/**
- * Base classes for FpOps which provides a generateDisassembly method.
- */
 class FpOp : public X86MicroopBase
 {
   protected:
-    const RegIndex src1;
-    const RegIndex src2;
-    const RegIndex dest;
-    const uint8_t dataSize;
     const int8_t spm;
 
     // Constructor
-    FpOp(ExtMachInst _machInst,
-            const char *mnem, const char *_instMnem,
-            uint64_t setFlags,
-            InstRegIndex _src1, InstRegIndex _src2, InstRegIndex _dest,
-            uint8_t _dataSize, int8_t _spm,
-            OpClass __opClass) :
-        X86MicroopBase(_machInst, mnem, _instMnem, setFlags,
-                __opClass),
-        src1(_src1.index()), src2(_src2.index()), dest(_dest.index()),
-        dataSize(_dataSize), spm(_spm)
+    FpOp(ExtMachInst mach_inst, const char *mnem, const char *inst_mnem,
+            uint64_t set_flags, OpClass op_class,
+            uint8_t data_size, int8_t _spm) :
+        X86MicroopBase(mach_inst, mnem, inst_mnem, set_flags, op_class),
+        spm(_spm), dataSize(data_size),
+        foldOBit((data_size == 1 && !mach_inst.rex.present) ? 1 << 6 : 0)
     {}
 
-    std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+  public:
+    const uint8_t dataSize;
+    const RegIndex foldOBit;
 };
 
-}
+} // namespace X86ISA
+} // namespace gem5
 
 #endif //__ARCH_X86_INSTS_MICROFPOP_HH__

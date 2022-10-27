@@ -2,8 +2,6 @@
  * Copyright (c) 2020 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -45,6 +43,15 @@
 #include "mem/ruby/network/garnet/NetworkLink.hh"
 #include "mem/ruby/network/garnet/flitBuffer.hh"
 #include "params/NetworkBridge.hh"
+
+namespace gem5
+{
+
+namespace ruby
+{
+
+namespace garnet
+{
 
 class GarnetNetwork;
 
@@ -94,5 +101,9 @@ class NetworkBridge: public CreditLink
     std::vector<std::queue<int>> extraCredit;
 
 };
+
+} // namespace garnet
+} // namespace ruby
+} // namespace gem5
 
 #endif // __MEM_RUBY_NETWORK_GARNET_0_NETWORK_BRIDGE_HH__

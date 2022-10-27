@@ -31,17 +31,23 @@
 
 #include <string>
 
+#include "base/compiler.hh"
 #include "base/types.hh"
 #include "sim/guest_abi.hh"
 
-namespace Linux
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Linux, linux);
+namespace linux
 {
 
 using PrintkVarArgs =
-    GuestABI::VarArgs<Addr, int32_t, uint32_t, int64_t, uint64_t>;
+    guest_abi::VarArgs<Addr, int32_t, uint32_t, int64_t, uint64_t>;
 int printk(std::string &out, ThreadContext *tc, Addr format_ptr,
            PrintkVarArgs args);
 
-} // namespace Linux
+} // namespace linux
+} // namespace gem5
 
 #endif // __KERN_LINUX_PRINTK_HH__

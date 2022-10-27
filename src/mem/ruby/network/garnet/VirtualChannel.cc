@@ -31,6 +31,15 @@
 
 #include "mem/ruby/network/garnet/VirtualChannel.hh"
 
+namespace gem5
+{
+
+namespace ruby
+{
+
+namespace garnet
+{
+
 VirtualChannel::VirtualChannel()
   : inputBuffer(), m_vc_state(IDLE_, Tick(0)), m_output_port(-1),
     m_enqueue_time(INFINITE_), m_output_vc(-1)
@@ -71,3 +80,7 @@ VirtualChannel::functionalWrite(Packet *pkt)
 {
     return inputBuffer.functionalWrite(pkt);
 }
+
+} // namespace garnet
+} // namespace ruby
+} // namespace gem5

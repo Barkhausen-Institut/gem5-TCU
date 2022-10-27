@@ -38,15 +38,13 @@
 #include "mem/tcu/noc_addr.hh"
 #include "sim/tile_memory.hh"
 
+namespace gem5
+{
+
 class M3Loader
 {
   protected:
     static const size_t ENV_SIZE        = 0x1000;
-#if THE_ISA == RISCV_ISA
-    static const uintptr_t ENV_START    = 0x10000008;
-#else
-    static const uintptr_t ENV_START    = 0x100000;
-#endif
     static const size_t HEAP_SIZE       = 0x8000;
     static const size_t MAX_MODNAME_LEN = 64;
 
@@ -94,6 +92,7 @@ class M3Loader
     std::string commandLine;
 
   public:
+    const Addr envStart;
     const uint tileId;
     const Addr modOffset;
     const Addr modSize;
@@ -103,6 +102,7 @@ class M3Loader
     M3Loader(const std::vector<Addr> &tiles,
              const std::vector<std::string> &mods,
              const std::string &cmdline,
+             Addr envStart,
              uint tileId,
              Addr modOffset,
              Addr modSize,
@@ -123,5 +123,7 @@ class M3Loader
                      const uint8_t *data, size_t size);
     Addr loadModule(RequestPort &noc, const std::string &filename, Addr addr);
 };
+
+}
 
 #endif

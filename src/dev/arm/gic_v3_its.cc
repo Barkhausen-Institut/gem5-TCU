@@ -53,6 +53,9 @@
 
 #define COMMAND(x, method) { x, DispatchEntry(#x, method) }
 
+namespace gem5
+{
+
 const AddrRange Gicv3Its::GITS_BASER(0x0100, 0x0140);
 
 const uint32_t Gicv3Its::CTLR_QUIESCENT = 0x80000000;
@@ -96,7 +99,7 @@ ItsProcess::doRead(Yield &yield, Addr addr, void *ptr, size_t size)
     RequestPtr req = std::make_shared<Request>(
         addr, size, 0, its.requestorId);
 
-    req->taskId(ContextSwitchTaskId::DMA);
+    req->taskId(context_switch_task_id::DMA);
 
     a.pkt = new Packet(req, MemCmd::ReadReq);
     a.pkt->dataStatic(ptr);
@@ -120,7 +123,7 @@ ItsProcess::doWrite(Yield &yield, Addr addr, void *ptr, size_t size)
     RequestPtr req = std::make_shared<Request>(
         addr, size, 0, its.requestorId);
 
-    req->taskId(ContextSwitchTaskId::DMA);
+    req->taskId(context_switch_task_id::DMA);
 
     a.pkt = new Packet(req, MemCmd::WriteReq);
     a.pkt->dataStatic(ptr);
@@ -1291,3 +1294,5 @@ Gicv3Its::moveAllPendingState(
 
     rd2->updateDistributor();
 }
+
+} // namespace gem5

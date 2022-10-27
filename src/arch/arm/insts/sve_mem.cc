@@ -37,12 +37,15 @@
 
 #include "arch/arm/insts/sve_mem.hh"
 
+namespace gem5
+{
+
 namespace ArmISA
 {
 
 std::string
 SveMemVecFillSpill::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -58,7 +61,7 @@ SveMemVecFillSpill::generateDisassembly(
 
 std::string
 SveMemPredFillSpill::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -74,7 +77,7 @@ SveMemPredFillSpill::generateDisassembly(
 
 std::string
 SveContigMemSS::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     // TODO: add suffix to transfer register and scaling factor (LSL #<x>)
     std::stringstream ss;
@@ -94,7 +97,7 @@ SveContigMemSS::generateDisassembly(
 
 std::string
 SveContigMemSI::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     // TODO: add suffix to transfer register
     std::stringstream ss;
@@ -113,4 +116,5 @@ SveContigMemSI::generateDisassembly(
     return ss.str();
 }
 
-}  // namespace ArmISA
+} // namespace ArmISA
+} // namespace gem5

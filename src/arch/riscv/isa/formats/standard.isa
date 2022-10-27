@@ -47,7 +47,7 @@ def template ImmDeclare {{
         %(class_name)s(MachInst machInst);
         Fault execute(ExecContext *, Trace::InstRecord *) const override;
         std::string generateDisassembly(Addr pc,
-            const Loader::SymbolTable *symtab) const override;
+            const loader::SymbolTable *symtab) const override;
     };
 }};
 
@@ -66,22 +66,16 @@ def template ImmExecute {{
     %(class_name)s::execute(
         ExecContext *xc, Trace::InstRecord *traceData) const
     {
-        Fault fault = NoFault;
-
         %(op_decl)s;
         %(op_rd)s;
-        if (fault == NoFault) {
-            %(code)s;
-            if (fault == NoFault) {
-                %(op_wb)s;
-            }
-        }
-        return fault;
+        %(code)s;
+        %(op_wb)s;
+        return NoFault;
     }
 
     std::string
     %(class_name)s::generateDisassembly(Addr pc,
-            const Loader::SymbolTable *symtab) const
+            const loader::SymbolTable *symtab) const
     {
         std::vector<RegId> indices = {%(regs)s};
         std::stringstream ss;
@@ -98,22 +92,16 @@ def template CILuiExecute {{
     %(class_name)s::execute(
         ExecContext *xc, Trace::InstRecord *traceData) const
     {
-        Fault fault = NoFault;
-
         %(op_decl)s;
         %(op_rd)s;
-        if (fault == NoFault) {
-            %(code)s;
-            if (fault == NoFault) {
-                %(op_wb)s;
-            }
-        }
-        return fault;
+        %(code)s;
+        %(op_wb)s;
+        return NoFault;
     }
 
     std::string
     %(class_name)s::generateDisassembly(Addr pc,
-            const Loader::SymbolTable *symtab) const
+            const loader::SymbolTable *symtab) const
     {
         std::vector<RegId> indices = {%(regs)s};
         std::stringstream ss;
@@ -132,22 +120,16 @@ def template FenceExecute {{
     %(class_name)s::execute(
         ExecContext *xc, Trace::InstRecord *traceData) const
     {
-        Fault fault = NoFault;
-
         %(op_decl)s;
         %(op_rd)s;
-        if (fault == NoFault) {
-            %(code)s;
-            if (fault == NoFault) {
-                %(op_wb)s;
-            }
-        }
-        return fault;
+        %(code)s;
+        %(op_wb)s;
+        return NoFault;
     }
 
     std::string
     %(class_name)s::generateDisassembly(Addr pc,
-            const Loader::SymbolTable *symtab) const
+            const loader::SymbolTable *symtab) const
     {
         std::stringstream ss;
         ss << mnemonic;
@@ -191,10 +173,10 @@ def template BranchDeclare {{
 
         std::string
         generateDisassembly(
-                Addr pc, const Loader::SymbolTable *symtab) const override;
+                Addr pc, const loader::SymbolTable *symtab) const override;
 
-        RiscvISA::PCState
-        branchTarget(const RiscvISA::PCState &branchPC) const override;
+        std::unique_ptr<PCStateBase> branchTarget(
+                const PCStateBase &branch_pc) const override;
 
         using StaticInst::branchTarget;
     };
@@ -205,28 +187,23 @@ def template BranchExecute {{
     %(class_name)s::execute(ExecContext *xc,
         Trace::InstRecord *traceData) const
     {
-        Fault fault = NoFault;
-
         %(op_decl)s;
         %(op_rd)s;
-        if (fault == NoFault) {
-            %(code)s;
-            if (fault == NoFault) {
-                %(op_wb)s;
-            }
-        }
-        return fault;
+        %(code)s;
+        %(op_wb)s;
+        return NoFault;
     }
 
-    RiscvISA::PCState
-    %(class_name)s::branchTarget(const RiscvISA::PCState &branchPC) const
+    std::unique_ptr<PCStateBase>
+    %(class_name)s::branchTarget(const PCStateBase &branch_pc) const
     {
-        return branchPC.pc() + imm;
+        auto &rpc = branch_pc.as<RiscvISA::PCState>();
+        return std::make_unique<PCState>(rpc.pc() + imm);
     }
 
     std::string
     %(class_name)s::generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const
+            Addr pc, const loader::SymbolTable *symtab) const
     {
         std::vector<RegId> indices = {%(regs)s};
         std::stringstream ss;
@@ -254,13 +231,56 @@ def template JumpDeclare {{
 
         std::string
         generateDisassembly(
-                Addr pc, const Loader::SymbolTable *symtab) const override;
+                Addr pc, const loader::SymbolTable *symtab) const override;
 
-        RiscvISA::PCState
-        branchTarget(ThreadContext *tc) const override;
+        std::unique_ptr<PCStateBase> branchTarget(
+                ThreadContext *tc) const override;
 
         using StaticInst::branchTarget;
     };
+}};
+
+def template JumpConstructor {{
+    %(class_name)s::%(class_name)s(MachInst machInst)
+        : %(base_class)s("%(mnemonic)s", machInst, %(op_class)s)
+    {
+        %(set_reg_idx_arr)s;
+        %(constructor)s;
+        %(imm_code)s;
+        if (QUADRANT != 0x3) {
+            // Handle "c_jr" instruction, set "IsReturn" flag if RC1 is 1 or 5
+            if (CFUNCT1 == 0 && (RC1 == 1 || RC1 == 5))
+                flags[IsReturn] = true;
+        } else {
+            bool rd_link = (RD == 1 || RD == 5);
+            bool rs1_link = (RS1 == 1 || RS1 == 5);
+            // Handle "jalr" and "jal" instruction,
+            // set "IsCall" if RD is link register
+            if (rd_link)
+                flags[IsCall] = true;
+
+            // Handle "Jalr" instruction
+            if (FUNCT3 == 0x0) {
+                // If RD is not link and RS1 is link, then pop RAS
+                if (!rd_link && rs1_link) flags[IsReturn] = true;
+                else if (rd_link) {
+                    // If RD is link and RS1 is not link, push RAS
+                    if (!rs1_link) flags[IsCall] = true;
+                    // If RD is link and RS1 is link and rd != rs1
+                    else if (rs1_link) {
+                        if (RS1 != RD) {
+                            // Both are link and RS1 == RD, pop then push
+                            flags[IsReturn] = true;
+                            flags[IsCall] = true;
+                        } else {
+                            // Both are link and RS1 != RD, push RAS
+                            flags[IsCall] = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
 }};
 
 def template JumpExecute {{
@@ -268,30 +288,25 @@ def template JumpExecute {{
     %(class_name)s::execute(
         ExecContext *xc, Trace::InstRecord *traceData) const
     {
-        Fault fault = NoFault;
-
         %(op_decl)s;
         %(op_rd)s;
-        if (fault == NoFault) {
-            %(code)s;
-            if (fault == NoFault) {
-                %(op_wb)s;
-            }
-        }
-        return fault;
+        %(code)s;
+        %(op_wb)s;
+        return NoFault;
     }
 
-    RiscvISA::PCState
+    std::unique_ptr<PCStateBase>
     %(class_name)s::branchTarget(ThreadContext *tc) const
     {
-        PCState pc = tc->pcState();
-        pc.set((tc->readIntReg(srcRegIdx(0).index()) + imm)&~0x1);
-        return pc;
+        PCStateBase *pc_ptr = tc->pcState().clone();
+        pc_ptr->as<PCState>().set(
+                (tc->readIntReg(srcRegIdx(0).index()) + imm) & ~0x1);
+        return std::unique_ptr<PCStateBase>{pc_ptr};
     }
 
     std::string
     %(class_name)s::generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const
+            Addr pc, const loader::SymbolTable *symtab) const
     {
         std::stringstream ss;
         ss << mnemonic << ' ';
@@ -309,114 +324,87 @@ def template CSRExecute {{
     %(class_name)s::execute(ExecContext *xc,
         Trace::InstRecord *traceData) const
     {
-        Fault fault = NoFault;
+        if (!valid) {
+            return std::make_shared<IllegalInstFault>(
+                    csprintf("Illegal CSR index %#x\n", csr), machInst);
+        }
 
         %(op_decl)s;
         %(op_rd)s;
 
         RegVal data, olddata;
+        auto lowestAllowedMode = (PrivilegeMode)bits(csr, 9, 8);
+        auto pm = (PrivilegeMode)xc->readMiscReg(MISCREG_PRV);
+        if (pm < lowestAllowedMode) {
+            return std::make_shared<IllegalInstFault>(
+                    csprintf("%s is not accessible in %s\n", csrName, pm),
+                    machInst);
+        }
         switch (csr) {
-          case CSR_FCSR:
-            olddata = xc->readMiscReg(MISCREG_FFLAGS) |
-                      (xc->readMiscReg(MISCREG_FRM) << FRM_OFFSET);
-            break;
           case CSR_SATP: {
-            auto pm = (PrivilegeMode)xc->readMiscReg(MISCREG_PRV);
             STATUS status = xc->readMiscReg(MISCREG_STATUS);
-            if (pm == PRV_U || (pm == PRV_S && status.tvm == 1)) {
-                std::string error = csprintf(
-                    "SATP access in user mode or with TVM enabled\n");
-                fault = std::make_shared<IllegalInstFault>(error, machInst);
-                olddata = 0;
-            } else {
-                olddata = xc->readMiscReg(CSRData.at(csr).physIndex);
-            }
-            break;
-          }
-          case CSR_MSTATUS: {
-            auto pm = (PrivilegeMode)xc->readMiscReg(MISCREG_PRV);
-            if (pm != PrivilegeMode::PRV_M) {
-                std::string error = csprintf(
-                    "MSTATUS is only accessibly in machine mode\n");
-                fault = std::make_shared<IllegalInstFault>(error, machInst);
-                olddata = 0;
-            } else {
-                olddata = xc->readMiscReg(CSRData.at(csr).physIndex);
+            if (pm == PRV_S && status.tvm == 1) {
+                return std::make_shared<IllegalInstFault>(
+                        "SATP access with TVM enabled\n",
+                        machInst);
             }
             break;
           }
           default:
-            if (CSRData.find(csr) != CSRData.end()) {
-                olddata = xc->readMiscReg(CSRData.at(csr).physIndex);
-            } else {
-                std::string error = csprintf("Illegal CSR index %#x\n", csr);
-                fault = std::make_shared<IllegalInstFault>(error, machInst);
-                olddata = 0;
-            }
             break;
         }
-        auto mask = CSRMasks.find(csr);
+
+        if (csr == CSR_FCSR) {
+            olddata = xc->readMiscReg(MISCREG_FFLAGS) |
+                      (xc->readMiscReg(MISCREG_FRM) << FRM_OFFSET);
+        } else {
+            olddata = xc->readMiscReg(midx);
+        }
         auto olddata_all = olddata;
-        if (mask != CSRMasks.end())
-            olddata &= mask->second;
-        DPRINTF(RiscvMisc, "Reading CSR %s: %#x\n", CSRData.at(csr).name,
-                olddata);
+
+        olddata &= maskVal;
+        DPRINTF(RiscvMisc, "Reading CSR %s: %#x\n", csrName, olddata);
         data = olddata;
 
-        if (fault == NoFault) {
-            %(code)s;
-            if (fault == NoFault) {
-                if (mask != CSRMasks.end())
-                    data &= mask->second;
-                if (data != olddata) {
-                    if (bits(csr, 11, 10) == 0x3) {
-                        std::string error = csprintf("CSR %s is read-only\n",
-                                                     CSRData.at(csr).name);
-                        fault = std::make_shared<IllegalInstFault>(
-                                error, machInst);
-                    } else {
-                        auto newdata_all = data;
-                        if (mask != CSRMasks.end()) {
-                            // we must keep those original bits not in mask
-                            // olddata and data only contain thebits visable
-                            // in current privilige level
-                            newdata_all = (olddata_all & (~mask->second))
-                                          | data;
-                        }
-                        DPRINTF(RiscvMisc, "Writing %#x to CSR %s.\n",
-                                newdata_all,
-                                CSRData.at(csr).name);
-                        switch (csr) {
-                          case CSR_FCSR:
-                            xc->setMiscReg(MISCREG_FFLAGS, bits(data, 4, 0));
-                            xc->setMiscReg(MISCREG_FRM, bits(data, 7, 5));
-                            break;
-                          case CSR_MIP: case CSR_MIE:
-                          case CSR_SIP: case CSR_SIE:
-                          case CSR_UIP: case CSR_UIE:
-                          case CSR_MSTATUS: case CSR_SSTATUS: case CSR_USTATUS:
-                            if (newdata_all != olddata_all) {
-                                xc->setMiscReg(CSRData.at(csr).physIndex,
-                                               newdata_all);
-                            } else {
-                                std::string error = "Only bits in mask are "
-                                                    "allowed to be set\n";
-                                fault = std::make_shared<IllegalInstFault>(
-                                        error, machInst);
-                            }
-                            break;
-                          default:
-                            xc->setMiscReg(CSRData.at(csr).physIndex, data);
-                            break;
-                        }
-                    }
-                }
+        %(code)s;
+
+        data &= maskVal;
+        if (data != olddata) {
+            if (bits(csr, 11, 10) == 0x3) {
+                return std::make_shared<IllegalInstFault>(
+                        csprintf("CSR %s is read-only\n", csrName), machInst);
             }
-            if (fault == NoFault) {
-                %(op_wb)s;
+            auto newdata_all = data;
+            // We must keep those original bits not in mask.
+            // olddata and data only contain the bits visable
+            // in current privilige level.
+            newdata_all = (olddata_all & ~maskVal) | data;
+            DPRINTF(RiscvMisc, "Writing %#x to CSR %s.\n",
+                    newdata_all, csrName);
+            switch (csr) {
+              case CSR_FCSR:
+                xc->setMiscReg(MISCREG_FFLAGS, bits(data, 4, 0));
+                xc->setMiscReg(MISCREG_FRM, bits(data, 7, 5));
+                break;
+              case CSR_MIP: case CSR_MIE:
+              case CSR_SIP: case CSR_SIE:
+              case CSR_UIP: case CSR_UIE:
+              case CSR_MSTATUS: case CSR_SSTATUS: case CSR_USTATUS:
+                if (newdata_all != olddata_all) {
+                    xc->setMiscReg(midx, newdata_all);
+                } else {
+                    return std::make_shared<IllegalInstFault>(
+                            "Only bits in mask are allowed to be set\n",
+                            machInst);
+                }
+                break;
+              default:
+                xc->setMiscReg(midx, data);
+                break;
             }
         }
-        return fault;
+        %(op_wb)s;
+        return NoFault;
     }
 }};
 
@@ -475,7 +463,7 @@ def format Jump(code, *opt_flags) {{
         {'code': code, 'imm_code': 'imm = sext<12>(IMM12);',
          'regs': ','.join(regs)}, opt_flags)
     header_output = JumpDeclare.subst(iop)
-    decoder_output = ImmConstructor.subst(iop)
+    decoder_output = JumpConstructor.subst(iop)
     decode_block = BasicDecode.subst(iop)
     exec_output = JumpExecute.subst(iop)
 }};
@@ -505,7 +493,7 @@ def format JOp(code, *opt_flags) {{
         {'code': code, 'imm_code': imm_code,
          'regs': ','.join(regs)}, opt_flags)
     header_output = BranchDeclare.subst(iop)
-    decoder_output = ImmConstructor.subst(iop)
+    decoder_output = JumpConstructor.subst(iop)
     decode_block = BasicDecode.subst(iop)
     exec_output = BranchExecute.subst(iop)
 }};

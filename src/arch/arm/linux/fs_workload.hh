@@ -52,7 +52,9 @@
 #include "base/output.hh"
 #include "kern/linux/events.hh"
 #include "params/ArmFsLinux.hh"
-#include "sim/core.hh"
+
+namespace gem5
+{
 
 namespace ArmISA
 {
@@ -164,6 +166,6 @@ class DumpStats64 : public DumpStats
 };
 
 } // namespace ArmISA
+} // namespace gem5
 
 #endif // __ARCH_ARM_LINUX_FS_WORKLOAD_HH__
-

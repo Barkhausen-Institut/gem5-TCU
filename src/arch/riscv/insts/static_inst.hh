@@ -32,10 +32,15 @@
 
 #include <string>
 
+#include "arch/riscv/pcstate.hh"
 #include "arch/riscv/types.hh"
 #include "cpu/exec_context.hh"
 #include "cpu/static_inst.hh"
+#include "cpu/thread_context.hh"
 #include "mem/packet.hh"
+
+namespace gem5
+{
 
 namespace RiscvISA
 {
@@ -46,10 +51,37 @@ namespace RiscvISA
 class RiscvStaticInst : public StaticInst
 {
   protected:
-    using StaticInst::StaticInst;
+    RiscvStaticInst(const char *_mnemonic, ExtMachInst _machInst,
+            OpClass __opClass) :
+        StaticInst(_mnemonic, __opClass), machInst(_machInst)
+    {}
 
   public:
-    void advancePC(PCState &pc) const override { pc.advance(); }
+    ExtMachInst machInst;
+
+    void
+    advancePC(PCStateBase &pc) const override
+    {
+        pc.as<PCState>().advance();
+    }
+
+    void
+    advancePC(ThreadContext *tc) const override
+    {
+        PCState pc = tc->pcState().as<PCState>();
+        pc.advance();
+        tc->pcState(pc);
+    }
+
+    std::unique_ptr<PCStateBase>
+    buildRetPC(const PCStateBase &cur_pc,
+            const PCStateBase &call_pc) const override
+    {
+        PCStateBase *ret_pc_ptr = call_pc.clone();
+        auto &ret_pc = ret_pc_ptr->as<PCState>();
+        ret_pc.advance();
+        return std::unique_ptr<PCStateBase>{ret_pc_ptr};
+    }
 
     size_t
     asBytes(void *buf, size_t size) override
@@ -114,9 +146,11 @@ class RiscvMicroInst : public RiscvStaticInst
         flags[IsMicroop] = true;
     }
 
-    void advancePC(PCState &pcState) const override;
+    void advancePC(PCStateBase &pcState) const override;
+    void advancePC(ThreadContext *tc) const override;
 };
 
-}
+} // namespace RiscvISA
+} // namespace gem5
 
 #endif // __ARCH_RISCV_STATIC_INST_HH__

@@ -32,16 +32,12 @@
 
 #include "dev/sparc/t1000.hh"
 
-#include <deque>
-#include <string>
-#include <vector>
+#include "base/logging.hh"
 
-#include "cpu/intr_control.hh"
-#include "sim/system.hh"
+namespace gem5
+{
 
-T1000::T1000(const Params &p)
-    : Platform(p), system(p.system)
-{}
+T1000::T1000(const Params &p) : Platform(p) {}
 
 void
 T1000::postConsoleInt()
@@ -69,27 +65,4 @@ T1000::clearPciInt(int line)
     panic("Need implementation\n");
 }
 
-Addr
-T1000::pciToDma(Addr pciAddr) const
-{
-    panic("Need implementation\n");
-}
-
-
-Addr
-T1000::calcPciConfigAddr(int bus, int dev, int func)
-{
-    panic("Need implementation\n");
-}
-
-Addr
-T1000::calcPciIOAddr(Addr addr)
-{
-    panic("Need implementation\n");
-}
-
-Addr
-T1000::calcPciMemAddr(Addr addr)
-{
-    panic("Need implementation\n");
-}
+} // namespace gem5

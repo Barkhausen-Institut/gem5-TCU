@@ -39,11 +39,17 @@
 #define __ARCH_X86_INSTS_MICROOP_HH__
 
 #include "arch/x86/insts/static_inst.hh"
+#include "arch/x86/pcstate.hh"
+#include "base/compiler.hh"
+
+namespace gem5
+{
 
 namespace X86ISA
 {
 
-namespace ConditionTests
+GEM5_DEPRECATED_NAMESPACE(ConditionTests, condition_tests);
+namespace condition_tests
 {
 
 enum CondTest
@@ -115,7 +121,7 @@ class X86MicroopBase : public X86StaticInst
 
     std::string
     generateDisassembly(Addr pc,
-                       const Loader::SymbolTable *symtab) const override
+                       const loader::SymbolTable *symtab) const override
     {
         std::stringstream ss;
 
@@ -127,15 +133,48 @@ class X86MicroopBase : public X86StaticInst
     bool checkCondition(uint64_t flags, int condition) const;
 
     void
-    advancePC(PCState &pcState) const override
+    advancePC(PCStateBase &pcState) const override
     {
+        auto &xpc = pcState.as<PCState>();
         if (flags[IsLastMicroop])
-            pcState.uEnd();
+            xpc.uEnd();
         else
-            pcState.uAdvance();
+            xpc.uAdvance();
     }
+
+    void
+    advancePC(ThreadContext *tc) const override
+    {
+        PCState pc = tc->pcState().as<PCState>();
+        if (flags[IsLastMicroop])
+            pc.uEnd();
+        else
+            pc.uAdvance();
+        tc->pcState(pc);
+    }
+
+    std::unique_ptr<PCStateBase> branchTarget(
+            const PCStateBase &branch_pc) const override;
+
+    // Explicitly import the otherwise hidden branchTarget.
+    using StaticInst::branchTarget;
 };
 
-}
+class MicroCondBase : public X86MicroopBase
+{
+  protected:
+    uint8_t cc;
+
+  public:
+    MicroCondBase(ExtMachInst mach_inst, const char *mnem,
+            const char *inst_mnem, uint64_t set_flags, OpClass op_class,
+            uint8_t _cc) :
+        X86MicroopBase(mach_inst, mnem, inst_mnem, set_flags, op_class),
+        cc(_cc)
+    {}
+};
+
+} // namespace X86ISA
+} // namespace gem5
 
 #endif //__ARCH_X86_INSTS_MICROOP_HH__

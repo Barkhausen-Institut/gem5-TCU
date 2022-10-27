@@ -35,6 +35,11 @@
 #include "base/types.hh"
 #include "mem/tcu/reg_file.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 /**
  *
  *  64 63        56            0
@@ -76,5 +81,8 @@ class NocAddr
 
     Addr offset;
 };
+
+}
+}
 
 #endif

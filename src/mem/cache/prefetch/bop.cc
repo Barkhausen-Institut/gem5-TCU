@@ -31,7 +31,12 @@
 #include "debug/HWPrefetch.hh"
 #include "params/BOPPrefetcher.hh"
 
-namespace Prefetcher {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Prefetcher, prefetch);
+namespace prefetch
+{
 
 BOP::BOP(const BOPPrefetcherParams &p)
     : Queued(p),
@@ -215,7 +220,7 @@ BOP::bestOffsetLearning(Addr x)
             phaseBestOffset = 0;
             resetScores();
             issuePrefetchRequests = true;
-        } else if (phaseBestOffset <= badScore) {
+        } else if (bestScore <= badScore) {
             issuePrefetchRequests = false;
         }
     }
@@ -260,4 +265,5 @@ BOP::notifyFill(const PacketPtr& pkt)
     }
 }
 
-} // namespace Prefetcher
+} // namespace prefetch
+} // namespace gem5

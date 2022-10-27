@@ -29,10 +29,14 @@
 #ifndef __DEV_X86_CMOS_HH__
 #define __DEV_X86_CMOS_HH__
 
+#include "base/bitunion.hh"
 #include "dev/intpin.hh"
 #include "dev/io_device.hh"
 #include "dev/mc146818.hh"
 #include "params/Cmos.hh"
+
+namespace gem5
+{
 
 namespace X86ISA
 {
@@ -42,7 +46,12 @@ class Cmos : public BasicPioDevice
   protected:
     Tick latency;
 
-    uint8_t address;
+    BitUnion8(CmosAddress)
+        Bitfield<6, 0> regNum;
+        Bitfield<7> nmiMask;
+    EndBitUnion(CmosAddress)
+
+    CmosAddress address;
 
     static const int numRegs = 128;
 
@@ -73,7 +82,7 @@ class Cmos : public BasicPioDevice
     typedef CmosParams Params;
 
     Cmos(const Params &p) : BasicPioDevice(p, 2), latency(p.pio_latency),
-        rtc(this, name() + ".rtc", p.time, true, ULL(5000000000),
+        rtc(this, name() + ".rtc", p.time, true, 5000000000ULL,
                 p.port_int_pin_connection_count)
     {
         memset(regs, 0, numRegs * sizeof(uint8_t));
@@ -100,5 +109,6 @@ class Cmos : public BasicPioDevice
 };
 
 } // namespace X86ISA
+} // namespace gem5
 
 #endif //__DEV_X86_CMOS_HH__

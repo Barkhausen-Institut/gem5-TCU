@@ -35,4 +35,5 @@ from m5.objects.Platform import Platform
 
 class IOPlatform(Platform):
     type = 'IOPlatform'
+    cxx_class = 'gem5::IOPlatform'
     cxx_header = "dev/io_platform.hh"

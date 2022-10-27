@@ -51,6 +51,7 @@
 #include <string>
 
 #include "base/addr_range.hh"
+#include "base/compiler.hh"
 #include "base/statistics.hh"
 #include "base/trace.hh"
 #include "base/types.hh"
@@ -75,7 +76,12 @@
 #include "sim/sim_exit.hh"
 #include "sim/system.hh"
 
-namespace Prefetcher {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Prefetcher, prefetch);
+namespace prefetch
+{
     class Base;
 }
 class MSHR;
@@ -92,7 +98,8 @@ class BaseCache : public ClockedObject
     /**
      * Indexes to enumerate the MSHR queues.
      */
-    enum MSHRQueueIndex {
+    enum MSHRQueueIndex
+    {
         MSHRQueue_MSHRs,
         MSHRQueue_WriteBuffer
     };
@@ -101,7 +108,8 @@ class BaseCache : public ClockedObject
     /**
      * Reasons for caches to be blocked.
      */
-    enum BlockedCause {
+    enum BlockedCause
+    {
         Blocked_NoMSHRs = MSHRQueue_MSHRs,
         Blocked_NoWBBuffers = MSHRQueue_WriteBuffer,
         Blocked_NoTargets,
@@ -342,10 +350,10 @@ class BaseCache : public ClockedObject
     BaseTags *tags;
 
     /** Compression method being used. */
-    Compressor::Base* compressor;
+    compression::Base* compressor;
 
     /** Prefetcher */
-    Prefetcher::Base *prefetcher;
+    prefetch::Base *prefetcher;
 
     /** To probe when a cache hit occurs */
     ProbePointArg<PacketPtr> *ppHit;
@@ -432,7 +440,7 @@ class BaseCache : public ClockedObject
      */
     inline bool allocOnFill(MemCmd cmd) const
     {
-        return clusivity == Enums::mostly_incl ||
+        return clusivity == enums::mostly_incl ||
             cmd == MemCmd::WriteLineReq ||
             cmd == MemCmd::ReadReq ||
             cmd == MemCmd::WriteReq ||
@@ -800,7 +808,7 @@ class BaseCache : public ClockedObject
      * @param blk Block to invalidate
      * @return A packet with the writeback, can be nullptr
      */
-    M5_NODISCARD virtual PacketPtr evictBlock(CacheBlk *blk) = 0;
+    [[nodiscard]] virtual PacketPtr evictBlock(CacheBlk *blk) = 0;
 
     /**
      * Evict a cache block.
@@ -930,7 +938,7 @@ protected:
      * fill into both this cache and the cache above on a miss. Note
      * that we currently do not support strict clusivity policies.
      */
-    const Enums::Clusivity clusivity;
+    const enums::Clusivity clusivity;
 
     /**
      * Is this cache read only, for example the instruction cache, or
@@ -983,7 +991,7 @@ protected:
     /** System we are currently operating in. */
     System *system;
 
-    struct CacheCmdStats : public Stats::Group
+    struct CacheCmdStats : public statistics::Group
     {
         CacheCmdStats(BaseCache &c, const std::string &name);
 
@@ -999,40 +1007,45 @@ protected:
 
         /** Number of hits per thread for each type of command.
             @sa Packet::Command */
-        Stats::Vector hits;
+        statistics::Vector hits;
         /** Number of misses per thread for each type of command.
             @sa Packet::Command */
-        Stats::Vector misses;
+        statistics::Vector misses;
         /**
-         * Total number of cycles per thread/command spent waiting for a miss.
+         * Total number of ticks per thread/command spent waiting for a hit.
+         * Used to calculate the average hit latency.
+         */
+        statistics::Vector hitLatency;
+        /**
+         * Total number of ticks per thread/command spent waiting for a miss.
          * Used to calculate the average miss latency.
          */
-        Stats::Vector missLatency;
+        statistics::Vector missLatency;
         /** The number of accesses per command and thread. */
-        Stats::Formula accesses;
+        statistics::Formula accesses;
         /** The miss rate per command and thread. */
-        Stats::Formula missRate;
+        statistics::Formula missRate;
         /** The average miss latency per command and thread. */
-        Stats::Formula avgMissLatency;
+        statistics::Formula avgMissLatency;
         /** Number of misses that hit in the MSHRs per command and thread. */
-        Stats::Vector mshrHits;
+        statistics::Vector mshrHits;
         /** Number of misses that miss in the MSHRs, per command and thread. */
-        Stats::Vector mshrMisses;
+        statistics::Vector mshrMisses;
         /** Number of misses that miss in the MSHRs, per command and thread. */
-        Stats::Vector mshrUncacheable;
-        /** Total cycle latency of each MSHR miss, per command and thread. */
-        Stats::Vector mshrMissLatency;
-        /** Total cycle latency of each MSHR miss, per command and thread. */
-        Stats::Vector mshrUncacheableLatency;
+        statistics::Vector mshrUncacheable;
+        /** Total tick latency of each MSHR miss, per command and thread. */
+        statistics::Vector mshrMissLatency;
+        /** Total tick latency of each MSHR miss, per command and thread. */
+        statistics::Vector mshrUncacheableLatency;
         /** The miss rate in the MSHRs pre command and thread. */
-        Stats::Formula mshrMissRate;
+        statistics::Formula mshrMissRate;
         /** The average latency of an MSHR miss, per command and thread. */
-        Stats::Formula avgMshrMissLatency;
+        statistics::Formula avgMshrMissLatency;
         /** The average latency of an MSHR miss, per command and thread. */
-        Stats::Formula avgMshrUncacheableLatency;
+        statistics::Formula avgMshrUncacheableLatency;
     };
 
-    struct CacheStats : public Stats::Group
+    struct CacheStats : public statistics::Group
     {
         CacheStats(BaseCache &c);
 
@@ -1045,95 +1058,95 @@ protected:
         const BaseCache &cache;
 
         /** Number of hits for demand accesses. */
-        Stats::Formula demandHits;
+        statistics::Formula demandHits;
         /** Number of hit for all accesses. */
-        Stats::Formula overallHits;
+        statistics::Formula overallHits;
+        /** Total number of ticks spent waiting for demand hits. */
+        statistics::Formula demandHitLatency;
+        /** Total number of ticks spent waiting for all hits. */
+        statistics::Formula overallHitLatency;
 
         /** Number of misses for demand accesses. */
-        Stats::Formula demandMisses;
+        statistics::Formula demandMisses;
         /** Number of misses for all accesses. */
-        Stats::Formula overallMisses;
+        statistics::Formula overallMisses;
 
-        /** Total number of cycles spent waiting for demand misses. */
-        Stats::Formula demandMissLatency;
-        /** Total number of cycles spent waiting for all misses. */
-        Stats::Formula overallMissLatency;
+        /** Total number of ticks spent waiting for demand misses. */
+        statistics::Formula demandMissLatency;
+        /** Total number of ticks spent waiting for all misses. */
+        statistics::Formula overallMissLatency;
 
         /** The number of demand accesses. */
-        Stats::Formula demandAccesses;
+        statistics::Formula demandAccesses;
         /** The number of overall accesses. */
-        Stats::Formula overallAccesses;
+        statistics::Formula overallAccesses;
 
         /** The miss rate of all demand accesses. */
-        Stats::Formula demandMissRate;
+        statistics::Formula demandMissRate;
         /** The miss rate for all accesses. */
-        Stats::Formula overallMissRate;
+        statistics::Formula overallMissRate;
 
         /** The average miss latency for demand misses. */
-        Stats::Formula demandAvgMissLatency;
+        statistics::Formula demandAvgMissLatency;
         /** The average miss latency for all misses. */
-        Stats::Formula overallAvgMissLatency;
+        statistics::Formula overallAvgMissLatency;
 
         /** The total number of cycles blocked for each blocked cause. */
-        Stats::Vector blockedCycles;
+        statistics::Vector blockedCycles;
         /** The number of times this cache blocked for each blocked cause. */
-        Stats::Vector blockedCauses;
+        statistics::Vector blockedCauses;
 
         /** The average number of cycles blocked for each blocked cause. */
-        Stats::Formula avgBlocked;
-
-        /** The number of times a HW-prefetched block is evicted w/o
-         * reference. */
-        Stats::Scalar unusedPrefetches;
+        statistics::Formula avgBlocked;
 
         /** Number of blocks written back per thread. */
-        Stats::Vector writebacks;
+        statistics::Vector writebacks;
 
         /** Demand misses that hit in the MSHRs. */
-        Stats::Formula demandMshrHits;
+        statistics::Formula demandMshrHits;
         /** Total number of misses that hit in the MSHRs. */
-        Stats::Formula overallMshrHits;
+        statistics::Formula overallMshrHits;
 
         /** Demand misses that miss in the MSHRs. */
-        Stats::Formula demandMshrMisses;
+        statistics::Formula demandMshrMisses;
         /** Total number of misses that miss in the MSHRs. */
-        Stats::Formula overallMshrMisses;
+        statistics::Formula overallMshrMisses;
 
         /** Total number of misses that miss in the MSHRs. */
-        Stats::Formula overallMshrUncacheable;
+        statistics::Formula overallMshrUncacheable;
 
-        /** Total cycle latency of demand MSHR misses. */
-        Stats::Formula demandMshrMissLatency;
-        /** Total cycle latency of overall MSHR misses. */
-        Stats::Formula overallMshrMissLatency;
+        /** Total tick latency of demand MSHR misses. */
+        statistics::Formula demandMshrMissLatency;
+        /** Total tick latency of overall MSHR misses. */
+        statistics::Formula overallMshrMissLatency;
 
-        /** Total cycle latency of overall MSHR misses. */
-        Stats::Formula overallMshrUncacheableLatency;
+        /** Total tick latency of overall MSHR misses. */
+        statistics::Formula overallMshrUncacheableLatency;
 
         /** The demand miss rate in the MSHRs. */
-        Stats::Formula demandMshrMissRate;
+        statistics::Formula demandMshrMissRate;
         /** The overall miss rate in the MSHRs. */
-        Stats::Formula overallMshrMissRate;
+        statistics::Formula overallMshrMissRate;
 
         /** The average latency of a demand MSHR miss. */
-        Stats::Formula demandAvgMshrMissLatency;
+        statistics::Formula demandAvgMshrMissLatency;
         /** The average overall latency of an MSHR miss. */
-        Stats::Formula overallAvgMshrMissLatency;
+        statistics::Formula overallAvgMshrMissLatency;
 
         /** The average overall latency of an MSHR miss. */
-        Stats::Formula overallAvgMshrUncacheableLatency;
+        statistics::Formula overallAvgMshrUncacheableLatency;
 
         /** Number of replacements of valid blocks. */
-        Stats::Scalar replacements;
+        statistics::Scalar replacements;
 
         /** Number of data expansions. */
-        Stats::Scalar dataExpansions;
+        statistics::Scalar dataExpansions;
 
         /**
          * Number of data contractions (blocks that had their compression
          * factor improved).
          */
-        Stats::Scalar dataContractions;
+        statistics::Scalar dataContractions;
 
         /** Per-command statistics */
         std::vector<std::unique_ptr<CacheCmdStats>> cmd;
@@ -1368,7 +1381,8 @@ protected:
  * line) we switch to NO_ALLOCATE when writes should not allocate in
  * the cache but rather send a whole line write to the memory below.
  */
-class WriteAllocator : public SimObject {
+class WriteAllocator : public SimObject
+{
   public:
     WriteAllocator(const WriteAllocatorParams &p) :
         SimObject(p),
@@ -1452,7 +1466,8 @@ class WriteAllocator : public SimObject {
      * normal operation (ALLOCATE), write coalescing (COALESCE), or
      * write coalescing without allocation (NO_ALLOCATE).
      */
-    enum class WriteMode : char {
+    enum class WriteMode : char
+    {
         ALLOCATE,
         COALESCE,
         NO_ALLOCATE,
@@ -1484,5 +1499,7 @@ class WriteAllocator : public SimObject {
      */
     std::unordered_map<Addr, Counter> delayCtr;
 };
+
+} // namespace gem5
 
 #endif //__MEM_CACHE_BASE_HH__

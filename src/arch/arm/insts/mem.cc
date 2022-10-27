@@ -42,6 +42,9 @@
 
 #include "base/loader/symtab.hh"
 
+namespace gem5
+{
+
 namespace ArmISA
 {
 
@@ -74,7 +77,7 @@ MemoryReg::printOffset(std::ostream &os) const
 }
 
 std::string
-RfeOp::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
+RfeOp::generateDisassembly(Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     switch (mode) {
@@ -99,7 +102,7 @@ RfeOp::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
 }
 
 std::string
-SrsOp::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
+SrsOp::generateDisassembly(Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     switch (mode) {
@@ -116,7 +119,7 @@ SrsOp::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
         printMnemonic(ss, "ib");
         break;
     }
-    printIntReg(ss, INTREG_SP);
+    printIntReg(ss, int_reg::Sp);
     if (wb) {
         ss << "!";
     }
@@ -177,4 +180,5 @@ Memory::printInst(std::ostream &os, AddrMode addrMode) const
     }
 }
 
-}
+} // namespace ArmISA
+} // namespace gem5

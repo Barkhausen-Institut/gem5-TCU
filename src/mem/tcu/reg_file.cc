@@ -37,6 +37,11 @@
 #include "mem/tcu/tcu.hh"
 #include "sim/tile_memory.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 #define DPRINTFNS(name, ...) do {                                       \
     Trace::getDebugLogger()->dprintf(curTick(), name, __VA_ARGS__);     \
 } while (0)
@@ -76,7 +81,7 @@ const char *RegFile::epTypeNames[] = {
 
 static bool isTraceEnabled(bool read)
 {
-    return (read && DTRACE(TcuRegRead)) || (!read && DTRACE(TcuRegWrite));
+    return (read && debug::TcuRegRead) || (!read && debug::TcuRegWrite);
 }
 
 static const char *regAccessName(RegAccess access)
@@ -484,4 +489,7 @@ Addr
 RegFile::getSize() const
 {
     return TcuTlb::PAGE_SIZE * 2 + sizeof(reg_t) * numPrivRegs;
+}
+
+}
 }

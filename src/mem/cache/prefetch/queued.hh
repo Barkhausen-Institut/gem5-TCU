@@ -42,19 +42,26 @@
 #include <list>
 #include <utility>
 
+#include "arch/generic/mmu.hh"
 #include "base/statistics.hh"
 #include "base/types.hh"
 #include "mem/cache/prefetch/base.hh"
 #include "mem/packet.hh"
 
+namespace gem5
+{
+
 struct QueuedPrefetcherParams;
 
-namespace Prefetcher {
+GEM5_DEPRECATED_NAMESPACE(Prefetcher, prefetch);
+namespace prefetch
+{
 
 class Queued : public Base
 {
   protected:
-    struct DeferredPacket : public BaseTLB::Translation {
+    struct DeferredPacket : public BaseMMU::Translation
+    {
         /** Owner of the packet */
         Queued *owner;
         /** Prefetch info corresponding to this packet */
@@ -124,7 +131,7 @@ class Queued : public Base
         {}
 
         void finish(const Fault &fault, const RequestPtr &req,
-                            ThreadContext *tc, BaseTLB::Mode mode) override;
+                            ThreadContext *tc, BaseMMU::Mode mode) override;
 
         /**
          * Issues the translation request to the provided TLB
@@ -168,15 +175,17 @@ class Queued : public Base
     /** Percentage of requests that can be throttled */
     const unsigned int throttleControlPct;
 
-    struct QueuedStats : public Stats::Group
+    struct QueuedStats : public statistics::Group
     {
-        QueuedStats(Stats::Group *parent);
+        QueuedStats(statistics::Group *parent);
         // STATS
-        Stats::Scalar pfIdentified;
-        Stats::Scalar pfBufferHit;
-        Stats::Scalar pfInCache;
-        Stats::Scalar pfRemovedFull;
-        Stats::Scalar pfSpanPage;
+        statistics::Scalar pfIdentified;
+        statistics::Scalar pfBufferHit;
+        statistics::Scalar pfInCache;
+        statistics::Scalar pfRemovedDemand;
+        statistics::Scalar pfRemovedFull;
+        statistics::Scalar pfSpanPage;
+        statistics::Scalar pfUsefulSpanPage;
     } statsQueued;
   public:
     using AddrPriority = std::pair<Addr, int32_t>;
@@ -196,6 +205,8 @@ class Queued : public Base
     {
         return pfq.empty() ? MaxTick : pfq.front().tick;
     }
+
+    void printQueue(const std::list<DeferredPacket> &queue) const;
 
   private:
 
@@ -249,7 +260,7 @@ class Queued : public Base
                                         PacketPtr pkt);
 };
 
-} // namespace Prefetcher
+} // namespace prefetch
+} // namespace gem5
 
 #endif //__MEM_CACHE_PREFETCH_QUEUED_HH__
-

@@ -46,7 +46,11 @@
 #include "systemc/ext/core/sc_module_name.hh"
 #include "systemc/sc_port_wrapper.hh"
 
-namespace FastModel
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(FastModel, fastmodel);
+namespace fastmodel
 {
 
 class PL330 : public scx_evs_PL330
@@ -75,7 +79,7 @@ class PL330 : public scx_evs_PL330
         PL330(params, params.name.c_str())
     {}
 
-    ::Port &gem5_getPort(const std::string &if_name, int idx=-1) override;
+    gem5::Port &gem5_getPort(const std::string &if_name, int idx=-1) override;
 
     void
     end_of_elaboration() override
@@ -86,6 +90,7 @@ class PL330 : public scx_evs_PL330
     void start_of_simulation() override;
 };
 
-} // namespace FastModel
+} // namespace fastmodel
+} // namespace gem5
 
 #endif // __ARCH_ARM_FASTMODEL_PL330_PL330_HH__

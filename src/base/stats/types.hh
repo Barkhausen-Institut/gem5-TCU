@@ -33,9 +33,15 @@
 #include <map>
 #include <vector>
 
+#include "base/compiler.hh"
 #include "base/types.hh"
 
-namespace Stats {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Stats, statistics);
+namespace statistics
+{
 
 /** All counters are of 64-bit values. */
 typedef double Counter;
@@ -54,6 +60,35 @@ typedef std::vector<Result> VResult;
 typedef unsigned int size_type;
 typedef unsigned int off_type;
 
-} // namespace Stats
+enum DistType { Deviation, Dist, Hist };
+
+/** General container for distribution data. */
+struct DistData
+{
+    DistType type;
+    Counter min;
+    Counter max;
+    Counter bucket_size;
+
+    Counter min_val;
+    Counter max_val;
+    Counter underflow;
+    Counter overflow;
+    VCounter cvec;
+    Counter sum;
+    Counter squares;
+    Counter logs;
+    Counter samples;
+};
+
+/** Data structure of sparse histogram */
+struct SparseHistData
+{
+    MCounter cmap;
+    Counter samples;
+};
+
+} // namespace statistics
+} // namespace gem5
 
 #endif // __BASE_STATS_TYPES_HH__

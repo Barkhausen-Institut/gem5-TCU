@@ -37,17 +37,21 @@
 #include "sim/process.hh"
 #include "sim/syscall_abi.hh"
 
-namespace Loader
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Loader, loader);
+namespace loader
 {
 class ObjectFile;
-} // namespace Loader
+} // namespace loader
 
 class System;
 
 class RiscvProcess : public Process
 {
   protected:
-    RiscvProcess(const ProcessParams &params, ::Loader::ObjectFile *objFile);
+    RiscvProcess(const ProcessParams &params, loader::ObjectFile *objFile);
     template<class IntType>
     void argsInit(int pageSize);
 
@@ -58,7 +62,7 @@ class RiscvProcess : public Process
 class RiscvProcess64 : public RiscvProcess
 {
   public:
-    RiscvProcess64(const ProcessParams &params, ::Loader::ObjectFile *objFile);
+    RiscvProcess64(const ProcessParams &params, loader::ObjectFile *objFile);
 
   protected:
     void initState() override;
@@ -67,10 +71,12 @@ class RiscvProcess64 : public RiscvProcess
 class RiscvProcess32 : public RiscvProcess
 {
   public:
-    RiscvProcess32(const ProcessParams &params, ::Loader::ObjectFile *objFile);
+    RiscvProcess32(const ProcessParams &params, loader::ObjectFile *objFile);
 
   protected:
     void initState() override;
 };
+
+} // namespace gem5
 
 #endif // __RISCV_PROCESS_HH__

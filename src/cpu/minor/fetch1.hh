@@ -47,13 +47,19 @@
 
 #include <vector>
 
+#include "arch/generic/mmu.hh"
+#include "base/named.hh"
 #include "cpu/base.hh"
 #include "cpu/minor/buffers.hh"
 #include "cpu/minor/cpu.hh"
 #include "cpu/minor/pipe_data.hh"
 #include "mem/packet.hh"
 
-namespace Minor
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Minor, minor);
+namespace minor
 {
 
 /** A stage responsible for fetching "lines" from memory and passing
@@ -99,7 +105,7 @@ class Fetch1 : public Named
     /** Structure to hold SenderState info through
      *  translation and memory accesses. */
     class FetchRequest :
-        public BaseTLB::Translation, /* For TLB lookups */
+        public BaseMMU::Translation, /* For TLB lookups */
         public Packet::SenderState /* For packing into a Packet */
     {
       protected:
@@ -133,7 +139,7 @@ class Fetch1 : public Named
         RequestPtr request;
 
         /** PC to fixup with line address */
-        TheISA::PCState pc;
+        Addr pc;
 
         /** Fill in a fault if one happens during fetch, check this by
          *  picking apart the response packet */
@@ -154,7 +160,7 @@ class Fetch1 : public Named
         bool isComplete() const { return state == Complete; }
 
       protected:
-        /** BaseTLB::Translation interface */
+        /** BaseMMU::Translation interface */
 
         /** Interface for ITLB responses.  We can handle delay, so don't
          *  do anything */
@@ -164,10 +170,10 @@ class Fetch1 : public Named
          *  the request on to the ports' handleTLBResponse member
          *  function */
         void finish(const Fault &fault_, const RequestPtr &request_,
-                    ThreadContext *tc, BaseTLB::Mode mode);
+                    ThreadContext *tc, BaseMMU::Mode mode);
 
       public:
-        FetchRequest(Fetch1 &fetch_, InstId id_, TheISA::PCState pc_) :
+        FetchRequest(Fetch1 &fetch_, InstId id_, Addr pc_) :
             SenderState(),
             fetch(fetch_),
             state(NotIssued),
@@ -235,49 +241,45 @@ class Fetch1 : public Named
 
     /** Stage cycle-by-cycle state */
 
-    struct Fetch1ThreadInfo {
-
-        /** Consturctor to initialize all fields. */
-        Fetch1ThreadInfo() :
-            state(FetchWaitingForPC),
-            pc(TheISA::PCState(0)),
-            streamSeqNum(InstId::firstStreamSeqNum),
-            predictionSeqNum(InstId::firstPredictionSeqNum),
-            blocked(false),
-            wakeupGuard(false)
-        { }
+    struct Fetch1ThreadInfo
+    {
+        // All fields have default initializers.
+        Fetch1ThreadInfo() {}
 
         Fetch1ThreadInfo(const Fetch1ThreadInfo& other) :
             state(other.state),
-            pc(other.pc),
+            pc(other.pc->clone()),
             streamSeqNum(other.streamSeqNum),
             predictionSeqNum(other.predictionSeqNum),
             blocked(other.blocked)
         { }
 
-        FetchState state;
+        FetchState state = FetchWaitingForPC;
 
         /** Fetch PC value. This is updated by branches from Execute, branch
-         *  prediction targets from Fetch2 and by incrementing it as we fetch
-         *  lines subsequent to those two sources. */
-        TheISA::PCState pc;
+         *  prediction targets from Fetch2. This is only valid immediately
+         *  following a redirect from one of those two sources. */
+        std::unique_ptr<PCStateBase> pc;
+
+        /** The address we're currently fetching lines from. */
+        Addr fetchAddr = 0;
 
         /** Stream sequence number.  This changes on request from Execute and is
          *  used to tag instructions by the fetch stream to which they belong.
          *  Execute originates new prediction sequence numbers. */
-        InstSeqNum streamSeqNum;
+        InstSeqNum streamSeqNum = InstId::firstStreamSeqNum;
 
         /** Prediction sequence number.  This changes when requests from Execute
          *  or Fetch2 ask for a change of fetch address and is used to tag lines
          *  by the prediction to which they belong.  Fetch2 originates
          *  prediction sequence numbers. */
-        InstSeqNum predictionSeqNum;
+        InstSeqNum predictionSeqNum = InstId::firstPredictionSeqNum;
 
         /** Blocked indication for report */
-        bool blocked;
+        bool blocked = false;
 
         /** Signal to guard against sleeping first cycle of wakeup */
-        bool wakeupGuard;
+        bool wakeupGuard = false;
     };
 
     std::vector<Fetch1ThreadInfo> fetchInfo;
@@ -384,7 +386,7 @@ class Fetch1 : public Named
   public:
     Fetch1(const std::string &name_,
         MinorCPU &cpu_,
-        const MinorCPUParams &params,
+        const BaseMinorCPUParams &params,
         Latch<BranchData>::Output inp_,
         Latch<ForwardLineData>::Input out_,
         Latch<BranchData>::Output prediction_,
@@ -407,6 +409,7 @@ class Fetch1 : public Named
     bool isDrained();
 };
 
-}
+} // namespace minor
+} // namespace gem5
 
 #endif /* __CPU_MINOR_FETCH1_HH__ */

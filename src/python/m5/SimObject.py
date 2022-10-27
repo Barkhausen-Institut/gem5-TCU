@@ -116,274 +116,6 @@ def public_value(key, value):
                isinstance(value, (FunctionType, MethodType, ModuleType,
                                   classmethod, type))
 
-def createCxxConfigDirectoryEntryFile(code, name, simobj, is_header):
-    entry_class = 'CxxConfigDirectoryEntry_%s' % name
-    param_class = '%sCxxConfigParams' % name
-
-    code('#include "params/%s.hh"' % name)
-
-    if not is_header:
-        for param in simobj._params.values():
-            if isSimObjectClass(param.ptype):
-                code('#include "%s"' % param.ptype._value_dict['cxx_header'])
-                code('#include "params/%s.hh"' % param.ptype.__name__)
-            else:
-                param.ptype.cxx_ini_predecls(code)
-
-    if is_header:
-        member_prefix = ''
-        end_of_decl = ';'
-        code('#include "sim/cxx_config.hh"')
-        code()
-        code('class ${param_class} : public CxxConfigParams,'
-            ' public ${name}Params')
-        code('{')
-        code('  private:')
-        code.indent()
-        code('class DirectoryEntry : public CxxConfigDirectoryEntry')
-        code('{')
-        code('  public:')
-        code.indent()
-        code('DirectoryEntry();');
-        code()
-        code('CxxConfigParams *makeParamsObject() const')
-        code('{ return new ${param_class}; }')
-        code.dedent()
-        code('};')
-        code()
-        code.dedent()
-        code('  public:')
-        code.indent()
-    else:
-        member_prefix = '%s::' % param_class
-        end_of_decl = ''
-        code('#include "%s"' % simobj._value_dict['cxx_header'])
-        code('#include "base/str.hh"')
-        code('#include "cxx_config/${name}.hh"')
-
-        code()
-        code('${member_prefix}DirectoryEntry::DirectoryEntry()');
-        code('{')
-
-        def cxx_bool(b):
-            return 'true' if b else 'false'
-
-        code.indent()
-        for param in simobj._params.values():
-            is_vector = isinstance(param, m5.params.VectorParamDesc)
-            is_simobj = issubclass(param.ptype, m5.SimObject.SimObject)
-
-            code('parameters["%s"] = new ParamDesc("%s", %s, %s);' %
-                (param.name, param.name, cxx_bool(is_vector),
-                cxx_bool(is_simobj)));
-
-        for port in simobj._ports.values():
-            is_vector = isinstance(port, m5.params.VectorPort)
-            is_requestor = port.role == 'GEM5 REQUESTOR'
-
-            code('ports["%s"] = new PortDesc("%s", %s, %s);' %
-                (port.name, port.name, cxx_bool(is_vector),
-                cxx_bool(is_requestor)))
-
-        code.dedent()
-        code('}')
-        code()
-
-    code('bool ${member_prefix}setSimObject(const std::string &name,')
-    code('    SimObject *simObject)${end_of_decl}')
-
-    if not is_header:
-        code('{')
-        code.indent()
-        code('bool ret = true;')
-        code()
-        code('if (false) {')
-        for param in simobj._params.values():
-            is_vector = isinstance(param, m5.params.VectorParamDesc)
-            is_simobj = issubclass(param.ptype, m5.SimObject.SimObject)
-
-            if is_simobj and not is_vector:
-                code('} else if (name == "${{param.name}}") {')
-                code.indent()
-                code('this->${{param.name}} = '
-                    'dynamic_cast<${{param.ptype.cxx_type}}>(simObject);')
-                code('if (simObject && !this->${{param.name}})')
-                code('   ret = false;')
-                code.dedent()
-        code('} else {')
-        code('    ret = false;')
-        code('}')
-        code()
-        code('return ret;')
-        code.dedent()
-        code('}')
-
-    code()
-    code('bool ${member_prefix}setSimObjectVector('
-        'const std::string &name,')
-    code('    const std::vector<SimObject *> &simObjects)${end_of_decl}')
-
-    if not is_header:
-        code('{')
-        code.indent()
-        code('bool ret = true;')
-        code()
-        code('if (false) {')
-        for param in simobj._params.values():
-            is_vector = isinstance(param, m5.params.VectorParamDesc)
-            is_simobj = issubclass(param.ptype, m5.SimObject.SimObject)
-
-            if is_simobj and is_vector:
-                code('} else if (name == "${{param.name}}") {')
-                code.indent()
-                code('this->${{param.name}}.clear();')
-                code('for (auto i = simObjects.begin(); '
-                    'ret && i != simObjects.end(); i ++)')
-                code('{')
-                code.indent()
-                code('${{param.ptype.cxx_type}} object = '
-                    'dynamic_cast<${{param.ptype.cxx_type}}>(*i);')
-                code('if (*i && !object)')
-                code('    ret = false;')
-                code('else')
-                code('    this->${{param.name}}.push_back(object);')
-                code.dedent()
-                code('}')
-                code.dedent()
-        code('} else {')
-        code('    ret = false;')
-        code('}')
-        code()
-        code('return ret;')
-        code.dedent()
-        code('}')
-
-    code()
-    code('void ${member_prefix}setName(const std::string &name_)'
-        '${end_of_decl}')
-
-    if not is_header:
-        code('{')
-        code.indent()
-        code('this->name = name_;')
-        code.dedent()
-        code('}')
-
-    if is_header:
-        code('const std::string &${member_prefix}getName()')
-        code('{ return this->name; }')
-
-    code()
-    code('bool ${member_prefix}setParam(const std::string &name,')
-    code('    const std::string &value, const Flags flags)${end_of_decl}')
-
-    if not is_header:
-        code('{')
-        code.indent()
-        code('bool ret = true;')
-        code()
-        code('if (false) {')
-        for param in simobj._params.values():
-            is_vector = isinstance(param, m5.params.VectorParamDesc)
-            is_simobj = issubclass(param.ptype, m5.SimObject.SimObject)
-
-            if not is_simobj and not is_vector:
-                code('} else if (name == "${{param.name}}") {')
-                code.indent()
-                param.ptype.cxx_ini_parse(code,
-                    'value', 'this->%s' % param.name, 'ret =')
-                code.dedent()
-        code('} else {')
-        code('    ret = false;')
-        code('}')
-        code()
-        code('return ret;')
-        code.dedent()
-        code('}')
-
-    code()
-    code('bool ${member_prefix}setParamVector('
-        'const std::string &name,')
-    code('    const std::vector<std::string> &values,')
-    code('    const Flags flags)${end_of_decl}')
-
-    if not is_header:
-        code('{')
-        code.indent()
-        code('bool ret = true;')
-        code()
-        code('if (false) {')
-        for param in simobj._params.values():
-            is_vector = isinstance(param, m5.params.VectorParamDesc)
-            is_simobj = issubclass(param.ptype, m5.SimObject.SimObject)
-
-            if not is_simobj and is_vector:
-                code('} else if (name == "${{param.name}}") {')
-                code.indent()
-                code('${{param.name}}.clear();')
-                code('for (auto i = values.begin(); '
-                    'ret && i != values.end(); i ++)')
-                code('{')
-                code.indent()
-                code('${{param.ptype.cxx_type}} elem;')
-                param.ptype.cxx_ini_parse(code,
-                    '*i', 'elem', 'ret =')
-                code('if (ret)')
-                code('    this->${{param.name}}.push_back(elem);')
-                code.dedent()
-                code('}')
-                code.dedent()
-        code('} else {')
-        code('    ret = false;')
-        code('}')
-        code()
-        code('return ret;')
-        code.dedent()
-        code('}')
-
-    code()
-    code('bool ${member_prefix}setPortConnectionCount('
-        'const std::string &name,')
-    code('    unsigned int count)${end_of_decl}')
-
-    if not is_header:
-        code('{')
-        code.indent()
-        code('bool ret = true;')
-        code()
-        code('if (false)')
-        code('    ;')
-        for port in simobj._ports.values():
-            code('else if (name == "${{port.name}}")')
-            code('    this->port_${{port.name}}_connection_count = count;')
-        code('else')
-        code('    ret = false;')
-        code()
-        code('return ret;')
-        code.dedent()
-        code('}')
-
-    code()
-    code('SimObject *${member_prefix}simObjectCreate()${end_of_decl}')
-
-    if not is_header:
-        code('{')
-        if getattr(simobj, 'abstract', False):
-            code('    return NULL;')
-        else:
-            code('    return this->create();')
-        code('}')
-
-    if is_header:
-        code()
-        code('static CxxConfigDirectoryEntry'
-            ' *${member_prefix}makeDirectoryEntry()')
-        code('{ return new DirectoryEntry; }')
-
-    if is_header:
-        code.dedent()
-        code('};')
-
 # The metaclass for SimObject.  This class controls how new classes
 # that derive from SimObject are instantiated, and provides inherited
 # class behavior (just like a class controls how instances of that
@@ -443,7 +175,7 @@ class MetaSimObject(type):
         if 'cxx_template_params' not in value_dict:
             value_dict['cxx_template_params'] = []
         cls_dict['_value_dict'] = value_dict
-        cls = super(MetaSimObject, mcls).__new__(mcls, name, bases, cls_dict)
+        cls = super().__new__(mcls, name, bases, cls_dict)
         if 'type' in value_dict:
             allClasses[name] = cls
         return cls
@@ -452,7 +184,7 @@ class MetaSimObject(type):
     def __init__(cls, name, bases, dict):
         # calls type.__init__()... I think that's a no-op, but leave
         # it here just in case it's not.
-        super(MetaSimObject, cls).__init__(name, bases, dict)
+        super().__init__(name, bases, dict)
 
         # initialize required attributes
 
@@ -472,6 +204,7 @@ class MetaSimObject(type):
         cls._children = multidict() # SimObject children
         cls._port_refs = multidict() # port ref objects
         cls._instantiated = False # really instantiated, cloned, or subclassed
+        cls._init_called = False # Used to check if __init__ overridden
 
         # We don't support multiple inheritance of sim objects.  If you want
         # to, you must fix multidict to deal with it properly. Non sim-objects
@@ -700,338 +433,6 @@ class MetaSimObject(type):
     def pybind_predecls(cls, code):
         code('#include "${{cls.cxx_header}}"')
 
-    def cxx_param_def(cls, code):
-        code('''
-#include <type_traits>
-
-#include "base/compiler.hh"
-
-#include "${{cls.cxx_header}}"
-#include "params/${cls}.hh"
-
-''')
-        code()
-        code('namespace')
-        code('{')
-        code()
-        # If we can't define a default create() method for this params struct
-        # because the SimObject doesn't have the right constructor, use
-        # template magic to make it so we're actually defining a create method
-        # for this class instead.
-        code('class Dummy${cls}ParamsClass')
-        code('{')
-        code('  public:')
-        code('    ${{cls.cxx_class}} *create() const;')
-        code('};')
-        code()
-        code('template <class CxxClass, class Enable=void>')
-        code('class Dummy${cls}Shunt;')
-        code()
-        # This version directs to the real Params struct and the default
-        # behavior of create if there's an appropriate constructor.
-        code('template <class CxxClass>')
-        code('class Dummy${cls}Shunt<CxxClass, std::enable_if_t<')
-        code('    std::is_constructible<CxxClass,')
-        code('        const ${cls}Params &>::value>>')
-        code('{')
-        code('  public:')
-        code('    using Params = ${cls}Params;')
-        code('    static ${{cls.cxx_class}} *')
-        code('    create(const Params &p)')
-        code('    {')
-        code('        return new CxxClass(p);')
-        code('    }')
-        code('};')
-        code()
-        # This version diverts to the DummyParamsClass and a dummy
-        # implementation of create if the appropriate constructor does not
-        # exist.
-        code('template <class CxxClass>')
-        code('class Dummy${cls}Shunt<CxxClass, std::enable_if_t<')
-        code('    !std::is_constructible<CxxClass,')
-        code('        const ${cls}Params &>::value>>')
-        code('{')
-        code('  public:')
-        code('    using Params = Dummy${cls}ParamsClass;')
-        code('    static ${{cls.cxx_class}} *')
-        code('    create(const Params &p)')
-        code('    {')
-        code('        return nullptr;')
-        code('    }')
-        code('};')
-        code()
-        code('} // anonymous namespace')
-        code()
-        # An implementation of either the real Params struct's create
-        # method, or the Dummy one. Either an implementation is
-        # mandantory since this was shunted off to the dummy class, or
-        # one is optional which will override this weak version.
-        code('M5_VAR_USED ${{cls.cxx_class}} *')
-        code('Dummy${cls}Shunt<${{cls.cxx_class}}>::Params::create() const')
-        code('{')
-        code('    return Dummy${cls}Shunt<${{cls.cxx_class}}>::')
-        code('        create(*this);')
-        code('}')
-
-
-    def pybind_decl(cls, code):
-        py_class_name = cls.pybind_class
-
-        # The 'local' attribute restricts us to the params declared in
-        # the object itself, not including inherited params (which
-        # will also be inherited from the base class's param struct
-        # here). Sort the params based on their key
-        params = list(map(lambda k_v: k_v[1], sorted(cls._params.local.items())))
-        ports = cls._ports.local
-
-        code('''#include "pybind11/pybind11.h"
-#include "pybind11/stl.h"
-
-#include "params/$cls.hh"
-#include "python/pybind11/core.hh"
-#include "sim/init.hh"
-#include "sim/sim_object.hh"
-
-#include "${{cls.cxx_header}}"
-
-''')
-
-        for param in params:
-            param.pybind_predecls(code)
-
-        code('''namespace py = pybind11;
-
-static void
-module_init(py::module_ &m_internal)
-{
-    py::module_ m = m_internal.def_submodule("param_${cls}");
-''')
-        code.indent()
-        if cls._base:
-            code('py::class_<${cls}Params, ${{cls._base.type}}Params, ' \
-                 'std::unique_ptr<${{cls}}Params, py::nodelete>>(' \
-                 'm, "${cls}Params")')
-        else:
-            code('py::class_<${cls}Params, ' \
-                 'std::unique_ptr<${cls}Params, py::nodelete>>(' \
-                 'm, "${cls}Params")')
-
-        code.indent()
-        if not hasattr(cls, 'abstract') or not cls.abstract:
-            code('.def(py::init<>())')
-            code('.def("create", &${cls}Params::create)')
-
-        param_exports = cls.cxx_param_exports + [
-            PyBindProperty(k)
-            for k, v in sorted(cls._params.local.items())
-        ] + [
-            PyBindProperty("port_%s_connection_count" % port.name)
-            for port in ports.values()
-        ]
-        for exp in param_exports:
-            exp.export(code, "%sParams" % cls)
-
-        code(';')
-        code()
-        code.dedent()
-
-        bases = []
-        if 'cxx_base' in cls._value_dict:
-            # If the c++ base class implied by python inheritance was
-            # overridden, use that value.
-            if cls.cxx_base:
-                bases.append(cls.cxx_base)
-        elif cls._base:
-            # If not and if there was a SimObject base, use its c++ class
-            # as this class' base.
-            bases.append(cls._base.cxx_class)
-        # Add in any extra bases that were requested.
-        bases.extend(cls.cxx_extra_bases)
-
-        if bases:
-            base_str = ", ".join(bases)
-            code('py::class_<${{cls.cxx_class}}, ${base_str}, ' \
-                 'std::unique_ptr<${{cls.cxx_class}}, py::nodelete>>(' \
-                 'm, "${py_class_name}")')
-        else:
-            code('py::class_<${{cls.cxx_class}}, ' \
-                 'std::unique_ptr<${{cls.cxx_class}}, py::nodelete>>(' \
-                 'm, "${py_class_name}")')
-        code.indent()
-        for exp in cls.cxx_exports:
-            exp.export(code, cls.cxx_class)
-        code(';')
-        code.dedent()
-        code()
-        code.dedent()
-        code('}')
-        code()
-        code('static EmbeddedPyBind embed_obj("${0}", module_init, "${1}");',
-             cls, cls._base.type if cls._base else "")
-
-    _warned_about_nested_templates = False
-
-    # Generate the C++ declaration (.hh file) for this SimObject's
-    # param struct.  Called from src/SConscript.
-    def cxx_param_decl(cls, code):
-        # The 'local' attribute restricts us to the params declared in
-        # the object itself, not including inherited params (which
-        # will also be inherited from the base class's param struct
-        # here). Sort the params based on their key
-        params = list(map(lambda k_v: k_v[1], sorted(cls._params.local.items())))
-        ports = cls._ports.local
-        try:
-            ptypes = [p.ptype for p in params]
-        except:
-            print(cls, p, p.ptype_str)
-            print(params)
-            raise
-
-        class CxxClass(object):
-            def __init__(self, sig, template_params=[]):
-                # Split the signature into its constituent parts. This could
-                # potentially be done with regular expressions, but
-                # it's simple enough to pick appart a class signature
-                # manually.
-                parts = sig.split('<', 1)
-                base = parts[0]
-                t_args = []
-                if len(parts) > 1:
-                    # The signature had template arguments.
-                    text = parts[1].rstrip(' \t\n>')
-                    arg = ''
-                    # Keep track of nesting to avoid splitting on ","s embedded
-                    # in the arguments themselves.
-                    depth = 0
-                    for c in text:
-                        if c == '<':
-                            depth = depth + 1
-                            if depth > 0 and not \
-                                    self._warned_about_nested_templates:
-                                self._warned_about_nested_templates = True
-                                print('Nested template argument in cxx_class.'
-                                      ' This feature is largely untested and '
-                                      ' may not work.')
-                        elif c == '>':
-                            depth = depth - 1
-                        elif c == ',' and depth == 0:
-                            t_args.append(arg.strip())
-                            arg = ''
-                        else:
-                            arg = arg + c
-                    if arg:
-                        t_args.append(arg.strip())
-                # Split the non-template part on :: boundaries.
-                class_path = base.split('::')
-
-                # The namespaces are everything except the last part of the
-                # class path.
-                self.namespaces = class_path[:-1]
-                # And the class name is the last part.
-                self.name = class_path[-1]
-
-                self.template_params = template_params
-                self.template_arguments = []
-                # Iterate through the template arguments and their values. This
-                # will likely break if parameter packs are used.
-                for arg, param in zip(t_args, template_params):
-                    type_keys = ('class', 'typename')
-                    # If a parameter is a type, parse it recursively. Otherwise
-                    # assume it's a constant, and store it verbatim.
-                    if any(param.strip().startswith(kw) for kw in type_keys):
-                        self.template_arguments.append(CxxClass(arg))
-                    else:
-                        self.template_arguments.append(arg)
-
-            def declare(self, code):
-                # First declare any template argument types.
-                for arg in self.template_arguments:
-                    if isinstance(arg, CxxClass):
-                        arg.declare(code)
-                # Re-open the target namespace.
-                for ns in self.namespaces:
-                    code('namespace $ns {')
-                # If this is a class template...
-                if self.template_params:
-                    code('template <${{", ".join(self.template_params)}}>')
-                # The actual class declaration.
-                code('class ${{self.name}};')
-                # Close the target namespaces.
-                for ns in reversed(self.namespaces):
-                    code('} // namespace $ns')
-
-        code('''\
-#ifndef __PARAMS__${cls}__
-#define __PARAMS__${cls}__
-
-''')
-
-
-        # The base SimObject has a couple of params that get
-        # automatically set from Python without being declared through
-        # the normal Param mechanism; we slip them in here (needed
-        # predecls now, actual declarations below)
-        if cls == SimObject:
-            code('''#include <string>''')
-
-        cxx_class = CxxClass(cls._value_dict['cxx_class'],
-                             cls._value_dict['cxx_template_params'])
-
-        # A forward class declaration is sufficient since we are just
-        # declaring a pointer.
-        cxx_class.declare(code)
-
-        for param in params:
-            param.cxx_predecls(code)
-        for port in ports.values():
-            port.cxx_predecls(code)
-        code()
-
-        if cls._base:
-            code('#include "params/${{cls._base.type}}.hh"')
-            code()
-
-        for ptype in ptypes:
-            if issubclass(ptype, Enum):
-                code('#include "enums/${{ptype.__name__}}.hh"')
-                code()
-
-        # now generate the actual param struct
-        code("struct ${cls}Params")
-        if cls._base:
-            code("    : public ${{cls._base.type}}Params")
-        code("{")
-        if not hasattr(cls, 'abstract') or not cls.abstract:
-            if 'type' in cls.__dict__:
-                code("    ${{cls.cxx_type}} create() const;")
-
-        code.indent()
-        if cls == SimObject:
-            code('''
-    SimObjectParams() {}
-    virtual ~SimObjectParams() {}
-
-    std::string name;
-            ''')
-
-        for param in params:
-            param.cxx_decl(code)
-        for port in ports.values():
-            port.cxx_decl(code)
-
-        code.dedent()
-        code('};')
-
-        code()
-        code('#endif // __PARAMS__${cls}__')
-        return code
-
-    # Generate the C++ declaration/definition files for this SimObject's
-    # param struct to allow C++ initialisation
-    def cxx_config_param_file(cls, code, is_header):
-        createCxxConfigDirectoryEntryFile(code, cls.__name__, cls, is_header)
-        return code
-
 # This *temporary* definition is required to support calls from the
 # SimObject class definition to the MetaSimObject methods (in
 # particular _set_param, which gets called for parameters with default
@@ -1111,7 +512,7 @@ class ParamInfo(object):
 
 class SimObjectCliWrapperException(Exception):
     def __init__(self, message):
-        super(Exception, self).__init__(message)
+        super().__init__(message)
 
 class SimObjectCliWrapper(object):
     """
@@ -1179,7 +580,8 @@ class SimObject(object, metaclass=MetaSimObject):
     abstract = True
 
     cxx_header = "sim/sim_object.hh"
-    cxx_extra_bases = [ "Drainable", "Serializable", "Stats::Group" ]
+    cxx_class = 'gem5::SimObject'
+    cxx_extra_bases = [ "Drainable", "Serializable", "statistics::Group" ]
     eventq_index = Param.UInt32(Parent.eventq_index, "Event Queue Index")
 
     cxx_exports = [
@@ -1287,6 +689,7 @@ class SimObject(object, metaclass=MetaSimObject):
         self._ccObject = None  # pointer to C++ object
         self._ccParams = None
         self._instantiated = False # really "cloned"
+        self._init_called = True # Checked so subclasses don't forget __init__
 
         # Clone children specified at class level.  No need for a
         # multidict here since we will be cloning everything.
@@ -1315,6 +718,14 @@ class SimObject(object, metaclass=MetaSimObject):
         # apply attribute assignments from keyword args, if any
         for key,val in kwargs.items():
             setattr(self, key, val)
+
+    def _check_init(self):
+        """Utility function to check to make sure that all subclasses call
+        __init__
+        """
+        if not self._init_called:
+            raise RuntimeError(f"{str(self.__class__)} is missing a call "
+                "to super().__init__()")
 
     # "Clone" the current instance by creating another instance of
     # this instance's class, but that inherits its parameter values
@@ -1349,6 +760,11 @@ class SimObject(object, metaclass=MetaSimObject):
         return ref
 
     def __getattr__(self, attr):
+        # Check for infinite recursion. If this SimObject hasn't been
+        # initialized with SimObject.__init__ this function will experience an
+        # infinite recursion checking for attributes that don't exist.
+        self._check_init()
+
         if attr in self._deprecated_params:
             dep_param = self._deprecated_params[attr]
             dep_param.printWarning(self._name, self.__class__.__name__)
@@ -1407,6 +823,12 @@ class SimObject(object, metaclass=MetaSimObject):
                 e.args = (msg, )
                 raise
             self._values[attr] = value
+
+            # If we assign NULL to an attr that is a SimObject,
+            # remove the corresponding children
+            if attr in self._children and isNullPointer(value):
+                self.clear_child(attr)
+
             # implicitly parent unparented objects assigned as params
             if isSimObjectOrVector(value) and not value.has_parent():
                 self.add_child(attr, value)
@@ -1477,17 +899,18 @@ class SimObject(object, metaclass=MetaSimObject):
     def add_child(self, name, child):
         child = coerceSimObjectOrVector(child)
         if child.has_parent():
-            warn(f"{self}.{name} already has parent (Previously declared as "
-                 f"{child._parent}.{name}).\n"
+            warn(f"{self}.{name} already has parent not resetting parent.\n"
                  f"\tNote: {name} is not a parameter of {type(self).__name__}")
+            warn(f"(Previously declared as {child._parent}.{name}")
+            return
         if name in self._children:
             # This code path had an undiscovered bug that would make it fail
             # at runtime. It had been here for a long time and was only
             # exposed by a buggy script. Changes here will probably not be
             # exercised without specialized testing.
             self.clear_child(name)
-        child.set_parent(self, name)
         if not isNullPointer(child):
+            child.set_parent(self, name)
             self._children[name] = child
 
     # Take SimObject-valued parameters that haven't been explicitly
@@ -1678,6 +1101,9 @@ class SimObject(object, metaclass=MetaSimObject):
         if self._ccParams:
             return self._ccParams
 
+        # Ensure that m5.internal.params is available.
+        import m5.internal.params
+
         cc_params_struct = getattr(m5.internal.params, '%sParams' % self.type)
         cc_params = cc_params_struct()
         cc_params.name = str(self)
@@ -1749,6 +1175,8 @@ class SimObject(object, metaclass=MetaSimObject):
 
     # Call C++ to create C++ object corresponding to this object
     def createCCObject(self):
+        if self.abstract:
+            fatal(f"Cannot instantiate an abstract SimObject ({self.path()})")
         self.getCCParams()
         self.getCCObject() # force creation
 

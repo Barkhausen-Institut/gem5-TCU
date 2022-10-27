@@ -42,12 +42,16 @@
 #include "cpu/minor/pipeline.hh"
 #include "debug/Decode.hh"
 
-namespace Minor
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Minor, minor);
+namespace minor
 {
 
 Decode::Decode(const std::string &name,
     MinorCPU &cpu_,
-    const MinorCPUParams &params,
+    const BaseMinorCPUParams &params,
     Latch<ForwardInstData>::Output inp_,
     Latch<ForwardInstData>::Input out_,
     std::vector<InputBuffer<ForwardInstData>> &next_stage_input_buffer) :
@@ -111,7 +115,7 @@ dynInstAddTracing(MinorDynInstPtr inst, StaticInstPtr static_inst,
 {
     inst->traceData = cpu.getTracer()->getInstRecord(curTick(),
         cpu.getContext(inst->id.threadId),
-        inst->staticInst, inst->pc, static_inst);
+        inst->staticInst, *inst->pc, static_inst);
 
     /* Use the execSeqNum as the fetch sequence number as this most closely
      *  matches the other processor models' idea of fetch sequence */
@@ -172,7 +176,7 @@ Decode::evaluate()
 
                     /* Set up PC for the next micro-op emitted */
                     if (!decode_info.inMacroop) {
-                        decode_info.microopPC = inst->pc;
+                        set(decode_info.microopPC, *inst->pc);
                         decode_info.inMacroop = true;
                     }
 
@@ -180,35 +184,35 @@ Decode::evaluate()
                      * static_inst. */
                     static_micro_inst =
                         static_inst->fetchMicroop(
-                                decode_info.microopPC.microPC());
+                                decode_info.microopPC->microPC());
 
                     output_inst =
                         new MinorDynInst(static_micro_inst, inst->id);
-                    output_inst->pc = decode_info.microopPC;
+                    set(output_inst->pc, decode_info.microopPC);
                     output_inst->fault = NoFault;
 
                     /* Allow a predicted next address only on the last
                      *  microop */
                     if (static_micro_inst->isLastMicroop()) {
                         output_inst->predictedTaken = inst->predictedTaken;
-                        output_inst->predictedTarget = inst->predictedTarget;
+                        set(output_inst->predictedTarget,
+                                inst->predictedTarget);
                     }
 
                     DPRINTF(Decode, "Microop decomposition inputIndex:"
                         " %d output_index: %d lastMicroop: %s microopPC:"
-                        " %d.%d inst: %d\n",
+                        " %s inst: %d\n",
                         decode_info.inputIndex, output_index,
                         (static_micro_inst->isLastMicroop() ?
                             "true" : "false"),
-                        decode_info.microopPC.instAddr(),
-                        decode_info.microopPC.microPC(),
+                        *decode_info.microopPC,
                         *output_inst);
 
                     /* Acknowledge that the static_inst isn't mine, it's my
                      * parent macro-op's */
                     parent_static_inst = static_inst;
 
-                    static_micro_inst->advancePC(decode_info.microopPC);
+                    static_micro_inst->advancePC(*decode_info.microopPC);
 
                     /* Step input if this is the last micro-op */
                     if (static_micro_inst->isLastMicroop()) {
@@ -300,13 +304,13 @@ Decode::getScheduledThread()
     std::vector<ThreadID> priority_list;
 
     switch (cpu.threadPolicy) {
-      case Enums::SingleThreaded:
+      case enums::SingleThreaded:
         priority_list.push_back(0);
         break;
-      case Enums::RoundRobin:
+      case enums::RoundRobin:
         priority_list = cpu.roundRobinPriority(threadPriority);
         break;
-      case Enums::Random:
+      case enums::Random:
         priority_list = cpu.randomPriority();
         break;
       default:
@@ -344,8 +348,9 @@ Decode::minorTrace() const
     else
         (*out.inputWire).reportData(data);
 
-    MINORTRACE("insts=%s\n", data.str());
+    minor::minorTrace("insts=%s\n", data.str());
     inputBuffer[0].minorTrace();
 }
 
-}
+} // namespace minor
+} // namespace gem5

@@ -37,11 +37,14 @@
 #include "arch/riscv/utility.hh"
 #include "cpu/static_inst.hh"
 
+namespace gem5
+{
+
 namespace RiscvISA
 {
 
 std::string
-Load::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
+Load::generateDisassembly(Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     ss << mnemonic << ' ' << registerName(destRegIdx(0)) << ", " <<
@@ -50,7 +53,7 @@ Load::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
 }
 
 std::string
-Store::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
+Store::generateDisassembly(Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     ss << mnemonic << ' ' << registerName(srcRegIdx(1)) << ", " <<
@@ -58,4 +61,5 @@ Store::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
     return ss.str();
 }
 
-}
+} // namespace RiscvISA
+} // namespace gem5

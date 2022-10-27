@@ -31,6 +31,11 @@
 #ifndef __MEM_TCU_ERROR_HH__
 #define __MEM_TCU_ERROR_HH__
 
+namespace gem5
+{
+namespace tcu
+{
+
 enum class TcuError
 {
     NONE                = 0,
@@ -60,5 +65,8 @@ enum class TcuError
     TLB_MISS            = 24,
     TLB_FULL            = 25,
 };
+
+}
+}
 
 #endif // __MEM_TCU_ERROR_HH__

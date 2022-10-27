@@ -2,8 +2,6 @@
  * Copyright (c) 2016 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -35,6 +33,9 @@
 
 #include "sim/serialize.hh"
 
+namespace gem5
+{
+
 void
 FDEntry::serialize(CheckpointOut &cp) const
 {
@@ -54,6 +55,7 @@ FileFDEntry::serialize(CheckpointOut &cp) const
     SERIALIZE_SCALAR(_flags);
     SERIALIZE_SCALAR(_fileName);
     SERIALIZE_SCALAR(_fileOffset);
+    SERIALIZE_SCALAR(_mode);
 }
 
 void
@@ -63,6 +65,7 @@ FileFDEntry::unserialize(CheckpointIn &cp)
     UNSERIALIZE_SCALAR(_flags);
     UNSERIALIZE_SCALAR(_fileName);
     UNSERIALIZE_SCALAR(_fileOffset);
+    UNSERIALIZE_SCALAR(_mode);
 }
 
 void
@@ -96,3 +99,5 @@ DeviceFDEntry::unserialize(CheckpointIn &cp)
     //UNSERIALIZE_SCALAR(_driver);
     UNSERIALIZE_SCALAR(_fileName);
 }
+
+} // namespace gem5

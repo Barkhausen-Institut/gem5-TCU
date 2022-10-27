@@ -42,10 +42,9 @@ output header {{
     class MipsStaticInst : public StaticInst
     {
       protected:
-
         // Constructor
         MipsStaticInst(const char *mnem, MachInst _machInst, OpClass __opClass)
-            : StaticInst(mnem, _machInst, __opClass)
+            : StaticInst(mnem, __opClass), machInst(_machInst)
         {
         }
 
@@ -54,13 +53,37 @@ output header {{
         void printReg(std::ostream &os, RegId reg) const;
 
         std::string generateDisassembly(
-                Addr pc, const Loader::SymbolTable *symtab) const override;
+                Addr pc, const loader::SymbolTable *symtab) const override;
 
       public:
+        ExtMachInst machInst;
+
         void
-        advancePC(MipsISA::PCState &pc) const override
+        advancePC(PCStateBase &pc) const override
         {
+            pc.as<PCState>().advance();
+        }
+
+        void
+        advancePC(ThreadContext *tc) const override
+        {
+            PCState pc = tc->pcState().as<PCState>();
             pc.advance();
+            tc->pcState(pc);
+        }
+
+        std::unique_ptr<PCStateBase>
+        buildRetPC(const PCStateBase &cur_pc,
+                const PCStateBase &call_pc) const override
+        {
+            PCStateBase *ret_pc = call_pc.clone();
+
+            auto &ret = ret_pc->as<PCState>();
+
+            ret.advance();
+            ret.pc(cur_pc.as<PCState>().npc());
+
+            return std::unique_ptr<PCStateBase>{ret_pc};
         }
 
         size_t
@@ -78,7 +101,7 @@ output decoder {{
     void
     MipsStaticInst::printReg(std::ostream &os, RegId reg) const
     {
-        if (reg.isIntReg()) {
+        if (reg.is(IntRegClass)) {
             ccprintf(os, "r%d", reg.index());
         } else {
             ccprintf(os, "f%d", reg.index());
@@ -87,7 +110,7 @@ output decoder {{
 
     std::string
     MipsStaticInst::generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const
+            Addr pc, const loader::SymbolTable *symtab) const
     {
         std::stringstream ss;
 

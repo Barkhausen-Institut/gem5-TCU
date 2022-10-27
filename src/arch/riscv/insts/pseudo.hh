@@ -33,6 +33,9 @@
 
 #include "arch/riscv/insts/static_inst.hh"
 
+namespace gem5
+{
+
 namespace RiscvISA
 {
 
@@ -42,12 +45,13 @@ class PseudoOp : public RiscvStaticInst
     using RiscvStaticInst::RiscvStaticInst;
 
     std::string generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const override
+        Addr pc, const loader::SymbolTable *symtab) const override
     {
         return mnemonic;
     }
 };
 
-}
+} // namespace RiscvISA
+} // namespace gem5
 
 #endif // __ARCH_RISCV_INSTS_PSEUDO_HH__

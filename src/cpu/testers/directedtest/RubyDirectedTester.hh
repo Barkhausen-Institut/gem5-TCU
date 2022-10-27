@@ -42,6 +42,9 @@
 #include "params/RubyDirectedTester.hh"
 #include "sim/clocked_object.hh"
 
+namespace gem5
+{
+
 class DirectedGenerator;
 
 class RubyDirectedTester : public ClockedObject
@@ -89,7 +92,7 @@ class RubyDirectedTester : public ClockedObject
     EventFunctionWrapper directedStartEvent;
 
   private:
-    void hitCallback(NodeID proc, Addr addr);
+    void hitCallback(ruby::NodeID proc, Addr addr);
 
     void checkForDeadlock();
 
@@ -102,5 +105,7 @@ class RubyDirectedTester : public ClockedObject
     uint64_t m_requests_to_complete;
     DirectedGenerator* generator;
 };
+
+} // namespace gem5
 
 #endif // __CPU_DIRECTEDTEST_RUBYDIRECTEDTESTER_HH__

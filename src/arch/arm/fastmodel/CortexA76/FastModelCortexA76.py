@@ -31,6 +31,8 @@ from m5.objects.ArmInterrupts import ArmInterrupts
 from m5.objects.ArmISA import ArmISA
 from m5.objects.FastModel import AmbaInitiatorSocket, AmbaTargetSocket
 from m5.objects.FastModelGIC import Gicv3CommsTargetSocket
+from m5.objects.ResetPort import ResetResponsePort
+from m5.objects.IntPin import IntSinkPin
 from m5.objects.Gic import ArmPPI
 from m5.objects.Iris import IrisBaseCPU
 from m5.objects.SystemC import SystemC_ScModule
@@ -38,7 +40,7 @@ from m5.util.fdthelper import FdtNode, FdtPropertyWords
 
 class FastModelCortexA76(IrisBaseCPU):
     type = 'FastModelCortexA76'
-    cxx_class = 'FastModel::CortexA76'
+    cxx_class = 'gem5::fastmodel::CortexA76'
     cxx_header = 'arch/arm/fastmodel/CortexA76/cortex_a76.hh'
 
     cntfrq = Param.UInt64(0x1800000, "Value for the CNTFRQ timer register")
@@ -46,6 +48,10 @@ class FastModelCortexA76(IrisBaseCPU):
     evs = Parent.evs
 
     redistributor = Gicv3CommsTargetSocket('GIC communication target')
+    core_reset = IntSinkPin('Raising this signal will put the core into ' \
+                            'reset mode.')
+    poweron_reset = IntSinkPin('Power on reset. Initializes all the ' \
+                               'processor logic, including debug logic.')
 
     CFGEND = Param.Bool(False, "Endianness configuration at reset.  "\
             "0, little endian. 1, big endian.")
@@ -136,7 +142,7 @@ class FastModelCortexA76(IrisBaseCPU):
 
 class FastModelCortexA76Cluster(SimObject):
     type = 'FastModelCortexA76Cluster'
-    cxx_class = 'FastModel::CortexA76Cluster'
+    cxx_class = 'gem5::fastmodel::CortexA76Cluster'
     cxx_header = 'arch/arm/fastmodel/CortexA76/cortex_a76.hh'
 
     cores = VectorParam.FastModelCortexA76(
@@ -163,6 +169,11 @@ class FastModelCortexA76Cluster(SimObject):
             "Non-secure physical timer event")
 
     amba = AmbaInitiatorSocket(64, 'AMBA initiator socket')
+    top_reset = IntSinkPin('A single cluster-wide power on reset signal for ' \
+            'all resettable registers in DynamIQ.')
+    dbg_reset = IntSinkPin('Initialize the shared debug APB, Cross Trigger ' \
+            'Interface (CTI), and Cross Trigger Matrix (CTM) logic.')
+    model_reset = ResetResponsePort('A reset port to reset the whole cluster.')
 
     # These parameters are described in "Fast Models Reference Manual" section
     # 3.4.19, "ARMCortexA7x1CT".
@@ -366,7 +377,8 @@ class FastModelCortexA76Cluster(SimObject):
 
 class FastModelScxEvsCortexA76x1(SystemC_ScModule):
     type = 'FastModelScxEvsCortexA76x1'
-    cxx_class = 'FastModel::ScxEvsCortexA76<FastModel::ScxEvsCortexA76x1Types>'
+    cxx_class = 'gem5::fastmodel::ScxEvsCortexA76<' \
+                    'gem5::fastmodel::ScxEvsCortexA76x1Types>'
     cxx_template_params = [ 'class Types' ]
     cxx_header = 'arch/arm/fastmodel/CortexA76/evs.hh'
 
@@ -377,7 +389,8 @@ class FastModelCortexA76x1(FastModelCortexA76Cluster):
 
 class FastModelScxEvsCortexA76x2(SystemC_ScModule):
     type = 'FastModelScxEvsCortexA76x2'
-    cxx_class = 'FastModel::ScxEvsCortexA76<FastModel::ScxEvsCortexA76x2Types>'
+    cxx_class = 'gem5::fastmodel::ScxEvsCortexA76<' \
+                    'gem5::fastmodel::ScxEvsCortexA76x2Types>'
     cxx_template_params = [ 'class Types' ]
     cxx_header = 'arch/arm/fastmodel/CortexA76/evs.hh'
 
@@ -389,7 +402,8 @@ class FastModelCortexA76x2(FastModelCortexA76Cluster):
 
 class FastModelScxEvsCortexA76x3(SystemC_ScModule):
     type = 'FastModelScxEvsCortexA76x3'
-    cxx_class = 'FastModel::ScxEvsCortexA76<FastModel::ScxEvsCortexA76x3Types>'
+    cxx_class = 'gem5::fastmodel::ScxEvsCortexA76<' \
+                    'gem5::fastmodel::ScxEvsCortexA76x3Types>'
     cxx_template_params = [ 'class Types' ]
     cxx_header = 'arch/arm/fastmodel/CortexA76/evs.hh'
 
@@ -402,7 +416,8 @@ class FastModelCortexA76x3(FastModelCortexA76Cluster):
 
 class FastModelScxEvsCortexA76x4(SystemC_ScModule):
     type = 'FastModelScxEvsCortexA76x4'
-    cxx_class = 'FastModel::ScxEvsCortexA76<FastModel::ScxEvsCortexA76x4Types>'
+    cxx_class = 'gem5::fastmodel::ScxEvsCortexA76<' \
+                    'gem5::fastmodel::ScxEvsCortexA76x4Types>'
     cxx_template_params = [ 'class Types' ]
     cxx_header = 'arch/arm/fastmodel/CortexA76/evs.hh'
 

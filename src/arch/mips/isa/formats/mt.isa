@@ -41,7 +41,7 @@ output header {{
         using MipsStaticInst::MipsStaticInst;
 
         std::string generateDisassembly(
-                Addr pc, const Loader::SymbolTable *symtab) const override;
+                Addr pc, const loader::SymbolTable *symtab) const override;
 
         bool user_mode = false;
     };
@@ -59,7 +59,7 @@ output header {{
 
 output decoder {{
     std::string
-    MTOp::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
+    MTOp::generateDisassembly(Addr pc, const loader::SymbolTable *symtab) const
     {
         std::stringstream ss;
 
@@ -111,7 +111,7 @@ def template ThreadRegisterExecute {{
             ExecContext *xc, Trace::InstRecord *traceData) const
         {
             Fault fault = NoFault;
-            M5_VAR_USED int64_t data;
+            [[maybe_unused]] int64_t data;
             %(op_decl)s;
             %(op_rd)s;
 

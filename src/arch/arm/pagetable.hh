@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2012-2013 ARM Limited
+ * Copyright (c) 2010, 2012-2013, 2021 Arm Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -43,12 +43,31 @@
 
 #include <cstdint>
 
-#include "arch/arm/isa_traits.hh"
+#include "arch/arm/page_size.hh"
+#include "arch/arm/types.hh"
 #include "arch/arm/utility.hh"
+#include "arch/generic/mmu.hh"
+#include "enums/TypeTLB.hh"
+#include "enums/ArmLookupLevel.hh"
 #include "sim/serialize.hh"
+
+namespace gem5
+{
 
 namespace ArmISA
 {
+
+// Granule sizes
+enum GrainSize
+{
+    Grain4KB  = 12,
+    Grain16KB = 14,
+    Grain64KB = 16,
+    ReservedGrain = 0
+};
+
+extern const GrainSize GrainMap_tg0[];
+extern const GrainSize GrainMap_tg1[];
 
 // Max. physical address range in bits supported by the architecture
 const unsigned MaxPhysAddrRange = 52;
@@ -68,30 +87,123 @@ struct PTE
 
 };
 
-// Lookup level
-enum LookupLevel {
-    L0 = 0,  // AArch64 only
-    L1,
-    L2,
-    L3,
-    MAX_LOOKUP_LEVELS
+struct PageTableOps
+{
+    typedef enums::ArmLookupLevel LookupLevel;
+    typedef int64_t pte_t;
+
+    virtual bool isValid(pte_t pte, unsigned level) const = 0;
+    virtual bool isLeaf(pte_t pte, unsigned level) const = 0;
+    virtual bool isWritable(pte_t pte, unsigned level, bool stage2) const = 0;
+    virtual Addr nextLevelPointer(pte_t pte, unsigned level) const = 0;
+    virtual Addr index(Addr va, unsigned level, int tsz) const = 0;
+    virtual Addr pageMask(pte_t pte, unsigned level) const = 0;
+    virtual unsigned walkBits(unsigned level) const = 0;
+    virtual LookupLevel firstLevel(uint8_t tsz) const = 0;
+    virtual LookupLevel firstS2Level(uint8_t sl0) const = 0;
+    virtual LookupLevel lastLevel() const = 0;
+
+    Addr walkMask(unsigned level) const;
+};
+
+struct V7LPageTableOps : public PageTableOps
+{
+    bool isValid(pte_t pte, unsigned level) const override;
+    bool isLeaf(pte_t pte, unsigned level) const override;
+    bool isWritable(pte_t pte, unsigned level, bool stage2) const override;
+    Addr nextLevelPointer(pte_t pte, unsigned level) const override;
+    Addr index(Addr va, unsigned level, int tsz) const override;
+    Addr pageMask(pte_t pte, unsigned level) const override;
+    unsigned walkBits(unsigned level) const override;
+    LookupLevel firstLevel(uint8_t tsz) const override;
+    LookupLevel lastLevel() const override;
+};
+
+struct V8PageTableOps4k : public PageTableOps
+{
+    bool isValid(pte_t pte, unsigned level) const override;
+    bool isLeaf(pte_t pte, unsigned level) const override;
+    bool isWritable(pte_t pte, unsigned level, bool stage2) const override;
+    Addr nextLevelPointer(pte_t pte, unsigned level) const override;
+    Addr index(Addr va, unsigned level, int tsz) const override;
+    Addr pageMask(pte_t pte, unsigned level) const override;
+    unsigned walkBits(unsigned level) const override;
+    LookupLevel firstLevel(uint8_t tsz) const override;
+    LookupLevel firstS2Level(uint8_t sl0) const override;
+    LookupLevel lastLevel() const override;
+};
+
+struct V8PageTableOps16k : public PageTableOps
+{
+    bool isValid(pte_t pte, unsigned level) const override;
+    bool isLeaf(pte_t pte, unsigned level) const override;
+    bool isWritable(pte_t pte, unsigned level, bool stage2) const override;
+    Addr nextLevelPointer(pte_t pte, unsigned level) const override;
+    Addr index(Addr va, unsigned level, int tsz) const override;
+    Addr pageMask(pte_t pte, unsigned level) const override;
+    unsigned walkBits(unsigned level) const override;
+    LookupLevel firstLevel(uint8_t tsz) const override;
+    LookupLevel firstS2Level(uint8_t sl0) const override;
+    LookupLevel lastLevel() const override;
+};
+
+struct V8PageTableOps64k : public PageTableOps
+{
+    bool isValid(pte_t pte, unsigned level) const override;
+    bool isLeaf(pte_t pte, unsigned level) const override;
+    bool isWritable(pte_t pte, unsigned level, bool stage2) const override;
+    Addr nextLevelPointer(pte_t pte, unsigned level) const override;
+    Addr index(Addr va, unsigned level, int tsz) const override;
+    Addr pageMask(pte_t pte, unsigned level) const override;
+    unsigned walkBits(unsigned level) const override;
+    LookupLevel firstLevel(uint8_t tsz) const override;
+    LookupLevel firstS2Level(uint8_t sl0) const override;
+    LookupLevel lastLevel() const override;
 };
 
 // ITB/DTB table entry
 struct TlbEntry : public Serializable
 {
   public:
-    enum class MemoryType : std::uint8_t {
+    typedef enums::ArmLookupLevel LookupLevel;
+
+    enum class MemoryType : std::uint8_t
+    {
         StronglyOrdered,
         Device,
         Normal
     };
 
-    enum class DomainType : std::uint8_t {
+    enum class DomainType : std::uint8_t
+    {
         NoAccess = 0,
         Client,
         Reserved,
         Manager
+    };
+
+    struct Lookup
+    {
+        // virtual address
+        Addr va = 0;
+        // context id/address space id to use
+        uint16_t asn = 0;
+        // if on lookup asn should be ignored
+        bool ignoreAsn = false;
+        // The virtual machine ID used for stage 2 translation
+        vmid_t vmid = 0;
+        // if the lookup is done from hyp mode
+        bool hyp = false;
+        // if the lookup is secure
+        bool secure = false;
+        // if the lookup should modify state
+        bool functional = false;
+        // selecting the translation regime
+        ExceptionLevel targetEL = EL0;
+        // if we are in host (EL2&0 regime)
+        bool inHost = false;
+        // mode to differentiate between read/writes/fetches.
+        BaseMMU::Mode mode = BaseMMU::Read;
     };
 
     // Matching variables
@@ -106,7 +218,7 @@ struct TlbEntry : public Serializable
                                 // use (AArch32 w/ LPAE and AArch64)
 
     uint16_t asid;          // Address Space Identifier
-    uint8_t vmid;           // Virtual machine Identifier
+    vmid_t vmid;            // Virtual machine Identifier
     uint8_t N;              // Number of bits in pagesize
     uint8_t innerAttrs;
     uint8_t outerAttrs;
@@ -129,6 +241,11 @@ struct TlbEntry : public Serializable
     bool nstid;
     // Exception level on insert, AARCH64 EL0&1, AARCH32 -> el=1
     ExceptionLevel el;
+    // This is used to distinguish between instruction and data entries
+    // in unified TLBs
+    TypeTLB type;
+    // True if the entry is caching a partial translation (a table walk)
+    bool partial;
 
     // Type of memory
     bool nonCacheable;     // Can we wrap this in mtype?
@@ -145,11 +262,14 @@ struct TlbEntry : public Serializable
     TlbEntry(Addr _asn, Addr _vaddr, Addr _paddr,
              bool uncacheable, bool read_only) :
          pfn(_paddr >> PageShift), size(PageBytes - 1), vpn(_vaddr >> PageShift),
-         attributes(0), lookupLevel(L1), asid(_asn), vmid(0), N(0),
+         attributes(0), lookupLevel(LookupLevel::L1),
+         asid(_asn), vmid(0), N(0),
          innerAttrs(0), outerAttrs(0), ap(read_only ? 0x3 : 0), hap(0x3),
          domain(DomainType::Client),  mtype(MemoryType::StronglyOrdered),
          longDescFormat(false), isHyp(false), global(false), valid(true),
-         ns(true), nstid(true), el(EL0), nonCacheable(uncacheable),
+         ns(true), nstid(true), el(EL0), type(TypeTLB::unified),
+         partial(false),
+         nonCacheable(uncacheable),
          shareable(false), outerShareable(false), xn(0), pxn(0)
     {
         // no restrictions by default, hap = 0x3
@@ -160,11 +280,13 @@ struct TlbEntry : public Serializable
     }
 
     TlbEntry() :
-         pfn(0), size(0), vpn(0), attributes(0), lookupLevel(L1), asid(0),
-         vmid(0), N(0), innerAttrs(0), outerAttrs(0), ap(0), hap(0x3),
+         pfn(0), size(0), vpn(0), attributes(0), lookupLevel(LookupLevel::L1),
+         asid(0), vmid(0), N(0),
+         innerAttrs(0), outerAttrs(0), ap(0), hap(0x3),
          domain(DomainType::Client), mtype(MemoryType::StronglyOrdered),
          longDescFormat(false), isHyp(false), global(false), valid(false),
-         ns(true), nstid(true), el(EL0), nonCacheable(false),
+         ns(true), nstid(true), el(EL0), type(TypeTLB::unified),
+         partial(false), nonCacheable(false),
          shareable(false), outerShareable(false), xn(0), pxn(0)
     {
         // no restrictions by default, hap = 0x3
@@ -185,30 +307,20 @@ struct TlbEntry : public Serializable
     }
 
     bool
-    match(Addr va, uint8_t _vmid, bool hypLookUp, bool secure_lookup,
-          ExceptionLevel target_el, bool in_host) const
-    {
-        return match(va, 0, _vmid, hypLookUp, secure_lookup, true,
-                     target_el, in_host);
-    }
-
-    bool
-    match(Addr va, uint16_t asn, uint8_t _vmid, bool hypLookUp,
-          bool secure_lookup, bool ignore_asn, ExceptionLevel target_el,
-          bool in_host) const
+    match(const Lookup &lookup) const
     {
         bool match = false;
         Addr v = vpn << N;
-        if (valid && va >= v && va <= v + size && (secure_lookup == !nstid) &&
-            (hypLookUp == isHyp))
+        if (valid && lookup.va >= v && lookup.va <= v + size &&
+            (lookup.secure == !nstid) && (lookup.hyp == isHyp))
         {
-            match = checkELMatch(target_el, in_host);
+            match = checkELMatch(lookup.targetEL, lookup.inHost);
 
-            if (match && !ignore_asn) {
-                match = global || (asn == asid);
+            if (match && !lookup.ignoreAsn) {
+                match = global || (lookup.asn == asid);
             }
             if (match && nstid) {
-                match = isHyp || (_vmid == vmid);
+                match = isHyp || (lookup.vmid == vmid);
             }
         }
         return match;
@@ -310,6 +422,7 @@ struct TlbEntry : public Serializable
         SERIALIZE_SCALAR(valid);
         SERIALIZE_SCALAR(ns);
         SERIALIZE_SCALAR(nstid);
+        SERIALIZE_ENUM(type);
         SERIALIZE_SCALAR(nonCacheable);
         SERIALIZE_ENUM(lookupLevel);
         SERIALIZE_ENUM(mtype);
@@ -340,6 +453,7 @@ struct TlbEntry : public Serializable
         UNSERIALIZE_SCALAR(valid);
         UNSERIALIZE_SCALAR(ns);
         UNSERIALIZE_SCALAR(nstid);
+        UNSERIALIZE_ENUM(type);
         UNSERIALIZE_SCALAR(nonCacheable);
         UNSERIALIZE_ENUM(lookupLevel);
         UNSERIALIZE_ENUM(mtype);
@@ -359,8 +473,9 @@ struct TlbEntry : public Serializable
 
 };
 
+const PageTableOps *getPageTableOps(GrainSize trans_granule);
 
+} // namespace ArmISA
+} // namespace gem5
 
-}
 #endif // __ARCH_ARM_PAGETABLE_H__
-

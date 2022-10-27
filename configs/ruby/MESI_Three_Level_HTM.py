@@ -43,22 +43,23 @@ class L1Cache(RubyCache): pass
 class L2Cache(RubyCache): pass
 
 def define_options(parser):
-    parser.add_option("--num-clusters", type = "int", default = 1,
-            help = "number of clusters in a design in which there are shared\
-            caches private to clusters")
-    parser.add_option("--l0i_size", type="string", default="4096B")
-    parser.add_option("--l0d_size", type="string", default="4096B")
-    parser.add_option("--l0i_assoc", type="int", default=1)
-    parser.add_option("--l0d_assoc", type="int", default=1)
-    parser.add_option("--l0_transitions_per_cycle", type="int", default=32)
-    parser.add_option("--l1_transitions_per_cycle", type="int", default=32)
-    parser.add_option("--l2_transitions_per_cycle", type="int", default=4)
-    parser.add_option("--enable-prefetch", action="store_true", default=False,\
-                        help="Enable Ruby hardware prefetcher")
+    parser.add_argument("--num-clusters", type=int, default=1,
+        help = "number of clusters in a design in which there are shared\
+        caches private to clusters")
+    parser.add_argument("--l0i_size", type=str, default="4096B")
+    parser.add_argument("--l0d_size", type=str, default="4096B")
+    parser.add_argument("--l0i_assoc", type=int, default=1)
+    parser.add_argument("--l0d_assoc", type=int, default=1)
+    parser.add_argument("--l0_transitions_per_cycle", type=int, default=32)
+    parser.add_argument("--l1_transitions_per_cycle", type=int, default=32)
+    parser.add_argument("--l2_transitions_per_cycle", type=int, default=4)
+    parser.add_argument(
+        "--enable-prefetch", action="store_true", default=False,
+        help="Enable Ruby hardware prefetcher")
     return
 
 def create_system(options, full_system, system, dma_ports, bootmem,
-                  ruby_system):
+                  ruby_system, cpus):
 
     if buildEnv['PROTOCOL'] != 'MESI_Three_Level_HTM':
         fatal("This script requires the MESI_Three_Level protocol to be\
@@ -108,17 +109,7 @@ def create_system(options, full_system, system, dma_ports, bootmem,
                 start_index_bit = block_size_bits,
                 replacement_policy = LRURP())
 
-            # the ruby random tester reuses num_cpus to specify the
-            # number of cpu ports connected to the tester object, which
-            # is stored in system.cpu. because there is only ever one
-            # tester object, num_cpus is not necessarily equal to the
-            # size of system.cpu; therefore if len(system.cpu) == 1
-            # we use system.cpu[0] to set the clk_domain, thereby ensuring
-            # we don't index off the end of the cpu list.
-            if len(system.cpu) == 1:
-                clk_domain = system.cpu[0].clk_domain
-            else:
-                clk_domain = system.cpu[i].clk_domain
+            clk_domain = cpus[i].clk_domain
 
             # Ruby prefetcher
             prefetcher = RubyPrefetcher(
@@ -181,16 +172,16 @@ def create_system(options, full_system, system, dma_ports, bootmem,
 
             # Connect the L1 controllers and the network
             l1_cntrl.requestToL2 = MessageBuffer()
-            l1_cntrl.requestToL2.master = ruby_system.network.slave
+            l1_cntrl.requestToL2.out_port = ruby_system.network.in_port
             l1_cntrl.responseToL2 = MessageBuffer()
-            l1_cntrl.responseToL2.master = ruby_system.network.slave
+            l1_cntrl.responseToL2.out_port = ruby_system.network.in_port
             l1_cntrl.unblockToL2 = MessageBuffer()
-            l1_cntrl.unblockToL2.master = ruby_system.network.slave
+            l1_cntrl.unblockToL2.out_port = ruby_system.network.in_port
 
             l1_cntrl.requestFromL2 = MessageBuffer()
-            l1_cntrl.requestFromL2.slave = ruby_system.network.master
+            l1_cntrl.requestFromL2.in_port = ruby_system.network.out_port
             l1_cntrl.responseFromL2 = MessageBuffer()
-            l1_cntrl.responseFromL2.slave = ruby_system.network.master
+            l1_cntrl.responseFromL2.in_port = ruby_system.network.out_port
 
 
         for j in range(num_l2caches_per_cluster):
@@ -211,18 +202,18 @@ def create_system(options, full_system, system, dma_ports, bootmem,
 
             # Connect the L2 controllers and the network
             l2_cntrl.DirRequestFromL2Cache = MessageBuffer()
-            l2_cntrl.DirRequestFromL2Cache.master = ruby_system.network.slave
+            l2_cntrl.DirRequestFromL2Cache.out_port = ruby_system.network.in_port
             l2_cntrl.L1RequestFromL2Cache = MessageBuffer()
-            l2_cntrl.L1RequestFromL2Cache.master = ruby_system.network.slave
+            l2_cntrl.L1RequestFromL2Cache.out_port = ruby_system.network.in_port
             l2_cntrl.responseFromL2Cache = MessageBuffer()
-            l2_cntrl.responseFromL2Cache.master = ruby_system.network.slave
+            l2_cntrl.responseFromL2Cache.out_port = ruby_system.network.in_port
 
             l2_cntrl.unblockToL2Cache = MessageBuffer()
-            l2_cntrl.unblockToL2Cache.slave = ruby_system.network.master
+            l2_cntrl.unblockToL2Cache.in_port = ruby_system.network.out_port
             l2_cntrl.L1RequestToL2Cache = MessageBuffer()
-            l2_cntrl.L1RequestToL2Cache.slave = ruby_system.network.master
+            l2_cntrl.L1RequestToL2Cache.in_port = ruby_system.network.out_port
             l2_cntrl.responseToL2Cache = MessageBuffer()
-            l2_cntrl.responseToL2Cache.slave = ruby_system.network.master
+            l2_cntrl.responseToL2Cache.in_port = ruby_system.network.out_port
 
     # Run each of the ruby memory controllers at a ratio of the frequency of
     # the ruby system
@@ -238,11 +229,11 @@ def create_system(options, full_system, system, dma_ports, bootmem,
     for dir_cntrl in dir_cntrl_nodes:
         # Connect the directory controllers and the network
         dir_cntrl.requestToDir = MessageBuffer()
-        dir_cntrl.requestToDir.slave = ruby_system.network.master
+        dir_cntrl.requestToDir.in_port = ruby_system.network.out_port
         dir_cntrl.responseToDir = MessageBuffer()
-        dir_cntrl.responseToDir.slave = ruby_system.network.master
+        dir_cntrl.responseToDir.in_port = ruby_system.network.out_port
         dir_cntrl.responseFromDir = MessageBuffer()
-        dir_cntrl.responseFromDir.master = ruby_system.network.slave
+        dir_cntrl.responseFromDir.out_port = ruby_system.network.in_port
         dir_cntrl.requestToMemory = MessageBuffer()
         dir_cntrl.responseFromMemory = MessageBuffer()
 
@@ -258,15 +249,15 @@ def create_system(options, full_system, system, dma_ports, bootmem,
                                    ruby_system = ruby_system)
 
         exec("ruby_system.dma_cntrl%d = dma_cntrl" % i)
-        exec("ruby_system.dma_cntrl%d.dma_sequencer.slave = dma_port" % i)
+        exec("ruby_system.dma_cntrl%d.dma_sequencer.in_ports = dma_port" % i)
         dma_cntrl_nodes.append(dma_cntrl)
 
         # Connect the dma controller to the network
         dma_cntrl.mandatoryQueue = MessageBuffer()
         dma_cntrl.responseFromDir = MessageBuffer(ordered = True)
-        dma_cntrl.responseFromDir.slave = ruby_system.network.master
+        dma_cntrl.responseFromDir.in_port = ruby_system.network.out_port
         dma_cntrl.requestToDir = MessageBuffer()
-        dma_cntrl.requestToDir.master = ruby_system.network.slave
+        dma_cntrl.requestToDir.out_port = ruby_system.network.in_port
 
     all_cntrls = l0_cntrl_nodes + \
                  l1_cntrl_nodes + \
@@ -286,9 +277,9 @@ def create_system(options, full_system, system, dma_ports, bootmem,
         # Connect the dma controller to the network
         io_controller.mandatoryQueue = MessageBuffer()
         io_controller.responseFromDir = MessageBuffer(ordered = True)
-        io_controller.responseFromDir.slave = ruby_system.network.master
+        io_controller.responseFromDir.in_port = ruby_system.network.out_port
         io_controller.requestToDir = MessageBuffer()
-        io_controller.requestToDir.master = ruby_system.network.slave
+        io_controller.requestToDir.out_port = ruby_system.network.in_port
 
         all_cntrls = all_cntrls + [io_controller]
     # Register configuration with filesystem

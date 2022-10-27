@@ -54,6 +54,9 @@ using std::min;
 using std::ostream;
 using std::string;
 
+namespace gem5
+{
+
 const char *NsRxStateStrings[] =
 {
     "rxIdle",
@@ -85,7 +88,7 @@ const char *NsDmaState[] =
     "dmaWriteWaiting"
 };
 
-using namespace Net;
+using namespace networking;
 
 ///////////////////////////////////////////////////////////////////////
 //
@@ -1163,7 +1166,7 @@ NSGigE::rxKick()
             rxPacketBufPtr = rxPacket->data;
 
 #if TRACING_ON
-            if (DTRACE(Ethernet)) {
+            if (debug::Ethernet) {
                 IpPtr ip(rxPacket);
                 if (ip) {
                     DPRINTF(Ethernet, "ID is %d\n", ip->id());
@@ -1360,7 +1363,7 @@ NSGigE::transmit()
             txFifo.size());
     if (interface->sendPacket(txFifo.front())) {
 #if TRACING_ON
-        if (DTRACE(Ethernet)) {
+        if (debug::Ethernet) {
             IpPtr ip(txFifo.front());
             if (ip) {
                 DPRINTF(Ethernet, "ID is %d\n", ip->id());
@@ -1395,7 +1398,7 @@ NSGigE::transmit()
 
    if (!txFifo.empty() && !txEvent.scheduled()) {
        DPRINTF(Ethernet, "reschedule transmit\n");
-       schedule(txEvent, curTick() + SimClock::Int::ns);
+       schedule(txEvent, curTick() + sim_clock::as_int::ns);
    }
 }
 
@@ -1604,7 +1607,7 @@ NSGigE::txKick()
                             udp->sum(cksum(udp));
                             etherDeviceStats.txUdpChecksums++;
                         } else {
-                            Debug::breakpoint();
+                            debug::breakpoint();
                             warn_once("UDPPKT set, but not UDP!\n");
                         }
                     } else if (extsts & EXTSTS_TCPPKT) {
@@ -2365,3 +2368,5 @@ NSGigE::unserialize(CheckpointIn &cp)
         schedule(intrEvent, intrEventTick);
     }
 }
+
+} // namespace gem5

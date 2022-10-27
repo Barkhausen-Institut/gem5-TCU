@@ -43,10 +43,14 @@
 #include "dev/riscv/plic.hh"
 #include "params/HiFive.hh"
 
+namespace gem5
+{
+
 using namespace RiscvISA;
-class HiFive : public Platform {
+
+class HiFive : public Platform
+{
   public:
-    System *system;
     Clint *clint;
     Plic *plic;
     int uartIntID;
@@ -63,11 +67,11 @@ class HiFive : public Platform {
 
     void clearPciInt(int line) override;
 
-    virtual Addr pciToDma(Addr pciAddr) const;
-
     void serialize(CheckpointOut &cp) const override;
 
     void unserialize(CheckpointIn &cp) override;
 };
+
+} // namespace gem5
 
 #endif  // __DEV_RISCV_HIFIVE_HH__

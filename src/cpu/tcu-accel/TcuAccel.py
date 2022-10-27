@@ -35,6 +35,7 @@ class TcuAccel(ClockedObject):
     type = 'TcuAccel'
     abstract = True
     cxx_header = "cpu/tcu-accel/accelerator.hh"
+    cxx_class = 'gem5::tcu::TcuAccel'
     port = MasterPort("Port to the TCU and Scratch-Pad-Memory")
     system = Param.System(Parent.any, "System this tester is part of")
     id = Param.Unsigned("Core ID")
@@ -46,5 +47,6 @@ class TcuAccel(ClockedObject):
 class TcuAccelConnector(BaseConnector):
     type = 'TcuAccelConnector'
     cxx_header = "cpu/tcu-accel/connector.hh"
+    cxx_class = 'gem5::tcu::TcuAccelConnector'
 
     accelerator = Param.TcuAccel("The accelerator")

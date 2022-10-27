@@ -61,14 +61,12 @@ import workloads
 # the cache class may be 'None' if the particular cache is not present.
 cpu_types = {
 
-    "atomic" : ( AtomicSimpleCPU, None, None, None, None),
+    "atomic" : ( AtomicSimpleCPU, None, None, None),
     "minor" : (MinorCPU,
                devices.L1I, devices.L1D,
-               devices.WalkCache,
                devices.L2),
     "hpi" : ( HPI.HPI,
               HPI.HPI_ICache, HPI.HPI_DCache,
-              HPI.HPI_WalkCache,
               HPI.HPI_L2)
 }
 
@@ -95,8 +93,7 @@ def create(args):
 
     platform = ObjectList.platform_list.get(args.machine_type)
 
-    system = devices.simpleSystem(ArmSystem,
-                                  want_caches,
+    system = devices.SimpleSystem(want_caches,
                                   args.mem_size,
                                   platform=platform(),
                                   mem_mode=mem_mode,
@@ -135,8 +132,7 @@ def create(args):
     # Create a cache hierarchy for the cluster. We are assuming that
     # clusters have core-private L1 caches and an L2 that's shared
     # within the cluster.
-    for cluster in system.cpu_cluster:
-        system.addCaches(want_caches, last_cache_level=2)
+    system.addCaches(want_caches, last_cache_level=2)
 
     # Setup gem5's minimal Linux boot loader.
     system.auto_reset_addr = True
@@ -145,8 +141,6 @@ def create(args):
     system.realview.gic.gicv4 = False
 
     system.highest_el_is_64 = True
-    system.have_virtualization = True
-    system.have_security = True
 
     workload_class = workloads.workload_list.get(args.workload)
     system.workload = workload_class(

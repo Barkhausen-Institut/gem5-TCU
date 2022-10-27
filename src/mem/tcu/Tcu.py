@@ -36,6 +36,7 @@ class BaseTcu(ClockedObject):
     type = 'BaseTcu'
     abstract = True
     cxx_header = "mem/tcu/base.hh"
+    cxx_class = 'gem5::tcu::BaseTcu'
 
     system = Param.System(Parent.any, "System we belong to")
 
@@ -63,6 +64,8 @@ class BaseTcu(ClockedObject):
 class Tcu(BaseTcu):
     type = 'Tcu'
     cxx_header = "mem/tcu/tcu.hh"
+    cxx_class = 'gem5::tcu::Tcu'
+
     num_endpoints = Param.Unsigned(8, "Number of endpoints per TCU")
 
     connector = Param.BaseConnector("The connector to the CPU")

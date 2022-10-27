@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020 ARM Limited
+ * Copyright (c) 2018-2021 Arm Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -40,6 +40,9 @@
 #include "arch/arm/mmu.hh"
 #include "cpu/checker/cpu.hh"
 
+namespace gem5
+{
+
 namespace ArmISA {
 
 void
@@ -48,6 +51,7 @@ TLBIALL::operator()(ThreadContext* tc)
     HCR hcr = tc->readMiscReg(MISCREG_HCR_EL2);
     inHost = (hcr.tge == 1 && hcr.e2h == 1);
     el2Enabled = EL2Enabled(tc);
+    currentEL = currEL(tc);
 
     getMMUPtr(tc)->flush(*this);
 
@@ -91,6 +95,7 @@ TLBIVMALL::operator()(ThreadContext* tc)
 {
     HCR hcr = tc->readMiscReg(MISCREG_HCR_EL2);
     inHost = (hcr.tge == 1 && hcr.e2h == 1);
+    el2Enabled = EL2Enabled(tc);
 
     getMMUPtr(tc)->flush(*this);
 
@@ -108,10 +113,10 @@ TLBIASID::operator()(ThreadContext* tc)
     inHost = (hcr.tge == 1 && hcr.e2h == 1);
     el2Enabled = EL2Enabled(tc);
 
-    getMMUPtr(tc)->flush(*this);
+    getMMUPtr(tc)->flushStage1(*this);
     CheckerCPU *checker = tc->getCheckerCpuPtr();
     if (checker) {
-        getMMUPtr(checker)->flush(*this);
+        getMMUPtr(checker)->flushStage1(*this);
     }
 }
 
@@ -145,11 +150,11 @@ TLBIMVAA::operator()(ThreadContext* tc)
 {
     HCR hcr = tc->readMiscReg(MISCREG_HCR_EL2);
     inHost = (hcr.tge == 1 && hcr.e2h == 1);
-    getMMUPtr(tc)->flush(*this);
+    getMMUPtr(tc)->flushStage1(*this);
 
     CheckerCPU *checker = tc->getCheckerCpuPtr();
     if (checker) {
-        getMMUPtr(checker)->flush(*this);
+        getMMUPtr(checker)->flushStage1(*this);
     }
 }
 
@@ -158,11 +163,11 @@ TLBIMVA::operator()(ThreadContext* tc)
 {
     HCR hcr = tc->readMiscReg(MISCREG_HCR_EL2);
     inHost = (hcr.tge == 1 && hcr.e2h == 1);
-    getMMUPtr(tc)->flush(*this);
+    getMMUPtr(tc)->flushStage1(*this);
 
     CheckerCPU *checker = tc->getCheckerCpuPtr();
     if (checker) {
-        getMMUPtr(checker)->flush(*this);
+        getMMUPtr(checker)->flushStage1(*this);
     }
 }
 
@@ -181,12 +186,13 @@ DTLBIMVA::operator()(ThreadContext* tc)
 void
 TLBIIPA::operator()(ThreadContext* tc)
 {
-    getMMUPtr(tc)->flush(*this);
+    getMMUPtr(tc)->flushStage2(makeStage2());
 
     CheckerCPU *checker = tc->getCheckerCpuPtr();
     if (checker) {
-        getMMUPtr(checker)->flush(*this);
+        getMMUPtr(checker)->flushStage2(makeStage2());
     }
 }
 
 } // namespace ArmISA
+} // namespace gem5

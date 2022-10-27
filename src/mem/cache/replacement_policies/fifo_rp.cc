@@ -32,9 +32,14 @@
 #include <memory>
 
 #include "params/FIFORP.hh"
-#include "sim/core.hh"
+#include "sim/cur_tick.hh"
 
-namespace ReplacementPolicy {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(ReplacementPolicy, replacement_policy);
+namespace replacement_policy
+{
 
 FIFO::FIFO(const Params &p)
   : Base(p)
@@ -43,7 +48,6 @@ FIFO::FIFO(const Params &p)
 
 void
 FIFO::invalidate(const std::shared_ptr<ReplacementData>& replacement_data)
-const
 {
     // Reset insertion tick
     std::static_pointer_cast<FIFOReplData>(
@@ -91,4 +95,5 @@ FIFO::instantiateEntry()
     return std::shared_ptr<ReplacementData>(new FIFOReplData());
 }
 
-} // namespace ReplacementPolicy
+} // namespace replacement_policy
+} // namespace gem5

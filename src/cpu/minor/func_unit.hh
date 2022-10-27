@@ -61,6 +61,9 @@
 #include "sim/clocked_object.hh"
 #include "sim/sim_object.hh"
 
+namespace gem5
+{
+
 /** Boxing for MinorOpClass to get around a build problem with C++11 but
  *  also allow for future additions to op class checking */
 class MinorOpClass : public SimObject
@@ -195,7 +198,8 @@ class MinorFUPool : public SimObject
     { }
 };
 
-namespace Minor
+GEM5_DEPRECATED_NAMESPACE(Minor, minor);
+namespace minor
 {
 
 /** Container class to box instructions in the FUs to make those
@@ -268,6 +272,7 @@ class FUPipeline : public FUPipelineBase, public FuncUnit
     void advance();
 };
 
-}
+} // namespace minor
+} // namespace gem5
 
 #endif /* __CPU_MINOR_FUNC_UNIT_HH__ */

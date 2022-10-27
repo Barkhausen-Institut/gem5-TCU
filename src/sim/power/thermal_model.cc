@@ -47,6 +47,9 @@
 #include "sim/power/thermal_domain.hh"
 #include "sim/sim_object.hh"
 
+namespace gem5
+{
+
 /**
  * ThermalReference
  */
@@ -166,7 +169,7 @@ ThermalModel::doStep()
         eq_nodes[i]->temp = Temperature::fromKelvin(temps[i]);
 
     // Schedule next computation
-    schedule(stepEvent, curTick() + SimClock::Int::s * _step);
+    schedule(stepEvent, curTick() + sim_clock::as_int::s * _step);
 
     // Notify everybody
     for (auto dom : domains)
@@ -203,7 +206,7 @@ ThermalModel::startup()
         eq_nodes[i]->id = i;
 
     // Schedule first thermal update
-    schedule(stepEvent, curTick() + SimClock::Int::s * _step);
+    schedule(stepEvent, curTick() + sim_clock::as_int::s * _step);
 }
 
 void
@@ -243,3 +246,5 @@ ThermalModel::getTemperature() const
         temp = std::max(temp, n->temp);
     return temp;
 }
+
+} // namespace gem5

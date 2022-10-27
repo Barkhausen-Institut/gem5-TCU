@@ -46,6 +46,9 @@
 #include "base/framebuffer.hh"
 #include "base/imgwriter.hh"
 
+namespace gem5
+{
+
 /** Image writer implementing support for PNG */
 class PngWriter : public ImgWriter
 {
@@ -76,7 +79,8 @@ class PngWriter : public ImgWriter
     void write(std::ostream &png) const override;
   private:
     /** Png Pixel type: not containing padding */
-    struct M5_ATTR_PACKED PngPixel24 {
+    struct GEM5_PACKED PngPixel24
+    {
         PngPixel24 &operator=(const Pixel &rhs) {
             red = rhs.red;
             green = rhs.green;
@@ -103,5 +107,7 @@ class PngWriter : public ImgWriter
 
     static const char* _imgExtension;
 };
+
+} // namespace gem5
 
 #endif // __BASE_PNG_HH__

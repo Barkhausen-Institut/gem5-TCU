@@ -55,6 +55,9 @@
 #include "sim/drain.hh"
 #include "sim/eventq.hh"
 
+namespace gem5
+{
+
 /**
  * A packet queue is a class that holds deferred packets and later
  * sends them using the associated CPU-side port or memory-side port.
@@ -63,7 +66,8 @@ class PacketQueue : public Drainable
 {
   private:
     /** A deferred packet, buffered to transmit later. */
-    class DeferredPacket {
+    class DeferredPacket
+    {
       public:
         Tick tick;      ///< The tick when the packet is ready to transmit
         PacketPtr pkt;  ///< Pointer to the packet to transmit
@@ -330,5 +334,7 @@ class RespPacketQueue : public PacketQueue
     bool sendTiming(PacketPtr pkt);
 
 };
+
+} // namespace gem5
 
 #endif // __MEM_PACKET_QUEUE_HH__

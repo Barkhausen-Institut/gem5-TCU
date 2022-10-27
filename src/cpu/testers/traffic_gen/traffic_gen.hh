@@ -42,6 +42,9 @@
 
 #include "cpu/testers/traffic_gen/base.hh"
 
+namespace gem5
+{
+
 struct TrafficGenParams;
 
 /**
@@ -100,7 +103,8 @@ class TrafficGen : public BaseTrafficGen
     size_t nextState();
 
     /** Struct to represent a probabilistic transition during parsing. */
-    struct Transition {
+    struct Transition
+    {
         uint32_t from;
         uint32_t to;
         double p;
@@ -131,5 +135,7 @@ class TrafficGen : public BaseTrafficGen
     void unserialize(CheckpointIn &cp) override;
 
 };
+
+} // namespace gem5
 
 #endif //__CPU_TRAFFIC_GEN_TRAFFIC_GEN_HH__

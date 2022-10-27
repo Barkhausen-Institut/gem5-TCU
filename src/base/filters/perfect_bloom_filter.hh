@@ -33,9 +33,14 @@
 
 #include "base/filters/base.hh"
 
+namespace gem5
+{
+
 struct BloomFilterPerfectParams;
 
-namespace BloomFilter {
+GEM5_DEPRECATED_NAMESPACE(BloomFilter, bloom_filter);
+namespace bloom_filter
+{
 
 /**
  * A perfect bloom filter with no false positives nor false negatives.
@@ -59,6 +64,7 @@ class Perfect : public Base
     std::unordered_set<Addr> entries;
 };
 
-} // namespace BloomFilter
+} // namespace bloom_filter
+} // namespace gem5
 
 #endif // __BASE_FILTERS_PERFECT_BLOOM_FILTER_HH__

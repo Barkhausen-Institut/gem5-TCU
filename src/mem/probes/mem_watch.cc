@@ -33,6 +33,9 @@
 #include "base/trace.hh"
 #include "params/MemWatchProbe.hh"
 
+namespace gem5
+{
+
 MemWatchProbe::MemWatchProbe(const MemWatchProbeParams &p)
     : BaseMemProbe(p),
       ranges(p.ranges)
@@ -61,4 +64,6 @@ MemWatchProbe::handleRequest(const ProbePoints::PacketInfo &pkt_info)
             }
         }
     }
+}
+
 }

@@ -47,6 +47,9 @@
 #include "debug/SnoopFilter.hh"
 #include "sim/system.hh"
 
+namespace gem5
+{
+
 const int SnoopFilter::SNOOP_MASK_SIZE;
 
 void
@@ -390,22 +393,22 @@ SnoopFilter::updateResponse(const Packet* cpkt, const ResponsePort&
             __func__, sf_item.requested, sf_item.holder);
 }
 
-SnoopFilter::SnoopFilterStats::SnoopFilterStats(Stats::Group *parent)
-    : Stats::Group(parent),
-      ADD_STAT(totRequests, UNIT_COUNT,
+SnoopFilter::SnoopFilterStats::SnoopFilterStats(statistics::Group *parent)
+    : statistics::Group(parent),
+      ADD_STAT(totRequests, statistics::units::Count::get(),
                "Total number of requests made to the snoop filter."),
-      ADD_STAT(hitSingleRequests, UNIT_COUNT,
+      ADD_STAT(hitSingleRequests, statistics::units::Count::get(),
                "Number of requests hitting in the snoop filter with a single "
                "holder of the requested data."),
-      ADD_STAT(hitMultiRequests, UNIT_COUNT,
+      ADD_STAT(hitMultiRequests, statistics::units::Count::get(),
                "Number of requests hitting in the snoop filter with multiple "
                "(>1) holders of the requested data."),
-      ADD_STAT(totSnoops, UNIT_COUNT,
+      ADD_STAT(totSnoops, statistics::units::Count::get(),
                "Total number of snoops made to the snoop filter."),
-      ADD_STAT(hitSingleSnoops, UNIT_COUNT,
+      ADD_STAT(hitSingleSnoops, statistics::units::Count::get(),
                "Number of snoops hitting in the snoop filter with a single "
                "holder of the requested data."),
-      ADD_STAT(hitMultiSnoops, UNIT_COUNT,
+      ADD_STAT(hitMultiSnoops, statistics::units::Count::get(),
                "Number of snoops hitting in the snoop filter with multiple "
                "(>1) holders of the requested data.")
 {}
@@ -415,3 +418,5 @@ SnoopFilter::regStats()
 {
     SimObject::regStats();
 }
+
+} // namespace gem5

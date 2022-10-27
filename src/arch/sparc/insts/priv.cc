@@ -29,11 +29,14 @@
 
 #include "arch/sparc/insts/priv.hh"
 
+namespace gem5
+{
+
 namespace SparcISA
 {
 
 std::string
-Priv::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
+Priv::generateDisassembly(Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream response;
 
@@ -43,7 +46,7 @@ Priv::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
 }
 
 std::string
-RdPriv::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
+RdPriv::generateDisassembly(Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream response;
 
@@ -56,7 +59,7 @@ RdPriv::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
 }
 
 std::string
-WrPriv::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
+WrPriv::generateDisassembly(Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream response;
 
@@ -77,7 +80,7 @@ WrPriv::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
 
 std::string
 WrPrivImm::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream response;
 
@@ -95,4 +98,5 @@ WrPrivImm::generateDisassembly(
     return response.str();
 }
 
-}
+} // namespace SparcISA
+} // namespace gem5

@@ -39,6 +39,12 @@
 #include "mem/ruby/system/RubyPort.hh"
 #include "params/DMASequencer.hh"
 
+namespace gem5
+{
+
+namespace ruby
+{
+
 struct DMARequest
 {
     DMARequest(uint64_t start_paddr, int len, bool write, int bytes_completed,
@@ -85,5 +91,8 @@ class DMASequencer : public RubyPort
     int m_outstanding_count;
     int m_max_outstanding_requests;
 };
+
+} // namespace ruby
+} // namespace gem5
 
 #endif // __MEM_RUBY_SYSTEM_DMASEQUENCER_HH__

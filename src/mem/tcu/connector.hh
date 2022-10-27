@@ -35,6 +35,11 @@
 #include "mem/tcu/ep_file.hh"
 #include "mem/tcu/error.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 class Tcu;
 
 class TcuConnector
@@ -83,8 +88,11 @@ class TcuConnector
 
   public:
 
-    Stats::Scalar irqInjects;
+    statistics::Scalar irqInjects;
 
 };
+
+}
+}
 
 #endif // __MEM_TCU_CONNECTOR_HH__

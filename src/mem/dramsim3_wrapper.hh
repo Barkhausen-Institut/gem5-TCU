@@ -56,6 +56,12 @@ class MemorySystem;
 
 }
 
+namespace gem5
+{
+
+namespace memory
+{
+
 /**
  * Wrapper class to avoid having DRAMsim3 names like ClockDomain etc
  * clashing with the normal gem5 world. Many of the DRAMsim3 headers
@@ -156,5 +162,8 @@ class DRAMsim3Wrapper
      */
     void tick();
 };
+
+} // namespace memory
+} // namespace gem5
 
 #endif //__MEM_DRAMSIM3_WRAPPER_HH__

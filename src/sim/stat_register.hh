@@ -42,12 +42,19 @@
 #ifndef __SIM_STAT_REGISTER_H__
 #define __SIM_STAT_REGISTER_H__
 
-namespace Stats
+#include "base/compiler.hh"
+
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Stats, statistics);
+namespace statistics
 {
 
 /** Register py_... functions as the statistics handlers */
 void registerPythonStatsHandlers();
 
-} // namespace Stats
+} // namespace statistics
+} // namespace gem5
 
 #endif // __SIM_STAT_REGISTER_H__

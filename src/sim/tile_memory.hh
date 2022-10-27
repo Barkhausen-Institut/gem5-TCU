@@ -34,6 +34,9 @@
 #include "sim/system.hh"
 #include "mem/tcu/noc_addr.hh"
 
+namespace gem5
+{
+
 class TileMemory
 {
   private:
@@ -44,27 +47,29 @@ class TileMemory
 
   public:
 
-    const tileid_t memTile;
+    const tcu::tileid_t memTile;
     const Addr memOffset;
     const Addr memSize;
 
     TileMemory(SimObject *obj,
-               tileid_t memTile,
+               tcu::tileid_t memTile,
                Addr memOffset,
                Addr memSize,
                PortProxy &phys);
 
-    bool hasMem(tileid_t tile) const
+    bool hasMem(tcu::tileid_t tile) const
     {
         return (tileDesc(tile) & 0x7) != 1;
     }
 
-    virtual uint32_t tileDesc(tileid_t tile) const = 0;
+    virtual uint32_t tileDesc(tcu::tileid_t tile) const = 0;
 
-    NocAddr getPhys(Addr offset) const
+    tcu::NocAddr getPhys(Addr offset) const
     {
-        return NocAddr(memTile, memOffset + offset);
+        return tcu::NocAddr(memTile, memOffset + offset);
     }
 };
+
+}
 
 #endif

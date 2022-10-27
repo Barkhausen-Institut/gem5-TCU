@@ -33,12 +33,15 @@
 #include <type_traits>
 #include <utility>
 
-#include "arch/arm/intregs.hh"
+#include "arch/arm/regs/int.hh"
 #include "arch/arm/utility.hh"
 #include "base/intmath.hh"
 #include "cpu/thread_context.hh"
 #include "sim/guest_abi.hh"
 #include "sim/proxy_ptr.hh"
+
+namespace gem5
+{
 
 class ThreadContext;
 
@@ -58,12 +61,13 @@ struct Aapcs64
         static const int MAX_SRN = 7;
 
         explicit State(const ThreadContext *tc) :
-            nsaa(tc->readIntReg(ArmISA::INTREG_SPX))
+            nsaa(tc->getReg(ArmISA::int_reg::Spx))
         {}
     };
 };
 
-namespace GuestABI
+GEM5_DEPRECATED_NAMESPACE(GuestABI, guest_abi);
+namespace guest_abi
 {
 
 /*
@@ -80,10 +84,13 @@ struct IsAapcs64ShortVector : public std::false_type {};
 template <typename E, size_t N>
 struct IsAapcs64ShortVector<E[N],
     typename std::enable_if_t<
-        (std::is_integral<E>::value || std::is_floating_point<E>::value) &&
+        (std::is_integral_v<E> || std::is_floating_point_v<E>) &&
         (sizeof(E) * N == 8 || sizeof(E) * N == 16)>> :
         public std::true_type
 {};
+
+template <typename T>
+constexpr bool IsAapcs64ShortVectorV = IsAapcs64ShortVector<T>::value;
 
 /*
  * Composite Types
@@ -94,15 +101,16 @@ struct IsAapcs64Composite : public std::false_type {};
 
 template <typename T>
 struct IsAapcs64Composite<T, typename std::enable_if_t<
-    (std::is_array<T>::value ||
-     std::is_class<T>::value ||
-     std::is_union<T>::value) &&
+    (std::is_array_v<T> || std::is_class_v<T> || std::is_union_v<T>) &&
     // VarArgs is technically a composite type, but it's not a normal argument.
-    !IsVarArgs<T>::value &&
+    !IsVarArgsV<T> &&
     // Short vectors are also composite types, but don't treat them as one.
-    !IsAapcs64ShortVector<T>::value
+    !IsAapcs64ShortVectorV<T>
     >> : public std::true_type
 {};
+
+template <typename T>
+constexpr bool IsAapcs64CompositeV = IsAapcs64Composite<T>::value;
 
 // Homogeneous Aggregates
 // These *should* be any aggregate type which has only one type of member, but
@@ -118,9 +126,12 @@ struct IsAapcs64Hfa : public std::false_type {};
 
 template <typename E, size_t N>
 struct IsAapcs64Hfa<E[N],
-    typename std::enable_if_t<std::is_floating_point<E>::value && N <= 4>> :
+    typename std::enable_if_t<std::is_floating_point_v<E> && N <= 4>> :
     public std::true_type
 {};
+
+template <typename T>
+constexpr bool IsAapcs64HfaV = IsAapcs64Hfa<T>::value;
 
 // An Homogeneous Short-Vector Aggregate (HVA) is an Homogeneous Aggregate with
 // a Fundamental Data Type that is a Short-Vector type and at most four
@@ -131,9 +142,12 @@ struct IsAapcs64Hva : public std::false_type {};
 
 template <typename E, size_t N>
 struct IsAapcs64Hva<E[N],
-    typename std::enable_if_t<IsAapcs64ShortVector<E>::value && N <= 4>> :
+    typename std::enable_if_t<IsAapcs64ShortVectorV<E> && N <= 4>> :
     public std::true_type
 {};
+
+template <typename T>
+constexpr bool IsAapcs64HvaV = IsAapcs64Hva<T>::value;
 
 // A shorthand to test if a type is an HVA or an HFA.
 template <typename T, typename Enabled=void>
@@ -141,9 +155,12 @@ struct IsAapcs64Hxa : public std::false_type {};
 
 template <typename T>
 struct IsAapcs64Hxa<T, typename std::enable_if_t<
-    IsAapcs64Hfa<T>::value || IsAapcs64Hva<T>::value>> :
+    IsAapcs64HfaV<T> || IsAapcs64HvaV<T>>> :
     public std::true_type
 {};
+
+template <typename T>
+constexpr bool IsAapcs64HxaV = IsAapcs64Hxa<T>::value;
 
 struct Aapcs64ArgumentBase
 {
@@ -177,8 +194,7 @@ struct Aapcs64ArgumentBase
 
 template <typename Float>
 struct Argument<Aapcs64, Float, typename std::enable_if_t<
-    std::is_floating_point<Float>::value ||
-    IsAapcs64ShortVector<Float>::value>> :
+    std::is_floating_point_v<Float> || IsAapcs64ShortVectorV<Float>>> :
     public Aapcs64ArgumentBase
 {
     static Float
@@ -186,7 +202,9 @@ struct Argument<Aapcs64, Float, typename std::enable_if_t<
     {
         if (state.nsrn <= state.MAX_SRN) {
             RegId id(VecRegClass, state.nsrn++);
-            return tc->readVecReg(id).laneView<Float, 0>();
+            ArmISA::VecRegContainer vc;
+            tc->getReg(id, &vc);
+            return vc.as<Float>()[0];
         }
 
         return loadFromStack<Float>(tc, state);
@@ -195,16 +213,16 @@ struct Argument<Aapcs64, Float, typename std::enable_if_t<
 
 template <typename Float>
 struct Result<Aapcs64, Float, typename std::enable_if_t<
-    std::is_floating_point<Float>::value ||
-    IsAapcs64ShortVector<Float>::value>>
+    std::is_floating_point_v<Float> || IsAapcs64ShortVectorV<Float>>>
 {
     static void
     store(ThreadContext *tc, const Float &f)
     {
         RegId id(VecRegClass, 0);
-        auto reg = tc->readVecReg(id);
-        reg.laneView<Float, 0>() = f;
-        tc->setVecReg(id, reg);
+        ArmISA::VecRegContainer reg;
+        tc->getReg(id, &reg);
+        reg.as<Float>()[0] = f;
+        tc->setReg(id, &reg);
     }
 };
 
@@ -216,14 +234,14 @@ struct Result<Aapcs64, Float, typename std::enable_if_t<
 // This will pick up Addr as well, which should be used for guest pointers.
 template <typename Integer>
 struct Argument<Aapcs64, Integer, typename std::enable_if_t<
-    std::is_integral<Integer>::value && (sizeof(Integer) <= 8)>> :
+    std::is_integral_v<Integer> && (sizeof(Integer) <= 8)>> :
     public Aapcs64ArgumentBase
 {
     static Integer
     get(ThreadContext *tc, Aapcs64::State &state)
     {
         if (state.ngrn <= state.MAX_GRN)
-            return tc->readIntReg(state.ngrn++);
+            return tc->getReg(RegId(IntRegClass, state.ngrn++));
 
         // Max out ngrn since we've effectively saturated it.
         state.ngrn = state.MAX_GRN + 1;
@@ -234,7 +252,7 @@ struct Argument<Aapcs64, Integer, typename std::enable_if_t<
 
 template <typename Integer>
 struct Argument<Aapcs64, Integer, typename std::enable_if_t<
-    std::is_integral<Integer>::value && (sizeof(Integer) > 8)>> :
+    std::is_integral_v<Integer> && (sizeof(Integer) > 8)>> :
     public Aapcs64ArgumentBase
 {
     static Integer
@@ -244,8 +262,8 @@ struct Argument<Aapcs64, Integer, typename std::enable_if_t<
             state.ngrn++;
 
         if (sizeof(Integer) == 16 && state.ngrn + 1 <= state.MAX_GRN) {
-            Integer low = tc->readIntReg(state.ngrn++);
-            Integer high = tc->readIntReg(state.ngrn++);
+            Integer low = tc->getReg(RegId(IntRegClass, state.ngrn++));
+            Integer high = tc->getReg(RegId(IntRegClass, state.ngrn++));
             high = high << 64;
             return high | low;
         }
@@ -259,24 +277,24 @@ struct Argument<Aapcs64, Integer, typename std::enable_if_t<
 
 template <typename Integer>
 struct Result<Aapcs64, Integer, typename std::enable_if_t<
-    std::is_integral<Integer>::value && (sizeof(Integer) <= 8)>>
+    std::is_integral_v<Integer> && (sizeof(Integer) <= 8)>>
 {
     static void
     store(ThreadContext *tc, const Integer &i)
     {
-        tc->setIntReg(0, i);
+        tc->setReg(ArmISA::int_reg::X0, i);
     }
 };
 
 template <typename Integer>
 struct Result<Aapcs64, Integer, typename std::enable_if_t<
-    std::is_integral<Integer>::value && (sizeof(Integer) > 8)>>
+    std::is_integral_v<Integer> && (sizeof(Integer) > 8)>>
 {
     static void
     store(ThreadContext *tc, const Integer &i)
     {
-        tc->setIntReg(0, (uint64_t)i);
-        tc->setIntReg(1, (uint64_t)(i >> 64));
+        tc->setReg(ArmISA::int_reg::X0, (uint64_t)i);
+        tc->setReg(ArmISA::int_reg::X1, (uint64_t)(i >> 64));
     }
 };
 
@@ -294,7 +312,7 @@ struct Aapcs64ArrayType<E[N]> { using Type = E; };
 
 template <typename HA>
 struct Argument<Aapcs64, HA, typename std::enable_if_t<
-    IsAapcs64Hxa<HA>::value>> : public Aapcs64ArgumentBase
+    IsAapcs64HxaV<HA>>> : public Aapcs64ArgumentBase
 {
     static HA
     get(ThreadContext *tc, Aapcs64::State &state)
@@ -317,8 +335,7 @@ struct Argument<Aapcs64, HA, typename std::enable_if_t<
 };
 
 template <typename HA>
-struct Result<Aapcs64, HA,
-    typename std::enable_if_t<IsAapcs64Hxa<HA>::value>>
+struct Result<Aapcs64, HA, typename std::enable_if_t<IsAapcs64HxaV<HA>>>
 {
     static HA
     store(ThreadContext *tc, const HA &ha)
@@ -338,7 +355,7 @@ struct Result<Aapcs64, HA,
 
 template <typename Composite>
 struct Argument<Aapcs64, Composite, typename std::enable_if_t<
-    IsAapcs64Composite<Composite>::value && !IsAapcs64Hxa<Composite>::value>> :
+    IsAapcs64CompositeV<Composite> && !IsAapcs64HxaV<Composite>>> :
     public Aapcs64ArgumentBase
 {
     static Composite
@@ -365,7 +382,7 @@ struct Argument<Aapcs64, Composite, typename std::enable_if_t<
         if (state.ngrn + regs - 1 <= state.MAX_GRN) {
             alignas(alignof(Composite)) uint8_t buf[bytes];
             for (int i = 0; i < regs; i++) {
-                Chunk val = tc->readIntReg(state.ngrn++);
+                Chunk val = tc->getReg(RegId(IntRegClass, state.ngrn++));
                 val = htog(val, ArmISA::byteOrder(tc));
                 size_t to_copy = std::min<size_t>(bytes, chunk_size);
                 memcpy(buf + i * chunk_size, &val, to_copy);
@@ -383,13 +400,13 @@ struct Argument<Aapcs64, Composite, typename std::enable_if_t<
 
 template <typename Composite>
 struct Result<Aapcs64, Composite, typename std::enable_if_t<
-    IsAapcs64Composite<Composite>::value && !IsAapcs64Hxa<Composite>::value>>
+    IsAapcs64CompositeV<Composite> && !IsAapcs64HxaV<Composite>>>
 {
     static void
     store(ThreadContext *tc, const Composite &c)
     {
         if (sizeof(Composite) > 16) {
-            Addr addr = tc->readIntReg(ArmISA::INTREG_X8);
+            Addr addr = tc->getReg(ArmISA::int_reg::X8);
             VPtr<Composite> composite(addr, tc);
             *composite = htog(c, ArmISA::byteOrder(tc));
             return;
@@ -412,7 +429,7 @@ struct Result<Aapcs64, Composite, typename std::enable_if_t<
             memcpy(&val, buf, to_copy);
             val = gtoh(val, ArmISA::byteOrder(tc));
 
-            tc->setIntReg(i, val);
+            tc->setReg(ArmISA::int_reg::x(i), val);
 
             bytes -= to_copy;
             buf += to_copy;
@@ -420,6 +437,7 @@ struct Result<Aapcs64, Composite, typename std::enable_if_t<
     }
 };
 
-} // namespace GuestABI
+} // namespace guest_abi
+} // namespace gem5
 
 #endif // __ARCH_ARM_AAPCS64_HH__

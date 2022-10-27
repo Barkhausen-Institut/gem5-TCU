@@ -43,6 +43,9 @@
 #include "base/bitunion.hh"
 #include "dev/io_device.hh"
 
+namespace gem5
+{
+
 class ArmSystem;
 struct FVPBasePwrCtrlParams;
 class ThreadContext;
@@ -106,7 +109,8 @@ class FVPBasePwrCtrl : public BasicPioDevice
         Bitfield<0> pwk;
     EndBitUnion(PwrStatus)
 
-    enum Offset : Addr {
+    enum Offset : Addr
+    {
         PPOFFR = 0x00,
         PPONR  = 0x04,
         PCOFFR = 0x08,
@@ -114,7 +118,8 @@ class FVPBasePwrCtrl : public BasicPioDevice
         PSYSR  = 0x10
     };
 
-    struct Registers {
+    struct Registers
+    {
         uint32_t ppoffr;
         uint32_t pponr;
         uint32_t pcoffr;
@@ -179,5 +184,7 @@ class FVPBasePwrCtrl : public BasicPioDevice
     /** Reference to the arm system */
     ArmSystem &system;
 };
+
+} // namespace gem5
 
 #endif // __DEV_ARM_FVP_BASE_PWR_CTRL_HH__

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 ARM Limited
+ * Copyright (c) 2020-2021 ARM Limited
  * All rights reserved.
  *
  * The license below extends only to copyright in the software and shall
@@ -52,10 +52,17 @@
 
 #include "sim/clocked_object.hh"
 
+namespace gem5
+{
+
+namespace ruby
+{
+
 class Consumer
 {
   public:
-    Consumer(ClockedObject *_em);
+    Consumer(ClockedObject *em,
+             Event::Priority ev_prio = Event::Default_Pri);
 
     virtual
     ~Consumer()
@@ -97,5 +104,8 @@ operator<<(std::ostream& out, const Consumer& obj)
     out << std::flush;
     return out;
 }
+
+} // namespace ruby
+} // namespace gem5
 
 #endif // __MEM_RUBY_COMMON_CONSUMER_HH__

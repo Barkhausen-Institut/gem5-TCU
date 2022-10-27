@@ -40,6 +40,11 @@
 #include "mem/tcu/reg_file.hh"
 #include "sim/system.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 class TcuAccelInDir : public TcuAccel
 {
     static const unsigned EP_OUT        = 16;
@@ -118,5 +123,8 @@ class TcuAccelInDir : public TcuAccel
     YieldSM yield;
     AccelCtxSwSM ctxsw;
 };
+
+}
+}
 
 #endif // __CPU_TCU_ACCEL_INDIR_HH__

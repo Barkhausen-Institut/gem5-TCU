@@ -46,7 +46,11 @@
 #include "base/loader/object_file.hh"
 #include "base/trace.hh"
 #include "cpu/thread_context.hh"
+#include "mem/se_translating_port_proxy.hh"
 #include "sim/syscall_emul.hh"
+
+namespace gem5
+{
 
 namespace
 {
@@ -55,37 +59,37 @@ class LinuxLoader : public Process::Loader
 {
   public:
     Process *
-    load(const ProcessParams &params, ::Loader::ObjectFile *obj) override
+    load(const ProcessParams &params, loader::ObjectFile *obj) override
     {
         auto arch = obj->getArch();
         auto opsys = obj->getOpSys();
 
-        if (arch != ::Loader::Arm && arch != ::Loader::Thumb &&
-                arch != ::Loader::Arm64) {
+        if (arch != loader::Arm && arch != loader::Thumb &&
+                arch != loader::Arm64) {
             return nullptr;
         }
 
-        if (opsys == ::Loader::UnknownOpSys) {
+        if (opsys == loader::UnknownOpSys) {
             warn("Unknown operating system; assuming Linux.");
-            opsys = ::Loader::Linux;
+            opsys = loader::Linux;
         }
 
-        if (opsys == ::Loader::LinuxArmOABI) {
+        if (opsys == loader::LinuxArmOABI) {
             fatal("gem5 does not support ARM OABI binaries. Please recompile "
                     "with an EABI compiler.");
         }
 
-        if (opsys != ::Loader::Linux)
+        if (opsys != loader::Linux)
             return nullptr;
 
-        if (arch == ::Loader::Arm64)
+        if (arch == loader::Arm64)
             return new ArmLinuxProcess64(params, obj, arch);
         else
             return new ArmLinuxProcess32(params, obj, arch);
     }
 };
 
-LinuxLoader loader;
+LinuxLoader linuxLoader;
 
 } // anonymous namespace
 
@@ -126,8 +130,8 @@ unameFunc64(SyscallDesc *desc, ThreadContext *tc, VPtr<Linux::utsname> name)
 static SyscallReturn
 setTLSFunc32(SyscallDesc *desc, ThreadContext *tc, uint32_t tlsPtr)
 {
-    tc->getVirtProxy().writeBlob(ArmLinuxProcess32::commPage + 0x0ff0,
-                                &tlsPtr, sizeof(tlsPtr));
+    SETranslatingPortProxy(tc).writeBlob(
+            ArmLinuxProcess32::commPage + 0x0ff0, &tlsPtr, sizeof(tlsPtr));
     tc->setMiscReg(MISCREG_TPIDRURO, tlsPtr);
     return 0;
 }
@@ -154,9 +158,9 @@ class SyscallTable32 : public SyscallDescTable<EmuLinux::SyscallABI32>
         {  base + 9, "link" },
         { base + 10, "unlink", unlinkFunc },
         { base + 11, "execve", execveFunc<ArmLinux32> },
-        { base + 12, "chdir" },
+        { base + 12, "chdir", chdirFunc },
         { base + 13, "time", timeFunc<ArmLinux32> },
-        { base + 14, "mknod" },
+        { base + 14, "mknod", mknodFunc },
         { base + 15, "chmod", chmodFunc<ArmLinux32> },
         { base + 16, "lchown", chownFunc },
         { base + 19, "lseek", lseekFunc },
@@ -212,17 +216,17 @@ class SyscallTable32 : public SyscallDescTable<EmuLinux::SyscallABI32>
         { base + 81, "setgroups" },
         { base + 82, "reserved#82" },
         { base + 83, "symlink" },
-        { base + 85, "readlink", readlinkFunc },
+        { base + 85, "readlink", readlinkFunc<ArmLinux32> },
         { base + 86, "uselib" },
         { base + 87, "swapon" },
         { base + 88, "reboot" },
         { base + 89, "readdir" },
         { base + 90, "mmap", mmapFunc<ArmLinux32> },
-        { base + 91, "munmap", munmapFunc },
-        { base + 92, "truncate", truncateFunc },
-        { base + 93, "ftruncate", ftruncateFunc },
+        { base + 91, "munmap", munmapFunc<ArmLinux32> },
+        { base + 92, "truncate", truncateFunc<ArmLinux32> },
+        { base + 93, "ftruncate", ftruncateFunc<ArmLinux32> },
         { base + 94, "fchmod" },
-        { base + 95, "fchown" },
+        { base + 95, "fchown", fchownFunc },
         { base + 96, "getpriority" },
         { base + 97, "setpriority" },
         { base + 99, "statfs" },
@@ -326,7 +330,7 @@ class SyscallTable32 : public SyscallDescTable<EmuLinux::SyscallABI32>
         { base + 204, "setregid" },
         { base + 205, "getgroups" },
         { base + 206, "setgroups" },
-        { base + 207, "fchown" },
+        { base + 207, "fchown", fchownFunc },
         { base + 208, "setresuid" },
         { base + 209, "getresuid" },
         { base + 210, "setresgid" },
@@ -388,7 +392,7 @@ class SyscallTable32 : public SyscallDescTable<EmuLinux::SyscallABI32>
         { base + 266, "statfs64" },
         { base + 267, "fstatfs64" },
         { base + 268, "tgkill", tgkillFunc<ArmLinux32> },
-        { base + 269, "utimes" },
+        { base + 269, "utimes", utimesFunc<ArmLinux32> },
         { base + 270, "arm_fadvise64_64" },
         { base + 271, "pciconfig_iobase" },
         { base + 272, "pciconfig_read" },
@@ -409,9 +413,9 @@ class SyscallTable32 : public SyscallDescTable<EmuLinux::SyscallABI32>
         { base + 287, "getpeername" },
         { base + 288, "socketpair" },
         { base + 289, "send" },
-        { base + 290, "sendto" },
+        { base + 290, "sendto", sendtoFunc<ArmLinux32> },
         { base + 291, "recv" },
-        { base + 292, "recvfrom" },
+        { base + 292, "recvfrom", recvfromFunc<ArmLinux32> },
         { base + 293, "shutdown" },
         { base + 294, "setsockopt" },
         { base + 295, "getsockopt" },
@@ -441,18 +445,18 @@ class SyscallTable32 : public SyscallDescTable<EmuLinux::SyscallABI32>
         { base + 320, "get_mempolicy" },
         { base + 321, "set_mempolicy" },
         { base + 322, "openat", openatFunc<ArmLinux32> },
-        { base + 323, "mkdirat" },
-        { base + 324, "mknodat" },
-        { base + 325, "fchownat" },
-        { base + 326, "futimesat" },
+        { base + 323, "mkdirat", mkdiratFunc<ArmLinux32> },
+        { base + 324, "mknodat", mknodatFunc<ArmLinux32> },
+        { base + 325, "fchownat", fchownatFunc<ArmLinux32> },
+        { base + 326, "futimesat", futimesatFunc<ArmLinux32> },
         { base + 327, "fstatat64" },
-        { base + 328, "unlinkat" },
-        { base + 329, "renameat" },
+        { base + 328, "unlinkat", unlinkatFunc<ArmLinux32> },
+        { base + 329, "renameat", renameatFunc<ArmLinux32> },
         { base + 330, "linkat" },
         { base + 331, "symlinkat" },
-        { base + 332, "readlinkat" },
-        { base + 333, "fchmodat" },
-        { base + 334, "faccessat" },
+        { base + 332, "readlinkat", readlinkatFunc<ArmLinux32> },
+        { base + 333, "fchmodat", fchmodatFunc<ArmLinux32> },
+        { base + 334, "faccessat", faccessatFunc<ArmLinux32> },
         { base + 335, "pselect6" },
         { base + 336, "ppoll" },
         { base + 337, "unshare" },
@@ -484,6 +488,7 @@ class SyscallTable32 : public SyscallDescTable<EmuLinux::SyscallABI32>
         { base + 363, "sys_rt_tgsigqueueinfo" },
         { base + 364, "sys_perf_event_open" },
         { base + 365, "sys_recvmmsg" },
+        { base + 384, "getrandom", getrandomFunc<ArmLinux32> }
     })
     {}
 };
@@ -527,8 +532,8 @@ class SyscallTable64 : public SyscallDescTable<EmuLinux::SyscallABI64>
         {   base + 30, "ioprio_set" },
         {   base + 31, "ioprio_get" },
         {   base + 32, "flock" },
-        {   base + 33, "mknodat" },
-        {   base + 34, "mkdirat" },
+        {   base + 33, "mknodat", mknodatFunc<ArmLinux64> },
+        {   base + 34, "mkdirat", mkdiratFunc<ArmLinux64> },
         {   base + 35, "unlinkat", unlinkatFunc<ArmLinux64> },
         {   base + 36, "symlinkat" },
         {   base + 37, "linkat" },
@@ -541,15 +546,15 @@ class SyscallTable64 : public SyscallDescTable<EmuLinux::SyscallABI64>
         {   base + 44, "fstatfs64" },
         {   base + 45, "truncate64" },
         {   base + 46, "ftruncate64", ftruncate64Func },
-        {   base + 47, "fallocate" },
+        {   base + 47, "fallocate", fallocateFunc<ArmLinux64> },
         {   base + 48, "faccessat", faccessatFunc<ArmLinux64> },
-        {   base + 49, "chdir" },
+        {   base + 49, "chdir", chdirFunc },
         {   base + 50, "fchdir" },
         {   base + 51, "chroot" },
         {   base + 52, "fchmod" },
-        {   base + 53, "fchmodat" },
-        {   base + 54, "fchownat" },
-        {   base + 55, "fchown" },
+        {   base + 53, "fchmodat", fchmodatFunc<ArmLinux64> },
+        {   base + 54, "fchownat", fchownatFunc<ArmLinux64> },
+        {   base + 55, "fchown", fchownFunc },
         {   base + 56, "openat", openatFunc<ArmLinux64> },
         {   base + 57, "close", closeFunc },
         {   base + 58, "vhangup" },
@@ -704,8 +709,8 @@ class SyscallTable64 : public SyscallDescTable<EmuLinux::SyscallABI64>
         {  base + 203, "connect" },
         {  base + 204, "getsockname" },
         {  base + 205, "getpeername" },
-        {  base + 206, "sendto" },
-        {  base + 207, "recvfrom" },
+        {  base + 206, "sendto", sendtoFunc<ArmLinux64> },
+        {  base + 207, "recvfrom", recvfromFunc<ArmLinux64> },
         {  base + 208, "setsockopt" },
         {  base + 209, "getsockopt" },
         {  base + 210, "shutdown" },
@@ -713,7 +718,7 @@ class SyscallTable64 : public SyscallDescTable<EmuLinux::SyscallABI64>
         {  base + 212, "recvmsg" },
         {  base + 213, "readahead" },
         {  base + 214, "brk", brkFunc },
-        {  base + 215, "munmap", munmapFunc },
+        {  base + 215, "munmap", munmapFunc<ArmLinux64> },
         {  base + 216, "mremap", mremapFunc<ArmLinux64> },
         {  base + 217, "add_key" },
         {  base + 218, "request_key" },
@@ -754,10 +759,33 @@ class SyscallTable64 : public SyscallDescTable<EmuLinux::SyscallABI64>
         {  base + 269, "sendmmsg" },
         {  base + 270, "process_vm_readv" },
         {  base + 271, "process_vm_writev" },
+        {  base + 272, "kcmp" },
+        {  base + 273, "finit_module" },
+        {  base + 274, "sched_setattr"},
+        {  base + 275, "sched_getattr"},
+        {  base + 276, "renameat2"},
+        {  base + 277, "seccomp"},
+        {  base + 278, "getrandom", getrandomFunc<ArmLinux64> },
+        {  base + 279, "memfd_create" },
+        {  base + 280, "bpf" },
+        {  base + 281, "execveat"},
+        {  base + 282, "userfaultfd"},
+        {  base + 283, "membarrier"},
+        {  base + 284, "mlock2"},
+        {  base + 285, "copy_file_range"},
+        {  base + 286, "preadv2"},
+        {  base + 287, "pwritev2"},
+        {  base + 288, "pkey_mprotect"},
+        {  base + 289, "pkey_alloc"},
+        {  base + 290, "pkey_free"},
+        {  base + 291, "statx"},
+        {  base + 292, "io_pgetevents"},
+        {  base + 293, "rseq", ignoreWarnOnceFunc },
+        {  base + 294, "kexec_file_load"},
         { base + 1024, "open", openFunc<ArmLinux64> },
         { base + 1025, "link" },
         { base + 1026, "unlink", unlinkFunc },
-        { base + 1027, "mknod" },
+        { base + 1027, "mknod", mknodFunc },
         { base + 1028, "chmod", chmodFunc<ArmLinux64> },
         { base + 1029, "chown" },
         { base + 1030, "mkdir", mkdirFunc },
@@ -765,9 +793,9 @@ class SyscallTable64 : public SyscallDescTable<EmuLinux::SyscallABI64>
         { base + 1032, "lchown" },
         { base + 1033, "access", accessFunc },
         { base + 1034, "rename", renameFunc },
-        { base + 1035, "readlink", readlinkFunc },
+        { base + 1035, "readlink", readlinkFunc<ArmLinux64> },
         { base + 1036, "symlink" },
-        { base + 1037, "utimes" },
+        { base + 1037, "utimes", utimesFunc<ArmLinux64> },
         { base + 1038, "stat64", stat64Func<ArmLinux64> },
         { base + 1039, "lstat64", lstat64Func<ArmLinux64> },
         { base + 1040, "pipe", pipePseudoFunc },
@@ -777,8 +805,8 @@ class SyscallTable64 : public SyscallDescTable<EmuLinux::SyscallABI64>
         { base + 1044, "eventfd" },
         { base + 1045, "signalfd" },
         { base + 1046, "sendfile" },
-        { base + 1047, "ftruncate", ftruncateFunc },
-        { base + 1048, "truncate", truncateFunc },
+        { base + 1047, "ftruncate", ftruncateFunc<ArmLinux64> },
+        { base + 1048, "truncate", truncateFunc<ArmLinux64> },
         { base + 1049, "stat", statFunc<ArmLinux64> },
         { base + 1050, "lstat" },
         { base + 1051, "fstat", fstatFunc<ArmLinux64> },
@@ -800,7 +828,7 @@ class SyscallTable64 : public SyscallDescTable<EmuLinux::SyscallABI64>
 #else
         { base + 1065, "getdents" },
 #endif
-        { base + 1066, "futimesat" },
+        { base + 1066, "futimesat", futimesatFunc<ArmLinux64> },
         { base + 1067, "select" },
         { base + 1068, "poll" },
         { base + 1069, "epoll_wait" },
@@ -844,14 +872,14 @@ EmuLinux::syscall(ThreadContext *tc)
 
     SyscallDesc *desc = nullptr;
     if (dynamic_cast<ArmLinuxProcess64 *>(process)) {
-        int num = tc->readIntReg(INTREG_X8);
+        int num = tc->getReg(int_reg::X8);
         desc = syscallDescs64Low.get(num, false);
         if (!desc)
             desc = syscallDescs64Low.get(num, false);
         if (!desc)
             desc = privSyscallDescs64.get(num);
     } else {
-        int num = tc->readIntReg(INTREG_R7);
+        int num = tc->getReg(int_reg::R7);
         desc = syscallDescs32Low.get(num, false);
         if (!desc)
             desc = syscallDescs32Low.get(num, false);
@@ -863,3 +891,4 @@ EmuLinux::syscall(ThreadContext *tc)
 }
 
 } // namespace ArmISA
+} // namespace gem5

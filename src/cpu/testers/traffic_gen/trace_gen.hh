@@ -50,6 +50,9 @@
 #include "mem/packet.hh"
 #include "proto/protoio.hh"
 
+namespace gem5
+{
+
 /**
  * The trace replay generator reads a trace file and plays
  * back the transactions. The trace is offset with respect to
@@ -63,7 +66,8 @@ class TraceGen : public BaseGen
     /**
      * This struct stores a line in the trace file.
      */
-    struct TraceElement {
+    struct TraceElement
+    {
 
         /** Specifies if the request is to be a read or a write */
         MemCmd cmd;
@@ -204,5 +208,7 @@ class TraceGen : public BaseGen
      */
     bool traceComplete;
 };
+
+} // namespace gem5
 
 #endif

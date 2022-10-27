@@ -36,7 +36,9 @@
 #include "debug/KecAcc.hh"
 #include "sim/system.hh"
 
-namespace {
+namespace gem5
+{
+
 enum
 {
     // Accelerator is idle (has completed previous command)
@@ -68,7 +70,6 @@ BitUnion64(CmdReg)
         BitfieldRO<63, 34> bytes;
     EndSubBitUnion(sponge)
 EndBitUnion(CmdReg)
-}
 
 KecAcc::KecAcc(const Params &p)
     : BasicPioDevice(p, sizeof(uint64_t)), port("port", *this),
@@ -352,4 +353,6 @@ KecAcc::CPUPort::recvReqRetry()
     assert(retryPkt);
     if (sendTimingReq(retryPkt))
         retryPkt = nullptr;
+}
+
 }

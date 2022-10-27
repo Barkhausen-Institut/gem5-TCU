@@ -34,6 +34,15 @@
 #include "mem/ruby/network/garnet/CommonTypes.hh"
 #include "mem/ruby/network/garnet/GarnetNetwork.hh"
 
+namespace gem5
+{
+
+namespace ruby
+{
+
+namespace garnet
+{
+
 class OutVcState
 {
   public:
@@ -63,5 +72,9 @@ class OutVcState
     int m_credit_count;
     int m_max_credit_count;
 };
+
+} // namespace garnet
+} // namespace ruby
+} // namespace gem5
 
 #endif //__MEM_RUBY_NETWORK_GARNET_0_OUTVCSTATE_HH__

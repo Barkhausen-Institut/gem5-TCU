@@ -47,9 +47,14 @@
 #include "base/types.hh"
 #include "mem/cache/compressors/dictionary_compressor.hh"
 
+namespace gem5
+{
+
 struct FPCDParams;
 
-namespace Compressor {
+GEM5_DEPRECATED_NAMESPACE(Compressor, compression);
+namespace compression
+{
 
 class FPCD : public DictionaryCompressor<uint32_t>
 {
@@ -92,11 +97,12 @@ class FPCD : public DictionaryCompressor<uint32_t>
      * These are used as indexes to reference the pattern data. If a new
      * pattern is added, it must be done before NUM_PATTERNS.
      */
-    typedef enum {
+    enum PatternNumber
+    {
         ZZZZ, FFFF, MMMMPenultimate, MMMMPrevious, ZZZX, XZZZ, RRRR,
         MMMXPenultimate, MMMXPrevious, ZZXX, ZXZX, FFXX, XXZZ,
         MMXXPenultimate, MMXXPrevious, XXXX, NUM_PATTERNS
-    } PatternNumber;
+    };
 
     /**
      * Convenience factory declaration. The templates must be organized by
@@ -317,6 +323,7 @@ class FPCD::PatternXXXX : public UncompressedPattern
     }
 };
 
-} // namespace Compressor
+} // namespace compression
+} // namespace gem5
 
 #endif //__MEM_CACHE_COMPRESSORS_FPCD_HH__

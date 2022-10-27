@@ -50,30 +50,36 @@
 #include "dev/arm/fvp_base_pwr_ctrl.hh"
 #include "dev/arm/gic_v2.hh"
 #include "mem/physical.hh"
+#include "params/ArmRelease.hh"
 
-using namespace Linux;
+namespace gem5
+{
+
+using namespace linux;
 using namespace ArmISA;
+
+ArmRelease::ArmRelease(const ArmReleaseParams &p)
+  : SimObject(p)
+{
+    for (auto ext : p.extensions) {
+        fatal_if(_extensions.find(ext) != _extensions.end(),
+            "Duplicated FEAT_\n");
+
+        _extensions[ext] = true;
+    }
+}
 
 ArmSystem::ArmSystem(const Params &p)
     : System(p),
-      _haveSecurity(p.have_security),
-      _haveLPAE(p.have_lpae),
-      _haveVirtualization(p.have_virtualization),
-      _haveCrypto(p.have_crypto),
       _genericTimer(nullptr),
       _gic(nullptr),
       _pwrCtrl(nullptr),
       _highestELIs64(p.highest_el_is_64),
       _physAddrRange64(p.phys_addr_range_64),
       _haveLargeAsid64(p.have_large_asid_64),
-      _haveTME(p.have_tme),
-      _haveSVE(p.have_sve),
       _sveVL(p.sve_vl),
-      _haveLSE(p.have_lse),
-      _haveVHE(p.have_vhe),
-      _havePAN(p.have_pan),
-      _haveSecEL2(p.have_secel2),
       semihosting(p.semihosting),
+      release(p.release),
       multiProc(p.multi_proc)
 {
     if (p.auto_reset_addr) {
@@ -85,7 +91,7 @@ ArmSystem::ArmSystem(const Params &p)
                 workload->getEntry(), _resetAddr);
     }
 
-    bool wl_is_64 = (workload->getArch() == Loader::Arm64);
+    bool wl_is_64 = (workload->getArch() == loader::Arm64);
     if (wl_is_64 != _highestELIs64) {
         warn("Highest ARM exception-level set to AArch%d but the workload "
               "is for AArch%d. Assuming you wanted these to match.",
@@ -96,27 +102,17 @@ ArmSystem::ArmSystem(const Params &p)
     if (_highestELIs64 && (
             _physAddrRange64 < 32 ||
             _physAddrRange64 > MaxPhysAddrRange ||
-            (_physAddrRange64 % 4 != 0 && _physAddrRange64 != 42))) {
+            (_physAddrRange64 % 4 != 0 && _physAddrRange64 != 42) ||
+            (_physAddrRange64 == 52 && !release->has(ArmExtension::FEAT_LPA))))
+    {
         fatal("Invalid physical address range (%d)\n", _physAddrRange64);
     }
 }
 
 bool
-ArmSystem::haveSecurity(ThreadContext *tc)
+ArmSystem::has(ArmExtension ext, ThreadContext *tc)
 {
-    return FullSystem? getArmSystem(tc)->haveSecurity() : false;
-}
-
-bool
-ArmSystem::haveLPAE(ThreadContext *tc)
-{
-    return FullSystem? getArmSystem(tc)->haveLPAE() : false;
-}
-
-bool
-ArmSystem::haveVirtualization(ThreadContext *tc)
-{
-    return FullSystem? getArmSystem(tc)->haveVirtualization() : false;
+    return FullSystem? getArmSystem(tc)->has(ext) : false;
 }
 
 bool
@@ -139,19 +135,13 @@ ArmSystem::haveEL(ThreadContext *tc, ExceptionLevel el)
       case EL1:
         return true;
       case EL2:
-        return haveVirtualization(tc);
+        return has(ArmExtension::VIRTUALIZATION, tc);
       case EL3:
-        return haveSecurity(tc);
+        return has(ArmExtension::SECURITY, tc);
       default:
         warn("Unimplemented Exception Level\n");
         return false;
     }
-}
-
-bool
-ArmSystem::haveTME(ThreadContext *tc)
-{
-    return getArmSystem(tc)->haveTME();
 }
 
 Addr
@@ -234,3 +224,5 @@ ArmSystem::callClearWakeRequest(ThreadContext *tc)
     if (FVPBasePwrCtrl *pwr_ctrl = getArmSystem(tc)->getPowerController())
         pwr_ctrl->clearWakeRequest(tc);
 }
+
+} // namespace gem5

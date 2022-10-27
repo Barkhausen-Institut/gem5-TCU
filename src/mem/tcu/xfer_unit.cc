@@ -36,6 +36,11 @@
 #include "mem/tcu/tcu.hh"
 #include "mem/tcu/xfer_unit.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 static const char *decodeFlags(uint flags)
 {
     static char buf[3];
@@ -74,22 +79,22 @@ XferUnit::regStats()
         .init(8)
         .name(tcu.name() + ".xfer.reads")
         .desc("Read times (in Cycles)")
-        .flags(Stats::nozero);
+        .flags(statistics::nozero);
     writes
         .init(8)
         .name(tcu.name() + ".xfer.writes")
         .desc("Write times (in Cycles)")
-        .flags(Stats::nozero);
+        .flags(statistics::nozero);
     bytesRead
         .init(8)
         .name(tcu.name() + ".xfer.bytesRead")
         .desc("Read bytes (from internal memory)")
-        .flags(Stats::nozero);
+        .flags(statistics::nozero);
     bytesWritten
         .init(8)
         .name(tcu.name() + ".xfer.bytesWritten")
         .desc("Written bytes (to internal memory)")
-        .flags(Stats::nozero);
+        .flags(statistics::nozero);
     delays
         .name(tcu.name() + ".xfer.delays")
         .desc("Number of delays due to occupied buffers");
@@ -344,4 +349,7 @@ XferUnit::allocateBuf(TransferEvent *event, uint flags)
     }
 
     return NULL;
+}
+
+}
 }

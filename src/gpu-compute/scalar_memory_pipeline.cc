@@ -2,8 +2,6 @@
  * Copyright (c) 2016-2017 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -40,6 +38,9 @@
 #include "gpu-compute/scalar_register_file.hh"
 #include "gpu-compute/shader.hh"
 #include "gpu-compute/wavefront.hh"
+
+namespace gem5
+{
 
 ScalarMemPipeline::ScalarMemPipeline(const ComputeUnitParams &p,
                                      ComputeUnit &cu)
@@ -140,3 +141,23 @@ ScalarMemPipeline::exec()
                 computeUnit.cu_id, mp->simdId, mp->wfSlotId);
     }
 }
+
+void
+ScalarMemPipeline::issueRequest(GPUDynInstPtr gpuDynInst)
+{
+    Wavefront *wf = gpuDynInst->wavefront();
+    if (gpuDynInst->isLoad()) {
+        wf->scalarRdGmReqsInPipe--;
+        wf->scalarOutstandingReqsRdGm++;
+    } else if (gpuDynInst->isStore()) {
+        wf->scalarWrGmReqsInPipe--;
+        wf->scalarOutstandingReqsWrGm++;
+    }
+
+    wf->outstandingReqs++;
+    wf->validateRequestCounters();
+
+    issuedRequests.push(gpuDynInst);
+}
+
+} // namespace gem5

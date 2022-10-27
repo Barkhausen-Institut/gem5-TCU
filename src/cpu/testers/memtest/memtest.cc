@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2019 ARM Limited
+ * Copyright (c) 2015, 2019, 2021 Arm Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -40,6 +40,7 @@
 
 #include "cpu/testers/memtest/memtest.hh"
 
+#include "base/compiler.hh"
 #include "base/random.hh"
 #include "base/statistics.hh"
 #include "base/trace.hh"
@@ -48,7 +49,10 @@
 #include "sim/stats.hh"
 #include "sim/system.hh"
 
-unsigned int TESTER_ALLOCATOR = 0;
+namespace gem5
+{
+
+static unsigned int TESTER_ALLOCATOR = 0;
 
 bool
 MemTest::CpuPort::recvTimingResp(PacketPtr pkt)
@@ -84,6 +88,7 @@ MemTest::MemTest(const Params &p)
       noResponseEvent([this]{ noResponse(); }, name()),
       port("port", *this),
       retryPkt(nullptr),
+      waitResponse(false),
       size(p.size),
       interval(p.interval),
       percentReads(p.percent_reads),
@@ -92,6 +97,10 @@ MemTest::MemTest(const Params &p)
       requestorId(p.system->getRequestorId(this)),
       blockSize(p.system->cacheLineSize()),
       blockAddrMask(blockSize - 1),
+      sizeBlocks(size / blockSize),
+      baseAddr1(p.base_addr_1),
+      baseAddr2(p.base_addr_2),
+      uncacheAddr(p.uncacheable_base_addr),
       progressInterval(p.progress_interval),
       progressCheck(p.progress_check),
       nextProgressMessage(p.progress_interval),
@@ -102,10 +111,6 @@ MemTest::MemTest(const Params &p)
     id = TESTER_ALLOCATOR++;
     fatal_if(id >= blockSize, "Too many testers, only %d allowed\n",
              blockSize - 1);
-
-    baseAddr1 = 0x100000;
-    baseAddr2 = 0x400000;
-    uncacheAddr = 0x800000;
 
     // set up counters
     numReads = 0;
@@ -188,11 +193,19 @@ MemTest::completeRequest(PacketPtr pkt, bool functional)
         reschedule(noResponseEvent, clockEdge(progressCheck));
     else if (noResponseEvent.scheduled())
         deschedule(noResponseEvent);
+
+    // schedule the next tick
+    if (waitResponse) {
+        waitResponse = false;
+        schedule(tickEvent, clockEdge(interval));
+    }
 }
-MemTest::MemTestStats::MemTestStats(Stats::Group *parent)
-      : Stats::Group(parent),
-      ADD_STAT(numReads, UNIT_COUNT, "number of read accesses completed"),
-      ADD_STAT(numWrites, UNIT_COUNT, "number of write accesses completed")
+MemTest::MemTestStats::MemTestStats(statistics::Group *parent)
+      : statistics::Group(parent),
+      ADD_STAT(numReads, statistics::units::Count::get(),
+               "number of read accesses completed"),
+      ADD_STAT(numWrites, statistics::units::Count::get(),
+               "number of write accesses completed")
 {
 
 }
@@ -200,8 +213,9 @@ MemTest::MemTestStats::MemTestStats(Stats::Group *parent)
 void
 MemTest::tick()
 {
-    // we should never tick if we are waiting for a retry
+    // we should never tick if we are waiting for a retry or response
     assert(!retryPkt);
+    assert(!waitResponse);
 
     // create a new request
     unsigned cmd = random_mt.random(0, 100);
@@ -210,6 +224,13 @@ MemTest::tick()
     unsigned base = random_mt.random(0, 1);
     Request::Flags flags;
     Addr paddr;
+
+    // halt until we clear outstanding requests, otherwise it won't be able to
+    // find a new unique address
+    if (outstandingAddrs.size() >= sizeBlocks) {
+        waitResponse = true;
+        return;
+    }
 
     // generate a unique address
     do {
@@ -244,7 +265,7 @@ MemTest::tick()
     if (cmd < percentReads) {
         // start by ensuring there is a reference value if we have not
         // seen this address before
-        M5_VAR_USED uint8_t ref_data = 0;
+        [[maybe_unused]] uint8_t ref_data = 0;
         auto ref = referenceData.find(req->getPaddr());
         if (ref == referenceData.end()) {
             referenceData[req->getPaddr()] = 0;
@@ -320,3 +341,5 @@ MemTest::recvRetry()
         reschedule(noRequestEvent, clockEdge(progressCheck), true);
     }
 }
+
+} // namespace gem5

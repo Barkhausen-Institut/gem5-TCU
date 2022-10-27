@@ -66,15 +66,14 @@ output header {{
 #include "arch/arm/insts/sve_mem.hh"
 #include "arch/arm/insts/tme64.hh"
 #include "arch/arm/insts/vfp.hh"
-#include "arch/arm/isa_traits.hh"
 #include "enums/DecoderFlavor.hh"
 #include "mem/packet.hh"
 #include "sim/faults.hh"
 
-namespace ArmISAInst
+namespace gem5::ArmISAInst
 {
 using namespace ArmISA;
-}
+} // namespace gem5::ArmISAInst
 
 }};
 
@@ -86,14 +85,16 @@ output decoder {{
 #include "arch/arm/decoder.hh"
 #include "arch/arm/faults.hh"
 #include "arch/arm/insts/sve_macromem.hh"
-#include "arch/arm/intregs.hh"
-#include "arch/arm/isa_traits.hh"
+#include "arch/arm/regs/int.hh"
 #include "arch/arm/utility.hh"
 #include "base/cprintf.hh"
 #include "base/loader/symtab.hh"
 #include "cpu/thread_context.hh"
 
+namespace gem5::ArmISAInst
+{
 using namespace ArmISA;
+} // namespace gem5::ArmISAInst
 }};
 
 output exec {{
@@ -103,7 +104,6 @@ output exec {{
 #include "arch/arm/interrupts.hh"
 #include "arch/arm/isa.hh"
 #include "arch/arm/htm.hh"
-#include "arch/arm/isa_traits.hh"
 #include "arch/arm/pauth_helpers.hh"
 #include "arch/arm/reg_abi.hh"
 #include "arch/arm/semihosting.hh"
@@ -111,19 +111,17 @@ output exec {{
 #include "arch/generic/memhelpers.hh"
 #include "base/condcodes.hh"
 #include "base/crc.hh"
+#include "base/fenv.hh"
 #include "cpu/base.hh"
-#include "sim/pseudo_inst.hh"
-
-#if defined(linux)
-#include <fenv.h>
-
-#endif
-
 #include "debug/Arm.hh"
 #include "mem/packet.hh"
 #include "mem/packet_access.hh"
+#include "sim/pseudo_inst.hh"
 #include "sim/sim_exit.hh"
 
+namespace gem5::ArmISAInst
+{
 using namespace ArmISA;
+} // namespace gem5::ArmISAInst
 
 }};

@@ -1,4 +1,4 @@
-# Copyright (c) 2015 ARM Limited
+# Copyright (c) 2015, 2021 Arm Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -44,11 +44,16 @@ from m5.objects.ClockedObject import ClockedObject
 class MemTest(ClockedObject):
     type = 'MemTest'
     cxx_header = "cpu/testers/memtest/memtest.hh"
+    cxx_class = 'gem5::MemTest'
 
     # Interval of packet injection, the size of the memory range
     # touched, and an optional stop condition
     interval = Param.Cycles(1, "Interval between request packets")
     size = Param.Unsigned(65536, "Size of memory region to use (bytes)")
+    base_addr_1 = Param.Addr(0x100000, "Start of the first testing region")
+    base_addr_2 = Param.Addr(0x400000, "Start of the second testing region")
+    uncacheable_base_addr = Param.Addr(
+        0x800000, "Start of the uncacheable testing region")
     max_loads = Param.Counter(0, "Number of loads to execute before exiting")
 
     # Control the mix of packets and if functional accesses are part of

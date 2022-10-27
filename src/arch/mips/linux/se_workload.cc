@@ -32,10 +32,14 @@
 #include <sys/syscall.h>
 
 #include "arch/mips/process.hh"
+#include "arch/mips/regs/misc.hh"
 #include "base/loader/object_file.hh"
 #include "base/trace.hh"
 #include "cpu/thread_context.hh"
 #include "sim/syscall_emul.hh"
+
+namespace gem5
+{
 
 namespace
 {
@@ -44,26 +48,26 @@ class LinuxLoader : public Process::Loader
 {
   public:
     Process *
-    load(const ProcessParams &params, ::Loader::ObjectFile *obj) override
+    load(const ProcessParams &params, loader::ObjectFile *obj) override
     {
-        if (obj->getArch() != ::Loader::Mips)
+        if (obj->getArch() != loader::Mips)
             return nullptr;
 
         auto opsys = obj->getOpSys();
 
-        if (opsys == ::Loader::UnknownOpSys) {
+        if (opsys == loader::UnknownOpSys) {
             warn("Unknown operating system; assuming Linux.");
-            opsys = ::Loader::Linux;
+            opsys = loader::Linux;
         }
 
-        if (opsys != ::Loader::Linux)
+        if (opsys != loader::Linux)
             return nullptr;
 
         return new MipsProcess(params, obj);
     }
 };
 
-LinuxLoader loader;
+LinuxLoader linuxLoader;
 
 } // anonymous namespace
 
@@ -239,15 +243,15 @@ SyscallDescTable<MipsISA::SEWorkload::SyscallABI> EmuLinux::syscallDescs = {
     { 4082, "reserved#82" },
     { 4083, "symlink" },
     { 4084, "unused#84" },
-    { 4085, "readlink", readlinkFunc },
+    { 4085, "readlink", readlinkFunc<MipsLinux> },
     { 4086, "uselib" },
     { 4087, "swapon", gethostnameFunc },
     { 4088, "reboot" },
     { 4089, "readdir" },
     { 4090, "mmap", mmapFunc<MipsLinux> },
-    { 4091, "munmap",munmapFunc },
-    { 4092, "truncate", truncateFunc },
-    { 4093, "ftruncate", ftruncateFunc },
+    { 4091, "munmap",munmapFunc<MipsLinux> },
+    { 4092, "truncate", truncateFunc<MipsLinux> },
+    { 4093, "ftruncate", ftruncateFunc<MipsLinux> },
     { 4094, "fchmod", fchmodFunc<MipsLinux> },
     { 4095, "fchown", fchownFunc },
     { 4096, "getpriority" },
@@ -477,3 +481,4 @@ SyscallDescTable<MipsISA::SEWorkload::SyscallABI> EmuLinux::syscallDescs = {
 };
 
 } // namespace MipsISA
+} // namespace gem5

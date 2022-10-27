@@ -34,6 +34,11 @@
 #include "mem/tcu/base.hh"
 #include "mem/tcu/error.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 class Tcu;
 
 class TcuCommands
@@ -204,10 +209,13 @@ class TcuCommands
 
   public:
 
-    Stats::Vector commands;
-    Stats::Vector privCommands;
-    Stats::Vector extCommands;
+    statistics::Vector commands;
+    statistics::Vector privCommands;
+    statistics::Vector extCommands;
 
 };
+
+}
+}
 
 #endif // __MEM_TCU_CMDS_HH__

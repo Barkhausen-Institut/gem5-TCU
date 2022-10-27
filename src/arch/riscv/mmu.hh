@@ -40,10 +40,14 @@
 
 #include "arch/generic/mmu.hh"
 #include "arch/riscv/isa.hh"
+#include "arch/riscv/page_size.hh"
 #include "arch/riscv/pma_checker.hh"
 #include "arch/riscv/tlb.hh"
 
 #include "params/RiscvMMU.hh"
+
+namespace gem5
+{
 
 namespace RiscvISA {
 
@@ -56,8 +60,16 @@ class MMU : public BaseMMU
       : BaseMMU(p), pma(p.pma_checker)
     {}
 
+    TranslationGenPtr
+    translateFunctional(Addr start, Addr size, ThreadContext *tc,
+            Mode mode, Request::Flags flags) override
+    {
+        return TranslationGenPtr(new MMUTranslationGen(
+                PageBytes, start, size, tc, this, mode, flags));
+    }
+
     PrivilegeMode
-    getMemPriv(ThreadContext *tc, BaseTLB::Mode mode)
+    getMemPriv(ThreadContext *tc, BaseMMU::Mode mode)
     {
         return static_cast<TLB*>(dtb)->getMemPriv(tc, mode);
     }
@@ -74,9 +86,17 @@ class MMU : public BaseMMU
       MMU *ommu = dynamic_cast<MMU*>(old_mmu);
       BaseMMU::takeOverFrom(ommu);
       pma->takeOverFrom(ommu->pma);
+
+    }
+
+    PMP *
+    getPMP()
+    {
+        return static_cast<TLB*>(dtb)->pmp;
     }
 };
 
 } // namespace RiscvISA
+} // namespace gem5
 
 #endif  // __ARCH_RISCV_MMU_HH__

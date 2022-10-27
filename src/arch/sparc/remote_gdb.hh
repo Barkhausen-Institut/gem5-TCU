@@ -34,6 +34,9 @@
 
 #include "base/remote_gdb.hh"
 
+namespace gem5
+{
+
 class System;
 class ThreadContext;
 
@@ -49,7 +52,8 @@ class RemoteGDB : public BaseRemoteGDB
     {
       using BaseGdbRegCache::BaseGdbRegCache;
       private:
-        struct {
+        struct
+        {
             uint32_t gpr[32];
             uint32_t hole[32];
             uint32_t y;
@@ -77,7 +81,8 @@ class RemoteGDB : public BaseRemoteGDB
     {
       using BaseGdbRegCache::BaseGdbRegCache;
       private:
-        struct {
+        struct
+        {
             uint64_t gpr[32];
             uint64_t fpr[32];
             uint64_t pc;
@@ -103,9 +108,10 @@ class RemoteGDB : public BaseRemoteGDB
     SPARC64GdbRegCache regCache64;
 
   public:
-    RemoteGDB(System *_system, ThreadContext *tc, int _port);
+    RemoteGDB(System *_system, int _port);
     BaseGdbRegCache *gdbRegs();
 };
 } // namespace SparcISA
+} // namespace gem5
 
 #endif /* __ARCH_SPARC_REMOTE_GDB_H__ */

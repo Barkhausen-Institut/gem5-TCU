@@ -29,6 +29,11 @@
 
 #include "cmd_sm.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 std::string
 CommandSM::stateName() const
 {
@@ -104,4 +109,7 @@ CommandSM::handleMemResp(PacketPtr pkt)
 
     // kick things into action again
     exec->scheduleCommand(delay);
+}
+
+}
 }

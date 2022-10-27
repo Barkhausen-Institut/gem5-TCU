@@ -36,7 +36,6 @@
 
 #include "arch/power/faults.hh"
 #include "arch/power/pagetable.hh"
-#include "arch/power/utility.hh"
 #include "base/inifile.hh"
 #include "base/str.hh"
 #include "base/trace.hh"
@@ -47,6 +46,9 @@
 #include "params/PowerTLB.hh"
 #include "sim/full_system.hh"
 #include "sim/process.hh"
+
+namespace gem5
+{
 
 using namespace PowerISA;
 
@@ -216,11 +218,13 @@ TLB::unserialize(CheckpointIn &cp)
 Fault
 TLB::translateInst(const RequestPtr &req, ThreadContext *tc)
 {
+    Addr vaddr = req->getVaddr();
+
     // Instruction accesses must be word-aligned
-    if (req->getVaddr() & 0x3) {
-        DPRINTF(TLB, "Alignment Fault on %#x, size = %d\n", req->getVaddr(),
+    if (vaddr & 0x3) {
+        DPRINTF(TLB, "Alignment Fault on %#x, size = %d\n", vaddr,
                 req->getSize());
-        return std::make_shared<AlignmentFault>();
+        return std::make_shared<AlignmentFault>(vaddr);
     }
 
     return tc->getProcessPtr()->pTable->translate(req);
@@ -233,19 +237,21 @@ TLB::translateData(const RequestPtr &req, ThreadContext *tc, bool write)
 }
 
 Fault
-TLB::translateAtomic(const RequestPtr &req, ThreadContext *tc, Mode mode)
+TLB::translateAtomic(const RequestPtr &req, ThreadContext *tc,
+                     BaseMMU::Mode mode)
 {
     panic_if(FullSystem,
             "translateAtomic not yet implemented for full system.");
 
-    if (mode == Execute)
+    if (mode == BaseMMU::Execute)
         return translateInst(req, tc);
     else
-        return translateData(req, tc, mode == Write);
+        return translateData(req, tc, mode == BaseMMU::Write);
 }
 
 Fault
-TLB::translateFunctional(const RequestPtr &req, ThreadContext *tc, Mode mode)
+TLB::translateFunctional(const RequestPtr &req, ThreadContext *tc,
+                         BaseMMU::Mode mode)
 {
     panic_if(FullSystem,
             "translateFunctional not implemented for full system.");
@@ -254,7 +260,7 @@ TLB::translateFunctional(const RequestPtr &req, ThreadContext *tc, Mode mode)
 
 void
 TLB::translateTiming(const RequestPtr &req, ThreadContext *tc,
-                     Translation *translation, Mode mode)
+                     BaseMMU::Translation *translation, BaseMMU::Mode mode)
 {
     assert(translation);
     translation->finish(translateAtomic(req, tc, mode), req, tc, mode);
@@ -262,7 +268,7 @@ TLB::translateTiming(const RequestPtr &req, ThreadContext *tc,
 
 Fault
 TLB::finalizePhysical(const RequestPtr &req,
-                      ThreadContext *tc, Mode mode) const
+                      ThreadContext *tc, BaseMMU::Mode mode) const
 {
     return NoFault;
 }
@@ -277,3 +283,5 @@ TLB::index(bool advance)
 
     return *pte;
 }
+
+} // namespace gem5

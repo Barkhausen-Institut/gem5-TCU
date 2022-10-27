@@ -34,9 +34,14 @@
 #include "mem/tcu/tcu.hh"
 #include "mem/tcu/tcuif.hh"
 #include "mem/tcu/reg_file.hh"
-#include "mem/mem_object.hh"
+#include "sim/clocked_object.hh"
 #include "params/TcuPciProxy.hh"
 #include "cmd_sm.hh"
+
+namespace gem5
+{
+namespace tcu
+{
 
 class TcuPciProxy : public ClockedObject, public CommandExecutor
 {
@@ -220,5 +225,8 @@ class TcuPciProxy : public ClockedObject, public CommandExecutor
     PacketPtr pendingDmaReq;
     bool dmaRetry;
 };
+
+}
+}
 
 #endif // __DEV_TCU_PCI_PROXY__

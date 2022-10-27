@@ -45,6 +45,7 @@ class VExpressFastmodel(VExpress_GEM5_Base):
     generic_timer = SubSystem()
     generic_timer_mem = SubSystem()
     sys_counter = SubSystem()
+    el2_watchdog = SubSystem()
 
     def _on_chip_devices(self):
         return [
@@ -57,5 +58,4 @@ class VExpressFastmodel(VExpress_GEM5_Base):
     def setupBootLoader(self, cur_sys, loc, boot_loader=None):
         if boot_loader is None:
             boot_loader = [ loc('boot_v2.arm64') ]
-        super(VExpressFastmodel, self).setupBootLoader(
-                cur_sys, boot_loader)
+        super().setupBootLoader(cur_sys, boot_loader)

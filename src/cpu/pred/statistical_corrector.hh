@@ -39,15 +39,21 @@
  * Statistical corrector base class
  */
 
-#ifndef __CPU_PRED_STATISTICAL_CORRECTOR_HH
-#define __CPU_PRED_STATISTICAL_CORRECTOR_HH
+#ifndef __CPU_PRED_STATISTICAL_CORRECTOR_HH__
+#define __CPU_PRED_STATISTICAL_CORRECTOR_HH__
 
 #include "base/statistics.hh"
 #include "base/types.hh"
 #include "cpu/static_inst.hh"
 #include "sim/sim_object.hh"
 
+namespace gem5
+{
+
 struct StatisticalCorrectorParams;
+
+namespace branch_prediction
+{
 
 class StatisticalCorrector : public SimObject
 {
@@ -66,7 +72,8 @@ class StatisticalCorrector : public SimObject
         }
     }
     // histories used for the statistical corrector
-    struct SCThreadHistory {
+    struct SCThreadHistory
+    {
         SCThreadHistory() {
             bwHist = 0;
             numOrdinalHistories = 0;
@@ -182,10 +189,11 @@ class StatisticalCorrector : public SimObject
     int8_t firstH;
     int8_t secondH;
 
-    struct StatisticalCorrectorStats : public Stats::Group {
-        StatisticalCorrectorStats(Stats::Group *parent);
-        Stats::Scalar correct;
-        Stats::Scalar wrong;
+    struct StatisticalCorrectorStats : public statistics::Group
+    {
+        StatisticalCorrectorStats(statistics::Group *parent);
+        statistics::Scalar correct;
+        statistics::Scalar wrong;
     } stats;
 
   public:
@@ -271,4 +279,8 @@ class StatisticalCorrector : public SimObject
 
     virtual size_t getSizeInBits() const;
 };
-#endif//__CPU_PRED_STATISTICAL_CORRECTOR_HH
+
+} // namespace branch_prediction
+} // namespace gem5
+
+#endif//__CPU_PRED_STATISTICAL_CORRECTOR_HH__

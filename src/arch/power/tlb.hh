@@ -35,12 +35,13 @@
 #include <map>
 
 #include "arch/generic/tlb.hh"
-#include "arch/power/isa_traits.hh"
 #include "arch/power/pagetable.hh"
-#include "arch/power/utility.hh"
 #include "base/statistics.hh"
 #include "mem/request.hh"
 #include "params/PowerTLB.hh"
+
+namespace gem5
+{
 
 class ThreadContext;
 
@@ -145,15 +146,15 @@ class TLB : public BaseTLB
     Fault translateInst(const RequestPtr &req, ThreadContext *tc);
     Fault translateData(const RequestPtr &req, ThreadContext *tc, bool write);
     Fault translateAtomic(
-            const RequestPtr &req, ThreadContext *tc, Mode mode) override;
+        const RequestPtr &req, ThreadContext *tc, BaseMMU::Mode mode) override;
     void translateTiming(
-            const RequestPtr &req, ThreadContext *tc,
-            Translation *translation, Mode mode) override;
+        const RequestPtr &req, ThreadContext *tc,
+        BaseMMU::Translation *translation, BaseMMU::Mode mode) override;
     Fault translateFunctional(
-            const RequestPtr &req, ThreadContext *tc, Mode mode) override;
+        const RequestPtr &req, ThreadContext *tc, BaseMMU::Mode mode) override;
     Fault finalizePhysical(
-            const RequestPtr &req,
-            ThreadContext *tc, Mode mode) const override;
+        const RequestPtr &req,
+        ThreadContext *tc, BaseMMU::Mode mode) const override;
 
     // Checkpointing
     void serialize(CheckpointOut &cp) const override;
@@ -161,5 +162,6 @@ class TLB : public BaseTLB
 };
 
 } // namespace PowerISA
+} // namespace gem5
 
 #endif // __ARCH_POWER_TLB_HH__

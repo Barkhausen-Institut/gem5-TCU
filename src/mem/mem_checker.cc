@@ -38,6 +38,10 @@
 #include "mem/mem_checker.hh"
 
 #include "base/logging.hh"
+#include "sim/cur_tick.hh"
+
+namespace gem5
+{
 
 void
 MemChecker::WriteCluster::startWrite(MemChecker::Serial serial, Tick _start,
@@ -49,7 +53,7 @@ MemChecker::WriteCluster::startWrite(MemChecker::Serial serial, Tick _start,
         // Initialize a fresh write cluster
         start = _start;
     }
-    chatty_assert(start <= _start, "WriteClusters must filled in order!");
+    gem5_assert(start <= _start, "WriteClusters must filled in order!");
 
     ++numIncomplete;
 
@@ -346,3 +350,5 @@ MemChecker::reset(Addr addr, size_t size)
         byte_trackers.erase(addr + i);
     }
 }
+
+} // namespace gem5

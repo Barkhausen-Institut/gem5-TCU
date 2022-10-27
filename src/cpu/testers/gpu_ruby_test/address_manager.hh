@@ -2,8 +2,6 @@
  * Copyright (c) 2017-2021 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -41,6 +39,9 @@
 
 #include "base/types.hh"
 #include "sim/eventq.hh"
+
+namespace gem5
+{
 
 /*
  * --- AddressManager has 3 main tasks ---
@@ -270,5 +271,7 @@ class AddressManager
     typedef std::vector<LastWriter*> LogTable;
     LogTable logTable;
 };
+
+} // namespace gem5
 
 #endif /* CPU_TESTERS_PROTOCOL_TESTER_ADDRESS_MANAGER_HH_ */

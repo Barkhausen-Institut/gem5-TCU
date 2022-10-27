@@ -32,6 +32,10 @@
 
 #include "sim/guest_abi.hh"
 
+using namespace gem5;
+
+namespace gem5
+{
 // Fake ThreadContext which holds data and captures results.
 class ThreadContext
 {
@@ -57,6 +61,8 @@ const double ThreadContext::floats[] = {
 
 const int ThreadContext::DefaultIntResult = 0;
 const double ThreadContext::DefaultFloatResult = 0.0;
+
+} // namespace gem5
 
 // ABI anchor for an ABI which has 1D progress. Conceptually, this could be
 // because integer and floating point arguments are stored in the same
@@ -89,7 +95,11 @@ struct TestABI_TcInit
     };
 };
 
-namespace GuestABI
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(GuestABI, guest_abi);
+namespace guest_abi
 {
 
 // Hooks for the 1D ABI arguments and return value. Add 1 or 1.0 to return
@@ -106,7 +116,7 @@ struct Argument<TestABI_1D, int>
 
 template <typename Arg>
 struct Argument<TestABI_1D, Arg,
-    typename std::enable_if_t<std::is_floating_point<Arg>::value>>
+    typename std::enable_if_t<std::is_floating_point_v<Arg>>>
 {
     static Arg
     get(ThreadContext *tc, TestABI_1D::State &state)
@@ -127,7 +137,7 @@ struct Result<TestABI_1D, int>
 
 template <typename Ret>
 struct Result<TestABI_1D, Ret,
-    typename std::enable_if_t<std::is_floating_point<Ret>::value>>
+    typename std::enable_if_t<std::is_floating_point_v<Ret>>>
 {
     static void
     store(ThreadContext *tc, const Ret &ret)
@@ -181,7 +191,7 @@ struct Argument<TestABI_2D, int>
 
 template <typename Arg>
 struct Argument<TestABI_2D, Arg,
-    typename std::enable_if_t<std::is_floating_point<Arg>::value>>
+    typename std::enable_if_t<std::is_floating_point_v<Arg>>>
 {
     static Arg
     get(ThreadContext *tc, TestABI_2D::State &state)
@@ -202,7 +212,7 @@ struct Result<TestABI_2D, int>
 
 template <typename Ret>
 struct Result<TestABI_2D, Ret,
-    typename std::enable_if_t<std::is_floating_point<Ret>::value>>
+    typename std::enable_if_t<std::is_floating_point_v<Ret>>>
 {
     static void
     store(ThreadContext *tc, const Ret &ret)
@@ -222,13 +232,14 @@ struct Argument<TestABI_TcInit, int>
     }
 };
 
-} // namespace GuestABI
+} // namespace guest_abi
+} // namespace gem5
 
 // Test function which verifies that its arguments reflect the 1D ABI and
 // which doesn't return anything.
 void
 testIntVoid(ThreadContext *tc, int a, float b, int c, double d,
-            GuestABI::VarArgs<int,float,double> varargs)
+            guest_abi::VarArgs<int,float,double> varargs)
 {
     EXPECT_EQ(a, tc->ints[0]);
     EXPECT_EQ(b, tc->floats[1]);
@@ -261,7 +272,7 @@ testPrepareInt(ThreadContext *tc, int a, int b)
 // which doesn't return anything.
 void
 test2DVoid(ThreadContext *tc, int a, float b, int c, double d,
-           GuestABI::VarArgs<int,float,double> varargs)
+           guest_abi::VarArgs<int,float,double> varargs)
 {
     EXPECT_EQ(a, tc->ints[0]);
     EXPECT_EQ(b, tc->floats[0]);
@@ -291,7 +302,7 @@ double testDoubleRet(ThreadContext *tc) { return DoubleRetValue; }
 
 
 // The actual test bodies.
-TEST(GuestABI, ABI_1D_args)
+TEST(GuestABITest, ABI_1D_args)
 {
     ThreadContext tc;
     invokeSimcall<TestABI_1D>(&tc, testIntVoid);
@@ -299,14 +310,14 @@ TEST(GuestABI, ABI_1D_args)
     EXPECT_EQ(tc.floatResult, tc.DefaultFloatResult);
 }
 
-TEST(GuestABI, ABI_Prepare)
+TEST(GuestABITest, ABI_Prepare)
 {
     ThreadContext tc;
     invokeSimcall<TestABI_Prepare>(&tc, testPrepareVoid);
     invokeSimcall<TestABI_Prepare>(&tc, testPrepareInt);
 }
 
-TEST(GuestABI, ABI_2D_args)
+TEST(GuestABITest, ABI_2D_args)
 {
     ThreadContext tc;
     invokeSimcall<TestABI_2D>(&tc, test2DVoid);
@@ -314,14 +325,14 @@ TEST(GuestABI, ABI_2D_args)
     EXPECT_EQ(tc.floatResult, tc.DefaultFloatResult);
 }
 
-TEST(GuestABI, ABI_TC_init)
+TEST(GuestABITest, ABI_TC_init)
 {
     ThreadContext tc;
     tc.intOffset = 2;
     invokeSimcall<TestABI_TcInit>(&tc, testTcInit);
 }
 
-TEST(GuestABI, ABI_returns)
+TEST(GuestABITest, ABI_returns)
 {
     // 1D returns.
     {
@@ -379,20 +390,20 @@ TEST(GuestABI, ABI_returns)
     }
 }
 
-TEST(GuestABI, dumpSimcall)
+TEST(GuestABITest, dumpSimcall)
 {
     ThreadContext tc;
     std::string dump = dumpSimcall<TestABI_1D>("test", &tc, testIntVoid);
     EXPECT_EQ(dump, "test(0, 11, 2, 13, ...)");
 }
 
-TEST(GuestABI, isVarArgs)
+TEST(GuestABITest, isVarArgs)
 {
-    EXPECT_TRUE(GuestABI::IsVarArgs<GuestABI::VarArgs<int>>::value);
-    EXPECT_FALSE(GuestABI::IsVarArgs<int>::value);
-    EXPECT_FALSE(GuestABI::IsVarArgs<double>::value);
+    EXPECT_TRUE(guest_abi::IsVarArgsV<guest_abi::VarArgs<int>>);
+    EXPECT_FALSE(guest_abi::IsVarArgsV<int>);
+    EXPECT_FALSE(guest_abi::IsVarArgsV<double>);
     struct FooStruct {};
-    EXPECT_FALSE(GuestABI::IsVarArgs<FooStruct>::value);
+    EXPECT_FALSE(guest_abi::IsVarArgsV<FooStruct>);
     union FooUnion {};
-    EXPECT_FALSE(GuestABI::IsVarArgs<FooUnion>::value);
+    EXPECT_FALSE(guest_abi::IsVarArgsV<FooUnion>);
 }

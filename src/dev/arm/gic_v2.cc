@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2013, 2015-2018, 2020 ARM Limited
+ * Copyright (c) 2010, 2013, 2015-2018, 2020-2022 Arm Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -40,13 +40,18 @@
 
 #include "dev/arm/gic_v2.hh"
 
+#include "base/compiler.hh"
 #include "base/trace.hh"
+#include "cpu/base.hh"
 #include "debug/Checkpoint.hh"
 #include "debug/GIC.hh"
 #include "debug/IPI.hh"
 #include "debug/Interrupt.hh"
 #include "mem/packet.hh"
 #include "mem/packet_access.hh"
+
+namespace gem5
+{
 
 const AddrRange GicV2::GICD_IGROUPR   (0x080, 0x100);
 const AddrRange GicV2::GICD_ISENABLER (0x100, 0x180);
@@ -58,6 +63,61 @@ const AddrRange GicV2::GICD_ICACTIVER (0x380, 0x400);
 const AddrRange GicV2::GICD_IPRIORITYR(0x400, 0x800);
 const AddrRange GicV2::GICD_ITARGETSR (0x800, 0xc00);
 const AddrRange GicV2::GICD_ICFGR     (0xc00, 0xd00);
+
+void
+GicV2Registers::copyDistRegister(GicV2Registers* from,
+                                 GicV2Registers* to,
+                                 ContextID ctx, Addr daddr)
+{
+    auto val = from->readDistributor(ctx, daddr);
+    DPRINTF(GIC, "copy dist 0x%x 0x%08x\n", daddr, val);
+    to->writeDistributor(ctx, daddr, val);
+}
+
+void
+GicV2Registers::copyCpuRegister(GicV2Registers* from,
+                                GicV2Registers* to,
+                                ContextID ctx, Addr daddr)
+{
+    auto val = from->readCpu(ctx, daddr);
+    DPRINTF(GIC, "copy cpu  0x%x 0x%08x\n", daddr, val);
+    to->writeCpu(ctx, daddr, val);
+}
+
+void
+GicV2Registers::copyBankedDistRange(System *sys, GicV2Registers* from,
+                                    GicV2Registers* to,
+                                    Addr daddr, size_t size)
+{
+    for (int ctx = 0; ctx < sys->threads.size(); ++ctx)
+        for (auto a = daddr; a < daddr + size; a += 4)
+            copyDistRegister(from, to, ctx, a);
+}
+
+void
+GicV2Registers::clearBankedDistRange(System *sys, GicV2Registers* to,
+                                     Addr daddr, size_t size)
+{
+    for (int ctx = 0; ctx < sys->threads.size(); ++ctx)
+        for (auto a = daddr; a < daddr + size; a += 4)
+            to->writeDistributor(ctx, a, 0xFFFFFFFF);
+}
+
+void
+GicV2Registers::copyDistRange(GicV2Registers* from,
+                              GicV2Registers* to,
+                              Addr daddr, size_t size)
+{
+    for (auto a = daddr; a < daddr + size; a += 4)
+        copyDistRegister(from, to, 0, a);
+}
+
+void
+GicV2Registers::clearDistRange(GicV2Registers* to, Addr daddr, size_t size)
+{
+    for (auto a = daddr; a < daddr + size; a += 4)
+        to->writeDistributor(0, a, 0xFFFFFFFF);
+}
 
 GicV2::GicV2(const Params &p)
     : BaseGic(p),
@@ -71,7 +131,7 @@ GicV2::GicV2(const Params &p)
       cpuPioDelay(p.cpu_pio_delay), intLatency(p.int_latency),
       enabled(false), haveGem5Extensions(p.gem5_extensions),
       itLines(p.it_lines),
-      intEnabled {}, pendingInt {}, activeInt {},
+      intEnabled {}, pendingInt {}, activeInt {}, intGroup {},
       intPriority {}, intConfig {}, cpuTarget {},
       cpuSgiPending {}, cpuSgiActive {},
       cpuSgiPendingExt {}, cpuSgiActiveExt {},
@@ -331,11 +391,11 @@ GicV2::readCpu(ContextID ctx, Addr daddr)
                             break;
                         }
                     }
-                    uint64_t sgi_num = ULL(1) << (ctx + 8 * iar.cpu_id);
+                    uint64_t sgi_num = 1ULL << (ctx + 8 * iar.cpu_id);
                     cpuSgiActive[iar.ack_id] |= sgi_num;
                     cpuSgiPending[iar.ack_id] &= ~sgi_num;
                 } else {
-                    uint64_t sgi_num = ULL(1) << iar.ack_id;
+                    uint64_t sgi_num = 1ULL << iar.ack_id;
                     cpuSgiActiveExt[ctx] |= sgi_num;
                     cpuSgiPendingExt[ctx] &= ~sgi_num;
                 }
@@ -389,7 +449,7 @@ GicV2::writeDistributor(PacketPtr pkt)
     const ContextID ctx = pkt->req->contextId();
     const size_t data_sz = pkt->getSize();
 
-    M5_VAR_USED uint32_t pkt_data;
+    [[maybe_unused]] uint32_t pkt_data;
     switch (data_sz)
     {
       case 1:
@@ -590,7 +650,7 @@ GicV2::writeCpu(ContextID ctx, Addr daddr, uint32_t data)
         const IAR iar = data;
         if (iar.ack_id < SGI_MAX) {
             // Clear out the bit that corresponds to the cleared int
-            uint64_t clr_int = ULL(1) << (ctx + 8 * iar.cpu_id);
+            uint64_t clr_int = 1ULL << (ctx + 8 * iar.cpu_id);
             if (!(cpuSgiActive[iar.ack_id] & clr_int) &&
                 !(cpuSgiActiveExt[ctx] & (1 << iar.ack_id)))
                 panic("Done handling a SGI that isn't active?\n");
@@ -716,7 +776,7 @@ uint64_t
 GicV2::genSwiMask(int cpu)
 {
     panic_if(cpu > sys->threads.size(), "Invalid CPU ID.");
-    return ULL(0x0101010101010101) << cpu;
+    return 0x0101010101010101ULL << cpu;
 }
 
 uint8_t
@@ -733,6 +793,9 @@ GicV2::getCpuPriority(unsigned cpu)
 void
 GicV2::updateIntState(int hint)
 {
+    if (blockIntUpdate())
+        return;
+
     for (int cpu = 0; cpu < sys->threads.size(); cpu++) {
         if (!cpuEnabled(cpu))
             continue;
@@ -917,10 +980,11 @@ GicV2::clearPPInt(uint32_t num, uint32_t cpu)
 void
 GicV2::clearInt(ContextID ctx, uint32_t int_num)
 {
+    auto tc = sys->threads[ctx];
     if (isFiq(ctx, int_num)) {
-        platform->intrctrl->clear(ctx, ArmISA::INT_FIQ, 0);
+        tc->getCpuPtr()->clearInterrupt(tc->threadId(), ArmISA::INT_FIQ, 0);
     } else {
-        platform->intrctrl->clear(ctx, ArmISA::INT_IRQ, 0);
+        tc->getCpuPtr()->clearInterrupt(tc->threadId(), ArmISA::INT_IRQ, 0);
     }
 }
 
@@ -936,7 +1000,8 @@ GicV2::postInt(uint32_t cpu, Tick when)
 void
 GicV2::postDelayedInt(uint32_t cpu)
 {
-    platform->intrctrl->post(cpu, ArmISA::INT_IRQ, 0);
+    auto tc = sys->threads[cpu];
+    tc->getCpuPtr()->postInterrupt(tc->threadId(), ArmISA::INT_IRQ, 0);
     --pendingDelayedInterrupts;
     assert(pendingDelayedInterrupts >= 0);
     if (pendingDelayedInterrupts == 0)
@@ -961,7 +1026,8 @@ GicV2::supportsVersion(GicVersion version)
 void
 GicV2::postDelayedFiq(uint32_t cpu)
 {
-    platform->intrctrl->post(cpu, ArmISA::INT_FIQ, 0);
+    auto tc = sys->threads[cpu];
+    tc->getCpuPtr()->postInterrupt(tc->threadId(), ArmISA::INT_FIQ, 0);
     --pendingDelayedInterrupts;
     assert(pendingDelayedInterrupts >= 0);
     if (pendingDelayedInterrupts == 0)
@@ -984,6 +1050,78 @@ GicV2::drainResume()
 {
     // There may be pending interrupts if checkpointed from Kvm; post them.
     updateIntState(-1);
+}
+
+void
+GicV2::copyGicState(GicV2Registers* from, GicV2Registers* to)
+{
+    Addr set, clear;
+    size_t size;
+
+    /// CPU state (GICC_*)
+    // Copy CPU Interface Control Register (CTLR),
+    //      Interrupt Priority Mask Register (PMR), and
+    //      Binary Point Register (BPR)
+    for (int ctx = 0; ctx < sys->threads.size(); ++ctx) {
+        copyCpuRegister(from, to, ctx, GICC_CTLR);
+        copyCpuRegister(from, to, ctx, GICC_PMR);
+        copyCpuRegister(from, to, ctx, GICC_BPR);
+    }
+
+    /// Distributor state (GICD_*)
+    // Copy Distributor Control Register (CTLR)
+    copyDistRegister(from, to, 0, GICD_CTLR);
+
+    // Copy interrupt-enabled statuses (I[CS]ENABLERn; R0 is per-CPU banked)
+    set   = GICD_ISENABLER.start();
+    clear = GICD_ICENABLER.start();
+    size  = itLines / 8;
+    clearBankedDistRange(sys, to, clear, 4);
+    copyBankedDistRange(sys, from, to, set, 4);
+
+    set += 4, clear += 4, size -= 4;
+    clearDistRange(to, clear, size);
+    copyDistRange(from, to, set, size);
+
+    // Copy pending interrupts (I[CS]PENDRn; R0 is per-CPU banked)
+    set   = GICD_ISPENDR.start();
+    clear = GICD_ICPENDR.start();
+    size  = itLines / 8;
+    clearBankedDistRange(sys, to, clear, 4);
+    copyBankedDistRange(sys, from, to, set, 4);
+
+    set += 4, clear += 4, size -= 4;
+    clearDistRange(to, clear, size);
+    copyDistRange(from, to, set, size);
+
+    // Copy active interrupts (I[CS]ACTIVERn; R0 is per-CPU banked)
+    set   = GICD_ISACTIVER.start();
+    clear = GICD_ICACTIVER.start();
+    size  = itLines / 8;
+    clearBankedDistRange(sys, to, clear, 4);
+    copyBankedDistRange(sys, from, to, set, 4);
+
+    set += 4, clear += 4, size -= 4;
+    clearDistRange(to, clear, size);
+    copyDistRange(from, to, set, size);
+
+    // Copy interrupt priorities (IPRIORITYRn; R0-7 are per-CPU banked)
+    set   = GICD_IPRIORITYR.start();
+    copyBankedDistRange(sys, from, to, set, 32);
+
+    set += 32;
+    size = itLines - 32;
+    copyDistRange(from, to, set, size);
+
+    // Copy interrupt processor target regs (ITARGETRn; R0-7 are read-only)
+    set = GICD_ITARGETSR.start() + 32;
+    size = itLines - 32;
+    copyDistRange(from, to, set, size);
+
+    // Copy interrupt configuration registers (ICFGRn)
+    set = GICD_ICFGR.start();
+    size = itLines / 4;
+    copyDistRange(from, to, set, size);
 }
 
 void
@@ -1090,3 +1228,5 @@ GicV2::BankedRegs::unserialize(CheckpointIn &cp)
     UNSERIALIZE_ARRAY(intConfig, 2);
     UNSERIALIZE_ARRAY(intPriority, SGI_MAX + PPI_MAX);
 }
+
+} // namespace gem5

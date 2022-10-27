@@ -32,9 +32,12 @@
 #include "base/intmath.hh"
 #include "mem/cache/prefetch/associative_set.hh"
 
+namespace gem5
+{
+
 template<class Entry>
 AssociativeSet<Entry>::AssociativeSet(int assoc, int num_entries,
-        BaseIndexingPolicy *idx_policy, ReplacementPolicy::Base *rpl_policy,
+        BaseIndexingPolicy *idx_policy, replacement_policy::Base *rpl_policy,
         Entry const &init_value)
   : associativity(assoc), numEntries(num_entries), indexingPolicy(idx_policy),
     replacementPolicy(rpl_policy), entries(numEntries, init_value)
@@ -120,5 +123,7 @@ AssociativeSet<Entry>::invalidate(Entry* entry)
     entry->invalidate();
     replacementPolicy->invalidate(entry->replacementData);
 }
+
+} // namespace gem5
 
 #endif//__CACHE_PREFETCH_ASSOCIATIVE_SET_IMPL_HH__

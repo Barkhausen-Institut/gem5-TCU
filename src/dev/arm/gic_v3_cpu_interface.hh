@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 ARM Limited
+ * Copyright (c) 2019, 2022 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -44,8 +44,16 @@
 #include "arch/arm/isa_device.hh"
 #include "dev/arm/gic_v3.hh"
 
+namespace gem5
+{
+
 class Gicv3Distributor;
 class Gicv3Redistributor;
+
+namespace ArmISA
+{
+class ISA;
+}
 
 class Gicv3CPUInterface : public ArmISA::BaseISADevice, public Serializable
 {
@@ -53,6 +61,7 @@ class Gicv3CPUInterface : public ArmISA::BaseISADevice, public Serializable
 
     friend class Gicv3Distributor;
     friend class Gicv3Redistributor;
+    friend class ArmISA::ISA;
 
   protected:
 
@@ -151,16 +160,18 @@ class Gicv3CPUInterface : public ArmISA::BaseISADevice, public Serializable
 
     static const uint8_t GIC_MIN_VBPR = 7 - VIRTUAL_PREEMPTION_BITS;
 
-    typedef struct {
+    struct hppi_t
+    {
         uint32_t intid;
         uint8_t prio;
         Gicv3::GroupId group;
-    } hppi_t;
+    };
 
     hppi_t hppi;
 
     // GIC CPU interface memory mapped control registers (legacy)
-    enum {
+    enum
+    {
         GICC_CTLR    = 0x0000,
         GICC_PMR     = 0x0004,
         GICC_BPR     = 0x0008,
@@ -180,7 +191,8 @@ class Gicv3CPUInterface : public ArmISA::BaseISADevice, public Serializable
     static const AddrRange GICC_NSAPR;
 
     // GIC CPU virtual interface memory mapped control registers (legacy)
-    enum {
+    enum
+    {
         GICH_HCR   = 0x0000,
         GICH_VTR   = 0x0004,
         GICH_VMCR  = 0x0008,
@@ -297,7 +309,7 @@ class Gicv3CPUInterface : public ArmISA::BaseISADevice, public Serializable
 
     void activateIRQ(uint32_t intid, Gicv3::GroupId group);
     void generateSGI(RegVal val, Gicv3::GroupId group);
-    int currEL() const;
+    ArmISA::ExceptionLevel currEL() const;
     void deactivateIRQ(uint32_t intid, Gicv3::GroupId group);
     void dropPriority(Gicv3::GroupId group);
     uint64_t eoiMaintenanceInterruptStatus() const;
@@ -348,10 +360,15 @@ class Gicv3CPUInterface : public ArmISA::BaseISADevice, public Serializable
 
     void init();
 
+  public:
+    void copy(Gicv3Registers *from, Gicv3Registers *to);
+
   public: // BaseISADevice
     RegVal readMiscReg(int misc_reg) override;
     void setMiscReg(int misc_reg, RegVal val) override;
     void setThreadContext(ThreadContext *tc) override;
 };
+
+} // namespace gem5
 
 #endif //__DEV_ARM_GICV3_CPU_INTERFACE_H__

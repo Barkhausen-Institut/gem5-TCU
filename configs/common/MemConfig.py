@@ -1,4 +1,4 @@
-# Copyright (c) 2013, 2017, 2020 ARM Limited
+# Copyright (c) 2013, 2017, 2020-2021 Arm Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -37,7 +37,7 @@ import m5.objects
 from common import ObjectList
 from common import HMC
 
-def create_mem_intf(intf, r, i, nbr_mem_ctrls, intlv_bits, intlv_size,
+def create_mem_intf(intf, r, i, intlv_bits, intlv_size,
                     xor_low_bit):
     """
     Helper function for creating a single memoy controller from the given
@@ -156,7 +156,7 @@ def config_mem(options, system):
     if opt_external_memory_system:
         subsystem.external_memory = m5.objects.ExternalSlave(
             port_type=opt_external_memory_system,
-            port_data="init_mem0", port=xbar.master,
+            port_data="init_mem0", port=xbar.mem_side_ports,
             addr_ranges=system.mem_ranges)
         subsystem.workload.addr_check = False
         return
@@ -199,7 +199,7 @@ def config_mem(options, system):
         for i in range(nbr_mem_ctrls):
             if opt_mem_type and (not opt_nvm_type or range_iter % 2 != 0):
                 # Create the DRAM interface
-                dram_intf = create_mem_intf(intf, r, i, nbr_mem_ctrls,
+                dram_intf = create_mem_intf(intf, r, i,
                     intlv_bits, intlv_size, opt_xor_low_bit)
 
                 # Set the number of ranks based on the command-line
@@ -218,30 +218,14 @@ def config_mem(options, system):
                         "latency to 1ns.")
 
                 # Create the controller that will drive the interface
-                if opt_mem_type == "HMC_2500_1x32":
-                    # The static latency of the vault controllers is estimated
-                    # to be smaller than a full DRAM channel controller
-                    mem_ctrl = m5.objects.MemCtrl(min_writes_per_switch = 8,
-                                             static_backend_latency = '4ns',
-                                             static_frontend_latency = '4ns')
-                elif opt_mem_type == "SimpleMemory":
-                    mem_ctrl = m5.objects.SimpleMemory()
-                elif opt_mem_type == "QoSMemSinkInterface":
-                    mem_ctrl = m5.objects.QoSMemSinkCtrl()
-                else:
-                    mem_ctrl = m5.objects.MemCtrl()
-
-                # Hookup the controller to the interface and add to the list
-                if opt_mem_type == "QoSMemSinkInterface":
-                    mem_ctrl.interface = dram_intf
-                elif opt_mem_type != "SimpleMemory":
-                    mem_ctrl.dram = dram_intf
+                mem_ctrl = dram_intf.controller()
 
                 mem_ctrls.append(mem_ctrl)
 
             elif opt_nvm_type and (not opt_mem_type or range_iter % 2 == 0):
-                nvm_intf = create_mem_intf(n_intf, r, i, nbr_mem_ctrls,
+                nvm_intf = create_mem_intf(n_intf, r, i,
                     intlv_bits, intlv_size, opt_xor_low_bit)
+
                 # Set the number of ranks based on the command-line
                 # options if it was explicitly set
                 if issubclass(n_intf, m5.objects.NVMInterface) and \
@@ -251,7 +235,7 @@ def config_mem(options, system):
                 # Create a controller if not sharing a channel with DRAM
                 # in which case the controller has already been created
                 if not opt_hybrid_channel:
-                    mem_ctrl = m5.objects.MemCtrl()
+                    mem_ctrl = m5.objects.HeteroMemCtrl()
                     mem_ctrl.nvm = nvm_intf
 
                     mem_ctrls.append(mem_ctrl)
@@ -266,7 +250,7 @@ def config_mem(options, system):
     for i in range(len(mem_ctrls)):
         if opt_mem_type == "HMC_2500_1x32":
             # Connect the controllers to the membus
-            mem_ctrls[i].port = xbar[i/4].mem_side_ports
+            mem_ctrls[i].port = xbar[i//4].mem_side_ports
             # Set memory device size. There is an independent controller
             # for each vault. All vaults are same size.
             mem_ctrls[i].dram.device_size = options.hmc_dev_vault_size

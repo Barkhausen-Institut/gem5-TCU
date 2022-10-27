@@ -33,6 +33,9 @@
 #include "cpu/decode_cache.hh"
 #include "cpu/static_inst_fwd.hh"
 
+namespace gem5
+{
+
 namespace GenericISA
 {
 
@@ -40,13 +43,13 @@ template <typename Decoder, typename EMI>
 class BasicDecodeCache
 {
   private:
-    DecodeCache::InstMap<EMI> instMap;
+    decode_cache::InstMap<EMI> instMap;
     struct AddrMapEntry
     {
         StaticInstPtr inst;
         EMI machInst;
     };
-    DecodeCache::AddrMap<AddrMapEntry> decodePages;
+    decode_cache::AddrMap<AddrMapEntry> decodePages;
 
   public:
     /// Decode a machine instruction.
@@ -74,5 +77,6 @@ class BasicDecodeCache
 };
 
 } // namespace GenericISA
+} // namespace gem5
 
 #endif // __ARCH_GENERIC_DECODE_CACHE_HH__

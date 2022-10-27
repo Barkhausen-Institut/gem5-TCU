@@ -30,6 +30,7 @@
 #include <cstring>
 #include <string>
 
+#include "base/compiler.hh"
 #include "systemc/core/kernel.hh"
 #include "systemc/core/scheduler.hh"
 #include "systemc/ext/core/messages.hh"
@@ -38,7 +39,7 @@
 #include "systemc/utils/report.hh"
 
 // A weak symbol to detect if sc_main has been defined, and if so where it is.
-M5_WEAK int sc_main(int argc, char *argv[]);
+GEM5_WEAK int sc_main(int argc, char *argv[]);
 
 namespace sc_gem5
 {
@@ -46,6 +47,8 @@ namespace sc_gem5
 void
 ScMainFiber::main()
 {
+    using namespace gem5;
+
     _called = true;
 
     if (::sc_main) {

@@ -41,6 +41,11 @@
 #include "dev/pci/host.hh"
 #include "params/TcuPciHost.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 class TcuPciProxy;
 
 /**
@@ -100,5 +105,8 @@ class TcuPciHost : public PciHost
     const Addr pciMemBase;
     const Addr pciDmaBase;
 };
+
+}
+}
 
 #endif // __DEV_DTU_PCI_HOST__

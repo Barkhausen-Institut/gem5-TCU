@@ -47,7 +47,7 @@ let {{
 
         def __init__(self, mnem, post, add, writeback,
                      size=4, sign=False, user=False, flavor="normal"):
-            super(LoadInst, self).__init__()
+            super().__init__()
 
             self.name = mnem
             self.post = post
@@ -89,10 +89,10 @@ let {{
         decConstBase = 'Rfe'
 
         def __init__(self, mnem, post, add, writeback):
-            super(RfeInst, self).__init__(mnem, post, add, writeback)
+            super().__init__(mnem, post, add, writeback)
             self.Name = "RFE_" + loadImmClassName(post, add, writeback, 8)
 
-            self.memFlags.append("ArmISA::TLB::AlignWord")
+            self.memFlags.append("ArmISA::MMU::AlignWord")
 
         def emit(self):
             offset = 0
@@ -118,7 +118,8 @@ let {{
             self.codeBlobs["memacc_code"] = accCode
 
             wbDecl = None
-            pcDecl = "MicroUopSetPCCPSR(machInst, INTREG_UREG0, INTREG_UREG1, INTREG_UREG2);"
+            pcDecl = "MicroUopSetPCCPSR(machInst, int_reg::Ureg0, " \
+                     "int_reg::Ureg1, int_reg::Ureg2);"
 
             if self.writeback:
                 wbDecl = "MicroAddiUop(machInst, base, base, %d);" % wbDiff
@@ -126,7 +127,7 @@ let {{
 
     class LoadImmInst(LoadInst):
         def __init__(self, *args, **kargs):
-            super(LoadImmInst, self).__init__(*args, **kargs)
+            super().__init__(*args, **kargs)
             self.offset = self.op + " imm"
 
             if self.add:
@@ -140,7 +141,7 @@ let {{
 
     class LoadRegInst(LoadInst):
         def __init__(self, *args, **kargs):
-            super(LoadRegInst, self).__init__(*args, **kargs)
+            super().__init__(*args, **kargs)
             self.offset = self.op + " shift_rm_imm(Index, shiftAmt," + \
                                     " shiftType, OptShiftRmCondCodesC)"
             if self.add:
@@ -154,7 +155,7 @@ let {{
 
     class LoadSingle(LoadInst):
         def __init__(self, *args, **kargs):
-            super(LoadSingle, self).__init__(*args, **kargs)
+            super().__init__(*args, **kargs)
 
             # Build the default class name
             self.Name = self.nameFunc(self.post, self.add, self.writeback,
@@ -163,7 +164,7 @@ let {{
             # Add memory request flags where necessary
             self.memFlags.append("%d" % int(math.log(self.size, 2)))
             if self.user:
-                self.memFlags.append("ArmISA::TLB::UserMode")
+                self.memFlags.append("ArmISA::MMU::UserMode")
 
             self.instFlags = []
             if self.flavor == "dprefetch":
@@ -173,7 +174,7 @@ let {{
                 self.memFlags.append("Request::PREFETCH")
                 self.instFlags = ['IsInstPrefetch']
             elif self.flavor == "normal":
-                self.memFlags.append("ArmISA::TLB::AllowUnaligned")
+                self.memFlags.append("ArmISA::MMU::AllowUnaligned")
 
             if self.flavor in ("exclusive", "acex"):
                 self.memFlags.append("Request::LLSC")
@@ -240,7 +241,7 @@ let {{
 
     class LoadDouble(LoadInst):
         def __init__(self, *args, **kargs):
-            super(LoadDouble, self).__init__(*args, **kargs)
+            super().__init__(*args, **kargs)
 
             # Build the default class name
             self.Name = self.nameFunc(self.post, self.add, self.writeback)
@@ -249,9 +250,9 @@ let {{
             # Add memory request flags where necessary
             if self.flavor in ("exclusive", "acex"):
                 self.memFlags.append("Request::LLSC")
-                self.memFlags.append("ArmISA::TLB::AlignDoubleWord")
+                self.memFlags.append("ArmISA::MMU::AlignDoubleWord")
             else:
-                self.memFlags.append("ArmISA::TLB::AlignWord")
+                self.memFlags.append("ArmISA::MMU::AlignWord")
 
             # Disambiguate the class name for different flavors of loads
             if self.flavor != "normal":

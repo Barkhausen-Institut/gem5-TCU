@@ -34,11 +34,15 @@
 
 #include <cpu/thread_context.hh>
 
+namespace gem5
+{
+
 /**
  * FutexKey class defines an unique identifier for a particular futex in the
  * system. The tgid and an address are the unique values needed as the key.
  */
-class FutexKey {
+class FutexKey
+{
   public:
     uint64_t addr;
     uint64_t tgid;
@@ -48,24 +52,39 @@ class FutexKey {
     bool operator==(const FutexKey &in) const;
 };
 
-namespace std {
+} // namespace gem5
+
+namespace std
+{
     /**
      * The unordered_map structure needs the parenthesis operator defined for
      * std::hash if a user defined key is used. Our key is is user defined
      * so we need to provide the hash functor.
      */
     template <>
-    struct hash<FutexKey>
+    struct hash<gem5::FutexKey>
     {
-        size_t operator()(const FutexKey& in) const;
+        size_t operator()(const gem5::FutexKey& in) const
+        {
+            size_t hash = 65521;
+            for (int i = 0; i < sizeof(uint64_t) / sizeof(size_t); i++) {
+                hash ^= (size_t)(in.addr >> sizeof(size_t) * i) ^
+                        (size_t)(in.tgid >> sizeof(size_t) * i);
+            }
+            return hash;
+        }
     };
-}
+} // namespace std
+
+namespace gem5
+{
 
 /**
  * WaiterState defines internal state of a waiter thread. The state
  * includes a pointer to the thread's context and its associated bitmask.
  */
-class WaiterState {
+class WaiterState
+{
   public:
     ThreadContext* tc;
     int bitmask;
@@ -123,5 +142,7 @@ class FutexMap : public std::unordered_map<FutexKey, WaiterList>
 
     std::unordered_set<ThreadContext *> waitingTcs;
 };
+
+} // namespace gem5
 
 #endif // __FUTEX_MAP_HH__

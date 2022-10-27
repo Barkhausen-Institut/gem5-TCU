@@ -47,12 +47,15 @@
 #include <vector>
 
 #include "base/cprintf.hh"
+#include "base/named.hh"
 #include "base/trace.hh"
 #include "base/types.hh"
 #include "debug/MemChecker.hh"
 #include "params/MemChecker.hh"
-#include "sim/core.hh"
 #include "sim/sim_object.hh"
+
+namespace gem5
+{
 
 /**
  * MemChecker. Verifies that reads observe the values from permissible writes.
@@ -564,5 +567,7 @@ MemChecker::abortWrite(MemChecker::Serial serial, Addr addr, size_t size)
         getByteTracker(addr + i)->abortWrite(serial);
     }
 }
+
+} // namespace gem5
 
 #endif // __MEM_MEM_CHECKER_HH__

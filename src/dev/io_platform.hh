@@ -34,6 +34,9 @@
 #include "dev/platform.hh"
 #include "params/IOPlatform.hh"
 
+namespace gem5
+{
+
 class IOPlatform : public Platform
 {
   public:
@@ -91,5 +94,7 @@ class IOPlatform : public Platform
         return addr;
     }
 };
+
+}
 
 #endif // __DEV_IOPLATFORM_HH__

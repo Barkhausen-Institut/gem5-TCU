@@ -38,24 +38,21 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from m5.SimObject import *
-from m5.defines import buildEnv
 from m5.params import *
 from m5.proxy import *
 
 from m5.objects.DVFSHandler import *
 from m5.objects.SimpleMemory import *
+from m5.objects.Workload import StubWorkload
 
 class MemoryMode(Enum): vals = ['invalid', 'atomic', 'timing',
                                 'atomic_noncaching']
 
-if buildEnv['TARGET_ISA'] in ('sparc', 'power'):
-    default_byte_order = 'big'
-else:
-    default_byte_order = 'little'
-
 class System(SimObject):
     type = 'System'
     cxx_header = "sim/system.hh"
+    cxx_class = 'gem5::System'
+
     system_port = RequestPort("System port")
 
     cxx_exports = [
@@ -83,14 +80,18 @@ class System(SimObject):
     # I/O bridge or cache
     mem_ranges = VectorParam.AddrRange([], "Ranges that constitute main memory")
 
+    # The ranges backed by a shadowed ROM
+    shadow_rom_ranges = VectorParam.AddrRange([], "Ranges  backed by a " \
+                                                  "shadowed ROM")
+
     shared_backstore = Param.String("", "backstore's shmem segment filename, "
         "use to directly address the backstore from another host-OS process. "
         "Leave this empty to unset the MAP_SHARED flag.")
+    auto_unlink_shared_backstore = Param.Bool(False, "Automatically remove the "
+        "shmem segment file upon destruction. This is used only if "
+        "shared_backstore is non-empty.")
 
     cache_line_size = Param.Unsigned(64, "Cache line size in bytes")
-
-    byte_order = Param.ByteOrder(default_byte_order,
-                                 "Default byte order of system components")
 
     redirect_paths = VectorParam.RedirectPath([], "Path redirections")
 
@@ -111,7 +112,7 @@ class System(SimObject):
     work_cpus_ckpt_count = Param.Counter(0,
         "create checkpoint when active cpu count value is reached")
 
-    workload = Param.Workload(NULL, "Workload to run on this system")
+    workload = Param.Workload(StubWorkload(), "Workload to run on this system")
     init_param = Param.UInt64(0, "numerical value to pass into simulator")
     readfile = Param.String("", "file to read startup script from")
     symbolfile = Param.String("", "file to get the symbols from")
@@ -125,10 +126,5 @@ class System(SimObject):
 
     # SE mode doesn't use the ISA System subclasses, and so we need to set an
     # ISA specific value in this class directly.
-    m5ops_base = Param.Addr(
-        0xffff0000 if buildEnv['TARGET_ISA'] == 'x86' else 0,
-        "Base of the 64KiB PA range used for memory-mapped m5ops. Set to 0 "
-        "to disable.")
-
-    if buildEnv['USE_KVM']:
-        kvm_vm = Param.KvmVM(NULL, 'KVM VM (i.e., shared memory domain)')
+    m5ops_base = Param.Addr(0, "Base of the 64KiB PA range used for "
+       "memory-mapped m5ops. Set to 0 to disable.")

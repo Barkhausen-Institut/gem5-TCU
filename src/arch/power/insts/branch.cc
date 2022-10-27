@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2009 The University of Edinburgh
+ * Copyright (c) 2021 IBM Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,24 +28,26 @@
  */
 
 #include "arch/power/insts/branch.hh"
+#include "arch/power/regs/int.hh"
+#include "arch/power/regs/misc.hh"
 
 #include "base/loader/symtab.hh"
 #include "cpu/thread_context.hh"
+
+namespace gem5
+{
 
 using namespace PowerISA;
 
 const std::string &
 PCDependentDisassembly::disassemble(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
-    if (!cachedDisassembly ||
-        pc != cachedPC || symtab != cachedSymtab)
-    {
-        if (cachedDisassembly)
-            delete cachedDisassembly;
+    if (!cachedDisassembly || pc != cachedPC || symtab != cachedSymtab) {
+        if (!cachedDisassembly)
+            cachedDisassembly.reset(new std::string);
 
-        cachedDisassembly =
-            new std::string(generateDisassembly(pc, symtab));
+        *cachedDisassembly = generateDisassembly(pc, symtab);
         cachedPC = pc;
         cachedSymtab = symtab;
     }
@@ -52,23 +55,47 @@ PCDependentDisassembly::disassemble(
     return *cachedDisassembly;
 }
 
-PowerISA::PCState
-BranchPCRel::branchTarget(const PowerISA::PCState &pc) const
+
+std::unique_ptr<PCStateBase>
+BranchOp::branchTarget(ThreadContext *tc) const
 {
-    return (uint32_t)(pc.pc() + disp);
+    Msr msr = tc->getReg(int_reg::Msr);
+    Addr addr;
+
+    if (aa)
+        addr = li;
+    else
+        addr = tc->pcState().instAddr() + li;
+
+    return std::make_unique<PowerISA::PCState>(
+            msr.sf ? addr : addr & UINT32_MAX);
 }
 
+
 std::string
-BranchPCRel::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+BranchOp::generateDisassembly(
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
+    Addr target;
 
-    ccprintf(ss, "%-10s ", mnemonic);
+    // Generate correct mnemonic
+    std::string myMnemonic(mnemonic);
+    std::string suffix;
 
-    Addr target = pc + disp;
+    // Additional characters depending on isa bits being set
+    if (lk)
+        suffix += "l";
+    if (aa)
+        suffix += "a";
+    ccprintf(ss, "%-10s ", myMnemonic + suffix);
 
-    Loader::SymbolTable::const_iterator it;
+    if (aa)
+        target = li;
+    else
+        target = pc + li;
+
+    loader::SymbolTable::const_iterator it;
     if (symtab && (it = symtab->find(target)) != symtab->end())
         ss << it->name;
     else
@@ -77,48 +104,50 @@ BranchPCRel::generateDisassembly(
     return ss.str();
 }
 
-PowerISA::PCState
-BranchNonPCRel::branchTarget(const PowerISA::PCState &pc) const
+
+std::unique_ptr<PCStateBase>
+BranchDispCondOp::branchTarget(ThreadContext *tc) const
 {
-    return targetAddr;
-}
+    Msr msr = tc->getReg(int_reg::Msr);
+    Addr addr;
 
-std::string
-BranchNonPCRel::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
-{
-    std::stringstream ss;
-
-    ccprintf(ss, "%-10s ", mnemonic);
-
-    Loader::SymbolTable::const_iterator it;
-    if (symtab && (it = symtab->find(targetAddr)) != symtab->end())
-        ss << it->name;
+    if (aa)
+        addr = bd;
     else
-        ccprintf(ss, "%#x", targetAddr);
+        addr = tc->pcState().instAddr() + bd;
 
-    return ss.str();
+    return std::make_unique<PowerISA::PCState>(
+            msr.sf ? addr : addr & UINT32_MAX);
 }
 
-PowerISA::PCState
-BranchPCRelCond::branchTarget(const PowerISA::PCState &pc) const
-{
-    return (uint32_t)(pc.pc() + disp);
-}
 
 std::string
-BranchPCRelCond::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+BranchDispCondOp::generateDisassembly(
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
+    Addr target;
 
-    ccprintf(ss, "%-10s ", mnemonic);
+    // Generate the correct mnemonic
+    std::string myMnemonic(mnemonic);
+    std::string suffix;
 
-    ss << bo << ", " << bi << ", ";
+    // Additional characters depending on isa bits being set
+    if (lk)
+        suffix += "l";
+    if (aa)
+        suffix += "a";
+    ccprintf(ss, "%-10s ", myMnemonic + suffix);
 
-    Addr target = pc + disp;
+    // Print BI and BO fields
+    ss << (int) bi << ", " << (int) bo << ", ";
 
-    Loader::SymbolTable::const_iterator it;
+    if (aa)
+        target = bd;
+    else
+        target = pc + bd;
+
+    loader::SymbolTable::const_iterator it;
     if (symtab && (it = symtab->find(target)) != symtab->end())
         ss << it->name;
     else
@@ -127,47 +156,36 @@ BranchPCRelCond::generateDisassembly(
     return ss.str();
 }
 
-PowerISA::PCState
-BranchNonPCRelCond::branchTarget(const PowerISA::PCState &pc) const
+
+std::unique_ptr<PCStateBase>
+BranchRegCondOp::branchTarget(ThreadContext *tc) const
 {
-    return targetAddr;
+    Msr msr = tc->getReg(int_reg::Msr);
+    Addr addr = tc->getReg(srcRegIdx(_numSrcRegs - 1)) & -4ULL;
+    return std::make_unique<PowerISA::PCState>(
+            msr.sf ? addr : addr & UINT32_MAX);
 }
 
+
 std::string
-BranchNonPCRelCond::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+BranchRegCondOp::generateDisassembly(
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
 
-    ccprintf(ss, "%-10s ", mnemonic);
+    // Generate the correct mnemonic
+    std::string myMnemonic(mnemonic);
+    std::string suffix;
 
-    ss << bo << ", " << bi << ", ";
+    // Additional characters depending on isa bits being set
+    if (lk)
+        suffix += "l";
+    ccprintf(ss, "%-10s ", myMnemonic + suffix);
 
-    Loader::SymbolTable::const_iterator it;
-    if (symtab && (it = symtab->find(targetAddr)) != symtab->end())
-        ss << it->name;
-    else
-        ccprintf(ss, "%#x", targetAddr);
+    // Print the BI and BO fields
+    ss << (int) bi << ", " << (int) bo;
 
     return ss.str();
 }
 
-PowerISA::PCState
-BranchRegCond::branchTarget(ThreadContext *tc) const
-{
-    uint32_t regVal = tc->readIntReg(srcRegIdx(_numSrcRegs - 1).index());
-    return regVal & 0xfffffffc;
-}
-
-std::string
-BranchRegCond::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
-{
-    std::stringstream ss;
-
-    ccprintf(ss, "%-10s ", mnemonic);
-
-    ss << bo << ", " << bi << ", ";
-
-    return ss.str();
-}
+} // namespace gem5

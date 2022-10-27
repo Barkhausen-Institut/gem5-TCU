@@ -45,6 +45,9 @@
 #include <type_traits>
 #include <vector>
 
+namespace gem5
+{
+
 /** Circular queue.
  * Circular queue implemented in a standard vector. All indices are
  * monotonically increasing, and modulo is used at access time to alias them
@@ -109,7 +112,7 @@ class CircularQueue
         /** Trait reference type
          * iterator satisfies OutputIterator, therefore reference
          * must be T& */
-        static_assert(std::is_same<reference, T&>::value,
+        static_assert(std::is_same_v<reference, T&>,
                 "reference type is not assignable as required");
 
         /**
@@ -345,7 +348,7 @@ class CircularQueue
          * @ingroup api_base_utils
          */
         template<typename Idx>
-        typename std::enable_if_t<std::is_integral<Idx>::value, reference>
+        typename std::enable_if_t<std::is_integral_v<Idx>, reference>
         operator[](const Idx& index)
         {
             return *(*this + index);
@@ -388,7 +391,7 @@ class CircularQueue
      * @ingroup api_base_utils
      */
     template <typename Idx>
-    typename std::enable_if_t<std::is_integral<Idx>::value, reference>
+    typename std::enable_if_t<std::is_integral_v<Idx>, reference>
     operator[](const Idx& index)
     {
         assert(index >= 0);
@@ -396,7 +399,7 @@ class CircularQueue
     }
 
     template <typename Idx>
-    typename std::enable_if_t<std::is_integral<Idx>::value, const_reference>
+    typename std::enable_if_t<std::is_integral_v<Idx>, const_reference>
     operator[](const Idx& index) const
     {
         assert(index >= 0);
@@ -588,5 +591,7 @@ class CircularQueue
     /** Return an iterator to an index in the queue. */
     iterator getIterator(size_t idx) { return iterator(this, idx); }
 };
+
+} // namespace gem5
 
 #endif /* __BASE_CIRCULARQUEUE_HH__ */

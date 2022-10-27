@@ -27,8 +27,8 @@
 
 Import('*')
 
-SimObject('TcuPciProxy.py')
-SimObject('TcuSerialInput.py')
+SimObject('TcuPciProxy.py', sim_objects=['TcuPciHost', 'TcuPciProxy'])
+SimObject('TcuSerialInput.py', sim_objects=['TcuSerialInput'])
 
 Source("cmd_sm.cc")
 Source("pci_proxy.cc")

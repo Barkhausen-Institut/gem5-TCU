@@ -47,6 +47,9 @@
 #include "base/logging.hh"
 #include "base/types.hh"
 
+namespace gem5
+{
+
 /**
  * Implements an n bit saturating counter and provides methods to
  * increment, decrement, and read it.
@@ -78,7 +81,7 @@ class GenericSatCounter
         fatal_if(bits > 8*sizeof(T),
                  "Number of bits exceeds counter size");
         fatal_if(initial_val > maxVal,
-                 "Saturating counter's Initial value exceeds max value.");
+                 "Saturating counter's initial value exceeds max value.");
     }
 
     /**
@@ -337,7 +340,6 @@ typedef GenericSatCounter<uint32_t> SatCounter32;
 typedef GenericSatCounter<uint64_t> SatCounter64;
 /** @} */
 
-[[deprecated("Use SatCounter8 (or variants) instead")]]
-typedef SatCounter8 SatCounter;
+} // namespace gem5
 
 #endif // __BASE_SAT_COUNTER_HH__

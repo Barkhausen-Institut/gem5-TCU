@@ -28,8 +28,8 @@
 
 Import('*')
 
-SimObject('TcuAccelStream.py')
-SimObject('AccelLogic.py')
+SimObject('TcuAccelStream.py', sim_objects=['TcuAccelStream'])
+SimObject('AccelLogic.py', sim_objects=['AccelLogic'])
 
 Source('accelerator.cc')
 Source('logic.cc')

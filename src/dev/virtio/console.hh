@@ -38,8 +38,12 @@
 #ifndef __DEV_VIRTIO_CONSOLE_HH__
 #define __DEV_VIRTIO_CONSOLE_HH__
 
+#include "base/compiler.hh"
 #include "dev/serial/serial.hh"
 #include "dev/virtio/base.hh"
+
+namespace gem5
+{
 
 struct VirtIOConsoleParams;
 
@@ -77,7 +81,8 @@ class VirtIOConsole : public VirtIODeviceBase
      * @note This needs to be changed if the multiport feature is
      * announced!
      */
-    struct M5_ATTR_PACKED Config {
+    struct GEM5_PACKED Config
+    {
         uint16_t cols;
         uint16_t rows;
     };
@@ -149,5 +154,7 @@ class VirtIOConsole : public VirtIODeviceBase
   protected:
     SerialDevice &device;
 };
+
+} // namespace gem5
 
 #endif // __DEV_VIRTIO_CONSOLE_HH__

@@ -35,6 +35,11 @@
 #include "mem/tcu/connector/core.hh"
 #include "sim/system.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 class RiscvConnector : public CoreConnector
 {
   public:
@@ -47,5 +52,8 @@ class RiscvConnector : public CoreConnector
 
     void doClearIrq(IRQ irq) override;
 };
+
+}
+}
 
 #endif // __MEM_TCU_RISCV_CONNECTOR__

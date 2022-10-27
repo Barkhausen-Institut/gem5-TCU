@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2009 The University of Edinburgh
+ * Copyright (c) 2021 IBM Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,6 +32,9 @@
 
 #include "arch/power/insts/static_inst.hh"
 
+namespace gem5
+{
+
 namespace PowerISA
 {
 
@@ -52,7 +56,7 @@ class MemOp : public PowerStaticInst
     }
 
     std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+            Addr pc, const loader::SymbolTable *symtab) const override;
 };
 
 
@@ -63,18 +67,58 @@ class MemDispOp : public MemOp
 {
   protected:
 
-    int16_t disp;
+    int64_t d;
 
     /// Constructor
     MemDispOp(const char *mnem, MachInst _machInst, OpClass __opClass)
-      : MemOp(mnem, _machInst, __opClass), disp(machInst.d)
+      : MemOp(mnem, _machInst, __opClass),
+        d(sext<16>(machInst.d))
     {
     }
 
     std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+            Addr pc, const loader::SymbolTable *symtab) const override;
+};
+
+/**
+ * Class for memory operations with shifted displacement.
+ */
+class MemDispShiftOp : public MemOp
+{
+  protected:
+
+    int64_t ds;
+
+    /// Constructor
+    MemDispShiftOp(const char *mnem, MachInst _machInst, OpClass __opClass)
+      : MemOp(mnem, _machInst, __opClass),
+        ds(sext<14>(machInst.ds))
+    {
+    }
+
+    std::string generateDisassembly(
+            Addr pc, const loader::SymbolTable *symtab) const override;
+};
+
+
+/**
+ * Class for memory operations with register indexed addressing.
+ */
+class MemIndexOp : public MemOp
+{
+  protected:
+
+    /// Constructor
+    MemIndexOp(const char *mnem, MachInst _machInst, OpClass __opClass)
+      : MemOp(mnem, _machInst, __opClass)
+    {
+    }
+
+    std::string generateDisassembly(
+            Addr pc, const loader::SymbolTable *symtab) const override;
 };
 
 } // namespace PowerISA
+} // namespace gem5
 
 #endif //__ARCH_POWER_INSTS_MEM_HH__

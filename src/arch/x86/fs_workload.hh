@@ -43,30 +43,37 @@
 
 #include "arch/x86/regs/misc.hh"
 #include "arch/x86/regs/segment.hh"
+#include "arch/x86/remote_gdb.hh"
 #include "base/types.hh"
 #include "cpu/thread_context.hh"
 #include "params/X86FsWorkload.hh"
 #include "sim/kernel_workload.hh"
 
+namespace gem5
+{
+
 namespace X86ISA
 {
 
-namespace SMBios
+GEM5_DEPRECATED_NAMESPACE(SMBios, smbios);
+namespace smbios
 {
 
 class SMBiosTable;
 
-} // namespace SMBios
-namespace IntelMP
+} // namespace smbios
+
+GEM5_DEPRECATED_NAMESPACE(IntelMP, intelmp);
+namespace intelmp
 {
 
 class FloatingPointer;
 class ConfigTable;
 
-} // namespace IntelMP
+} // namespace intelmp
 
-void installSegDesc(ThreadContext *tc, SegmentRegIndex seg,
-                    SegDescriptor desc, bool longmode);
+void installSegDesc(ThreadContext *tc, int seg, SegDescriptor desc,
+        bool longmode);
 
 class FsWorkload : public KernelWorkload
 {
@@ -77,11 +84,20 @@ class FsWorkload : public KernelWorkload
   public:
     void initState() override;
 
+    void
+    setSystem(System *sys) override
+    {
+        KernelWorkload::setSystem(sys);
+        gdb = BaseRemoteGDB::build<RemoteGDB>(system);
+    }
+
+    ByteOrder byteOrder() const override { return ByteOrder::little; }
+
   protected:
 
-    SMBios::SMBiosTable *smbiosTable;
-    IntelMP::FloatingPointer *mpFloatingPointer;
-    IntelMP::ConfigTable *mpConfigTable;
+    smbios::SMBiosTable *smbiosTable;
+    intelmp::FloatingPointer *mpFloatingPointer;
+    intelmp::ConfigTable *mpConfigTable;
     ACPI::RSDP *rsdp;
 
     void writeOutSMBiosTable(Addr header,
@@ -89,8 +105,11 @@ class FsWorkload : public KernelWorkload
 
     void writeOutMPTable(Addr fp,
             Addr &fpSize, Addr &tableSize, Addr table=0);
+
+    void writeOutACPITables(Addr begin, Addr &size);
 };
 
 } // namespace X86ISA
+} // namespace gem5
 
 #endif // __ARCH_X86_FS_WORKLOAD_HH__

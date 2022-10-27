@@ -42,12 +42,17 @@
 #define __MEM_RUBY_NETWORK_TOPOLOGY_HH__
 
 #include <iostream>
-#include <string>
 #include <vector>
 
 #include "mem/ruby/common/TypeDefines.hh"
 #include "mem/ruby/network/BasicLink.hh"
 #include "mem/ruby/protocol/LinkDirection.hh"
+
+namespace gem5
+{
+
+namespace ruby
+{
 
 class NetDest;
 class Network;
@@ -59,7 +64,6 @@ class Network;
  * represent the source ID, destination ID, and vnet number.
  */
 typedef std::vector<std::vector<std::vector<int>>> Matrix;
-typedef std::string PortDirection;
 
 struct LinkEntry
 {
@@ -121,5 +125,8 @@ operator<<(std::ostream& out, const Topology& obj)
     out << std::flush;
     return out;
 }
+
+} // namespace ruby
+} // namespace gem5
 
 #endif // __MEM_RUBY_NETWORK_TOPOLOGY_HH__

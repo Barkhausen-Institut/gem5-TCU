@@ -34,7 +34,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from abc import ABCMeta, abstractmethod
-import optparse
+import argparse
 import m5
 from m5.objects import *
 from m5.proxy import *
@@ -108,8 +108,8 @@ class BaseSystem(object, metaclass=ABCMeta):
         system.toL2Bus = L2XBar(clk_domain=system.cpu_clk_domain)
         system.l2c = L2Cache(clk_domain=system.cpu_clk_domain,
                              size='4MB', assoc=8)
-        system.l2c.cpu_side = system.toL2Bus.master
-        system.l2c.mem_side = system.membus.slave
+        system.l2c.cpu_side = system.toL2Bus.mem_side_ports
+        system.l2c.mem_side = system.membus.cpu_side_ports
         return system.toL2Bus
 
     def init_cpu(self, system, cpu, sha_bus):
@@ -122,8 +122,30 @@ class BaseSystem(object, metaclass=ABCMeta):
         if not cpu.switched_out:
             self.create_caches_private(cpu)
             cpu.createInterruptController()
-            cpu.connectAllPorts(sha_bus if sha_bus != None else system.membus,
-                                system.membus)
+            cached_bus = sha_bus if sha_bus != None else system.membus
+            cpu.connectAllPorts(cached_bus.cpu_side_ports,
+                                system.membus.cpu_side_ports,
+                                system.membus.mem_side_ports)
+
+    def init_kvm_cpus(self, cpus):
+        """
+        Assign KVM CPUs to their own event queues / threads. This
+        has to be done after creating caches and other child objects
+        since these mustn't inherit the CPU event queue.
+
+        Arguments:
+          cpus -- List of cpus
+        """
+        if len(cpus) > 1:
+            device_eq = 0
+            first_cpu_eq = 1
+            for idx, cpu in enumerate(cpus):
+                # Child objects usually inherit the parent's event
+                # queue. Override that and use the same event queue for
+                # all devices.
+                for obj in cpu.descendants():
+                    obj.eventq_index = device_eq
+                cpu.eventq_index = first_cpu_eq + idx
 
     def init_kvm(self, system):
         """Do KVM-specific system initialization.
@@ -142,45 +164,45 @@ class BaseSystem(object, metaclass=ABCMeta):
         self.create_clk_src(system)
         system.cpu = self.create_cpus(system.cpu_clk_domain)
 
-        if _have_kvm_support and \
-                any([isinstance(c, BaseKvmCPU) for c in system.cpu]):
-            self.init_kvm(system)
-
         if self.use_ruby:
             # Add the ruby specific and protocol specific options
-            parser = optparse.OptionParser()
+            parser = argparse.ArgumentParser()
             Options.addCommonOptions(parser)
             Ruby.define_options(parser)
-            (options, args) = parser.parse_args()
+            args, extra = parser.parse_known_args()
 
             # Set the default cache size and associativity to be very
             # small to encourage races between requests and writebacks.
-            options.l1d_size="32kB"
-            options.l1i_size="32kB"
-            options.l2_size="4MB"
-            options.l1d_assoc=4
-            options.l1i_assoc=2
-            options.l2_assoc=8
-            options.num_cpus = self.num_cpus
-            options.num_dirs = 2
+            args.l1d_size="32kB"
+            args.l1i_size="32kB"
+            args.l2_size="4MB"
+            args.l1d_assoc=4
+            args.l1i_assoc=2
+            args.l2_assoc=8
+            args.num_cpus = self.num_cpus
+            args.num_dirs = 2
 
             bootmem = getattr(system, '_bootmem', None)
-            Ruby.create_system(options, True, system, system.iobus,
+            Ruby.create_system(args, True, system, system.iobus,
                                system._dma_ports, bootmem)
 
             # Create a seperate clock domain for Ruby
             system.ruby.clk_domain = SrcClockDomain(
-                clock = options.ruby_clock,
+                clock = args.ruby_clock,
                 voltage_domain = system.voltage_domain)
             for i, cpu in enumerate(system.cpu):
                 if not cpu.switched_out:
                     cpu.createInterruptController()
-                    cpu.connectCachedPorts(system.ruby._cpu_ports[i])
+                    cpu.connectCachedPorts(system.ruby._cpu_ports[i].in_ports)
         else:
             sha_bus = self.create_caches_shared(system)
             for cpu in system.cpu:
                 self.init_cpu(system, cpu, sha_bus)
 
+        if _have_kvm_support and \
+                any([isinstance(c, BaseKvmCPU) for c in system.cpu]):
+            self.init_kvm(system)
+            self.init_kvm_cpus(system.cpu)
 
     def create_clk_src(self,system):
         # Create system clock domain. This provides clock value to every
@@ -228,8 +250,8 @@ class BaseSESystem(BaseSystem):
                         mem_mode = self.mem_mode,
                         multi_thread = (self.num_threads > 1))
         if not self.use_ruby:
-            system.system_port = system.membus.slave
-        system.physmem.port = system.membus.master
+            system.system_port = system.membus.cpu_side_ports
+        system.physmem.port = system.membus.mem_side_ports
         self.init_system(system)
         return system
 
@@ -271,7 +293,7 @@ class BaseFSSystem(BaseSystem):
         if self.use_ruby:
             # Connect the ruby io port to the PIO bus,
             # assuming that there is just one such port.
-            system.iobus.master = system.ruby._io_port.slave
+            system.iobus.mem_side_ports = system.ruby._io_port.in_ports
         else:
             # create the memory controllers and connect them, stick with
             # the physmem name to avoid bumping all the reference stats
@@ -286,12 +308,12 @@ class BaseFSSystem(BaseSystem):
                 system.physmem = [self.mem_class(range = r)
                                   for r in system.mem_ranges]
             for i in range(len(system.physmem)):
-                system.physmem[i].port = system.membus.master
+                system.physmem[i].port = system.membus.mem_side_ports
 
             # create the iocache, which by default runs at the system clock
             system.iocache = IOCache(addr_ranges=system.mem_ranges)
-            system.iocache.cpu_side = system.iobus.master
-            system.iocache.mem_side = system.membus.slave
+            system.iocache.cpu_side = system.iobus.mem_side_ports
+            system.iocache.mem_side = system.membus.cpu_side_ports
 
     def create_root(self):
         system = self.create_system()

@@ -38,13 +38,12 @@
 #include <string>
 #include <unordered_map>
 
-#include "arch/utility.hh"
 #include "base/chunk_generator.hh"
 #include "base/trace.hh"
-#include "config/the_isa.hh"
 #include "cpu/thread_context.hh"
 #include "dev/net/dist_iface.hh"
 #include "mem/page_table.hh"
+#include "mem/se_translating_port_proxy.hh"
 #include "sim/byteswap.hh"
 #include "sim/process.hh"
 #include "sim/proxy_ptr.hh"
@@ -52,6 +51,9 @@
 #include "sim/syscall_debug_macros.hh"
 #include "sim/syscall_desc.hh"
 #include "sim/system.hh"
+
+namespace gem5
+{
 
 void
 warnUnsupportedOS(std::string syscall_name)
@@ -95,7 +97,7 @@ exitFutexWake(ThreadContext *tc, VPtr<> addr, uint64_t tgid)
     BufferArg ctidBuf(addr, sizeof(long));
     long *ctid = (long *)ctidBuf.bufferPtr();
     *ctid = 0;
-    ctidBuf.copyOut(tc->getVirtProxy());
+    ctidBuf.copyOut(SETranslatingPortProxy(tc));
 
     FutexMap &futex_map = tc->getSystemPtr()->futexMap;
     // Wake one of the waiting threads.
@@ -190,6 +192,16 @@ exitImpl(SyscallDesc *desc, ThreadContext *tc, bool group, int status)
             if ((*p->fds)[i])
                 p->fds->closeFDEntry(i);
         }
+    }
+
+    /**
+     * If we were a thread created by a clone with vfork set, wake up
+     * the thread that created us
+     */
+    if (!p->vforkContexts.empty()) {
+        ThreadContext *vtc = sys->threads[p->vforkContexts.front()];
+        assert(vtc->status() == ThreadContext::Suspended);
+        vtc->activate();
     }
 
     tc->halt();
@@ -319,27 +331,7 @@ _llseekFunc(SyscallDesc *desc, ThreadContext *tc,
     // Assuming that the size of loff_t is 64 bits on the target platform
     BufferArg result_buf(result_ptr, sizeof(result));
     std::memcpy(result_buf.bufferPtr(), &result, sizeof(result));
-    result_buf.copyOut(tc->getVirtProxy());
-    return 0;
-}
-
-
-SyscallReturn
-munmapFunc(SyscallDesc *desc, ThreadContext *tc, VPtr<> start, size_t length)
-{
-    // Even if the system is currently not capable of recycling physical
-    // pages, there is no reason we can't unmap them so that we trigger
-    // appropriate seg faults when the application mistakenly tries to
-    // access them again.
-    auto p = tc->getProcessPtr();
-
-    if (p->pTable->pageOffset(start))
-        return -EINVAL;
-
-    length = roundUp(length, p->pTable->pageSize());
-
-    p->memState->unmapRegion(start, length);
-
+    result_buf.copyOut(SETranslatingPortProxy(tc));
     return 0;
 }
 
@@ -352,7 +344,7 @@ gethostnameFunc(SyscallDesc *desc, ThreadContext *tc,
 {
     BufferArg name(buf_ptr, name_len);
     strncpy((char *)name.bufferPtr(), hostname, name_len);
-    name.copyOut(tc->getVirtProxy());
+    name.copyOut(SETranslatingPortProxy(tc));
     return 0;
 }
 
@@ -381,65 +373,7 @@ getcwdFunc(SyscallDesc *desc, ThreadContext *tc,
         }
     }
 
-    buf.copyOut(tc->getVirtProxy());
-
-    return (result == -1) ? -errno : result;
-}
-
-SyscallReturn
-readlinkFunc(SyscallDesc *desc, ThreadContext *tc,
-             VPtr<> pathname, VPtr<> buf_ptr, size_t bufsiz)
-{
-    std::string path;
-    auto p = tc->getProcessPtr();
-
-    if (!tc->getVirtProxy().tryReadString(path, pathname))
-        return -EFAULT;
-
-    // Adjust path for cwd and redirection
-    path = p->checkPathRedirect(path);
-
-    BufferArg buf(buf_ptr, bufsiz);
-
-    int result = -1;
-    if (path != "/proc/self/exe") {
-        result = readlink(path.c_str(), (char *)buf.bufferPtr(), bufsiz);
-    } else {
-        // Emulate readlink() called on '/proc/self/exe' should return the
-        // absolute path of the binary running in the simulated system (the
-        // Process' executable). It is possible that using this path in
-        // the simulated system will result in unexpected behavior if:
-        //  1) One binary runs another (e.g., -c time -o "my_binary"), and
-        //     called binary calls readlink().
-        //  2) The host's full path to the running benchmark changes from one
-        //     simulation to another. This can result in different simulated
-        //     performance since the simulated system will process the binary
-        //     path differently, even if the binary itself does not change.
-
-        // Get the absolute canonical path to the running application
-        char real_path[PATH_MAX];
-        char *check_real_path = realpath(p->progName(), real_path);
-        if (!check_real_path) {
-            fatal("readlink('/proc/self/exe') unable to resolve path to "
-                  "executable: %s", p->progName());
-        }
-        strncpy((char*)buf.bufferPtr(), real_path, bufsiz);
-        size_t real_path_len = strlen(real_path);
-        if (real_path_len > bufsiz) {
-            // readlink will truncate the contents of the
-            // path to ensure it is no more than bufsiz
-            result = bufsiz;
-        } else {
-            result = real_path_len;
-        }
-
-        // Issue a warning about potential unexpected results
-        warn_once("readlink() called on '/proc/self/exe' may yield unexpected "
-                  "results in various settings.\n      Returning '%s'\n",
-                  (char*)buf.bufferPtr());
-    }
-
-    buf.copyOut(tc->getVirtProxy());
+    buf.copyOut(SETranslatingPortProxy(tc));
 
     return (result == -1) ? -errno : result;
 }
@@ -448,11 +382,16 @@ SyscallReturn
 unlinkFunc(SyscallDesc *desc, ThreadContext *tc, VPtr<> pathname)
 {
     std::string path;
-    auto p = tc->getProcessPtr();
-
-    if (!tc->getVirtProxy().tryReadString(path, pathname))
+    if (!SETranslatingPortProxy(tc).tryReadString(path, pathname))
         return -EFAULT;
 
+    return unlinkImpl(desc, tc, path);
+}
+
+SyscallReturn
+unlinkImpl(SyscallDesc *desc, ThreadContext *tc, std::string path)
+{
+    auto p = tc->getProcessPtr();
     path = p->checkPathRedirect(path);
 
     int result = unlink(path.c_str());
@@ -467,7 +406,7 @@ linkFunc(SyscallDesc *desc, ThreadContext *tc,
     std::string new_path;
     auto p = tc->getProcessPtr();
 
-    auto &virt_mem = tc->getVirtProxy();
+    SETranslatingPortProxy virt_mem(tc);
     if (!virt_mem.tryReadString(path, pathname))
         return -EFAULT;
     if (!virt_mem.tryReadString(new_path, new_pathname))
@@ -488,7 +427,7 @@ symlinkFunc(SyscallDesc *desc, ThreadContext *tc,
     std::string new_path;
     auto p = tc->getProcessPtr();
 
-    auto &virt_mem = tc->getVirtProxy();
+    SETranslatingPortProxy virt_mem(tc);
     if (!virt_mem.tryReadString(path, pathname))
         return -EFAULT;
     if (!virt_mem.tryReadString(new_path, new_pathname))
@@ -504,11 +443,17 @@ symlinkFunc(SyscallDesc *desc, ThreadContext *tc,
 SyscallReturn
 mkdirFunc(SyscallDesc *desc, ThreadContext *tc, VPtr<> pathname, mode_t mode)
 {
-    auto p = tc->getProcessPtr();
     std::string path;
-    if (!tc->getVirtProxy().tryReadString(path, pathname))
+    if (!SETranslatingPortProxy(tc).tryReadString(path, pathname))
         return -EFAULT;
 
+    return mkdirImpl(desc, tc, path, mode);
+}
+
+SyscallReturn
+mkdirImpl(SyscallDesc *desc, ThreadContext *tc, std::string path, mode_t mode)
+{
+    auto p = tc->getProcessPtr();
     path = p->checkPathRedirect(path);
 
     auto result = mkdir(path.c_str(), mode);
@@ -519,15 +464,23 @@ SyscallReturn
 renameFunc(SyscallDesc *desc, ThreadContext *tc, VPtr<> oldpath,
            VPtr<> newpath)
 {
-    auto p = tc->getProcessPtr();
-
+    SETranslatingPortProxy proxy(tc);
     std::string old_name;
-    if (!tc->getVirtProxy().tryReadString(old_name, oldpath))
+    if (!proxy.tryReadString(old_name, oldpath))
         return -EFAULT;
 
     std::string new_name;
-    if (!tc->getVirtProxy().tryReadString(new_name, newpath))
+    if (!proxy.tryReadString(new_name, newpath))
         return -EFAULT;
+
+    return renameImpl(desc, tc, old_name, new_name);
+}
+
+SyscallReturn
+renameImpl(SyscallDesc *desc, ThreadContext *tc,
+           std::string old_name, std::string new_name)
+{
+    auto p = tc->getProcessPtr();
 
     // Adjust path for cwd and redirection
     old_name = p->checkPathRedirect(old_name);
@@ -537,36 +490,6 @@ renameFunc(SyscallDesc *desc, ThreadContext *tc, VPtr<> oldpath,
     return (result == -1) ? -errno : result;
 }
 
-SyscallReturn
-truncateFunc(SyscallDesc *desc, ThreadContext *tc, VPtr<> pathname,
-        off_t length)
-{
-    std::string path;
-    auto p = tc->getProcessPtr();
-
-    if (!tc->getVirtProxy().tryReadString(path, pathname))
-        return -EFAULT;
-
-    // Adjust path for cwd and redirection
-    path = p->checkPathRedirect(path);
-
-    int result = truncate(path.c_str(), length);
-    return (result == -1) ? -errno : result;
-}
-
-SyscallReturn
-ftruncateFunc(SyscallDesc *desc, ThreadContext *tc, int tgt_fd, off_t length)
-{
-    auto p = tc->getProcessPtr();
-
-    auto ffdp = std::dynamic_pointer_cast<FileFDEntry>((*p->fds)[tgt_fd]);
-    if (!ffdp)
-        return -EBADF;
-    int sim_fd = ffdp->getSimFD();
-
-    int result = ftruncate(sim_fd, length);
-    return (result == -1) ? -errno : result;
-}
 
 SyscallReturn
 truncate64Func(SyscallDesc *desc, ThreadContext *tc,
@@ -575,7 +498,7 @@ truncate64Func(SyscallDesc *desc, ThreadContext *tc,
     auto process = tc->getProcessPtr();
     std::string path;
 
-    if (!tc->getVirtProxy().tryReadString(path, pathname))
+    if (!SETranslatingPortProxy(tc).tryReadString(path, pathname))
         return -EFAULT;
 
     // Adjust path for cwd and redirection
@@ -624,10 +547,17 @@ chownFunc(SyscallDesc *desc, ThreadContext *tc,
           VPtr<> pathname, uint32_t owner, uint32_t group)
 {
     std::string path;
-    auto p = tc->getProcessPtr();
-
-    if (!tc->getVirtProxy().tryReadString(path, pathname))
+    if (!SETranslatingPortProxy(tc).tryReadString(path, pathname))
         return -EFAULT;
+
+    return chownImpl(desc, tc, path, owner, group);
+}
+
+SyscallReturn
+chownImpl(SyscallDesc *desc, ThreadContext *tc,
+          std::string path, uint32_t owner, uint32_t group)
+{
+    auto p = tc->getProcessPtr();
 
     /* XXX endianess */
     uid_t hostOwner = owner;
@@ -715,7 +645,7 @@ dup2Func(SyscallDesc *desc, ThreadContext *tc, int old_tgt_fd, int new_tgt_fd)
 
 SyscallReturn
 fcntlFunc(SyscallDesc *desc, ThreadContext *tc,
-          int tgt_fd, int cmd, GuestABI::VarArgs<int> varargs)
+          int tgt_fd, int cmd, guest_abi::VarArgs<int> varargs)
 {
     auto p = tc->getProcessPtr();
 
@@ -839,7 +769,7 @@ pipe2Func(SyscallDesc *desc, ThreadContext *tc, VPtr<> tgt_addr, int flags)
     int *buf_ptr = (int*)tgt_handle.bufferPtr();
     buf_ptr[0] = tgt_fds[0];
     buf_ptr[1] = tgt_fds[1];
-    tgt_handle.copyOut(tc->getVirtProxy());
+    tgt_handle.copyOut(SETranslatingPortProxy(tc));
 
     if (flags) {
         // pipe2 only uses O_NONBLOCK, O_CLOEXEC, and (O_NONBLOCK | O_CLOEXEC)
@@ -972,36 +902,21 @@ getegidFunc(SyscallDesc *desc, ThreadContext *tc)
 }
 
 SyscallReturn
-fallocateFunc(SyscallDesc *desc, ThreadContext *tc,
-              int tgt_fd, int mode, off_t offset, off_t len)
-{
-#if defined(__linux__)
-    auto p = tc->getProcessPtr();
-
-    auto ffdp = std::dynamic_pointer_cast<FileFDEntry>((*p->fds)[tgt_fd]);
-    if (!ffdp)
-        return -EBADF;
-    int sim_fd = ffdp->getSimFD();
-
-    int result = fallocate(sim_fd, mode, offset, len);
-    if (result < 0)
-        return -errno;
-    return 0;
-#else
-    warnUnsupportedOS("fallocate");
-    return -1;
-#endif
-}
-
-SyscallReturn
 accessFunc(SyscallDesc *desc, ThreadContext *tc,
            VPtr<> pathname, mode_t mode)
 {
     std::string path;
-    auto p = tc->getProcessPtr();
-    if (!tc->getVirtProxy().tryReadString(path, pathname))
+    if (!SETranslatingPortProxy(tc).tryReadString(path, pathname))
         return -EFAULT;
 
+    return accessImpl(desc, tc, path, mode);
+}
+
+SyscallReturn
+accessImpl(SyscallDesc *desc, ThreadContext *tc,
+           std::string path, mode_t mode)
+{
+    auto p = tc->getProcessPtr();
     // Adjust path for cwd and redirection
     path = p->checkPathRedirect(path);
 
@@ -1013,11 +928,18 @@ SyscallReturn
 mknodFunc(SyscallDesc *desc, ThreadContext *tc,
           VPtr<> pathname, mode_t mode, dev_t dev)
 {
-    auto p = tc->getProcessPtr();
     std::string path;
-    if (!tc->getVirtProxy().tryReadString(path, pathname))
+    if (!SETranslatingPortProxy(tc).tryReadString(path, pathname))
         return -EFAULT;
 
+    return mknodImpl(desc, tc, path, mode, dev);
+}
+
+SyscallReturn
+mknodImpl(SyscallDesc *desc, ThreadContext *tc,
+          std::string path, mode_t mode, dev_t dev)
+{
+    auto p = tc->getProcessPtr();
     path = p->checkPathRedirect(path);
 
     auto result = mknod(path.c_str(), mode, dev);
@@ -1029,7 +951,7 @@ chdirFunc(SyscallDesc *desc, ThreadContext *tc, VPtr<> pathname)
 {
     auto p = tc->getProcessPtr();
     std::string path;
-    if (!tc->getVirtProxy().tryReadString(path, pathname))
+    if (!SETranslatingPortProxy(tc).tryReadString(path, pathname))
         return -EFAULT;
 
     std::string tgt_cwd;
@@ -1054,11 +976,17 @@ chdirFunc(SyscallDesc *desc, ThreadContext *tc, VPtr<> pathname)
 SyscallReturn
 rmdirFunc(SyscallDesc *desc, ThreadContext *tc, VPtr<> pathname)
 {
-    auto p = tc->getProcessPtr();
     std::string path;
-    if (!tc->getVirtProxy().tryReadString(path, pathname))
+    if (!SETranslatingPortProxy(tc).tryReadString(path, pathname))
         return -EFAULT;
 
+    return rmdirImpl(desc, tc, path);
+}
+
+SyscallReturn
+rmdirImpl(SyscallDesc *desc, ThreadContext *tc, std::string path)
+{
+    auto p = tc->getProcessPtr();
     path = p->checkPathRedirect(path);
 
     auto result = rmdir(path.c_str());
@@ -1103,7 +1031,7 @@ getdentsImpl(SyscallDesc *desc, ThreadContext *tc,
         traversed += host_reclen;
     }
 
-    buf_arg.copyOut(tc->getVirtProxy());
+    buf_arg.copyOut(SETranslatingPortProxy(tc));
     return status;
 }
 #endif
@@ -1113,7 +1041,8 @@ SyscallReturn
 getdentsFunc(SyscallDesc *desc, ThreadContext *tc,
              int tgt_fd, VPtr<> buf_ptr, unsigned count)
 {
-    typedef struct linux_dirent {
+    typedef struct linux_dirent
+    {
         unsigned long d_ino;
         unsigned long d_off;
         unsigned short d_reclen;
@@ -1130,7 +1059,8 @@ SyscallReturn
 getdents64Func(SyscallDesc *desc, ThreadContext *tc,
                int tgt_fd, VPtr<> buf_ptr, unsigned count)
 {
-    typedef struct linux_dirent64 {
+    typedef struct linux_dirent64
+    {
         ino64_t d_ino;
         off64_t d_off;
         unsigned short d_reclen;
@@ -1164,7 +1094,7 @@ bindFunc(SyscallDesc *desc, ThreadContext *tc,
     auto p = tc->getProcessPtr();
 
     BufferArg bufSock(buf_ptr, addrlen);
-    bufSock.copyIn(tc->getVirtProxy());
+    bufSock.copyIn(SETranslatingPortProxy(tc));
 
     auto sfdp = std::dynamic_pointer_cast<SocketFDEntry>((*p->fds)[tgt_fd]);
     if (!sfdp)
@@ -1200,7 +1130,7 @@ connectFunc(SyscallDesc *desc, ThreadContext *tc,
     auto p = tc->getProcessPtr();
 
     BufferArg addr(buf_ptr, addrlen);
-    addr.copyIn(tc->getVirtProxy());
+    addr.copyIn(SETranslatingPortProxy(tc));
 
     auto sfdp = std::dynamic_pointer_cast<SocketFDEntry>((*p->fds)[tgt_fd]);
     if (!sfdp)
@@ -1214,97 +1144,6 @@ connectFunc(SyscallDesc *desc, ThreadContext *tc,
     return (status == -1) ? -errno : status;
 }
 
-SyscallReturn
-recvfromFunc(SyscallDesc *desc, ThreadContext *tc,
-             int tgt_fd, VPtr<> bufrPtr, size_t bufrLen, int flags,
-             VPtr<> addrPtr, VPtr<> addrlenPtr)
-{
-    auto p = tc->getProcessPtr();
-
-    auto sfdp = std::dynamic_pointer_cast<SocketFDEntry>((*p->fds)[tgt_fd]);
-    if (!sfdp)
-        return -EBADF;
-    int sim_fd = sfdp->getSimFD();
-
-    // Reserve buffer space.
-    BufferArg bufrBuf(bufrPtr, bufrLen);
-
-    // Get address length.
-    socklen_t addrLen = 0;
-    if (addrlenPtr != 0) {
-        // Read address length parameter.
-        BufferArg addrlenBuf(addrlenPtr, sizeof(socklen_t));
-        addrlenBuf.copyIn(tc->getVirtProxy());
-        addrLen = *((socklen_t *)addrlenBuf.bufferPtr());
-    }
-
-    struct sockaddr sa, *sap = NULL;
-    if (addrLen != 0) {
-        BufferArg addrBuf(addrPtr, addrLen);
-        addrBuf.copyIn(tc->getVirtProxy());
-        memcpy(&sa, (struct sockaddr *)addrBuf.bufferPtr(),
-               sizeof(struct sockaddr));
-        sap = &sa;
-    }
-
-    ssize_t recvd_size = recvfrom(sim_fd,
-                                  (void *)bufrBuf.bufferPtr(),
-                                  bufrLen, flags, sap, (socklen_t *)&addrLen);
-
-    if (recvd_size == -1)
-        return -errno;
-
-    // Pass the received data out.
-    bufrBuf.copyOut(tc->getVirtProxy());
-
-    // Copy address to addrPtr and pass it on.
-    if (sap != NULL) {
-        BufferArg addrBuf(addrPtr, addrLen);
-        memcpy(addrBuf.bufferPtr(), sap, sizeof(sa));
-        addrBuf.copyOut(tc->getVirtProxy());
-    }
-
-    // Copy len to addrlenPtr and pass it on.
-    if (addrLen != 0) {
-        BufferArg addrlenBuf(addrlenPtr, sizeof(socklen_t));
-        *(socklen_t *)addrlenBuf.bufferPtr() = addrLen;
-        addrlenBuf.copyOut(tc->getVirtProxy());
-    }
-
-    return recvd_size;
-}
-
-SyscallReturn
-sendtoFunc(SyscallDesc *desc, ThreadContext *tc,
-           int tgt_fd, VPtr<> bufrPtr, size_t bufrLen, int flags,
-           VPtr<> addrPtr, socklen_t addrLen)
-{
-    auto p = tc->getProcessPtr();
-
-    auto sfdp = std::dynamic_pointer_cast<SocketFDEntry>((*p->fds)[tgt_fd]);
-    if (!sfdp)
-        return -EBADF;
-    int sim_fd = sfdp->getSimFD();
-
-    // Reserve buffer space.
-    BufferArg bufrBuf(bufrPtr, bufrLen);
-    bufrBuf.copyIn(tc->getVirtProxy());
-
-    struct sockaddr sa, *sap = nullptr;
-    memset(&sa, 0, sizeof(sockaddr));
-    if (addrLen != 0) {
-        BufferArg addrBuf(addrPtr, addrLen);
-        addrBuf.copyIn(tc->getVirtProxy());
-        memcpy(&sa, (sockaddr*)addrBuf.bufferPtr(), addrLen);
-        sap = &sa;
-    }
-
-    ssize_t sent_size = sendto(sim_fd,
-                               (void *)bufrBuf.bufferPtr(),
-                               bufrLen, flags, sap, (socklen_t)addrLen);
-
-    return (sent_size == -1) ? -errno : sent_size;
-}
 
 SyscallReturn
 recvmsgFunc(SyscallDesc *desc, ThreadContext *tc,
@@ -1335,13 +1174,15 @@ recvmsgFunc(SyscallDesc *desc, ThreadContext *tc,
       *  };
       */
 
+    SETranslatingPortProxy proxy(tc);
+
     /**
      * The plan with this system call is to replace all of the pointers in the
      * structure and the substructure with BufferArg class pointers. We will
      * copy every field from the structures into our BufferArg classes.
      */
     BufferArg msgBuf(msgPtr, sizeof(struct msghdr));
-    msgBuf.copyIn(tc->getVirtProxy());
+    msgBuf.copyIn(proxy);
     struct msghdr *msgHdr = (struct msghdr *)msgBuf.bufferPtr();
 
     /**
@@ -1361,7 +1202,7 @@ recvmsgFunc(SyscallDesc *desc, ThreadContext *tc,
     if (msgHdr->msg_name) {
         /*1*/msg_name_phold = (Addr)msgHdr->msg_name;
         /*2*/nameBuf = new BufferArg(msg_name_phold, msgHdr->msg_namelen);
-        /*3*/nameBuf->copyIn(tc->getVirtProxy());
+        /*3*/nameBuf->copyIn(proxy);
         /*4*/msgHdr->msg_name = nameBuf->bufferPtr();
     }
 
@@ -1381,14 +1222,14 @@ recvmsgFunc(SyscallDesc *desc, ThreadContext *tc,
         /*1*/msg_iov_phold = (Addr)msgHdr->msg_iov;
         /*2*/iovBuf = new BufferArg(msg_iov_phold, msgHdr->msg_iovlen *
                                     sizeof(struct iovec));
-        /*3*/iovBuf->copyIn(tc->getVirtProxy());
+        /*3*/iovBuf->copyIn(proxy);
         for (int i = 0; i < msgHdr->msg_iovlen; i++) {
             if (((struct iovec *)iovBuf->bufferPtr())[i].iov_base) {
                 /*1*/iovec_base_phold[i] =
                      (Addr)((struct iovec *)iovBuf->bufferPtr())[i].iov_base;
                 /*2*/iovecBuf[i] = new BufferArg(iovec_base_phold[i],
                      ((struct iovec *)iovBuf->bufferPtr())[i].iov_len);
-                /*3*/iovecBuf[i]->copyIn(tc->getVirtProxy());
+                /*3*/iovecBuf[i]->copyIn(proxy);
                 /*4*/((struct iovec *)iovBuf->bufferPtr())[i].iov_base =
                      iovecBuf[i]->bufferPtr();
             }
@@ -1404,7 +1245,7 @@ recvmsgFunc(SyscallDesc *desc, ThreadContext *tc,
         /*1*/msg_control_phold = (Addr)msgHdr->msg_control;
         /*2*/controlBuf = new BufferArg(msg_control_phold,
                                         CMSG_ALIGN(msgHdr->msg_controllen));
-        /*3*/controlBuf->copyIn(tc->getVirtProxy());
+        /*3*/controlBuf->copyIn(proxy);
         /*4*/msgHdr->msg_control = controlBuf->bufferPtr();
     }
 
@@ -1414,7 +1255,7 @@ recvmsgFunc(SyscallDesc *desc, ThreadContext *tc,
         return -errno;
 
     if (msgHdr->msg_name) {
-        nameBuf->copyOut(tc->getVirtProxy());
+        nameBuf->copyOut(proxy);
         delete(nameBuf);
         msgHdr->msg_name = (void *)msg_name_phold;
     }
@@ -1422,24 +1263,24 @@ recvmsgFunc(SyscallDesc *desc, ThreadContext *tc,
     if (msgHdr->msg_iov) {
         for (int i = 0; i< msgHdr->msg_iovlen; i++) {
             if (((struct iovec *)iovBuf->bufferPtr())[i].iov_base) {
-                iovecBuf[i]->copyOut(tc->getVirtProxy());
+                iovecBuf[i]->copyOut(proxy);
                 delete iovecBuf[i];
                 ((struct iovec *)iovBuf->bufferPtr())[i].iov_base =
                 (void *)iovec_base_phold[i];
             }
         }
-        iovBuf->copyOut(tc->getVirtProxy());
+        iovBuf->copyOut(proxy);
         delete iovBuf;
         msgHdr->msg_iov = (struct iovec *)msg_iov_phold;
     }
 
     if (msgHdr->msg_control) {
-        controlBuf->copyOut(tc->getVirtProxy());
+        controlBuf->copyOut(proxy);
         delete(controlBuf);
         msgHdr->msg_control = (void *)msg_control_phold;
     }
 
-    msgBuf.copyOut(tc->getVirtProxy());
+    msgBuf.copyOut(proxy);
 
     return recvd_size;
 }
@@ -1455,11 +1296,13 @@ sendmsgFunc(SyscallDesc *desc, ThreadContext *tc,
         return -EBADF;
     int sim_fd = sfdp->getSimFD();
 
+    SETranslatingPortProxy proxy(tc);
+
     /**
      * Reserve buffer space.
      */
     BufferArg msgBuf(msgPtr, sizeof(struct msghdr));
-    msgBuf.copyIn(tc->getVirtProxy());
+    msgBuf.copyIn(proxy);
     struct msghdr msgHdr = *((struct msghdr *)msgBuf.bufferPtr());
 
     /**
@@ -1468,7 +1311,7 @@ sendmsgFunc(SyscallDesc *desc, ThreadContext *tc,
      */
     struct iovec *iovPtr = msgHdr.msg_iov;
     BufferArg iovBuf((Addr)iovPtr, sizeof(struct iovec) * msgHdr.msg_iovlen);
-    iovBuf.copyIn(tc->getVirtProxy());
+    iovBuf.copyIn(proxy);
     struct iovec *iov = (struct iovec *)iovBuf.bufferPtr();
     msgHdr.msg_iov = iov;
 
@@ -1488,7 +1331,7 @@ sendmsgFunc(SyscallDesc *desc, ThreadContext *tc,
     for (int iovIndex = 0 ; iovIndex < msgHdr.msg_iovlen; iovIndex++) {
         Addr basePtr = (Addr) iov[iovIndex].iov_base;
         bufferArray[iovIndex] = new BufferArg(basePtr, iov[iovIndex].iov_len);
-        bufferArray[iovIndex]->copyIn(tc->getVirtProxy());
+        bufferArray[iovIndex]->copyIn(proxy);
         iov[iovIndex].iov_base = bufferArray[iovIndex]->bufferPtr();
     }
 
@@ -1517,7 +1360,8 @@ getsockoptFunc(SyscallDesc *desc, ThreadContext *tc,
                VPtr<> lenPtr)
 {
     // union of all possible return value types from getsockopt
-    union val {
+    union val
+    {
         int i_val;
         long l_val;
         struct linger linger_val;
@@ -1537,15 +1381,17 @@ getsockoptFunc(SyscallDesc *desc, ThreadContext *tc,
     if (status == -1)
         return -errno;
 
+    SETranslatingPortProxy proxy(tc);
+
     // copy val to valPtr and pass it on
     BufferArg valBuf(valPtr, sizeof(val));
     memcpy(valBuf.bufferPtr(), &val, sizeof(val));
-    valBuf.copyOut(tc->getVirtProxy());
+    valBuf.copyOut(proxy);
 
     // copy len to lenPtr and pass  it on
     BufferArg lenBuf(lenPtr, sizeof(len));
     memcpy(lenBuf.bufferPtr(), &len, sizeof(len));
-    lenBuf.copyOut(tc->getVirtProxy());
+    lenBuf.copyOut(proxy);
 
     return status;
 }
@@ -1564,9 +1410,11 @@ getsocknameFunc(SyscallDesc *desc, ThreadContext *tc,
     // lenPtr is an in-out paramenter:
     // sending the address length in, conveying the final length out
 
+    SETranslatingPortProxy proxy(tc);
+
     // Read in the value of len from the passed pointer.
     BufferArg lenBuf(lenPtr, sizeof(socklen_t));
-    lenBuf.copyIn(tc->getVirtProxy());
+    lenBuf.copyIn(proxy);
     socklen_t len = *(socklen_t *)lenBuf.bufferPtr();
 
     struct sockaddr sa;
@@ -1578,11 +1426,11 @@ getsocknameFunc(SyscallDesc *desc, ThreadContext *tc,
     // Copy address to addrPtr and pass it on.
     BufferArg addrBuf(addrPtr, sizeof(sa));
     memcpy(addrBuf.bufferPtr(), &sa, sizeof(sa));
-    addrBuf.copyOut(tc->getVirtProxy());
+    addrBuf.copyOut(proxy);
 
     // Copy len to lenPtr and pass  it on.
     *(socklen_t *)lenBuf.bufferPtr() = len;
-    lenBuf.copyOut(tc->getVirtProxy());
+    lenBuf.copyOut(proxy);
 
     return status;
 }
@@ -1598,8 +1446,10 @@ getpeernameFunc(SyscallDesc *desc, ThreadContext *tc,
         return -EBADF;
     int sim_fd = sfdp->getSimFD();
 
+    SETranslatingPortProxy proxy(tc);
+
     BufferArg bufAddrlen(addrlenPtr, sizeof(unsigned));
-    bufAddrlen.copyIn(tc->getVirtProxy());
+    bufAddrlen.copyIn(proxy);
     BufferArg bufSock(sockAddrPtr, *(unsigned *)bufAddrlen.bufferPtr());
 
     int retval = getpeername(sim_fd,
@@ -1607,8 +1457,8 @@ getpeernameFunc(SyscallDesc *desc, ThreadContext *tc,
                              (unsigned *)bufAddrlen.bufferPtr());
 
     if (retval != -1) {
-        bufSock.copyOut(tc->getVirtProxy());
-        bufAddrlen.copyOut(tc->getVirtProxy());
+        bufSock.copyOut(proxy);
+        bufAddrlen.copyOut(proxy);
     }
 
     return (retval == -1) ? -errno : retval;
@@ -1622,7 +1472,7 @@ setsockoptFunc(SyscallDesc *desc, ThreadContext *tc,
     auto p = tc->getProcessPtr();
 
     BufferArg valBuf(valPtr, len);
-    valBuf.copyIn(tc->getVirtProxy());
+    valBuf.copyIn(SETranslatingPortProxy(tc));
 
     auto sfdp = std::dynamic_pointer_cast<SocketFDEntry>((*p->fds)[tgt_fd]);
     if (!sfdp)
@@ -1649,3 +1499,5 @@ getcpuFunc(SyscallDesc *desc, ThreadContext *tc,
 
     return 0;
 }
+
+} // namespace gem5

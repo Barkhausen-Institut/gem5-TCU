@@ -39,86 +39,41 @@
 #define __ARCH_X86_INSTS_MICROREGOP_HH__
 
 #include "arch/x86/insts/microop.hh"
+#include "arch/x86/insts/microop_args.hh"
+
+namespace gem5
+{
 
 namespace X86ISA
 {
 
-/**
- * Base classes for RegOps which provides a generateDisassembly method.
- */
 class RegOpBase : public X86MicroopBase
 {
   protected:
-    const RegIndex src1;
-    const RegIndex dest;
-    const uint8_t dataSize;
     const uint16_t ext;
-    RegIndex foldOBit;
 
-    // Constructor
-    RegOpBase(ExtMachInst _machInst,
-            const char *mnem, const char *_instMnem, uint64_t setFlags,
-            InstRegIndex _src1, InstRegIndex _dest,
-            uint8_t _dataSize, uint16_t _ext,
-            OpClass __opClass) :
-        X86MicroopBase(_machInst, mnem, _instMnem, setFlags,
-                __opClass),
-        src1(_src1.index()), dest(_dest.index()),
-        dataSize(_dataSize), ext(_ext)
-    {
-        foldOBit = (dataSize == 1 && !_machInst.rex.present) ? 1 << 6 : 0;
-    }
+    RegOpBase(ExtMachInst mach_inst, const char *mnem, const char *inst_mnem,
+            uint64_t set_flags, OpClass op_class, uint8_t data_size,
+            uint16_t _ext) :
+        X86MicroopBase(mach_inst, mnem, inst_mnem, set_flags, op_class),
+        ext(_ext), dataSize(data_size),
+        foldOBit((data_size == 1 && !mach_inst.rex.present) ? 1 << 6 : 0)
+    {}
 
     //Figure out what the condition code flags should be.
-    uint64_t genFlags(uint64_t oldFlags, uint64_t flagMask,
+    uint64_t genFlags(uint64_t old_flags, uint64_t flag_mask,
             uint64_t _dest, uint64_t _src1, uint64_t _src2,
-            bool subtract = false) const;
+            bool subtract=false)const ;
+
+  public:
+    const uint8_t dataSize;
+    const RegIndex foldOBit;
 };
 
-class RegOp : public RegOpBase
-{
-  protected:
-    const RegIndex src2;
+template <typename ...Operands>
+using RegOpT = InstOperands<RegOpBase, Operands...>;
 
-    // Constructor
-    RegOp(ExtMachInst _machInst,
-            const char *mnem, const char *_instMnem, uint64_t setFlags,
-            InstRegIndex _src1, InstRegIndex _src2, InstRegIndex _dest,
-            uint8_t _dataSize, uint16_t _ext,
-            OpClass __opClass) :
-        RegOpBase(_machInst, mnem, _instMnem, setFlags,
-                _src1, _dest, _dataSize, _ext,
-                __opClass),
-        src2(_src2.index())
-    {
-    }
-
-    std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
-};
-
-class RegOpImm : public RegOpBase
-{
-  protected:
-    const uint8_t imm8;
-
-    // Constructor
-    RegOpImm(ExtMachInst _machInst,
-            const char * mnem, const char *_instMnem, uint64_t setFlags,
-            InstRegIndex _src1, uint8_t _imm8, InstRegIndex _dest,
-            uint8_t _dataSize, uint16_t _ext,
-            OpClass __opClass) :
-        RegOpBase(_machInst, mnem, _instMnem, setFlags,
-                _src1, _dest, _dataSize, _ext,
-                __opClass),
-        imm8(_imm8)
-    {
-    }
-
-    std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
-};
-
-}
+} // namespace X86ISA
+} // namespace gem5
 
 #endif //__ARCH_X86_INSTS_MICROREGOP_HH__

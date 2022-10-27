@@ -44,6 +44,9 @@
 #include "debug/TrafficGen.hh"
 #include "enums/AddrMap.hh"
 
+namespace gem5
+{
+
 PacketPtr
 DramRotGen::getNextPacket()
 {
@@ -98,13 +101,13 @@ DramRotGen::getNextPacket()
 
     } else {
         // increment the column by one
-        if (addrMapping == Enums::RoRaBaCoCh ||
-            addrMapping == Enums::RoRaBaChCo)
+        if (addrMapping == enums::RoRaBaCoCh ||
+            addrMapping == enums::RoRaBaChCo)
             // Simply increment addr by blocksize to
             // increment the column by one
             addr += blocksize;
 
-        else if (addrMapping ==  Enums::RoCoRaBaCh) {
+        else if (addrMapping ==  enums::RoCoRaBaCh) {
             // Explicity increment the column bits
 
                     unsigned int new_col = ((addr / blocksize /
@@ -132,3 +135,5 @@ DramRotGen::getNextPacket()
     // return the generated packet
     return pkt;
 }
+
+} // namespace gem5

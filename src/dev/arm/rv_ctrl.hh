@@ -48,10 +48,14 @@
  * This implements the simple real view registers on a PBXA9
  */
 
+namespace gem5
+{
+
 class RealViewCtrl : public BasicPioDevice
 {
   public:
-    enum DeviceFunc {
+    enum DeviceFunc
+    {
         FUNC_OSC      = 1,
         FUNC_VOLT     = 2,
         FUNC_AMP      = 3,
@@ -82,7 +86,8 @@ class RealViewCtrl : public BasicPioDevice
     };
 
   protected:
-    enum {
+    enum
+    {
         IdReg      = 0x00,
         SwReg      = 0x04,
         Led        = 0x08,
@@ -241,5 +246,6 @@ class RealViewTemperatureSensor
     System * system;
 };
 
+} // namespace gem5
 
 #endif // __DEV_ARM_RV_HH__

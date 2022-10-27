@@ -49,8 +49,11 @@
 #include "base/types.hh"
 #include "base/uncontended_mutex.hh"
 #include "debug/Event.hh"
-#include "sim/core.hh"
+#include "sim/cur_tick.hh"
 #include "sim/serialize.hh"
+
+namespace gem5
+{
 
 class EventQueue;       // forward declaration
 class BaseGlobalEvent;
@@ -94,7 +97,7 @@ class EventBase
 {
   protected:
     typedef unsigned short FlagsType;
-    typedef ::Flags<FlagsType> Flags;
+    typedef ::gem5::Flags<FlagsType> Flags;
 
     static const FlagsType PublicRead    = 0x003f; // public readable flags
     static const FlagsType PublicWrite   = 0x001d; // public writable flags
@@ -781,7 +784,7 @@ class EventQueue
         event->flags.set(Event::Scheduled);
         event->acquire();
 
-        if (DTRACE(Event))
+        if (debug::Event)
             event->trace("scheduled");
     }
 
@@ -802,7 +805,7 @@ class EventQueue
         event->flags.clear(Event::Squashed);
         event->flags.clear(Event::Scheduled);
 
-        if (DTRACE(Event))
+        if (debug::Event)
             event->trace("descheduled");
 
         event->release();
@@ -833,7 +836,7 @@ class EventQueue
         event->flags.clear(Event::Squashed);
         event->flags.set(Event::Scheduled);
 
-        if (DTRACE(Event))
+        if (debug::Event)
             event->trace("rescheduled");
     }
 
@@ -1151,5 +1154,25 @@ class EventFunctionWrapper : public Event
      */
     const char *description() const { return "EventFunctionWrapped"; }
 };
+
+/**
+ * \def SERIALIZE_EVENT(event)
+ *
+ * @ingroup api_serialize
+ */
+#define SERIALIZE_EVENT(event) event.serializeSection(cp, #event);
+
+/**
+ * \def UNSERIALIZE_EVENT(event)
+ *
+ * @ingroup api_serialize
+ */
+#define UNSERIALIZE_EVENT(event)                        \
+    do {                                                \
+        event.unserializeSection(cp, #event);           \
+        eventQueue()->checkpointReschedule(&event);     \
+    } while (0)
+
+} // namespace gem5
 
 #endif // __SIM_EVENTQ_HH__

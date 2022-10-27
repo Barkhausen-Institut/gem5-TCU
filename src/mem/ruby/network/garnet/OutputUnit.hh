@@ -41,6 +41,15 @@
 #include "mem/ruby/network/garnet/NetworkLink.hh"
 #include "mem/ruby/network/garnet/OutVcState.hh"
 
+namespace gem5
+{
+
+namespace ruby
+{
+
+namespace garnet
+{
+
 class CreditLink;
 class Router;
 
@@ -99,7 +108,7 @@ class OutputUnit : public Consumer
 
   private:
     Router *m_router;
-    M5_CLASS_VAR_USED int m_id;
+    GEM5_CLASS_VAR_USED int m_id;
     PortDirection m_direction;
     int m_vc_per_vnet;
     NetworkLink *m_out_link;
@@ -110,5 +119,9 @@ class OutputUnit : public Consumer
     // vc state of downstream router
     std::vector<OutVcState> outVcState;
 };
+
+} // namespace garnet
+} // namespace ruby
+} // namespace gem5
 
 #endif // __MEM_RUBY_NETWORK_GARNET_0_OUTPUTUNIT_HH__

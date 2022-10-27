@@ -44,7 +44,10 @@
 #include "dev/net/etherint.hh"
 #include "dev/net/etherpkt.hh"
 #include "params/EtherBus.hh"
-#include "sim/core.hh"
+#include "sim/cur_tick.hh"
+
+namespace gem5
+{
 
 EtherBus::EtherBus(const Params &p)
     : SimObject(p), ticksPerByte(p.speed), loopback(p.loopback),
@@ -103,3 +106,5 @@ EtherBus::send(EtherInt *sndr, EthPacketPtr &pkt)
 
     return true;
 }
+
+} // namespace gem5

@@ -10,7 +10,7 @@
  * unmodified and in its entirety in all distributions of the software,
  * modified or unmodified, in source code or in binary form.
  *
- * Copyright 2015 LabWare
+ * Copyright 2015, 2021 LabWare
  * Copyright 2014 Google, Inc.
  * Copyright (c) 2002-2005 The Regents of The University of Michigan
  * All rights reserved.
@@ -48,13 +48,26 @@
 #include <exception>
 #include <map>
 #include <string>
+#include <vector>
 
-#include "arch/types.hh"
+#include "arch/generic/pcstate.hh"
+#include "base/cprintf.hh"
 #include "base/pollevent.hh"
 #include "base/socket.hh"
 #include "base/types.hh"
 #include "cpu/pc_event.hh"
+#include "sim/debug.hh"
 #include "sim/eventq.hh"
+
+/*
+ * This file implements a client for the GDB remote serial protocol as
+ * described in this official documentation:
+ *
+ * https://sourceware.org/gdb/current/onlinedocs/gdb/Remote-Protocol.html
+ */
+
+namespace gem5
+{
 
 class System;
 class ThreadContext;
@@ -140,7 +153,7 @@ class BaseRemoteGDB
     /**
      * Interface to other parts of the simulator.
      */
-    BaseRemoteGDB(System *system, ThreadContext *context, int _port);
+    BaseRemoteGDB(System *system, int _port);
     virtual ~BaseRemoteGDB();
 
     std::string name();
@@ -154,19 +167,42 @@ class BaseRemoteGDB
     void detach();
     bool isAttached() { return attached; }
 
-    void replaceThreadContext(ThreadContext *_tc) { tc = _tc; }
+    void addThreadContext(ThreadContext *_tc);
+    void replaceThreadContext(ThreadContext *_tc);
+    bool selectThreadContext(ContextID id);
 
-    bool trap(int type);
-    bool breakpoint() { return trap(SIGTRAP); }
+    void trap(ContextID id, int signum);
 
     /** @} */ // end of api_remote_gdb
+
+    template <class GDBStub, class ...Args>
+    static BaseRemoteGDB *
+    build(Args... args)
+    {
+        int port = getRemoteGDBPort();
+        if (port)
+            return new GDBStub(args..., port);
+        else
+            return nullptr;
+    }
 
   private:
     /*
      * Connection to the external GDB.
      */
+
+    /*
+     * Asynchronous socket events and event handlers.
+     *
+     * These events occur asynchronously and are handled asynchronously
+     * to main simulation loop - therefore they *shall not* interact with
+     * rest of gem5.
+     *
+     * The only thing they do is to schedule a synchronous event at instruction
+     * boundary to deal with the request.
+     */
     void incomingData(int revent);
-    void connectWrapper(int revent) { connect(); }
+    void incomingConnection(int revent);
 
     template <void (BaseRemoteGDB::*F)(int revent)>
     class SocketEvent : public PollEvent
@@ -182,14 +218,16 @@ class BaseRemoteGDB
         void process(int revent) { (gdb->*F)(revent); }
     };
 
-    typedef SocketEvent<&BaseRemoteGDB::connectWrapper> ConnectEvent;
-    typedef SocketEvent<&BaseRemoteGDB::incomingData> DataEvent;
+    typedef SocketEvent<&BaseRemoteGDB::incomingConnection>
+        IncomingConnectionEvent;
+    typedef SocketEvent<&BaseRemoteGDB::incomingData>
+        IncomingDataEvent;
 
-    friend ConnectEvent;
-    friend DataEvent;
+    friend IncomingConnectionEvent;
+    friend IncomingDataEvent;
 
-    ConnectEvent *connectEvent;
-    DataEvent *dataEvent;
+    IncomingConnectionEvent *incomingConnectionEvent;
+    IncomingDataEvent *incomingDataEvent;
 
     ListenSocket listener;
     int _port;
@@ -203,22 +241,44 @@ class BaseRemoteGDB
 
     void recv(std::vector<char> &bp);
     void send(const char *data);
+    void send(const std::string &data) { send(data.c_str()); }
+
+    template <typename ...Args>
+    void
+    send(const char *format, const Args &...args)
+    {
+        send(csprintf(format, args...));
+    }
+
+    /*
+     * Process commands from remote GDB. If simulation has been
+     * stopped because of some kind of fault (as segmentation violation,
+     * or SW trap), 'signum' is the signal value reported back to GDB
+     * in "S" packet (this is done in trap()).
+     */
+    void processCommands(int signum=0);
 
     /*
      * Simulator side debugger state.
      */
-    bool active;
-    bool attached;
+    bool attached = false;
+    bool threadSwitching = false;
 
     System *sys;
-    ThreadContext *tc;
 
-    BaseGdbRegCache *regCachePtr;
+    std::map<ContextID, ThreadContext *> threads;
+    ThreadContext *tc = nullptr;
+
+    BaseGdbRegCache *regCachePtr = nullptr;
+
+    EventWrapper<BaseRemoteGDB, &BaseRemoteGDB::connect> connectEvent;
+    EventWrapper<BaseRemoteGDB, &BaseRemoteGDB::detach>  disconnectEvent;
 
     class TrapEvent : public Event
     {
       protected:
         int _type;
+        ContextID _id;
         BaseRemoteGDB *gdb;
 
       public:
@@ -226,7 +286,8 @@ class BaseRemoteGDB
         {}
 
         void type(int t) { _type = t; }
-        void process() { gdb->trap(_type); }
+        void id(ContextID id) { _id = id; }
+        void process() { gdb->trap(_id, _type); }
     } trapEvent;
 
     /*
@@ -252,10 +313,10 @@ class BaseRemoteGDB
     void descheduleInstCommitEvent(Event *ev);
 
     // Breakpoints.
-    void insertSoftBreak(Addr addr, size_t len);
-    void removeSoftBreak(Addr addr, size_t len);
-    void insertHardBreak(Addr addr, size_t len);
-    void removeHardBreak(Addr addr, size_t len);
+    void insertSoftBreak(Addr addr, size_t kind);
+    void removeSoftBreak(Addr addr, size_t kind);
+    void insertHardBreak(Addr addr, size_t kind);
+    void removeHardBreak(Addr addr, size_t kind);
 
     /*
      * GDB commands.
@@ -266,7 +327,7 @@ class BaseRemoteGDB
         struct Context
         {
             const GdbCommand *cmd;
-            char cmd_byte;
+            char cmdByte;
             int type;
             char *data;
             int len;
@@ -280,24 +341,55 @@ class BaseRemoteGDB
         GdbCommand(const char *_name, Func _func) : name(_name), func(_func) {}
     };
 
-    static std::map<char, GdbCommand> command_map;
+    static std::map<char, GdbCommand> commandMap;
 
-    bool cmd_unsupported(GdbCommand::Context &ctx);
+    bool cmdUnsupported(GdbCommand::Context &ctx);
 
-    bool cmd_signal(GdbCommand::Context &ctx);
-    bool cmd_cont(GdbCommand::Context &ctx);
-    bool cmd_async_cont(GdbCommand::Context &ctx);
-    bool cmd_detach(GdbCommand::Context &ctx);
-    bool cmd_reg_r(GdbCommand::Context &ctx);
-    bool cmd_reg_w(GdbCommand::Context &ctx);
-    bool cmd_set_thread(GdbCommand::Context &ctx);
-    bool cmd_mem_r(GdbCommand::Context &ctx);
-    bool cmd_mem_w(GdbCommand::Context &ctx);
-    bool cmd_query_var(GdbCommand::Context &ctx);
-    bool cmd_step(GdbCommand::Context &ctx);
-    bool cmd_async_step(GdbCommand::Context &ctx);
-    bool cmd_clr_hw_bkpt(GdbCommand::Context &ctx);
-    bool cmd_set_hw_bkpt(GdbCommand::Context &ctx);
+    bool cmdSignal(GdbCommand::Context &ctx);
+    bool cmdCont(GdbCommand::Context &ctx);
+    bool cmdAsyncCont(GdbCommand::Context &ctx);
+    bool cmdDetach(GdbCommand::Context &ctx);
+    bool cmdRegR(GdbCommand::Context &ctx);
+    bool cmdRegW(GdbCommand::Context &ctx);
+    bool cmdSetThread(GdbCommand::Context &ctx);
+    bool cmdMemR(GdbCommand::Context &ctx);
+    bool cmdMemW(GdbCommand::Context &ctx);
+    bool cmdQueryVar(GdbCommand::Context &ctx);
+    bool cmdStep(GdbCommand::Context &ctx);
+    bool cmdAsyncStep(GdbCommand::Context &ctx);
+    bool cmdClrHwBkpt(GdbCommand::Context &ctx);
+    bool cmdSetHwBkpt(GdbCommand::Context &ctx);
+    bool cmdDumpPageTable(GdbCommand::Context &ctx);
+
+    struct QuerySetCommand
+    {
+        struct Context
+        {
+            const std::string &name;
+            std::vector<std::string> args;
+
+            Context(const std::string &_name) : name(_name) {}
+        };
+
+        using Func = void (BaseRemoteGDB::*)(Context &ctx);
+
+        const char * const argSep;
+        const Func func;
+
+        QuerySetCommand(Func _func, const char *_argSep=nullptr) :
+            argSep(_argSep), func(_func)
+        {}
+    };
+
+    static std::map<std::string, QuerySetCommand> queryMap;
+
+    void queryC(QuerySetCommand::Context &ctx);
+    void querySupported(QuerySetCommand::Context &ctx);
+    void queryXfer(QuerySetCommand::Context &ctx);
+
+    size_t threadInfoIdx = 0;
+    void queryFThreadInfo(QuerySetCommand::Context &ctx);
+    void querySThreadInfo(QuerySetCommand::Context &ctx);
 
   protected:
     ThreadContext *context() { return tc; }
@@ -309,8 +401,10 @@ class BaseRemoteGDB
     void encodeXferResponse(const std::string &unencoded,
         std::string &encoded, size_t offset, size_t unencoded_length) const;
 
-    // To be implemented by subclasses.
-    virtual bool checkBpLen(size_t len);
+    // checkBpKind checks if a kind of breakpoint is legal. This function should
+    // be implemented by subclasses by arch. The "kind" is considered to be
+    // breakpoint size in some arch.
+    virtual bool checkBpKind(size_t kind);
 
     virtual BaseGdbRegCache *gdbRegs() = 0;
 
@@ -344,5 +438,7 @@ BaseRemoteGDB::write(Addr addr, T data)
 {
     write(addr, sizeof(T), (const char *)&data);
 }
+
+} // namespace gem5
 
 #endif /* __REMOTE_GDB_H__ */

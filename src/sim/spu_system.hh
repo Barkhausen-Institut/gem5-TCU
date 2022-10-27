@@ -38,18 +38,23 @@
 #include "sim/tile_memory.hh"
 #include "params/SpuSystem.hh"
 
+namespace gem5
+{
+
 class SpuSystem : public System, public TileMemory
 {
   protected:
     std::vector<Addr> tiles;
-    tileid_t tileId;
+    tcu::tileid_t tileId;
 
   public:
     typedef SpuSystemParams Params;
     SpuSystem(const Params &p);
     ~SpuSystem();
 
-    uint32_t tileDesc(tileid_t tile) const override;
+    uint32_t tileDesc(tcu::tileid_t tile) const override;
 };
+
+}
 
 #endif

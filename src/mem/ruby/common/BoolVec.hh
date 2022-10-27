@@ -41,8 +41,17 @@
 #include <ostream>
 #include <vector>
 
+namespace gem5
+{
+
+namespace ruby
+{
+
 typedef std::vector<bool> BoolVec;
 
 std::ostream& operator<<(std::ostream& os, const std::vector<bool>& myvector);
+
+} // namespace ruby
+} // namespace gem5
 
 #endif //__MEM_RUBY_COMMON_BOOLVEC_HH__

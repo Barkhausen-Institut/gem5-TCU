@@ -42,44 +42,45 @@
 #include "cpu/o3/regfile.hh"
 
 #include "cpu/o3/free_list.hh"
-#include "arch/generic/types.hh"
-#include "cpu/o3/free_list.hh"
+
+namespace gem5
+{
+
+namespace o3
+{
 
 PhysRegFile::PhysRegFile(unsigned _numPhysicalIntRegs,
                          unsigned _numPhysicalFloatRegs,
                          unsigned _numPhysicalVecRegs,
                          unsigned _numPhysicalVecPredRegs,
                          unsigned _numPhysicalCCRegs,
-                         VecMode vmode)
-    : intRegFile(_numPhysicalIntRegs),
-      floatRegFile(_numPhysicalFloatRegs),
-      vectorRegFile(_numPhysicalVecRegs),
-      vecPredRegFile(_numPhysicalVecPredRegs),
-      ccRegFile(_numPhysicalCCRegs),
+                         const BaseISA::RegClasses &reg_classes)
+    : intRegFile(reg_classes.at(IntRegClass), _numPhysicalIntRegs),
+      floatRegFile(reg_classes.at(FloatRegClass), _numPhysicalFloatRegs),
+      vectorRegFile(reg_classes.at(VecRegClass), _numPhysicalVecRegs),
+      vectorElemRegFile(reg_classes.at(VecElemClass), _numPhysicalVecRegs * (
+                  reg_classes.at(VecElemClass).numRegs() /
+                  reg_classes.at(VecRegClass).numRegs())),
+      vecPredRegFile(reg_classes.at(VecPredRegClass), _numPhysicalVecPredRegs),
+      ccRegFile(reg_classes.at(CCRegClass), _numPhysicalCCRegs),
       numPhysicalIntRegs(_numPhysicalIntRegs),
       numPhysicalFloatRegs(_numPhysicalFloatRegs),
       numPhysicalVecRegs(_numPhysicalVecRegs),
-      numPhysicalVecElemRegs(_numPhysicalVecRegs *
-                             TheISA::NumVecElemPerVecReg),
+      numPhysicalVecElemRegs(_numPhysicalVecRegs * (
+                  reg_classes.at(VecElemClass).numRegs() /
+                  reg_classes.at(VecRegClass).numRegs())),
       numPhysicalVecPredRegs(_numPhysicalVecPredRegs),
       numPhysicalCCRegs(_numPhysicalCCRegs),
       totalNumRegs(_numPhysicalIntRegs
                    + _numPhysicalFloatRegs
                    + _numPhysicalVecRegs
-                   + _numPhysicalVecRegs * TheISA::NumVecElemPerVecReg
+                   + numPhysicalVecElemRegs
                    + _numPhysicalVecPredRegs
-                   + _numPhysicalCCRegs),
-      vecMode(vmode)
+                   + _numPhysicalCCRegs)
 {
-    PhysRegIndex phys_reg;
-    PhysRegIndex flat_reg_idx = 0;
+    RegIndex phys_reg;
+    RegIndex flat_reg_idx = 0;
 
-    if (TheISA::NumCCRegs == 0 && _numPhysicalCCRegs != 0) {
-        // Just make this a warning and go ahead and allocate them
-        // anyway, to keep from having to add checks everywhere
-        warn("Non-zero number of physical CC regs specified, even though\n"
-             "    ISA does not use them.\n");
-    }
     // The initial batch of registers are the integer ones
     for (phys_reg = 0; phys_reg < numPhysicalIntRegs; phys_reg++) {
         intRegIds.emplace_back(IntRegClass, phys_reg, flat_reg_idx++);
@@ -94,18 +95,12 @@ PhysRegFile::PhysRegFile(unsigned _numPhysicalIntRegs,
     // The next batch of the registers are the vector physical
     // registers; put them onto the vector free list.
     for (phys_reg = 0; phys_reg < numPhysicalVecRegs; phys_reg++) {
-        vectorRegFile[phys_reg].zero();
         vecRegIds.emplace_back(VecRegClass, phys_reg, flat_reg_idx++);
     }
     // The next batch of the registers are the vector element physical
-    // registers; they refer to the same containers as the vector
-    // registers, just a different (and incompatible) way to access
-    // them; put them onto the vector free list.
-    for (phys_reg = 0; phys_reg < numPhysicalVecRegs; phys_reg++) {
-        for (ElemIndex eIdx = 0; eIdx < TheISA::NumVecElemPerVecReg; eIdx++) {
-            vecElemIds.emplace_back(VecElemClass, phys_reg,
-                    eIdx, flat_reg_idx++);
-        }
+    // registers; put them onto the vector free list.
+    for (phys_reg = 0; phys_reg < numPhysicalVecElemRegs; phys_reg++) {
+        vecElemIds.emplace_back(VecElemClass, phys_reg, flat_reg_idx++);
     }
 
     // The next batch of the registers are the predicate physical
@@ -121,7 +116,8 @@ PhysRegFile::PhysRegFile(unsigned _numPhysicalIntRegs,
     }
 
     // Misc regs have a fixed mapping but still need PhysRegIds.
-    for (phys_reg = 0; phys_reg < TheISA::NumMiscRegs; phys_reg++) {
+    for (phys_reg = 0; phys_reg < reg_classes.at(MiscRegClass).numRegs();
+            phys_reg++) {
         miscRegIds.emplace_back(MiscRegClass, phys_reg, 0);
     }
 }
@@ -150,21 +146,12 @@ PhysRegFile::initFreeList(UnifiedFreeList *freeList)
      * registers; put them onto the vector free list. */
     for (reg_idx = 0; reg_idx < numPhysicalVecRegs; reg_idx++) {
         assert(vecRegIds[reg_idx].index() == reg_idx);
-        for (ElemIndex elemIdx = 0; elemIdx < TheISA::NumVecElemPerVecReg;
-                elemIdx++) {
-            assert(vecElemIds[reg_idx * TheISA::NumVecElemPerVecReg +
-                    elemIdx].index() == reg_idx);
-            assert(vecElemIds[reg_idx * TheISA::NumVecElemPerVecReg +
-                    elemIdx].elemIndex() == elemIdx);
-        }
     }
-
-    /* depending on the mode we add the vector registers as whole units or
-     * as different elements. */
-    if (vecMode == Enums::Full)
-        freeList->addRegs(vecRegIds.begin(), vecRegIds.end());
-    else
-        freeList->addRegs(vecElemIds.begin(), vecElemIds.end());
+    freeList->addRegs(vecRegIds.begin(), vecRegIds.end());
+    for (reg_idx = 0; reg_idx < numPhysicalVecElemRegs; reg_idx++) {
+        assert(vecElemIds[reg_idx].index() == reg_idx);
+    }
+    freeList->addRegs(vecElemIds.begin(), vecElemIds.end());
 
     // The next batch of the registers are the predicate physical
     // registers; put them onto the predicate free list.
@@ -182,18 +169,7 @@ PhysRegFile::initFreeList(UnifiedFreeList *freeList)
 }
 
 PhysRegFile::IdRange
-PhysRegFile::getRegElemIds(PhysRegIdPtr reg)
-{
-    panic_if(!reg->isVectorPhysReg(),
-            "Trying to get elems of a %s register", reg->className());
-    auto idx = reg->index();
-    return std::make_pair(
-                vecElemIds.begin() + idx * TheISA::NumVecElemPerVecReg,
-                vecElemIds.begin() + (idx+1) * TheISA::NumVecElemPerVecReg);
-}
-
-PhysRegFile::IdRange
-PhysRegFile::getRegIds(RegClass cls)
+PhysRegFile::getRegIds(RegClassType cls)
 {
     switch (cls)
     {
@@ -211,6 +187,8 @@ PhysRegFile::getRegIds(RegClass cls)
         return std::make_pair(ccRegIds.begin(), ccRegIds.end());
       case MiscRegClass:
         return std::make_pair(miscRegIds.begin(), miscRegIds.end());
+      case InvalidRegClass:
+        panic("Tried to get register IDs for the invalid class.");
     }
     /* There is no way to make an empty iterator */
     return std::make_pair(PhysIds::iterator(),
@@ -224,12 +202,13 @@ PhysRegFile::getTrueId(PhysRegIdPtr reg)
     case VecRegClass:
         return &vecRegIds[reg->index()];
     case VecElemClass:
-        return &vecElemIds[reg->index() * TheISA::NumVecElemPerVecReg +
-            reg->elemIndex()];
+        return &vecElemIds[reg->index()];
     default:
-        panic_if(!reg->isVectorPhysElem(),
+        panic_if(!reg->is(VecElemClass),
             "Trying to get the register of a %s register", reg->className());
     }
     return nullptr;
 }
 
+} // namespace o3
+} // namespace gem5

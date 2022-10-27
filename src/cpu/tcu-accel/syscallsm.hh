@@ -34,6 +34,11 @@
 #include "cpu/tcu-accel/accelerator.hh"
 #include "sim/system.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 class SyscallSM
 {
     static const size_t RBUF_ADDR = 0x3FB000;
@@ -133,5 +138,8 @@ class SyscallSM
     Addr replyAddr;
     Addr syscallSize;
 };
+
+}
+}
 
 #endif /* __CPU_TCU_ACCEL_SYSCALLSM_HH__ */

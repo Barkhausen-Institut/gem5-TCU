@@ -53,11 +53,16 @@
 #include <vector>
 
 #include "base/printable.hh"
+#include "base/trace.hh"
 #include "base/types.hh"
+#include "debug/MSHR.hh"
 #include "mem/cache/queue_entry.hh"
 #include "mem/packet.hh"
 #include "mem/request.hh"
-#include "sim/core.hh"
+#include "sim/cur_tick.hh"
+
+namespace gem5
+{
 
 class BaseCache;
 
@@ -121,10 +126,12 @@ class MSHR : public QueueEntry, public Printable
     /** True if the entry is just a simple forward from an upper level */
     bool isForward;
 
-    class Target : public QueueEntry::Target {
+    class Target : public QueueEntry::Target
+    {
       public:
 
-        enum Source {
+        enum Source
+        {
             FromCPU,
             FromSnoop,
             FromPrefetcher
@@ -159,7 +166,8 @@ class MSHR : public QueueEntry, public Printable
         {}
     };
 
-    class TargetList : public std::list<Target> {
+    class TargetList : public std::list<Target>, public Named
+    {
 
       public:
         bool needsWritable;
@@ -172,7 +180,7 @@ class MSHR : public QueueEntry, public Printable
          */
         bool hasFromCache;
 
-        TargetList();
+        TargetList(const std::string &name = ".unnamedTargetList");
 
         /**
          * Use the provided packet and the source to update the
@@ -342,6 +350,22 @@ class MSHR : public QueueEntry, public Printable
         return targets.hasFromCache;
     }
 
+    /**
+     * Replaces the matching packet in the Targets list with a dummy packet to
+     * ensure the MSHR remains allocated until the corresponding locked write
+     * arrives.
+     *
+     * @param pkt The LockedRMWRead packet to be updated
+     */
+    void updateLockedRMWReadTarget(PacketPtr pkt);
+
+    /**
+     * Determine if there are any LockedRMWReads in the Targets list
+     *
+     * @return true if Targets list contains a LockedRMWRead
+     */
+    bool hasLockedRMWReadTarget();
+
   private:
     /**
      * Promotes deferred targets that satisfy a predicate
@@ -413,7 +437,7 @@ class MSHR : public QueueEntry, public Printable
     bool handleSnoop(PacketPtr target, Counter order);
 
     /** A simple constructor. */
-    MSHR();
+    MSHR(const std::string &name);
 
     /**
      * Returns the current number of allocated targets.
@@ -462,6 +486,8 @@ class MSHR : public QueueEntry, public Printable
      */
     void popTarget()
     {
+        DPRINTF(MSHR, "Force deallocating MSHR targets: %s\n",
+                targets.front().pkt->print());
         targets.pop_front();
     }
 
@@ -516,5 +542,7 @@ class MSHR : public QueueEntry, public Printable
     bool matchBlockAddr(const PacketPtr pkt) const override;
     bool conflictAddr(const QueueEntry* entry) const override;
 };
+
+} // namespace gem5
 
 #endif // __MEM_CACHE_MSHR_HH__

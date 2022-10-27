@@ -35,21 +35,36 @@
 #include <sstream>
 
 #include "arch/riscv/interrupts.hh"
+#include "arch/riscv/mmu.hh"
 #include "arch/riscv/pagetable.hh"
-#include "arch/riscv/registers.hh"
+#include "arch/riscv/pmp.hh"
+#include "arch/riscv/regs/float.hh"
+#include "arch/riscv/regs/int.hh"
+#include "arch/riscv/regs/misc.hh"
 #include "base/bitfield.hh"
 #include "base/compiler.hh"
+#include "base/logging.hh"
+#include "base/trace.hh"
 #include "cpu/base.hh"
 #include "debug/Checkpoint.hh"
+#include "debug/FloatRegs.hh"
+#include "debug/IntRegs.hh"
+#include "debug/LLSC.hh"
+#include "debug/MiscRegs.hh"
 #include "debug/RiscvMisc.hh"
+#include "mem/packet.hh"
+#include "mem/request.hh"
 #include "params/RiscvISA.hh"
-#include "sim/core.hh"
+#include "sim/m3_system.hh"
 #include "sim/pseudo_inst.hh"
+
+namespace gem5
+{
 
 namespace RiscvISA
 {
 
-M5_VAR_USED const std::array<const char *, NumMiscRegs> MiscRegNames = {{
+[[maybe_unused]] const std::array<const char *, NUM_MISCREGS> MiscRegNames = {{
     [MISCREG_PRV]           = "PRV",
     [MISCREG_ISA]           = "ISA",
     [MISCREG_VENDORID]      = "VENDORID",
@@ -174,12 +189,44 @@ M5_VAR_USED const std::array<const char *, NumMiscRegs> MiscRegNames = {{
     [MISCREG_UTVAL]         = "UTVAL",
     [MISCREG_FFLAGS]        = "FFLAGS",
     [MISCREG_FRM]           = "FRM",
+
+    [MISCREG_NMIVEC]        = "NMIVEC",
+    [MISCREG_NMIE]          = "NMIE",
+    [MISCREG_NMIP]          = "NMIP",
 }};
 
 ISA::ISA(const Params &p) : BaseISA(p)
 {
-    miscRegFile.resize(NumMiscRegs);
+    _regClasses.emplace_back(NumIntRegs, debug::IntRegs);
+    _regClasses.emplace_back(NumFloatRegs, debug::FloatRegs);
+    _regClasses.emplace_back(1, debug::IntRegs); // Not applicable to RISCV
+    _regClasses.emplace_back(2, debug::IntRegs); // Not applicable to RISCV
+    _regClasses.emplace_back(1, debug::IntRegs); // Not applicable to RISCV
+    _regClasses.emplace_back(0, debug::IntRegs); // Not applicable to RISCV
+    _regClasses.emplace_back(NUM_MISCREGS, debug::MiscRegs);
+
+    miscRegFile.resize(NUM_MISCREGS);
     clear();
+}
+
+bool ISA::inUserMode() const
+{
+    return miscRegFile[MISCREG_PRV] == PRV_U;
+}
+
+void
+ISA::copyRegsFrom(ThreadContext *src)
+{
+    // First loop through the integer registers.
+    for (int i = 0; i < NumIntRegs; ++i)
+        tc->setIntReg(i, src->readIntReg(i));
+
+    // Second loop through the float registers.
+    for (int i = 0; i < NumFloatRegs; ++i)
+        tc->setFloatReg(i, src->readFloatReg(i));
+
+    // Lastly copy PC/NPC
+    tc->pcState(src->pcState());
 }
 
 void ISA::clear()
@@ -198,6 +245,8 @@ void ISA::clear()
     // don't set it to zero; software may try to determine the supported
     // triggers, starting at zero. simply set a different value here.
     miscRegFile[MISCREG_TSELECT] = 1;
+    // NMI is always enabled.
+    miscRegFile[MISCREG_NMIE] = 1;
 }
 
 bool
@@ -226,7 +275,7 @@ ISA::hpmCounterEnabled(int misc_reg) const
 RegVal
 ISA::readMiscRegNoEffect(int misc_reg) const
 {
-    if (misc_reg > NumMiscRegs || misc_reg < 0) {
+    if (misc_reg > NUM_MISCREGS || misc_reg < 0) {
         // Illegal CSR
         panic("Illegal CSR index %#x\n", misc_reg);
         return -1;
@@ -314,7 +363,7 @@ ISA::readMiscReg(int misc_reg)
 void
 ISA::setMiscRegNoEffect(int misc_reg, RegVal val)
 {
-    if (misc_reg > NumMiscRegs || misc_reg < 0) {
+    if (misc_reg > NUM_MISCREGS || misc_reg < 0) {
         // Illegal CSR
         panic("Illegal CSR index %#x\n", misc_reg);
     }
@@ -331,6 +380,57 @@ ISA::setMiscReg(int misc_reg, RegVal val)
         warn("Ignoring write to %s.\n", CSRData.at(misc_reg).name);
     } else {
         switch (misc_reg) {
+
+          // From section 3.7.1 of RISCV priv. specs
+          // V1.12, the odd-numbered configuration
+          // registers are illegal for RV64 and
+          // each 64 bit CFG register hold configurations
+          // for 8 PMP entries.
+
+          case MISCREG_PMPCFG0:
+          case MISCREG_PMPCFG2:
+            {
+                // PMP registers should only be modified in M mode
+                assert(readMiscRegNoEffect(MISCREG_PRV) == PRV_M);
+
+                // Specs do not seem to mention what should be
+                // configured first, cfg or address regs!
+                // qemu seems to update the tables when
+                // pmp addr regs are written (with the assumption
+                // that cfg regs are already written)
+
+                for (int i=0; i < sizeof(val); i++) {
+
+                    uint8_t cfg_val = (val >> (8*i)) & 0xff;
+                    auto mmu = dynamic_cast<RiscvISA::MMU *>
+                                (tc->getMMUPtr());
+
+                    // Form pmp_index using the index i and
+                    // PMPCFG register number
+                    // Note: MISCREG_PMPCFG2 - MISCREG_PMPCFG0 = 1
+                    // 8*(misc_reg-MISCREG_PMPCFG0) will be useful
+                    // if a system contains more than 16 PMP entries
+                    uint32_t pmp_index = i+(8*(misc_reg-MISCREG_PMPCFG0));
+                    mmu->getPMP()->pmpUpdateCfg(pmp_index,cfg_val);
+                }
+
+                setMiscRegNoEffect(misc_reg, val);
+            }
+            break;
+          case MISCREG_PMPADDR00 ... MISCREG_PMPADDR15:
+            {
+                // PMP registers should only be modified in M mode
+                assert(readMiscRegNoEffect(MISCREG_PRV) == PRV_M);
+
+                auto mmu = dynamic_cast<RiscvISA::MMU *>
+                              (tc->getMMUPtr());
+                uint32_t pmp_index = misc_reg-MISCREG_PMPADDR00;
+                mmu->getPMP()->pmpUpdateAddr(pmp_index, val);
+
+                setMiscRegNoEffect(misc_reg, val);
+            }
+            break;
+
           case MISCREG_IP:
             {
                 auto ic = dynamic_cast<RiscvISA::Interrupts *>(
@@ -370,8 +470,10 @@ ISA::setMiscReg(int misc_reg, RegVal val)
                 // only allow to disable compressed instructions
                 // if the following instruction is 4-byte aligned
                 if ((val & ISA_EXT_C_MASK) == 0 &&
-                    bits(tc->pcState().npc(), 2, 0) != 0)
+                        bits(tc->pcState().as<RiscvISA::PCState>().npc(),
+                            2, 0) != 0) {
                     val |= cur_val & ISA_EXT_C_MASK;
+                }
                 setMiscRegNoEffect(misc_reg, val);
             }
             break;
@@ -404,4 +506,103 @@ ISA::unserialize(CheckpointIn &cp)
     UNSERIALIZE_CONTAINER(miscRegFile);
 }
 
+const int WARN_FAILURE = 10000;
+const int MAX_TILES = 1024;
+
+const Addr INVALID_RESERVATION_ADDR = (Addr) -1;
+std::unordered_map<int, Addr> load_reservation_addrs;
+
+template <class XC>
+Addr &get_reservation_addr(XC *xc)
+{
+    int tile = 0;
+    M3System *m3sys;
+    if((m3sys = dynamic_cast<M3System*>(xc->getCpuPtr()->system)) != nullptr)
+        tile = m3sys->tile();
+    return load_reservation_addrs[tile * MAX_TILES + xc->contextId()];
+}
+
+void
+ISA::handleLockedSnoop(PacketPtr pkt, Addr cacheBlockMask)
+{
+    Addr& load_reservation_addr = get_reservation_addr(tc);
+
+    if (load_reservation_addr == INVALID_RESERVATION_ADDR)
+        return;
+    Addr snoop_addr = pkt->getAddr() & cacheBlockMask;
+    DPRINTF(LLSC, "Locked snoop on address %x.\n", snoop_addr);
+    if ((load_reservation_addr & cacheBlockMask) == snoop_addr)
+        load_reservation_addr = INVALID_RESERVATION_ADDR;
+}
+
+
+void
+ISA::handleLockedRead(const RequestPtr &req)
+{
+    Addr& load_reservation_addr = get_reservation_addr(tc);
+
+    load_reservation_addr = req->getPaddr() & ~0xF;
+    DPRINTF(LLSC, "[cid:%d]: Reserved address %x.\n",
+            req->contextId(), req->getPaddr() & ~0xF);
+}
+
+bool
+ISA::handleLockedWrite(const RequestPtr &req, Addr cacheBlockMask)
+{
+    Addr& load_reservation_addr = get_reservation_addr(tc);
+    bool lr_addr_empty = (load_reservation_addr == INVALID_RESERVATION_ADDR);
+
+    // Normally RISC-V uses zero to indicate success and nonzero to indicate
+    // failure (right now only 1 is reserved), but in gem5 zero indicates
+    // failure and one indicates success, so here we conform to that (it should
+    // be switched in the instruction's implementation)
+
+    DPRINTF(LLSC, "[cid:%d]: load_reservation_addrs empty? %s.\n",
+            req->contextId(),
+            lr_addr_empty ? "yes" : "no");
+    if (!lr_addr_empty) {
+        DPRINTF(LLSC, "[cid:%d]: addr = %x.\n", req->contextId(),
+                req->getPaddr() & ~0xF);
+        DPRINTF(LLSC, "[cid:%d]: last locked addr = %x.\n", req->contextId(),
+                load_reservation_addr);
+    }
+    if (lr_addr_empty
+            || load_reservation_addr != ((req->getPaddr() & ~0xF))) {
+        req->setExtraData(0);
+        int stCondFailures = tc->readStCondFailures();
+        tc->setStCondFailures(++stCondFailures);
+        if (stCondFailures % WARN_FAILURE == 0) {
+            warn("%i: context %d: %d consecutive SC failures.\n",
+                    curTick(), tc->contextId(), stCondFailures);
+        }
+        return false;
+    }
+    if (req->isUncacheable()) {
+        req->setExtraData(2);
+    }
+
+    return true;
+}
+
+void
+ISA::globalClearExclusive()
+{
+    tc->getCpuPtr()->wakeup(tc->threadId());
+}
+
+} // namespace RiscvISA
+} // namespace gem5
+
+std::ostream &
+operator<<(std::ostream &os, gem5::RiscvISA::PrivilegeMode pm)
+{
+    switch (pm) {
+    case gem5::RiscvISA::PRV_U:
+        return os << "PRV_U";
+    case gem5::RiscvISA::PRV_S:
+        return os << "PRV_S";
+    case gem5::RiscvISA::PRV_M:
+        return os << "PRV_M";
+    }
+    return os << "PRV_<invalid>";
 }

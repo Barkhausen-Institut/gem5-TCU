@@ -37,7 +37,11 @@
 
 #include "arch/arm/isa_device.hh"
 
+#include "arch/arm/regs/misc.hh"
 #include "base/logging.hh"
+
+namespace gem5
+{
 
 namespace ArmISA
 {
@@ -71,5 +75,5 @@ DummyISADevice::readMiscReg(int misc_reg)
     return 0;
 }
 
-
-}
+} // namespace ArmISA
+} // namespace gem5

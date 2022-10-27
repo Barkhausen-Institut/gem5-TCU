@@ -44,20 +44,23 @@
 #include <string>
 #include <vector>
 
-#include "arch/arm/intregs.hh"
+#include "arch/arm/regs/int.hh"
 #include "base/loader/object_file.hh"
 #include "mem/page_table.hh"
 #include "sim/process.hh"
 #include "sim/syscall_abi.hh"
 
+namespace gem5
+{
+
 class ArmProcess : public Process
 {
   protected:
-    ::Loader::Arch arch;
-    ArmProcess(const ProcessParams &params, ::Loader::ObjectFile *objFile,
-               ::Loader::Arch _arch);
+    loader::Arch arch;
+    ArmProcess(const ProcessParams &params, loader::ObjectFile *objFile,
+               loader::Arch _arch);
     template<class IntType>
-    void argsInit(int pageSize, ArmISA::IntRegIndex spIndex);
+    void argsInit(int pageSize, const RegId &spId);
 
     template<class IntType>
     IntType
@@ -75,8 +78,8 @@ class ArmProcess : public Process
 class ArmProcess32 : public ArmProcess
 {
   public:
-    ArmProcess32(const ProcessParams &params, ::Loader::ObjectFile *objFile,
-                 ::Loader::Arch _arch);
+    ArmProcess32(const ProcessParams &params, loader::ObjectFile *objFile,
+                 loader::Arch _arch);
 
   protected:
     void initState() override;
@@ -88,8 +91,8 @@ class ArmProcess32 : public ArmProcess
 class ArmProcess64 : public ArmProcess
 {
   public:
-    ArmProcess64(const ProcessParams &params, ::Loader::ObjectFile *objFile,
-                 ::Loader::Arch _arch);
+    ArmProcess64(const ProcessParams &params, loader::ObjectFile *objFile,
+                 loader::Arch _arch);
 
   protected:
     void initState() override;
@@ -98,5 +101,6 @@ class ArmProcess64 : public ArmProcess
     uint32_t armHwcapImpl() const override;
 };
 
-#endif // __ARM_PROCESS_HH__
+} // namespace gem5
 
+#endif // __ARM_PROCESS_HH__

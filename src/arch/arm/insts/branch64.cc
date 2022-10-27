@@ -37,39 +37,45 @@
 
 #include "arch/arm/insts/branch64.hh"
 
+namespace gem5
+{
+
 namespace ArmISA
 {
 
-ArmISA::PCState
-BranchImm64::branchTarget(const ArmISA::PCState &branchPC) const
+std::unique_ptr<PCStateBase>
+BranchImm64::branchTarget(const PCStateBase &branch_pc) const
 {
-    ArmISA::PCState pcs = branchPC;
-    pcs.instNPC(pcs.pc() + imm);
-    pcs.advance();
-    return pcs;
+    PCStateBase *pcs = branch_pc.clone();
+    auto &apc = pcs->as<PCState>();
+    apc.instNPC(apc.pc() + imm);
+    apc.advance();
+    return std::unique_ptr<PCStateBase>{pcs};
 }
 
-ArmISA::PCState
-BranchImmReg64::branchTarget(const ArmISA::PCState &branchPC) const
+std::unique_ptr<PCStateBase>
+BranchImmReg64::branchTarget(const PCStateBase &branch_pc) const
 {
-    ArmISA::PCState pcs = branchPC;
-    pcs.instNPC(pcs.pc() + imm);
-    pcs.advance();
-    return pcs;
+    PCStateBase *pcs = branch_pc.clone();
+    auto &apc = pcs->as<PCState>();
+    apc.instNPC(apc.pc() + imm);
+    apc.advance();
+    return std::unique_ptr<PCStateBase>{pcs};
 }
 
-ArmISA::PCState
-BranchImmImmReg64::branchTarget(const ArmISA::PCState &branchPC) const
+std::unique_ptr<PCStateBase>
+BranchImmImmReg64::branchTarget(const PCStateBase &branch_pc) const
 {
-    ArmISA::PCState pcs = branchPC;
-    pcs.instNPC(pcs.pc() + imm2);
-    pcs.advance();
-    return pcs;
+    PCStateBase *pcs = branch_pc.clone();
+    auto &apc = pcs->as<PCState>();
+    apc.instNPC(apc.pc() + imm2);
+    apc.advance();
+    return std::unique_ptr<PCStateBase>{pcs};
 }
 
 std::string
 BranchImmCond64::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false, true, condCode);
@@ -79,7 +85,7 @@ BranchImmCond64::generateDisassembly(
 
 std::string
 BranchImm64::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -89,7 +95,7 @@ BranchImm64::generateDisassembly(
 
 std::string
 BranchReg64::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -99,7 +105,7 @@ BranchReg64::generateDisassembly(
 
 std::string
 BranchRegReg64::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -111,29 +117,29 @@ BranchRegReg64::generateDisassembly(
 
 std::string
 BranchRet64::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
-    if (op1 != INTREG_X30)
+    if (op1 != int_reg::X30)
         printIntReg(ss, op1);
     return ss.str();
 }
 
 std::string
 BranchRetA64::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
-    if (op1 != INTREG_X30)
+    if (op1 != int_reg::X30)
         printIntReg(ss, op1);
     return ss.str();
 }
 
 std::string
 BranchEret64::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -142,7 +148,7 @@ BranchEret64::generateDisassembly(
 
 std::string
 BranchEretA64::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -151,7 +157,7 @@ BranchEretA64::generateDisassembly(
 
 std::string
 BranchImmReg64::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -163,7 +169,7 @@ BranchImmReg64::generateDisassembly(
 
 std::string
 BranchImmImmReg64::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     printMnemonic(ss, "", false);
@@ -174,3 +180,4 @@ BranchImmImmReg64::generateDisassembly(
 }
 
 } // namespace ArmISA
+} // namespace gem5

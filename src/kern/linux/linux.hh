@@ -1,4 +1,16 @@
 /*
+ * Copyright (c) 2021 Arm Limited
+ * All rights reserved
+ *
+ * The license below extends only to copyright in the software and shall
+ * not be construed as granting a license to any other intellectual
+ * property including but not limited to intellectual property relating
+ * to a hardware implementation of the functionality of the software
+ * licensed hereunder.  You may use the software subject to the license
+ * terms below provided that you ensure that this notice is replicated
+ * unmodified and in its entirety in all distributions of the software,
+ * modified or unmodified, in source code or in binary form.
+ *
  * Copyright (c) 2004-2009 The Regents of The University of Michigan
  * All rights reserved.
  *
@@ -36,6 +48,9 @@
 #include "kern/operatingsystem.hh"
 #include "sim/process.hh"
 
+namespace gem5
+{
+
 class ThreadContext;
 
 ///
@@ -61,7 +76,8 @@ class Linux : public OperatingSystem
     /// Stat buffer.  Note that we can't call it 'stat' since that
     /// gets #defined to something else on some systems. This type
     /// can be specialized by architecture specific "Linux" classes
-    typedef struct {
+    struct tgt_stat
+    {
         uint32_t        st_dev;         //!< device
         uint32_t        st_ino;         //!< inode
         uint32_t        st_mode;        //!< mode
@@ -78,10 +94,11 @@ class Linux : public OperatingSystem
         int32_t         st_blocks;      //!< number of blocks allocated
         uint32_t        st_flags;       //!< flags
         uint32_t        st_gen;         //!< unknown
-    } tgt_stat;
+    };
 
     // same for stat64
-    typedef struct {
+    struct tgt_stat64
+    {
         uint64_t        st_dev;
         uint64_t        st_ino;
         uint64_t        st_rdev;
@@ -102,13 +119,14 @@ class Linux : public OperatingSystem
         uint64_t        st_ctimeX;
         uint64_t        st_ctime_nsec;
         int64_t         ___unused[3];
-    } tgt_stat64;
+    };
 
     /// Length of strings in struct utsname (plus 1 for null char).
     static const int _SYS_NMLN = 65;
 
     /// Interface struct for uname().
-    struct utsname {
+    struct utsname
+    {
         char sysname[_SYS_NMLN];        //!< System name.
         char nodename[_SYS_NMLN];       //!< Node name.
         char release[_SYS_NMLN];        //!< OS release.
@@ -117,19 +135,22 @@ class Linux : public OperatingSystem
     };
 
     /// Limit struct for getrlimit/setrlimit.
-    struct rlimit {
+    struct rlimit
+    {
         uint64_t  rlim_cur;     //!< soft limit
         uint64_t  rlim_max;     //!< hard limit
     };
 
     /// For gettimeofday().
-    struct timeval {
+    struct timeval
+    {
         int64_t tv_sec;         //!< seconds
         int64_t tv_usec;        //!< microseconds
     };
 
     /// For clock_gettime().
-    struct timespec {
+    struct timespec
+    {
         time_t tv_sec;         //!< seconds
         int64_t tv_nsec;        //!< nanoseconds
     };
@@ -138,7 +159,8 @@ class Linux : public OperatingSystem
     static const int M5_SC_CLK_TCK = 100;
 
     /// For times().
-    struct tms {
+    struct tms
+    {
         int64_t tms_utime;      //!< user time
         int64_t tms_stime;      //!< system time
         int64_t tms_cutime;     //!< user time of children
@@ -146,14 +168,16 @@ class Linux : public OperatingSystem
     };
 
     // For writev/readv
-    struct tgt_iovec {
+    struct tgt_iovec
+    {
         uint64_t iov_base; // void *
         uint64_t iov_len;
     };
 
     // For select().
     // linux-3.14-src/include/uapi/linux/posix_types.h
-    struct fd_set{
+    struct fd_set
+    {
 #ifndef LINUX__FD_SETSIZE
 #define LINUX__FD_SETSIZE 1024
         unsigned long fds_bits[LINUX__FD_SETSIZE / (8 * sizeof(long))];
@@ -211,7 +235,8 @@ class Linux : public OperatingSystem
     static const int TGT_RUSAGE_CHILDREN = -1;
     static const int TGT_RUSAGE_BOTH     = -2;
 
-    struct rusage {
+    struct rusage
+    {
         struct timeval ru_utime;        //!< user time used
         struct timeval ru_stime;        //!< system time used
         int64_t ru_maxrss;              //!< max rss
@@ -270,7 +295,11 @@ class Linux : public OperatingSystem
     static const unsigned TGT_FUTEX_OP_CMP_GE = 5;
 
     // for *at syscalls
-    static const int TGT_AT_FDCWD   = -100;
+    static const int TGT_AT_FDCWD     = -100;
+    static const int TGT_AT_REMOVEDIR = 0x200;
+    static const int TGT_AT_SYMLINK_FOLLOW = 0x400;
+    static const int TGT_AT_NO_AUTOMOUNT = 0x800;
+    static const int TGT_AT_EMPTY_PATH = 0x1000;
 
     // for MREMAP
     static const unsigned TGT_MREMAP_MAYMOVE    = 0x1;
@@ -307,5 +336,7 @@ class Linux : public OperatingSystem
     static const unsigned TGT_WCONTINUED            = 0x00000008;
     static const unsigned TGT_WNOWAIT               = 0x01000000;
 };  // class Linux
+
+} // namespace gem5
 
 #endif // __LINUX_HH__

@@ -38,6 +38,12 @@
 #include "mem/ruby/network/Network.hh"
 #include "mem/ruby/slicc_interface/AbstractController.hh"
 
+namespace gem5
+{
+
+namespace ruby
+{
+
 const int INFINITE_LATENCY = 10000; // Yes, this is a big hack
 
 // Note: In this file, we use the first 2*m_nodes SwitchIDs to
@@ -439,3 +445,6 @@ Topology::shortest_path_to_node(SwitchID src, SwitchID next,
 
     return result;
 }
+
+} // namespace ruby
+} // namespace gem5

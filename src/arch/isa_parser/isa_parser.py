@@ -44,7 +44,7 @@ import traceback
 # get type names
 from types import *
 
-from m5.util.grammar import Grammar
+from grammar import Grammar
 from .operand_list import *
 from .operand_types import *
 from .util import *
@@ -121,19 +121,11 @@ class Template(object):
             &std::remove_pointer_t<decltype(this)>::destRegIdxArr));
             '''
 
+            pcstate_decl = f'{self.parser.namespace}::PCState ' \
+                    '__parserAutoPCState;\n'
             myDict['op_decl'] = operands.concatAttrStrings('op_decl')
             if operands.readPC or operands.setPC:
-                myDict['op_decl'] += 'TheISA::PCState __parserAutoPCState;\n'
-
-            # In case there are predicated register reads and write, declare
-            # the variables for register indicies. It is being assumed that
-            # all the operands in the OperandList are also in the
-            # SubOperandList and in the same order. Otherwise, it is
-            # expected that predication would not be used for the operands.
-            if operands.predRead:
-                myDict['op_decl'] += 'uint8_t _sourceIndex = 0;\n'
-            if operands.predWrite:
-                myDict['op_decl'] += 'M5_VAR_USED uint8_t _destIndex = 0;\n'
+                myDict['op_decl'] += pcstate_decl
 
             is_src = lambda op: op.is_src
             is_dest = lambda op: op.is_dest
@@ -143,15 +135,14 @@ class Template(object):
             myDict['op_dest_decl'] = \
                       operands.concatSomeAttrStrings(is_dest, 'op_dest_decl')
             if operands.readPC:
-                myDict['op_src_decl'] += \
-                    'TheISA::PCState __parserAutoPCState;\n'
+                myDict['op_src_decl'] += pcstate_decl
             if operands.setPC:
-                myDict['op_dest_decl'] += \
-                    'TheISA::PCState __parserAutoPCState;\n'
+                myDict['op_dest_decl'] += pcstate_decl
 
             myDict['op_rd'] = operands.concatAttrStrings('op_rd')
             if operands.readPC:
-                myDict['op_rd'] = '__parserAutoPCState = xc->pcState();\n' + \
+                myDict['op_rd'] = \
+                        'set(__parserAutoPCState, xc->pcState());\n' + \
                                   myDict['op_rd']
 
             # Compose the op_wb string. If we're going to write back the
@@ -408,14 +399,6 @@ class InstObjParams(object):
         # The header of the constructor declares the variables to be used
         # in the body of the constructor.
         header = ''
-        header += '\n\t_numSrcRegs = 0;'
-        header += '\n\t_numDestRegs = 0;'
-        header += '\n\t_numFPDestRegs = 0;'
-        header += '\n\t_numVecDestRegs = 0;'
-        header += '\n\t_numVecElemDestRegs = 0;'
-        header += '\n\t_numVecPredDestRegs = 0;'
-        header += '\n\t_numIntDestRegs = 0;'
-        header += '\n\t_numCCDestRegs = 0;'
 
         self.constructor = header + \
                            self.operands.concatAttrStrings('constructor')
@@ -473,8 +456,6 @@ class InstObjParams(object):
         # function (which should be provided by isa_desc via a declare)
         if 'IsFloating' in self.flags:
             self.fp_enable_check = 'fault = checkFpEnableFault(xc, machInst);'
-        elif 'IsVector' in self.flags:
-            self.fp_enable_check = 'fault = checkVecEnableFault(xc);'
         else:
             self.fp_enable_check = ''
 
@@ -493,7 +474,7 @@ class InstObjParams(object):
 
 class ISAParser(Grammar):
     def __init__(self, output_dir):
-        super(ISAParser, self).__init__()
+        super().__init__()
         self.output_dir = output_dir
 
         self.filename = None # for output file watermarking/scaremongering
@@ -535,6 +516,18 @@ class ISAParser(Grammar):
 
         symbols = ('makeList', 're')
         self.exportContext = dict([(s, eval(s)) for s in symbols])
+        self.exportContext.update({
+            'overrideInOperand': overrideInOperand,
+            'IntRegOp': IntRegOperandDesc,
+            'FloatRegOp': FloatRegOperandDesc,
+            'CCRegOp': CCRegOperandDesc,
+            'VecElemOp': VecElemOperandDesc,
+            'VecRegOp': VecRegOperandDesc,
+            'VecPredRegOp': VecPredRegOperandDesc,
+            'ControlRegOp': ControlRegOperandDesc,
+            'MemOp': MemOperandDesc,
+            'PCStateOp': PCStateOperandDesc,
+        })
 
         self.maxMiscDestRegs = 0
 
@@ -616,8 +609,10 @@ class ISAParser(Grammar):
 
             fn = 'decoder-ns.hh.inc'
             assert(fn in self.files)
-            f.write('namespace %s {\n#include "%s"\n}\n'
-                    % (self.namespace, fn))
+            f.write('namespace gem5\n{\n')
+            f.write('namespace %s {\n#include "%s"\n} // namespace %s\n'
+                    % (self.namespace, fn, self.namespace))
+            f.write('} // namespace gem5')
             f.write('\n#endif  // __ARCH_%s_GENERATED_DECODER_HH__\n' %
                     self.isa_name.upper())
 
@@ -658,11 +653,13 @@ class ISAParser(Grammar):
 
                 fn = 'decoder-ns.cc.inc'
                 assert(fn in self.files)
+                print('namespace gem5\n{\n', file=f)
                 print('namespace %s {' % self.namespace, file=f)
                 if splits > 1:
                     print('#define __SPLIT %u' % i, file=f)
                 print('#include "%s"' % fn, file=f)
-                print('}', file=f)
+                print('} // namespace %s' % self.namespace, file=f)
+                print('} // namespace gem5', file=f)
 
         # instruction execution
         splits = self.splits[self.get_file('exec')]
@@ -679,11 +676,13 @@ class ISAParser(Grammar):
 
                 fn = 'exec-ns.cc.inc'
                 assert(fn in self.files)
+                print('namespace gem5\n{\n', file=f)
                 print('namespace %s {' % self.namespace, file=f)
                 if splits > 1:
                     print('#define __SPLIT %u' % i, file=f)
                 print('#include "%s"' % fn, file=f)
-                print('}', file=f)
+                print('} // namespace %s' % self.namespace, file=f)
+                print('} // namespace gem5', file=f)
 
     scaremonger_template ='''// DO NOT EDIT
 // This file was automatically generated from an ISA description:
@@ -1162,6 +1161,7 @@ del wrap
         'top_level_decode_block : decode_block'
         codeObj = t[1]
         codeObj.wrap_decode_block('''
+using namespace gem5;
 StaticInstPtr
 %(isa_name)s::Decoder::decodeInst(%(isa_name)s::ExtMachInst machInst)
 {
@@ -1267,7 +1267,7 @@ StaticInstPtr
         # just wrap the decoding code from the block as a case in the
         # outer switch statement.
         codeObj.wrap_decode_block('\n%s\n' % ''.join(case_list),
-                                  'M5_UNREACHABLE;\n')
+                                  'GEM5_UNREACHABLE;\n')
         codeObj.has_decode_default = (case_list == ['default:'])
         t[0] = codeObj
 
@@ -1290,7 +1290,7 @@ StaticInstPtr
 
     def prep_int_lit_case_label(self, lit):
         if lit >= 2**32:
-            return 'case ULL(%#x): ' % lit
+            return 'case %#xULL: ' % lit
         else:
             return 'case %#x: ' % lit
 
@@ -1440,8 +1440,7 @@ StaticInstPtr
         # Create a wrapper class that allows us to grab the current parser.
         class InstObjParamsWrapper(InstObjParams):
             def __init__(iop, *args, **kwargs):
-                super(InstObjParamsWrapper, iop).__init__(
-                        self, *args, **kwargs)
+                super().__init__(self, *args, **kwargs)
         self.exportContext['InstObjParams'] = InstObjParamsWrapper
         self.exportContext.update(self.templateMap)
 
@@ -1457,75 +1456,19 @@ StaticInstPtr
 
     def buildOperandNameMap(self, user_dict, lineno):
         operand_name = {}
-        for op_name, val in user_dict.items():
+        for op_name, op_desc in user_dict.items():
+            assert(isinstance(op_desc, OperandDesc))
 
-            # Check if extra attributes have been specified.
-            if len(val) > 9:
-                error(lineno, 'error: too many attributes for operand "%s"' %
-                      base_cls_name)
+            base_cls = op_desc.attrs['base_cls']
 
-            # Pad val with None in case optional args are missing
-            val += (None, None, None, None)
-            base_cls_name, dflt_ext, reg_spec, flags, sort_pri, \
-            read_code, write_code, read_predicate, write_predicate = val[:9]
+            op_desc.setName(op_name)
 
-            # Canonical flag structure is a triple of lists, where each list
-            # indicates the set of flags implied by this operand always, when
-            # used as a source, and when used as a dest, respectively.
-            # For simplicity this can be initialized using a variety of fairly
-            # obvious shortcuts; we convert these to canonical form here.
-            if not flags:
-                # no flags specified (e.g., 'None')
-                flags = ( [], [], [] )
-            elif isinstance(flags, str):
-                # a single flag: assumed to be unconditional
-                flags = ( [ flags ], [], [] )
-            elif isinstance(flags, list):
-                # a list of flags: also assumed to be unconditional
-                flags = ( flags, [], [] )
-            elif isinstance(flags, tuple):
-                # it's a tuple: it should be a triple,
-                # but each item could be a single string or a list
-                (uncond_flags, src_flags, dest_flags) = flags
-                flags = (makeList(uncond_flags),
-                         makeList(src_flags), makeList(dest_flags))
-
-            # Accumulate attributes of new operand class in tmp_dict
-            tmp_dict = {}
-            attrList = ['reg_spec', 'flags', 'sort_pri',
-                        'read_code', 'write_code',
-                        'read_predicate', 'write_predicate']
-            if dflt_ext:
-                dflt_ctype = self.operandTypeMap[dflt_ext]
-                attrList.extend(['dflt_ctype', 'dflt_ext'])
-            # reg_spec is either just a string or a dictionary
-            # (for elems of vector)
-            if isinstance(reg_spec, tuple):
-                (reg_spec, elem_spec) = reg_spec
-                if isinstance(elem_spec, str):
-                    attrList.append('elem_spec')
-                else:
-                    assert(isinstance(elem_spec, dict))
-                    elems = elem_spec
-                    attrList.append('elems')
-            for attr in attrList:
-                tmp_dict[attr] = eval(attr)
-            tmp_dict['base_name'] = op_name
-
-            # New class name will be e.g. "IntReg_Ra"
-            cls_name = base_cls_name + '_' + op_name
-            # Evaluate string arg to get class object.  Note that the
-            # actual base class for "IntReg" is "IntRegOperand", i.e. we
-            # have to append "Operand".
-            try:
-                base_cls = eval(base_cls_name + 'Operand')
-            except NameError:
-                error(lineno,
-                      'error: unknown operand base class "%s"' % base_cls_name)
+            # New class name will be e.g. "IntRegOperand_Ra"
+            cls_name = base_cls.__name__ + '_' + op_name
             # The following statement creates a new class called
             # <cls_name> as a subclass of <base_cls> with the attributes
-            # in tmp_dict, just as if we evaluated a class declaration.
-            operand_name[op_name] = type(cls_name, (base_cls,), tmp_dict)
+            # in op_desc.attrs, just as if we evaluated a class declaration.
+            operand_name[op_name] = type(cls_name, (base_cls,), op_desc.attrs)
 
         self.operandNameMap.update(operand_name)
 
@@ -1544,7 +1487,7 @@ StaticInstPtr
         extensions = self.operandTypeMap.keys()
 
         operandsREString = r'''
-        (?<!\w)      # neg. lookbehind assertion: prevent partial matches
+        (?<!\w|:)     # neg. lookbehind assertion: prevent partial matches
         ((%s)(?:_(%s))?)   # match: operand with optional '_' then suffix
         (?!\w)       # neg. lookahead assertion: prevent partial matches
         ''' % ('|'.join(operands), '|'.join(extensions))

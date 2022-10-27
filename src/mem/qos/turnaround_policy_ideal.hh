@@ -38,9 +38,18 @@
 #ifndef __MEM_QOS_TURNAROUND_POLICY_IDEAL_HH_
 #define __MEM_QOS_TURNAROUND_POLICY_IDEAL_HH_
 
+#include "base/compiler.hh"
 #include "mem/qos/turnaround_policy.hh"
 
-namespace QoS {
+namespace gem5
+{
+
+namespace memory
+{
+
+GEM5_DEPRECATED_NAMESPACE(QoS, qos);
+namespace qos
+{
 
 /**
  * Ideal QoS Bus Turnaround policy
@@ -65,6 +74,8 @@ class TurnaroundPolicyIdeal: public TurnaroundPolicy
     virtual MemCtrl::BusState selectBusState() override;
 };
 
-} // namespace QoS
+} // namespace qos
+} // namespace memory
+} // namespace gem5
 
 #endif /* __MEM_QOS_TURNAROUND_POLICY_IDEAL_HH_ */

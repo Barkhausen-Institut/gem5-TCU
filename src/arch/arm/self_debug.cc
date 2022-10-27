@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2021 Arm Limited
  * Copyright (c) 2019 Metempsy Technology LSC
  * All rights reserved
  *
@@ -38,18 +39,21 @@
 #include "arch/arm/self_debug.hh"
 
 #include "arch/arm/faults.hh"
-#include "arch/arm/miscregs_types.hh"
+#include "arch/arm/regs/misc_types.hh"
 #include "base/bitfield.hh"
+
+namespace gem5
+{
 
 using namespace ArmISA;
 
 Fault
 SelfDebug::testDebug(ThreadContext *tc, const RequestPtr &req,
-                     BaseTLB::Mode mode)
+                     BaseMMU::Mode mode)
 {
     Fault fault = NoFault;
 
-    if (mode == BaseTLB::Execute) {
+    if (mode == BaseMMU::Execute) {
         const bool d_step = softStep->advanceSS(tc);
         if (!d_step) {
             fault = testVectorCatch(tc, req->getVaddr(), nullptr);
@@ -58,7 +62,7 @@ SelfDebug::testDebug(ThreadContext *tc, const RequestPtr &req,
         }
     } else if (!req->isCacheMaintenance() ||
              (req->isCacheInvalidate() && !req->isCacheClean())) {
-        bool md = mode == BaseTLB::Write ? true: false;
+        bool md = mode == BaseMMU::Write ? true: false;
         fault = testWatchPoints(tc, req->getVaddr(), md,
                                 req->isAtomic(),
                                 req->getSize(),
@@ -85,15 +89,14 @@ SelfDebug::testBreakPoints(ThreadContext *tc, Addr vaddr)
 
     ExceptionLevel el = (ExceptionLevel) currEL(tc);
     for (auto &p: arBrkPoints){
-        PCState pcst = tc->pcState();
+        PCState pcst = tc->pcState().as<PCState>();
         Addr pc = vaddr;
         if (pcst.itstate() != 0x0)
             pc = pcst.pc();
         if (p.enable && p.isActive(pc) &&(!to32 || !p.onUse)) {
             const DBGBCR ctr = p.getControlReg(tc);
             if (p.isEnabled(tc, el, ctr.hmc, ctr.ssc, ctr.pmc)) {
-                bool debug = p.test(tc, pc, el, ctr, false);
-                if (debug){
+                if (p.test(tc, pc, el, ctr, false)) {
                     if (to32)
                         p.onUse = true;
                     return triggerException(tc, pc);
@@ -134,8 +137,7 @@ SelfDebug::testWatchPoints(ThreadContext *tc, Addr vaddr, bool write,
     for (auto &p: arWatchPoints){
         idxtmp ++;
         if (p.enable) {
-            bool debug = p.test(tc, vaddr, el, write, atomic, size);
-            if (debug){
+            if (p.test(tc, vaddr, el, write, atomic, size)) {
                 return triggerWatchpointException(tc, vaddr, write, cm);
             }
         }
@@ -163,8 +165,9 @@ bool
 SelfDebug::isDebugEnabledForEL64(ThreadContext *tc, ExceptionLevel el,
                          bool secure, bool mask)
 {
-    bool route_to_el2 =  ArmSystem::haveEL(tc, EL2) &&
-                         (!secure || HaveSecureEL2Ext(tc)) && enableTdeTge;
+    bool route_to_el2 = ArmSystem::haveEL(tc, EL2) &&
+                        (!secure || HaveExt(tc, ArmExtension::FEAT_SEL2)) &&
+                        enableTdeTge;
 
     ExceptionLevel target_el = route_to_el2 ? EL2 : EL1;
     if (oslk || (sdd && secure && ArmSystem::haveEL(tc, EL3))) {
@@ -208,12 +211,8 @@ SelfDebug::isDebugEnabledForEL32(ThreadContext *tc, ExceptionLevel el,
 bool
 BrkPoint::testLinkedBk(ThreadContext *tc, Addr vaddr, ExceptionLevel el)
 {
-    bool debug = false;
     const DBGBCR ctr = getControlReg(tc);
-    if ((ctr.bt & 0x1) && enable) {
-        debug = test(tc, vaddr, el, ctr, true);
-    }
-    return debug;
+    return ((ctr.bt & 0x1) && enable) && test(tc, vaddr, el, ctr, true);
 }
 
 bool
@@ -258,12 +257,13 @@ BrkPoint::test(ThreadContext *tc, Addr pc, ExceptionLevel el, DBGBCR ctr,
         break;
 
       case 0x6:
-        if (HaveVirtHostExt(tc) && !ELIsInHost(tc, el))
+        if (HaveExt(tc, ArmExtension::FEAT_VHE) && !ELIsInHost(tc, el))
              v = testContextMatch(tc, true);
         break;
 
       case 0x7:
-        if (HaveVirtHostExt(tc) && !ELIsInHost(tc, el) && from_link)
+        if (HaveExt(tc, ArmExtension::FEAT_VHE) && !ELIsInHost(tc, el) &&
+            from_link)
             v = testContextMatch(tc, true);
         break;
 
@@ -294,27 +294,29 @@ BrkPoint::test(ThreadContext *tc, Addr pc, ExceptionLevel el, DBGBCR ctr,
         break;
 
       case 0xc:
-        if (HaveVirtHostExt(tc) && (!isSecure(tc)|| HaveSecureEL2Ext(tc)))
+        if (HaveExt(tc, ArmExtension::FEAT_VHE) &&
+            (!isSecure(tc)|| HaveExt(tc, ArmExtension::FEAT_SEL2)))
             v = testContextMatch(tc, false);
         break;
 
       case 0xd:
-        if (HaveVirtHostExt(tc) && from_link &&
-            (!isSecure(tc)|| HaveSecureEL2Ext(tc))) {
+        if (HaveExt(tc, ArmExtension::FEAT_VHE) && from_link &&
+            (!isSecure(tc)|| HaveExt(tc, ArmExtension::FEAT_SEL2))) {
              v = testContextMatch(tc, false);
         }
         break;
 
       case 0xe:
-        if (HaveVirtHostExt(tc) && !ELIsInHost(tc, el) &&
-            (!isSecure(tc)|| HaveSecureEL2Ext(tc))) {
+        if (HaveExt(tc, ArmExtension::FEAT_VHE) && !ELIsInHost(tc, el) &&
+            (!isSecure(tc)|| HaveExt(tc, ArmExtension::FEAT_SEL2))) {
             v = testContextMatch(tc, true); // CONTEXTIDR_EL1
             v = v && testContextMatch(tc, false); // CONTEXTIDR_EL2
         }
         break;
       case 0xf:
-        if (HaveVirtHostExt(tc) && !ELIsInHost(tc, el) && from_link &&
-            (!isSecure(tc)|| HaveSecureEL2Ext(tc))) {
+        if (HaveExt(tc, ArmExtension::FEAT_VHE) && !ELIsInHost(tc, el) &&
+            from_link &&
+            (!isSecure(tc)|| HaveExt(tc, ArmExtension::FEAT_SEL2))) {
             v = testContextMatch(tc, true); // CONTEXTIDR_EL1
             v = v && testContextMatch(tc, false); // CONTEXTIDR_EL2
         }
@@ -452,15 +454,18 @@ BrkPoint::testContextMatch(ThreadContext *tc, bool ctx1, bool low_ctx)
 bool
 BrkPoint::testVMIDMatch(ThreadContext *tc)
 {
+    const bool vs = ((VTCR_t)(tc->readMiscReg(MISCREG_VTCR_EL2))).vs;
+
     uint32_t vmid_index = 55;
-    if (VMID16enabled)
+    if (VMID16enabled && vs)
         vmid_index = 63;
     ExceptionLevel el = currEL(tc);
     if (el == EL2)
         return false;
 
-    uint32_t vmid = bits(tc->readMiscReg(MISCREG_VTTBR_EL2), vmid_index, 48);
-    uint32_t v = getVMIDfromReg(tc);
+    vmid_t vmid = bits(tc->readMiscReg(MISCREG_VTTBR_EL2), vmid_index, 48);
+    vmid_t v = getVMIDfromReg(tc, vs);
+
     return (v == vmid);
 }
 
@@ -520,11 +525,11 @@ BrkPoint::isEnabled(ThreadContext *tc, ExceptionLevel el,
     return v && SelfDebug::securityStateMatch(tc, ssc, hmc || !aarch32);
 }
 
-uint32_t
-BrkPoint::getVMIDfromReg(ThreadContext *tc)
+vmid_t
+BrkPoint::getVMIDfromReg(ThreadContext *tc, bool vs)
 {
     uint32_t vmid_index = 39;
-    if (VMID16enabled)
+    if (VMID16enabled && vs)
         vmid_index = 47;
     return bits(tc->readMiscReg(valRegIndex), vmid_index, 32);
 }
@@ -675,8 +680,7 @@ SoftwareStep::debugExceptionReturnSS(ThreadContext *tc, CPSR spsr,
 bool
 SoftwareStep::advanceSS(ThreadContext * tc)
 {
-
-    PCState pc = tc->pcState();
+    PCState pc = tc->pcState().as<PCState>();
     bool res = false;
     switch (stateSS) {
       case INACTIVE_STATE:
@@ -723,12 +727,12 @@ SelfDebug::testVectorCatch(ThreadContext *tc, Addr addr,
         return NoFault;
 
     ExceptionLevel el = (ExceptionLevel) currEL(tc);
-    bool debug;
+    bool do_debug;
     if (fault == nullptr)
-        debug = vcExcpt->addressMatching(tc, addr, el);
+        do_debug = vcExcpt->addressMatching(tc, addr, el);
     else
-        debug = vcExcpt->exceptionTrapping(tc, el, fault);
-    if (debug) {
+        do_debug = vcExcpt->exceptionTrapping(tc, el, fault);
+    if (do_debug) {
         if (enableTdeTge) {
             return std::make_shared<HypervisorTrap>(0, 0x22,
                                         EC_PREFETCH_ABORT_TO_HYP);
@@ -830,3 +834,4 @@ VectorCatch::exceptionTrapping(ThreadContext *tc, ExceptionLevel el,
     return false;
 }
 
+} // namespace gem5

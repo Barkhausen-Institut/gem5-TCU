@@ -31,10 +31,20 @@
 #include "mem/ruby/network/garnet/RoutingUnit.hh"
 
 #include "base/cast.hh"
+#include "base/compiler.hh"
 #include "debug/RubyNetwork.hh"
 #include "mem/ruby/network/garnet/InputUnit.hh"
 #include "mem/ruby/network/garnet/Router.hh"
 #include "mem/ruby/slicc_interface/Message.hh"
+
+namespace gem5
+{
+
+namespace ruby
+{
+
+namespace garnet
+{
 
 RoutingUnit::RoutingUnit(Router *router)
 {
@@ -201,7 +211,7 @@ RoutingUnit::outportComputeXY(RouteInfo route,
 {
     PortDirection outport_dirn = "Unknown";
 
-    M5_VAR_USED int num_rows = m_router->get_net_ptr()->getNumRows();
+    [[maybe_unused]] int num_rows = m_router->get_net_ptr()->getNumRows();
     int num_cols = m_router->get_net_ptr()->getNumCols();
     assert(num_rows > 0 && num_cols > 0);
 
@@ -259,3 +269,7 @@ RoutingUnit::outportComputeCustom(RouteInfo route,
 {
     panic("%s placeholder executed", __FUNCTION__);
 }
+
+} // namespace garnet
+} // namespace ruby
+} // namespace gem5

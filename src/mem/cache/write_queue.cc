@@ -48,9 +48,13 @@
 
 #include "mem/cache/write_queue_entry.hh"
 
+namespace gem5
+{
+
 WriteQueue::WriteQueue(const std::string &_label,
-                       int num_entries, int reserve)
-    : Queue<WriteQueueEntry>(_label, num_entries, reserve)
+                       int num_entries, int reserve, const std::string &name)
+    : Queue<WriteQueueEntry>(_label, num_entries, reserve,
+            name + ".write_queue")
 {}
 
 WriteQueueEntry *
@@ -80,3 +84,5 @@ WriteQueue::markInService(WriteQueueEntry *entry)
     entry->popTarget();
     deallocate(entry);
 }
+
+} // namespace gem5

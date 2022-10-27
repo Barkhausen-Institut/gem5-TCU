@@ -36,6 +36,11 @@
 #include "mem/tcu/noc_addr.hh"
 #include <vector>
 
+namespace gem5
+{
+namespace tcu
+{
+
 class Tcu;
 
 class TcuTlb
@@ -130,14 +135,17 @@ class TcuTlb
     size_t num;
     uint lru_seq;
 
-    Stats::Scalar hits;
-    Stats::Scalar misses;
-    Stats::Scalar pagefaults;
-    Stats::Formula accesses;
-    Stats::Scalar inserts;
-    Stats::Scalar evicts;
-    Stats::Scalar invalidates;
-    Stats::Scalar flushes;
+    statistics::Scalar hits;
+    statistics::Scalar misses;
+    statistics::Scalar pagefaults;
+    statistics::Formula accesses;
+    statistics::Scalar inserts;
+    statistics::Scalar evicts;
+    statistics::Scalar invalidates;
+    statistics::Scalar flushes;
 };
+
+}
+}
 
 #endif

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 ARM Limited
+ * Copyright (c) 2019-2022 Arm Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -42,11 +42,15 @@
 
 #include <algorithm>
 
+#include "base/compiler.hh"
 #include "base/intmath.hh"
 #include "debug/GIC.hh"
 #include "dev/arm/gic_v3.hh"
 #include "dev/arm/gic_v3_cpu_interface.hh"
 #include "dev/arm/gic_v3_redistributor.hh"
+
+namespace gem5
+{
 
 const AddrRange Gicv3Distributor::GICD_IGROUPR   (0x0080, 0x0100);
 const AddrRange Gicv3Distributor::GICD_ISENABLER (0x0100, 0x0180);
@@ -84,7 +88,7 @@ Gicv3Distributor::Gicv3Distributor(Gicv3 * gic, uint32_t it_lines)
       gicdTyper(0),
       gicdPidr0(0x92),
       gicdPidr1(0xb4),
-      gicdPidr2(0x3b),
+      gicdPidr2(gic->params().gicv4 ? 0x4b : 0x3b),
       gicdPidr3(0),
       gicdPidr4(0x44)
 {
@@ -114,14 +118,15 @@ Gicv3Distributor::Gicv3Distributor(Gicv3 * gic, uint32_t it_lines)
      * ITLinesNumber [4:0]   == N
      * (MaxSPIIntId = 32 (N + 1) - 1)
      */
+    bool have_security = gic->getSystem()->has(ArmExtension::SECURITY);
     int max_spi_int_id = itLines - 1;
     int it_lines_number = divCeil(max_spi_int_id + 1, 32) - 1;
     gicdTyper = (1 << 26) | (1 << 25) | (1 << 24) | (IDBITS << 19) |
         (1 << 17) | (1 << 16) |
-        ((gic->getSystem()->haveSecurity() ? 1 : 0) << 10) |
+        ((have_security ? 1 : 0) << 10) |
         (it_lines_number << 0);
 
-    if (gic->getSystem()->haveSecurity()) {
+    if (have_security) {
         DS = false;
     } else {
         DS = true;
@@ -1080,6 +1085,9 @@ Gicv3Distributor::clearIrqCpuInterface(uint32_t int_id)
 void
 Gicv3Distributor::update()
 {
+    if (gic->blockIntUpdate())
+        return;
+
     // Find the highest priority pending SPI
     for (int int_id = Gicv3::SGI_MAX + Gicv3::PPI_MAX; int_id < itLines;
          int_id++) {
@@ -1155,7 +1163,7 @@ Gicv3Distributor::getIntGroup(int int_id) const
         }
     }
 
-    M5_UNREACHABLE;
+    GEM5_UNREACHABLE;
 }
 
 void
@@ -1171,6 +1179,29 @@ void
 Gicv3Distributor::deactivateIRQ(uint32_t int_id)
 {
     irqActive[int_id] = false;
+}
+
+void
+Gicv3Distributor::copy(Gicv3Registers *from, Gicv3Registers *to)
+{
+    const size_t size = itLines / 8;
+
+    gic->copyDistRegister(from, to, GICD_CTLR);
+
+    gic->clearDistRange(to, GICD_ICENABLER.start(), size);
+    gic->clearDistRange(to, GICD_ICPENDR.start(), size);
+    gic->clearDistRange(to, GICD_ICACTIVER.start(), size);
+
+    gic->copyDistRange(from, to, GICD_IGROUPR.start(), size);
+    gic->copyDistRange(from, to, GICD_ISENABLER.start(), size);
+    gic->copyDistRange(from, to, GICD_ISPENDR.start(), size);
+    gic->copyDistRange(from, to, GICD_ISACTIVER.start(), size);
+    gic->copyDistRange(from, to, GICD_IPRIORITYR.start(), size);
+    gic->copyDistRange(from, to, GICD_ITARGETSR.start(), size);
+    gic->copyDistRange(from, to, GICD_ICFGR.start(), size);
+    gic->copyDistRange(from, to, GICD_IGRPMODR.start(), size);
+    gic->copyDistRange(from, to, GICD_NSACR.start(), size);
+    gic->copyDistRange(from, to, GICD_IROUTER.start(), size);
 }
 
 void
@@ -1212,3 +1243,5 @@ Gicv3Distributor::unserialize(CheckpointIn & cp)
     UNSERIALIZE_CONTAINER(irqNsacr);
     UNSERIALIZE_CONTAINER(irqAffinityRouting);
 }
+
+} // namespace gem5

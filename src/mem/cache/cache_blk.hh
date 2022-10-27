@@ -57,7 +57,10 @@
 #include "mem/cache/tags/tagged_entry.hh"
 #include "mem/packet.hh"
 #include "mem/request.hh"
-#include "sim/core.hh"
+#include "sim/cur_tick.hh"
+
+namespace gem5
+{
 
 /**
  * A Basic Cache block.
@@ -97,20 +100,21 @@ class CacheBlk : public TaggedEntry
      * data stored here should be kept consistant with the actual data
      * referenced by this block.
      */
-    uint8_t *data;
+    uint8_t *data = nullptr;
 
     /**
      * Which curTick() will this block be accessible. Its value is only
      * meaningful if the block is valid.
      */
-    Tick whenReady;
+    Tick whenReady = 0;
 
   protected:
     /**
      * Represents that the indicated thread context has a "lock" on
      * the block, in the LL/SC sense.
      */
-    class Lock {
+    class Lock
+    {
       public:
         ContextID contextId;     // locking context
         Addr lowAddr;      // low address of lock range
@@ -148,7 +152,7 @@ class CacheBlk : public TaggedEntry
     std::list<Lock> lockList;
 
   public:
-    CacheBlk() : TaggedEntry(), data(nullptr), _tickInserted(0)
+    CacheBlk()
     {
         invalidate();
     }
@@ -200,7 +204,7 @@ class CacheBlk : public TaggedEntry
         clearPrefetched();
         clearCoherenceBits(AllBits);
 
-        setTaskId(ContextSwitchTaskId::Unknown);
+        setTaskId(context_switch_task_id::Unknown);
         setWhenReady(MaxTick);
         setRefCount(0);
         setSrcRequestorId(Request::invldRequestorId);
@@ -395,8 +399,9 @@ class CacheBlk : public TaggedEntry
           default:    s = 'T'; break; // @TODO add other types
         }
         return csprintf("state: %x (%c) writable: %d readable: %d "
-            "dirty: %d | %s", coherence, s, isSet(WritableBit),
-            isSet(ReadableBit), isSet(DirtyBit), TaggedEntry::print());
+            "dirty: %d prefetched: %d | %s", coherence, s,
+            isSet(WritableBit), isSet(ReadableBit), isSet(DirtyBit),
+            wasPrefetched(), TaggedEntry::print());
     }
 
     /**
@@ -469,22 +474,22 @@ class CacheBlk : public TaggedEntry
 
   private:
     /** Task Id associated with this block */
-    uint32_t _taskId;
+    uint32_t _taskId = 0;
 
     /** holds the source requestor ID for this block. */
-    int _srcRequestorId;
+    int _srcRequestorId = 0;
 
     /** Number of references to this block since it was brought in. */
-    unsigned _refCount;
+    unsigned _refCount = 0;
 
     /**
      * Tick on which the block was inserted in the cache. Its value is only
      * meaningful if the block is valid.
      */
-    Tick _tickInserted;
+    Tick _tickInserted = 0;
 
     /** Whether this block is an unaccessed hardware prefetch. */
-    bool _prefetched;
+    bool _prefetched = 0;
 };
 
 /**
@@ -555,5 +560,7 @@ class CacheBlkPrintWrapper : public Printable
     void print(std::ostream &o, int verbosity = 0,
                const std::string &prefix = "") const;
 };
+
+} // namespace gem5
 
 #endif //__MEM_CACHE_CACHE_BLK_HH__

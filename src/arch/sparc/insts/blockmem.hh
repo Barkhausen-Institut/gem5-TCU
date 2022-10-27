@@ -31,6 +31,9 @@
 
 #include "arch/sparc/insts/micro.hh"
 
+namespace gem5
+{
+
 namespace SparcISA
 {
 
@@ -64,7 +67,7 @@ class BlockMemMicro : public SparcMicroInst
     {}
 
     std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+            Addr pc, const loader::SymbolTable *symtab) const override;
 
     const int8_t offset;
 };
@@ -75,15 +78,16 @@ class BlockMemImmMicro : public BlockMemMicro
     BlockMemImmMicro(const char *mnem, ExtMachInst _machInst,
                      OpClass __opClass, int8_t _offset) :
         BlockMemMicro(mnem, _machInst, __opClass, _offset),
-        imm(sext<13>(bits(_machInst, 12, 0)))
+        imm(szext<13>(_machInst))
     {}
 
     std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+            Addr pc, const loader::SymbolTable *symtab) const override;
 
     const int32_t imm;
 };
 
-}
+} // namespace SparcISA
+} // namespace gem5
 
 #endif // __ARCH_SPARC_INSTS_BLOCKMEM_HH__

@@ -29,14 +29,24 @@
 #define __SIM_SE_WORKLOAD_HH__
 
 #include "params/SEWorkload.hh"
+#include "sim/mem_pool.hh"
 #include "sim/workload.hh"
+
+namespace gem5
+{
 
 class SEWorkload : public Workload
 {
+  protected:
+    /** Memory allocation objects for all physical memories in the system. */
+    MemPools memPools;
+
   public:
     using Params = SEWorkloadParams;
 
-    SEWorkload(const Params &p);
+    SEWorkload(const Params &p, Addr page_shift=0);
+
+    void setSystem(System *sys) override;
 
     Addr
     getEntry() const override
@@ -46,7 +56,7 @@ class SEWorkload : public Workload
         panic("No workload entry point for syscall emulation mode.");
     }
 
-    Loader::Arch
+    loader::Arch
     getArch() const override
     {
         // ISA specific subclasses should implement this method.
@@ -55,7 +65,7 @@ class SEWorkload : public Workload
         panic("SEWorkload::getArch() not implemented.");
     }
 
-    const Loader::SymbolTable &
+    const loader::SymbolTable &
     symtab(ThreadContext *) override
     {
         // This object represents the OS, not the individual processes running
@@ -64,17 +74,26 @@ class SEWorkload : public Workload
     }
 
     bool
-    insertSymbol(const Loader::Symbol &symbol) override
+    insertSymbol(const loader::Symbol &symbol) override
     {
         // This object represents the OS, not the individual processes running
         // within it.
         panic("No workload symbol table for syscall emulation mode.");
     }
 
+    void serialize(CheckpointOut &cp) const override;
+    void unserialize(CheckpointIn &cp) override;
+
     void syscall(ThreadContext *tc) override;
 
     // For now, assume the only type of events are system calls.
     void event(ThreadContext *tc) override { syscall(tc); }
+
+    Addr allocPhysPages(int npages, int pool_id=0);
+    Addr memSize(int pool_id=0) const;
+    Addr freeMemSize(int pool_id=0) const;
 };
+
+} // namespace gem5
 
 #endif // __SIM_SE_WORKLOAD_HH__

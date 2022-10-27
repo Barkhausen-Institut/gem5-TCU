@@ -43,12 +43,18 @@
 #include <cmath>
 
 #include "arch/arm/insts/misc.hh"
-#include "arch/arm/miscregs.hh"
+#include "arch/arm/pcstate.hh"
+#include "arch/arm/regs/misc.hh"
+#include "cpu/thread_context.hh"
+
+namespace gem5
+{
 
 namespace ArmISA
 {
 
-enum VfpMicroMode {
+enum VfpMicroMode
+{
     VfpNotAMicroop,
     VfpMicroop,
     VfpFirstMicroop,
@@ -117,7 +123,7 @@ flushToZero(fpType &op)
 {
     fpType junk = 0.0;
     if (std::fpclassify(op) == FP_SUBNORMAL) {
-        uint64_t bitMask = ULL(0x1) << (sizeof(fpType) * 8 - 1);
+        uint64_t bitMask = 0x1ULL << (sizeof(fpType) * 8 - 1);
         op = bitsToFp(fpToBits(op) & bitMask, junk);
         return true;
     }
@@ -204,7 +210,7 @@ isSnan(fpType val)
 {
     const bool single = (sizeof(fpType) == sizeof(float));
     const uint64_t qnan =
-        single ? 0x7fc00000 : ULL(0x7ff8000000000000);
+        single ? 0x7fc00000 : 0x7ff8000000000000ULL;
     return std::isnan(val) && ((fpToBits(val) & qnan) != qnan);
 }
 
@@ -452,7 +458,7 @@ class VfpMacroOp : public PredMacroOp
 {
   public:
     static bool
-    inScalarBank(IntRegIndex idx)
+    inScalarBank(RegIndex idx)
     {
         return (idx % 32) < 8;
     }
@@ -465,10 +471,10 @@ class VfpMacroOp : public PredMacroOp
         PredMacroOp(mnem, _machInst, __opClass), wide(_wide)
     {}
 
-    IntRegIndex addStride(IntRegIndex idx, unsigned stride);
-    void nextIdxs(IntRegIndex &dest, IntRegIndex &op1, IntRegIndex &op2);
-    void nextIdxs(IntRegIndex &dest, IntRegIndex &op1);
-    void nextIdxs(IntRegIndex &dest);
+    RegIndex addStride(RegIndex idx, unsigned stride);
+    void nextIdxs(RegIndex &dest, RegIndex &op1, RegIndex &op2);
+    void nextIdxs(RegIndex &dest, RegIndex &op1);
+    void nextIdxs(RegIndex &dest);
 };
 
 template <typename T>
@@ -597,7 +603,7 @@ fpMulAdd(T op1, T op2, T addend)
     if (std::isnan(result) && !std::isnan(op1) &&
         !std::isnan(op2) && !std::isnan(addend))
     {
-        uint64_t bitMask = ULL(0x1) << ((sizeof(T) * 8) - 1);
+        uint64_t bitMask = 0x1ULL << ((sizeof(T) * 8) - 1);
         result = bitsToFp(fpToBits(result) & ~bitMask, op1);
     }
     return result;
@@ -620,7 +626,7 @@ static inline T
 fpMaxNum(T a, T b)
 {
     const bool     single = (sizeof(T) == sizeof(float));
-    const uint64_t qnan   = single ? 0x7fc00000 : ULL(0x7ff8000000000000);
+    const uint64_t qnan   = single ? 0x7fc00000 : 0x7ff8000000000000ULL;
 
     if (std::isnan(a))
         return ((fpToBits(a) & qnan) == qnan) ? b : a;
@@ -648,7 +654,7 @@ static inline T
 fpMinNum(T a, T b)
 {
     const bool     single = (sizeof(T) == sizeof(float));
-    const uint64_t qnan   = single ? 0x7fc00000 : ULL(0x7ff8000000000000);
+    const uint64_t qnan   = single ? 0x7fc00000 : 0x7ff8000000000000ULL;
 
     if (std::isnan(a))
         return ((fpToBits(a) & qnan) == qnan) ? b : a;
@@ -849,15 +855,30 @@ class FpOp : public PredOp
             bool flush, uint32_t rMode) const;
 
     void
-    advancePC(PCState &pcState) const override
+    advancePC(PCStateBase &pcState) const override
     {
+        auto &apc = pcState.as<PCState>();
         if (flags[IsLastMicroop]) {
-            pcState.uEnd();
+            apc.uEnd();
         } else if (flags[IsMicroop]) {
-            pcState.uAdvance();
+            apc.uAdvance();
         } else {
-            pcState.advance();
+            apc.advance();
         }
+    }
+
+    void
+    advancePC(ThreadContext *tc) const override
+    {
+        PCState pc = tc->pcState().as<PCState>();
+        if (flags[IsLastMicroop]) {
+            pc.uEnd();
+        } else if (flags[IsMicroop]) {
+            pc.uAdvance();
+        } else {
+            pc.advance();
+        }
+        tc->pcState(pc);
     }
 
     float
@@ -880,46 +901,46 @@ class FpOp : public PredOp
 class FpCondCompRegOp : public FpOp
 {
   protected:
-    IntRegIndex op1, op2;
+    RegIndex op1, op2;
     ConditionCode condCode;
     uint8_t defCc;
 
     FpCondCompRegOp(const char *mnem, ExtMachInst _machInst,
-                       OpClass __opClass, IntRegIndex _op1, IntRegIndex _op2,
+                       OpClass __opClass, RegIndex _op1, RegIndex _op2,
                        ConditionCode _condCode, uint8_t _defCc) :
         FpOp(mnem, _machInst, __opClass),
         op1(_op1), op2(_op2), condCode(_condCode), defCc(_defCc)
     {}
 
     std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+            Addr pc, const loader::SymbolTable *symtab) const override;
 };
 
 class FpCondSelOp : public FpOp
 {
   protected:
-    IntRegIndex dest, op1, op2;
+    RegIndex dest, op1, op2;
     ConditionCode condCode;
 
     FpCondSelOp(const char *mnem, ExtMachInst _machInst, OpClass __opClass,
-                IntRegIndex _dest, IntRegIndex _op1, IntRegIndex _op2,
+                RegIndex _dest, RegIndex _op1, RegIndex _op2,
                 ConditionCode _condCode) :
         FpOp(mnem, _machInst, __opClass),
         dest(_dest), op1(_op1), op2(_op2), condCode(_condCode)
     {}
 
     std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+            Addr pc, const loader::SymbolTable *symtab) const override;
 };
 
 class FpRegRegOp : public FpOp
 {
   protected:
-    IntRegIndex dest;
-    IntRegIndex op1;
+    RegIndex dest;
+    RegIndex op1;
 
     FpRegRegOp(const char *mnem, ExtMachInst _machInst, OpClass __opClass,
-               IntRegIndex _dest, IntRegIndex _op1,
+               RegIndex _dest, RegIndex _op1,
                VfpMicroMode mode = VfpNotAMicroop) :
         FpOp(mnem, _machInst, __opClass), dest(_dest), op1(_op1)
     {
@@ -927,17 +948,17 @@ class FpRegRegOp : public FpOp
     }
 
     std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+            Addr pc, const loader::SymbolTable *symtab) const override;
 };
 
 class FpRegImmOp : public FpOp
 {
   protected:
-    IntRegIndex dest;
+    RegIndex dest;
     uint64_t imm;
 
     FpRegImmOp(const char *mnem, ExtMachInst _machInst, OpClass __opClass,
-               IntRegIndex _dest, uint64_t _imm,
+               RegIndex _dest, uint64_t _imm,
                VfpMicroMode mode = VfpNotAMicroop) :
         FpOp(mnem, _machInst, __opClass), dest(_dest), imm(_imm)
     {
@@ -945,18 +966,18 @@ class FpRegImmOp : public FpOp
     }
 
     std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+            Addr pc, const loader::SymbolTable *symtab) const override;
 };
 
 class FpRegRegImmOp : public FpOp
 {
   protected:
-    IntRegIndex dest;
-    IntRegIndex op1;
+    RegIndex dest;
+    RegIndex op1;
     uint64_t imm;
 
     FpRegRegImmOp(const char *mnem, ExtMachInst _machInst, OpClass __opClass,
-                  IntRegIndex _dest, IntRegIndex _op1,
+                  RegIndex _dest, RegIndex _op1,
                   uint64_t _imm, VfpMicroMode mode = VfpNotAMicroop) :
         FpOp(mnem, _machInst, __opClass), dest(_dest), op1(_op1), imm(_imm)
     {
@@ -964,18 +985,18 @@ class FpRegRegImmOp : public FpOp
     }
 
     std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+            Addr pc, const loader::SymbolTable *symtab) const override;
 };
 
 class FpRegRegRegOp : public FpOp
 {
   protected:
-    IntRegIndex dest;
-    IntRegIndex op1;
-    IntRegIndex op2;
+    RegIndex dest;
+    RegIndex op1;
+    RegIndex op2;
 
     FpRegRegRegOp(const char *mnem, ExtMachInst _machInst, OpClass __opClass,
-                  IntRegIndex _dest, IntRegIndex _op1, IntRegIndex _op2,
+                  RegIndex _dest, RegIndex _op1, RegIndex _op2,
                   VfpMicroMode mode = VfpNotAMicroop) :
         FpOp(mnem, _machInst, __opClass), dest(_dest), op1(_op1), op2(_op2)
     {
@@ -983,20 +1004,20 @@ class FpRegRegRegOp : public FpOp
     }
 
     std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+            Addr pc, const loader::SymbolTable *symtab) const override;
 };
 
 class FpRegRegRegCondOp : public FpOp
 {
   protected:
-    IntRegIndex dest;
-    IntRegIndex op1;
-    IntRegIndex op2;
+    RegIndex dest;
+    RegIndex op1;
+    RegIndex op2;
     ConditionCode cond;
 
     FpRegRegRegCondOp(const char *mnem, ExtMachInst _machInst,
-                      OpClass __opClass, IntRegIndex _dest, IntRegIndex _op1,
-                      IntRegIndex _op2, ConditionCode _cond,
+                      OpClass __opClass, RegIndex _dest, RegIndex _op1,
+                      RegIndex _op2, ConditionCode _cond,
                       VfpMicroMode mode = VfpNotAMicroop) :
         FpOp(mnem, _machInst, __opClass), dest(_dest), op1(_op1), op2(_op2),
         cond(_cond)
@@ -1005,20 +1026,20 @@ class FpRegRegRegCondOp : public FpOp
     }
 
     std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+            Addr pc, const loader::SymbolTable *symtab) const override;
 };
 
 class FpRegRegRegRegOp : public FpOp
 {
   protected:
-    IntRegIndex dest;
-    IntRegIndex op1;
-    IntRegIndex op2;
-    IntRegIndex op3;
+    RegIndex dest;
+    RegIndex op1;
+    RegIndex op2;
+    RegIndex op3;
 
     FpRegRegRegRegOp(const char *mnem, ExtMachInst _machInst, OpClass __opClass,
-                     IntRegIndex _dest, IntRegIndex _op1, IntRegIndex _op2,
-                     IntRegIndex _op3, VfpMicroMode mode = VfpNotAMicroop) :
+                     RegIndex _dest, RegIndex _op1, RegIndex _op2,
+                     RegIndex _op3, VfpMicroMode mode = VfpNotAMicroop) :
         FpOp(mnem, _machInst, __opClass), dest(_dest), op1(_op1), op2(_op2),
         op3(_op3)
     {
@@ -1026,20 +1047,20 @@ class FpRegRegRegRegOp : public FpOp
     }
 
     std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+            Addr pc, const loader::SymbolTable *symtab) const override;
 };
 
 class FpRegRegRegImmOp : public FpOp
 {
   protected:
-    IntRegIndex dest;
-    IntRegIndex op1;
-    IntRegIndex op2;
+    RegIndex dest;
+    RegIndex op1;
+    RegIndex op2;
     uint64_t imm;
 
     FpRegRegRegImmOp(const char *mnem, ExtMachInst _machInst,
-                     OpClass __opClass, IntRegIndex _dest,
-                     IntRegIndex _op1, IntRegIndex _op2,
+                     OpClass __opClass, RegIndex _dest,
+                     RegIndex _op1, RegIndex _op2,
                      uint64_t _imm, VfpMicroMode mode = VfpNotAMicroop) :
         FpOp(mnem, _machInst, __opClass),
         dest(_dest), op1(_op1), op2(_op2), imm(_imm)
@@ -1048,9 +1069,10 @@ class FpRegRegRegImmOp : public FpOp
     }
 
     std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+            Addr pc, const loader::SymbolTable *symtab) const override;
 };
 
-}
+} // namespace ArmISA
+} // namespace gem5
 
 #endif //__ARCH_ARM_INSTS_VFP_HH__

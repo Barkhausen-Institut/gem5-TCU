@@ -55,6 +55,9 @@
 #include "base/trace.hh"
 #include "debug/Drain.hh"
 
+namespace gem5
+{
+
 /**
  * Flash Device constructor and destructor
  */
@@ -128,7 +131,7 @@ FlashDevice::initializeFlash(uint64_t disk_size, uint32_t sector_size)
     for (uint32_t count = 0; count < pagesPerDisk; count++) {
         //setup lookup table + physical aspects
 
-        if (dataDistribution == Enums::stripe) {
+        if (dataDistribution == enums::stripe) {
             locationTable[count].page = count / blocksPerDisk;
             locationTable[count].block = count % blocksPerDisk;
 
@@ -455,19 +458,22 @@ FlashDevice::getUnknownPages(uint32_t index)
     return unknownPages[index >> 5] & (0x01 << (index % 32));
 }
 
-FlashDevice::
-FlashDeviceStats::FlashDeviceStats(Stats::Group *parent)
-    : Stats::Group(parent, "FlashDevice"),
-    ADD_STAT(totalGCActivations, UNIT_COUNT,
+FlashDevice::FlashDeviceStats::FlashDeviceStats(statistics::Group *parent)
+    : statistics::Group(parent, "FlashDevice"),
+    ADD_STAT(totalGCActivations, statistics::units::Count::get(),
              "Number of Garbage collector activations"),
-    ADD_STAT(writeAccess, UNIT_COUNT, "Histogram of write addresses"),
-    ADD_STAT(readAccess, UNIT_COUNT, "Histogram of read addresses"),
-    ADD_STAT(fileSystemAccess, UNIT_COUNT,
+    ADD_STAT(writeAccess, statistics::units::Count::get(),
+             "Histogram of write addresses"),
+    ADD_STAT(readAccess, statistics::units::Count::get(),
+             "Histogram of read addresses"),
+    ADD_STAT(fileSystemAccess, statistics::units::Count::get(),
              "Histogram of file system accesses"),
-    ADD_STAT(writeLatency, UNIT_TICK, "Histogram of write latency"),
-    ADD_STAT(readLatency, UNIT_TICK, "Histogram of read latency")
+    ADD_STAT(writeLatency, statistics::units::Tick::get(),
+             "Histogram of write latency"),
+    ADD_STAT(readLatency, statistics::units::Tick::get(),
+             "Histogram of read latency")
 {
-    using namespace Stats;
+    using namespace statistics;
 
     /** Amount of GC activations*/
     totalGCActivations
@@ -573,3 +579,5 @@ FlashDevice::checkDrain()
         signalDrainDone();
     }
 }
+
+} // namespace gem5

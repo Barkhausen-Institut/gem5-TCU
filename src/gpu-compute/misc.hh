@@ -2,8 +2,6 @@
  * Copyright (c) 2011-2017 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -41,13 +39,17 @@
 #include "base/logging.hh"
 #include "sim/clocked_object.hh"
 
+namespace gem5
+{
+
 class GPUDynInst;
 
 typedef std::bitset<std::numeric_limits<unsigned long long>::digits>
     VectorMask;
 typedef std::shared_ptr<GPUDynInst> GPUDynInstPtr;
 
-enum InstMemoryHop : int {
+enum InstMemoryHop : int
+{
     Initiate = 0,
     CoalsrSend = 1,
     CoalsrRecv = 2,
@@ -56,7 +58,8 @@ enum InstMemoryHop : int {
     InstMemoryHopMax = 5
 };
 
-enum BlockMemoryHop : int {
+enum BlockMemoryHop : int
+{
     BlockSend = 0,
     BlockRecv = 1
 };
@@ -170,5 +173,7 @@ class Float16
         return *(reinterpret_cast<float *>(&val1));
     }
 };
+
+} // namespace gem5
 
 #endif // __MISC_HH__

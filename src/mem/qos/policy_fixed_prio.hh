@@ -33,17 +33,28 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Author: Matteo Andreozzi
  */
 
 #ifndef __MEM_QOS_POLICY_FIXED_PRIO_HH__
 #define __MEM_QOS_POLICY_FIXED_PRIO_HH__
 
-#include "mem/qos/policy.hh"
-#include "params/QoSFixedPriorityPolicy.hh"
+#include <cstdint>
+#include <map>
 
-namespace QoS {
+#include "base/compiler.hh"
+#include "mem/qos/policy.hh"
+
+namespace gem5
+{
+
+struct QoSFixedPriorityPolicyParams;
+
+namespace memory
+{
+
+GEM5_DEPRECATED_NAMESPACE(QoS, qos);
+namespace qos
+{
 
 /**
  * Fixed Priority QoS Policy
@@ -100,6 +111,8 @@ class FixedPriorityPolicy : public Policy
     std::map<RequestorID, uint8_t> priorityMap;
 };
 
-} // namespace QoS
+} // namespace qos
+} // namespace memory
+} // namespace gem5
 
 #endif // __MEM_QOS_POLICY_FIXED_PRIO_HH__

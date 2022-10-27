@@ -34,6 +34,11 @@
 #include "mem/tcu/msg_unit.hh"
 #include "mem/tcu/tcu.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 static const char *cmdNames[] =
 {
     "IDLE",
@@ -108,7 +113,7 @@ TcuCommands::regStats()
         .init(sizeof(cmdNames) / sizeof(cmdNames[0]))
         .name(name() + ".commands")
         .desc("The executed commands")
-        .flags(Stats::total | Stats::nozero);
+        .flags(statistics::total | statistics::nozero);
     for (size_t i = 0; i < sizeof(cmdNames) / sizeof(cmdNames[0]); ++i)
         commands.subname(i, cmdNames[i]);
 
@@ -116,7 +121,7 @@ TcuCommands::regStats()
         .init(sizeof(privCmdNames) / sizeof(privCmdNames[0]))
         .name(name() + ".privCommands")
         .desc("The executed privileged commands")
-        .flags(Stats::total | Stats::nozero);
+        .flags(statistics::total | statistics::nozero);
     for (size_t i = 0; i < sizeof(privCmdNames) / sizeof(privCmdNames[0]); ++i)
         privCommands.subname(i, privCmdNames[i]);
 
@@ -124,7 +129,7 @@ TcuCommands::regStats()
         .init(sizeof(extCmdNames) / sizeof(extCmdNames[0]))
         .name(name() + ".extCommands")
         .desc("The executed external commands")
-        .flags(Stats::total | Stats::nozero);
+        .flags(statistics::total | statistics::nozero);
     for (size_t i = 0; i < sizeof(extCmdNames) / sizeof(extCmdNames[0]); ++i)
         extCommands.subname(i, extCmdNames[i]);
 }
@@ -496,4 +501,7 @@ TcuCommands::scheduleExtCmdFinish(Cycles delay, TcuError error,
         extCmdFinish = new FinishExtCommandEvent(*this, error, arg);
         tcu.schedule(extCmdFinish, tcu.clockEdge(delay));
     }
+}
+
+}
 }

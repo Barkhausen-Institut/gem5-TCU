@@ -34,11 +34,14 @@ Source('info.cc')
 Source('storage.cc')
 Source('text.cc')
 
-if env['USE_HDF5']:
-    if main['GCC']:
-        Source('hdf5.cc', append={'CXXFLAGS': '-Wno-deprecated-copy'})
-    else:
-        Source('hdf5.cc')
+if env['GCC']:
+    Source('hdf5.cc', append={'CXXFLAGS': '-Wno-deprecated-copy'}, tags='hdf5')
+else:
+    Source('hdf5.cc', tags='hdf5')
 
-GTest('storage.test', 'storage.test.cc', '../debug.cc', '../str.cc', 'info.cc',
+GTest('group.test', 'group.test.cc', 'group.cc', 'info.cc',
+    with_tag('gem5 trace'))
+GTest('info.test', 'info.test.cc', 'info.cc', '../debug.cc', '../str.cc')
+GTest('storage.test', 'storage.test.cc', '../debug.cc', '../str.cc',
     'storage.cc', '../../sim/cur_tick.cc')
+GTest('units.test', 'units.test.cc')

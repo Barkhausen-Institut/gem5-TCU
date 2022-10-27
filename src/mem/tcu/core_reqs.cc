@@ -32,6 +32,11 @@
 #include "mem/tcu/tcu.hh"
 #include "mem/tcu/error.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 CoreRequests::CoreRequests(Tcu &_tcu, size_t bufCount)
     : tcu(_tcu),
       reqs()
@@ -168,4 +173,7 @@ CoreRequests::nextId() const
         if (getById(id) == nullptr)
             return id;
     }
+}
+
+}
 }

@@ -33,4 +33,5 @@ from m5.proxy import *
 class X86Connector(CoreConnector):
     type = 'X86Connector'
     cxx_header = "mem/tcu/connector/x86.hh"
+    cxx_class = 'gem5::tcu::X86Connector'
     irq_master_port = MasterPort("Port to send the IRQs to")

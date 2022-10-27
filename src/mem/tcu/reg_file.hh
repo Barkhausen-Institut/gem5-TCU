@@ -39,6 +39,11 @@
 #include "mem/tcu/error.hh"
 #include "mem/packet.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 // external registers (only externally writable)
 enum class ExtReg : Addr
 {
@@ -541,5 +546,8 @@ class RegFile
     static const char *unprivRegNames[];
     static const char *epTypeNames[];
 };
+
+}
+}
 
 #endif // __MEM_TCU_REG_FILE_HH__

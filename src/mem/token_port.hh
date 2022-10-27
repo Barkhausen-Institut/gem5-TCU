@@ -2,8 +2,6 @@
  * Copyright (c) 2016-2020 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -36,6 +34,9 @@
 
 #include "mem/port.hh"
 #include "sim/clocked_object.hh"
+
+namespace gem5
+{
 
 class TokenManager;
 class TokenResponsePort;
@@ -159,5 +160,7 @@ class TokenManager
      */
     void acquireTokens(int num_tokens);
 };
+
+} // namespace gem5
 
 #endif

@@ -37,6 +37,11 @@
 #include <map>
 #include <vector>
 
+namespace gem5
+{
+namespace tcu
+{
+
 class Tcu;
 
 class EpFile
@@ -123,5 +128,8 @@ class EpFile
 
     EpCache *lock;
 };
+
+}
+}
 
 #endif // __MEM_TCU_EP_FILE_HH__

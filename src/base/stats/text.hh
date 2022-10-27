@@ -45,11 +45,17 @@
 #include <stack>
 #include <string>
 
+#include "base/compiler.hh"
+#include "base/output.hh"
 #include "base/stats/output.hh"
 #include "base/stats/types.hh"
-#include "base/output.hh"
 
-namespace Stats {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Stats, statistics);
+namespace statistics
+{
 
 class Text : public Output
 {
@@ -64,7 +70,7 @@ class Text : public Output
     bool noOutput(const Info &info);
 
   public:
-    bool units;
+    bool enableUnits;
     bool descriptions;
     bool spaces;
 
@@ -101,6 +107,7 @@ std::string ValueToString(Result value, int precision);
 
 Output *initText(const std::string &filename, bool desc, bool spaces);
 
-} // namespace Stats
+} // namespace statistics
+} // namespace gem5
 
 #endif // __BASE_STATS_TEXT_HH__

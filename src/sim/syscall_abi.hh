@@ -34,6 +34,9 @@
 #include "sim/guest_abi.hh"
 #include "sim/syscall_return.hh"
 
+namespace gem5
+{
+
 class SyscallDesc;
 
 struct GenericSyscallABI
@@ -59,6 +62,9 @@ struct GenericSyscallABI32 : public GenericSyscallABI
         public std::true_type
     {};
 
+    template <typename T>
+    static constexpr bool IsWideV = IsWide<T>::value;
+
     // Read two registers and merge them into one value.
     static uint64_t
     mergeRegs(ThreadContext *tc, RegIndex low_idx, RegIndex high_idx)
@@ -69,15 +75,16 @@ struct GenericSyscallABI32 : public GenericSyscallABI
     }
 };
 
-namespace GuestABI
+GEM5_DEPRECATED_NAMESPACE(GuestABI, guest_abi);
+namespace guest_abi
 {
 
 // For 64 bit systems, return syscall args directly.
 template <typename ABI, typename Arg>
 struct Argument<ABI, Arg,
     typename std::enable_if_t<
-        std::is_base_of<GenericSyscallABI64, ABI>::value &&
-        std::is_integral<Arg>::value>>
+        std::is_base_of_v<GenericSyscallABI64, ABI> &&
+        std::is_integral_v<Arg>>>
 {
     static Arg
     get(ThreadContext *tc, typename ABI::State &state)
@@ -92,8 +99,8 @@ struct Argument<ABI, Arg,
 // arguments aren't handled generically.
 template <typename ABI, typename Arg>
 struct Argument<ABI, Arg,
-    typename std::enable_if_t<std::is_integral<Arg>::value &&
-        !ABI::template IsWide<Arg>::value>>
+    typename std::enable_if_t<std::is_integral_v<Arg> &&
+        !ABI::template IsWideV<Arg>>>
 {
     static Arg
     get(ThreadContext *tc, typename ABI::State &state)
@@ -104,6 +111,7 @@ struct Argument<ABI, Arg,
     }
 };
 
-} // namespace GuestABI
+} // namespace guest_abi
+} // namespace gem5
 
 #endif // __SIM_SYSCALL_ABI_HH__

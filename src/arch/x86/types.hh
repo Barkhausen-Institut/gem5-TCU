@@ -38,13 +38,16 @@
 #ifndef __ARCH_X86_TYPES_HH__
 #define __ARCH_X86_TYPES_HH__
 
+#include <cstdint>
+#include <functional>
 #include <iostream>
 
-#include "arch/generic/types.hh"
+#include "arch/x86/pcstate.hh"
 #include "base/bitunion.hh"
 #include "base/cprintf.hh"
-#include "base/types.hh"
-#include "sim/serialize.hh"
+
+namespace gem5
+{
 
 namespace X86ISA
 {
@@ -52,7 +55,8 @@ namespace X86ISA
 //This really determines how many bytes are passed to the decoder.
 typedef uint64_t MachInst;
 
-enum Prefixes {
+enum Prefixes
+{
     NoOverride,
     ESOverride,
     CSOverride,
@@ -145,7 +149,8 @@ BitUnion8(VexInfo)
     Bitfield<0> present;
 EndBitUnion(VexInfo)
 
-enum OpcodeType {
+enum OpcodeType
+{
     BadOpcode,
     OneByteOpcode,
     TwoByteOpcode,
@@ -182,12 +187,20 @@ BitUnion8(OperatingMode)
     Bitfield<2,0> submode;
 EndBitUnion(OperatingMode)
 
-enum X86Mode {
+BitUnion8(OperatingModeAndCPL)
+    Bitfield<5,4> cpl;
+    Bitfield<3> mode;
+    Bitfield<2,0> submode;
+EndBitUnion(OperatingModeAndCPL)
+
+enum X86Mode
+{
     LongMode,
     LegacyMode
 };
 
-enum X86SubMode {
+enum X86SubMode
+{
     SixtyFourBitMode,
     CompatabilityMode,
     ProtectedMode,
@@ -229,7 +242,7 @@ struct ExtMachInst
     uint8_t dispSize;
 
     //Mode information
-    OperatingMode mode;
+    OperatingModeAndCPL mode;
 };
 
 inline static std::ostream &
@@ -283,80 +296,27 @@ operator == (const ExtMachInst &emi1, const ExtMachInst &emi2)
     return true;
 }
 
-class PCState : public GenericISA::UPCState<MachInst>
-{
-  protected:
-    typedef GenericISA::UPCState<MachInst> Base;
+} // namespace X86ISA
 
-    uint8_t _size;
+// These two functions allow ExtMachInst to be used with SERIALIZE_SCALAR
+// and UNSERIALIZE_SCALAR.
+template <>
+void paramOut(CheckpointOut &cp, const std::string &name,
+        const X86ISA::ExtMachInst &machInst);
+template <>
+void paramIn(CheckpointIn &cp, const std::string &name,
+        X86ISA::ExtMachInst &machInst);
 
-  public:
-    void
-    set(Addr val)
-    {
-        Base::set(val);
-        _size = 0;
-    }
-
-    PCState() {}
-    PCState(Addr val) { set(val); }
-
-    void
-    setNPC(Addr val)
-    {
-        Base::setNPC(val);
-        _size = 0;
-    }
-
-    uint8_t size() const { return _size; }
-    void size(uint8_t newSize) { _size = newSize; }
-
-    bool
-    branching() const
-    {
-        return (this->npc() != this->pc() + size()) ||
-               (this->nupc() != this->upc() + 1);
-    }
-
-    void
-    advance()
-    {
-        Base::advance();
-        _size = 0;
-    }
-
-    void
-    uEnd()
-    {
-        Base::uEnd();
-        _size = 0;
-    }
-
-    void
-    serialize(CheckpointOut &cp) const
-    {
-        Base::serialize(cp);
-        SERIALIZE_SCALAR(_size);
-    }
-
-    void
-    unserialize(CheckpointIn &cp)
-    {
-        Base::unserialize(cp);
-        UNSERIALIZE_SCALAR(_size);
-    }
-};
-
-}
+} // namespace gem5
 
 namespace std
 {
 
 template<>
-struct hash<X86ISA::ExtMachInst>
+struct hash<gem5::X86ISA::ExtMachInst>
 {
     size_t
-    operator()(const X86ISA::ExtMachInst &emi) const
+    operator()(const gem5::X86ISA::ExtMachInst &emi) const
     {
         return (((uint64_t)emi.legacy << 48) |
                 ((uint64_t)emi.rex << 40) |
@@ -372,15 +332,6 @@ struct hash<X86ISA::ExtMachInst>
     };
 };
 
-}
-
-// These two functions allow ExtMachInst to be used with SERIALIZE_SCALAR
-// and UNSERIALIZE_SCALAR.
-template <>
-void paramOut(CheckpointOut &cp, const std::string &name,
-        const X86ISA::ExtMachInst &machInst);
-template <>
-void paramIn(CheckpointIn &cp, const std::string &name,
-        X86ISA::ExtMachInst &machInst);
+} // namespace std
 
 #endif // __ARCH_X86_TYPES_HH__

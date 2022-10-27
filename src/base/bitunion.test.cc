@@ -34,6 +34,8 @@
 #include "base/bitunion.hh"
 #include "base/cprintf.hh"
 
+using namespace gem5;
+
 namespace {
 
 BitUnion64(SixtyFour)
@@ -127,11 +129,12 @@ containingFunc(uint64_t init_val, uint64_t fieldVal)
 // Declare these as global so g++ doesn't ignore them. Initialize them in
 // various ways.
 EmptySixtyFour emptySixtyFour = 0;
-EmptyThirtyTwo emptyThirtyTwo;
-EmptySixteen emptySixteen;
+EmptyThirtyTwo emptyThirtyTwo{};
+[[maybe_unused]] EmptySixteen emptySixteen;
 EmptyEight emptyEight(0);
 
-class BitUnionData : public testing::Test {
+class BitUnionData : public testing::Test
+{
   protected:
     SixtyFour sixtyFour;
     Split split;
@@ -261,9 +264,9 @@ TEST_F(BitUnionData, Templating)
     EndBitUnion(Dummy32);
 
     bool is64;
-    is64 = std::is_same<BitUnionBaseType<Dummy64>, uint64_t>::value;
+    is64 = std::is_same_v<BitUnionBaseType<Dummy64>, uint64_t>;
     EXPECT_TRUE(is64);
-    is64 = std::is_same<BitUnionBaseType<Dummy32>, uint64_t>::value;
+    is64 = std::is_same_v<BitUnionBaseType<Dummy32>, uint64_t>;
     EXPECT_FALSE(is64);
 }
 

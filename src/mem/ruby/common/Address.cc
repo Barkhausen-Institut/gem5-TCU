@@ -31,6 +31,12 @@
 #include "base/bitfield.hh"
 #include "mem/ruby/system/RubySystem.hh"
 
+namespace gem5
+{
+
+namespace ruby
+{
+
 Addr
 bitSelect(Addr addr, unsigned int small, unsigned int big)
 {
@@ -78,3 +84,6 @@ printAddress(Addr addr)
        << makeLineAddress(addr) << std::dec << "]";
     return out.str();
 }
+
+} // namespace ruby
+} // namespace gem5

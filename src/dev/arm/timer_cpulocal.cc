@@ -49,6 +49,9 @@
 #include "mem/packet.hh"
 #include "mem/packet_access.hh"
 
+namespace gem5
+{
+
 CpuLocalTimer::CpuLocalTimer(const Params &p)
     : BasicPioDevice(p, 0x38)
 {
@@ -123,8 +126,7 @@ CpuLocalTimer::Timer::read(PacketPtr pkt, Addr daddr)
                 timerZeroEvent.when(), parent->clockPeriod(),
                 timerControl.prescalar);
         time = timerZeroEvent.when() - curTick();
-        time = time / parent->clockPeriod() /
-            power(16, timerControl.prescalar);
+        time = (time / parent->clockPeriod()) >> (4 * timerControl.prescalar);
         DPRINTF(Timer, "-- returning counter at %d\n", time);
         pkt->setLE<uint32_t>(time);
         break;
@@ -143,8 +145,8 @@ CpuLocalTimer::Timer::read(PacketPtr pkt, Addr daddr)
                 watchdogZeroEvent.when(), parent->clockPeriod(),
                 watchdogControl.prescalar);
         time = watchdogZeroEvent.when() - curTick();
-        time = time / parent->clockPeriod() /
-            power(16, watchdogControl.prescalar);
+        time = (time / parent->clockPeriod()) >>
+            (4 * watchdogControl.prescalar);
         DPRINTF(Timer, "-- returning counter at %d\n", time);
         pkt->setLE<uint32_t>(time);
         break;
@@ -269,7 +271,7 @@ CpuLocalTimer::Timer::restartTimerCounter(uint32_t val)
     if (!timerControl.enable)
         return;
 
-    Tick time = parent->clockPeriod() * power(16, timerControl.prescalar);
+    Tick time = parent->clockPeriod() << (4 * timerControl.prescalar);
     time *= val;
 
     if (timerZeroEvent.scheduled()) {
@@ -287,7 +289,7 @@ CpuLocalTimer::Timer::restartWatchdogCounter(uint32_t val)
     if (!watchdogControl.enable)
         return;
 
-    Tick time = parent->clockPeriod() * power(16, watchdogControl.prescalar);
+    Tick time = parent->clockPeriod() << (4 * watchdogControl.prescalar);
     time *= val;
 
     if (watchdogZeroEvent.scheduled()) {
@@ -442,3 +444,5 @@ CpuLocalTimer::unserialize(CheckpointIn &cp)
     for (int i = 0; i < sys->threads.size(); i++)
         localTimer[i]->unserializeSection(cp, csprintf("timer%d", i));
 }
+
+} // namespace gem5

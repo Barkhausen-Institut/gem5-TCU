@@ -38,14 +38,18 @@
 
 #include "arch/x86/fs_workload.hh"
 
+#include "arch/x86/bios/acpi.hh"
 #include "arch/x86/bios/intelmp.hh"
 #include "arch/x86/bios/smbios.hh"
 #include "arch/x86/faults.hh"
-#include "arch/x86/isa_traits.hh"
 #include "base/loader/object_file.hh"
 #include "cpu/thread_context.hh"
+#include "debug/ACPI.hh"
 #include "params/X86FsWorkload.hh"
 #include "sim/system.hh"
+
+namespace gem5
+{
 
 namespace X86ISA
 {
@@ -58,13 +62,10 @@ FsWorkload::FsWorkload(const Params &p) : KernelWorkload(p),
 {}
 
 void
-installSegDesc(ThreadContext *tc, SegmentRegIndex seg,
-               SegDescriptor desc, bool longmode)
+installSegDesc(ThreadContext *tc, int seg, SegDescriptor desc, bool longmode)
 {
-    bool honorBase = !longmode || seg == SEGMENT_REG_FS ||
-                                  seg == SEGMENT_REG_GS ||
-                                  seg == SEGMENT_REG_TSL ||
-                                  seg == SYS_SEGMENT_REG_TR;
+    bool honorBase = !longmode || seg == segment_idx::Fs ||
+                                  seg == segment_idx::Gs;
 
     SegAttr attr = 0;
 
@@ -95,10 +96,10 @@ installSegDesc(ThreadContext *tc, SegmentRegIndex seg,
         attr.expandDown = 0;
     }
 
-    tc->setMiscReg(MISCREG_SEG_BASE(seg), desc.base);
-    tc->setMiscReg(MISCREG_SEG_EFF_BASE(seg), honorBase ? desc.base : 0);
-    tc->setMiscReg(MISCREG_SEG_LIMIT(seg), desc.limit);
-    tc->setMiscReg(MISCREG_SEG_ATTR(seg), (RegVal)attr);
+    tc->setMiscReg(misc_reg::segBase(seg), desc.base);
+    tc->setMiscReg(misc_reg::segEffBase(seg), honorBase ? desc.base : 0);
+    tc->setMiscReg(misc_reg::segLimit(seg), desc.limit);
+    tc->setMiscReg(misc_reg::segAttr(seg), (RegVal)attr);
 }
 
 void
@@ -121,7 +122,7 @@ FsWorkload::initState()
 
     fatal_if(!kernelObj, "No kernel to load.");
 
-    fatal_if(kernelObj->getArch() == Loader::I386,
+    fatal_if(kernelObj->getArch() == loader::I386,
              "Loading a 32 bit x86 kernel is not supported.");
 
     ThreadContext *tc = system->threads[0];
@@ -185,7 +186,7 @@ FsWorkload::initState()
     SegSelector cs = 0;
     cs.si = numGDTEntries - 1;
 
-    tc->setMiscReg(MISCREG_CS, (RegVal)cs);
+    tc->setMiscReg(misc_reg::Cs, (RegVal)cs);
 
     // 32 bit data segment
     SegDescriptor dsDesc = initDesc;
@@ -203,18 +204,18 @@ FsWorkload::initState()
     SegSelector ds = 0;
     ds.si = numGDTEntries - 1;
 
-    tc->setMiscReg(MISCREG_DS, (RegVal)ds);
-    tc->setMiscReg(MISCREG_ES, (RegVal)ds);
-    tc->setMiscReg(MISCREG_FS, (RegVal)ds);
-    tc->setMiscReg(MISCREG_GS, (RegVal)ds);
-    tc->setMiscReg(MISCREG_SS, (RegVal)ds);
+    tc->setMiscReg(misc_reg::Ds, (RegVal)ds);
+    tc->setMiscReg(misc_reg::Es, (RegVal)ds);
+    tc->setMiscReg(misc_reg::Fs, (RegVal)ds);
+    tc->setMiscReg(misc_reg::Gs, (RegVal)ds);
+    tc->setMiscReg(misc_reg::Ss, (RegVal)ds);
 
-    tc->setMiscReg(MISCREG_TSL, 0);
+    tc->setMiscReg(misc_reg::Tsl, 0);
     SegAttr ldtAttr = 0;
     ldtAttr.unusable = 1;
-    tc->setMiscReg(MISCREG_TSL_ATTR, ldtAttr);
-    tc->setMiscReg(MISCREG_TSG_BASE, GDTBase);
-    tc->setMiscReg(MISCREG_TSG_LIMIT, 8 * numGDTEntries - 1);
+    tc->setMiscReg(misc_reg::TslAttr, ldtAttr);
+    tc->setMiscReg(misc_reg::TsgBase, GDTBase);
+    tc->setMiscReg(misc_reg::TsgLimit, 8 * numGDTEntries - 1);
 
     SegDescriptor tssDesc = initDesc;
     tssDesc.type = 0xB;
@@ -228,8 +229,8 @@ FsWorkload::initState()
     SegSelector tss = 0;
     tss.si = numGDTEntries - 1;
 
-    tc->setMiscReg(MISCREG_TR, (RegVal)tss);
-    installSegDesc(tc, SYS_SEGMENT_REG_TR, tssDesc, true);
+    tc->setMiscReg(misc_reg::Tr, (RegVal)tss);
+    installSegDesc(tc, segment_idx::Tr, tssDesc, true);
 
     /*
      * Identity map the first 4GB of memory. In order to map this region
@@ -287,38 +288,38 @@ FsWorkload::initState()
     /*
      * Transition from real mode all the way up to Long mode
      */
-    CR0 cr0 = tc->readMiscRegNoEffect(MISCREG_CR0);
+    CR0 cr0 = tc->readMiscRegNoEffect(misc_reg::Cr0);
     // Turn off paging.
     cr0.pg = 0;
-    tc->setMiscReg(MISCREG_CR0, cr0);
+    tc->setMiscReg(misc_reg::Cr0, cr0);
     // Turn on protected mode.
     cr0.pe = 1;
-    tc->setMiscReg(MISCREG_CR0, cr0);
+    tc->setMiscReg(misc_reg::Cr0, cr0);
 
-    CR4 cr4 = tc->readMiscRegNoEffect(MISCREG_CR4);
+    CR4 cr4 = tc->readMiscRegNoEffect(misc_reg::Cr4);
     // Turn on pae.
     cr4.pae = 1;
-    tc->setMiscReg(MISCREG_CR4, cr4);
+    tc->setMiscReg(misc_reg::Cr4, cr4);
 
     // Point to the page tables.
-    tc->setMiscReg(MISCREG_CR3, PageMapLevel4);
+    tc->setMiscReg(misc_reg::Cr3, PageMapLevel4);
 
-    Efer efer = tc->readMiscRegNoEffect(MISCREG_EFER);
+    Efer efer = tc->readMiscRegNoEffect(misc_reg::Efer);
     // Enable long mode.
     efer.lme = 1;
-    tc->setMiscReg(MISCREG_EFER, efer);
+    tc->setMiscReg(misc_reg::Efer, efer);
 
     // Start using longmode segments.
-    installSegDesc(tc, SEGMENT_REG_CS, csDesc, true);
-    installSegDesc(tc, SEGMENT_REG_DS, dsDesc, true);
-    installSegDesc(tc, SEGMENT_REG_ES, dsDesc, true);
-    installSegDesc(tc, SEGMENT_REG_FS, dsDesc, true);
-    installSegDesc(tc, SEGMENT_REG_GS, dsDesc, true);
-    installSegDesc(tc, SEGMENT_REG_SS, dsDesc, true);
+    installSegDesc(tc, segment_idx::Cs, csDesc, true);
+    installSegDesc(tc, segment_idx::Ds, dsDesc, true);
+    installSegDesc(tc, segment_idx::Es, dsDesc, true);
+    installSegDesc(tc, segment_idx::Fs, dsDesc, true);
+    installSegDesc(tc, segment_idx::Gs, dsDesc, true);
+    installSegDesc(tc, segment_idx::Ss, dsDesc, true);
 
     // Activate long mode.
     cr0.pg = 1;
-    tc->setMiscReg(MISCREG_CR0, cr0);
+    tc->setMiscReg(misc_reg::Cr0, cr0);
 
     tc->pcState(kernelObj->entryPoint());
 
@@ -335,6 +336,10 @@ FsWorkload::initState()
     // Write out the Intel MP Specification configuration table.
     writeOutMPTable(ebdaPos, fixed, table);
     ebdaPos += (fixed + table);
+
+    // Write out ACPI tables
+    writeOutACPITables(ebdaPos, table);
+    ebdaPos += table;
 }
 
 void
@@ -380,4 +385,18 @@ FsWorkload::writeOutMPTable(Addr fp, Addr &fpSize, Addr &tableSize, Addr table)
     assert(fpSize == 0x10);
 }
 
+void
+FsWorkload::writeOutACPITables(Addr fp, Addr &fpSize)
+{
+    fpSize = 0;
+    if (rsdp) {
+        ACPI::LinearAllocator alloc(fp, 0x000FFFFF);
+        rsdp->write(system->physProxy, alloc);
+        fpSize = alloc.alloc(0, 0) - fp;
+        DPRINTF(ACPI, "Wrote ACPI tables to memory at %llx with size %llx.\n",
+                fp, fpSize);
+    }
+}
+
 } // namespace X86ISA
+} // namespace gem5

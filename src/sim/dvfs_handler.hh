@@ -58,6 +58,9 @@
 #include "sim/eventq.hh"
 #include "sim/sim_object.hh"
 
+namespace gem5
+{
+
 /**
  * DVFS Handler class, maintains a list of all the domains it can handle.
  * Each entry of that list is an object of the DomainConfig class, and the
@@ -223,7 +226,8 @@ class DVFSHandler : public SimObject
      * Update performance level event, encapsulates all the required information
      * for a future call to change a domain's performance level.
      */
-    struct UpdateEvent : public Event {
+    struct UpdateEvent : public Event
+    {
         UpdateEvent() : Event(DVFS_Update_Pri), domainIDToSet(0),
                         perfLevelToSet(0) {}
 
@@ -260,5 +264,7 @@ class DVFSHandler : public SimObject
      */
     UpdatePerfLevelEvents updatePerfLevelEvents;
 };
+
+} // namespace gem5
 
 #endif // __SIM_DVFS_HANDLER_HH__

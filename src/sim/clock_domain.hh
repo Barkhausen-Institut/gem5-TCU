@@ -52,6 +52,9 @@
 #include "params/SrcClockDomain.hh"
 #include "sim/sim_object.hh"
 
+namespace gem5
+{
+
 /**
  * Forward declaration
  */
@@ -140,14 +143,14 @@ class ClockDomain : public SimObject
     { children.push_back(clock_domain); }
 
   private:
-    struct ClockDomainStats : public Stats::Group
+    struct ClockDomainStats : public statistics::Group
     {
         ClockDomainStats(ClockDomain &cd);
 
         /**
          * Stat to report clock period of clock domain
          */
-        Stats::Value clock;
+        statistics::Value clock;
     } stats;
 };
 
@@ -297,5 +300,7 @@ class DerivedClockDomain: public ClockDomain
      */
     const uint64_t clockDivider;
 };
+
+} // namespace gem5
 
 #endif

@@ -35,6 +35,11 @@
 #include "mem/tcu/connector/base.hh"
 #include "sim/system.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 class TcuAccelConnector : public BaseConnector
 {
   public:
@@ -51,5 +56,8 @@ class TcuAccelConnector : public BaseConnector
 
     TcuAccel *acc;
 };
+
+}
+}
 
 #endif // __CPU_TCU_ACCEL_CONNECTOR_HH__

@@ -2,8 +2,6 @@
  * Copyright (c) 2014-2017 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -35,6 +33,9 @@
 #define __GPU_COMPUTE_SCHEDULING_POLICY_HH__
 
 #include <vector>
+
+namespace gem5
+{
 
 class Wavefront;
 
@@ -68,5 +69,7 @@ class __SchedulingPolicy : public SchedulingPolicy
         return Policy::__chooseWave(sched_list);
     }
 };
+
+} // namespace gem5
 
 #endif // __GPU_COMPUTE_SCHEDULING_POLICY_HH__

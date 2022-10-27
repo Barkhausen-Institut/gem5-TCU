@@ -48,13 +48,18 @@
 #include <string>
 #include <vector>
 
+#include "base/named.hh"
 #include "cpu/minor/buffers.hh"
 #include "cpu/minor/cpu.hh"
 #include "cpu/minor/pipe_data.hh"
 #include "cpu/minor/trace.hh"
 #include "mem/packet.hh"
 
-namespace Minor
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Minor, minor);
+namespace minor
 {
 
 /* Forward declaration */
@@ -120,7 +125,7 @@ class LSQ : public Named
      *  translation, the queues in this port and back from the memory
      *  system. */
     class LSQRequest :
-        public BaseTLB::Translation, /* For TLB lookups */
+        public BaseMMU::Translation, /* For TLB lookups */
         public Packet::SenderState /* For packing into a Packet */
     {
       public:
@@ -187,7 +192,7 @@ class LSQ : public Named
         LSQRequestState state;
 
       protected:
-        /** BaseTLB::Translation interface */
+        /** BaseMMU::Translation interface */
         void markDelayed() { isTranslationDelayed = true; }
 
         /** Instructions may want to suppress translation faults (e.g.
@@ -199,7 +204,7 @@ class LSQ : public Named
 
       public:
         LSQRequest(LSQ &port_, MinorDynInstPtr inst_, bool isLoad_,
-            PacketDataPtr data_ = NULL, uint64_t *res_ = NULL);
+                PacketDataPtr data_ = NULL, uint64_t *res_ = NULL);
 
         virtual ~LSQRequest();
 
@@ -282,7 +287,7 @@ class LSQ : public Named
       protected:
         /** TLB interace */
         void finish(const Fault &fault_, const RequestPtr &request_,
-                    ThreadContext *tc, BaseTLB::Mode mode)
+                    ThreadContext *tc, BaseMMU::Mode mode)
         { }
 
       public:
@@ -343,7 +348,7 @@ class LSQ : public Named
       protected:
         /** TLB interace */
         void finish(const Fault &fault_, const RequestPtr &request_,
-                    ThreadContext *tc, BaseTLB::Mode mode);
+                    ThreadContext *tc, BaseMMU::Mode mode);
 
         /** Has my only packet been sent to the memory system but has not
          *  yet been responded to */
@@ -416,7 +421,7 @@ class LSQ : public Named
       protected:
         /** TLB response interface */
         void finish(const Fault &fault_, const RequestPtr &request_,
-                    ThreadContext *tc, BaseTLB::Mode mode);
+                    ThreadContext *tc, BaseMMU::Mode mode);
 
       public:
         SplitDataRequest(LSQ &port_, MinorDynInstPtr inst_,
@@ -734,6 +739,8 @@ class LSQ : public Named
  *  pushed into the packet as senderState */
 PacketPtr makePacketForRequest(const RequestPtr &request, bool isLoad,
     Packet::SenderState *sender_state = NULL, PacketDataPtr data = NULL);
-}
+
+} // namespace minor
+} // namespace gem5
 
 #endif /* __CPU_MINOR_NEW_LSQ_HH__ */

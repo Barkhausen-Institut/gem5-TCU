@@ -30,11 +30,16 @@
 
 #include <type_traits>
 
+#include "base/compiler.hh"
 #include "sim/guest_abi/definition.hh"
+
+namespace gem5
+{
 
 class ThreadContext;
 
-namespace GuestABI
+GEM5_DEPRECATED_NAMESPACE(GuestABI, guest_abi);
+namespace guest_abi
 {
 
 /*
@@ -53,7 +58,7 @@ struct StateInitializer
 
 template <typename ABI>
 struct StateInitializer<ABI, typename std::enable_if_t<
-    std::is_constructible<typename ABI::State, const ThreadContext *>::value>>
+    std::is_constructible_v<typename ABI::State, const ThreadContext *>>>
 {
     static typename ABI::State
     init(const ThreadContext *tc)
@@ -100,29 +105,22 @@ struct Preparer<ABI, Role, Type, decltype((void)&Role<ABI, Type>::prepare)>
 };
 
 template <typename ABI, typename Ret, typename Enabled=void>
-static void
+static inline void
 prepareForResult(ThreadContext *tc, typename ABI::State &state)
 {
     Preparer<ABI, Result, Ret>::prepare(tc, state);
 }
 
-template <typename ABI>
-static void
-prepareForArguments(ThreadContext *tc, typename ABI::State &state)
+template <typename ABI, typename ...Args>
+static inline void
+prepareForArguments([[maybe_unused]] ThreadContext *tc,
+        typename ABI::State &state)
 {
-    return;
-}
-
-template <typename ABI, typename NextArg, typename ...Args>
-static void
-prepareForArguments(ThreadContext *tc, typename ABI::State &state)
-{
-    Preparer<ABI, Argument, NextArg>::prepare(tc, state);
-    prepareForArguments<ABI, Args...>(tc, state);
+    GEM5_FOR_EACH_IN_PACK(Preparer<ABI, Argument, Args>::prepare(tc, state));
 }
 
 template <typename ABI, typename Ret, typename ...Args>
-static void
+static inline void
 prepareForFunction(ThreadContext *tc, typename ABI::State &state)
 {
     prepareForResult<ABI, Ret>(tc, state);
@@ -144,16 +142,11 @@ struct ResultStorer
     }
 };
 
-template <typename Ret, typename State>
-std::true_type foo(void (*)(ThreadContext *, const Ret &ret, State &state));
-
-template <typename Ret>
-std::false_type foo(void (*)(ThreadContext *, const Ret &ret));
-
 template <typename ABI, typename Ret>
 struct ResultStorer<ABI, Ret, typename std::enable_if_t<
-    std::is_same<void (*)(ThreadContext *, const Ret &, typename ABI::State &),
-                 decltype(&Result<ABI, Ret>::store)>::value>>
+    std::is_same_v<void (*)(ThreadContext *, const Ret &,
+                            typename ABI::State &),
+                 decltype(&Result<ABI, Ret>::store)>>>
 {
     static void
     store(ThreadContext *tc, const Ret &ret, typename ABI::State &state)
@@ -180,6 +173,7 @@ getArgument(ThreadContext *tc, typename ABI::State &state)
     return Argument<ABI, Arg>::get(tc, state);
 }
 
-} // namespace GuestABI
+} // namespace guest_abi
+} // namespace gem5
 
 #endif // __SIM_GUEST_ABI_LAYOUT_HH__

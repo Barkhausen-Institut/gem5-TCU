@@ -31,6 +31,8 @@
 
 #include "sim/proxy_ptr.hh"
 
+using namespace gem5;
+
 struct Access
 {
     bool read;
@@ -163,7 +165,7 @@ class TestProxy
     BackingStore &store;
 
     TestProxy(BackingStore &_store) : store(_store) {}
-    // Sneaky constructor for testing GuestABI integration.
+    // Sneaky constructor for testing guest_abi integration.
     TestProxy(ThreadContext *tc) : store(*(BackingStore *)tc) {}
 
     void
@@ -339,7 +341,7 @@ TEST(ProxyPtr, ConstOperators)
     EXPECT_EQ((const PtrType *)null, nullptr);
 
     // Dereferences.
-    is_same = std::is_same<decltype(*test_ptr1), const PtrType &>::value;
+    is_same = std::is_same_v<decltype(*test_ptr1), const PtrType &>;
     EXPECT_TRUE(is_same);
 
     store.store[0x100] = 0x55;
@@ -371,7 +373,7 @@ TEST(ProxyPtr, ConstOperators)
     EXPECT_EQ(struct_ptr->c, 0x33);
     EXPECT_EQ(struct_ptr->d, 0x44);
 
-    is_same = std::is_same<decltype((struct_ptr->a)), const uint8_t &>::value;
+    is_same = std::is_same_v<decltype((struct_ptr->a)), const uint8_t &>;
     EXPECT_TRUE(is_same);
 }
 
@@ -424,7 +426,7 @@ TEST(ProxyPtr, NonConstOperators)
     EXPECT_EQ((const PtrType *)null, nullptr);
 
     // Dereferences.
-    is_same = std::is_same<decltype(*test_ptr1), PtrType &>::value;
+    is_same = std::is_same_v<decltype(*test_ptr1), PtrType &>;
     EXPECT_TRUE(is_same);
 
     // Flush test_ptr1, which has been conservatively marked as dirty.
@@ -459,7 +461,7 @@ TEST(ProxyPtr, NonConstOperators)
     EXPECT_EQ(struct_ptr->c, 0x33);
     EXPECT_EQ(struct_ptr->d, 0x44);
 
-    is_same = std::is_same<decltype((struct_ptr->a)), uint8_t &>::value;
+    is_same = std::is_same_v<decltype((struct_ptr->a)), uint8_t &>;
     EXPECT_TRUE(is_same);
 }
 
@@ -469,7 +471,11 @@ struct TestABI
     using State = int;
 };
 
-namespace GuestABI
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(GuestABI, guest_abi);
+namespace guest_abi
 {
 
 template <>
@@ -482,7 +488,8 @@ struct Argument<TestABI, Addr>
     }
 };
 
-}
+} // namespace guest_abi
+} // namespace gem5
 
 bool abiCalled = false;
 bool abiCalledConst = false;
@@ -501,7 +508,7 @@ abiTestFuncConst(ThreadContext *tc, ConstTestPtr<uint8_t> ptr)
     EXPECT_EQ(ptr.addr(), 0x1000);
 }
 
-TEST(ProxyPtr, GuestABI)
+TEST(ProxyPtrTest, GuestABI)
 {
     BackingStore store(0x1000, 0x1000);
 

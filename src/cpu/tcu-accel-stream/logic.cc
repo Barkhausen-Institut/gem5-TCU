@@ -35,6 +35,11 @@
 #include "cpu/tcu-accel-stream/algorithm_rot13.hh"
 #include "cpu/tcu-accel-stream/logic.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 AccelLogic::AccelLogic(const AccelLogicParams &p)
     : ClockedObject(p), tickEvent(this), port("port", this),
       accel(), algo(), state(), stateChanged(),
@@ -211,4 +216,7 @@ AccelLogic::recvRetry()
     assert(retryPkt);
     if (port.sendTimingReq(retryPkt))
         retryPkt = nullptr;
+}
+
+}
 }

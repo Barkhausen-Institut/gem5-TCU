@@ -42,7 +42,6 @@
 
 #include <sstream>
 
-#include "arch/utility.hh"
 #include "base/output.hh"
 #include "base/trace.hh"
 #include "cpu/base.hh"
@@ -52,7 +51,11 @@
 #include "sim/core.hh"
 #include "sim/system.hh"
 
-namespace Linux
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Linux, linux);
+namespace linux
 {
 
 void
@@ -91,7 +94,8 @@ onUDelay(ThreadContext *tc, uint64_t div, uint64_t mul, uint64_t time)
     // time to 0 with the assumption that quiesce will not happen. To avoid
     // the quiesce handling in this case, only execute the quiesce if time > 0.
     if (time > 0)
-        tc->quiesceTick(curTick() + SimClock::Int::ns * time);
+        tc->quiesceTick(curTick() + sim_clock::as_int::ns * time);
 }
 
 } // namespace linux
+} // namespace gem5

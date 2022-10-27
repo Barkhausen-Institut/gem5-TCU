@@ -44,7 +44,11 @@
 #include <string>
 #include <vector>
 
-class MathExpr {
+namespace gem5
+{
+
+class MathExpr
+{
   public:
 
     MathExpr(std::string expr);
@@ -84,14 +88,16 @@ class MathExpr {
     }
 
   private:
-    enum Operator {
+    enum Operator
+    {
         bAdd, bSub, bMul, bDiv, bPow, uNeg, sValue, sVariable, nInvalid
     };
 
     // Match operators
     const int MAX_PRIO = 4;
     typedef double (*binOp)(double, double);
-    struct OpSearch {
+    struct OpSearch
+    {
         bool binary;
         Operator op;
         int priority;
@@ -102,7 +108,8 @@ class MathExpr {
     /** Operator list */
     std::array<OpSearch, uNeg + 1> ops;
 
-    class Node {
+    class Node
+    {
       public:
         Node() : op(nInvalid), l(0), r(0), value(0) {}
         std::string toStr() const {
@@ -141,5 +148,7 @@ class MathExpr {
      * strings */
     void getVariables(const Node *n, std::vector<std::string> &vars) const;
 };
+
+} // namespace gem5
 
 #endif

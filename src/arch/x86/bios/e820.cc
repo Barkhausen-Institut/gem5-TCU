@@ -37,9 +37,11 @@
 
 #include "arch/x86/bios/e820.hh"
 
-#include "arch/x86/isa_traits.hh"
 #include "mem/port_proxy.hh"
 #include "sim/byteswap.hh"
+
+namespace gem5
+{
 
 using namespace X86ISA;
 
@@ -69,3 +71,5 @@ void X86ISA::E820Table::writeTo(PortProxy& proxy, Addr countAddr, Addr addr)
         writeVal(entries[i]->type, proxy, addr);
     }
 }
+
+} // namespace gem5

@@ -42,6 +42,15 @@
 #include "params/NetworkLink.hh"
 #include "sim/clocked_object.hh"
 
+namespace gem5
+{
+
+namespace ruby
+{
+
+namespace garnet
+{
+
 class GarnetNetwork;
 
 class NetworkLink : public ClockedObject, public Consumer
@@ -96,5 +105,9 @@ class NetworkLink : public ClockedObject, public Consumer
     flitBuffer *link_srcQueue;
 
 };
+
+} // namespace garnet
+} // namespace ruby
+} // namespace gem5
 
 #endif // __MEM_RUBY_NETWORK_GARNET_0_NETWORKLINK_HH__

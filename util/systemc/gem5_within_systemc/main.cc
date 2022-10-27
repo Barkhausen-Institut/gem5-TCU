@@ -64,12 +64,14 @@
 #include "sc_module.hh"
 #include "sim/cxx_config_ini.hh"
 #include "sim/cxx_manager.hh"
+#include "sim/globals.hh"
 #include "sim/init_signals.hh"
-#include "sim/serialize.hh"
 #include "sim/simulate.hh"
 #include "sim/stat_control.hh"
 #include "sim/system.hh"
 #include "stats.hh"
+
+using namespace gem5;
 
 // Defining global string variable decalred in stats.hh
 std::string filename;
@@ -154,8 +156,6 @@ SimControl::SimControl(sc_core::sc_module_name name,
     if (argc == 1)
         usage(prog_name);
 
-    cxxConfigInit();
-
     /* Pass DPRINTF messages to SystemC */
     Trace::setDebugLogger(&logger);
 
@@ -176,8 +176,8 @@ SimControl::SimControl(sc_core::sc_module_name name,
     initSignals();
 
     /* Enable stats */
-    Stats::initSimStats();
-    Stats::registerHandlers(CxxConfig::statsReset, CxxConfig::statsDump);
+    statistics::initSimStats();
+    statistics::registerHandlers(CxxConfig::statsReset, CxxConfig::statsDump);
 
     Trace::enable();
     setDebugFlag("Terminal");
@@ -294,8 +294,9 @@ void SimControl::run()
         if (checkpoint_restore) {
             std::cerr << "Restoring checkpoint\n";
 
-            CheckpointIn *checkpoint = new CheckpointIn(checkpoint_dir,
-                config_manager->getSimObjectResolver());
+            SimObject::setSimObjectResolver(
+                &config_manager->getSimObjectResolver());
+            CheckpointIn *checkpoint = new CheckpointIn(checkpoint_dir);
 
             /* Catch SystemC up with gem5 after checkpoint restore.
              *  Note that gem5 leading SystemC is always a violation of the
@@ -303,7 +304,6 @@ void SimControl::run()
              *  catchup */
 
             DrainManager::instance().preCheckpointRestore();
-            Serializable::unserializeGlobals(*checkpoint);
 
             Tick systemc_time = sc_core::sc_time_stamp().value();
             if (curTick() > systemc_time) {
@@ -351,7 +351,7 @@ void SimControl::run()
         /* FIXME, this should really be serialising just for
          *  config_manager rather than using serializeAll's ugly
          *  SimObject static object list */
-        Serializable::serializeAll(checkpoint_dir);
+        SimObject::serializeAll(checkpoint_dir);
 
         std::cerr << "Completed checkpoint\n";
 
@@ -434,7 +434,7 @@ SimControl::switchCpu(unsigned cpuNum, unsigned numTotalCpus) {
     // it is best to just move this call before the switchCpu loop in run()
     // where it previously was
     if (cpuNum == 0)
-        system.setMemoryMode(Enums::timing);
+        system.setMemoryMode(enums::timing);
 
     new_cpu.takeOverFrom(&old_cpu);
 

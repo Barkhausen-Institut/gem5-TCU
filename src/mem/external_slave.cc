@@ -40,8 +40,12 @@
 #include <cctype>
 #include <iomanip>
 
+#include "base/compiler.hh"
 #include "base/trace.hh"
 #include "debug/ExternalPort.hh"
+
+namespace gem5
+{
 
 /** Implement a `stub' port which just responds to requests by printing
  *  a message.  The stub port can be used to configure and test a system
@@ -96,8 +100,8 @@ class StubSlavePortHandler : public
 Tick
 StubSlavePort::recvAtomic(PacketPtr packet)
 {
-    if (DTRACE(ExternalPort)) {
-        M5_VAR_USED unsigned int size = packet->getSize();
+    if (debug::ExternalPort) {
+        [[maybe_unused]] unsigned int size = packet->getSize();
 
         DPRINTF(ExternalPort, "StubSlavePort: recvAtomic a: 0x%x size: %d"
             " data: ...\n", packet->getAddr(), size);
@@ -236,3 +240,5 @@ ExternalSlave::registerHandler(const std::string &handler_name,
 {
     portHandlers[handler_name] = handler;
 }
+
+} // namespace gem5

@@ -2,8 +2,6 @@
  * Copyright (c) 2014-2015 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -35,6 +33,7 @@
 
 #include <unordered_set>
 
+#include "base/compiler.hh"
 #include "debug/GPUSched.hh"
 #include "debug/GPUVRF.hh"
 #include "gpu-compute/compute_unit.hh"
@@ -42,6 +41,9 @@
 #include "gpu-compute/scalar_register_file.hh"
 #include "gpu-compute/vector_register_file.hh"
 #include "gpu-compute/wavefront.hh"
+
+namespace gem5
+{
 
 ScheduleStage::ScheduleStage(const ComputeUnitParams &p, ComputeUnit &cu,
                              ScoreboardCheckToSchedule &from_scoreboard_check,
@@ -581,6 +583,11 @@ ScheduleStage::fillDispatchList()
                         computeUnit.globalMemoryPipe.acqCoalescerToken(mp);
                     }
 
+                    // Set instruction's exec_mask if it's a mem operation
+                    if (mp->isMemRef()) {
+                        mp->exec_mask = mp->wavefront()->execMask();
+                    }
+
                     doDispatchListTransition(j, EXREADY, schIter->first);
                     DPRINTF(GPUSched, "dispatchList[%d]: fillDispatchList: "
                             "EMPTY->EXREADY\n", j);
@@ -758,7 +765,7 @@ ScheduleStage::reserveResources()
                 // that we've reserved a global and local memory unit. Thus,
                 // we need to mark the latter execution unit as not available.
                 if (execUnitIds.size() > 1) {
-                    M5_VAR_USED int lm_exec_unit = wf->localMem;
+                    [[maybe_unused]] int lm_exec_unit = wf->localMem;
                     assert(toExecute.dispatchStatus(lm_exec_unit)
                            == SKIP);
                 }
@@ -767,7 +774,7 @@ ScheduleStage::reserveResources()
                 // Verify the GM pipe for this wave is ready to execute
                 // and the wave in the GM pipe is the same as the wave
                 // in the LM pipe
-                M5_VAR_USED int gm_exec_unit = wf->globalMem;
+                [[maybe_unused]] int gm_exec_unit = wf->globalMem;
                 assert(wf->wfDynId == toExecute
                        .readyInst(gm_exec_unit)->wfDynId);
                 assert(toExecute.dispatchStatus(gm_exec_unit)
@@ -783,9 +790,9 @@ ScheduleStage::deleteFromSch(Wavefront *w)
     wavesInSch.erase(w->wfDynId);
 }
 
-ScheduleStage::ScheduleStageStats::ScheduleStageStats(Stats::Group *parent,
-                                                      int num_exec_units)
-    : Stats::Group(parent, "ScheduleStage"),
+ScheduleStage::ScheduleStageStats::ScheduleStageStats(
+    statistics::Group *parent, int num_exec_units)
+    : statistics::Group(parent, "ScheduleStage"),
       ADD_STAT(rdyListEmpty ,"number of cycles no wave on ready list per "
                "execution resource"),
       ADD_STAT(rdyListNotEmpty, "number of cycles one or more wave on ready "
@@ -854,3 +861,5 @@ ScheduleStage::ScheduleStageStats::ScheduleStageStats(Stats::Group *parent,
     rfAccessStalls.subname(SCH_SRF_WR_ACCESS_NRDY, csprintf("SrfWr"));
     rfAccessStalls.subname(SCH_RF_ACCESS_NRDY, csprintf("Any"));
 }
+
+} // namespace gem5

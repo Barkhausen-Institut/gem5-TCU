@@ -40,6 +40,7 @@
 
 #include <vector>
 
+#include "arch/generic/mmu.hh"
 #include "arch/x86/pagetable.hh"
 #include "arch/x86/tlb.hh"
 #include "base/types.hh"
@@ -48,6 +49,9 @@
 #include "sim/clocked_object.hh"
 #include "sim/faults.hh"
 #include "sim/system.hh"
+
+namespace gem5
+{
 
 class ThreadContext;
 
@@ -79,7 +83,8 @@ namespace X86ISA
         {
           friend class Walker;
           private:
-            enum State {
+            enum State
+            {
                 Ready,
                 Waiting,
                 // Long mode
@@ -103,15 +108,15 @@ namespace X86ISA
             PacketPtr read;
             std::vector<PacketPtr> writes;
             Fault timingFault;
-            TLB::Translation * translation;
-            BaseTLB::Mode mode;
+            BaseMMU::Translation * translation;
+            BaseMMU::Mode mode;
             bool functional;
             bool timing;
             bool retrying;
             bool started;
             bool squashed;
           public:
-            WalkerState(Walker * _walker, BaseTLB::Translation *_translation,
+            WalkerState(Walker * _walker, BaseMMU::Translation *_translation,
                         const RequestPtr &_req, bool _isFunctional = false) :
                 walker(_walker), req(_req), state(Ready),
                 nextState(Ready), inflight(0),
@@ -120,7 +125,7 @@ namespace X86ISA
                 retrying(false), started(false), squashed(false)
             {
             }
-            void initState(ThreadContext * _tc, BaseTLB::Mode _mode,
+            void initState(ThreadContext * _tc, BaseMMU::Mode _mode,
                            bool _isTiming = false);
             Fault startWalk();
             Fault startFunctional(Addr &addr, unsigned &logBytes);
@@ -157,10 +162,10 @@ namespace X86ISA
 
       public:
         // Kick off the state machine.
-        Fault start(ThreadContext * _tc, BaseTLB::Translation *translation,
-                const RequestPtr &req, BaseTLB::Mode mode);
+        Fault start(ThreadContext * _tc, BaseMMU::Translation *translation,
+                const RequestPtr &req, BaseMMU::Mode mode);
         Fault startFunctional(ThreadContext * _tc, Addr &addr,
-                unsigned &logBytes, BaseTLB::Mode mode);
+                unsigned &logBytes, BaseMMU::Mode mode);
         Port &getPort(const std::string &if_name,
                       PortID idx=InvalidPortID) override;
 
@@ -204,5 +209,8 @@ namespace X86ISA
         {
         }
     };
-}
+
+} // namespace X86ISA
+} // namespace gem5
+
 #endif // __ARCH_X86_PAGE_TABLE_WALKER_HH__

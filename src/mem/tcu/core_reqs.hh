@@ -35,6 +35,11 @@
 
 #include <list>
 
+namespace gem5
+{
+namespace tcu
+{
+
 class Tcu;
 
 class CoreRequests
@@ -93,9 +98,12 @@ class CoreRequests
     Tcu &tcu;
     std::list<Request*> reqs;
 
-    Stats::Scalar coreReqs;
-    Stats::Scalar coreDelays;
-    Stats::Scalar coreFails;
+    statistics::Scalar coreReqs;
+    statistics::Scalar coreDelays;
+    statistics::Scalar coreFails;
 };
+
+}
+}
 
 #endif // __MEM_TCU_CORE_REQS_HH__

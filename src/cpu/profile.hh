@@ -37,13 +37,17 @@
 #include "cpu/static_inst.hh"
 #include "debug/Stack.hh"
 
+namespace gem5
+{
+
 class ThreadContext;
 class FunctionProfile;
 
-namespace Loader
+GEM5_DEPRECATED_NAMESPACE(Loader, loader);
+namespace loader
 {
     class SymbolTable;
-} // Loader
+} // namespace loader
 
 class BaseStackTrace
 {
@@ -86,7 +90,7 @@ class BaseStackTrace
 
     const std::vector<Addr> &getstack() const { return stack; }
 
-    void dprintf() { if (DTRACE(Stack)) dump(); }
+    void dprintf() { if (debug::Stack) dump(); }
 
     // This function can be overridden so that special addresses which don't
     // actually refer to PCs can be translated into special names. For
@@ -96,11 +100,11 @@ class BaseStackTrace
     // It should return whether addr was recognized and symbol has been set to
     // something.
     virtual bool tryGetSymbol(std::string &symbol, Addr addr,
-                              const Loader::SymbolTable *symtab);
+                              const loader::SymbolTable *symtab);
 
     void
     getSymbol(std::string &symbol, Addr addr,
-              const Loader::SymbolTable *symtab)
+              const loader::SymbolTable *symtab)
     {
         panic_if(!tryGetSymbol(symbol, addr, symtab),
                  "Could not find symbol for address %#x\n", addr);
@@ -129,14 +133,14 @@ class FunctionProfile
   private:
     friend class ProfileNode;
 
-    const Loader::SymbolTable &symtab;
+    const loader::SymbolTable &symtab;
     ProfileNode top;
     std::map<Addr, Counter> pc_count;
     std::unique_ptr<BaseStackTrace> trace;
 
   public:
     FunctionProfile(std::unique_ptr<BaseStackTrace> _trace,
-                    const Loader::SymbolTable &symtab);
+                    const loader::SymbolTable &symtab);
 
     ProfileNode *consume(ThreadContext *tc, const StaticInstPtr &inst);
     ProfileNode *consume(const std::vector<Addr> &stack);
@@ -153,5 +157,7 @@ FunctionProfile::consume(ThreadContext *tc, const StaticInstPtr &inst)
     trace->dprintf();
     return consume(trace->getstack());
 }
+
+} // namespace gem5
 
 #endif // __CPU_PROFILE_HH__

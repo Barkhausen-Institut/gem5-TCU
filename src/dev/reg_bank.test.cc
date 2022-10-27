@@ -57,6 +57,8 @@
 
 #include "dev/reg_bank.hh"
 
+using namespace gem5;
+
 // Compare the elements of an array against expected values.
 using testing::ElementsAre;
 // This version is needed with enough elements, empirically more than 10.
@@ -244,16 +246,17 @@ class RegisterBufTest : public testing::Test
   protected:
     static constexpr size_t RegSize = 4;
 
-    RegisterBankLE::RegisterBuf reg;
-
     std::array<uint8_t, RegSize * 3> buf;
     std::array<uint8_t, RegSize * 3> backing;
 
+    RegisterBankLE::RegisterBuf reg;
+
   public:
-    RegisterBufTest() : reg("buf_reg", backing.data() + RegSize, RegSize),
-        buf{0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xa, 0xb, 0xc},
+    RegisterBufTest()
+      : buf{0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xa, 0xb, 0xc},
         backing{0x10, 0x20, 0x30, 0x40, 0x50, 0x60,
-                0x70, 0x80, 0x90, 0xa0, 0xb0, 0xc0}
+                0x70, 0x80, 0x90, 0xa0, 0xb0, 0xc0},
+        reg("buf_reg", backing.data() + RegSize, RegSize)
     {}
 };
 // Needed by C++14 and lower
@@ -896,7 +899,8 @@ class RegisterBankTest : public testing::Test
         {}
     };
 
-    enum AccessType {
+    enum AccessType
+    {
         Read,
         Write,
         PartialRead,

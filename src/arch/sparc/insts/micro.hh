@@ -31,6 +31,9 @@
 
 #include "arch/sparc/insts/static_inst.hh"
 
+namespace gem5
+{
+
 namespace SparcISA
 {
 
@@ -56,7 +59,7 @@ class SparcMacroInst : public SparcStaticInst
     }
 
     std::string generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const override;
+        Addr pc, const loader::SymbolTable *symtab) const override;
 
     StaticInstPtr *microops;
 
@@ -98,12 +101,24 @@ class SparcMicroInst : public SparcStaticInst
     }
 
     void
-    advancePC(SparcISA::PCState &pcState) const override
+    advancePC(PCStateBase &pc_state) const override
     {
+        auto &spc = pc_state.as<PCState>();
         if (flags[IsLastMicroop])
-            pcState.uEnd();
+            spc.uEnd();
         else
-            pcState.uAdvance();
+            spc.uAdvance();
+    }
+
+    void
+    advancePC(ThreadContext *tc) const override
+    {
+        PCState pc = tc->pcState().as<PCState>();
+        if (flags[IsLastMicroop])
+            pc.uEnd();
+        else
+            pc.uAdvance();
+        tc->pcState(pc);
     }
 };
 
@@ -119,6 +134,7 @@ class SparcDelayedMicroInst : public SparcMicroInst
     }
 };
 
-}
+} // namespace SparcISA
+} // namespace gem5
 
 #endif // __ARCH_SPARC_INSTS_MICRO_HH__

@@ -1,4 +1,4 @@
-# Copyright (c) 2020 ARM Limited
+# Copyright (c) 2020-2021 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -49,8 +49,9 @@ class MessageRandomization(ScopedEnum):
 
 class MessageBuffer(SimObject):
     type = 'MessageBuffer'
-    cxx_class = 'MessageBuffer'
+    cxx_class = 'gem5::ruby::MessageBuffer'
     cxx_header = "mem/ruby/network/MessageBuffer.hh"
+
     ordered = Param.Bool(False, "Whether the buffer is ordered")
     buffer_size = Param.Unsigned(0, "Maximum number of entries to buffer \
                                      (0 allows infinite entries)")
@@ -66,3 +67,9 @@ class MessageBuffer(SimObject):
     master = DeprecatedParam(out_port, '`master` is now called `out_port`')
     in_port = ResponsePort("Response port from MessageBuffer sender")
     slave = DeprecatedParam(in_port, '`slave` is now called `in_port`')
+    max_dequeue_rate = Param.Unsigned(0, "Maximum number of messages that can \
+                                          be dequeued per cycle \
+                                    (0 allows dequeueing all ready messages)")
+    routing_priority = Param.Int(0, "Buffer priority when messages are \
+                                     consumed by the network. Smaller value \
+                                     means higher priority")

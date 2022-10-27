@@ -28,22 +28,36 @@
 #ifndef __ARCH_POWER_SE_WORKLOAD_HH__
 #define __ARCH_POWER_SE_WORKLOAD_HH__
 
-#include "arch/power/registers.hh"
+#include "arch/power/regs/int.hh"
+#include "arch/power/regs/misc.hh"
+#include "arch/power/remote_gdb.hh"
 #include "params/PowerSEWorkload.hh"
 #include "sim/se_workload.hh"
 #include "sim/syscall_abi.hh"
 #include "sim/syscall_desc.hh"
 
+namespace gem5
+{
+
 namespace PowerISA
 {
 
-class SEWorkload : public ::SEWorkload
+class SEWorkload : public gem5::SEWorkload
 {
   public:
     using Params = PowerSEWorkloadParams;
-    SEWorkload(const Params &p) : ::SEWorkload(p) {}
+    SEWorkload(const Params &p, Addr page_shift) :
+        gem5::SEWorkload(p, page_shift)
+    {}
 
-    ::Loader::Arch getArch() const override { return ::Loader::Power; }
+    void
+    setSystem(System *sys) override
+    {
+        gem5::SEWorkload::setSystem(sys);
+        gdb = BaseRemoteGDB::build<RemoteGDB>(system);
+    }
+
+    loader::Arch getArch() const override { return loader::Power; }
 
     struct SyscallABI : public GenericSyscallABI64
     {
@@ -53,7 +67,8 @@ class SEWorkload : public ::SEWorkload
 
 } // namespace PowerISA
 
-namespace GuestABI
+GEM5_DEPRECATED_NAMESPACE(GuestABI, guest_abi);
+namespace guest_abi
 {
 
 template <>
@@ -62,20 +77,18 @@ struct Result<PowerISA::SEWorkload::SyscallABI, SyscallReturn>
     static void
     store(ThreadContext *tc, const SyscallReturn &ret)
     {
-        if (ret.suppressed() || ret.needsRetry())
-            return;
-
-        PowerISA::Cr cr = tc->readIntReg(PowerISA::INTREG_CR);
+        PowerISA::Cr cr = tc->getReg(PowerISA::int_reg::Cr);
         if (ret.successful()) {
             cr.cr0.so = 0;
         } else {
             cr.cr0.so = 1;
         }
-        tc->setIntReg(PowerISA::INTREG_CR, cr);
-        tc->setIntReg(PowerISA::ReturnValueReg, ret.encodedValue());
+        tc->setReg(PowerISA::int_reg::Cr, cr);
+        tc->setReg(PowerISA::ReturnValueReg, ret.encodedValue());
     }
 };
 
-} // namespace GuestABI
+} // namespace guest_abi
+} // namespace gem5
 
 #endif // __ARCH_POWER_SE_WORKLOAD_HH__

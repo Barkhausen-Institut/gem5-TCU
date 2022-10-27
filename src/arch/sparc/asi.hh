@@ -29,10 +29,14 @@
 #ifndef __ARCH_SPARC_ASI_HH__
 #define __ARCH_SPARC_ASI_HH__
 
+namespace gem5
+{
+
 namespace SparcISA
 {
 
-enum ASI {
+enum ASI
+{
     ASI_IMPLICIT = 0x00,
     /* Priveleged ASIs */
     // 0x00-0x03 implementation dependent
@@ -270,5 +274,7 @@ bool asiIsReg(ASI);
 bool asiIsInterrupt(ASI);
 bool asiIsSparcError(ASI);
 };
+
+} // namespace gem5
 
 #endif // __ARCH_SPARC_ASI_HH__

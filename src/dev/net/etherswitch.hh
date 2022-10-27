@@ -48,6 +48,9 @@
 #include "sim/serialize.hh"
 #include "sim/sim_object.hh"
 
+namespace gem5
+{
+
 class EtherSwitch : public SimObject
 {
   public:
@@ -81,8 +84,8 @@ class EtherSwitch : public SimObject
         void sendDone() {}
         Tick switchingDelay();
 
-        Interface* lookupDestPort(Net::EthAddr destAddr);
-        void learnSenderAddr(Net::EthAddr srcMacAddr, Interface *sender);
+        Interface* lookupDestPort(networking::EthAddr destAddr);
+        void learnSenderAddr(networking::EthAddr srcMacAddr, Interface *sender);
 
         void serialize(CheckpointOut &cp) const;
         void unserialize(CheckpointIn &cp);
@@ -117,7 +120,8 @@ class EtherSwitch : public SimObject
         class PortFifo : public Serializable
         {
           protected:
-            struct EntryOrder {
+            struct EntryOrder
+            {
                 bool operator() (const PortFifoEntry& lhs,
                                  const PortFifoEntry& rhs) const
                 {
@@ -171,7 +175,8 @@ class EtherSwitch : public SimObject
         EventFunctionWrapper txEvent;
     };
 
-    struct SwitchTableEntry {
+    struct SwitchTableEntry
+    {
             Interface *interface;
             Tick lastUseTime;
         };
@@ -187,5 +192,7 @@ class EtherSwitch : public SimObject
     void serialize(CheckpointOut &cp) const override;
     void unserialize(CheckpointIn &cp) override;
 };
+
+} // namespace gem5
 
 #endif // __DEV_ETHERSWITCH_HH__

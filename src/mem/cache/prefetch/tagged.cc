@@ -35,7 +35,12 @@
 
 #include "params/TaggedPrefetcher.hh"
 
-namespace Prefetcher {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Prefetcher, prefetch);
+namespace prefetch
+{
 
 Tagged::Tagged(const TaggedPrefetcherParams &p)
     : Queued(p), degree(p.degree)
@@ -55,4 +60,5 @@ Tagged::calculatePrefetch(const PrefetchInfo &pfi,
     }
 }
 
-} // namespace Prefetcher
+} // namespace prefetch
+} // namespace gem5

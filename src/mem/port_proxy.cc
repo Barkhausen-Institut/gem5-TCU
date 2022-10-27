@@ -38,6 +38,21 @@
 #include "mem/port_proxy.hh"
 
 #include "base/chunk_generator.hh"
+#include "cpu/thread_context.hh"
+#include "mem/port.hh"
+
+namespace gem5
+{
+
+PortProxy::PortProxy(ThreadContext *tc, unsigned int cache_line_size) :
+    PortProxy([tc](PacketPtr pkt)->void { tc->sendFunctional(pkt); },
+        cache_line_size)
+{}
+
+PortProxy::PortProxy(const RequestPort &port, unsigned int cache_line_size) :
+    PortProxy([&port](PacketPtr pkt)->void { port.sendFunctional(pkt); },
+        cache_line_size)
+{}
 
 void
 PortProxy::readBlobPhys(Addr addr, Request::Flags flags,
@@ -123,3 +138,5 @@ PortProxy::tryReadString(char *str, Addr addr, size_t maxlen) const
     *--str = '\0';
     return true;
 }
+
+} // namespace gem5

@@ -46,24 +46,14 @@
 #include <sys/time.h>
 #include <sys/types.h>
 
+#include <cassert>
 #include <cerrno>
-#include <fstream>
-#include <list>
-#include <set>
-#include <string>
-#include <vector>
 
-#include "base/inifile.hh"
-#include "base/output.hh"
 #include "base/trace.hh"
 #include "debug/Checkpoint.hh"
-#include "sim/eventq.hh"
-#include "sim/sim_events.hh"
-#include "sim/sim_exit.hh"
-#include "sim/sim_object.hh"
 
-// For stat reset hack
-#include "sim/stat_control.hh"
+namespace gem5
+{
 
 int ckptMaxCount = 0;
 int ckptCount = 0;
@@ -71,92 +61,6 @@ int ckptPrevCount = -1;
 std::stack<std::string> Serializable::path;
 
 /////////////////////////////
-
-/// Container for serializing global variables (not associated with
-/// any serialized object).
-class Globals : public Serializable
-{
-  public:
-    Globals()
-        : unserializedCurTick(0) {}
-
-    void serialize(CheckpointOut &cp) const override;
-    void unserialize(CheckpointIn &cp) override;
-
-    Tick unserializedCurTick;
-};
-
-/// The one and only instance of the Globals class.
-Globals globals;
-
-/// The version tags for this build of the simulator, to be stored in the
-/// Globals section during serialization and compared upon unserialization.
-extern std::set<std::string> version_tags;
-
-void
-Globals::serialize(CheckpointOut &cp) const
-{
-    paramOut(cp, "curTick", curTick());
-    SERIALIZE_CONTAINER(version_tags);
-}
-
-void
-Globals::unserialize(CheckpointIn &cp)
-{
-    paramIn(cp, "curTick", unserializedCurTick);
-
-    const std::string &section(Serializable::currentSection());
-    std::string str;
-    if (!cp.find(section, "version_tags", str)) {
-        warn("**********************************************************\n");
-        warn("!!!! Checkpoint uses an old versioning scheme.        !!!!\n");
-        warn("Run the checkpoint upgrader (util/cpt_upgrader.py) on your "
-             "checkpoint\n");
-        warn("**********************************************************\n");
-        return;
-    }
-
-    std::set<std::string> cpt_tags;
-    arrayParamIn(cp, "version_tags", cpt_tags); // UNSERIALIZE_CONTAINER
-
-    bool err = false;
-    for (const auto& t : version_tags) {
-        if (cpt_tags.find(t) == cpt_tags.end()) {
-            // checkpoint is missing tag that this binary has
-            if (!err) {
-                warn("*****************************************************\n");
-                warn("!!!! Checkpoint is missing the following version tags:\n");
-                err = true;
-            }
-            warn("  %s\n", t);
-        }
-    }
-    if (err) {
-        warn("You might experience some issues when restoring and should run "
-             "the checkpoint upgrader (util/cpt_upgrader.py) on your "
-             "checkpoint\n");
-        warn("**********************************************************\n");
-    }
-
-    err = false;
-    for (const auto& t : cpt_tags) {
-        if (version_tags.find(t) == version_tags.end()) {
-            // gem5 binary is missing tag that this checkpoint has
-            if (!err) {
-                warn("*****************************************************\n");
-                warn("!!!! gem5 is missing the following version tags:\n");
-                err = true;
-            }
-            warn("  %s\n", t);
-        }
-    }
-    if (err) {
-        warn("Running a checkpoint with incompatible version tags is not "
-             "supported. While it might work, you may experience incorrect "
-             "behavior or crashes.\n");
-        warn("**********************************************************\n");
-     }
-}
 
 Serializable::Serializable()
 {
@@ -181,31 +85,19 @@ Serializable::unserializeSection(CheckpointIn &cp, const char *name)
 }
 
 void
-Serializable::serializeAll(const std::string &cpt_dir)
+Serializable::generateCheckpointOut(const std::string &cpt_dir,
+        std::ofstream &outstream)
 {
     std::string dir = CheckpointIn::setDir(cpt_dir);
     if (mkdir(dir.c_str(), 0775) == -1 && errno != EEXIST)
             fatal("couldn't mkdir %s\n", dir);
 
     std::string cpt_file = dir + CheckpointIn::baseFilename;
-    std::ofstream outstream(cpt_file.c_str());
+    outstream = std::ofstream(cpt_file.c_str());
     time_t t = time(NULL);
-    if (!outstream.is_open())
+    if (!outstream)
         fatal("Unable to open file %s for writing\n", cpt_file.c_str());
     outstream << "## checkpoint generated: " << ctime(&t);
-
-    globals.serializeSection(outstream, "Globals");
-
-    SimObject::serializeAll(outstream);
-}
-
-void
-Serializable::unserializeGlobals(CheckpointIn &cp)
-{
-    globals.unserializeSection(cp, "Globals");
-
-    for (uint32_t i = 0; i < numMainEventQueues; ++i)
-        mainEventQueue[i]->setCurTick(globals.unserializedCurTick);
 }
 
 Serializable::ScopedCheckpointSection::~ScopedCheckpointSection()
@@ -264,20 +156,15 @@ CheckpointIn::dir()
     return currentDirectory;
 }
 
-CheckpointIn::CheckpointIn(const std::string &cpt_dir,
-        SimObjectResolver &resolver)
-    : db(new IniFile), objNameResolver(resolver), _cptDir(setDir(cpt_dir))
+CheckpointIn::CheckpointIn(const std::string &cpt_dir)
+    : db(), _cptDir(setDir(cpt_dir))
 {
     std::string filename = getCptDir() + "/" + CheckpointIn::baseFilename;
-    if (!db->load(filename)) {
+    if (!db.load(filename)) {
         fatal("Can't load checkpoint file '%s'\n", filename);
     }
 }
 
-CheckpointIn::~CheckpointIn()
-{
-    delete db;
-}
 /**
  * @param section Here we mention the section we are looking for
  * (example: currentsection).
@@ -290,7 +177,7 @@ CheckpointIn::~CheckpointIn()
 bool
 CheckpointIn::entryExists(const std::string &section, const std::string &entry)
 {
-    return db->entryExists(section, entry);
+    return db.entryExists(section, entry);
 }
 /**
  * @param section Here we mention the section we are looking for
@@ -306,55 +193,20 @@ bool
 CheckpointIn::find(const std::string &section, const std::string &entry,
         std::string &value)
 {
-    return db->find(section, entry, value);
-}
-/**
- * @param section Here we mention the section we are looking for
- * (example: currentsection).
- * @param entry Mention the SimObject we are looking for (example:
- * interruput time) in the section.
- * @param value Give the value at the said entry.
- *
- * @return Returns true if a SimObject exists in the section.
- *
- */
-bool
-CheckpointIn::findObj(const std::string &section, const std::string &entry,
-                    SimObject *&value)
-{
-    std::string path;
-
-    if (!db->find(section, entry, path))
-        return false;
-
-    value = objNameResolver.resolveSimObject(path);
-    return true;
+    return db.find(section, entry, value);
 }
 
 bool
 CheckpointIn::sectionExists(const std::string &section)
 {
-    return db->sectionExists(section);
+    return db.sectionExists(section);
 }
 
 void
 CheckpointIn::visitSection(const std::string &section,
     IniFile::VisitSectionCallback cb)
 {
-    db->visitSection(section, cb);
+    db.visitSection(section, cb);
 }
 
-void
-objParamIn(CheckpointIn &cp, const std::string &name, SimObject * &param)
-{
-    const std::string &section(Serializable::currentSection());
-    if (!cp.findObj(section, name, param)) {
-        fatal("Can't unserialize '%s:%s'\n", section, name);
-    }
-}
-
-void
-debug_serialize(const std::string &cpt_dir)
-{
-    Serializable::serializeAll(cpt_dir);
-}
+} // namespace gem5

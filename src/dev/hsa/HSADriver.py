@@ -1,8 +1,6 @@
 # Copyright (c) 2015-2018 Advanced Micro Devices, Inc.
 # All rights reserved.
 #
-# For use for simulation and test purposes only
-#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #
@@ -38,4 +36,5 @@ class HSADriver(EmulatedDriver):
     type = 'HSADriver'
     abstract = True
     cxx_header = 'dev/hsa/hsa_driver.hh'
+    cxx_class = 'gem5::HSADriver'
     device = Param.HSADevice('HSA device controlled by this driver')

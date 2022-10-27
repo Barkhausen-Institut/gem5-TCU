@@ -60,13 +60,20 @@
 #include "mem/packet.hh"
 #include "params/StridePrefetcherHashedSetAssociative.hh"
 
+namespace gem5
+{
+
 class BaseIndexingPolicy;
-namespace ReplacementPolicy {
+GEM5_DEPRECATED_NAMESPACE(ReplacementPolicy, replacement_policy);
+namespace replacement_policy
+{
     class Base;
 }
 struct StridePrefetcherParams;
 
-namespace Prefetcher {
+GEM5_DEPRECATED_NAMESPACE(Prefetcher, prefetch);
+namespace prefetch
+{
 
 /**
  * Override the default set associative to apply a specific hash function
@@ -109,14 +116,13 @@ class Stride : public Queued
         const int numEntries;
 
         BaseIndexingPolicy* const indexingPolicy;
-        ReplacementPolicy::Base* const replacementPolicy;
+        replacement_policy::Base* const replacementPolicy;
 
         PCTableInfo(int assoc, int num_entries,
             BaseIndexingPolicy* indexing_policy,
-            ReplacementPolicy::Base* replacement_policy)
+            replacement_policy::Base* repl_policy)
           : assoc(assoc), numEntries(num_entries),
-            indexingPolicy(indexing_policy),
-            replacementPolicy(replacement_policy)
+            indexingPolicy(indexing_policy), replacementPolicy(repl_policy)
         {
         }
     } pcTableInfo;
@@ -159,6 +165,7 @@ class Stride : public Queued
                            std::vector<AddrPriority> &addresses) override;
 };
 
-} // namespace Prefetcher
+} // namespace prefetch
+} // namespace gem5
 
 #endif // __MEM_CACHE_PREFETCH_STRIDE_HH__

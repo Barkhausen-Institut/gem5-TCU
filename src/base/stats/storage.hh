@@ -34,13 +34,17 @@
 #include <cmath>
 
 #include "base/cast.hh"
+#include "base/compiler.hh"
 #include "base/logging.hh"
-#include "base/stats/info.hh"
 #include "base/stats/types.hh"
-// For curTick().
-#include "sim/core.hh"
+#include "sim/cur_tick.hh"
 
-namespace Stats {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Stats, statistics);
+namespace statistics
+{
 
 struct StorageParams
 {
@@ -63,7 +67,7 @@ class StatStor
      * Builds this storage element and calls the base constructor of the
      * datatype.
      */
-    StatStor(Info *info)
+    StatStor(const StorageParams* const storage_params)
         : data(Counter())
     { }
 
@@ -100,12 +104,12 @@ class StatStor
     /**
      * Prepare stat data for dumping or serialization
      */
-    void prepare(Info *info) { }
+    void prepare(const StorageParams* const storage_params) { }
 
     /**
      * Reset stat value to default
      */
-    void reset(Info *info) { data = Counter(); }
+    void reset(const StorageParams* const storage_params) { data = Counter(); }
 
     /**
      * @return true if zero value
@@ -138,7 +142,7 @@ class AvgStor
     /**
      * Build and initializes this stat storage.
      */
-    AvgStor(Info *info)
+    AvgStor(const StorageParams* const storage_params)
         : current(0), lastReset(0), total(0), last(0)
     { }
 
@@ -193,7 +197,7 @@ class AvgStor
      * Prepare stat data for dumping or serialization
      */
     void
-    prepare(Info *info)
+    prepare(const StorageParams* const storage_params)
     {
         total += current * (curTick() - last);
         last = curTick();
@@ -203,7 +207,7 @@ class AvgStor
      * Reset stat value to default
      */
     void
-    reset(Info *info)
+    reset(const StorageParams* const storage_params)
     {
         total = 0.0;
         last = curTick();
@@ -281,10 +285,10 @@ class DistStor
         }
     };
 
-    DistStor(Info *info)
-        : cvec(safe_cast<const Params *>(info->storageParams)->buckets)
+    DistStor(const StorageParams* const storage_params)
+        : cvec(safe_cast<const Params *>(storage_params)->buckets)
     {
-        reset(info);
+        reset(storage_params);
     }
 
     /**
@@ -311,9 +315,9 @@ class DistStor
     }
 
     void
-    prepare(Info *info, DistData &data)
+    prepare(const StorageParams* const storage_params, DistData &data)
     {
-        const Params *params = safe_cast<const Params *>(info->storageParams);
+        const Params *params = safe_cast<const Params *>(storage_params);
 
         assert(params->type == Dist);
         data.type = params->type;
@@ -339,9 +343,9 @@ class DistStor
      * Reset stat value to default
      */
     void
-    reset(Info *info)
+    reset(const StorageParams* const storage_params)
     {
-        const Params *params = safe_cast<const Params *>(info->storageParams);
+        const Params *params = safe_cast<const Params *>(storage_params);
         min_track = params->min;
         max_track = params->max;
         bucket_size = params->bucket_size;
@@ -467,10 +471,10 @@ class HistStor
         }
     };
 
-    HistStor(Info *info)
-        : cvec(safe_cast<const Params *>(info->storageParams)->buckets)
+    HistStor(const StorageParams* const storage_params)
+        : cvec(safe_cast<const Params *>(storage_params)->buckets)
     {
-        reset(info);
+        reset(storage_params);
     }
 
     /**
@@ -503,9 +507,9 @@ class HistStor
     }
 
     void
-    prepare(Info *info, DistData &data)
+    prepare(const StorageParams* const storage_params, DistData &data)
     {
-        const Params *params = safe_cast<const Params *>(info->storageParams);
+        const Params *params = safe_cast<const Params *>(storage_params);
 
         assert(params->type == Hist);
         data.type = params->type;
@@ -531,9 +535,9 @@ class HistStor
      * Reset stat value to default
      */
     void
-    reset(Info *info)
+    reset(const StorageParams* const storage_params)
     {
-        const Params *params = safe_cast<const Params *>(info->storageParams);
+        const Params *params = safe_cast<const Params *>(storage_params);
         min_bucket = 0;
         max_bucket = params->buckets - 1;
         bucket_size = 1;
@@ -572,7 +576,7 @@ class SampleStor
     /**
      * Create and initialize this storage.
      */
-    SampleStor(Info *info)
+    SampleStor(const StorageParams* const storage_params)
         : sum(Counter()), squares(Counter()), samples(Counter())
     { }
 
@@ -604,9 +608,9 @@ class SampleStor
     bool zero() const { return samples == Counter(); }
 
     void
-    prepare(Info *info, DistData &data)
+    prepare(const StorageParams* const storage_params, DistData &data)
     {
-        const Params *params = safe_cast<const Params *>(info->storageParams);
+        const Params *params = safe_cast<const Params *>(storage_params);
 
         assert(params->type == Deviation);
         data.type = params->type;
@@ -619,7 +623,7 @@ class SampleStor
      * Reset stat value to default
      */
     void
-    reset(Info *info)
+    reset(const StorageParams* const storage_params)
     {
         sum = Counter();
         squares = Counter();
@@ -648,7 +652,7 @@ class AvgSampleStor
     /**
      * Create and initialize this storage.
      */
-    AvgSampleStor(Info *info)
+    AvgSampleStor(const StorageParams* const storage_params)
         : sum(Counter()), squares(Counter())
     {}
 
@@ -678,9 +682,9 @@ class AvgSampleStor
     bool zero() const { return sum == Counter(); }
 
     void
-    prepare(Info *info, DistData &data)
+    prepare(const StorageParams* const storage_params, DistData &data)
     {
-        const Params *params = safe_cast<const Params *>(info->storageParams);
+        const Params *params = safe_cast<const Params *>(storage_params);
 
         assert(params->type == Deviation);
         data.type = params->type;
@@ -693,7 +697,7 @@ class AvgSampleStor
      * Reset stat value to default
      */
     void
-    reset(Info *info)
+    reset(const StorageParams* const storage_params)
     {
         sum = Counter();
         squares = Counter();
@@ -722,9 +726,9 @@ class SparseHistStor
         Params() : DistParams(Hist) {}
     };
 
-    SparseHistStor(Info *info)
+    SparseHistStor(const StorageParams* const storage_params)
     {
-        reset(info);
+        reset(storage_params);
     }
 
     /**
@@ -756,7 +760,7 @@ class SparseHistStor
     }
 
     void
-    prepare(Info *info, SparseHistData &data)
+    prepare(const StorageParams* const storage_params, SparseHistData &data)
     {
         MCounter::iterator it;
         data.cmap.clear();
@@ -771,13 +775,14 @@ class SparseHistStor
      * Reset stat value to default
      */
     void
-    reset(Info *info)
+    reset(const StorageParams* const storage_params)
     {
         cmap.clear();
         samples = 0;
     }
 };
 
-} // namespace Stats
+} // namespace statistics
+} // namespace gem5
 
 #endif // __BASE_STATS_STORAGE_HH__

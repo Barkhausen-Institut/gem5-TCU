@@ -38,11 +38,18 @@
 #ifndef __MEM_CACHE_PREFETCH_MULTI_HH__
 #define __MEM_CACHE_PREFETCH_MULTI_HH__
 
+#include <vector>
+
 #include "mem/cache/prefetch/base.hh"
+
+namespace gem5
+{
 
 struct MultiPrefetcherParams;
 
-namespace Prefetcher {
+GEM5_DEPRECATED_NAMESPACE(Prefetcher, prefetch);
+namespace prefetch
+{
 
 class Multi : public Base
 {
@@ -65,9 +72,11 @@ class Multi : public Base
 
   protected:
     /** List of sub-prefetchers ordered by priority. */
-    std::list<Base*> prefetchers;
+    std::vector<Base*> prefetchers;
+    uint8_t lastChosenPf;
 };
 
-} // namespace Prefetcher
+} // namespace prefetch
+} // namespace gem5
 
 #endif //__MEM_CACHE_PREFETCH_MULTI_HH__

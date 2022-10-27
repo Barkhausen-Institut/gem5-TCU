@@ -2,8 +2,6 @@
  * Copyright (c) 2014-2017 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -40,6 +38,9 @@
 #include "gpu-compute/scheduling_policy.hh"
 #include "gpu-compute/wavefront.hh"
 
+namespace gem5
+{
+
 // round-robin pick among the list of ready waves
 class RRSchedulingPolicy final : public __SchedulingPolicy<RRSchedulingPolicy>
 {
@@ -70,5 +71,7 @@ class RRSchedulingPolicy final : public __SchedulingPolicy<RRSchedulingPolicy>
         return selected_wave;
     }
 };
+
+} // namespace gem5
 
 #endif // __GPU_COMPUTE_RR_SCHEDULING_POLICY_HH__

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2013,2015,2018,2020 ARM Limited
+ * Copyright (c) 2012-2013,2015,2018,2020-2021 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -41,16 +41,20 @@
 #ifndef __CPU_SIMPLE_TIMING_HH__
 #define __CPU_SIMPLE_TIMING_HH__
 
+#include "arch/generic/mmu.hh"
 #include "cpu/simple/base.hh"
 #include "cpu/simple/exec_context.hh"
 #include "cpu/translation.hh"
-#include "params/TimingSimpleCPU.hh"
+#include "params/BaseTimingSimpleCPU.hh"
+
+namespace gem5
+{
 
 class TimingSimpleCPU : public BaseSimpleCPU
 {
   public:
 
-    TimingSimpleCPU(const TimingSimpleCPUParams &params);
+    TimingSimpleCPU(const BaseTimingSimpleCPUParams &params);
     virtual ~TimingSimpleCPU();
 
     void init() override;
@@ -104,7 +108,7 @@ class TimingSimpleCPU : public BaseSimpleCPU
         }
     };
 
-    class FetchTranslation : public BaseTLB::Translation
+    class FetchTranslation : public BaseMMU::Translation
     {
       protected:
         TimingSimpleCPU *cpu;
@@ -123,7 +127,7 @@ class TimingSimpleCPU : public BaseSimpleCPU
 
         void
         finish(const Fault &fault, const RequestPtr &req, ThreadContext *tc,
-               BaseTLB::Mode mode)
+               BaseMMU::Mode mode)
         {
             cpu->sendFetch(fault, req, tc);
         }
@@ -322,16 +326,18 @@ class TimingSimpleCPU : public BaseSimpleCPU
      */
     void finishTranslation(WholeTranslationState *state);
 
-    /** hardware transactional memory **/
-    Fault initiateHtmCmd(Request::Flags flags) override;
+    /** hardware transactional memory & TLBI operations **/
+    Fault initiateMemMgmtCmd(Request::Flags flags) override;
 
-    void htmSendAbortSignal(HtmFailureFaultCause) override;
+    void htmSendAbortSignal(ThreadID tid, uint64_t htm_uid,
+                            HtmFailureFaultCause) override;
 
   private:
 
     EventFunctionWrapper fetchEvent;
 
-    struct IprEvent : Event {
+    struct IprEvent : Event
+    {
         Packet *pkt;
         TimingSimpleCPU *cpu;
         IprEvent(Packet *_pkt, TimingSimpleCPU *_cpu, Tick t);
@@ -359,7 +365,7 @@ class TimingSimpleCPU : public BaseSimpleCPU
         SimpleExecContext& t_info = *threadInfo[curThread];
         SimpleThread* thread = t_info.thread;
 
-        return thread->microPC() == 0 && !t_info.stayAtPC &&
+        return thread->pcState().microPC() == 0 && !t_info.stayAtPC &&
                !fetchEvent.scheduled();
     }
 
@@ -372,5 +378,7 @@ class TimingSimpleCPU : public BaseSimpleCPU
 
     void reset();
 };
+
+} // namespace gem5
 
 #endif // __CPU_SIMPLE_TIMING_HH__

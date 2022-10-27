@@ -42,35 +42,44 @@
 #include "base/hostinfo.hh"
 #include "base/logging.hh"
 #include "base/trace.hh"
-#include "config/the_isa.hh"
 #include "debug/TimeSync.hh"
+#include "sim/core.hh"
+#include "sim/cur_tick.hh"
 #include "sim/eventq.hh"
 #include "sim/full_system.hh"
 #include "sim/root.hh"
+
+namespace gem5
+{
 
 Root *Root::_root = NULL;
 Root::RootStats Root::RootStats::instance;
 Root::RootStats &rootStats = Root::RootStats::instance;
 
 Root::RootStats::RootStats()
-    : Stats::Group(nullptr),
-    ADD_STAT(simSeconds, UNIT_SECOND, "Number of seconds simulated"),
-    ADD_STAT(simTicks, UNIT_TICK, "Number of ticks simulated"),
-    ADD_STAT(finalTick, UNIT_TICK,
+    : statistics::Group(nullptr),
+    ADD_STAT(simSeconds, statistics::units::Second::get(),
+             "Number of seconds simulated"),
+    ADD_STAT(simTicks, statistics::units::Tick::get(),
+             "Number of ticks simulated"),
+    ADD_STAT(finalTick, statistics::units::Tick::get(),
              "Number of ticks from beginning of simulation "
              "(restored from checkpoints and never reset)"),
-    ADD_STAT(simFreq, UNIT_RATE(Stats::Units::Tick, Stats::Units::Second),
+    ADD_STAT(simFreq, statistics::units::Rate<
+                statistics::units::Tick, statistics::units::Second>::get(),
              "The number of ticks per simulated second"),
-    ADD_STAT(hostSeconds, UNIT_SECOND, "Real time elapsed on the host"),
-    ADD_STAT(hostTickRate,
-             UNIT_RATE(Stats::Units::Tick, Stats::Units::Second),
+    ADD_STAT(hostSeconds, statistics::units::Second::get(),
+             "Real time elapsed on the host"),
+    ADD_STAT(hostTickRate, statistics::units::Rate<
+                statistics::units::Tick, statistics::units::Second>::get(),
              "The number of ticks simulated per host second (ticks/s)"),
-    ADD_STAT(hostMemory, UNIT_BYTE, "Number of bytes of host memory used"),
+    ADD_STAT(hostMemory, statistics::units::Byte::get(),
+             "Number of bytes of host memory used"),
 
     statTime(true),
     startTick(0)
 {
-    simFreq.scalar(SimClock::Frequency);
+    simFreq.scalar(sim_clock::Frequency);
     simTicks.functor([this]() { return curTick() - startTick; });
     finalTick.functor(curTick);
 
@@ -100,7 +109,7 @@ Root::RootStats::resetStats()
     statTime.setTimer();
     startTick = curTick();
 
-    Stats::Group::resetStats();
+    statistics::Group::resetStats();
 }
 
 /*
@@ -196,10 +205,17 @@ void
 Root::serialize(CheckpointOut &cp) const
 {
     SERIALIZE_SCALAR(FullSystem);
-    std::string isa = THE_ISA_STR;
-    SERIALIZE_SCALAR(isa);
+
+    globals.serializeSection(cp, "globals");
 }
 
+void
+Root::unserialize(CheckpointIn &cp)
+{
+    globals.unserializeSection(cp, "globals");
+    for (uint32_t i = 0; i < numMainEventQueues; ++i)
+        mainEventQueue[i]->setCurTick(globals.unserializedCurTick);
+}
 
 bool FullSystem;
 unsigned int FullSystemInt;
@@ -218,3 +234,5 @@ RootParams::create() const
 
     return new Root(*this, 0);
 }
+
+} // namespace gem5

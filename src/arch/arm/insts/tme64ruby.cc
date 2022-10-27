@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 ARM Limited
+ * Copyright (c) 2020-2021 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -38,12 +38,13 @@
 #include "arch/arm/faults.hh"
 #include "arch/arm/htm.hh"
 #include "arch/arm/insts/tme64.hh"
-#include "arch/arm/locked_mem.hh"
-#include "arch/arm/registers.hh"
 #include "arch/generic/memhelpers.hh"
 #include "debug/ArmTme.hh"
 #include "mem/packet_access.hh"
 #include "mem/request.hh"
+
+namespace gem5
+{
 
 using namespace ArmISA;
 
@@ -76,7 +77,7 @@ Tstart64::initiateAcc(ExecContext *xc,
             memAccessFlags = memAccessFlags | Request::NO_ACCESS;
         }
 
-        fault = xc->initiateHtmCmd(memAccessFlags);
+        fault = xc->initiateMemMgmtCmd(memAccessFlags);
     }
 
     return fault;
@@ -118,10 +119,10 @@ Tstart64::completeAcc(PacketPtr pkt, ExecContext *xc,
             armcpt->save(tc);
             armcpt->destinationRegister(dest);
 
-            ArmISA::globalClearExclusive(tc);
+            tc->getIsaPtr()->globalClearExclusive();
         }
 
-        xc->setIntRegOperand(this, 0, (Dest64) & mask(intWidth));
+        xc->setRegOperand(this, 0, Dest64 & mask(intWidth));
 
 
         uint64_t final_val = Dest64;
@@ -154,7 +155,7 @@ Ttest64::execute(ExecContext *xc, Trace::InstRecord *traceData) const
 
     if (fault == NoFault) {
         uint64_t final_val = Dest64;
-        xc->setIntRegOperand(this, 0, (Dest64) & mask(intWidth));
+        xc->setRegOperand(this, 0, Dest64 & mask(intWidth));
         if (traceData) { traceData->setData(final_val); }
     }
 
@@ -174,7 +175,7 @@ Tcancel64::initiateAcc(ExecContext *xc, Trace::InstRecord *traceData) const
     Request::Flags memAccessFlags =
         Request::STRICT_ORDER|Request::PHYSICAL|Request::HTM_CANCEL;
 
-    fault = xc->initiateHtmCmd(memAccessFlags);
+    fault = xc->initiateMemMgmtCmd(memAccessFlags);
 
     return fault;
 }
@@ -230,7 +231,7 @@ MicroTcommit64::initiateAcc(ExecContext *xc,
         memAccessFlags = memAccessFlags | Request::NO_ACCESS;
     }
 
-    fault = xc->initiateHtmCmd(memAccessFlags);
+    fault = xc->initiateMemMgmtCmd(memAccessFlags);
 
     return fault;
 }
@@ -260,11 +261,12 @@ MicroTcommit64::completeAcc(PacketPtr pkt, ExecContext *xc,
             assert(tme_checkpoint->valid());
 
             tme_checkpoint->reset();
-            ArmISA::globalClearExclusive(tc);
+            tc->getIsaPtr()->globalClearExclusive();
         }
     }
 
     return fault;
 }
 
-} // namespace
+} // namespace ArmISAInst
+} // namespace gem5

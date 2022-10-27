@@ -33,18 +33,28 @@ Port.compat(INT_SOURCE_ROLE, INT_SINK_ROLE)
 # multiple sinks.
 class IntSourcePin(VectorPort):
     def __init__(self, desc):
-        super(IntSourcePin, self).__init__(
-                INT_SOURCE_ROLE, desc, is_source=True)
+        super().__init__(INT_SOURCE_ROLE, desc, is_source=True)
+
+# A vector of source pins which might represent a bank of physical pins. Unlike
+# IntSourcePin, each source pin in VectorIntSourcePin can only connect to a
+# single sink pin. VectorIntSourcePin has the same definition as IntSourcePin
+# right now, but will likely be implemented differently in the future.
+# VectorIntSourcePin is defined as its own separate type to differentiate it
+# from IntSourcePin and make it clear to the user how it should be interpreted
+# and used.
+class VectorIntSourcePin(VectorPort):
+    def __init__(self, desc):
+        super().__init__(INT_SOURCE_ROLE, desc, is_source=True)
 
 # Each "physical" pin can be driven by a single source pin since there are no
 # provisions for resolving competing signals running to the same pin.
 class IntSinkPin(Port):
     def __init__(self, desc):
-        super(IntSinkPin, self).__init__(INT_SINK_ROLE, desc)
+        super().__init__(INT_SINK_ROLE, desc)
 
 # A vector of sink pins represents a bank of physical pins. For instance, an
 # interrupt controller with many numbered input interrupts could represent them
 # as a VectorIntSinkPin.
 class VectorIntSinkPin(VectorPort):
     def __init__(self, desc):
-        super(VectorIntSinkPin, self).__init__(INT_SINK_ROLE, desc)
+        super().__init__(INT_SINK_ROLE, desc)

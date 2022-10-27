@@ -36,14 +36,17 @@
 
 #include "arch/generic/tlb.hh"
 #include "arch/riscv/isa.hh"
-#include "arch/riscv/isa_traits.hh"
 #include "arch/riscv/pagetable.hh"
 #include "arch/riscv/pma_checker.hh"
+#include "arch/riscv/regs/misc.hh"
 #include "arch/riscv/utility.hh"
 #include "base/statistics.hh"
 #include "mem/request.hh"
 #include "params/RiscvTLB.hh"
 #include "sim/sim_object.hh"
+
+namespace gem5
+{
 
 class ThreadContext;
 
@@ -54,7 +57,7 @@ namespace RiscvISA {
 class Walker;
 
 class TLB : public BaseTLB
-  {
+{
     typedef std::list<TlbEntry *> EntryList;
 
   protected:
@@ -66,25 +69,25 @@ class TLB : public BaseTLB
 
     Walker *walker;
 
-    struct TlbStats : public Stats::Group{
-        TlbStats(Stats::Group *parent);
+    struct TlbStats : public statistics::Group
+    {
+        TlbStats(statistics::Group *parent);
 
-        Stats::Scalar readHits;
-        Stats::Scalar readMisses;
-        Stats::Scalar read_acv;
-        Stats::Scalar readAccesses;
-        Stats::Scalar writeHits;
-        Stats::Scalar writeMisses;
-        Stats::Scalar write_acv;
-        Stats::Scalar writeAccesses;
+        statistics::Scalar readHits;
+        statistics::Scalar readMisses;
+        statistics::Scalar readAccesses;
+        statistics::Scalar writeHits;
+        statistics::Scalar writeMisses;
+        statistics::Scalar writeAccesses;
 
-        Stats::Formula hits;
-        Stats::Formula misses;
-        Stats::Formula accesses;
+        statistics::Formula hits;
+        statistics::Formula misses;
+        statistics::Formula accesses;
     } stats;
 
   public:
     PMAChecker *pma;
+    PMP *pmp;
 
   public:
     typedef RiscvTLBParams Params;
@@ -99,10 +102,10 @@ class TLB : public BaseTLB
     void demapPage(Addr vaddr, uint64_t asn) override;
 
     Fault checkPermissions(STATUS status, PrivilegeMode pmode, Addr vaddr,
-                           Mode mode, PTESv39 pte);
-    Fault createPagefault(Addr vaddr, Mode mode);
+                           BaseMMU::Mode mode, PTESv39 pte);
+    Fault createPagefault(Addr vaddr, BaseMMU::Mode mode);
 
-    PrivilegeMode getMemPriv(ThreadContext *tc, Mode mode);
+    PrivilegeMode getMemPriv(ThreadContext *tc, BaseMMU::Mode mode);
 
     // Checkpointing
     void serialize(CheckpointOut &cp) const override;
@@ -120,31 +123,35 @@ class TLB : public BaseTLB
      */
     Port *getTableWalkerPort() override;
 
-    Addr translateWithTLB(Addr vaddr, uint16_t asid, Mode mode);
+    Addr translateWithTLB(Addr vaddr, uint16_t asid, BaseMMU::Mode mode);
 
     Fault translateAtomic(const RequestPtr &req,
-                          ThreadContext *tc, Mode mode) override;
+                          ThreadContext *tc, BaseMMU::Mode mode) override;
     void translateTiming(const RequestPtr &req, ThreadContext *tc,
-                         Translation *translation, Mode mode) override;
-    Fault translateFunctional(const RequestPtr &req,
-                              ThreadContext *tc, Mode mode) override;
-    Fault finalizePhysical(const RequestPtr &req,
-                           ThreadContext *tc, Mode mode) const override;
+                         BaseMMU::Translation *translation,
+                         BaseMMU::Mode mode) override;
+    Fault translateFunctional(const RequestPtr &req, ThreadContext *tc,
+                              BaseMMU::Mode mode) override;
+    Fault finalizePhysical(const RequestPtr &req, ThreadContext *tc,
+                           BaseMMU::Mode mode) const override;
 
   private:
     uint64_t nextSeq() { return ++lruSeq; }
 
-    TlbEntry *lookup(Addr vpn, uint16_t asid, Mode mode, bool hidden);
+    TlbEntry *lookup(Addr vpn, uint16_t asid, BaseMMU::Mode mode, bool hidden);
 
     void evictLRU();
     void remove(size_t idx);
 
     Fault translate(const RequestPtr &req, ThreadContext *tc,
-                    Translation *translation, Mode mode, bool &delayed);
+                    BaseMMU::Translation *translation, BaseMMU::Mode mode,
+                    bool &delayed);
     Fault doTranslate(const RequestPtr &req, ThreadContext *tc,
-                      Translation *translation, Mode mode, bool &delayed);
+                      BaseMMU::Translation *translation, BaseMMU::Mode mode,
+                      bool &delayed);
 };
 
-}
+} // namespace RiscvISA
+} // namespace gem5
 
 #endif // __RISCV_MEMORY_HH__

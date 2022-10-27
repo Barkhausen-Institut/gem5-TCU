@@ -35,6 +35,9 @@
 #include "sim/guest_abi/layout.hh"
 #include "sim/guest_abi/varargs.hh"
 
+namespace gem5
+{
+
 class ThreadContext;
 
 // These functions wrap a simulator level function with the given signature.
@@ -49,9 +52,10 @@ invokeSimcall(ThreadContext *tc,
 {
     // Default construct a State to track consumed resources. Built in
     // types will be zero initialized.
-    auto state = GuestABI::initializeState<ABI>(tc);
-    GuestABI::prepareForFunction<ABI, Ret, Args...>(tc, state);
-    return GuestABI::callFrom<ABI, store_ret, Ret, Args...>(tc, state, target);
+    auto state = guest_abi::initializeState<ABI>(tc);
+    guest_abi::prepareForFunction<ABI, Ret, Args...>(tc, state);
+    return guest_abi::callFrom<ABI, Ret, store_ret, Args...>(tc, state,
+        target);
 }
 
 template <typename ABI, typename Ret, typename ...Args>
@@ -84,9 +88,9 @@ invokeSimcall(ThreadContext *tc,
 {
     // Default construct a State to track consumed resources. Built in
     // types will be zero initialized.
-    auto state = GuestABI::initializeState<ABI>(tc);
-    GuestABI::prepareForArguments<ABI, Args...>(tc, state);
-    GuestABI::callFrom<ABI, Args...>(tc, state, target);
+    auto state = guest_abi::initializeState<ABI>(tc);
+    guest_abi::prepareForArguments<ABI, Args...>(tc, state);
+    guest_abi::callFrom<ABI, void, false, Args...>(tc, state, target);
 }
 
 template <typename ABI, typename ...Args>
@@ -108,12 +112,12 @@ dumpSimcall(std::string name, ThreadContext *tc,
             std::function<Ret(ThreadContext *, Args...)> target=
             std::function<Ret(ThreadContext *, Args...)>())
 {
-    auto state = GuestABI::initializeState<ABI>(tc);
+    auto state = guest_abi::initializeState<ABI>(tc);
     std::ostringstream ss;
 
-    GuestABI::prepareForFunction<ABI, Ret, Args...>(tc, state);
+    guest_abi::prepareForFunction<ABI, Ret, Args...>(tc, state);
     ss << name;
-    GuestABI::dumpArgsFrom<ABI, Ret, Args...>(0, ss, tc, state);
+    guest_abi::dumpArgsFrom<ABI, Ret, Args...>(ss, tc, state);
     return ss.str();
 }
 
@@ -125,5 +129,7 @@ dumpSimcall(std::string name, ThreadContext *tc,
     return dumpSimcall<ABI>(
             name, tc, std::function<Ret(ThreadContext *, Args...)>(target));
 }
+
+} // namespace gem5
 
 #endif // __SIM_GUEST_ABI_HH__

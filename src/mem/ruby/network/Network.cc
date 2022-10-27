@@ -45,6 +45,12 @@
 #include "mem/ruby/network/BasicLink.hh"
 #include "mem/ruby/system/RubySystem.hh"
 
+namespace gem5
+{
+
+namespace ruby
+{
+
 uint32_t Network::m_virtual_networks;
 uint32_t Network::m_control_msg_size;
 uint32_t Network::m_data_msg_size;
@@ -130,7 +136,7 @@ Network::Network(const Params &p)
     }
 
     // Register a callback function for combining the statistics
-    Stats::registerDumpCallback([this]() { collateStats(); });
+    statistics::registerDumpCallback([this]() { collateStats(); });
 
     for (auto &it : dynamic_cast<Network *>(this)->params().ext_links) {
         it->params().ext_node->initNetQueues();
@@ -249,3 +255,6 @@ Network::getLocalNodeID(NodeID global_id) const
     assert(globalToLocalMap.count(global_id));
     return globalToLocalMap.at(global_id);
 }
+
+} // namespace ruby
+} // namespace gem5

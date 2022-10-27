@@ -37,6 +37,11 @@
 
 #include <string>
 
+namespace gem5
+{
+namespace tcu
+{
+
 class CommandExecutor {
 public:
     virtual ~CommandExecutor() {}
@@ -83,5 +88,8 @@ class CommandSM
     State state;
     PacketPtr cmd;
 };
+
+}
+}
 
 #endif // __DEV_TCU_CMD_SM_HH__

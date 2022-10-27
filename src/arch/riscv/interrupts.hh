@@ -34,12 +34,15 @@
 
 #include "arch/generic/interrupts.hh"
 #include "arch/riscv/faults.hh"
-#include "arch/riscv/registers.hh"
+#include "arch/riscv/regs/misc.hh"
 #include "base/logging.hh"
 #include "cpu/thread_context.hh"
 #include "debug/Interrupt.hh"
 #include "params/RiscvInterrupts.hh"
 #include "sim/sim_object.hh"
+
+namespace gem5
+{
 
 class BaseCPU;
 class ThreadContext;
@@ -102,16 +105,24 @@ class Interrupts : public BaseInterrupts
         return std::bitset<NumInterruptTypes>(mask);
     }
 
+    bool
+    checkNonMaskableInterrupt() const
+    {
+        return tc->readMiscReg(MISCREG_NMIP) & tc->readMiscReg(MISCREG_NMIE);
+    }
+
     bool checkInterrupt(int num) const { return ip[num] && ie[num]; }
     bool checkInterrupts() const
     {
-        return (ip & ie & globalMask()).any();
+        return checkNonMaskableInterrupt() || (ip & ie & globalMask()).any();
     }
 
     Fault
     getInterrupt()
     {
         assert(checkInterrupts());
+        if (checkNonMaskableInterrupt())
+            return std::make_shared<NonMaskableInterruptFault>();
         std::bitset<NumInterruptTypes> mask = globalMask();
         const std::vector<int> interrupt_order {
             INT_EXT_MACHINE, INT_TIMER_MACHINE, INT_SOFTWARE_MACHINE,
@@ -140,11 +151,15 @@ class Interrupts : public BaseInterrupts
         ip[int_num] = false;
     }
 
+    void postNMI() { tc->setMiscReg(MISCREG_NMIP, 1); }
+    void clearNMI() { tc->setMiscReg(MISCREG_NMIP, 0); }
+
     void
     clearAll()
     {
         DPRINTF(Interrupt, "All interrupts cleared\n");
         ip = 0;
+        clearNMI();
     }
 
     uint64_t readIP() const { return (uint64_t)ip.to_ulong(); }
@@ -174,5 +189,6 @@ class Interrupts : public BaseInterrupts
 };
 
 } // namespace RiscvISA
+} // namespace gem5
 
 #endif // __ARCH_RISCV_INTERRUPT_HH__

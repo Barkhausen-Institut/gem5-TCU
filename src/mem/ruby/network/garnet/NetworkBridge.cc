@@ -2,8 +2,6 @@
  * Copyright (c) 2020 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -39,6 +37,15 @@
 #include "debug/RubyNetwork.hh"
 #include "params/GarnetIntLink.hh"
 
+namespace gem5
+{
+
+namespace ruby
+{
+
+namespace garnet
+{
+
 NetworkBridge::NetworkBridge(const Params &p)
     :CreditLink(p)
 {
@@ -51,10 +58,10 @@ NetworkBridge::NetworkBridge(const Params &p)
     lastScheduledAt = 0;
 
     nLink = p.link;
-    if (mType == Enums::LINK_OBJECT) {
+    if (mType == enums::LINK_OBJECT) {
         nLink->setLinkConsumer(this);
         setSourceQueue(nLink->getBuffer(), nLink);
-    } else if (mType == Enums::OBJECT_LINK) {
+    } else if (mType == enums::OBJECT_LINK) {
         nLink->setSourceQueue(&linkBuffer, this);
         setLinkConsumer(nLink);
     } else {
@@ -122,7 +129,7 @@ NetworkBridge::flitisizeAndSend(flit *t_flit)
         // Calculate the target-width
         int target_width = bitWidth;
         int cur_width = nLink->bitWidth;
-        if (mType == Enums::OBJECT_LINK) {
+        if (mType == enums::OBJECT_LINK) {
             target_width = nLink->bitWidth;
             cur_width = bitWidth;
         }
@@ -257,7 +264,14 @@ NetworkBridge::wakeup()
         t_flit = link_srcQueue->getTopFlit();
         DPRINTF(RubyNetwork, "Recieved flit %s\n", *t_flit);
         flitisizeAndSend(t_flit);
-        return;
     }
-    assert(!link_srcQueue->getSize());
+
+    // Reschedule in case there is a waiting flit.
+    if (!link_srcQueue->isEmpty()) {
+        scheduleEvent(Cycles(1));
+    }
 }
+
+} // namespace garnet
+} // namespace ruby
+} // namespace gem5

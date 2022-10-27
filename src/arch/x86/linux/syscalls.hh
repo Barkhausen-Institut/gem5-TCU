@@ -33,6 +33,9 @@
 #include "sim/se_workload.hh"
 #include "sim/syscall_emul.hh"
 
+namespace gem5
+{
+
 namespace X86ISA
 {
 
@@ -51,7 +54,8 @@ BitUnion32(UserDescFlags)
     Bitfield<6> useable;
 EndBitUnion(UserDescFlags)
 
-struct UserDesc32 {
+struct UserDesc32
+{
     uint32_t entry_number;
     uint32_t base_addr;
     uint32_t limit;
@@ -62,5 +66,6 @@ SyscallReturn setThreadArea32Func(SyscallDesc *desc, ThreadContext *tc,
                                   VPtr<UserDesc32> userDesc);
 
 } // namespace X86ISA
+} // namespace gem5
 
 #endif // __ARCH_X86_LINUX_SYSCALLS_HH__

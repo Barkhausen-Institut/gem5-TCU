@@ -38,10 +38,13 @@
 #include "sim/system.hh"
 #include "params/MemSystem.hh"
 
+namespace gem5
+{
+
 class MemSystem : public System
 {
   protected:
-    tileid_t tileId;
+    tcu::tileid_t tileId;
     std::string memFile;
     size_t memFileNum;
 
@@ -52,5 +55,7 @@ class MemSystem : public System
 
     void initState();
 };
+
+}
 
 #endif

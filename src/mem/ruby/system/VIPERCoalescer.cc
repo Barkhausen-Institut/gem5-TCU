@@ -2,8 +2,6 @@
  * Copyright (c) 2013-2015 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -35,7 +33,6 @@
 
 #include "base/logging.hh"
 #include "base/str.hh"
-#include "config/the_isa.hh"
 #include "cpu/testers/rubytest/RubyTester.hh"
 #include "debug/GPUCoalescer.hh"
 #include "debug/MemoryAccess.hh"
@@ -50,6 +47,12 @@
 #include "mem/ruby/system/GPUCoalescer.hh"
 #include "mem/ruby/system/RubySystem.hh"
 #include "params/VIPERCoalescer.hh"
+
+namespace gem5
+{
+
+namespace ruby
+{
 
 VIPERCoalescer::VIPERCoalescer(const Params &p)
     : GPUCoalescer(p),
@@ -300,3 +303,6 @@ VIPERCoalescer::invTCP()
             "There are %d Invalidatons outstanding after Cache Walk\n",
             m_num_pending_invs);
 }
+
+} // namespace ruby
+} // namespace gem5

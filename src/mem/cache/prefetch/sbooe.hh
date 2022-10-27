@@ -42,9 +42,14 @@
 #include "mem/cache/prefetch/queued.hh"
 #include "mem/packet.hh"
 
+namespace gem5
+{
+
 struct SBOOEPrefetcherParams;
 
-namespace Prefetcher {
+GEM5_DEPRECATED_NAMESPACE(Prefetcher, prefetch);
+namespace prefetch
+{
 
 class SBOOE : public Queued
 {
@@ -77,7 +82,8 @@ class SBOOE : public Queued
         /** Holds the current sum of the latency buffer latency */
         Tick latencyBufferSum;
 
-        struct SandboxEntry {
+        struct SandboxEntry
+        {
             /** Cache line predicted by the candidate prefetcher */
             Addr line;
             /** Tick when the simulated prefetch is expected to be filled */
@@ -157,6 +163,7 @@ class SBOOE : public Queued
                                std::vector<AddrPriority> &addresses) override;
 };
 
-} // namespace Prefetcher
+} // namespace prefetch
+} // namespace gem5
 
 #endif // __MEM_CACHE_PREFETCH_SBOOE_HH__

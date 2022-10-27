@@ -42,7 +42,11 @@
 #include "base/intmath.hh"
 #include "base/types.hh"
 #include "mem/request.hh"
+#include "mem/translation_gen.hh"
 #include "sim/serialize.hh"
+
+namespace gem5
+{
 
 class ThreadContext;
 
@@ -89,7 +93,8 @@ class EmulationPageTable : public Serializable
      * bit 2 - cacheable  | uncacheable
      * bit 3 - read-write | read-only
      */
-    enum MappingFlags : uint32_t {
+    enum MappingFlags : uint32_t
+    {
         Clobber     = 1,
         Uncacheable = 4,
         ReadOnly    = 8,
@@ -149,7 +154,32 @@ class EmulationPageTable : public Serializable
      * @param vaddr The virtual address.
      * @return True if translation exists
      */
-    bool translate(Addr vaddr) { Addr dummy; return translate(vaddr, dummy); }
+    bool
+    translate(Addr vaddr)
+    {
+        Addr dummy;
+        return translate(vaddr, dummy);
+    }
+
+    class PageTableTranslationGen : public TranslationGen
+    {
+      private:
+        EmulationPageTable *pt;
+
+        void translate(Range &range) const override;
+
+      public:
+        PageTableTranslationGen(EmulationPageTable *_pt, Addr vaddr,
+                Addr size) : TranslationGen(vaddr, size), pt(_pt)
+        {}
+    };
+
+    TranslationGenPtr
+    translateRange(Addr vaddr, Addr size)
+    {
+        return TranslationGenPtr(
+                new PageTableTranslationGen(this, vaddr, size));
+    }
 
     /**
      * Perform a translation on the memory request, fills in paddr
@@ -158,10 +188,18 @@ class EmulationPageTable : public Serializable
      */
     Fault translate(const RequestPtr &req);
 
+    /**
+     * Dump all items in the pTable, to a concatenation of strings of the form
+     *    Addr:Entry;
+     */
+    const std::string externalize() const;
+
     void getMappings(std::vector<std::pair<Addr, Addr>> *addr_mappings);
 
     void serialize(CheckpointOut &cp) const override;
     void unserialize(CheckpointIn &cp) override;
 };
+
+} // namespace gem5
 
 #endif // __MEM_PAGE_TABLE_HH__

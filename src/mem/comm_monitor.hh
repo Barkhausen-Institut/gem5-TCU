@@ -46,6 +46,9 @@
 #include "sim/probe/mem.hh"
 #include "sim/sim_object.hh"
 
+namespace gem5
+{
+
 /**
  * The communication monitor is a SimObject which can monitor statistics of
  * the communication happening between two ports in the memory system.
@@ -267,16 +270,16 @@ class CommMonitor : public SimObject
     bool tryTiming(PacketPtr pkt);
 
     /** Stats declarations, all in a struct for convenience. */
-    struct MonitorStats : public Stats::Group
+    struct MonitorStats : public statistics::Group
     {
         /** Disable flag for burst length histograms **/
         bool disableBurstLengthHists;
 
         /** Histogram of read burst lengths */
-        Stats::Histogram readBurstLengthHist;
+        statistics::Histogram readBurstLengthHist;
 
         /** Histogram of write burst lengths */
-        Stats::Histogram writeBurstLengthHist;
+        statistics::Histogram writeBurstLengthHist;
 
         /** Disable flag for the bandwidth histograms */
         bool disableBandwidthHists;
@@ -286,27 +289,27 @@ class CommMonitor : public SimObject
          * internal counter is an unsigned int rather than a stat.
          */
         unsigned int readBytes;
-        Stats::Histogram readBandwidthHist;
-        Stats::Scalar totalReadBytes;
-        Stats::Formula averageReadBandwidth;
+        statistics::Histogram readBandwidthHist;
+        statistics::Scalar totalReadBytes;
+        statistics::Formula averageReadBandwidth;
 
         /**
          * Histogram for write bandwidth per sample window. The
          * internal counter is an unsigned int rather than a stat.
          */
         unsigned int writtenBytes;
-        Stats::Histogram writeBandwidthHist;
-        Stats::Scalar totalWrittenBytes;
-        Stats::Formula averageWriteBandwidth;
+        statistics::Histogram writeBandwidthHist;
+        statistics::Scalar totalWrittenBytes;
+        statistics::Formula averageWriteBandwidth;
 
         /** Disable flag for latency histograms. */
         bool disableLatencyHists;
 
         /** Histogram of read request-to-response latencies */
-        Stats::Histogram readLatencyHist;
+        statistics::Histogram readLatencyHist;
 
         /** Histogram of write request-to-response latencies */
-        Stats::Histogram writeLatencyHist;
+        statistics::Histogram writeLatencyHist;
 
         /** Disable flag for ITT distributions. */
         bool disableITTDists;
@@ -317,9 +320,9 @@ class CommMonitor : public SimObject
          * accesses. The time of a request is the tick at which the
          * request is forwarded by the monitor.
          */
-        Stats::Distribution ittReadRead;
-        Stats::Distribution ittWriteWrite;
-        Stats::Distribution ittReqReq;
+        statistics::Distribution ittReadRead;
+        statistics::Distribution ittWriteWrite;
+        statistics::Distribution ittReqReq;
         Tick timeOfLastRead;
         Tick timeOfLastWrite;
         Tick timeOfLastReq;
@@ -332,7 +335,7 @@ class CommMonitor : public SimObject
          * outstanding read requests is an unsigned integer because
          * it should not be reset when stats are reset.
          */
-        Stats::Histogram outstandingReadsHist;
+        statistics::Histogram outstandingReadsHist;
         unsigned int outstandingReadReqs;
 
         /**
@@ -340,18 +343,18 @@ class CommMonitor : public SimObject
          * outstanding write requests is an unsigned integer because
          * it should not be reset when stats are reset.
          */
-        Stats::Histogram outstandingWritesHist;
+        statistics::Histogram outstandingWritesHist;
         unsigned int outstandingWriteReqs;
 
         /** Disable flag for transaction histograms. */
         bool disableTransactionHists;
 
         /** Histogram of number of read transactions per time bin */
-        Stats::Histogram readTransHist;
+        statistics::Histogram readTransHist;
         unsigned int readTrans;
 
         /** Histogram of number of timing write transactions per time bin */
-        Stats::Histogram writeTransHist;
+        statistics::Histogram writeTransHist;
         unsigned int writeTrans;
 
         /** Disable flag for address distributions. */
@@ -367,24 +370,25 @@ class CommMonitor : public SimObject
          * Histogram of number of read accesses to addresses over
          * time.
          */
-        Stats::SparseHistogram readAddrDist;
+        statistics::SparseHistogram readAddrDist;
 
         /**
          * Histogram of number of write accesses to addresses over
          * time.
          */
-        Stats::SparseHistogram writeAddrDist;
+        statistics::SparseHistogram writeAddrDist;
 
         /**
          * Create the monitor stats and initialise all the members
          * that are not statistics themselves, but used to control the
          * stats or track values during a sample period.
          */
-        MonitorStats(Stats::Group *parent, const CommMonitorParams &params);
+        MonitorStats(statistics::Group *parent,
+            const CommMonitorParams &params);
 
-        void updateReqStats(const ProbePoints::PacketInfo& pkt, bool is_atomic,
+        void updateReqStats(const probing::PacketInfo& pkt, bool is_atomic,
                             bool expects_response);
-        void updateRespStats(const ProbePoints::PacketInfo& pkt, Tick latency,
+        void updateRespStats(const probing::PacketInfo& pkt, Tick latency,
                              bool is_atomic);
     };
 
@@ -416,12 +420,14 @@ class CommMonitor : public SimObject
      */
 
     /** Successfully forwarded request packet */
-    ProbePoints::PacketUPtr ppPktReq;
+    probing::PacketUPtr ppPktReq;
 
     /** Successfully forwarded response packet */
-    ProbePoints::PacketUPtr ppPktResp;
+    probing::PacketUPtr ppPktResp;
 
     /** @} */
 };
+
+} // namespace gem5
 
 #endif //__MEM_COMM_MONITOR_HH__

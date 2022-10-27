@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2021 Arm Limited
  * Copyright (c) 2019 Metempsy Technology LSC
  * All rights reserved
  *
@@ -40,12 +41,15 @@
 
 
 #include "arch/arm/faults.hh"
-#include "arch/arm/miscregs.hh"
+#include "arch/arm/regs/misc.hh"
 #include "arch/arm/system.hh"
 #include "arch/arm/types.hh"
 #include "arch/arm/utility.hh"
 #include "arch/generic/tlb.hh"
 #include "cpu/thread_context.hh"
+
+namespace gem5
+{
 
 class ThreadContext;
 
@@ -103,7 +107,7 @@ class BrkPoint
     }
 
 
-    inline uint32_t getVMIDfromReg(ThreadContext *tc);
+    vmid_t getVMIDfromReg(ThreadContext *tc, bool vs);
 
   public:
     bool testAddrMatch(ThreadContext *tc, Addr pc, uint8_t bas);
@@ -304,7 +308,7 @@ class SelfDebug
     }
 
     Fault testDebug(ThreadContext *tc, const RequestPtr &req,
-                    BaseTLB::Mode mode);
+                    BaseMMU::Mode mode);
 
   protected:
     Fault testBreakPoints(ThreadContext *tc, Addr vaddr);
@@ -460,5 +464,7 @@ class SelfDebug
     void init(ThreadContext *tc);
 };
 
-}
+} // namespace ArmISA
+} // namespace gem5
+
 #endif

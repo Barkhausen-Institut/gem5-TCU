@@ -42,6 +42,9 @@
 #include <mutex>
 #include <vector>
 
+namespace gem5
+{
+
 class Drainable;
 
 /**
@@ -68,7 +71,8 @@ class Drainable;
  *
  * @ingroup api_drain
  */
-enum class DrainState {
+enum class DrainState
+{
     Running,  /**< Running normally */
     Draining, /**< Draining buffers pending serialization/handover */
     Drained,  /**< Buffers drained, ready for serialization/handover */
@@ -355,5 +359,7 @@ class Drainable
      */
     mutable DrainState _drainState;
 };
+
+} // namespace gem5
 
 #endif

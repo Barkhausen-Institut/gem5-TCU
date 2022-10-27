@@ -2,8 +2,6 @@
  * Copyright (c) 2015-2017 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -45,6 +43,10 @@
 #include "enums/StorageClassType.hh"
 #include "gpu-compute/compute_unit.hh"
 #include "gpu-compute/gpu_exec_context.hh"
+#include "gpu-compute/operand_info.hh"
+
+namespace gem5
+{
 
 class GPUStaticInst;
 
@@ -74,6 +76,43 @@ class AtomicOpCAS : public TypedAtomicOpFunctor<T>
     AtomicOpFunctor* clone () { return new AtomicOpCAS(c, s, computeUnit); }
 };
 
+class RegisterOperandInfo
+{
+  public:
+    RegisterOperandInfo() = delete;
+    RegisterOperandInfo(int op_idx, int num_dwords,
+                        const std::vector<int> &virt_indices,
+                        const std::vector<int> &phys_indices)
+        : opIdx(op_idx), numDWORDs(num_dwords), virtIndices(virt_indices),
+          physIndices(phys_indices)
+    {
+    }
+
+    /**
+     * The number of registers required to store this operand.
+     */
+    int numRegisters() const { return numDWORDs / TheGpuISA::RegSizeDWords; }
+    int operandIdx() const { return opIdx; }
+    /**
+     * We typically only need the first virtual register for the operand
+     * regardless of its size.
+     */
+    int virtIdx(int reg_num=0) const { return virtIndices.at(reg_num); }
+
+  private:
+    /**
+     * Index of this operand within the set of its parent instruction's
+     * operand list.
+     */
+    const int opIdx;
+    /**
+     * Size of this operand in DWORDs.
+     */
+    const int numDWORDs;
+    const std::vector<int> virtIndices;
+    const std::vector<int> physIndices;
+};
+
 class GPUDynInst : public GPUExecContext
 {
   public:
@@ -81,42 +120,50 @@ class GPUDynInst : public GPUExecContext
                uint64_t instSeqNum);
     ~GPUDynInst();
     void execute(GPUDynInstPtr gpuDynInst);
+
+    const std::vector<OperandInfo>& srcVecRegOperands() const;
+    const std::vector<OperandInfo>& dstVecRegOperands() const;
+    const std::vector<OperandInfo>& srcScalarRegOperands() const;
+    const std::vector<OperandInfo>& dstScalarRegOperands() const;
+
     int numSrcRegOperands();
     int numDstRegOperands();
-    int numDstVecOperands();
-    int numSrcVecOperands();
-    int numSrcVecDWORDs();
-    int numDstVecDWORDs();
-    int numOpdDWORDs(int operandIdx);
-    int getNumOperands();
-    bool isVectorRegister(int operandIdx);
-    bool isScalarRegister(int operandIdx);
-    int getRegisterIndex(int operandIdx, GPUDynInstPtr gpuDynInst);
-    int getOperandSize(int operandIdx);
-    bool isDstOperand(int operandIdx);
-    bool isSrcOperand(int operandIdx);
 
-    bool hasDestinationSgpr() const;
+    int numSrcVecRegOperands() const;
+    int numDstVecRegOperands() const;
+    int maxSrcVecRegOperandSize();
+    int numSrcVecDWords();
+    int numDstVecDWords();
+
+    int numSrcScalarRegOperands() const;
+    int numDstScalarRegOperands() const;
+    int maxSrcScalarRegOperandSize();
+    int numSrcScalarDWords();
+    int numDstScalarDWords();
+
+    int maxOperandSize();
+
+    int getNumOperands() const;
+
     bool hasSourceSgpr() const;
-    bool hasDestinationVgpr() const;
+    bool hasDestinationSgpr() const;
     bool hasSourceVgpr() const;
-
-    bool hasSgprRawDependence(GPUDynInstPtr s);
-    bool hasVgprRawDependence(GPUDynInstPtr s);
+    bool hasDestinationVgpr() const;
 
     // returns true if the string "opcodeStr" is found in the
     // opcode of the instruction
     bool isOpcode(const std::string& opcodeStr) const;
     bool isOpcode(const std::string& opcodeStr,
                   const std::string& extStr) const;
-    // returns true if source operand at "index" is a vector register
-    bool srcIsVgpr(int index) const;
 
     const std::string &disassemble() const;
 
     InstSeqNum seqNum() const;
 
-    Enums::StorageClassType executedAs();
+    Addr pc();
+    void pc(Addr _pc);
+
+    enums::StorageClassType executedAs();
 
     // virtual address for scalar memory operations
     Addr scalarAddr;
@@ -186,6 +233,7 @@ class GPUDynInst : public GPUExecContext
     bool isMemSync() const;
     bool isMemRef() const;
     bool isFlat() const;
+    bool isFlatGlobal() const;
     bool isLoad() const;
     bool isStore() const;
 
@@ -199,8 +247,8 @@ class GPUDynInst : public GPUExecContext
     bool writesSCC() const;
     bool readsVCC() const;
     bool writesVCC() const;
-    bool readsEXEC() const;
-    bool writesEXEC() const;
+    bool readsExec() const;
+    bool writesExec() const;
     bool readsMode() const;
     bool writesMode() const;
     bool ignoreExec() const;
@@ -428,9 +476,16 @@ class GPUDynInst : public GPUExecContext
 
     // inst used to save/restore a wavefront context
     bool isSaveRestore;
+
+    bool isSystemReq() { return systemReq; }
+    void setSystemReq() { systemReq = true; }
+
   private:
     GPUStaticInst *_staticInst;
     const InstSeqNum _seqNum;
+    int maxSrcVecRegOpSize;
+    int maxSrcScalarRegOpSize;
+    bool systemReq = false;
 
     // the time the request was started
     Tick accessTime = -1;
@@ -443,5 +498,7 @@ class GPUDynInst : public GPUExecContext
     // to hold the tick when the block arrives at certain hop points
     std::map<Addr, std::vector<Tick>> lineAddressTime;
 };
+
+} // namespace gem5
 
 #endif // __GPU_DYN_INST_HH__

@@ -2,8 +2,6 @@
  * Copyright (c) 2017-2020 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -39,6 +37,9 @@
 #include "base/logging.hh"
 #include "base/random.hh"
 #include "base/trace.hh"
+
+namespace gem5
+{
 
 const int AddressManager::INVALID_VALUE = -1;
 const int AddressManager::INVALID_LOCATION = -1;
@@ -429,3 +430,5 @@ AddressManager::validateAtomicResp(Location loc, Value ret_val)
     assert(loc >= 0 && loc < numAtomicLocs);
     return atomicStructs[loc]->isExpectedValue(ret_val);
 }
+
+} // namespace gem5

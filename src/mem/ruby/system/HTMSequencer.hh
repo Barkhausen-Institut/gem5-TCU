@@ -48,6 +48,12 @@
 #include "mem/ruby/system/Sequencer.hh"
 #include "params/RubyHTMSequencer.hh"
 
+namespace gem5
+{
+
+namespace ruby
+{
+
 class HTMSequencer : public Sequencer
 {
   public:
@@ -62,7 +68,6 @@ class HTMSequencer : public Sequencer
 
     bool empty() const override;
     void print(std::ostream& out) const override;
-    void regStats() override;
     void wakeup() override;
 
   private:
@@ -95,11 +100,11 @@ class HTMSequencer : public Sequencer
     Counter m_htmstart_instruction;
 
     //! Histogram of cycle latencies of HTM transactions
-    Stats::Histogram m_htm_transaction_cycles;
+    statistics::Histogram m_htm_transaction_cycles;
     //! Histogram of instruction lengths of HTM transactions
-    Stats::Histogram m_htm_transaction_instructions;
+    statistics::Histogram m_htm_transaction_instructions;
     //! Causes for HTM transaction aborts
-    Stats::Vector m_htm_transaction_abort_cause;
+    statistics::Vector m_htm_transaction_abort_cause;
 };
 
 inline std::ostream&
@@ -109,5 +114,8 @@ operator<<(std::ostream& out, const HTMSequencer& obj)
     out << std::flush;
     return out;
 }
+
+} // namespace ruby
+} // namespace gem5
 
 #endif // __MEM_RUBY_SYSTEM_HTMSEQUENCER_HH__

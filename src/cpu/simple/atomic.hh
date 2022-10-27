@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2013, 2015, 2018, 2020 ARM Limited
+ * Copyright (c) 2012-2013, 2015, 2018, 2020-2021 ARM Limited
  * All rights reserved.
  *
  * The license below extends only to copyright in the software and shall
@@ -44,14 +44,17 @@
 #include "cpu/simple/base.hh"
 #include "cpu/simple/exec_context.hh"
 #include "mem/request.hh"
-#include "params/AtomicSimpleCPU.hh"
+#include "params/BaseAtomicSimpleCPU.hh"
 #include "sim/probe/probe.hh"
+
+namespace gem5
+{
 
 class AtomicSimpleCPU : public BaseSimpleCPU
 {
   public:
 
-    AtomicSimpleCPU(const AtomicSimpleCPUParams &params);
+    AtomicSimpleCPU(const BaseAtomicSimpleCPUParams &params);
     virtual ~AtomicSimpleCPU();
 
     void init() override;
@@ -89,7 +92,7 @@ class AtomicSimpleCPU : public BaseSimpleCPU
     isCpuDrained() const
     {
         SimpleExecContext &t_info = *threadInfo[curThread];
-        return t_info.thread->microPC() == 0 &&
+        return t_info.thread->pcState().microPC() == 0 &&
             !locked && !t_info.stayAtPC;
     }
 
@@ -221,17 +224,18 @@ class AtomicSimpleCPU : public BaseSimpleCPU
         override;
 
     Fault
-    initiateHtmCmd(Request::Flags flags) override
+    initiateMemMgmtCmd(Request::Flags flags) override
     {
-        panic("initiateHtmCmd() is for timing accesses, and should "
-              "never be called on AtomicSimpleCPU.\n");
+        panic("initiateMemMgmtCmd() is for timing accesses, and "
+              "should never be called on AtomicSimpleCPU.\n");
     }
 
     void
-    htmSendAbortSignal(HtmFailureFaultCause cause) override
+    htmSendAbortSignal(ThreadID tid, uint64_t htm_uid,
+                       HtmFailureFaultCause cause) override
     {
         panic("htmSendAbortSignal() is for timing accesses, and should "
-              "never be called on AtomicSimpleCPU.\n");
+              "never be called on AtomicSimpleCPU.");
     }
 
     Fault writeMem(uint8_t *data, unsigned size,
@@ -250,5 +254,7 @@ class AtomicSimpleCPU : public BaseSimpleCPU
      */
     void printAddr(Addr a);
 };
+
+} // namespace gem5
 
 #endif // __CPU_SIMPLE_ATOMIC_HH__

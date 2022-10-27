@@ -28,16 +28,20 @@
 
 #include "arch/sparc/insts/micro.hh"
 
+namespace gem5
+{
+
 namespace SparcISA
 {
 
 std::string
 SparcMacroInst::generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const
+        Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream response;
     printMnemonic(response, mnemonic);
     return response.str();
 }
 
-}
+} // namespace SparcISA
+} // namespace gem5

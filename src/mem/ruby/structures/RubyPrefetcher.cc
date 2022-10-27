@@ -48,6 +48,12 @@
 #include "mem/ruby/slicc_interface/RubySlicc_ComponentMapping.hh"
 #include "mem/ruby/system/RubySystem.hh"
 
+namespace gem5
+{
+
+namespace ruby
+{
+
 RubyPrefetcher::RubyPrefetcher(const Params &p)
     : SimObject(p), m_num_streams(p.num_streams),
     m_array(p.num_streams), m_train_misses(p.train_misses),
@@ -56,7 +62,7 @@ RubyPrefetcher::RubyPrefetcher(const Params &p)
     negativeFilter(p.unit_filter),
     nonUnitFilter(p.nonunit_filter),
     m_prefetch_cross_pages(p.cross_page),
-    m_page_shift(p.sys->getPageShift()),
+    pageShift(p.page_shift),
     rubyPrefetcherStats(this)
 {
     assert(m_num_streams > 0);
@@ -64,8 +70,8 @@ RubyPrefetcher::RubyPrefetcher(const Params &p)
 }
 
 RubyPrefetcher::
-RubyPrefetcherStats::RubyPrefetcherStats(Stats::Group *parent)
-    : Stats::Group(parent, "RubyPrefetcher"),
+RubyPrefetcherStats::RubyPrefetcherStats(statistics::Group *parent)
+    : statistics::Group(parent, "RubyPrefetcher"),
       ADD_STAT(numMissObserved, "Number of misses observed"),
       ADD_STAT(numAllocatedStreams, "Number of streams allocated for "
                                     "prefetching"),
@@ -372,5 +378,8 @@ RubyPrefetcher::print(std::ostream& out) const
 Addr
 RubyPrefetcher::pageAddress(Addr addr) const
 {
-    return mbits<Addr>(addr, 63, m_page_shift);
+    return mbits<Addr>(addr, 63, pageShift);
 }
+
+} // namespace ruby
+} // namespace gem5

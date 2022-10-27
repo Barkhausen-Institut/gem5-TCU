@@ -32,10 +32,15 @@
 #include <cstdint>
 #include <string>
 
+#include "base/compiler.hh"
 #include "base/loader/image_file_data.hh"
 #include "base/loader/memory_image.hh"
 
-namespace Loader
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Loader, loader);
+namespace loader
 {
 
 class ImageFile
@@ -49,6 +54,7 @@ class ImageFile
     virtual MemoryImage buildImage() const = 0;
 };
 
-} // namespace Loader
+} // namespace loader
+} // namespace gem5
 
 #endif // __BASE_LOADER_IMAGE_FILE_HH__

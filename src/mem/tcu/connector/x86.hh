@@ -35,6 +35,11 @@
 #include "mem/tcu/connector/core.hh"
 #include "sim/system.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 class X86Connector : public CoreConnector
 {
   private:
@@ -73,5 +78,8 @@ class X86Connector : public CoreConnector
 
     IrqMasterPort irqPort;
 };
+
+}
+}
 
 #endif // __MEM_TCU_X86_CONNECTOR__

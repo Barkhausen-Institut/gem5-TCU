@@ -33,6 +33,11 @@
 
 #include "mem/tcu/tcu.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 class TcuIf {
 public:
     static Addr getRegAddr(PrivReg reg);
@@ -62,5 +67,8 @@ private:
     RequestorID requestorId;
     unsigned int id;
 };
+
+}
+}
 
 #endif

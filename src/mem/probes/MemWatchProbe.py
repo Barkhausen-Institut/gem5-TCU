@@ -33,5 +33,6 @@ from m5.objects.BaseMemProbe import BaseMemProbe
 class MemWatchProbe(BaseMemProbe):
     type = 'MemWatchProbe'
     cxx_header = "mem/probes/mem_watch.hh"
+    cxx_class = 'gem5::MemWatchProbe'
 
     ranges = VectorParam.AddrRange([], "The address ranges to watch")

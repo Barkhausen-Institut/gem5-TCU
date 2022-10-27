@@ -40,11 +40,13 @@ from m5.SimObject import SimObject
 
 from m5.objects.Device import PioDevice, BasicPioDevice
 from m5.objects.Platform import Platform
+from m5.objects.IntPin import IntSourcePin
 
 class BaseGic(PioDevice):
     type = 'BaseGic'
     abstract = True
     cxx_header = "dev/arm/base_gic.hh"
+    cxx_class = 'gem5::BaseGic'
 
     # Used for DTB autogeneration
     _state = FdtState(addr_cells=0, interrupt_cells=3)
@@ -95,7 +97,7 @@ class ArmInterruptType(ScopedEnum):
 class ArmInterruptPin(SimObject):
     type = 'ArmInterruptPin'
     cxx_header = "dev/arm/base_gic.hh"
-    cxx_class = "ArmInterruptPinGen"
+    cxx_class = "gem5::ArmInterruptPinGen"
     abstract = True
 
     platform = Param.Platform(Parent.any, "Platform with interrupt controller")
@@ -106,7 +108,7 @@ class ArmInterruptPin(SimObject):
 class ArmSPI(ArmInterruptPin):
     type = 'ArmSPI'
     cxx_header = "dev/arm/base_gic.hh"
-    cxx_class = "ArmSPIGen"
+    cxx_class = "gem5::ArmSPIGen"
 
     _LINUX_ID = 0
 
@@ -123,7 +125,7 @@ class ArmSPI(ArmInterruptPin):
 class ArmPPI(ArmInterruptPin):
     type = 'ArmPPI'
     cxx_header = "dev/arm/base_gic.hh"
-    cxx_class = "ArmPPIGen"
+    cxx_class = "gem5::ArmPPIGen"
 
     _LINUX_ID = 1
 
@@ -137,9 +139,17 @@ class ArmPPI(ArmInterruptPin):
         return gic.interruptCells(
             self._LINUX_ID, self.num - 16, int(self.int_type.getValue()))
 
+class ArmSigInterruptPin(ArmInterruptPin):
+    type = 'ArmSigInterruptPin'
+    cxx_header = "dev/arm/base_gic.hh"
+    cxx_class = "gem5::ArmSigInterruptPinGen"
+
+    irq = IntSourcePin('Interrupt pin')
+
 class GicV2(BaseGic):
     type = 'GicV2'
     cxx_header = "dev/arm/gic_v2.hh"
+    cxx_class = 'gem5::GicV2'
 
     dist_addr = Param.Addr("Address for distributor")
     cpu_addr = Param.Addr("Address for cpu")
@@ -166,6 +176,7 @@ class Gic400(GicV2):
 class Gicv2mFrame(SimObject):
     type = 'Gicv2mFrame'
     cxx_header = "dev/arm/gic_v2m.hh"
+    cxx_class = 'gem5::Gicv2mFrame'
     spi_base = Param.UInt32(0x0, "Frame SPI base number");
     spi_len = Param.UInt32(0x0, "Frame SPI total number");
     addr = Param.Addr("Address for frame PIO")
@@ -173,6 +184,7 @@ class Gicv2mFrame(SimObject):
 class Gicv2m(PioDevice):
     type = 'Gicv2m'
     cxx_header = "dev/arm/gic_v2m.hh"
+    cxx_class = 'gem5::Gicv2m'
 
     pio_delay = Param.Latency('10ns', "Delay for PIO r/w")
     gic = Param.BaseGic(Parent.any, "Gic on which to trigger interrupts")
@@ -181,6 +193,7 @@ class Gicv2m(PioDevice):
 class VGic(PioDevice):
     type = 'VGic'
     cxx_header = "dev/arm/vgic.hh"
+    cxx_class = 'gem5::VGic'
     gic = Param.BaseGic(Parent.any, "Gic to use for interrupting")
     platform = Param.Platform(Parent.any, "Platform this device is part of.")
     vcpu_addr = Param.Addr(0, "Address for vcpu interfaces")
@@ -224,6 +237,7 @@ class VGic(PioDevice):
 class Gicv3Its(BasicPioDevice):
     type = 'Gicv3Its'
     cxx_header = "dev/arm/gic_v3_its.hh"
+    cxx_class = 'gem5::Gicv3Its'
 
     dma = RequestPort("DMA port")
     pio_size = Param.Unsigned(0x20000, "Gicv3Its pio size")
@@ -245,6 +259,7 @@ class Gicv3Its(BasicPioDevice):
 class Gicv3(BaseGic):
     type = 'Gicv3'
     cxx_header = "dev/arm/gic_v3.hh"
+    cxx_class = 'gem5::Gicv3'
 
     # Used for DTB autogeneration
     _state = FdtState(addr_cells=2, size_cells=2, interrupt_cells=3)
@@ -268,7 +283,7 @@ class Gicv3(BaseGic):
         "Maximum number of PE. This is affecting the maximum number of "
         "redistributors")
 
-    gicv4 = Param.Bool(True, "GICv4 extension available")
+    gicv4 = Param.Bool(False, "GIC is GICv4 compatible")
 
     def interruptCells(self, int_type, int_num, int_trigger, partition=None):
         """

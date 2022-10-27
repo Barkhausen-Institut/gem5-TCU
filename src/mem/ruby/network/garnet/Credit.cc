@@ -32,12 +32,21 @@
 #include "base/trace.hh"
 #include "debug/RubyNetwork.hh"
 
+namespace gem5
+{
+
+namespace ruby
+{
+
+namespace garnet
+{
+
 // Credit Signal for buffers inside VC
 // Carries m_vc (inherits from flit.hh)
 // and m_is_free_signal (whether VC is free or not)
 
 Credit::Credit(int vc, bool is_free_signal, Tick curTime)
-    : flit(0, vc, 0, RouteInfo(), 0, nullptr, 0, 0, curTime)
+    : flit(0, 0, vc, 0, RouteInfo(), 0, nullptr, 0, 0, curTime)
 {
     m_is_free_signal = is_free_signal;
     m_type = CREDIT_;
@@ -80,5 +89,6 @@ Credit::print(std::ostream& out) const
     out << "]";
 }
 
-
-
+} // namespace garnet
+} // namespace ruby
+} // namespace gem5

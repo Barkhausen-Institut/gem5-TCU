@@ -48,7 +48,6 @@ class MockDB(ArtifactDB):
         self.hashes = {}
 
     def put(self, key, metadata):
-        print("putting an entry in the mock database")
         self.db[key] = metadata
         self.hashes[metadata["hash"]] = key
 
@@ -92,7 +91,7 @@ class TestGit(unittest.TestCase):
     def test_origin(self):
         git = artifact.artifact.getGit(Path("."))
         self.assertTrue(
-            git["origin"].endswith("gem5art"), "Origin should end with gem5art"
+            git["origin"].endswith("gem5"), "Origin should end with gem5art"
         )
 
 

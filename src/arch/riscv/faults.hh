@@ -31,17 +31,23 @@
 #ifndef __ARCH_RISCV_FAULTS_HH__
 #define __ARCH_RISCV_FAULTS_HH__
 
+#include <cstdint>
 #include <string>
 
 #include "arch/riscv/isa.hh"
-#include "arch/riscv/registers.hh"
-#include "cpu/thread_context.hh"
+#include "cpu/null_static_inst.hh"
 #include "sim/faults.hh"
+
+namespace gem5
+{
+
+class ThreadContext;
 
 namespace RiscvISA
 {
 
-enum FloatException : uint64_t {
+enum FloatException : uint64_t
+{
     FloatInexact = 0x1,
     FloatUnderflow = 0x2,
     FloatOverflow = 0x4,
@@ -58,7 +64,8 @@ enum FloatException : uint64_t {
  * For more details on exception causes, see Chapter 3.1.20 of the RISC-V
  * privileged specification v 1.10. Codes are enumerated in Table 3.6.
  */
-enum ExceptionCode : uint64_t {
+enum ExceptionCode : uint64_t
+{
     INST_ADDR_MISALIGNED = 0,
     INST_ACCESS = 1,
     INST_ILLEGAL = 2,
@@ -89,19 +96,30 @@ enum ExceptionCode : uint64_t {
     NumInterruptTypes
 };
 
+enum class FaultType
+{
+    INTERRUPT,
+    NON_MASKABLE_INTERRUPT,
+    OTHERS,
+};
+
 class RiscvFault : public FaultBase
 {
   protected:
     const FaultName _name;
-    const bool _interrupt;
+    const FaultType _fault_type;
     ExceptionCode _code;
 
-    RiscvFault(FaultName n, bool i, ExceptionCode c)
-        : _name(n), _interrupt(i), _code(c)
+    RiscvFault(FaultName n, FaultType ft, ExceptionCode c)
+        : _name(n), _fault_type(ft), _code(c)
     {}
 
     FaultName name() const override { return _name; }
-    bool isInterrupt() const { return _interrupt; }
+    bool isInterrupt() const { return _fault_type == FaultType::INTERRUPT; }
+    bool isNonMaskableInterrupt() const
+    {
+        return _fault_type == FaultType::NON_MASKABLE_INTERRUPT;
+    }
     ExceptionCode exception() const { return _code; }
     virtual RegVal trap_value() const { return 0; }
 
@@ -119,14 +137,26 @@ class Reset : public FaultBase
     FaultName name() const override { return _name; }
 
     void invoke(ThreadContext *tc, const StaticInstPtr &inst =
-        StaticInst::nullStaticInstPtr) override;
+        nullStaticInstPtr) override;
 };
 
 class InterruptFault : public RiscvFault
 {
   public:
-    InterruptFault(ExceptionCode c) : RiscvFault("interrupt", true, c) {}
+    InterruptFault(ExceptionCode c)
+        : RiscvFault("interrupt", FaultType::INTERRUPT, c)
+    {}
     InterruptFault(int c) : InterruptFault(static_cast<ExceptionCode>(c)) {}
+};
+
+class NonMaskableInterruptFault : public RiscvFault
+{
+  public:
+    NonMaskableInterruptFault()
+        : RiscvFault("non_maskable_interrupt",
+                     FaultType::NON_MASKABLE_INTERRUPT,
+                     static_cast<ExceptionCode>(0))
+    {}
 };
 
 class InstFault : public RiscvFault
@@ -136,7 +166,7 @@ class InstFault : public RiscvFault
 
   public:
     InstFault(FaultName n, const ExtMachInst inst)
-        : RiscvFault(n, false, INST_ILLEGAL), _inst(inst)
+        : RiscvFault(n, FaultType::OTHERS, INST_ILLEGAL), _inst(inst)
     {}
 
     RegVal trap_value() const override { return _inst; }
@@ -159,7 +189,8 @@ class IllegalInstFault : public InstFault
 
   public:
     IllegalInstFault(std::string r, const ExtMachInst inst)
-        : InstFault("Illegal instruction", inst)
+        : InstFault("Illegal instruction", inst),
+          reason(r)
     {}
 
     void invokeSE(ThreadContext *tc, const StaticInstPtr &inst) override;
@@ -200,7 +231,7 @@ class AddressFault : public RiscvFault
 
   public:
     AddressFault(const Addr addr, ExceptionCode code)
-        : RiscvFault("Address", false, code), _addr(addr)
+        : RiscvFault("Address", FaultType::OTHERS, code), _addr(addr)
     {}
 
     RegVal trap_value() const override { return _addr; }
@@ -212,8 +243,9 @@ class BreakpointFault : public RiscvFault
     const PCState pcState;
 
   public:
-    BreakpointFault(const PCState &pc)
-        : RiscvFault("Breakpoint", false, BREAKPOINT), pcState(pc)
+    BreakpointFault(const PCStateBase &pc)
+        : RiscvFault("Breakpoint", FaultType::OTHERS, BREAKPOINT),
+        pcState(pc.as<PCState>())
     {}
 
     RegVal trap_value() const override { return pcState.pc(); }
@@ -224,7 +256,7 @@ class SyscallFault : public RiscvFault
 {
   public:
     SyscallFault(PrivilegeMode prv)
-        : RiscvFault("System call", false, ECALL_USER)
+        : RiscvFault("System call", FaultType::OTHERS, ECALL_USER)
     {
         switch (prv) {
           case PRV_U:
@@ -246,5 +278,6 @@ class SyscallFault : public RiscvFault
 };
 
 } // namespace RiscvISA
+} // namespace gem5
 
 #endif // __ARCH_RISCV_FAULTS_HH__

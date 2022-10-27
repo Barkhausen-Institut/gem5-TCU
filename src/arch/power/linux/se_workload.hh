@@ -31,9 +31,13 @@
 #define __ARCH_POWER_LINUX_SE_WORKLOAD_HH__
 
 #include "arch/power/linux/linux.hh"
+#include "arch/power/page_size.hh"
 #include "arch/power/se_workload.hh"
 #include "params/PowerEmuLinux.hh"
 #include "sim/syscall_desc.hh"
+
+namespace gem5
+{
 
 namespace PowerISA
 {
@@ -47,11 +51,14 @@ class EmuLinux : public SEWorkload
   public:
     using Params = PowerEmuLinuxParams;
 
-    EmuLinux(const Params &p) : SEWorkload(p) {}
+    EmuLinux(const Params &p) : SEWorkload(p, PageShift) {}
+
+    ByteOrder byteOrder() const override { return ByteOrder::big; }
 
     void syscall(ThreadContext *tc) override;
 };
 
 } // namespace PowerISA
+} // namespace gem5
 
 #endif // __ARCH_POWER_LINUX_SE_WORKLOAD_HH__

@@ -26,7 +26,6 @@
  */
 
 #include "base/types.hh"
-#include "sim/core.hh"
 #include "sim/eventq.hh"
 #include "systemc/core/kernel.hh"
 #include "systemc/core/sc_main_fiber.hh"
@@ -60,8 +59,8 @@ sc_argv()
 void
 sc_start()
 {
-    Tick now = ::sc_gem5::scheduler.getCurTick();
-    sc_start(sc_time::from_value(MaxTick - now), SC_EXIT_ON_STARVATION);
+    gem5::Tick now = ::sc_gem5::scheduler.getCurTick();
+    sc_start(sc_time::from_value(gem5::MaxTick - now), SC_EXIT_ON_STARVATION);
 }
 
 void
@@ -77,8 +76,8 @@ sc_start(const sc_time &time, sc_starvation_policy p)
     if (time.value() == 0) {
         ::sc_gem5::scheduler.oneCycle();
     } else {
-        Tick now = ::sc_gem5::scheduler.getCurTick();
-        if (MaxTick - now < time.value())
+        gem5::Tick now = ::sc_gem5::scheduler.getCurTick();
+        if (gem5::MaxTick - now < time.value())
             SC_REPORT_ERROR(SC_ID_SIMULATION_TIME_OVERFLOW_, "");
         ::sc_gem5::scheduler.start(now + time.value(), p == SC_RUN_TO_TIME);
     }
@@ -228,7 +227,7 @@ operator << (std::ostream &os, sc_status s)
             }
             os << ")";
         } else {
-            ccprintf(os, "%#x", s);
+            gem5::ccprintf(os, "%#x", s);
         }
     }
 

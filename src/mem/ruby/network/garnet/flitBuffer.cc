@@ -31,6 +31,15 @@
 
 #include "mem/ruby/network/garnet/flitBuffer.hh"
 
+namespace gem5
+{
+
+namespace ruby
+{
+
+namespace garnet
+{
+
 flitBuffer::flitBuffer()
 {
     max_size = INFINITE_;
@@ -89,3 +98,7 @@ flitBuffer::functionalWrite(Packet *pkt)
 
     return num_functional_writes;
 }
+
+} // namespace garnet
+} // namespace ruby
+} // namespace gem5

@@ -45,9 +45,13 @@
 #include <iostream>
 #include <memory>
 
+#include "base/compiler.hh"
 #include "base/imgwriter.hh"
 #include "params/VncInput.hh"
 #include "sim/sim_object.hh"
+
+namespace gem5
+{
 
 class OutputDirectory;
 
@@ -87,7 +91,8 @@ class VncInput : public SimObject
   public:
 
     /** Client -> Server message IDs */
-    enum ClientMessages {
+    enum ClientMessages
+    {
         ClientSetPixelFormat    = 0,
         ClientSetEncodings      = 2,
         ClientFrameBufferUpdate = 3,
@@ -96,7 +101,8 @@ class VncInput : public SimObject
         ClientCutText           = 6
     };
 
-    struct M5_ATTR_PACKED PixelFormat {
+    struct GEM5_PACKED PixelFormat
+    {
         uint8_t bpp;
         uint8_t depth;
         uint8_t bigendian;
@@ -110,19 +116,22 @@ class VncInput : public SimObject
         uint8_t padding[3];
     };
 
-    struct M5_ATTR_PACKED PixelFormatMessage {
+    struct GEM5_PACKED PixelFormatMessage
+    {
         uint8_t type;
         uint8_t padding[3];
         PixelFormat px;
     };
 
-    struct M5_ATTR_PACKED PixelEncodingsMessage {
+    struct GEM5_PACKED PixelEncodingsMessage
+    {
         uint8_t type;
         uint8_t padding;
         uint16_t num_encodings;
     };
 
-    struct M5_ATTR_PACKED FrameBufferUpdateReq {
+    struct GEM5_PACKED FrameBufferUpdateReq
+    {
         uint8_t type;
         uint8_t incremental;
         uint16_t x;
@@ -131,21 +140,24 @@ class VncInput : public SimObject
         uint16_t height;
     };
 
-    struct M5_ATTR_PACKED KeyEventMessage {
+    struct GEM5_PACKED KeyEventMessage
+    {
         uint8_t type;
         uint8_t down_flag;
         uint8_t padding[2];
         uint32_t key;
     };
 
-    struct M5_ATTR_PACKED PointerEventMessage {
+    struct GEM5_PACKED PointerEventMessage
+    {
         uint8_t type;
         uint8_t button_mask;
         uint16_t x;
         uint16_t y;
     };
 
-    struct M5_ATTR_PACKED ClientCutTextMessage {
+    struct GEM5_PACKED ClientCutTextMessage
+    {
         uint8_t type;
         uint8_t padding[3];
         uint32_t length;
@@ -227,9 +239,12 @@ class VncInput : public SimObject
     std::unique_ptr<ImgWriter> captureImage;
 
     /** image format */
-    Enums::ImageFormat imgFormat;
+    enums::ImageFormat imgFormat;
 
     /** Captures the current frame buffer to a file */
     void captureFrameBuffer();
 };
+
+} // namespace gem5
+
 #endif

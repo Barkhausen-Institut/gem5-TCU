@@ -41,6 +41,9 @@
 #include "base/intmath.hh"
 #include "params/MemFootprintProbe.hh"
 
+namespace gem5
+{
+
 MemFootprintProbe::MemFootprintProbe(const MemFootprintProbeParams &p)
     : BaseMemProbe(p),
       cacheLineSizeLg2(floorLog2(p.system->cacheLineSize())),
@@ -60,20 +63,21 @@ MemFootprintProbe::MemFootprintProbe(const MemFootprintProbeParams &p)
              "MemFootprintProbe expects page size parameter is power of 2");
 }
 
-MemFootprintProbe::
-MemFootprintProbeStats::MemFootprintProbeStats(MemFootprintProbe *parent)
-    : Stats::Group(parent),
-      ADD_STAT(cacheLine, UNIT_COUNT,
+MemFootprintProbe::MemFootprintProbeStats::MemFootprintProbeStats(
+    MemFootprintProbe *parent)
+    : statistics::Group(parent),
+      ADD_STAT(cacheLine, statistics::units::Count::get(),
                "Memory footprint at cache line granularity"),
-      ADD_STAT(cacheLineTotal, UNIT_COUNT,
+      ADD_STAT(cacheLineTotal, statistics::units::Count::get(),
                "Total memory footprint at cache line granularity since "
                "simulation begin"),
-      ADD_STAT(page, UNIT_COUNT, "Memory footprint at page granularity"),
-      ADD_STAT(pageTotal, UNIT_COUNT,
+      ADD_STAT(page, statistics::units::Count::get(),
+               "Memory footprint at page granularity"),
+      ADD_STAT(pageTotal, statistics::units::Count::get(),
                "Total memory footprint at page granularity since simulation "
                "begin")
 {
-    using namespace Stats;
+    using namespace statistics;
     // clang-format off
     cacheLine.flags(nozero | nonan);
     cacheLineTotal.flags(nozero | nonan);
@@ -91,7 +95,7 @@ MemFootprintProbe::insertAddr(Addr addr, AddrSet *set, uint64_t limit)
 }
 
 void
-MemFootprintProbe::handleRequest(const ProbePoints::PacketInfo &pi)
+MemFootprintProbe::handleRequest(const probing::PacketInfo &pi)
 {
     if (!pi.cmd.isRequest() || !system->isMemAddr(pi.addr))
         return;
@@ -118,3 +122,5 @@ MemFootprintProbe::statReset()
     cacheLines.clear();
     pages.clear();
 }
+
+} // namespace gem5

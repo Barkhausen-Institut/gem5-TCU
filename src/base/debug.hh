@@ -43,11 +43,19 @@
 #define __BASE_DEBUG_HH__
 
 #include <initializer_list>
+#include <iostream>
 #include <map>
 #include <string>
 #include <vector>
 
-namespace Debug {
+#include "base/compiler.hh"
+
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Debug, debug);
+namespace debug
+{
 
 void breakpoint();
 
@@ -55,6 +63,8 @@ class Flag
 {
   protected:
     static bool _globalEnable; // whether debug tracings are enabled
+
+    bool _tracing = false; // tracing is enabled and flag is on
 
     const char *_name;
     const char *_desc;
@@ -68,11 +78,12 @@ class Flag
     std::string name() const { return _name; }
     std::string desc() const { return _desc; }
 
+    bool tracing() const { return TRACING_ON && _tracing; }
+
     virtual void enable() = 0;
     virtual void disable() = 0;
-    virtual bool enabled() const = 0;
 
-    operator bool() const { return enabled(); }
+    operator bool() const { return tracing(); }
 
     static void globalEnable();
     static void globalDisable();
@@ -84,17 +95,12 @@ class SimpleFlag : public Flag
     /** Whether this flag changes debug formatting. */
     const bool _isFormat = false;
 
-    bool _tracing = false; // tracing is enabled and flag is on
     bool _enabled = false; // flag enablement status
 
     void sync() override { _tracing = _globalEnable && _enabled; }
 
   public:
-    SimpleFlag(const char *name, const char *desc, bool is_format=false)
-      : Flag(name, desc), _isFormat(is_format)
-    {}
-
-    bool enabled() const override { return _tracing; }
+    SimpleFlag(const char *name, const char *desc, bool is_format=false);
 
     void enable() override  { _enabled = true;  sync(); }
     void disable() override { _enabled = false; sync(); }
@@ -126,7 +132,20 @@ class CompoundFlag : public Flag
 
     void enable() override;
     void disable() override;
-    bool enabled() const override;
+};
+
+class AllFlagsFlag : public CompoundFlag
+{
+  protected:
+    static int _version;
+
+  public:
+    AllFlagsFlag();
+
+    void add(SimpleFlag *flag);
+
+    static AllFlagsFlag &instance();
+    static int version() { return _version; }
 };
 
 typedef std::map<std::string, Flag *> FlagsMap;
@@ -136,13 +155,13 @@ Flag *findFlag(const std::string &name);
 
 bool changeFlag(const char *s, bool value);
 
-} // namespace Debug
+} // namespace debug
 
 void setDebugFlag(const char *string);
 
 void clearDebugFlag(const char *string);
 
-void dumpDebugFlags();
+void dumpDebugFlags(std::ostream &os=std::cout);
 
 /**
  * \def DTRACE(x)
@@ -150,11 +169,10 @@ void dumpDebugFlags();
  * @ingroup api_trace
  * @{
  */
-#if TRACING_ON
-#   define DTRACE(x) (Debug::x)
-#else // !TRACING_ON
-#   define DTRACE(x) (false)
-#endif  // TRACING_ON
+#define DTRACE(x) GEM5_DEPRECATED_MACRO(DTRACE, debug::x, \
+        "Replace DTRACE(x) with debug::x.")
 /** @} */ // end of api_trace
+
+} // namespace gem5
 
 #endif // __BASE_DEBUG_HH__

@@ -37,6 +37,11 @@
 #include "mem/tcu/noc_addr.hh"
 #include "sim/system.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 BaseTcu::TcuMasterPort::TcuMasterPort(const std::string& _name, BaseTcu& _tcu)
   : QueuedRequestPort(_name, &_tcu, reqQueue, snoopRespQueue),
     tcu(_tcu),
@@ -492,4 +497,7 @@ BaseTcu::printNocRequest(PacketPtr pkt, const char *type)
              pkt->cmd.toString(),
              pkt->getAddr(),
              pkt->getSize());
+}
+
+}
 }

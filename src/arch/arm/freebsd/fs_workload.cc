@@ -32,7 +32,6 @@
 
 #include "arch/arm/freebsd/fs_workload.hh"
 
-#include "arch/arm/isa_traits.hh"
 #include "arch/arm/utility.hh"
 #include "arch/generic/freebsd/threadinfo.hh"
 #include "base/loader/dtb_file.hh"
@@ -46,7 +45,10 @@
 #include "mem/physical.hh"
 #include "sim/stat_control.hh"
 
-using namespace FreeBSD;
+namespace gem5
+{
+
+using namespace free_bsd;
 
 namespace ArmISA
 {
@@ -82,7 +84,7 @@ FsFreebsd::initState()
     if (params().early_kernel_symbols) {
         auto phys_globals = kernelObj->symtab().globals()->mask(_loadAddrMask);
         kernelSymtab.insert(*phys_globals);
-        Loader::debugSymbolTable.insert(*phys_globals);
+        loader::debugSymbolTable.insert(*phys_globals);
     }
 
     // Check if the kernel image has a symbol that tells us it supports
@@ -96,7 +98,7 @@ FsFreebsd::initState()
     inform("Loading DTB file: %s at address %#x\n", params().dtb_filename,
             params().dtb_addr);
 
-    auto *dtb_file = new ::Loader::DtbFile(params().dtb_filename);
+    auto *dtb_file = new loader::DtbFile(params().dtb_filename);
 
     warn_if(!dtb_file->addBootCmdLine(commandLine.c_str(), commandLine.size()),
             "Couldn't append bootargs to DTB file: %s",
@@ -104,7 +106,7 @@ FsFreebsd::initState()
 
     Addr ra = dtb_file->findReleaseAddr();
     if (ra)
-        bootReleaseAddr = ra & ~ULL(0x7F);
+        bootReleaseAddr = ra & ~0x7FULL;
 
     dtb_file->buildImage().
         offset(params().dtb_addr).
@@ -113,9 +115,9 @@ FsFreebsd::initState()
 
     // Kernel boot requirements to set up r0, r1 and r2 in ARMv7
     for (auto *tc: system->threads) {
-        tc->setIntReg(0, 0);
-        tc->setIntReg(1, params().machine_type);
-        tc->setIntReg(2, params().dtb_addr);
+        tc->setReg(int_reg::R0, (RegVal)0);
+        tc->setReg(int_reg::R1, params().machine_type);
+        tc->setReg(int_reg::R2, params().dtb_addr);
     }
 }
 
@@ -125,3 +127,4 @@ FsFreebsd::~FsFreebsd()
 }
 
 } // namespace ArmISA
+} // namespace gem5

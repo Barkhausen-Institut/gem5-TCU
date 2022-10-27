@@ -33,22 +33,29 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Author: Matteo Andreozzi
  */
 
 #ifndef __MEM_QOS_Q_POLICY_HH__
 #define __MEM_QOS_Q_POLICY_HH__
 
 #include <deque>
+#include <list>
 #include <unordered_set>
 
+#include "base/compiler.hh"
 #include "mem/packet.hh"
+#include "mem/qos/mem_ctrl.hh"
 #include "params/QoSMemCtrl.hh"
 
-namespace QoS {
+namespace gem5
+{
 
-class MemCtrl;
+namespace memory
+{
+
+GEM5_DEPRECATED_NAMESPACE(QoS, qos);
+namespace qos
+{
 
 /**
  * QoS Queue Policy
@@ -67,7 +74,7 @@ class QueuePolicy
      * QueuePolicy object.  If no particular QueuePolicy has been specified in
      * the QoSMemCtrlParams, the method will default to a LIFO queue policy.
      *
-     * @param p QoS::MemCtrl parameter variable
+     * @param p qos::MemCtrl parameter variable
      * @return Pointer to the QueuePolicy
      */
     static QueuePolicy* create(const QoSMemCtrlParams &p);
@@ -185,6 +192,8 @@ class LrgQueuePolicy : public QueuePolicy
     std::list<RequestorID> toServe;
 };
 
-} // namespace QoS
+} // namespace qos
+} // namespace memory
+} // namespace gem5
 
 #endif /* __MEM_QOS_Q_POLICY_HH__ */

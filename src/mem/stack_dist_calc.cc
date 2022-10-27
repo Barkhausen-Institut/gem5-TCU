@@ -39,8 +39,12 @@
 
 #include "base/chunk_generator.hh"
 #include "base/intmath.hh"
+#include "base/logging.hh"
 #include "base/trace.hh"
 #include "debug/StackDist.hh"
+
+namespace gem5
+{
 
 StackDistCalc::StackDistCalc(bool verify_stack)
     : index(0),
@@ -594,3 +598,5 @@ StackDistCalc::printStack(int n) const
         }
     }
 }
+
+} // namespace gem5

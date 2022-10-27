@@ -43,24 +43,31 @@
 #include "sim/process.hh"
 #include "sim/system.hh"
 
+namespace gem5
+{
+
 SETranslatingPortProxy::SETranslatingPortProxy(
         ThreadContext *tc, AllocType alloc, Request::Flags _flags) :
     TranslatingPortProxy(tc, _flags), allocating(alloc)
 {}
 
 bool
-SETranslatingPortProxy::fixupAddr(Addr addr, BaseTLB::Mode mode) const
+SETranslatingPortProxy::fixupRange(const TranslationGen::Range &range,
+        BaseMMU::Mode mode) const
 {
     auto *process = _tc->getProcessPtr();
 
-    if (mode == BaseTLB::Write) {
+    if (mode == BaseMMU::Write) {
         if (allocating == Always) {
-            process->allocateMem(roundDown(addr, pageBytes), pageBytes);
+            process->allocateMem(range.vaddr, range.size);
             return true;
-        } else if (allocating == NextPage && process->fixupFault(addr)) {
+        } else if (allocating == NextPage &&
+                process->fixupFault(range.vaddr)) {
             // We've accessed the next page on the stack.
             return true;
         }
     }
     return false;
 }
+
+} // namespace gem5

@@ -57,8 +57,12 @@ Process *newCThreadProcess(const char *name, ProcessFuncWrapper *func);
 
 } // namespace sc_gem5
 
-// Gem5 prototype
+namespace gem5
+{
+
 class Port;
+
+} // namespace gem5
 
 namespace sc_core
 {
@@ -98,7 +102,7 @@ class sc_module : public sc_object
 {
   public:
     // Gem5 specific extensions
-    virtual ::Port &gem5_getPort(const std::string &if_name, int idx=-1);
+    virtual gem5::Port &gem5_getPort(const std::string &if_name, int idx=-1);
 
   public:
     friend class ::sc_gem5::Kernel;

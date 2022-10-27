@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019 The Regents of the University of California
- * Copyright (c) 2018-2019 ARM Limited
+ * Copyright (c) 2018-2019, 2021 Arm Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -36,12 +36,17 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include <cmath>
 
 #include "base/addr_range.hh"
 #include "base/bitfield.hh"
+
+using namespace gem5;
+
+using testing::ElementsAre;
 
 TEST(AddrRangeTest, ValidRange)
 {
@@ -78,9 +83,9 @@ TEST(AddrRangeTest, EmptyRange)
     EXPECT_FALSE(r.interleaved());
 
     /*
-     * With no masks, "stripes()" returns ULL(1).
+     * With no masks, "stripes()" returns 1ULL.
      */
-    EXPECT_EQ(ULL(1), r.stripes());
+    EXPECT_EQ(1ULL, r.stripes());
     EXPECT_EQ("[0:0]", r.to_string());
 }
 
@@ -93,7 +98,7 @@ TEST(AddrRangeTest, RangeSizeOfOne)
     EXPECT_EQ(1, r.size());
     EXPECT_EQ(1, r.granularity());
     EXPECT_FALSE(r.interleaved());
-    EXPECT_EQ(ULL(1), r.stripes());
+    EXPECT_EQ(1ULL, r.stripes());
     EXPECT_EQ("[0:0x1]", r.to_string());
 }
 
@@ -106,7 +111,7 @@ TEST(AddrRangeTest, Range16Bit)
     EXPECT_EQ(0x0FFF, r.size());
     EXPECT_EQ(0x0FFF, r.granularity());
     EXPECT_FALSE(r.interleaved());
-    EXPECT_EQ(ULL(1), r.stripes());
+    EXPECT_EQ(1ULL, r.stripes());
     EXPECT_EQ("[0xf000:0xffff]", r.to_string());
 }
 
@@ -380,7 +385,7 @@ TEST(AddrRangeTest, LsbInterleavingMask)
      */
     EXPECT_EQ(1, r.granularity());
     EXPECT_TRUE(r.interleaved());
-    EXPECT_EQ(ULL(2), r.stripes());
+    EXPECT_EQ(2ULL, r.stripes());
     EXPECT_EQ("[0:0xff] a[0]^\b=1", r.to_string());
 }
 
@@ -403,7 +408,7 @@ TEST(AddrRangeTest, TwoInterleavingMasks)
 
     EXPECT_EQ(0x3FFF, r.size());
     EXPECT_TRUE(r.interleaved());
-    EXPECT_EQ(ULL(4), r.stripes());
+    EXPECT_EQ(4ULL, r.stripes());
     EXPECT_EQ("[0:0xffff] a[0]^\b=1 a[1]^\b=1", r.to_string());
 }
 
@@ -413,7 +418,7 @@ TEST(AddrRangeTest, ComplexInterleavingMasks)
     Addr end   = 0xFFFF;
     std::vector<Addr> masks;
     masks.push_back((1 << 1) | 1);
-    masks.push_back((ULL(1) << 63) | (ULL(1) << 62));
+    masks.push_back((1ULL << 63) | (1ULL << 62));
     uint8_t intlv_match = 0;
 
     AddrRange r(start, end, masks, intlv_match);
@@ -423,7 +428,7 @@ TEST(AddrRangeTest, ComplexInterleavingMasks)
 
     EXPECT_EQ(0x3FFF, r.size());
     EXPECT_TRUE(r.interleaved());
-    EXPECT_EQ(ULL(4), r.stripes());
+    EXPECT_EQ(4ULL, r.stripes());
     EXPECT_EQ("[0:0xffff] a[0]^a[1]^\b=0 a[62]^a[63]^\b=0", r.to_string());
 }
 
@@ -919,10 +924,10 @@ TEST(AddrRangeTest, InterleavingNotEqualTo)
 }
 
 /*
- * The AddrRange(std::vector<AddrRange>) constructor "merges" the interleaving
+ * The AddrRange(AddrRangeList) constructor "merges" the interleaving
  * address ranges. It should be noted that this constructor simply checks that
  * these interleaving addresses can be merged then creates a new address from
- * the start and end addresses of the first address range in the vector.
+ * the start and end addresses of the first address range in the list.
  */
 TEST(AddrRangeTest, MergingInterleavingAddressRanges)
 {
@@ -940,7 +945,7 @@ TEST(AddrRangeTest, MergingInterleavingAddressRanges)
     uint8_t intlv_match2 = 1;
     AddrRange r2(start2, end2, masks2, intlv_match2);
 
-    std::vector<AddrRange> to_merge;
+    AddrRangeList to_merge;
     to_merge.push_back(r1);
     to_merge.push_back(r2);
 
@@ -954,7 +959,7 @@ TEST(AddrRangeTest, MergingInterleavingAddressRanges)
 TEST(AddrRangeTest, MergingInterleavingAddressRangesOneRange)
 {
     /*
-     * In the case where there is just one range in the vector, the merged
+     * In the case where there is just one range in the list, the merged
      * address range is equal to that range.
      */
     Addr start = 0x0000;
@@ -964,7 +969,7 @@ TEST(AddrRangeTest, MergingInterleavingAddressRangesOneRange)
     uint8_t intlv_match = 0;
     AddrRange r(start, end, masks, intlv_match);
 
-    std::vector<AddrRange> to_merge;
+    AddrRangeList to_merge;
     to_merge.push_back(r);
 
     AddrRange output(to_merge);
@@ -1087,4 +1092,480 @@ TEST(AddrRangeTest, RangeSizeConstruction){
     AddrRange r = RangeSize(0x5, 5);
     EXPECT_EQ(0x5, r.start());
     EXPECT_EQ(0xA, r.end());
+}
+
+/*
+ * The exclude list is excluding the entire range: return an empty
+ * list of ranges
+ *
+ * |---------------------|
+ * |       range         |
+ * |---------------------|
+ *
+ * |------------------------------|
+ * |       exclude_range          |
+ * |------------------------------|
+ */
+TEST(AddrRangeTest, ExcludeAll)
+{
+    const AddrRangeList exclude_ranges{
+        AddrRange(0x0, 0x200)
+    };
+
+    AddrRange r(0x00, 0x100);
+    auto ranges = r.exclude(exclude_ranges);
+
+    EXPECT_TRUE(ranges.empty());
+}
+
+/*
+ * The exclude list is excluding the entire range: return an empty
+ * list of ranges. The exclude_range = range
+ *
+ * |---------------------|
+ * |       range         |
+ * |---------------------|
+ *
+ * |---------------------|
+ * |    exclude_range    |
+ * |---------------------|
+ */
+TEST(AddrRangeTest, ExcludeAllEqual)
+{
+    const AddrRangeList exclude_ranges{
+        AddrRange(0x0, 0x100)
+    };
+
+    AddrRange r(0x00, 0x100);
+    auto ranges = r.exclude(exclude_ranges);
+
+    EXPECT_TRUE(ranges.empty());
+}
+
+/*
+ * The exclude list is made of multiple adjacent ranges covering the entire
+ * interval: return an empty list of ranges.
+ *
+ * |---------------------------------------------------------------|
+ * |                            range                              |
+ * |---------------------------------------------------------------|
+ *
+ * |--------------------------|---------------|--------------------------|
+ * |       exclude_range      | exclude_range |       exclude_range      |
+ * |--------------------------|---------------|--------------------------|
+ */
+TEST(AddrRangeTest, ExcludeAllMultiple)
+{
+    const AddrRangeList exclude_ranges{
+        AddrRange(0x0, 0x30),
+        AddrRange(0x30, 0x40),
+        AddrRange(0x40, 0x120)
+    };
+
+    AddrRange r(0x00, 0x100);
+    auto ranges = r.exclude(exclude_ranges);
+
+    EXPECT_TRUE(ranges.empty());
+}
+
+/*
+ * ExcludeAllOverlapping:
+ * The exclude list is made of multiple overlapping ranges covering the entire
+ * interval: return an empty list of ranges.
+ *
+ *           |-----------------------------------|
+ *           |              range                |
+ *           |-----------------------------------|
+ *
+ *  |-----------------------------|
+ *  |       exclude_range         |
+ *  |-----------------------------|
+ *                          |-----------------------------|
+ *                          |       exclude_range         |
+ *                          |-----------------------------|
+ */
+TEST(AddrRangeTest, ExcludeAllOverlapping)
+{
+    const AddrRangeList exclude_ranges{
+        AddrRange(0x0, 0x150),
+        AddrRange(0x140, 0x220)
+    };
+
+    AddrRange r(0x100, 0x200);
+
+    auto ranges = r.exclude(exclude_ranges);
+
+    EXPECT_TRUE(ranges.empty());
+}
+
+/*
+ * The exclude list is empty:
+ * the return list contains the unmodified range
+ *
+ * |---------------------|
+ * |       range         |
+ * |---------------------|
+ *
+ */
+TEST(AddrRangeTest, ExcludeEmpty)
+{
+    const AddrRangeList exclude_ranges;
+
+    AddrRange r(0x00, 0x100);
+    auto ranges = r.exclude(exclude_ranges);
+
+    EXPECT_EQ(ranges.size(), 1);
+    EXPECT_EQ(ranges.front(), r);
+}
+
+
+/*
+ * Ranges do not overlap:
+ * the return list contains the unmodified range
+ *
+ * |---------------------|
+ * |       range         |
+ * |---------------------|
+ *
+ *                       |------------------------------|
+ *                       |       exclude_range          |
+ *                       |------------------------------|
+ */
+TEST(AddrRangeTest, NoExclusion)
+{
+    const AddrRangeList exclude_ranges{
+        AddrRange(0x100, 0x200)
+    };
+
+    AddrRange r(0x00, 0x100);
+    auto ranges = r.exclude(exclude_ranges);
+
+    EXPECT_EQ(ranges.size(), 1);
+    EXPECT_EQ(ranges.front(), r);
+}
+
+/*
+ * DoubleExclusion:
+ * The exclusion should return two ranges:
+ * AddrRange(0x130, 0x140)
+ * AddrRange(0x170, 0x200)
+ *
+ *           |-----------------------------------|
+ *           |              range                |
+ *           |-----------------------------------|
+ *
+ *  |-----------------|  |-----------------|
+ *  |  exclude_range  |  |  exclude_range  |
+ *  |-----------------|  |-----------------|
+ */
+TEST(AddrRangeTest, DoubleExclusion)
+{
+    const AddrRangeList exclude_ranges{
+        AddrRange(0x000, 0x130),
+        AddrRange(0x140, 0x170),
+    };
+
+    const AddrRange expected_range1(0x130, 0x140);
+    const AddrRange expected_range2(0x170, 0x200);
+
+    AddrRange r(0x100, 0x200);
+    auto ranges = r.exclude(exclude_ranges);
+
+    EXPECT_EQ(ranges.size(), 2);
+    EXPECT_THAT(ranges, ElementsAre(expected_range1, expected_range2));
+}
+
+/*
+ * MultipleExclusion:
+ * The exclusion should return two ranges:
+ * AddrRange(0x130, 0x140)
+ * AddrRange(0x170, 0x180)
+ *
+ *           |-----------------------------------|
+ *           |              range                |
+ *           |-----------------------------------|
+ *
+ *  |-----------------|  |-----------------|  |-----------------|
+ *  |  exclude_range  |  |  exclude_range  |  |  exclude_range  |
+ *  |-----------------|  |-----------------|  |-----------------|
+ */
+TEST(AddrRangeTest, MultipleExclusion)
+{
+    const AddrRangeList exclude_ranges{
+        AddrRange(0x000, 0x130),
+        AddrRange(0x140, 0x170),
+        AddrRange(0x180, 0x210)
+    };
+
+    const AddrRange expected_range1(0x130, 0x140);
+    const AddrRange expected_range2(0x170, 0x180);
+
+    AddrRange r(0x100, 0x200);
+    auto ranges = r.exclude(exclude_ranges);
+
+    EXPECT_EQ(ranges.size(), 2);
+    EXPECT_THAT(ranges, ElementsAre(expected_range1, expected_range2));
+}
+
+/*
+ * MultipleExclusionOverlapping:
+ * The exclusion should return one range:
+ * AddrRange(0x130, 0x140)
+ *
+ *           |-----------------------------------|
+ *           |              range                |
+ *           |-----------------------------------|
+ *
+ *  |-----------------|  |-----------------|
+ *  |  exclude_range  |  |  exclude_range  |
+ *  |-----------------|  |-----------------|
+ *                                 |-----------------|
+ *                                 |  exclude_range  |
+ *                                 |-----------------|
+ */
+TEST(AddrRangeTest, MultipleExclusionOverlapping)
+{
+    const AddrRangeList exclude_ranges{
+        AddrRange(0x000, 0x130),
+        AddrRange(0x140, 0x170),
+        AddrRange(0x150, 0x210)
+    };
+
+    const AddrRange expected_range1(0x130, 0x140);
+
+    AddrRange r(0x100, 0x200);
+    auto ranges = r.exclude(exclude_ranges);
+
+    EXPECT_EQ(ranges.size(), 1);
+    EXPECT_THAT(ranges, ElementsAre(expected_range1));
+}
+
+/*
+ * ExclusionOverlapping:
+ * The exclusion should return two range:
+ * AddrRange(0x100, 0x120)
+ * AddrRange(0x180, 0x200)
+ *
+ *           |-----------------------------------|
+ *           |              range                |
+ *           |-----------------------------------|
+ *
+ *                   |--------------------|
+ *                   |    exclude_range   |
+ *                   |--------------------|
+ *
+ *                      |---------------|
+ *                      | exclude_range |
+ *                      |---------------|
+ */
+TEST(AddrRangeTest, ExclusionOverlapping)
+{
+    const AddrRangeList exclude_ranges{
+        AddrRange(0x120, 0x180),
+        AddrRange(0x130, 0x170)
+    };
+
+    const AddrRange expected_range1(0x100, 0x120);
+    const AddrRange expected_range2(0x180, 0x200);
+
+    AddrRange r(0x100, 0x200);
+    auto ranges = r.exclude(exclude_ranges);
+
+    EXPECT_EQ(ranges.size(), 2);
+    EXPECT_THAT(ranges, ElementsAre(expected_range1, expected_range2));
+}
+
+/*
+ * MultipleExclusionUnsorted:
+ * The exclusion should return two ranges:
+ * AddrRange(0x130, 0x140)
+ * AddrRange(0x170, 0x180)
+ * Same as MultipleExclusion, but the exclude list is provided
+ * in unsorted order
+ *
+ *           |-----------------------------------|
+ *           |              range                |
+ *           |-----------------------------------|
+ *
+ *  |-----------------|  |-----------------|  |-----------------|
+ *  |  exclude_range  |  |  exclude_range  |  |  exclude_range  |
+ *  |-----------------|  |-----------------|  |-----------------|
+ */
+TEST(AddrRangeTest, MultipleExclusionUnsorted)
+{
+    const AddrRangeList exclude_ranges{
+        AddrRange(0x180, 0x210),
+        AddrRange(0x000, 0x130),
+        AddrRange(0x140, 0x170)
+    };
+
+    const AddrRange expected_range1(0x130, 0x140);
+    const AddrRange expected_range2(0x170, 0x180);
+
+    AddrRange r(0x100, 0x200);
+    auto ranges = r.exclude(exclude_ranges);
+
+    EXPECT_EQ(ranges.size(), 2);
+    EXPECT_THAT(ranges, ElementsAre(expected_range1, expected_range2));
+}
+
+TEST(AddrRangeTest, ExclusionOfSingleRange)
+{
+    const AddrRange expected_range1(0x100, 0x140);
+    const AddrRange expected_range2(0x1c0, 0x200);
+
+    AddrRange r(0x100, 0x200);
+    auto ranges = r.exclude(AddrRange(0x140, 0x1c0));
+
+    EXPECT_EQ(ranges.size(), 2);
+    EXPECT_THAT(ranges, ElementsAre(expected_range1, expected_range2));
+}
+
+TEST(AddrRangeTest, ExclusionOfRangeFromRangeList)
+{
+    AddrRangeList base({AddrRange(0x100, 0x200), AddrRange(0x300, 0x400)});
+
+    const AddrRange expected_range1(0x100, 0x180);
+    const AddrRange expected_range2(0x380, 0x400);
+
+    auto ranges = exclude(base, AddrRange(0x180, 0x380));
+
+    EXPECT_EQ(ranges.size(), 2);
+    EXPECT_THAT(ranges, ElementsAre(expected_range1, expected_range2));
+}
+
+TEST(AddrRangeTest, ExclusionOfRangeListFromRangeList)
+{
+    AddrRangeList base({AddrRange(0x100, 0x200), AddrRange(0x300, 0x400)});
+
+    const AddrRange expected_range1(0x100, 0x140);
+    const AddrRange expected_range2(0x180, 0x200);
+    const AddrRange expected_range3(0x300, 0x340);
+    const AddrRange expected_range4(0x380, 0x400);
+
+    const AddrRangeList to_exclude({
+            AddrRange(0x140, 0x180), AddrRange(0x340, 0x380)});
+    auto ranges = exclude(base, to_exclude);
+
+    EXPECT_EQ(ranges.size(), 4);
+    EXPECT_THAT(ranges, ElementsAre(
+                expected_range1, expected_range2,
+                expected_range3, expected_range4));
+}
+
+TEST(AddrRangeTest, SubtractionOperatorRange)
+{
+    const AddrRange expected_range1(0x100, 0x140);
+    const AddrRange expected_range2(0x1c0, 0x200);
+
+    AddrRange r(0x100, 0x200);
+    auto ranges = r - AddrRange(0x140, 0x1c0);
+
+    EXPECT_EQ(ranges.size(), 2);
+    EXPECT_THAT(ranges, ElementsAre(expected_range1, expected_range2));
+}
+
+TEST(AddrRangeTest, SubtractionOperatorRangeList)
+{
+    const AddrRange expected_range1(0x100, 0x140);
+    const AddrRange expected_range2(0x160, 0x180);
+    const AddrRange expected_range3(0x1a0, 0x200);
+
+    AddrRange r(0x100, 0x200);
+    auto ranges = r - AddrRangeList(
+            {AddrRange(0x140, 0x160), AddrRange(0x180, 0x1a0)});
+
+    EXPECT_EQ(ranges.size(), 3);
+    EXPECT_THAT(ranges, ElementsAre(
+                expected_range1, expected_range2, expected_range3));
+}
+
+TEST(AddrRangeTest, SubtractionOfRangeFromRangeList)
+{
+    AddrRangeList base({AddrRange(0x100, 0x200), AddrRange(0x300, 0x400)});
+
+    const AddrRange expected_range1(0x100, 0x180);
+    const AddrRange expected_range2(0x380, 0x400);
+
+    auto ranges = base - AddrRange(0x180, 0x380);
+
+    EXPECT_EQ(ranges.size(), 2);
+    EXPECT_THAT(ranges, ElementsAre(expected_range1, expected_range2));
+}
+
+TEST(AddrRangeTest, SubtractionOfRangeListFromRangeList)
+{
+    AddrRangeList base({AddrRange(0x100, 0x200), AddrRange(0x300, 0x400)});
+
+    const AddrRange expected_range1(0x100, 0x140);
+    const AddrRange expected_range2(0x180, 0x200);
+    const AddrRange expected_range3(0x300, 0x340);
+    const AddrRange expected_range4(0x380, 0x400);
+
+    const AddrRangeList to_exclude({
+            AddrRange(0x140, 0x180), AddrRange(0x340, 0x380)});
+    auto ranges = base - to_exclude;
+
+    EXPECT_EQ(ranges.size(), 4);
+    EXPECT_THAT(ranges, ElementsAre(
+                expected_range1, expected_range2,
+                expected_range3, expected_range4));
+}
+
+TEST(AddrRangeTest, SubtractionAssignmentOfRangeFromRangeList)
+{
+    AddrRangeList base({AddrRange(0x100, 0x200), AddrRange(0x300, 0x400)});
+
+    const AddrRange expected_range1(0x100, 0x180);
+    const AddrRange expected_range2(0x380, 0x400);
+
+    base -= AddrRange(0x180, 0x380);
+
+    EXPECT_EQ(base.size(), 2);
+    EXPECT_THAT(base, ElementsAre(expected_range1, expected_range2));
+}
+
+TEST(AddrRangeTest, SubtractionAssignmentOfRangeListFromRangeList)
+{
+    AddrRangeList base({AddrRange(0x100, 0x200), AddrRange(0x300, 0x400)});
+
+    const AddrRange expected_range1(0x100, 0x140);
+    const AddrRange expected_range2(0x180, 0x200);
+    const AddrRange expected_range3(0x300, 0x340);
+    const AddrRange expected_range4(0x380, 0x400);
+
+    const AddrRangeList to_exclude({
+            AddrRange(0x140, 0x180), AddrRange(0x340, 0x380)});
+    base -= to_exclude;
+
+    EXPECT_EQ(base.size(), 4);
+    EXPECT_THAT(base, ElementsAre(
+                expected_range1, expected_range2,
+                expected_range3, expected_range4));
+}
+
+/*
+ * InterleavingRanges:
+ * The exclude method does not support interleaving ranges
+ */
+TEST(AddrRangeDeathTest, ExcludeInterleavingRanges)
+{
+  /* An `assert(!interleaved());` exists at the top of the `exclude(...)`
+   * method. This means EXPECT_DEATH will only function when DEBUG is enabled
+   * (as when compiled to `.opt`). When disabled (as when compiled to `.fast`),
+   * `r.exclude` fails more catastrophically via a `panic` which GTest cannot
+   * handle correctly. We therefore include a `#ifdef NDEBUG` guard so this
+   * test is skipped when DEBUG is disabled.
+   */
+#ifdef NDEBUG
+    GTEST_SKIP() << "Skipping as assetions are stripped from fast builds.";
+#endif
+    const AddrRangeList exclude_ranges{
+        AddrRange(0x180, 0x210),
+    };
+
+    AddrRange r(0x100, 0x200, {1}, 0);
+
+    EXPECT_TRUE(r.interleaved());
+    EXPECT_DEATH(r.exclude(exclude_ranges), "");
 }

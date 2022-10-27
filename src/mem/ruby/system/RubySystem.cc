@@ -46,6 +46,7 @@
 #include <cstdio>
 #include <list>
 
+#include "base/compiler.hh"
 #include "base/intmath.hh"
 #include "base/statistics.hh"
 #include "debug/RubyCacheTrace.hh"
@@ -58,6 +59,12 @@
 #include "sim/eventq.hh"
 #include "sim/simulate.hh"
 #include "sim/system.hh"
+
+namespace gem5
+{
+
+namespace ruby
+{
 
 bool RubySystem::m_randomization;
 uint32_t RubySystem::m_block_size_bytes;
@@ -84,7 +91,7 @@ RubySystem::RubySystem(const Params &p)
     m_abstract_controls.resize(MachineType_NUM);
 
     // Collate the statistics before they are printed.
-    Stats::registerDumpCallback([this]() { collateStats(); });
+    statistics::registerDumpCallback([this]() { collateStats(); });
     // Create the profiler
     m_profiler = new Profiler(p, this);
     m_phys_mem = p.phys_mem;
@@ -470,6 +477,7 @@ RubySystem::resetStats()
     for (auto& network : m_networks) {
         network->resetStats();
     }
+    ClockedObject::resetStats();
 }
 
 #ifndef PARTIAL_FUNC_READS
@@ -650,13 +658,21 @@ RubySystem::functionalRead(PacketPtr pkt)
     for (auto ctrl : ctrl_ro)
         ctrl->functionalRead(line_address, pkt, bytes);
 
-    ctrl_bs->functionalRead(line_address, pkt, bytes);
+    if (ctrl_bs)
+        ctrl_bs->functionalRead(line_address, pkt, bytes);
 
     // if there is any busy controller or bytes still not set, then a partial
     // and/or dirty copy of the line might be in a message buffer or the
     // network
     if (!ctrl_busy.empty() || !bytes.isFull()) {
-        DPRINTF(RubySystem, "Reading from busy controllers and network\n");
+        DPRINTF(RubySystem, "Reading from remaining controllers, "
+                            "buffers and networks\n");
+        if (ctrl_rw != nullptr)
+            ctrl_rw->functionalReadBuffers(pkt, bytes);
+        for (auto ctrl : ctrl_ro)
+            ctrl->functionalReadBuffers(pkt, bytes);
+        if (ctrl_bs != nullptr)
+            ctrl_bs->functionalReadBuffers(pkt, bytes);
         for (auto ctrl : ctrl_busy) {
             ctrl->functionalRead(line_address, pkt, bytes);
             ctrl->functionalReadBuffers(pkt, bytes);
@@ -691,7 +707,7 @@ RubySystem::functionalWrite(PacketPtr pkt)
 
     DPRINTF(RubySystem, "Functional Write request for %#x\n", addr);
 
-    M5_VAR_USED uint32_t num_functional_writes = 0;
+    [[maybe_unused]] uint32_t num_functional_writes = 0;
 
     // Only send functional requests within the same network.
     assert(requestorToNetwork.count(pkt->requestorId()));
@@ -727,3 +743,6 @@ RubySystem::functionalWrite(PacketPtr pkt)
 
     return true;
 }
+
+} // namespace ruby
+} // namespace gem5

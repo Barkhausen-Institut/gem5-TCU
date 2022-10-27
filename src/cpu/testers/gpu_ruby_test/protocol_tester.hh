@@ -2,8 +2,6 @@
  * Copyright (c) 2017-2021 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -60,6 +58,9 @@
 #include "mem/ruby/system/RubyPort.hh"
 #include "mem/token_port.hh"
 #include "params/ProtocolTester.hh"
+
+namespace gem5
+{
 
 class TesterThread;
 class CpuThread;
@@ -197,5 +198,7 @@ class ProtocolTester : public ClockedObject
 
     OutputStream* logFile;
 };
+
+} // namespace gem5
 
 #endif /* CPU_TESTERS_PROTOCOL_TESTER_PROTOCOL_TESTER_HH_ */

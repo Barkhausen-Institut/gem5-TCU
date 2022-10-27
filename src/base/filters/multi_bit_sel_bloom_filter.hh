@@ -32,9 +32,14 @@
 
 #include "base/filters/base.hh"
 
+namespace gem5
+{
+
 struct BloomFilterMultiBitSelParams;
 
-namespace BloomFilter {
+GEM5_DEPRECATED_NAMESPACE(BloomFilter, bloom_filter);
+namespace bloom_filter
+{
 
 /**
  * The MultiBitSel Bloom Filter associates an address to multiple entries
@@ -75,6 +80,7 @@ class MultiBitSel : public Base
     const int skipBits;
 };
 
-} // namespace BloomFilter
+} // namespace bloom_filter
+} // namespace gem5
 
 #endif // __BASE_FILTERS_MULTI_BIT_SEL_BLOOM_FILTER_HH__

@@ -361,8 +361,10 @@ class SortedIncludes(Verifier):
 
         if modified:
             if not silent:
-                self.ui.write("invalid sorting of includes in %s\n"
-                                % (filename))
+                self.ui.write("invalid sorting of includes in %s. Note: If "
+                              "there is more than one empty line under the "
+                              "#include region, please reduce it to one.\n"
+                              % (filename))
                 if self.ui.verbose:
                     for start, end in modified.regions:
                         self.ui.write("bad region [%d, %d)\n" % (start, end))
@@ -454,6 +456,83 @@ class BoolCompare(LineVerifier):
             else:
                 self.ui.write("Warning: cannot automatically fix "
                               "comparisons with false/False.\n")
+        return line
+
+class StructureBraces(LineVerifier):
+    """ Check if the opening braces of structures are not on the same line of
+        the structure name. This includes classes, structs, enums and unions.
+
+        This verifier matches lines starting in optional indent, followed by
+        an optional typedef and the structure's keyword, followed by any
+        character until the first opening brace is seen. Any extra characters
+        after the opening brace are saved for a recursive check, if needed.
+
+        This fixes, for example:
+            1) "struct A {"
+            2) "enum{"
+            3) "    class B { // This is a class"
+            4) "union { struct C {"
+        to:
+            1) "struct A\n{"
+            2) "enum\n{"
+            3) "    class B\n    {\n        // This is a class"
+            4) "union\n{\n        struct C\n        {"
+
+        @todo Make this work for multi-line structure declarations. e.g.,
+
+            class MultiLineClass
+              : public BaseClass {
+    """
+
+    languages = set(('C', 'C++'))
+    test_name = 'structure opening brace position'
+    opt_name = 'structurebrace'
+
+    # Matches the indentation of the line
+    regex_indentation = '(?P<indentation>\s*)'
+    # Matches an optional "typedef" before the keyword
+    regex_typedef = '(?P<typedef>(typedef\s+)?)'
+    # Matches the structure's keyword
+    regex_keyword = '(?P<keyword>class|struct|enum|union)'
+    # A negative lookahead to avoid incorrect matches with variable's names
+    # e.g., "classifications = {" should not be fixed here.
+    regex_avoid = '(?![^\{\s])'
+    # Matches anything after the keyword and before the opening brace.
+    # e.g., structure name, base type, type of inheritance, etc
+    regex_name = '(?P<name>[^\{]*)'
+    # Matches anything after the opening brace, which should be
+    # parsed recursively
+    regex_extra = '(?P<extra>.*)$'
+    regex = re.compile(r'^' + regex_indentation + regex_typedef +
+        regex_keyword + regex_avoid + regex_name + '\{' + regex_extra)
+
+    def check_line(self, line, **kwargs):
+        return (self.regex.search(line) == None) or \
+            (line.count('{') == line.count('};'))
+
+    def fix_line(self, line, **kwargs):
+        match = self.regex.search(line)
+
+        if match:
+            # Move the opening brace to the next line
+            match_indentation = match.group('indentation')
+            match_typedef = match.group('typedef')
+            match_keyword = match.group('keyword')
+            match_name = match.group('name').rstrip()
+            match_extra = match.group('extra').lstrip()
+            line = match_indentation + match_typedef + match_keyword + \
+                match_name + "\n" + match_indentation + "{"
+
+            # The opening brace should be alone in its own line, so move any
+            # extra contents to the next line
+            if match_extra != '':
+                # Check if the extra line obeys the opening brace rule
+                # (in case there are nested declarations)
+                line_extra = match_indentation + "    " + match_extra
+                if not self.check_line(line_extra):
+                    line_extra = self.fix_line(line_extra)
+                line += "\n" + line_extra
+
         return line
 
 def is_verifier(cls):

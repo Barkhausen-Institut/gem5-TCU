@@ -37,6 +37,12 @@
 #include "cpu/pred/bpred_unit.hh"
 #include "params/BiModeBP.hh"
 
+namespace gem5
+{
+
+namespace branch_prediction
+{
+
 /**
  * Implements a bi-mode branch predictor. The bi-mode predictor is a two-level
  * branch predictor that has three seprate history arrays: a taken array, a
@@ -65,7 +71,8 @@ class BiModeBP : public BPredUnit
   private:
     void updateGlobalHistReg(ThreadID tid, bool taken);
 
-    struct BPHistory {
+    struct BPHistory
+    {
         unsigned globalHistoryReg;
         // was the taken array's prediction used?
         // true: takenPred used
@@ -107,5 +114,8 @@ class BiModeBP : public BPredUnit
     unsigned takenThreshold;
     unsigned notTakenThreshold;
 };
+
+} // namespace branch_prediction
+} // namespace gem5
 
 #endif // __CPU_PRED_BI_MODE_PRED_HH__

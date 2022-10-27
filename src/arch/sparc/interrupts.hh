@@ -31,12 +31,14 @@
 
 #include "arch/generic/interrupts.hh"
 #include "arch/sparc/faults.hh"
-#include "arch/sparc/isa_traits.hh"
-#include "arch/sparc/registers.hh"
+#include "arch/sparc/regs/misc.hh"
 #include "cpu/thread_context.hh"
 #include "debug/Interrupt.hh"
 #include "params/SparcInterrupts.hh"
 #include "sim/sim_object.hh"
+
+namespace gem5
+{
 
 namespace SparcISA
 {
@@ -89,8 +91,8 @@ class Interrupts : public BaseInterrupts
         assert(int_num >= 0 && int_num < NumInterruptTypes);
         assert(index >= 0 && index < 64);
 
-        interrupts[int_num] |= ULL(1) << index;
-        intStatus |= ULL(1) << int_num;
+        interrupts[int_num] |= 1ULL << index;
+        intStatus |= 1ULL << int_num;
     }
 
     void
@@ -100,9 +102,9 @@ class Interrupts : public BaseInterrupts
         assert(int_num >= 0 && int_num < NumInterruptTypes);
         assert(index >= 0 && index < 64);
 
-        interrupts[int_num] &= ~(ULL(1) << index);
+        interrupts[int_num] &= ~(1ULL << index);
         if (!interrupts[int_num])
-            intStatus &= ~(ULL(1) << int_num);
+            intStatus &= ~(1ULL << int_num);
     }
 
     void
@@ -252,6 +254,8 @@ class Interrupts : public BaseInterrupts
         UNSERIALIZE_SCALAR(intStatus);
     }
 };
-} // namespace SPARC_ISA
+
+} // namespace SparcISA
+} // namespace gem5
 
 #endif // __ARCH_SPARC_INTERRUPT_HH__

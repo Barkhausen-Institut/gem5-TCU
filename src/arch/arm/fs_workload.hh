@@ -46,10 +46,14 @@
 
 #include "arch/arm/aapcs32.hh"
 #include "arch/arm/aapcs64.hh"
+#include "arch/arm/remote_gdb.hh"
 #include "kern/linux/events.hh"
 #include "params/ArmFsWorkload.hh"
 #include "sim/kernel_workload.hh"
 #include "sim/sim_object.hh"
+
+namespace gem5
+{
 
 namespace ArmISA
 {
@@ -65,12 +69,12 @@ class FsWorkload : public KernelWorkload
 {
   protected:
     /** Bootloaders */
-    std::vector<std::unique_ptr<Loader::ObjectFile>> bootLoaders;
+    std::vector<std::unique_ptr<loader::ObjectFile>> bootLoaders;
 
     /**
      * Pointer to the bootloader object
      */
-    Loader::ObjectFile *bootldr = nullptr;
+    loader::ObjectFile *bootldr = nullptr;
 
     /**
      * This differs from entry since it takes into account where
@@ -86,14 +90,14 @@ class FsWorkload : public KernelWorkload
      * @return Pointer to boot loader ObjectFile or nullptr if there
      *         is no matching boot loader.
      */
-    Loader::ObjectFile *getBootLoader(Loader::ObjectFile *const obj);
+    loader::ObjectFile *getBootLoader(loader::ObjectFile *const obj);
 
     template <template <class ABI, class Base> class FuncEvent,
              typename... Args>
     PCEvent *
     addSkipFunc(Args... args)
     {
-        if (getArch() == Loader::Arm64) {
+        if (getArch() == loader::Arm64) {
             return addKernelFuncEvent<FuncEvent<Aapcs64, SkipFunc>>(
                     std::forward<Args>(args)...);
         } else {
@@ -107,7 +111,7 @@ class FsWorkload : public KernelWorkload
     PCEvent *
     addSkipFuncOrPanic(Args... args)
     {
-        if (getArch() == Loader::Arm64) {
+        if (getArch() == loader::Arm64) {
             return addKernelFuncEventOrPanic<FuncEvent<Aapcs64, SkipFunc>>(
                     std::forward<Args>(args)...);
         } else {
@@ -128,7 +132,7 @@ class FsWorkload : public KernelWorkload
             return kernelEntry;
     }
 
-    Loader::Arch
+    loader::Arch
     getArch() const override
     {
         if (bootldr)
@@ -136,12 +140,21 @@ class FsWorkload : public KernelWorkload
         else if (kernelObj)
             return kernelObj->getArch();
         else
-            return Loader::Arm64;
+            return loader::Arm64;
     }
+
+    ByteOrder byteOrder() const override { return ByteOrder::little; }
 
     FsWorkload(const Params &p);
 
     void initState() override;
+
+    void
+    setSystem(System *sys) override
+    {
+        KernelWorkload::setSystem(sys);
+        gdb = BaseRemoteGDB::build<RemoteGDB>(system);
+    }
 
     Addr
     fixFuncEventAddr(Addr addr) const override
@@ -153,5 +166,6 @@ class FsWorkload : public KernelWorkload
 };
 
 } // namespace ArmISA
+} // namespace gem5
 
 #endif // __ARCH_ARM_FS_WORKLOAD_HH__

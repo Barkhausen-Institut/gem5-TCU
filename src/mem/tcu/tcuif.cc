@@ -30,6 +30,11 @@
 
 #include "mem/tcu/tcuif.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 TcuIf::TcuIf(Addr reg_base, RequestorID requestorId, unsigned int id)
     : reg_base(reg_base),
       requestorId(requestorId),
@@ -126,4 +131,7 @@ TcuIf::freePacket(PacketPtr pkt)
 {
     // the packet will delete the data
     delete pkt;
+}
+
+}
 }

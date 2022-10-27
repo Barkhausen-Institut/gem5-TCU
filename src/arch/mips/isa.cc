@@ -31,17 +31,27 @@
 #include "arch/mips/mt.hh"
 #include "arch/mips/mt_constants.hh"
 #include "arch/mips/pra_constants.hh"
+#include "arch/mips/regs/float.hh"
+#include "arch/mips/regs/int.hh"
+#include "arch/mips/regs/misc.hh"
 #include "base/bitfield.hh"
 #include "cpu/base.hh"
+#include "cpu/reg_class.hh"
 #include "cpu/thread_context.hh"
+#include "debug/FloatRegs.hh"
+#include "debug/IntRegs.hh"
 #include "debug/MipsPRA.hh"
+#include "debug/MiscRegs.hh"
 #include "params/MipsISA.hh"
+
+namespace gem5
+{
 
 namespace MipsISA
 {
 
 std::string
-ISA::miscRegNames[NumMiscRegs] =
+ISA::miscRegNames[MISCREG_NUMREGS] =
 {
     "Index", "MVPControl", "MVPConf0", "MVPConf1", "", "", "", "",
     "Random", "VPEControl", "VPEConf0", "VPEConf1",
@@ -90,17 +100,25 @@ ISA::miscRegNames[NumMiscRegs] =
 ISA::ISA(const Params &p) : BaseISA(p), numThreads(p.num_threads),
     numVpes(p.num_vpes)
 {
-    miscRegFile.resize(NumMiscRegs);
-    bankType.resize(NumMiscRegs);
+    _regClasses.emplace_back(NumIntRegs, debug::IntRegs);
+    _regClasses.emplace_back(NumFloatRegs, debug::FloatRegs);
+    _regClasses.emplace_back(1, debug::IntRegs); // Not applicable to MIPS.
+    _regClasses.emplace_back(2, debug::IntRegs); // Not applicable to MIPS.
+    _regClasses.emplace_back(1, debug::IntRegs); // Not applicable to MIPS.
+    _regClasses.emplace_back(0, debug::IntRegs); // Not applicable to MIPS.
+    _regClasses.emplace_back(MISCREG_NUMREGS, debug::MiscRegs);
 
-    for (int i=0; i < NumMiscRegs; i++) {
+    miscRegFile.resize(MISCREG_NUMREGS);
+    bankType.resize(MISCREG_NUMREGS);
+
+    for (int i = 0; i < MISCREG_NUMREGS; i++) {
         miscRegFile[i].resize(1);
         bankType[i] = perProcessor;
     }
 
-    miscRegFile_WriteMask.resize(NumMiscRegs);
+    miscRegFile_WriteMask.resize(MISCREG_NUMREGS);
 
-    for (int i = 0; i < NumMiscRegs; i++) {
+    for (int i = 0; i < MISCREG_NUMREGS; i++) {
         miscRegFile_WriteMask[i].push_back(0);
     }
 
@@ -143,13 +161,32 @@ ISA::ISA(const Params &p) : BaseISA(p), numThreads(p.num_threads),
 void
 ISA::clear()
 {
-    for (int i = 0; i < NumMiscRegs; i++) {
+    for (int i = 0; i < MISCREG_NUMREGS; i++) {
         for (int j = 0; j < miscRegFile[i].size(); j++)
             miscRegFile[i][j] = 0;
 
         for (int k = 0; k < miscRegFile_WriteMask[i].size(); k++)
             miscRegFile_WriteMask[i][k] = (long unsigned int)(-1);
     }
+}
+
+void
+ISA::copyRegsFrom(ThreadContext *src)
+{
+    // First loop through the integer registers.
+    for (int i = 0; i < NumIntRegs; i++)
+        tc->setIntRegFlat(i, src->readIntRegFlat(i));
+
+    // Then loop through the floating point registers.
+    for (int i = 0; i < NumFloatRegs; i++)
+        tc->setFloatRegFlat(i, src->readFloatRegFlat(i));
+
+    // Copy misc. registers
+    for (int i = 0; i < MISCREG_NUMREGS; i++)
+        tc->setMiscRegNoEffect(i, src->readMiscRegNoEffect(i));
+
+    // Copy over the PC State
+    tc->pcState(src->pcState());
 }
 
 
@@ -561,4 +598,5 @@ ISA::processCP0Event(BaseCPU *cpu, CP0EventType cp0EventType)
     }
 }
 
-}
+} // namespace MipsISA
+} // namespace gem5

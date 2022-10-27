@@ -54,6 +54,12 @@
 #include "base/compiler.hh"
 #include "base/logging.hh"
 
+namespace gem5
+{
+
+namespace memory
+{
+
 /**
  * DRAMSim2 requires SHOW_SIM_OUTPUT to be defined (declared extern in
  * the DRAMSim2 print macros), otherwise we get linking errors due to
@@ -169,7 +175,7 @@ DRAMSim2Wrapper::canAccept() const
 void
 DRAMSim2Wrapper::enqueue(bool is_write, uint64_t addr)
 {
-    M5_VAR_USED bool success = dramsim->addTransaction(is_write, addr);
+    [[maybe_unused]] bool success = dramsim->addTransaction(is_write, addr);
     assert(success);
 }
 
@@ -196,3 +202,6 @@ DRAMSim2Wrapper::tick()
 {
     dramsim->update();
 }
+
+} // namespace memory
+} // namespace gem5

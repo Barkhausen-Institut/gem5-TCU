@@ -2,8 +2,6 @@
  * Copyright (c) 2014-2015 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -43,6 +41,9 @@
 #include "gpu-compute/vector_register_file.hh"
 #include "gpu-compute/wavefront.hh"
 
+namespace gem5
+{
+
 GlobalMemPipeline::GlobalMemPipeline(const ComputeUnitParams &p,
                                      ComputeUnit &cu)
     : computeUnit(cu), _name(cu.name() + ".GlobalMemPipeline"),
@@ -61,6 +62,10 @@ GlobalMemPipeline::init()
 bool
 GlobalMemPipeline::coalescerReady(GPUDynInstPtr mp) const
 {
+    // System requests do not need GPU coalescer tokens. Make sure nothing
+    // has bypassed the operand gather check stage.
+    assert(!mp->isSystemReq());
+
     // We require one token from the coalescer's uncoalesced table to
     // proceed
     int token_count = 1;
@@ -273,6 +278,24 @@ GlobalMemPipeline::completeRequest(GPUDynInstPtr gpuDynInst)
 void
 GlobalMemPipeline::issueRequest(GPUDynInstPtr gpuDynInst)
 {
+    Wavefront *wf = gpuDynInst->wavefront();
+    if (gpuDynInst->isLoad()) {
+        wf->rdGmReqsInPipe--;
+        wf->outstandingReqsRdGm++;
+    } else if (gpuDynInst->isStore()) {
+        wf->wrGmReqsInPipe--;
+        wf->outstandingReqsWrGm++;
+    } else {
+        // Atomic, both read and write
+        wf->rdGmReqsInPipe--;
+        wf->outstandingReqsRdGm++;
+        wf->wrGmReqsInPipe--;
+        wf->outstandingReqsWrGm++;
+    }
+
+    wf->outstandingReqs++;
+    wf->validateRequestCounters();
+
     gpuDynInst->setAccessTime(curTick());
     gpuDynInst->profileRoundTripTime(curTick(), InstMemoryHop::Initiate);
     gmIssuedRequests.push(gpuDynInst);
@@ -290,9 +313,11 @@ GlobalMemPipeline::handleResponse(GPUDynInstPtr gpuDynInst)
 }
 
 GlobalMemPipeline::
-GlobalMemPipelineStats::GlobalMemPipelineStats(Stats::Group *parent)
-    : Stats::Group(parent, "GlobalMemPipeline"),
+GlobalMemPipelineStats::GlobalMemPipelineStats(statistics::Group *parent)
+    : statistics::Group(parent, "GlobalMemPipeline"),
       ADD_STAT(loadVrfBankConflictCycles, "total number of cycles GM data "
                "are delayed before updating the VRF")
 {
 }
+
+} // namespace gem5

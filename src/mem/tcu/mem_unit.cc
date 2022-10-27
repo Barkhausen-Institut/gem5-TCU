@@ -36,6 +36,11 @@
 #include "mem/tcu/xfer_unit.hh"
 #include "mem/tcu/noc_addr.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 static void
 finishReadWrite(Tcu &tcu, Addr size)
 {
@@ -58,21 +63,21 @@ MemoryUnit::regStats()
         .init(8)
         .name(tcu.name() + ".mem.readBytes")
         .desc("Sent read requests (in bytes)")
-        .flags(Stats::nozero);
+        .flags(statistics::nozero);
     writtenBytes
         .init(8)
         .name(tcu.name() + ".mem.writtenBytes")
         .desc("Sent write requests (in bytes)")
-        .flags(Stats::nozero);
+        .flags(statistics::nozero);
     receivedBytes
         .init(8)
         .name(tcu.name() + ".mem.receivedBytes")
         .desc("Received read/write requests (in bytes)")
-        .flags(Stats::nozero);
+        .flags(statistics::nozero);
     wrongAct
         .name(tcu.name() + ".mem.wrongAct")
         .desc("Number of received requests that targeted the wrong activity")
-        .flags(Stats::nozero);
+        .flags(statistics::nozero);
 }
 
 void
@@ -442,4 +447,7 @@ MemoryUnit::ReceiveTransferEvent::transferDone(TcuError result)
 
         tcu().schedNocResponse(pkt, tcu().clockEdge(Cycles(1)));
     }
+}
+
+}
 }

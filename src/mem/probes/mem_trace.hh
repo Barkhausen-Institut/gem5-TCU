@@ -42,6 +42,9 @@
 #include "mem/probes/base.hh"
 #include "proto/protoio.hh"
 
+namespace gem5
+{
+
 struct MemTraceProbeParams;
 class System;
 
@@ -51,7 +54,7 @@ class MemTraceProbe : public BaseMemProbe
     MemTraceProbe(const MemTraceProbeParams &params);
 
   protected:
-    void handleRequest(const ProbePoints::PacketInfo &pkt_info) override;
+    void handleRequest(const probing::PacketInfo &pkt_info) override;
 
     /**
      * Callback to flush and close all open output streams on exit. If
@@ -73,5 +76,7 @@ class MemTraceProbe : public BaseMemProbe
     /** Include the Program Counter in the memory trace */
     const bool withPC;
 };
+
+} // namespace gem5
 
 #endif //__MEM_PROBES_MEM_TRACE_HH__

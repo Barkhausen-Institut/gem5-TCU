@@ -84,6 +84,9 @@
 #include "dev/pixelpump.hh"
 #include "sim/serialize.hh"
 
+namespace gem5
+{
+
 class VncInput;
 struct HDLcdParams;
 class HDLcdPixelPump;
@@ -115,7 +118,8 @@ class HDLcd: public AmbaDmaDevice
 
   protected: // Register handling
     /** ARM HDLcd register offsets */
-    enum RegisterOffset {
+    enum RegisterOffset
+    {
         Version          = 0x0000,
         Int_RawStat      = 0x0010,
         Int_Clear        = 0x0014,
@@ -369,7 +373,7 @@ class HDLcd: public AmbaDmaDevice
     std::unique_ptr<ImgWriter> imgWriter;
 
     /** Image Format */
-    Enums::ImageFormat imgFormat;
+    enums::ImageFormat imgFormat;
 
     /** Picture of what the current frame buffer looks like */
     OutputStream *pic = nullptr;
@@ -410,11 +414,13 @@ class HDLcd: public AmbaDmaDevice
     std::unique_ptr<DmaEngine> dmaEngine;
 
   protected: // Statistics
-    struct HDLcdStats: public Stats::Group
+    struct HDLcdStats: public statistics::Group
     {
-        HDLcdStats(Stats::Group *parent);
-        Stats::Scalar underruns;
+        HDLcdStats(statistics::Group *parent);
+        statistics::Scalar underruns;
     } stats;
 };
+
+} // namespace gem5
 
 #endif

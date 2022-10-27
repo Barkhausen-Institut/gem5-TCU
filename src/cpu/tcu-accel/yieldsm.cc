@@ -30,6 +30,11 @@
 
 #include "cpu/tcu-accel/yieldsm.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 PacketPtr
 YieldSM::tick()
 {
@@ -43,4 +48,7 @@ bool
 YieldSM::handleMemResp(PacketPtr pkt)
 {
     return true;
+}
+
+}
 }

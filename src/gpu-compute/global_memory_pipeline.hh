@@ -2,8 +2,6 @@
  * Copyright (c) 2014-2015 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -52,6 +50,9 @@
  * This stage also retires previously issued loads and stores that have
  * returned from the memory sub-system.
  */
+
+namespace gem5
+{
 
 class ComputeUnit;
 
@@ -143,15 +144,17 @@ class GlobalMemPipeline
     std::queue<GPUDynInstPtr> gmIssuedRequests;
 
   protected:
-    struct GlobalMemPipelineStats : public Stats::Group
+    struct GlobalMemPipelineStats : public statistics::Group
     {
-        GlobalMemPipelineStats(Stats::Group *parent);
+        GlobalMemPipelineStats(statistics::Group *parent);
 
         // number of cycles of delaying the update of a VGPR that is the
         // target of a load instruction (or the load component of an atomic)
         // The delay is due to VRF bank conflicts
-        Stats::Scalar loadVrfBankConflictCycles;
+        statistics::Scalar loadVrfBankConflictCycles;
     } stats;
 };
+
+} // namespace gem5
 
 #endif // __GLOBAL_MEMORY_PIPELINE_HH__

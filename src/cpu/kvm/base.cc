@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, 2017 ARM Limited
+ * Copyright (c) 2012, 2015, 2017, 2021 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -46,7 +46,7 @@
 #include <csignal>
 #include <ostream>
 
-#include "arch/utility.hh"
+#include "base/compiler.hh"
 #include "debug/Checkpoint.hh"
 #include "debug/Drain.hh"
 #include "debug/Kvm.hh"
@@ -59,16 +59,19 @@
 /* Used by some KVM macros */
 #define PAGE_SIZE pageSize
 
+namespace gem5
+{
+
 BaseKvmCPU::BaseKvmCPU(const BaseKvmCPUParams &params)
     : BaseCPU(params),
-      vm(*params.system->getKvmVM()),
+      vm(nullptr),
       _status(Idle),
       dataPort(name() + ".dcache_port", this),
       instPort(name() + ".icache_port", this),
       alwaysSyncTC(params.alwaysSyncTC),
       threadContextDirty(true),
       kvmStateDirty(false),
-      vcpuID(vm.allocVCPUID()), vcpuFD(-1), vcpuMMapSize(0),
+      vcpuID(-1), vcpuFD(-1), vcpuMMapSize(0),
       _kvmRun(NULL), mmioRing(NULL),
       pageSize(sysconf(_SC_PAGE_SIZE)),
       tickEvent([this]{ tick(); }, "BaseKvmCPU tick",
@@ -84,11 +87,11 @@ BaseKvmCPU::BaseKvmCPU(const BaseKvmCPUParams &params)
 
     if (FullSystem)
         thread = new SimpleThread(this, 0, params.system, params.mmu,
-                                  params.isa[0]);
+                                  params.isa[0], params.decoder[0]);
     else
         thread = new SimpleThread(this, /* thread_num */ 0, params.system,
                                   params.workload[0], params.mmu,
-                                  params.isa[0]);
+                                  params.isa[0], params.decoder[0]);
 
     thread->setStatus(ThreadContext::Halted);
     tc = thread->getTC();
@@ -105,12 +108,10 @@ BaseKvmCPU::~BaseKvmCPU()
 void
 BaseKvmCPU::init()
 {
+    vm = system->getKvmVM();
+    vcpuID = vm->allocVCPUID();
     BaseCPU::init();
-
-    if (numThreads != 1)
-        fatal("KVM: Multithreading not supported");
-
-    tc->initMemProxies(tc);
+    fatal_if(numThreads != 1, "KVM: Multithreading not supported");
 }
 
 void
@@ -119,19 +120,19 @@ BaseKvmCPU::startup()
     const BaseKvmCPUParams &p =
         dynamic_cast<const BaseKvmCPUParams &>(params());
 
-    Kvm &kvm(*vm.kvm);
+    Kvm &kvm = *vm->kvm;
 
     BaseCPU::startup();
 
     assert(vcpuFD == -1);
 
     // Tell the VM that a CPU is about to start.
-    vm.cpuStartup();
+    vm->cpuStartup();
 
     // We can't initialize KVM CPUs in BaseKvmCPU::init() since we are
     // not guaranteed that the parent KVM VM has initialized at that
     // point. Initialize virtual CPUs here instead.
-    vcpuFD = vm.createVCPU(vcpuID);
+    vcpuFD = vm->createVCPU(vcpuID);
 
     // Map the KVM run structure
     vcpuMMapSize = kvm.getVCPUMMapSize();
@@ -155,9 +156,9 @@ BaseKvmCPU::startup()
         inform("KVM: Coalesced not supported by host OS\n");
     }
 
-    Event *startupEvent(
-        new EventFunctionWrapper([this]{ startupThread(); }, name(), true));
-    schedule(startupEvent, curTick());
+    schedule(new EventFunctionWrapper([this]{
+                restartEqThread();
+            }, name(), true), curTick());
 }
 
 BaseKvmCPU::Status
@@ -229,7 +230,7 @@ BaseKvmCPU::finishMMIOPending()
 }
 
 void
-BaseKvmCPU::startupThread()
+BaseKvmCPU::restartEqThread()
 {
     // Do thread-specific initialization. We need to setup signal
     // delivery for counters and timers from within the thread that
@@ -258,29 +259,34 @@ BaseKvmCPU::startupThread()
     }
 }
 
-BaseKvmCPU::StatGroup::StatGroup(Stats::Group *parent)
-    : Stats::Group(parent),
-    ADD_STAT(committedInsts, UNIT_COUNT, "Number of instructions committed"),
-    ADD_STAT(numVMExits, UNIT_COUNT, "total number of KVM exits"),
-    ADD_STAT(numVMHalfEntries, UNIT_COUNT,
+BaseKvmCPU::StatGroup::StatGroup(statistics::Group *parent)
+    : statistics::Group(parent),
+    ADD_STAT(committedInsts, statistics::units::Count::get(),
+             "Number of instructions committed"),
+    ADD_STAT(numVMExits, statistics::units::Count::get(),
+             "total number of KVM exits"),
+    ADD_STAT(numVMHalfEntries, statistics::units::Count::get(),
              "number of KVM entries to finalize pending operations"),
-    ADD_STAT(numExitSignal, UNIT_COUNT, "exits due to signal delivery"),
-    ADD_STAT(numMMIO, UNIT_COUNT,
+    ADD_STAT(numExitSignal, statistics::units::Count::get(),
+             "exits due to signal delivery"),
+    ADD_STAT(numMMIO, statistics::units::Count::get(),
              "number of VM exits due to memory mapped IO"),
-    ADD_STAT(numCoalescedMMIO, UNIT_COUNT,
+    ADD_STAT(numCoalescedMMIO, statistics::units::Count::get(),
              "number of coalesced memory mapped IO requests"),
-    ADD_STAT(numIO, UNIT_COUNT, "number of VM exits due to legacy IO"),
-    ADD_STAT(numHalt, UNIT_COUNT,
+    ADD_STAT(numIO, statistics::units::Count::get(),
+             "number of VM exits due to legacy IO"),
+    ADD_STAT(numHalt, statistics::units::Count::get(),
              "number of VM exits due to wait for interrupt instructions"),
-    ADD_STAT(numInterrupts, UNIT_COUNT, "number of interrupts delivered"),
-    ADD_STAT(numHypercalls, UNIT_COUNT, "number of hypercalls")
+    ADD_STAT(numInterrupts, statistics::units::Count::get(),
+             "number of interrupts delivered"),
+    ADD_STAT(numHypercalls, statistics::units::Count::get(), "number of hypercalls")
 {
 }
 
 void
 BaseKvmCPU::serializeThread(CheckpointOut &cp, ThreadID tid) const
 {
-    if (DTRACE(Checkpoint)) {
+    if (debug::Checkpoint) {
         DPRINTF(Checkpoint, "KVM: Serializing thread %i:\n", tid);
         dump();
     }
@@ -333,7 +339,7 @@ BaseKvmCPU::drain()
             deschedule(tickEvent);
         _status = Idle;
 
-        M5_FALLTHROUGH;
+        [[fallthrough]];
       case Idle:
         // Idle, no need to drain
         assert(!tickEvent.scheduled());
@@ -384,6 +390,13 @@ BaseKvmCPU::drainResume()
 
     DPRINTF(Kvm, "drainResume\n");
     verifyMemoryMode();
+
+    /* The simulator may have terminated the threads servicing event
+     * queues. In that case, we need to re-initialize the new
+     * threads. */
+    schedule(new EventFunctionWrapper([this]{
+                restartEqThread();
+            }, name(), true), curTick());
 
     // The tick event is de-scheduled as a part of the draining
     // process. Re-schedule it if the thread context is active.
@@ -1081,8 +1094,8 @@ BaseKvmCPU::doMMIOAccess(Addr paddr, void *data, int size, bool write)
     // before they are inserted into the memory system. This enables
     // APIC accesses on x86 and m5ops where supported through a MMIO
     // interface.
-    BaseTLB::Mode tlb_mode(write ? BaseTLB::Write : BaseTLB::Read);
-    Fault fault(tc->getMMUPtr()->finalizePhysical(mmio_req, tc, tlb_mode));
+    BaseMMU::Mode access_type(write ? BaseMMU::Write : BaseMMU::Read);
+    Fault fault(tc->getMMUPtr()->finalizePhysical(mmio_req, tc, access_type));
     if (fault != NoFault)
         warn("Finalization of MMIO address failed: %s\n", fault->name());
 
@@ -1099,8 +1112,10 @@ BaseKvmCPU::doMMIOAccess(Addr paddr, void *data, int size, bool write)
         //
         // We won't be able to rewind the current PC to the "correct"
         // value without figuring out how big the current instruction
-        // is, and that's probably not worth the effort.
-        tc->setNPC(tc->instAddr());
+        // is, and that's probably not worth the effort
+        std::unique_ptr<PCStateBase> pc(tc->pcState().clone());
+        stutterPC(*pc);
+        tc->pcState(*pc);
         // We currently assume that there is no need to migrate to a
         // different event queue when doing local accesses. Currently, they
         // are only used for m5ops, so it should be a valid assumption.
@@ -1120,7 +1135,8 @@ BaseKvmCPU::doMMIOAccess(Addr paddr, void *data, int size, bool write)
 void
 BaseKvmCPU::setSignalMask(const sigset_t *mask)
 {
-    std::unique_ptr<struct kvm_signal_mask> kvm_mask;
+    std::unique_ptr<struct kvm_signal_mask, void(*)(void *p)>
+        kvm_mask(nullptr, [](void *p) { operator delete(p); });
 
     if (mask) {
         kvm_mask.reset((struct kvm_signal_mask *)operator new(
@@ -1271,6 +1287,11 @@ BaseKvmCPU::setupCounters()
             .samplePeriod(42);
     }
 
+    // We might be re-attaching counters due threads being
+    // re-initialised after fork.
+    if (hwCycles.attached())
+        hwCycles.detach();
+
     hwCycles.attach(cfgCycles,
                     0); // TID (0 => currentThread)
 
@@ -1358,3 +1379,5 @@ BaseKvmCPU::setupInstCounter(uint64_t period)
 
     activeInstPeriod = period;
 }
+
+} // namespace gem5

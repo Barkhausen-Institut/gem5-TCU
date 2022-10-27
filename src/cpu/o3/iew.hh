@@ -46,17 +46,27 @@
 
 #include "base/statistics.hh"
 #include "cpu/o3/comm.hh"
+#include "cpu/o3/dyn_inst_ptr.hh"
+#include "cpu/o3/inst_queue.hh"
+#include "cpu/o3/limits.hh"
 #include "cpu/o3/lsq.hh"
 #include "cpu/o3/scoreboard.hh"
 #include "cpu/timebuf.hh"
 #include "debug/IEW.hh"
 #include "sim/probe/probe.hh"
 
-struct DerivO3CPUParams;
+namespace gem5
+{
+
+struct BaseO3CPUParams;
+
+namespace o3
+{
+
 class FUPool;
 
 /**
- * DefaultIEW handles both single threaded and SMT IEW
+ * IEW handles both single threaded and SMT IEW
  * (issue/execute/writeback).  It handles the dispatching of
  * instructions to the LSQ/IQ as part of the issue stage, and has the
  * IQ try to issue instructions each cycle. The execute latency is
@@ -74,35 +84,21 @@ class FUPool;
  * up any dependents, and marking the register ready on the
  * scoreboard.
  */
-template<class Impl>
-class DefaultIEW
+class IEW
 {
-  private:
-    //Typedefs from Impl
-    typedef typename Impl::CPUPol CPUPol;
-    typedef typename Impl::DynInstPtr DynInstPtr;
-    typedef typename Impl::O3CPU O3CPU;
-
-    typedef typename CPUPol::IQ IQ;
-    typedef typename CPUPol::RenameMap RenameMap;
-    typedef typename CPUPol::LSQ LSQ;
-
-    typedef typename CPUPol::TimeStruct TimeStruct;
-    typedef typename CPUPol::IEWStruct IEWStruct;
-    typedef typename CPUPol::RenameStruct RenameStruct;
-    typedef typename CPUPol::IssueStruct IssueStruct;
-
   public:
     /** Overall IEW stage status. Used to determine if the CPU can
      * deschedule itself due to a lack of activity.
      */
-    enum Status {
+    enum Status
+    {
         Active,
         Inactive
     };
 
     /** Status for Issue, Execute, and Writeback stages. */
-    enum StageStatus {
+    enum StageStatus
+    {
         Running,
         Blocked,
         Idle,
@@ -115,7 +111,7 @@ class DefaultIEW
     /** Overall stage status. */
     Status _status;
     /** Dispatch status. */
-    StageStatus dispatchStatus[Impl::MaxThreads];
+    StageStatus dispatchStatus[MaxThreads];
     /** Execute status. */
     StageStatus exeStatus;
     /** Writeback status. */
@@ -130,10 +126,10 @@ class DefaultIEW
     ProbePointArg<DynInstPtr> *ppToCommit;
 
   public:
-    /** Constructs a DefaultIEW with the given parameters. */
-    DefaultIEW(O3CPU *_cpu, const DerivO3CPUParams &params);
+    /** Constructs a IEW with the given parameters. */
+    IEW(CPU *_cpu, const BaseO3CPUParams &params);
 
-    /** Returns the name of the DefaultIEW stage. */
+    /** Returns the name of the IEW stage. */
     std::string name() const;
 
     /** Registers probes. */
@@ -216,10 +212,10 @@ class DefaultIEW
     void activityThisCycle();
 
     /** Tells CPU that the IEW stage is active and running. */
-    inline void activateStage();
+    void activateStage();
 
     /** Tells CPU that the IEW stage is inactive and idle. */
-    inline void deactivateStage();
+    void deactivateStage();
 
     /** Returns if the LSQ has any stores to writeback. */
     bool hasStoresToWB() { return ldstQueue.hasStoresToWB(); }
@@ -278,11 +274,6 @@ class DefaultIEW
      */
     void writebackInsts();
 
-    /** Returns the number of valid, non-squashed instructions coming from
-     * rename to dispatch.
-     */
-    unsigned validInstsFromRename();
-
     /** Checks if any of the stall conditions are currently true. */
     bool checkStall(ThreadID tid);
 
@@ -309,25 +300,25 @@ class DefaultIEW
     TimeBuffer<TimeStruct> *timeBuffer;
 
     /** Wire to write information heading to previous stages. */
-    typename TimeBuffer<TimeStruct>::wire toFetch;
+    TimeBuffer<TimeStruct>::wire toFetch;
 
     /** Wire to get commit's output from backwards time buffer. */
-    typename TimeBuffer<TimeStruct>::wire fromCommit;
+    TimeBuffer<TimeStruct>::wire fromCommit;
 
     /** Wire to write information heading to previous stages. */
-    typename TimeBuffer<TimeStruct>::wire toRename;
+    TimeBuffer<TimeStruct>::wire toRename;
 
     /** Rename instruction queue interface. */
     TimeBuffer<RenameStruct> *renameQueue;
 
     /** Wire to get rename's output from rename queue. */
-    typename TimeBuffer<RenameStruct>::wire fromRename;
+    TimeBuffer<RenameStruct>::wire fromRename;
 
     /** Issue stage queue. */
     TimeBuffer<IssueStruct> issueToExecQueue;
 
     /** Wire to read information from the issue stage time queue. */
-    typename TimeBuffer<IssueStruct>::wire fromIssue;
+    TimeBuffer<IssueStruct>::wire fromIssue;
 
     /**
      * IEW stage time buffer.  Holds ROB indices of instructions that
@@ -336,20 +327,20 @@ class DefaultIEW
     TimeBuffer<IEWStruct> *iewQueue;
 
     /** Wire to write infromation heading to commit. */
-    typename TimeBuffer<IEWStruct>::wire toCommit;
+    TimeBuffer<IEWStruct>::wire toCommit;
 
     /** Queue of all instructions coming from rename this cycle. */
-    std::queue<DynInstPtr> insts[Impl::MaxThreads];
+    std::queue<DynInstPtr> insts[MaxThreads];
 
     /** Skid buffer between rename and IEW. */
-    std::queue<DynInstPtr> skidBuffer[Impl::MaxThreads];
+    std::queue<DynInstPtr> skidBuffer[MaxThreads];
 
     /** Scoreboard pointer. */
     Scoreboard* scoreboard;
 
   private:
     /** CPU pointer. */
-    O3CPU *cpu;
+    CPU *cpu;
 
     /** Records if IEW has written to the time buffer this cycle, so that the
      * CPU can deschedule itself if there is no activity.
@@ -361,7 +352,7 @@ class DefaultIEW
 
   public:
     /** Instruction queue. */
-    IQ instQueue;
+    InstructionQueue instQueue;
 
     /** Load / store queue. */
     LSQ ldstQueue;
@@ -375,7 +366,7 @@ class DefaultIEW
 
   private:
     /** Records if there is a fetch redirect on this cycle for each thread. */
-    bool fetchRedirect[Impl::MaxThreads];
+    bool fetchRedirect[MaxThreads];
 
     /** Records if the queues have been changed (inserted or issued insts),
      * so that IEW knows to broadcast the updated amount of free entries.
@@ -424,80 +415,83 @@ class DefaultIEW
     unsigned skidBufferMax;
 
 
-    struct IEWStats : public Stats::Group
+    struct IEWStats : public statistics::Group
     {
-        IEWStats(O3CPU *cpu);
+        IEWStats(CPU *cpu);
 
         /** Stat for total number of idle cycles. */
-        Stats::Scalar idleCycles;
+        statistics::Scalar idleCycles;
         /** Stat for total number of squashing cycles. */
-        Stats::Scalar squashCycles;
+        statistics::Scalar squashCycles;
         /** Stat for total number of blocking cycles. */
-        Stats::Scalar blockCycles;
+        statistics::Scalar blockCycles;
         /** Stat for total number of unblocking cycles. */
-        Stats::Scalar unblockCycles;
+        statistics::Scalar unblockCycles;
         /** Stat for total number of instructions dispatched. */
-        Stats::Scalar dispatchedInsts;
+        statistics::Scalar dispatchedInsts;
         /** Stat for total number of squashed instructions dispatch skips. */
-        Stats::Scalar dispSquashedInsts;
+        statistics::Scalar dispSquashedInsts;
         /** Stat for total number of dispatched load instructions. */
-        Stats::Scalar dispLoadInsts;
+        statistics::Scalar dispLoadInsts;
         /** Stat for total number of dispatched store instructions. */
-        Stats::Scalar dispStoreInsts;
-        /** Stat for total number of dispatched non speculative instructions. */
-        Stats::Scalar dispNonSpecInsts;
+        statistics::Scalar dispStoreInsts;
+        /** Stat for total number of dispatched non speculative insts. */
+        statistics::Scalar dispNonSpecInsts;
         /** Stat for number of times the IQ becomes full. */
-        Stats::Scalar iqFullEvents;
+        statistics::Scalar iqFullEvents;
         /** Stat for number of times the LSQ becomes full. */
-        Stats::Scalar lsqFullEvents;
+        statistics::Scalar lsqFullEvents;
         /** Stat for total number of memory ordering violation events. */
-        Stats::Scalar memOrderViolationEvents;
+        statistics::Scalar memOrderViolationEvents;
         /** Stat for total number of incorrect predicted taken branches. */
-        Stats::Scalar predictedTakenIncorrect;
+        statistics::Scalar predictedTakenIncorrect;
         /** Stat for total number of incorrect predicted not taken branches. */
-        Stats::Scalar predictedNotTakenIncorrect;
+        statistics::Scalar predictedNotTakenIncorrect;
         /** Stat for total number of mispredicted branches detected at
          *  execute. */
-        Stats::Formula branchMispredicts;
+        statistics::Formula branchMispredicts;
 
-        struct ExecutedInstStats : public Stats::Group
+        struct ExecutedInstStats : public statistics::Group
         {
-            ExecutedInstStats(O3CPU* cpu);
+            ExecutedInstStats(CPU *cpu);
 
             /** Stat for total number of executed instructions. */
-            Stats::Scalar numInsts;
+            statistics::Scalar numInsts;
             /** Stat for total number of executed load instructions. */
-            Stats::Vector numLoadInsts;
+            statistics::Vector numLoadInsts;
             /** Stat for total number of squashed instructions skipped at
              *  execute. */
-            Stats::Scalar numSquashedInsts;
+            statistics::Scalar numSquashedInsts;
             /** Number of executed software prefetches. */
-            Stats::Vector numSwp;
+            statistics::Vector numSwp;
             /** Number of executed nops. */
-            Stats::Vector numNop;
+            statistics::Vector numNop;
             /** Number of executed meomory references. */
-            Stats::Vector numRefs;
+            statistics::Vector numRefs;
             /** Number of executed branches. */
-            Stats::Vector numBranches;
+            statistics::Vector numBranches;
             /** Number of executed store instructions. */
-            Stats::Formula numStoreInsts;
+            statistics::Formula numStoreInsts;
             /** Number of instructions executed per cycle. */
-            Stats::Formula numRate;
+            statistics::Formula numRate;
         } executedInstStats;
 
         /** Number of instructions sent to commit. */
-        Stats::Vector instsToCommit;
+        statistics::Vector instsToCommit;
         /** Number of instructions that writeback. */
-        Stats::Vector writebackCount;
+        statistics::Vector writebackCount;
         /** Number of instructions that wake consumers. */
-        Stats::Vector producerInst;
+        statistics::Vector producerInst;
         /** Number of instructions that wake up from producers. */
-        Stats::Vector consumerInst;
+        statistics::Vector consumerInst;
         /** Number of instructions per cycle written back. */
-        Stats::Formula wbRate;
+        statistics::Formula wbRate;
         /** Average number of woken instructions per writeback. */
-        Stats::Formula wbFanout;
+        statistics::Formula wbFanout;
     } iewStats;
 };
+
+} // namespace o3
+} // namespace gem5
 
 #endif // __CPU_O3_IEW_HH__

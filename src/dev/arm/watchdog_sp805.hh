@@ -40,6 +40,9 @@
 
 #include "dev/arm/amba_device.hh"
 
+namespace gem5
+{
+
 struct Sp805Params;
 
 /**
@@ -62,7 +65,8 @@ class Sp805 : public AmbaIntDevice
     Tick write(PacketPtr pkt) override;
 
   private:
-    enum Offset : Addr {
+    enum Offset : Addr
+    {
         WDOGLOAD      = 0x000,
         WDOGVALUE     = 0x004,
         WDOGCONTROL   = 0x008,
@@ -126,5 +130,7 @@ class Sp805 : public AmbaIntDevice
     /** If written into WdogLock, registers are unlocked for writes */
     static constexpr uint32_t WDOGLOCK_MAGIC = 0x1acce551;
 };
+
+} // namespace gem5
 
 #endif // __DEV_ARM_WATCHDOG_SP805_HH__

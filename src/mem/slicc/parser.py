@@ -41,8 +41,8 @@ import os.path
 import re
 import sys
 
-from m5.util import code_formatter
-from m5.util.grammar import Grammar, ParseError
+from code_formatter import code_formatter
+from grammar import Grammar, ParseError
 
 import slicc.ast as ast
 import slicc.util as util
@@ -752,11 +752,11 @@ class SLICC(Grammar):
         p[0] = p[2]
 
     def p_expr__is_valid_ptr(self, p):
-        "aexpr : IS_VALID '(' var ')'"
+        "aexpr : IS_VALID '(' expr ')'"
         p[0] = ast.IsValidPtrExprAST(self, p[3], True)
 
     def p_expr__is_invalid_ptr(self, p):
-        "aexpr : IS_INVALID '(' var ')'"
+        "aexpr : IS_INVALID '(' expr ')'"
         p[0] = ast.IsValidPtrExprAST(self, p[3], False)
 
     def p_literal__string(self, p):

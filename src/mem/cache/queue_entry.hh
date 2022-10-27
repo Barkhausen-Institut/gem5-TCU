@@ -46,8 +46,12 @@
 #ifndef __MEM_CACHE_QUEUE_ENTRY_HH__
 #define __MEM_CACHE_QUEUE_ENTRY_HH__
 
+#include "base/named.hh"
 #include "base/types.hh"
 #include "mem/packet.hh"
+
+namespace gem5
+{
 
 class BaseCache;
 
@@ -55,7 +59,7 @@ class BaseCache;
  * A queue entry base class, to be used by both the MSHRs and
  * write-queue entries.
  */
-class QueueEntry : public Packet::SenderState
+class QueueEntry : public Packet::SenderState, public Named
 {
 
     /**
@@ -80,12 +84,13 @@ class QueueEntry : public Packet::SenderState
      * stored in a target containing its availability, order and other info,
      * and the queue entry stores these similar targets in a list.
      */
-    class Target {
+    class Target
+    {
       public:
         const Tick recvTime;  //!< Time when request was received (for stats)
         const Tick readyTime; //!< Time when request is ready to be serviced
         const Counter order;  //!< Global order (for memory consistency mgmt)
-        const PacketPtr pkt;  //!< Pending request packet.
+        PacketPtr pkt;  //!< Pending request packet.
 
         /**
          * Default constructor. Assigns the current tick as the arrival time
@@ -116,8 +121,9 @@ class QueueEntry : public Packet::SenderState
     /** True if the entry targets the secure memory space. */
     bool isSecure;
 
-    QueueEntry()
-        : readyTime(0), _isUncacheable(false),
+    QueueEntry(const std::string &name)
+        : Named(name),
+          readyTime(0), _isUncacheable(false),
           inService(false), order(0), blkAddr(0), blkSize(0), isSecure(false)
     {}
 
@@ -163,5 +169,7 @@ class QueueEntry : public Packet::SenderState
      */
     virtual Target* getTarget() = 0;
 };
+
+} // namespace gem5
 
 #endif // __MEM_CACHE_QUEUE_ENTRY_HH__

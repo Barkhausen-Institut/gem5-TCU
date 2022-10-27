@@ -62,6 +62,9 @@
 #include "mem/packet.hh"
 #include "params/BaseSetAssoc.hh"
 
+namespace gem5
+{
+
 /**
  * A basic cache tag store.
  * @sa  \ref gem5MemorySystem "gem5 Memory System"
@@ -82,7 +85,7 @@ class BaseSetAssoc : public BaseTags
     const bool sequentialAccess;
 
     /** Replacement policy */
-    ReplacementPolicy::Base *replacementPolicy;
+    replacement_policy::Base *replacementPolicy;
 
   public:
     /** Convenience typedef. */
@@ -117,14 +120,13 @@ class BaseSetAssoc : public BaseTags
      * should only be used as such. Returns the tag lookup latency as a side
      * effect.
      *
-     * @param addr The address to find.
-     * @param is_secure True if the target memory space is secure.
+     * @param pkt The packet holding the address to find.
      * @param lat The latency of the tag lookup.
      * @return Pointer to the cache block if found.
      */
-    CacheBlk* accessBlock(Addr addr, bool is_secure, Cycles &lat) override
+    CacheBlk* accessBlock(const PacketPtr pkt, Cycles &lat) override
     {
-        CacheBlk *blk = findBlock(addr, is_secure);
+        CacheBlk *blk = findBlock(pkt->getAddr(), pkt->isSecure());
 
         // Access all tags in parallel, hence one in each way.  The data side
         // either accesses all blocks in parallel, or one block sequentially on
@@ -144,7 +146,7 @@ class BaseSetAssoc : public BaseTags
             blk->increaseRefCount();
 
             // Update replacement data of accessed block
-            replacementPolicy->touch(blk->replacementData);
+            replacementPolicy->touch(blk->replacementData, pkt);
         }
 
         // The tag lookup latency is the same for a hit or a miss
@@ -196,7 +198,7 @@ class BaseSetAssoc : public BaseTags
         stats.tagsInUse++;
 
         // Update replacement policy
-        replacementPolicy->reset(blk->replacementData);
+        replacementPolicy->reset(blk->replacementData, pkt);
     }
 
     void moveBlock(CacheBlk *src_blk, CacheBlk *dest_blk) override;
@@ -246,5 +248,7 @@ class BaseSetAssoc : public BaseTags
         return false;
     }
 };
+
+} // namespace gem5
 
 #endif //__MEM_CACHE_TAGS_BASE_SET_ASSOC_HH__

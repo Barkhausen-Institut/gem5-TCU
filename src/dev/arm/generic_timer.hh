@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, 2017-2018,2020 ARM Limited
+ * Copyright (c) 2013, 2015, 2017-2018,2020,2022 Arm Limited
  * All rights reserved.
  *
  * The license below extends only to copyright in the software and shall
@@ -48,7 +48,6 @@
 #include "base/types.hh"
 #include "dev/arm/base_gic.hh"
 #include "dev/arm/generic_timer_miscregs_types.hh"
-#include "sim/core.hh"
 #include "sim/drain.hh"
 #include "sim/eventq.hh"
 #include "sim/serialize.hh"
@@ -62,6 +61,9 @@
 ///     D11.2 - The AArch64 view of the Generic Timer
 ///     G6.2  - The AArch32 view of the Generic Timer
 ///     I2 - System Level Implementation of the Generic Timer
+
+namespace gem5
+{
 
 class Checkpoint;
 struct SystemCounterParams;
@@ -278,9 +280,7 @@ class ArchTimerKvm : public ArchTimer
     // For ArchTimer's in a GenericTimerISA with Kvm execution about
     // to begin, skip rescheduling the event.
     // Otherwise, we should reschedule the event (if necessary).
-    bool scheduleEvents() override {
-        return !system.validKvmEnvironment();
-    }
+    bool scheduleEvents() override;
 };
 
 class GenericTimer : public SimObject
@@ -302,8 +302,13 @@ class GenericTimer : public SimObject
     {
       public:
         CoreTimers(GenericTimer &_parent, ArmSystem &system, unsigned cpu,
-                   ArmInterruptPin *_irqPhysS, ArmInterruptPin *_irqPhysNS,
-                   ArmInterruptPin *_irqVirt, ArmInterruptPin *_irqHyp);
+                   ArmInterruptPin *irq_el3_phys,
+                   ArmInterruptPin *irq_el1_phys,
+                   ArmInterruptPin *irq_el1_virt,
+                   ArmInterruptPin *irq_el2_ns_phys,
+                   ArmInterruptPin *irq_el2_ns_virt,
+                   ArmInterruptPin *irq_el2_s_phys,
+                   ArmInterruptPin *irq_el2_s_virt);
 
         /// Generic Timer parent reference
         GenericTimer &parent;
@@ -320,15 +325,21 @@ class GenericTimer : public SimObject
         /// Thread (HW) context associated to this PE implementation
         ThreadContext *threadContext;
 
-        ArmInterruptPin const *irqPhysS;
-        ArmInterruptPin const *irqPhysNS;
-        ArmInterruptPin const *irqVirt;
-        ArmInterruptPin const *irqHyp;
+        ArmInterruptPin const *irqPhysEL3;
+        ArmInterruptPin const *irqPhysEL1;
+        ArmInterruptPin const *irqVirtEL1;
+        ArmInterruptPin const *irqPhysNsEL2;
+        ArmInterruptPin const *irqVirtNsEL2;
+        ArmInterruptPin const *irqPhysSEL2;
+        ArmInterruptPin const *irqVirtSEL2;
 
-        ArchTimerKvm physS;
-        ArchTimerKvm physNS;
-        ArchTimerKvm virt;
-        ArchTimerKvm hyp;
+        ArchTimerKvm physEL3;
+        ArchTimerKvm physEL1;
+        ArchTimerKvm virtEL1;
+        ArchTimerKvm physNsEL2;
+        ArchTimerKvm virtNsEL2;
+        ArchTimerKvm physSEL2;
+        ArchTimerKvm virtSEL2;
 
         // Event Stream. Events are generated based on a configurable
         // transitionBit over the counter value. transitionTo indicates
@@ -584,5 +595,7 @@ class GenericTimerMem : public PioDevice
 
     ArmSystem &system;
 };
+
+} // namespace gem5
 
 #endif // __DEV_ARM_GENERIC_TIMER_HH__

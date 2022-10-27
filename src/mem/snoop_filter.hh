@@ -54,6 +54,9 @@
 #include "sim/sim_object.hh"
 #include "sim/system.hh"
 
+namespace gem5
+{
+
 /**
  * This snoop filter keeps track of which connected port has a
  * particular line of data. It can be queried (through lookup*) on
@@ -83,7 +86,8 @@
  * (4) ordering: there is no single point of order in the system.  Instead,
  *     requesting MSHRs track order between local requests and remote snoops
  */
-class SnoopFilter : public SimObject {
+class SnoopFilter : public SimObject
+{
   public:
 
     // Change for systems with more than 256 ports tracked by this object
@@ -211,7 +215,8 @@ class SnoopFilter : public SimObject {
     * outstanding request to this line (requested) or already share a
     * cache line with this address (holder).
     */
-    struct SnoopItem {
+    struct SnoopItem
+    {
         SnoopMask requested;
         SnoopMask holder;
     };
@@ -267,7 +272,8 @@ class SnoopFilter : public SimObject {
      * made to the snoop filter while performing the lookup must be undone.
      * This structure keeps track of the state previous to such changes.
      */
-    struct ReqLookupResult {
+    struct ReqLookupResult
+    {
         /** Iterator used to store the result from lookupRequest. */
         SnoopFilterCache::iterator it;
 
@@ -305,22 +311,24 @@ class SnoopFilter : public SimObject {
     /**
      * Use the lower bits of the address to keep track of the line status
      */
-    enum LineStatus {
+    enum LineStatus
+    {
         /** block holds data from the secure memory space */
         LineSecure = 0x01,
     };
 
     /** Statistics */
-    struct SnoopFilterStats : public Stats::Group {
-        SnoopFilterStats(Stats::Group *parent);
+    struct SnoopFilterStats : public statistics::Group
+    {
+        SnoopFilterStats(statistics::Group *parent);
 
-        Stats::Scalar totRequests;
-        Stats::Scalar hitSingleRequests;
-        Stats::Scalar hitMultiRequests;
+        statistics::Scalar totRequests;
+        statistics::Scalar hitSingleRequests;
+        statistics::Scalar hitMultiRequests;
 
-        Stats::Scalar totSnoops;
-        Stats::Scalar hitSingleSnoops;
-        Stats::Scalar hitMultiSnoops;
+        statistics::Scalar totSnoops;
+        statistics::Scalar hitSingleSnoops;
+        statistics::Scalar hitMultiSnoops;
     } stats;
 };
 
@@ -342,5 +350,7 @@ SnoopFilter::maskToPortList(SnoopMask port_mask) const
             res.push_back(p);
     return res;
 }
+
+} // namespace gem5
 
 #endif // __MEM_SNOOP_FILTER_HH__

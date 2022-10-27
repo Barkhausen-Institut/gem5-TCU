@@ -39,8 +39,12 @@
 #include "base/logging.hh"
 #include "base/output.hh"
 #include "sim/core.hh"
+#include "sim/cur_tick.hh"
 
 using std::string;
+
+namespace gem5
+{
 
 EtherDump::EtherDump(const Params &p)
     : SimObject(p), stream(simout.create(p.file, true)->stream()),
@@ -53,7 +57,8 @@ EtherDump::EtherDump(const Params &p)
 #define PCAP_VERSION_MAJOR      2
 #define PCAP_VERSION_MINOR      4
 
-struct pcap_file_header {
+struct pcap_file_header
+{
     uint32_t magic;
     uint16_t version_major;
     uint16_t version_minor;
@@ -63,7 +68,8 @@ struct pcap_file_header {
     uint32_t linktype;          // data link type (DLT_*)
 };
 
-struct pcap_pkthdr {
+struct pcap_pkthdr
+{
     uint32_t seconds;
     uint32_t microseconds;
     uint32_t caplen;            // length of portion present
@@ -92,11 +98,13 @@ void
 EtherDump::dumpPacket(EthPacketPtr &packet)
 {
     pcap_pkthdr pkthdr;
-    pkthdr.seconds = curTick() / SimClock::Int::s;
-    pkthdr.microseconds = (curTick() / SimClock::Int::us) % ULL(1000000);
+    pkthdr.seconds = curTick() / sim_clock::as_int::s;
+    pkthdr.microseconds = (curTick() / sim_clock::as_int::us) % 1000000ULL;
     pkthdr.caplen = std::min(packet->length, maxlen);
     pkthdr.len = packet->length;
     stream->write(reinterpret_cast<char *>(&pkthdr), sizeof(pkthdr));
     stream->write(reinterpret_cast<char *>(packet->data), pkthdr.caplen);
     stream->flush();
 }
+
+} // namespace gem5

@@ -32,24 +32,19 @@
 
 #include "dev/x86/pc.hh"
 
-#include <deque>
-#include <string>
-#include <vector>
-
 #include "arch/x86/intmessage.hh"
 #include "arch/x86/x86_traits.hh"
-#include "cpu/intr_control.hh"
 #include "dev/x86/i82094aa.hh"
 #include "dev/x86/i8254.hh"
 #include "dev/x86/i8259.hh"
 #include "dev/x86/south_bridge.hh"
 #include "sim/system.hh"
 
-Pc::Pc(const Params &p)
-    : Platform(p), system(p.system)
+namespace gem5
 {
-    southBridge = NULL;
-}
+
+Pc::Pc(const Params &p) : Platform(p), southBridge(p.south_bridge)
+{}
 
 void
 Pc::init()
@@ -73,15 +68,15 @@ Pc::init()
      */
     X86ISA::I82094AA &ioApic = *southBridge->ioApic;
     X86ISA::I82094AA::RedirTableEntry entry = 0;
-    entry.deliveryMode = X86ISA::DeliveryMode::ExtInt;
+    entry.mask = 1;
+    entry.deliveryMode = X86ISA::delivery_mode::ExtInt;
     entry.vector = 0x20;
     ioApic.writeReg(0x10, entry.bottomDW);
     ioApic.writeReg(0x11, entry.topDW);
-    entry.deliveryMode = X86ISA::DeliveryMode::Fixed;
+    entry.deliveryMode = X86ISA::delivery_mode::Fixed;
     entry.vector = 0x24;
     ioApic.writeReg(0x18, entry.bottomDW);
     ioApic.writeReg(0x19, entry.topDW);
-    entry.mask = 1;
     entry.vector = 0x21;
     ioApic.writeReg(0x12, entry.bottomDW);
     ioApic.writeReg(0x13, entry.topDW);
@@ -112,7 +107,7 @@ Pc::init()
 void
 Pc::postConsoleInt()
 {
-    southBridge->ioApic->signalInterrupt(4);
+    southBridge->ioApic->requestInterrupt(4);
     southBridge->pic1->signalInterrupt(4);
 }
 
@@ -126,7 +121,7 @@ Pc::clearConsoleInt()
 void
 Pc::postPciInt(int line)
 {
-    southBridge->ioApic->signalInterrupt(line);
+    southBridge->ioApic->requestInterrupt(line);
 }
 
 void
@@ -134,3 +129,5 @@ Pc::clearPciInt(int line)
 {
     warn_once("Tried to clear PCI interrupt %d\n", line);
 }
+
+} // namespace gem5

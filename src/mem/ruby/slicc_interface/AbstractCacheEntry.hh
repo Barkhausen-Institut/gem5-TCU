@@ -50,9 +50,14 @@
 #include "base/logging.hh"
 #include "mem/cache/replacement_policies/replaceable_entry.hh"
 #include "mem/ruby/common/Address.hh"
+#include "mem/ruby/common/DataBlock.hh"
 #include "mem/ruby/protocol/AccessPermission.hh"
 
-class DataBlock;
+namespace gem5
+{
+
+namespace ruby
+{
 
 class AbstractCacheEntry : public ReplaceableEntry
 {
@@ -73,8 +78,15 @@ class AbstractCacheEntry : public ReplaceableEntry
 
     // The methods below are those called by ruby runtime, add when it
     // is absolutely necessary and should all be virtual function.
-    virtual DataBlock& getDataBlk()
-    { panic("getDataBlk() not implemented!"); }
+    virtual DataBlock&
+    getDataBlk()
+    {
+        panic("getDataBlk() not implemented!");
+
+        // Dummy return to appease the compiler
+        static DataBlock b;
+        return b;
+    }
 
     int validBlocks;
     virtual int& getNumValidBlocks()
@@ -123,5 +135,8 @@ operator<<(std::ostream& out, const AbstractCacheEntry& obj)
     out << std::flush;
     return out;
 }
+
+} // namespace ruby
+} // namespace gem5
 
 #endif // __MEM_RUBY_SLICC_INTERFACE_ABSTRACTCACHEENTRY_HH__

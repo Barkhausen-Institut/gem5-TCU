@@ -33,6 +33,11 @@
 
 #include "cpu/tcu-accel-stream/algorithm.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 class TcuAccelStreamAlgoCopy : public TcuAccelStreamAlgo
 {
   public:
@@ -51,5 +56,8 @@ class TcuAccelStreamAlgoCopy : public TcuAccelStreamAlgo
         return Cycles((time * len) / BLOCK_SIZE);
     }
 };
+
+}
+}
 
 #endif // __CPU_TCU_ACCEL_STREAM_ALGORITHM_COPY_HH__

@@ -33,14 +33,18 @@
 #include "mem/cache/tags/indexing_policies/base.hh"
 #include "mem/cache/tags/tagged_entry.hh"
 
+namespace gem5
+{
+
 /**
  * Associative container based on the previosuly defined Entry type
  * Each element is indexed by a key of type Addr, an additional
  * bool value is used as an additional tag data of the entry.
  */
 template<class Entry>
-class AssociativeSet {
-    static_assert(std::is_base_of<TaggedEntry, Entry>::value,
+class AssociativeSet
+{
+    static_assert(std::is_base_of_v<TaggedEntry, Entry>,
                   "Entry must derive from TaggedEntry");
 
     /** Associativity of the container */
@@ -54,7 +58,7 @@ class AssociativeSet {
     /** Pointer to the indexing policy */
     BaseIndexingPolicy* const indexingPolicy;
     /** Pointer to the replacement policy */
-    ReplacementPolicy::Base* const replacementPolicy;
+    replacement_policy::Base* const replacementPolicy;
     /** Vector containing the entries of the container */
     std::vector<Entry> entries;
 
@@ -69,7 +73,7 @@ class AssociativeSet {
      * @param init_val initial value of the elements of the set
      */
     AssociativeSet(int assoc, int num_entries, BaseIndexingPolicy *idx_policy,
-        ReplacementPolicy::Base *rpl_policy, Entry const &init_val = Entry());
+        replacement_policy::Base *rpl_policy, Entry const &init_val = Entry());
 
     /**
      * Find an entry within the set
@@ -159,5 +163,7 @@ class AssociativeSet {
         return entries.end();
     }
 };
+
+} // namespace gem5
 
 #endif//__CACHE_PREFETCH_ASSOCIATIVE_SET_HH__

@@ -33,6 +33,11 @@
 
 #include "sim/system.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 class TcuAccelStreamAlgo
 {
   public:
@@ -43,5 +48,8 @@ class TcuAccelStreamAlgo
 
     virtual Cycles getDelay(Cycles time, size_t len) = 0;
 };
+
+}
+}
 
 #endif // __CPU_TCU_ACCEL_STREAM_ALGORITHM_HH__

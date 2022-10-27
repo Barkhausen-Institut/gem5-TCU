@@ -41,7 +41,10 @@
 #include "base/addr_range_map.hh"
 #include "cpu/simple/atomic.hh"
 #include "mem/backdoor.hh"
-#include "params/NonCachingSimpleCPU.hh"
+#include "params/BaseNonCachingSimpleCPU.hh"
+
+namespace gem5
+{
 
 /**
  * The NonCachingSimpleCPU is an AtomicSimpleCPU using the
@@ -50,7 +53,7 @@
 class NonCachingSimpleCPU : public AtomicSimpleCPU
 {
   public:
-    NonCachingSimpleCPU(const NonCachingSimpleCPUParams &p);
+    NonCachingSimpleCPU(const BaseNonCachingSimpleCPUParams &p);
 
     void verifyMemoryMode() const override;
 
@@ -60,5 +63,7 @@ class NonCachingSimpleCPU : public AtomicSimpleCPU
     Tick sendPacket(RequestPort &port, const PacketPtr &pkt) override;
     Tick fetchInstMem() override;
 };
+
+} // namespace gem5
 
 #endif // __CPU_SIMPLE_NONCACHING_HH__

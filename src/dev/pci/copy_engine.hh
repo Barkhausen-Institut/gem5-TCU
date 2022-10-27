@@ -55,6 +55,9 @@
 #include "sim/drain.hh"
 #include "sim/eventq.hh"
 
+namespace gem5
+{
+
 class CopyEngine : public PciDevice
 {
     class CopyEngineChannel : public Drainable, public Serializable
@@ -62,9 +65,9 @@ class CopyEngine : public PciDevice
       private:
         DmaPort cePort;
         CopyEngine *ce;
-        CopyEngineReg::ChanRegs  cr;
+        copy_engine_reg::ChanRegs  cr;
         int channelId;
-        CopyEngineReg::DmaDesc *curDmaDesc;
+        copy_engine_reg::DmaDesc *curDmaDesc;
         uint8_t *copyBuffer;
 
         bool busy;
@@ -78,7 +81,8 @@ class CopyEngine : public PciDevice
 
         uint64_t completionDataReg;
 
-        enum ChannelState {
+        enum ChannelState
+        {
             Idle,
             AddressFetch,
             DescriptorFetch,
@@ -94,7 +98,13 @@ class CopyEngine : public PciDevice
         virtual ~CopyEngineChannel();
         Port &getPort();
 
-        std::string name() { assert(ce); return ce->name() + csprintf("-chan%d", channelId); }
+        std::string
+        name()
+        {
+            assert(ce);
+            return ce->name() + csprintf("-chan%d", channelId);
+        }
+
         virtual Tick read(PacketPtr pkt)
                         { panic("CopyEngineChannel has no I/O access\n");}
         virtual Tick write(PacketPtr pkt)
@@ -139,16 +149,17 @@ class CopyEngine : public PciDevice
 
   private:
 
-    struct CopyEngineStats : public Stats::Group
+    struct CopyEngineStats : public statistics::Group
     {
-        CopyEngineStats(Stats::Group *parent, const uint8_t& channel_count);
+        CopyEngineStats(statistics::Group *parent,
+            const uint8_t& channel_count);
 
-        Stats::Vector bytesCopied;
-        Stats::Vector copiesProcessed;
+        statistics::Vector bytesCopied;
+        statistics::Vector copiesProcessed;
     } copyEngineStats;
 
     // device registers
-    CopyEngineReg::Regs regs;
+    copy_engine_reg::Regs regs;
 
     // Array of channels each one with regs/dma port/etc
     std::vector<CopyEngineChannel*> chan;
@@ -168,5 +179,6 @@ class CopyEngine : public PciDevice
     void unserialize(CheckpointIn &cp) override;
 };
 
-#endif //__DEV_PCI_COPY_ENGINE_HH__
+} // namespace gem5
 
+#endif //__DEV_PCI_COPY_ENGINE_HH__

@@ -2,8 +2,6 @@
  * Copyright (c) 2021 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -34,6 +32,9 @@
 #include "cpu/testers/gpu_ruby_test/dma_thread.hh"
 
 #include "debug/ProtocolTest.hh"
+
+namespace gem5
+{
 
 DmaThread::DmaThread(const Params& _params)
     : TesterThread(_params)
@@ -69,7 +70,7 @@ DmaThread::issueLoadOps()
         Addr address = addrManager->getAddress(location);
         DPRINTF(ProtocolTest, "%s Episode %d: Issuing Load - Addr %s\n",
                 this->getName(), curEpisode->getEpisodeId(),
-                printAddress(address));
+                ruby::printAddress(address));
 
         int load_size = sizeof(Value);
 
@@ -126,7 +127,7 @@ DmaThread::issueStoreOps()
 
         DPRINTF(ProtocolTest, "%s Episode %d: Issuing Store - Addr %s - "
                 "Value %d\n", this->getName(),
-                curEpisode->getEpisodeId(), printAddress(address),
+                curEpisode->getEpisodeId(), ruby::printAddress(address),
                 new_value);
 
         auto req = std::make_shared<Request>(address, sizeof(Value),
@@ -210,7 +211,7 @@ DmaThread::hitCallback(PacketPtr pkt)
 
     DPRINTF(ProtocolTest, "%s Episode %d: hitCallback - Command %s -"
             " Addr %s\n", this->getName(), curEpisode->getEpisodeId(),
-            resp_cmd.toString(), printAddress(addr));
+            resp_cmd.toString(), ruby::printAddress(addr));
 
     if (resp_cmd == MemCmd::SwapResp) {
         // response to a pending atomic
@@ -287,3 +288,5 @@ DmaThread::hitCallback(PacketPtr pkt)
         scheduleWakeup();
     }
 }
+
+} // namespace gem5

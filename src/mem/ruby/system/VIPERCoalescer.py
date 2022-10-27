@@ -1,8 +1,6 @@
 # Copyright (c) 2015 Advanced Micro Devices, Inc.
 # All rights reserved.
 #
-# For use for simulation and test purposes only
-#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #
@@ -35,7 +33,8 @@ from m5.objects.GPUCoalescer import *
 
 class VIPERCoalescer(RubyGPUCoalescer):
     type = 'VIPERCoalescer'
-    cxx_class = 'VIPERCoalescer'
+    cxx_class = 'gem5::ruby::VIPERCoalescer'
     cxx_header = "mem/ruby/system/VIPERCoalescer.hh"
+
     max_inv_per_cycle = Param.Int(32, "max invalidations per cycle")
     max_wb_per_cycle = Param.Int(32, "max writebacks per cycle")

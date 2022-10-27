@@ -38,11 +38,20 @@
 #include "mem/ruby/network/garnet/CommonTypes.hh"
 #include "mem/ruby/slicc_interface/Message.hh"
 
+namespace gem5
+{
+
+namespace ruby
+{
+
+namespace garnet
+{
+
 class flit
 {
   public:
     flit() {}
-    flit(int id, int vc, int vnet, RouteInfo route, int size,
+    flit(int packet_id, int id, int vc, int vnet, RouteInfo route, int size,
          MsgPtr msg_ptr, int MsgSize, uint32_t bWidth, Tick curTime);
 
     virtual ~flit(){};
@@ -51,6 +60,7 @@ class flit
     int get_size() { return m_size; }
     Tick get_enqueue_time() { return m_enqueue_time; }
     Tick get_dequeue_time() { return m_dequeue_time; }
+    int getPacketID() { return m_packet_id; }
     int get_id() { return m_id; }
     Tick get_time() { return m_time; }
     int get_vnet() { return m_vnet; }
@@ -105,6 +115,7 @@ class flit
     uint32_t m_width;
     int msgSize;
   protected:
+    int m_packet_id;
     int m_id;
     int m_vnet;
     int m_vc;
@@ -126,5 +137,9 @@ operator<<(std::ostream& out, const flit& obj)
     out << std::flush;
     return out;
 }
+
+} // namespace garnet
+} // namespace ruby
+} // namespace gem5
 
 #endif // __MEM_RUBY_NETWORK_GARNET_0_FLIT_HH__

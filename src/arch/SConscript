@@ -40,6 +40,7 @@
 
 import sys
 import os
+import os.path
 import re
 
 from gem5_scons import Transform
@@ -51,31 +52,32 @@ Import('*')
 # ISA "switch header" generation.
 #
 # Auto-generate arch headers that include the right ISA-specific
-# header based on the setting of THE_ISA preprocessor variable.
+# header based on the setting of TARGET_ISA setting.
 #
 #################################################################
 
+env.TagImplies(env.subst('${CONF["TARGET_ISA"]} isa'), 'gem5 lib')
+
 env.SwitchingHeaders(
     Split('''
-        decoder.hh
         isa.hh
-        isa_traits.hh
-        locked_mem.hh
-        registers.hh
-        remote_gdb.hh
-        types.hh
-        utility.hh
+        vecregs.hh
         '''),
-    env.subst('${TARGET_ISA}'))
+    env.subst('${CONF["TARGET_ISA"]}'))
 
-if env['BUILD_GPU']:
+amdgpu_isa = ['gcn3', 'vega']
+
+if env['CONF']['BUILD_GPU']:
     env.SwitchingHeaders(
         Split('''
             gpu_decoder.hh
             gpu_isa.hh
+            gpu_registers.hh
             gpu_types.hh
             '''),
-        env.subst('${TARGET_GPU_ISA}'))
+        '{}'.format('amdgpu/' if
+            env['CONF']['TARGET_GPU_ISA'] in amdgpu_isa else '') +
+        env.subst('${CONF["TARGET_GPU_ISA"]}'))
 
 #################################################################
 #
@@ -103,8 +105,12 @@ SCons.Tool.SourceFileScanner.add_scanner('.cc.inc', SCons.Tool.CScanner)
 # Now create a Builder object that uses isa_parser.py to generate C++
 # output from the ISA description (*.isa) files.
 #
-
-parser_files = Glob('isa_parser/*.py')
+parser_files = []
+for root, dirnames, filenames in os.walk(Dir("isa_parser").srcnode().abspath):
+    for name in filenames:
+        _, ext = os.path.splitext(name)
+        if ext == '.py':
+            parser_files.append(os.path.join(root, name))
 micro_asm_py = File('micro_asm.py')
 
 # import ply here because SCons screws with sys.path when performing actions.
@@ -114,7 +120,7 @@ arch_dir = Dir('.')
 
 def run_parser(target, source, env):
     # Add the current directory to the system path so we can import files.
-    sys.path[0:0] = [ arch_dir.abspath ]
+    sys.path[0:0] = [ arch_dir.srcnode().abspath ]
     import isa_parser
 
     parser = isa_parser.ISAParser(target[0].dir.abspath)
@@ -127,7 +133,7 @@ IsaDescBuilder = Builder(action=desc_action)
 
 # ISAs should use this function to set up an IsaDescBuilder and not try to
 # set one up manually.
-def ISADesc(desc, decoder_splits=1, exec_splits=1):
+def ISADesc(desc, decoder_splits=1, exec_splits=1, tags=None, add_tags=None):
     '''Set up a builder for an ISA description.
 
     The decoder_splits and exec_splits parameters let us determine what
@@ -189,7 +195,10 @@ def ISADesc(desc, decoder_splits=1, exec_splits=1):
     # These generated files are also top level sources.
     def source_gen(name):
         add_gen(name)
-        Source(gen_file(name))
+        append = {}
+        if env['CLANG']:
+            append['CCFLAGS'] = ['-Wno-self-assign']
+        Source(gen_file(name), append=append, tags=tags, add_tags=add_tags)
 
     source_gen('decoder.cc')
 
@@ -220,3 +229,7 @@ DebugFlag('CCRegs')
 DebugFlag('MiscRegs')
 CompoundFlag('Registers', [ 'IntRegs', 'FloatRegs', 'VecRegs', 'VecPredRegs',
                             'CCRegs', 'MiscRegs' ])
+
+DebugFlag('Decoder', "Decoder debug output")
+DebugFlag('Faults', "Information about faults, exceptions, interrupts, etc")
+DebugFlag('TLBVerbose')

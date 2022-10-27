@@ -1,8 +1,6 @@
 # Copyright (c) 2017-2021 Advanced Micro Devices, Inc.
 # All rights reserved.
 #
-# For use for simulation and test purposes only
-#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #
@@ -36,6 +34,7 @@ from m5.proxy import *
 class ProtocolTester(ClockedObject):
     type = 'ProtocolTester'
     cxx_header = "cpu/testers/gpu_ruby_test/protocol_tester.hh"
+    cxx_class = 'gem5::ProtocolTester'
 
     cpu_ports = VectorRequestPort("Ports for CPUs")
     dma_ports = VectorRequestPort("Ports for DMAs")

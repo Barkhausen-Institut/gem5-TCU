@@ -33,6 +33,7 @@ from m5.objects.Device import BasicPioDevice
 class KecAcc(BasicPioDevice):
     type = 'KecAcc'
     cxx_header = "dev/kecacc/kecacc.hh"
+    cxx_class = 'gem5::KecAcc'
 
     port = RequestPort("Port to the memory system")
     buf_size = Param.MemorySize('512KiB', "Maximum size of processable buffers")

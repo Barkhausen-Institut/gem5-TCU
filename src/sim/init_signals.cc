@@ -58,8 +58,10 @@
 #include "base/logging.hh"
 #include "sim/async.hh"
 #include "sim/backtrace.hh"
-#include "sim/core.hh"
 #include "sim/eventq.hh"
+
+namespace gem5
+{
 
 // Use an separate stack for fatal signal handlers
 
@@ -214,3 +216,4 @@ initSignals()
     installSignalHandler(SIGIO, ioHandler);
 }
 
+} // namespace gem5

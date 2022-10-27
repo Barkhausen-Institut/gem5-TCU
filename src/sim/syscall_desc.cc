@@ -30,7 +30,11 @@
 #include "sim/syscall_desc.hh"
 
 #include "base/types.hh"
+#include "sim/eventq.hh"
 #include "sim/syscall_debug_macros.hh"
+
+namespace gem5
+{
 
 class ThreadContext;
 
@@ -41,10 +45,60 @@ SyscallDesc::doSyscall(ThreadContext *tc)
 
     SyscallReturn retval = executor(this, tc);
 
-    if (retval.needsRetry())
-        DPRINTF_SYSCALL(Base, "Needs retry.\n", name());
-    else if (retval.suppressed())
-        DPRINTF_SYSCALL(Base, "No return value.\n", name());
-    else
-        DPRINTF_SYSCALL(Base, "Returned %d.\n", retval.encodedValue());
+    if (retval.needsRetry()) {
+        // Suspend this ThreadContext while the syscall is pending.
+        tc->suspend();
+
+        DPRINTF_SYSCALL(Base, "%s needs retry.\n", name());
+        setupRetry(tc);
+        return;
+    }
+
+    handleReturn(tc, retval);
 }
+
+void
+SyscallDesc::retrySyscall(ThreadContext *tc)
+{
+    DPRINTF_SYSCALL(Base, "Retrying %s...\n", dumper(name(), tc));
+
+    SyscallReturn retval = executor(this, tc);
+
+    if (retval.needsRetry()) {
+        DPRINTF_SYSCALL(Base, "%s still needs retry.\n", name());
+        setupRetry(tc);
+        return;
+    }
+
+    // We're done retrying, so reactivate this ThreadContext.
+    tc->activate();
+
+    handleReturn(tc, retval);
+}
+
+void
+SyscallDesc::setupRetry(ThreadContext *tc)
+{
+    // Create an event which will retry the system call later.
+    auto retry = [this, tc]() { retrySyscall(tc); };
+    auto *event = new EventFunctionWrapper(retry, name(), true);
+
+    // Schedule it in about 100 CPU cycles. That will give other contexts
+    // a chance to execute a bit of code before trying again.
+    auto *cpu = tc->getCpuPtr();
+    curEventQueue()->schedule(event,
+            curTick() + cpu->cyclesToTicks(Cycles(100)));
+}
+
+void
+SyscallDesc::handleReturn(ThreadContext *tc, const SyscallReturn &ret)
+{
+    if (ret.suppressed()) {
+        DPRINTF_SYSCALL(Base, "No return value.\n", name());
+    } else {
+        returnInto(tc, ret);
+        DPRINTF_SYSCALL(Base, "Returned %d.\n", ret.encodedValue());
+    }
+}
+
+} // namespace gem5

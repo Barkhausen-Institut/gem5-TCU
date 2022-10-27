@@ -2,8 +2,6 @@
  * Copyright (c) 2018 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -39,6 +37,9 @@
 
 #include "gpu-compute/exec_stage.hh"
 #include "gpu-compute/misc.hh"
+
+namespace gem5
+{
 
 struct ComputeUnitParams;
 class Wavefront;
@@ -117,5 +118,7 @@ class ScheduleToExecute : public PipeStageIFace
     std::vector<GPUDynInstPtr> _readyInsts;
     std::vector<DISPATCH_STATUS> _dispatchStatus;
 };
+
+} // namespace gem5
 
 #endif // __GPU_COMPUTE_COMM_HH__

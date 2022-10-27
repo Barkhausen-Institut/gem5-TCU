@@ -45,15 +45,22 @@
  * one that predicted when the prediction is incorrect.
  */
 
-#ifndef __CPU_PRED_TAGE_BASE
-#define __CPU_PRED_TAGE_BASE
+#ifndef __CPU_PRED_TAGE_BASE_HH__
+#define __CPU_PRED_TAGE_BASE_HH__
 
 #include <vector>
 
 #include "base/statistics.hh"
+#include "cpu/null_static_inst.hh"
 #include "cpu/static_inst.hh"
 #include "params/TAGEBase.hh"
 #include "sim/sim_object.hh"
+
+namespace gem5
+{
+
+namespace branch_prediction
+{
 
 class TAGEBase : public SimObject
 {
@@ -101,14 +108,15 @@ class TAGEBase : public SimObject
             comp = (comp << 1) | h[0];
             comp ^= h[origLength] << outpoint;
             comp ^= (comp >> compLength);
-            comp &= (ULL(1) << compLength) - 1;
+            comp &= (1ULL << compLength) - 1;
         }
     };
 
   public:
 
     // provider type
-    enum {
+    enum
+    {
         BIMODAL_ONLY = 0,
         TAGE_LONGEST_MATCH,
         BIMODAL_ALT_MATCH,
@@ -286,7 +294,7 @@ class TAGEBase : public SimObject
     virtual void updateHistories(
         ThreadID tid, Addr branch_pc, bool taken, BranchInfo* b,
         bool speculative,
-        const StaticInstPtr & inst = StaticInst::nullStaticInstPtr,
+        const StaticInstPtr & inst = nullStaticInstPtr,
         Addr target = MaxAddr);
 
     /**
@@ -431,7 +439,8 @@ class TAGEBase : public SimObject
 
     // Keep per-thread histories to
     // support SMT.
-    struct ThreadHistory {
+    struct ThreadHistory
+    {
         // Speculative path history
         // (LSB of branch address)
         int pathHist;
@@ -482,23 +491,27 @@ class TAGEBase : public SimObject
 
     bool initialized;
 
-    struct TAGEBaseStats : public Stats::Group {
-        TAGEBaseStats(Stats::Group *parent, unsigned nHistoryTables);
+    struct TAGEBaseStats : public statistics::Group
+    {
+        TAGEBaseStats(statistics::Group *parent, unsigned nHistoryTables);
         // stats
-        Stats::Scalar longestMatchProviderCorrect;
-        Stats::Scalar altMatchProviderCorrect;
-        Stats::Scalar bimodalAltMatchProviderCorrect;
-        Stats::Scalar bimodalProviderCorrect;
-        Stats::Scalar longestMatchProviderWrong;
-        Stats::Scalar altMatchProviderWrong;
-        Stats::Scalar bimodalAltMatchProviderWrong;
-        Stats::Scalar bimodalProviderWrong;
-        Stats::Scalar altMatchProviderWouldHaveHit;
-        Stats::Scalar longestMatchProviderWouldHaveHit;
+        statistics::Scalar longestMatchProviderCorrect;
+        statistics::Scalar altMatchProviderCorrect;
+        statistics::Scalar bimodalAltMatchProviderCorrect;
+        statistics::Scalar bimodalProviderCorrect;
+        statistics::Scalar longestMatchProviderWrong;
+        statistics::Scalar altMatchProviderWrong;
+        statistics::Scalar bimodalAltMatchProviderWrong;
+        statistics::Scalar bimodalProviderWrong;
+        statistics::Scalar altMatchProviderWouldHaveHit;
+        statistics::Scalar longestMatchProviderWouldHaveHit;
 
-        Stats::Vector longestMatchProvider;
-        Stats::Vector altMatchProvider;
+        statistics::Vector longestMatchProvider;
+        statistics::Vector altMatchProvider;
     } stats;
 };
 
-#endif // __CPU_PRED_TAGE_BASE
+} // namespace branch_prediction
+} // namespace gem5
+
+#endif // __CPU_PRED_TAGE_BASE_HH__

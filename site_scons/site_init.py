@@ -53,7 +53,7 @@ For more details, see:
 
 # Check for the python version. Python 2 is no longer supported.
 try:
-    EnsurePythonVersion(3, 0)
+    EnsurePythonVersion(3, 6)
 except SystemExit as e:
     print("""\033[93m
 Python 3 is now required.
@@ -63,7 +63,7 @@ The following are steps to compile gem5 in Python 3 environment,
 *Step 1*: ensure Python 3 is installed. On Ubuntu like systems, you can try \
 this command:
 
-    sudo apt-get install python3 python3-six python-is-python3 python3-pydot
+    sudo apt-get install python3 python-is-python3 python3-pydot
 
 To run Python 3 from a container, you can try the Docker files in \
 util/dockerfiles folder.

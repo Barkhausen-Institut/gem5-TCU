@@ -2,8 +2,6 @@
  * Copyright (c) 2017-2018 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -54,6 +52,9 @@
 #include "dev/hsa/hsa_packet.hh"
 #include "dev/hsa/hsa_queue.hh"
 #include "gpu-compute/kernel_code.hh"
+
+namespace gem5
+{
 
 class HSAQueueEntry
 {
@@ -474,5 +475,7 @@ class HSAQueueEntry
     std::bitset<NumVectorInitFields> initialVgprState;
     std::bitset<NumScalarInitFields> initialSgprState;
 };
+
+} // namespace gem5
 
 #endif // __GPU_COMPUTE_HSA_QUEUE_ENTRY__

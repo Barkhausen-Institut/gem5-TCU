@@ -28,7 +28,13 @@
 
 #include "mem/ruby/profiler/StoreTrace.hh"
 
-#include "sim/core.hh"
+#include "sim/cur_tick.hh"
+
+namespace gem5
+{
+
+namespace ruby
+{
 
 bool StoreTrace::s_init = false; // Total number of store lifetimes of
                                  // all lines
@@ -157,3 +163,6 @@ StoreTrace::downgrade(NodeID node)
         m_last_writer = -1;
     }
 }
+
+} // namespace ruby
+} // namespace gem5

@@ -41,9 +41,13 @@
 #include <libgen.h>
 #include <sstream>
 
+namespace gem5
+{
+
 M3Loader::M3Loader(const std::vector<Addr> &tiles,
                    const std::vector<std::string> &mods,
                    const std::string &cmdline,
+                   Addr envStart,
                    unsigned tileId,
                    Addr modOffset,
                    Addr modSize,
@@ -51,6 +55,7 @@ M3Loader::M3Loader(const std::vector<Addr> &tiles,
     : tiles(tiles),
       mods(mods),
       commandLine(cmdline),
+      envStart(envStart),
       tileId(tileId),
       modOffset(modOffset),
       modSize(modSize),
@@ -107,9 +112,9 @@ M3Loader::writeRemote(RequestPort &noc, Addr dest,
     Packet pkt(req, MemCmd::WriteReq);
     pkt.dataStaticConst(data);
 
-    auto senderState = new Tcu::NocSenderState();
-    senderState->packetType = Tcu::NocPacketType::CACHE_MEM_REQ_FUNC;
-    senderState->result = TcuError::NONE;
+    auto senderState = new tcu::Tcu::NocSenderState();
+    senderState->packetType = tcu::Tcu::NocPacketType::CACHE_MEM_REQ_FUNC;
+    senderState->result = tcu::TcuError::NONE;
 
     pkt.pushSenderState(senderState);
 
@@ -148,7 +153,7 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
     env.tile_id = tileId;
     env.tile_desc = tiles[tileId];
     env.argc = getArgc();
-    Addr argv = ENV_START + sizeof(env);
+    Addr argv = envStart + sizeof(env);
     // the kernel gets the kernel env behind the normal env
     if (modOffset)
         argv += sizeof(KernelEnv);
@@ -163,10 +168,10 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
         env.heap_size = 0;
 
     // check if there is enough space
-    if (commandLine.length() + 1 > ENV_START + ENV_SIZE - args)
+    if (commandLine.length() + 1 > envStart + ENV_SIZE - args)
     {
         panic("Command line \"%s\" is longer than %d characters.\n",
-                commandLine, ENV_START + ENV_SIZE - args - 1);
+                commandLine, envStart + ENV_SIZE - args - 1);
     }
 
     // write arguments to state area
@@ -193,7 +198,7 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
         BootModule *bmods = new BootModule[mods.size()]();
 
         i = 0;
-        Addr addr = NocAddr(mem.memTile, modOffset).getAddr();
+        Addr addr = tcu::NocAddr(mem.memTile, modOffset).getAddr();
         for (const std::string &mod : mods)
         {
             Addr size = loadModule(noc, mod, addr);
@@ -214,8 +219,8 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
                 bmods[i].name, bmods[i].addr, bmods[i].addr + bmods[i].size);
 
             // to next
-            addr += size + TcuTlb::PAGE_SIZE - 1;
-            addr &= ~static_cast<Addr>(TcuTlb::PAGE_SIZE - 1);
+            addr += size + tcu::TcuTlb::PAGE_SIZE - 1;
+            addr &= ~static_cast<Addr>(tcu::TcuTlb::PAGE_SIZE - 1);
             i++;
         }
 
@@ -226,13 +231,13 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
         bmems[0].size = tiles[mem.memTile] & ~static_cast<Addr>(0xFFF);
         if (bmems[0].size < avail_mem_start)
             panic("Not enough DRAM for modules and tiles");
-        bmems[0].addr = NocAddr(mem.memTile, avail_mem_start).getAddr();
+        bmems[0].addr = tcu::NocAddr(mem.memTile, avail_mem_start).getAddr();
         bmems[0].size -= avail_mem_start;
         mem_count++;
 
         for (size_t i = 0; i < tiles.size(); ++i) {
             if (i != mem.memTile && (tiles[i] & 0x7) == 2) {
-                bmems[mem_count].addr = NocAddr(i, 0).getAddr();
+                bmems[mem_count].addr = tcu::NocAddr(i, 0).getAddr();
                 bmems[mem_count].size = tiles[i] & ~static_cast<Addr>(0xFFF);
                 mem_count++;
             }
@@ -271,15 +276,17 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
         addr += bmemsize;
 
         // check size
-        Addr end = NocAddr(mem.memTile, modOffset + modSize).getAddr();
+        Addr end = tcu::NocAddr(mem.memTile, modOffset + modSize).getAddr();
         if (addr > end)
         {
             panic("Modules are too large (have: %lu, need: %lu)",
-                modSize, addr - NocAddr(mem.memTile, modOffset).getAddr());
+                modSize, addr - tcu::NocAddr(mem.memTile, modOffset).getAddr());
         }
     }
 
     // write env
     sys.physProxy.writeBlob(
-        ENV_START, reinterpret_cast<uint8_t*>(&env), sizeof(env));
+        envStart, reinterpret_cast<uint8_t*>(&env), sizeof(env));
+}
+
 }

@@ -35,6 +35,9 @@
 #include "arch/riscv/insts/static_inst.hh"
 #include "cpu/static_inst.hh"
 
+namespace gem5
+{
+
 namespace RiscvISA
 {
 
@@ -47,9 +50,10 @@ class CompRegOp : public RiscvStaticInst
     using RiscvStaticInst::RiscvStaticInst;
 
     std::string generateDisassembly(
-        Addr pc, const Loader::SymbolTable *symtab) const override;
+        Addr pc, const loader::SymbolTable *symtab) const override;
 };
 
-}
+} // namespace RiscvISA
+} // namespace gem5
 
 #endif // __ARCH_RISCV_INSTS_COMPRESSED_HH__

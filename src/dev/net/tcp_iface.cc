@@ -52,11 +52,11 @@
 #include <cstring>
 #include <vector>
 
+#include "base/compiler.hh"
 #include "base/trace.hh"
 #include "base/types.hh"
 #include "debug/DistEthernet.hh"
 #include "debug/DistEthernetCmd.hh"
-#include "sim/core.hh"
 #include "sim/sim_exit.hh"
 
 #if defined(__FreeBSD__)
@@ -70,6 +70,9 @@
 #define MSG_NOSIGNAL SO_NOSIGPIPE
 #endif
 #endif
+
+namespace gem5
+{
 
 std::vector<std::pair<TCPIface::NodeInfo, int> > TCPIface::nodes;
 std::vector<int> TCPIface::sockRegistry;
@@ -251,7 +254,7 @@ TCPIface::connect()
 
 TCPIface::~TCPIface()
 {
-    M5_VAR_USED int ret;
+    [[maybe_unused]] int ret;
 
     ret = close(sock);
     assert(ret == 0);
@@ -339,3 +342,5 @@ TCPIface::initTransport()
     // phase. That information is necessary for global connection ordering.
     establishConnection();
 }
+
+} // namespace gem5

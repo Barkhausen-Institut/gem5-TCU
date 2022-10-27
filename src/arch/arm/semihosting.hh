@@ -45,12 +45,16 @@
 #include <utility>
 #include <vector>
 
-#include "arch/arm/intregs.hh"
+#include "arch/arm/regs/int.hh"
 #include "arch/arm/utility.hh"
 #include "cpu/thread_context.hh"
 #include "mem/port_proxy.hh"
+#include "sim/core.hh"
 #include "sim/guest_abi.hh"
 #include "sim/sim_object.hh"
+
+namespace gem5
+{
 
 struct ArmSemihostingParams;
 class SerialDevice;
@@ -72,8 +76,8 @@ class SerialDevice;
 class ArmSemihosting : public SimObject
 {
   public:
-
-    enum {
+    enum
+    {
         // Standard ARM immediate values which trigger semihosting.
         T32Imm = 0xAB,
         A32Imm = 0x123456,
@@ -140,7 +144,7 @@ class ArmSemihosting : public SimObject
           public:
             // For 64 bit semihosting, the params are pointer to by X1.
             explicit State(const ThreadContext *tc) :
-                StateBase<uint64_t>(tc, tc->readIntReg(ArmISA::INTREG_X1))
+                StateBase<uint64_t>(tc, tc->getReg(ArmISA::int_reg::X1))
             {}
         };
     };
@@ -154,7 +158,7 @@ class ArmSemihosting : public SimObject
           public:
             // For 32 bit semihosting, the params are pointer to by R1.
             explicit State(const ThreadContext *tc) :
-                StateBase<uint64_t>(tc, tc->readIntReg(ArmISA::INTREG_R1))
+                StateBase<uint64_t>(tc, tc->getReg(ArmISA::int_reg::R1))
             {}
         };
     };
@@ -197,7 +201,8 @@ class ArmSemihosting : public SimObject
         }
     };
 
-    enum Operation {
+    enum Operation
+    {
         SYS_OPEN = 0x01,
         SYS_CLOSE = 0x02,
         SYS_WRITEC = 0x03,
@@ -413,7 +418,7 @@ class ArmSemihosting : public SimObject
     unsigned
     calcTickShift() const
     {
-        int msb = findMsbSet(SimClock::Frequency);
+        int msb = findMsbSet(sim_clock::Frequency);
         return msb > 31 ? msb - 31 : 0;
     }
     uint64_t
@@ -594,12 +599,13 @@ class ArmSemihosting : public SimObject
 std::ostream &operator << (
         std::ostream &os, const ArmSemihosting::InPlaceArg &ipa);
 
-namespace GuestABI
+GEM5_DEPRECATED_NAMESPACE(GuestABI, guest_abi);
+namespace guest_abi
 {
 
 template <typename Arg>
 struct Argument<ArmSemihosting::Abi64, Arg,
-    typename std::enable_if_t<std::is_integral<Arg>::value>>
+    typename std::enable_if_t<std::is_integral_v<Arg>>>
 {
     static Arg
     get(ThreadContext *tc, ArmSemihosting::Abi64::State &state)
@@ -610,12 +616,12 @@ struct Argument<ArmSemihosting::Abi64, Arg,
 
 template <typename Arg>
 struct Argument<ArmSemihosting::Abi32, Arg,
-    typename std::enable_if_t<std::is_integral<Arg>::value>>
+    typename std::enable_if_t<std::is_integral_v<Arg>>>
 {
     static Arg
     get(ThreadContext *tc, ArmSemihosting::Abi32::State &state)
     {
-        if (std::is_signed<Arg>::value)
+        if (std::is_signed_v<Arg>)
             return sext<32>(state.get(tc));
         else
             return state.get(tc);
@@ -624,7 +630,7 @@ struct Argument<ArmSemihosting::Abi32, Arg,
 
 template <typename Abi>
 struct Argument<Abi, ArmSemihosting::InPlaceArg, typename std::enable_if_t<
-    std::is_base_of<ArmSemihosting::AbiBase, Abi>::value>>
+    std::is_base_of_v<ArmSemihosting::AbiBase, Abi>>>
 {
     static ArmSemihosting::InPlaceArg
     get(ThreadContext *tc, typename Abi::State &state)
@@ -640,7 +646,7 @@ struct Result<ArmSemihosting::Abi32, ArmSemihosting::RetErrno>
     static void
     store(ThreadContext *tc, const ArmSemihosting::RetErrno &err)
     {
-        tc->setIntReg(ArmISA::INTREG_R0, err.first);
+        tc->setReg(ArmISA::int_reg::R0, err.first);
     }
 };
 
@@ -650,10 +656,11 @@ struct Result<ArmSemihosting::Abi64, ArmSemihosting::RetErrno>
     static void
     store(ThreadContext *tc, const ArmSemihosting::RetErrno &err)
     {
-        tc->setIntReg(ArmISA::INTREG_X0, err.first);
+        tc->setReg(ArmISA::int_reg::X0, err.first);
     }
 };
 
-} // namespace GuestABI
+} // namespace guest_abi
+} // namespace gem5
 
 #endif // __ARCH_ARM_SEMIHOSTING_HH__

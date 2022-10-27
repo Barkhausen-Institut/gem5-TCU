@@ -28,7 +28,7 @@
 
 Import('*')
 
-SimObject('TcuAccel.py')
+SimObject('TcuAccel.py', sim_objects=['TcuAccel', 'TcuAccelConnector'])
 
 Source('accelerator.cc')
 Source('connector.cc')

@@ -41,9 +41,14 @@
 #include "mem/cache/replacement_policies/base.hh"
 #include "mem/cache/replacement_policies/fifo_rp.hh"
 
+namespace gem5
+{
+
 struct SecondChanceRPParams;
 
-namespace ReplacementPolicy {
+GEM5_DEPRECATED_NAMESPACE(ReplacementPolicy, replacement_policy);
+namespace replacement_policy
+{
 
 class SecondChance : public FIFO
 {
@@ -85,7 +90,7 @@ class SecondChance : public FIFO
      * @param replacement_data Replacement data to be invalidated.
      */
     void invalidate(const std::shared_ptr<ReplacementData>& replacement_data)
-                                                              const override;
+                                                                    override;
 
     /**
      * Touch an entry to update its re-insertion tick and second chance bit.
@@ -123,6 +128,7 @@ class SecondChance : public FIFO
     std::shared_ptr<ReplacementData> instantiateEntry() override;
 };
 
-} // namespace ReplacementPolicy
+} // namespace replacement_policy
+} // namespace gem5
 
 #endif // __MEM_CACHE_REPLACEMENT_POLICIES_SECOND_CHANCE_RP_HH__

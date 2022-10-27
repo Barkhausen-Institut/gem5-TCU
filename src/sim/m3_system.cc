@@ -32,6 +32,9 @@
 
 #include <libgen.h>
 
+namespace gem5
+{
+
 M3System::NoCMasterPort::NoCMasterPort(M3System &_sys)
   : QueuedRequestPort("noc_master_port", &_sys, reqQueue, snoopRespQueue),
     reqQueue(_sys, *this),
@@ -43,12 +46,12 @@ M3System::M3System(const Params &p)
       TileMemory(this, p.memory_tile, p.memory_offset, p.memory_size,
                 physProxy),
       nocPort(*this),
-      loader(p.tiles, p.mods, p.cmdline,
+      loader(p.tiles, p.mods, p.cmdline, p.env_start,
              p.tile_id, p.mod_offset, p.mod_size, p.tile_size)
 {
 }
 
-uint32_t M3System::tileDesc(tileid_t tile) const
+uint32_t M3System::tileDesc(tcu::tileid_t tile) const
 {
     return loader.tile_attr()[tile];
 }
@@ -69,4 +72,6 @@ M3System::initState()
     loader.initState(*this, *this, nocPort);
 
     workload->initState();
+}
+
 }

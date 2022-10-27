@@ -2,8 +2,6 @@
  * Copyright (c) 2016-2017 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -36,18 +34,21 @@
 
 #include <cstdint>
 
-typedef enum
+namespace gem5
+{
+
+enum _hsa_queue_type_t
 {
     _HSA_QUEUE_TYPE_MULTI = 0,
     _HSA_QUEUE_TYPE_SINGLE = 1
-} _hsa_queue_type_t;
+};
 
-typedef struct _hsa_signal_s
+struct _hsa_signal_t
 {
     uint64_t handle;
-} _hsa_signal_t;
+};
 
-typedef struct _hsa_queue_s
+struct _hsa_queue_t
 {
     _hsa_queue_type_t type;
     uint32_t features;
@@ -56,11 +57,11 @@ typedef struct _hsa_queue_s
     uint32_t size;
     uint32_t reserved1;
     uint64_t id;
-} _hsa_queue_t;
+};
 
 typedef uint32_t _amd_queue_properties32_t;
 
-typedef struct _amd_queue_s
+struct _amd_queue_t
 {
     _hsa_queue_t hsa_queue;
     uint32_t reserved1[4];
@@ -85,6 +86,8 @@ typedef struct _amd_queue_s
     uint32_t reserved3[2];
     _hsa_signal_t queue_inactive_signal;
     uint32_t reserved4[14];
-} _amd_queue_t;
+};
+
+} // namespace gem5
 
 #endif // __DEV_HSA_HSA_QUEUE_HH__

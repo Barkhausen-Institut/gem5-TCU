@@ -35,17 +35,6 @@ class BaseSimpleCPU(BaseCPU):
     type = 'BaseSimpleCPU'
     abstract = True
     cxx_header = "cpu/simple/base.hh"
-
-    def addCheckerCpu(self):
-        if buildEnv['TARGET_ISA'] in ['arm']:
-            from m5.objects.ArmTLB import ArmMMU
-
-            self.checker = DummyChecker(workload = self.workload)
-            self.checker.mmu = ArmMMU()
-            self.checker.mmu.itb.size = self.mmu.itb.size
-            self.checker.mmu.dtb.size = self.mmu.dtb.size
-        else:
-            print("ERROR: Checker only supported under ARM ISA!")
-            exit(1)
+    cxx_class = 'gem5::BaseSimpleCPU'
 
     branchPred = Param.BranchPredictor(NULL, "Branch Predictor")

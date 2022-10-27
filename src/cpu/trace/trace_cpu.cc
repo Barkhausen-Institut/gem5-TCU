@@ -37,7 +37,11 @@
 
 #include "cpu/trace/trace_cpu.hh"
 
+#include "base/compiler.hh"
 #include "sim/sim_exit.hh"
+
+namespace gem5
+{
 
 // Declare and initialize the static counter for number of trace CPUs.
 int TraceCPU::numTraceCPUs = 0;
@@ -201,15 +205,16 @@ TraceCPU::checkAndSchedExitEvent()
     }
 }
  TraceCPU::TraceStats::TraceStats(TraceCPU *trace) :
-    Stats::Group(trace),
-    ADD_STAT(numSchedDcacheEvent, UNIT_COUNT,
+    statistics::Group(trace),
+    ADD_STAT(numSchedDcacheEvent, statistics::units::Count::get(),
              "Number of events scheduled to trigger data request generator"),
-    ADD_STAT(numSchedIcacheEvent, UNIT_COUNT,
-             "Number of events scheduled to trigger instruction request generator"),
-    ADD_STAT(numOps, UNIT_COUNT,
+    ADD_STAT(numSchedIcacheEvent, statistics::units::Count::get(),
+             "Number of events scheduled to trigger instruction request "
+             "generator"),
+    ADD_STAT(numOps, statistics::units::Count::get(),
              "Number of micro-ops simulated by the Trace CPU"),
-    ADD_STAT(cpi,
-             UNIT_RATE(Stats::Units::Cycle, Stats::Units::Count),
+    ADD_STAT(cpi, statistics::units::Rate<
+                    statistics::units::Cycle, statistics::units::Count>::get(),
              "Cycles per micro-op used as a proxy for CPI",
              trace->baseStats.numCycles / numOps)
 {
@@ -217,23 +222,28 @@ TraceCPU::checkAndSchedExitEvent()
 }
 
 TraceCPU::ElasticDataGen::
-ElasticDataGenStatGroup::ElasticDataGenStatGroup(Stats::Group *parent,
+ElasticDataGenStatGroup::ElasticDataGenStatGroup(statistics::Group *parent,
                                                  const std::string& _name) :
-    Stats::Group(parent, _name.c_str()),
-    ADD_STAT(maxDependents, UNIT_COUNT,
+    statistics::Group(parent, _name.c_str()),
+    ADD_STAT(maxDependents, statistics::units::Count::get(),
              "Max number of dependents observed on a node"),
-    ADD_STAT(maxReadyListSize, UNIT_COUNT,
+    ADD_STAT(maxReadyListSize, statistics::units::Count::get(),
              "Max size of the ready list observed"),
-    ADD_STAT(numSendAttempted, UNIT_COUNT,
+    ADD_STAT(numSendAttempted, statistics::units::Count::get(),
              "Number of first attempts to send a request"),
-    ADD_STAT(numSendSucceeded, UNIT_COUNT,
+    ADD_STAT(numSendSucceeded, statistics::units::Count::get(),
              "Number of successful first attempts"),
-    ADD_STAT(numSendFailed, UNIT_COUNT, "Number of failed first attempts"),
-    ADD_STAT(numRetrySucceeded, UNIT_COUNT, "Number of successful retries"),
-    ADD_STAT(numSplitReqs, UNIT_COUNT, "Number of split requests"),
-    ADD_STAT(numSOLoads, UNIT_COUNT, "Number of strictly ordered loads"),
-    ADD_STAT(numSOStores, UNIT_COUNT, "Number of strictly ordered stores"),
-    ADD_STAT(dataLastTick, UNIT_TICK,
+    ADD_STAT(numSendFailed, statistics::units::Count::get(),
+             "Number of failed first attempts"),
+    ADD_STAT(numRetrySucceeded, statistics::units::Count::get(),
+             "Number of successful retries"),
+    ADD_STAT(numSplitReqs, statistics::units::Count::get(),
+             "Number of split requests"),
+    ADD_STAT(numSOLoads, statistics::units::Count::get(),
+             "Number of strictly ordered loads"),
+    ADD_STAT(numSOStores, statistics::units::Count::get(),
+             "Number of strictly ordered stores"),
+    ADD_STAT(dataLastTick, statistics::units::Tick::get(),
              "Last tick simulated from the elastic data trace")
 {
 }
@@ -257,7 +267,7 @@ TraceCPU::ElasticDataGen::init()
             depGraph.size());
 
     // Print readyList
-    if (DTRACE(TraceCPUData)) {
+    if (debug::TraceCPUData) {
         printReadyList();
     }
     auto free_itr = readyList.begin();
@@ -509,7 +519,7 @@ TraceCPU::ElasticDataGen::execute()
     } // end of while loop
 
     // Print readyList, sizes of queues and resource status after updating
-    if (DTRACE(TraceCPUData)) {
+    if (debug::TraceCPUData) {
         printReadyList();
         DPRINTF(TraceCPUData, "Execute end occupancy:\n");
         DPRINTFR(TraceCPUData, "\tdepGraph = %d, readyList = %d, "
@@ -713,7 +723,7 @@ TraceCPU::ElasticDataGen::completeMemAccess(PacketPtr pkt)
         depGraph.erase(graph_itr);
     }
 
-    if (DTRACE(TraceCPUData)) {
+    if (debug::TraceCPUData) {
         printReadyList();
     }
 
@@ -811,7 +821,7 @@ TraceCPU::ElasticDataGen::printReadyList()
     DPRINTF(TraceCPUData, "Printing readyList:\n");
     while (itr != readyList.end()) {
         auto graph_itr = depGraph.find(itr->seqNum);
-        M5_VAR_USED GraphNode* node_ptr = graph_itr->second;
+        [[maybe_unused]] GraphNode* node_ptr = graph_itr->second;
         DPRINTFR(TraceCPUData, "\t%lld(%s), %lld\n", itr->seqNum,
             node_ptr->typeToStr(), itr->execTick);
         itr++;
@@ -959,15 +969,17 @@ TraceCPU::ElasticDataGen::HardwareResource::printOccupancy()
 }
 
 TraceCPU::FixedRetryGen::FixedRetryGenStatGroup::FixedRetryGenStatGroup(
-        Stats::Group *parent, const std::string& _name) :
-    Stats::Group(parent, _name.c_str()),
-    ADD_STAT(numSendAttempted, UNIT_COUNT,
+        statistics::Group *parent, const std::string& _name) :
+    statistics::Group(parent, _name.c_str()),
+    ADD_STAT(numSendAttempted, statistics::units::Count::get(),
              "Number of first attempts to send a request"),
-    ADD_STAT(numSendSucceeded, UNIT_COUNT,
+    ADD_STAT(numSendSucceeded, statistics::units::Count::get(),
              "Number of successful first attempts"),
-    ADD_STAT(numSendFailed, UNIT_COUNT, "Number of failed first attempts"),
-    ADD_STAT(numRetrySucceeded, UNIT_COUNT, "Number of successful retries"),
-    ADD_STAT(instLastTick, UNIT_TICK,
+    ADD_STAT(numSendFailed, statistics::units::Count::get(),
+             "Number of failed first attempts"),
+    ADD_STAT(numRetrySucceeded, statistics::units::Count::get(),
+             "Number of successful retries"),
+    ADD_STAT(instLastTick, statistics::units::Tick::get(),
              "Last tick simulated from the fixed inst trace")
 {
 
@@ -1193,7 +1205,7 @@ TraceCPU::ElasticDataGen::InputStream::InputStream(
     if (!trace.read(header_msg)) {
         panic("Failed to read packet header from %s\n", filename);
 
-        if (header_msg.tick_freq() != SimClock::Frequency) {
+        if (header_msg.tick_freq() != sim_clock::Frequency) {
             panic("Trace %s was recorded with a different tick frequency %d\n",
                   header_msg.tick_freq());
         }
@@ -1322,7 +1334,7 @@ TraceCPU::ElasticDataGen::GraphNode::removeDepOnInst(NodeSeqNum done_seq_num)
         // If it is not an rob dependency then it must be a register dependency
         // If the register dependency is not found, it violates an assumption
         // and must be caught by assert.
-        M5_VAR_USED bool regdep_found = removeRegDep(done_seq_num);
+        [[maybe_unused]] bool regdep_found = removeRegDep(done_seq_num);
         assert(regdep_found);
     }
     // Return true if the node is dependency free
@@ -1374,7 +1386,7 @@ TraceCPU::FixedRetryGen::InputStream::InputStream(const std::string& filename)
     if (!trace.read(header_msg)) {
         panic("Failed to read packet header from %s\n", filename);
 
-        if (header_msg.tick_freq() != SimClock::Frequency) {
+        if (header_msg.tick_freq() != sim_clock::Frequency) {
             panic("Trace %s was recorded with a different tick frequency %d\n",
                   header_msg.tick_freq());
         }
@@ -1404,3 +1416,5 @@ TraceCPU::FixedRetryGen::InputStream::read(TraceElement* element)
     // We have reached the end of the file
     return false;
 }
+
+} // namespace gem5

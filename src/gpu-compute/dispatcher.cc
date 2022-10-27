@@ -2,8 +2,6 @@
  * Copyright (c) 2011-2015,2018 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -44,6 +42,9 @@
 #include "gpu-compute/wavefront.hh"
 #include "sim/syscall_emul_buf.hh"
 #include "sim/system.hh"
+
+namespace gem5
+{
 
 GPUDispatcher::GPUDispatcher(const Params &p)
     : SimObject(p), shader(nullptr), gpuCmdProc(nullptr),
@@ -344,10 +345,13 @@ GPUDispatcher::scheduleDispatch()
     }
 }
 
-GPUDispatcher::GPUDispatcherStats::GPUDispatcherStats(Stats::Group *parent)
-    : Stats::Group(parent),
+GPUDispatcher::GPUDispatcherStats::GPUDispatcherStats(
+    statistics::Group *parent)
+    : statistics::Group(parent),
       ADD_STAT(numKernelLaunched, "number of kernel launched"),
       ADD_STAT(cyclesWaitingForDispatch, "number of cycles with outstanding "
                "wavefronts that are waiting to be dispatched")
 {
 }
+
+} // namespace gem5

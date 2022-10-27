@@ -31,9 +31,13 @@
 #define __ARCH_RISCV_LINUX_SE_WORKLOAD_HH__
 
 #include "arch/riscv/linux/linux.hh"
+#include "arch/riscv/page_size.hh"
 #include "arch/riscv/se_workload.hh"
 #include "params/RiscvEmuLinux.hh"
 #include "sim/syscall_desc.hh"
+
+namespace gem5
+{
 
 namespace RiscvISA
 {
@@ -51,11 +55,14 @@ class EmuLinux : public SEWorkload
   public:
     using Params = RiscvEmuLinuxParams;
 
-    EmuLinux(const Params &p) : SEWorkload(p) {}
+    EmuLinux(const Params &p) : SEWorkload(p, PageShift) {}
+
+    ByteOrder byteOrder() const override { return ByteOrder::little; }
 
     void syscall(ThreadContext *tc) override;
 };
 
 } // namespace RiscvISA
+} // namespace gem5
 
 #endif // __ARCH_RISCV_LINUX_SE_WORKLOAD_HH__

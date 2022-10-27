@@ -37,6 +37,9 @@
 #include "cpu/base.hh"
 #include "cpu/thread_context.hh"
 
+namespace gem5
+{
+
 void
 BaseStackTrace::dump()
 {
@@ -55,7 +58,7 @@ BaseStackTrace::dump()
 
 bool
 BaseStackTrace::tryGetSymbol(std::string &symbol, Addr addr,
-                             const Loader::SymbolTable *symtab)
+                             const loader::SymbolTable *symtab)
 {
     const auto it = symtab->find(addr);
     if (it == symtab->end())
@@ -94,10 +97,10 @@ ProfileNode::clear()
 }
 
 FunctionProfile::FunctionProfile(std::unique_ptr<BaseStackTrace> _trace,
-                                 const Loader::SymbolTable &_symtab) :
+                                 const loader::SymbolTable &_symtab) :
     symtab(_symtab), trace(std::move(_trace))
 {
-    Stats::registerResetCallback([this]() { clear(); });
+    statistics::registerResetCallback([this]() { clear(); });
 }
 
 ProfileNode *
@@ -155,3 +158,5 @@ FunctionProfile::sample(ProfileNode *node, Addr pc)
         pc_count[pc]++;
     }
 }
+
+} // namespace gem5

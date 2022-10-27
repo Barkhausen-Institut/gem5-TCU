@@ -50,6 +50,12 @@
 #include "mem/qport.hh"
 #include "params/DRAMSim2.hh"
 
+namespace gem5
+{
+
+namespace memory
+{
+
 class DRAMSim2 : public AbstractMemory
 {
   private:
@@ -64,7 +70,7 @@ class DRAMSim2 : public AbstractMemory
 
       private:
 
-        DRAMSim2& memory;
+        DRAMSim2& mem;
 
       public:
 
@@ -203,5 +209,8 @@ class DRAMSim2 : public AbstractMemory
     void recvRespRetry();
 
 };
+
+} // namespace memory
+} // namespace gem5
 
 #endif // __MEM_DRAMSIM2_HH__

@@ -32,8 +32,11 @@
 #include "mem/port_proxy.hh"
 #include "mem/tcu/tlb.hh"
 
+namespace gem5
+{
+
 TileMemory::TileMemory(SimObject *obj,
-                       tileid_t memTile,
+                       tcu::tileid_t memTile,
                        Addr memOffset,
                        Addr memSize,
                        PortProxy &phys)
@@ -43,4 +46,6 @@ TileMemory::TileMemory(SimObject *obj,
       memOffset(memOffset),
       memSize(memSize)
 {
+}
+
 }

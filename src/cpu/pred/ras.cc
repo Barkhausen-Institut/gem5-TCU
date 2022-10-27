@@ -28,12 +28,18 @@
 
 #include "cpu/pred/ras.hh"
 
+namespace gem5
+{
+
+namespace branch_prediction
+{
+
 void
 ReturnAddrStack::init(unsigned _numEntries)
 {
-     numEntries  = _numEntries;
-     addrStack.resize(numEntries);
-     reset();
+    numEntries = _numEntries;
+    addrStack.resize(numEntries);
+    reset();
 }
 
 void
@@ -41,16 +47,14 @@ ReturnAddrStack::reset()
 {
     usedEntries = 0;
     tos = 0;
-    for (unsigned i = 0; i < numEntries; ++i)
-        addrStack[i].set(0);
 }
 
 void
-ReturnAddrStack::push(const TheISA::PCState &return_addr)
+ReturnAddrStack::push(const PCStateBase &return_addr)
 {
     incrTos();
 
-    addrStack[tos] = return_addr;
+    set(addrStack[tos], return_addr);
 
     if (usedEntries != numEntries) {
         ++usedEntries;
@@ -68,14 +72,16 @@ ReturnAddrStack::pop()
 }
 
 void
-ReturnAddrStack::restore(unsigned top_entry_idx,
-                         const TheISA::PCState &restored)
+ReturnAddrStack::restore(unsigned top_entry_idx, const PCStateBase *restored)
 {
     tos = top_entry_idx;
 
-    addrStack[tos] = restored;
+    set(addrStack[tos], restored);
 
     if (usedEntries != numEntries) {
         ++usedEntries;
     }
 }
+
+} // namespace branch_prediction
+} // namespace gem5

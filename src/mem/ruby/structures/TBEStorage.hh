@@ -44,6 +44,12 @@
 
 #include <base/statistics.hh>
 
+namespace gem5
+{
+
+namespace ruby
+{
+
 // The TBEStorage is used to track the resources consumed by the TBETable,
 // i.e. the number of available TBE slots.
 //
@@ -70,9 +76,10 @@
 // the current TBETable would be cumbersome since the TBETable is indexed
 // by the transaction address.
 
-class TBEStorage {
+class TBEStorage
+{
   public:
-    TBEStorage(Stats::Group *parent, int number_of_TBEs);
+    TBEStorage(statistics::Group *parent, int number_of_TBEs);
 
     // Returns the current number of slots allocated
     int size() const { return m_slots_used.size(); }
@@ -117,14 +124,14 @@ class TBEStorage {
     std::stack<int> m_slots_avail;
     std::unordered_map<int, int> m_slots_used;
 
-    struct TBEStorageStats : public Stats::Group
+    struct TBEStorageStats : public statistics::Group
     {
-        TBEStorageStats(Stats::Group *parent);
+        TBEStorageStats(statistics::Group *parent);
 
         // Statistical variables
-        Stats::Average avg_size;
-        Stats::Average avg_util;
-        Stats::Average avg_reserved;
+        statistics::Average avg_size;
+        statistics::Average avg_util;
+        statistics::Average avg_reserved;
     } m_stats;
 };
 
@@ -184,5 +191,8 @@ TBEStorage::removeEntryFromSlot(int slot)
     m_stats.avg_size = size();
     m_stats.avg_util = utilization();
 }
+
+} // namespace ruby
+} // namespace gem5
 
 #endif

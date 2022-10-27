@@ -30,6 +30,8 @@
 
 #include <algorithm>
 #include <bitset>
+#include <cassert>
+#include <cstdint>
 #include <cstring>
 #include <functional>
 #include <initializer_list>
@@ -284,6 +286,9 @@
  * the RegisterBank.
  */
 
+namespace gem5
+{
+
 // Common bases to make it easier to identify both endiannesses at once.
 class RegisterBankBase
 {
@@ -432,6 +437,21 @@ class RegisterBank : public RegisterBankBase
         // The buffer's owner is responsible for serializing it.
         void serialize(std::ostream &os) const override {}
         bool unserialize(const std::string &s) override { return true; }
+
+      protected:
+        /**
+         * This method exists so that derived classes that need to initialize
+         * their buffers before they can be set can do so.
+         *
+         * @param buf The pointer to the backing buffer.
+         */
+        void
+        setBuffer(void *buf)
+        {
+            assert(_ptr == nullptr);
+            assert(buf != nullptr);
+            _ptr = buf;
+        }
     };
 
     // Same as above, but which keeps its storage locally.
@@ -442,8 +462,10 @@ class RegisterBank : public RegisterBankBase
         std::array<uint8_t, BufBytes> buffer;
 
         RegisterLBuf(const std::string &new_name) :
-            RegisterBuf(new_name, buffer.data(), BufBytes)
-        {}
+            RegisterBuf(new_name, nullptr, BufBytes)
+        {
+            this->setBuffer(buffer.data());
+        }
 
         void
         serialize(std::ostream &os) const override
@@ -921,8 +943,8 @@ using RegisterBankBE = RegisterBank<ByteOrder::big>;
 
 // Delegate serialization to the individual RegisterBase subclasses.
 template <class T>
-struct ParseParam<T, std::enable_if_t<std::is_base_of<
-    typename RegisterBankBase::RegisterBaseBase, T>::value>>
+struct ParseParam<T, std::enable_if_t<std::is_base_of_v<
+    typename RegisterBankBase::RegisterBaseBase, T>>>
 {
     static bool
     parse(const std::string &s, T &value)
@@ -932,8 +954,8 @@ struct ParseParam<T, std::enable_if_t<std::is_base_of<
 };
 
 template <class T>
-struct ShowParam<T, std::enable_if_t<std::is_base_of<
-    typename RegisterBankBase::RegisterBaseBase, T>::value>>
+struct ShowParam<T, std::enable_if_t<std::is_base_of_v<
+    typename RegisterBankBase::RegisterBaseBase, T>>>
 {
     static void
     show(std::ostream &os, const T &value)
@@ -941,5 +963,7 @@ struct ShowParam<T, std::enable_if_t<std::is_base_of<
         value.serialize(os);
     }
 };
+
+} // namespace gem5
 
 #endif // __DEV_REG_BANK_HH__

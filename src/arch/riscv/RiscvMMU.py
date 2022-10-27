@@ -40,14 +40,17 @@ from m5.params import *
 from m5.objects.BaseMMU import BaseMMU
 from m5.objects.RiscvTLB import RiscvTLB
 from m5.objects.PMAChecker import PMAChecker
+from m5.objects.PMP import PMP
 
 class RiscvMMU(BaseMMU):
     type = 'RiscvMMU'
-    cxx_class = 'RiscvISA::MMU'
+    cxx_class = 'gem5::RiscvISA::MMU'
     cxx_header = 'arch/riscv/mmu.hh'
-    itb = RiscvTLB()
-    dtb = RiscvTLB()
+
+    itb = RiscvTLB(entry_type="instruction")
+    dtb = RiscvTLB(entry_type="data")
     pma_checker = Param.PMAChecker(PMAChecker(), "PMA Checker")
+    pmp = Param.PMP(PMP(), "Physical Memory Protection Unit")
 
     @classmethod
     def walkerPorts(cls):

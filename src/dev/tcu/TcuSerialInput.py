@@ -33,6 +33,7 @@ from m5.proxy import *
 class TcuSerialInput(ClockedObject):
     type = 'TcuSerialInput'
     cxx_header = "dev/tcu/serial_input.hh"
+    cxx_class = 'gem5::tcu::TcuSerialInput'
 
     tcu_master_port = MasterPort("Port to send requests to the TCU")
     tcu_slave_port = SlavePort("Port that receives memory requests "

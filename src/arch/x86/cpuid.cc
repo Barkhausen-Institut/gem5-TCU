@@ -32,8 +32,12 @@
 #include "base/bitfield.hh"
 #include "cpu/thread_context.hh"
 
+namespace gem5
+{
+
 namespace X86ISA {
-    enum StandardCpuidFunction {
+    enum StandardCpuidFunction
+    {
         VendorAndLargestStdFunc,
         FamilyModelStepping,
         CacheAndTLB,
@@ -45,7 +49,8 @@ namespace X86ISA {
         NumStandardCpuidFuncs
     };
 
-    enum ExtendedCpuidFunctions {
+    enum ExtendedCpuidFunctions
+    {
         VendorAndLargestExtFunc,
         FamilyModelSteppingBrandFeatures,
         NameString1,
@@ -184,3 +189,4 @@ namespace X86ISA {
         return true;
     }
 } // namespace X86ISA
+} // namespace gem5

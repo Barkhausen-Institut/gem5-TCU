@@ -37,7 +37,6 @@
 
 #include "arch/x86/linux/fs_workload.hh"
 
-#include "arch/x86/isa_traits.hh"
 #include "arch/x86/regs/int.hh"
 #include "base/trace.hh"
 #include "cpu/thread_context.hh"
@@ -45,6 +44,9 @@
 #include "params/X86FsLinux.hh"
 #include "sim/byteswap.hh"
 #include "sim/system.hh"
+
+namespace gem5
+{
 
 namespace X86ISA
 {
@@ -124,7 +126,8 @@ FsLinux::initState()
      * Pass the location of the real mode data structure to the kernel
      * using register %esi. We'll use %rsi which should be equivalent.
      */
-    system->threads[0]->setIntReg(INTREG_RSI, realModeData);
+    system->threads[0]->setReg(int_reg::Rsi, realModeData);
 }
 
 } // namespace X86ISA
+} // namespace gem5

@@ -45,6 +45,9 @@
 #include "mem/cache/replacement_policies/replaceable_entry.hh"
 #include "mem/cache/tags/indexing_policies/base.hh"
 
+namespace gem5
+{
+
 SectorTags::SectorTags(const SectorTagsParams &p)
     : BaseTags(p), allocAssoc(p.assoc),
       sequentialAccess(p.sequential_access),
@@ -136,9 +139,9 @@ SectorTags::invalidate(CacheBlk *blk)
 }
 
 CacheBlk*
-SectorTags::accessBlock(Addr addr, bool is_secure, Cycles &lat)
+SectorTags::accessBlock(const PacketPtr pkt, Cycles &lat)
 {
-    CacheBlk *blk = findBlock(addr, is_secure);
+    CacheBlk *blk = findBlock(pkt->getAddr(), pkt->isSecure());
 
     // Access all tags in parallel, hence one in each way.  The data side
     // either accesses all blocks in parallel, or one block sequentially on
@@ -163,7 +166,7 @@ SectorTags::accessBlock(Addr addr, bool is_secure, Cycles &lat)
 
         // Update replacement data of accessed block, which is shared with
         // the whole sector it belongs to
-        replacementPolicy->touch(sector_blk->replacementData);
+        replacementPolicy->touch(sector_blk->replacementData, pkt);
     }
 
     // The tag lookup latency is the same for a hit or a miss
@@ -183,14 +186,14 @@ SectorTags::insertBlock(const PacketPtr pkt, CacheBlk *blk)
     // sector was not previously present in the cache.
     if (sector_blk->isValid()) {
         // An existing entry's replacement data is just updated
-        replacementPolicy->touch(sector_blk->replacementData);
+        replacementPolicy->touch(sector_blk->replacementData, pkt);
     } else {
         // Increment tag counter
         stats.tagsInUse++;
         assert(stats.tagsInUse.value() <= numSectors);
 
         // A new entry resets the replacement data
-        replacementPolicy->reset(sector_blk->replacementData);
+        replacementPolicy->reset(sector_blk->replacementData, pkt);
     }
 
     // Do common block insertion functionality
@@ -337,8 +340,8 @@ SectorTags::regenerateBlkAddr(const CacheBlk* blk) const
 
 SectorTags::SectorTagsStats::SectorTagsStats(BaseTagStats &base_group,
     SectorTags& _tags)
-  : Stats::Group(&base_group), tags(_tags),
-    ADD_STAT(evictionsReplacement, UNIT_COUNT,
+  : statistics::Group(&base_group), tags(_tags),
+    ADD_STAT(evictionsReplacement, statistics::units::Count::get(),
              "Number of blocks evicted due to a replacement")
 {
 }
@@ -346,7 +349,7 @@ SectorTags::SectorTagsStats::SectorTagsStats(BaseTagStats &base_group,
 void
 SectorTags::SectorTagsStats::regStats()
 {
-    Stats::Group::regStats();
+    statistics::Group::regStats();
 
     evictionsReplacement.init(tags.numBlocksPerSector + 1);
     for (unsigned i = 0; i <= tags.numBlocksPerSector; ++i) {
@@ -374,3 +377,5 @@ SectorTags::anyBlk(std::function<bool(CacheBlk &)> visitor)
     }
     return false;
 }
+
+} // namespace gem5

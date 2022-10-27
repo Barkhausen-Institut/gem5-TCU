@@ -48,7 +48,7 @@ class ArmMachineType(Enum):
 class ArmFsWorkload(KernelWorkload):
     type = 'ArmFsWorkload'
     cxx_header = "arch/arm/fs_workload.hh"
-    cxx_class = "ArmISA::FsWorkload"
+    cxx_class = 'gem5::ArmISA::FsWorkload'
 
     boot_loader = VectorParam.String([],
         "File that contains the boot loader code. Zero or more files may be "
@@ -58,6 +58,9 @@ class ArmFsWorkload(KernelWorkload):
     dtb_filename = Param.String("",
         "File that contains the Device Tree Blob. Don't use DTB if empty.")
     dtb_addr = Param.Addr(0, "DTB or ATAGS address")
+    initrd_filename = Param.String("",
+        "File that contains the initial ramdisk. Don't use initrd if empty.")
+    initrd_addr = Param.Addr(0, "initrd/initramfs address")
     cpu_release_addr = Param.Addr(0, "cpu-release-addr property")
 
     machine_type = Param.ArmMachineType('DTOnly',
@@ -75,7 +78,7 @@ class ArmFsWorkload(KernelWorkload):
 class ArmFsLinux(ArmFsWorkload):
     type = 'ArmFsLinux'
     cxx_header = "arch/arm/linux/fs_workload.hh"
-    cxx_class = "ArmISA::FsLinux"
+    cxx_class = 'gem5::ArmISA::FsLinux'
 
     load_addr_mask = 0
 
@@ -87,4 +90,4 @@ class ArmFsLinux(ArmFsWorkload):
 class ArmFsFreebsd(ArmFsWorkload):
     type = 'ArmFsFreebsd'
     cxx_header = "arch/arm/freebsd/fs_workload.hh"
-    cxx_class = "ArmISA::FsFreebsd"
+    cxx_class = 'gem5::ArmISA::FsFreebsd'

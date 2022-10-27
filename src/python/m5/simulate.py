@@ -1,4 +1,4 @@
-# Copyright (c) 2012,2019 ARM Limited
+# Copyright (c) 2012, 2019, 2021 Arm Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -50,6 +50,7 @@ from . import stats
 from . import SimObject
 from . import ticks
 from . import objects
+from . import params
 from m5.util.dot_writer import do_dot, do_dvfs_dot
 from m5.util.dot_writer_ruby import do_ruby_dot
 
@@ -59,18 +60,20 @@ from .util import attrdict
 # define a MaxTick parameter, unsigned 64 bit
 MaxTick = 2**64 - 1
 
-_memory_modes = {
-    "atomic" : objects.params.atomic,
-    "timing" : objects.params.timing,
-    "atomic_noncaching" : objects.params.atomic_noncaching,
-    }
-
 _drain_manager = _m5.drain.DrainManager.instance()
 
-# The final hook to generate .ini files.  Called from the user script
-# once the config is built.
+_instantiated = False # Has m5.instantiate() been called?
+
+# The final call to instantiate the SimObject graph and initialize the
+# system.
 def instantiate(ckpt_dir=None):
+    global _instantiated
     from m5 import options
+
+    if _instantiated:
+        fatal("m5.instantiate() called twice.")
+
+    _instantiated = True
 
     root = objects.Root.getInstance()
 
@@ -142,7 +145,6 @@ def instantiate(ckpt_dir=None):
     if ckpt_dir:
         _drain_manager.preCheckpointRestore()
         ckpt = _m5.core.getCheckpoint(ckpt_dir)
-        _m5.core.unserializeGlobals(ckpt);
         for obj in root.descendants(): obj.loadState(ckpt)
     else:
         for obj in root.descendants(): obj.initState()
@@ -154,6 +156,10 @@ def instantiate(ckpt_dir=None):
 need_startup = True
 def simulate(*args, **kwargs):
     global need_startup
+    global _instantiated
+
+    if not _instantiated:
+        fatal("m5.instantiate() must be called before m5.simulate().")
 
     if need_startup:
         root = objects.Root.getInstance()
@@ -293,8 +299,9 @@ def switchCpus(system, cpuList, verbose=True):
             raise RuntimeError(
                 "Old CPU (%s) does not support CPU handover." % (old_cpu,))
 
+    MemoryMode = params.allEnums["MemoryMode"]
     try:
-        memory_mode = _memory_modes[memory_mode_name]
+        memory_mode = MemoryMode(memory_mode_name).getValue()
     except KeyError:
         raise RuntimeError("Invalid memory mode (%s)" % memory_mode_name)
 
@@ -310,7 +317,7 @@ def switchCpus(system, cpuList, verbose=True):
         # Flush the memory system if we are switching to a memory mode
         # that disables caches. This typically happens when switching to a
         # hardware virtualized CPU.
-        if memory_mode == objects.params.atomic_noncaching:
+        if memory_mode == MemoryMode("atomic_noncaching").getValue():
             memWriteback(system)
             memInvalidate(system)
 
@@ -352,6 +359,9 @@ def fork(simout="%(parent)s.f%(fork_seq)i"):
         raise RuntimeError("Can not fork a simulator with listeners enabled")
 
     drain()
+
+    # Terminate helper threads that service parallel event queues.
+    _m5.event.terminateEventQueueThreads()
 
     try:
         pid = os.fork()

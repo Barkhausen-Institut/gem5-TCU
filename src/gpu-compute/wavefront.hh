@@ -2,8 +2,6 @@
  * Copyright (c) 2011-2017 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -56,10 +54,14 @@
 #include "params/Wavefront.hh"
 #include "sim/sim_object.hh"
 
+namespace gem5
+{
+
 class Wavefront : public SimObject
 {
   public:
-    enum status_e {
+    enum status_e
+    {
         // wavefront is stalled
         S_STOPPED,
         // wavefront is returning from a kernel
@@ -329,50 +331,52 @@ class Wavefront : public SimObject
     int barId;
 
   public:
-    struct WavefrontStats : public Stats::Group
+    struct WavefrontStats : public statistics::Group
     {
-        WavefrontStats(Stats::Group *parent);
+        WavefrontStats(statistics::Group *parent);
 
         // Number of instructions executed by this wavefront slot across all
         // dynamic wavefronts
-        Stats::Scalar numInstrExecuted;
+        statistics::Scalar numInstrExecuted;
 
         // Number of cycles this WF spends in SCH stage
-        Stats::Scalar schCycles;
+        statistics::Scalar schCycles;
 
         // Number of stall cycles encounterd by this WF in SCH stage
-        Stats::Scalar schStalls;
+        statistics::Scalar schStalls;
 
         // The following stats sum to the value of schStalls, and record, per
         // WF slot, what the cause of each stall was at a coarse granularity.
 
         // Cycles WF is selected by scheduler, but RFs cannot support
         // instruction
-        Stats::Scalar schRfAccessStalls;
+        statistics::Scalar schRfAccessStalls;
         // Cycles spent waiting for execution resources
-        Stats::Scalar schResourceStalls;
+        statistics::Scalar schResourceStalls;
         // cycles spent waiting for RF reads to complete in SCH stage
-        Stats::Scalar schOpdNrdyStalls;
+        statistics::Scalar schOpdNrdyStalls;
         // LDS arbitration stall cycles. WF attempts to execute LM instruction,
         // but another wave is executing FLAT, which requires LM and GM and
         // forces this WF to stall.
-        Stats::Scalar schLdsArbStalls;
+        statistics::Scalar schLdsArbStalls;
 
         // number of times an instruction of a WF is blocked from being issued
         // due to WAR and WAW dependencies
-        Stats::Scalar numTimesBlockedDueWAXDependencies;
+        statistics::Scalar numTimesBlockedDueWAXDependencies;
         // number of times an instruction of a WF is blocked from being issued
         // due to WAR and WAW dependencies
-        Stats::Scalar numTimesBlockedDueRAWDependencies;
+        statistics::Scalar numTimesBlockedDueRAWDependencies;
 
         // Distribution to track the distance between producer and consumer
         // for vector register values
-        Stats::Distribution vecRawDistance;
+        statistics::Distribution vecRawDistance;
 
         // Distribution to track the number of times every vector register
         // value produced is consumed.
-        Stats::Distribution readsPerWrite;
+        statistics::Distribution readsPerWrite;
     } stats;
 };
+
+} // namespace gem5
 
 #endif // __GPU_COMPUTE_WAVEFRONT_HH__

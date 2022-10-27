@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 ARM Limited
+ * Copyright (c) 2019, 2021-2022 Arm Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -46,6 +46,9 @@
 #include "dev/arm/gic_v3.hh"
 #include "dev/arm/gic_v3_distributor.hh"
 #include "dev/arm/gic_v3_redistributor.hh"
+
+namespace gem5
+{
 
 using namespace ArmISA;
 
@@ -2029,6 +2032,9 @@ Gicv3CPUInterface::updateDistributor()
 void
 Gicv3CPUInterface::update()
 {
+    if (gic->blockIntUpdate())
+        return;
+
     bool signal_IRQ = false;
     bool signal_FIQ = false;
 
@@ -2063,6 +2069,9 @@ Gicv3CPUInterface::update()
 void
 Gicv3CPUInterface::virtualUpdate()
 {
+    if (gic->blockIntUpdate())
+        return;
+
     bool signal_IRQ = false;
     bool signal_FIQ = false;
     int lr_idx = getHPPVILR();
@@ -2330,38 +2339,13 @@ Gicv3CPUInterface::groupEnabled(Gicv3::GroupId group) const
 bool
 Gicv3CPUInterface::inSecureState() const
 {
-    if (!gic->getSystem()->haveSecurity()) {
-        return false;
-    }
-
-    CPSR cpsr = isa->readMiscRegNoEffect(MISCREG_CPSR);
-    SCR scr = isa->readMiscRegNoEffect(MISCREG_SCR);
-    return ::inSecureState(scr, cpsr);
+    return isa->inSecureState();
 }
 
-int
+ExceptionLevel
 Gicv3CPUInterface::currEL() const
 {
-    CPSR cpsr = isa->readMiscRegNoEffect(MISCREG_CPSR);
-    bool is_64 = opModeIs64((OperatingMode)(uint8_t) cpsr.mode);
-
-    if (is_64) {
-        return (ExceptionLevel)(uint8_t) cpsr.el;
-    } else {
-        switch (cpsr.mode) {
-          case MODE_USER:
-            return 0;
-
-          case MODE_HYP:
-            return 2;
-
-          case MODE_MON:
-            return 3;
-
-          default:
-            return 1;
-        }
-    }
+    return isa->currEL();
 }
 
 bool
@@ -2373,10 +2357,10 @@ Gicv3CPUInterface::haveEL(ExceptionLevel el) const
         return true;
 
       case EL2:
-        return gic->getSystem()->haveVirtualization();
+        return gic->getSystem()->has(ArmExtension::VIRTUALIZATION);
 
       case EL3:
-        return gic->getSystem()->haveSecurity();
+        return gic->getSystem()->has(ArmExtension::SECURITY);
 
       default:
         warn("Unimplemented Exception Level\n");
@@ -2609,6 +2593,29 @@ Gicv3CPUInterface::deassertWakeRequest()
 }
 
 void
+Gicv3CPUInterface::copy(Gicv3Registers *from, Gicv3Registers *to)
+{
+    const auto affinity = redistributor->getAffinity();
+    gic->copyCpuRegister(from, to, affinity, MISCREG_ICC_PMR_EL1);
+
+    gic->copyCpuRegister(from, to, affinity, MISCREG_ICC_AP1R0_EL1);
+    if (PRIORITY_BITS >= 6) {
+        gic->copyCpuRegister(from, to, affinity, MISCREG_ICC_AP1R1_EL1);
+    }
+
+    if (PRIORITY_BITS >= 7) {
+        gic->copyCpuRegister(from, to, affinity, MISCREG_ICC_AP1R2_EL1);
+        gic->copyCpuRegister(from, to, affinity, MISCREG_ICC_AP1R3_EL1);
+    }
+
+    gic->copyCpuRegister(from, to, affinity, MISCREG_ICC_BPR1_EL1);
+    gic->copyCpuRegister(from, to, affinity, MISCREG_ICC_CTLR_EL1);
+    gic->copyCpuRegister(from, to, affinity, MISCREG_ICC_SRE_EL1);
+    gic->copyCpuRegister(from, to, affinity, MISCREG_ICC_IGRPEN0_EL1);
+    gic->copyCpuRegister(from, to, affinity, MISCREG_ICC_IGRPEN1_EL1);
+}
+
+void
 Gicv3CPUInterface::serialize(CheckpointOut & cp) const
 {
     SERIALIZE_SCALAR(hppi.intid);
@@ -2623,3 +2630,5 @@ Gicv3CPUInterface::unserialize(CheckpointIn & cp)
     UNSERIALIZE_SCALAR(hppi.prio);
     UNSERIALIZE_ENUM(hppi.group);
 }
+
+} // namespace gem5

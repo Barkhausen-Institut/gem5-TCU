@@ -46,6 +46,9 @@
 #include "debug/DirectedTest.hh"
 #include "sim/sim_exit.hh"
 
+namespace gem5
+{
+
 RubyDirectedTester::RubyDirectedTester(const Params &p)
   : ClockedObject(p),
     directedStartEvent([this]{ wakeup(); }, "Directed tick",
@@ -114,7 +117,7 @@ RubyDirectedTester::getCpuPort(int idx)
 }
 
 void
-RubyDirectedTester::hitCallback(NodeID proc, Addr addr)
+RubyDirectedTester::hitCallback(ruby::NodeID proc, Addr addr)
 {
     DPRINTF(DirectedTest,
             "completed request for proc: %d addr: 0x%x\n",
@@ -136,3 +139,5 @@ RubyDirectedTester::wakeup()
         exitSimLoop("Ruby DirectedTester completed");
     }
 }
+
+} // namespace gem5

@@ -31,7 +31,12 @@
 #include "mem/cache/compressors/dictionary_compressor_impl.hh"
 #include "params/FPC.hh"
 
-namespace Compressor {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Compressor, compression);
+namespace compression
+{
 
 FPC::FPCCompData::FPCCompData(int zero_run_size_bits)
   : CompData(), zeroRunSizeBits(zero_run_size_bits)
@@ -94,4 +99,5 @@ FPC::instantiateDictionaryCompData() const
         new FPCCompData(zeroRunSizeBits));
 }
 
-} // namespace Compressor
+} // namespace compression
+} // namespace gem5

@@ -33,6 +33,12 @@
 #include "base/trace.hh"
 #include "debug/Fetch.hh"
 
+namespace gem5
+{
+
+namespace branch_prediction
+{
+
 LocalBP::LocalBP(const LocalBPParams &params)
     : BPredUnit(params),
       localPredictorSize(params.localPredictorSize),
@@ -133,3 +139,6 @@ void
 LocalBP::uncondBranch(ThreadID tid, Addr pc, void *&bp_history)
 {
 }
+
+} // namespace branch_prediction
+} // namespace gem5

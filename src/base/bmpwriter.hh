@@ -47,6 +47,9 @@
  * @file Declaration of a class that writes a frame buffer to a bitmap
  */
 
+namespace gem5
+{
+
 // write frame buffer into a bitmap picture
 class  BmpWriter : public ImgWriter
 {
@@ -75,7 +78,8 @@ class  BmpWriter : public ImgWriter
     void write(std::ostream &bmp) const override;
 
   private:
-    struct M5_ATTR_PACKED FileHeader {
+    struct GEM5_PACKED FileHeader
+    {
         unsigned char magic_number[2];
         uint32_t size;
         uint16_t reserved1;
@@ -83,7 +87,9 @@ class  BmpWriter : public ImgWriter
         uint32_t offset;
     };
 
-    struct M5_ATTR_PACKED InfoHeaderV1 { /* Aka DIB header */
+    struct GEM5_PACKED InfoHeaderV1
+    {
+        /* Aka DIB header */
         uint32_t Size;
         uint32_t Width;
         uint32_t Height;
@@ -97,12 +103,14 @@ class  BmpWriter : public ImgWriter
         uint32_t ClrImportant;
     };
 
-    struct M5_ATTR_PACKED CompleteV1Header {
+    struct GEM5_PACKED CompleteV1Header
+    {
         FileHeader file;
         InfoHeaderV1 info;
     };
 
-    struct M5_ATTR_PACKED BmpPixel32 {
+    struct GEM5_PACKED BmpPixel32
+    {
         BmpPixel32 &operator=(const Pixel &rhs) {
             red = rhs.red;
             green = rhs.green;
@@ -124,6 +132,6 @@ class  BmpWriter : public ImgWriter
     const CompleteV1Header getCompleteHeader() const;
 };
 
+} // namespace gem5
 
 #endif // __BASE_BITMAP_HH__
-

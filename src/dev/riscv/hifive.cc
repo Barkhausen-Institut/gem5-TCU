@@ -42,10 +42,13 @@
 #include "params/HiFive.hh"
 #include "sim/system.hh"
 
+namespace gem5
+{
+
 using namespace RiscvISA;
 
 HiFive::HiFive(const Params &params) :
-    Platform(params), system(params.system),
+    Platform(params),
     clint(params.clint), plic(params.plic),
     uartIntID(params.uart_int_id)
 {
@@ -75,12 +78,6 @@ HiFive::clearPciInt(int line)
     plic->clear(line);
 }
 
-Addr
-HiFive::pciToDma(Addr pciAddr) const
-{
-    panic("HiFive::pciToDma() has not been implemented.");
-}
-
 void
 HiFive::serialize(CheckpointOut &cp) const
 {
@@ -90,3 +87,5 @@ void
 HiFive::unserialize(CheckpointIn &cp)
 {
 }
+
+} // namespace gem5

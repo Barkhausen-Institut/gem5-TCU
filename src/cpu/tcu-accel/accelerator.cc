@@ -37,6 +37,11 @@
 
 #include <iomanip>
 
+namespace gem5
+{
+namespace tcu
+{
+
 const unsigned TcuAccel::EP_SYSS       = 8;
 const unsigned TcuAccel::EP_SYSR       = 9;
 
@@ -109,4 +114,7 @@ TcuAccel::recvRetry()
     assert(retryPkt);
     if (port.sendTimingReq(retryPkt))
         retryPkt = nullptr;
+}
+
+}
 }

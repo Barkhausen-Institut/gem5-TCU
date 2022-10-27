@@ -57,6 +57,9 @@
 #include "sim/process.hh"
 #include "sim/pseudo_inst.hh"
 
+namespace gem5
+{
+
 namespace X86ISA {
 
 TLB::TLB(const Params &p)
@@ -173,7 +176,7 @@ namespace
 {
 
 Cycles
-localMiscRegAccess(bool read, MiscRegIndex regNum,
+localMiscRegAccess(bool read, RegIndex regNum,
                    ThreadContext *tc, PacketPtr pkt)
 {
     if (read) {
@@ -202,7 +205,7 @@ TLB::translateInt(bool read, RequestPtr req, ThreadContext *tc)
     } else if (prefix == IntAddrPrefixMSR) {
         vaddr = (vaddr >> 3) & ~IntAddrPrefixMask;
 
-        MiscRegIndex regNum;
+        RegIndex regNum;
         if (!msrAddrToIndex(regNum, vaddr))
             return std::make_shared<GeneralProtection>(0);
 
@@ -229,13 +232,13 @@ TLB::translateInt(bool read, RequestPtr req, ThreadContext *tc)
                 [read](ThreadContext *tc, PacketPtr pkt)
                 {
                     return localMiscRegAccess(
-                            read, MISCREG_PCI_CONFIG_ADDRESS, tc, pkt);
+                            read, misc_reg::PciConfigAddress, tc, pkt);
                 }
             );
         } else if ((IOPort & ~mask(2)) == 0xCFC) {
             req->setFlags(Request::UNCACHEABLE | Request::STRICT_ORDER);
             Addr configAddress =
-                tc->readMiscRegNoEffect(MISCREG_PCI_CONFIG_ADDRESS);
+                tc->readMiscRegNoEffect(misc_reg::PciConfigAddress);
             if (bits(configAddress, 31, 31)) {
                 req->setPaddr(PhysAddrPrefixPciConfig |
                         mbits(configAddress, 30, 2) |
@@ -256,20 +259,20 @@ TLB::translateInt(bool read, RequestPtr req, ThreadContext *tc)
 
 Fault
 TLB::finalizePhysical(const RequestPtr &req,
-                      ThreadContext *tc, Mode mode) const
+                      ThreadContext *tc, BaseMMU::Mode mode) const
 {
     Addr paddr = req->getPaddr();
 
     if (m5opRange.contains(paddr)) {
         req->setFlags(Request::STRICT_ORDER);
         uint8_t func;
-        PseudoInst::decodeAddrOffset(paddr - m5opRange.start(), func);
+        pseudo_inst::decodeAddrOffset(paddr - m5opRange.start(), func);
         req->setLocalAccessor(
             [func, mode](ThreadContext *tc, PacketPtr pkt) -> Cycles
             {
                 uint64_t ret;
-                PseudoInst::pseudoInst<X86PseudoInstABI, true>(tc, func, ret);
-                if (mode == Read)
+                pseudo_inst::pseudoInst<X86PseudoInstABI, true>(tc, func, ret);
+                if (mode == BaseMMU::Read)
                     pkt->setLE(ret);
                 return Cycles(1);
             }
@@ -277,7 +280,7 @@ TLB::finalizePhysical(const RequestPtr &req,
     } else if (FullSystem) {
         // Check for an access to the local APIC
         LocalApicBase localApicBase =
-            tc->readMiscRegNoEffect(MISCREG_APIC_BASE);
+            tc->readMiscRegNoEffect(misc_reg::ApicBase);
         AddrRange apicRange(localApicBase.base * PageBytes,
                             (localApicBase.base + 1) * PageBytes);
 
@@ -305,25 +308,29 @@ TLB::finalizePhysical(const RequestPtr &req,
 
 Fault
 TLB::translate(const RequestPtr &req,
-        ThreadContext *tc, Translation *translation,
-        Mode mode, bool &delayedResponse, bool timing)
+        ThreadContext *tc, BaseMMU::Translation *translation,
+        BaseMMU::Mode mode, bool &delayedResponse, bool timing)
 {
     Request::Flags flags = req->getFlags();
     int seg = flags & SegmentFlagMask;
-    bool storeCheck = flags & (StoreCheck << FlagShift);
+    bool storeCheck = flags & Request::READ_MODIFY_WRITE;
 
     delayedResponse = false;
 
     // If this is true, we're dealing with a request to a non-memory address
     // space.
-    if (seg == SEGMENT_REG_MS) {
-        return translateInt(mode == Read, req, tc);
+    if (seg == segment_idx::Ms) {
+        return translateInt(mode == BaseMMU::Read, req, tc);
     }
 
     Addr vaddr = req->getVaddr();
     DPRINTF(TLB, "Translating vaddr %#x.\n", vaddr);
 
-    HandyM5Reg m5Reg = tc->readMiscRegNoEffect(MISCREG_M5_REG);
+    HandyM5Reg m5Reg = tc->readMiscRegNoEffect(misc_reg::M5Reg);
+
+    const Addr logAddrSize = (flags >> AddrSizeFlagShift) & AddrSizeFlagMask;
+    const int addrSize = 8 << logAddrSize;
+    const Addr addrMask = mask(addrSize);
 
     // If protected mode has been enabled...
     if (m5Reg.prot) {
@@ -331,28 +338,38 @@ TLB::translate(const RequestPtr &req,
         // If we're not in 64-bit mode, do protection/limit checks
         if (m5Reg.mode != LongMode) {
             DPRINTF(TLB, "Not in long mode. Checking segment protection.\n");
-            // Check for a NULL segment selector.
-            if (!(seg == SEGMENT_REG_TSG || seg == SYS_SEGMENT_REG_IDTR ||
-                        seg == SEGMENT_REG_HS || seg == SEGMENT_REG_LS)
-                    && !tc->readMiscRegNoEffect(MISCREG_SEG_SEL(seg)))
+
+            // CPUs won't know to use CS when building fetch requests, so we
+            // need to override the value of "seg" here if this is a fetch.
+            if (mode == BaseMMU::Execute)
+                seg = segment_idx::Cs;
+
+            SegAttr attr = tc->readMiscRegNoEffect(misc_reg::segAttr(seg));
+            // Check for an unusable segment.
+            if (attr.unusable) {
+                DPRINTF(TLB, "Unusable segment.\n");
                 return std::make_shared<GeneralProtection>(0);
+            }
             bool expandDown = false;
-            SegAttr attr = tc->readMiscRegNoEffect(MISCREG_SEG_ATTR(seg));
-            if (seg >= SEGMENT_REG_ES && seg <= SEGMENT_REG_HS) {
-                if (!attr.writable && (mode == Write || storeCheck))
+            if (seg >= segment_idx::Es && seg <= segment_idx::Hs) {
+                if (!attr.writable && (mode == BaseMMU::Write || storeCheck)) {
+                    DPRINTF(TLB, "Tried to write to unwritable segment.\n");
                     return std::make_shared<GeneralProtection>(0);
-                if (!attr.readable && mode == Read)
+                }
+                if (!attr.readable && mode == BaseMMU::Read) {
+                    DPRINTF(TLB, "Tried to read from unreadble segment.\n");
                     return std::make_shared<GeneralProtection>(0);
+                }
                 expandDown = attr.expandDown;
 
             }
-            Addr base = tc->readMiscRegNoEffect(MISCREG_SEG_BASE(seg));
-            Addr limit = tc->readMiscRegNoEffect(MISCREG_SEG_LIMIT(seg));
-            bool sizeOverride = (flags & (AddrSizeFlagBit << FlagShift));
-            unsigned logSize = sizeOverride ? (unsigned)m5Reg.altAddr
-                                            : (unsigned)m5Reg.defAddr;
-            int size = (1 << logSize) * 8;
-            Addr offset = bits(vaddr - base, size - 1, 0);
+            Addr base = tc->readMiscRegNoEffect(misc_reg::segBase(seg));
+            Addr limit = tc->readMiscRegNoEffect(misc_reg::segLimit(seg));
+            Addr offset;
+            if (mode == BaseMMU::Execute)
+                offset = vaddr - base;
+            else
+                offset = (vaddr - base) & addrMask;
             Addr endOffset = offset + req->getSize() - 1;
             if (expandDown) {
                 DPRINTF(TLB, "Checking an expand down segment.\n");
@@ -360,19 +377,21 @@ TLB::translate(const RequestPtr &req,
                 if (offset <= limit || endOffset <= limit)
                     return std::make_shared<GeneralProtection>(0);
             } else {
-                if (offset > limit || endOffset > limit)
+                if (offset > limit || endOffset > limit) {
+                    DPRINTF(TLB, "Segment limit check failed, "
+                            "offset = %#x limit = %#x.\n", offset, limit);
                     return std::make_shared<GeneralProtection>(0);
+                }
             }
         }
-        if (m5Reg.submode != SixtyFourBitMode ||
-                (flags & (AddrSizeFlagBit << FlagShift)))
+        if (m5Reg.submode != SixtyFourBitMode && addrSize != 64)
             vaddr &= mask(32);
         // If paging is enabled, do the translation.
         if (m5Reg.paging) {
             DPRINTF(TLB, "Paging enabled.\n");
             // The vaddr already has the segment base applied.
             TlbEntry *entry = lookup(vaddr);
-            if (mode == Read) {
+            if (mode == BaseMMU::Read) {
                 stats.rdAccesses++;
             } else {
                 stats.wrAccesses++;
@@ -380,8 +399,8 @@ TLB::translate(const RequestPtr &req,
             if (!entry) {
                 DPRINTF(TLB, "Handling a TLB miss for "
                         "address %#x at pc %#x.\n",
-                        vaddr, tc->instAddr());
-                if (mode == Read) {
+                        vaddr, tc->pcState().instAddr());
+                if (mode == BaseMMU::Read) {
                     stats.rdMisses++;
                 } else {
                     stats.wrMisses++;
@@ -418,11 +437,11 @@ TLB::translate(const RequestPtr &req,
             DPRINTF(TLB, "Entry found with paddr %#x, "
                     "doing protection checks.\n", entry->paddr);
             // Do paging protection checks.
-            bool inUser = (m5Reg.cpl == 3 &&
-                    !(flags & (CPL0FlagBit << FlagShift)));
-            CR0 cr0 = tc->readMiscRegNoEffect(MISCREG_CR0);
+            bool inUser = m5Reg.cpl == 3 && !(flags & CPL0FlagBit);
+            CR0 cr0 = tc->readMiscRegNoEffect(misc_reg::Cr0);
             bool badWrite = (!entry->writable && (inUser || cr0.wp));
-            if ((inUser && !entry->user) || (mode == Write && badWrite)) {
+            if ((inUser && !entry->user) ||
+                (mode == BaseMMU::Write && badWrite)) {
                 // The page must have been present to get into the TLB in
                 // the first place. We'll assume the reserved bits are
                 // fine even though we're not checking them.
@@ -432,8 +451,8 @@ TLB::translate(const RequestPtr &req,
             if (storeCheck && badWrite) {
                 // This would fault if this were a write, so return a page
                 // fault that reflects that happening.
-                return std::make_shared<PageFault>(vaddr, true, Write, inUser,
-                                                   false);
+                return std::make_shared<PageFault>(
+                    vaddr, true, BaseMMU::Write, inUser, false);
             }
 
             Addr paddr = entry->paddr | (vaddr & mask(entry->logBytes));
@@ -458,14 +477,16 @@ TLB::translate(const RequestPtr &req,
 }
 
 Fault
-TLB::translateAtomic(const RequestPtr &req, ThreadContext *tc, Mode mode)
+TLB::translateAtomic(const RequestPtr &req, ThreadContext *tc,
+    BaseMMU::Mode mode)
 {
     bool delayedResponse;
     return TLB::translate(req, tc, NULL, mode, delayedResponse, false);
 }
 
 Fault
-TLB::translateFunctional(const RequestPtr &req, ThreadContext *tc, Mode mode)
+TLB::translateFunctional(const RequestPtr &req, ThreadContext *tc,
+    BaseMMU::Mode mode)
 {
     unsigned logBytes;
     const Addr vaddr = req->getVaddr();
@@ -480,7 +501,7 @@ TLB::translateFunctional(const RequestPtr &req, ThreadContext *tc, Mode mode)
         Process *process = tc->getProcessPtr();
         const auto *pte = process->pTable->lookup(vaddr);
 
-        if (!pte && mode != Execute) {
+        if (!pte && mode != BaseMMU::Execute) {
             // Check if we just need to grow the stack.
             if (process->fixupFault(vaddr)) {
                 // If we did, lookup the entry for the new page.
@@ -500,7 +521,7 @@ TLB::translateFunctional(const RequestPtr &req, ThreadContext *tc, Mode mode)
 
 void
 TLB::translateTiming(const RequestPtr &req, ThreadContext *tc,
-        Translation *translation, Mode mode)
+    BaseMMU::Translation *translation, BaseMMU::Mode mode)
 {
     bool delayedResponse;
     assert(translation);
@@ -518,12 +539,16 @@ TLB::getWalker()
     return walker;
 }
 
-TLB::TlbStats::TlbStats(Stats::Group *parent)
-  : Stats::Group(parent),
-    ADD_STAT(rdAccesses, UNIT_COUNT, "TLB accesses on read requests"),
-    ADD_STAT(wrAccesses, UNIT_COUNT, "TLB accesses on write requests"),
-    ADD_STAT(rdMisses, UNIT_COUNT, "TLB misses on read requests"),
-    ADD_STAT(wrMisses, UNIT_COUNT, "TLB misses on write requests")
+TLB::TlbStats::TlbStats(statistics::Group *parent)
+  : statistics::Group(parent),
+    ADD_STAT(rdAccesses, statistics::units::Count::get(),
+             "TLB accesses on read requests"),
+    ADD_STAT(wrAccesses, statistics::units::Count::get(),
+             "TLB accesses on write requests"),
+    ADD_STAT(rdMisses, statistics::units::Count::get(),
+             "TLB misses on read requests"),
+    ADD_STAT(wrMisses, statistics::units::Count::get(),
+             "TLB misses on write requests")
 {
 }
 
@@ -571,3 +596,4 @@ TLB::getTableWalkerPort()
 }
 
 } // namespace X86ISA
+} // namespace gem5

@@ -38,14 +38,17 @@
 #include <iostream>
 
 #include "arch/mips/faults.hh"
-#include "arch/mips/isa_traits.hh"
 #include "arch/mips/mt_constants.hh"
+#include "arch/mips/pcstate.hh"
 #include "arch/mips/pra_constants.hh"
-#include "arch/mips/registers.hh"
+#include "arch/mips/regs/misc.hh"
 #include "base/bitfield.hh"
 #include "base/logging.hh"
 #include "base/trace.hh"
 #include "cpu/exec_context.hh"
+
+namespace gem5
+{
 
 namespace MipsISA
 {
@@ -138,7 +141,7 @@ haltThread(TC *tc)
         // Save last known PC in TCRestart
         // @TODO: Needs to check if this is a branch and if so,
         // take previous instruction
-        PCState pc = tc->pcState();
+        auto &pc = tc->pcState().template as<MipsISA::PCState>();
         tc->setMiscReg(MISCREG_TC_RESTART, pc.npc());
 
         warn("%i: Halting thread %i in %s @ PC %x, setting restart PC to %x",
@@ -273,7 +276,7 @@ yieldThread(TC *tc, Fault &fault, int src_reg, uint32_t yield_mask)
                     curTick(), tc->threadId());
         }
     } else if (src_reg > 0) {
-        if (src_reg && !yield_mask != 0) {
+        if ((src_reg & ~yield_mask) != 0) {
             VPEControlReg vpeControl = tc->readMiscReg(MISCREG_VPE_CONTROL);
             vpeControl.excpt = 2;
             tc->setMiscReg(MISCREG_VPE_CONTROL, vpeControl);
@@ -333,6 +336,6 @@ updateTCStatusView(TC *tc)
 }
 
 } // namespace MipsISA
-
+} // namespace gem5
 
 #endif

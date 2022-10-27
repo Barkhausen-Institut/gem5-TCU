@@ -32,8 +32,10 @@
 
 #include "arch/arm/fastmodel/amba_ports.hh"
 #include "arch/arm/fastmodel/common/signal_receiver.hh"
+#include "arch/arm/fastmodel/common/signal_sender.hh"
 #include "arch/arm/fastmodel/iris/cpu.hh"
 #include "arch/arm/fastmodel/protocol/exported_clock_rate_control.hh"
+#include "dev/reset_port.hh"
 #include "mem/port_proxy.hh"
 #include "params/FastModelScxEvsCortexA76x1.hh"
 #include "params/FastModelScxEvsCortexA76x2.hh"
@@ -47,7 +49,11 @@
 #include "systemc/ext/core/sc_module.hh"
 #include "systemc/tlm_port_wrapper.hh"
 
-namespace FastModel
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(FastModel, fastmodel);
+namespace fastmodel
 {
 
 class CortexA76Cluster;
@@ -65,10 +71,13 @@ class ScxEvsCortexA76 : public Types::Base, public Iris::BaseCpuEvs
     ClockRateControlInitiatorSocket clockRateControl;
     ClockRateControlInitiatorSocket periphClockRateControl;
 
-    typedef sc_gem5::TlmTargetBaseWrapper<
+    using TlmGicTarget = sc_gem5::TlmTargetBaseWrapper<
         64, svp_gicv3_comms::gicv3_comms_fw_if,
         svp_gicv3_comms::gicv3_comms_bw_if, 1,
-        sc_core::SC_ONE_OR_MORE_BOUND> TlmGicTarget;
+        sc_core::SC_ONE_OR_MORE_BOUND>;
+
+    template <typename T>
+    using SignalInitiator = amba_pv::signal_master_port<T>;
 
     AmbaInitiator amba;
     std::vector<std::unique_ptr<TlmGicTarget>> redist;
@@ -82,6 +91,15 @@ class ScxEvsCortexA76 : public Types::Base, public Iris::BaseCpuEvs
     std::vector<std::unique_ptr<SignalReceiver>> pmuirq;
     std::vector<std::unique_ptr<SignalReceiver>> vcpumntirq;
     std::vector<std::unique_ptr<SignalReceiver>> cntpnsirq;
+    std::vector<std::unique_ptr<SignalInitiator<uint64_t>>> rvbaraddr;
+    std::vector<std::unique_ptr<SignalSender>> core_reset;
+    std::vector<std::unique_ptr<SignalSender>> poweron_reset;
+
+    SignalSender top_reset;
+
+    SignalSender dbg_reset;
+
+    ResetResponsePort<ScxEvsCortexA76> model_reset;
 
     CortexA76Cluster *gem5CpuCluster;
 
@@ -109,6 +127,10 @@ class ScxEvsCortexA76 : public Types::Base, public Iris::BaseCpuEvs
     void setSysCounterFrq(uint64_t sys_counter_frq) override;
 
     void setCluster(SimObject *cluster) override;
+
+    void setResetAddr(int core, Addr addr, bool secure) override;
+
+    void requestReset();
 };
 
 struct ScxEvsCortexA76x1Types
@@ -147,6 +169,7 @@ struct ScxEvsCortexA76x4Types
 using ScxEvsCortexA76x4 = ScxEvsCortexA76<ScxEvsCortexA76x4Types>;
 extern template class ScxEvsCortexA76<ScxEvsCortexA76x4Types>;
 
-} // namespace FastModel
+} // namespace fastmodel
+} // namespace gem5
 
 #endif // __ARCH_ARM_FASTMODEL_CORTEXA76_EVS_HH__

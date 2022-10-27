@@ -64,7 +64,7 @@ output header {{
 
         std::string
         generateDisassembly(Addr pc,
-                            const Loader::SymbolTable *symtab) const override;
+                            const loader::SymbolTable *symtab) const override;
     };
 
     /**
@@ -96,21 +96,21 @@ output header {{
 
         std::string
         generateDisassembly(Addr pc,
-                            const Loader::SymbolTable *symtab) const override;
+                            const loader::SymbolTable *symtab) const override;
     };
 }};
 
 output decoder {{
     std::string
     FailUnimplemented::generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const
+            Addr pc, const loader::SymbolTable *symtab) const
     {
         return csprintf("%-10s (unimplemented)", mnemonic);
     }
 
     std::string
     WarnUnimplemented::generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const
+            Addr pc, const loader::SymbolTable *symtab) const
     {
         return csprintf("%-10s (unimplemented)", mnemonic);
     }
@@ -142,7 +142,7 @@ output exec {{
     checkFpEnableFault(ExecContext *xc, const X86ISA::ExtMachInst &)
     {
         if (FullSystem) {
-            CR0 cr0 = xc->readMiscReg(MISCREG_CR0);
+            CR0 cr0 = xc->readMiscReg(misc_reg::Cr0);
             if (cr0.ts == 1) {
                 return std::make_shared<DeviceNotAvailable>();
             }

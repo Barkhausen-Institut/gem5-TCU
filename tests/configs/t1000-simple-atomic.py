@@ -43,14 +43,14 @@ cpu = AtomicSimpleCPU(cpu_id=0, clk_domain = system.cpu_clk_domain)
 system.cpu = cpu
 # create the interrupt controller
 cpu.createInterruptController()
-cpu.connectAllPorts(system.membus)
+cpu.connectBus(system.membus)
 
 # create the memory controllers and connect them, stick with
 # the physmem name to avoid bumping all the reference stats
 system.physmem = [SimpleMemory(range = r)
                   for r in system.mem_ranges]
 for i in range(len(system.physmem)):
-    system.physmem[i].port = system.membus.master
+    system.physmem[i].port = system.membus.mem_side_ports
 
 root = Root(full_system=True, system=system)
 

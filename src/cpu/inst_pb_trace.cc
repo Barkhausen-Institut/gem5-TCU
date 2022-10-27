@@ -46,6 +46,10 @@
 #include "params/InstPBTrace.hh"
 #include "proto/inst.pb.h"
 #include "sim/core.hh"
+#include "sim/cur_tick.hh"
+
+namespace gem5
+{
 
 namespace Trace {
 
@@ -58,7 +62,7 @@ InstPBTraceRecord::dump()
     // instructions that aren't macro-oped
     if ((macroStaticInst && staticInst->isFirstMicroop()) ||
             !staticInst->isMicroop()) {
-        tracer.traceInst(thread, staticInst, pc);
+        tracer.traceInst(thread, staticInst, *pc);
     }
 
     // If this instruction accessed memory lets record it
@@ -86,7 +90,7 @@ InstPBTrace::createTraceFile(std::string filename)
     ProtoMessage::InstHeader header_msg;
     header_msg.set_obj_id("gem5 generated instruction trace");
     header_msg.set_ver(0);
-    header_msg.set_tick_freq(SimClock::Frequency);
+    header_msg.set_tick_freq(sim_clock::Frequency);
     header_msg.set_has_mem(true);
     traceStream->write(header_msg);
 
@@ -117,10 +121,10 @@ InstPBTrace::~InstPBTrace()
 
 InstPBTraceRecord*
 InstPBTrace::getInstRecord(Tick when, ThreadContext *tc, const StaticInstPtr si,
-                           TheISA::PCState pc, const StaticInstPtr mi)
+                           const PCStateBase &pc, const StaticInstPtr mi)
 {
     // Only record the trace if Exec debugging is enabled
-    if (!Debug::ExecEnable)
+    if (!debug::ExecEnable)
         return NULL;
 
     return new InstPBTraceRecord(*this, when, tc, si, pc, mi);
@@ -128,10 +132,11 @@ InstPBTrace::getInstRecord(Tick when, ThreadContext *tc, const StaticInstPtr si,
 }
 
 void
-InstPBTrace::traceInst(ThreadContext *tc, StaticInstPtr si, TheISA::PCState pc)
+InstPBTrace::traceInst(ThreadContext *tc, StaticInstPtr si,
+        const PCStateBase &pc)
 {
     if (curMsg) {
-        /// @todo if we are running multi-threaded I assume we'd need a lock here
+        //TODO if we are running multi-threaded I assume we'd need a lock here
         traceStream->write(*curMsg);
         delete curMsg;
         curMsg = NULL;
@@ -146,7 +151,7 @@ InstPBTrace::traceInst(ThreadContext *tc, StaticInstPtr si, TheISA::PCState pc)
 
     // Create a new instruction message and fill out the fields
     curMsg = new ProtoMessage::Inst;
-    curMsg->set_pc(pc.pc());
+    curMsg->set_pc(pc.instAddr());
     if (instSize == sizeof(uint32_t)) {
         curMsg->set_inst(letoh(*reinterpret_cast<uint32_t *>(buf.get())));
     } else if (instSize) {
@@ -174,3 +179,4 @@ InstPBTrace::traceMem(StaticInstPtr si, Addr a, Addr s, unsigned f)
 }
 
 } // namespace Trace
+} // namespace gem5

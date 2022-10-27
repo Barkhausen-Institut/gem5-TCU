@@ -36,6 +36,11 @@
 #include "mem/tcu/ep_file.hh"
 #include "mem/tcu/xfer_unit.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 class MemoryUnit
 {
   public:
@@ -167,11 +172,14 @@ class MemoryUnit
 
     EpFile::EpCache eps;
 
-    Stats::Histogram readBytes;
-    Stats::Histogram writtenBytes;
-    Stats::Histogram receivedBytes;
-    Stats::Scalar wrongAct;
+    statistics::Histogram readBytes;
+    statistics::Histogram writtenBytes;
+    statistics::Histogram receivedBytes;
+    statistics::Scalar wrongAct;
 
 };
+
+}
+}
 
 #endif

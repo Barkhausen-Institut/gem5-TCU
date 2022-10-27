@@ -87,7 +87,7 @@ def config_cache(options, system):
         dcache_class, icache_class, l2_cache_class, walk_cache_class = \
             core.O3_ARM_v7a_DCache, core.O3_ARM_v7a_ICache, \
             core.O3_ARM_v7aL2, \
-            core.O3_ARM_v7aWalkCache
+            None
     elif options.cpu_type == "HPI":
         try:
             import cores.arm.HPI as core
@@ -96,7 +96,7 @@ def config_cache(options, system):
             sys.exit(1)
 
         dcache_class, icache_class, l2_cache_class, walk_cache_class = \
-            core.HPI_DCache, core.HPI_ICache, core.HPI_L2, core.HPI_WalkCache
+            core.HPI_DCache, core.HPI_ICache, core.HPI_L2, None
     else:
         dcache_class, icache_class, l2_cache_class, walk_cache_class = \
             L1_DCache, L1_ICache, L2Cache, None
@@ -122,8 +122,8 @@ def config_cache(options, system):
                                    **_get_cache_opts('l2', options))
 
         system.tol2bus = L2XBar(clk_domain = system.cpu_clk_domain)
-        system.l2.cpu_side = system.tol2bus.master
-        system.l2.mem_side = system.membus.slave
+        system.l2.cpu_side = system.tol2bus.mem_side_ports
+        system.l2.mem_side = system.membus.cpu_side_ports
 
     if options.memchecker:
         system.memchecker = MemChecker()
@@ -187,11 +187,14 @@ def config_cache(options, system):
 
         system.cpu[i].createInterruptController()
         if options.l2cache:
-            system.cpu[i].connectAllPorts(system.tol2bus, system.membus)
+            system.cpu[i].connectAllPorts(
+                system.tol2bus.cpu_side_ports,
+                system.membus.cpu_side_ports, system.membus.mem_side_ports)
         elif options.external_memory_system:
-            system.cpu[i].connectUncachedPorts(system.membus)
+            system.cpu[i].connectUncachedPorts(
+                system.membus.cpu_side_ports, system.membus.mem_side_ports)
         else:
-            system.cpu[i].connectAllPorts(system.membus)
+            system.cpu[i].connectBus(system.membus)
 
     return system
 

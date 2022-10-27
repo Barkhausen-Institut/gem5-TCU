@@ -42,7 +42,6 @@
 
 #include <vector>
 
-#include "arch/locked_mem.hh"
 #include "base/loader/memory_image.hh"
 #include "base/loader/object_file.hh"
 #include "cpu/thread_context.hh"
@@ -50,6 +49,12 @@
 #include "debug/MemoryAccess.hh"
 #include "mem/packet_access.hh"
 #include "sim/system.hh"
+
+namespace gem5
+{
+
+namespace memory
+{
 
 AbstractMemory::AbstractMemory(const Params &p) :
     ClockedObject(p), range(p.range), pmemAddr(NULL),
@@ -74,11 +79,11 @@ AbstractMemory::initState()
     if (file == "")
         return;
 
-    auto *object = Loader::createObjectFile(file, true);
+    auto *object = loader::createObjectFile(file, true);
     fatal_if(!object, "%s: Could not load %s.", name(), file);
 
-    Loader::debugSymbolTable.insert(*object->symtab().globals());
-    Loader::MemoryImage image = object->buildImage();
+    loader::debugSymbolTable.insert(*object->symtab().globals());
+    loader::MemoryImage image = object->buildImage();
 
     AddrRange image_range(image.minAddr(), image.maxAddr());
     if (!range.contains(image_range.start())) {
@@ -110,25 +115,31 @@ AbstractMemory::setBackingStore(uint8_t* pmem_addr)
 }
 
 AbstractMemory::MemStats::MemStats(AbstractMemory &_mem)
-    : Stats::Group(&_mem), mem(_mem),
-    ADD_STAT(bytesRead, UNIT_BYTE, "Number of bytes read from this memory"),
-    ADD_STAT(bytesInstRead, UNIT_BYTE,
+    : statistics::Group(&_mem), mem(_mem),
+    ADD_STAT(bytesRead, statistics::units::Byte::get(),
+             "Number of bytes read from this memory"),
+    ADD_STAT(bytesInstRead, statistics::units::Byte::get(),
              "Number of instructions bytes read from this memory"),
-    ADD_STAT(bytesWritten, UNIT_BYTE,
+    ADD_STAT(bytesWritten, statistics::units::Byte::get(),
              "Number of bytes written to this memory"),
-    ADD_STAT(numReads, UNIT_COUNT,
+    ADD_STAT(numReads, statistics::units::Count::get(),
              "Number of read requests responded to by this memory"),
-    ADD_STAT(numWrites, UNIT_COUNT,
+    ADD_STAT(numWrites, statistics::units::Count::get(),
              "Number of write requests responded to by this memory"),
-    ADD_STAT(numOther, UNIT_COUNT,
+    ADD_STAT(numOther, statistics::units::Count::get(),
              "Number of other requests responded to by this memory"),
-    ADD_STAT(bwRead, UNIT_RATE(Stats::Units::Byte, Stats::Units::Second),
+    ADD_STAT(bwRead, statistics::units::Rate<
+                statistics::units::Byte, statistics::units::Second>::get(),
              "Total read bandwidth from this memory"),
-    ADD_STAT(bwInstRead, UNIT_RATE(Stats::Units::Byte, Stats::Units::Second),
+    ADD_STAT(bwInstRead,
+             statistics::units::Rate<
+                statistics::units::Byte, statistics::units::Second>::get(),
              "Instruction read bandwidth from this memory"),
-    ADD_STAT(bwWrite, UNIT_RATE(Stats::Units::Byte, Stats::Units::Second),
+    ADD_STAT(bwWrite, statistics::units::Rate<
+                statistics::units::Byte, statistics::units::Second>::get(),
              "Write bandwidth from this memory"),
-    ADD_STAT(bwTotal, UNIT_RATE(Stats::Units::Byte, Stats::Units::Second),
+    ADD_STAT(bwTotal, statistics::units::Rate<
+                statistics::units::Byte, statistics::units::Second>::get(),
              "Total bandwidth to/from this memory")
 {
 }
@@ -136,9 +147,9 @@ AbstractMemory::MemStats::MemStats(AbstractMemory &_mem)
 void
 AbstractMemory::MemStats::regStats()
 {
-    using namespace Stats;
+    using namespace statistics;
 
-    Stats::Group::regStats();
+    statistics::Group::regStats();
 
     System *sys = mem.system();
     assert(sys);
@@ -327,7 +338,7 @@ AbstractMemory::checkLockedAddrList(PacketPtr pkt)
                                            InvalidContextID;
                 if (owner_cid != requestor_cid) {
                     ThreadContext* ctx = system()->threads[owner_cid];
-                    TheISA::globalClearExclusive(ctx);
+                    ctx->getIsaPtr()->globalClearExclusive();
                 }
                 i = lockedAddrList.erase(i);
             } else {
@@ -347,9 +358,9 @@ tracePacket(System *sys, const char *label, PacketPtr pkt)
     if (size == 1 || size == 2 || size == 4 || size == 8) {
         ByteOrder byte_order = sys->getGuestByteOrder();
         DPRINTF(MemoryAccess, "%s from %s of size %i on address %#x data "
-                "%#x %c\n",
-                label, sys->getRequestorName(pkt->req->requestorId()),
-                size, pkt->getAddr(), pkt->getUintX(byte_order),
+                "%#x %c\n", label, sys->getRequestorName(pkt->req->
+                requestorId()), size, pkt->getAddr(),
+                pkt->getUintX(byte_order),
                 pkt->req->isUncacheable() ? 'U' : 'C');
         return;
     }
@@ -499,3 +510,6 @@ AbstractMemory::functionalAccess(PacketPtr pkt)
               pkt->cmdString());
     }
 }
+
+} // namespace memory
+} // namespace gem5

@@ -34,14 +34,18 @@
 #include <string>
 
 #include "arch/riscv/insts/static_inst.hh"
+#include "arch/riscv/regs/misc.hh"
 #include "arch/riscv/utility.hh"
 #include "cpu/static_inst.hh"
+
+namespace gem5
+{
 
 namespace RiscvISA
 {
 
 std::string
-RegOp::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
+RegOp::generateDisassembly(Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     ss << mnemonic << ' ' << registerName(destRegIdx(0)) << ", " <<
@@ -54,7 +58,7 @@ RegOp::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
 }
 
 std::string
-CSROp::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
+CSROp::generateDisassembly(Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream ss;
     ss << mnemonic << ' ' << registerName(destRegIdx(0)) << ", ";
@@ -71,7 +75,7 @@ CSROp::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
 }
 
 std::string
-SystemOp::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
+SystemOp::generateDisassembly(Addr pc, const loader::SymbolTable *symtab) const
 {
     if (strcmp(mnemonic, "fence_vma") == 0) {
         std::stringstream ss;
@@ -83,4 +87,5 @@ SystemOp::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
     return mnemonic;
 }
 
-}
+} // namespace RiscvISA
+} // namespace gem5

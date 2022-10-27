@@ -39,8 +39,11 @@
 
 #include <cmath>
 
-#include "arch/x86/isa_traits.hh"
+#include "arch/x86/page_size.hh"
 #include "sim/serialize.hh"
+
+namespace gem5
+{
 
 namespace X86ISA
 {
@@ -89,4 +92,5 @@ TlbEntry::unserialize(CheckpointIn &cp)
     UNSERIALIZE_SCALAR(lruSeq);
 }
 
-}
+} // namespace X86ISA
+} // namespace gem5

@@ -45,6 +45,9 @@
 #include "params/PowerModelState.hh"
 #include "sim/probe/probe.hh"
 
+namespace gem5
+{
+
 class SimObject;
 class ClockedObject;
 
@@ -92,7 +95,7 @@ class PowerModelState : public SimObject
     /** The clocked object we belong to */
     ClockedObject * clocked_object;
 
-    Stats::Value dynamicPower, staticPower;
+    statistics::Value dynamicPower, staticPower;
 };
 
 /**
@@ -159,9 +162,11 @@ class PowerModel : public SimObject
     ClockedObject * clocked_object;
 
     /** The type of power model - collects all power, static or dynamic only */
-    Enums::PMType power_model_type;
+    enums::PMType power_model_type;
 
-    Stats::Value dynamicPower, staticPower;
+    statistics::Value dynamicPower, staticPower;
 };
+
+} // namespace gem5
 
 #endif

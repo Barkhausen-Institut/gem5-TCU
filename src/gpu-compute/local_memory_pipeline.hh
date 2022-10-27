@@ -2,8 +2,6 @@
  * Copyright (c) 2014-2015 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -49,6 +47,9 @@
  * from pipeline to the LDS. This stage also retires previously issued
  * loads and stores that have returned from the LDS.
  */
+
+namespace gem5
+{
 
 class ComputeUnit;
 class Wavefront;
@@ -97,12 +98,14 @@ class LocalMemPipeline
     std::queue<GPUDynInstPtr> lmReturnedRequests;
 
   protected:
-    struct LocalMemPipelineStats : public Stats::Group
+    struct LocalMemPipelineStats : public statistics::Group
     {
-        LocalMemPipelineStats(Stats::Group *parent);
+        LocalMemPipelineStats(statistics::Group *parent);
 
-        Stats::Scalar loadVrfBankConflictCycles;
+        statistics::Scalar loadVrfBankConflictCycles;
     } stats;
 };
+
+} // namespace gem5
 
 #endif // __LOCAL_MEMORY_PIPELINE_HH__

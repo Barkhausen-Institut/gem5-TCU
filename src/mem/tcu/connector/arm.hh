@@ -35,6 +35,11 @@
 #include "mem/tcu/connector/core.hh"
 #include "sim/system.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 class ArmConnector : public CoreConnector
 {
   public:
@@ -47,5 +52,8 @@ class ArmConnector : public CoreConnector
 
     void doClearIrq(IRQ irq) override;
 };
+
+}
+}
 
 #endif // __MEM_TCU_ARM_CONNECTOR__

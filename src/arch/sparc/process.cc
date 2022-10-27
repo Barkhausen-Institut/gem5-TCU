@@ -30,8 +30,9 @@
 
 #include "arch/sparc/asi.hh"
 #include "arch/sparc/handlers.hh"
-#include "arch/sparc/isa_traits.hh"
-#include "arch/sparc/registers.hh"
+#include "arch/sparc/page_size.hh"
+#include "arch/sparc/regs/int.hh"
+#include "arch/sparc/regs/misc.hh"
 #include "arch/sparc/types.hh"
 #include "base/loader/elf_object.hh"
 #include "base/loader/object_file.hh"
@@ -41,14 +42,18 @@
 #include "mem/page_table.hh"
 #include "params/Process.hh"
 #include "sim/aux_vector.hh"
+#include "sim/byteswap.hh"
 #include "sim/process_impl.hh"
 #include "sim/syscall_return.hh"
 #include "sim/system.hh"
 
+namespace gem5
+{
+
 using namespace SparcISA;
 
 SparcProcess::SparcProcess(const ProcessParams &params,
-                           ::Loader::ObjectFile *objFile, Addr _StackBias)
+                           loader::ObjectFile *objFile, Addr _StackBias)
     : Process(params,
               new EmulationPageTable(params.name, params.pid, PageBytes),
               objFile),
@@ -97,6 +102,9 @@ SparcProcess::initState()
     // Set the MMU Primary Context Register to hold the process' pid
     tc->setMiscReg(MISCREG_MMU_P_CONTEXT, _pid);
 
+    // Enable floating point.
+    tc->setMiscReg(MISCREG_FPRS, 0x4);
+
     /*
      * T1 specific registers
      */
@@ -112,6 +120,7 @@ Sparc32Process::initState()
     ThreadContext *tc = system->threads[contextIds[0]];
     // The process runs in user mode with 32 bit addresses
     PSTATE pstate = 0;
+    pstate.pef = 1;
     pstate.ie = 1;
     pstate.am = 1;
     tc->setMiscReg(MISCREG_PSTATE, pstate);
@@ -127,6 +136,7 @@ Sparc64Process::initState()
     ThreadContext *tc = system->threads[contextIds[0]];
     // The process runs in user mode
     PSTATE pstate = 0;
+    pstate.pef = 1;
     pstate.ie = 1;
     tc->setMiscReg(MISCREG_PSTATE, pstate);
 
@@ -139,7 +149,7 @@ SparcProcess::argsInit(int pageSize)
 {
     int intSize = sizeof(IntType);
 
-    std::vector<AuxVector<IntType>> auxv;
+    std::vector<gem5::auxv::AuxVector<IntType>> auxv;
 
     std::string filename;
     if (argv.size() < 1)
@@ -151,62 +161,62 @@ SparcProcess::argsInit(int pageSize)
     // maintain double word alignment of the stack pointer.
     uint64_t align = 16;
 
-    enum hardwareCaps
+    enum HardwareCaps
     {
-        M5_HWCAP_SPARC_FLUSH = 1,
-        M5_HWCAP_SPARC_STBAR = 2,
-        M5_HWCAP_SPARC_SWAP = 4,
-        M5_HWCAP_SPARC_MULDIV = 8,
-        M5_HWCAP_SPARC_V9 = 16,
+        HwcapSparcFlush = 1,
+        HwcapSparcStbar = 2,
+        HwcapSparcSwap = 4,
+        HwcapSparcMuldiv = 8,
+        HwcapSparcV9 = 16,
         // This one should technically only be set
         // if there is a cheetah or cheetah_plus tlb,
         // but we'll use it all the time
-        M5_HWCAP_SPARC_ULTRA3 = 32
+        HwcapSparcUltra3 = 32
     };
 
     const int64_t hwcap =
-        M5_HWCAP_SPARC_FLUSH |
-        M5_HWCAP_SPARC_STBAR |
-        M5_HWCAP_SPARC_SWAP |
-        M5_HWCAP_SPARC_MULDIV |
-        M5_HWCAP_SPARC_V9 |
-        M5_HWCAP_SPARC_ULTRA3;
+        HwcapSparcFlush |
+        HwcapSparcStbar |
+        HwcapSparcSwap |
+        HwcapSparcMuldiv |
+        HwcapSparcV9 |
+        HwcapSparcUltra3;
 
     // Setup the auxilliary vectors. These will already have endian conversion.
     // Auxilliary vectors are loaded only for elf formatted executables.
-    auto *elfObject = dynamic_cast<::Loader::ElfObject *>(objFile);
+    auto *elfObject = dynamic_cast<loader::ElfObject *>(objFile);
     if (elfObject) {
         // Bits which describe the system hardware capabilities
-        auxv.emplace_back(M5_AT_HWCAP, hwcap);
+        auxv.emplace_back(gem5::auxv::Hwcap, hwcap);
         // The system page size
-        auxv.emplace_back(M5_AT_PAGESZ, SparcISA::PageBytes);
+        auxv.emplace_back(gem5::auxv::Pagesz, SparcISA::PageBytes);
         // Defined to be 100 in the kernel source.
         // Frequency at which times() increments
-        auxv.emplace_back(M5_AT_CLKTCK, 100);
+        auxv.emplace_back(gem5::auxv::Clktck, 100);
         // For statically linked executables, this is the virtual address of
         // the program header tables if they appear in the executable image
-        auxv.emplace_back(M5_AT_PHDR, elfObject->programHeaderTable());
+        auxv.emplace_back(gem5::auxv::Phdr, elfObject->programHeaderTable());
         // This is the size of a program header entry from the elf file.
-        auxv.emplace_back(M5_AT_PHENT, elfObject->programHeaderSize());
+        auxv.emplace_back(gem5::auxv::Phent, elfObject->programHeaderSize());
         // This is the number of program headers from the original elf file.
-        auxv.emplace_back(M5_AT_PHNUM, elfObject->programHeaderCount());
+        auxv.emplace_back(gem5::auxv::Phnum, elfObject->programHeaderCount());
         // This is the base address of the ELF interpreter; it should be
         // zero for static executables or contain the base address for
         // dynamic executables.
-        auxv.emplace_back(M5_AT_BASE, getBias());
+        auxv.emplace_back(gem5::auxv::Base, getBias());
         // This is hardwired to 0 in the elf loading code in the kernel
-        auxv.emplace_back(M5_AT_FLAGS, 0);
+        auxv.emplace_back(gem5::auxv::Flags, 0);
         // The entry point to the program
-        auxv.emplace_back(M5_AT_ENTRY, objFile->entryPoint());
+        auxv.emplace_back(gem5::auxv::Entry, objFile->entryPoint());
         // Different user and group IDs
-        auxv.emplace_back(M5_AT_UID, uid());
-        auxv.emplace_back(M5_AT_EUID, euid());
-        auxv.emplace_back(M5_AT_GID, gid());
-        auxv.emplace_back(M5_AT_EGID, egid());
+        auxv.emplace_back(gem5::auxv::Uid, uid());
+        auxv.emplace_back(gem5::auxv::Euid, euid());
+        auxv.emplace_back(gem5::auxv::Gid, gid());
+        auxv.emplace_back(gem5::auxv::Egid, egid());
         // Whether to enable "secure mode" in the executable
-        auxv.emplace_back(M5_AT_SECURE, 0);
+        auxv.emplace_back(gem5::auxv::Secure, 0);
         // The address of 16 "random" bytes.
-        auxv.emplace_back(M5_AT_RANDOM, 0);
+        auxv.emplace_back(gem5::auxv::Random, 0);
     }
 
     // Figure out how big the initial stack needs to be
@@ -284,9 +294,7 @@ SparcProcess::argsInit(int pageSize)
     IntType envp_array_base = auxv_array_base - envp_array_size;
     IntType argv_array_base = envp_array_base - argv_array_size;
     IntType argc_base = argv_array_base - argc_size;
-#if TRACING_ON
     IntType window_save_base = argc_base - window_save_size;
-#endif
 
     DPRINTF(Stack, "The addresses of items on the initial stack:\n");
     DPRINTF(Stack, "%#x - sentry NULL\n", sentry_base);
@@ -318,19 +326,19 @@ SparcProcess::argsInit(int pageSize)
 
     // Fix up the aux vectors which point to data.
     for (auto &aux: auxv) {
-        if (aux.type == M5_AT_RANDOM)
+        if (aux.type == gem5::auxv::Random)
             aux.val = aux_data_base;
     }
 
     // Copy the aux stuff
     Addr auxv_array_end = auxv_array_base;
     for (const auto &aux: auxv) {
-        initVirtMem->write(auxv_array_end, aux, GuestByteOrder);
+        initVirtMem->write(auxv_array_end, aux, ByteOrder::big);
         auxv_array_end += sizeof(aux);
     }
 
     // Write out the terminating zeroed auxilliary vector
-    const AuxVector<IntType> zero(0, 0);
+    const gem5::auxv::AuxVector<IntType> zero(0, 0);
     initVirtMem->write(auxv_array_end, zero);
     auxv_array_end += sizeof(zero);
 
@@ -387,3 +395,5 @@ Sparc32Process::argsInit(int intSize, int pageSize)
     initVirtMem->writeBlob(spillStart,
             spillHandler32, sizeof(MachInst) *  numSpillInsts);
 }
+
+} // namespace gem5

@@ -32,9 +32,15 @@
 
 #include <cstdint>
 
+#include "arch/sparc/pcstate.hh"
+#include "arch/sparc/types.hh"
 #include "base/trace.hh"
 #include "cpu/exec_context.hh"
 #include "cpu/static_inst.hh"
+#include "cpu/thread_context.hh"
+
+namespace gem5
+{
 
 namespace SparcISA
 {
@@ -87,10 +93,15 @@ enum FpCondTest
 class SparcStaticInst : public StaticInst
 {
   protected:
-    using StaticInst::StaticInst;
+    ExtMachInst machInst;
+
+    SparcStaticInst(const char *_mnemonic, ExtMachInst _machInst,
+            OpClass __opClass) :
+        StaticInst(_mnemonic, __opClass), machInst(_machInst)
+    {}
 
     std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+            Addr pc, const loader::SymbolTable *symtab) const override;
 
     static void printMnemonic(std::ostream &os, const char *mnemonic);
     static void printReg(std::ostream &os, RegId reg);
@@ -101,7 +112,8 @@ class SparcStaticInst : public StaticInst
     void printRegArray(std::ostream &os,
         const RegId *indexArray, int num) const;
 
-    void advancePC(PCState &pcState) const override;
+    void advancePC(PCStateBase &pcState) const override;
+    void advancePC(ThreadContext *tc) const override;
 
     static bool passesFpCondition(uint32_t fcc, uint32_t condition);
     static bool passesCondition(uint32_t codes, uint32_t condition);
@@ -111,8 +123,20 @@ class SparcStaticInst : public StaticInst
     {
         return simpleAsBytes(buf, size, machInst);
     }
+
+    std::unique_ptr<PCStateBase>
+    buildRetPC(const PCStateBase &cur_pc,
+            const PCStateBase &call_pc) const override
+    {
+        PCStateBase *ret_ptr = call_pc.clone();
+        auto &ret = ret_ptr->as<PCState>();
+        ret.uEnd();
+        ret.pc(cur_pc.as<PCState>().npc());
+        return std::unique_ptr<PCStateBase>{ret_ptr};
+    }
 };
 
-}
+} // namespace SparcISA
+} // namespace gem5
 
 #endif //__ARCH_SPARC_INSTS_STATIC_INST_HH__

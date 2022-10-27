@@ -34,6 +34,9 @@
 
 #include "base/compiler.hh"
 
+namespace gem5
+{
+
 namespace cp
 {
 
@@ -139,7 +142,7 @@ Print::processFlag()
 
           case 'X':
             fmt.uppercase = true;
-            M5_FALLTHROUGH;
+            [[fallthrough]];
           case 'x':
             fmt.base = Format::Hex;
             fmt.format = Format::Integer;
@@ -161,7 +164,7 @@ Print::processFlag()
 
           case 'G':
             fmt.uppercase = true;
-            M5_FALLTHROUGH;
+            [[fallthrough]];
           case 'g':
             fmt.format = Format::Floating;
             fmt.floatFormat = Format::Best;
@@ -170,7 +173,7 @@ Print::processFlag()
 
           case 'E':
             fmt.uppercase = true;
-            M5_FALLTHROUGH;
+            [[fallthrough]];
           case 'e':
             fmt.format = Format::Floating;
             fmt.floatFormat = Format::Scientific;
@@ -217,7 +220,7 @@ Print::processFlag()
                 fmt.fillZero = true;
                 break;
             }
-            M5_FALLTHROUGH;
+            [[fallthrough]];
           case '1':
           case '2':
           case '3':
@@ -238,7 +241,7 @@ Print::processFlag()
             break;
 
           case '%':
-            M5_UNREACHABLE;
+            GEM5_UNREACHABLE;
             break;
 
           default:
@@ -313,3 +316,4 @@ Print::endArgs()
 }
 
 } // namespace cp
+} // namespace gem5

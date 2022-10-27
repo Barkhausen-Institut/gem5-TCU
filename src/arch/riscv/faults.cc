@@ -31,15 +31,19 @@
 
 #include "arch/riscv/faults.hh"
 
+#include "arch/riscv/insts/static_inst.hh"
 #include "arch/riscv/isa.hh"
-#include "arch/riscv/registers.hh"
+#include "arch/riscv/regs/misc.hh"
 #include "arch/riscv/utility.hh"
 #include "cpu/base.hh"
 #include "cpu/thread_context.hh"
-#include "debug/Fault.hh"
+#include "debug/Faults.hh"
 #include "sim/debug.hh"
 #include "sim/full_system.hh"
 #include "sim/workload.hh"
+
+namespace gem5
+{
 
 namespace RiscvISA
 {
@@ -47,24 +51,33 @@ namespace RiscvISA
 void
 RiscvFault::invokeSE(ThreadContext *tc, const StaticInstPtr &inst)
 {
-    panic("Fault %s encountered at pc 0x%016llx.", name(), tc->pcState().pc());
+    panic("Fault %s encountered at pc %s.", name(), tc->pcState());
 }
 
 void
 RiscvFault::invoke(ThreadContext *tc, const StaticInstPtr &inst)
 {
-    PCState pcState = tc->pcState();
+    auto pc_state = tc->pcState().as<PCState>();
 
-    DPRINTFS(Fault, tc->getCpuPtr(), "Fault (%s) at PC: %s\n",
-             name(), pcState);
+    DPRINTFS(Faults, tc->getCpuPtr(), "Fault (%s) at PC: %s\n",
+             name(), pc_state);
 
     if (FullSystem) {
         PrivilegeMode pp = (PrivilegeMode)tc->readMiscReg(MISCREG_PRV);
         PrivilegeMode prv = PRV_M;
         STATUS status = tc->readMiscReg(MISCREG_STATUS);
 
+        // According to riscv-privileged-v1.11, if a NMI occurs at the middle
+        // of a M-mode trap handler, the state (epc/cause) will be overwritten
+        // and is not necessary recoverable. There's nothing we can do here so
+        // we'll just warn our user that the CPU state might be broken.
+        warn_if(isNonMaskableInterrupt() && pp == PRV_M && status.mie == 0,
+                "NMI overwriting M-mode trap handler state");
+
         // Set fault handler privilege mode
-        if (isInterrupt()) {
+        if (isNonMaskableInterrupt()) {
+            prv = PRV_M;
+        } else if (isInterrupt()) {
             if (pp != PRV_M &&
                 bits(tc->readMiscReg(MISCREG_MIDELEG), _code) != 0) {
                 prv = PRV_S;
@@ -109,7 +122,7 @@ RiscvFault::invoke(ThreadContext *tc, const StaticInstPtr &inst)
           case PRV_M:
             cause = MISCREG_MCAUSE;
             epc = MISCREG_MEPC;
-            tvec = MISCREG_MTVEC;
+            tvec = isNonMaskableInterrupt() ? MISCREG_NMIVEC : MISCREG_MTVEC;
             tval = MISCREG_MTVAL;
 
             status.mpp = pp;
@@ -128,24 +141,32 @@ RiscvFault::invoke(ThreadContext *tc, const StaticInstPtr &inst)
            _cause |= (1L << 63);
         }
         tc->setMiscReg(cause, _cause);
-        tc->setMiscReg(epc, tc->instAddr());
+        tc->setMiscReg(epc, tc->pcState().instAddr());
         tc->setMiscReg(tval, trap_value());
         tc->setMiscReg(MISCREG_PRV, prv);
         tc->setMiscReg(MISCREG_STATUS, status);
+        // Temporarily mask NMI while we're in NMI handler. Otherweise, the
+        // checkNonMaskableInterrupt will always return true and we'll be
+        // stucked in an infinite loop.
+        if (isNonMaskableInterrupt()) {
+            tc->setMiscReg(MISCREG_NMIE, 0);
+        }
 
         // Set PC to fault handler address
         Addr addr = mbits(tc->readMiscReg(tvec), 63, 2);
         if (isInterrupt() && bits(tc->readMiscReg(tvec), 1, 0) == 1)
             addr += 4 * _code;
-        pcState.set(addr);
+        pc_state.set(addr);
+        tc->pcState(pc_state);
     } else {
+        inst->advancePC(pc_state);
+        tc->pcState(pc_state);
         invokeSE(tc, inst);
-        advancePC(pcState, inst);
     }
-    tc->pcState(pcState);
 }
 
-void Reset::invoke(ThreadContext *tc, const StaticInstPtr &inst)
+void
+Reset::invoke(ThreadContext *tc, const StaticInstPtr &inst)
 {
     tc->setMiscReg(MISCREG_PRV, PRV_M);
     STATUS status = tc->readMiscReg(MISCREG_STATUS);
@@ -156,37 +177,37 @@ void Reset::invoke(ThreadContext *tc, const StaticInstPtr &inst)
 
     // Advance the PC to the implementation-defined reset vector
     auto workload = dynamic_cast<Workload *>(tc->getSystemPtr()->workload);
-    PCState pc = workload->getEntry();
+    PCState pc(workload->getEntry());
     tc->pcState(pc);
 }
 
 void
 UnknownInstFault::invokeSE(ThreadContext *tc, const StaticInstPtr &inst)
 {
-    panic("Unknown instruction 0x%08x at pc 0x%016llx", inst->machInst,
-        tc->pcState().pc());
+    auto *rsi = static_cast<RiscvStaticInst *>(inst.get());
+    panic("Unknown instruction 0x%08x at pc %s", rsi->machInst,
+        tc->pcState());
 }
 
 void
 IllegalInstFault::invokeSE(ThreadContext *tc, const StaticInstPtr &inst)
 {
-    panic("Illegal instruction 0x%08x at pc 0x%016llx: %s", inst->machInst,
-        tc->pcState().pc(), reason.c_str());
+    auto *rsi = static_cast<RiscvStaticInst *>(inst.get());
+    panic("Illegal instruction 0x%08x at pc %s: %s", rsi->machInst,
+        tc->pcState(), reason.c_str());
 }
 
 void
-UnimplementedFault::invokeSE(ThreadContext *tc,
-        const StaticInstPtr &inst)
+UnimplementedFault::invokeSE(ThreadContext *tc, const StaticInstPtr &inst)
 {
-    panic("Unimplemented instruction %s at pc 0x%016llx", instName,
-        tc->pcState().pc());
+    panic("Unimplemented instruction %s at pc %s", instName, tc->pcState());
 }
 
 void
 IllegalFrmFault::invokeSE(ThreadContext *tc, const StaticInstPtr &inst)
 {
-    panic("Illegal floating-point rounding mode 0x%x at pc 0x%016llx.",
-            frm, tc->pcState().pc());
+    panic("Illegal floating-point rounding mode 0x%x at pc %s.",
+            frm, tc->pcState());
 }
 
 void
@@ -202,3 +223,4 @@ SyscallFault::invokeSE(ThreadContext *tc, const StaticInstPtr &inst)
 }
 
 } // namespace RiscvISA
+} // namespace gem5

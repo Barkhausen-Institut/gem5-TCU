@@ -2,8 +2,6 @@
  * Copyright (c) 2015 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -37,8 +35,17 @@
 #include <ostream>
 #include <vector>
 
+namespace gem5
+{
+
+namespace ruby
+{
+
 typedef std::vector<int> IntVec;
 
 std::ostream& operator<<(std::ostream& os, const std::vector<int>& myvector);
+
+} // namespace ruby
+} // namespace gem5
 
 #endif //__MEM_RUBY_COMMON_INTVEC_HH__

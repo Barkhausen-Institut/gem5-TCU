@@ -27,6 +27,9 @@
 
 #include "arch/arm/reg_abi.hh"
 
+namespace gem5
+{
+
 namespace ArmISA
 {
 
@@ -38,3 +41,4 @@ const std::vector<int> RegABI64::ArgumentRegs = {
 };
 
 } // namespace ArmISA
+} // namespace gem5

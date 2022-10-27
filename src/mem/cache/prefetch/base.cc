@@ -52,7 +52,12 @@
 #include "params/BasePrefetcher.hh"
 #include "sim/system.hh"
 
-namespace Prefetcher {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Prefetcher, prefetch);
+namespace prefetch
+{
 
 Base::PrefetchInfo::PrefetchInfo(PacketPtr pkt, Addr addr, bool miss)
   : address(addr), pc(pkt->req->hasPC() ? pkt->req->getPC() : 0),
@@ -93,8 +98,9 @@ Base::Base(const BasePrefetcherParams &p)
       lBlkSize(floorLog2(blkSize)), onMiss(p.on_miss), onRead(p.on_read),
       onWrite(p.on_write), onData(p.on_data), onInst(p.on_inst),
       requestorId(p.sys->getRequestorId(this)),
-      pageBytes(p.sys->getPageBytes()),
+      pageBytes(p.page_bytes),
       prefetchOnAccess(p.prefetch_on_access),
+      prefetchOnPfHit(p.prefetch_on_pf_hit),
       useVirtualAddresses(p.use_virtual_addresses),
       prefetchStats(this), issuedPrefetches(0),
       usefulPrefetches(0), tlb(nullptr)
@@ -111,12 +117,45 @@ Base::setCache(BaseCache *_cache)
     blkSize = cache->getBlockSize();
     lBlkSize = floorLog2(blkSize);
 }
-Base::StatGroup::StatGroup(Stats::Group *parent)
-    : Stats::Group(parent),
-    ADD_STAT(pfIssued, UNIT_COUNT, "number of hwpf issued")
-{
-}
 
+Base::StatGroup::StatGroup(statistics::Group *parent)
+  : statistics::Group(parent),
+    ADD_STAT(demandMshrMisses, statistics::units::Count::get(),
+        "demands not covered by prefetchs"),
+    ADD_STAT(pfIssued, statistics::units::Count::get(),
+        "number of hwpf issued"),
+    ADD_STAT(pfUnused, statistics::units::Count::get(),
+             "number of HardPF blocks evicted w/o reference"),
+    ADD_STAT(pfUseful, statistics::units::Count::get(),
+        "number of useful prefetch"),
+    ADD_STAT(pfUsefulButMiss, statistics::units::Count::get(),
+        "number of hit on prefetch but cache block is not in an usable "
+        "state"),
+    ADD_STAT(accuracy, statistics::units::Count::get(),
+        "accuracy of the prefetcher"),
+    ADD_STAT(coverage, statistics::units::Count::get(),
+    "coverage brought by this prefetcher"),
+    ADD_STAT(pfHitInCache, statistics::units::Count::get(),
+        "number of prefetches hitting in cache"),
+    ADD_STAT(pfHitInMSHR, statistics::units::Count::get(),
+        "number of prefetches hitting in a MSHR"),
+    ADD_STAT(pfHitInWB, statistics::units::Count::get(),
+        "number of prefetches hit in the Write Buffer"),
+    ADD_STAT(pfLate, statistics::units::Count::get(),
+        "number of late prefetches (hitting in cache, MSHR or WB)")
+{
+    using namespace statistics;
+
+    pfUnused.flags(nozero);
+
+    accuracy.flags(total);
+    accuracy = pfUseful / pfIssued;
+
+    coverage.flags(total);
+    coverage = pfUseful / (pfUseful + demandMshrMisses);
+
+    pfLate = pfHitInCache + pfHitInMSHR + pfHitInWB;
+}
 
 bool
 Base::observeAccess(const PacketPtr &pkt, bool miss) const
@@ -125,7 +164,12 @@ Base::observeAccess(const PacketPtr &pkt, bool miss) const
     bool read = pkt->isRead();
     bool inv = pkt->isInvalidate();
 
-    if (!miss && !prefetchOnAccess) return false;
+    if (!miss) {
+        if (prefetchOnPfHit)
+            return hasBeenPrefetched(pkt->getAddr(), pkt->isSecure());
+        if (!prefetchOnAccess)
+            return false;
+    }
     if (pkt->req->isUncacheable()) return false;
     if (fetch && !onInst) return false;
     if (!fetch && !onData) return false;
@@ -209,6 +253,11 @@ Base::probeNotify(const PacketPtr &pkt, bool miss)
 
     if (hasBeenPrefetched(pkt->getAddr(), pkt->isSecure())) {
         usefulPrefetches += 1;
+        prefetchStats.pfUseful++;
+        if (miss)
+            // This case happens when a demand hits on a prefetched line
+            // that's not in the requested coherency state.
+            prefetchStats.pfUsefulButMiss++;
     }
 
     // Verify this access type is observed by prefetcher
@@ -256,4 +305,5 @@ Base::addTLB(BaseTLB *t)
     tlb = t;
 }
 
-} // namespace Prefetcher
+} // namespace prefetch
+} // namespace gem5

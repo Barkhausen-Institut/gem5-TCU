@@ -44,9 +44,13 @@
  * ISA-specific types for hardware transactional memory.
  */
 
-#include "arch/arm/registers.hh"
+#include "arch/arm/regs/int.hh"
+#include "arch/arm/regs/vec.hh"
 #include "arch/generic/htm.hh"
 #include "base/types.hh"
+
+namespace gem5
+{
 
 namespace ArmISA
 {
@@ -70,7 +74,7 @@ class HTMCheckpoint : public BaseHTMCheckpoint
   private:
     uint8_t rt; // TSTART destination register
     Addr nPc; // Fallback instruction address
-    std::array<RegVal, NumIntArchRegs> x; // General purpose registers
+    std::array<RegVal, int_reg::NumArchRegs> x; // General purpose registers
     std::array<VecRegContainer, NumVecRegs> z; // Vector registers
     std::array<VecPredRegContainer, NumVecRegs> p; // Predicate registers
     Addr sp; // Stack Pointer at current EL
@@ -84,5 +88,6 @@ class HTMCheckpoint : public BaseHTMCheckpoint
 };
 
 } // namespace ArmISA
+} // namespace gem5
 
 #endif

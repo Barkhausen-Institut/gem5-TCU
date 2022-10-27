@@ -56,9 +56,14 @@
 #include "base/types.hh"
 #include "mem/cache/compressors/base.hh"
 
+namespace gem5
+{
+
 struct BaseDictionaryCompressorParams;
 
-namespace Compressor {
+GEM5_DEPRECATED_NAMESPACE(Compressor, compression);
+namespace compression
+{
 
 class BaseDictionaryCompressor : public Base
 {
@@ -69,7 +74,7 @@ class BaseDictionaryCompressor : public Base
     /** Number of valid entries in the dictionary. */
     std::size_t numEntries;
 
-    struct DictionaryStats : public Stats::Group
+    struct DictionaryStats : public statistics::Group
     {
         const BaseDictionaryCompressor& compressor;
 
@@ -79,7 +84,7 @@ class BaseDictionaryCompressor : public Base
         void regStats() override;
 
         /** Number of data entries that were compressed to each pattern. */
-        Stats::Vector patterns;
+        statistics::Vector patterns;
     } dictionaryStats;
 
     /**
@@ -174,7 +179,7 @@ class DictionaryCompressor : public BaseDictionaryCompressor
     template <class Head>
     struct Factory<Head>
     {
-        static_assert(std::is_base_of<UncompressedPattern, Head>::value,
+        static_assert(std::is_base_of_v<UncompressedPattern, Head>,
             "The last pattern must always be derived from the uncompressed "
             "pattern.");
 
@@ -776,7 +781,7 @@ class DictionaryCompressor<T>::SignExtendedPattern
         const DictionaryEntry& dict_bytes, const int match_location)
     {
         const T data = DictionaryCompressor<T>::fromDictionaryEntry(bytes);
-        return data == sext<N>(data & mask(N));
+        return data == (T)szext<N>(data);
     }
 
     DictionaryEntry
@@ -786,6 +791,7 @@ class DictionaryCompressor<T>::SignExtendedPattern
     }
 };
 
-} // namespace Compressor
+} // namespace compression
+} // namespace gem5
 
 #endif //__MEM_CACHE_COMPRESSORS_DICTIONARY_COMPRESSOR_HH__

@@ -29,13 +29,17 @@
 
 #include "arch/x86/linux/linux.hh"
 #include "arch/x86/process.hh"
-#include "arch/x86/registers.hh"
+#include "arch/x86/regs/misc.hh"
 #include "base/trace.hh"
 #include "cpu/thread_context.hh"
 #include "kern/linux/linux.hh"
+#include "mem/se_translating_port_proxy.hh"
 #include "sim/process.hh"
 #include "sim/syscall_desc.hh"
 #include "sim/syscall_emul.hh"
+
+namespace gem5
+{
 
 namespace X86ISA
 {
@@ -67,24 +71,24 @@ archPrctlFunc(SyscallDesc *desc, ThreadContext *tc, int code, uint64_t addr)
     };
 
     uint64_t fsBase, gsBase;
-    PortProxy &p = tc->getVirtProxy();
+    SETranslatingPortProxy p(tc);
     switch(code)
     {
       // Each of these valid options should actually check addr.
       case SetFS:
-        tc->setMiscRegNoEffect(MISCREG_FS_BASE, addr);
-        tc->setMiscRegNoEffect(MISCREG_FS_EFF_BASE, addr);
+        tc->setMiscRegNoEffect(misc_reg::FsBase, addr);
+        tc->setMiscRegNoEffect(misc_reg::FsEffBase, addr);
         return 0;
       case GetFS:
-        fsBase = tc->readMiscRegNoEffect(MISCREG_FS_BASE);
+        fsBase = tc->readMiscRegNoEffect(misc_reg::FsBase);
         p.write(addr, fsBase);
         return 0;
       case SetGS:
-        tc->setMiscRegNoEffect(MISCREG_GS_BASE, addr);
-        tc->setMiscRegNoEffect(MISCREG_GS_EFF_BASE, addr);
+        tc->setMiscRegNoEffect(misc_reg::GsBase, addr);
+        tc->setMiscRegNoEffect(misc_reg::GsEffBase, addr);
         return 0;
       case GetGS:
-        gsBase = tc->readMiscRegNoEffect(MISCREG_GS_BASE);
+        gsBase = tc->readMiscRegNoEffect(misc_reg::GsBase);
         p.write(addr, gsBase);
         return 0;
       default:
@@ -101,6 +105,7 @@ setThreadArea32Func(SyscallDesc *desc, ThreadContext *tc,
     const int maxTLSEntry = minTLSEntry + numTLSEntries - 1;
 
     auto process = tc->getProcessPtr();
+    SETranslatingPortProxy proxy(tc);
 
     X86Process *x86p = dynamic_cast<X86Process *>(process);
     assert(x86p);
@@ -111,7 +116,7 @@ setThreadArea32Func(SyscallDesc *desc, ThreadContext *tc,
         gdt(x86p->gdtStart() + minTLSEntry * sizeof(uint64_t),
             numTLSEntries * sizeof(uint64_t));
 
-    if (!gdt.copyIn(tc->getVirtProxy()))
+    if (!gdt.copyIn(proxy))
         panic("Failed to copy in GDT for %s.\n", desc->name());
 
     if (userDesc->entry_number == (uint32_t)(-1)) {
@@ -163,10 +168,11 @@ setThreadArea32Func(SyscallDesc *desc, ThreadContext *tc,
 
     gdt[index] = (uint64_t)segDesc;
 
-    if (!gdt.copyOut(tc->getVirtProxy()))
+    if (!gdt.copyOut(proxy))
         panic("Failed to copy out GDT for %s.\n", desc->name());
 
     return 0;
 }
 
 } // namespace X86ISA
+} // namespace gem5

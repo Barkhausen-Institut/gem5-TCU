@@ -36,6 +36,9 @@
 
 #include "arch/sparc/insts/static_inst.hh"
 
+namespace gem5
+{
+
 namespace SparcISA
 {
 
@@ -54,7 +57,7 @@ class Trap : public SparcStaticInst
     {}
 
     std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+            Addr pc, const loader::SymbolTable *symtab) const override;
 
     int trapNum;
 };
@@ -66,12 +69,13 @@ class FpUnimpl : public SparcStaticInst
 
     std::string
     generateDisassembly(
-            Addr pc,  const Loader::SymbolTable *symtab) const override
+            Addr pc,  const loader::SymbolTable *symtab) const override
     {
         return mnemonic;
     }
 };
 
-}
+} // namespace SparcISA
+} // namespace gem5
 
 #endif // __ARCH_SPARC_INSTS_TRAP_HH__

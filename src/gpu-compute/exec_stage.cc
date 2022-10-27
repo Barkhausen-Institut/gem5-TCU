@@ -2,8 +2,6 @@
  * Copyright (c) 2014-2015 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -40,6 +38,9 @@
 #include "gpu-compute/compute_unit.hh"
 #include "gpu-compute/vector_register_file.hh"
 #include "gpu-compute/wavefront.hh"
+
+namespace gem5
+{
 
 ExecStage::ExecStage(const ComputeUnitParams &p, ComputeUnit &cu,
                      ScheduleToExecute &from_schedule)
@@ -151,7 +152,7 @@ void
 ExecStage::exec()
 {
     initStatistics();
-    if (Debug::GPUSched) {
+    if (debug::GPUSched) {
         dumpDispList();
     }
     for (int unitId = 0; unitId < computeUnit.numExeUnits(); ++unitId) {
@@ -197,8 +198,8 @@ ExecStage::exec()
     collectStatistics(PostExec, 0);
 }
 
-ExecStage::ExecStageStats::ExecStageStats(Stats::Group *parent)
-    : Stats::Group(parent, "ExecStage"),
+ExecStage::ExecStageStats::ExecStageStats(statistics::Group *parent)
+    : statistics::Group(parent, "ExecStage"),
       ADD_STAT(numTransActiveIdle,
                "number of CU transitions from active to idle"),
       ADD_STAT(numCyclesWithNoIssue, "number of cycles the CU issues nothing"),
@@ -236,3 +237,5 @@ ExecStage::ExecStageStats::ExecStageStats(Stats::Group *parent)
     numCyclesWithNoInstrTypeIssued.subname(c, "SharedMemPipe");
     numCyclesWithInstrTypeIssued.subname(c++, "SharedMemPipe");
 }
+
+} // namespace gem5

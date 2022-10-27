@@ -35,7 +35,12 @@
 #include "base/random.hh"
 #include "params/BRRIPRP.hh"
 
-namespace ReplacementPolicy {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(ReplacementPolicy, replacement_policy);
+namespace replacement_policy
+{
 
 BRRIP::BRRIP(const Params &p)
   : Base(p), numRRPVBits(p.num_bits), hitPriority(p.hit_priority),
@@ -46,7 +51,6 @@ BRRIP::BRRIP(const Params &p)
 
 void
 BRRIP::invalidate(const std::shared_ptr<ReplacementData>& replacement_data)
-const
 {
     std::shared_ptr<BRRIPReplData> casted_replacement_data =
         std::static_pointer_cast<BRRIPReplData>(replacement_data);
@@ -144,4 +148,5 @@ BRRIP::instantiateEntry()
     return std::shared_ptr<ReplacementData>(new BRRIPReplData(numRRPVBits));
 }
 
-} // namespace ReplacementPolicy
+} // namespace replacement_policy
+} // namespace gem5

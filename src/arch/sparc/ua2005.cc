@@ -28,7 +28,7 @@
 
 #include "arch/sparc/interrupts.hh"
 #include "arch/sparc/isa.hh"
-#include "arch/sparc/registers.hh"
+#include "arch/sparc/regs/misc.hh"
 #include "base/bitfield.hh"
 #include "base/trace.hh"
 #include "cpu/base.hh"
@@ -36,6 +36,9 @@
 #include "debug/Quiesce.hh"
 #include "debug/Timer.hh"
 #include "sim/system.hh"
+
+namespace gem5
+{
 
 using namespace SparcISA;
 
@@ -155,7 +158,7 @@ ISA::setFSReg(int miscReg, RegVal val)
 
       case MISCREG_HTBA:
         // clear lower 7 bits on writes.
-        setMiscRegNoEffect(miscReg, val & ULL(~0x7FFF));
+        setMiscRegNoEffect(miscReg, val & ~0x7FFFULL);
         break;
 
       case MISCREG_QUEUE_CPU_MONDO_HEAD:
@@ -267,12 +270,12 @@ ISA::readFSReg(int miscReg)
         return readMiscRegNoEffect(miscReg) ;
 
       case MISCREG_HTBA:
-        return readMiscRegNoEffect(miscReg) & ULL(~0x7FFF);
+        return readMiscRegNoEffect(miscReg) & ~0x7FFFULL;
       case MISCREG_HVER:
         // XXX set to match Legion
-        return ULL(0x3e) << 48 |
-               ULL(0x23) << 32 |
-               ULL(0x20) << 24 |
+        return 0x3eULL << 48 |
+               0x23ULL << 32 |
+               0x20ULL << 24 |
                    // MaxGL << 16 | XXX For some reason legion doesn't set GL
                    MaxTL << 8  |
            (NWindows -1) << 0;
@@ -337,8 +340,8 @@ ISA::processSTickCompare()
     if (delay == 0 || tc->status() == ThreadContext::Suspended) {
         DPRINTF(Timer, "STick compare cycle reached at %#x\n",
                 (stick_cmpr & mask(63)));
-        if (!(tc->readMiscRegNoEffect(MISCREG_STICK_CMPR) & (ULL(1) << 63))) {
-            setMiscReg(MISCREG_SOFTINT, softint | (ULL(1) << 16));
+        if (!(tc->readMiscRegNoEffect(MISCREG_STICK_CMPR) & (1ULL << 63))) {
+            setMiscReg(MISCREG_SOFTINT, softint | (1ULL << 16));
         }
     } else {
         cpu->schedule(sTickCompare, cpu->clockEdge(Cycles(delay)));
@@ -364,7 +367,7 @@ ISA::processHSTickCompare()
     if (delay == 0 || tc->status() == ThreadContext::Suspended) {
         DPRINTF(Timer, "HSTick compare cycle reached at %#x\n",
                 (stick_cmpr & mask(63)));
-        if (!(tc->readMiscRegNoEffect(MISCREG_HSTICK_CMPR) & (ULL(1) << 63))) {
+        if (!(tc->readMiscRegNoEffect(MISCREG_HSTICK_CMPR) & (1ULL << 63))) {
             setMiscReg(MISCREG_HINTP, 1);
         }
         // Need to do something to cause interrupt to happen here !!! @todo
@@ -373,3 +376,4 @@ ISA::processHSTickCompare()
     }
 }
 
+} // namespace gem5

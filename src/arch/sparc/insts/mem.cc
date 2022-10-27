@@ -28,11 +28,14 @@
 
 #include "arch/sparc/insts/mem.hh"
 
+namespace gem5
+{
+
 namespace SparcISA
 {
 
 std::string
-Mem::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
+Mem::generateDisassembly(Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream response;
     bool load = flags[IsLoad];
@@ -59,7 +62,7 @@ Mem::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
 }
 
 std::string
-MemImm::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
+MemImm::generateDisassembly(Addr pc, const loader::SymbolTable *symtab) const
 {
     std::stringstream response;
     bool load = flags[IsLoad];
@@ -87,4 +90,5 @@ MemImm::generateDisassembly(Addr pc, const Loader::SymbolTable *symtab) const
     return response.str();
 }
 
-}
+} // namespace SparcISA
+} // namespace gem5

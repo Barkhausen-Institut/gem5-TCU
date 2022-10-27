@@ -32,6 +32,11 @@
 #include "mem/tcu/connector/base.hh"
 #include "mem/tcu/tcu.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 void
 BaseConnector::setIrq(IRQ irq)
 {
@@ -61,4 +66,7 @@ BaseConnector::startIrq(IRQ irq)
 {
     _tcu->regs().set(PrivReg::CLEAR_IRQ, irq);
     doSetIrq(irq);
+}
+
+}
 }

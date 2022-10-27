@@ -1,4 +1,4 @@
-# Copyright (c) 2009-2020 ARM Limited
+# Copyright (c) 2009-2020, 2022 Arm Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -52,6 +52,7 @@ Reference:
 
     type = 'SystemCounter'
     cxx_header = "dev/arm/generic_timer.hh"
+    cxx_class = 'gem5::SystemCounter'
 
     # Maximum of 1004 frequency entries, including end marker
     freqs = VectorParam.UInt32([0x01800000], "Frequencies available for the "
@@ -77,6 +78,7 @@ Reference:
 
     type = 'GenericTimer'
     cxx_header = "dev/arm/generic_timer.hh"
+    cxx_class = 'gem5::GenericTimer'
 
     _freq_in_dtb = False
 
@@ -84,10 +86,13 @@ Reference:
 
     counter = Param.SystemCounter(Parent.any, "Global system counter")
 
-    int_phys_s = Param.ArmPPI("Physical (S) timer interrupt")
-    int_phys_ns = Param.ArmPPI("Physical (NS) timer interrupt")
-    int_virt = Param.ArmPPI("Virtual timer interrupt")
-    int_hyp = Param.ArmPPI("Hypervisor timer interrupt")
+    int_el1_phys = Param.ArmPPI("EL1 physical timer interrupt")
+    int_el1_virt = Param.ArmPPI("EL1 virtual timer interrupt")
+    int_el2_ns_phys = Param.ArmPPI("EL2 Non-secure physical timer interrupt")
+    int_el2_ns_virt = Param.ArmPPI("EL2 Non-secure virtual timer interrupt")
+    int_el2_s_phys = Param.ArmPPI("EL2 Secure physical timer interrupt")
+    int_el2_s_virt = Param.ArmPPI("EL2 Secure virtual timer interrupt")
+    int_el3_phys = Param.ArmPPI("EL3 physical timer interrupt")
 
     # This value should be in theory initialized by the highest
     # priviledged software. We do this in gem5 to avoid KVM
@@ -107,10 +112,11 @@ Reference:
 
         gic = self._parent.unproxy(self).gic
         node.append(FdtPropertyWords("interrupts",
-            self.int_phys_s.generateFdtProperty(gic) +
-            self.int_phys_ns.generateFdtProperty(gic) +
-            self.int_virt.generateFdtProperty(gic) +
-            self.int_hyp.generateFdtProperty(gic)))
+            self.int_el3_phys.generateFdtProperty(gic) +
+            self.int_el1_phys.generateFdtProperty(gic) +
+            self.int_el1_virt.generateFdtProperty(gic) +
+            self.int_el2_ns_phys.generateFdtProperty(gic) +
+            self.int_el2_ns_virt.generateFdtProperty(gic)))
 
         if self._freq_in_dtb:
             node.append(self.counter.unproxy(self).generateDtb())
@@ -129,6 +135,7 @@ Reference:
 
     type = 'GenericTimerFrame'
     cxx_header = "dev/arm/generic_timer.hh"
+    cxx_class = 'gem5::GenericTimerFrame'
 
     _frame_num = 0
 
@@ -173,6 +180,7 @@ Reference:
 
     type = 'GenericTimerMem'
     cxx_header = "dev/arm/generic_timer.hh"
+    cxx_class = 'gem5::GenericTimerMem'
 
     _freq_in_dtb = False
 

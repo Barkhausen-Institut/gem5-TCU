@@ -41,10 +41,16 @@
 #ifndef __SIM_STAT_CONTROL_HH__
 #define __SIM_STAT_CONTROL_HH__
 
+#include "base/compiler.hh"
 #include "base/types.hh"
-#include "sim/core.hh"
+#include "sim/cur_tick.hh"
 
-namespace Stats {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Stats, statistics);
+namespace statistics
+{
 
 
 void initSimStats();
@@ -76,6 +82,7 @@ void schedStatEvent(bool dump, bool reset, Tick when = curTick(),
  * @param period The period at which the dumping should occur.
  */
 void periodicStatDump(Tick period = 0);
-} // namespace Stats
+} // namespace statistics
+} // namespace gem5
 
 #endif // __SIM_STAT_CONTROL_HH__

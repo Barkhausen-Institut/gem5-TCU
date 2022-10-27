@@ -2,8 +2,6 @@
  * Copyright (c) 2016-2019 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -33,9 +31,15 @@
 #ifndef DEV_HSA_HSA_SIGNAL_H
 #define DEV_HSA_HSA_SIGNAL_H
 
+#include <cstdint>
+
+namespace gem5
+{
+
 // AMD Signal Kind Enumeration Values.
 typedef int64_t amd_signal_kind64_t;
-enum amd_signal_kind_t {
+enum amd_signal_kind_t
+{
   AMD_SIGNAL_KIND_INVALID = 0,
   AMD_SIGNAL_KIND_USER = 1,
   AMD_SIGNAL_KIND_DOORBELL = -1,
@@ -43,9 +47,11 @@ enum amd_signal_kind_t {
 };
 
 // AMD Signal.
-typedef struct amd_signal_s {
+typedef struct amd_signal_s
+{
   amd_signal_kind64_t kind;
-  union {
+  union
+  {
     volatile int64_t value;
     volatile uint32_t* legacy_hardware_doorbell_ptr;
     volatile uint64_t* hardware_doorbell_ptr;
@@ -55,11 +61,14 @@ typedef struct amd_signal_s {
   uint32_t reserved1;
   uint64_t start_ts;
   uint64_t end_ts;
-  union {
+  union
+  {
     uint64_t queue_ptr;
     uint64_t reserved2;
   };
   uint32_t reserved3[2];
 } amd_signal_t;
+
+} // namespace gem5
 
 #endif // DEV_HSA_HSA_SIGNAL_H

@@ -31,8 +31,17 @@
 
 #include <cstdint>
 
-namespace Compressor {
-namespace Encoder {
+#include "base/compiler.hh"
+
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Compressor, compression);
+namespace compression
+{
+GEM5_DEPRECATED_NAMESPACE(Encoder, encoder);
+namespace encoder
+{
 
 struct Code
 {
@@ -73,7 +82,8 @@ class Base
     virtual uint64_t decode(const uint64_t code) const = 0;
 };
 
-} // namespace Encoder
-} // namespace Compressor
+} // namespace encoder
+} // namespace compression
+} // namespace gem5
 
 #endif //__MEM_CACHE_COMPRESSORS_ENCODERS_BASE_HH__

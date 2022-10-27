@@ -35,7 +35,12 @@
 #include "base/logging.hh"
 #include "params/BloomFilterH3.hh"
 
-namespace BloomFilter {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(BloomFilter, bloom_filter);
+namespace bloom_filter
+{
 
 static int H3Matrix[64][16] = {
     { 33268410,   395488709,  311024285,  456111753,
@@ -389,4 +394,5 @@ H3::hash(Addr addr, int hash_number) const
     }
 }
 
-} // namespace BloomFilter
+} // namespace bloom_filter
+} // namespace gem5

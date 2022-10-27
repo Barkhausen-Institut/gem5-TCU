@@ -41,8 +41,13 @@
 #ifndef __MEM_TRANSLATING_PORT_PROXY_HH__
 #define __MEM_TRANSLATING_PORT_PROXY_HH__
 
-#include "arch/generic/tlb.hh"
+#include <functional>
+
+#include "arch/generic/mmu.hh"
 #include "mem/port_proxy.hh"
+
+namespace gem5
+{
 
 class ThreadContext;
 
@@ -54,24 +59,20 @@ class ThreadContext;
  */
 class TranslatingPortProxy : public PortProxy
 {
-  private:
-    bool tryTLBsOnce(RequestPtr req, BaseTLB::Mode) const;
-    bool tryTLBs(RequestPtr req, BaseTLB::Mode) const;
-
   protected:
     ThreadContext* _tc;
-    const Addr pageBytes;
-
     Request::Flags flags;
 
     virtual bool
-    fixupAddr(Addr addr, BaseTLB::Mode mode) const
+    fixupRange(const TranslationGen::Range &range, BaseMMU::Mode mode) const
     {
         return false;
     }
 
-  public:
+    bool tryOnBlob(BaseMMU::Mode mode, TranslationGenPtr gen,
+            std::function<void(const TranslationGen::Range &)> func) const;
 
+  public:
     TranslatingPortProxy(ThreadContext *tc, Request::Flags _flags=0);
 
     /** Version of tryReadblob that translates virt->phys and deals
@@ -87,5 +88,7 @@ class TranslatingPortProxy : public PortProxy
      */
     bool tryMemsetBlob(Addr address, uint8_t  v, int size) const override;
 };
+
+} // namespace gem5
 
 #endif //__MEM_TRANSLATING_PORT_PROXY_HH__

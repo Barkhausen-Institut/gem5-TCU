@@ -55,6 +55,12 @@
 #include "base/compiler.hh"
 #include "base/logging.hh"
 
+namespace gem5
+{
+
+namespace memory
+{
+
 DRAMsim3Wrapper::DRAMsim3Wrapper(const std::string& config_file,
                                  const std::string& working_dir,
                                  std::function<void(uint64_t)> read_cb,
@@ -123,7 +129,7 @@ DRAMsim3Wrapper::canAccept(uint64_t addr, bool is_write) const
 void
 DRAMsim3Wrapper::enqueue(uint64_t addr, bool is_write)
 {
-    M5_VAR_USED bool success = dramsim->AddTransaction(addr, is_write);
+    [[maybe_unused]] bool success = dramsim->AddTransaction(addr, is_write);
     assert(success);
 }
 
@@ -151,3 +157,5 @@ DRAMsim3Wrapper::tick()
     dramsim->ClockTick();
 }
 
+} // namespace memory
+} // namespace gem5

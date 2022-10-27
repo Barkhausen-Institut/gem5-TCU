@@ -53,6 +53,9 @@
  * Technical Reference Manual rev r2p2 (ARM DDI 0407F)
  */
 
+namespace gem5
+{
+
 class BaseGic;
 class ArmInterruptPin;
 
@@ -63,7 +66,8 @@ class CpuLocalTimer : public BasicPioDevice
     {
 
       public:
-        enum {
+        enum
+        {
             TimerLoadReg    	   = 0x00,
             TimerCounterReg 	   = 0x04,
             TimerControlReg 	   = 0x08,
@@ -191,6 +195,6 @@ class CpuLocalTimer : public BasicPioDevice
     void unserialize(CheckpointIn &cp) override;
 };
 
+} // namespace gem5
 
 #endif // __DEV_ARM_SP804_HH__
-

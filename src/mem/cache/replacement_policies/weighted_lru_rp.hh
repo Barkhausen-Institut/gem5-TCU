@@ -2,8 +2,6 @@
  * Copyright (c) 2013-2015 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -37,62 +35,39 @@
 #include <memory>
 
 #include "base/types.hh"
-#include "mem/cache/replacement_policies/base.hh"
+#include "mem/cache/replacement_policies/lru_rp.hh"
+
+namespace gem5
+{
 
 struct WeightedLRURPParams;
 
-namespace ReplacementPolicy {
+GEM5_DEPRECATED_NAMESPACE(ReplacementPolicy, replacement_policy);
+namespace replacement_policy
+{
 
-class WeightedLRU : public Base
+class WeightedLRU : public LRU
 {
   protected:
     /** Weighted LRU implementation of replacement data. */
-    struct WeightedLRUReplData : ReplacementData
+    struct WeightedLRUReplData : LRUReplData
     {
         /** pointer for last occupancy */
         int last_occ_ptr;
 
-        /** Tick on which the entry was last touched. */
-        Tick last_touch_tick;
-
         /**
          * Default constructor. Invalidate data.
          */
-        WeightedLRUReplData() : ReplacementData(),
-                                last_occ_ptr(0), last_touch_tick(0) {}
+        WeightedLRUReplData() : LRUReplData(), last_occ_ptr(0) {}
     };
   public:
     typedef WeightedLRURPParams Params;
     WeightedLRU(const Params &p);
     ~WeightedLRU() = default;
 
-    /**
-     * Invalidate replacement data to set it as the next probable victim.
-     * Sets its last touch tick as the starting tick.
-     *
-     * @param replacement_data Replacement data to be invalidated.
-     */
-    void invalidate(const std::shared_ptr<ReplacementData>& replacement_data)
-                                                              const override;
-    /**
-     * Touch an entry to update its replacement data.
-     * Sets its last touch tick as the current tick.
-     *
-     * @param replacement_data Replacement data to be touched.
-     */
-    void touch(const std::shared_ptr<ReplacementData>&
-                                        replacement_data) const override;
+    using Base::touch;
     void touch(const std::shared_ptr<ReplacementData>& replacement_data,
                                         int occupancy) const;
-
-    /**
-     * Reset replacement data. Used when an entry is inserted.
-     * Sets its last touch tick as the current tick.
-     *
-     * @param replacement_data Replacement data to be reset.
-     */
-    void reset(const std::shared_ptr<ReplacementData>& replacement_data) const
-                                                                     override;
 
     /**
      * Instantiate a replacement data entry.
@@ -111,6 +86,7 @@ class WeightedLRU : public Base
                                               candidates) const override;
 };
 
-} // namespace ReplacementPolicy
+} // namespace replacement_policy
+} // namespace gem5
 
 #endif // __MEM_CACHE_REPLACEMENT_POLICIES_WEIGHTED_LRU_RP_HH__

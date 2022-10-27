@@ -41,6 +41,11 @@
 #include <list>
 #include <vector>
 
+namespace gem5
+{
+namespace tcu
+{
+
 class Tcu;
 
 class XferUnit
@@ -225,12 +230,15 @@ class XferUnit
 
     std::list<TransferEvent*> queue;
 
-    Stats::Histogram reads;
-    Stats::Histogram writes;
-    Stats::Histogram bytesRead;
-    Stats::Histogram bytesWritten;
-    Stats::Scalar delays;
-    Stats::Scalar aborts;
+    statistics::Histogram reads;
+    statistics::Histogram writes;
+    statistics::Histogram bytesRead;
+    statistics::Histogram bytesWritten;
+    statistics::Scalar delays;
+    statistics::Scalar aborts;
 };
+
+}
+}
 
 #endif

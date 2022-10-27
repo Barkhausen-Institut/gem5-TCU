@@ -35,6 +35,9 @@
 #include "base/addr_range.hh"
 #include "base/callback.hh"
 
+namespace gem5
+{
+
 class MemBackdoor
 {
   public:
@@ -43,7 +46,8 @@ class MemBackdoor
     typedef std::function<void(const MemBackdoor &backdoor)> CbFunction;
 
   public:
-    enum Flags{
+    enum Flags
+    {
         // How data is allowed to be accessed through this backdoor.
         NoAccess = 0x0,
         Readable = 0x1,
@@ -121,5 +125,7 @@ class MemBackdoor
 };
 
 typedef MemBackdoor *MemBackdoorPtr;
+
+} // namespace gem5
 
 #endif  //__MEM_BACKDOOR_HH__

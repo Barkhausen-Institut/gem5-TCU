@@ -50,6 +50,9 @@
 #include "enums/AddrMap.hh"
 #include "mem/packet.hh"
 
+namespace gem5
+{
+
 /**
  * Hybrid NVM + DRAM specific generator is for issuing request with variable
  * buffer hit length and bank utilization. Currently assumes a single
@@ -106,7 +109,7 @@ class HybridGen : public BaseGen
            unsigned int nbr_of_banks_dram, unsigned int nbr_of_banks_util_dram,
            unsigned int num_seq_pkts_nvm, unsigned int buffer_size_nvm,
            unsigned int nbr_of_banks_nvm, unsigned int nbr_of_banks_util_nvm,
-           Enums::AddrMap addr_mapping,
+           enums::AddrMap addr_mapping,
            unsigned int nbr_of_ranks_dram,
            unsigned int nbr_of_ranks_nvm,
            uint8_t nvm_percent);
@@ -204,7 +207,7 @@ class HybridGen : public BaseGen
     const unsigned int nbrOfBanksUtilNvm;
 
     /** Address mapping to be used */
-    Enums::AddrMap addrMapping;
+    enums::AddrMap addrMapping;
 
     /** Number of ranks to be utilized for a given configuration */
     const unsigned int nbrOfRanksDram;
@@ -271,5 +274,7 @@ class HybridGen : public BaseGen
     unsigned int rankBits;
 
 };
+
+} // namespace gem5
 
 #endif

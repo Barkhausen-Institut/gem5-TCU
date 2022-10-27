@@ -28,47 +28,52 @@
 
 #include <Python.h>
 
-#include "sim/init.hh"
+#include <iostream>
+
+#include "pybind11/embed.h"
+#include "pybind11/pybind11.h"
+
+#include "python/embedded.hh"
 #include "sim/init_signals.hh"
 
+using namespace gem5;
+
+namespace py = pybind11;
+
 // main() is now pretty stripped down and just sets up python and then
-// calls initM5Python which loads the various embedded python modules
-// into the python environment and then starts things running by
-// calling m5Main.
+// calls EmbeddedPython::initAll which loads the various embedded python
+// modules into the python environment and then starts things running by
+// running python's m5.main().
 int
 main(int argc, char **argv)
 {
-    int ret;
-
-    // Initialize m5 special signal handling.
+    // Initialize gem5 special signal handling.
     initSignals();
 
-#if PY_MAJOR_VERSION >= 3
+    // Convert argv[0] to a wchar_t string, using python's locale and cleanup
+    // functions.
     std::unique_ptr<wchar_t[], decltype(&PyMem_RawFree)> program(
-        Py_DecodeLocale(argv[0], NULL),
+        Py_DecodeLocale(argv[0], nullptr),
         &PyMem_RawFree);
+
+    // This can help python find libraries at run time relative to this binary.
+    // It's probably not necessary, but is mostly harmless and might be useful.
     Py_SetProgramName(program.get());
-#else
-    Py_SetProgramName(argv[0]);
-#endif
 
-    // Register native modules with Python's init system before
-    // initializing the interpreter.
-    registerNativeModules();
+    py::scoped_interpreter guard(true, argc, argv);
 
-    // initialize embedded Python interpreter
-    Py_Initialize();
+    auto importer = py::module_::import("importer");
+    importer.attr("install")();
 
-    // Initialize the embedded m5 python library
-    ret = EmbeddedPython::initAll();
+    try {
+        py::module_::import("m5").attr("main")();
+    } catch (py::error_already_set &e) {
+        if (e.matches(PyExc_SystemExit))
+            return e.value().attr("code").cast<int>();
 
-    if (ret == 0) {
-        // start m5
-        ret = m5Main(argc, argv);
+        std::cerr << e.what();
+        return 1;
     }
 
-    // clean up Python intepreter.
-    Py_Finalize();
-
-    return ret;
+    return 0;
 }

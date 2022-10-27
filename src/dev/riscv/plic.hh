@@ -42,13 +42,15 @@
 #include <map>
 
 #include "arch/riscv/interrupts.hh"
-#include "cpu/intr_control.hh"
 #include "dev/io_device.hh"
 #include "dev/reg_bank.hh"
 #include "mem/packet.hh"
 #include "mem/packet_access.hh"
 #include "params/Plic.hh"
 #include "sim/system.hh"
+
+namespace gem5
+{
 
 using namespace RiscvISA;
 /**
@@ -86,7 +88,8 @@ using namespace RiscvISA;
  *   writing to M mode registers)
  */
 
-struct PlicOutput {
+struct PlicOutput
+{
   std::vector<uint32_t> maxID;
   std::vector<uint32_t> maxPriority;
 };
@@ -96,7 +99,6 @@ class Plic : public BasicPioDevice
   // Params
   protected:
     System *system;
-    IntrControl *intrctrl;
 
     // Number of interrupt sources
     int nSrc;
@@ -182,7 +184,8 @@ class Plic : public BasicPioDevice
      *
      * ... reserved[3]
      */
-    class PlicRegisters: public RegisterBankLE {
+    class PlicRegisters: public RegisterBankLE
+    {
       public:
         const Addr pendingStart = 0x1000;
         const Addr enableStart = 0x2000;
@@ -279,5 +282,6 @@ class Plic : public BasicPioDevice
     void updateInt();
 };
 
+} // namespace gem5
 
 #endif // __DEV_RISCV_PLIC_HH__

@@ -38,6 +38,11 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+namespace gem5
+{
+namespace tcu
+{
+
 TcuSerialInput::DataEvent::DataEvent(TcuSerialInput *s, int fd, int e)
     : PollEvent(fd, e), ser(s)
 {
@@ -213,4 +218,7 @@ TcuSerialInput::commandFinished()
 {
     DPRINTF(TcuSerialInput, "Send finished\n");
     pos = 0;
+}
+
+}
 }

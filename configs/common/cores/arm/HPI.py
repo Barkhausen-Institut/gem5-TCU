@@ -1328,25 +1328,9 @@ class HPI_FUPool(MinorFUPool):
         HPI_MiscFU() # 6
         ]
 
-class HPI_DTB(ArmDTB):
-    size = 256
-
-class HPI_ITB(ArmITB):
-    size = 256
-
 class HPI_MMU(ArmMMU):
-    itb = HPI_ITB()
-    dtb = HPI_DTB()
-
-class HPI_WalkCache(Cache):
-    data_latency = 4
-    tag_latency = 4
-    response_latency = 4
-    mshrs = 6
-    tgts_per_mshr = 8
-    size = '1kB'
-    assoc = 8
-    write_buffers = 16
+    itb = ArmTLB(entry_type="instruction", size=256)
+    dtb = ArmTLB(entry_type="data", size=256)
 
 class HPI_BP(TournamentBP):
     localPredictorSize = 64
@@ -1395,7 +1379,7 @@ class HPI_L2(Cache):
     write_buffers = 16
     # prefetcher FIXME
 
-class HPI(MinorCPU):
+class HPI(ArmMinorCPU):
     # Inherit the doc string from the module to avoid repeating it
     # here.
     __doc__ = __doc__
@@ -1448,7 +1432,7 @@ class HPI(MinorCPU):
 
 __all__ = [
     "HPI_BP",
-    "HPI_ITB", "HPI_DTB", "HPI_WalkCache",
+    "HPI_ITB", "HPI_DTB",
     "HPI_ICache", "HPI_DCache", "HPI_L2",
     "HPI",
 ]

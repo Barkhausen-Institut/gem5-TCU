@@ -38,16 +38,28 @@ from m5.proxy import *
 
 from m5.SimObject import SimObject
 from m5.objects.ArmPMU import ArmPMU
-from m5.objects.ArmSystem import SveVectorLength
+from m5.objects.ArmSystem import SveVectorLength, ArmRelease
 from m5.objects.BaseISA import BaseISA
-from m5.objects.ISACommon import VecRegRenameMode
 
 # Enum for DecoderFlavor
 class DecoderFlavor(Enum): vals = ['Generic']
 
+class ArmDefaultSERelease(ArmRelease):
+    extensions = [
+        'CRYPTO',
+        # Armv8.1
+        'FEAT_LSE', 'FEAT_RDM',
+        # Armv8.2
+        'FEAT_SVE',
+        # Armv8.3
+        'FEAT_FCMA', 'FEAT_JSCVT', 'FEAT_PAuth',
+        # Other
+        'TME'
+    ]
+
 class ArmISA(BaseISA):
     type = 'ArmISA'
-    cxx_class = 'ArmISA::ISA'
+    cxx_class = 'gem5::ArmISA::ISA'
     cxx_header = "arch/arm/isa.hh"
 
     system = Param.System(Parent.any, "System this ISA object belongs to")
@@ -55,6 +67,9 @@ class ArmISA(BaseISA):
     pmu = Param.ArmPMU(NULL, "Performance Monitoring Unit")
     decoderFlavor = Param.DecoderFlavor(
             'Generic', "Decoder flavor specification")
+
+    release_se = Param.ArmRelease(ArmDefaultSERelease(),
+        "Set of features/extensions to use in SE mode")
 
     # If no MIDR value is provided, 0x0 is treated by gem5 as follows:
     # When 'highest_el_is_64' (AArch64 support) is:
@@ -113,11 +128,11 @@ class ArmISA(BaseISA):
     # 4K | 64K | !16K | !BigEndEL0 | !SNSMem | !BigEnd | 8b ASID | 40b PA
     id_aa64mmfr0_el1 = Param.UInt64(0x0000000000f00002,
         "AArch64 Memory Model Feature Register 0")
-    # PAN | HPDS | !VHE
-    id_aa64mmfr1_el1 = Param.UInt64(0x0000000000101000,
+    # PAN | HPDS | !VHE | VMIDBits
+    id_aa64mmfr1_el1 = Param.UInt64(0x0000000000101020,
         "AArch64 Memory Model Feature Register 1")
-    # |VARANGE
-    id_aa64mmfr2_el1 = Param.UInt64(0x0000000000010000,
+    # |VARANGE | UAO
+    id_aa64mmfr2_el1 = Param.UInt64(0x0000000000010010,
         "AArch64 Memory Model Feature Register 2")
 
     # Any access (read/write) to an unimplemented

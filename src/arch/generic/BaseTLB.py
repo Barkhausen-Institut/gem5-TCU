@@ -1,3 +1,15 @@
+# Copyright (c) 2021 Arm Limited
+# All rights reserved.
+#
+# The license below extends only to copyright in the software and shall
+# not be construed as granting a license to any other intellectual
+# property including but not limited to intellectual property relating
+# to a hardware implementation of the functionality of the software
+# licensed hereunder.  You may use the software subject to the license
+# terms below provided that you ensure that this notice is replicated
+# unmodified and in its entirety in all distributions of the software,
+# modified or unmodified, in source code or in binary form.
+#
 # Copyright (c) 2008 The Hewlett-Packard Development Company
 # Copyright (c) 2018 Metempsy Technology Consulting
 # Copyright (c) 2020 Barkhausen Institut
@@ -32,10 +44,31 @@ from m5.proxy import *
 from m5.SimObject import SimObject
 from m5.objects.ClockedObject import ClockedObject
 
+class TypeTLB(ScopedEnum):
+    """
+    instruction: TLB contains instruction entries only
+    data: TLB contains data entries only
+    unified: TLB contains both instruction and data entries
+
+    The enum values have been selected in order to perform bitwise
+    operations on them. For example a unified TLB contains both
+    instruction and data entries so code trying to assess if the
+    TLB is storing (e.g.) data entries can do that with:
+
+    bool has_data = tlb->type() & TypeTLB::data;
+    """
+    map = {
+        'instruction' : 0x1,
+        'data' : 0x2,
+        'unified' : 0x3,
+    }
+
 class BaseTLB(SimObject):
     type = 'BaseTLB'
     abstract = True
     cxx_header = "arch/generic/tlb.hh"
+    cxx_class = 'gem5::BaseTLB'
+
     # Ports to connect with other TLB levels
     cpu_side_ports  = VectorResponsePort("Ports closer to the CPU side")
     slave     = DeprecatedParam(cpu_side_ports,
@@ -43,3 +76,7 @@ class BaseTLB(SimObject):
     mem_side_port = RequestPort("Port closer to memory side")
     master   = DeprecatedParam(mem_side_port,
                     '`master` is now called `mem_side_port`')
+
+    entry_type = Param.TypeTLB("Instruction/Data/Unified TLB entries")
+
+    next_level = Param.BaseTLB(NULL, "next level")

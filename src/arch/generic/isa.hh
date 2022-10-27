@@ -40,23 +40,83 @@
 #ifndef __ARCH_GENERIC_ISA_HH__
 #define __ARCH_GENERIC_ISA_HH__
 
+#include <vector>
+
+#include "arch/generic/pcstate.hh"
+#include "cpu/reg_class.hh"
+#include "mem/packet.hh"
+#include "mem/request.hh"
 #include "sim/sim_object.hh"
 
+namespace gem5
+{
+
 class ThreadContext;
+class ExecContext;
 
 class BaseISA : public SimObject
 {
+  public:
+    typedef std::vector<RegClass> RegClasses;
+
   protected:
     using SimObject::SimObject;
 
     ThreadContext *tc = nullptr;
 
+    RegClasses _regClasses;
+
   public:
+    virtual PCStateBase *newPCState(Addr new_inst_addr=0) const = 0;
     virtual void takeOverFrom(ThreadContext *new_tc, ThreadContext *old_tc) {}
     virtual void setThreadContext(ThreadContext *_tc) { tc = _tc; }
 
     virtual uint64_t getExecutingAsid() const { return 0; }
     virtual bool inUserMode() const = 0;
+    virtual void copyRegsFrom(ThreadContext *src) = 0;
+
+    const RegClasses &regClasses() const { return _regClasses; }
+
+    // Locked memory handling functions.
+    virtual void handleLockedRead(const RequestPtr &req) {}
+    virtual void
+    handleLockedRead(ExecContext *xc, const RequestPtr &req)
+    {
+        handleLockedRead(req);
+    }
+    virtual bool
+    handleLockedWrite(const RequestPtr &req, Addr cacheBlockMask)
+    {
+        return true;
+    }
+    virtual bool
+    handleLockedWrite(ExecContext *xc, const RequestPtr &req,
+            Addr cacheBlockMask)
+    {
+        return handleLockedWrite(req, cacheBlockMask);
+    }
+
+    virtual void handleLockedSnoop(PacketPtr pkt, Addr cacheBlockMask) {}
+    virtual void
+    handleLockedSnoop(ExecContext *xc, PacketPtr pkt, Addr cacheBlockMask)
+    {
+        handleLockedSnoop(pkt, cacheBlockMask);
+    }
+    virtual void handleLockedSnoopHit() {}
+    virtual void
+    handleLockedSnoopHit(ExecContext *xc)
+    {
+        handleLockedSnoopHit();
+    }
+
+    virtual void globalClearExclusive() {}
+    virtual void
+    globalClearExclusive(ExecContext *xc)
+    {
+        globalClearExclusive();
+    }
 };
+
+} // namespace gem5
 
 #endif // __ARCH_GENERIC_ISA_HH__

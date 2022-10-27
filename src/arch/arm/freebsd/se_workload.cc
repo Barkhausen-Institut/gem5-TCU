@@ -34,7 +34,7 @@
 #include "arch/arm/freebsd/se_workload.hh"
 
 #include <sys/syscall.h>
-#if !defined ( __GNU_LIBRARY__ ) && defined(__FreeBSD__)
+#if !defined( __GNU_LIBRARY__ ) && (defined(__FreeBSD__) || defined(__APPLE__))
 #include <sys/sysctl.h>
 #endif
 
@@ -42,7 +42,11 @@
 #include "base/loader/object_file.hh"
 #include "base/trace.hh"
 #include "cpu/thread_context.hh"
+#include "mem/se_translating_port_proxy.hh"
 #include "sim/syscall_emul.hh"
+
+namespace gem5
+{
 
 namespace
 {
@@ -51,27 +55,27 @@ class FreebsdLoader : public Process::Loader
 {
   public:
     Process *
-    load(const ProcessParams &params, ::Loader::ObjectFile *obj) override
+    load(const ProcessParams &params, loader::ObjectFile *obj) override
     {
         auto arch = obj->getArch();
         auto opsys = obj->getOpSys();
 
-        if (arch != ::Loader::Arm && arch != ::Loader::Thumb &&
-                arch != ::Loader::Arm64) {
+        if (arch != loader::Arm && arch != loader::Thumb &&
+                arch != loader::Arm64) {
             return nullptr;
         }
 
-        if (opsys != ::Loader::FreeBSD)
+        if (opsys != loader::FreeBSD)
             return nullptr;
 
-        if (arch == ::Loader::Arm64)
+        if (arch == loader::Arm64)
             return new ArmProcess64(params, obj, arch);
         else
             return new ArmProcess32(params, obj, arch);
     }
 };
 
-FreebsdLoader loader;
+FreebsdLoader freebsdLoader;
 
 } // anonymous namespace
 
@@ -91,18 +95,20 @@ sysctlFunc(SyscallDesc *desc, ThreadContext *tc, VPtr<> namep, size_t nameLen,
 {
     uint64_t ret;
 
+    SETranslatingPortProxy proxy(tc);
+
     BufferArg buf(namep, sizeof(size_t));
     BufferArg buf2(oldp, sizeof(size_t));
     BufferArg buf3(oldlenp, sizeof(size_t));
     BufferArg buf4(newp, sizeof(size_t));
 
-    buf.copyIn(tc->getVirtProxy());
-    buf2.copyIn(tc->getVirtProxy());
-    buf3.copyIn(tc->getVirtProxy());
+    buf.copyIn(proxy);
+    buf2.copyIn(proxy);
+    buf3.copyIn(proxy);
 
     void *hnewp = NULL;
     if (newp) {
-        buf4.copyIn(tc->getVirtProxy());
+        buf4.copyIn(proxy);
         hnewp = (void *)buf4.bufferPtr();
     }
 
@@ -112,11 +118,11 @@ sysctlFunc(SyscallDesc *desc, ThreadContext *tc, VPtr<> namep, size_t nameLen,
 
     ret = sysctl((int *)hnamep, nameLen, holdp, holdlenp, hnewp, newlen);
 
-    buf.copyOut(tc->getVirtProxy());
-    buf2.copyOut(tc->getVirtProxy());
-    buf3.copyOut(tc->getVirtProxy());
+    buf.copyOut(proxy);
+    buf2.copyOut(proxy);
+    buf3.copyOut(proxy);
     if (newp)
-        buf4.copyOut(tc->getVirtProxy());
+        buf4.copyOut(proxy);
 
     return (ret);
 }
@@ -130,7 +136,7 @@ static SyscallDescTable<EmuFreebsd::SyscallABI64> syscallDescs64 = {
     {    4, "write", writeFunc<ArmFreebsd64> },
     {   17, "obreak", brkFunc },
     {   54, "ioctl", ioctlFunc<ArmFreebsd64> },
-    {   58, "readlink", readlinkFunc },
+    {   58, "readlink", readlinkFunc<ArmFreebsd64> },
     {  117, "getrusage", getrusageFunc<ArmFreebsd64> },
     {  189, "fstat", fstatFunc<ArmFreebsd64> },
 #if !defined ( __GNU_LIBRARY__ )
@@ -151,9 +157,10 @@ EmuFreebsd::syscall(ThreadContext *tc)
     process->Process::syscall(tc);
 
     if (dynamic_cast<ArmProcess64 *>(process))
-        syscallDescs64.get(tc->readIntReg(INTREG_X8))->doSyscall(tc);
+        syscallDescs64.get(tc->getReg(int_reg::X8))->doSyscall(tc);
     else
-        syscallDescs32.get(tc->readIntReg(INTREG_R7))->doSyscall(tc);
+        syscallDescs32.get(tc->getReg(int_reg::R7))->doSyscall(tc);
 }
 
 } // namespace ArmISA
+} // namespace gem5

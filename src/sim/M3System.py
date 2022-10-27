@@ -31,6 +31,7 @@ from m5.objects.System import System
 class M3System(System):
     type = 'M3System'
     cxx_header = 'sim/m3_system.hh'
+    cxx_class = 'gem5::M3System'
 
     cmdline = Param.String("", "The command line arguments")
 
@@ -39,6 +40,8 @@ class M3System(System):
     memory_tile = Param.Unsigned(0, "The memory tile to use")
     memory_offset = Param.Addr(0, "The offset in the memory tile")
     memory_size = Param.Addr(0, "The size in the memory tile")
+
+    env_start = Param.Addr(0x100000, "The environment start address")
 
     mod_offset = Param.Addr(0, "The offset of the boot modules (only for kernel tile)")
     mod_size = Param.Addr(0, "The max. size of the boot modules (only for kernel tile)")

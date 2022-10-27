@@ -43,42 +43,54 @@
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
+#include "arch/arm/page_size.hh"
 #include "kern/linux/events.hh"
 #include "params/ArmSystem.hh"
 #include "sim/full_system.hh"
 #include "sim/sim_object.hh"
 #include "sim/system.hh"
+#include "enums/ArmExtension.hh"
+
+
+namespace gem5
+{
 
 class GenericTimer;
 class BaseGic;
 class FVPBasePwrCtrl;
 class ThreadContext;
 
+struct ArmReleaseParams;
+
+class ArmRelease : public SimObject
+{
+  public:
+    PARAMS(ArmRelease);
+    ArmRelease(const Params &p);
+
+    bool
+    has(ArmExtension ext) const
+    {
+        if (auto it = _extensions.find(ext); it != _extensions.end()) {
+            return it->second;
+        } else {
+            return false;
+        }
+    }
+
+  protected:
+    /**
+     * List of implemented extensions
+     */
+    std::unordered_map<ArmExtension, bool> _extensions;
+};
+
 class ArmSystem : public System
 {
   protected:
-    /**
-     * True if this system implements the Security Extensions
-     */
-    const bool _haveSecurity;
-
-    /**
-     * True if this system implements the Large Physical Address Extension
-     */
-    const bool _haveLPAE;
-
-    /**
-     * True if this system implements the virtualization Extensions
-     */
-    const bool _haveVirtualization;
-
-    /**
-     * True if this system implements the Crypto Extension
-     */
-    const bool _haveCrypto;
-
     /**
      * Pointer to the Generic Timer wrapper.
      */
@@ -112,37 +124,19 @@ class ArmSystem : public System
      */
     const bool _haveLargeAsid64;
 
-    /**
-     * True if system implements the transactional memory extension (TME)
-     */
-    const bool _haveTME;
-
-    /**
-     * True if SVE is implemented (ARMv8)
-     */
-    const bool _haveSVE;
-
     /** SVE vector length at reset, in quadwords */
     const unsigned _sveVL;
-
-    /**
-     * True if LSE is implemented (ARMv8.1)
-     */
-    const bool _haveLSE;
-
-    /** True if FEAT_VHE (Virtualization Host Extensions) is implemented */
-    const bool _haveVHE;
-
-    /** True if Priviledge Access Never is implemented */
-    const unsigned _havePAN;
-
-    /** True if Secure EL2 is implemented */
-    const unsigned _haveSecEL2;
 
     /**
      * True if the Semihosting interface is enabled.
      */
     ArmSemihosting *const semihosting;
+
+    /**
+     * Arm Release object: contains a list of implemented
+     * features
+     */
+    const ArmRelease *release;
 
   public:
     static constexpr Addr PageBytes = ArmISA::PageBytes;
@@ -155,22 +149,9 @@ class ArmSystem : public System
     /** true if this a multiprocessor system */
     bool multiProc;
 
-    /** Returns true if this system implements the Security Extensions */
-    bool haveSecurity() const { return _haveSecurity; }
+    const ArmRelease* releaseFS() const { return release; }
 
-    /** Returns true if this system implements the Large Physical Address
-     * Extension */
-    bool haveLPAE() const { return _haveLPAE; }
-
-    /** Returns true if this system implements the virtualization
-      * Extensions
-      */
-    bool haveVirtualization() const { return _haveVirtualization; }
-
-    /** Returns true if this system implements the Crypto
-      * Extension
-      */
-    bool haveCrypto() const { return _haveCrypto; }
+    bool has(ArmExtension ext) const { return release->has(ext); }
 
     /** Sets the pointer to the Generic Timer. */
     void
@@ -205,9 +186,9 @@ class ArmSystem : public System
     ArmISA::ExceptionLevel
     highestEL() const
     {
-        if (_haveSecurity)
+        if (has(ArmExtension::SECURITY))
             return ArmISA::EL3;
-        if (_haveVirtualization)
+        if (has(ArmExtension::VIRTUALIZATION))
             return ArmISA::EL2;
         return ArmISA::EL1;
     }
@@ -220,28 +201,8 @@ class ArmSystem : public System
     /** Returns true if ASID is 16 bits in AArch64 (ARMv8) */
     bool haveLargeAsid64() const { return _haveLargeAsid64; }
 
-    /** Returns true if this system implements the transactional
-      * memory extension (ARMv9)
-      */
-    bool haveTME() const { return _haveTME; }
-
-    /** Returns true if SVE is implemented (ARMv8) */
-    bool haveSVE() const { return _haveSVE; }
-
     /** Returns the SVE vector length at reset, in quadwords */
     unsigned sveVL() const { return _sveVL; }
-
-    /** Returns true if LSE is implemented (ARMv8.1) */
-    bool haveLSE() const { return _haveLSE; }
-
-    /** Returns true if Virtualization Host Extensions is implemented */
-    bool haveVHE() const { return _haveVHE; }
-
-    /** Returns true if Priviledge Access Never is implemented */
-    bool havePAN() const { return _havePAN; }
-
-    /** Returns true if Priviledge Access Never is implemented */
-    bool haveSecEL2() const { return _haveSecEL2; }
 
     /** Returns the supported physical address range in bits if the highest
      * implemented exception level is 64 bits (ARMv8) */
@@ -253,7 +214,7 @@ class ArmSystem : public System
     {
         if (_highestELIs64)
             return _physAddrRange64;
-        if (_haveLPAE)
+        if (has(ArmExtension::LPAE))
             return 40;
         return 32;
     }
@@ -275,24 +236,8 @@ class ArmSystem : public System
         return static_cast<ArmSystem *>(tc->getSystemPtr());
     }
 
-    /** Returns true if the system of a specific thread context implements the
-     * Security Extensions
-     */
-    static bool haveSecurity(ThreadContext *tc);
+    static bool has(ArmExtension ext, ThreadContext *tc);
 
-    /** Returns true if the system of a specific thread context implements the
-     * virtualization Extensions
-     */
-    static bool haveVirtualization(ThreadContext *tc);
-
-    /** Returns true if the system of a specific thread context implements the
-     * Large Physical Address Extension
-     */
-    static bool haveLPAE(ThreadContext *tc);
-
-    /** Returns true if the register width of the highest implemented exception
-     * level for the system of a specific thread context is 64 bits (ARMv8)
-     */
     static bool highestELIs64(ThreadContext *tc);
 
     /** Returns the highest implemented exception level for the system of a
@@ -302,11 +247,6 @@ class ArmSystem : public System
 
     /** Return true if the system implements a specific exception level */
     static bool haveEL(ThreadContext *tc, ArmISA::ExceptionLevel el);
-
-    /** Returns true if the system of a specific thread context implements the
-     * transactional memory extension (TME)
-     */
-    static bool haveTME(ThreadContext *tc);
 
     /** Returns the reset address if the highest implemented exception level
      * for the system of a specific thread context is 64 bits (ARMv8)
@@ -355,5 +295,7 @@ class ArmSystem : public System
     /** Notify the power controller of WAKEREQUEST deassertion */
     static void callClearWakeRequest(ThreadContext *tc);
 };
+
+} // namespace gem5
 
 #endif

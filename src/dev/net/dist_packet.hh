@@ -55,6 +55,9 @@
 
 #include "base/types.hh"
 
+namespace gem5
+{
+
 class DistHeaderPkt
 {
   private:
@@ -89,17 +92,20 @@ class DistHeaderPkt
          * (from EthPacketData::simLength).
          */
         unsigned simLength;
-        union {
+        union
+        {
             Tick sendDelay;
             Tick syncRepeat;
         };
-        union {
+        union
+        {
             /**
              * Actual length of the simulated Ethernet packet.
              * (from EthPacketData::length).
              */
             unsigned dataPacketLength;
-            struct {
+            struct
+            {
                 ReqType needCkpt;
                 ReqType needStopSync;
                 ReqType needExit;
@@ -108,4 +114,6 @@ class DistHeaderPkt
     };
 };
 
-#endif
+} // namespace gem5
+
+#endif // __DEV_DIST_PACKET_HH__

@@ -43,11 +43,13 @@ output header {{
 #include "arch/power/insts/mem.hh"
 #include "arch/power/insts/misc.hh"
 #include "arch/power/insts/static_inst.hh"
-#include "arch/power/isa_traits.hh"
 #include "cpu/static_inst.hh"
 #include "mem/packet.hh"
 
+namespace gem5::PowerISAInst
+{
 using namespace PowerISA;
+} // namespace gem5::PowerISAInst
 }};
 
 output decoder {{
@@ -55,13 +57,15 @@ output decoder {{
 
 #include "arch/power/decoder.hh"
 #include "arch/power/faults.hh"
-#include "arch/power/isa_traits.hh"
-#include "arch/power/utility.hh"
+#include "arch/power/regs/int.hh"
 #include "base/loader/symtab.hh"
 #include "base/cprintf.hh"
 #include "cpu/thread_context.hh"
 
+namespace gem5::PowerISAInst
+{
 using namespace PowerISA;
+} // namespace gem5::PowerISAInst
 }};
 
 output exec {{
@@ -69,8 +73,8 @@ output exec {{
 
 #include "arch/generic/memhelpers.hh"
 #include "arch/power/faults.hh"
-#include "arch/power/isa_traits.hh"
-#include "arch/power/utility.hh"
+#include "arch/power/regs/int.hh"
+#include "arch/power/regs/misc.hh"
 #include "base/condcodes.hh"
 #include "cpu/base.hh"
 #include "cpu/exetrace.hh"
@@ -78,6 +82,8 @@ output exec {{
 #include "mem/packet_access.hh"
 #include "sim/sim_exit.hh"
 
+namespace gem5::PowerISAInst
+{
 using namespace PowerISA;
+} // namespace gem5::PowerISAInst
 }};
-

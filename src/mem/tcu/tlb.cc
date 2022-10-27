@@ -35,6 +35,11 @@
 
 #include <limits>
 
+namespace gem5
+{
+namespace tcu
+{
+
 static const char *decode_access(uint access)
 {
     static char buf[6];
@@ -227,4 +232,7 @@ TcuTlb::clear()
             entries[i].flags = 0;
     }
     flushes++;
+}
+
+}
 }

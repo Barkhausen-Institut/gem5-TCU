@@ -31,9 +31,14 @@
 
 #include <vector>
 
-#include "arch/types.hh"
+#include "arch/generic/pcstate.hh"
 #include "base/types.hh"
-#include "config/the_isa.hh"
+
+namespace gem5
+{
+
+namespace branch_prediction
+{
 
 /** Return address stack class, implements a simple RAS. */
 class ReturnAddrStack
@@ -52,15 +57,13 @@ class ReturnAddrStack
     void reset();
 
     /** Returns the top address on the RAS. */
-    TheISA::PCState top()
-    { return addrStack[tos]; }
+    const PCStateBase *top() { return addrStack[tos].get(); }
 
     /** Returns the index of the top of the RAS. */
-    unsigned topIdx()
-    { return tos; }
+    unsigned topIdx() { return tos; }
 
     /** Pushes an address onto the RAS. */
-    void push(const TheISA::PCState &return_addr);
+    void push(const PCStateBase &return_addr);
 
     /** Pops the top address from the RAS. */
     void pop();
@@ -70,22 +73,29 @@ class ReturnAddrStack
      *  @param top_entry_idx The index of the RAS that will now be the top.
      *  @param restored The new target address of the new top of the RAS.
      */
-    void restore(unsigned top_entry_idx, const TheISA::PCState &restored);
+    void restore(unsigned top_entry_idx, const PCStateBase *restored);
 
-     bool empty() { return usedEntries == 0; }
+    bool empty() { return usedEntries == 0; }
 
-     bool full() { return usedEntries == numEntries; }
+    bool full() { return usedEntries == numEntries; }
   private:
     /** Increments the top of stack index. */
-    inline void incrTos()
-    { if (++tos == numEntries) tos = 0; }
+    inline void
+    incrTos()
+    {
+        if (++tos == numEntries)
+            tos = 0;
+    }
 
     /** Decrements the top of stack index. */
-    inline void decrTos()
-    { tos = (tos == 0 ? numEntries - 1 : tos - 1); }
+    inline void
+    decrTos()
+    {
+        tos = (tos == 0 ? numEntries - 1 : tos - 1);
+    }
 
     /** The RAS itself. */
-    std::vector<TheISA::PCState> addrStack;
+    std::vector<std::unique_ptr<PCStateBase>> addrStack;
 
     /** The number of entries in the RAS. */
     unsigned numEntries;
@@ -96,5 +106,8 @@ class ReturnAddrStack
     /** The top of stack index. */
     unsigned tos;
 };
+
+} // namespace branch_prediction
+} // namespace gem5
 
 #endif // __CPU_PRED_RAS_HH__

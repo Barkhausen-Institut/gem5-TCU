@@ -44,6 +44,9 @@
 #include "debug/TrafficGen.hh"
 #include "enums/AddrMap.hh"
 
+namespace gem5
+{
+
 NvmGen::NvmGen(SimObject &obj,
                RequestorID requestor_id, Tick _duration,
                Addr start_addr, Addr end_addr,
@@ -53,7 +56,7 @@ NvmGen::NvmGen(SimObject &obj,
                unsigned int num_seq_pkts, unsigned int buffer_size,
                unsigned int nbr_of_banks,
                unsigned int nbr_of_banks_util,
-               Enums::AddrMap addr_mapping,
+               enums::AddrMap addr_mapping,
                unsigned int nbr_of_ranks)
        : RandomGen(obj, requestor_id, _duration, start_addr, end_addr,
          _blocksize, cacheline_size, min_period, max_period,
@@ -105,13 +108,13 @@ NvmGen::getNextPacket()
 
     } else {
         // increment the column by one
-        if (addrMapping == Enums::RoRaBaCoCh ||
-            addrMapping == Enums::RoRaBaChCo)
+        if (addrMapping == enums::RoRaBaCoCh ||
+            addrMapping == enums::RoRaBaChCo)
             // Simply increment addr by blocksize to increment
             // the column by one
             addr += blocksize;
 
-        else if (addrMapping == Enums::RoCoRaBaCh) {
+        else if (addrMapping == enums::RoCoRaBaCh) {
             // Explicity increment the column bits
             unsigned int new_col = ((addr / blocksize /
                                        nbrOfBanksNVM / nbrOfRanks) %
@@ -161,8 +164,8 @@ NvmGen::genStartAddr(unsigned int new_bank, unsigned int new_rank)
     unsigned int new_col =
         random_mt.random<unsigned int>(0, burst_per_buffer - numSeqPkts);
 
-    if (addrMapping == Enums::RoRaBaCoCh ||
-        addrMapping == Enums::RoRaBaChCo) {
+    if (addrMapping == enums::RoRaBaCoCh ||
+        addrMapping == enums::RoRaBaChCo) {
         // Block bits, then buffer bits, then bank bits, then rank bits
         replaceBits(addr, blockBits + bufferBits + bankBits - 1,
                     blockBits + bufferBits, new_bank);
@@ -172,7 +175,7 @@ NvmGen::genStartAddr(unsigned int new_bank, unsigned int new_rank)
                         rankBits - 1, blockBits + bufferBits + bankBits,
                         new_rank);
         }
-    } else if (addrMapping == Enums::RoCoRaBaCh) {
+    } else if (addrMapping == enums::RoCoRaBaCh) {
         // Block bits, then bank bits, then rank bits, then buffer bits
         replaceBits(addr, blockBits + bankBits - 1, blockBits, new_bank);
         replaceBits(addr, blockBits + bankBits + rankBits + bufferBits - 1,
@@ -183,3 +186,5 @@ NvmGen::genStartAddr(unsigned int new_bank, unsigned int new_rank)
         }
     }
 }
+
+} // namespace gem5

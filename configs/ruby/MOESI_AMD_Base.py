@@ -1,8 +1,6 @@
 # Copyright (c) 2010-2015 Advanced Micro Devices, Inc.
 # All rights reserved.
 #
-# For use for simulation and test purposes only
-#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #
@@ -197,14 +195,14 @@ class DirCntrl(Directory_Controller, CntrlBase):
         self.respToL3 = resp_to_l3
 
 def define_options(parser):
-    parser.add_option("--num-subcaches", type="int", default=4)
-    parser.add_option("--l3-data-latency", type="int", default=20)
-    parser.add_option("--l3-tag-latency", type="int", default=15)
-    parser.add_option("--cpu-to-dir-latency", type="int", default=15)
-    parser.add_option("--no-resource-stalls", action="store_false",
-                      default=True)
-    parser.add_option("--num-tbes", type="int", default=256)
-    parser.add_option("--l2-latency", type="int", default=50) # load to use
+    parser.add_argument("--num-subcaches", type=int, default=4)
+    parser.add_argument("--l3-data-latency", type=int, default=20)
+    parser.add_argument("--l3-tag-latency", type=int, default=15)
+    parser.add_argument("--cpu-to-dir-latency", type=int, default=15)
+    parser.add_argument("--no-resource-stalls", action="store_false",
+                        default=True)
+    parser.add_argument("--num-tbes", type=int, default=256)
+    parser.add_argument("--l2-latency", type=int, default=50) # load to use
 
 def create_system(options, full_system, system, dma_devices, bootmem,
                   ruby_system):
@@ -259,19 +257,19 @@ def create_system(options, full_system, system, dma_devices, bootmem,
 
         # Connect the Directory controller to the ruby network
         dir_cntrl.requestFromCores = MessageBuffer(ordered = True)
-        dir_cntrl.requestFromCores.slave = ruby_system.network.master
+        dir_cntrl.requestFromCores.in_port = ruby_system.network.out_port
 
         dir_cntrl.responseFromCores = MessageBuffer()
-        dir_cntrl.responseFromCores.slave = ruby_system.network.master
+        dir_cntrl.responseFromCores.in_port = ruby_system.network.out_port
 
         dir_cntrl.unblockFromCores = MessageBuffer()
-        dir_cntrl.unblockFromCores.slave = ruby_system.network.master
+        dir_cntrl.unblockFromCores.in_port = ruby_system.network.out_port
 
         dir_cntrl.probeToCore = MessageBuffer()
-        dir_cntrl.probeToCore.master = ruby_system.network.slave
+        dir_cntrl.probeToCore.out_port = ruby_system.network.in_port
 
         dir_cntrl.responseToCore = MessageBuffer()
-        dir_cntrl.responseToCore.master = ruby_system.network.slave
+        dir_cntrl.responseToCore.out_port = ruby_system.network.in_port
 
         dir_cntrl.triggerQueue = MessageBuffer(ordered = True)
         dir_cntrl.L3triggerQueue = MessageBuffer(ordered = True)
@@ -305,19 +303,19 @@ def create_system(options, full_system, system, dma_devices, bootmem,
 
         # Connect the CP controllers and the network
         cp_cntrl.requestFromCore = MessageBuffer()
-        cp_cntrl.requestFromCore.master = ruby_system.network.slave
+        cp_cntrl.requestFromCore.out_port = ruby_system.network.in_port
 
         cp_cntrl.responseFromCore = MessageBuffer()
-        cp_cntrl.responseFromCore.master = ruby_system.network.slave
+        cp_cntrl.responseFromCore.out_port = ruby_system.network.in_port
 
         cp_cntrl.unblockFromCore = MessageBuffer()
-        cp_cntrl.unblockFromCore.master = ruby_system.network.slave
+        cp_cntrl.unblockFromCore.out_port = ruby_system.network.in_port
 
         cp_cntrl.probeToCore = MessageBuffer()
-        cp_cntrl.probeToCore.slave = ruby_system.network.master
+        cp_cntrl.probeToCore.in_port = ruby_system.network.out_port
 
         cp_cntrl.responseToCore = MessageBuffer()
-        cp_cntrl.responseToCore.slave = ruby_system.network.master
+        cp_cntrl.responseToCore.in_port = ruby_system.network.out_port
 
         cp_cntrl.mandatoryQueue = MessageBuffer()
         cp_cntrl.triggerQueue = MessageBuffer(ordered = True)

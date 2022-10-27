@@ -32,7 +32,9 @@
 #include <sys/stat.h>
 
 #include "base/types.hh"
-#include "config/the_isa.hh"
+
+namespace gem5
+{
 
 void
 VMA::fillMemPages(Addr start, Addr size, PortProxy &port) const
@@ -153,3 +155,5 @@ VMA::MappedFileBuffer::~MappedFileBuffer()
                  strerror(errno));
     }
 }
+
+} // namespace gem5

@@ -48,6 +48,12 @@
 #include "cpu/pred/bpred_unit.hh"
 #include "params/TournamentBP.hh"
 
+namespace gem5
+{
+
+namespace branch_prediction
+{
+
 /**
  * Implements a tournament branch predictor, hopefully identical to the one
  * used in the 21264.  It has a local predictor, which uses a local history
@@ -151,7 +157,8 @@ class TournamentBP : public BPredUnit
      * when the BP can use this information to update/restore its
      * state properly.
      */
-    struct BPHistory {
+    struct BPHistory
+    {
 #ifdef DEBUG
         BPHistory()
         { newCount++; }
@@ -237,5 +244,8 @@ class TournamentBP : public BPredUnit
     unsigned globalThreshold;
     unsigned choiceThreshold;
 };
+
+} // namespace branch_prediction
+} // namespace gem5
 
 #endif // __CPU_PRED_TOURNAMENT_PRED_HH__

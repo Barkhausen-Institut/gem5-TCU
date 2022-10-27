@@ -29,6 +29,12 @@
 #ifndef __SOCKET_HH__
 #define __SOCKET_HH__
 
+#include <sys/socket.h>
+#include <sys/types.h>
+
+namespace gem5
+{
+
 class ListenSocket
 {
   protected:
@@ -56,7 +62,6 @@ class ListenSocket
      */
     static void cleanup();
 
-
   public:
     /**
      * @ingroup api_socket
@@ -71,7 +76,15 @@ class ListenSocket
 
     int getfd() const { return fd; }
     bool islistening() const { return listening; }
+
+    /* Create a socket, adding SOCK_CLOEXEC if available. */
+    static int socketCloexec(int domain, int type, int protocol);
+    /* Accept a connection, adding SOCK_CLOEXEC if available. */
+    static int acceptCloexec(int sockfd, struct sockaddr *addr,
+                              socklen_t *addrlen);
     /** @} */ // end of api_socket
 };
+
+} // namespace gem5
 
 #endif //__SOCKET_HH__

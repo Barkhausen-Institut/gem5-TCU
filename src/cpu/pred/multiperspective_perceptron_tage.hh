@@ -48,10 +48,18 @@
 #include "params/MPP_TAGE.hh"
 #include "params/MultiperspectivePerceptronTAGE.hh"
 
-class MPP_TAGE : public TAGEBase {
+namespace gem5
+{
+
+namespace branch_prediction
+{
+
+class MPP_TAGE : public TAGEBase
+{
     std::vector<unsigned int> tunedHistoryLengths;
   public:
-    struct BranchInfo : public TAGEBase::BranchInfo {
+    struct BranchInfo : public TAGEBase::BranchInfo
+    {
         BranchInfo(TAGEBase &tage) : TAGEBase::BranchInfo(tage)
         {}
         virtual ~BranchInfo()
@@ -82,7 +90,8 @@ class MPP_TAGE : public TAGEBase {
                                     bool taken, Addr branch_pc, Addr target);
 };
 
-class MPP_LoopPredictor : public LoopPredictor {
+class MPP_LoopPredictor : public LoopPredictor
+{
   public:
     MPP_LoopPredictor(const MPP_LoopPredictorParams &p) : LoopPredictor(p)
     {}
@@ -91,7 +100,8 @@ class MPP_LoopPredictor : public LoopPredictor {
     bool optionalAgeInc() const override;
 };
 
-class MPP_StatisticalCorrector : public StatisticalCorrector {
+class MPP_StatisticalCorrector : public StatisticalCorrector
+{
   protected:
     int8_t thirdH;
     // global branch history variation GEHL
@@ -142,7 +152,8 @@ class MPP_StatisticalCorrector : public StatisticalCorrector {
     };
 
   public:
-    struct BranchInfo : public StatisticalCorrector::BranchInfo {
+    struct BranchInfo : public StatisticalCorrector::BranchInfo
+    {
         virtual ~BranchInfo()
         {}
     };
@@ -233,4 +244,8 @@ class MultiperspectivePerceptronTAGE : public MultiperspectivePerceptron
     void squash(ThreadID tid, void *bp_history) override;
 
 };
+
+} // namespace branch_prediction
+} // namespace gem5
+
 #endif//__CPU_PRED_MULTIPERSPECTIVE_PERCEPTRON_TAGE_HH__

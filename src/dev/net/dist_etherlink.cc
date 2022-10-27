@@ -62,9 +62,12 @@
 #include "dev/net/etherpkt.hh"
 #include "dev/net/tcp_iface.hh"
 #include "params/EtherLink.hh"
-#include "sim/core.hh"
+#include "sim/cur_tick.hh"
 #include "sim/serialize.hh"
 #include "sim/system.hh"
+
+namespace gem5
+{
 
 DistEtherLink::DistEtherLink(const Params &p)
     : SimObject(p), linkDelay(p.delay)
@@ -251,4 +254,4 @@ DistEtherLink::LocalIface::LocalIface(const std::string &name,
     rx->setDistInt(m);
 }
 
-
+} // namespace gem5

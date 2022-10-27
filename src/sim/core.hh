@@ -38,17 +38,22 @@
 #include <functional>
 #include <string>
 
+#include "base/compiler.hh"
 #include "base/types.hh"
-// @todo The next include is not needed in this file, but must be kept
-// until the transitive includes are fixed
-#include "sim/cur_tick.hh"
+
+namespace gem5
+{
 
 /// These are variables that are set based on the simulator frequency
 ///@{
-namespace SimClock {
+GEM5_DEPRECATED_NAMESPACE(SimClock, sim_clock);
+namespace sim_clock
+{
 extern Tick Frequency; ///< The number of ticks that equal one second
 
-namespace Float {
+GEM5_DEPRECATED_NAMESPACE(Float, as_float);
+namespace as_float
+{
 
 /** These variables equal the number of ticks in the unit of time they're
  * named after in a double.
@@ -69,22 +74,24 @@ extern double kHz; ///< kHz
 extern double MHz; ///< MHz
 extern double GHz; ///< GHz
 /** @}*/
-} // namespace Float
+} // namespace as_float
 
 /** These variables equal the number of ticks in the unit of time they're
  *  named after in a 64 bit integer.
  *
  * @{
  */
-namespace Int {
+GEM5_DEPRECATED_NAMESPACE(Int, as_int);
+namespace as_int
+{
 extern Tick s;  ///< second
 extern Tick ms; ///< millisecond
 extern Tick us; ///< microsecond
 extern Tick ns; ///< nanosecond
 extern Tick ps; ///< picosecond
 /** @} */
-} // namespace Int
-} // namespace SimClock
+} // namespace as_int
+} // namespace sim_clock
 /** @} */
 
 void fixClockFrequency();
@@ -97,5 +104,7 @@ void setOutputDir(const std::string &dir);
 
 void registerExitCallback(const std::function<void()> &callback);
 void doExitCleanup();
+
+} // namespace gem5
 
 #endif /* __SIM_CORE_HH__ */

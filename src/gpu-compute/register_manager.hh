@@ -2,8 +2,6 @@
  * Copyright (c) 2016, 2017 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -45,6 +43,9 @@
 #include "sim/sim_object.hh"
 #include "sim/stats.hh"
 
+namespace gem5
+{
+
 class ComputeUnit;
 class Wavefront;
 
@@ -85,5 +86,7 @@ class RegisterManager : public SimObject
 
     std::string _name;
 };
+
+} // namespace gem5
 
 #endif // __REGISTER_MANAGER_HH__

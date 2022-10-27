@@ -50,9 +50,13 @@
 #include "debug/DistEthernet.hh"
 #include "debug/DistEthernetPkt.hh"
 #include "dev/net/etherpkt.hh"
+#include "sim/cur_tick.hh"
 #include "sim/sim_exit.hh"
 #include "sim/sim_object.hh"
 #include "sim/system.hh"
+
+namespace gem5
+{
 
 DistIface::Sync *DistIface::sync = nullptr;
 System *DistIface::sys = nullptr;
@@ -864,7 +868,7 @@ DistIface::toggleSync(ThreadContext *tc)
         // stop point.  Suspend execution of all local thread contexts.
         // Dist-gem5 will reactivate all thread contexts when everyone has
         // reached the sync stop point.
-#if THE_ISA != NULL_ISA
+#if !IS_NULL_ISA
         for (auto *tc: primary->sys->threads) {
             if (tc->status() == ThreadContext::Active)
                 tc->quiesce();
@@ -878,7 +882,7 @@ DistIface::toggleSync(ThreadContext *tc)
         // nodes to prevent causality errors.  We can also schedule CPU
         // activation here, since we know exactly when the next sync will
         // occur.
-#if THE_ISA != NULL_ISA
+#if !IS_NULL_ISA
         for (auto *tc: primary->sys->threads) {
             if (tc->status() == ThreadContext::Active)
                 tc->quiesceTick(primary->syncEvent->when() + 1);
@@ -937,3 +941,5 @@ DistIface::sizeParam()
     }
     return val;
 }
+
+} // namespace gem5

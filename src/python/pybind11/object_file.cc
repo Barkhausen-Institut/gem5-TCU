@@ -31,6 +31,9 @@
 
 namespace py = pybind11;
 
+namespace gem5
+{
+
 namespace
 {
 
@@ -39,19 +42,20 @@ objectfile_pybind(py::module_ &m_internal)
 {
     py::module_ m = m_internal.def_submodule("object_file");
 
-    py::class_<Loader::ObjectFile>(m, "ObjectFile")
-        .def("get_arch", [](const Loader::ObjectFile &obj) {
-                return Loader::archToString(obj.getArch());
+    py::class_<loader::ObjectFile>(m, "ObjectFile")
+        .def("get_arch", [](const loader::ObjectFile &obj) {
+                return loader::archToString(obj.getArch());
                 }, py::return_value_policy::reference)
-        .def("get_op_sys", [](const Loader::ObjectFile &obj) {
-                return Loader::opSysToString(obj.getOpSys());
+        .def("get_op_sys", [](const loader::ObjectFile &obj) {
+                return loader::opSysToString(obj.getOpSys());
                 }, py::return_value_policy::reference)
-        .def("entry_point", &Loader::ObjectFile::entryPoint)
-        .def("get_interpreter", &Loader::ObjectFile::getInterpreter);
+        .def("entry_point", &loader::ObjectFile::entryPoint)
+        .def("get_interpreter", &loader::ObjectFile::getInterpreter);
 
     m.def("create", [](const std::string &fname) {
-            return Loader::createObjectFile(fname); });
+            return loader::createObjectFile(fname); });
 }
 EmbeddedPyBind embed_("object_file", &objectfile_pybind);
 
 } // anonymous namespace
+} // namespace gem5

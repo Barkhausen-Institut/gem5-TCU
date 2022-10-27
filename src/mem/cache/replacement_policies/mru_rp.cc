@@ -32,9 +32,14 @@
 #include <memory>
 
 #include "params/MRURP.hh"
-#include "sim/core.hh"
+#include "sim/cur_tick.hh"
 
-namespace ReplacementPolicy {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(ReplacementPolicy, replacement_policy);
+namespace replacement_policy
+{
 
 MRU::MRU(const Params &p)
   : Base(p)
@@ -43,7 +48,6 @@ MRU::MRU(const Params &p)
 
 void
 MRU::invalidate(const std::shared_ptr<ReplacementData>& replacement_data)
-const
 {
     // Reset last touch timestamp
     std::static_pointer_cast<MRUReplData>(
@@ -98,4 +102,5 @@ MRU::instantiateEntry()
     return std::shared_ptr<ReplacementData>(new MRUReplData());
 }
 
-} // namespace ReplacementPolicy
+} // namespace replacement_policy
+} // namespace gem5

@@ -47,7 +47,7 @@ let {{
 
         def __init__(self, mnem, Name, size=4, user=False, flavor="normal",
                      top = False):
-            super(StoreInst64, self).__init__()
+            super().__init__()
 
             self.name = mnem
             self.Name = Name
@@ -73,7 +73,7 @@ let {{
 
             if self.flavor not in ("release", "relex", "exclusive",
                                    "relexp", "exp"):
-                self.memFlags.append("ArmISA::TLB::AllowUnaligned")
+                self.memFlags.append("ArmISA::MMU::AllowUnaligned")
 
             if self.micro:
                 self.instFlags.append("IsMicroop")
@@ -137,20 +137,20 @@ let {{
             if self.user:
                 eaCode += " uint8_t userFlag = 0;\n"\
                           "  if(isUnpriviledgeAccess(xc->tcBase()))\n"\
-                          "     userFlag = ArmISA::TLB::UserMode;"
+                          "     userFlag = ArmISA::MMU::UserMode;"
             self.codeBlobs["ea_code"] = eaCode
 
 
     class StoreImmInst64(StoreInst64):
         def __init__(self, *args, **kargs):
-            super(StoreImmInst64, self).__init__(*args, **kargs)
+            super().__init__(*args, **kargs)
             self.offset = "+ imm"
 
             self.wbDecl = "MicroAddXiUop(machInst, base, base, imm);"
 
     class StoreRegInst64(StoreInst64):
         def __init__(self, *args, **kargs):
-            super(StoreRegInst64, self).__init__(*args, **kargs)
+            super().__init__(*args, **kargs)
             self.offset = "+ extendReg64(XOffset, type, shiftAmt, 64)"
 
             self.wbDecl = \
@@ -159,7 +159,7 @@ let {{
 
     class StoreRawRegInst64(StoreInst64):
         def __init__(self, *args, **kargs):
-            super(StoreRawRegInst64, self).__init__(*args, **kargs)
+            super().__init__(*args, **kargs)
             self.offset = ""
 
     class StoreSingle64(StoreInst64):
@@ -283,7 +283,7 @@ let {{
         post = False
         execBase = 'StoreEx64'
         def __init__(self, *args, **kargs):
-            super(StoreEx64, self).__init__(*args, **kargs)
+            super().__init__(*args, **kargs)
             self.codeBlobs["postacc_code"] = \
                  "XResult = !writeResult; SevMailbox = 1; LLSCLock = 0;"
 
@@ -350,7 +350,7 @@ let {{
         post = False
         writeback = False
         def __init__(self, *args, **kargs):
-            super(StoreImmDEx64, self).__init__(*args, **kargs)
+            super().__init__(*args, **kargs)
             self.codeBlobs["postacc_code"] = \
                  "XResult = !writeResult; SevMailbox = 1; LLSCLock = 0;"
 

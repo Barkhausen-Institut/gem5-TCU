@@ -37,6 +37,9 @@
 
 #include <vector>
 
+namespace gem5
+{
+
 struct MemWatchProbeParams;
 
 class MemWatchProbe : public BaseMemProbe
@@ -51,5 +54,7 @@ class MemWatchProbe : public BaseMemProbe
 
     const std::vector<AddrRange> ranges;
 };
+
+}
 
 #endif //__MEM_PROBES_MEM_WATCH_HH__

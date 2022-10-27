@@ -36,6 +36,11 @@
 
 #include <iomanip>
 
+namespace gem5
+{
+namespace tcu
+{
+
 static const char *stateNames[] =
 {
     "IDLE",
@@ -886,4 +891,7 @@ TcuAccelStream::tick()
         memPending = true;
         sendPkt(pkt);
     }
+}
+
+}
 }

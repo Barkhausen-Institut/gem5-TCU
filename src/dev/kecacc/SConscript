@@ -30,7 +30,7 @@
 Import('*')
 
 DebugFlag('KecAcc')
-SimObject('KecAcc.py')
+SimObject('KecAcc.py', sim_objects=['KecAcc'])
 Source('kecacc.cc')
 
 # C++17 is needed for template<auto ...>

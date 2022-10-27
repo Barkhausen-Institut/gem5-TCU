@@ -31,7 +31,11 @@
 #include "params/FastModelGIC.hh"
 #include "params/SCFastModelGIC.hh"
 
-namespace FastModel
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(FastModel, fastmodel);
+namespace fastmodel
 {
 
 int
@@ -69,9 +73,15 @@ SCGIC::Terminator::sendTowardsCPU(uint8_t len, const uint8_t *data)
 
 SCGIC::SCGIC(const SCFastModelGICParams &params,
              sc_core::sc_module_name _name)
-    : scx_evs_GIC(_name)
+    : scx_evs_GIC(_name), _params(params)
 {
     signalInterrupt.bind(signal_interrupt);
+
+    for (int i = 0; i < wake_request.size(); i++) {
+        wakeRequests.emplace_back(
+            new SignalReceiver(csprintf("%s.wakerequest[%d]", name(), i)));
+        wake_request[i].bind(wakeRequests[i]->signal_in);
+    }
 
     set_parameter("gic.enabled", params.enabled);
     set_parameter("gic.has-gicv3", params.has_gicv3);
@@ -302,7 +312,18 @@ GIC::GIC(const FastModelGICParams &params) :
     ambaS(params.sc_gic->amba_s, params.name + ".amba_s", -1),
     redistributors(params.port_redistributor_connection_count),
     scGIC(params.sc_gic)
-{}
+{
+    for (int i = 0; i < params.port_wake_request_connection_count; i++) {
+        wakeRequestPorts.emplace_back(new IntSourcePin<GIC>(
+            csprintf("%s.wakerequestport[%d]", name(), i), i, this));
+        auto handler = [this, i](bool status)
+        {
+            auto &port = wakeRequestPorts[i];
+            status ? port->raise() : port->lower();
+        };
+        scGIC->wakeRequests[i]->onChange(handler);
+    }
+}
 
 Port &
 GIC::getPort(const std::string &if_name, PortID idx)
@@ -319,6 +340,8 @@ GIC::getPort(const std::string &if_name, PortID idx)
                                                    name(), idx), idx));
         }
         return *ptr;
+    } else if (if_name == "wake_request") {
+        return *wakeRequestPorts.at(idx);
     } else {
         return BaseGic::getPort(if_name, idx);
     }
@@ -357,4 +380,5 @@ GIC::supportsVersion(GicVersion version)
            (version == GicVersion::GIC_V4 && scGIC->params().has_gicv4_1);
 }
 
-} // namespace FastModel
+} // namespace fastmodel
+} // namespace gem5

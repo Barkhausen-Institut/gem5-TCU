@@ -2,8 +2,6 @@
  * Copyright (c) 2017-2021 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -38,6 +36,9 @@
 
 #include "cpu/testers/gpu_ruby_test/protocol_tester.hh"
 #include "cpu/testers/gpu_ruby_test/tester_thread.hh"
+
+namespace gem5
+{
 
 Episode::Episode(ProtocolTester* _tester, TesterThread* _thread, int num_loads,
                  int num_stores)
@@ -319,3 +320,5 @@ Episode::Action::printType() const
     else
         panic("Invalid action type\n");
 }
+
+} // namespace gem5

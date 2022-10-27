@@ -43,7 +43,11 @@
 #include <algorithm>
 
 #include "arch/x86/types.hh"
+#include "base/compiler.hh"
 #include "base/remote_gdb.hh"
+
+namespace gem5
+{
 
 class System;
 class ThreadContext;
@@ -54,12 +58,13 @@ class RemoteGDB : public BaseRemoteGDB
 {
   protected:
     bool acc(Addr addr, size_t len);
-    bool checkBpLen(size_t len) { return len == 1; }
+    bool checkBpKind(size_t kind) { return kind == 1; }
     class X86GdbRegCache : public BaseGdbRegCache
     {
       using BaseGdbRegCache::BaseGdbRegCache;
       private:
-        struct {
+        struct
+        {
           uint32_t eax;
           uint32_t ecx;
           uint32_t edx;
@@ -93,7 +98,8 @@ class RemoteGDB : public BaseRemoteGDB
     {
       using BaseGdbRegCache::BaseGdbRegCache;
       private:
-        struct M5_ATTR_PACKED {
+        struct GEM5_PACKED
+        {
           uint64_t rax;
           uint64_t rbx;
           uint64_t rcx;
@@ -140,9 +146,11 @@ class RemoteGDB : public BaseRemoteGDB
     AMD64GdbRegCache regCache64;
 
   public:
-    RemoteGDB(System *system, ThreadContext *context, int _port);
+    RemoteGDB(System *system, int _port);
     BaseGdbRegCache *gdbRegs();
 };
+
 } // namespace X86ISA
+} // namespace gem5
 
 #endif // __ARCH_X86_REMOTEGDB_HH__

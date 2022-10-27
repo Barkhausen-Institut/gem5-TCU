@@ -42,12 +42,16 @@
 #include <vector>
 
 #include "base/bitfield.hh"
+#include "base/compiler.hh"
 #include "enums/X86IntelMPAddressType.hh"
 #include "enums/X86IntelMPInterruptType.hh"
 #include "enums/X86IntelMPPolarity.hh"
 #include "enums/X86IntelMPRangeList.hh"
 #include "enums/X86IntelMPTriggerMode.hh"
 #include "sim/sim_object.hh"
+
+namespace gem5
+{
 
 class PortProxy;
 
@@ -80,7 +84,8 @@ uint8_t writeOutString(PortProxy& proxy, Addr addr, std::string str,
 namespace X86ISA
 {
 
-namespace IntelMP
+GEM5_DEPRECATED_NAMESPACE(IntelMP, intelmp);
+namespace intelmp
 {
 
 class FloatingPointer : public SimObject
@@ -228,9 +233,9 @@ class IntAssignment : public BaseConfigEntry
     Addr writeOut(PortProxy& proxy, Addr addr, uint8_t &checkSum);
 
     IntAssignment(const X86IntelMPBaseConfigEntryParams &p,
-            Enums::X86IntelMPInterruptType _interruptType,
-            Enums::X86IntelMPPolarity polarity,
-            Enums::X86IntelMPTriggerMode trigger,
+            enums::X86IntelMPInterruptType _interruptType,
+            enums::X86IntelMPPolarity polarity,
+            enums::X86IntelMPTriggerMode trigger,
             uint8_t _type,
             uint8_t _sourceBusID, uint8_t _sourceBusIRQ,
             uint8_t _destApicID, uint8_t _destApicIntIn) :
@@ -308,8 +313,8 @@ class CompatAddrSpaceMod : public ExtConfigEntry
     CompatAddrSpaceMod(const Params &p);
 };
 
-} //IntelMP
-
-} //X86ISA
+} // namespace intelmp
+} // namespace X86ISA
+} // namespace gem5
 
 #endif

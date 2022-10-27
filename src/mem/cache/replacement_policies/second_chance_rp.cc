@@ -32,7 +32,12 @@
 
 #include "params/SecondChanceRP.hh"
 
-namespace ReplacementPolicy {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(ReplacementPolicy, replacement_policy);
+namespace replacement_policy
+{
 
 SecondChance::SecondChance(const Params &p)
   : FIFO(p)
@@ -52,7 +57,7 @@ SecondChance::useSecondChance(
 
 void
 SecondChance::invalidate(
-    const std::shared_ptr<ReplacementData>& replacement_data) const
+    const std::shared_ptr<ReplacementData>& replacement_data)
 {
     FIFO::invalidate(replacement_data);
 
@@ -133,4 +138,5 @@ SecondChance::instantiateEntry()
     return std::shared_ptr<ReplacementData>(new SecondChanceReplData());
 }
 
-} // namespace ReplacementPolicy
+} // namespace replacement_policy
+} // namespace gem5

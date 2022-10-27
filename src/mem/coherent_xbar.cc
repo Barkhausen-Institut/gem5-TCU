@@ -45,11 +45,15 @@
 
 #include "mem/coherent_xbar.hh"
 
+#include "base/compiler.hh"
 #include "base/logging.hh"
 #include "base/trace.hh"
 #include "debug/AddrRanges.hh"
 #include "debug/CoherentXBar.hh"
 #include "sim/system.hh"
+
+namespace gem5
+{
 
 CoherentXBar::CoherentXBar(const CoherentXBarParams &p)
     : BaseXBar(p), system(p.system), snoopFilter(p.snoop_filter),
@@ -59,9 +63,10 @@ CoherentXBar::CoherentXBar(const CoherentXBarParams &p)
       pointOfCoherency(p.point_of_coherency),
       pointOfUnification(p.point_of_unification),
 
-      ADD_STAT(snoops, UNIT_COUNT, "Total snoops"),
-      ADD_STAT(snoopTraffic, UNIT_BYTE, "Total snoop traffic"),
-      ADD_STAT(snoopFanout, UNIT_COUNT, "Request fanout histogram")
+      ADD_STAT(snoops, statistics::units::Count::get(), "Total snoops"),
+      ADD_STAT(snoopTraffic, statistics::units::Byte::get(), "Total snoop traffic"),
+      ADD_STAT(snoopFanout, statistics::units::Count::get(),
+               "Request fanout histogram")
 {
     // create the ports based on the size of the memory-side port and
     // CPU-side port vector ports, and the presence of the default port,
@@ -638,7 +643,7 @@ CoherentXBar::recvTimingSnoopResp(PacketPtr pkt, PortID cpu_side_port_id)
                             *memSidePorts[dest_port_id]);
         }
 
-        M5_VAR_USED bool success =
+        [[maybe_unused]] bool success =
             memSidePorts[dest_port_id]->sendTimingSnoopResp(pkt);
         pktCount[cpu_side_port_id][dest_port_id]++;
         pktSize[cpu_side_port_id][dest_port_id] += pkt_size;
@@ -858,7 +863,7 @@ CoherentXBar::recvAtomicBackdoor(PacketPtr pkt, PortID cpu_side_port_id,
         // if this is the destination of the operation, the xbar
         // sends the responce to the cache clean operation only
         // after having encountered the cache clean request
-        M5_VAR_USED auto ret = outstandingCMO.emplace(pkt->id, nullptr);
+        [[maybe_unused]] auto ret = outstandingCMO.emplace(pkt->id, nullptr);
         // in atomic mode we know that the WriteClean packet should
         // precede the clean request
         assert(ret.second);
@@ -1117,3 +1122,5 @@ CoherentXBar::regStats()
 
     snoopFanout.init(0, snoopPorts.size(), 1);
 }
+
+} // namespace gem5

@@ -70,6 +70,12 @@
 #include "params/RubyNetwork.hh"
 #include "sim/clocked_object.hh"
 
+namespace gem5
+{
+
+namespace ruby
+{
+
 class NetDest;
 class MessageBuffer;
 
@@ -160,7 +166,8 @@ class Network : public ClockedObject
 
   private:
     // Global address map
-    struct AddrMapNode {
+    struct AddrMapNode
+    {
         NodeID id;
         AddrRangeList ranges;
     };
@@ -178,5 +185,8 @@ operator<<(std::ostream& out, const Network& obj)
     out << std::flush;
     return out;
 }
+
+} // namespace ruby
+} // namespace gem5
 
 #endif // __MEM_RUBY_NETWORK_NETWORK_HH__

@@ -44,14 +44,21 @@
 #include <vector>
 
 #include "base/bitunion.hh"
+#include "base/compiler.hh"
 
 /** @file misc functions and constants required to interface with or
  * emulate ps2 devices
  */
 
-namespace Ps2 {
+namespace gem5
+{
 
-enum {
+GEM5_DEPRECATED_NAMESPACE(Ps2, ps2);
+namespace ps2
+{
+
+enum
+{
     SelfTestPass       = 0xAA,
     ReadID             = 0xF2,
     Enable             = 0xF4,
@@ -63,9 +70,12 @@ enum {
     Reset              = 0xFF,
 };
 
-namespace Keyboard {
+GEM5_DEPRECATED_NAMESPACE(Keyboard, keyboard);
+namespace keyboard
+{
 
-enum {
+enum
+{
     LEDWrite = 0xED,
     DiagnosticEcho = 0xEE,
     AlternateScanCodes = 0xF0,
@@ -81,11 +91,14 @@ enum {
 
 extern const std::vector<uint8_t> ID;
 
-};
+} // namespace keyboard
 
-namespace Mouse {
+GEM5_DEPRECATED_NAMESPACE(Mouse, mouse);
+namespace mouse
+{
 
-enum {
+enum
+{
     Scale1to1 = 0xE6,
     Scale2to1 = 0xE7,
     SetResolution = 0xE8,
@@ -99,7 +112,7 @@ enum {
 
 extern const std::vector<uint8_t> ID;
 
-};
+} // namespace mouse
 
 /** A bitfield that represents the first byte of a mouse movement packet
  */
@@ -123,5 +136,7 @@ EndBitUnion(Ps2MouseMovement)
 void keySymToPs2(uint32_t key, bool down, bool &cur_shift,
         std::list<uint8_t> &keys);
 
-} /* namespace Ps2 */
+} // namespace ps2
+} // namespace gem5
+
 #endif // __DEV_PS2_HH__

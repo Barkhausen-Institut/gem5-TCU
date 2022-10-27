@@ -50,8 +50,9 @@
 #include <unordered_map>
 #include <utility>
 
-#include "cpu/o3/dyn_inst.hh"
-#include "cpu/o3/impl.hh"
+#include "base/statistics.hh"
+#include "cpu/o3/dyn_inst_ptr.hh"
+#include "cpu/reg_class.hh"
 #include "mem/request.hh"
 #include "params/ElasticTrace.hh"
 #include "proto/inst_dep_record.pb.h"
@@ -59,6 +60,14 @@
 #include "proto/protoio.hh"
 #include "sim/eventq.hh"
 #include "sim/probe/probe.hh"
+
+namespace gem5
+{
+
+namespace o3
+{
+
+class CPU;
 
 /**
  * The elastic trace is a type of probe listener and listens to probe points
@@ -85,9 +94,7 @@ class ElasticTrace : public ProbeListenerObject
 {
 
   public:
-    typedef typename O3CPUImpl::DynInstPtr DynInstPtr;
-    typedef typename O3CPUImpl::DynInstConstPtr DynInstConstPtr;
-    typedef typename std::pair<InstSeqNum, PhysRegIndex> SeqNumRegPair;
+    typedef typename std::pair<InstSeqNum, RegIndex> SeqNumRegPair;
 
     /** Trace record types corresponding to instruction node types */
     typedef ProtoMessage::InstDepRecord::RecordType RecordType;
@@ -104,9 +111,6 @@ class ElasticTrace : public ProbeListenerObject
 
     /** Register all listeners. */
     void regEtraceListeners();
-
-    /** Returns the name of the trace probe listener. */
-    const std::string name() const;
 
     /**
      * Process any outstanding trace records, flush them out to the protobuf
@@ -237,7 +241,7 @@ class ElasticTrace : public ProbeListenerObject
      * After Write dependencies. The key is the renamed physical register and
      * the value is the instruction sequence number of its last producer.
      */
-    std::unordered_map<PhysRegIndex, InstSeqNum> physRegDepMap;
+    std::unordered_map<RegIndex, InstSeqNum> physRegDepMap;
 
     /**
      * @defgroup TraceInfo Struct for a record in the instruction dependency
@@ -365,7 +369,7 @@ class ElasticTrace : public ProbeListenerObject
     const bool traceVirtAddr;
 
     /** Pointer to the O3CPU that is this listener's parent a.k.a. manager */
-    FullO3CPU<O3CPUImpl>* cpu;
+    CPU *cpu;
 
     /**
      * Add a record to the dependency trace depTrace which is a sequential
@@ -504,54 +508,59 @@ class ElasticTrace : public ProbeListenerObject
      */
     bool hasCompCompleted(TraceInfo* past_record, Tick execute_tick) const;
 
-    struct ElasticTraceStats : public Stats::Group {
-        ElasticTraceStats(Stats::Group *parent);
+    struct ElasticTraceStats : public statistics::Group
+    {
+        ElasticTraceStats(statistics::Group *parent);
 
         /** Number of register dependencies recorded during tracing */
-        Stats::Scalar numRegDep;
+        statistics::Scalar numRegDep;
 
         /**
          * Number of stores that got assigned a commit order dependency
          * on a past load/store.
          */
-        Stats::Scalar numOrderDepStores;
+        statistics::Scalar numOrderDepStores;
 
         /**
          * Number of load insts that got assigned an issue order dependency
          * because they were dependency-free.
          */
-        Stats::Scalar numIssueOrderDepLoads;
+        statistics::Scalar numIssueOrderDepLoads;
 
         /**
          * Number of store insts that got assigned an issue order dependency
          * because they were dependency-free.
          */
-        Stats::Scalar numIssueOrderDepStores;
+        statistics::Scalar numIssueOrderDepStores;
 
         /**
          * Number of non load/store insts that got assigned an issue order
          * dependency because they were dependency-free.
          */
-        Stats::Scalar numIssueOrderDepOther;
+        statistics::Scalar numIssueOrderDepOther;
 
         /** Number of filtered nodes */
-        Stats::Scalar numFilteredNodes;
+        statistics::Scalar numFilteredNodes;
 
         /** Maximum number of dependents on any instruction */
-        Stats::Scalar maxNumDependents;
+        statistics::Scalar maxNumDependents;
 
         /**
          * Maximum size of the temporary store mostly useful as a check that
          * it is not growing
          */
-        Stats::Scalar maxTempStoreSize;
+        statistics::Scalar maxTempStoreSize;
 
         /**
          * Maximum size of the map that holds the last writer to a physical
          * register.
          */
-        Stats::Scalar maxPhysRegDepMapSize;
+        statistics::Scalar maxPhysRegDepMapSize;
     } stats;
 
 };
+
+} // namespace o3
+} // namespace gem5
+
 #endif//__CPU_O3_PROBE_ELASTIC_TRACE_HH__

@@ -35,6 +35,11 @@
 #include "mem/tcu/tcu.hh"
 #include "mem/tcu/mem_unit.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 class MessageUnit
 {
   public:
@@ -171,12 +176,15 @@ class MessageUnit
     EpFile::EpCache cmdEps;
     EpFile::EpCache extCmdEps;
 
-    Stats::Histogram sentBytes;
-    Stats::Histogram repliedBytes;
-    Stats::Histogram receivedBytes;
-    Stats::Scalar wrongAct;
-    Stats::Scalar noSpace;
+    statistics::Histogram sentBytes;
+    statistics::Histogram repliedBytes;
+    statistics::Histogram receivedBytes;
+    statistics::Scalar wrongAct;
+    statistics::Scalar noSpace;
 
 };
+
+}
+}
 
 #endif

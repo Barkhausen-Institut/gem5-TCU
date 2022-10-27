@@ -41,13 +41,20 @@
 #ifndef __ARCH_ARM_INSTS_NEON64_MEM_HH__
 #define __ARCH_ARM_INSTS_NEON64_MEM_HH__
 
+#include <cassert>
+#include <cstdint>
+
+namespace gem5
+{
+
 namespace ArmISA
 {
 
 typedef uint64_t XReg;
 
 /// 128-bit NEON vector register.
-struct VReg {
+struct VReg
+{
     XReg hi;
     XReg lo;
 };
@@ -120,6 +127,7 @@ readVecElem(VReg src, int index, int eSize)
     return data;
 }
 
-}  // namespace ArmISA
+} // namespace ArmISA
+} // namespace gem5
 
 #endif  // __ARCH_ARM_INSTS_NEON64_MEM_HH__

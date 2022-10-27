@@ -31,6 +31,11 @@
 #include "mem/tcu/ep_file.hh"
 #include "mem/tcu/tcu.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 EpFile::EpCache::EpCache(EpFile &_epfile)
     : state(FETCH), autoFinish(), pending(), func(),
       cachedEps(), epfile(_epfile)
@@ -174,4 +179,7 @@ EpFile::EpCache
 EpFile::newCache()
 {
     return EpCache(*this);
+}
+
+}
 }

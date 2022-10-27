@@ -31,6 +31,9 @@
 
 #include "arch/sparc/insts/static_inst.hh"
 
+namespace gem5
+{
+
 namespace SparcISA
 {
 
@@ -60,7 +63,7 @@ class Nop : public SparcStaticInst
 
     std::string
     generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override
+            Addr pc, const loader::SymbolTable *symtab) const override
     {
         std::stringstream response;
         printMnemonic(response, mnemonic);
@@ -68,6 +71,7 @@ class Nop : public SparcStaticInst
     }
 };
 
-}
+} // namespace SparcISA
+} // namespace gem5
 
 #endif // __ARCH_SPARC_INSTS_NOP_HH__

@@ -42,36 +42,20 @@
 #include "cpu/thread_context.hh"
 #include "sim/full_system.hh"
 
-namespace X86ISA
+namespace gem5
 {
 
-    inline PCState
-    buildRetPC(const PCState &curPC, const PCState &callPC)
-    {
-        PCState retPC = callPC;
-        retPC.uEnd();
-        return retPC;
-    }
-
-    void copyRegs(ThreadContext *src, ThreadContext *dest);
-
-    void copyMiscRegs(ThreadContext *src, ThreadContext *dest);
-
-    inline void
-    advancePC(PCState &pc, const StaticInstPtr &inst)
-    {
-        inst->advancePC(pc);
-    }
-
+namespace X86ISA
+{
     /**
      * Reconstruct the rflags register from the internal gem5 register
      * state.
      *
      * gem5 stores rflags in several different registers to avoid
      * pipeline dependencies. In order to get the true rflags value,
-     * we can't simply read the value of MISCREG_RFLAGS. Instead, we
+     * we can't simply read the value of misc_reg::Rflags. Instead, we
      * need to read out various state from microcode registers and
-     * merge that with MISCREG_RFLAGS.
+     * merge that with misc_reg::Rflags.
      *
      * @param tc Thread context to read rflags from.
      * @return rflags as seen by the guest.
@@ -81,9 +65,9 @@ namespace X86ISA
     /**
      * Set update the rflags register and internal gem5 state.
      *
-     * @note This function does not update MISCREG_M5_REG. You might
+     * @note This function does not update misc_reg::M5Reg. You might
      * need to update this register by writing anything to
-     * MISCREG_M5_REG with side-effects.
+     * misc_reg::M5Reg with side-effects.
      *
      * @see X86ISA::getRFlags()
      *
@@ -153,6 +137,8 @@ namespace X86ISA
      * @param value Double precision float to store.
      */
     void storeFloat80(void *mem, double value);
-}
+
+} // namespace X86ISA
+} // namespace gem5
 
 #endif // __ARCH_X86_UTILITY_HH__

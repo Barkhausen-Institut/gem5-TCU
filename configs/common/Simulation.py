@@ -489,6 +489,7 @@ def run(options, root, testsys, cpu_class):
                     options.indirect_bp_type)
                 switch_cpus[i].branchPred.indirectBranchPred = \
                     IndirectBPClass()
+            switch_cpus[i].createThreads()
 
         # If elastic tracing is enabled attach the elastic trace probe
         # to the switch CPUs
@@ -711,7 +712,7 @@ def run(options, root, testsys, cpu_class):
         takeSimpointCheckpoints(simpoints, interval_length, cptdir)
 
     # Restore from SimPoint checkpoints
-    elif options.restore_simpoint_checkpoint != None:
+    elif options.restore_simpoint_checkpoint:
         restoreSimpointCheckpoint()
 
     else:

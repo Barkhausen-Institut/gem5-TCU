@@ -38,6 +38,11 @@
 #include "dev/pci/pcireg.h"
 #include "sim/system.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 const unsigned TcuPciProxy::EP_INT = 16;
 const unsigned TcuPciProxy::EP_DMA = 17;
 const Addr TcuPciProxy::REG_ADDR = 0x4000;
@@ -410,4 +415,7 @@ TcuPciProxy::DmaPort::getAddrRanges() const
     AddrRangeList ranges;
     ranges.push_back(AddrRange(0, 0xffffffffffffffff));
     return ranges;
+}
+
+}
 }

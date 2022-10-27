@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2016-2018, 2020 ARM Limited
+ * Copyright (c) 2014, 2016-2018, 2020-2021 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -42,7 +42,7 @@
 #ifndef __CPU_EXEC_CONTEXT_HH__
 #define __CPU_EXEC_CONTEXT_HH__
 
-#include "arch/registers.hh"
+#include "arch/vecregs.hh"
 #include "base/types.hh"
 #include "config/the_isa.hh"
 #include "cpu/base.hh"
@@ -50,6 +50,9 @@
 #include "cpu/static_inst_fwd.hh"
 #include "cpu/translation.hh"
 #include "mem/request.hh"
+
+namespace gem5
+{
 
 /**
  * The ExecContext is an abstract base class the provides the
@@ -70,118 +73,13 @@
 class ExecContext
 {
   public:
-    /**
-     * @{
-     * @name Integer Register Interfaces
-     *
-     */
 
-    /** Reads an integer register. */
-    virtual RegVal readIntRegOperand(const StaticInst *si, int idx) = 0;
-
-    /** Sets an integer register to a value. */
-    virtual void setIntRegOperand(const StaticInst *si,
-                                  int idx, RegVal val) = 0;
-
-    /** @} */
-
-
-    /**
-     * @{
-     * @name Floating Point Register Interfaces
-     */
-
-    /** Reads a floating point register in its binary format, instead
-     * of by value. */
-    virtual RegVal readFloatRegOperandBits(const StaticInst *si, int idx) = 0;
-
-    /** Sets the bits of a floating point register of single width
-     * to a binary value. */
-    virtual void setFloatRegOperandBits(const StaticInst *si,
-                                        int idx, RegVal val) = 0;
-
-    /** @} */
-
-    /** Vector Register Interfaces. */
-    /** @{ */
-    /** Reads source vector register operand. */
-    virtual const TheISA::VecRegContainer& readVecRegOperand(
-            const StaticInst *si, int idx) const = 0;
-
-    /** Gets destination vector register operand for modification. */
-    virtual TheISA::VecRegContainer& getWritableVecRegOperand(
-            const StaticInst *si, int idx) = 0;
-
-    /** Sets a destination vector register operand to a value. */
-    virtual void setVecRegOperand(const StaticInst *si, int idx,
-            const TheISA::VecRegContainer& val) = 0;
-    /** @} */
-
-    /** Vector Register Lane Interfaces. */
-    /** @{ */
-    /** Reads source vector 8bit operand. */
-    virtual ConstVecLane8 readVec8BitLaneOperand(
-            const StaticInst *si, int idx) const = 0;
-
-    /** Reads source vector 16bit operand. */
-    virtual ConstVecLane16 readVec16BitLaneOperand(
-            const StaticInst *si, int idx) const = 0;
-
-    /** Reads source vector 32bit operand. */
-    virtual ConstVecLane32 readVec32BitLaneOperand(
-            const StaticInst *si, int idx) const = 0;
-
-    /** Reads source vector 64bit operand. */
-    virtual ConstVecLane64 readVec64BitLaneOperand(
-            const StaticInst *si, int idx) const = 0;
-
-    /** Write a lane of the destination vector operand. */
-    /** @{ */
-    virtual void setVecLaneOperand(const StaticInst *si, int idx,
-            const LaneData<LaneSize::Byte>& val) = 0;
-    virtual void setVecLaneOperand(const StaticInst *si, int idx,
-            const LaneData<LaneSize::TwoByte>& val) = 0;
-    virtual void setVecLaneOperand(const StaticInst *si, int idx,
-            const LaneData<LaneSize::FourByte>& val) = 0;
-    virtual void setVecLaneOperand(const StaticInst *si, int idx,
-            const LaneData<LaneSize::EightByte>& val) = 0;
-    /** @} */
-
-    /** Vector Elem Interfaces. */
-    /** @{ */
-    /** Reads an element of a vector register. */
-    virtual TheISA::VecElem readVecElemOperand(
-            const StaticInst *si, int idx) const = 0;
-
-    /** Sets a vector register to a value. */
-    virtual void setVecElemOperand(
-            const StaticInst *si, int idx, const TheISA::VecElem val) = 0;
-    /** @} */
-
-    /** Predicate registers interface. */
-    /** @{ */
-    /** Reads source predicate register operand. */
-    virtual const TheISA::VecPredRegContainer& readVecPredRegOperand(
-            const StaticInst *si, int idx) const = 0;
-
-    /** Gets destination predicate register operand for modification. */
-    virtual TheISA::VecPredRegContainer& getWritableVecPredRegOperand(
-            const StaticInst *si, int idx) = 0;
-
-    /** Sets a destination predicate register operand to a value. */
-    virtual void setVecPredRegOperand(
-            const StaticInst *si, int idx,
-            const TheISA::VecPredRegContainer& val) = 0;
-    /** @} */
-
-    /**
-     * @{
-     * @name Condition Code Registers
-     */
-    virtual RegVal readCCRegOperand(const StaticInst *si, int idx) = 0;
-    virtual void setCCRegOperand(
-            const StaticInst *si, int idx, RegVal val) = 0;
-    /** @} */
+    virtual RegVal getRegOperand(const StaticInst *si, int idx) = 0;
+    virtual void getRegOperand(const StaticInst *si, int idx, void *val) = 0;
+    virtual void *getWritableRegOperand(const StaticInst *si, int idx) = 0;
+    virtual void setRegOperand(const StaticInst *si, int idx, RegVal val) = 0;
+    virtual void setRegOperand(const StaticInst *si, int idx,
+            const void *val) = 0;
 
     /**
      * @{
@@ -209,8 +107,8 @@ class ExecContext
      * @{
      * @name PC Control
      */
-    virtual TheISA::PCState pcState() const = 0;
-    virtual void pcState(const TheISA::PCState &val) = 0;
+    virtual const PCStateBase &pcState() const = 0;
+    virtual void pcState(const PCStateBase &val) = 0;
     /** @} */
 
     /**
@@ -246,10 +144,14 @@ class ExecContext
     }
 
     /**
-     * Initiate an HTM command,
-     * e.g. tell Ruby we're starting/stopping a transaction
+     * Initiate a memory management command with no valid address.
+     * Currently, these instructions need to bypass squashing in the O3 model
+     * Examples include HTM commands and TLBI commands.
+     * e.g. tell Ruby we're starting/stopping a HTM transaction,
+     *      or tell Ruby to issue a TLBI operation
      */
-    virtual Fault initiateHtmCmd(Request::Flags flags) = 0;
+    virtual Fault initiateMemMgmtCmd(Request::Flags flags) = 0;
+
     /**
      * For atomic-mode contexts, perform an atomic memory write operation.
      * For timing-mode contexts, initiate a timing memory write operation.
@@ -329,5 +231,7 @@ class ExecContext
 
     /** @} */
 };
+
+} // namespace gem5
 
 #endif // __CPU_EXEC_CONTEXT_HH__

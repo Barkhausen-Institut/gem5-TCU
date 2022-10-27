@@ -43,8 +43,15 @@
 
 #include <unordered_map>
 
+#include "base/compiler.hh"
 #include "mem/ruby/common/Address.hh"
 #include "mem/ruby/protocol/AccessPermission.hh"
+
+namespace gem5
+{
+
+namespace ruby
+{
 
 template<class ENTRY>
 struct PerfectCacheLineState
@@ -150,7 +157,7 @@ template<class ENTRY>
 inline void
 PerfectCacheMemory<ENTRY>::deallocate(Addr address)
 {
-    M5_VAR_USED auto num_erased = m_map.erase(makeLineAddress(address));
+    [[maybe_unused]] auto num_erased = m_map.erase(makeLineAddress(address));
     assert(num_erased == 1);
 }
 
@@ -201,5 +208,8 @@ inline void
 PerfectCacheMemory<ENTRY>::print(std::ostream& out) const
 {
 }
+
+} // namespace ruby
+} // namespace gem5
 
 #endif // __MEM_RUBY_STRUCTURES_PERFECTCACHEMEMORY_HH__

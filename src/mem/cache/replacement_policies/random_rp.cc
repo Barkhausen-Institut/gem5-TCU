@@ -34,7 +34,12 @@
 #include "base/random.hh"
 #include "params/RandomRP.hh"
 
-namespace ReplacementPolicy {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(ReplacementPolicy, replacement_policy);
+namespace replacement_policy
+{
 
 Random::Random(const Params &p)
   : Base(p)
@@ -43,7 +48,6 @@ Random::Random(const Params &p)
 
 void
 Random::invalidate(const std::shared_ptr<ReplacementData>& replacement_data)
-const
 {
     // Unprioritize replacement data victimization
     std::static_pointer_cast<RandomReplData>(
@@ -92,4 +96,5 @@ Random::instantiateEntry()
     return std::shared_ptr<ReplacementData>(new RandomReplData());
 }
 
-} // namespace ReplacementPolicy
+} // namespace replacement_policy
+} // namespace gem5

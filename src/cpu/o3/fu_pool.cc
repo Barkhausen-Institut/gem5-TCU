@@ -44,6 +44,12 @@
 
 #include "cpu/func_unit.hh"
 
+namespace gem5
+{
+
+namespace o3
+{
+
 ////////////////////////////////////////////////////////////////////////////
 //
 //  A pool of function units
@@ -243,3 +249,6 @@ FUPool::isDrained() const
 
     return is_drained;
 }
+
+} // namespace o3
+} // namespace gem5

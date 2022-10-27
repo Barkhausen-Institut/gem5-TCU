@@ -33,6 +33,7 @@ from m5.objects.AbstractMemory import *
 class Scratchpad(AbstractMemory):
     type = 'Scratchpad'
     cxx_header = 'mem/scratchpad.hh'
+    cxx_class = 'gem5::memory::Scratchpad'
 
     range = 128 * 1024 # default size 128K
 

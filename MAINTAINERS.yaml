@@ -68,6 +68,12 @@ arch-gcn3:
     - Matt Poremba <matthew.poremba@amd.com>
     - Matt Sinclair <sinclair@cs.wisc.edu>
 
+arch-vega:
+  status: maintained
+  maintainers:
+    - Matt Poremba <matthew.poremba@amd.com>
+    - Matt Sinclair <sinclair@cs.wisc.edu>
+
 arch-mips:
   status: orphaned
 
@@ -140,6 +146,11 @@ dev-hsa:
   maintainers:
     - Matt Poremba <matthew.poremba@amd.com>
 
+dev-amdgpu:
+  status: maintained
+  maintainers:
+    - Matt Poremba <matthew.poremba@amd.com>
+
 dev-virtio:
   status: maintained
   maintainers:
@@ -189,6 +200,13 @@ learning-gem5:
   status: maintained
   maintainers:
     - Jason Lowe-Power <jason@lowepower.com>
+
+stdlib:
+  desc: >-
+    The gem5 standard library found under `src/python/gem5`
+  status: maintained
+  maintainers:
+    - Bobby R. Bruce <bbruce@ucdavis.edu>
 
 mem:
   desc: >-

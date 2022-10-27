@@ -42,6 +42,11 @@
 #define __ARCH_ARM_MEM_HH__
 
 #include "arch/arm/insts/pred_inst.hh"
+#include "arch/arm/pcstate.hh"
+#include "cpu/thread_context.hh"
+
+namespace gem5
+{
 
 namespace ArmISA
 {
@@ -54,15 +59,30 @@ class MightBeMicro : public PredOp
     {}
 
     void
-    advancePC(PCState &pcState) const override
+    advancePC(PCStateBase &pcState) const override
     {
+        auto &apc = pcState.as<PCState>();
         if (flags[IsLastMicroop]) {
-            pcState.uEnd();
+            apc.uEnd();
         } else if (flags[IsMicroop]) {
-            pcState.uAdvance();
+            apc.uAdvance();
         } else {
-            pcState.advance();
+            apc.advance();
         }
+    }
+
+    void
+    advancePC(ThreadContext *tc) const override
+    {
+        PCState pc = tc->pcState().as<PCState>();
+        if (flags[IsLastMicroop]) {
+            pc.uEnd();
+        } else if (flags[IsMicroop]) {
+            pc.uAdvance();
+        } else {
+            pc.advance();
+        }
+        tc->pcState(pc);
     }
 };
 
@@ -70,27 +90,28 @@ class MightBeMicro : public PredOp
 class RfeOp : public MightBeMicro
 {
   public:
-    enum AddrMode {
+    enum AddrMode
+    {
         DecrementAfter,
         DecrementBefore,
         IncrementAfter,
         IncrementBefore
     };
   protected:
-    IntRegIndex base;
+    RegIndex base;
     AddrMode mode;
     bool wb;
-    IntRegIndex ura, urb, urc;
+    RegIndex ura, urb, urc;
     static const unsigned numMicroops = 3;
 
     StaticInstPtr *uops;
 
     RfeOp(const char *mnem, ExtMachInst _machInst, OpClass __opClass,
-          IntRegIndex _base, AddrMode _mode, bool _wb)
+          RegIndex _base, AddrMode _mode, bool _wb)
         : MightBeMicro(mnem, _machInst, __opClass),
           base(_base), mode(_mode), wb(_wb),
-          ura(INTREG_UREG0), urb(INTREG_UREG1),
-          urc(INTREG_UREG2),
+          ura(int_reg::Ureg0), urb(int_reg::Ureg1),
+          urc(int_reg::Ureg2),
           uops(NULL)
     {}
 
@@ -108,14 +129,15 @@ class RfeOp : public MightBeMicro
     }
 
     std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+            Addr pc, const loader::SymbolTable *symtab) const override;
 };
 
 // The address is a base register plus an immediate.
 class SrsOp : public MightBeMicro
 {
   public:
-    enum AddrMode {
+    enum AddrMode
+    {
         DecrementAfter,
         DecrementBefore,
         IncrementAfter,
@@ -149,13 +171,14 @@ class SrsOp : public MightBeMicro
     }
 
     std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+            Addr pc, const loader::SymbolTable *symtab) const override;
 };
 
 class Memory : public MightBeMicro
 {
   public:
-    enum AddrMode {
+    enum AddrMode
+    {
         AddrMd_Offset,
         AddrMd_PreIndex,
         AddrMd_PostIndex
@@ -163,15 +186,15 @@ class Memory : public MightBeMicro
 
   protected:
 
-    IntRegIndex dest;
-    IntRegIndex base;
+    RegIndex dest;
+    RegIndex base;
     bool add;
     static const unsigned numMicroops = 3;
 
     StaticInstPtr *uops;
 
     Memory(const char *mnem, ExtMachInst _machInst, OpClass __opClass,
-           IntRegIndex _dest, IntRegIndex _base, bool _add)
+           RegIndex _dest, RegIndex _base, bool _add)
         : MightBeMicro(mnem, _machInst, __opClass),
           dest(_dest), base(_base), add(_add), uops(NULL)
     {}
@@ -209,7 +232,7 @@ class MemoryImm : public Memory
     int32_t imm;
 
     MemoryImm(const char *mnem, ExtMachInst _machInst, OpClass __opClass,
-              IntRegIndex _dest, IntRegIndex _base, bool _add, int32_t _imm)
+              RegIndex _dest, RegIndex _base, bool _add, int32_t _imm)
         : Memory(mnem, _machInst, __opClass, _dest, _base, _add), imm(_imm)
     {}
 
@@ -226,10 +249,10 @@ class MemoryImm : public Memory
 class MemoryExImm : public MemoryImm
 {
   protected:
-    IntRegIndex result;
+    RegIndex result;
 
     MemoryExImm(const char *mnem, ExtMachInst _machInst, OpClass __opClass,
-                IntRegIndex _result, IntRegIndex _dest, IntRegIndex _base,
+                RegIndex _result, RegIndex _dest, RegIndex _base,
                 bool _add, int32_t _imm)
         : MemoryImm(mnem, _machInst, __opClass, _dest, _base, _add, _imm),
                     result(_result)
@@ -248,11 +271,11 @@ class MemoryExImm : public MemoryImm
 class MemoryDImm : public MemoryImm
 {
   protected:
-    IntRegIndex dest2;
+    RegIndex dest2;
 
     MemoryDImm(const char *mnem, ExtMachInst _machInst, OpClass __opClass,
-              IntRegIndex _dest, IntRegIndex _dest2,
-              IntRegIndex _base, bool _add, int32_t _imm)
+              RegIndex _dest, RegIndex _dest2,
+              RegIndex _base, bool _add, int32_t _imm)
         : MemoryImm(mnem, _machInst, __opClass, _dest, _base, _add, _imm),
           dest2(_dest2)
     {}
@@ -269,11 +292,11 @@ class MemoryDImm : public MemoryImm
 class MemoryExDImm : public MemoryDImm
 {
   protected:
-    IntRegIndex result;
+    RegIndex result;
 
     MemoryExDImm(const char *mnem, ExtMachInst _machInst, OpClass __opClass,
-                 IntRegIndex _result, IntRegIndex _dest, IntRegIndex _dest2,
-                 IntRegIndex _base, bool _add, int32_t _imm)
+                 RegIndex _result, RegIndex _dest, RegIndex _dest2,
+                 RegIndex _base, bool _add, int32_t _imm)
         : MemoryDImm(mnem, _machInst, __opClass, _dest, _dest2,
                      _base, _add, _imm), result(_result)
     {}
@@ -293,12 +316,12 @@ class MemoryReg : public Memory
   protected:
     int32_t shiftAmt;
     ArmShiftType shiftType;
-    IntRegIndex index;
+    RegIndex index;
 
     MemoryReg(const char *mnem, ExtMachInst _machInst, OpClass __opClass,
-              IntRegIndex _dest, IntRegIndex _base, bool _add,
+              RegIndex _dest, RegIndex _base, bool _add,
               int32_t _shiftAmt, ArmShiftType _shiftType,
-              IntRegIndex _index)
+              RegIndex _index)
         : Memory(mnem, _machInst, __opClass, _dest, _base, _add),
           shiftAmt(_shiftAmt), shiftType(_shiftType), index(_index)
     {}
@@ -309,13 +332,13 @@ class MemoryReg : public Memory
 class MemoryDReg : public MemoryReg
 {
   protected:
-    IntRegIndex dest2;
+    RegIndex dest2;
 
     MemoryDReg(const char *mnem, ExtMachInst _machInst, OpClass __opClass,
-               IntRegIndex _dest, IntRegIndex _dest2,
-               IntRegIndex _base, bool _add,
+               RegIndex _dest, RegIndex _dest2,
+               RegIndex _base, bool _add,
                int32_t _shiftAmt, ArmShiftType _shiftType,
-               IntRegIndex _index)
+               RegIndex _index)
         : MemoryReg(mnem, _machInst, __opClass, _dest, _base, _add,
                     _shiftAmt, _shiftType, _index),
           dest2(_dest2)
@@ -335,45 +358,45 @@ class MemoryOffset : public Base
 {
   protected:
     MemoryOffset(const char *mnem, ExtMachInst _machInst,
-                 OpClass __opClass, IntRegIndex _dest, IntRegIndex _base,
+                 OpClass __opClass, RegIndex _dest, RegIndex _base,
                  bool _add, int32_t _imm)
         : Base(mnem, _machInst, __opClass, _dest, _base, _add, _imm)
     {}
 
     MemoryOffset(const char *mnem, ExtMachInst _machInst,
-                 OpClass __opClass, IntRegIndex _dest, IntRegIndex _base,
+                 OpClass __opClass, RegIndex _dest, RegIndex _base,
                  bool _add, int32_t _shiftAmt, ArmShiftType _shiftType,
-                 IntRegIndex _index)
+                 RegIndex _index)
         : Base(mnem, _machInst, __opClass, _dest, _base, _add,
                 _shiftAmt, _shiftType, _index)
     {}
 
     MemoryOffset(const char *mnem, ExtMachInst _machInst,
-                 OpClass __opClass, IntRegIndex _dest, IntRegIndex _dest2,
-                 IntRegIndex _base, bool _add, int32_t _imm)
+                 OpClass __opClass, RegIndex _dest, RegIndex _dest2,
+                 RegIndex _base, bool _add, int32_t _imm)
         : Base(mnem, _machInst, __opClass, _dest, _dest2, _base, _add, _imm)
     {}
 
     MemoryOffset(const char *mnem, ExtMachInst _machInst,
-                 OpClass __opClass, IntRegIndex _result,
-                 IntRegIndex _dest, IntRegIndex _dest2,
-                 IntRegIndex _base, bool _add, int32_t _imm)
+                 OpClass __opClass, RegIndex _result,
+                 RegIndex _dest, RegIndex _dest2,
+                 RegIndex _base, bool _add, int32_t _imm)
         : Base(mnem, _machInst, __opClass, _result,
                 _dest, _dest2, _base, _add, _imm)
     {}
 
     MemoryOffset(const char *mnem, ExtMachInst _machInst,
-                 OpClass __opClass, IntRegIndex _dest, IntRegIndex _dest2,
-                 IntRegIndex _base, bool _add,
+                 OpClass __opClass, RegIndex _dest, RegIndex _dest2,
+                 RegIndex _base, bool _add,
                  int32_t _shiftAmt, ArmShiftType _shiftType,
-                 IntRegIndex _index)
+                 RegIndex _index)
         : Base(mnem, _machInst, __opClass, _dest, _dest2, _base, _add,
                 _shiftAmt, _shiftType, _index)
     {}
 
     std::string
     generateDisassembly(Addr pc,
-                        const Loader::SymbolTable *symtab) const override
+                        const loader::SymbolTable *symtab) const override
     {
         std::stringstream ss;
         this->printInst(ss, Memory::AddrMd_Offset);
@@ -386,45 +409,45 @@ class MemoryPreIndex : public Base
 {
   protected:
     MemoryPreIndex(const char *mnem, ExtMachInst _machInst,
-                   OpClass __opClass, IntRegIndex _dest, IntRegIndex _base,
+                   OpClass __opClass, RegIndex _dest, RegIndex _base,
                    bool _add, int32_t _imm)
         : Base(mnem, _machInst, __opClass, _dest, _base, _add, _imm)
     {}
 
     MemoryPreIndex(const char *mnem, ExtMachInst _machInst,
-                   OpClass __opClass, IntRegIndex _dest, IntRegIndex _base,
+                   OpClass __opClass, RegIndex _dest, RegIndex _base,
                    bool _add, int32_t _shiftAmt, ArmShiftType _shiftType,
-                   IntRegIndex _index)
+                   RegIndex _index)
         : Base(mnem, _machInst, __opClass, _dest, _base, _add,
                 _shiftAmt, _shiftType, _index)
     {}
 
     MemoryPreIndex(const char *mnem, ExtMachInst _machInst,
-                   OpClass __opClass, IntRegIndex _dest, IntRegIndex _dest2,
-                   IntRegIndex _base, bool _add, int32_t _imm)
+                   OpClass __opClass, RegIndex _dest, RegIndex _dest2,
+                   RegIndex _base, bool _add, int32_t _imm)
         : Base(mnem, _machInst, __opClass, _dest, _dest2, _base, _add, _imm)
     {}
 
     MemoryPreIndex(const char *mnem, ExtMachInst _machInst,
-                   OpClass __opClass, IntRegIndex _result,
-                   IntRegIndex _dest, IntRegIndex _dest2,
-                   IntRegIndex _base, bool _add, int32_t _imm)
+                   OpClass __opClass, RegIndex _result,
+                   RegIndex _dest, RegIndex _dest2,
+                   RegIndex _base, bool _add, int32_t _imm)
         : Base(mnem, _machInst, __opClass, _result,
                 _dest, _dest2, _base, _add, _imm)
     {}
 
     MemoryPreIndex(const char *mnem, ExtMachInst _machInst,
-                   OpClass __opClass, IntRegIndex _dest, IntRegIndex _dest2,
-                   IntRegIndex _base, bool _add,
+                   OpClass __opClass, RegIndex _dest, RegIndex _dest2,
+                   RegIndex _base, bool _add,
                    int32_t _shiftAmt, ArmShiftType _shiftType,
-                   IntRegIndex _index)
+                   RegIndex _index)
         : Base(mnem, _machInst, __opClass, _dest, _dest2, _base, _add,
                 _shiftAmt, _shiftType, _index)
     {}
 
     std::string
     generateDisassembly(Addr pc,
-                        const Loader::SymbolTable *symtab) const override
+                        const loader::SymbolTable *symtab) const override
     {
         std::stringstream ss;
         this->printInst(ss, Memory::AddrMd_PreIndex);
@@ -437,51 +460,53 @@ class MemoryPostIndex : public Base
 {
   protected:
     MemoryPostIndex(const char *mnem, ExtMachInst _machInst,
-                    OpClass __opClass, IntRegIndex _dest, IntRegIndex _base,
+                    OpClass __opClass, RegIndex _dest, RegIndex _base,
                     bool _add, int32_t _imm)
         : Base(mnem, _machInst, __opClass, _dest, _base, _add, _imm)
     {}
 
     MemoryPostIndex(const char *mnem, ExtMachInst _machInst,
-                    OpClass __opClass, IntRegIndex _dest, IntRegIndex _base,
+                    OpClass __opClass, RegIndex _dest, RegIndex _base,
                     bool _add, int32_t _shiftAmt, ArmShiftType _shiftType,
-                    IntRegIndex _index)
+                    RegIndex _index)
         : Base(mnem, _machInst, __opClass, _dest, _base, _add,
                 _shiftAmt, _shiftType, _index)
     {}
 
     MemoryPostIndex(const char *mnem, ExtMachInst _machInst,
-                    OpClass __opClass, IntRegIndex _dest, IntRegIndex _dest2,
-                    IntRegIndex _base, bool _add, int32_t _imm)
+                    OpClass __opClass, RegIndex _dest, RegIndex _dest2,
+                    RegIndex _base, bool _add, int32_t _imm)
         : Base(mnem, _machInst, __opClass, _dest, _dest2, _base, _add, _imm)
     {}
 
     MemoryPostIndex(const char *mnem, ExtMachInst _machInst,
-                    OpClass __opClass, IntRegIndex _result,
-                    IntRegIndex _dest, IntRegIndex _dest2,
-                    IntRegIndex _base, bool _add, int32_t _imm)
+                    OpClass __opClass, RegIndex _result,
+                    RegIndex _dest, RegIndex _dest2,
+                    RegIndex _base, bool _add, int32_t _imm)
         : Base(mnem, _machInst, __opClass, _result,
                 _dest, _dest2, _base, _add, _imm)
     {}
 
     MemoryPostIndex(const char *mnem, ExtMachInst _machInst,
-                    OpClass __opClass, IntRegIndex _dest, IntRegIndex _dest2,
-                    IntRegIndex _base, bool _add,
+                    OpClass __opClass, RegIndex _dest, RegIndex _dest2,
+                    RegIndex _base, bool _add,
                     int32_t _shiftAmt, ArmShiftType _shiftType,
-                    IntRegIndex _index)
+                    RegIndex _index)
         : Base(mnem, _machInst, __opClass, _dest, _dest2, _base, _add,
                 _shiftAmt, _shiftType, _index)
     {}
 
     std::string
     generateDisassembly(Addr pc,
-                        const Loader::SymbolTable *symtab) const override
+                        const loader::SymbolTable *symtab) const override
     {
         std::stringstream ss;
         this->printInst(ss, Memory::AddrMd_PostIndex);
         return ss.str();
     }
 };
-}
+
+} // namespace ArmISA
+} // namespace gem5
 
 #endif //__ARCH_ARM_INSTS_MEM_HH__

@@ -31,7 +31,7 @@ def template MicroRomConstructor {{
 
     X86ISA::MicrocodeRom::MicrocodeRom()
     {
-        using namespace RomLabels;
+        using namespace rom_labels;
         genFuncs = new GenFunc[numMicroops];
         %(alloc_generators)s;
     }
@@ -41,18 +41,10 @@ let {{
     from micro_asm import Rom
 
     class X86MicrocodeRom(Rom):
-        def __init__(self, name):
-            super(X86MicrocodeRom, self).__init__(name)
-            self.directives = {}
-
-        def add_microop(self, mnemonic, microop):
-            microop.mnemonic = mnemonic
-            microop.micropc = len(self.microops)
-            self.microops.append(microop)
-
-
         def getDeclaration(self):
-            declareLabels = "namespace RomLabels {\n"
+            declareLabels = \
+                "GEM5_DEPRECATED_NAMESPACE(RomLabels, rom_labels);\n"
+            declareLabels += "namespace rom_labels\n{\n"
             for (label, microop) in self.labels.items():
                 declareLabels += "const static uint64_t label_%s = %d;\n" \
                                   % (label, microop.micropc)

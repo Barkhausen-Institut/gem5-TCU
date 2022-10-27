@@ -39,6 +39,11 @@
 
 #define ARRAY_SIZE(a)   (sizeof((a)) / sizeof((a)[0]))
 
+namespace gem5
+{
+namespace tcu
+{
+
 static const Addr DATA_ADDR         = 0x1000;
 static const Addr DEST_ADDR         = 0x2000;
 static const Addr RECV_ADDR         = 0x3000;
@@ -541,7 +546,7 @@ TcuAbortTest::tick()
 
         case State::STOP:
         {
-            Tick when = curTick() + SimClock::Int::ns;
+            Tick when = curTick() + sim_clock::as_int::ns;
             inform("[PE0:kernel @ 0] Shutting down\n");
             exitSimLoop("All tests done", 0, when, 0, false);
             return;
@@ -555,4 +560,7 @@ TcuAbortTest::tick()
         schedule(tickEvent, clockEdge(Cycles(1)));
     else
         sendPkt(pkt);
+}
+
+}
 }

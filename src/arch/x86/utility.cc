@@ -40,58 +40,27 @@
 
 #include "arch/x86/interrupts.hh"
 #include "arch/x86/mmu.hh"
-#include "arch/x86/registers.hh"
+#include "arch/x86/regs/ccr.hh"
+#include "arch/x86/regs/float.hh"
+#include "arch/x86/regs/int.hh"
+#include "arch/x86/regs/misc.hh"
 #include "arch/x86/x86_traits.hh"
 #include "cpu/base.hh"
 #include "fputils/fp80.h"
-#include "sim/full_system.hh"
+
+namespace gem5
+{
 
 namespace X86ISA
 {
 
-void
-copyMiscRegs(ThreadContext *src, ThreadContext *dest)
-{
-    // This function assumes no side effects other than TLB invalidation
-    // need to be considered while copying state. That will likely not be
-    // true in the future.
-    for (int i = 0; i < NUM_MISCREGS; ++i) {
-        if (!isValidMiscReg(i))
-             continue;
-
-        dest->setMiscRegNoEffect(i, src->readMiscRegNoEffect(i));
-    }
-
-    // The TSC has to be updated with side-effects if the CPUs in a
-    // CPU switch have different frequencies.
-    dest->setMiscReg(MISCREG_TSC, src->readMiscReg(MISCREG_TSC));
-
-    dest->getMMUPtr()->flushAll();
-}
-
-void
-copyRegs(ThreadContext *src, ThreadContext *dest)
-{
-    //copy int regs
-    for (int i = 0; i < NumIntRegs; ++i)
-         dest->setIntRegFlat(i, src->readIntRegFlat(i));
-    //copy float regs
-    for (int i = 0; i < NumFloatRegs; ++i)
-         dest->setFloatRegFlat(i, src->readFloatRegFlat(i));
-    //copy condition-code regs
-    for (int i = 0; i < NumCCRegs; ++i)
-         dest->setCCRegFlat(i, src->readCCRegFlat(i));
-    copyMiscRegs(src, dest);
-    dest->pcState(src->pcState());
-}
-
 uint64_t
 getRFlags(ThreadContext *tc)
 {
-    const uint64_t ncc_flags(tc->readMiscRegNoEffect(MISCREG_RFLAGS));
-    const uint64_t cc_flags(tc->readCCReg(X86ISA::CCREG_ZAPS));
-    const uint64_t cfof_bits(tc->readCCReg(X86ISA::CCREG_CFOF));
-    const uint64_t df_bit(tc->readCCReg(X86ISA::CCREG_DF));
+    const uint64_t ncc_flags(tc->readMiscRegNoEffect(misc_reg::Rflags));
+    const uint64_t cc_flags(tc->getReg(X86ISA::cc_reg::Zaps));
+    const uint64_t cfof_bits(tc->getReg(X86ISA::cc_reg::Cfof));
+    const uint64_t df_bit(tc->getReg(X86ISA::cc_reg::Df));
     // ecf (PSEUDO(3)) & ezf (PSEUDO(4)) are only visible to
     // microcode, so we can safely ignore them.
 
@@ -104,17 +73,17 @@ getRFlags(ThreadContext *tc)
 void
 setRFlags(ThreadContext *tc, uint64_t val)
 {
-    tc->setCCReg(X86ISA::CCREG_ZAPS, val & ccFlagMask);
-    tc->setCCReg(X86ISA::CCREG_CFOF, val & cfofMask);
-    tc->setCCReg(X86ISA::CCREG_DF, val & DFBit);
+    tc->setReg(X86ISA::cc_reg::Zaps, val & CcFlagMask);
+    tc->setReg(X86ISA::cc_reg::Cfof, val & CfofMask);
+    tc->setReg(X86ISA::cc_reg::Df, val & DFBit);
 
     // Internal microcode registers (ECF & EZF)
-    tc->setCCReg(X86ISA::CCREG_ECF, 0);
-    tc->setCCReg(X86ISA::CCREG_EZF, 0);
+    tc->setReg(X86ISA::cc_reg::Ecf, (RegVal)0);
+    tc->setReg(X86ISA::cc_reg::Ezf, (RegVal)0);
 
     // Update the RFLAGS misc reg with whatever didn't go into the
     // magic registers.
-    tc->setMiscReg(MISCREG_RFLAGS, val & ~(ccFlagMask | cfofMask | DFBit));
+    tc->setMiscReg(misc_reg::Rflags, val & ~(CcFlagMask | CfofMask | DFBit));
 }
 
 uint8_t
@@ -200,3 +169,4 @@ storeFloat80(void *_mem, double value)
 }
 
 } // namespace X86_ISA
+} // namespace gem5

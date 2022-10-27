@@ -49,12 +49,16 @@
 
 #include <stdint.h>
 
-#include "arch/arm/miscregs.hh"
+#include "arch/arm/regs/misc.hh"
+
+namespace gem5
+{
 
 namespace ArmISA
 {
 
-enum FPRounding {
+enum FPRounding
+{
     FPRounding_TIEEVEN = 0,
     FPRounding_POSINF = 1,
     FPRounding_NEGINF = 2,
@@ -413,6 +417,8 @@ template <>
 uint32_t fplibDefaultNaN();
 template <>
 uint64_t fplibDefaultNaN();
-}
+
+} // namespace ArmISA
+} // namespace gem5
 
 #endif

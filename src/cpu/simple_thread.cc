@@ -42,7 +42,7 @@
 
 #include <string>
 
-#include "arch/utility.hh"
+#include "arch/generic/decoder.hh"
 #include "base/callback.hh"
 #include "base/compiler.hh"
 #include "base/cprintf.hh"
@@ -62,44 +62,44 @@
 #include "sim/sim_exit.hh"
 #include "sim/system.hh"
 
+namespace gem5
+{
+
 // constructor
 SimpleThread::SimpleThread(BaseCPU *_cpu, int _thread_num, System *_sys,
                            Process *_process, BaseMMU *_mmu,
-                           BaseISA *_isa)
+                           BaseISA *_isa, InstDecoder *_decoder)
     : ThreadState(_cpu, _thread_num, _process),
+      regFiles{{
+          {_isa->regClasses().at(IntRegClass)},
+          {_isa->regClasses().at(FloatRegClass)},
+          {_isa->regClasses().at(VecRegClass)},
+          {_isa->regClasses().at(VecElemClass)},
+          {_isa->regClasses().at(VecPredRegClass)},
+          {_isa->regClasses().at(CCRegClass)}
+      }},
       isa(dynamic_cast<TheISA::ISA *>(_isa)),
       predicate(true), memAccPredicate(true),
       comInstEventQueue("instruction-based event queue"),
-      system(_sys), mmu(_mmu), decoder(isa),
+      system(_sys), mmu(_mmu), decoder(_decoder),
       htmTransactionStarts(0), htmTransactionStops(0)
 {
-    assert(isa);
     clearArchRegs();
 }
 
 SimpleThread::SimpleThread(BaseCPU *_cpu, int _thread_num, System *_sys,
-                           BaseMMU *_mmu, BaseISA *_isa)
-    : ThreadState(_cpu, _thread_num, NULL),
-      isa(dynamic_cast<TheISA::ISA *>(_isa)),
-      predicate(true), memAccPredicate(true),
-      comInstEventQueue("instruction-based event queue"),
-      system(_sys), mmu(_mmu), decoder(isa),
-      htmTransactionStarts(0), htmTransactionStops(0)
-{
-    assert(isa);
-
-    clearArchRegs();
-}
+                           BaseMMU *_mmu, BaseISA *_isa, InstDecoder *_decoder)
+    : SimpleThread(_cpu, _thread_num, _sys, nullptr, _mmu, _isa, _decoder)
+{}
 
 void
 SimpleThread::takeOverFrom(ThreadContext *oldContext)
 {
-    ::takeOverFrom(*this, *oldContext);
-    decoder.takeOverFrom(oldContext->getDecoderPtr());
+    gem5::takeOverFrom(*this, *oldContext);
+    decoder->takeOverFrom(oldContext->getDecoderPtr());
 
     isa->takeOverFrom(this, oldContext);
 
-    funcExeInst = oldContext->readFuncExeInst();
     storeCondFailures = 0;
 }
 
@@ -109,8 +109,6 @@ SimpleThread::copyState(ThreadContext *oldContext)
     // copy over functional state
     _status = oldContext->status();
     copyArchRegs(oldContext);
-    if (FullSystem)
-        funcExeInst = oldContext->readFuncExeInst();
 
     _threadId = oldContext->threadId();
     _contextId = oldContext->contextId();
@@ -120,7 +118,7 @@ void
 SimpleThread::serialize(CheckpointOut &cp) const
 {
     ThreadState::serialize(cp);
-    ::serialize(*this, cp);
+    gem5::serialize(*this, cp);
 }
 
 
@@ -128,7 +126,7 @@ void
 SimpleThread::unserialize(CheckpointIn &cp)
 {
     ThreadState::unserialize(cp);
-    ::unserialize(*this, cp);
+    gem5::unserialize(*this, cp);
 }
 
 void
@@ -168,17 +166,14 @@ SimpleThread::halt()
 void
 SimpleThread::copyArchRegs(ThreadContext *src_tc)
 {
-    TheISA::copyRegs(src_tc, this);
+    getIsaPtr()->copyRegsFrom(src_tc);
 }
 
 // hardware transactional memory
 void
 SimpleThread::htmAbortTransaction(uint64_t htm_uid, HtmFailureFaultCause cause)
 {
-    BaseSimpleCPU *baseSimpleCpu = dynamic_cast<BaseSimpleCPU*>(baseCpu);
-    assert(baseSimpleCpu);
-
-    baseSimpleCpu->htmSendAbortSignal(cause);
+    baseCpu->htmSendAbortSignal(threadId(), htm_uid, cause);
 
     // these must be reset after the abort signal has been sent
     htmTransactionStarts = 0;
@@ -196,3 +191,5 @@ SimpleThread::setHtmCheckpointPtr(BaseHTMCheckpointPtr new_cpt)
 {
     _htmCheckpoint = std::move(new_cpt);
 }
+
+} // namespace gem5

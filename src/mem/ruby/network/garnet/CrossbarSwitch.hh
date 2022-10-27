@@ -39,6 +39,15 @@
 #include "mem/ruby/network/garnet/CommonTypes.hh"
 #include "mem/ruby/network/garnet/flitBuffer.hh"
 
+namespace gem5
+{
+
+namespace ruby
+{
+
+namespace garnet
+{
+
 class Router;
 
 class CrossbarSwitch : public Consumer
@@ -67,5 +76,9 @@ class CrossbarSwitch : public Consumer
     double m_crossbar_activity;
     std::vector<flitBuffer> switchBuffers;
 };
+
+} // namespace garnet
+} // namespace ruby
+} // namespace gem5
 
 #endif // __MEM_RUBY_NETWORK_GARNET_0_CROSSBARSWITCH_HH__

@@ -40,6 +40,9 @@
 #include "params/StackDistProbe.hh"
 #include "sim/system.hh"
 
+namespace gem5
+{
+
 StackDistProbe::StackDistProbe(const StackDistProbeParams &p)
     : BaseMemProbe(p),
       lineSize(p.line_size),
@@ -53,17 +56,21 @@ StackDistProbe::StackDistProbe(const StackDistProbeParams &p)
              "larger or equal to the system's cahce line size.");
 }
 
-StackDistProbe::
-StackDistProbeStats::StackDistProbeStats(StackDistProbe *parent)
-    : Stats::Group(parent),
-      ADD_STAT(readLinearHist, UNIT_COUNT, "Reads linear distribution"),
-      ADD_STAT(readLogHist, UNIT_RATIO, "Reads logarithmic distribution"),
-      ADD_STAT(writeLinearHist, UNIT_COUNT, "Writes linear distribution"),
-      ADD_STAT(writeLogHist, UNIT_RATIO, "Writes logarithmic distribution"),
-      ADD_STAT(infiniteSD, UNIT_COUNT,
+StackDistProbe::StackDistProbeStats::StackDistProbeStats(
+    StackDistProbe *parent)
+    : statistics::Group(parent),
+      ADD_STAT(readLinearHist, statistics::units::Count::get(),
+               "Reads linear distribution"),
+      ADD_STAT(readLogHist, statistics::units::Ratio::get(),
+               "Reads logarithmic distribution"),
+      ADD_STAT(writeLinearHist, statistics::units::Count::get(),
+               "Writes linear distribution"),
+      ADD_STAT(writeLogHist, statistics::units::Ratio::get(),
+               "Writes logarithmic distribution"),
+      ADD_STAT(infiniteSD, statistics::units::Count::get(),
                "Number of requests with infinite stack distance")
 {
-    using namespace Stats;
+    using namespace statistics;
 
     const StackDistProbeParams &p =
         dynamic_cast<const StackDistProbeParams &>(parent->params());
@@ -89,7 +96,7 @@ StackDistProbeStats::StackDistProbeStats(StackDistProbe *parent)
 }
 
 void
-StackDistProbe::handleRequest(const ProbePoints::PacketInfo &pkt_info)
+StackDistProbe::handleRequest(const probing::PacketInfo &pkt_info)
 {
     // only capturing read and write requests (which allocate in the
     // cache)
@@ -124,3 +131,5 @@ StackDistProbe::handleRequest(const ProbePoints::PacketInfo &pkt_info)
             stats.writeLogHist.sample(sd_lg2);
     }
 }
+
+} // namespace gem5

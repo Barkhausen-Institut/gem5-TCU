@@ -55,6 +55,9 @@
 #include "sim/sim_exit.hh"
 #include "sim/system.hh"
 
+namespace gem5
+{
+
 BaseTags::BaseTags(const Params &p)
     : ClockedObject(p), blkSize(p.block_size), blkMask(blkSize - 1),
       size(p.size), lookupLatency(p.tag_latency),
@@ -162,18 +165,18 @@ BaseTags::computeStatsVisitor(CacheBlk &blk)
 {
     if (blk.isValid()) {
         const uint32_t task_id = blk.getTaskId();
-        assert(task_id < ContextSwitchTaskId::NumTaskId);
+        assert(task_id < context_switch_task_id::NumTaskId);
         stats.occupanciesTaskId[task_id]++;
         Tick age = blk.getAge();
 
         int age_index;
-        if (age / SimClock::Int::us < 10) { // <10us
+        if (age / sim_clock::as_int::us < 10) { // <10us
             age_index = 0;
-        } else if (age / SimClock::Int::us < 100) { // <100us
+        } else if (age / sim_clock::as_int::us < 100) { // <100us
             age_index = 1;
-        } else if (age / SimClock::Int::ms < 1) { // <1ms
+        } else if (age / sim_clock::as_int::ms < 1) { // <1ms
             age_index = 2;
-        } else if (age / SimClock::Int::ms < 10) { // <10ms
+        } else if (age / sim_clock::as_int::ms < 10) { // <10ms
             age_index = 3;
         } else
             age_index = 4; // >10ms
@@ -185,7 +188,7 @@ BaseTags::computeStatsVisitor(CacheBlk &blk)
 void
 BaseTags::computeStats()
 {
-    for (unsigned i = 0; i < ContextSwitchTaskId::NumTaskId; ++i) {
+    for (unsigned i = 0; i < context_switch_task_id::NumTaskId; ++i) {
         stats.occupanciesTaskId[i] = 0;
         for (unsigned j = 0; j < 5; ++j) {
             stats.ageTaskId[i][j] = 0;
@@ -213,39 +216,46 @@ BaseTags::print()
 }
 
 BaseTags::BaseTagStats::BaseTagStats(BaseTags &_tags)
-    : Stats::Group(&_tags),
+    : statistics::Group(&_tags),
     tags(_tags),
 
-    ADD_STAT(tagsInUse, UNIT_RATE(Stats::Units::Tick, Stats::Units::Count),
+    ADD_STAT(tagsInUse, statistics::units::Rate<
+                statistics::units::Tick, statistics::units::Count>::get(),
              "Average ticks per tags in use"),
-    ADD_STAT(totalRefs, UNIT_COUNT,
+    ADD_STAT(totalRefs, statistics::units::Count::get(),
              "Total number of references to valid blocks."),
-    ADD_STAT(sampledRefs, UNIT_COUNT,
+    ADD_STAT(sampledRefs, statistics::units::Count::get(),
              "Sample count of references to valid blocks."),
-    ADD_STAT(avgRefs, UNIT_RATE(Stats::Units::Count, Stats::Units::Count),
+    ADD_STAT(avgRefs, statistics::units::Rate<
+                statistics::units::Count, statistics::units::Count>::get(),
              "Average number of references to valid blocks."),
-    ADD_STAT(warmupTick, UNIT_TICK,
+    ADD_STAT(warmupTick, statistics::units::Tick::get(),
              "The tick when the warmup percentage was hit."),
-    ADD_STAT(occupancies, UNIT_RATE(Stats::Units::Count, Stats::Units::Tick),
+    ADD_STAT(occupancies, statistics::units::Rate<
+                statistics::units::Count, statistics::units::Tick>::get(),
              "Average occupied blocks per tick, per requestor"),
-    ADD_STAT(avgOccs, UNIT_RATE(Stats::Units::Ratio, Stats::Units::Tick),
+    ADD_STAT(avgOccs, statistics::units::Rate<
+                statistics::units::Ratio, statistics::units::Tick>::get(),
              "Average percentage of cache occupancy"),
-    ADD_STAT(occupanciesTaskId, UNIT_COUNT, "Occupied blocks per task id"),
-    ADD_STAT(ageTaskId, UNIT_COUNT,
+    ADD_STAT(occupanciesTaskId, statistics::units::Count::get(),
+             "Occupied blocks per task id"),
+    ADD_STAT(ageTaskId, statistics::units::Count::get(),
              "Occupied blocks per task id, per block age"),
-    ADD_STAT(ratioOccsTaskId, UNIT_RATIO,
+    ADD_STAT(ratioOccsTaskId, statistics::units::Ratio::get(),
              "Ratio of occupied blocks and all blocks, per task id"),
-    ADD_STAT(tagAccesses, UNIT_COUNT, "Number of tag accesses"),
-    ADD_STAT(dataAccesses, UNIT_COUNT, "Number of data accesses")
+    ADD_STAT(tagAccesses, statistics::units::Count::get(),
+             "Number of tag accesses"),
+    ADD_STAT(dataAccesses, statistics::units::Count::get(),
+             "Number of data accesses")
 {
 }
 
 void
 BaseTags::BaseTagStats::regStats()
 {
-    using namespace Stats;
+    using namespace statistics;
 
-    Stats::Group::regStats();
+    statistics::Group::regStats();
 
     System *system = tags.system;
 
@@ -264,27 +274,29 @@ BaseTags::BaseTagStats::regStats()
         avgOccs.subname(i, system->getRequestorName(i));
     }
 
-    avgOccs = occupancies / Stats::constant(tags.numBlocks);
+    avgOccs = occupancies / statistics::constant(tags.numBlocks);
 
     occupanciesTaskId
-        .init(ContextSwitchTaskId::NumTaskId)
+        .init(context_switch_task_id::NumTaskId)
         .flags(nozero | nonan)
         ;
 
     ageTaskId
-        .init(ContextSwitchTaskId::NumTaskId, 5)
+        .init(context_switch_task_id::NumTaskId, 5)
         .flags(nozero | nonan)
         ;
 
     ratioOccsTaskId.flags(nozero);
 
-    ratioOccsTaskId = occupanciesTaskId / Stats::constant(tags.numBlocks);
+    ratioOccsTaskId = occupanciesTaskId / statistics::constant(tags.numBlocks);
 }
 
 void
 BaseTags::BaseTagStats::preDumpStats()
 {
-    Stats::Group::preDumpStats();
+    statistics::Group::preDumpStats();
 
     tags.computeStats();
 }
+
+} // namespace gem5

@@ -45,12 +45,15 @@
 
 #include "arch/arm/process.hh"
 
+namespace gem5
+{
+
 /// A process with emulated Arm/Linux syscalls.
 class ArmLinuxProcess32 : public ArmProcess32
 {
   public:
     ArmLinuxProcess32(const ProcessParams &params,
-                      ::Loader::ObjectFile *objFile, ::Loader::Arch _arch) :
+                      loader::ObjectFile *objFile, loader::Arch _arch) :
         ArmProcess32(params, objFile, _arch)
     {}
 
@@ -65,11 +68,13 @@ class ArmLinuxProcess64 : public ArmProcess64
 {
   public:
     ArmLinuxProcess64(const ProcessParams &params,
-                      ::Loader::ObjectFile *objFile, ::Loader::Arch _arch) :
+                      loader::ObjectFile *objFile, loader::Arch _arch) :
         ArmProcess64(params, objFile, _arch)
     {}
 
     void initState() override;
 };
+
+} // namespace gem5
 
 #endif // __ARM_LINUX_PROCESS_HH__

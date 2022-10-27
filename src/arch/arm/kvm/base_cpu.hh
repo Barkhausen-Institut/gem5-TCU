@@ -40,8 +40,15 @@
 
 #include <vector>
 
+#include "arch/arm/pcstate.hh"
 #include "cpu/kvm/base.hh"
 #include "dev/arm/base_gic.hh"
+
+struct kvm_reg_list;
+struct kvm_vcpu_init;
+
+namespace gem5
+{
 
 struct BaseArmKvmCPUParams;
 
@@ -56,6 +63,14 @@ class BaseArmKvmCPU : public BaseKvmCPU
   protected:
     Tick kvmRun(Tick ticks) override;
 
+    void
+    stutterPC(PCStateBase &pc) const override
+    {
+        pc.as<ArmISA::PCState>().setNPC(pc.instAddr());
+    }
+
+    /** Override for synchronizing state in kvm_run */
+    void ioctlRun() override;
 
     /** Cached state of the IRQ line */
     bool irqAsserted;
@@ -104,10 +119,10 @@ class BaseArmKvmCPU : public BaseKvmCPU
      *
      * @param target CPU type to emulate
      */
-    void kvmArmVCpuInit(const struct kvm_vcpu_init &init);
+    void kvmArmVCpuInit(const kvm_vcpu_init &init);
 
   private:
-    std::unique_ptr<struct kvm_reg_list> tryGetRegList(uint64_t nelem) const;
+    std::unique_ptr<kvm_reg_list> tryGetRegList(uint64_t nelem) const;
 
     /**
      * Get a list of registers supported by getOneReg() and setOneReg().
@@ -116,12 +131,14 @@ class BaseArmKvmCPU : public BaseKvmCPU
      * is too small to hold the complete register list (the required
      * size is written to regs.n in this case). True on success.
      */
-    bool getRegList(struct kvm_reg_list &regs) const;
+    bool getRegList(kvm_reg_list &regs) const;
 
     /**
      * Cached copy of the list of registers supported by KVM
      */
     mutable RegIndexVector _regIndexList;
 };
+
+} // namespace gem5
 
 #endif // __ARCH_ARM_KVM_BASE_CPU_HH__

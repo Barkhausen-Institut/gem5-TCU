@@ -1,4 +1,16 @@
 /*
+ * Copyright (c) 2022 Arm Limited
+ * All rights reserved
+ *
+ * The license below extends only to copyright in the software and shall
+ * not be construed as granting a license to any other intellectual
+ * property including but not limited to intellectual property relating
+ * to a hardware implementation of the functionality of the software
+ * licensed hereunder.  You may use the software subject to the license
+ * terms below provided that you ensure that this notice is replicated
+ * unmodified and in its entirety in all distributions of the software,
+ * modified or unmodified, in source code or in binary form.
+ *
  * Copyright (c) 2002-2004 The Regents of The University of Michigan
  * All rights reserved.
  *
@@ -33,7 +45,11 @@
 
 #include "base/loader/raw_image.hh"
 
-namespace Loader
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Loader, loader);
+namespace loader
 {
 
 ObjectFile::ObjectFile(ImageFileDataPtr ifd) : ImageFile(ifd) {}
@@ -62,6 +78,8 @@ archToString(Arch arch)
         return "thumb";
       case Power:
         return "power";
+      case Power64:
+        return "power64";
       case Riscv64:
         return "riscv64";
       case Riscv32:
@@ -80,6 +98,8 @@ opSysToString(OpSys op_sys)
       case Tru64:
         return "tru64";
       case Linux:
+      case LinuxPower64ABIv1:
+      case LinuxPower64ABIv2:
         return "linux";
       case Solaris:
         return "solaris";
@@ -128,4 +148,20 @@ createObjectFile(const std::string &fname, bool raw)
     return nullptr;
 }
 
-} // namespace Loader
+bool
+archIs64Bit(const loader::Arch arch)
+{
+    switch (arch) {
+      case SPARC64:
+      case X86_64:
+      case Arm64:
+      case Power64:
+      case Riscv64:
+        return true;
+      default:
+        return false;
+    }
+}
+
+} // namespace loader
+} // namespace gem5

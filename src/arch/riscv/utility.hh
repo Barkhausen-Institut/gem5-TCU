@@ -49,11 +49,15 @@
 #include <sstream>
 #include <string>
 
-#include "arch/riscv/registers.hh"
+#include "arch/riscv/regs/float.hh"
+#include "arch/riscv/regs/int.hh"
 #include "base/types.hh"
 #include "cpu/reg_class.hh"
 #include "cpu/static_inst.hh"
 #include "cpu/thread_context.hh"
+
+namespace gem5
+{
 
 namespace RiscvISA
 {
@@ -98,34 +102,10 @@ issignalingnan<double>(double val)
         && (reinterpret_cast<uint64_t&>(val)&0x0004000000000000ULL);
 }
 
-inline PCState
-buildRetPC(const PCState &curPC, const PCState &callPC)
-{
-    PCState retPC = callPC;
-    retPC.advance();
-    retPC.pc(curPC.npc());
-    return retPC;
-}
-
-inline void
-copyRegs(ThreadContext *src, ThreadContext *dest)
-{
-    // First loop through the integer registers.
-    for (int i = 0; i < NumIntRegs; ++i)
-        dest->setIntReg(i, src->readIntReg(i));
-
-    // Second loop through the float registers.
-    for (int i = 0; i < NumFloatRegs; ++i)
-        dest->setFloatReg(i, src->readFloatReg(i));
-
-    // Lastly copy PC/NPC
-    dest->pcState(src->pcState());
-}
-
 inline std::string
 registerName(RegId reg)
 {
-    if (reg.isIntReg()) {
+    if (reg.is(IntRegClass)) {
         if (reg.index() >= NumIntArchRegs) {
             /*
              * This should only happen if a instruction is being speculatively
@@ -151,12 +131,7 @@ registerName(RegId reg)
     }
 }
 
-inline void
-advancePC(PCState &pc, const StaticInstPtr &inst)
-{
-    inst->advancePC(pc);
-}
-
 } // namespace RiscvISA
+} // namespace gem5
 
 #endif // __ARCH_RISCV_UTILITY_HH__

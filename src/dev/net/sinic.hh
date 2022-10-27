@@ -29,6 +29,7 @@
 #ifndef __DEV_NET_SINIC_HH__
 #define __DEV_NET_SINIC_HH__
 
+#include "base/compiler.hh"
 #include "base/inet.hh"
 #include "base/statistics.hh"
 #include "dev/io_device.hh"
@@ -41,7 +42,12 @@
 #include "params/Sinic.hh"
 #include "sim/eventq.hh"
 
-namespace Sinic {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Sinic, sinic);
+namespace sinic
+{
 
 class Interface;
 class Base : public EtherDevBase
@@ -84,7 +90,8 @@ class Device : public Base
 {
   protected:
     /** Receive State Machine States */
-    enum RxState {
+    enum RxState
+    {
         rxIdle,
         rxFifoBlock,
         rxBeginCopy,
@@ -93,7 +100,8 @@ class Device : public Base
     };
 
     /** Transmit State Machine states */
-    enum TxState {
+    enum TxState
+    {
         txIdle,
         txFifoBlock,
         txBeginCopy,
@@ -102,7 +110,8 @@ class Device : public Base
     };
 
     /** device register file */
-    struct {
+    struct
+    {
         uint32_t Config;       // 0x00
         uint32_t Command;      // 0x04
         uint32_t IntrStatus;   // 0x08
@@ -129,7 +138,8 @@ class Device : public Base
         uint64_t RxStatus;     // 0x78
     } regs;
 
-    struct VirtualReg {
+    struct VirtualReg
+    {
         uint64_t RxData;
         uint64_t RxDone;
         uint64_t TxData;
@@ -250,7 +260,7 @@ class Device : public Base
  */
   protected:
     void devIntrPost(uint32_t interrupts);
-    void devIntrClear(uint32_t interrupts = Regs::Intr_All);
+    void devIntrClear(uint32_t interrupts = registers::Intr_All);
     void devIntrChangeMask(uint32_t newmask);
 
 /**
@@ -270,14 +280,14 @@ class Device : public Base
  * Statistics
  */
   private:
-    struct DeviceStats : public Stats::Group
+    struct DeviceStats : public statistics::Group
     {
-        DeviceStats(Stats::Group *parent);
+        DeviceStats(statistics::Group *parent);
 
-        Stats::Scalar totalVnicDistance;
-        Stats::Scalar numVnicDistance;
-        Stats::Scalar maxVnicDistance;
-        Stats::Formula avgVnicDistance;
+        statistics::Scalar totalVnicDistance;
+        statistics::Scalar numVnicDistance;
+        statistics::Scalar maxVnicDistance;
+        statistics::Formula avgVnicDistance;
 
         int _maxVnicDistance;
     } sinicDeviceStats;
@@ -315,6 +325,7 @@ class Interface : public EtherInt
     virtual void sendDone() { dev->transferDone(); }
 };
 
-} // namespace Sinic
+} // namespace sinic
+} // namespace gem5
 
 #endif // __DEV_NET_SINIC_HH__

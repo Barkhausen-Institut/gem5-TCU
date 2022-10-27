@@ -43,6 +43,9 @@
 #include "params/VirtIODummyDevice.hh"
 #include "sim/serialize.hh"
 
+namespace gem5
+{
+
 VirtDescriptor::VirtDescriptor(PortProxy &_memProxy, ByteOrder bo,
                                VirtQueue &_queue, Index descIndex)
     : memProxy(&_memProxy), queue(&_queue), byteOrder(bo), _index(descIndex),
@@ -105,7 +108,7 @@ VirtDescriptor::updateChain()
 void
 VirtDescriptor::dump() const
 {
-    if (!DTRACE(VIO))
+    if (!debug::VIO)
         return;
 
     DPRINTF(VIO, "Descriptor[%i]: "
@@ -122,7 +125,7 @@ VirtDescriptor::dump() const
 void
 VirtDescriptor::dumpChain() const
 {
-    if (!DTRACE(VIO))
+    if (!debug::VIO)
         return;
 
     const VirtDescriptor *desc(this);
@@ -314,7 +317,7 @@ VirtQueue::produceDescriptor(VirtDescriptor *desc, uint32_t len)
 void
 VirtQueue::dump() const
 {
-    if (!DTRACE(VIO))
+    if (!debug::VIO)
         return;
 
     for (const VirtDescriptor &d : descriptors)
@@ -495,3 +498,5 @@ VirtIODummyDevice::VirtIODummyDevice(const VirtIODummyDeviceParams &params)
     : VirtIODeviceBase(params, ID_INVALID, 0, 0)
 {
 }
+
+} // namespace gem5

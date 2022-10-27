@@ -27,7 +27,7 @@
 # of the authors and should not be interpreted as representing official policies,
 # either expressed or implied, of the FreeBSD Project.
 
-import optparse
+import argparse
 import sys
 import os
 
@@ -90,61 +90,57 @@ class PcPciHost(GenericPciHost):
 
 # reads the options and returns them
 def getOptions():
-    parser = optparse.OptionParser()
+    parser = argparse.ArgumentParser()
 
-    parser.add_option("--cpu-type", type="choice", default="DerivO3CPU",
-                      choices=ObjectList.cpu_list.get_names(),
-                      help="type of cpu to run with")
+    parser.add_argument("--cpu-type", default="DerivO3CPU",
+                        choices=ObjectList.cpu_list.get_names(),
+                        help="type of cpu to run with")
 
-    parser.add_option("--isa", type="choice", default="x86_64",
-                      choices=['arm', 'riscv', 'x86_64'],
-                      help="The ISA to use")
+    parser.add_argument("--isa", default="x86_64",
+                        choices=['arm', 'riscv', 'x86_64'],
+                        help="The ISA to use")
 
-    parser.add_option("-c", "--cmd", default="", type="string",
-                      help="comma separated list of binaries")
+    parser.add_argument("-c", "--cmd", default="",
+                        help="comma separated list of binaries")
 
-    parser.add_option("--mods", default="", type="string",
-                      help="comma separated list of boot modules")
+    parser.add_argument("--mods", default="",
+                        help="comma separated list of boot modules")
 
-    parser.add_option("--mem-type", type="choice", default="DDR3_1600_8x8",
-                      choices=ObjectList.mem_list.get_names(),
-                      help="type of memory to use")
-    parser.add_option("--mem-channels", type="int", default=1,
-                      help="number of memory channels")
-    parser.add_option("--mem-ranks", type="int", default=None,
-                      help="number of memory ranks per channel")
+    parser.add_argument("--mem-type", default="DDR3_1600_8x8",
+                        choices=ObjectList.mem_list.get_names(),
+                        help="type of memory to use")
+    parser.add_argument("--mem-channels", default=1,
+                        help="number of memory channels")
+    parser.add_argument("--mem-ranks", default=None,
+                        help="number of memory ranks per channel")
 
-    parser.add_option("--pausetile", default=-1, type="int",
-                      help="the tile to pause until GDB connects")
+    parser.add_argument("--pausetile", default=-1,
+                        help="the tile to pause until GDB connects")
 
-    parser.add_option("--sys-voltage", action="store", type="string",
-                      default='1.0V',
-                      help="""Top-level voltage for blocks running at system
-                      power supply""")
-    parser.add_option("--sys-clock", action="store", type="string",
-                      default='1GHz',
-                      help="""Top-level clock for blocks running at system
-                      speed""")
-    parser.add_option("--cpu-clock", action="store", type="string",
-                      default='2GHz',
-                      help="Clock for blocks running at CPU speed")
+    parser.add_argument("--sys-voltage", action="store",
+                        default='1.0V',
+                        help="""Top-level voltage for blocks running at system
+                        power supply""")
+    parser.add_argument("--sys-clock", action="store",
+                        default='1GHz',
+                        help="""Top-level clock for blocks running at system
+                        speed""")
+    parser.add_argument("--cpu-clock", action="store",
+                        default='2GHz',
+                        help="Clock for blocks running at CPU speed")
 
-    parser.add_option("-m", "--maxtick", type="int", default=m5.MaxTick,
-                      metavar="T",
-                      help="Stop after T ticks")
+    parser.add_argument("-m", "--maxtick", default=m5.MaxTick,
+                        metavar="T",
+                        help="Stop after T ticks")
 
     Options.addFSOptions(parser)
 
-    (options, args) = parser.parse_args()
+    args = parser.parse_args()
 
-    options.dot_config = ''
-    options.mem_watches = {}
+    args.dot_config = ''
+    args.mem_watches = {}
 
-    if args:
-        print("Error: script doesn't take any positional arguments")
-        sys.exit(1)
-
-    return options
+    return args
 
 def getCacheStr(cache):
     return '%d KiB (%d-way assoc, %d cycles)' % (
@@ -264,16 +260,14 @@ def createTile(noc, options, no, systemType, l1size, l2size, spmsize,
 
         # the TCU handles LLC misses
         tile.tcu.llc_slave_port = tile.xbar.default
-
-        # don't check whether the kernel is in memory because a tile does not have memory in this
-        # case, but just a cache that is connected to a different tile
-        tile.workload.addr_check = False
     elif not spmsize is None:
         tile.spm = Scratchpad(in_addr_map="true")
         tile.spm.cpu_port = tile.xbar.default
         tile.spm.range = spmsize
 
     if options.isa == 'riscv':
+        if systemType != SpuSystem and systemType != MemSystem:
+            tile.env_start= 0x10000008
         tile.tcu.tile_mem_offset = 0x10000000
         if l1size is None and not spmsize is None:
             tile.spm.offset = tile.tcu.tile_mem_offset
@@ -351,7 +345,7 @@ def createCoreTile(noc, options, no, cmdline, memTile, epCount,
     tile.cmdline = cmdline
 
     print("T%02d: %s" % (no, cmdline))
-    print('     Core =%s %s @ %s' % (type(tile.cpu), options.isa, options.cpu_clock))
+    print('     Core =%s @ %s' % (type(tile.cpu), options.cpu_clock))
     printConfig(tile)
 
     # if specified, let this tile wait for GDB
@@ -389,7 +383,12 @@ def createCoreTile(noc, options, no, cmdline, memTile, epCount,
 
     tile.cpu.itb_walker_cache = PageTableWalkerCache()
     tile.cpu.dtb_walker_cache = PageTableWalkerCache()
-    tile.cpu.mmu.connectWalkerPorts(tile.cpu.itb_walker_cache.cpu_side, tile.cpu.dtb_walker_cache.cpu_side)
+    if options.isa == 'arm':
+        tile.cpu.mmu.itb_walker.port = tile.cpu.itb_walker_cache.cpu_side
+        tile.cpu.mmu.dtb_walker.port = tile.cpu.dtb_walker_cache.cpu_side
+    else:
+        tile.cpu.mmu.connectWalkerPorts(tile.cpu.itb_walker_cache.cpu_side,
+                                        tile.cpu.dtb_walker_cache.cpu_side)
 
     if options.isa == 'riscv':
         tile.cpu.mmu.pma_checker = PMAChecker(uncacheable = [
@@ -680,7 +679,6 @@ def createRoot(options):
     root.platform = IOPlatform()
     root.platform.system = System()
     root.platform.system.system_port = root.noc.cpu_side_ports
-    root.platform.intrctrl = IntrControl()
 
     # UART and terminal
     root.platform.com_1 = Uart8250()

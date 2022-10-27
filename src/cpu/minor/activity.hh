@@ -47,7 +47,11 @@
 
 #include "cpu/activity.hh"
 
-namespace Minor
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(Minor, minor);
+namespace minor
 {
 
 /** ActivityRecorder with a Ticked interface */
@@ -65,6 +69,7 @@ class MinorActivityRecorder : public ActivityRecorder
     { }
 };
 
-}
+} // namespace minor
+} // namespace gem5
 
 #endif /* __CPU_MINOR_ACTIVITY_HH__ */

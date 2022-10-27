@@ -41,9 +41,14 @@
 #include "base/types.hh"
 #include "mem/cache/compressors/base.hh"
 
+namespace gem5
+{
+
 struct MultiCompressorParams;
 
-namespace Compressor {
+GEM5_DEPRECATED_NAMESPACE(Compressor, compression);
+namespace compression
+{
 
 class Multi : public Base
 {
@@ -82,7 +87,7 @@ class Multi : public Base
      */
     const Cycles extraDecompressionLatency;
 
-    struct MultiStats : public Stats::Group
+    struct MultiStats : public statistics::Group
     {
         const Multi& compressor;
 
@@ -93,7 +98,7 @@ class Multi : public Base
         /**
          * Number of times each compressor provided the nth best compression.
          */
-        Stats::Vector2d ranks;
+        statistics::Vector2d ranks;
     } multiStats;
 
   public:
@@ -136,6 +141,7 @@ class Multi::MultiCompData : public CompressionData
     uint8_t getIndex() const;
 };
 
-} // namespace Compressor
+} // namespace compression
+} // namespace gem5
 
 #endif //__MEM_CACHE_COMPRESSORS_MULTI_HH__

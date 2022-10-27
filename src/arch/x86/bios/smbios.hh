@@ -44,10 +44,14 @@
 #include <string>
 #include <vector>
 
+#include "base/compiler.hh"
 #include "base/types.hh"
 #include "enums/Characteristic.hh"
 #include "enums/ExtCharacteristic.hh"
 #include "sim/sim_object.hh"
+
+namespace gem5
+{
 
 class PortProxy;
 struct X86SMBiosBiosInformationParams;
@@ -57,7 +61,8 @@ struct X86SMBiosSMBiosTableParams;
 namespace X86ISA
 {
 
-namespace SMBios
+GEM5_DEPRECATED_NAMESPACE(SMBios, smbios);
+namespace smbios
 {
 
 class SMBiosStructure : public SimObject
@@ -225,7 +230,8 @@ class SMBiosTable : public SimObject
             Addr &headerSize, Addr &structSize);
 };
 
-} //SMBios
-} //X86ISA
+} // namespace smbios
+} // namespace X86ISA
+} // namespace gem5
 
 #endif

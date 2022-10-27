@@ -2,8 +2,6 @@
  * Copyright (c) 2011-2015 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -35,8 +33,8 @@
 
 #include <limits>
 
-#include "arch/x86/isa_traits.hh"
-#include "arch/x86/linux/linux.hh"
+#include "arch/amdgpu/common/gpu_translation_state.hh"
+#include "arch/amdgpu/common/tlb.hh"
 #include "base/chunk_generator.hh"
 #include "debug/GPUAgentDisp.hh"
 #include "debug/GPUDisp.hh"
@@ -52,6 +50,9 @@
 #include "mem/ruby/system/RubySystem.hh"
 #include "sim/sim_exit.hh"
 
+namespace gem5
+{
+
 Shader::Shader(const Params &p) : ClockedObject(p),
     _activeCus(0), _lastInactiveTick(0), cpuThread(nullptr),
     gpuTc(nullptr), cpuPointer(p.cpu_pointer),
@@ -64,7 +65,7 @@ Shader::Shader(const Params &p) : ClockedObject(p),
     trace_vgpr_all(1), n_cu((p.CUs).size()), n_wf(p.n_wf),
     globalMemSize(p.globalmem),
     nextSchedCu(0), sa_n(0), gpuCmdProc(*p.gpu_cmd_proc),
-    _dispatcher(*p.dispatcher),
+    _dispatcher(*p.dispatcher), systemHub(p.system_hub),
     max_valu_insts(p.max_valu_insts), total_valu_insts(0),
     stats(this, p.CUs[0]->wfSize())
 {
@@ -287,12 +288,12 @@ Shader::doFunctionalAccess(const RequestPtr &req, MemCmd cmd, void *data,
     unsigned size = req->getSize();
 
     Addr tmp_addr;
-    BaseTLB::Mode trans_mode;
+    BaseMMU::Mode trans_mode;
 
     if (cmd == MemCmd::ReadReq) {
-        trans_mode = BaseTLB::Read;
+        trans_mode = BaseMMU::Read;
     } else if (cmd == MemCmd::WriteReq) {
-        trans_mode = BaseTLB::Write;
+        trans_mode = BaseMMU::Write;
     } else {
         fatal("unexcepted MemCmd\n");
     }
@@ -423,11 +424,11 @@ Shader::WriteMem(uint64_t address, void *ptr, uint32_t size, int cu_id,
  * Otherwise it's the TLB of the cu_id compute unit.
  */
 void
-Shader::functionalTLBAccess(PacketPtr pkt, int cu_id, BaseTLB::Mode mode)
+Shader::functionalTLBAccess(PacketPtr pkt, int cu_id, BaseMMU::Mode mode)
 {
     // update senderState. Need to know the gpuTc and the TLB mode
     pkt->senderState =
-        new TheISA::GpuTLB::TranslationState(mode, gpuTc, false);
+        new GpuTranslationState(mode, gpuTc, false);
 
     // even when the perLaneTLB flag is turned on
     // it's ok tp send all accesses through lane 0
@@ -436,8 +437,8 @@ Shader::functionalTLBAccess(PacketPtr pkt, int cu_id, BaseTLB::Mode mode)
     cuList[cu_id]->tlbPort[0].sendFunctional(pkt);
 
     /* safe_cast the senderState */
-    TheISA::GpuTLB::TranslationState *sender_state =
-               safe_cast<TheISA::GpuTLB::TranslationState*>(pkt->senderState);
+    GpuTranslationState *sender_state =
+               safe_cast<GpuTranslationState*>(pkt->senderState);
 
     delete sender_state->tlbEntry;
     delete pkt->senderState;
@@ -522,8 +523,17 @@ Shader::notifyCuSleep() {
         stats.shaderActiveTicks += curTick() - _lastInactiveTick;
 }
 
-Shader::ShaderStats::ShaderStats(Stats::Group *parent, int wf_size)
-    : Stats::Group(parent),
+/**
+ * Forward the VRAM requestor ID needed for device memory from CP.
+ */
+RequestorID
+Shader::vramRequestorId()
+{
+    return gpuCmdProc.vramRequestorId();
+}
+
+Shader::ShaderStats::ShaderStats(statistics::Group *parent, int wf_size)
+    : statistics::Group(parent),
       ADD_STAT(allLatencyDist, "delay distribution for all"),
       ADD_STAT(loadLatencyDist, "delay distribution for loads"),
       ADD_STAT(storeLatencyDist, "delay distribution for stores"),
@@ -546,40 +556,40 @@ Shader::ShaderStats::ShaderStats(Stats::Group *parent, int wf_size)
 {
     allLatencyDist
         .init(0, 1600000, 10000)
-        .flags(Stats::pdf | Stats::oneline);
+        .flags(statistics::pdf | statistics::oneline);
 
     loadLatencyDist
         .init(0, 1600000, 10000)
-        .flags(Stats::pdf | Stats::oneline);
+        .flags(statistics::pdf | statistics::oneline);
 
     storeLatencyDist
         .init(0, 1600000, 10000)
-        .flags(Stats::pdf | Stats::oneline);
+        .flags(statistics::pdf | statistics::oneline);
 
     initToCoalesceLatency
         .init(0, 1600000, 10000)
-        .flags(Stats::pdf | Stats::oneline);
+        .flags(statistics::pdf | statistics::oneline);
 
     rubyNetworkLatency
         .init(0, 1600000, 10000)
-        .flags(Stats::pdf | Stats::oneline);
+        .flags(statistics::pdf | statistics::oneline);
 
     gmEnqueueLatency
         .init(0, 1600000, 10000)
-        .flags(Stats::pdf | Stats::oneline);
+        .flags(statistics::pdf | statistics::oneline);
 
     gmToCompleteLatency
         .init(0, 1600000, 10000)
-        .flags(Stats::pdf | Stats::oneline);
+        .flags(statistics::pdf | statistics::oneline);
 
     coalsrLineAddresses
         .init(0, 20, 1)
-        .flags(Stats::pdf | Stats::oneline);
+        .flags(statistics::pdf | statistics::oneline);
 
     vectorInstSrcOperand.init(4);
     vectorInstDstOperand.init(4);
 
-    cacheBlockRoundTrip = new Stats::Distribution[wf_size];
+    cacheBlockRoundTrip = new statistics::Distribution[wf_size];
     for (int idx = 0; idx < wf_size; ++idx) {
         std::stringstream namestr;
         ccprintf(namestr, "%s.cacheBlockRoundTrip%d",
@@ -588,6 +598,8 @@ Shader::ShaderStats::ShaderStats(Stats::Group *parent, int wf_size)
             .init(0, 1600000, 10000)
             .name(namestr.str())
             .desc("Coalsr-to-coalsr time for the Nth cache block in an inst")
-            .flags(Stats::pdf | Stats::oneline);
+            .flags(statistics::pdf | statistics::oneline);
     }
 }
+
+} // namespace gem5

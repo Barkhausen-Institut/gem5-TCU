@@ -25,11 +25,11 @@
 
 Import('*')
 
-if not env['USE_SYSTEMC']:
+if not env['CONF']['USE_SYSTEMC']:
     Return()
 
 env.UseSystemcCheck(warn=True)
 
 env.Append(CPPPATH=Dir('ext'))
 
-SimObject('Tlm.py')
+SimObject('Tlm.py', sim_objects=[])

@@ -2,8 +2,6 @@
  * Copyright (c) 2015-2017 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -36,6 +34,9 @@
 
 #include <bitset>
 #include <cstdint>
+
+namespace gem5
+{
 
 /**
  * these enums represent the indices into the
@@ -186,5 +187,7 @@ struct AMDKernelCode
     uint64_t runtime_loader_kernel_symbol;
     uint64_t control_directives[16];
 };
+
+} // namespace gem5
 
 #endif // __GPU_COMPUTE_KERNEL_CODE_HH__

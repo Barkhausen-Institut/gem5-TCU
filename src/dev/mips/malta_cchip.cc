@@ -37,7 +37,7 @@
 #include <vector>
 
 #include "base/trace.hh"
-#include "cpu/intr_control.hh"
+#include "cpu/base.hh"
 #include "cpu/thread_context.hh"
 #include "debug/Malta.hh"
 #include "dev/mips/malta.hh"
@@ -47,6 +47,9 @@
 #include "mem/port.hh"
 #include "params/MaltaCChip.hh"
 #include "sim/system.hh"
+
+namespace gem5
+{
 
 MaltaCChip::MaltaCChip(const Params &p)
     : BasicPioDevice(p, 0xfffffff), malta(p.malta)
@@ -106,7 +109,8 @@ MaltaCChip::postIntr(uint32_t interrupt)
     for (int i=0; i < size; i++) {
         //Note: Malta does not use index, but this was added to use the
         //pre-existing implementation
-        malta->intrctrl->post(i, interrupt, 0);
+        auto tc = sys->threads[i];
+        tc->getCpuPtr()->postInterrupt(tc->threadId(), interrupt, 0);
         DPRINTF(Malta, "posting  interrupt to cpu %d, interrupt %d\n",
                 i, interrupt);
    }
@@ -121,7 +125,8 @@ MaltaCChip::clearIntr(uint32_t interrupt)
     for (int i=0; i < size; i++) {
         //Note: Malta does not use index, but this was added to use the
         //pre-existing implementation
-        malta->intrctrl->clear(i, interrupt, 0);
+        auto tc = sys->threads[i];
+        tc->getCpuPtr()->clearInterrupt(tc->threadId(), interrupt, 0);
         DPRINTF(Malta, "clearing interrupt to cpu %d, interrupt %d\n",
                 i, interrupt);
    }
@@ -137,3 +142,5 @@ void
 MaltaCChip::unserialize(CheckpointIn &cp)
 {
 }
+
+} // namespace gem5

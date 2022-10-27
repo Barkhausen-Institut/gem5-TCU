@@ -29,8 +29,14 @@
 #ifndef __ARCH_POWER_INSTS_STATICINST_HH__
 #define __ARCH_POWER_INSTS_STATICINST_HH__
 
+#include "arch/power/pcstate.hh"
+#include "arch/power/types.hh"
 #include "base/trace.hh"
 #include "cpu/static_inst.hh"
+#include "cpu/thread_context.hh"
+
+namespace gem5
+{
 
 namespace PowerISA
 {
@@ -38,10 +44,11 @@ namespace PowerISA
 class PowerStaticInst : public StaticInst
 {
   protected:
+    ExtMachInst machInst;
 
     // Constructor
-    PowerStaticInst(const char *mnem, MachInst _machInst, OpClass __opClass)
-        : StaticInst(mnem, _machInst, __opClass)
+    PowerStaticInst(const char *mnem, ExtMachInst _machInst, OpClass __opClass)
+        : StaticInst(mnem, __opClass), machInst(_machInst)
     {
     }
 
@@ -60,12 +67,29 @@ class PowerStaticInst : public StaticInst
     printReg(std::ostream &os, RegId reg) const;
 
     std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+            Addr pc, const loader::SymbolTable *symtab) const override;
 
     void
-    advancePC(PowerISA::PCState &pcState) const override
+    advancePC(PCStateBase &pc_state) const override
     {
-        pcState.advance();
+        pc_state.as<PCState>().advance();
+    }
+
+    void
+    advancePC(ThreadContext *tc) const override
+    {
+        PCState pc = tc->pcState().as<PCState>();
+        pc.advance();
+        tc->pcState(pc);
+    }
+
+    std::unique_ptr<PCStateBase>
+    buildRetPC(const PCStateBase &cur_pc,
+            const PCStateBase &call_pc) const override
+    {
+        PCStateBase *ret_pc = call_pc.clone();
+        ret_pc->as<PCState>().advance();
+        return std::unique_ptr<PCStateBase>{ret_pc};
     }
 
     size_t
@@ -76,5 +100,6 @@ class PowerStaticInst : public StaticInst
 };
 
 } // namespace PowerISA
+} // namespace gem5
 
 #endif //__ARCH_POWER_INSTS_STATICINST_HH__

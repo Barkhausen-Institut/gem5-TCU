@@ -44,6 +44,7 @@
 #include <functional>
 #include <string>
 
+#include "base/compiler.hh"
 #include "base/trace.hh"
 #include "debug/DebugPrintf.hh"
 #include "kern/linux/printk.hh"
@@ -51,9 +52,13 @@
 #include "mem/se_translating_port_proxy.hh"
 #include "sim/guest_abi.hh"
 
+namespace gem5
+{
+
 class ThreadContext;
 
-namespace Linux
+GEM5_DEPRECATED_NAMESPACE(Linux, linux);
+namespace linux
 {
 
 template <typename ABI, typename Base>
@@ -64,7 +69,7 @@ class DebugPrintk : public Base
     void
     process(ThreadContext *tc) override
     {
-        if (DTRACE(DebugPrintf)) {
+        if (debug::DebugPrintf) {
             std::string str;
             std::function<int(ThreadContext *, Addr, PrintkVarArgs)> func =
                 [&str](ThreadContext *tc, Addr format_ptr,
@@ -82,7 +87,7 @@ class DebugPrintk : public Base
  * Dump the guest kernel's dmesg buffer to a file in gem5's output
  * directory and print a warning.
  *
- * @warn This event uses Linux::dumpDmesg() and comes with the same
+ * @warn This event uses linux::dumpDmesg() and comes with the same
  * limitations. Most importantly, the kernel's address mappings must
  * be available to the translating proxy.
  */
@@ -103,7 +108,7 @@ class DmesgDump : public PCEvent
  * Dump the guest kernel's dmesg buffer to a file in gem5's output
  * directory and panic.
  *
- * @warn This event uses Linux::dumpDmesg() and comes with the same
+ * @warn This event uses linux::dumpDmesg() and comes with the same
  * limitations. Most importantly, the kernel's address mappings must
  * be available to the translating proxy.
  */
@@ -167,6 +172,7 @@ class SkipUDelay : public Base
     }
 };
 
-} // namespace Linux
+} // namespace linux
+} // namespace gem5
 
 #endif // __KERN_LINUX_EVENTS_HH__

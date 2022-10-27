@@ -46,9 +46,11 @@
 #include "base/logging.hh"
 #include "base/types.hh"
 #include "sim/async.hh"
-#include "sim/core.hh"
 #include "sim/eventq.hh"
 #include "sim/serialize.hh"
+
+namespace gem5
+{
 
 PollQueue pollQueue;
 
@@ -248,3 +250,5 @@ PollQueue::setupAsyncIO(int fd, bool set)
         getEventQueue(0)->wakeup();
     }
 }
+
+} // namespace gem5

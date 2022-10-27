@@ -35,6 +35,11 @@
 #include "cpu/tcu-accel/syscallsm.hh"
 #include "sim/system.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 class YieldSM
 {
   public:
@@ -52,5 +57,8 @@ class YieldSM
 
     TcuAccel *accel;
 };
+
+}
+}
 
 #endif /* __CPU_TCU_ACCEL_YIELDSM_HH__ */

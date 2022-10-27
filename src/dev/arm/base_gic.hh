@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2013, 2017-2018 ARM Limited
+ * Copyright (c) 2012-2013, 2017-2018, 2021 Arm Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -42,12 +42,18 @@
 #ifndef __DEV_ARM_BASE_GIC_H__
 #define __DEV_ARM_BASE_GIC_H__
 
+#include <memory>
 #include <unordered_map>
+#include <vector>
 
 #include "arch/arm/system.hh"
+#include "dev/intpin.hh"
 #include "dev/io_device.hh"
 
 #include "enums/ArmInterruptType.hh"
+
+namespace gem5
+{
 
 class Platform;
 class RealView;
@@ -55,10 +61,12 @@ class ThreadContext;
 class ArmInterruptPin;
 class ArmSPI;
 class ArmPPI;
+class ArmSigInterruptPin;
 
 struct ArmInterruptPinParams;
 struct ArmPPIParams;
 struct ArmSPIParams;
+struct ArmSigInterruptPinParams;
 struct BaseGicParams;
 
 class BaseGic :  public PioDevice
@@ -111,20 +119,19 @@ class BaseGic :  public PioDevice
     /** Check if version supported */
     virtual bool supportsVersion(GicVersion version) = 0;
 
+  protected: // GIC state transfer
+    /**
+     * When trasferring the state between two GICs (essentially
+     * writing architectural registers) an interrupt might be posted
+     * by the model. We don't want this to happen as the GIC might
+     * be in an inconsistent state. We therefore disable side effects
+     * by relying on the blockIntUpdate method.
+     */
+    virtual bool blockIntUpdate() const { return false; }
+
   protected:
     /** Platform this GIC belongs to. */
     Platform *platform;
-};
-
-class BaseGicRegisters
-{
-  public:
-    virtual uint32_t readDistributor(ContextID ctx, Addr daddr) = 0;
-    virtual uint32_t readCpu(ContextID ctx, Addr daddr) = 0;
-
-    virtual void writeDistributor(ContextID ctx, Addr daddr,
-                                  uint32_t data) = 0;
-    virtual void writeCpu(ContextID ctx, Addr daddr, uint32_t data) = 0;
 };
 
 /**
@@ -171,6 +178,19 @@ class ArmPPIGen : public ArmInterruptPinGen
     ArmInterruptPin* get(ThreadContext* tc = nullptr) override;
   protected:
     std::unordered_map<ContextID, ArmPPI*> pins;
+};
+
+class ArmSigInterruptPinGen : public ArmInterruptPinGen
+{
+  public:
+    ArmSigInterruptPinGen(const ArmSigInterruptPinParams &p);
+
+    ArmInterruptPin* get(ThreadContext* tc = nullptr) override;
+    Port &getPort(const std::string &if_name,
+                  PortID idx = InvalidPortID) override;
+
+  protected:
+    ArmSigInterruptPin* pin;
 };
 
 /**
@@ -257,4 +277,19 @@ class ArmPPI : public ArmInterruptPin
     void clear() override;
 };
 
-#endif
+class ArmSigInterruptPin : public ArmInterruptPin
+{
+    friend class ArmSigInterruptPinGen;
+  private:
+    ArmSigInterruptPin(const ArmSigInterruptPinParams &p);
+
+    std::vector<std::unique_ptr<IntSourcePin<ArmSigInterruptPinGen>>> sigPin;
+
+  public:
+    void raise() override;
+    void clear() override;
+};
+
+} // namespace gem5
+
+#endif // __DEV_ARM_BASE_GIC_H__

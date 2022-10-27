@@ -27,8 +27,12 @@
  */
 
 #include "arch/sparc/linux/se_workload.hh"
+#include "mem/se_translating_port_proxy.hh"
 #include "sim/syscall_desc.hh"
 #include "sim/syscall_emul.hh"
+
+namespace gem5
+{
 
 class Process;
 class ThreadContext;
@@ -56,25 +60,26 @@ static SyscallReturn
 getresuidFunc(SyscallDesc *desc, ThreadContext *tc,
               VPtr<> ruid, VPtr<> euid, VPtr<> suid)
 {
+    SETranslatingPortProxy proxy(tc);
     const uint64_t id = htobe(100);
     // Handle the EFAULT case
     // Set the ruid
     if (ruid) {
         BufferArg ruidBuff(ruid, sizeof(uint64_t));
         memcpy(ruidBuff.bufferPtr(), &id, sizeof(uint64_t));
-        ruidBuff.copyOut(tc->getVirtProxy());
+        ruidBuff.copyOut(proxy);
     }
     // Set the euid
     if (euid) {
         BufferArg euidBuff(euid, sizeof(uint64_t));
         memcpy(euidBuff.bufferPtr(), &id, sizeof(uint64_t));
-        euidBuff.copyOut(tc->getVirtProxy());
+        euidBuff.copyOut(proxy);
     }
     // Set the suid
     if (suid) {
         BufferArg suidBuff(suid, sizeof(uint64_t));
         memcpy(suidBuff.bufferPtr(), &id, sizeof(uint64_t));
-        suidBuff.copyOut(tc->getVirtProxy());
+        suidBuff.copyOut(proxy);
     }
     return 0;
 }
@@ -138,7 +143,7 @@ SyscallDescTable<SEWorkload::SyscallABI32> EmuLinux::syscall32Descs = {
     {  55, "reboot" }, // 32 bit
     {  56, "mmap2" }, // 32 bit
     {  57, "symlink" },
-    {  58, "readlink", readlinkFunc }, // 32 bit
+    {  58, "readlink", readlinkFunc<Sparc32Linux> }, // 32 bit
     {  59, "execve" }, // 32 bit
     {  60, "umask" }, // 32 bit
     {  61, "chroot" },
@@ -153,7 +158,7 @@ SyscallDescTable<SEWorkload::SyscallABI32> EmuLinux::syscall32Descs = {
     {  70, "getegid32" },
     {  71, "mmap", mmapFunc<Sparc32Linux> },
     {  72, "setreuid32" },
-    {  73, "munmap", munmapFunc },
+    {  73, "munmap", munmapFunc<Sparc32Linux> },
     {  74, "mprotect", ignoreFunc },
     {  75, "madvise" },
     {  76, "vhangup" },
@@ -441,7 +446,7 @@ SyscallDescTable<SEWorkload::SyscallABI64> EmuLinux::syscallDescs = {
     { 55, "reboot" },
     { 56, "mmap2" },
     { 57, "symlink" },
-    { 58, "readlink", readlinkFunc },
+    { 58, "readlink", readlinkFunc<SparcLinux> },
     { 59, "execve" },
     { 60, "umask" },
     { 61, "chroot" },
@@ -456,7 +461,7 @@ SyscallDescTable<SEWorkload::SyscallABI64> EmuLinux::syscallDescs = {
     { 70, "getegid32" },
     { 71, "mmap", mmapFunc<SparcLinux> },
     { 72, "setreuid32" },
-    { 73, "munmap", munmapFunc },
+    { 73, "munmap", munmapFunc<SparcLinux> },
     { 74, "mprotect", ignoreFunc },
     { 75, "madvise" },
     { 76, "vhangup" },
@@ -670,3 +675,4 @@ SyscallDescTable<SEWorkload::SyscallABI64> EmuLinux::syscallDescs = {
 };
 
 } // namespace SparcISA
+} // namespace gem5

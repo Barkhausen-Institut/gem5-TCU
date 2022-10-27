@@ -30,9 +30,13 @@
 #define __ARCH_MIPS_LINUX_SE_WORKLOAD_HH__
 
 #include "arch/mips/linux/linux.hh"
+#include "arch/mips/page_size.hh"
 #include "arch/mips/se_workload.hh"
 #include "params/MipsEmuLinux.hh"
 #include "sim/syscall_desc.hh"
+
+namespace gem5
+{
 
 namespace MipsISA
 {
@@ -46,11 +50,13 @@ class EmuLinux : public SEWorkload
   public:
     using Params = MipsEmuLinuxParams;
 
-    EmuLinux(const Params &p) : SEWorkload(p) {}
+    EmuLinux(const Params &p) : SEWorkload(p, PageShift) {}
+    ByteOrder byteOrder() const override { return ByteOrder::little; }
 
     void syscall(ThreadContext *tc) override;
 };
 
 } // namespace MipsISA
+} // namespace gem5
 
 #endif // __ARCH_MIPS_LINUX_SE_WORKLOAD_HH__

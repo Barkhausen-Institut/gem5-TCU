@@ -46,7 +46,7 @@ let {{
         bCode = '''
         NPC = (uint32_t)(PC + imm);
         '''
-        br_tgt_code = '''pcs.instNPC((uint32_t)(branchPC.instPC() + imm));'''
+        br_tgt_code = '''pcs.instNPC((uint32_t)(pcs.instPC() + imm));'''
         instFlags = ["IsDirectControl"]
         if (link):
             bCode += '''
@@ -86,8 +86,8 @@ let {{
             # of the current ISA. Thumb is whether the target is ARM.
             newPC = '(uint32_t)(Thumb ? (roundDown(PC, 4) + imm) : (PC + imm))'
             br_tgt_code = '''
-            pcs.instNPC((uint32_t)(branchPC.thumb() ? (roundDown(branchPC.instPC(),4) + imm) :
-                                (branchPC.instPC() + imm)));
+            pcs.instNPC((uint32_t)(pcs.thumb() ? (roundDown(pcs.instPC(), 4) +
+                            imm) : (pcs.instPC() + imm)));
             '''
             base = "BranchImmCond"
             declare = BranchImmCondDeclare
@@ -122,15 +122,14 @@ let {{
             instFlags += ["IsCall"]
         else:
             linkStr = ""
-            isRasPop = "op1 == INTREG_LR"
+            isRasPop = "op1 == int_reg::Lr"
 
         if imm and link: #blx with imm
             branchStr = '''
                 NextThumb = !Thumb;
                 NPC = %(newPC)s;
             '''
-            br_tgt_code = '''pcs.nextThumb(!branchPC.thumb());\n''' + \
-                          br_tgt_code
+            br_tgt_code = '''pcs.nextThumb(!pcs.thumb());\n''' + br_tgt_code
         else:
             branchStr = "IWNPC = %(newPC)s;"
         branchStr = branchStr % { "newPC" : newPC }
@@ -152,7 +151,7 @@ let {{
     HSTR hstr = Hstr;
     CPSR cpsr = Cpsr;
 
-    if (ArmSystem::haveVirtualization(xc->tcBase()) && hstr.tjdbx &&
+    if (ArmSystem::haveEL(xc->tcBase(), EL2) && hstr.tjdbx &&
         !isSecure(xc->tcBase()) && (cpsr.mode != MODE_HYP)) {
        fault = std::make_shared<HypervisorTrap>(machInst, op1, EC_TRAPPED_BXJ);
     }
@@ -162,7 +161,7 @@ let {{
     bxjIop = ArmInstObjParams("bxj", "BxjReg", "BranchRegCond",
                               { "code": bxjcode,
                                 "predicate_test": predicateTest,
-                                "is_ras_pop": "op1 == INTREG_LR" },
+                                "is_ras_pop": "op1 == int_reg::Lr" },
                               ["IsIndirectControl"])
     header_output += BranchRegCondDeclare.subst(bxjIop)
     decoder_output += BranchRegCondConstructor.subst(bxjIop)
@@ -171,7 +170,7 @@ let {{
     #CBNZ, CBZ. These are always unconditional as far as predicates
     for (mnem, test) in (("cbz", "=="), ("cbnz", "!=")):
         code = 'NPC = (uint32_t)(PC + imm);\n'
-        br_tgt_code = '''pcs.instNPC((uint32_t)(branchPC.instPC() + imm));'''
+        br_tgt_code = '''pcs.instNPC((uint32_t)(pcs.instPC() + imm));'''
         predTest = "Op1 %(test)s 0" % {"test": test}
         iop = ArmInstObjParams(mnem, mnem.capitalize(), "BranchImmReg",
                                { "code" : code, "predicate_test" : predTest,
@@ -186,16 +185,16 @@ let {{
     for isTbh in (0, 1):
         if isTbh:
             eaCode = '''
-            unsigned memAccessFlags = ArmISA::TLB::AllowUnaligned |
-                                      ArmISA::TLB::AlignHalfWord;
+            unsigned memAccessFlags = ArmISA::MMU::AllowUnaligned |
+                                      ArmISA::MMU::AlignHalfWord;
             EA = Op1 + Op2 * 2
             '''
             accCode = 'NPC = PC + 2 * (Mem_uh);\n'
             mnem = "tbh"
         else:
             eaCode = '''
-            unsigned memAccessFlags = ArmISA::TLB::AllowUnaligned |
-                                      ArmISA::TLB::AlignByte;
+            unsigned memAccessFlags = ArmISA::MMU::AllowUnaligned |
+                                      ArmISA::MMU::AlignByte;
             EA = Op1 + Op2
             '''
             accCode = 'NPC = PC + 2 * (Mem_ub)'

@@ -34,6 +34,11 @@
 #include "cpu/tcu-accel/accelerator.hh"
 #include "sim/system.hh"
 
+namespace gem5
+{
+namespace tcu
+{
+
 class AccelCtxSwSM
 {
     static const uint64_t OUR_VPE   = 0xFFFF;
@@ -106,5 +111,8 @@ class AccelCtxSwSM
     Addr msgAddr;
     uint64_t vpe_id;
 };
+
+}
+}
 
 #endif /* __CPU_TCU_ACCEL_CTXSWSM_HH__ */

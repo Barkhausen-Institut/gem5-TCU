@@ -33,3 +33,4 @@ from m5.proxy import *
 class ArmConnector(CoreConnector):
     type = 'ArmConnector'
     cxx_header = "mem/tcu/connector/arm.hh"
+    cxx_class = 'gem5::tcu::ArmConnector'

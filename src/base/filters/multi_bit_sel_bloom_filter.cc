@@ -35,7 +35,12 @@
 #include "base/logging.hh"
 #include "params/BloomFilterMultiBitSel.hh"
 
-namespace BloomFilter {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(BloomFilter, bloom_filter);
+namespace bloom_filter
+{
 
 MultiBitSel::MultiBitSel(const BloomFilterMultiBitSelParams &p)
     : Base(p), numHashes(p.num_hashes),
@@ -93,5 +98,6 @@ MultiBitSel::hash(Addr addr, int hash_number) const
     }
 }
 
-} // namespace BloomFilter
+} // namespace bloom_filter
+} // namespace gem5
 

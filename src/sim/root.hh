@@ -56,7 +56,11 @@
 #include "base/types.hh"
 #include "params/Root.hh"
 #include "sim/eventq.hh"
+#include "sim/globals.hh"
 #include "sim/sim_object.hh"
+
+namespace gem5
+{
 
 class Root : public SimObject
 {
@@ -70,6 +74,8 @@ class Root : public SimObject
     Time _spinThreshold;
 
     Time lastTime;
+
+    Globals globals;
 
     void timeSync();
     EventFunctionWrapper syncEvent;
@@ -91,18 +97,18 @@ class Root : public SimObject
     }
 
   public: // Global statistics
-    struct RootStats : public Stats::Group
+    struct RootStats : public statistics::Group
     {
         void resetStats() override;
 
-        Stats::Formula simSeconds;
-        Stats::Value simTicks;
-        Stats::Value finalTick;
-        Stats::Value simFreq;
-        Stats::Value hostSeconds;
+        statistics::Formula simSeconds;
+        statistics::Value simTicks;
+        statistics::Value finalTick;
+        statistics::Value simFreq;
+        statistics::Value hostSeconds;
 
-        Stats::Formula hostTickRate;
-        Stats::Value hostMemory;
+        statistics::Formula hostTickRate;
+        statistics::Value hostMemory;
 
         static RootStats instance;
 
@@ -143,6 +149,7 @@ class Root : public SimObject
     void startup() override;
 
     void serialize(CheckpointOut &cp) const override;
+    void unserialize(CheckpointIn &cp) override;
 };
 
 /**
@@ -150,5 +157,7 @@ class Root : public SimObject
  * specific SimObject.
  */
 extern Root::RootStats &rootStats;
+
+} // namespace gem5
 
 #endif // __SIM_ROOT_HH__

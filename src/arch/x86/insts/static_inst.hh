@@ -38,41 +38,59 @@
 #ifndef __ARCH_X86_INSTS_STATICINST_HH__
 #define __ARCH_X86_INSTS_STATICINST_HH__
 
+#include "arch/x86/pcstate.hh"
+#include "arch/x86/regs/int.hh"
+#include "arch/x86/types.hh"
 #include "base/trace.hh"
 #include "cpu/static_inst.hh"
+#include "cpu/thread_context.hh"
 #include "debug/X86.hh"
+
+namespace gem5
+{
 
 namespace X86ISA
 {
 
 /**
- * Class for register indices passed to instruction constructors. Using a
+ * Classes for register indices passed to instruction constructors. Using a
  * wrapper struct for these lets take advantage of the compiler's type
  * checking.
  */
-struct InstRegIndex : public RegId
+struct GpRegIndex
 {
-    explicit InstRegIndex(RegIndex _idx) :
-       RegId(computeRegClass(_idx), _idx) {}
+    RegIndex index;
+    explicit GpRegIndex(RegIndex idx) : index(idx) {}
+};
 
-  private:
-    // TODO: As X86 register index definition is highly built on the
-    //       unified space concept, it is easier for the moment to rely on
-    //       an helper function to compute the RegClass. It would be nice
-    //       to fix those definition and get rid of this.
-    RegClass
-    computeRegClass(RegIndex _idx)
-    {
-        if (_idx < FP_Reg_Base) {
-            return IntRegClass;
-        } else if (_idx < CC_Reg_Base) {
-            return FloatRegClass;
-        } else if (_idx < Misc_Reg_Base) {
-            return CCRegClass;
-        } else {
-            return MiscRegClass;
-        }
-    }
+struct FpRegIndex
+{
+    RegIndex index;
+    explicit FpRegIndex(RegIndex idx) : index(idx) {}
+};
+
+struct CtrlRegIndex
+{
+    RegIndex index;
+    explicit CtrlRegIndex(RegIndex idx) : index(idx) {}
+};
+
+struct CrRegIndex
+{
+    RegIndex index;
+    explicit CrRegIndex(RegIndex idx) : index(idx) {}
+};
+
+struct DbgRegIndex
+{
+    RegIndex index;
+    explicit DbgRegIndex(RegIndex idx) : index(idx) {}
+};
+
+struct SegRegIndex
+{
+    RegIndex index;
+    explicit SegRegIndex(RegIndex idx) : index(idx) {}
 };
 
 /**
@@ -81,37 +99,41 @@ struct InstRegIndex : public RegId
 
 class X86StaticInst : public StaticInst
 {
+  public:
+    static void printMnemonic(std::ostream &os, const char *mnemonic);
+    static void printMnemonic(std::ostream &os, const char *instMnemonic,
+            const char *mnemonic);
+    static void printMem(std::ostream &os, uint8_t segment,
+            uint8_t scale, RegIndex index, RegIndex base,
+            uint64_t disp, uint8_t addressSize, bool rip);
+
+    static void printSegment(std::ostream &os, int segment);
+
+    static void printReg(std::ostream &os, RegId reg, int size);
+
   protected:
     using ExtMachInst = X86ISA::ExtMachInst;
 
+  public:
+    ExtMachInst machInst;
+
+  protected:
     // Constructor.
-    X86StaticInst(const char *mnem,
-         ExtMachInst _machInst, OpClass __opClass)
-            : StaticInst(mnem, _machInst, __opClass)
-        {
-        }
+    X86StaticInst(const char *mnem, ExtMachInst _machInst, OpClass __opClass) :
+        StaticInst(mnem, __opClass), machInst(_machInst)
+    {}
 
     std::string generateDisassembly(
-            Addr pc, const Loader::SymbolTable *symtab) const override;
+            Addr pc, const loader::SymbolTable *symtab) const override;
 
-    void printMnemonic(std::ostream &os, const char * mnemonic) const;
-    void printMnemonic(std::ostream &os, const char * instMnemonic,
-            const char * mnemonic) const;
+    static void divideStep(uint64_t divident, uint64_t divisor,
+            uint64_t &quotient, uint64_t &remainder);
 
-    void printSegment(std::ostream &os, int segment) const;
-
-    void printReg(std::ostream &os, RegId reg, int size) const;
-    void printSrcReg(std::ostream &os, int reg, int size) const;
-    void printDestReg(std::ostream &os, int reg, int size) const;
-    void printMem(std::ostream &os, uint8_t segment,
-            uint8_t scale, RegIndex index, RegIndex base,
-            uint64_t disp, uint8_t addressSize, bool rip) const;
-
-    inline uint64_t
-    merge(uint64_t into, uint64_t val, int size) const
+    static inline uint64_t
+    merge(uint64_t into, RegIndex index, uint64_t val, int size)
     {
         X86IntReg reg = into;
-        if (destRegIdx(0).index() & IntFoldBit) {
+        if (index & IntFoldBit) {
             reg.H = val;
             return reg;
         }
@@ -136,12 +158,12 @@ class X86StaticInst : public StaticInst
         return reg;
     }
 
-    inline uint64_t
-    pick(uint64_t from, int idx, int size) const
+    static inline uint64_t
+    pick(uint64_t from, RegIndex index, int size)
     {
         X86IntReg reg = from;
         DPRINTF(X86, "Picking with size %d\n", size);
-        if (srcRegIdx(idx).index() & IntFoldBit)
+        if (index & IntFoldBit)
             return reg.H;
         switch(size) {
           case 1:
@@ -157,12 +179,12 @@ class X86StaticInst : public StaticInst
         }
     }
 
-    inline int64_t
-    signedPick(uint64_t from, int idx, int size) const
+    static inline int64_t
+    signedPick(uint64_t from, RegIndex index, int size)
     {
         X86IntReg reg = from;
         DPRINTF(X86, "Picking with size %d\n", size);
-        if (srcRegIdx(idx).index() & IntFoldBit)
+        if (index & IntFoldBit)
             return reg.SH;
         switch(size) {
           case 1:
@@ -179,11 +201,30 @@ class X86StaticInst : public StaticInst
     }
 
     void
-    advancePC(PCState &pcState) const override
+    advancePC(PCStateBase &pcState) const override
     {
-        pcState.advance();
+        pcState.as<PCState>().advance();
+    }
+
+    void
+    advancePC(ThreadContext *tc) const override
+    {
+        PCState pc = tc->pcState().as<PCState>();
+        pc.advance();
+        tc->pcState(pc);
+    }
+
+    std::unique_ptr<PCStateBase>
+    buildRetPC(const PCStateBase &cur_pc,
+            const PCStateBase &call_pc) const override
+    {
+        PCStateBase *ret_pc_ptr = call_pc.clone();
+        ret_pc_ptr->as<PCState>().uEnd();
+        return std::unique_ptr<PCStateBase>{ret_pc_ptr};
     }
 };
-}
+
+} // namespace X86ISA
+} // namespace gem5
 
 #endif //__ARCH_X86_INSTS_STATICINST_HH__

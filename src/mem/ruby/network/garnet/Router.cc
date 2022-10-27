@@ -39,6 +39,15 @@
 #include "mem/ruby/network/garnet/NetworkLink.hh"
 #include "mem/ruby/network/garnet/OutputUnit.hh"
 
+namespace gem5
+{
+
+namespace ruby
+{
+
+namespace garnet
+{
+
 Router::Router(const Params &p)
   : BasicRouter(p), Consumer(this), m_latency(p.latency),
     m_virtual_networks(p.virt_nets), m_vc_per_vnet(p.vcs_per_vnet),
@@ -185,27 +194,27 @@ Router::regStats()
 
     m_buffer_reads
         .name(name() + ".buffer_reads")
-        .flags(Stats::nozero)
+        .flags(statistics::nozero)
     ;
 
     m_buffer_writes
         .name(name() + ".buffer_writes")
-        .flags(Stats::nozero)
+        .flags(statistics::nozero)
     ;
 
     m_crossbar_activity
         .name(name() + ".crossbar_activity")
-        .flags(Stats::nozero)
+        .flags(statistics::nozero)
     ;
 
     m_sw_input_arbiter_activity
         .name(name() + ".sw_input_arbiter_activity")
-        .flags(Stats::nozero)
+        .flags(statistics::nozero)
     ;
 
     m_sw_output_arbiter_activity
         .name(name() + ".sw_output_arbiter_activity")
-        .flags(Stats::nozero)
+        .flags(statistics::nozero)
     ;
 }
 
@@ -281,3 +290,7 @@ Router::functionalWrite(Packet *pkt)
 
     return num_functional_writes;
 }
+
+} // namespace garnet
+} // namespace ruby
+} // namespace gem5

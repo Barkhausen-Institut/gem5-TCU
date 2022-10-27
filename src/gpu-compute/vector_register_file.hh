@@ -2,8 +2,6 @@
  * Copyright (c) 2015-2017 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
- * For use for simulation and test purposes only
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
@@ -39,6 +37,9 @@
 #include "debug/GPUVRF.hh"
 #include "gpu-compute/register_file.hh"
 #include "gpu-compute/wavefront.hh"
+
+namespace gem5
+{
 
 struct VectorRegisterFileParams;
 
@@ -105,5 +106,7 @@ class VectorRegisterFile : public RegisterFile
   private:
     std::vector<VecRegContainer> regFile;
 };
+
+} // namespace gem5
 
 #endif // __VECTOR_REGISTER_FILE_HH__

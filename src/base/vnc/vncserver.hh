@@ -44,16 +44,20 @@
 
 #include <iostream>
 
-#include "base/vnc/vncinput.hh"
 #include "base/circlebuf.hh"
+#include "base/compiler.hh"
 #include "base/pollevent.hh"
 #include "base/socket.hh"
+#include "base/vnc/vncinput.hh"
 #include "params/VncServer.hh"
 #include "sim/sim_object.hh"
 
 /** @file
  * Declaration of a VNC server
  */
+
+namespace gem5
+{
 
 class VncServer : public VncInput
 {
@@ -71,7 +75,8 @@ class VncServer : public VncInput
     const static uint32_t VncOK   = 0;
 
     /** Server -> Client message IDs */
-    enum ServerMessages {
+    enum ServerMessages
+    {
         ServerFrameBufferUpdate     = 0,
         ServerSetColorMapEntries    = 1,
         ServerBell                  = 2,
@@ -79,7 +84,8 @@ class VncServer : public VncInput
     };
 
     /** Encoding types */
-    enum EncodingTypes {
+    enum EncodingTypes
+    {
         EncodingRaw         = 0,
         EncodingCopyRect    = 1,
         EncodingHextile     = 5,
@@ -87,7 +93,8 @@ class VncServer : public VncInput
     };
 
     /** keyboard/mouse support */
-    enum MouseEvents {
+    enum MouseEvents
+    {
         MouseLeftButton     = 0x1,
         MouseRightButton    = 0x2,
         MouseMiddleButton   = 0x4
@@ -98,7 +105,8 @@ class VncServer : public VncInput
         return "RFB 003.008\n";
     }
 
-    enum ConnectionState {
+    enum ConnectionState
+    {
         WaitForProtocolVersion,
         WaitForSecurityResponse,
         WaitForClientInit,
@@ -106,7 +114,8 @@ class VncServer : public VncInput
         NormalPhase
     };
 
-    struct M5_ATTR_PACKED ServerInitMsg {
+    struct GEM5_PACKED ServerInitMsg
+    {
         uint16_t fbWidth;
         uint16_t fbHeight;
         PixelFormat px;
@@ -114,13 +123,15 @@ class VncServer : public VncInput
         char name[2]; // just to put M5 in here
     };
 
-    struct M5_ATTR_PACKED FrameBufferUpdate {
+    struct GEM5_PACKED FrameBufferUpdate
+    {
         uint8_t type;
         uint8_t padding;
         uint16_t num_rects;
     };
 
-    struct M5_ATTR_PACKED FrameBufferRect {
+    struct GEM5_PACKED FrameBufferRect
+    {
         uint16_t x;
         uint16_t y;
         uint16_t width;
@@ -128,7 +139,8 @@ class VncServer : public VncInput
         int32_t encoding;
     };
 
-    struct M5_ATTR_PACKED ServerCutText {
+    struct GEM5_PACKED ServerCutText
+    {
         uint8_t type;
         uint8_t padding[3];
         uint32_t length;
@@ -306,5 +318,7 @@ class VncServer : public VncInput
     void setDirty() override;
     void frameBufferResized() override;
 };
+
+} // namespace gem5
 
 #endif

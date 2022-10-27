@@ -40,7 +40,12 @@
 #include "base/logging.hh"
 #include "params/TreePLRURP.hh"
 
-namespace ReplacementPolicy {
+namespace gem5
+{
+
+GEM5_DEPRECATED_NAMESPACE(ReplacementPolicy, replacement_policy);
+namespace replacement_policy
+{
 
 /**
  * Get the index of the parent of the given indexed subtree.
@@ -105,8 +110,7 @@ TreePLRU::TreePLRU(const Params &p)
 }
 
 void
-TreePLRU::invalidate(
-    const std::shared_ptr<ReplacementData>& replacement_data) const
+TreePLRU::invalidate(const std::shared_ptr<ReplacementData>& replacement_data)
 {
     // Cast replacement data
     std::shared_ptr<TreePLRUReplData> treePLRU_replacement_data =
@@ -211,4 +215,5 @@ TreePLRU::instantiateEntry()
     return std::shared_ptr<ReplacementData>(treePLRUReplData);
 }
 
-} // namespace ReplacementPolicy
+} // namespace replacement_policy
+} // namespace gem5

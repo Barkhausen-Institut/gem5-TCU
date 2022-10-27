@@ -56,6 +56,12 @@ class MultiChannelMemorySystem;
 
 }
 
+namespace gem5
+{
+
+namespace memory
+{
+
 /**
  * Wrapper class to avoid having DRAMSim2 names like ClockDomain etc
  * clashing with the normal gem5 world. Many of the DRAMSim2 headers
@@ -157,5 +163,8 @@ class DRAMSim2Wrapper
      */
     void tick();
 };
+
+} // namespace memory
+} // namespace gem5
 
 #endif //__MEM_DRAMSIM2_WRAPPER_HH__

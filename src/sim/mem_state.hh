@@ -34,12 +34,14 @@
 #include <string>
 #include <vector>
 
-#include "config/the_isa.hh"
 #include "debug/Vma.hh"
 #include "mem/page_table.hh"
 #include "mem/se_translating_port_proxy.hh"
 #include "sim/serialize.hh"
 #include "sim/vma.hh"
+
+namespace gem5
+{
 
 class Process;
 struct ProcessParams;
@@ -235,6 +237,17 @@ class MemState : public Serializable
 
   private:
     /**
+     * @param
+     */
+    void replicatePage(const MemState &in, Addr vaddr, Addr new_paddr,
+                       bool alloc_page);
+
+    /**
+     * @param
+     */
+    System * system() const;
+
+    /**
      * Owner process of MemState. Used to manipulate page tables.
      */
     Process * _ownerProcess;
@@ -267,5 +280,7 @@ class MemState : public Serializable
      */
     std::list<VMA> _vmaList;
 };
+
+} // namespace gem5
 
 #endif

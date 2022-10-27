@@ -31,7 +31,10 @@
 #include <list>
 #include <map>
 #include <memory>
+#include <unordered_map>
 
+#include "arch/arm/fastmodel/iris/memory_spaces.hh"
+#include "arch/arm/regs/vec.hh"
 #include "cpu/base.hh"
 #include "cpu/thread_context.hh"
 #include "iris/IrisInstance.h"
@@ -39,12 +42,15 @@
 #include "iris/detail/IrisObjects.h"
 #include "sim/system.hh"
 
+namespace gem5
+{
+
 namespace Iris
 {
 
 // This class is the base for ThreadContexts which read and write state using
 // the Iris API.
-class ThreadContext : public ::ThreadContext
+class ThreadContext : public gem5::ThreadContext
 {
   public:
     typedef std::map<std::string, iris::ResourceInfo> ResourceMap;
@@ -52,13 +58,16 @@ class ThreadContext : public ::ThreadContext
     typedef std::vector<iris::ResourceId> ResourceIds;
     typedef std::map<int, std::string> IdxNameMap;
 
+    typedef std::unordered_map<Iris::CanonicalMsn, iris::MemorySpaceId>
+        MemorySpaceMap;
+
   protected:
-    ::BaseCPU *_cpu;
+    gem5::BaseCPU *_cpu;
     int _threadId;
     ContextID _contextId;
     System *_system;
-    ::BaseMMU *_mmu;
-    ::BaseISA *_isa;
+    gem5::BaseMMU *_mmu;
+    gem5::BaseISA *_isa;
 
     std::string _irisPath;
     iris::InstanceId _instId = iris::IRIS_UINT64_MAX;
@@ -77,6 +86,7 @@ class ThreadContext : public ::ThreadContext
             const ResourceMap &resources, const std::string &name);
     void extractResourceMap(ResourceIds &ids,
             const ResourceMap &resources, const IdxNameMap &idx_names);
+    iris::MemorySpaceId getMemorySpaceId(const Iris::CanonicalMsn& msn) const;
 
 
     ResourceIds miscRegIds;
@@ -93,10 +103,7 @@ class ThreadContext : public ::ThreadContext
 
     std::vector<iris::MemorySpaceInfo> memorySpaces;
     std::vector<iris::MemorySupportedAddressTranslationResult> translations;
-
-    std::unique_ptr<PortProxy> virtProxy = nullptr;
-    std::unique_ptr<PortProxy> physProxy = nullptr;
-
+    MemorySpaceMap memorySpaceIds;
 
     // A queue to keep track of instruction count based events.
     EventQueue comInstEventQueue;
@@ -162,12 +169,18 @@ class ThreadContext : public ::ThreadContext
     iris::IrisCppAdapter &call() const { return client.irisCall(); }
     iris::IrisCppAdapter &noThrow() const { return client.irisCallNoThrow(); }
 
+    mutable ArmISA::PCState pc;
+
+    void readMem(iris::MemorySpaceId space,
+                 Addr addr, void *p, size_t size);
+    void writeMem(iris::MemorySpaceId space,
+                  Addr addr, const void *p, size_t size);
     bool translateAddress(Addr &paddr, iris::MemorySpaceId p_space,
                           Addr vaddr, iris::MemorySpaceId v_space);
 
   public:
-    ThreadContext(::BaseCPU *cpu, int id, System *system,
-                  ::BaseMMU *mmu, ::BaseISA *isa,
+    ThreadContext(gem5::BaseCPU *cpu, int id, System *system,
+                  gem5::BaseMMU *mmu, gem5::BaseISA *isa,
                   iris::IrisConnectionInterface *iris_if,
                   const std::string &iris_path);
     virtual ~ThreadContext();
@@ -181,7 +194,7 @@ class ThreadContext : public ::ThreadContext
     void descheduleInstCountEvent(Event *event) override;
     Tick getCurrentInstCount() override;
 
-    ::BaseCPU *getCpuPtr() override { return _cpu; }
+    gem5::BaseCPU *getCpuPtr() override { return _cpu; }
     int cpuId() const override { return _cpu->cpuId(); }
     uint32_t socketId() const override { return _cpu->socketId(); }
 
@@ -198,7 +211,7 @@ class ThreadContext : public ::ThreadContext
     }
 
     CheckerCPU *getCheckerCpuPtr() override { return nullptr; }
-    ArmISA::Decoder *
+    InstDecoder *
     getDecoderPtr() override
     {
         panic("%s not implemented.", __FUNCTION__);
@@ -207,14 +220,12 @@ class ThreadContext : public ::ThreadContext
     System *getSystemPtr() override { return _cpu->system; }
 
     BaseISA *
-    getIsaPtr() override
+    getIsaPtr() const override
     {
         return _isa;
     }
 
-    PortProxy &getPhysProxy() override { return *physProxy; }
-    PortProxy &getVirtProxy() override { return *virtProxy; }
-    void initMemProxies(::ThreadContext *tc) override;
+    void sendFunctional(PacketPtr pkt) override;
 
     Process *
     getProcessPtr() override
@@ -234,7 +245,7 @@ class ThreadContext : public ::ThreadContext
     void halt() override { setStatus(Halted); }
 
     void
-    takeOverFrom(::ThreadContext *old_context) override
+    takeOverFrom(gem5::ThreadContext *old_context) override
     {
         panic("%s not implemented.", __FUNCTION__);
     }
@@ -254,7 +265,7 @@ class ThreadContext : public ::ThreadContext
     }
 
     void
-    copyArchRegs(::ThreadContext *tc) override
+    copyArchRegs(gem5::ThreadContext *tc) override
     {
         panic("%s not implemented.", __FUNCTION__);
     }
@@ -268,136 +279,73 @@ class ThreadContext : public ::ThreadContext
     //
     // New accessors for new decoder.
     //
-    RegVal readIntReg(RegIndex reg_idx) const override;
+    RegVal getReg(const RegId &reg) const override;
+    void getReg(const RegId &reg, void *val) const override;
+    void *getWritableReg(const RegId &reg) override;
 
-    RegVal
-    readFloatReg(RegIndex reg_idx) const override
-    {
-        panic("%s not implemented.", __FUNCTION__);
-    }
+    void setReg(const RegId &reg, RegVal val) override;
+    void setReg(const RegId &reg, const void *val) override;
 
-    const VecRegContainer &readVecReg(const RegId &reg) const override;
-    VecRegContainer &
-    getWritableVecReg(const RegId &reg) override
-    {
-        panic("%s not implemented.", __FUNCTION__);
-    }
+    virtual RegVal readIntReg(RegIndex reg_idx) const;
 
-    /** Vector Register Lane Interfaces. */
-    /** @{ */
-    /** Reads source vector 8bit operand. */
-    ConstVecLane8
-    readVec8BitLaneReg(const RegId &reg) const override
+    virtual const ArmISA::VecRegContainer &readVecReg(const RegId &reg) const;
+    virtual ArmISA::VecRegContainer &
+    getWritableVecReg(const RegId &reg)
     {
         panic("%s not implemented.", __FUNCTION__);
     }
 
-    /** Reads source vector 16bit operand. */
-    ConstVecLane16
-    readVec16BitLaneReg(const RegId &reg) const override
+    virtual RegVal
+    readVecElem(const RegId &reg) const
     {
         panic("%s not implemented.", __FUNCTION__);
     }
 
-    /** Reads source vector 32bit operand. */
-    ConstVecLane32
-    readVec32BitLaneReg(const RegId &reg) const override
+    virtual const ArmISA::VecPredRegContainer &
+        readVecPredReg(const RegId &reg) const;
+    virtual ArmISA::VecPredRegContainer &
+    getWritableVecPredReg(const RegId &reg)
     {
         panic("%s not implemented.", __FUNCTION__);
     }
 
-    /** Reads source vector 64bit operand. */
-    ConstVecLane64
-    readVec64BitLaneReg(const RegId &reg) const override
-    {
-        panic("%s not implemented.", __FUNCTION__);
-    }
-
-    /** Write a lane of the destination vector register. */
-    void
-    setVecLane(const RegId &reg, const LaneData<LaneSize::Byte> &val) override
-    {
-        panic("%s not implemented.", __FUNCTION__);
-    }
-    void
-    setVecLane(const RegId &reg,
-               const LaneData<LaneSize::TwoByte> &val) override
-    {
-        panic("%s not implemented.", __FUNCTION__);
-    }
-    void
-    setVecLane(const RegId &reg,
-               const LaneData<LaneSize::FourByte> &val) override
-    {
-        panic("%s not implemented.", __FUNCTION__);
-    }
-    void
-    setVecLane(const RegId &reg,
-               const LaneData<LaneSize::EightByte> &val) override
-    {
-        panic("%s not implemented.", __FUNCTION__);
-    }
-    /** @} */
-
-    const VecElem &
-    readVecElem(const RegId &reg) const override
-    {
-        panic("%s not implemented.", __FUNCTION__);
-    }
-
-    const VecPredRegContainer &readVecPredReg(const RegId &reg) const override;
-    VecPredRegContainer &
-    getWritableVecPredReg(const RegId &reg) override
-    {
-        panic("%s not implemented.", __FUNCTION__);
-    }
-
-    RegVal
-    readCCReg(RegIndex reg_idx) const override
+    virtual RegVal
+    readCCReg(RegIndex reg_idx) const
     {
         return readCCRegFlat(reg_idx);
     }
 
-    void setIntReg(RegIndex reg_idx, RegVal val) override;
+    virtual void setIntReg(RegIndex reg_idx, RegVal val);
 
-    void
-    setFloatReg(RegIndex reg_idx, RegVal val) override
+    virtual void
+    setVecReg(const RegId &reg, const ArmISA::VecRegContainer &val)
     {
         panic("%s not implemented.", __FUNCTION__);
     }
 
-    void
-    setVecReg(const RegId &reg, const VecRegContainer &val) override
+    virtual void
+    setVecElem(const RegId& reg, RegVal val)
     {
         panic("%s not implemented.", __FUNCTION__);
     }
 
-    void
-    setVecElem(const RegId& reg, const VecElem& val) override
-    {
-        panic("%s not implemented.", __FUNCTION__);
-    }
-
-    void
+    virtual void
     setVecPredReg(const RegId &reg,
-                  const VecPredRegContainer &val) override
+                  const ArmISA::VecPredRegContainer &val)
     {
         panic("%s not implemented.", __FUNCTION__);
     }
 
-    void
-    setCCReg(RegIndex reg_idx, RegVal val) override
+    virtual void
+    setCCReg(RegIndex reg_idx, RegVal val)
     {
         setCCRegFlat(reg_idx, val);
     }
 
-    void pcStateNoRecord(const ArmISA::PCState &val) override { pcState(val); }
-    MicroPC microPC() const override { return 0; }
+    void pcStateNoRecord(const PCStateBase &val) override { pcState(val); }
 
-    ArmISA::PCState pcState() const override;
-    void pcState(const ArmISA::PCState &val) override;
-    Addr instAddr() const override;
-    Addr nextInstAddr() const override;
+    const PCStateBase &pcState() const override;
+    void pcState(const PCStateBase &val) override;
 
     RegVal readMiscRegNoEffect(RegIndex misc_reg) const override;
     RegVal
@@ -433,13 +381,6 @@ class ThreadContext : public ::ThreadContext
         panic("%s not implemented.", __FUNCTION__);
     }
 
-    // Same with st cond failures.
-    Counter
-    readFuncExeInst() const override
-    {
-        panic("%s not implemented.", __FUNCTION__);
-    }
-
     /** @{ */
     /**
      * Flat register interfaces
@@ -452,58 +393,54 @@ class ThreadContext : public ::ThreadContext
      * serialization code to access all registers.
      */
 
-    RegVal readIntRegFlat(RegIndex idx) const override;
-    void setIntRegFlat(RegIndex idx, uint64_t val) override;
+    RegVal getRegFlat(const RegId &reg) const override;
+    void getRegFlat(const RegId &reg, void *val) const override;
+    void *getWritableRegFlat(const RegId &reg) override;
 
-    RegVal
-    readFloatRegFlat(RegIndex idx) const override
-    {
-        panic("%s not implemented.", __FUNCTION__);
-    }
-    void
-    setFloatRegFlat(RegIndex idx, RegVal val) override
-    {
-        panic("%s not implemented.", __FUNCTION__);
-    }
+    void setRegFlat(const RegId &reg, RegVal val) override;
+    void setRegFlat(const RegId &reg, const void *val) override;
 
-    const VecRegContainer &readVecRegFlat(RegIndex idx) const override;
-    VecRegContainer &
-    getWritableVecRegFlat(RegIndex idx) override
+    virtual RegVal readIntRegFlat(RegIndex idx) const;
+    virtual void setIntRegFlat(RegIndex idx, uint64_t val);
+
+    virtual const ArmISA::VecRegContainer &readVecRegFlat(RegIndex idx) const;
+    virtual ArmISA::VecRegContainer &
+    getWritableVecRegFlat(RegIndex idx)
     {
         panic("%s not implemented.", __FUNCTION__);
     }
-    void
-    setVecRegFlat(RegIndex idx, const VecRegContainer &val) override
+    virtual void
+    setVecRegFlat(RegIndex idx, const ArmISA::VecRegContainer &val)
     {
         panic("%s not implemented.", __FUNCTION__);
     }
 
-    const VecElem&
-    readVecElemFlat(RegIndex idx, const ElemIndex& elemIdx) const override
+    virtual RegVal
+    readVecElemFlat(RegIndex idx) const
     {
         panic("%s not implemented.", __FUNCTION__);
     }
-    void
-    setVecElemFlat(RegIndex idx, const ElemIndex &elemIdx,
-                   const VecElem &val) override
-    {
-        panic("%s not implemented.", __FUNCTION__);
-    }
-
-    const VecPredRegContainer &readVecPredRegFlat(RegIndex idx) const override;
-    VecPredRegContainer &
-    getWritableVecPredRegFlat(RegIndex idx) override
-    {
-        panic("%s not implemented.", __FUNCTION__);
-    }
-    void
-    setVecPredRegFlat(RegIndex idx, const VecPredRegContainer &val) override
+    virtual void
+    setVecElemFlat(RegIndex idx, RegVal val)
     {
         panic("%s not implemented.", __FUNCTION__);
     }
 
-    RegVal readCCRegFlat(RegIndex idx) const override;
-    void setCCRegFlat(RegIndex idx, RegVal val) override;
+    virtual ArmISA::VecPredRegContainer readVecPredRegFlat(RegIndex idx) const;
+    virtual ArmISA::VecPredRegContainer &
+    getWritableVecPredRegFlat(RegIndex idx)
+    {
+        panic("%s not implemented.", __FUNCTION__);
+    }
+    virtual void
+    setVecPredRegFlat(RegIndex idx,
+            const ArmISA::VecPredRegContainer &val)
+    {
+        panic("%s not implemented.", __FUNCTION__);
+    }
+
+    virtual RegVal readCCRegFlat(RegIndex idx) const;
+    virtual void setCCRegFlat(RegIndex idx, RegVal val);
     /** @} */
 
     // hardware transactional memory
@@ -527,5 +464,6 @@ class ThreadContext : public ::ThreadContext
 };
 
 } // namespace Iris
+} // namespace gem5
 
 #endif // __ARCH_ARM_FASTMODEL_IRIS_THREAD_CONTEXT_HH__

@@ -50,6 +50,9 @@
 #include "sim/stats.hh"
 #include "sim/system.hh"
 
+namespace gem5
+{
+
 TrafficGen::TrafficGen(const TrafficGenParams &p)
     : BaseTrafficGen(p),
       configFile(p.config_file),
@@ -220,8 +223,8 @@ TrafficGen::parseConfig()
                         is >> stride_size >> page_size >> nbr_of_banks >>
                             nbr_of_banks_util >> _addr_mapping >>
                             nbr_of_ranks;
-                        Enums::AddrMap addr_mapping =
-                            static_cast<Enums::AddrMap>(_addr_mapping);
+                        enums::AddrMap addr_mapping =
+                            static_cast<enums::AddrMap>(_addr_mapping);
 
                         if (stride_size > page_size)
                             warn("Memory generator stride size (%d) is greater"
@@ -368,3 +371,5 @@ TrafficGen::nextGenerator()
     DPRINTF(TrafficGen, "Transition to state %d\n", currState);
     return states[currState];
 }
+
+} // namespace gem5

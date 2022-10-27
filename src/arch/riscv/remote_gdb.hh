@@ -35,8 +35,12 @@
 
 #include <string>
 
-#include "arch/riscv/registers.hh"
+#include "arch/riscv/regs/float.hh"
+#include "arch/riscv/regs/int.hh"
 #include "base/remote_gdb.hh"
+
+namespace gem5
+{
 
 class System;
 class ThreadContext;
@@ -52,7 +56,7 @@ class RemoteGDB : public BaseRemoteGDB
 
     bool acc(Addr addr, size_t len) override;
     // A breakpoint will be 2 bytes if it is compressed and 4 if not
-    bool checkBpLen(size_t len) override { return len == 2 || len == 4; }
+    bool checkBpKind(size_t kind) override { return kind == 2 || kind == 4; }
 
     class RiscvGdbRegCache : public BaseGdbRegCache
     {
@@ -66,7 +70,8 @@ class RemoteGDB : public BaseRemoteGDB
          * 2. Add register to struct below
          * 3. Modify RiscvGdbRegCache::getRegs and setRegs
          */
-        struct {
+        struct
+        {
             uint64_t gpr[NumIntArchRegs];
             uint64_t pc;
             uint64_t fpu[NumFloatRegs];
@@ -140,7 +145,7 @@ class RemoteGDB : public BaseRemoteGDB
     RiscvGdbRegCache regCache;
 
   public:
-    RemoteGDB(System *_system, ThreadContext *tc, int _port);
+    RemoteGDB(System *_system, int _port);
     BaseGdbRegCache *gdbRegs() override;
     /**
      * Informs GDB remote serial protocol that XML features are supported
@@ -159,5 +164,6 @@ class RemoteGDB : public BaseRemoteGDB
 };
 
 } // namespace RiscvISA
+} // namespace gem5
 
 #endif /* __ARCH_RISCV_REMOTE_GDB_H__ */

@@ -29,8 +29,12 @@
 #ifndef __ARCH_RISCV_BARE_METAL_SYSTEM_HH__
 #define __ARCH_RISCV_BARE_METAL_SYSTEM_HH__
 
+#include "arch/riscv/remote_gdb.hh"
 #include "params/RiscvBareMetal.hh"
 #include "sim/workload.hh"
+
+namespace gem5
+{
 
 namespace RiscvISA
 {
@@ -42,8 +46,8 @@ class BareMetal : public Workload
     bool _isBareMetal;
     // entry point for simulation
     Addr _resetVect;
-    Loader::ObjectFile *bootloader;
-    Loader::SymbolTable bootloaderSymtab;
+    loader::ObjectFile *bootloader;
+    loader::SymbolTable bootloaderSymtab;
 
   public:
     PARAMS(RiscvBareMetal);
@@ -52,15 +56,24 @@ class BareMetal : public Workload
 
     void initState() override;
 
-    Loader::Arch getArch() const override { return bootloader->getArch(); }
-    const Loader::SymbolTable &
+    void
+    setSystem(System *sys) override
+    {
+        Workload::setSystem(sys);
+        gdb = BaseRemoteGDB::build<RemoteGDB>(system);
+    }
+
+    loader::Arch getArch() const override { return bootloader->getArch(); }
+    ByteOrder byteOrder() const override { return ByteOrder::little; }
+
+    const loader::SymbolTable &
     symtab(ThreadContext *tc) override
     {
         return bootloaderSymtab;
     }
 
     bool
-    insertSymbol(const Loader::Symbol &symbol) override
+    insertSymbol(const loader::Symbol &symbol) override
     {
         return bootloaderSymtab.insert(symbol);
     }
@@ -75,5 +88,6 @@ class BareMetal : public Workload
 };
 
 } // namespace RiscvISA
+} // namespace gem5
 
 #endif // __ARCH_RISCV_BARE_METAL_FS_WORKLOAD_HH__

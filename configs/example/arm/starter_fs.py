@@ -1,4 +1,4 @@
-# Copyright (c) 2016-2017, 2020 ARM Limited
+# Copyright (c) 2016-2017, 2020, 2022 Arm Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -50,7 +50,7 @@ m5.util.addToPath('../..')
 from common import SysPaths
 from common import ObjectList
 from common import MemConfig
-from common.cores.arm import HPI
+from common.cores.arm import O3_ARM_v7a, HPI
 
 import devices
 
@@ -61,19 +61,19 @@ default_root_device = '/dev/vda1'
 
 
 # Pre-defined CPU configurations. Each tuple must be ordered as : (cpu_class,
-# l1_icache_class, l1_dcache_class, walk_cache_class, l2_Cache_class). Any of
+# l1_icache_class, l1_dcache_class, l2_Cache_class). Any of
 # the cache class may be 'None' if the particular cache is not present.
 cpu_types = {
-
-    "atomic" : ( AtomicSimpleCPU, None, None, None, None),
+    "atomic" : (AtomicSimpleCPU, None, None, None),
     "minor" : (MinorCPU,
                devices.L1I, devices.L1D,
-               devices.WalkCache,
                devices.L2),
-    "hpi" : ( HPI.HPI,
-              HPI.HPI_ICache, HPI.HPI_DCache,
-              HPI.HPI_WalkCache,
-              HPI.HPI_L2)
+    "hpi" : (HPI.HPI,
+             HPI.HPI_ICache, HPI.HPI_DCache,
+             HPI.HPI_L2),
+    "o3" : (O3_ARM_v7a.O3_ARM_v7a_3,
+            O3_ARM_v7a.O3_ARM_v7a_ICache, O3_ARM_v7a.O3_ARM_v7a_DCache,
+            O3_ARM_v7a.O3_ARM_v7aL2),
 }
 
 def create_cow_image(name):
@@ -96,8 +96,7 @@ def create(args):
     # Only simulate caches when using a timing CPU (e.g., the HPI model)
     want_caches = True if mem_mode == "timing" else False
 
-    system = devices.simpleSystem(ArmSystem,
-                                  want_caches,
+    system = devices.SimpleSystem(want_caches,
                                   args.mem_size,
                                   mem_mode=mem_mode,
                                   workload=ArmFsLinux(
@@ -138,8 +137,7 @@ def create(args):
     # Create a cache hierarchy for the cluster. We are assuming that
     # clusters have core-private L1 caches and an L2 that's shared
     # within the cluster.
-    for cluster in system.cpu_cluster:
-        system.addCaches(want_caches, last_cache_level=2)
+    system.addCaches(want_caches, last_cache_level=2)
 
     # Setup gem5's minimal Linux boot loader.
     system.realview.setupBootLoader(system, SysPaths.binary)
@@ -151,6 +149,9 @@ def create(args):
         system.workload.dtb_filename = \
             os.path.join(m5.options.outdir, 'system.dtb')
         system.generateDtb(system.workload.dtb_filename)
+
+    if args.initrd:
+        system.workload.initrd_filename = args.initrd
 
     # Linux boot command flags
     kernel_cmd = [
@@ -200,6 +201,8 @@ def main():
                         help="DTB file to load")
     parser.add_argument("--kernel", type=str, default=default_kernel,
                         help="Linux kernel")
+    parser.add_argument("--initrd", type=str, default=None,
+                        help="initrd/initramfs file to load")
     parser.add_argument("--disk-image", type=str,
                         default=default_disk,
                         help="Disk to instantiate")

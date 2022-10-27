@@ -34,6 +34,9 @@
 #include "params/SparcEmuLinux.hh"
 #include "sim/syscall_desc.hh"
 
+namespace gem5
+{
+
 namespace SparcISA
 {
 
@@ -54,12 +57,14 @@ class EmuLinux : public SEWorkload
 
     EmuLinux(const Params &p);
 
-    ::Loader::Arch getArch() const override { return ::Loader::SPARC64; }
+    loader::Arch getArch() const override { return loader::SPARC64; }
+    ByteOrder byteOrder() const override { return ByteOrder::big; }
 
     void handleTrap(ThreadContext *tc, int trapNum) override;
     void syscall(ThreadContext *tc) override;
 };
 
 } // namespace SparcISA
+} // namespace gem5
 
 #endif // __ARCH_SPARC_LINUX_SE_WORKLOAD_HH__

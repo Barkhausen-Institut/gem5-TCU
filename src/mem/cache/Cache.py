@@ -53,6 +53,7 @@ class Clusivity(Enum): vals = ['mostly_incl', 'mostly_excl']
 class WriteAllocator(SimObject):
     type = 'WriteAllocator'
     cxx_header = "mem/cache/cache.hh"
+    cxx_class = 'gem5::WriteAllocator'
 
     # Control the limits for when the cache introduces extra delays to
     # allow whole-line write coalescing, and eventually switches to a
@@ -73,6 +74,7 @@ class BaseCache(ClockedObject):
     type = 'BaseCache'
     abstract = True
     cxx_header = "mem/cache/base.hh"
+    cxx_class = 'gem5::BaseCache'
 
     size = Param.MemorySize("Capacity")
     assoc = Param.Unsigned("Associativity")
@@ -97,6 +99,8 @@ class BaseCache(ClockedObject):
     prefetcher = Param.BasePrefetcher(NULL,"Prefetcher attached to cache")
     prefetch_on_access = Param.Bool(False,
          "Notify the hardware prefetcher on every access (not just misses)")
+    prefetch_on_pf_hit = Param.Bool(False,
+        "Notify the hardware prefetcher on hit on prefetched lines")
 
     tags = Param.BaseTags(BaseSetAssoc(), "Tag store")
     replacement_policy = Param.BaseReplacementPolicy(LRURP(),
@@ -151,11 +155,12 @@ class BaseCache(ClockedObject):
 class Cache(BaseCache):
     type = 'Cache'
     cxx_header = 'mem/cache/cache.hh'
-
+    cxx_class = 'gem5::Cache'
 
 class NoncoherentCache(BaseCache):
     type = 'NoncoherentCache'
     cxx_header = 'mem/cache/noncoherent_cache.hh'
+    cxx_class = 'gem5::NoncoherentCache'
 
     # This is typically a last level cache and any clean
     # writebacks would be unnecessary traffic to the main memory.

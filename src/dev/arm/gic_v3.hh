@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 ARM Limited
+ * Copyright (c) 2019, 2022 Arm Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -42,19 +42,62 @@
 #define __DEV_ARM_GICV3_H__
 
 #include "arch/arm/interrupts.hh"
+#include "arch/arm/types.hh"
 #include "dev/arm/base_gic.hh"
 #include "params/Gicv3.hh"
+
+namespace gem5
+{
 
 class Gicv3CPUInterface;
 class Gicv3Distributor;
 class Gicv3Redistributor;
 class Gicv3Its;
 
-class Gicv3 : public BaseGic
+class Gicv3Registers
+{
+  public:
+    virtual uint32_t readDistributor(Addr daddr) = 0;
+    virtual uint32_t readRedistributor(const ArmISA::Affinity &aff,
+                                       Addr daddr) = 0;
+    virtual RegVal readCpu(const ArmISA::Affinity &aff,
+                           ArmISA::MiscRegIndex misc_reg) = 0;
+
+    virtual void writeDistributor(Addr daddr, uint32_t data) = 0;
+    virtual void writeRedistributor(const ArmISA::Affinity &aff,
+                                    Addr daddr, uint32_t data) = 0;
+    virtual void writeCpu(const ArmISA::Affinity &aff,
+                          ArmISA::MiscRegIndex misc_reg, RegVal data) = 0;
+
+  protected:
+    static void copyDistRegister(Gicv3Registers* from,
+                                 Gicv3Registers* to,
+                                 Addr daddr);
+    static void copyRedistRegister(Gicv3Registers* from,
+                                   Gicv3Registers* to,
+                                   const ArmISA::Affinity &aff, Addr daddr);
+    static void copyCpuRegister(Gicv3Registers* from,
+                                Gicv3Registers* to,
+                                const ArmISA::Affinity &aff,
+                                ArmISA::MiscRegIndex misc_reg);
+    static void clearRedistRegister(Gicv3Registers* to,
+                                    const ArmISA::Affinity &aff, Addr daddr);
+    static void copyRedistRange(Gicv3Registers* from,
+                                Gicv3Registers* to,
+                                const ArmISA::Affinity &aff,
+                                Addr daddr, size_t size);
+    static void copyDistRange(Gicv3Registers* from,
+                              Gicv3Registers* to,
+                              Addr daddr, size_t size);
+    static void clearDistRange(Gicv3Registers* to, Addr daddr, size_t size);
+};
+
+class Gicv3 : public BaseGic, public Gicv3Registers
 {
   protected:
     friend class Gicv3CPUInterface;
     friend class Gicv3Redistributor;
+    friend class Gicv3Distributor;
 
     Gicv3Distributor * distributor;
     std::vector<Gicv3Redistributor *> redistributors;
@@ -78,24 +121,27 @@ class Gicv3 : public BaseGic
     static const int PPI_MAX = 16;
 
     // Interrupt states for PPIs, SGIs and SPIs, as per SPEC 4.1.2 section
-    typedef enum {
+    enum IntStatus
+    {
         INT_INACTIVE,
         INT_PENDING,
         INT_ACTIVE,
         INT_ACTIVE_PENDING,
-    } IntStatus;
+    };
 
     // Interrupt groups, as per SPEC section 4.6
-    typedef enum {
+    enum GroupId
+    {
         G0S,
         G1S,
         G1NS,
-    } GroupId;
+    };
 
-    typedef enum {
+    enum IntTriggerType
+    {
         INT_LEVEL_SENSITIVE,
         INT_EDGE_TRIGGERED,
-    } IntTriggerType;
+    };
 
   protected:
 
@@ -149,13 +195,34 @@ class Gicv3 : public BaseGic
         return redistributors[context_id];
     }
 
+    Gicv3CPUInterface *
+    getCPUInterfaceByAffinity(const ArmISA::Affinity &aff) const;
+
     Gicv3Redistributor *
-    getRedistributorByAffinity(uint32_t affinity) const;
+    getRedistributorByAffinity(const ArmISA::Affinity &aff) const;
 
     Gicv3Redistributor *
     getRedistributorByAddr(Addr address) const;
 
     void postInt(uint32_t cpu, ArmISA::InterruptTypes int_type);
+
+  protected: // GIC state transfer
+    void copyGicState(Gicv3Registers* from, Gicv3Registers* to);
+
+  public: // Gicv3Registers
+    uint32_t readDistributor(Addr daddr) override;
+    uint32_t readRedistributor(const ArmISA::Affinity &aff,
+                               Addr daddr) override;
+    RegVal readCpu(const ArmISA::Affinity &aff,
+                   ArmISA::MiscRegIndex misc_reg) override;
+
+    void writeDistributor(Addr daddr, uint32_t data) override;
+    void writeRedistributor(const ArmISA::Affinity &aff,
+                            Addr daddr, uint32_t data) override;
+    void writeCpu(const ArmISA::Affinity &aff,
+                  ArmISA::MiscRegIndex misc_reg, RegVal data) override;
 };
+
+} // namespace gem5
 
 #endif //__DEV_ARM_GICV3_H__

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 ARM Limited
+ * Copyright (c) 2019-2022 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -45,6 +45,9 @@
 #include "dev/arm/gic_v3.hh"
 #include "sim/serialize.hh"
 
+namespace gem5
+{
+
 class Gicv3Distributor : public Serializable
 {
   private:
@@ -58,7 +61,8 @@ class Gicv3Distributor : public Serializable
     Gicv3 * gic;
     const uint32_t itLines;
 
-    enum {
+    enum
+    {
         // Control Register
         GICD_CTLR  = 0x0000,
         // Interrupt Controller Type Register
@@ -268,6 +272,10 @@ class Gicv3Distributor : public Serializable
     uint64_t read(Addr addr, size_t size, bool is_secure_access);
     void write(Addr addr, uint64_t data, size_t size,
                bool is_secure_access);
+
+    void copy(Gicv3Registers *from, Gicv3Registers *to);
 };
+
+} // namespace gem5
 
 #endif //__DEV_ARM_GICV3_DISTRIBUTOR_H__

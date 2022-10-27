@@ -61,9 +61,15 @@
 
 #include "params/TlmToGem5Bridge32.hh"
 #include "params/TlmToGem5Bridge64.hh"
+#include "params/TlmToGem5Bridge128.hh"
+#include "params/TlmToGem5Bridge256.hh"
+#include "params/TlmToGem5Bridge512.hh"
+#include "sim/core.hh"
 #include "sim/system.hh"
 #include "systemc/ext/core/sc_module_name.hh"
 #include "systemc/ext/core/sc_time.hh"
+
+using namespace gem5;
 
 namespace sc_gem5
 {
@@ -93,24 +99,42 @@ PacketPtr
 payload2packet(RequestorID _id, tlm::tlm_generic_payload &trans)
 {
     MemCmd cmd;
+    RequestPtr req;
 
-    switch (trans.get_command()) {
-        case tlm::TLM_READ_COMMAND:
+    Gem5SystemC::AtomicExtension *atomic_ex = nullptr;
+    trans.get_extension(atomic_ex);
+    if (atomic_ex) {
+        cmd = MemCmd::SwapReq;
+        Request::Flags flags = (atomic_ex->needReturn() ?
+                                Request::ATOMIC_RETURN_OP :
+                                Request::ATOMIC_NO_RETURN_OP);
+        AtomicOpFunctorPtr amo_op = AtomicOpFunctorPtr(
+            atomic_ex->getAtomicOpFunctor()->clone());
+        // FIXME: correct the context_id and pc state.
+        req = std::make_shared<Request>(
+            trans.get_address(), trans.get_data_length(), flags, _id,
+            0, 0, std::move(amo_op));
+        req->setPaddr(trans.get_address());
+    } else {
+        switch (trans.get_command()) {
+          case tlm::TLM_READ_COMMAND:
             cmd = MemCmd::ReadReq;
             break;
-        case tlm::TLM_WRITE_COMMAND:
+          case tlm::TLM_WRITE_COMMAND:
             cmd = MemCmd::WriteReq;
             break;
-        case tlm::TLM_IGNORE_COMMAND:
+          case tlm::TLM_IGNORE_COMMAND:
             return nullptr;
-        default:
+          default:
             SC_REPORT_FATAL("TlmToGem5Bridge",
-                            "received transaction with unsupported command");
+                            "received transaction with unsupported "
+                            "command");
+        }
+        Request::Flags flags;
+        req = std::make_shared<Request>(
+            trans.get_address(), trans.get_data_length(), flags, _id);
     }
 
-    Request::Flags flags;
-    auto req = std::make_shared<Request>(
-        trans.get_address(), trans.get_data_length(), flags, _id);
 
     /*
      * Allocate a new Packet. The packet will be deleted when it returns from
@@ -243,7 +267,7 @@ TlmToGem5Bridge<BITWIDTH>::checkTransaction(tlm::tlm_generic_payload &trans)
 
 template <unsigned int BITWIDTH>
 void
-TlmToGem5Bridge<BITWIDTH>::invalidateDmi(const ::MemBackdoor &backdoor)
+TlmToGem5Bridge<BITWIDTH>::invalidateDmi(const gem5::MemBackdoor &backdoor)
 {
     socket->invalidate_direct_mem_ptr(
             backdoor.range().start(), backdoor.range().end());
@@ -320,7 +344,8 @@ TlmToGem5Bridge<BITWIDTH>::b_transport(tlm::tlm_generic_payload &trans,
              "Packet sending failed!\n");
 
     auto delay =
-      sc_core::sc_time((double)(ticks / SimClock::Int::ps), sc_core::SC_PS);
+      sc_core::sc_time((double)(ticks / sim_clock::as_int::ps),
+        sc_core::SC_PS);
 
     // update time
     t += delay;
@@ -486,7 +511,7 @@ TlmToGem5Bridge<BITWIDTH>::recvRangeChange()
 }
 
 template <unsigned int BITWIDTH>
-::Port &
+gem5::Port &
 TlmToGem5Bridge<BITWIDTH>::gem5_getPort(const std::string &if_name, int idx)
 {
     if (if_name == "gem5")
@@ -546,15 +571,36 @@ TlmToGem5Bridge<BITWIDTH>::before_end_of_elaboration()
 } // namespace sc_gem5
 
 sc_gem5::TlmToGem5Bridge<32> *
-TlmToGem5Bridge32Params::create() const
+gem5::TlmToGem5Bridge32Params::create() const
 {
     return new sc_gem5::TlmToGem5Bridge<32>(
             *this, sc_core::sc_module_name(name.c_str()));
 }
 
 sc_gem5::TlmToGem5Bridge<64> *
-TlmToGem5Bridge64Params::create() const
+gem5::TlmToGem5Bridge64Params::create() const
 {
     return new sc_gem5::TlmToGem5Bridge<64>(
+            *this, sc_core::sc_module_name(name.c_str()));
+}
+
+sc_gem5::TlmToGem5Bridge<128> *
+gem5::TlmToGem5Bridge128Params::create() const
+{
+    return new sc_gem5::TlmToGem5Bridge<128>(
+            *this, sc_core::sc_module_name(name.c_str()));
+}
+
+sc_gem5::TlmToGem5Bridge<256> *
+gem5::TlmToGem5Bridge256Params::create() const
+{
+    return new sc_gem5::TlmToGem5Bridge<256>(
+            *this, sc_core::sc_module_name(name.c_str()));
+}
+
+sc_gem5::TlmToGem5Bridge<512> *
+gem5::TlmToGem5Bridge512Params::create() const
+{
+    return new sc_gem5::TlmToGem5Bridge<512>(
             *this, sc_core::sc_module_name(name.c_str()));
 }
