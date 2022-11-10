@@ -167,6 +167,14 @@ def generateMemNode(state, mem_range):
         state.sizeCells(mem_range.size()) ))
     return node
 
+def generateTcuNode(state, mem_range):
+    node = FdtNode("tcu_mmio@%x" % int(mem_range.start))
+    node.append(FdtPropertyStrings("device_type", ["mmio"]))
+    node.append(FdtPropertyWords("reg",
+        state.addrCells(mem_range.start) +
+        state.sizeCells(mem_range.size()) ))
+    return node
+
 def generateDtb(system):
     state = FdtState(addr_cells=2, size_cells=2, cpu_cells=1)
     root = FdtNode('/')
@@ -191,6 +199,7 @@ def generateDtb(system):
     uart_idx = root[soc_idx].index('uart@10000000')
     root[soc_idx][uart_idx].remove('compatible')
     root[soc_idx][uart_idx].append(FdtPropertyStrings('compatible', ['ns8250', 'gem5,uart0']))
+    root[soc_idx].append(generateTcuNode(state, system.tcu.mmio_region))
 
     fdt = Fdt()
     fdt.add_rootnode(root)
