@@ -452,7 +452,7 @@ Tcu::completeNocRequest(PacketPtr pkt)
 void
 Tcu::completeMemRequest(PacketPtr pkt)
 {
-    // assert(!pkt->isError());
+    assert(!pkt->isError());
     assert(pkt->isResponse());
 
     auto senderState = dynamic_cast<MemSenderState*>(pkt->popSenderState());
