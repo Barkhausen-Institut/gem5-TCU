@@ -80,8 +80,8 @@ IO_address_space_base           = 0xff20000000000000
 interrupts_address_space_base   = 0xff40000000000000
 
 base_offset                     = 768 * 1024 * 1024
-linux_tile_offset               = base_offset // 2
-linux_tile_size                 = base_offset // 2
+linux_tile_offset               = base_offset // 2 # 0x1800_0000
+linux_tile_size                 = 0x5000_0000
 mod_offset                      = linux_tile_offset + linux_tile_size
 mod_size                        = 128 * 1024 * 1024
 tile_offset                     = mod_offset + mod_size
@@ -199,7 +199,7 @@ def generateDtb(system):
     uart_idx = root[soc_idx].index('uart@10000000')
     root[soc_idx][uart_idx].remove('compatible')
     root[soc_idx][uart_idx].append(FdtPropertyStrings('compatible', ['ns8250', 'gem5,uart0']))
-    root[soc_idx].append(generateTcuNode(state, system.tcu.mmio_region))
+    # root[soc_idx].append(generateTcuNode(state, system.tcu.mmio_region))
 
     fdt = Fdt()
     fdt.add_rootnode(root)
@@ -523,16 +523,16 @@ def createLinuxTile(options, noc, no, memTile, kernel, fsImage, commandLine='ear
 
     mdesc = SysConfig(disks=fsImage, mem='512MB', os_type='linux')
     system.mem_mode = CPUClass.memory_mode()
-    system.mem_ranges = [AddrRange(start=0x80000000, size=mdesc.mem())]
+    system.mem_ranges = [AddrRange(start=0x30000000, size=mdesc.mem())]
 
     system.workload = RiscvLinux()
     system.workload.object_file = kernel
 
     system.iobus = IOXBar()
-    system.membus = MemBus()
+    system.membus = SystemXBar()
 
     system.system_port = system.membus.cpu_side_ports
-    # system.membus.default = system.tcu.cache_mem_slave_port
+    system.membus.default = system.tcu.cache_mem_slave_port
 
     # HiFive Platform
     system.platform = HiFive()
@@ -605,7 +605,7 @@ def createLinuxTile(options, noc, no, memTile, kernel, fsImage, commandLine='ear
         m5.options.outdir, 'device.dtb')
 
     # Default DTB address if bbl is bulit with --with-dts option
-    system.workload.dtb_addr = 0x87e00000
+    system.workload.dtb_addr = 0x37e00000
 
     # Linux boot command flags
     system.workload.command_line = commandLine
@@ -640,8 +640,6 @@ def createLinuxTile(options, noc, no, memTile, kernel, fsImage, commandLine='ear
     system.cpu.connectAllPorts(system.tol2bus, system.membus)
 
     # ---------------------------- end CacheConfig.config_cache ------------ #
-
-    MemConfig.config_mem(options, system)
 
     # configure caches like M³ does
     system.cpu.icache.tag_latency = 4
@@ -840,7 +838,7 @@ def createAccelTile(noc, options, no, accel, memTile, epCount,
         print('Accelerator "%s" does not exist' % (accel))
         sys.exit(1)
     tile.tcu.connector.accelerator = tile.accel
-    tile.accel.id = no;
+    tile.accel.id = no
     tile.accel.offset = tile.tcu.tile_mem_offset
 
     connectCuToMem(tile, options, tile.accel.port)
@@ -861,7 +859,7 @@ def createAbortTestTile(noc, options, no, memTile, epCount,
     tile.tcu.connector = BaseConnector()
 
     tile.cpu = TcuAbortTest()
-    tile.cpu.id = no;
+    tile.cpu.id = no
 
     connectCuToMem(tile, options, tile.cpu.port)
 
@@ -998,10 +996,11 @@ def runSimulation(root, options, tiles):
     # Instantiate configuration
     m5.instantiate()
     exit_event = m5.simulate()
+    m5.checkpoint("run/exit")
 
     # Simulate until program terminates
-    safe_tick = 287682115000
-    checkpoint_name = f"run/checkpoint-{safe_tick}"
+    ## safe_tick = 287682115000
+    ## checkpoint_name = f"run/checkpoint-{safe_tick}"
     
     # m5.instantiate(checkpoint_name)
     # exit_event = m5.simulate()
