@@ -996,7 +996,7 @@ def runSimulation(root, options, tiles):
     # Instantiate configuration
     m5.instantiate()
     exit_event = m5.simulate()
-    m5.checkpoint("run/exit")
+    # m5.checkpoint("run/exit")
 
     # Simulate until program terminates
     ## safe_tick = 287682115000
