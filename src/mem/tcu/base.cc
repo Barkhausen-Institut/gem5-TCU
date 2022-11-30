@@ -250,7 +250,7 @@ BaseTcu::NocSlavePort::getAddrRanges() const
     Addr baseNocAddr = NocAddr(tcu.tileId, 0).getAddr();
     Addr topNocAddr  = NocAddr(tcu.tileId + 1, 0).getAddr() - 1;
 
-    DPRINTF(TcuSlavePort, "Tcu %u covers %#x to %#x\n",
+    DPRINTF(TcuSlavePort, "TCU%u covers %#x to %#x\n",
                           tcu.tileId,
                           baseNocAddr,
                           topNocAddr);

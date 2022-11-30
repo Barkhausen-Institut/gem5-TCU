@@ -443,7 +443,7 @@ def createSerialTile(noc, options, no, memTile, epCount):
     # the serial device reads from the host's stdin and sends the read bytes
     # via TCU to some defined receive EP
     tile.serial = TcuSerialInput()
-    tile.serial.id = no
+    tile.serial.tile_id = no
     tile.serial.clk_domain = SrcClockDomain(clock=options.sys_clock,
                                             voltage_domain=tile.voltage_domain)
 
@@ -468,7 +468,7 @@ def createDeviceTile(noc, options, no, memTile, epCount):
     # the proxy sits between the device and the TCU to translate interrupts
     # and DMA to the TCU's mechanisms
     tile.proxy = TcuPciProxy()
-    tile.proxy.id = no
+    tile.proxy.tile_id = no
     tile.proxy.clk_domain = SrcClockDomain(clock=options.sys_clock,
                                            voltage_domain=tile.voltage_domain)
 
@@ -583,7 +583,7 @@ def createAccelTile(noc, options, no, accel, memTile, epCount,
         print('Accelerator "%s" does not exist' % (accel))
         sys.exit(1)
     tile.tcu.connector.accelerator = tile.accel
-    tile.accel.id = no;
+    tile.accel.tile_id = no;
     tile.accel.offset = tile.tcu.tile_mem_offset
 
     connectCuToMem(tile, options, tile.accel.port)
@@ -604,7 +604,7 @@ def createAbortTestTile(noc, options, no, memTile, epCount,
     tile.tcu.connector = BaseConnector()
 
     tile.cpu = TcuAbortTest()
-    tile.cpu.id = no;
+    tile.cpu.tile_id = no;
 
     connectCuToMem(tile, options, tile.cpu.port)
 

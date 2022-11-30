@@ -65,7 +65,7 @@ TcuSerialInput::TcuSerialInput(const Params &p)
       tcuMasterPort(name() + ".tcu_master_port", this),
       tcuSlavePort(name() + ".tcu_slave_port", this),
       tickEvent(this),
-      tcu(p.tcu_regfile_base_addr, p.system->getRequestorId(this, name()), p.id),
+      tcu(p.tcu_regfile_base_addr, p.system->getRequestorId(this, name()), p.tile_id),
       cmdSM(tcu, this),
       buffer(),
       pos()

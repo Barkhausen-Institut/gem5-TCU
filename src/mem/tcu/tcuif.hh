@@ -44,9 +44,9 @@ public:
 
     static Addr getRegAddr(UnprivReg reg);
 
-    static Addr getRegAddr(unsigned reg, unsigned epid);
+    static Addr getRegAddr(size_t reg, epid_t epid);
 
-    explicit TcuIf(Addr reg_base, RequestorID requestorId, unsigned int id);
+    explicit TcuIf(Addr reg_base, RequestorID requestorId, unsigned ctxId);
 
     RequestorID reqId() const { return requestorId; }
 
@@ -65,7 +65,7 @@ public:
 private:
     Addr reg_base;
     RequestorID requestorId;
-    unsigned int id;
+    unsigned ctxId;
 };
 
 }

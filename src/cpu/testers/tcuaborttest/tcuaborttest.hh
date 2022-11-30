@@ -108,7 +108,7 @@ class TcuAbortTest : public ClockedObject
     /// Request id for all generated traffic
     RequestorID requestorId;
 
-    unsigned int id;
+    tcu::tileid_t tileId;
 
     const bool atomic;
 

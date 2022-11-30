@@ -132,7 +132,7 @@ Tcu::regStats()
 }
 
 bool
-Tcu::isMemTile(unsigned tile) const
+Tcu::isMemTile(tileid_t tile) const
 {
     TileMemory *sys = dynamic_cast<TileMemory*>(system);
     return !sys || sys->hasMem(tile);

@@ -48,7 +48,7 @@ M3Loader::M3Loader(const std::vector<Addr> &tiles,
                    const std::vector<std::string> &mods,
                    const std::string &cmdline,
                    Addr envStart,
-                   unsigned tileId,
+                   tcu::tileid_t tileId,
                    Addr modOffset,
                    Addr modSize,
                    Addr tileSize)
@@ -151,7 +151,7 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
     memset(&env, 0, sizeof(env));
     env.platform = Platform::GEM5;
     env.tile_id = tileId;
-    env.tile_desc = tiles[tileId];
+    env.tile_desc = tile_attr(tileId);
     env.argc = getArgc();
     Addr argv = envStart + sizeof(env);
     // the kernel gets the kernel env behind the normal env
@@ -161,7 +161,7 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
     env.argv = argv;
 
     // with paging, the kernel gets an initial heap mapped
-    if ((tiles[tileId] & 0x7) == 1 || (tiles[tileId] & 0x7) == 2)
+    if ((env.tile_desc & 0x7) == 1 || (env.tile_desc & 0x7) == 2)
         env.heap_size = HEAP_SIZE;
     // otherwise, he should use all internal memory
     else
@@ -228,7 +228,7 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
         size_t mem_count = 0;
         MemMod *bmems = new MemMod[tiles.size()];
         auto avail_mem_start = modOffset + modSize + tiles.size() * tileSize;
-        bmems[0].size = tiles[mem.memTile] & ~static_cast<Addr>(0xFFF);
+        bmems[0].size = tile_attr(mem.memTile) & ~static_cast<Addr>(0xFFF);
         if (bmems[0].size < avail_mem_start)
             panic("Not enough DRAM for modules and tiles");
         bmems[0].addr = tcu::NocAddr(mem.memTile, avail_mem_start).getAddr();

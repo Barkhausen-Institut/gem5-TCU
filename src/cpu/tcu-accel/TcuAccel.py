@@ -38,7 +38,7 @@ class TcuAccel(ClockedObject):
     cxx_class = 'gem5::tcu::TcuAccel'
     port = MasterPort("Port to the TCU and Scratch-Pad-Memory")
     system = Param.System(Parent.any, "System this tester is part of")
-    id = Param.Unsigned("Core ID")
+    tile_id = Param.Unsigned("Tile ID")
     regfile_base_addr = Param.Addr(0xF0000000, "Register file address")
     offset = Param.Unsigned(0, "The offset that all accesses have to go above")
 

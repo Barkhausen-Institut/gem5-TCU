@@ -60,5 +60,5 @@ class TcuPciProxy(ClockedObject):
                          "from the proxied device")
 
     system = Param.System(Parent.any, "System the PCI proxy is part of")
-    id = Param.Unsigned("Core ID")
+    tile_id = Param.Unsigned("Tile ID")
     tcu_regfile_base_addr = Param.Addr(0xF0000000, "TCU register file address")

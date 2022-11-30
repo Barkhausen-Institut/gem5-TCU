@@ -93,7 +93,7 @@ class M3Loader
 
   public:
     const Addr envStart;
-    const uint tileId;
+    const tcu::tileid_t tileId;
     const Addr modOffset;
     const Addr modSize;
     const Addr tileSize;
@@ -103,14 +103,14 @@ class M3Loader
              const std::vector<std::string> &mods,
              const std::string &cmdline,
              Addr envStart,
-             uint tileId,
+             tcu::tileid_t tileId,
              Addr modOffset,
              Addr modSize,
              Addr tileSize);
 
-    const std::vector<Addr> &tile_attr() const
+    Addr tile_attr(tcu::tileid_t tileId) const
     {
-        return tiles;
+        return tiles[tileId];
     }
 
     void initState(System &sys, TileMemory &mem, RequestPort &noc);

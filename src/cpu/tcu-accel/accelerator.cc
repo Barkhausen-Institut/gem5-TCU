@@ -66,14 +66,14 @@ TcuAccel::TcuAccel(const TcuAccelParams &p)
     maxDataSize(p.max_data_size),
     offset(p.offset),
     port("port", this),
-    tcu(p.regfile_base_addr, system->getRequestorId(this, name()), p.id),
-    id(p.id),
+    tcu(p.regfile_base_addr, system->getRequestorId(this, name()), p.tile_id),
+    tileId(p.tile_id),
     atomic(system->isAtomicMode()),
     retryPkt(nullptr),
     connector()
 {
     TileMemory *sys = dynamic_cast<TileMemory*>(system);
-    haveVM = !sys->hasMem(id);
+    haveVM = !sys->hasMem(tileId);
     // if we don't have VM, we have an SPM, which supports larger chunks
     if (!haveVM)
         chunkSize = maxDataSize;

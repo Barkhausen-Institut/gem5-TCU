@@ -54,7 +54,7 @@ M3ArmSystem::M3ArmSystem(const Params &p)
 
 uint32_t M3ArmSystem::tileDesc(tcu::tileid_t tile) const
 {
-    return loader.tile_attr()[tile];
+    return loader.tile_attr(tile);
 }
 
 Port&

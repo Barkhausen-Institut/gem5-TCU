@@ -79,7 +79,7 @@ TcuPciProxy::TcuPciProxy(const TcuPciProxyParams &p)
       tcuSlavePort(name() + ".tcu_slave_port", this),
       pioPort(name() + ".pio_port", this),
       dmaPort(name() + ".dma_port", this),
-      tcu(p.tcu_regfile_base_addr, p.system->getRequestorId(this, name()), p.id),
+      tcu(p.tcu_regfile_base_addr, p.system->getRequestorId(this, name()), p.tile_id),
       deviceBusAddr(0, 0, 0),
       tickEvent(this),
       cmdSM(tcu, this),

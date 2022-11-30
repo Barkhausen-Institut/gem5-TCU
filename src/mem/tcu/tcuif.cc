@@ -35,10 +35,10 @@ namespace gem5
 namespace tcu
 {
 
-TcuIf::TcuIf(Addr reg_base, RequestorID requestorId, unsigned int id)
+TcuIf::TcuIf(Addr reg_base, RequestorID requestorId, unsigned ctxId)
     : reg_base(reg_base),
       requestorId(requestorId),
-      id(id)
+      ctxId(ctxId)
 {
 }
 
@@ -59,7 +59,7 @@ TcuIf::getRegAddr(UnprivReg reg)
 }
 
 Addr
-TcuIf::getRegAddr(unsigned reg, unsigned epid)
+TcuIf::getRegAddr(size_t reg, epid_t epid)
 {
     Addr result = sizeof(RegFile::reg_t) * (numExtRegs + numUnprivRegs);
 
@@ -87,7 +87,7 @@ TcuIf::createPacket(Addr paddr,
     Request::Flags flags;
 
     auto req = std::make_shared<Request>(paddr, size, flags, requestorId);
-    req->setContext(id);
+    req->setContext(ctxId);
 
     auto pkt = new Packet(req, cmd);
     pkt->dataDynamic(data);
