@@ -37,20 +37,23 @@ namespace gem5
 
 SpuSystem::SpuSystem(const Params &p)
     : System(p),
-      TileMemory(this, p.memory_tile, p.memory_offset, p.memory_size,
-                physProxy),
-      tiles(p.tiles),
-      tileId(p.tile_id)
+      TileMemory(this, tcu::TileId::from_raw(p.memory_tile),
+                 p.memory_offset, p.memory_size, physProxy),
+      tiles(),
+      tileId(tcu::TileId::from_raw(p.tile_id))
 {
+    assert(p.tile_descs.size() == p.tile_ids.size());
+    for (size_t i = 0; i < p.tile_ids.size(); ++i)
+        tiles[tcu::TileId::from_raw(p.tile_ids[i])] = p.tile_descs[i];
 }
 
 SpuSystem::~SpuSystem()
 {
 }
 
-uint32_t SpuSystem::tileDesc(tcu::tileid_t tile) const
+tcu::tiledesc_t SpuSystem::tileDesc(tcu::TileId tile) const
 {
-    return tiles[tile];
+    return tiles.at(tile);
 }
 
 }

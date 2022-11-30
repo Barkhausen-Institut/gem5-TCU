@@ -132,7 +132,7 @@ Tcu::regStats()
 }
 
 bool
-Tcu::isMemTile(tileid_t tile) const
+Tcu::isMemTile(TileId tile) const
 {
     TileMemory *sys = dynamic_cast<TileMemory*>(system);
     return !sys || sys->hasMem(tile);
@@ -198,7 +198,7 @@ Tcu::WriteCoverageEvent::completed(PacketPtr pkt)
     if (!_out)
     {
         std::ostringstream filename;
-        filename << "coverage-" << (int)_tcu.tileId << "-" << _act << ".profraw";
+        filename << "coverage-" << _tcu.tileId.raw() << "-" << _act << ".profraw";
 
         DPRINTF(Tcu, "Writing coverage: opening %s\n", filename.str().c_str());
 
@@ -537,7 +537,7 @@ Tcu::translatePhysToNoC(Addr phys, bool write)
     if (epid >= numEndpoints || regs().getEp(epid).type() != EpType::MEMORY)
     {
         DPRINTFS(Tcu, this, "PMP-EP%u: invalid EP (phys=%#x)\n", epid, phys);
-        warn("T%u,PMP-EP%u: invalid EP", tileId, epid);
+        warn("%s,PMP-EP%u: invalid EP", tileId, epid);
         return NocAddr();
     }
 
@@ -548,7 +548,7 @@ Tcu::translatePhysToNoC(Addr phys, bool write)
         DPRINTFS(Tcu, this,
                  "PMP-EP%u: out of bounds (%#x vs. %#x)\n",
                  epid, physOff, mep.r2.remoteSize);
-        warn("T%u,PMP-EP%u: out of bounds", tileId, epid);
+        warn("%s,PMP-EP%u: out of bounds", tileId, epid);
         return NocAddr();
     }
     if ((!write && !(mep.r0.flags & MemoryFlags::READ)) ||
@@ -557,12 +557,13 @@ Tcu::translatePhysToNoC(Addr phys, bool write)
         DPRINTFS(Tcu, this,
                  "PMP-EP%u: permission denied (flags=%#x, write=%d)\n",
                  epid, mep.r0.flags, write);
-        warn("T%u,PMP-EP%u: permission denied", tileId, epid);
+        warn("%s,PMP-EP%u: permission denied", tileId, epid);
         return NocAddr();
     }
 
     // translate to NoC address
-    return NocAddr(mep.r0.targetTile, mep.r1.remoteAddr + physOff);
+    return NocAddr(TileId::from_raw(mep.r0.targetTile),
+                   mep.r1.remoteAddr + physOff);
 }
 
 bool
@@ -589,8 +590,8 @@ Tcu::handleLLCRequest(PacketPtr pkt, bool functional)
 
     pkt->setAddr(noc.getAddr());
 
-    DPRINTF(TcuLLCMemAcc, "Sending LLC request for %#x to %d:%#x\n",
-                    pktAddr, noc.tileId, noc.offset);
+    DPRINTF(TcuLLCMemAcc, "Sending LLC request for %#x to %s:%#x\n",
+            pktAddr, noc.tileId, noc.offset);
 
     if(pkt->isWrite())
         printPacket(pkt);

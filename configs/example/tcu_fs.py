@@ -28,6 +28,7 @@
 # either expressed or implied, of the FreeBSD Project.
 
 import argparse
+import re
 import sys
 import os
 
@@ -81,6 +82,40 @@ mod_offset                      = base_offset
 mod_size                        = 128 * 1024 * 1024
 tile_offset                     = mod_offset + mod_size
 tile_size                       = 16 * 1024 * 1024
+tile_off                        = 0
+
+class TileId:
+    @classmethod
+    def from_raw(cls, raw):
+        return cls(int(raw) >> 8, int(raw) & 0xFF)
+    @classmethod
+    def parse(cls, desc):
+        m = re.match("C(\d+)T(\d+)", desc)
+        if m:
+            return cls(int(m.group(1)), int(m.group(2)))
+        else:
+            return cls(0, int(desc))
+
+    def __init__(self, chip, tile):
+        self._chip = chip
+        self._tile = tile
+
+    def raw(self):
+        return (self._chip << 8) | self._tile
+    def chip(self):
+        return self._chip
+    def tile(self):
+        return self._tile
+
+    def __eq__(self, other):
+        if not isinstance(other, TileId):
+            return NotImplemented
+        return self._chip == other._chip and self._tile == other._tile
+    def __hash__(self):
+        return hash((self._chip, self._tile))
+
+    def __str__(self):
+        return "C%dT%02d" % (self.chip(), self.tile())
 
 class PcPciHost(GenericPciHost):
     conf_base = 0x30000000
@@ -114,7 +149,7 @@ def getOptions():
     parser.add_argument("--mem-ranks", default=None,
                         help="number of memory ranks per channel")
 
-    parser.add_argument("--pausetile", default=-1,
+    parser.add_argument("--pausetile", default="",
                         help="the tile to pause until GDB connects")
 
     parser.add_argument("--sys-voltage", action="store",
@@ -148,33 +183,33 @@ def getCacheStr(cache):
     )
 
 def printConfig(tile):
-    print('     TCU  =eps:%d, bufsz:%d B, blocksz:%d B, count:%d, tlb:%d' % \
+    print('       TCU  =eps:%d, bufsz:%d B, blocksz:%d B, count:%d, tlb:%d' % \
         (tile.tcu.num_endpoints, tile.tcu.buf_size.value, tile.tcu.block_size.value,
          tile.tcu.buf_count, tile.tcu.tlb_entries))
 
     try:
-        print('     L1i$ =%s' % (getCacheStr(tile.l1icache)))
-        print('     L1d$ =%s' % (getCacheStr(tile.l1dcache)))
+        print('       L1i$ =%s' % (getCacheStr(tile.l1icache)))
+        print('       L1d$ =%s' % (getCacheStr(tile.l1dcache)))
         if hasattr(tile, 'l2cache'):
-            print('     L2$  =%s' % (getCacheStr(tile.l2cache)))
+            print('       L2$  =%s' % (getCacheStr(tile.l2cache)))
 
-        str = '     Comp =Core -> TCU -> L1$'
+        str = '       Comp =Core -> TCU -> L1$'
         if hasattr(tile, 'l2cache'):
             str += ' -> L2$'
         print(str)
     except:
         try:
-            print('     imem =%d KiB' % (int(tile.spm.range.end) / 1024))
-            print('     Comp =Core -> TCU -> SPM')
+            print('       imem =%d KiB' % (int(tile.spm.range.end) / 1024))
+            print('       Comp =Core -> TCU -> SPM')
         except:
             pass
 
 def interpose(tile, options, name, port):
-    if int(tile.tile_id) in options.mem_watches:
-        watch = options.mem_watches[int(tile.tile_id)]
+    if TileId.from_raw(tile.tile_id) in options.mem_watches:
+        watch = options.mem_watches[TileId.from_raw(tile.tile_id)]
         mon = CommMonitor()
         mon.trace = MemWatchProbe(probe_name="PktResponse", ranges=watch)
-        mon.cpu_side_ports = port
+        mon.cpu_side_port = port
         setattr(tile, name, mon)
         return mon.master
     return port
@@ -194,8 +229,9 @@ def connectCuToMem(tile, options, dport, iport=None, l1size=None):
         tile.tcu.icache_slave_port = interpose(tile, options, 'cu_imon', iport)
     tile.tcu.dcache_slave_port = interpose(tile, options, 'cu_dmon', dport)
 
-def createTile(noc, options, no, systemType, l1size, l2size, spmsize,
+def createTile(noc, options, id, systemType, l1size, l2size, spmsize,
                memTile, epCount):
+    global tile_off
     CPUClass = ObjectList.cpu_list.get(options.cpu_type)
 
     # each tile is represented by it's own subsystem
@@ -203,7 +239,7 @@ def createTile(noc, options, no, systemType, l1size, l2size, spmsize,
     tile.voltage_domain = VoltageDomain(voltage=options.sys_voltage)
     tile.clk_domain = SrcClockDomain(clock=options.cpu_clock,
                                    voltage_domain=tile.voltage_domain)
-    tile.tile_id = no
+    tile.tile_id = id.raw()
 
     if not l2size is None:
         tile.xbar = SystemXBar()
@@ -212,7 +248,7 @@ def createTile(noc, options, no, systemType, l1size, l2size, spmsize,
     tile.xbar.point_of_coherency = True
 
     tile.tcu = Tcu(max_noc_packet_size='2kB', buf_size='2kB')
-    tile.tcu.tile_id = no
+    tile.tcu.tile_id = id.raw()
 
     tile.tcu.num_endpoints = epCount
 
@@ -273,9 +309,10 @@ def createTile(noc, options, no, systemType, l1size, l2size, spmsize,
             tile.spm.offset = tile.tcu.tile_mem_offset
 
     if systemType != MemSystem:
-        tile.memory_tile = memTile
-        tile.memory_offset = tile_offset + (tile_size * no)
+        tile.memory_tile = memTile.raw()
+        tile.memory_offset = tile_offset + (tile_size * tile_off)
         tile.memory_size = tile_size
+        tile_off += 1
 
     if systemType == MemSystem or l1size is None:
         # for memory tiles or tiles with SPM, we do not need a buffer. for the
@@ -296,7 +333,7 @@ def createTile(noc, options, no, systemType, l1size, l2size, spmsize,
 
     return tile
 
-def createCoreTile(noc, options, no, cmdline, memTile, epCount,
+def createCoreTile(noc, options, id, cmdline, memTile, epCount,
                    l1size=None, l2size=None, spmsize='8MB'):
     CPUClass = ObjectList.cpu_list.get(options.cpu_type)
 
@@ -311,7 +348,7 @@ def createCoreTile(noc, options, no, cmdline, memTile, epCount,
         con = X86Connector
 
     tile = createTile(
-        noc=noc, options=options, no=no, systemType=sysType,
+        noc=noc, options=options, id=id, systemType=sysType,
         l1size=l1size, l2size=l2size, spmsize=spmsize,
         memTile=memTile, epCount=epCount
     )
@@ -344,14 +381,15 @@ def createCoreTile(noc, options, no, cmdline, memTile, epCount,
         tile.workload = X86FsWorkload(object_file = cmdline.split(' ')[0])
     tile.cmdline = cmdline
 
-    print("T%02d: %s" % (no, cmdline))
-    print('     Core =%s @ %s' % (type(tile.cpu), options.cpu_clock))
+    print("%s: %s" % (id, cmdline))
+    print('       Core =%s @ %s' % (type(tile.cpu), options.cpu_clock))
     printConfig(tile)
 
     # if specified, let this tile wait for GDB
-    if options.pausetile == no:
-        print('      waiting for GDB')
-        tile.cpu.wait_for_remote_gdb = True
+    if options.pausetile != "":
+        if TileId.parse(options.pausetile) == id:
+            print('       Waiting for GDB')
+            tile.workload.wait_for_remote_gdb = True
 
     print()
 
@@ -404,8 +442,8 @@ def createCoreTile(noc, options, no, cmdline, memTile, epCount,
 
     return tile
 
-def createKecAccTile(noc, options, no, cmdline, memTile, epCount, spmsize='8MB'):
-    tile = createCoreTile(noc, options, no, cmdline, memTile, epCount,
+def createKecAccTile(noc, options, id, cmdline, memTile, epCount, spmsize='8MB'):
+    tile = createCoreTile(noc, options, id, cmdline, memTile, epCount,
                           spmsize=spmsize)
 
     # The MMIO address of the accelerator
@@ -432,9 +470,9 @@ def createKecAccTile(noc, options, no, cmdline, memTile, epCount, spmsize='8MB')
 
     return tile
 
-def createSerialTile(noc, options, no, memTile, epCount):
+def createSerialTile(noc, options, id, memTile, epCount):
     tile = createTile(
-        noc=noc, options=options, no=no, systemType=SpuSystem,
+        noc=noc, options=options, id=id, systemType=SpuSystem,
         l1size=None, l2size=None, spmsize=None, memTile=memTile,
         epCount=epCount
     )
@@ -443,23 +481,23 @@ def createSerialTile(noc, options, no, memTile, epCount):
     # the serial device reads from the host's stdin and sends the read bytes
     # via TCU to some defined receive EP
     tile.serial = TcuSerialInput()
-    tile.serial.tile_id = no
+    tile.serial.tile_id = id.raw()
     tile.serial.clk_domain = SrcClockDomain(clock=options.sys_clock,
                                             voltage_domain=tile.voltage_domain)
 
     connectCuToMem(tile, options, tile.serial.tcu_master_port)
     tile.serial.tcu_slave_port = tile.xbar.mem_side_ports
 
-    print('T%02d: SerialInput' % (no))
+    print('%s: SerialInput' % (id))
     printConfig(tile)
-    print('     Comp =TCU -> SerialInput')
+    print('       Comp =TCU -> SerialInput')
     print()
 
     return tile
 
-def createDeviceTile(noc, options, no, memTile, epCount):
+def createDeviceTile(noc, options, id, memTile, epCount):
     tile = createTile(
-        noc=noc, options=options, no=no, systemType=SpuSystem,
+        noc=noc, options=options, id=id, systemType=SpuSystem,
         l1size=None, l2size=None, spmsize=None, memTile=memTile,
         epCount=epCount
     )
@@ -468,7 +506,7 @@ def createDeviceTile(noc, options, no, memTile, epCount):
     # the proxy sits between the device and the TCU to translate interrupts
     # and DMA to the TCU's mechanisms
     tile.proxy = TcuPciProxy()
-    tile.proxy.tile_id = no
+    tile.proxy.tile_id = id.raw()
     tile.proxy.clk_domain = SrcClockDomain(clock=options.sys_clock,
                                            voltage_domain=tile.voltage_domain)
 
@@ -495,8 +533,8 @@ def createDeviceTile(noc, options, no, memTile, epCount):
 
     return tile
 
-def createStorageTile(noc, options, no, memTile, epCount, img0=None, img1=None):
-    tile = createDeviceTile(noc, options, no, memTile, epCount)
+def createStorageTile(noc, options, id, memTile, epCount, img0=None, img1=None):
+    tile = createDeviceTile(noc, options, id, memTile, epCount)
 
     # create disks
     disks = []
@@ -521,15 +559,15 @@ def createStorageTile(noc, options, no, memTile, epCount, img0=None, img1=None):
     tile.idectrl.pio = tile.iobus.default
     tile.idectrl.dma = tile.dmabridge.cpu_side_port
 
-    print('tile%02d: %s' % (no, img0))
+    print('%s: %s' % (id, img0))
     printConfig(tile)
-    print('     Comp =TCU -> Proxy -> IDE')
+    print('       Comp =TCU -> Proxy -> IDE')
     print()
 
     return tile
 
-def createEtherTile(noc, options, no, memTile, epCount):
-    tile = createDeviceTile(noc, options, no, memTile, epCount)
+def createEtherTile(noc, options, id, memTile, epCount):
+    tile = createDeviceTile(noc, options, id, memTile, epCount)
 
     tile.nic = IGbE_e1000()
     tile.nic.clk_domain = SrcClockDomain(clock=options.sys_clock,
@@ -543,9 +581,9 @@ def createEtherTile(noc, options, no, memTile, epCount):
     tile.nic.pio = tile.iobus.default
     tile.nic.dma = tile.dmabridge.cpu_side_port
 
-    print('T%02d: IGbE_e1000' % (no))
+    print('%s: IGbE_e1000' % (id))
     printConfig(tile)
-    print('     Comp =TCU -> Proxy -> NIC')
+    print('       Comp =TCU -> Proxy -> NIC')
     print()
 
     return tile
@@ -558,10 +596,10 @@ def linkEthertiles(ether0, ether1):
     ether0.etherlink = link
     ether1.etherlink = link
 
-def createAccelTile(noc, options, no, accel, memTile, epCount,
+def createAccelTile(noc, options, id, accel, memTile, epCount,
                     l1size=None, l2size=None, spmsize='64kB'):
     tile = createTile(
-        noc=noc, options=options, no=no, systemType=SpuSystem,
+        noc=noc, options=options, id=id, systemType=SpuSystem,
         l1size=l1size, l2size=l2size, spmsize=spmsize, memTile=memTile,
         epCount=epCount
     )
@@ -583,41 +621,41 @@ def createAccelTile(noc, options, no, accel, memTile, epCount,
         print('Accelerator "%s" does not exist' % (accel))
         sys.exit(1)
     tile.tcu.connector.accelerator = tile.accel
-    tile.accel.tile_id = no;
+    tile.accel.tile_id = id.raw();
     tile.accel.offset = tile.tcu.tile_mem_offset
 
     connectCuToMem(tile, options, tile.accel.port)
 
-    print('T%02d: %s accelerator @ %s' % (no, accel, options.cpu_clock))
+    print('%s: %s accelerator @ %s' % (id, accel, options.cpu_clock))
     printConfig(tile)
     print()
 
     return tile
 
-def createAbortTestTile(noc, options, no, memTile, epCount,
+def createAbortTestTile(noc, options, id, memTile, epCount,
                         l1size=None, l2size=None, spmsize='8MB'):
     tile = createTile(
-        noc=noc, options=options, no=no, systemType=SpuSystem,
+        noc=noc, options=options, id=id, systemType=SpuSystem,
         l1size=l1size, l2size=l2size, spmsize=spmsize, memTile=memTile,
         epCount=epCount
     )
     tile.tcu.connector = BaseConnector()
 
     tile.cpu = TcuAbortTest()
-    tile.cpu.tile_id = no;
+    tile.cpu.tile_id = id.raw();
 
     connectCuToMem(tile, options, tile.cpu.port)
 
-    print('T%02d: aborttest core' % (no))
+    print('%s: aborttest core' % (id))
     printConfig(tile)
     print()
 
     return tile
 
-def createMemTile(noc, options, no, size, epCount,
+def createMemTile(noc, options, id, size, epCount,
                   dram=True, image=None, imageNum=0):
     tile = createTile(
-        noc=noc, options=options, no=no, systemType=MemSystem,
+        noc=noc, options=options, id=id, systemType=MemSystem,
         l1size=None, l2size=None, spmsize=None, memTile=0,
         epCount=epCount
     )
@@ -649,11 +687,11 @@ def createMemTile(noc, options, no, size, epCount,
         tile.mem_file = image
         tile.mem_file_num = imageNum
 
-    print('T%02d: %s x %d' % (no, image, imageNum))
+    print('%s: %s x %d' % (id, image, imageNum))
     printConfig(tile)
-    print('     imem =%d KiB' % (int(size_bytes) / 1024))
+    print('       imem =%d KiB' % (int(size_bytes) / 1024))
     name = 'SPM' if type(tile.mem_ctrl).__name__ == 'Scratchpad' else 'DRAM'
-    print('     Comp =TCU -> %s' % (name))
+    print('       Comp =TCU -> %s' % (name))
     print()
 
     return tile
@@ -675,22 +713,12 @@ def createRoot(options):
     root.noc.forward_latency = 2
     root.noc.response_latency = 4
 
-    # create a dummy platform and system for the UART
-    root.platform = IOPlatform()
-    root.platform.system = System()
-    root.platform.system.system_port = root.noc.cpu_side_ports
-
-    # UART and terminal
-    root.platform.com_1 = Uart8250()
-    root.platform.com_1.pio_addr = IO_address_space_base + 0x3f8
-    root.platform.com_1.device = Terminal()
-    root.platform.com_1.pio = root.noc.mem_side_ports
-
     return root
 
 def runSimulation(root, options, tiles):
-    # determine types of tiles and their internal memory size
-    tile_mems = []
+    # determine tile descriptors and ids
+    tile_descs = []
+    tile_ids = []
     for tile in tiles:
         size = 0
         if hasattr(tile, 'mem_ctrl'):
@@ -727,14 +755,16 @@ def runSimulation(root, options, tiles):
 
             if hasattr(tile, 'kecacc'):
                 size |= 0x8 << 7 # TileAttr::KECACC
-        tile_mems.append(size)
+        tile_descs.append(size)
+        tile_ids.append(tile.tile_id)
 
     # give that to the tiles
     for tile in tiles:
-        setattr(root, 'T%02d' % tile.tile_id, tile)
+        setattr(root, '%s' % TileId.from_raw(tile.tile_id), tile)
         try:
             tile.mods = options.mods
-            tile.tiles = tile_mems
+            tile.tile_descs = tile_descs
+            tile.tile_ids = tile_ids
         except:
             pass
 

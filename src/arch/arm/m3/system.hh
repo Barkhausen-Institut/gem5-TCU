@@ -71,7 +71,7 @@ class M3ArmSystem : public ArmSystem, public TileMemory
     typedef M3ArmSystemParams Params;
     M3ArmSystem(const Params &p);
 
-    uint32_t tileDesc(tcu::tileid_t tile) const override;
+    tcu::tiledesc_t tileDesc(tcu::TileId tile) const override;
 
     Port& getPort(const std::string &if_name,
                   PortID idx = InvalidPortID) override;

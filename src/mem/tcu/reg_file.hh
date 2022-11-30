@@ -85,7 +85,44 @@ constexpr unsigned numBufRegs = 32;
 
 typedef uint16_t actid_t;
 typedef uint16_t epid_t;
+typedef uint8_t chipid_t;
 typedef uint8_t tileid_t;
+typedef uint64_t tiledesc_t;
+
+class TileId
+{
+public:
+    static TileId from_raw(uint16_t raw)
+    {
+        return TileId(raw >> 8, raw & 0xFF);
+    }
+
+    explicit TileId() : id() {}
+    explicit TileId(chipid_t chip, tileid_t tile) : id((chip << 8) | tile) {}
+
+    chipid_t chip() const { return id >> 8; }
+    tileid_t tile() const { return id & 0xFF; }
+    uint16_t raw() const { return id; }
+
+    bool operator <(const TileId &rhs) const { return id < rhs.id; }
+    friend bool operator==(const TileId &lhs, const TileId &rhs)
+    {
+        return lhs.id == rhs.id;
+    }
+    friend bool operator!=(const TileId &lhs, const TileId &rhs)
+    {
+        return !operator==(lhs, rhs);
+    }
+
+    friend std::ostream &operator<<(std::ostream &os, const TileId &t)
+    {
+        ccprintf(os, "C%dT%02d", t.chip(), t.tile());
+        return os;
+    }
+
+private:
+    uint16_t id;
+};
 
 enum class EpType
 {
@@ -208,7 +245,7 @@ struct SendEp
     EndBitUnion(R0)
 
     BitUnion64(R1)
-        Bitfield<23, 16> tgtTile;
+        Bitfield<29, 16> tgtTile;
         Bitfield<15, 0> tgtEp;
     EndBitUnion(R1)
 
@@ -303,7 +340,7 @@ struct MemEp
                RegAccess access) const;
 
     BitUnion64(R0)
-        Bitfield<30, 23> targetTile;
+        Bitfield<36, 23> targetTile;
         Bitfield<22, 19> flags;
         Bitfield<18, 3> act;
         Bitfield<2, 0> type;
@@ -400,14 +437,14 @@ EndBitUnion(PrintReg)
 
 struct M5_ATTR_PACKED MessageHeader
 {
-    uint8_t flags : 2,
-            replySize: 6;
-    uint8_t senderTileId;
+    uint32_t flags : 1,
+             replySize : 4,
+             senderTileId : 14,
+             length : 13;
     uint16_t senderEpId;
     // for a normal message this is the reply epId
     // for a reply this is the enpoint that receives credits
     uint16_t replyEpId;
-    uint16_t length;
 
     // should be large enough for pointers.
     uint32_t replyLabel;

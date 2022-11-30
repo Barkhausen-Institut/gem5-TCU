@@ -139,7 +139,7 @@ RegFile::initMemEp()
         ep.r0.act = Tcu::INVALID_ACT_ID;
         // TODO exec
         ep.r0.flags = Tcu::MemoryFlags::READ | Tcu::MemoryFlags::WRITE;
-        ep.r0.targetTile = phys.tileId;
+        ep.r0.targetTile = phys.tileId.raw();
         ep.r1.remoteAddr = phys.offset;
         ep.r2.remoteSize = sys->memSize;
 

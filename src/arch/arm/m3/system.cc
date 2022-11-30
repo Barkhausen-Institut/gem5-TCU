@@ -47,12 +47,12 @@ M3ArmSystem::M3ArmSystem(const Params &p)
       TileMemory(this, p.memory_tile, p.memory_offset, p.memory_size,
                  physProxy),
       nocPort(*this),
-      loader(p.tiles, p.mods, p.cmdline, p.env_start,
+      loader(p.tiles_per_chip, p.tiles, p.mods, p.cmdline, p.env_start,
              p.tile_id, p.mod_offset, p.mod_size, p.tile_size)
 {
 }
 
-uint32_t M3ArmSystem::tileDesc(tcu::tileid_t tile) const
+tcu::tiledesc_t M3ArmSystem::tileDesc(tcu::TileId tile) const
 {
     return loader.tile_attr(tile);
 }

@@ -42,10 +42,10 @@ namespace tcu
 
 /**
  *
- *  64 63        56            0
- *   ---------------------------
- *   |V|   tileId  | offset      |
- *   ---------------------------
+ *  64 63      49        0
+ *   ---------------------
+ *   |V| tileId | offset |
+ *   ---------------------
  */
 class NocAddr
 {
@@ -56,28 +56,28 @@ class NocAddr
 
     explicit NocAddr(Addr addr)
         : valid(addr >> 63),
-          tileId((addr >> 56) & ((1 << 7) - 1)),
-          offset(addr & ((static_cast<Addr>(1) << 56) - 1))
+          tileId(TileId::from_raw((addr >> 49) & ((1 << 14) - 1))),
+          offset(addr & ((static_cast<Addr>(1) << 49) - 1))
     {}
 
-    explicit NocAddr(tileid_t _tileId, Addr _offset)
+    explicit NocAddr(TileId _tileId, Addr _offset)
         : valid(1), tileId(_tileId), offset(_offset)
     {}
 
     Addr getAddr() const
     {
-        assert((tileId & ~((1 << 7) - 1)) == 0);
-        assert((offset & ~((static_cast<Addr>(1) << 56) - 1)) == 0);
+        assert((tileId.raw() & ~((1 << 14) - 1)) == 0);
+        assert((offset & ~((static_cast<Addr>(1) << 49) - 1)) == 0);
 
         Addr res = static_cast<Addr>(valid) << 63;
-        res |= static_cast<Addr>(tileId) << 56;
+        res |= static_cast<Addr>(tileId.raw()) << 49;
         res |= offset;
         return res;
     }
 
     bool valid;
 
-    tileid_t tileId;
+    TileId tileId;
 
     Addr offset;
 };

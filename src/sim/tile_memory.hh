@@ -47,22 +47,22 @@ class TileMemory
 
   public:
 
-    const tcu::tileid_t memTile;
+    const tcu::TileId memTile;
     const Addr memOffset;
     const Addr memSize;
 
     TileMemory(SimObject *obj,
-               tcu::tileid_t memTile,
+               tcu::TileId memTile,
                Addr memOffset,
                Addr memSize,
                PortProxy &phys);
 
-    bool hasMem(tcu::tileid_t tile) const
+    bool hasMem(tcu::TileId tile) const
     {
         return (tileDesc(tile) & 0x7) != 1;
     }
 
-    virtual uint32_t tileDesc(tcu::tileid_t tile) const = 0;
+    virtual tcu::tiledesc_t tileDesc(tcu::TileId tile) const = 0;
 
     tcu::NocAddr getPhys(Addr offset) const
     {

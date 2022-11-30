@@ -142,14 +142,15 @@ MemoryUnit::startReadWithEP(EpFile::EpCache &eps)
 
     readBytes.sample(size);
 
+    NocAddr dest(TileId::from_raw(mep.r0.targetTile),
+                 mep.r1.remoteAddr + offset);
+
     DPRINTFS(Tcu, (&tcu),
-        "\e[1m[rd -> %u]\e[0m at %#018lx+%#lx with EP%u into %#018lx:%lu\n",
-        mep.r0.targetTile, mep.r1.remoteAddr, offset,
+        "\e[1m[rd -> %s]\e[0m at %#018lx+%#lx with EP%u into %#018lx:%lu\n",
+        dest.tileId, mep.r1.remoteAddr, offset,
         cmd.epid, data.addr, size);
 
-    NocAddr nocAddr(mep.r0.targetTile, mep.r1.remoteAddr + offset);
-
-    auto pkt = tcu.generateRequest(nocAddr.getAddr(),
+    auto pkt = tcu.generateRequest(dest.getAddr(),
                                    size,
                                    MemCmd::ReadReq);
 
@@ -309,7 +310,8 @@ MemoryUnit::startWriteWithEP(EpFile::EpCache &eps)
         }
     }
 
-    NocAddr dest(mep.r0.targetTile, mep.r1.remoteAddr + offset);
+    NocAddr dest(TileId::from_raw(mep.r0.targetTile),
+                 mep.r1.remoteAddr + offset);
 
     auto xfer = new WriteTransferEvent(phys, size, 0, dest);
     tcu.startTransfer(xfer, delay);
@@ -343,7 +345,7 @@ MemoryUnit::WriteTransferEvent::transferDone(TcuError result)
             const CmdData::Bits data = tcu().regs().getData();
             Addr offset = tcu().regs().get(UnprivReg::ARG1);
             DPRINTFS(Tcu, (&tcu()),
-                "\e[1m[wr -> %u]\e[0m at %#018lx+%#lx with EP%u from %#018lx:%lu\n",
+                "\e[1m[wr -> %s]\e[0m at %#018lx+%#lx with EP%u from %#018lx:%lu\n",
                 dest.tileId, dest.offset - offset, offset,
                 cmd.epid, data.addr, size());
         }

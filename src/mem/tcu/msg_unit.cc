@@ -281,7 +281,7 @@ MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
     else
         header->flags = 0; // normal message
 
-    header->senderTileId   = tcu.tileId;
+    header->senderTileId = tcu.tileId.raw();
     header->senderEpId   = sep.r0.curCrd == Tcu::CREDITS_UNLIM
                            ? Tcu::INVALID_EP_ID
                            : cmd.epid;
@@ -293,7 +293,7 @@ MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
 
     assert(data.size + sizeof(MessageHeader) <= tcu.maxNocPacketSize);
 
-    NocAddr nocAddr(sep.r1.tgtTile, sep.r1.tgtEp);
+    NocAddr nocAddr(TileId::from_raw(sep.r1.tgtTile), sep.r1.tgtEp);
     uint flags = XferUnit::MESSAGE;
 
     // start the transfer of the payload
@@ -361,22 +361,23 @@ MessageUnit::SendTransferEvent::transferDone(TcuError result)
             const CmdData::Bits data = tcu().regs().getData();
 
             DPRINTFS(Tcu, (&tcu()),
-                     "\e[1m[%s -> %u]\e[0m with EP%u of %#018lx:%lu\n",
+                     "\e[1m[%s -> %s]\e[0m with EP%u of %#018lx:%lu\n",
                      cmd.opcode == CmdCommand::REPLY ? "rp" : "sd",
-                     sep.r1.tgtTile,
+                     TileId::from_raw(sep.r1.tgtTile),
                      cmd.epid,
                      data.addr,
                      data.size);
 
             DPRINTFS(Tcu, (&tcu()),
-                "  src: tile=%u ep=%u rpep=%u rplbl=%#018lx rpsize=%#x flags=%#x%s\n",
-                header->senderTileId, header->senderEpId, header->replyEpId,
+                "  src: tile=%s ep=%u rpep=%u rplbl=%#018lx rpsize=%#x flags=%#x%s\n",
+                TileId::from_raw(header->senderTileId),
+                header->senderEpId, header->replyEpId,
                 header->replyLabel, 1 << header->replySize, header->flags,
-                header->senderTileId != tcu().tileId ? " (on behalf)" : "");
+                TileId::from_raw(header->senderTileId) != tcu().tileId ? " (on behalf)" : "");
 
             DPRINTFS(Tcu, (&tcu()),
-                "  dst: tile=%u ep=%u lbl=%#018lx\n",
-                sep.r1.tgtTile, sep.r1.tgtEp, header->label);
+                "  dst: tile=%s ep=%u lbl=%#018lx\n",
+                TileId::from_raw(sep.r1.tgtTile), sep.r1.tgtEp, header->label);
         }
     }
 
@@ -758,8 +759,8 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
     }
 
     DPRINTFS(Tcu, (&tcu),
-        "\e[1m[rv <- %u]\e[0m %lu bytes on EP%u\n",
-        header->senderTileId, header->length, epId);
+        "\e[1m[rv <- %s]\e[0m %lu bytes on EP%u\n",
+        TileId::from_raw(header->senderTileId), header->length, epId);
     tcu.printPacket(pkt);
 
     if (debug::TcuMsgs)

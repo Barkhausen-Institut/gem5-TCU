@@ -31,6 +31,7 @@
 #ifndef __SIM_M3_LOADER_HH__
 #define __SIM_M3_LOADER_HH__
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -87,30 +88,31 @@ class M3Loader
         uint64_t lambda;
     };
 
-    std::vector<Addr> tiles;
+    std::map<tcu::TileId, tcu::tiledesc_t> tiles;
     std::vector<std::string> mods;
     std::string commandLine;
 
   public:
     const Addr envStart;
-    const tcu::tileid_t tileId;
+    const tcu::TileId tileId;
     const Addr modOffset;
     const Addr modSize;
     const Addr tileSize;
 
   public:
-    M3Loader(const std::vector<Addr> &tiles,
+    M3Loader(const std::vector<Addr> &tile_descs,
+             const std::vector<Addr> &tile_ids,
              const std::vector<std::string> &mods,
              const std::string &cmdline,
              Addr envStart,
-             tcu::tileid_t tileId,
+             tcu::TileId tileId,
              Addr modOffset,
              Addr modSize,
              Addr tileSize);
 
-    Addr tile_attr(tcu::tileid_t tileId) const
+    tcu::tiledesc_t tile_attr(tcu::TileId tileId) const
     {
-        return tiles[tileId];
+        return tiles.at(tileId);
     }
 
     void initState(System &sys, TileMemory &mem, RequestPort &noc);

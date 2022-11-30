@@ -36,7 +36,7 @@ namespace gem5
 {
 
 TileMemory::TileMemory(SimObject *obj,
-                       tcu::tileid_t memTile,
+                       tcu::TileId memTile,
                        Addr memOffset,
                        Addr memSize,
                        PortProxy &phys)

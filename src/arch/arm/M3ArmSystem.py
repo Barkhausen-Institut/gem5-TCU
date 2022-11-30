@@ -49,6 +49,7 @@ class M3ArmSystem(ArmSystem):
     tile_size = Param.Addr(0, "The size of the reserved memory region for each tile (only for kernel tile)")
 
     mods = VectorParam.String([], "The boot modules")
-    tiles = VectorParam.Addr([], "All tiles in the system with their type and mem size")
+    tile_descs = VectorParam.Addr([], "All tile descriptions with their type and mem size")
+    tile_ids = VectorParam.Addr([], "All tile ids")
 
     noc_master_port = MasterPort("Port that connects to the global NoC (only for initialization)")

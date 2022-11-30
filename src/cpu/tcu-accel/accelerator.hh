@@ -123,7 +123,7 @@ class TcuAccel : public ClockedObject
 
     TcuIf tcu;
 
-    tcu::tileid_t tileId;
+    tcu::TileId tileId;
 
     const bool atomic;
 

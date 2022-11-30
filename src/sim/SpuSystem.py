@@ -37,7 +37,8 @@ class SpuSystem(System):
     tile_id = Param.Unsigned("The tile id")
 
     mods = VectorParam.String([], "The boot modules")
-    tiles = VectorParam.Addr([], "All PEs in the system with their type and mem size")
+    tile_descs = VectorParam.Addr([], "All tile descriptions with their type and mem size")
+    tile_ids = VectorParam.Addr([], "All tile ids")
 
     memory_tile = Param.Unsigned(0, "The memory tile to use")
     memory_offset = Param.Addr(0, "The offset in the memory tile")

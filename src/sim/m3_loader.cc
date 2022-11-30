@@ -44,15 +44,16 @@
 namespace gem5
 {
 
-M3Loader::M3Loader(const std::vector<Addr> &tiles,
+M3Loader::M3Loader(const std::vector<Addr> &tile_descs,
+                   const std::vector<Addr> &tile_ids,
                    const std::vector<std::string> &mods,
                    const std::string &cmdline,
                    Addr envStart,
-                   tcu::tileid_t tileId,
+                   tcu::TileId tileId,
                    Addr modOffset,
                    Addr modSize,
                    Addr tileSize)
-    : tiles(tiles),
+    : tiles(),
       mods(mods),
       commandLine(cmdline),
       envStart(envStart),
@@ -61,6 +62,9 @@ M3Loader::M3Loader(const std::vector<Addr> &tiles,
       modSize(modSize),
       tileSize(tileSize)
 {
+    assert(tile_descs.size() == tile_ids.size());
+    for (size_t i = 0; i < tile_ids.size(); ++i)
+        tiles[tcu::TileId::from_raw(tile_ids[i])] = tile_descs[i];
 }
 
 size_t
@@ -150,7 +154,7 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
     BootEnv env;
     memset(&env, 0, sizeof(env));
     env.platform = Platform::GEM5;
-    env.tile_id = tileId;
+    env.tile_id = tileId.raw();
     env.tile_desc = tile_attr(tileId);
     env.argc = getArgc();
     Addr argv = envStart + sizeof(env);
@@ -235,10 +239,11 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
         bmems[0].size -= avail_mem_start;
         mem_count++;
 
-        for (size_t i = 0; i < tiles.size(); ++i) {
-            if (i != mem.memTile && (tiles[i] & 0x7) == 2) {
-                bmems[mem_count].addr = tcu::NocAddr(i, 0).getAddr();
-                bmems[mem_count].size = tiles[i] & ~static_cast<Addr>(0xFFF);
+        for(auto it = tiles.cbegin(); it != tiles.cend(); ++it)
+        {
+            if (it->first != mem.memTile && (tile_attr(it->first) & 0x7) == 2) {
+                bmems[mem_count].addr = tcu::NocAddr(it->first, 0).getAddr();
+                bmems[mem_count].size = tile_attr(it->first) & ~static_cast<Addr>(0xFFF);
                 mem_count++;
             }
         }
@@ -260,14 +265,29 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
         delete[] bmods;
         addr += bmodsize;
 
-        // write PEs to memory
-        uint64_t *ktiles = new uint64_t[kenv.tile_count]();
-        for (size_t i = 0; i < kenv.tile_count; ++i)
-            ktiles[i] = tiles[i];
-        size_t bpesize = kenv.tile_count * sizeof(uint64_t);
-        writeRemote(noc, addr, reinterpret_cast<uint8_t*>(ktiles), bpesize);
-        delete[] ktiles;
-        addr += bpesize;
+        // write tile ids to memory
+        uint16_t *ktileIds = new uint16_t[kenv.tile_count]();
+        {
+            size_t i = 0;
+            for(auto it = tiles.cbegin(); it != tiles.cend(); ++it, ++i)
+                ktileIds[i] = it->first.raw();
+        }
+        size_t bidssize = kenv.tile_count * sizeof(uint16_t);
+        writeRemote(noc, addr, reinterpret_cast<uint8_t*>(ktileIds), bidssize);
+        delete[] ktileIds;
+        addr += bidssize;
+
+        // write tile descriptors to memory
+        uint64_t *ktileDescs = new uint64_t[kenv.tile_count]();
+        {
+            size_t i = 0;
+            for(auto it = tiles.cbegin(); it != tiles.cend(); ++it, ++i)
+                ktileDescs[i] = it->second;
+        }
+        size_t bdescssize = kenv.tile_count * sizeof(uint64_t);
+        writeRemote(noc, addr, reinterpret_cast<uint8_t*>(ktileDescs), bdescssize);
+        delete[] ktileDescs;
+        addr += bdescssize;
 
         // write memory regions to memory
         size_t bmemsize = kenv.mem_count * sizeof(MemMod);

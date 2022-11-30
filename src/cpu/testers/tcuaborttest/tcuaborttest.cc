@@ -149,7 +149,7 @@ TcuAbortTest::TcuAbortTest(const TcuAbortTestParams &p)
     // TODO parameterize
     reg_base(0xF0000000),
     requestorId(p.system->getRequestorId(this, name())),
-    tileId(p.tile_id),
+    tileId(TileId::from_raw(p.tile_id)),
     atomic(p.system->isAtomicMode()),
     retryPkt(nullptr)
 {
@@ -213,7 +213,7 @@ TcuAbortTest::createPacket(Addr paddr,
     Request::Flags flags;
 
     auto req = std::make_shared<Request>(paddr, size, flags, requestorId);
-    req->setContext(tileId);
+    req->setContext(tileId.raw());
 
     auto pkt = new Packet(req, cmd);
     auto pkt_data = new uint8_t[size];
@@ -403,7 +403,7 @@ TcuAbortTest::tick()
             ep.r0.type = static_cast<RegFile::reg_t>(EpType::MEMORY);
             ep.r0.act = Tcu::INVALID_ACT_ID;
             ep.r0.flags = Tcu::MemoryFlags::READ | Tcu::MemoryFlags::WRITE;
-            ep.r0.targetTile = tileId;
+            ep.r0.targetTile = tileId.raw();
             ep.r1.remoteAddr = 0;
             ep.r2.remoteSize = 0xFFFFFFFFFFFFFFFF;
 
@@ -426,7 +426,7 @@ TcuAbortTest::tick()
             ep.r0.curCrd = Tcu::CREDITS_UNLIM;
             ep.r0.maxCrd = Tcu::CREDITS_UNLIM;
             ep.r0.msgSize = 10;
-            ep.r1.tgtTile = tileId;
+            ep.r1.tgtTile = tileId.raw();
             ep.r1.tgtEp = EP_RECV;
             ep.r2.label = 0;
 

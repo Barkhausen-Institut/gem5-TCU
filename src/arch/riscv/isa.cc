@@ -518,7 +518,7 @@ Addr &get_reservation_addr(XC *xc)
     int tile = 0;
     M3System *m3sys;
     if((m3sys = dynamic_cast<M3System*>(xc->getCpuPtr()->system)) != nullptr)
-        tile = m3sys->tile();
+        tile = m3sys->tile().raw();
     return load_reservation_addrs[tile * MAX_TILES + xc->contextId()];
 }
 

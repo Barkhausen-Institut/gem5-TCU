@@ -248,12 +248,9 @@ BaseTcu::NocSlavePort::getAddrRanges() const
     AddrRangeList ranges;
 
     Addr baseNocAddr = NocAddr(tcu.tileId, 0).getAddr();
-    Addr topNocAddr  = NocAddr(tcu.tileId + 1, 0).getAddr() - 1;
+    Addr topNocAddr  = NocAddr(TileId::from_raw(tcu.tileId.raw() + 1), 0).getAddr() - 1;
 
-    DPRINTF(TcuSlavePort, "TCU%u covers %#x to %#x\n",
-                          tcu.tileId,
-                          baseNocAddr,
-                          topNocAddr);
+    DPRINTF(TcuSlavePort, "Covering %#x to %#x\n", baseNocAddr, topNocAddr);
 
     auto range = AddrRange(baseNocAddr, topNocAddr);
 
@@ -308,7 +305,7 @@ BaseTcu::BaseTcu(const BaseTcuParams &p)
     dcacheSlavePort(dcacheMasterPort, *this, false),
     llcSlavePort(*this),
     nocReqFinishedEvent(*this),
-    tileId(p.tile_id),
+    tileId(TileId::from_raw(p.tile_id)),
     mmioRegion(p.mmio_region),
     slaveRegion(p.slave_region)
 {

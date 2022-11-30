@@ -70,12 +70,12 @@ class M3System : public System, public TileMemory
     typedef M3SystemParams Params;
     M3System(const Params &p);
 
-    tcu::tileid_t tile() const
+    tcu::TileId tile() const
     {
         return loader.tileId;
     }
 
-    uint32_t tileDesc(tcu::tileid_t tile) const override;
+    tcu::tiledesc_t tileDesc(tcu::TileId tile) const override;
 
     Port& getPort(const std::string &if_name,
                   PortID idx = InvalidPortID) override;

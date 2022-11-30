@@ -67,7 +67,7 @@ TcuAccel::TcuAccel(const TcuAccelParams &p)
     offset(p.offset),
     port("port", this),
     tcu(p.regfile_base_addr, system->getRequestorId(this, name()), p.tile_id),
-    tileId(p.tile_id),
+    tileId(TileId::from_raw(p.tile_id)),
     atomic(system->isAtomicMode()),
     retryPkt(nullptr),
     connector()

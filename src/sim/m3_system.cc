@@ -43,15 +43,16 @@ M3System::NoCMasterPort::NoCMasterPort(M3System &_sys)
 
 M3System::M3System(const Params &p)
     : System(p),
-      TileMemory(this, p.memory_tile, p.memory_offset, p.memory_size,
-                physProxy),
+      TileMemory(this, tcu::TileId::from_raw(p.memory_tile),
+                 p.memory_offset, p.memory_size, physProxy),
       nocPort(*this),
-      loader(p.tiles, p.mods, p.cmdline, p.env_start,
-             p.tile_id, p.mod_offset, p.mod_size, p.tile_size)
+      loader(p.tile_descs, p.tile_ids, p.mods, p.cmdline, p.env_start,
+             tcu::TileId::from_raw(p.tile_id), p.mod_offset,
+             p.mod_size, p.tile_size)
 {
 }
 
-uint32_t M3System::tileDesc(tcu::tileid_t tile) const
+tcu::tiledesc_t M3System::tileDesc(tcu::TileId tile) const
 {
     return loader.tile_attr(tile);
 }
