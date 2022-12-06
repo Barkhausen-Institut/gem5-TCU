@@ -528,7 +528,6 @@ def createLinuxTile(options, noc, no, memTile, kernel, fsImage, commandLine='ear
     system.workload = RiscvLinux()
     system.workload.object_file = kernel
 
-    system.iobus = IOXBar()
     system.membus = SystemXBar()
 
     system.system_port = system.membus.cpu_side_ports
@@ -555,13 +554,8 @@ def createLinuxTile(options, noc, no, memTile, kernel, fsImage, commandLine='ear
             ))
         system.platform.disks = disks
 
-    system.bridge = Bridge(delay='50ns')
-    system.bridge.mem_side_port = system.iobus.cpu_side_ports
-    system.bridge.cpu_side_port = system.membus.mem_side_ports
-    system.bridge.ranges = system.platform._off_chip_ranges()
-
     system.platform.attachOnChipIO(system.membus)
-    system.platform.attachOffChipIO(system.iobus)
+    system.platform.attachOffChipIO(system.membus)
     system.platform.attachPlic()
     system.platform.intrctrl = IntrControl()
 
@@ -580,10 +574,6 @@ def createLinuxTile(options, noc, no, memTile, kernel, fsImage, commandLine='ear
 
     system.cpu = CPUClass(clk_domain=system.cpu_clk_domain, cpu_id=0)
 
-    # By default the IOCache runs at the system clock
-    system.iocache = IOCache(addr_ranges = system.mem_ranges)
-    system.iocache.cpu_side = system.iobus.mem_side_ports
-    system.iocache.mem_side = system.membus.cpu_side_ports
     system.cpu.createThreads()
 
     # ----------------------------- PMA Checker ---------------------------- #
@@ -653,7 +643,7 @@ def createLinuxTile(options, noc, no, memTile, kernel, fsImage, commandLine='ear
     system.l2.response_latency = 12
     system.l2.prefetcher = StridePrefetcher(degree = 16)
 
-    system.tcu.caches = [system.iocache, system.l2, system.cpu.icache, system.cpu.dcache]
+    system.tcu.caches = [system.l2, system.cpu.icache, system.cpu.dcache]
 
     return system
 
