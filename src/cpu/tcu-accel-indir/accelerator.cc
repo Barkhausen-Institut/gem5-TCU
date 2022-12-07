@@ -276,7 +276,7 @@ TcuAccelInDir::tick()
             {
                 pkt = tcuif().createTcuCmdPkt(
                     CmdCommand::create(CmdCommand::FETCH_MSG, EP_RECV),
-                    0
+                    CmdData::create(0, 0)
                 );
             }
             break;

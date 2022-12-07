@@ -64,7 +64,7 @@ SyscallSM::tick()
 
             pkt = accel->tcuif().createTcuCmdPkt(
                 CmdCommand::create(CmdCommand::FETCH_MSG, TcuAccel::EP_SYSR),
-                0
+                CmdData::create(0, 0)
             );
             break;
         }
@@ -79,7 +79,7 @@ SyscallSM::tick()
             pkt = accel->tcuif().createTcuCmdPkt(
                 CmdCommand::create(CmdCommand::ACK_MSG, TcuAccel::EP_SYSR,
                                    replyAddr - (RBUF_ADDR + accel->offset)),
-                0
+                CmdData::create(0, 0)
             );
             break;
         }

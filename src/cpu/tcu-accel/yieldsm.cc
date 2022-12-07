@@ -35,7 +35,7 @@ YieldSM::tick()
 {
     return accel->tcuif().createTcuCmdPkt(
         CmdCommand::create(CmdCommand::SLEEP, 0, 0xFFFF),
-        0
+        CmdData::create(0, 0)
     );
 }
 

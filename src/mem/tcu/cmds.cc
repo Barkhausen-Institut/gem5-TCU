@@ -291,7 +291,7 @@ TcuCommands::finishCommand(TcuError error)
         case CmdCommand::READ:
         case CmdCommand::WRITE:
         {
-            const CmdData::Bits data = tcu.regs().getData();
+            const CmdData data = tcu.regs().getData();
             if (error == TcuError::NONE && data.size > 0)
             {
                 if (cmd.opcode == CmdCommand::READ)

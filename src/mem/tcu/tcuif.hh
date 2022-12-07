@@ -52,7 +52,7 @@ public:
 
     PacketPtr createTcuRegPkt(Addr reg, RegFile::reg_t value, MemCmd cmd);
 
-    PacketPtr createTcuCmdPkt(CmdCommand::Bits cmd, CmdData::Bits data,
+    PacketPtr createTcuCmdPkt(CmdCommand::Bits cmd, CmdData data,
                               uint64_t offset = 0);
 
     void freePacket(PacketPtr pkt);
