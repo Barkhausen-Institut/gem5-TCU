@@ -33,7 +33,6 @@
 
 #include "base/statistics.hh"
 #include "base/types.hh"
-#include "base/trie.hh"
 #include "mem/tcu/noc_addr.hh"
 #include <vector>
 
@@ -51,10 +50,7 @@ class TcuTlb
         uint flags;
 
         uint lru_seq;
-        Trie<Addr, Entry>::Handle handle;
     };
-
-    typedef Trie<Addr, Entry> TlbEntryTrie;
 
   public:
 
@@ -124,14 +120,12 @@ class TcuTlb
 
   private:
 
-    Result do_lookup(Addr virt, uint16_t asid, uint access, NocAddr *phys);
+    Entry *do_lookup(Addr virt, uint16_t asid, size_t *iters);
 
-    bool evict();
+    Entry *find_free();
 
     Tcu &tcu;
-    TlbEntryTrie trie;
     std::vector<Entry> entries;
-    std::vector<Entry*> free;
     size_t num;
     uint lru_seq;
 
