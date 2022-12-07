@@ -144,7 +144,7 @@ void
 MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
 {
     const CmdCommand::Bits cmd = tcu.regs().getCommand();
-    const CmdData::Bits data = tcu.regs().getData();
+    const CmdData data = tcu.regs().getData();
 
     Cycles delay(cmd.opcode == CmdCommand::REPLY ? tcu.cmdReplyLatency
                                                  : tcu.cmdSendLatency);
@@ -358,7 +358,7 @@ MessageUnit::SendTransferEvent::transferDone(TcuError result)
         {
             msgUnit->sendReplyFinished = false;
 
-            const CmdData::Bits data = tcu().regs().getData();
+            const CmdData data = tcu().regs().getData();
 
             DPRINTFS(Tcu, (&tcu()),
                      "\e[1m[%s -> %s]\e[0m with EP%u of %#018lx:%lu\n",

@@ -70,7 +70,8 @@ enum class PrivReg : Addr
 enum class UnprivReg : Addr
 {
     COMMAND,
-    DATA,
+    DATA_ADDR,
+    DATA_SIZE,
     ARG1,
     CUR_TIME,
     PRINT,
@@ -78,7 +79,7 @@ enum class UnprivReg : Addr
 
 constexpr unsigned numExtRegs = 2;
 constexpr unsigned numPrivRegs = 5;
-constexpr unsigned numUnprivRegs = 5;
+constexpr unsigned numUnprivRegs = 6;
 constexpr unsigned numEpRegs = 3;
 // buffer for prints (32 * 8 bytes)
 constexpr unsigned numBufRegs = 32;
@@ -172,17 +173,15 @@ struct CmdCommand
 
 struct CmdData
 {
-    BitUnion64(Bits)
-        Bitfield<63, 32> size;
-        Bitfield<31, 0> addr;
-    EndBitUnion(Bits)
+    uint64_t addr;
+    uint64_t size;
 
-    static Bits create(uint32_t addr, uint32_t size)
+    static CmdData create(uint64_t addr, uint64_t size)
     {
-        Bits data = 0;
-        data.addr = addr;
-        data.size = size;
-        return data;
+        return CmdData {
+            .addr = addr,
+            .size = size,
+        };
     }
 };
 
@@ -250,7 +249,7 @@ struct SendEp
     EndBitUnion(R1)
 
     BitUnion64(R2)
-        Bitfield<31, 0> label;
+        Bitfield<63, 0> label;
     EndBitUnion(R2)
 
     epid_t id;
@@ -447,8 +446,8 @@ struct M5_ATTR_PACKED MessageHeader
     uint16_t replyEpId;
 
     // should be large enough for pointers.
-    uint32_t replyLabel;
-    uint32_t label;
+    uint64_t replyLabel;
+    uint64_t label;
 };
 
 class Tcu;
@@ -514,14 +513,15 @@ class RegFile
         return get(UnprivReg::COMMAND);
     }
 
-    CmdData::Bits getData() const
+    CmdData getData() const
     {
-        return CmdData::Bits(get(UnprivReg::DATA));
+        return CmdData::create(get(UnprivReg::DATA_ADDR), get(UnprivReg::DATA_SIZE));
     }
 
-    void setData(const CmdData::Bits &data)
+    void setData(const CmdData &data)
     {
-        set(UnprivReg::DATA, data);
+        set(UnprivReg::DATA_ADDR, data.addr);
+        set(UnprivReg::DATA_SIZE, data.size);
     }
 
     const char *getBuffer(size_t bytes);

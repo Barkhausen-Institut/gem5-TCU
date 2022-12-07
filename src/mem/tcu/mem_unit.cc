@@ -45,7 +45,7 @@ static void
 finishReadWrite(Tcu &tcu, Addr size)
 {
     // change data register accordingly
-    CmdData::Bits data = tcu.regs().getData();
+    CmdData data = tcu.regs().getData();
     data.size = data.size - size;
     data.addr = data.addr + size;
     tcu.regs().setData(data);
@@ -116,7 +116,7 @@ MemoryUnit::startReadWithEP(EpFile::EpCache &eps)
                                  "EP%u: no permission\n", cmd.epid);
     }
 
-    CmdData::Bits data = tcu.regs().getData();
+    CmdData data = tcu.regs().getData();
     Addr offset = tcu.regs().get(UnprivReg::ARG1);
     Addr size = std::min(static_cast<Addr>(data.size), tcu.maxNocPacketSize);
 
@@ -180,7 +180,7 @@ MemoryUnit::readComplete(const CmdCommand::Bits& cmd, PacketPtr pkt, TcuError er
 {
     tcu.printPacket(pkt);
 
-    const CmdData::Bits data = tcu.regs().getData();
+    const CmdData data = tcu.regs().getData();
 
     // since the transfer is done in steps, we can start after the header
     // delay here
@@ -268,7 +268,7 @@ MemoryUnit::startWriteWithEP(EpFile::EpCache &eps)
                                  "EP%u: no permission\n", cmd.epid);
     }
 
-    CmdData::Bits data = tcu.regs().getData();
+    CmdData data = tcu.regs().getData();
     Addr offset = tcu.regs().get(UnprivReg::ARG1);
     Addr size = std::min(static_cast<Addr>(data.size), tcu.maxNocPacketSize);
 
@@ -342,7 +342,7 @@ MemoryUnit::WriteTransferEvent::transferDone(TcuError result)
         const CmdCommand::Bits cmd = tcu().regs().getCommand();
         if (cmd.opcode == CmdCommand::WRITE)
         {
-            const CmdData::Bits data = tcu().regs().getData();
+            const CmdData data = tcu().regs().getData();
             Addr offset = tcu().regs().get(UnprivReg::ARG1);
             DPRINTFS(Tcu, (&tcu()),
                 "\e[1m[wr -> %s]\e[0m at %#018lx+%#lx with EP%u from %#018lx:%lu\n",

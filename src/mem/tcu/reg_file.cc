@@ -61,7 +61,8 @@ const char *RegFile::privRegNames[] = {
 
 const char *RegFile::unprivRegNames[] = {
     "COMMAND",
-    "DATA",
+    "DATA_ADDR",
+    "DATA_SIZE",
     "ARG1",
     "CUR_TIME",
     "PRINT",

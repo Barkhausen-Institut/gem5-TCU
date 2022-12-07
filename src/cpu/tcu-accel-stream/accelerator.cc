@@ -721,7 +721,7 @@ TcuAccelStream::tick()
             pkt = tcuif().createTcuCmdPkt(
                 CmdCommand::create(CmdCommand::ACK_MSG, EP_RECV,
                                    ctx.msgAddr - rbufAddr()),
-                0
+                CmdData::create(0, 0)
             );
             break;
         }
@@ -732,7 +732,7 @@ TcuAccelStream::tick()
             {
                 pkt = tcuif().createTcuCmdPkt(
                     CmdCommand::create(CmdCommand::FETCH_MSG, EP_RECV),
-                    0
+                    CmdData::create(0, 0)
                 );
             }
             break;
@@ -840,7 +840,7 @@ TcuAccelStream::tick()
                 pkt = tcuif().createTcuCmdPkt(
                     CmdCommand::create(CmdCommand::ACK_MSG,
                                        EP_RECV, addr - rbufAddr()),
-                    0
+                    CmdData::create(0, 0)
                 );
                 break;
             }

@@ -295,7 +295,7 @@ TcuCommands::finishCommand(TcuError error)
         case CmdCommand::READ:
         case CmdCommand::WRITE:
         {
-            const CmdData::Bits data = tcu.regs().getData();
+            const CmdData data = tcu.regs().getData();
             if (error == TcuError::NONE && data.size > 0)
             {
                 if (cmd.opcode == CmdCommand::READ)
@@ -358,8 +358,8 @@ TcuCommands::executePrivCommand(PacketPtr pkt)
         case PrivCommand::INV_PAGE:
             if (tcu.tlb())
             {
-                uint16_t asid = cmd.arg0 >> 32;
-                Addr virt = cmd.arg0 & 0xFFFFFFFF;
+                uint16_t asid = cmd.arg0;
+                Addr virt = tcu.regs().get(PrivReg::PRIV_CMD_ARG1);
                 if (!tcu.tlb()->remove(virt, asid))
                     res = TcuError::TLB_MISS;
             }
@@ -372,9 +372,9 @@ TcuCommands::executePrivCommand(PacketPtr pkt)
             if (tcu.tlb())
             {
                 uint16_t asid = cmd.arg0 >> 32;
-                Addr virt = cmd.arg0 & 0xFFFFF000;
+                Addr phys = cmd.arg0 & 0xFFFFF000;
                 uint flags = cmd.arg0 & 0x1F;
-                Addr phys = tcu.regs().get(PrivReg::PRIV_CMD_ARG1);
+                Addr virt = tcu.regs().get(PrivReg::PRIV_CMD_ARG1) & 0xFFFFFFFFFFFFF000;
                 if (!tcu.tlb()->insert(virt, asid, NocAddr(phys), flags))
                     res = TcuError::TLB_FULL;
             }

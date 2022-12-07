@@ -234,21 +234,23 @@ TcuAbortTest::createTcuRegisterPkt(Addr reg,
 
 PacketPtr
 TcuAbortTest::createCommandPkt(CmdCommand::Bits cmd,
-                               CmdData::Bits data,
+                               CmdData data,
                                Addr arg1)
 {
     static_assert(static_cast<int>(UnprivReg::COMMAND) == 0, "");
-    static_assert(static_cast<int>(UnprivReg::DATA) == 1, "");
-    static_assert(static_cast<int>(UnprivReg::ARG1) == 2, "");
+    static_assert(static_cast<int>(UnprivReg::DATA_ADDR) == 1, "");
+    static_assert(static_cast<int>(UnprivReg::DATA_SIZE) == 2, "");
+    static_assert(static_cast<int>(UnprivReg::ARG1) == 3, "");
 
     auto pkt = createPacket(reg_base + getRegAddr(UnprivReg::COMMAND),
-                            sizeof(RegFile::reg_t) * 3,
+                            sizeof(RegFile::reg_t) * 4,
                             MemCmd::WriteReq);
 
     RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
     regs[0] = cmd;
-    regs[1] = data;
-    regs[2] = arg1;
+    regs[1] = data.addr;
+    regs[2] = data.size;
+    regs[3] = arg1;
     return pkt;
 }
 
