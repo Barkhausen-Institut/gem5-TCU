@@ -437,14 +437,15 @@ def createCoreTile(noc, options, no, cmdline, memTile, epCount,
     print()
 
     # connect the IO space via bridge to the root NoC
-    tile.bridge = Bridge(delay='50ns')
-    tile.bridge.mem_side_port = noc.cpu_side_ports
-    tile.bridge.cpu_side_port = tile.xbar.mem_side_ports
-    tile.bridge.ranges = \
-        [
-        AddrRange(IO_address_space_base,
-                  interrupts_address_space_base - 1)
-        ]
+    # this is probably not necessary
+    ## tile.bridge = Bridge(delay='50ns')
+    ## tile.bridge.mem_side_port = noc.cpu_side_ports
+    ## tile.bridge.cpu_side_port = tile.xbar.mem_side_ports
+    ## tile.bridge.ranges = \
+    ##     [
+    ##     AddrRange(IO_address_space_base,
+    ##               interrupts_address_space_base - 1)
+    ##     ]
 
     # if not l1size is None:
     #     # connect legacy devices
