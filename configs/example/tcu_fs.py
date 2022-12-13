@@ -81,8 +81,7 @@ interrupts_address_space_base   = 0xff40000000000000
 
 base_offset                     = 768 * 1024 * 1024
 linux_tile_offset               = base_offset // 2 # 0x1800_0000
-# in the linux config, this value is changed to 0x5000_0000
-linux_tile_size                 = base_offset // 2 # 0x1800_0000
+linux_tile_size                 = 0x5000_0000
 mod_offset                      = linux_tile_offset + linux_tile_size
 mod_size                        = 128 * 1024 * 1024
 tile_offset                     = mod_offset + mod_size
