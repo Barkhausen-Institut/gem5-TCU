@@ -159,7 +159,7 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
     env.argc = getArgc();
     Addr argv = envStart + sizeof(env);
     // the kernel gets the kernel env behind the normal env
-    if (modOffset)
+    if (modSize)
         argv += sizeof(KernelEnv);
     Addr args = argv + sizeof(uint64_t) * env.argc;
     env.argv = argv;
@@ -197,7 +197,7 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
         writeArg(sys, args, i, argv, cmd, begin);
 
     // modules for the kernel
-    if (modOffset)
+    if (modSize)
     {
         BootModule *bmods = new BootModule[mods.size()]();
 
@@ -205,22 +205,24 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
         Addr addr = tcu::NocAddr(mem.memTile, modOffset).getAddr();
         for (const std::string &mod : mods)
         {
-            Addr size = loadModule(noc, mod, addr);
+            // split into name and path by "="
+            std::stringstream ss(mod);
+            std::string name, path;
+            panic_if(!std::getline(ss, name, '='),
+                "Unable to find '=' in module description");
+            panic_if(!std::getline(ss, path),
+                "Unable to read path from module description");
 
-            // determine module name
-            char *tmp = new char[mod.length() + 1];
-            strcpy(tmp, mod.c_str());
-            std::string mod_name(basename(tmp));
-            delete[] tmp;
+            Addr size = loadModule(noc, path, addr);
 
             // construct module info
             bmods[i].addr = addr;
             bmods[i].size = size;
-            panic_if(mod_name.length() >= MAX_MODNAME_LEN, "name too long");
-            strcpy(bmods[i].name, mod_name.c_str());
+            panic_if(name.length() >= MAX_MODNAME_LEN, "name too long");
+            strcpy(bmods[i].name, name.c_str());
 
             inform("Loaded '%s' to %p .. %p",
-                bmods[i].name, bmods[i].addr, bmods[i].addr + bmods[i].size);
+                path, bmods[i].addr, bmods[i].addr + bmods[i].size);
 
             // to next
             addr += size + tcu::TcuTlb::PAGE_SIZE - 1;

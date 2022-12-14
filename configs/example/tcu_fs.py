@@ -77,12 +77,11 @@ IO_address_space_base           = 0xff20000000000000
 interrupts_address_space_base   = 0xff40000000000000
 APIC_range_size                 = 1 << 12
 
-base_offset                     = 768 * 1024 * 1024
-mod_offset                      = base_offset
-mod_size                        = 128 * 1024 * 1024
+mod_offset                      = 0
+mod_size                        = 768 * 1024 * 1024
 tile_offset                     = mod_offset + mod_size
 tile_size                       = 16 * 1024 * 1024
-tile_off                        = 0
+tile_cur_off                    = 0
 
 class TileId:
     @classmethod
@@ -139,7 +138,7 @@ def getOptions():
                         help="comma separated list of binaries")
 
     parser.add_argument("--mods", default="",
-                        help="comma separated list of boot modules")
+                        help="comma separated list of <name>=<path>")
 
     parser.add_argument("--mem-type", default="DDR3_1600_8x8",
                         choices=ObjectList.mem_list.get_names(),
@@ -231,7 +230,7 @@ def connectCuToMem(tile, options, dport, iport=None, l1size=None):
 
 def createTile(noc, options, id, systemType, l1size, l2size, spmsize,
                memTile, epCount):
-    global tile_off
+    global tile_cur_off
     CPUClass = ObjectList.cpu_list.get(options.cpu_type)
 
     # each tile is represented by it's own subsystem
@@ -310,9 +309,9 @@ def createTile(noc, options, id, systemType, l1size, l2size, spmsize,
 
     if systemType != MemSystem:
         tile.memory_tile = memTile.raw()
-        tile.memory_offset = tile_offset + (tile_size * tile_off)
+        tile.memory_offset = tile_offset + (tile_size * tile_cur_off)
         tile.memory_size = tile_size
-        tile_off += 1
+        tile_cur_off += 1
 
     if systemType == MemSystem or l1size is None:
         # for memory tiles or tiles with SPM, we do not need a buffer. for the
@@ -652,8 +651,7 @@ def createAbortTestTile(noc, options, id, memTile, epCount,
 
     return tile
 
-def createMemTile(noc, options, id, size, epCount,
-                  dram=True, image=None, imageNum=0):
+def createMemTile(noc, options, id, size, epCount, dram=True):
     tile = createTile(
         noc=noc, options=options, id=id, systemType=MemSystem,
         l1size=None, l2size=None, spmsize=None, memTile=0,
@@ -679,19 +677,12 @@ def createMemTile(noc, options, id, size, epCount,
         tile.mem_ctrl.cpu_port = tile.xbar.mem_side_ports
         tile.mem_ctrl.range = size_bytes
 
-    if not image is None:
-        if os.stat(image).st_size * imageNum > base_offset:
-            print('File "%s" is too large for memory layout (%u x %u vs %u)' \
-              % (image, imageNum, os.stat(image).st_size, base_offset))
-            sys.exit(1)
-        tile.mem_file = image
-        tile.mem_file_num = imageNum
-
-    print('%s: %s x %d' % (id, image, imageNum))
+    name = type(tile.mem_ctrl.dram) if dram else type(tile.mem_ctrl)
+    print('%s: %s' % (id, name))
     printConfig(tile)
     print('       imem =%d KiB' % (int(size_bytes) / 1024))
-    name = 'SPM' if type(tile.mem_ctrl).__name__ == 'Scratchpad' else 'DRAM'
-    print('       Comp =TCU -> %s' % (name))
+    short = 'SPM' if type(tile.mem_ctrl).__name__ == 'Scratchpad' else 'DRAM'
+    print('       Comp =TCU -> %s' % (short))
     print()
 
     return tile
