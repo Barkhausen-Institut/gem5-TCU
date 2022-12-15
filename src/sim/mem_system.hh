@@ -45,15 +45,11 @@ class MemSystem : public System
 {
   protected:
     tcu::tileid_t tileId;
-    std::string memFile;
-    size_t memFileNum;
 
   public:
     typedef MemSystemParams Params;
     MemSystem(const Params &p);
     ~MemSystem();
-
-    void initState();
 };
 
 }

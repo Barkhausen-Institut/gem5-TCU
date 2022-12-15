@@ -35,6 +35,3 @@ class MemSystem(System):
     cxx_class = 'gem5::MemSystem'
 
     tile_id = Param.Unsigned("The tile id")
-
-    mem_file = Param.String("", "The file to load into memory")
-    mem_file_num = Param.Unsigned(1, "The number of times to load the file into memory")

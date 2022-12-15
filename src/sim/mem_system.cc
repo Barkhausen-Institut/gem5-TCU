@@ -38,50 +38,12 @@ namespace gem5
 
 MemSystem::MemSystem(const Params &p)
     : System(p),
-      tileId(p.tile_id),
-      memFile(p.mem_file),
-      memFileNum(p.mem_file_num)
+      tileId(p.tile_id)
 {
 }
 
 MemSystem::~MemSystem()
 {
-}
-
-void
-MemSystem::initState()
-{
-    System::initState();
-
-    if(!memFile.empty() && memFileNum > 0)
-    {
-        FILE *f = fopen(memFile.c_str(), "r");
-        if(!f)
-            panic("Unable to open '%s' for reading", memFile.c_str());
-
-        fseek(f, 0L, SEEK_END);
-        size_t sz = ftell(f);
-        fseek(f, 0L, SEEK_SET);
-
-        const size_t BUF_SIZE = 1024 * 1024;
-        auto data = new uint8_t[BUF_SIZE];
-        size_t rem = sz, off = 0;
-        while (rem > 0)
-        {
-            size_t amount = std::min(rem, BUF_SIZE);
-            size_t res;
-            if((res = fread(data, 1, amount, f)) != amount)
-                panic("Unable to read '%s': %lu (expected %lu)", memFile.c_str(), res, amount);
-
-            for(size_t i = 0; i < memFileNum; ++i)
-                physProxy.writeBlob(i * sz + off, data, amount);
-
-            off += amount;
-            rem -= amount;
-        }
-        delete[] data;
-        fclose(f);
-    }
 }
 
 }
