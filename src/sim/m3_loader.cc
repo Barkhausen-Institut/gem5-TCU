@@ -163,6 +163,7 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
         argv += sizeof(KernelEnv);
     Addr args = argv + sizeof(uint64_t) * env.argc;
     env.argv = argv;
+    env.envp = 0;
 
     // with paging, the kernel gets an initial heap mapped
     if ((env.tile_desc & 0x7) == 1 || (env.tile_desc & 0x7) == 2)

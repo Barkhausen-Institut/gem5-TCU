@@ -83,6 +83,7 @@ class M3Loader
         uint64_t tile_desc;
         uint64_t argc;
         uint64_t argv;
+        uint64_t envp;
         uint64_t heap_size;
         uint64_t kenv;
         uint64_t lambda;
