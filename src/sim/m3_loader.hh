@@ -46,8 +46,10 @@ class M3Loader
 {
   protected:
     static const size_t ENV_SIZE        = 0x1000;
-    static const size_t HEAP_SIZE       = 0x8000;
+    static const size_t HEAP_SIZE       = 64 * 0x1000;
     static const size_t MAX_MODNAME_LEN = 64;
+    static const size_t MAX_CHIPS       = 2;
+    static const size_t MAX_TILES       = 64;
 
     struct M5_ATTR_PACKED BootModule
     {
@@ -87,6 +89,8 @@ class M3Loader
         uint64_t heap_size;
         uint64_t kenv;
         uint64_t lambda;
+        uint64_t raw_tile_count;
+        uint64_t raw_tile_ids[MAX_CHIPS * MAX_TILES];
     };
 
     std::map<tcu::TileId, tcu::tiledesc_t> tiles;

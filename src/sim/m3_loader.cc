@@ -164,6 +164,13 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
     Addr args = argv + sizeof(uint64_t) * env.argc;
     env.argv = argv;
     env.envp = 0;
+    env.raw_tile_count = tiles.size();
+    // write tile ids to environment
+    {
+        size_t i = 0;
+        for(auto it = tiles.cbegin(); it != tiles.cend(); ++it, ++i)
+            env.raw_tile_ids[i] = it->first.raw();
+    }
 
     // with paging, the kernel gets an initial heap mapped
     if ((env.tile_desc & 0x7) == 1 || (env.tile_desc & 0x7) == 2)
@@ -265,18 +272,6 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
         writeRemote(noc, addr, reinterpret_cast<uint8_t*>(bmods), bmodsize);
         delete[] bmods;
         addr += bmodsize;
-
-        // write tile ids to memory
-        uint16_t *ktileIds = new uint16_t[kenv.tile_count]();
-        {
-            size_t i = 0;
-            for(auto it = tiles.cbegin(); it != tiles.cend(); ++it, ++i)
-                ktileIds[i] = it->first.raw();
-        }
-        size_t bidssize = kenv.tile_count * sizeof(uint16_t);
-        writeRemote(noc, addr, reinterpret_cast<uint8_t*>(ktileIds), bidssize);
-        delete[] ktileIds;
-        addr += bidssize;
 
         // write tile descriptors to memory
         uint64_t *ktileDescs = new uint64_t[kenv.tile_count]();
