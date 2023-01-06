@@ -33,21 +33,14 @@ import os
 from os import path
 
 import m5
-from m5.defines import buildEnv
 from m5.objects import *
-from m5.util import addToPath, fatal
+from m5.util import addToPath
 
 addToPath('../platform/gem5/configs')
 
-from common.FSConfig import *
-from common import Simulation
-from common import CacheConfig
-from common.CacheConfig import _get_cache_opts
-from common import CpuConfig
-from common import MemConfig
-from common import ObjectList
-from common.Caches import *
 from common import Options
+from common.Caches import *
+from common import ObjectList
 
 # Each tile is represented as an instance of System. Whereas each tile has a
 # CPU, a Scratchpad, and a TCU. Because it seems that the gem5 crossbar is not
@@ -76,18 +69,20 @@ from common import Options
 ###############################################################################
 
 # global constants
-IO_address_space_base           = 0xff20000000000000
-interrupts_address_space_base   = 0xff40000000000000
+IO_address_space_base = 0xff20000000000000
+interrupts_address_space_base = 0xff40000000000000
 
-base_offset                     = 768 * 1024 * 1024
-linux_tile_offset               = base_offset // 2 # 0x1800_0000
-linux_tile_size                 = 0x5000_0000
-mod_offset                      = linux_tile_offset + linux_tile_size
-mod_size                        = 128 * 1024 * 1024
-tile_offset                     = mod_offset + mod_size
-tile_size                       = 16 * 1024 * 1024
+base_offset = 768 * 1024 * 1024
+linux_tile_offset = base_offset // 2  # 0x1800_0000
+linux_tile_size = 0x5000_0000
+mod_offset = linux_tile_offset + linux_tile_size
+mod_size = 128 * 1024 * 1024
+tile_offset = mod_offset + mod_size
+tile_size = 16 * 1024 * 1024
 
 # reads the options and returns them
+
+
 def getOptions():
     parser = optparse.OptionParser()
 
@@ -95,13 +90,13 @@ def getOptions():
     Options.addFSOptions(parser)
 
     parser.add_option("--isa", type="choice", default="riscv",
-                        choices=['arm', 'riscv', 'x86_64'],
-                        help="The ISA to use")
+                      choices=['arm', 'riscv', 'x86_64'],
+                      help="The ISA to use")
     parser.add_option("--mods", default="", type="string",
-                        help="comma separated list of boot modules")
+                      help="comma separated list of boot modules")
     parser.add_option("--dtb-filename", action="store", type=str,
-        help="Specifies device tree blob file to use with device-tree-"\
-            "enabled kernels")
+        help="Specifies device tree blob file to use with device-tree-"
+                      "enabled kernels")
     parser.add_option("-c", "--cmd", default="", type="string",
                       help="comma separated list of binaries")
     parser.add_option("--pausetile", default=-1, type="int",
@@ -118,15 +113,18 @@ def getOptions():
 
     return options
 
+
 def getCacheStr(cache):
     return '%d KiB (%d-way assoc, %d cycles)' % (
         cache.size.value / 1024, cache.assoc, cache.tag_latency
     )
 
+
 def printConfig(tile, tcupos):
-    print('     TCU  =eps:%d, bufsz:%d B, blocksz:%d B, count:%d, tlb:%d' % \
-        (tile.tcu.num_endpoints, tile.tcu.buf_size.value, tile.tcu.block_size.value,
-         tile.tcu.buf_count, tile.tcu.tlb_entries))
+    print('     TCU  =eps:%d, bufsz:%d B, blocksz:%d B, count:%d, tlb:%d' %
+          (tile.tcu.num_endpoints, tile.tcu.buf_size.value,
+           tile.tcu.block_size.value, tile.tcu.buf_count,
+           tile.tcu.tlb_entries))
 
     try:
         print('     L1i$ =%s' % (getCacheStr(tile.l1icache)))
@@ -159,21 +157,24 @@ def printConfig(tile, tcupos):
         except:
             pass
 
+
 def generateMemNode(state, mem_range):
     node = FdtNode("memory@%x" % int(mem_range.start))
     node.append(FdtPropertyStrings("device_type", ["memory"]))
     node.append(FdtPropertyWords("reg",
-        state.addrCells(mem_range.start) +
-        state.sizeCells(mem_range.size()) ))
+                                 state.addrCells(mem_range.start) +
+                                 state.sizeCells(mem_range.size())))
     return node
+
 
 def generateTcuNode(state, mem_range):
     node = FdtNode("tcu_mmio@%x" % int(mem_range.start))
     node.append(FdtPropertyStrings("device_type", ["mmio"]))
     node.append(FdtPropertyWords("reg",
-        state.addrCells(mem_range.start) +
-        state.sizeCells(mem_range.size()) ))
+                                 state.addrCells(mem_range.start) +
+                                 state.sizeCells(mem_range.size())))
     return node
+
 
 def generateDtb(system):
     state = FdtState(addr_cells=2, size_cells=2, cpu_cells=1)
@@ -198,7 +199,8 @@ def generateDtb(system):
     soc_idx = root.index('soc')
     uart_idx = root[soc_idx].index('uart@10000000')
     root[soc_idx][uart_idx].remove('compatible')
-    root[soc_idx][uart_idx].append(FdtPropertyStrings('compatible', ['ns8250', 'gem5,uart0']))
+    root[soc_idx][uart_idx].append(FdtPropertyStrings(
+        'compatible', ['ns8250', 'gem5,uart0']))
     # root[soc_idx].append(generateTcuNode(state, system.tcu.mmio_region))
 
     fdt = Fdt()
@@ -217,10 +219,12 @@ def interpose(tile, options, name, port):
         return mon.master
     return port
 
+
 def connectTcuToMem(tile, options, l1size, tcupos):
     dport = interpose(tile, options, 'tcudmon', tile.tcu.dcache_master_port)
     if l1size is None or tcupos == 0:
-        iport = interpose(tile, options, 'tcuimon', tile.tcu.icache_master_port)
+        iport = interpose(tile, options, 'tcuimon',
+                          tile.tcu.icache_master_port)
 
     if not l1size is None:
         if tcupos == 0:
@@ -231,6 +235,7 @@ def connectTcuToMem(tile, options, l1size, tcupos):
     else:
         tile.xbar.cpu_side_ports = iport
         tile.xbar.cpu_side_ports = dport
+
 
 def connectCuToMem(tile, options, dport, iport=None, l1size=None, tcupos=0):
     dport = interpose(tile, options, 'cu_dmon', dport)
@@ -246,6 +251,7 @@ def connectCuToMem(tile, options, dport, iport=None, l1size=None, tcupos=0):
             tile.tcu.icache_slave_port = iport
         tile.tcu.dcache_slave_port = dport
 
+
 def createTile(noc, options, no, systemType, l1size, l2size, spmsize,
                tcupos, memTile, epCount):
     CPUClass = ObjectList.cpu_list.get(options.cpu_type)
@@ -254,7 +260,7 @@ def createTile(noc, options, no, systemType, l1size, l2size, spmsize,
     tile = systemType(mem_mode=CPUClass.memory_mode())
     tile.voltage_domain = VoltageDomain(voltage=options.sys_voltage)
     tile.clk_domain = SrcClockDomain(clock=options.cpu_clock,
-                                   voltage_domain=tile.voltage_domain)
+                                     voltage_domain=tile.voltage_domain)
     tile.tile_id = no
 
     if not l2size is None:
@@ -274,7 +280,7 @@ def createTile(noc, options, no, systemType, l1size, l2size, spmsize,
 
     # connection to noc
     tile.tcu.noc_master_port = noc.cpu_side_ports
-    tile.tcu.noc_slave_port  = noc.mem_side_ports
+    tile.tcu.noc_slave_port = noc.mem_side_ports
 
     tile.tcu.slave_region = [AddrRange(0, tile.tcu.mmio_region.start - 1)]
 
@@ -305,7 +311,7 @@ def createTile(noc, options, no, systemType, l1size, l2size, spmsize,
             tile.l2cache.response_latency = 12
             tile.tcu.caches.append(tile.l2cache)
 
-            tile.l2cache.prefetcher = StridePrefetcher(degree = 16)
+            tile.l2cache.prefetcher = StridePrefetcher(degree=16)
 
             # use a crossbar to connect l1icache and l1dcache to l2cache
             tile.tol2bus = L2XBar()
@@ -315,7 +321,7 @@ def createTile(noc, options, no, systemType, l1size, l2size, spmsize,
             tile.l1icache.mem_side = tile.tol2bus.cpu_side_ports
             tile.l1dcache.mem_side = tile.tol2bus.cpu_side_ports
         else:
-            tile.l1dcache.prefetcher = StridePrefetcher(degree = 16)
+            tile.l1dcache.prefetcher = StridePrefetcher(degree=16)
 
             tile.l1icache.mem_side = tile.xbar.cpu_side_ports
             tile.l1dcache.mem_side = tile.xbar.cpu_side_ports
@@ -371,6 +377,18 @@ def createTile(noc, options, no, systemType, l1size, l2size, spmsize,
 
     return tile
 
+
+def print_tcu_latencies(tcu):
+    print(f"""     register_access_latency: {tcu.register_access_latency}
+     cpu_to_cache_latency: {tcu.cpu_to_cache_latency}
+     command_to_noc_request_latency: {tcu.command_to_noc_request_latency}
+     start_msg_transfer_delay: {tcu.start_msg_transfer_delay}
+     transfer_to_mem_request_latency: {tcu.transfer_to_mem_request_latency}
+     transfer_to_noc_latency: {tcu.transfer_to_noc_latency}
+     noc_to_transfer_latency: {tcu.noc_to_transfer_latency}
+    """)
+
+
 def createCoreTile(noc, options, no, cmdline, memTile, epCount,
                    l1size=None, l2size=None, tcupos=0, spmsize='8MB'):
     CPUClass = ObjectList.cpu_list.get(options.cpu_type)
@@ -416,16 +434,17 @@ def createCoreTile(noc, options, no, cmdline, memTile, epCount,
 
     # workload and command line
     if options.isa == 'riscv':
-        tile.workload = RiscvBareMetal(bootloader = cmdline.split(' ')[0])
+        tile.workload = RiscvBareMetal(bootloader=cmdline.split(' ')[0])
     elif options.isa == 'arm':
-        tile.workload = ArmFsWorkload(object_file = cmdline.split(' ')[0])
+        tile.workload = ArmFsWorkload(object_file=cmdline.split(' ')[0])
         tile.highest_el_is_64 = False
     else:
-        tile.workload = X86FsWorkload(object_file = cmdline.split(' ')[0])
+        tile.workload = X86FsWorkload(object_file=cmdline.split(' ')[0])
     tile.cmdline = cmdline
 
     print("T%02d: %s" % (no, cmdline))
-    print('     Core =%s %s @ %s' % (type(tile.cpu), options.isa, options.cpu_clock))
+    print('     Core =%s %s @ %s' %
+          (type(tile.cpu), options.isa, options.cpu_clock))
     printConfig(tile, tcupos)
 
     # if specified, let this tile wait for GDB
@@ -440,11 +459,11 @@ def createCoreTile(noc, options, no, cmdline, memTile, epCount,
     ## tile.bridge = Bridge(delay='50ns')
     ## tile.bridge.mem_side_port = noc.cpu_side_ports
     ## tile.bridge.cpu_side_port = tile.xbar.mem_side_ports
-    ## tile.bridge.ranges = \
-    ##     [
-    ##     AddrRange(IO_address_space_base,
-    ##               interrupts_address_space_base - 1)
-    ##     ]
+    # tile.bridge.ranges = \
+    # [
+    # AddrRange(IO_address_space_base,
+    # interrupts_address_space_base - 1)
+    # ]
 
     # if not l1size is None:
     #     # connect legacy devices
@@ -464,10 +483,11 @@ def createCoreTile(noc, options, no, cmdline, memTile, epCount,
 
     tile.cpu.itb_walker_cache = PageTableWalkerCache()
     tile.cpu.dtb_walker_cache = PageTableWalkerCache()
-    tile.cpu.mmu.connectWalkerPorts(tile.cpu.itb_walker_cache.cpu_side, tile.cpu.dtb_walker_cache.cpu_side)
+    tile.cpu.mmu.connectWalkerPorts(
+        tile.cpu.itb_walker_cache.cpu_side, tile.cpu.dtb_walker_cache.cpu_side)
 
     if options.isa == 'riscv':
-        tile.cpu.mmu.pma_checker = PMAChecker(uncacheable = [
+        tile.cpu.mmu.pma_checker = PMAChecker(uncacheable=[
             tile.tcu.mmio_region,
         ])
 
@@ -481,7 +501,63 @@ def createCoreTile(noc, options, no, cmdline, memTile, epCount,
     return tile
 
 
-def createLinuxTile(options, noc, no, memTile, kernel, fsImage, commandLine='earlycon=sbi console=ttyS0 root=/dev/vda1', cpuType='TimingSimpleCPU'):
+def createLinuxTileNew(noc, options, no, kernel, memTile,
+                    epCount, l1size, l2size, fsImage,
+                    commandLine='earlycon=sbi console=ttyS0 root=/dev/vda1'):
+    tile = createCoreTile(
+        noc,
+        options,
+        no,
+        'this is a linux tile',
+        memTile,
+        epCount,
+        l1size,
+        l2size,
+        tcupos=0,
+    )
+    tile.memory_offset = linux_tile_offset
+    tile.memory_size = linux_tile_size
+    tile.mem_ranges = [AddrRange(start=0x3000_0000, end=0x5000_0000)]
+
+    tile.workload = RiscvLinux()
+    tile.workload.object_file = kernel
+
+    tile.platform = HiFive()
+    tile.platform.rtc = RiscvRTC(frequency=Frequency("100MHz"))
+    tile.platform.clint.int_pin = tile.platform.rtc.int_pin
+
+    image = CowDiskImage(child=RawDiskImage(read_only=True), read_only=False)
+    image.child.image_file = fsImage
+    mmioVirtIO = MmioVirtIO(
+        vio=VirtIOBlock(image=image),
+        interrupt_id=0x8,
+        pio_size=4096,
+        pio_addr=0xa0008000,
+    )
+    tile.platform.disks = [mmioVirtIO]
+
+    tile.platform.attachOnChipIO(tile.xbar)
+    tile.platform.attachOffChipIO(tile.xbar)
+    tile.platform.attachPlic()
+    tile.platform.intrctrl = IntrControl()
+
+    generateDtb(tile)
+    tile.workload.dtb_filename = path.join(m5.options.outdir, 'device.dtb')
+    # Default DTB address if bbl is bulit with --with-dts option
+    tile.workload.dtb_addr = 0x37e00000
+    # Linux boot command flags
+    tile.workload.command_line = commandLine
+
+    tile.cpu.mmu.pma_checker.uncacheable += [
+        *tile.platform._on_chip_ranges(),
+        *tile.platform._off_chip_ranges()
+    ]
+
+    return tile
+
+
+def createLinuxTile(options, noc, no, memTile, kernel, fsImage,
+                    commandLine='earlycon=sbi console=ttyS0 root=/dev/vda1'):
     assert options.isa == 'riscv'
     assert options.num_cpus == 1
     assert options.external_memory_system is None
@@ -494,58 +570,58 @@ def createLinuxTile(options, noc, no, memTile, kernel, fsImage, commandLine='ear
     assert not options.elastic_trace_en
     assert not options.checker
 
-    CPUClass = ObjectList.cpu_list.get(cpuType)
+    CPUClass = ObjectList.cpu_list.get(options.cpu_type)
 
     # ---------------------------- Setup System ---------------------------- #
     # Default Setup
-    system = M3System()
-    system.tile_id = no
-    system.memory_tile = memTile
-    system.memory_offset = linux_tile_offset
-    system.memory_size = linux_tile_size
+    tile = M3System()
+    tile.tile_id = no
+    tile.memory_tile = memTile
+    tile.memory_offset = linux_tile_offset
+    tile.memory_size = linux_tile_size
 
+    tile.tcu = Tcu(max_noc_packet_size='2kB', buf_size='2kB')
+    tile.tcu.connector = RiscvConnector()
+    tile.tcu.tile_id = tile.tile_id
 
-    system.tcu = Tcu(max_noc_packet_size='2kB', buf_size='2kB')
-    system.tcu.connector = RiscvConnector()
-    system.tcu.tile_id = system.tile_id
+    tile.tcu.tile_mem_offset = 0x10000000
 
-    system.tcu.tile_mem_offset = 0x10000000
-
-    system.tcu.num_endpoints = 192
-    system.tcu.tlb_entries = 128
+    tile.tcu.num_endpoints = 192
+    tile.tcu.tlb_entries = 128
 
     # connection to noc
-    system.tcu.noc_master_port = noc.cpu_side_ports
-    system.tcu.noc_slave_port  = noc.mem_side_ports
+    tile.tcu.noc_master_port = noc.cpu_side_ports
+    tile.tcu.noc_slave_port = noc.mem_side_ports
 
-    system.tcu.slave_region = [AddrRange(0, system.tcu.mmio_region.start - 1)]
+    tile.tcu.slave_region = [AddrRange(0, tile.tcu.mmio_region.start - 1)]
 
-    system.noc_master_port = noc.cpu_side_ports
+    tile.noc_master_port = noc.cpu_side_ports
 
     mdesc = SysConfig(disks=fsImage, mem='512MB', os_type='linux')
-    system.mem_mode = CPUClass.memory_mode()
-    system.mem_ranges = [AddrRange(start=0x30000000, size=mdesc.mem())]
+    tile.mem_mode = CPUClass.memory_mode()
+    tile.mem_ranges = [AddrRange(start=0x30000000, size=mdesc.mem())]
 
-    system.workload = RiscvLinux()
-    system.workload.object_file = kernel
+    tile.workload = RiscvLinux()
+    tile.workload.object_file = kernel
 
-    system.membus = SystemXBar()
+    tile.xbar = SystemXBar()
 
-    system.system_port = system.membus.cpu_side_ports
-    system.membus.default = system.tcu.cache_mem_slave_port
+    tile.system_port = tile.xbar.cpu_side_ports
+    tile.xbar.default = tile.tcu.cache_mem_slave_port
 
     # HiFive Platform
-    system.platform = HiFive()
+    tile.platform = HiFive()
 
     # RTCCLK (Set to 100MHz for faster simulation)
-    system.platform.rtc = RiscvRTC(frequency=Frequency("100MHz"))
-    system.platform.clint.int_pin = system.platform.rtc.int_pin
+    tile.platform.rtc = RiscvRTC(frequency=Frequency("100MHz"))
+    tile.platform.clint.int_pin = tile.platform.rtc.int_pin
 
     # VirtIOMMIO
     if fsImage:
         disks = []
         for (i, disk) in enumerate(mdesc.disks()):
-            image = CowDiskImage(child=RawDiskImage(read_only=True), read_only=False)
+            image = CowDiskImage(child=RawDiskImage(
+                read_only=True), read_only=False)
             image.child.image_file = disk
             disks.append(MmioVirtIO(
                 vio=VirtIOBlock(image=image),
@@ -553,104 +629,116 @@ def createLinuxTile(options, noc, no, memTile, kernel, fsImage, commandLine='ear
                 pio_size=4096,
                 pio_addr=0xa0008000 + i * 4096
             ))
-        system.platform.disks = disks
+        tile.platform.disks = disks
 
-    system.platform.attachOnChipIO(system.membus)
-    system.platform.attachOffChipIO(system.membus)
-    system.platform.attachPlic()
-    system.platform.intrctrl = IntrControl()
+    tile.platform.attachOnChipIO(tile.xbar)
+    tile.platform.attachOffChipIO(tile.xbar)
+    tile.platform.attachPlic()
+    tile.platform.intrctrl = IntrControl()
 
     # ---------------------------- Default Setup --------------------------- #
 
-    system.cache_line_size = 64
-    system.voltage_domain = VoltageDomain(voltage=options.sys_voltage)
-    system.clk_domain = SrcClockDomain(clock=options.sys_clock,
-            voltage_domain=system.voltage_domain)
-    system.cpu_voltage_domain = VoltageDomain()
-    system.cpu_clk_domain = SrcClockDomain(clock=options.cpu_clock,
-                                                voltage_domain=
-                                                system.cpu_voltage_domain)
+    tile.cache_line_size = 64
+    tile.voltage_domain = VoltageDomain(voltage=options.sys_voltage)
+    # tile.clk_domain = SrcClockDomain(clock=options.sys_clock,
+    tile.clk_domain = SrcClockDomain(
+        clock="2GHz", voltage_domain=tile.voltage_domain)
+    # tile.cpu_voltage_domain = VoltageDomain()
+    # tile.cpu_clk_domain = SrcClockDomain(clock=options.cpu_clock,
+    #                                             voltage_domain=
+    #                                             tile.cpu_voltage_domain)
 
-    system.readfile = '/dev/stdin'
+    tile.readfile = '/dev/stdin'
 
-    system.cpu = CPUClass(clk_domain=system.cpu_clk_domain, cpu_id=0)
+    tile.cpu = CPUClass(clk_domain=tile.clk_domain, cpu_id=0)
 
-    system.cpu.createThreads()
+    tile.cpu.createThreads()
 
     # ----------------------------- PMA Checker ---------------------------- #
 
     uncacheable_range = [
-        *system.platform._on_chip_ranges(),
-        *system.platform._off_chip_ranges()
+        *tile.platform._on_chip_ranges(),
+        *tile.platform._off_chip_ranges()
     ]
 
     # PMA checker can be defined at system-level (system.pma_checker)
     # or MMU-level (system.cpu[0].mmu.pma_checker). It will be resolved
     # by RiscvTLB's Parent.any proxy
-    system.cpu.mmu.pma_checker = PMAChecker(uncacheable=uncacheable_range)
+    tile.cpu.mmu.pma_checker = PMAChecker(uncacheable=uncacheable_range)
 
     # --------------------------- DTB Generation --------------------------- #
 
-    generateDtb(system)
-    system.workload.dtb_filename = path.join(
+    generateDtb(tile)
+    tile.workload.dtb_filename = path.join(
         m5.options.outdir, 'device.dtb')
 
     # Default DTB address if bbl is bulit with --with-dts option
-    system.workload.dtb_addr = 0x37e00000
+    tile.workload.dtb_addr = 0x37e00000
 
     # Linux boot command flags
-    system.workload.command_line = commandLine
+    tile.workload.command_line = commandLine
 
     # ---------------------------- start CacheConfig.config_cache ---------- #
 
     # Provide a clock for the L2 and the L1-to-L2 bus here as they
     # are not connected using addTwoLevelCacheHierarchy. Use the
     # same clock as the CPUs.
-    system.l2 = L2Cache(clk_domain=system.cpu_clk_domain, size='512kB')
+    tile.l2cache = L2Cache(clk_domain=tile.clk_domain, size='512kB')
 
-    system.tol2bus = L2XBar(clk_domain = system.cpu_clk_domain)
-    system.l2.cpu_side = system.tol2bus.master
-    system.l2.mem_side = system.membus.slave
+    tile.tol2bus = L2XBar(clk_domain=tile.clk_domain)
+    tile.l2cache.cpu_side = tile.tol2bus.master
+    tile.l2cache.mem_side = tile.xbar.slave
 
-    system.cpu.icache = L1_ICache(size='32kB')
-    system.cpu.dcache = L1_DCache(size='32kB')
-    system.cpu.icache.cpu_side = system.tcu.icache_master_port
-    system.cpu.dcache.cpu_side = system.tcu.dcache_master_port
-    system.cpu.icache_port = system.tcu.icache_slave_port
-    system.cpu.dcache_port = system.tcu.dcache_slave_port
-    system.cpu._cached_ports = ['icache.mem_side', 'dcache.mem_side']
+    tile.l1icache = L1_ICache(size='32kB')
+    tile.l1dcache = L1_DCache(size='32kB')
+    tile.l1icache.cpu_side = tile.tcu.icache_master_port
+    tile.l1dcache.cpu_side = tile.tcu.dcache_master_port
+    tile.l1icache.mem_side = tile.tol2bus.cpu_side_ports
+    tile.l1dcache.mem_side = tile.tol2bus.cpu_side_ports
+    tile.cpu.icache_port = tile.tcu.icache_slave_port
+    tile.cpu.dcache_port = tile.tcu.dcache_slave_port
+    # tile.cpu._cached_ports = ['l1icache.mem_side', 'l1dcache.mem_side']
 
-    system.cpu.itb_walker_cache = PageTableWalkerCache()
-    system.cpu.dtb_walker_cache = PageTableWalkerCache()
-    system.cpu.mmu.connectWalkerPorts(
-        system.cpu.itb_walker_cache.cpu_side, system.cpu.dtb_walker_cache.cpu_side)
-    system.cpu._cached_ports += ["itb_walker_cache.mem_side", \
-                        "dtb_walker_cache.mem_side"]
+    tile.cpu.itb_walker_cache = PageTableWalkerCache()
+    tile.cpu.dtb_walker_cache = PageTableWalkerCache()
+    tile.cpu.mmu.connectWalkerPorts(
+        tile.cpu.itb_walker_cache.cpu_side, tile.cpu.dtb_walker_cache.cpu_side)
+    # tile.cpu._cached_ports += ["itb_walker_cache.mem_side", \
+    #                     "dtb_walker_cache.mem_side"]
 
-    system.cpu.createInterruptController()
-    system.cpu.connectAllPorts(system.tol2bus, system.membus)
+    tile.cpu.createInterruptController()
+    # tile.cpu.connectAllPorts(tile.tol2bus, tile.xbar)
+    tile.cpu.itb_walker_cache.mem_side = tile.tol2bus.cpu_side_ports
+    tile.cpu.dtb_walker_cache.mem_side = tile.tol2bus.cpu_side_ports
 
     # ---------------------------- end CacheConfig.config_cache ------------ #
 
     # configure caches like M³ does
-    system.cpu.icache.tag_latency = 4
-    system.cpu.icache.data_latency = 4
-    system.cpu.icache.response_latency = 4
-    system.cpu.dcache.tag_latency = 4
-    system.cpu.dcache.data_latency = 4
-    system.cpu.dcache.response_latency = 4
-    system.l2.tag_latency = 12
-    system.l2.data_latency = 12
-    system.l2.response_latency = 12
-    system.l2.prefetcher = StridePrefetcher(degree = 16)
+    tile.l1icache.tag_latency = 4
+    tile.l1icache.data_latency = 4
+    tile.l1icache.response_latency = 4
+    tile.l1dcache.tag_latency = 4
+    tile.l1dcache.data_latency = 4
+    tile.l1dcache.response_latency = 4
+    tile.l2cache.tag_latency = 12
+    tile.l2cache.data_latency = 12
+    tile.l2cache.response_latency = 12
+    tile.l2cache.prefetcher = StridePrefetcher(degree=16)
 
-    system.tcu.caches = [system.l2, system.cpu.icache, system.cpu.dcache]
+    tile.tcu.caches = [tile.l2cache, tile.l1icache, tile.l1dcache]
 
-    return system
+    print("T%02d: %s" % (no, "LINUX"))
+    print('     Core =%s %s @ %s' %
+          (type(tile.cpu), options.isa, options.cpu_clock))
+    printConfig(tile, 2)
+
+    print_tcu_latencies(tile.tcu)
+
+    return tile
 
 
 def createKecAccTile(noc, options, no, cmdline,
-    memTile, epCount, spmsize='8MB'):
+                     memTile, epCount, spmsize='8MB'):
     tile = createCoreTile(noc, options, no, cmdline, memTile, epCount,
                           spmsize=spmsize)
 
@@ -674,9 +762,11 @@ def createKecAccTile(noc, options, no, cmdline,
 
     # Make sure accelerator is accessed uncached and without speculation
     if options.isa == 'riscv':
-        tile.cpu.mmu.pma_checker.uncacheable.append(AddrRange(addr, size=0x1000))
+        tile.cpu.mmu.pma_checker.uncacheable.append(
+            AddrRange(addr, size=0x1000))
 
     return tile
+
 
 def createSerialTile(noc, options, no, memTile, epCount):
     tile = createTile(
@@ -702,6 +792,7 @@ def createSerialTile(noc, options, no, memTile, epCount):
     print()
 
     return tile
+
 
 def createDeviceTile(noc, options, no, memTile, epCount):
     tile = createTile(
@@ -741,7 +832,9 @@ def createDeviceTile(noc, options, no, memTile, epCount):
 
     return tile
 
-def createStorageTile(noc, options, no, memTile, epCount, img0=None, img1=None):
+
+def createStorageTile(noc, options, no, memTile,
+                      epCount, img0=None, img1=None):
     tile = createDeviceTile(noc, options, no, memTile, epCount)
 
     # create disks
@@ -749,11 +842,11 @@ def createStorageTile(noc, options, no, memTile, epCount, img0=None, img1=None):
     for img in [img0, img1]:
         if img is not None:
             disk = IdeDisk(driveID='device0')
-            disk.image = RawDiskImage(image_file = img)
+            disk.image = RawDiskImage(image_file=img)
             disks.append(disk)
 
     tile.idectrl = IdeController(disks=disks,
-        pci_func=0, pci_dev=0, pci_bus=0)
+                                 pci_func=0, pci_dev=0, pci_bus=0)
     tile.idectrl.BAR0 = PciLegacyIoBar(addr=0x1f0, size='8B')
     tile.idectrl.BAR1 = PciLegacyIoBar(addr=0x3f4, size='3B')
     tile.idectrl.BAR2 = PciLegacyIoBar(addr=0x170, size='8B')
@@ -773,6 +866,7 @@ def createStorageTile(noc, options, no, memTile, epCount, img0=None, img1=None):
     print()
 
     return tile
+
 
 def createEtherTile(noc, options, no, memTile, epCount):
     tile = createDeviceTile(noc, options, no, memTile, epCount)
@@ -796,6 +890,7 @@ def createEtherTile(noc, options, no, memTile, epCount):
 
     return tile
 
+
 def linkEthertiles(ether0, ether1):
     link = EtherLink()
     link.int0 = ether0.nic.interface
@@ -803,6 +898,7 @@ def linkEthertiles(ether0, ether1):
 
     ether0.etherlink = link
     ether1.etherlink = link
+
 
 def createAccelTile(noc, options, no, accel, memTile, epCount,
                     l1size=None, l2size=None, spmsize='64kB'):
@@ -817,8 +913,8 @@ def createAccelTile(noc, options, no, accel, memTile, epCount,
         tile.accel = TcuAccelInDir()
     elif accel == 'copy' or accel == 'rot13':
         algos = {
-            'copy'   : 0,
-            'rot13'  : 1,
+            'copy': 0,
+            'rot13': 1,
         }
         tile.accel = TcuAccelStream()
         tile.accel.logic = AccelLogic()
@@ -840,6 +936,7 @@ def createAccelTile(noc, options, no, accel, memTile, epCount,
 
     return tile
 
+
 def createAbortTestTile(noc, options, no, memTile, epCount,
                         l1size=None, l2size=None, spmsize='8MB'):
     tile = createTile(
@@ -859,6 +956,7 @@ def createAbortTestTile(noc, options, no, memTile, epCount,
     print()
 
     return tile
+
 
 def createMemTile(noc, options, no, size, epCount,
                   dram=True, image=None, imageNum=0):
@@ -889,8 +987,8 @@ def createMemTile(noc, options, no, size, epCount,
 
     if not image is None:
         if os.stat(image).st_size * imageNum > base_offset:
-            print('File "%s" is too large for memory layout (%u x %u vs %u)' \
-              % (image, imageNum, os.stat(image).st_size, base_offset))
+            print('File "%s" is too large for memory layout (%u x %u vs %u)'
+                  % (image, imageNum, os.stat(image).st_size, base_offset))
             sys.exit(1)
         tile.mem_file = image
         tile.mem_file_num = imageNum
@@ -903,6 +1001,7 @@ def createMemTile(noc, options, no, size, epCount,
     print()
 
     return tile
+
 
 def createRoot(options):
     root = Root(full_system=True)
@@ -932,6 +1031,7 @@ def createRoot(options):
 
     return root
 
+
 def runSimulation(root, options, tiles):
     # determine types of tiles and their internal memory size
     tile_mems = []
@@ -946,21 +1046,21 @@ def runSimulation(root, options, tiles):
                 size = int(tile.spm.range.end)
                 assert size % 4096 == 0, "Memory size not page aligned"
             else:
-                size |= 1 # emem
+                size |= 1  # emem
 
             if hasattr(tile, 'accel'):
                 if type(tile.accel).__name__ == 'TcuAccelInDir':
-                    size |= 4 << 3 # indir accelerator
+                    size |= 4 << 3  # indir accelerator
                 elif int(tile.accel.logic.algorithm) == 0:
-                    size |= 5 << 3 # copy accelerator
+                    size |= 5 << 3  # copy accelerator
                 elif int(tile.accel.logic.algorithm) == 1:
-                    size |= 6 << 3 # rot13 accelerator
+                    size |= 6 << 3  # rot13 accelerator
             elif options.isa == 'arm':
-                size |= 2 << 3 # arm
+                size |= 2 << 3  # arm
             elif options.isa == 'riscv':
-                size |= 3 << 3 # riscv
+                size |= 3 << 3  # riscv
             else:
-                size |= 1 << 3 # x86
+                size |= 1 << 3  # x86
 
             if hasattr(tile, 'idectrl'):
                 size = 7 << 3
@@ -970,7 +1070,7 @@ def runSimulation(root, options, tiles):
                 size = 9 << 3
 
             if hasattr(tile, 'kecacc'):
-                size |= 0x8 << 7 # TileAttr::KECACC
+                size |= 0x8 << 7  # TileAttr::KECACC
         tile_mems.append(size)
 
     # give that to the tiles
@@ -992,7 +1092,7 @@ def runSimulation(root, options, tiles):
     # Simulate until program terminates
     ## safe_tick = 287682115000
     ## checkpoint_name = f"run/checkpoint-{safe_tick}"
-    
+
     # m5.instantiate(checkpoint_name)
     # exit_event = m5.simulate()
 
