@@ -378,17 +378,6 @@ def createTile(noc, options, no, systemType, l1size, l2size, spmsize,
     return tile
 
 
-def print_tcu_latencies(tcu):
-    print(f"""     register_access_latency: {tcu.register_access_latency}
-     cpu_to_cache_latency: {tcu.cpu_to_cache_latency}
-     command_to_noc_request_latency: {tcu.command_to_noc_request_latency}
-     start_msg_transfer_delay: {tcu.start_msg_transfer_delay}
-     transfer_to_mem_request_latency: {tcu.transfer_to_mem_request_latency}
-     transfer_to_noc_latency: {tcu.transfer_to_noc_latency}
-     noc_to_transfer_latency: {tcu.noc_to_transfer_latency}
-    """)
-
-
 def createCoreTile(noc, options, no, cmdline, memTile, epCount,
                    l1size=None, l2size=None, tcupos=0, spmsize='8MB'):
     CPUClass = ObjectList.cpu_list.get(options.cpu_type)
@@ -501,7 +490,7 @@ def createCoreTile(noc, options, no, cmdline, memTile, epCount,
     return tile
 
 
-def createLinuxTileNew(noc, options, no, kernel, memTile,
+def createLinuxTile(noc, options, no, kernel, memTile,
                     epCount, l1size, l2size, fsImage,
                     commandLine='earlycon=sbi console=ttyS0 root=/dev/vda1'):
     tile = createCoreTile(
@@ -552,187 +541,6 @@ def createLinuxTileNew(noc, options, no, kernel, memTile,
         *tile.platform._on_chip_ranges(),
         *tile.platform._off_chip_ranges()
     ]
-
-    return tile
-
-
-def createLinuxTile(options, noc, no, memTile, kernel, fsImage,
-                    commandLine='earlycon=sbi console=ttyS0 root=/dev/vda1'):
-    assert options.isa == 'riscv'
-    assert options.num_cpus == 1
-    assert options.external_memory_system is None
-    assert options.cpu_type != "O3_ARM_v7a_3"
-    assert options.cpu_type != "HPI"
-    assert options.simpoint_profile is None
-    assert options.root_device is None
-    assert not options.simpoint
-    assert not options.memchecker
-    assert not options.elastic_trace_en
-    assert not options.checker
-
-    CPUClass = ObjectList.cpu_list.get(options.cpu_type)
-
-    # ---------------------------- Setup System ---------------------------- #
-    # Default Setup
-    tile = M3System()
-    tile.tile_id = no
-    tile.memory_tile = memTile
-    tile.memory_offset = linux_tile_offset
-    tile.memory_size = linux_tile_size
-
-    tile.tcu = Tcu(max_noc_packet_size='2kB', buf_size='2kB')
-    tile.tcu.connector = RiscvConnector()
-    tile.tcu.tile_id = tile.tile_id
-
-    tile.tcu.tile_mem_offset = 0x10000000
-
-    tile.tcu.num_endpoints = 192
-    tile.tcu.tlb_entries = 128
-
-    # connection to noc
-    tile.tcu.noc_master_port = noc.cpu_side_ports
-    tile.tcu.noc_slave_port = noc.mem_side_ports
-
-    tile.tcu.slave_region = [AddrRange(0, tile.tcu.mmio_region.start - 1)]
-
-    tile.noc_master_port = noc.cpu_side_ports
-
-    mdesc = SysConfig(disks=fsImage, mem='512MB', os_type='linux')
-    tile.mem_mode = CPUClass.memory_mode()
-    tile.mem_ranges = [AddrRange(start=0x30000000, size=mdesc.mem())]
-
-    tile.workload = RiscvLinux()
-    tile.workload.object_file = kernel
-
-    tile.xbar = SystemXBar()
-
-    tile.system_port = tile.xbar.cpu_side_ports
-    tile.xbar.default = tile.tcu.cache_mem_slave_port
-
-    # HiFive Platform
-    tile.platform = HiFive()
-
-    # RTCCLK (Set to 100MHz for faster simulation)
-    tile.platform.rtc = RiscvRTC(frequency=Frequency("100MHz"))
-    tile.platform.clint.int_pin = tile.platform.rtc.int_pin
-
-    # VirtIOMMIO
-    if fsImage:
-        disks = []
-        for (i, disk) in enumerate(mdesc.disks()):
-            image = CowDiskImage(child=RawDiskImage(
-                read_only=True), read_only=False)
-            image.child.image_file = disk
-            disks.append(MmioVirtIO(
-                vio=VirtIOBlock(image=image),
-                interrupt_id=0x8 + i,
-                pio_size=4096,
-                pio_addr=0xa0008000 + i * 4096
-            ))
-        tile.platform.disks = disks
-
-    tile.platform.attachOnChipIO(tile.xbar)
-    tile.platform.attachOffChipIO(tile.xbar)
-    tile.platform.attachPlic()
-    tile.platform.intrctrl = IntrControl()
-
-    # ---------------------------- Default Setup --------------------------- #
-
-    tile.cache_line_size = 64
-    tile.voltage_domain = VoltageDomain(voltage=options.sys_voltage)
-    # tile.clk_domain = SrcClockDomain(clock=options.sys_clock,
-    tile.clk_domain = SrcClockDomain(
-        clock="2GHz", voltage_domain=tile.voltage_domain)
-    # tile.cpu_voltage_domain = VoltageDomain()
-    # tile.cpu_clk_domain = SrcClockDomain(clock=options.cpu_clock,
-    #                                             voltage_domain=
-    #                                             tile.cpu_voltage_domain)
-
-    tile.readfile = '/dev/stdin'
-
-    tile.cpu = CPUClass(clk_domain=tile.clk_domain, cpu_id=0)
-
-    tile.cpu.createThreads()
-
-    # ----------------------------- PMA Checker ---------------------------- #
-
-    uncacheable_range = [
-        *tile.platform._on_chip_ranges(),
-        *tile.platform._off_chip_ranges()
-    ]
-
-    # PMA checker can be defined at system-level (system.pma_checker)
-    # or MMU-level (system.cpu[0].mmu.pma_checker). It will be resolved
-    # by RiscvTLB's Parent.any proxy
-    tile.cpu.mmu.pma_checker = PMAChecker(uncacheable=uncacheable_range)
-
-    # --------------------------- DTB Generation --------------------------- #
-
-    generateDtb(tile)
-    tile.workload.dtb_filename = path.join(
-        m5.options.outdir, 'device.dtb')
-
-    # Default DTB address if bbl is bulit with --with-dts option
-    tile.workload.dtb_addr = 0x37e00000
-
-    # Linux boot command flags
-    tile.workload.command_line = commandLine
-
-    # ---------------------------- start CacheConfig.config_cache ---------- #
-
-    # Provide a clock for the L2 and the L1-to-L2 bus here as they
-    # are not connected using addTwoLevelCacheHierarchy. Use the
-    # same clock as the CPUs.
-    tile.l2cache = L2Cache(clk_domain=tile.clk_domain, size='512kB')
-
-    tile.tol2bus = L2XBar(clk_domain=tile.clk_domain)
-    tile.l2cache.cpu_side = tile.tol2bus.master
-    tile.l2cache.mem_side = tile.xbar.slave
-
-    tile.l1icache = L1_ICache(size='32kB')
-    tile.l1dcache = L1_DCache(size='32kB')
-    tile.l1icache.cpu_side = tile.tcu.icache_master_port
-    tile.l1dcache.cpu_side = tile.tcu.dcache_master_port
-    tile.l1icache.mem_side = tile.tol2bus.cpu_side_ports
-    tile.l1dcache.mem_side = tile.tol2bus.cpu_side_ports
-    tile.cpu.icache_port = tile.tcu.icache_slave_port
-    tile.cpu.dcache_port = tile.tcu.dcache_slave_port
-    # tile.cpu._cached_ports = ['l1icache.mem_side', 'l1dcache.mem_side']
-
-    tile.cpu.itb_walker_cache = PageTableWalkerCache()
-    tile.cpu.dtb_walker_cache = PageTableWalkerCache()
-    tile.cpu.mmu.connectWalkerPorts(
-        tile.cpu.itb_walker_cache.cpu_side, tile.cpu.dtb_walker_cache.cpu_side)
-    # tile.cpu._cached_ports += ["itb_walker_cache.mem_side", \
-    #                     "dtb_walker_cache.mem_side"]
-
-    tile.cpu.createInterruptController()
-    # tile.cpu.connectAllPorts(tile.tol2bus, tile.xbar)
-    tile.cpu.itb_walker_cache.mem_side = tile.tol2bus.cpu_side_ports
-    tile.cpu.dtb_walker_cache.mem_side = tile.tol2bus.cpu_side_ports
-
-    # ---------------------------- end CacheConfig.config_cache ------------ #
-
-    # configure caches like M³ does
-    tile.l1icache.tag_latency = 4
-    tile.l1icache.data_latency = 4
-    tile.l1icache.response_latency = 4
-    tile.l1dcache.tag_latency = 4
-    tile.l1dcache.data_latency = 4
-    tile.l1dcache.response_latency = 4
-    tile.l2cache.tag_latency = 12
-    tile.l2cache.data_latency = 12
-    tile.l2cache.response_latency = 12
-    tile.l2cache.prefetcher = StridePrefetcher(degree=16)
-
-    tile.tcu.caches = [tile.l2cache, tile.l1icache, tile.l1dcache]
-
-    print("T%02d: %s" % (no, "LINUX"))
-    print('     Core =%s %s @ %s' %
-          (type(tile.cpu), options.isa, options.cpu_clock))
-    printConfig(tile, 2)
-
-    print_tcu_latencies(tile.tcu)
 
     return tile
 
