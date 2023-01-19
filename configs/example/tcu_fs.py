@@ -512,7 +512,7 @@ def createLinuxTile(noc, options, no, kernel, memTile,
     tile.workload.object_file = kernel
 
     tile.platform = HiFive()
-    tile.platform.rtc = RiscvRTC(frequency=Frequency("100MHz"))
+    tile.platform.rtc = RiscvRTC(frequency=Frequency("100Hz"))
     tile.platform.clint.int_pin = tile.platform.rtc.int_pin
 
     image = CowDiskImage(child=RawDiskImage(read_only=True), read_only=False)
