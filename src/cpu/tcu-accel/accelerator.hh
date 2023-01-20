@@ -111,7 +111,6 @@ class TcuAccel : public ClockedObject
 
     EventWrapper<TcuAccel, &TcuAccel::tick> tickEvent;
 
-    bool haveVM;
     Addr chunkSize;
     size_t maxDataSize;
 

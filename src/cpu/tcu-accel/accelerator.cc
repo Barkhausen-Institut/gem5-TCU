@@ -62,7 +62,8 @@ TcuAccel::TcuAccel(const TcuAccelParams &p)
   : ClockedObject(p),
     system(p.system),
     tickEvent(this),
-    chunkSize(system->cacheLineSize()),
+    // our accelerators always have SPM, which supports larger chunks
+    chunkSize(p.max_data_size),
     maxDataSize(p.max_data_size),
     offset(p.offset),
     port("port", this),
@@ -72,12 +73,6 @@ TcuAccel::TcuAccel(const TcuAccelParams &p)
     retryPkt(nullptr),
     connector()
 {
-    TileMemory *sys = dynamic_cast<TileMemory*>(system);
-    haveVM = !sys->hasMem(tileId);
-    // if we don't have VM, we have an SPM, which supports larger chunks
-    if (!haveVM)
-        chunkSize = maxDataSize;
-
     // kick things into action
     schedule(tickEvent, curTick());
 }

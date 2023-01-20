@@ -131,13 +131,6 @@ Tcu::regStats()
     connector.regStats();
 }
 
-bool
-Tcu::isMemTile(TileId tile) const
-{
-    TileMemory *sys = dynamic_cast<TileMemory*>(system);
-    return !sys || sys->hasMem(tile);
-}
-
 void
 Tcu::reset()
 {

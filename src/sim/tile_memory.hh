@@ -57,11 +57,6 @@ class TileMemory
                Addr memSize,
                PortProxy &phys);
 
-    bool hasMem(tcu::TileId tile) const
-    {
-        return (tileDesc(tile) & 0x7) != 1;
-    }
-
     virtual tcu::tiledesc_t tileDesc(tcu::TileId tile) const = 0;
 
     tcu::NocAddr getPhys(Addr offset) const

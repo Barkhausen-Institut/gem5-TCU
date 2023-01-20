@@ -154,8 +154,6 @@ class Tcu : public BaseTcu
 
     TcuTlb *tlb() { return tlBuf; }
 
-    bool isMemTile(TileId tile) const;
-
     void printLine(Addr len);
 
     void writeCoverage(PrintReg pr);
