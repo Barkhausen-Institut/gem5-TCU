@@ -236,7 +236,7 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
         size_t mem_count = 0;
         MemMod *bmems = new MemMod[tiles.size()];
         auto avail_mem_start = modOffset + modSize + tiles.size() * tileSize;
-        bmems[0].size = tile_attr(mem.memTile) & ~static_cast<Addr>(0xFFF);
+        bmems[0].size = (tile_attr(mem.memTile) >> 28) << 12;
         if (bmems[0].size < avail_mem_start)
             panic("Not enough DRAM for modules and tiles");
         bmems[0].addr = tcu::NocAddr(mem.memTile, avail_mem_start).getAddr();
@@ -245,9 +245,9 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
 
         for(auto it = tiles.cbegin(); it != tiles.cend(); ++it)
         {
-            if (it->first != mem.memTile && (tile_attr(it->first) & 0x7) == 2) {
+            if (it->first != mem.memTile && (tile_attr(it->first) & 0x3F) == 1) {
                 bmems[mem_count].addr = tcu::NocAddr(it->first, 0).getAddr();
-                bmems[mem_count].size = tile_attr(it->first) & ~static_cast<Addr>(0xFFF);
+                bmems[mem_count].size = (tile_attr(it->first) >> 28) << 12;
                 mem_count++;
             }
         }

@@ -711,42 +711,43 @@ def runSimulation(root, options, tiles):
     tile_descs = []
     tile_ids = []
     for tile in tiles:
-        size = 0
+        desc = 0
         if hasattr(tile, 'mem_ctrl'):
+            desc |= 1 # mem
             size = int(tile.mem_ctrl.dram.device_size)
             assert size % 4096 == 0, "Memory size not page aligned"
-            size |= 2   # mem
+            desc |= (size >> 12) << 28 # mem size in pages
+            desc |= (1 << 5) << 20     # TileAttr::IMEM
         else:
             if hasattr(tile, 'spm'):
                 size = int(tile.spm.range.end)
                 assert size % 4096 == 0, "Memory size not page aligned"
-            else:
-                size |= 1 # emem
+                desc |= (size >> 12) << 28 # mem size in pages
+                desc |= (1 << 5) << 20     # TileAttr::IMEM
 
             if hasattr(tile, 'accel'):
                 if type(tile.accel).__name__ == 'TcuAccelInDir':
-                    size |= 4 << 3 # indir accelerator
+                    desc |= 4 << 6 # indir accelerator
                 elif int(tile.accel.logic.algorithm) == 0:
-                    size |= 5 << 3 # copy accelerator
+                    desc |= 5 << 6 # copy accelerator
                 elif int(tile.accel.logic.algorithm) == 1:
-                    size |= 6 << 3 # rot13 accelerator
-            elif options.isa == 'arm':
-                size |= 2 << 3 # arm
-            elif options.isa == 'riscv':
-                size |= 3 << 3 # riscv
-            else:
-                size |= 1 << 3 # x86
-
-            if hasattr(tile, 'idectrl'):
-                size = 7 << 3
+                    desc |= 6 << 6 # rot13 accelerator
+            elif hasattr(tile, 'idectrl'):
+                desc |= 7 << 6
             elif hasattr(tile, 'nic'):
-                size = 8 << 3
+                desc |= 8 << 6
             elif hasattr(tile, 'serial'):
-                size = 9 << 3
+                desc |= 9 << 6
+            elif options.isa == 'arm':
+                desc |= 2 << 6 # arm
+            elif options.isa == 'riscv':
+                desc |= 3 << 6 # riscv
+            else:
+                desc |= 1 << 6 # x86
 
             if hasattr(tile, 'kecacc'):
-                size |= 0x8 << 7 # TileAttr::KECACC
-        tile_descs.append(size)
+                desc |= (1 << 4) << 20
+        tile_descs.append(desc)
         tile_ids.append(tile.tile_id)
 
     # give that to the tiles
