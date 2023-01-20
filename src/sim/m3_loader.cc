@@ -164,6 +164,7 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
     Addr args = argv + sizeof(uint64_t) * env.argc;
     env.argv = argv;
     env.envp = 0;
+    env.heap_size = 0;
     env.raw_tile_count = tiles.size();
     // write tile ids to environment
     {
@@ -171,13 +172,6 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
         for(auto it = tiles.cbegin(); it != tiles.cend(); ++it, ++i)
             env.raw_tile_ids[i] = it->first.raw();
     }
-
-    // with paging, the kernel gets an initial heap mapped
-    if ((env.tile_desc & 0x7) == 1 || (env.tile_desc & 0x7) == 2)
-        env.heap_size = HEAP_SIZE;
-    // otherwise, he should use all internal memory
-    else
-        env.heap_size = 0;
 
     // check if there is enough space
     if (commandLine.length() + 1 > envStart + ENV_SIZE - args)
