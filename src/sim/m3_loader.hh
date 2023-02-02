@@ -86,9 +86,7 @@ class M3Loader
         uint64_t argc;
         uint64_t argv;
         uint64_t envp;
-        uint64_t heap_size;
         uint64_t kenv;
-        uint64_t lambda;
         uint64_t raw_tile_count;
         uint64_t raw_tile_ids[MAX_CHIPS * MAX_TILES];
     };

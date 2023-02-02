@@ -164,7 +164,6 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
     Addr args = argv + sizeof(uint64_t) * env.argc;
     env.argv = argv;
     env.envp = 0;
-    env.heap_size = 0;
     env.raw_tile_count = tiles.size();
     // write tile ids to environment
     {
