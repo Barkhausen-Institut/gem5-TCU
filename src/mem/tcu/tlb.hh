@@ -69,9 +69,6 @@ class TcuTlb
         LEVEL_CNT    = 4,
         LEVEL_BITS   = PAGE_BITS - PTE_BITS,
         LEVEL_MASK   = (1 << LEVEL_BITS) - 1,
-        LPAGE_BITS   = PAGE_BITS + LEVEL_BITS,
-        LPAGE_SIZE   = 1UL << LPAGE_BITS,
-        LPAGE_MASK   = LPAGE_SIZE - 1,
     };
 
     enum Result
@@ -86,12 +83,8 @@ class TcuTlb
     {
         READ    = 1,
         WRITE   = 2,
-        EXEC    = 4,
-        LARGE   = 8,
-        FIXED   = 16,
+        FIXED   = 4,
         RW      = READ | WRITE,
-        RX      = READ | EXEC,
-        RWX     = RW | EXEC,
     };
 
     struct MissHandler

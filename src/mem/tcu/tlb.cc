@@ -42,13 +42,11 @@ namespace tcu
 
 static const char *decode_access(uint access)
 {
-    static char buf[6];
-    buf[0] = (access & TcuTlb::LARGE) ? 'l' : '-';
-    buf[1] = (access & TcuTlb::READ) ? 'r' : '-';
-    buf[2] = (access & TcuTlb::WRITE) ? 'w' : '-';
-    buf[3] = (access & TcuTlb::EXEC) ? 'x' : '-';
-    buf[4] = (access & TcuTlb::FIXED) ? 'f' : '-';
-    buf[5] = '\0';
+    static char buf[4];
+    buf[0] = (access & TcuTlb::READ) ? 'r' : '-';
+    buf[1] = (access & TcuTlb::WRITE) ? 'w' : '-';
+    buf[2] = (access & TcuTlb::FIXED) ? 'f' : '-';
+    buf[3] = '\0';
     return buf;
 }
 
@@ -122,8 +120,7 @@ TcuTlb::lookup(Addr virt, uint16_t asid, uint access, NocAddr *phys,
         assert(e->flags != 0);
         *phys = e->phys;
         e->lru_seq = ++lru_seq;
-        Addr mask = (e->flags & LARGE) ? LPAGE_MASK : PAGE_MASK;
-        phys->offset += virt & mask;
+        phys->offset += virt & PAGE_MASK;
         hits++;
         res = HIT;
     }
@@ -144,9 +141,7 @@ TcuTlb::do_lookup(Addr virt, uint16_t asid, size_t *iters)
         if (entries[i].flags == 0 || entries[i].asid != asid)
             continue;
 
-        Addr offMask = (entries[i].flags & LARGE) ? LPAGE_MASK : PAGE_MASK;
-        Addr pgMask = ~offMask;
-        if ((virt & pgMask) == entries[i].virt)
+        if ((virt & ~static_cast<Addr>(PAGE_MASK)) == entries[i].virt)
         {
             *iters = i + 1;
             return &entries[i];
@@ -181,7 +176,6 @@ bool
 TcuTlb::insert(Addr virt, uint16_t asid, NocAddr phys, uint flags)
 {
     assert(flags != 0);
-    Addr mask = (flags & LARGE) ? LPAGE_MASK : PAGE_MASK;
 
     size_t iters;
     Entry *e = do_lookup(virt, asid, &iters);
@@ -193,8 +187,8 @@ TcuTlb::insert(Addr virt, uint16_t asid, NocAddr phys, uint flags)
     }
 
     e->asid = asid;
-    e->virt = virt & ~mask;
-    e->phys = NocAddr(phys.getAddr() & ~mask);
+    e->virt = virt & ~static_cast<Addr>(PAGE_MASK);
+    e->phys = NocAddr(phys.getAddr() & ~static_cast<Addr>(PAGE_MASK));
     e->flags = flags;
 
     DPRINTFS(TcuTlbWrite, (&tcu),
