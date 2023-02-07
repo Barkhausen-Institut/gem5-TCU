@@ -34,6 +34,7 @@
 
 #include "base/chunk_generator.hh"
 #include "base/output.hh"
+#include "cpu/translation.hh"
 #include "debug/Tcu.hh"
 #include "mem/tcu/base.hh"
 #include "mem/tcu/cmds.hh"
@@ -131,9 +132,12 @@ class Tcu : public BaseTcu
         }
 
         void process() override;
+        void finishTranslation(WholeTranslationState *state);
         void completed(PacketPtr pkt);
         const std::string name() const override;
         const char* description() const override { return "WriteCoverageEvent"; }
+        // for the address translation (we don't speculate)
+        bool isSquashed() const { return false; }
     };
 
   public:

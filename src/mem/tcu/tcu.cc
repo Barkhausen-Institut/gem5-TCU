@@ -166,23 +166,33 @@ Tcu::WriteCoverageEvent::name() const
 void
 Tcu::WriteCoverageEvent::process()
 {
-    auto tc = _tcu.system->threads[0];
-    BaseMMU *mmu = tc->getMMUPtr();
     Request::Flags flags;
 
-    auto tmpReq = std::make_shared<Request>(_gen.addr(), _gen.size(), flags,
-                                            _tcu.requestorId, 0,
-                                            tc->contextId());
-
-    if (mmu->translateFunctional(tmpReq, tc, BaseMMU::Read) != NoFault)
-        panic("Translation of address %u failed", _gen.addr());
-
-    auto req = std::make_shared<Request>(tmpReq->getPaddr(), _gen.size(),
+    auto req = std::make_shared<Request>(_gen.addr(), _gen.size(),
                                          flags, _tcu.requestorId);
-    auto pkt = new Packet(req, MemCmd::ReadReq);
-    pkt->dataStatic(_buffer);
+    req->setVirt(_gen.addr(), _gen.size(), flags, _tcu.requestorId, 0);
 
+    BaseMMU::Mode mode = BaseMMU::Read;
+    WholeTranslationState *state =
+        new WholeTranslationState(req, new uint8_t[_gen.size()], NULL, mode);
+    DataTranslation<Tcu::WriteCoverageEvent *> *translation
+        = new DataTranslation<Tcu::WriteCoverageEvent *>(this, state);
+
+    auto tc = _tcu.system->threads[0];
+    tc->getMMUPtr()->translateTiming(req, tc, translation, mode);
+}
+
+void
+Tcu::WriteCoverageEvent::finishTranslation(WholeTranslationState *state)
+{
+    assert(state->getFault() == NoFault);
+    assert(state->isSplit == false);
+
+    auto pkt = new Packet(state->mainReq, MemCmd::ReadReq);
+    pkt->dataStatic(state->data);
     _tcu.sendMemRequest(pkt, reinterpret_cast<Addr>(this), Cycles(1), true);
+
+    delete state;
 }
 
 void
