@@ -229,7 +229,13 @@ TcuTlb::clear()
     for (size_t i = 0; i < num; ++i)
     {
         if (entries[i].flags != 0 && !(entries[i].flags & FIXED))
+        {
+            DPRINTFS(TcuTlbWrite, (&tcu),
+                     "TLB invalidate for virt=%p asid=%#x perm=%s -> %p\n",
+                     entries[i].virt, entries[i].asid,
+                     decode_access(entries[i].flags), entries[i].phys.getAddr());
             entries[i].flags = 0;
+        }
     }
     flushes++;
 }
