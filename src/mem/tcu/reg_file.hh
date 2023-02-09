@@ -44,6 +44,8 @@ namespace gem5
 namespace tcu
 {
 
+static constexpr Addr VERSION = 1;
+
 // external registers (only externally writable)
 enum class ExtReg : Addr
 {
@@ -53,7 +55,9 @@ enum class ExtReg : Addr
 
 enum class Features
 {
-    PRIV            = 1 << 0,
+    KERNEL  = 1 << 0,
+    VM      = 1 << 1,
+    CTXSW   = 1 << 2,
 };
 
 // privileged registers (only writable by privileged software)

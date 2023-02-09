@@ -114,7 +114,8 @@ RegFile::RegFile(Tcu &_tcu, const std::string& name, unsigned numEndpoints)
         eps.push_back(Ep(i));
 
     // at boot, all tiles are privileged
-    reg_t feat = static_cast<reg_t>(Features::PRIV);
+    reg_t feat = static_cast<reg_t>(Features::KERNEL);
+    feat |= VERSION << 32;
     set(ExtReg::FEATURES, feat);
 
     // and no activity is running (the id might stay invalid for tiles that don't
@@ -131,21 +132,19 @@ void
 RegFile::initMemEp()
 {
     TileMemory *sys = dynamic_cast<TileMemory*>(tcu.systemObject());
-    if (sys)
-    {
-        NocAddr phys = sys->getPhys(0);
+    assert(sys != nullptr);
 
-        MemEp ep;
-        ep.r0.type = static_cast<RegFile::reg_t>(EpType::MEMORY);
-        ep.r0.act = Tcu::INVALID_ACT_ID;
-        // TODO exec
-        ep.r0.flags = Tcu::MemoryFlags::READ | Tcu::MemoryFlags::WRITE;
-        ep.r0.targetTile = phys.tileId.raw();
-        ep.r1.remoteAddr = phys.offset;
-        ep.r2.remoteSize = sys->memSize;
+    NocAddr phys = sys->getPhys(0);
 
-        updateEp(ep);
-    }
+    MemEp ep;
+    ep.r0.type = static_cast<RegFile::reg_t>(EpType::MEMORY);
+    ep.r0.act = Tcu::INVALID_ACT_ID;
+    ep.r0.flags = Tcu::MemoryFlags::READ | Tcu::MemoryFlags::WRITE;
+    ep.r0.targetTile = phys.tileId.raw();
+    ep.r1.remoteAddr = phys.offset;
+    ep.r2.remoteSize = sys->memSize;
+
+    updateEp(ep);
 }
 
 void
@@ -371,7 +370,7 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
     RegAccess access = isCpuRequest ? RegAccess::CPU : RegAccess::NOC;
     reg_t* data = pkt->getPtr<reg_t>();
     uint res = WROTE_NONE;
-    bool isPriv = hasFeature(Features::PRIV);
+    bool isPriv = hasFeature(Features::KERNEL);
     int lastEp = -1;
 
     // perform a single register access for each requested register
@@ -391,7 +390,17 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
             {
                 if (reg == ExtReg::EXT_CMD)
                     res |= WROTE_EXT_CMD;
-                set(reg, data[offset / sizeof(reg_t)], access);
+                // only the KERNEL flag can be changed
+                if (reg == ExtReg::FEATURES)
+                {
+                    auto ver = get(reg, access)
+                        & ~static_cast<reg_t>(Features::KERNEL);
+                    auto feat = data[offset / sizeof(reg_t)]
+                        & static_cast<reg_t>(Features::KERNEL);
+                    set(reg, ver | feat, access);
+                }
+                else
+                    set(reg, data[offset / sizeof(reg_t)], access);
             }
         }
         else if (regAddr >= TcuTlb::PAGE_SIZE * 2)

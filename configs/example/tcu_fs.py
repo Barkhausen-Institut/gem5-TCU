@@ -301,19 +301,19 @@ def createTile(noc, options, id, systemType, l1size, l2size, spmsize,
         tile.spm.range = spmsize
 
     if options.isa == 'riscv':
-        if systemType != SpuSystem and systemType != MemSystem:
+        if systemType != SpuSystem:
             tile.env_start= 0x10000008
         tile.tcu.tile_mem_offset = 0x10000000
         if l1size is None and not spmsize is None:
             tile.spm.offset = tile.tcu.tile_mem_offset
 
-    if systemType != MemSystem:
+    if not memTile is None:
         tile.memory_tile = memTile.raw()
         tile.memory_offset = tile_offset + (tile_size * tile_cur_off)
         tile.memory_size = tile_size
         tile_cur_off += 1
 
-    if systemType == MemSystem or l1size is None:
+    if l1size is None:
         # for memory tiles or tiles with SPM, we do not need a buffer. for the
         # sake of an easy implementation we just make the buffer very large and
         # the block size as well, so that we can read a packet from SPM/DRAM
@@ -653,8 +653,8 @@ def createAbortTestTile(noc, options, id, memTile, epCount,
 
 def createMemTile(noc, options, id, size, epCount, dram=True):
     tile = createTile(
-        noc=noc, options=options, id=id, systemType=MemSystem,
-        l1size=None, l2size=None, spmsize=None, memTile=0,
+        noc=noc, options=options, id=id, systemType=SpuSystem,
+        l1size=None, l2size=None, spmsize=None, memTile=None,
         epCount=epCount
     )
     tile.clk_domain = SrcClockDomain(clock=options.sys_clock,
