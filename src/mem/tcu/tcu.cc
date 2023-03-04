@@ -152,9 +152,14 @@ Tcu::printLine(Addr len)
 void
 Tcu::writeCoverage(PrintReg pr)
 {
-    auto writeCovEvent = new WriteCoverageEvent(*this, pr.cov_act,
-                                                pr.cov_addr, pr.size);
-    schedule(writeCovEvent, clockEdge(Cycles(1)));
+    if (pr.size == 0)
+        regs().set(UnprivReg::PRINT, 0);
+    else
+    {
+        auto writeCovEvent = new WriteCoverageEvent(*this, pr.cov_act,
+                                                    pr.cov_addr, pr.size);
+        schedule(writeCovEvent, clockEdge(Cycles(1)));
+    }
 }
 
 const std::string
