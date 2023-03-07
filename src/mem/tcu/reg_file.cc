@@ -48,6 +48,7 @@ namespace tcu
 
 const char *RegFile::extRegNames[] = {
     "FEATURES",
+    "TILE_DESC",
     "EXT_CMD",
 };
 
@@ -117,6 +118,11 @@ RegFile::RegFile(Tcu &_tcu, const std::string& name, unsigned numEndpoints)
     reg_t feat = static_cast<reg_t>(Features::KERNEL);
     feat |= VERSION << 32;
     set(ExtReg::FEATURES, feat);
+
+    // provide tile description for software
+    TileMemory *sys = dynamic_cast<TileMemory*>(tcu.systemObject());
+    assert(sys != nullptr);
+    set(ExtReg::TILE_DESC, sys->tileDesc(tcu.tileId));
 
     reset(false);
 
@@ -427,7 +433,8 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
                         & static_cast<reg_t>(Features::KERNEL);
                     set(reg, ver | feat, access);
                 }
-                else
+                // TILE_DESC is read-only
+                else if (reg != ExtReg::TILE_DESC)
                     set(reg, data[offset / sizeof(reg_t)], access);
             }
         }

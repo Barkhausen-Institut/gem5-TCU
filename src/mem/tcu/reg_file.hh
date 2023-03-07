@@ -50,6 +50,7 @@ static constexpr Addr VERSION = 1;
 enum class ExtReg : Addr
 {
     FEATURES,
+    TILE_DESC,
     EXT_CMD,
 };
 
@@ -81,7 +82,7 @@ enum class UnprivReg : Addr
     PRINT,
 };
 
-constexpr unsigned numExtRegs = 2;
+constexpr unsigned numExtRegs = 3;
 constexpr unsigned numPrivRegs = 5;
 constexpr unsigned numUnprivRegs = 6;
 constexpr unsigned numEpRegs = 3;
