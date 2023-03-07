@@ -717,13 +717,13 @@ def runSimulation(root, options, tiles):
             size = int(tile.mem_ctrl.dram.device_size)
             assert size % 4096 == 0, "Memory size not page aligned"
             desc |= (size >> 12) << 28 # mem size in pages
-            desc |= (1 << 5) << 20     # TileAttr::IMEM
+            desc |= (1 << 4) << 20     # TileAttr::IMEM
         else:
             if hasattr(tile, 'spm'):
                 size = int(tile.spm.range.end)
                 assert size % 4096 == 0, "Memory size not page aligned"
                 desc |= (size >> 12) << 28 # mem size in pages
-                desc |= (1 << 5) << 20     # TileAttr::IMEM
+                desc |= (1 << 4) << 20     # TileAttr::IMEM
 
             if hasattr(tile, 'accel'):
                 if type(tile.accel).__name__ == 'TcuAccelInDir':
@@ -739,14 +739,14 @@ def runSimulation(root, options, tiles):
             elif hasattr(tile, 'serial'):
                 desc |= 9 << 6
             elif options.isa == 'arm':
-                desc |= 2 << 6 # arm
+                desc |= 3 << 6 # arm
             elif options.isa == 'riscv':
-                desc |= 3 << 6 # riscv
+                desc |= 1 << 6 # riscv
             else:
-                desc |= 1 << 6 # x86
+                desc |= 2 << 6 # x86
 
             if hasattr(tile, 'kecacc'):
-                desc |= (1 << 4) << 20
+                desc |= (1 << 5) << 20
         tile_descs.append(desc)
         tile_ids.append(tile.tile_id)
 
