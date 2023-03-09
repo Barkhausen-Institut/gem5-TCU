@@ -44,7 +44,7 @@ namespace gem5
 namespace tcu
 {
 
-static constexpr Addr VERSION = 1;
+static constexpr Addr VERSION = 2;
 
 // external registers (only externally writable)
 enum class ExtReg : Addr
@@ -64,11 +64,17 @@ enum class Features
 // privileged registers (only writable by privileged software)
 enum class PrivReg : Addr
 {
+    PRIV_CTRL,
     CORE_REQ,
     PRIV_CMD,
     PRIV_CMD_ARG1,
     CUR_ACT,
     CLEAR_IRQ,
+};
+
+enum PrivCtrl
+{
+    PMP_FAILURES  = 1 << 0,
 };
 
 // unprivileged registers (writable by the application)
@@ -83,7 +89,7 @@ enum class UnprivReg : Addr
 };
 
 constexpr unsigned numExtRegs = 3;
-constexpr unsigned numPrivRegs = 5;
+constexpr unsigned numPrivRegs = 6;
 constexpr unsigned numUnprivRegs = 6;
 constexpr unsigned numEpRegs = 3;
 // buffer for prints (32 * 8 bytes)
@@ -424,6 +430,7 @@ enum CoreMsgType
     IDLE = 0,
     RESP = 1,
     FOREIGN_REQ = 2,
+    PMP_FAILURE = 3,
 };
 
 BitUnion64(CoreMsg)
@@ -431,14 +438,21 @@ BitUnion64(CoreMsg)
 EndBitUnion(CoreMsg)
 
 BitUnion64(ForeignCoreReq)
-    Bitfield<1, 0> type;
-    Bitfield<17, 2> ep;
+    Bitfield<2, 0> type;
+    Bitfield<18, 3> ep;
     Bitfield<63, 48> act;
 EndBitUnion(ForeignCoreReq)
 
 BitUnion64(ForeignCoreResp)
-    Bitfield<1, 0> type;
+    Bitfield<2, 0> type;
 EndBitUnion(ForeignCoreResp)
+
+BitUnion64(PMPFailureCoreReq)
+    Bitfield<2, 0> type;
+    Bitfield<3, 3> write;
+    Bitfield<8, 4> error;
+    Bitfield<63, 32> phys;
+EndBitUnion(PMPFailureCoreReq)
 
 BitUnion64(PrintReg)
     Bitfield<23, 0> size;

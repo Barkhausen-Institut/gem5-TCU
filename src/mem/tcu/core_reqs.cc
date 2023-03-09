@@ -52,9 +52,12 @@ CoreRequests::name() const
 void
 CoreRequests::regStats()
 {
-    coreReqs
-        .name(name() + ".coreReqs")
-        .desc("Number of translate requests to the core");
+    coreForeignRecvs
+        .name(name() + ".coreForeignRecvs")
+        .desc("Number of foreign-receive requests to the core");
+    corePMPFailures
+        .name(name() + ".corePMPFailures")
+        .desc("Number of PMP failure requests to the core");
     coreDelays
         .name(name() + ".coreDelays")
         .desc("Number of delayed translate requests to the core");
@@ -63,7 +66,16 @@ CoreRequests::regStats()
         .desc("Number of failed translate requests to the core");
 }
 
-size_t
+void
+CoreRequests::add(Request *req)
+{
+    if(reqs.size() == 1)
+        req->start();
+    else
+        coreDelays++;
+}
+
+void
 CoreRequests::startForeignReceive(epid_t epId,
                                   actid_t actId)
 {
@@ -77,13 +89,35 @@ CoreRequests::startForeignReceive(epid_t epId,
     DPRINTFS(TcuCoreReqs, (&tcu),
         "CoreRequest[%lu] = recvForeign(ep=%u, act=%u)\n",
         id, epId, actId);
-    coreReqs++;
 
-    if(reqs.size() == 1)
-        req->start();
-    else
-        coreDelays++;
-    return id;
+    coreForeignRecvs++;
+    add(req);
+}
+
+void
+CoreRequests::startPMPFailure(Addr phys, bool write, TcuError error)
+{
+    if (!(tcu.regs().get(PrivReg::PRIV_CTRL) & PrivCtrl::PMP_FAILURES))
+    {
+        DPRINTFS(TcuCoreReqs, (&tcu),
+            "Ignoring PMP-failure core request as PRIV_CTRL.PMP_FAILURES is disabled\n");
+        return;
+    }
+
+    size_t id = nextId();
+
+    auto req = new PMPFailureRequest(id, *this);
+    req->phys = phys;
+    req->write = write;
+    req->error = error;
+    reqs.push_back(req);
+
+    DPRINTFS(TcuCoreReqs, (&tcu),
+        "CoreRequest[%lu] = pmpFailure(phys=%#x, write=%d, error=%d)\n",
+        id, phys, write, static_cast<int>(error));
+
+    corePMPFailures++;
+    add(req);
 }
 
 void
@@ -101,6 +135,20 @@ CoreRequests::ForeignRecvRequest::start()
     freq.ep = epId;
     freq.act = actId;
     req.tcu.regs().set(PrivReg::CORE_REQ, freq);
+    waiting = false;
+
+    Request::start();
+}
+
+void
+CoreRequests::PMPFailureRequest::start()
+{
+    PMPFailureCoreReq pmpreq = 0;
+    pmpreq.type = CoreMsgType::PMP_FAILURE;
+    pmpreq.phys = phys;
+    pmpreq.write = write;
+    pmpreq.error = static_cast<int>(error);
+    req.tcu.regs().set(PrivReg::CORE_REQ, pmpreq);
     waiting = false;
 
     Request::start();

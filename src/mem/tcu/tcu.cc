@@ -283,14 +283,14 @@ Tcu::startTransfer(void *event, Cycles delay)
     xferUnit->startTransfer(ev, delay);
 }
 
-size_t
+void
 Tcu::startForeignReceive(epid_t epId, actid_t actId)
 {
     // if a command is running, send the response now to finish its memory
     // write instruction to the COMMAND register
     cmds.stopCommand();
 
-    return coreReqs.startForeignReceive(epId, actId);
+    coreReqs.startForeignReceive(epId, actId);
 }
 
 void
@@ -585,10 +585,17 @@ Tcu::translatePhysToNoC(Addr phys, bool write)
     Addr physOff = physAddr & 0x3FFFFFFF;
     epid_t epid = physAddr >> 30;
 
-    if (epid >= numEndpoints || regs().getEp(epid).type() != EpType::MEMORY)
+    if (epid >= numEndpoints)
     {
-        DPRINTFS(Tcu, this, "PMP-EP%u: invalid EP (phys=%#x)\n", epid, phys);
-        warn("%s,PMP-EP%u: invalid EP", tileId, epid);
+        DPRINTFS(Tcu, this, "PMP-EP%u: invalid PMP EP (phys=%#x)\n", epid, phys);
+        coreReqs.startPMPFailure(phys, write, TcuError::NO_PMP_EP);
+        return NocAddr();
+    }
+
+    if (regs().getEp(epid).type() != EpType::MEMORY)
+    {
+        DPRINTFS(Tcu, this, "PMP-EP%u: no memory EP (phys=%#x)\n", epid, phys);
+        coreReqs.startPMPFailure(phys, write, TcuError::NO_MEP);
         return NocAddr();
     }
 
@@ -599,7 +606,7 @@ Tcu::translatePhysToNoC(Addr phys, bool write)
         DPRINTFS(Tcu, this,
                  "PMP-EP%u: out of bounds (%#x vs. %#x)\n",
                  epid, physOff, mep.r2.remoteSize);
-        warn("%s,PMP-EP%u: out of bounds", tileId, epid);
+        coreReqs.startPMPFailure(phys, write, TcuError::OUT_OF_BOUNDS);
         return NocAddr();
     }
     if ((!write && !(mep.r0.flags & MemoryFlags::READ)) ||
@@ -608,7 +615,7 @@ Tcu::translatePhysToNoC(Addr phys, bool write)
         DPRINTFS(Tcu, this,
                  "PMP-EP%u: permission denied (flags=%#x, write=%d)\n",
                  epid, mep.r0.flags, write);
-        warn("%s,PMP-EP%u: permission denied", tileId, epid);
+        coreReqs.startPMPFailure(phys, write, TcuError::NO_PERM);
         return NocAddr();
     }
 

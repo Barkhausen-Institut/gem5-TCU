@@ -222,7 +222,7 @@ class Tcu : public BaseTcu
 
     void startTransfer(void *event, Cycles delay);
 
-    size_t startForeignReceive(epid_t epId, actid_t actId);
+    void startForeignReceive(epid_t epId, actid_t actId);
 
     void printPacket(PacketPtr pkt) const;
 

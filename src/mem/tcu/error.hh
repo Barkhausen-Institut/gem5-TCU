@@ -64,6 +64,7 @@ enum class TcuError
     MSG_UNALIGNED       = 23,
     TLB_MISS            = 24,
     TLB_FULL            = 25,
+    NO_PMP_EP           = 26,
 };
 
 }

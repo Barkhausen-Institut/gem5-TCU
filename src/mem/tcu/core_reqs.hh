@@ -76,14 +76,28 @@ class CoreRequests
         actid_t actId;
     };
 
+    struct PMPFailureRequest : public Request
+    {
+        explicit PMPFailureRequest(size_t id, CoreRequests &req)
+            : Request(id, req) {}
+
+        void start() override;
+        void complete(RegFile::reg_t) override {}
+
+        Addr phys;
+        bool write;
+        TcuError error;
+    };
+
     explicit CoreRequests(Tcu &tcu, size_t bufCount);
 
     const std::string name() const;
 
     void regStats();
 
-    size_t startForeignReceive(epid_t epId,
+    void startForeignReceive(epid_t epId,
                                actid_t actId);
+    void startPMPFailure(Addr phys, bool write, TcuError error);
 
     void completeReqs();
 
@@ -91,6 +105,7 @@ class CoreRequests
 
   private:
 
+    void add(Request *req);
     void startNextReq();
     Request *getById(size_t id) const;
     size_t nextId() const;
@@ -98,7 +113,8 @@ class CoreRequests
     Tcu &tcu;
     std::list<Request*> reqs;
 
-    statistics::Scalar coreReqs;
+    statistics::Scalar coreForeignRecvs;
+    statistics::Scalar corePMPFailures;
     statistics::Scalar coreDelays;
     statistics::Scalar coreFails;
 };
