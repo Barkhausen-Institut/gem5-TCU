@@ -116,8 +116,13 @@ RegFile::RegFile(Tcu &_tcu, const std::string& name, unsigned numEndpoints)
         eps.push_back(Ep(i));
 
     // at boot, all tiles are privileged
-    reg_t feat = static_cast<reg_t>(Features::KERNEL);
-    feat |= VERSION << 32;
+    FeatureReg feat = 0;
+    feat.kernel = 1;
+    feat.vm = 0;
+    feat.ctxsw = 0;
+    feat.vmajor = MAJOR_VERSION;
+    feat.vminor = MINOR_VERSION;
+    feat.vpatch = PATCH_VERSION;
     set(ExtReg::FEATURES, feat);
 
     // provide tile description for software

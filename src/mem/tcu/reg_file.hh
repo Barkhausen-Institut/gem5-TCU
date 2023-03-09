@@ -44,7 +44,9 @@ namespace gem5
 namespace tcu
 {
 
-static constexpr Addr VERSION = 2;
+static constexpr Addr PATCH_VERSION = 0;
+static constexpr Addr MINOR_VERSION = 0;
+static constexpr Addr MAJOR_VERSION = 2;
 
 // external registers (only externally writable)
 enum class ExtReg : Addr
@@ -453,6 +455,15 @@ BitUnion64(PMPFailureCoreReq)
     Bitfield<8, 4> error;
     Bitfield<63, 32> phys;
 EndBitUnion(PMPFailureCoreReq)
+
+BitUnion64(FeatureReg)
+    Bitfield<63, 56> vpatch;
+    Bitfield<55, 48> vminor;
+    Bitfield<47, 32> vmajor;
+    Bitfield<2, 2> ctxsw;
+    Bitfield<1, 1> vm;
+    Bitfield<0, 0> kernel;
+EndBitUnion(FeatureReg)
 
 BitUnion64(PrintReg)
     Bitfield<23, 0> size;
