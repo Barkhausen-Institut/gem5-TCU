@@ -27,8 +27,8 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
-#include "debug/TcuCoreReqs.hh"
-#include "mem/tcu/core_reqs.hh"
+#include "debug/TcuCUReqs.hh"
+#include "mem/tcu/cu_reqs.hh"
 #include "mem/tcu/tcu.hh"
 #include "mem/tcu/error.hh"
 
@@ -37,46 +37,46 @@ namespace gem5
 namespace tcu
 {
 
-CoreRequests::CoreRequests(Tcu &_tcu, size_t bufCount)
+CURequests::CURequests(Tcu &_tcu, size_t bufCount)
     : tcu(_tcu),
       reqs()
 {
 }
 
 const std::string
-CoreRequests::name() const
+CURequests::name() const
 {
     return tcu.name();
 }
 
 void
-CoreRequests::regStats()
+CURequests::regStats()
 {
-    coreForeignRecvs
-        .name(name() + ".coreForeignRecvs")
-        .desc("Number of foreign-receive requests to the core");
-    corePMPFailures
-        .name(name() + ".corePMPFailures")
-        .desc("Number of PMP failure requests to the core");
-    coreDelays
-        .name(name() + ".coreDelays")
-        .desc("Number of delayed translate requests to the core");
-    coreFails
-        .name(name() + ".coreFails")
-        .desc("Number of failed translate requests to the core");
+    cuForeignRecvs
+        .name(name() + ".cuReqForeignRecvs")
+        .desc("Number of foreign-receive requests to the CU");
+    cuPMPFailures
+        .name(name() + ".cuReqPMPFailures")
+        .desc("Number of PMP failure requests to the CU");
+    cuDelays
+        .name(name() + ".cuReqDelays")
+        .desc("Number of delayed translate requests to the CU");
+    cuFails
+        .name(name() + ".cuReqFails")
+        .desc("Number of failed translate requests to the CU");
 }
 
 void
-CoreRequests::add(Request *req)
+CURequests::add(Request *req)
 {
     if(reqs.size() == 1)
         req->start();
     else
-        coreDelays++;
+        cuDelays++;
 }
 
 void
-CoreRequests::startForeignReceive(epid_t epId,
+CURequests::startForeignReceive(epid_t epId,
                                   actid_t actId)
 {
     size_t id = nextId();
@@ -86,21 +86,21 @@ CoreRequests::startForeignReceive(epid_t epId,
     req->actId = actId;
     reqs.push_back(req);
 
-    DPRINTFS(TcuCoreReqs, (&tcu),
-        "CoreRequest[%lu] = recvForeign(ep=%u, act=%u)\n",
+    DPRINTFS(TcuCUReqs, (&tcu),
+        "CURequest[%lu] = recvForeign(ep=%u, act=%u)\n",
         id, epId, actId);
 
-    coreForeignRecvs++;
+    cuForeignRecvs++;
     add(req);
 }
 
 void
-CoreRequests::startPMPFailure(Addr phys, bool write, TcuError error)
+CURequests::startPMPFailure(Addr phys, bool write, TcuError error)
 {
     if (!(tcu.regs().get(PrivReg::PRIV_CTRL) & PrivCtrl::PMP_FAILURES))
     {
-        DPRINTFS(TcuCoreReqs, (&tcu),
-            "Ignoring PMP-failure core request as PRIV_CTRL.PMP_FAILURES is disabled\n");
+        DPRINTFS(TcuCUReqs, (&tcu),
+            "Ignoring PMP-failure CU request as PRIV_CTRL.PMP_FAILURES is disabled\n");
         return;
     }
 
@@ -112,77 +112,77 @@ CoreRequests::startPMPFailure(Addr phys, bool write, TcuError error)
     req->error = error;
     reqs.push_back(req);
 
-    DPRINTFS(TcuCoreReqs, (&tcu),
-        "CoreRequest[%lu] = pmpFailure(phys=%#x, write=%d, error=%d)\n",
+    DPRINTFS(TcuCUReqs, (&tcu),
+        "CURequest[%lu] = pmpFailure(phys=%#x, write=%d, error=%d)\n",
         id, phys, write, static_cast<int>(error));
 
-    corePMPFailures++;
+    cuPMPFailures++;
     add(req);
 }
 
 void
-CoreRequests::Request::start()
+CURequests::Request::start()
 {
-    DPRINTFS(TcuCoreReqs, (&req.tcu), "CoreRequest[%lu] started\n", id);
-    req.tcu.con().setIrq(BaseConnector::IRQ::CORE_REQ);
+    DPRINTFS(TcuCUReqs, (&req.tcu), "CURequest[%lu] started\n", id);
+    req.tcu.con().setIrq(BaseConnector::IRQ::CU_REQ);
 }
 
 void
-CoreRequests::ForeignRecvRequest::start()
+CURequests::ForeignRecvRequest::start()
 {
-    ForeignCoreReq freq = 0;
-    freq.type = CoreMsgType::FOREIGN_REQ;
+    ForeignCUReq freq = 0;
+    freq.type = CUMsgType::FOREIGN_REQ;
     freq.ep = epId;
     freq.act = actId;
-    req.tcu.regs().set(PrivReg::CORE_REQ, freq);
+    req.tcu.regs().set(PrivReg::CU_REQ, freq);
     waiting = false;
 
     Request::start();
 }
 
 void
-CoreRequests::PMPFailureRequest::start()
+CURequests::PMPFailureRequest::start()
 {
-    PMPFailureCoreReq pmpreq = 0;
-    pmpreq.type = CoreMsgType::PMP_FAILURE;
+    PMPFailureCUReq pmpreq = 0;
+    pmpreq.type = CUMsgType::PMP_FAILURE;
     pmpreq.phys = phys;
     pmpreq.write = write;
     pmpreq.error = static_cast<int>(error);
-    req.tcu.regs().set(PrivReg::CORE_REQ, pmpreq);
+    req.tcu.regs().set(PrivReg::CU_REQ, pmpreq);
     waiting = false;
 
     Request::start();
 }
 
 void
-CoreRequests::completeReqs()
+CURequests::completeReqs()
 {
-    CoreMsg resp = tcu.regs().get(PrivReg::CORE_REQ);
-    assert(resp.type == CoreMsgType::RESP);
+    CUMsg resp = tcu.regs().get(PrivReg::CU_REQ);
+    assert(resp.type == CUMsgType::RESP);
     assert(!reqs.empty());
 
     Request *req = reqs.front();
-    DPRINTFS(TcuCoreReqs, (&tcu), "CoreRequest[%lu] done\n", req->id);
+    DPRINTFS(TcuCUReqs, (&tcu), "CURequest[%lu] done\n", req->id);
     reqs.pop_front();
 
     req->complete(resp);
     delete req;
 
-    tcu.regs().set(PrivReg::CORE_REQ, CoreMsgType::IDLE);
+    tcu.regs().set(PrivReg::CU_REQ, CUMsgType::IDLE);
 
     startNextReq();
 }
 
 void
-CoreRequests::abortReq(size_t id)
+CURequests::abortReq(size_t id)
 {
     for (auto r = reqs.begin(); r != reqs.end(); ++r)
     {
         if ((*r)->id == id)
         {
-            DPRINTFS(TcuCoreReqs, (&tcu), "CoreRequest[%lu] aborted\n", id);
+            DPRINTFS(TcuCUReqs, (&tcu), "CURequest[%lu] aborted\n", id);
             if (!(*r)->waiting)
-               tcu.regs().set(PrivReg::CORE_REQ, CoreMsgType::IDLE);
+               tcu.regs().set(PrivReg::CU_REQ, CUMsgType::IDLE);
            reqs.erase(r);
            delete *r;
            break;
@@ -193,7 +193,7 @@ CoreRequests::abortReq(size_t id)
 }
 
 void
-CoreRequests::startNextReq()
+CURequests::startNextReq()
 {
     if (!reqs.empty())
     {
@@ -202,8 +202,8 @@ CoreRequests::startNextReq()
     }
 }
 
-CoreRequests::Request *
-CoreRequests::getById(size_t id) const
+CURequests::Request *
+CURequests::getById(size_t id) const
 {
     for (auto r : reqs)
     {
@@ -214,7 +214,7 @@ CoreRequests::getById(size_t id) const
 }
 
 size_t
-CoreRequests::nextId() const
+CURequests::nextId() const
 {
     for (size_t id = 0; ; ++id)
     {

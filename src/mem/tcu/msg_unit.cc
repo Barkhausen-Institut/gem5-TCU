@@ -506,7 +506,7 @@ MessageUnit::fetchWithEP(EpFile::EpCache &eps)
 
     // check if the current activity has unread messages at all. note that this is
     // important in case it is out of sync with the receive EPs, i.e., if we
-    // have ongoing foreignRecv core requests.
+    // have ongoing foreignRecv CU requests.
     if (rep.r2.unread == 0 || tcu.regs().getCurAct().msgs == 0)
     {
         tcu.regs().set(UnprivReg::ARG1, -1);

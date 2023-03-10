@@ -61,10 +61,10 @@ Tcu::Tcu(const TcuParams &p)
     msgUnit(new MessageUnit(*this)),
     memUnit(new MemoryUnit(*this)),
     xferUnit(new XferUnit(*this, p.block_size, p.buf_count, p.buf_size)),
-    coreReqs(*this, p.buf_count),
+    cuReqs(*this, p.buf_count),
     epFile(*this),
     cmds(*this),
-    completeCoreReqEvent(coreReqs),
+    completeCUReqEvent(cuReqs),
     coreDrained(),
     tileMemOffset(p.tile_mem_offset),
     numEndpoints(p.num_endpoints),
@@ -126,7 +126,7 @@ Tcu::regStats()
     if (tlb())
         tlb()->regStats();
     cmds.regStats();
-    coreReqs.regStats();
+    cuReqs.regStats();
     xferUnit->regStats();
     memUnit->regStats();
     msgUnit->regStats();
@@ -290,7 +290,7 @@ Tcu::startForeignReceive(epid_t epId, actid_t actId)
     // write instruction to the COMMAND register
     cmds.stopCommand();
 
-    coreReqs.startForeignReceive(epId, actId);
+    cuReqs.startForeignReceive(epId, actId);
 }
 
 void
@@ -471,11 +471,11 @@ Tcu::completeMemRequest(PacketPtr pkt)
 }
 
 bool
-Tcu::handleCoreMemRequest(PacketPtr pkt,
-                          TcuSlavePort &sport,
-                          TcuMasterPort &mport,
-                          bool icache,
-                          bool functional)
+Tcu::handleCUMemRequest(PacketPtr pkt,
+                        TcuSlavePort &sport,
+                        TcuMasterPort &mport,
+                        bool icache,
+                        bool functional)
 {
     bool res = true;
     Addr virt = pkt->getAddr();
@@ -558,8 +558,8 @@ Tcu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
         else if(!isCpuRequest)
             schedNocResponse(pkt, when);
 
-        if (result & RegFile::WROTE_CORE_REQ)
-            schedule(completeCoreReqEvent, when);
+        if (result & RegFile::WROTE_CU_REQ)
+            schedule(completeCUReqEvent, when);
         if (result & RegFile::WROTE_PRINT)
         {
             PrintReg pr = regs().get(UnprivReg::PRINT);
@@ -588,14 +588,14 @@ Tcu::translatePhysToNoC(Addr phys, bool write)
     if (epid >= numEndpoints)
     {
         DPRINTFS(Tcu, this, "PMP-EP%u: invalid PMP EP (phys=%#x)\n", epid, phys);
-        coreReqs.startPMPFailure(phys, write, TcuError::NO_PMP_EP);
+        cuReqs.startPMPFailure(phys, write, TcuError::NO_PMP_EP);
         return NocAddr();
     }
 
     if (regs().getEp(epid).type() != EpType::MEMORY)
     {
         DPRINTFS(Tcu, this, "PMP-EP%u: no memory EP (phys=%#x)\n", epid, phys);
-        coreReqs.startPMPFailure(phys, write, TcuError::NO_MEP);
+        cuReqs.startPMPFailure(phys, write, TcuError::NO_MEP);
         return NocAddr();
     }
 
@@ -606,7 +606,7 @@ Tcu::translatePhysToNoC(Addr phys, bool write)
         DPRINTFS(Tcu, this,
                  "PMP-EP%u: out of bounds (%#x vs. %#x)\n",
                  epid, physOff, mep.r2.remoteSize);
-        coreReqs.startPMPFailure(phys, write, TcuError::OUT_OF_BOUNDS);
+        cuReqs.startPMPFailure(phys, write, TcuError::OUT_OF_BOUNDS);
         return NocAddr();
     }
     if ((!write && !(mep.r0.flags & MemoryFlags::READ)) ||
@@ -615,7 +615,7 @@ Tcu::translatePhysToNoC(Addr phys, bool write)
         DPRINTFS(Tcu, this,
                  "PMP-EP%u: permission denied (flags=%#x, write=%d)\n",
                  epid, mep.r0.flags, write);
-        coreReqs.startPMPFailure(phys, write, TcuError::NO_PERM);
+        cuReqs.startPMPFailure(phys, write, TcuError::NO_PERM);
         return NocAddr();
     }
 

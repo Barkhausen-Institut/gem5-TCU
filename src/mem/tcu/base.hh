@@ -203,7 +203,7 @@ class BaseTcu : public ClockedObject
 
         bool handleRequest(PacketPtr pkt, bool *, bool functional) override
         {
-            bool res = tcu.handleCoreMemRequest(pkt, *this, port, icache, functional);
+            bool res = tcu.handleCUMemRequest(pkt, *this, port, icache, functional);
             if (!res)
                 tcu.schedDummyResponse(*this, pkt, functional);
             return true;
@@ -271,11 +271,11 @@ class BaseTcu : public ClockedObject
 
     virtual void handleNocRequest(PacketPtr pkt) = 0;
 
-    virtual bool handleCoreMemRequest(PacketPtr pkt,
-                                      TcuSlavePort &sport,
-                                      TcuMasterPort &mport,
-                                      bool icache,
-                                      bool functional) = 0;
+    virtual bool handleCUMemRequest(PacketPtr pkt,
+                                    TcuSlavePort &sport,
+                                    TcuMasterPort &mport,
+                                    bool icache,
+                                    bool functional) = 0;
 
     virtual bool handleLLCRequest(PacketPtr pkt, bool functional) = 0;
 

@@ -50,7 +50,7 @@ class BaseConnector : public ClockedObject
 
     enum IRQ
     {
-        CORE_REQ,
+        CU_REQ,
         TIMER,
     };
 

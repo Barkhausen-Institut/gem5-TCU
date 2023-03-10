@@ -27,8 +27,8 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
-#ifndef __MEM_TCU_CORE_REQS_HH__
-#define __MEM_TCU_CORE_REQS_HH__
+#ifndef __MEM_TCU_CU_REQS_HH__
+#define __MEM_TCU_CU_REQS_HH__
 
 #include "mem/tcu/reg_file.hh"
 #include "mem/tcu/xfer_unit.hh"
@@ -42,13 +42,13 @@ namespace tcu
 
 class Tcu;
 
-class CoreRequests
+class CURequests
 {
   public:
 
     struct Request
     {
-        explicit Request(size_t _id, CoreRequests &_req)
+        explicit Request(size_t _id, CURequests &_req)
             : id(_id),
               req(_req),
               waiting(true)
@@ -60,13 +60,13 @@ class CoreRequests
         virtual void complete(RegFile::reg_t resp) = 0;
 
         size_t id;
-        CoreRequests &req;
+        CURequests &req;
         bool waiting;
     };
 
     struct ForeignRecvRequest : public Request
     {
-        explicit ForeignRecvRequest(size_t id, CoreRequests &req)
+        explicit ForeignRecvRequest(size_t id, CURequests &req)
             : Request(id, req) {}
 
         void start() override;
@@ -78,7 +78,7 @@ class CoreRequests
 
     struct PMPFailureRequest : public Request
     {
-        explicit PMPFailureRequest(size_t id, CoreRequests &req)
+        explicit PMPFailureRequest(size_t id, CURequests &req)
             : Request(id, req) {}
 
         void start() override;
@@ -89,7 +89,7 @@ class CoreRequests
         TcuError error;
     };
 
-    explicit CoreRequests(Tcu &tcu, size_t bufCount);
+    explicit CURequests(Tcu &tcu, size_t bufCount);
 
     const std::string name() const;
 
@@ -113,13 +113,13 @@ class CoreRequests
     Tcu &tcu;
     std::list<Request*> reqs;
 
-    statistics::Scalar coreForeignRecvs;
-    statistics::Scalar corePMPFailures;
-    statistics::Scalar coreDelays;
-    statistics::Scalar coreFails;
+    statistics::Scalar cuForeignRecvs;
+    statistics::Scalar cuPMPFailures;
+    statistics::Scalar cuDelays;
+    statistics::Scalar cuFails;
 };
 
 }
 }
 
-#endif // __MEM_TCU_CORE_REQS_HH__
+#endif // __MEM_TCU_CU_REQS_HH__

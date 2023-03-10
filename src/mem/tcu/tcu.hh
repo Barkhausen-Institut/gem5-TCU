@@ -43,7 +43,7 @@
 #include "mem/tcu/reg_file.hh"
 #include "mem/tcu/noc_addr.hh"
 #include "mem/tcu/xfer_unit.hh"
-#include "mem/tcu/core_reqs.hh"
+#include "mem/tcu/cu_reqs.hh"
 #include "mem/tcu/error.hh"
 #include "params/Tcu.hh"
 
@@ -236,11 +236,11 @@ class Tcu : public BaseTcu
 
     void handleNocRequest(PacketPtr pkt) override;
 
-    bool handleCoreMemRequest(PacketPtr pkt,
-                              TcuSlavePort &sport,
-                              TcuMasterPort &mport,
-                              bool icache,
-                              bool functional) override;
+    bool handleCUMemRequest(PacketPtr pkt,
+                            TcuSlavePort &sport,
+                            TcuMasterPort &mport,
+                            bool icache,
+                            bool functional) override;
 
     bool handleLLCRequest(PacketPtr pkt, bool functional) override;
 
@@ -258,13 +258,13 @@ class Tcu : public BaseTcu
 
     XferUnit *xferUnit;
 
-    CoreRequests coreReqs;
+    CURequests cuReqs;
 
     EpFile epFile;
 
     TcuCommands cmds;
 
-    EventWrapper<CoreRequests, &CoreRequests::completeReqs> completeCoreReqEvent;
+    EventWrapper<CURequests, &CURequests::completeReqs> completeCUReqEvent;
 
     bool coreDrained;
 

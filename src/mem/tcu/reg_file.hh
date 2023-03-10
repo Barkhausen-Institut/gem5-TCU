@@ -67,7 +67,7 @@ enum class Features
 enum class PrivReg : Addr
 {
     PRIV_CTRL,
-    CORE_REQ,
+    CU_REQ,
     PRIV_CMD,
     PRIV_CMD_ARG1,
     CUR_ACT,
@@ -427,7 +427,7 @@ BitUnion64(ActState)
     Bitfield<15, 0> id;
 EndBitUnion(ActState)
 
-enum CoreMsgType
+enum CUMsgType
 {
     IDLE = 0,
     RESP = 1,
@@ -435,26 +435,26 @@ enum CoreMsgType
     PMP_FAILURE = 3,
 };
 
-BitUnion64(CoreMsg)
+BitUnion64(CUMsg)
     Bitfield<1, 0> type;
-EndBitUnion(CoreMsg)
+EndBitUnion(CUMsg)
 
-BitUnion64(ForeignCoreReq)
+BitUnion64(ForeignCUReq)
     Bitfield<2, 0> type;
     Bitfield<18, 3> ep;
     Bitfield<63, 48> act;
-EndBitUnion(ForeignCoreReq)
+EndBitUnion(ForeignCUReq)
 
-BitUnion64(ForeignCoreResp)
+BitUnion64(ForeignCUResp)
     Bitfield<2, 0> type;
-EndBitUnion(ForeignCoreResp)
+EndBitUnion(ForeignCUResp)
 
-BitUnion64(PMPFailureCoreReq)
+BitUnion64(PMPFailureCUReq)
     Bitfield<2, 0> type;
     Bitfield<3, 3> write;
     Bitfield<8, 4> error;
     Bitfield<63, 32> phys;
-EndBitUnion(PMPFailureCoreReq)
+EndBitUnion(PMPFailureCUReq)
 
 BitUnion64(FeatureReg)
     Bitfield<63, 56> vpatch;
@@ -509,7 +509,7 @@ class RegFile
         WROTE_CMD       = 1,
         WROTE_PRIV_CMD  = 2,
         WROTE_EXT_CMD   = 4,
-        WROTE_CORE_REQ  = 8,
+        WROTE_CU_REQ    = 8,
         WROTE_CLEAR_IRQ = 16,
         WROTE_PRINT     = 32,
     };

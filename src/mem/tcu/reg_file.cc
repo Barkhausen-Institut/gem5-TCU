@@ -54,7 +54,7 @@ const char *RegFile::extRegNames[] = {
 
 const char *RegFile::privRegNames[] = {
     "PRIV_CTRL",
-    "CORE_REQ",
+    "CU_REQ",
     "PRIV_CMD",
     "PRIV_CMD_ARG",
     "CUR_ACT",
@@ -456,8 +456,8 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
                     data[offset / sizeof(reg_t)] = get(reg, access);
                 else if (pkt->isWrite())
                 {
-                    if (reg == PrivReg::CORE_REQ)
-                        res |= WROTE_CORE_REQ;
+                    if (reg == PrivReg::CU_REQ)
+                        res |= WROTE_CU_REQ;
                     else if (reg == PrivReg::PRIV_CMD)
                         res |= WROTE_PRIV_CMD;
                     else if (reg == PrivReg::CLEAR_IRQ)
