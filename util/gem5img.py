@@ -324,7 +324,7 @@ def newImage(file, mb):
     # leaves a "hole" which many file systems are smart enough not to actually
     # store to disk and which is defined to read as zero.
     fd = os.open(file, os.O_WRONLY | os.O_CREAT)
-    os.lseek(fd, size - 1, os.SEEK_SET)
+    os.lseek(fd, int(size - 1), os.SEEK_SET)
     os.write(fd, b'\0')
 
 def newComFunc(options, args):

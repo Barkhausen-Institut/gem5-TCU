@@ -31,20 +31,17 @@ import argparse
 import re
 import sys
 import os
+from os import path
 
 import m5
-from m5.defines import buildEnv
 from m5.objects import *
-from m5.util import addToPath, fatal
+from m5.util import addToPath
 
 addToPath('../platform/gem5/configs')
 
-from common.FSConfig import *
-from common import Simulation
-from common import CacheConfig
-from common import ObjectList
-from common.Caches import *
 from common import Options
+from common.Caches import *
+from common import ObjectList
 
 # Each tile is represented as an instance of System. Whereas each tile has a
 # CPU, a Scratchpad, and a TCU. Because it seems that the gem5 crossbar is not
@@ -79,6 +76,12 @@ APIC_range_size                 = 1 << 12
 
 mod_offset                      = 0
 mod_size                        = 768 * 1024 * 1024
+linux_tile_offset               = 2 * 1024 * 1024 * 1024
+linux_tile_size                 = 1024 * 1024 * 1024
+linux_initrd_size               = 4 * 1024 * 1024
+linux_initrd_offset             = linux_tile_size - linux_initrd_size
+linux_dtb_size                  = 1 * 1024 * 1024
+linux_dtb_offset                = linux_initrd_offset - linux_dtb_size
 tile_offset                     = mod_offset + mod_size
 tile_size                       = 16 * 1024 * 1024
 tile_cur_off                    = 0
@@ -116,19 +119,9 @@ class TileId:
     def __str__(self):
         return "C%dT%02d" % (self.chip(), self.tile())
 
-class PcPciHost(GenericPciHost):
-    conf_base = 0x30000000
-    conf_size = "16MB"
-
-    pci_pio_base = 0
-
 # reads the options and returns them
 def getOptions():
     parser = argparse.ArgumentParser()
-
-    parser.add_argument("--cpu-type", default="DerivO3CPU",
-                        choices=ObjectList.cpu_list.get_names(),
-                        help="type of cpu to run with")
 
     parser.add_argument("--isa", default="x86_64",
                         choices=['arm', 'riscv', 'x86_64'],
@@ -142,33 +135,16 @@ def getOptions():
     parser.add_argument("--logflags", default="",
                         help="comma separated list of log flags (e.g., Info,LibNet)")
 
-    parser.add_argument("--mem-type", default="DDR3_1600_8x8",
-                        choices=ObjectList.mem_list.get_names(),
-                        help="type of memory to use")
-    parser.add_argument("--mem-channels", default=1,
-                        help="number of memory channels")
-    parser.add_argument("--mem-ranks", default=None,
-                        help="number of memory ranks per channel")
-
     parser.add_argument("--pausetile", default="",
                         help="the tile to pause until GDB connects")
 
-    parser.add_argument("--sys-voltage", action="store",
-                        default='1.0V',
-                        help="""Top-level voltage for blocks running at system
-                        power supply""")
-    parser.add_argument("--sys-clock", action="store",
-                        default='1GHz',
-                        help="""Top-level clock for blocks running at system
-                        speed""")
-    parser.add_argument("--cpu-clock", action="store",
-                        default='2GHz',
-                        help="Clock for blocks running at CPU speed")
+    parser.add_argument("--bare-metal", action="store_true",
+                        help="Provide the raw system without the linux specific bits")
+    parser.add_argument("--dtb-filename", action="store", type=str,
+                        help="Specifies device tree blob file to use with device-tree-"\
+                            "enabled kernels")
 
-    parser.add_argument("-m", "--maxtick", default=m5.MaxTick,
-                        metavar="T",
-                        help="Stop after T ticks")
-
+    Options.addCommonOptions(parser)
     Options.addFSOptions(parser)
 
     args = parser.parse_args()
@@ -204,6 +180,64 @@ def printConfig(tile):
             print('       Comp =Core -> TCU -> SPM')
         except:
             pass
+
+def generateMemNode(state, mem_range):
+    node = FdtNode("memory@%x" % int(mem_range.start))
+    node.append(FdtPropertyStrings("device_type", ["memory"]))
+    node.append(FdtPropertyWords("reg",
+                                 state.addrCells(mem_range.start) +
+                                 state.sizeCells(mem_range.size())))
+    return node
+
+def generateTcuNode(state, mem_range):
+    node = FdtNode("tcu_mmio@%x" % int(mem_range.start))
+    node.append(FdtPropertyStrings("device_type", ["mmio"]))
+    node.append(FdtPropertyWords("reg",
+                                 state.addrCells(mem_range.start) +
+                                 state.sizeCells(mem_range.size())))
+    return node
+
+def generateChosenNode(state, commandLine):
+    node = FdtNode("chosen")
+    node.append(FdtPropertyStrings("bootargs", [commandLine]))
+    node.append(FdtPropertyWords("linux,initrd-start",
+        state.addrCells(linux_initrd_offset)))
+    node.append(FdtPropertyWords("linux,initrd-end",
+        state.addrCells(linux_initrd_offset + linux_initrd_size)))
+    return node
+
+def generateDtb(system, commandLine):
+    state = FdtState(addr_cells=2, size_cells=2, cpu_cells=1)
+    root = FdtNode('/')
+    root.append(state.addrCellsProperty())
+    root.append(state.sizeCellsProperty())
+    root.appendCompatible(["riscv-virtio"])
+    root.append(generateChosenNode(state, commandLine))
+
+    for mem_range in system.mem_ranges:
+        root.append(generateMemNode(state, mem_range))
+
+    sections = [system.cpu, system.platform]
+
+    for section in sections:
+        for node in section.generateDeviceTree(state):
+            if node.get_name() == root.get_name():
+                root.merge(node)
+            else:
+                root.append(node)
+
+    # add "compatible" entry to UART for gem5-specific UART in bbl
+    soc_idx = root.index('soc')
+    uart_idx = root[soc_idx].index('uart@10000000')
+    root[soc_idx][uart_idx].remove('compatible')
+    root[soc_idx][uart_idx].append(FdtPropertyStrings(
+        'compatible', ['ns8250', 'gem5,uart0']))
+    # root[soc_idx].append(generateTcuNode(state, system.tcu.mmio_region))
+
+    fdt = Fdt()
+    fdt.add_rootnode(root)
+    fdt.writeDtsFile(path.join(m5.options.outdir, 'device.dts'))
+    fdt.writeDtbFile(path.join(m5.options.outdir, 'device.dtb'))
 
 def interpose(tile, options, name, port):
     if TileId.from_raw(tile.tile_id) in options.mem_watches:
@@ -396,14 +430,15 @@ def createCoreTile(noc, options, id, cmdline, memTile, epCount,
     print()
 
     # connect the IO space via bridge to the root NoC
-    tile.bridge = Bridge(delay='50ns')
-    tile.bridge.mem_side_port = noc.cpu_side_ports
-    tile.bridge.cpu_side_port = tile.xbar.mem_side_ports
-    tile.bridge.ranges = \
-        [
-        AddrRange(IO_address_space_base,
-                  interrupts_address_space_base - 1)
-        ]
+    # this is probably not necessary
+    ## tile.bridge = Bridge(delay='50ns')
+    ## tile.bridge.mem_side_port = noc.cpu_side_ports
+    ## tile.bridge.cpu_side_port = tile.xbar.mem_side_ports
+    ## tile.bridge.ranges = \
+    ##     [
+    ##     AddrRange(IO_address_space_base,
+    ##               interrupts_address_space_base - 1)
+    ##     ]
 
     # if not l1size is None:
     #     # connect legacy devices
@@ -441,6 +476,45 @@ def createCoreTile(noc, options, id, cmdline, memTile, epCount,
     else:
         tile.cpu.itb_walker_cache.mem_side = tile.xbar.cpu_side_ports
         tile.cpu.dtb_walker_cache.mem_side = tile.xbar.cpu_side_ports
+
+    return tile
+
+
+def createLinuxTile(noc, options, id, memTile, epCount, l1size, l2size):
+    tile = createCoreTile(
+        noc, options, id, '', memTile, epCount, l1size, l2size
+    )
+    tile.memory_offset = linux_tile_offset
+    tile.memory_size = linux_tile_size
+    tile.mem_ranges = [
+        AddrRange(start=0, end=linux_tile_size)
+    ]
+
+    tile.workload = RiscvLinux()
+    tile.workload.object_file = options.kernel
+    tile.workload.extras = [ options.initrd ]
+    tile.workload.extras_addrs = [ linux_initrd_offset ]
+
+    tile.platform = HiFive()
+    tile.platform.rtc = RiscvRTC(frequency=Frequency("100Hz"))
+    tile.platform.clint.int_pin = tile.platform.rtc.int_pin
+
+    tile.platform.attachOnChipIO(tile.xbar)
+    tile.platform.attachOffChipIO(tile.xbar)
+    tile.platform.attachPlic()
+    tile.platform.setNumCores(1)
+
+    generateDtb(tile, options.command_line)
+    tile.workload.dtb_filename = path.join(m5.options.outdir, 'device.dtb')
+    # Default DTB address if bbl is built with --with-dts option
+    tile.workload.dtb_addr = linux_dtb_offset
+    # Linux boot command flags
+    tile.workload.command_line = options.command_line
+
+    tile.cpu.mmu.pma_checker.uncacheable += [
+        *tile.platform._on_chip_ranges(),
+        *tile.platform._off_chip_ranges()
+    ]
 
     return tile
 
@@ -713,14 +787,19 @@ def runSimulation(root, options, tiles):
     # determine tile descriptors and ids
     tile_descs = []
     tile_ids = []
+    mem_tile_no = 0
     for tile in tiles:
         desc = 0
         if hasattr(tile, 'mem_ctrl'):
             desc |= 1 # mem
             size = int(tile.mem_ctrl.dram.device_size)
+            # the upper area in the first memory tile is reserved for Linux
+            if mem_tile_no == 0:
+                size -= linux_tile_size
             assert size % 4096 == 0, "Memory size not page aligned"
             desc |= (size >> 12) << 28 # mem size in pages
             desc |= (1 << 4) << 20     # TileAttr::IMEM
+            mem_tile_no += 1
         else:
             if hasattr(tile, 'spm'):
                 size = int(tile.spm.range.end)
@@ -767,8 +846,18 @@ def runSimulation(root, options, tiles):
 
     # Instantiate configuration
     m5.instantiate()
+    exit_event = m5.simulate()
+    # m5.checkpoint("run/exit")
 
     # Simulate until program terminates
-    exit_event = m5.simulate(options.maxtick)
+    ## safe_tick = 287682115000
+    ## checkpoint_name = f"run/checkpoint-{safe_tick}"
+    
+    # m5.instantiate(checkpoint_name)
+    # exit_event = m5.simulate()
+
+    # m5.instantiate()
+    # exit_event = m5.simulate(safe_tick)
+    # m5.checkpoint(checkpoint_name)
 
     print('Exiting @ tick', m5.curTick(), 'because', exit_event.getCause())

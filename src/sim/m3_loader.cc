@@ -192,6 +192,10 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
         Addr addr = tcu::NocAddr(mem.memTile, modOffset).getAddr();
         for (const std::string &mod : mods)
         {
+            // default --mods parameter leads to empty mod string
+            if (mod.empty())
+                continue;
+
             // split into name and path by "="
             std::stringstream ss(mod);
             std::string name, path;
