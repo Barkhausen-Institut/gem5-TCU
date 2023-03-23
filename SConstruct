@@ -319,7 +319,7 @@ def config_embedded_python(env):
         if conf.TryAction(f'@{python_config} --embed')[0]:
             cmd.append('--embed')
 
-    def flag_filter(env, cmd_output, unique):
+    def flag_filter(env, cmd_output, unique=False):
         flags = cmd_output.split()
         prefixes = ('-l', '-L', '-I')
         is_useful = lambda x: any(x.startswith(prefix) for prefix in prefixes)
