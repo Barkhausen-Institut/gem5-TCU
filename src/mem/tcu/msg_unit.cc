@@ -294,7 +294,7 @@ MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
     assert(data.size + sizeof(MessageHeader) <= tcu.maxNocPacketSize);
 
     NocAddr nocAddr(TileId::from_raw(sep.r1.tgtTile), sep.r1.tgtEp);
-    uint flags = XferUnit::MESSAGE;
+    unsigned flags = XferUnit::MESSAGE;
 
     // start the transfer of the payload
     auto *ev = new SendTransferEvent(
@@ -682,7 +682,7 @@ MessageUnit::finishMsgReceive(EpFile::EpCache &eps,
                               Addr msgAddr,
                               const MessageHeader *header,
                               TcuError error,
-                              uint xferFlags,
+                              unsigned xferFlags,
                               bool addMsg)
 {
     int idx = (msgAddr - ep.r1.buffer) >> ep.r0.slotSize;
@@ -702,7 +702,7 @@ MessageUnit::finishMsgReceive(EpFile::EpCache &eps,
             // install use-once reply EP
             SendEp rep;
             rep.id = ep.r0.rplEps + idx;
-            rep.r0.type = static_cast<uint>(EpType::SEND);
+            rep.r0.type = static_cast<unsigned>(EpType::SEND);
             rep.r0.act = ep.r0.act;
             rep.r0.msgSize = header->replySize;
             rep.r0.maxCrd = rep.r0.curCrd = 1;
@@ -836,7 +836,7 @@ MessageUnit::recvFromNocWithEP(EpFile::EpCache &eps, PacketPtr pkt)
     pkt->headerDelay = 0;
     delay += tcu.cmdRecvLatency;
 
-    uint rflags = XferUnit::XferFlags::MSGRECV;
+    unsigned rflags = XferUnit::XferFlags::MSGRECV;
     Addr physAddr = rep.r1.buffer + (msgidx << rep.r0.slotSize);
 
     auto *ev = new ReceiveTransferEvent(

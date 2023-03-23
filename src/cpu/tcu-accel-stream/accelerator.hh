@@ -210,7 +210,7 @@ class TcuAccelStream : public TcuAccel
         uint64_t len;
     } reply;
 
-    size_t bufSize;
+    uint64_t bufSize;
     SyscallSM sysc;
     State syscNext;
     Addr replyAddr;

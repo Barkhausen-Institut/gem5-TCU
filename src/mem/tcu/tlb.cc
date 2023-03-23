@@ -40,7 +40,7 @@ namespace gem5
 namespace tcu
 {
 
-static const char *decode_access(uint access)
+static const char *decode_access(unsigned access)
 {
     static char buf[4];
     buf[0] = (access & TcuTlb::READ) ? 'r' : '-';
@@ -88,7 +88,7 @@ TcuTlb::regStats()
 }
 
 TcuTlb::Result
-TcuTlb::lookup(Addr virt, uint16_t asid, uint access, NocAddr *phys,
+TcuTlb::lookup(Addr virt, uint16_t asid, unsigned access, NocAddr *phys,
                Cycles *delay)
 {
     static const char *results[] =
@@ -154,7 +154,7 @@ TcuTlb::do_lookup(Addr virt, uint16_t asid, size_t *iters)
 TcuTlb::Entry *
 TcuTlb::find_free()
 {
-    uint min = std::numeric_limits<uint>::max();
+    unsigned min = std::numeric_limits<unsigned>::max();
     Entry *minEntry = NULL;
     for (size_t i = 0; i < num; ++i)
     {
@@ -173,7 +173,7 @@ TcuTlb::find_free()
 }
 
 bool
-TcuTlb::insert(Addr virt, uint16_t asid, NocAddr phys, uint flags)
+TcuTlb::insert(Addr virt, uint16_t asid, NocAddr phys, unsigned flags)
 {
     assert(flags != 0);
 

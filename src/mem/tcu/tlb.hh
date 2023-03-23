@@ -52,9 +52,9 @@ class TcuTlb
         Addr virt;
         uint16_t asid;
         NocAddr phys;
-        uint flags;
+        unsigned flags;
 
-        uint lru_seq;
+        unsigned lru_seq;
     };
 
   public:
@@ -89,7 +89,7 @@ class TcuTlb
 
     struct MissHandler
     {
-        MissHandler(Addr _virt, uint _access)
+        MissHandler(Addr _virt, unsigned _access)
             : virt(_virt), access(_access)
         {}
 
@@ -101,17 +101,17 @@ class TcuTlb
         virtual void finish(NocAddr phys) = 0;
 
         Addr virt;
-        uint access;
+        unsigned access;
     };
 
     TcuTlb(Tcu &_tcu, size_t _num);
 
     void regStats();
 
-    Result lookup(Addr virt, uint16_t asid, uint access, NocAddr *phys,
+    Result lookup(Addr virt, uint16_t asid, unsigned access, NocAddr *phys,
                   Cycles *delay);
 
-    bool insert(Addr virt, uint16_t asid, NocAddr phys, uint flags);
+    bool insert(Addr virt, uint16_t asid, NocAddr phys, unsigned flags);
 
     bool remove(Addr virt, uint16_t asid);
 
@@ -126,7 +126,7 @@ class TcuTlb
     Tcu &tcu;
     std::vector<Entry> entries;
     size_t num;
-    uint lru_seq;
+    unsigned lru_seq;
 
     statistics::Scalar hits;
     statistics::Scalar misses;

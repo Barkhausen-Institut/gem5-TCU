@@ -123,8 +123,8 @@ class XferUnit
         Cycles startCycle;
         TransferType type;
         NocAddr phys;
-        size_t remaining;
-        uint xferFlags;
+        Addr remaining;
+        unsigned xferFlags;
         TcuError result;
         int freeSlots;
 
@@ -133,7 +133,7 @@ class XferUnit
         TransferEvent(TransferType _type,
                       NocAddr _phys,
                       size_t _size,
-                      uint _flags = 0)
+                      unsigned _flags = 0)
             : xfer(),
               buf(),
               startCycle(),
@@ -151,7 +151,7 @@ class XferUnit
 
         int bufId() const { return buf->id; }
 
-        uint flags() const { return xferFlags; }
+        unsigned flags() const { return xferFlags; }
 
         void *data() { return buf->bytes; }
 
@@ -216,7 +216,7 @@ class XferUnit
 
     void continueTransfer(Buffer *buf);
 
-    Buffer* allocateBuf(TransferEvent *event, uint flags);
+    Buffer* allocateBuf(TransferEvent *event, unsigned flags);
 
   private:
 

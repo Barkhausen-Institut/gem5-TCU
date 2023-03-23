@@ -85,7 +85,7 @@ AccelLogic::tick()
     {
         case State::LOGIC_PULL:
         {
-            size_t rem = dataSize - pos;
+            Addr rem = dataSize - pos;
             pullSize = std::min(accel->chunkSize, rem);
             pkt = accel->tcuif().createPacket(
                 accel->bufferAddr() + offset + pos,

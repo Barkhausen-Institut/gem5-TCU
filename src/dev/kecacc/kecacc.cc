@@ -263,7 +263,8 @@ KecAcc::absorb(PacketPtr pkt)
     DPRINTF(KecAcc, "absorb(%u)\n", pkt->getSize());
     assert(pkt->isRead());
     auto nperm = xkcp.absorb(pkt->getConstPtr<uint8_t>(), pkt->getSize());
-    return Cycles(std::max(nperm * params().permute_cycles, 1UL));
+    return Cycles(
+        std::max(nperm * params().permute_cycles, static_cast<uint64_t>(1)));
 }
 
 Cycles
@@ -272,7 +273,8 @@ KecAcc::squeeze(PacketPtr pkt)
     DPRINTF(KecAcc, "squeeze(%u)\n", pkt->getSize());
     assert(pkt->isWrite());
     auto nperm = xkcp.squeeze(pkt->getPtr<uint8_t>(), pkt->getSize());
-    return Cycles(std::max(nperm * params().permute_cycles, 1UL));
+    return Cycles(
+        std::max(nperm * params().permute_cycles, static_cast<uint64_t>(1)));
 }
 
 Cycles

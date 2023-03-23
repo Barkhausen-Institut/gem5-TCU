@@ -56,7 +56,7 @@ class MessageUnit
                           epid_t _sepid,
                           NocAddr phys,
                           size_t size,
-                          uint flags,
+                          unsigned flags,
                           NocAddr dest,
                           MessageHeader *_header)
             : WriteTransferEvent(phys, size, flags, dest),
@@ -82,7 +82,7 @@ class MessageUnit
                              EpFile::EpCache *_eps,
                              epid_t _epid,
                              NocAddr phys,
-                             uint flags,
+                             unsigned flags,
                              PacketPtr pkt)
             : MemoryUnit::ReceiveTransferEvent(
                 XferUnit::TransferType::REMOTE_WRITE, phys, flags, pkt),
@@ -165,7 +165,7 @@ class MessageUnit
                               Addr msgAddr,
                               const MessageHeader *header,
                               TcuError error,
-                              uint xferFlags,
+                              unsigned xferFlags,
                               bool addMsg);
 
   private:

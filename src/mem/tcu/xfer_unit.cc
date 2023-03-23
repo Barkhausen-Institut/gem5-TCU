@@ -41,7 +41,7 @@ namespace gem5
 namespace tcu
 {
 
-static const char *decodeFlags(uint flags)
+static const char *decodeFlags(unsigned flags)
 {
     static char buf[3];
     buf[0] = (flags & XferUnit::MESSAGE) ? 'm' : '-';
@@ -336,7 +336,7 @@ XferUnit::tryAbortCommand()
 }
 
 XferUnit::Buffer*
-XferUnit::allocateBuf(TransferEvent *event, uint flags)
+XferUnit::allocateBuf(TransferEvent *event, unsigned flags)
 {
     for (size_t i = 0; i < bufCount; ++i)
     {

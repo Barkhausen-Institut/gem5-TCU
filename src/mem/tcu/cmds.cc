@@ -320,7 +320,7 @@ TcuCommands::finishCommand(TcuError error)
 
     DPRINTF(TcuCmd, "Finished command %s with EP=%u -> %u\n",
             COMMAND_NAME(cmdNames, cmd.opcode), cmd.epid,
-            static_cast<uint>(error));
+            static_cast<unsigned>(error));
 
     // let the SW know that the command is finished
     cmd = 0;
@@ -373,7 +373,7 @@ TcuCommands::executePrivCommand(PacketPtr pkt)
             {
                 uint16_t asid = cmd.arg0 >> 32;
                 Addr phys = cmd.arg0 & 0xFFFFF000;
-                uint flags = cmd.arg0 & 0x1F;
+                unsigned flags = cmd.arg0 & 0x1F;
                 Addr virt = tcu.regs().get(PrivReg::PRIV_CMD_ARG1) & 0xFFFFFFFFFFFFF000;
                 if (!tcu.tlb()->insert(virt, asid, NocAddr(phys), flags))
                     res = TcuError::TLB_FULL;
@@ -403,11 +403,11 @@ TcuCommands::executePrivCommand(PacketPtr pkt)
         tcu.schedCpuResponse(pkt, tcu.clockEdge(delay));
 
     DPRINTF(TcuCmd, "Finished privileged command %s with arg0=0, res=%d\n",
-            COMMAND_NAME(privCmdNames, cmd.opcode), static_cast<uint>(res));
+            COMMAND_NAME(privCmdNames, cmd.opcode), static_cast<unsigned>(res));
 
     // set privileged command back to IDLE
     cmd.arg0 = 0;
-    cmd.error = static_cast<uint>(res);
+    cmd.error = static_cast<unsigned>(res);
     cmd.opcode = PrivCommand::IDLE;
     tcu.regs().set(PrivReg::PRIV_CMD, cmd);
 }
@@ -470,12 +470,12 @@ TcuCommands::finishExtCommand(TcuError error, RegFile::reg_t arg)
 
     DPRINTF(TcuCmd, "Finished external command %s with res=%d\n",
             COMMAND_NAME(extCmdNames, cmd.opcode),
-            static_cast<uint>(error));
+            static_cast<unsigned>(error));
 
     cmd.arg = arg;
     // set external command back to IDLE
     cmd.opcode = ExtCommand::IDLE;
-    cmd.error = static_cast<uint>(error);
+    cmd.error = static_cast<unsigned>(error);
     tcu.regs().set(ExtReg::EXT_CMD, cmd);
 
     assert(extCmdPkt != nullptr);

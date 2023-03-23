@@ -316,7 +316,7 @@ InvalidEp::print(const RegFile &rf,
         "%s%s EP%-3u%12s: INVALID (%#x)\n",
         regAccessName(access), read ? "<-" : "->",
         id, "",
-        static_cast<uint>(type()));
+        static_cast<unsigned>(type()));
 }
 
 RegFile::reg_t
@@ -369,7 +369,7 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
 
     RegAccess access = isCpuRequest ? RegAccess::CPU : RegAccess::NOC;
     reg_t* data = pkt->getPtr<reg_t>();
-    uint res = WROTE_NONE;
+    unsigned res = WROTE_NONE;
     bool isPriv = hasFeature(Features::KERNEL);
     int lastEp = -1;
 
