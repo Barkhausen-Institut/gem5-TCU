@@ -120,10 +120,6 @@ class HiFive(Platform):
     # PLIC
     plic = Param.Plic(Plic(pio_addr=0xc000000), "PLIC")
 
-    #PCI
-    pci_host = GenericRiscvPciHost(conf_base=0x30000000, conf_size='256MB',
-        conf_device_bits=12, pci_pio_base=0x2f000000, pci_mem_base=0x40000000)
-
     # Uart
     uart = RiscvUart8250(pio_addr=0x10000000)
     # Int source ID to redirect console interrupts to
@@ -171,8 +167,7 @@ class HiFive(Platform):
     def attachPlic(self):
         """Count number of PLIC interrupt sources
         """
-        plic_srcs = [self.uart_int_id, self.pci_host.int_base
-                     + self.pci_host.int_count]
+        plic_srcs = [self.uart_int_id]
         for device in self._off_chip_devices():
             if hasattr(device, "interrupt_id"):
                 plic_srcs.append(device.interrupt_id)
