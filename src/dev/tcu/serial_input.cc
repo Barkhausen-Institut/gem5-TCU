@@ -169,6 +169,13 @@ void
 TcuSerialInput::data()
 {
     ssize_t res = ::read(STDIN_FILENO, buffer + pos, sizeof(buffer) - pos);
+    // actually we should only get here if there is something to read, because
+    // we are using PollQueue. However, spurious wake ups are still possible
+    // and therefore we simply return here if read reports that we should come
+    // back later.
+    if(res < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+        return;
+
     panic_if(res < 0, "unable to read from stdin");
     // if we are currently sending the input, ignore further input
     if(pos > 0) {
