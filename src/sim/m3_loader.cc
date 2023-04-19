@@ -48,6 +48,7 @@ M3Loader::M3Loader(const std::vector<Addr> &tile_descs,
                    const std::vector<Addr> &tile_ids,
                    const std::vector<std::string> &mods,
                    const std::string &cmdline,
+                   const std::string &logflags,
                    Addr envStart,
                    tcu::TileId tileId,
                    Addr modOffset,
@@ -56,6 +57,7 @@ M3Loader::M3Loader(const std::vector<Addr> &tile_descs,
     : tiles(),
       mods(mods),
       commandLine(cmdline),
+      logflags(logflags),
       envStart(envStart),
       tileId(tileId),
       modOffset(modOffset),
@@ -65,47 +67,6 @@ M3Loader::M3Loader(const std::vector<Addr> &tile_descs,
     assert(tile_descs.size() == tile_ids.size());
     for (size_t i = 0; i < tile_ids.size(); ++i)
         tiles[tcu::TileId::from_raw(tile_ids[i])] = tile_descs[i];
-}
-
-size_t
-M3Loader::getArgc() const
-{
-    const char *cmd = commandLine.c_str();
-    size_t argc = 0;
-    size_t len = 0;
-    while (*cmd)
-    {
-        if (isspace(*cmd))
-        {
-            if(len > 0)
-                argc++;
-            len = 0;
-        }
-        else
-            len++;
-        cmd++;
-    }
-    if(len > 0)
-        argc++;
-
-    return argc;
-}
-
-void
-M3Loader::writeArg(System &sys, Addr &args, size_t &i, Addr argv,
-                   const char *cmd, const char *begin)
-{
-    const char zero[] = {0};
-    // write argument pointer
-    uint64_t argvPtr = args;
-    sys.physProxy.writeBlob(argv + i * sizeof(uint64_t),
-                            (uint8_t*)&argvPtr, sizeof(argvPtr));
-    // write argument
-    sys.physProxy.writeBlob(args, (uint8_t*)begin, cmd - begin);
-    args += cmd - begin;
-    sys.physProxy.writeBlob(args, (uint8_t*)zero, 1);
-    args++;
-    i++;
 }
 
 void
@@ -149,6 +110,41 @@ M3Loader::loadModule(RequestPort &noc, const std::string &filename, Addr addr)
 }
 
 void
+M3Loader::writeArg(System &sys, Addr buf, size_t i, Addr argv,
+                   const std::string &arg)
+{
+    // write argument pointer
+    uint64_t argvPtr = buf;
+    sys.physProxy.writeBlob(argv + i * sizeof(uint64_t),
+                            (uint8_t*)&argvPtr, sizeof(argvPtr));
+    if (buf)
+    {
+        // write argument
+        sys.physProxy.writeBlob(buf, (uint8_t*)arg.c_str(), arg.length() + 1);
+    }
+}
+
+Addr
+M3Loader::writeArgs(System &sys, const std::vector<std::string> &args,
+                    Addr argv, Addr bufStart, Addr bufEnd)
+{
+    size_t i = 0;
+    Addr bufCur = bufStart;
+    for (auto arg : args)
+    {
+        if(bufCur + arg.length() + 1 > bufEnd)
+            panic("Not enough space for argv or envp.\n");
+        writeArg(sys, bufCur, i, argv, arg);
+        bufCur += arg.length() + 1;
+        i++;
+    }
+
+    // null termination
+    writeArg(sys, 0, i, argv, "");
+    return bufCur;
+}
+
+void
 M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
 {
     BootEnv env;
@@ -156,14 +152,6 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
     env.platform = Platform::GEM5;
     env.tile_id = tileId.raw();
     env.tile_desc = tile_attr(tileId);
-    env.argc = getArgc();
-    Addr argv = envStart + sizeof(env);
-    // the kernel gets the kernel env behind the normal env
-    if (modSize)
-        argv += sizeof(KernelEnv);
-    Addr args = argv + sizeof(uint64_t) * env.argc;
-    env.argv = argv;
-    env.envp = 0;
     env.raw_tile_count = tiles.size();
     // write tile ids to environment
     {
@@ -172,37 +160,35 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
             env.raw_tile_ids[i] = it->first.raw();
     }
 
-    // check if there is enough space
-    if (commandLine.length() + 1 > envStart + ENV_SIZE - args)
-    {
-        panic("Command line \"%s\" is longer than %d characters.\n",
-                commandLine, envStart + ENV_SIZE - args - 1);
-    }
+    // convert command line to an array of strings
+    std::istringstream iss(commandLine);
+    std::vector<std::string> args{std::istream_iterator<std::string>(iss),
+                                  std::istream_iterator<std::string>()};
+    // build environment (only containing LOG=<logflags>)
+    std::vector<std::string> envs;
+    envs.push_back(std::string("LOG=") + logflags);
 
-    // write arguments to state area
-    const char *cmd = commandLine.c_str();
-    const char *begin = cmd;
-    size_t i = 0;
-    while (*cmd)
-    {
-        if (isspace(*cmd))
-        {
-            if (cmd > begin)
-                writeArg(sys, args, i, argv, cmd, begin);
-            begin = cmd + 1;
-        }
-        cmd++;
-    }
+    Addr argv = envStart + sizeof(env);
+    // the kernel gets the kernel env behind the normal env
+    if (modSize)
+        argv += sizeof(KernelEnv);
 
-    if (cmd > begin)
-        writeArg(sys, args, i, argv, cmd, begin);
+    // calculate argc, argv, and envp
+    env.argc = args.size();
+    env.argv = argv;
+    env.envp = argv + sizeof(uint64_t) * (env.argc + 1);
+    Addr bufStart = env.envp + sizeof(uint64_t) * 2;
+
+    // write arguments and argument pointer to memory
+    bufStart = writeArgs(sys, args, argv, bufStart, envStart + ENV_SIZE);
+    writeArgs(sys, envs, env.envp, bufStart, envStart + ENV_SIZE);
 
     // modules for the kernel
     if (modSize)
     {
         BootModule *bmods = new BootModule[mods.size()]();
 
-        i = 0;
+        size_t i = 0;
         Addr addr = tcu::NocAddr(mem.memTile, modOffset).getAddr();
         for (const std::string &mod : mods)
         {

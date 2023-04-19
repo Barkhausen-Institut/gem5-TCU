@@ -94,6 +94,7 @@ class M3Loader
     std::map<tcu::TileId, tcu::tiledesc_t> tiles;
     std::vector<std::string> mods;
     std::string commandLine;
+    std::string logflags;
 
   public:
     const Addr envStart;
@@ -107,6 +108,7 @@ class M3Loader
              const std::vector<Addr> &tile_ids,
              const std::vector<std::string> &mods,
              const std::string &cmdline,
+             const std::string &logflags,
              Addr envStart,
              tcu::TileId tileId,
              Addr modOffset,
@@ -121,9 +123,10 @@ class M3Loader
     void initState(System &sys, TileMemory &mem, RequestPort &noc);
 
   private:
-    size_t getArgc() const;
-    void writeArg(System &sys, Addr &args, size_t &i, Addr argv,
-                  const char *cmd, const char *begin);
+    void writeArg(System &sys, Addr buf, size_t i, Addr argv,
+                  const std::string &arg);
+    Addr writeArgs(System &sys, const std::vector<std::string> &args,
+                   Addr argv, Addr bufStart, Addr bufEnd);
     void writeRemote(RequestPort &noc, Addr dest,
                      const uint8_t *data, size_t size);
     Addr loadModule(RequestPort &noc, const std::string &filename, Addr addr);

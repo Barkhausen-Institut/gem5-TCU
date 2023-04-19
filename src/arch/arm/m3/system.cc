@@ -47,8 +47,8 @@ M3ArmSystem::M3ArmSystem(const Params &p)
       TileMemory(this, p.memory_tile, p.memory_offset, p.memory_size,
                  physProxy),
       nocPort(*this),
-      loader(p.tiles_per_chip, p.tiles, p.mods, p.cmdline, p.env_start,
-             p.tile_id, p.mod_offset, p.mod_size, p.tile_size)
+      loader(p.tiles_per_chip, p.tiles, p.mods, p.cmdline, p.logflags,
+             p.env_start, p.tile_id, p.mod_offset, p.mod_size, p.tile_size)
 {
 }
 

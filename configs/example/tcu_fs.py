@@ -139,6 +139,8 @@ def getOptions():
 
     parser.add_argument("--mods", default="",
                         help="comma separated list of <name>=<path>")
+    parser.add_argument("--logflags", default="",
+                        help="comma separated list of log flags (e.g., Info,LibNet)")
 
     parser.add_argument("--mem-type", default="DDR3_1600_8x8",
                         choices=ObjectList.mem_list.get_names(),
@@ -379,6 +381,7 @@ def createCoreTile(noc, options, id, cmdline, memTile, epCount,
     else:
         tile.workload = X86FsWorkload(object_file = cmdline.split(' ')[0])
     tile.cmdline = cmdline
+    tile.logflags = options.logflags
 
     print("%s: %s" % (id, cmdline))
     print('       Core =%s @ %s' % (type(tile.cpu), options.cpu_clock))

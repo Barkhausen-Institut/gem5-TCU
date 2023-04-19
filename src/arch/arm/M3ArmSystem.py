@@ -35,6 +35,7 @@ class M3ArmSystem(ArmSystem):
     cxx_class = 'gem5::M3ArmSystem'
 
     cmdline = Param.String("", "The command line arguments")
+    logflags = Param.String("", "The log flags (LOG)")
 
     tile_id = Param.Unsigned("The tile id")
 
