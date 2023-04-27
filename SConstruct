@@ -1,6 +1,6 @@
 # -*- mode:python -*-
 
-# Copyright (c) 2013, 2015-2020 ARM Limited
+# Copyright (c) 2013, 2015-2020, 2023 ARM Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -126,6 +126,10 @@ AddOption('--with-systemc-tests', action='store_true',
 from gem5_scons import Transform, error, warning, summarize_warnings
 from gem5_scons import TempFileSpawn, parse_build_path
 import gem5_scons
+
+# Patch re.compile to support inline flags anywhere within a RE
+# string. Required to use PLY with Python 3.11+.
+gem5_scons.patch_re_compile_for_inline_flags()
 
 ########################################################################
 #
