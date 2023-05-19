@@ -51,6 +51,7 @@ class X86FsWorkload(KernelWorkload):
     cxx_header = 'arch/x86/fs_workload.hh'
     cxx_class = 'gem5::X86ISA::FsWorkload'
 
+    entry = Param.Addr(0, 'entry point (in case no kernel is provided)')
     smbios_table = Param.X86SMBiosSMBiosTable(
             X86SMBiosSMBiosTable(), 'table of smbios/dmi information')
     intel_mp_pointer = Param.X86IntelMPFloatingPointer(

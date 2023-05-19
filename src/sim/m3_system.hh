@@ -75,6 +75,16 @@ class M3System : public System, public TileMemory
         return loader.tileId;
     }
 
+    bool started() const
+    {
+        return _started;
+    }
+
+    void set_started(bool started)
+    {
+        _started = started;
+    }
+
     tcu::tiledesc_t tileDesc(tcu::TileId tile) const override;
 
     Port& getPort(const std::string &if_name,
@@ -85,6 +95,8 @@ class M3System : public System, public TileMemory
   private:
 
     M3Loader loader;
+
+    bool _started;
 };
 
 }

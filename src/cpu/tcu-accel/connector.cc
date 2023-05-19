@@ -60,10 +60,10 @@ TcuAccelConnector::doSetIrq(IRQ irq)
 }
 
 void
-TcuAccelConnector::reset()
+TcuAccelConnector::reset(bool start)
 {
     DPRINTF(TcuConnector, "Resetting accelerator\n");
-    acc->reset();
+    acc->reset(start);
 }
 
 }

@@ -59,6 +59,11 @@ class TileMemory
 
     virtual tcu::tiledesc_t tileDesc(tcu::TileId tile) const = 0;
 
+    bool hasMem() const
+    {
+        return memSize != 0;
+    }
+
     tcu::NocAddr getPhys(Addr offset) const
     {
         return tcu::NocAddr(memTile, memOffset + offset);

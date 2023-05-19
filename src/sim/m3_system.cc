@@ -48,7 +48,8 @@ M3System::M3System(const Params &p)
       nocPort(*this),
       loader(p.tile_descs, p.tile_ids, p.mods, p.cmdline, p.logflags,
              p.env_start, tcu::TileId::from_raw(p.tile_id), p.mod_offset,
-             p.mod_size, p.tile_size)
+             p.mod_size, p.tile_size),
+      _started(!p.cmdline.empty())
 {
 }
 
@@ -70,9 +71,13 @@ M3System::initState()
 {
     System::initState();
 
-    loader.initState(*this, *this, nocPort);
+    if (_started)
+    {
+        loader.initState(*this, *this, nocPort);
 
-    workload->initState();
+        for (auto *tc: threads)
+            tc->activate();
+    }
 }
 
 }

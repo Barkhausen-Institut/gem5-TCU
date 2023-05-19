@@ -35,7 +35,6 @@
 #include "cpu/tcu-accel/accelerator.hh"
 #include "cpu/tcu-accel/ctxswsm.hh"
 #include "cpu/tcu-accel/syscallsm.hh"
-#include "cpu/tcu-accel/yieldsm.hh"
 #include "mem/tcu/connector/base.hh"
 #include "mem/tcu/reg_file.hh"
 #include "sim/system.hh"
@@ -63,7 +62,7 @@ class TcuAccelInDir : public TcuAccel
 
     void interrupt() override;
 
-    void reset() override;
+    void reset(bool start) override;
 
     Addr rbufAddr() const { return RBUF_ADDR + offset; }
     Addr sendMsgAddr() const override { return MSG_ADDR + offset; }
@@ -120,7 +119,6 @@ class TcuAccelInDir : public TcuAccel
         uint64_t count;
     } reply;
 
-    YieldSM yield;
     AccelCtxSwSM ctxsw;
 };
 

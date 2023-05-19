@@ -52,7 +52,7 @@ CoreConnector::wakeup()
     if (system->threads.empty())
         return;
 
-    if (system->threads[0]->status() == ThreadContext::Suspended)
+    if (system->threads[0]->status() != ThreadContext::Active)
     {
         DPRINTF(TcuConnector, "Waking up core\n");
         system->threads[0]->activate();

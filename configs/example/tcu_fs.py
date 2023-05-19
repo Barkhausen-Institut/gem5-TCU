@@ -292,6 +292,7 @@ def createTile(noc, options, id, systemType, l1size, l2size, spmsize,
     tile.tcu.noc_slave_port  = noc.mem_side_ports
 
     tile.tcu.slave_region = [AddrRange(0, tile.tcu.mmio_region.start - 1)]
+    tile.tcu.caches = []
 
     # create caches
     if not l1size is None:
@@ -300,12 +301,14 @@ def createTile(noc, options, id, systemType, l1size, l2size, spmsize,
         tile.l1icache.tag_latency = 4
         tile.l1icache.data_latency = 4
         tile.l1icache.response_latency = 4
+        tile.tcu.caches.append(tile.l1icache)
 
         tile.l1dcache = L1_DCache(size=l1size)
         tile.l1dcache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
         tile.l1dcache.tag_latency = 4
         tile.l1dcache.data_latency = 4
         tile.l1dcache.response_latency = 4
+        tile.tcu.caches.append(tile.l1dcache)
 
         if not l2size is None:
             tile.l2cache = L2Cache(size=l2size)
@@ -313,8 +316,8 @@ def createTile(noc, options, id, systemType, l1size, l2size, spmsize,
             tile.l2cache.tag_latency = 12
             tile.l2cache.data_latency = 12
             tile.l2cache.response_latency = 12
-
             tile.l2cache.prefetcher = StridePrefetcher(degree = 16)
+            tile.tcu.caches.append(tile.l2cache)
 
             # use a crossbar to connect l1icache and l1dcache to l2cache
             tile.tol2bus = L2XBar()
@@ -408,12 +411,12 @@ def createCoreTile(noc, options, id, cmdline, memTile, epCount,
 
     # workload and command line
     if options.isa == 'riscv':
-        tile.workload = RiscvBareMetal(bootloader = cmdline.split(' ')[0])
+        tile.workload = RiscvBareMetal(bootloader = cmdline.split(' ')[0], reset_vect = 0x10200000)
     elif options.isa == 'arm':
         tile.workload = ArmFsWorkload(object_file = cmdline.split(' ')[0])
         tile.highest_el_is_64 = False
     else:
-        tile.workload = X86FsWorkload(object_file = cmdline.split(' ')[0])
+        tile.workload = X86FsWorkload(object_file = cmdline.split(' ')[0], entry = 0x200000)
     tile.cmdline = cmdline
     tile.logflags = options.logflags
 
@@ -464,6 +467,8 @@ def createCoreTile(noc, options, id, cmdline, memTile, epCount,
     else:
         tile.cpu.mmu.connectWalkerPorts(tile.cpu.itb_walker_cache.cpu_side,
                                         tile.cpu.dtb_walker_cache.cpu_side)
+    tile.tcu.caches.append(tile.cpu.itb_walker_cache)
+    tile.tcu.caches.append(tile.cpu.dtb_walker_cache)
 
     if options.isa == 'riscv':
         tile.cpu.mmu.pma_checker = PMAChecker(uncacheable = [

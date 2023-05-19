@@ -76,7 +76,7 @@ class TcuAccelStream : public TcuAccel
 
     void interrupt() override;
 
-    void reset() override;
+    void reset(bool start) override;
 
     void logicFinished();
 
@@ -94,6 +94,7 @@ class TcuAccelStream : public TcuAccel
 
     enum class State
     {
+        OFF,
         IDLE,
 
         FETCH_MSG,

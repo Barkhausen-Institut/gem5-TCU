@@ -74,6 +74,8 @@ class X86Connector : public CoreConnector
 
   private:
 
+    void reset(bool start) override;
+
     void doSetIrq(IRQ irq) override;
 
     IrqMasterPort irqPort;

@@ -53,6 +53,15 @@ RiscvConnector::RiscvConnector(const RiscvConnectorParams &p)
 }
 
 void
+RiscvConnector::reset(bool)
+{
+    DPRINTF(TcuConnector, "Resetting core\n");
+
+    ThreadContext *tc = system->threads[0];
+    RiscvISA::Reset().invoke(tc);
+}
+
+void
 RiscvConnector::doSetIrq(IRQ irq)
 {
     int vector = translate(irq);

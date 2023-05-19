@@ -54,13 +54,13 @@ class TcuConnector
 
     bool canSuspendCmds() const { return connector->canSuspendCmds(); }
 
-    void reset() { connector->reset(); }
+    void reset(bool start) { connector->reset(start); }
 
     void startWaitEP(const CmdCommand::Bits &cmd);
 
     void startWaitEPWithEP(EpFile::EpCache &eps, epid_t epid);
 
-    bool startSleep(epid_t wakeupEp);
+    bool startSleep(epid_t wakeupEp, bool force = false);
 
     void stopSleep();
 

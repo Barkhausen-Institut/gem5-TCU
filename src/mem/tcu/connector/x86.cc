@@ -34,6 +34,7 @@
 #include "mem/tcu/tcu.hh"
 #include "cpu/simple/base.hh"
 #include "sim/process.hh"
+#include "sim/m3_system.hh"
 
 namespace gem5
 {
@@ -80,6 +81,18 @@ X86Connector::IrqMasterPort::recvReqRetry()
     assert(pending);
     if (sendTimingReq(pending))
         pending = nullptr;
+}
+
+void
+X86Connector::reset(bool start)
+{
+    DPRINTF(TcuConnector, "Resetting core\n");
+
+    M3System *m3sys = dynamic_cast<M3System*>(system);
+    m3sys->set_started(start);
+
+    if(start)
+        system->workload->initState();
 }
 
 void

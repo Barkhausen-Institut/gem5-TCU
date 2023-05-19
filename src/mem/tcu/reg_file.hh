@@ -375,7 +375,14 @@ struct InvalidEp
     }
 
     epid_t id;
-    uint64_t r[3];
+    union {
+        uint64_t r[3];
+        struct {
+            uint64_t r0;
+            uint64_t r1;
+            uint64_t r2;
+        };
+    };
 };
 
 union Ep
@@ -482,6 +489,8 @@ class RegFile
     };
 
     RegFile(Tcu &tcu, const std::string& name, unsigned numEndpoints);
+
+    void reset(bool inval);
 
     bool hasFeature(Features feature) const
     {

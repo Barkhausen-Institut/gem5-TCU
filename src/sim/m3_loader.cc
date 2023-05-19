@@ -224,7 +224,7 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
         // determine memory regions
         size_t mem_count = 0;
         MemMod *bmems = new MemMod[tiles.size()];
-        auto avail_mem_start = modOffset + modSize + tiles.size() * tileSize;
+        auto avail_mem_start = modOffset + modSize + tileSize;
         bmems[0].size = (tile_attr(mem.memTile) >> 28) << 12;
         if (bmems[0].size < avail_mem_start)
             panic("Not enough DRAM for modules and tiles");

@@ -37,7 +37,7 @@ class RiscvBareMetal(Workload):
     cxx_class = 'gem5::RiscvISA::BareMetal'
     cxx_header = 'arch/riscv/bare_metal/fs_workload.hh'
 
-    bootloader = Param.String("File, that contains the bootloader code")
+    bootloader = Param.String("", "File, that contains the bootloader code")
     bare_metal = Param.Bool(True, "Using Bare Metal Application?")
     reset_vect = Param.Addr(0x0, 'Reset vector')
 

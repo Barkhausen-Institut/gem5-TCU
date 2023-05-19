@@ -48,7 +48,7 @@ class TcuAccelConnector : public BaseConnector
 
     void wakeup() override;
 
-    void reset() override;
+    void reset(bool start) override;
 
   private:
 

@@ -99,6 +99,7 @@ class FsWorkload : public KernelWorkload
     intelmp::FloatingPointer *mpFloatingPointer;
     intelmp::ConfigTable *mpConfigTable;
     ACPI::RSDP *rsdp;
+    Addr entry;
 
     void writeOutSMBiosTable(Addr header,
             Addr &headerSize, Addr &tableSize, Addr table=0);

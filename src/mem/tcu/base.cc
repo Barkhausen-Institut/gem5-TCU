@@ -305,6 +305,7 @@ BaseTcu::BaseTcu(const BaseTcuParams &p)
     dcacheSlavePort(dcacheMasterPort, *this, false),
     llcSlavePort(*this),
     nocReqFinishedEvent(*this),
+    caches(p.caches),
     tileId(TileId::from_raw(p.tile_id)),
     mmioRegion(p.mmio_region),
     slaveRegion(p.slave_region)
@@ -445,6 +446,16 @@ BaseTcu::schedLLCResponse(PacketPtr pkt, bool success)
 }
 
 // -- misc --
+
+void
+BaseTcu::invalidateCaches()
+{
+    for(auto cache : caches)
+    {
+        cache->memWriteback();
+        cache->memInvalidate();
+    }
+}
 
 void
 BaseTcu::schedNocRequestFinished(Tick when)

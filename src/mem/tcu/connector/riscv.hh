@@ -48,6 +48,8 @@ class RiscvConnector : public CoreConnector
 
   private:
 
+    void reset(bool start) override;
+
     void doSetIrq(IRQ irq) override;
 
     void doClearIrq(IRQ irq) override;

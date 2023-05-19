@@ -47,6 +47,7 @@
 #include "debug/ACPI.hh"
 #include "params/X86FsWorkload.hh"
 #include "sim/system.hh"
+#include "sim/m3_system.hh"
 
 namespace gem5
 {
@@ -58,7 +59,8 @@ FsWorkload::FsWorkload(const Params &p) : KernelWorkload(p),
     smbiosTable(p.smbios_table),
     mpFloatingPointer(p.intel_mp_pointer),
     mpConfigTable(p.intel_mp_table),
-    rsdp(p.acpi_description_table_pointer)
+    rsdp(p.acpi_description_table_pointer),
+    entry(p.entry)
 {}
 
 void
@@ -107,6 +109,12 @@ FsWorkload::initState()
 {
     KernelWorkload::initState();
 
+    M3System *m3sys = dynamic_cast<M3System*>(system);
+    if(m3sys) {
+        if(!m3sys->started())
+            return;
+    }
+
     for (auto *tc: system->threads) {
         X86ISA::InitInterrupt(0).invoke(tc);
 
@@ -120,9 +128,9 @@ FsWorkload::initState()
         }
     }
 
-    fatal_if(!kernelObj, "No kernel to load.");
+    fatal_if(!kernelObj && entry == 0, "No kernel to load and no entry point.");
 
-    fatal_if(kernelObj->getArch() == loader::I386,
+    fatal_if(kernelObj && kernelObj->getArch() == loader::I386,
              "Loading a 32 bit x86 kernel is not supported.");
 
     ThreadContext *tc = system->threads[0];
@@ -321,7 +329,7 @@ FsWorkload::initState()
     cr0.pg = 1;
     tc->setMiscReg(misc_reg::Cr0, cr0);
 
-    tc->pcState(kernelObj->entryPoint());
+    tc->pcState(kernelObj ? kernelObj->entryPoint() : entry);
 
     // We should now be in long mode. Yay!
 

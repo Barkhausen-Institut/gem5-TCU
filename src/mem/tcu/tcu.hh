@@ -162,7 +162,7 @@ class Tcu : public BaseTcu
 
     void writeCoverage(PrintReg pr);
 
-    void reset();
+    void reset(bool start);
 
     void forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest);
 

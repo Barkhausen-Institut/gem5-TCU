@@ -43,6 +43,7 @@ namespace tcu
 
 static const char *stateNames[] =
 {
+    "OFF",
     "IDLE",
 
     "FETCH_MSG",
@@ -83,7 +84,7 @@ TcuAccelStream::TcuAccelStream(const TcuAccelStreamParams &p)
   : TcuAccel(p),
     irqPending(false),
     memPending(false),
-    state(State::IDLE),
+    state(State::OFF),
     lastState(State::FETCH_MSG), // something different
     lastFlags(),
     ctx(),
@@ -138,6 +139,9 @@ TcuAccelStream::completeRequest(PacketPtr pkt)
     {
         switch(state)
         {
+            case State::OFF:
+                panic("Memory response received in state OFF!?");
+
             case State::IDLE:
             {
                 if (yield.handleMemResp(pkt))
@@ -489,7 +493,7 @@ TcuAccelStream::completeRequest(PacketPtr pkt)
                         ctx.outReqAddr = 0;
 
                     if (ctx.flags & Flags::EXIT)
-                        state = State::IDLE;
+                        state = State::OFF;
                     else
                         state = State::EXIT;
                 }
@@ -499,7 +503,7 @@ TcuAccelStream::completeRequest(PacketPtr pkt)
             case State::EXIT:
             {
                 sysc.start(sizeof(exit_msg), false);
-                syscNext = State::IDLE;
+                syscNext = State::OFF;
                 state = State::SYSCALL;
                 ctx.flags |= Flags::EXIT;
                 break;
@@ -532,11 +536,11 @@ TcuAccelStream::interrupt()
 }
 
 void
-TcuAccelStream::reset()
+TcuAccelStream::reset(bool start)
 {
     irqPending = false;
 
-    state = State::IDLE;
+    state = start ? State::IDLE : State::OFF;
     memset(&ctx, 0, sizeof(ctx));
 }
 
@@ -670,6 +674,9 @@ TcuAccelStream::tick()
 
     switch(state)
     {
+        case State::OFF:
+            break;
+
         case State::IDLE:
         {
             pkt = yield.tick();
@@ -847,8 +854,8 @@ TcuAccelStream::tick()
 
             if (ctx.flags & Flags::EXIT)
             {
-                state = State::IDLE;
-                pkt = yield.tick();
+                state = State::OFF;
+                pkt = nullptr;
                 break;
             }
             else

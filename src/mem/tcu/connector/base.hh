@@ -69,11 +69,10 @@ class BaseConnector : public ClockedObject
         return false;
     }
 
-    // wakeup and suspend are only used to improve simulation speed.
     virtual void wakeup() {};
     virtual void suspend() {};
 
-    virtual void reset() {};
+    virtual void reset(bool start) {};
 
     bool havePendingIrq() const
     {

@@ -70,7 +70,7 @@ class TcuAccel : public ClockedObject
 
     virtual void interrupt() = 0;
 
-    virtual void reset() = 0;
+    virtual void reset(bool start) = 0;
 
     /// main simulation loop
     virtual void tick() = 0;

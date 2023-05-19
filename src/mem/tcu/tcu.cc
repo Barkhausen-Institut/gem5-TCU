@@ -132,12 +132,21 @@ Tcu::regStats()
 }
 
 void
-Tcu::reset()
+Tcu::reset(bool start)
 {
     if (tlb())
         tlb()->clear();
 
-    connector.reset();
+    if (!start)
+    {
+        connector.startSleep(Tcu::INVALID_EP_ID, true);
+        invalidateCaches();
+        regs().reset(true);
+    }
+    connector.reset(start);
+    if (start)
+        connector.stopSleep();
+
     resets++;
 }
 

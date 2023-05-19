@@ -38,6 +38,7 @@
 #include "mem/qport.hh"
 #include "params/BaseTcu.hh"
 #include "mem/tcu/tlb.hh"
+#include "mem/cache/cache.hh"
 
 namespace gem5
 {
@@ -280,6 +281,8 @@ class BaseTcu : public ClockedObject
 
   protected:
 
+    void invalidateCaches();
+
     void nocRequestFinished();
 
     void schedDummyResponse(TcuSlavePort &port, PacketPtr pkt, bool functional);
@@ -305,6 +308,8 @@ class BaseTcu : public ClockedObject
     LLCSlavePort llcSlavePort;
 
     EventWrapper<BaseTcu, &BaseTcu::nocRequestFinished> nocReqFinishedEvent;
+
+    std::vector<Cache*> caches;
 
   public:
 

@@ -454,7 +454,7 @@ TcuCommands::executeExtCommand(PacketPtr pkt)
             tcu.msgUnit->startInvalidate(cmd);
             break;
         case ExtCommand::RESET:
-            tcu.reset();
+            tcu.reset(cmd.arg == 1);
             scheduleExtCmdFinish(Cycles(1), TcuError::NONE, 0);
             break;
         default:

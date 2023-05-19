@@ -43,6 +43,8 @@ class BaseTcu(ClockedObject):
     noc_master_port = MasterPort("TCU master port")
     noc_slave_port  = SlavePort("TCU slave port")
 
+    caches = VectorParam.Cache([], "The caches the TCU has access to (for invalidation on reset)")
+
     icache_slave_port = SlavePort("Port that forwards requests from the CPU to the icache")
     dcache_slave_port = SlavePort("Port that forwards requests from the CPU to the dcache")
     slave_region = VectorParam.AddrRange([], "The address region for requests to the TCU")

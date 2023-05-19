@@ -118,14 +118,40 @@ RegFile::RegFile(Tcu &_tcu, const std::string& name, unsigned numEndpoints)
     feat |= VERSION << 32;
     set(ExtReg::FEATURES, feat);
 
-    // and no activity is running (the id might stay invalid for tiles that don't
+    reset(false);
+
+    initMemEp();
+}
+
+void
+RegFile::reset(bool inval)
+{
+    if(inval)
+    {
+        // invalidate all EPs
+        for(size_t i = 0; i < eps.size(); ++i)
+        {
+            Ep ep = getEp(i);
+            for (int i = 0; i < numEpRegs; ++i)
+                ep.inval.r[i] = 0;
+            updateEp(ep.inval);
+        }
+
+        // reset all unprivileged and privileged registers
+        for(size_t i = 0; i < numUnprivRegs; ++i)
+            set(static_cast<UnprivReg>(i), 0);
+        for(size_t i = 0; i < numPrivRegs; ++i) {
+            if(static_cast<PrivReg>(i) != PrivReg::CUR_ACT)
+                set(static_cast<PrivReg>(i), 0);
+        }
+    }
+
+    // no activity is running (the id might stay invalid for tiles that don't
     // support multiple activities though)
     ActState act = 0;
     act.id = Tcu::INVALID_ACT_ID;
     act.msgs = 0;
     set(PrivReg::CUR_ACT, act);
-
-    initMemEp();
 }
 
 void
@@ -134,17 +160,19 @@ RegFile::initMemEp()
     TileMemory *sys = dynamic_cast<TileMemory*>(tcu.systemObject());
     assert(sys != nullptr);
 
-    NocAddr phys = sys->getPhys(0);
+    if (sys->hasMem())
+    {
+        NocAddr phys = sys->getPhys(0);
 
-    MemEp ep;
-    ep.r0.type = static_cast<RegFile::reg_t>(EpType::MEMORY);
-    ep.r0.act = Tcu::INVALID_ACT_ID;
-    ep.r0.flags = Tcu::MemoryFlags::READ | Tcu::MemoryFlags::WRITE;
-    ep.r0.targetTile = phys.tileId.raw();
-    ep.r1.remoteAddr = phys.offset;
-    ep.r2.remoteSize = sys->memSize;
-
-    updateEp(ep);
+        MemEp ep;
+        ep.r0.type = static_cast<RegFile::reg_t>(EpType::MEMORY);
+        ep.r0.act = Tcu::INVALID_ACT_ID;
+        ep.r0.flags = Tcu::MemoryFlags::READ | Tcu::MemoryFlags::WRITE;
+        ep.r0.targetTile = phys.tileId.raw();
+        ep.r1.remoteAddr = phys.offset;
+        ep.r2.remoteSize = sys->memSize;
+        updateEp(ep);
+    }
 }
 
 void

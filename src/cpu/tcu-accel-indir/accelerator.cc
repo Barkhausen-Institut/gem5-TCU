@@ -68,7 +68,6 @@ TcuAccelInDir::TcuAccelInDir(const TcuAccelInDirParams &p)
     state(State::IDLE),
     lastState(State::CTXSW),    // something different
     msgAddr(),
-    yield(this),
     ctxsw(this)
 {
     static_assert((sizeof(stateNames) / sizeof(stateNames[0]) ==
@@ -110,15 +109,7 @@ TcuAccelInDir::completeRequest(PacketPtr pkt)
         switch(state)
         {
             case State::IDLE:
-            {
-                if (yield.handleMemResp(pkt))
-                {
-                    if (irqPending)
-                        irqPending = false;
-                    state = State::CTXSW;
-                }
-                break;
-            }
+                panic("Memory response received in state OFF!?");
 
             case State::CTXSW:
             {
@@ -223,6 +214,13 @@ TcuAccelInDir::completeRequest(PacketPtr pkt)
 void
 TcuAccelInDir::wakeup()
 {
+    if (state == State::IDLE)
+    {
+        if (irqPending)
+            irqPending = false;
+        state = State::CTXSW;
+    }
+
     if (!memPending && !tickEvent.scheduled())
         schedule(tickEvent, clockEdge(Cycles(1)));
 }
@@ -234,7 +232,7 @@ TcuAccelInDir::interrupt()
 }
 
 void
-TcuAccelInDir::reset()
+TcuAccelInDir::reset(bool start)
 {
     irqPending = false;
 
@@ -247,8 +245,7 @@ TcuAccelInDir::tick()
     PacketPtr pkt = nullptr;
 
     if (state != lastState ||
-        (state == State::CTXSW && ctxsw.hasStateChanged()) ||
-        (state == State::IDLE && yield.hasStateChanged()))
+        (state == State::CTXSW && ctxsw.hasStateChanged()))
     {
         DPRINTF(TcuAccelInDirState, "[%s] tick\n",
             getStateName().c_str());
@@ -258,10 +255,7 @@ TcuAccelInDir::tick()
     switch(state)
     {
         case State::IDLE:
-        {
-            pkt = yield.tick();
             break;
-        }
 
         case State::CTXSW:
         {

@@ -101,9 +101,9 @@ TcuConnector::startWaitEPWithEP(EpFile::EpCache &eps, epid_t epid)
 }
 
 bool
-TcuConnector::startSleep(epid_t ep)
+TcuConnector::startSleep(epid_t ep, bool force)
 {
-    if (connector->havePendingIrq())
+    if (!force && connector->havePendingIrq())
         return false;
 
     wakeupEp = ep;
