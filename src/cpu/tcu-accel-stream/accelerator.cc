@@ -860,9 +860,9 @@ TcuAccelStream::tick()
 
         case State::EXIT:
         {
-            exit_msg.opcode = SyscallSM::Operation::VPE_CTRL;
-            exit_msg.op = SyscallSM::VPEOp::VCTRL_STOP;
-            exit_msg.vpe_sel = SyscallSM::VPE_SEL;
+            exit_msg.opcode = SyscallSM::Operation::ACT_CTRL;
+            exit_msg.op = SyscallSM::ActOp::ACTRL_STOP;
+            exit_msg.act_sel = SyscallSM::ACT_SEL;
             exit_msg.arg = 0;
 
             pkt = tcuif().createPacket(sendMsgAddr(), sizeof(exit_msg),

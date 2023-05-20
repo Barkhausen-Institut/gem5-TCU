@@ -53,42 +53,46 @@ class SyscallSM
         CREATE_RGATE,
         CREATE_SGATE,
         CREATE_MAP,
-        CREATE_VPE,
+        CREATE_ACT,
         CREATE_SEM,
         ALLOC_EPS,
 
         // capability operations
         ACTIVATE,
-        SET_PMP,
-        VPE_CTRL,
-        VPE_WAIT,
+        ACT_CTRL,
+        ACT_WAIT,
         DERIVE_MEM,
         DERIVE_KMEM,
-        DERIVE_PE,
+        DERIVE_TILE,
         DERIVE_SRV,
         GET_SESS,
         MGATE_REGION,
+        RGATE_BUFFER,
         KMEM_QUOTA,
-        PE_QUOTA,
-        PE_SET_QUOTA,
+        TILE_QUOTA,
+        TILE_SET_QUOTA,
+        TILE_SET_PMP,
+        TILE_MEM,
+        TILE_RESET,
         SEM_CTRL,
 
         // capability exchange
-        DELEGATE,
-        OBTAIN,
+        EXCHANGE_SESS,
         EXCHANGE,
         REVOKE,
 
         // misc
         RESET_STATS,
         NOOP,
+
+        COUNT
     };
 
-    enum VPEOp
+    enum ActOp
     {
-        VCTRL_INIT,
-        VCTRL_START,
-        VCTRL_STOP,
+        ACTRL_INIT,
+        ACTRL_START,
+        ACTRL_STOP,
     };
 
     enum State
@@ -102,7 +106,7 @@ class SyscallSM
         SYSC_ACK_WAIT,
     };
 
-    static const uint64_t VPE_SEL = 2;
+    static const uint64_t ACT_SEL = 2;
 
     explicit SyscallSM(TcuAccel *_accel)
         : accel(_accel), state(), stateChanged(), waitForReply(), fetched(),

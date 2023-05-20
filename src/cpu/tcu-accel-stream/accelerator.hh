@@ -198,7 +198,7 @@ class TcuAccelStream : public TcuAccel
     struct M5_ATTR_PACKED
     {
         uint64_t opcode;
-        uint64_t vpe_sel;
+        uint64_t act_sel;
         uint64_t op;
         uint64_t arg;
     } exit_msg;
