@@ -160,7 +160,7 @@ AccelCtxSwSM::handleMemResp(PacketPtr pkt)
             const uint64_t *args =
                 reinterpret_cast<const uint64_t*>(pkt_data + sizeof(MessageHeader));
 
-            DPRINTF(TcuAccel,
+            DPRINTFS(TcuAccel, accel,
                     "Received side call with op=%u, act=%u, ctrl=%u\n",
                     args[0], args[1], args[2]);
 
