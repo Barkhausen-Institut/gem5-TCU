@@ -43,8 +43,6 @@ class AccelCtxSwSM
 {
     static const uint64_t OUR_VPE   = 0xFFFF;
 
-    static const size_t RBUF_ADDR   = 0xF00040;
-
     static const unsigned EP_RECV   = 6;
     static const size_t MSG_SIZE    = 64;
 
@@ -71,6 +69,8 @@ class AccelCtxSwSM
 
     enum State
     {
+        READ_RBUF_ADDR,
+
         FETCH_MSG,
         FETCH_MSG_WAIT,
         READ_MSG_ADDR,
@@ -96,7 +96,7 @@ class AccelCtxSwSM
 
     bool hasStateChanged() const { return stateChanged; }
 
-    void restart() { state = FETCH_MSG; }
+    void restart() { state = rbufAddr ? FETCH_MSG : READ_RBUF_ADDR; }
 
     PacketPtr tick();
 
@@ -108,6 +108,7 @@ class AccelCtxSwSM
     State state;
     bool stateChanged;
     bool switched;
+    Addr rbufAddr;
     Addr msgAddr;
     uint64_t vpe_id;
 };

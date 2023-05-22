@@ -52,7 +52,6 @@ class TcuAccelStream : public TcuAccel
 
     static const Addr MSG_ADDR          = 0x2000;
     static const Addr BUF_ADDR          = 0x8000;
-    static const Addr RBUF_ADDR         = 0x3FFF00;
 
     static const unsigned EP_IN_SEND    = 16;
     static const unsigned EP_IN_MEM     = 17;
@@ -80,7 +79,6 @@ class TcuAccelStream : public TcuAccel
 
     void logicFinished();
 
-    Addr rbufAddr() const { return RBUF_ADDR + offset; }
     Addr sendMsgAddr() const override { return MSG_ADDR + offset; }
     Addr bufferAddr() const override { return BUF_ADDR + offset; }
     void setSwitched() override { ctx.flags |= Flags::STARTED; }
@@ -118,6 +116,7 @@ class TcuAccelStream : public TcuAccel
         REPLY_SEND,
         REPLY_WAIT,
 
+        READ_RBUF_ADDR,
         CTXSW,
 
         SYSCALL,
@@ -214,6 +213,7 @@ class TcuAccelStream : public TcuAccel
     uint64_t bufSize;
     SyscallSM sysc;
     State syscNext;
+    Addr rbufAddr;
     Addr replyAddr;
     State replyNext;
     YieldSM yield;

@@ -29,6 +29,7 @@
  */
 
 #include "cpu/tcu-accel/syscallsm.hh"
+#include "debug/TcuAccel.hh"
 
 namespace gem5
 {
@@ -40,7 +41,7 @@ SyscallSM::stateName() const
 {
     const char *names[] =
     {
-        "SEND", "SEND_WAIT", "FETCH", "FETCH_WAIT",
+        "READ_RBUF_ADDR", "SEND", "SEND_WAIT", "FETCH", "FETCH_WAIT",
         "READ_ADDR", "ACK", "ACK_WAIT"
     };
     return names[static_cast<size_t>(state)];
@@ -53,6 +54,16 @@ SyscallSM::tick()
 
     switch(state)
     {
+        case State::SYSC_READ_RBUF_ADDR:
+        {
+            pkt = accel->tcuif().createTcuRegPkt(
+                TcuIf::getRegAddr(1, TcuAccel::EP_SYSR),
+                0,
+                MemCmd::ReadReq
+            );
+            break;
+        }
+
         case State::SYSC_SEND:
         {
             pkt = accel->tcuif().createTcuCmdPkt(
@@ -83,7 +94,7 @@ SyscallSM::tick()
         {
             pkt = accel->tcuif().createTcuCmdPkt(
                 CmdCommand::create(CmdCommand::ACK_MSG, TcuAccel::EP_SYSR,
-                                   replyAddr - (RBUF_ADDR + accel->offset)),
+                                   replyAddr - rbufAddr),
                 CmdData::create(0, 0)
             );
             break;
@@ -111,6 +122,15 @@ SyscallSM::handleMemResp(PacketPtr pkt)
 
     switch(state)
     {
+        case State::SYSC_READ_RBUF_ADDR:
+        {
+            rbufAddr = *reinterpret_cast<const Addr*>(data);
+            DPRINTFS(TcuAccel, accel,
+                "Syscall receive buffer @ %#llx\n", rbufAddr);
+            state = State::SYSC_SEND;
+            break;
+        }
+
         case State::SYSC_SEND:
         {
             state = State::SYSC_SEND_WAIT;
@@ -147,7 +167,7 @@ SyscallSM::handleMemResp(PacketPtr pkt)
             const RegFile::reg_t *regs = data;
             if(regs[0] != static_cast<RegFile::reg_t>(-1))
             {
-                replyAddr = regs[0] + RBUF_ADDR + accel->offset;
+                replyAddr = regs[0] + rbufAddr;
                 state = State::SYSC_ACK;
             }
             else

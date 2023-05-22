@@ -38,7 +38,8 @@ namespace tcu
 
 AccelCtxSwSM::AccelCtxSwSM(TcuAccel *_accel)
     : accel(_accel),
-      state(FETCH_MSG), stateChanged(), switched(), vpe_id(OUR_VPE)
+      state(READ_RBUF_ADDR), stateChanged(), switched(),
+      rbufAddr(), msgAddr(), vpe_id(OUR_VPE)
 {
 }
 
@@ -47,6 +48,7 @@ AccelCtxSwSM::stateName() const
 {
     const char *names[] =
     {
+        "READ_RBUF_ADDR",
         "FETCH_MSG",
         "FETCH_MSG_WAIT",
         "READ_MSG_ADDR",
@@ -65,6 +67,16 @@ AccelCtxSwSM::tick()
 
     switch(state)
     {
+        case State::READ_RBUF_ADDR:
+        {
+            pkt = accel->tcuif().createTcuRegPkt(
+                TcuIf::getRegAddr(1, EP_RECV),
+                0,
+                MemCmd::ReadReq
+            );
+            break;
+        }
+
         case State::FETCH_MSG:
         {
             pkt = accel->tcuif().createTcuCmdPkt(
@@ -100,7 +112,7 @@ AccelCtxSwSM::tick()
         {
             pkt = accel->tcuif().createTcuCmdPkt(
                 CmdCommand::create(CmdCommand::REPLY, EP_RECV,
-                                   msgAddr - (RBUF_ADDR + accel->offset)),
+                                   msgAddr - rbufAddr),
                 CmdData::create(msgAddr, sizeof(reply))
             );
             break;
@@ -127,6 +139,15 @@ AccelCtxSwSM::handleMemResp(PacketPtr pkt)
 
     switch(state)
     {
+        case State::READ_RBUF_ADDR:
+        {
+            rbufAddr = *reinterpret_cast<const Addr*>(pkt_data);
+            DPRINTFS(TcuAccel, accel,
+                "TileMux receive buffer @ %#llx\n", rbufAddr);
+            state = State::FETCH_MSG;
+            break;
+        }
+
         case State::FETCH_MSG:
         {
             state = State::FETCH_MSG_WAIT;
@@ -145,7 +166,7 @@ AccelCtxSwSM::handleMemResp(PacketPtr pkt)
             const RegFile::reg_t *regs = pkt->getConstPtr<RegFile::reg_t>();
             if(regs[0] != static_cast<RegFile::reg_t>(-1))
             {
-                msgAddr = regs[0] + RBUF_ADDR + accel->offset;
+                msgAddr = regs[0] + rbufAddr;
                 state = State::READ_MSG;
             }
             else

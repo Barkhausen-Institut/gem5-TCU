@@ -67,6 +67,7 @@ static const char *stateNames[] =
     "REPLY_SEND",
     "REPLY_WAIT",
 
+    "READ_RBUF_ADDR",
     "CTXSW",
 
     "SYSCALL",
@@ -90,6 +91,7 @@ TcuAccelStream::TcuAccelStream(const TcuAccelStreamParams &p)
     ctx(),
     bufSize(p.buf_size),
     sysc(this),
+    rbufAddr(),
     yield(this),
     logic(p.logic),
     ctxsw(this),
@@ -148,8 +150,17 @@ TcuAccelStream::completeRequest(PacketPtr pkt)
                 {
                     if (irqPending)
                         irqPending = false;
-                    state = State::CTXSW;
+                    state = rbufAddr ? State::CTXSW : State::READ_RBUF_ADDR;
                 }
+                break;
+            }
+
+            case State::READ_RBUF_ADDR:
+            {
+                rbufAddr = *reinterpret_cast<const Addr*>(pkt_data);
+                DPRINTF(TcuAccelStream,
+                    "Accelerator receive buffer @ %#llx\n", rbufAddr);
+                state = State::CTXSW;
                 break;
             }
 
@@ -230,7 +241,7 @@ TcuAccelStream::completeRequest(PacketPtr pkt)
                 const RegFile::reg_t *regs = pkt->getConstPtr<RegFile::reg_t>();
                 if (regs[0] != static_cast<RegFile::reg_t>(-1))
                 {
-                    ctx.msgAddr = regs[0] + rbufAddr();
+                    ctx.msgAddr = regs[0] + rbufAddr;
                     DPRINTF(TcuAccelStream,
                             "Received message @ %p\n", ctx.msgAddr);
                     if (ctx.flags & Flags::EXIT)
@@ -616,7 +627,7 @@ TcuAccelStream::tick()
         irqPending = false;
         ctx.flags |= Flags::INSYSC;
         ctx.nextSysc = static_cast<uint64_t>(syscNext);
-        state = State::CTXSW;
+        state = rbufAddr ? State::CTXSW : State::READ_RBUF_ADDR;
     }
 
     if (state == State::INOUT_START)
@@ -624,7 +635,7 @@ TcuAccelStream::tick()
         if (irqPending)
         {
             irqPending = false;
-            state = State::CTXSW;
+            state = rbufAddr ? State::CTXSW : State::READ_RBUF_ADDR;
         }
         // if we waked up because of some message, just ack it
         // alternatively, if we are already waiting for a response, just check
@@ -683,6 +694,16 @@ TcuAccelStream::tick()
             break;
         }
 
+        case State::READ_RBUF_ADDR:
+        {
+            pkt = tcuif().createTcuRegPkt(
+                TcuIf::getRegAddr(1, EP_RECV),
+                0,
+                MemCmd::ReadReq
+            );
+            break;
+        }
+
         case State::CTXSW:
         {
             pkt = ctxsw.tick();
@@ -727,7 +748,7 @@ TcuAccelStream::tick()
         {
             pkt = tcuif().createTcuCmdPkt(
                 CmdCommand::create(CmdCommand::ACK_MSG, EP_RECV,
-                                   ctx.msgAddr - rbufAddr()),
+                                   ctx.msgAddr - rbufAddr),
                 CmdData::create(0, 0)
             );
             break;
@@ -799,7 +820,7 @@ TcuAccelStream::tick()
         {
             pkt = tcuif().createTcuCmdPkt(
                 CmdCommand::create(CmdCommand::REPLY, EP_RECV,
-                                   replyAddr - rbufAddr()),
+                                   replyAddr - rbufAddr),
                 CmdData::create(bufferAddr() + bufSize, sizeof(reply))
             );
             break;
@@ -846,7 +867,7 @@ TcuAccelStream::tick()
                 auto addr = ctx.inReqAddr ? ctx.inReqAddr : ctx.outReqAddr;
                 pkt = tcuif().createTcuCmdPkt(
                     CmdCommand::create(CmdCommand::ACK_MSG,
-                                       EP_RECV, addr - rbufAddr()),
+                                       EP_RECV, addr - rbufAddr),
                     CmdData::create(0, 0)
                 );
                 break;

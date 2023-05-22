@@ -50,7 +50,6 @@ class TcuAccelInDir : public TcuAccel
     static const unsigned EP_RECV       = 17;
 
     static const size_t MSG_SIZE        = 64;
-    static const Addr RBUF_ADDR         = 0x3FFF00;
     static const Addr MSG_ADDR          = 0x2000;
     static const Addr BUF_ADDR          = 0x8000;
     static const size_t BLOCK_SIZE      = 1024;
@@ -64,7 +63,6 @@ class TcuAccelInDir : public TcuAccel
 
     void reset(bool start) override;
 
-    Addr rbufAddr() const { return RBUF_ADDR + offset; }
     Addr sendMsgAddr() const override { return MSG_ADDR + offset; }
     Addr bufferAddr() const override { return BUF_ADDR + offset; }
     void setSwitched() override {}
@@ -79,6 +77,8 @@ class TcuAccelInDir : public TcuAccel
     enum class State
     {
         IDLE,
+
+        READ_RBUF_ADDR,
 
         FETCH_MSG,
         FETCH_MSG_WAIT,
@@ -105,6 +105,7 @@ class TcuAccelInDir : public TcuAccel
     State state;
     State lastState;
 
+    Addr rbufAddr;
     Addr msgAddr;
     Addr dataSize;
 

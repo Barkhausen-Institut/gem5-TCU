@@ -50,6 +50,8 @@ static const char *stateNames[] =
     "READ_MSG_ADDR",
     "READ_MSG",
 
+    "READ_RBUF_ADDR",
+
     "WRITE_DATA",
     "WRITE_DATA_WAIT",
 
@@ -67,6 +69,7 @@ TcuAccelInDir::TcuAccelInDir(const TcuAccelInDirParams &p)
     memPending(false),
     state(State::IDLE),
     lastState(State::CTXSW),    // something different
+    rbufAddr(),
     msgAddr(),
     ctxsw(this)
 {
@@ -114,7 +117,24 @@ TcuAccelInDir::completeRequest(PacketPtr pkt)
             case State::CTXSW:
             {
                 if(ctxsw.handleMemResp(pkt))
+                {
+                    state = rbufAddr ? State::FETCH_MSG
+                                     : State::READ_RBUF_ADDR;
+                }
+                break;
+            }
+
+            case State::READ_RBUF_ADDR:
+            {
+                rbufAddr = *reinterpret_cast<const Addr*>(pkt_data);
+                if (rbufAddr)
+                {
+                    DPRINTF(TcuAccelInDir,
+                        "Accelerator receive buffer @ %#llx\n", rbufAddr);
                     state = State::FETCH_MSG;
+                }
+                else
+                    state = State::IDLE;
                 break;
             }
 
@@ -136,7 +156,7 @@ TcuAccelInDir::completeRequest(PacketPtr pkt)
                 const RegFile::reg_t *regs = pkt->getConstPtr<RegFile::reg_t>();
                 if(regs[0] != static_cast<RegFile::reg_t>(-1))
                 {
-                    msgAddr = rbufAddr() + regs[0];
+                    msgAddr = rbufAddr + regs[0];
                     DPRINTF(TcuAccelInDir, "Received message @ %p\n", msgAddr);
                     state = State::READ_MSG;
                 }
@@ -263,6 +283,16 @@ TcuAccelInDir::tick()
             break;
         }
 
+        case State::READ_RBUF_ADDR:
+        {
+            pkt = tcuif().createTcuRegPkt(
+                TcuIf::getRegAddr(1, EP_RECV),
+                0,
+                MemCmd::ReadReq
+            );
+            break;
+        }
+
         case State::FETCH_MSG:
         {
             if (irqPending)
@@ -313,7 +343,7 @@ TcuAccelInDir::tick()
         {
             pkt = tcuif().createTcuCmdPkt(
                 CmdCommand::create(CmdCommand::REPLY, EP_RECV,
-                                   msgAddr - rbufAddr()),
+                                   msgAddr - rbufAddr),
                 CmdData::create(bufferAddr(), sizeof(reply))
             );
             break;

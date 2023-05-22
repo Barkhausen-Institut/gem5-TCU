@@ -41,8 +41,6 @@ namespace tcu
 
 class SyscallSM
 {
-    static const size_t RBUF_ADDR = 0x3FB000;
-
   public:
     enum Operation
     {
@@ -97,6 +95,7 @@ class SyscallSM
 
     enum State
     {
+        SYSC_READ_RBUF_ADDR,
         SYSC_SEND,
         SYSC_SEND_WAIT,
         SYSC_FETCH,
@@ -110,7 +109,7 @@ class SyscallSM
 
     explicit SyscallSM(TcuAccel *_accel)
         : accel(_accel), state(), stateChanged(), waitForReply(), fetched(),
-          replyAddr(), syscallSize() {}
+          rbufAddr(), replyAddr(), syscallSize() {}
 
     std::string stateName() const;
 
@@ -123,7 +122,8 @@ class SyscallSM
     void start(Addr size, bool wait = true, bool resume = false)
     {
         syscallSize = size;
-        state = resume ? SYSC_FETCH : SYSC_SEND;
+        state = resume ? SYSC_FETCH :
+            (rbufAddr ? SYSC_SEND : SYSC_READ_RBUF_ADDR);
         fetched = false;
         waitForReply = wait;
     }
@@ -139,6 +139,7 @@ class SyscallSM
     bool stateChanged;
     bool waitForReply;
     bool fetched;
+    Addr rbufAddr;
     Addr replyAddr;
     Addr syscallSize;
 };
