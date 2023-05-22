@@ -109,7 +109,7 @@ TcuIf::createTcuRegPkt(Addr reg,
 PacketPtr
 TcuIf::createTcuCmdPkt(CmdCommand::Bits cmd,
                        CmdData data,
-                       uint64_t offset)
+                       Addr arg1)
 {
     static_assert(static_cast<int>(UnprivReg::COMMAND) == 0, "");
     static_assert(static_cast<int>(UnprivReg::DATA_ADDR) == 1, "");
@@ -124,7 +124,7 @@ TcuIf::createTcuCmdPkt(CmdCommand::Bits cmd,
     regs[0] = cmd;
     regs[1] = data.addr;
     regs[2] = data.size;
-    regs[3] = offset;
+    regs[3] = arg1;
     return pkt;
 }
 

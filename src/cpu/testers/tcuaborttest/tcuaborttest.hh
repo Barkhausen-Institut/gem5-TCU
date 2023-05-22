@@ -35,6 +35,7 @@
 #include "params/TcuAbortTest.hh"
 #include "mem/tcu/tcu.hh"
 #include "mem/tcu/reg_file.hh"
+#include "mem/tcu/tcuif.hh"
 #include "sim/system.hh"
 
 namespace gem5
@@ -105,8 +106,6 @@ class TcuAbortTest : public ClockedObject
 
     Addr reg_base;
 
-    /// Request id for all generated traffic
-    RequestorID requestorId;
 
     tcu::TileId tileId;
 
@@ -115,14 +114,6 @@ class TcuAbortTest : public ClockedObject
     /// Stores the Packet for later retry
     PacketPtr retryPkt;
 
-    PacketPtr createPacket(Addr paddr, size_t size, MemCmd cmd);
-
-    PacketPtr createTcuRegisterPkt(Addr reg, RegFile::reg_t value, MemCmd cmd);
-
-    PacketPtr createCommandPkt(CmdCommand::Bits cmd,
-                               CmdData data,
-                               Addr arg1 = 0);
-
     bool sendPkt(PacketPtr pkt);
 
     void completeRequest(PacketPtr pkt);
@@ -130,12 +121,6 @@ class TcuAbortTest : public ClockedObject
     void recvRetry();
 
     void finishTest(bool success);
-
-    static Addr getRegAddr(PrivReg reg);
-
-    static Addr getRegAddr(UnprivReg reg);
-
-    static Addr getRegAddr(unsigned reg, unsigned epid);
 };
 
 }

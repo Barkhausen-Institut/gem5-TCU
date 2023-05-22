@@ -87,43 +87,14 @@ static const char *abortNames[] =
     "REMOTE",
 };
 
-Addr
-TcuAbortTest::getRegAddr(PrivReg reg)
+bool
+TcuAbortTest::CpuPort::recvTimingResp(PacketPtr pkt)
 {
     static_assert(ARRAY_SIZE(stateNames) == static_cast<size_t>(State::STOP) + 1,
                   "stateNames out of sync");
     static_assert(ARRAY_SIZE(substateNames) == static_cast<size_t>(SubState::WAIT_CMD) + 1,
                   "substateNames out of sync");
 
-    return TcuTlb::PAGE_SIZE * 2 +
-           static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
-}
-
-Addr
-TcuAbortTest::getRegAddr(UnprivReg reg)
-{
-    Addr result = sizeof(RegFile::reg_t) * numExtRegs;
-
-    result += static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
-
-    return result;
-}
-
-Addr
-TcuAbortTest::getRegAddr(unsigned reg, unsigned epid)
-{
-    Addr result = sizeof(RegFile::reg_t) * (numExtRegs + numUnprivRegs);
-
-    result += epid * numEpRegs * sizeof(RegFile::reg_t);
-
-    result += reg * sizeof(RegFile::reg_t);
-
-    return result;
-}
-
-bool
-TcuAbortTest::CpuPort::recvTimingResp(PacketPtr pkt)
-{
     tcutest.completeRequest(pkt);
     return true;
 }
@@ -146,9 +117,8 @@ TcuAbortTest::TcuAbortTest(const TcuAbortTestParams &p)
     abortTypes(),
     abortStart(0),
     system(p.system),
-    // TODO parameterize
-    reg_base(0xF0000000),
-    requestorId(p.system->getRequestorId(this, name())),
+    reg_base(p.regfile_base_addr),
+    tcu(p.regfile_base_addr, system->getRequestorId(this, name()), p.tile_id),
     tileId(TileId::from_raw(p.tile_id)),
     atomic(p.system->isAtomicMode()),
     retryPkt(nullptr)
@@ -203,55 +173,6 @@ TcuAbortTest::recvRetry()
 
         retryPkt = nullptr;
     }
-}
-
-PacketPtr
-TcuAbortTest::createPacket(Addr paddr,
-                          size_t size,
-                          MemCmd cmd = MemCmd::WriteReq)
-{
-    Request::Flags flags;
-
-    auto req = std::make_shared<Request>(paddr, size, flags, requestorId);
-    req->setContext(tileId.raw());
-
-    auto pkt = new Packet(req, cmd);
-    auto pkt_data = new uint8_t[size];
-    pkt->dataDynamic(pkt_data);
-
-    return pkt;
-}
-
-PacketPtr
-TcuAbortTest::createTcuRegisterPkt(Addr reg,
-                                   RegFile::reg_t value,
-                                   MemCmd cmd = MemCmd::WriteReq)
-{
-    auto pkt = createPacket(reg_base + reg, sizeof(RegFile::reg_t), cmd);
-    *pkt->getPtr<RegFile::reg_t>() = value;
-    return pkt;
-}
-
-PacketPtr
-TcuAbortTest::createCommandPkt(CmdCommand::Bits cmd,
-                               CmdData data,
-                               Addr arg1)
-{
-    static_assert(static_cast<int>(UnprivReg::COMMAND) == 0, "");
-    static_assert(static_cast<int>(UnprivReg::DATA_ADDR) == 1, "");
-    static_assert(static_cast<int>(UnprivReg::DATA_SIZE) == 2, "");
-    static_assert(static_cast<int>(UnprivReg::ARG1) == 3, "");
-
-    auto pkt = createPacket(reg_base + getRegAddr(UnprivReg::COMMAND),
-                            sizeof(RegFile::reg_t) * 4,
-                            MemCmd::WriteReq);
-
-    RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
-    regs[0] = cmd;
-    regs[1] = data.addr;
-    regs[2] = data.size;
-    regs[3] = arg1;
-    return pkt;
 }
 
 void
@@ -397,9 +318,9 @@ TcuAbortTest::tick()
 
         case State::INIT_MEM_EP:
         {
-            pkt = createPacket(reg_base + getRegAddr(0, EP_MEM),
-                               sizeof(RegFile::reg_t) * numEpRegs,
-                               MemCmd::WriteReq);
+            pkt = tcu.createPacket(reg_base + TcuIf::getRegAddr(0, EP_MEM),
+                                   sizeof(RegFile::reg_t) * numEpRegs,
+                                   MemCmd::WriteReq);
 
             MemEp ep;
             ep.r0.type = static_cast<RegFile::reg_t>(EpType::MEMORY);
@@ -418,9 +339,9 @@ TcuAbortTest::tick()
 
         case State::INIT_SEND_EP:
         {
-            pkt = createPacket(reg_base + getRegAddr(0, EP_SEND),
-                               sizeof(RegFile::reg_t) * numEpRegs,
-                               MemCmd::WriteReq);
+            pkt = tcu.createPacket(reg_base + TcuIf::getRegAddr(0, EP_SEND),
+                                   sizeof(RegFile::reg_t) * numEpRegs,
+                                   MemCmd::WriteReq);
 
             SendEp ep;
             ep.r0.type = static_cast<RegFile::reg_t>(EpType::SEND);
@@ -441,9 +362,9 @@ TcuAbortTest::tick()
 
         case State::INIT_RECV_EP:
         {
-            pkt = createPacket(reg_base + getRegAddr(0, EP_RECV),
-                               sizeof(RegFile::reg_t) * numEpRegs,
-                               MemCmd::WriteReq);
+            pkt = tcu.createPacket(reg_base + TcuIf::getRegAddr(0, EP_RECV),
+                                   sizeof(RegFile::reg_t) * numEpRegs,
+                                   MemCmd::WriteReq);
 
             RecvEp ep;
             ep.r0.type = static_cast<RegFile::reg_t>(EpType::RECEIVE);
@@ -476,7 +397,7 @@ TcuAbortTest::tick()
 
                     if (testNo == 0)
                     {
-                        pkt = createCommandPkt(
+                        pkt = tcu.createTcuCmdPkt(
                             CmdCommand::create(CmdCommand::WRITE, EP_MEM,
                                                DEST_ADDR),
                             CmdData::create(DATA_ADDR,
@@ -485,7 +406,7 @@ TcuAbortTest::tick()
                     }
                     else if (testNo == 1)
                     {
-                        pkt = createCommandPkt(
+                        pkt = tcu.createTcuCmdPkt(
                             CmdCommand::create(CmdCommand::READ, EP_MEM,
                                                DEST_ADDR),
                             CmdData::create(DATA_ADDR,
@@ -494,7 +415,7 @@ TcuAbortTest::tick()
                     }
                     else if (testNo == 2)
                     {
-                        pkt = createCommandPkt(
+                        pkt = tcu.createTcuCmdPkt(
                             CmdCommand::create(CmdCommand::SEND, EP_SEND,
                                                EP_RECV),
                            CmdData::create(DATA_ADDR,
@@ -503,7 +424,7 @@ TcuAbortTest::tick()
                     }
                     else if (testNo == 3)
                     {
-                        pkt = createCommandPkt(
+                        pkt = tcu.createTcuCmdPkt(
                             CmdCommand::create(CmdCommand::REPLY, EP_RECV),
                            CmdData::create(DATA_ADDR,
                                            system->cacheLineSize() * 8)
@@ -514,18 +435,18 @@ TcuAbortTest::tick()
 
                 case SubState::ABORT:
                 {
-                    Addr regAddr = getRegAddr(PrivReg::PRIV_CMD);
-                    pkt = createTcuRegisterPkt(regAddr,
-                                               PrivCommand::ABORT_CMD,
-                                               MemCmd::WriteReq);
+                    Addr regAddr = TcuIf::getRegAddr(PrivReg::PRIV_CMD);
+                    pkt = tcu.createTcuRegPkt(regAddr,
+                                              PrivCommand::ABORT_CMD,
+                                              MemCmd::WriteReq);
                     abortStart = curTick();
                     break;
                 }
 
                 case SubState::WAIT_ABORT:
                 {
-                    Addr regAddr = getRegAddr(PrivReg::PRIV_CMD);
-                    pkt = createTcuRegisterPkt(regAddr, 0, MemCmd::ReadReq);
+                    Addr regAddr = TcuIf::getRegAddr(PrivReg::PRIV_CMD);
+                    pkt = tcu.createTcuRegPkt(regAddr, 0, MemCmd::ReadReq);
                     break;
                 }
 
@@ -537,8 +458,8 @@ TcuAbortTest::tick()
                             ? abortNames[abortType]
                             : "??");
 
-                    Addr regAddr = getRegAddr(UnprivReg::COMMAND);
-                    pkt = createTcuRegisterPkt(regAddr, 0, MemCmd::ReadReq);
+                    Addr regAddr = TcuIf::getRegAddr(UnprivReg::COMMAND);
+                    pkt = tcu.createTcuRegPkt(regAddr, 0, MemCmd::ReadReq);
                     break;
                 }
             }
