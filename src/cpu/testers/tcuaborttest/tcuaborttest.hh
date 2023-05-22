@@ -106,6 +106,9 @@ class TcuAbortTest : public ClockedObject
 
     Addr reg_base;
 
+    Addr offset;
+
+    TcuIf tcu;
 
     tcu::TileId tileId;
 

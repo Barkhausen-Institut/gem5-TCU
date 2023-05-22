@@ -118,6 +118,7 @@ TcuAbortTest::TcuAbortTest(const TcuAbortTestParams &p)
     abortStart(0),
     system(p.system),
     reg_base(p.regfile_base_addr),
+    offset(p.offset),
     tcu(p.regfile_base_addr, system->getRequestorId(this, name()), p.tile_id),
     tileId(TileId::from_raw(p.tile_id)),
     atomic(p.system->isAtomicMode()),
@@ -327,7 +328,7 @@ TcuAbortTest::tick()
             ep.r0.act = Tcu::INVALID_ACT_ID;
             ep.r0.flags = Tcu::MemoryFlags::READ | Tcu::MemoryFlags::WRITE;
             ep.r0.targetTile = tileId.raw();
-            ep.r1.remoteAddr = 0;
+            ep.r1.remoteAddr = offset;
             ep.r2.remoteSize = 0xFFFFFFFFFFFFFFFF;
 
             RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
@@ -372,7 +373,7 @@ TcuAbortTest::tick()
             ep.r0.rplEps = EP_REPLY;
             ep.r0.slots = 1;
             ep.r0.slotSize = 10;
-            ep.r1.buffer = RECV_ADDR;
+            ep.r1.buffer = offset + RECV_ADDR;
             ep.r2.unread = 0;
             ep.r2.occupied = 0;
 
@@ -399,8 +400,8 @@ TcuAbortTest::tick()
                     {
                         pkt = tcu.createTcuCmdPkt(
                             CmdCommand::create(CmdCommand::WRITE, EP_MEM,
-                                               DEST_ADDR),
-                            CmdData::create(DATA_ADDR,
+                                               offset + DEST_ADDR),
+                            CmdData::create(offset + DATA_ADDR,
                                             system->cacheLineSize() * 8)
                         );
                     }
@@ -408,8 +409,8 @@ TcuAbortTest::tick()
                     {
                         pkt = tcu.createTcuCmdPkt(
                             CmdCommand::create(CmdCommand::READ, EP_MEM,
-                                               DEST_ADDR),
-                            CmdData::create(DATA_ADDR,
+                                               offset + DEST_ADDR),
+                            CmdData::create(offset + DATA_ADDR,
                                             system->cacheLineSize() * 8)
                         );
                     }
@@ -418,7 +419,7 @@ TcuAbortTest::tick()
                         pkt = tcu.createTcuCmdPkt(
                             CmdCommand::create(CmdCommand::SEND, EP_SEND,
                                                EP_RECV),
-                           CmdData::create(DATA_ADDR,
+                           CmdData::create(offset + DATA_ADDR,
                                            system->cacheLineSize() * 8)
                         );
                     }
@@ -426,7 +427,7 @@ TcuAbortTest::tick()
                     {
                         pkt = tcu.createTcuCmdPkt(
                             CmdCommand::create(CmdCommand::REPLY, EP_RECV),
-                           CmdData::create(DATA_ADDR,
+                           CmdData::create(offset + DATA_ADDR,
                                            system->cacheLineSize() * 8)
                         );
                     }

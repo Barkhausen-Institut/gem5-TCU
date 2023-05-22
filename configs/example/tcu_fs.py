@@ -724,6 +724,7 @@ def createAbortTestTile(noc, options, id, memTile, epCount,
 
     tile.cpu = TcuAbortTest()
     tile.cpu.tile_id = id.raw();
+    tile.cpu.offset = tile.tcu.tile_mem_offset
 
     connectCuToMem(tile, options, tile.cpu.port)
 

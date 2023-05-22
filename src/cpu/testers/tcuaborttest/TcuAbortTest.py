@@ -38,3 +38,4 @@ class TcuAbortTest(ClockedObject):
     system = Param.System(Parent.any, "System this tester is part of")
     tile_id = Param.Unsigned("Tile ID")
     regfile_base_addr = Param.Addr(0xF0000000, "Register file address")
+    offset = Param.Unsigned(0, "The offset that all accesses have to go above")
