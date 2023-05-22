@@ -84,8 +84,8 @@ Scratchpad::recvAtomic(PacketPtr pkt)
         else
         {
             out_of_range = true;
-            warn_once("%s: address out-of-range: %#x\n",
-                      name(), pkt->getAddr());
+            warn_once("%llu: %s: address out-of-range: %#x\n",
+                      curTick(), name(), pkt->getAddr());
         }
     }
 
