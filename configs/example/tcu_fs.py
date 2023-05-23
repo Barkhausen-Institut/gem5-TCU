@@ -341,10 +341,13 @@ def createTile(noc, options, id, systemType, l1size, l2size, spmsize,
 
     if options.isa == 'riscv':
         if systemType != SpuSystem:
-            tile.env_start= 0x10000008
+            tile.env_start= 0x10001000
         tile.tcu.tile_mem_offset = 0x10000000
         if l1size is None and not spmsize is None:
             tile.spm.offset = tile.tcu.tile_mem_offset
+    else:
+        if systemType != SpuSystem:
+            tile.env_start= 0x1FE000
 
     if not memTile is None:
         tile.memory_tile = memTile.raw()
@@ -411,7 +414,7 @@ def createCoreTile(noc, options, id, cmdline, memTile, epCount,
 
     # workload and command line
     if options.isa == 'riscv':
-        tile.workload = RiscvBareMetal(bootloader = cmdline.split(' ')[0], reset_vect = 0x10200000)
+        tile.workload = RiscvBareMetal(bootloader = cmdline.split(' ')[0], reset_vect = 0x10003000)
     elif options.isa == 'arm':
         tile.workload = ArmFsWorkload(object_file = cmdline.split(' ')[0])
         tile.highest_el_is_64 = False
