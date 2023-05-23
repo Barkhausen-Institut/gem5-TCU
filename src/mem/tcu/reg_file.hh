@@ -66,8 +66,8 @@ enum class Features
 // privileged registers (only writable by privileged software)
 enum class PrivReg : Addr
 {
-    PRIV_CTRL,
     CU_REQ,
+    PRIV_CTRL,
     PRIV_CMD,
     PRIV_CMD_ARG1,
     CUR_ACT,
