@@ -34,3 +34,4 @@ class RiscvConnector(CoreConnector):
     type = 'RiscvConnector'
     cxx_header = "mem/tcu/connector/riscv.hh"
     cxx_class = 'gem5::tcu::RiscvConnector'
+    platform = Param.Platform(Parent.any, "Platform this device is part of.")

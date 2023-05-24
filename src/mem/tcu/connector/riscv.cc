@@ -40,15 +40,9 @@ namespace gem5
 namespace tcu
 {
 
-static int translate(RiscvConnector::IRQ irq)
-{
-    if (irq == RiscvConnector::CORE_REQ)
-        return RiscvISA::ExceptionCode::INT_EXT_SUPER;
-    return RiscvISA::ExceptionCode::INT_TIMER_SUPER;
-}
-
 RiscvConnector::RiscvConnector(const RiscvConnectorParams &p)
-  : CoreConnector(p)
+  : CoreConnector(p),
+    platform(p.platform)
 {
 }
 
@@ -64,21 +58,17 @@ RiscvConnector::reset(bool)
 void
 RiscvConnector::doSetIrq(IRQ irq)
 {
-    int vector = translate(irq);
-    DPRINTF(TcuConnector, "Injecting IRQ %d (vector %d)\n", irq, vector);
-
-    ThreadContext *tc = system->threads[0];
-    tc->getCpuPtr()->getInterruptController(0)->post(vector, 0);
+    int line = static_cast<int>(irq) + 1;
+    DPRINTF(TcuConnector, "Injecting IRQ %d\n", line);
+    platform->postPciInt(line);
 }
 
 void
 RiscvConnector::doClearIrq(IRQ irq)
 {
-    int vector = translate(irq);
-    DPRINTF(TcuConnector, "Clearing IRQ %d (vector %d)\n", irq, vector);
-
-    ThreadContext *tc = system->threads[0];
-    tc->getCpuPtr()->getInterruptController(0)->clear(vector, 0);
+    int line = static_cast<int>(irq) + 1;
+    DPRINTF(TcuConnector, "Clearing IRQ %d\n", line);
+    platform->clearPciInt(line);
 }
 
 }

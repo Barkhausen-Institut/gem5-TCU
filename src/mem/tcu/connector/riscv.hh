@@ -31,6 +31,7 @@
 #ifndef __MEM_TCU_RISCV_CONNECTOR__
 #define __MEM_TCU_RISCV_CONNECTOR__
 
+#include "dev/platform.hh"
 #include "params/RiscvConnector.hh"
 #include "mem/tcu/connector/core.hh"
 #include "sim/system.hh"
@@ -53,6 +54,8 @@ class RiscvConnector : public CoreConnector
     void doSetIrq(IRQ irq) override;
 
     void doClearIrq(IRQ irq) override;
+
+    Platform *platform;
 };
 
 }
