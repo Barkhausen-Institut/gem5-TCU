@@ -75,7 +75,9 @@ Clint::raiseInterruptPin(int id)
 
         // Post timer interrupt
         uint64_t mtimecmp = registers.mtimecmp[context_id].get();
-        if (mtime >= mtimecmp) {
+        // TODO we disable this interrupt here, because we are never interested
+        // in it and it disrupts the execution if tiles are shut off.
+        if (false && mtime >= mtimecmp) {
             if (mtime == mtimecmp) {
                 DPRINTF(Clint,
                     "MTIP posted - thread: %d, mtime: %d, mtimecmp: %d\n",
