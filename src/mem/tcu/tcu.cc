@@ -35,6 +35,7 @@
 
 #include "arch/generic/mmu.hh"
 #include "base/output.hh"
+#include "cpu/base.hh"
 #include "debug/Tcu.hh"
 #include "debug/TcuPackets.hh"
 #include "debug/TcuLLCMemAcc.hh"
@@ -131,23 +132,49 @@ Tcu::regStats()
     connector.regStats();
 }
 
+const std::string
+Tcu::ResetEvent::name() const
+{
+    return _tcu.name();
+}
+
+void
+Tcu::ResetEvent::process()
+{
+    if (_tcu.system->threads.empty() ||
+        _tcu.system->threads[0]->getCpuPtr()->drain() == DrainState::Drained)
+    {
+        _tcu.connector.startSleep(Tcu::INVALID_EP_ID, true);
+        _tcu.invalidateCaches();
+        _tcu.regs().reset(true);
+
+        _tcu.connector.reset(false);
+        _tcu.scheduleExtCmdFinish(Cycles(1), TcuError::NONE, 0);
+        delete this;
+    }
+    else
+        _tcu.schedule(this, _tcu.clockEdge(Cycles(1)));
+}
+
 void
 Tcu::reset(bool start)
 {
+    resets++;
+
     if (tlb())
         tlb()->clear();
 
-    if (!start)
-    {
-        connector.startSleep(Tcu::INVALID_EP_ID, true);
-        invalidateCaches();
-        regs().reset(true);
-    }
-    connector.reset(start);
     if (start)
+    {
+        connector.reset(true);
         connector.stopSleep();
-
-    resets++;
+        scheduleExtCmdFinish(Cycles(1), TcuError::NONE, 0);
+    }
+    else
+    {
+        auto resetEvent = new ResetEvent(*this);
+        schedule(resetEvent, clockEdge(Cycles(1)));
+    }
 }
 
 void

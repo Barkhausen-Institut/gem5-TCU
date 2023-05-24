@@ -457,7 +457,7 @@ Fetch::takeOverFrom()
 void
 Fetch::drainStall(ThreadID tid)
 {
-    assert(cpu->isDraining());
+    // assert(cpu->isDraining());
     assert(!stalls[tid].drain);
     DPRINTF(Drain, "%i: Thread drained.\n", tid);
     stalls[tid].drain = true;
@@ -776,7 +776,7 @@ Fetch::checkStall(ThreadID tid) const
     bool ret_val = false;
 
     if (stalls[tid].drain) {
-        assert(cpu->isDraining());
+        // assert(cpu->isDraining());
         DPRINTF(Fetch,"[tid:%i] Drain stall detected.\n",tid);
         ret_val = true;
     }

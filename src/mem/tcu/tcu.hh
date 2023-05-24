@@ -106,6 +106,23 @@ class Tcu : public BaseTcu
         Addr oldAddr;
     };
 
+    struct ResetEvent : public Event
+    {
+        Tcu &_tcu;
+
+        ResetEvent(Tcu& tcu)
+            : Event(),
+              _tcu(tcu)
+        {}
+
+        void process() override;
+        void completed(PacketPtr pkt);
+        const std::string name() const override;
+        const char* description() const override { return "ResetEvent"; }
+        // for the address translation (we don't speculate)
+        bool isSquashed() const { return false; }
+    };
+
     struct WriteCoverageEvent : public Event
     {
         Tcu &_tcu;

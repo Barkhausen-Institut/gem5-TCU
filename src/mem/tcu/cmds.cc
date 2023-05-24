@@ -455,7 +455,6 @@ TcuCommands::executeExtCommand(PacketPtr pkt)
             break;
         case ExtCommand::RESET:
             tcu.reset(cmd.arg == 1);
-            scheduleExtCmdFinish(Cycles(1), TcuError::NONE, 0);
             break;
         default:
             scheduleExtCmdFinish(Cycles(1), TcuError::UNKNOWN_CMD, 0);
