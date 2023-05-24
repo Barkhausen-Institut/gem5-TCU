@@ -148,7 +148,12 @@ TcuAccelInDir::completeRequest(PacketPtr pkt)
                 CmdCommand::Bits cmd =
                     *reinterpret_cast<const RegFile::reg_t*>(pkt_data);
                 if (cmd.opcode == 0)
-                    state = State::READ_MSG_ADDR;
+                {
+                    if (cmd.error == 0)
+                        state = State::READ_MSG_ADDR;
+                    else
+                        state = State::IDLE;
+                }
                 break;
             }
             case State::READ_MSG_ADDR:
