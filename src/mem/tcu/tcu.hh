@@ -266,6 +266,8 @@ class Tcu : public BaseTcu
 
     EventWrapper<CoreRequests, &CoreRequests::completeReqs> completeCoreReqEvent;
 
+    bool coreDrained;
+
   public:
 
     const Addr tileMemOffset;

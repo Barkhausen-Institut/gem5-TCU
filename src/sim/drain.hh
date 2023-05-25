@@ -255,6 +255,7 @@ class Drainable
     Drainable();
     virtual ~Drainable();
 
+  public:
     /**
      * Draining is the process of clearing out the states of
      * SimObjects.These are the SimObjects that are partially

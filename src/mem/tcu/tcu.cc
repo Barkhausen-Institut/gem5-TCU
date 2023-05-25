@@ -65,6 +65,7 @@ Tcu::Tcu(const TcuParams &p)
     epFile(*this),
     cmds(*this),
     completeCoreReqEvent(coreReqs),
+    coreDrained(),
     tileMemOffset(p.tile_mem_offset),
     numEndpoints(p.num_endpoints),
     maxNocPacketSize(p.max_noc_packet_size),
@@ -148,6 +149,7 @@ Tcu::ResetEvent::process()
         _tcu.invalidateCaches();
         _tcu.regs().reset(true);
 
+        _tcu.coreDrained = !_tcu.system->threads.empty();
         _tcu.connector.reset(false);
         _tcu.scheduleExtCmdFinish(Cycles(1), TcuError::NONE, 0);
         delete this;
@@ -166,6 +168,11 @@ Tcu::reset(bool start)
 
     if (start)
     {
+        if (coreDrained)
+        {
+            system->threads[0]->getCpuPtr()->drainResume();
+            coreDrained = false;
+        }
         connector.reset(true);
         connector.stopSleep();
         scheduleExtCmdFinish(Cycles(1), TcuError::NONE, 0);
