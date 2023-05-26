@@ -73,11 +73,19 @@ Clint::raiseInterruptPin(int id)
         ISA* isa = dynamic_cast<ISA*>(tc->getIsaPtr());
         isa->setMiscRegNoEffect(MISCREG_TIME, mtime);
 
-        // Post timer interrupt
         uint64_t mtimecmp = registers.mtimecmp[context_id].get();
-        // TODO we disable this interrupt here, because we are never interested
-        // in it and it disrupts the execution if tiles are shut off.
-        if (false && mtime >= mtimecmp) {
+
+        // TODO workaround for M³: if tiles are shut off, we don't want to
+        // bother them with timer interrupts.
+        if (mtimecmp == 0) {
+            DPRINTF(Clint,
+                "Ignoring MTI - thread: %d, mtime: %d, mtimecmp: %d\n",
+                context_id, mtime, mtimecmp);
+            continue;
+        }
+
+        // Post timer interrupt
+        if (mtime >= mtimecmp) {
             if (mtime == mtimecmp) {
                 DPRINTF(Clint,
                     "MTIP posted - thread: %d, mtime: %d, mtimecmp: %d\n",
