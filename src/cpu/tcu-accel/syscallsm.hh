@@ -70,6 +70,7 @@ class SyscallSM
         TILE_QUOTA,
         TILE_SET_QUOTA,
         TILE_SET_PMP,
+        TILE_MUX_INFO,
         TILE_MEM,
         TILE_RESET,
         SEM_CTRL,

@@ -48,6 +48,7 @@ class AccelCtxSwSM
 
     enum Operation
     {
+        INFO,
         VPE_INIT,
         VPE_CTRL,
         MAP,
