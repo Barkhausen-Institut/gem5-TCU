@@ -32,8 +32,5 @@ Import('*')
 DebugFlag('KecAcc')
 SimObject('KecAcc.py', sim_objects=['KecAcc'])
 Source('kecacc.cc')
-
-# C++17 is needed for template<auto ...>
-# FIXME: Drop CXXFLAGS after updating to gem5 v21.1.0.0 (C++17 is default)
-Source('kecacc-xkcp/kecacc-xkcp.cc', append={'CXXFLAGS': '-std=c++17'})
+Source('kecacc-xkcp/kecacc-xkcp.cc')
 Source('kecacc-xkcp/xkcp/KeccakP-1600-opt64.c')
