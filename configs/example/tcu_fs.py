@@ -795,7 +795,10 @@ def runSimulation(root, options, tiles):
         desc = 0
         if hasattr(tile, 'mem_ctrl'):
             desc |= 1 # mem
-            size = int(tile.mem_ctrl.dram.device_size)
+            if hasattr(tile.mem_ctrl, 'dram'):
+                size = int(tile.mem_ctrl.dram.device_size)
+            else:  # SPM
+                size = int(tile.mem_ctrl.range.end)
             assert size % 4096 == 0, "Memory size not page aligned"
             desc |= (size >> 12) << 28 # mem size in pages
             desc |= (1 << 4) << 11     # TileAttr::IMEM
