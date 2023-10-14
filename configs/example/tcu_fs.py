@@ -731,7 +731,7 @@ def createAbortTestTile(noc, options, id, memTile,
 
     return tile
 
-def createMemTile(noc, options, id, size, dram=True):
+def createMemTile(noc, options, id, size, memType='DRAM'):
     tile = createTile(
         noc=noc, options=options, id=id, systemType=SpuSystem,
         l1size=None, l2size=None, spmsize=None, memTile=None,
@@ -746,23 +746,31 @@ def createMemTile(noc, options, id, size, dram=True):
     tile.tcu.buf_count = 8
 
     size_bytes = MemorySize(size).value
-    if dram:
+    if memType == 'DRAM':
         tile.mem_ctrl = MemCtrl()
         tile.mem_ctrl.dram = DDR3_1600_8x8()
         tile.mem_ctrl.dram.device_size = size
         tile.mem_ctrl.dram.range = size_bytes
         tile.mem_ctrl.port = tile.xbar.mem_side_ports
-    else:
+        mem = tile.mem_ctrl.dram
+    elif memType == 'SPM':
         tile.mem_ctrl = Scratchpad()
         tile.mem_ctrl.cpu_port = tile.xbar.mem_side_ports
         tile.mem_ctrl.range = size_bytes
+        mem = tile.mem_ctrl
+    elif memType == 'Flash':
+        tile.flash = CfiMemory(latency='100ns', bandwidth='50MB/s')
+        tile.flash.port = tile.xbar.mem_side_ports
+        tile.flash.range = size_bytes
+        mem = tile.flash
+    else:
+        raise ValueError('Invalid mem_type')
 
-    name = type(tile.mem_ctrl.dram) if dram else type(tile.mem_ctrl)
+    name = type(mem)
     print('%s: %s' % (id, name))
     printConfig(tile)
     print('       imem =%d KiB' % (int(size_bytes) / 1024))
-    short = 'SPM' if type(tile.mem_ctrl).__name__ == 'Scratchpad' else 'DRAM'
-    print('       Comp =TCU -> %s' % (short))
+    print('       Comp =TCU -> %s' % (memType))
     print()
 
     return tile
@@ -823,6 +831,12 @@ def runSimulation(root, options, tiles):
                 desc |= 8 << 6
             elif hasattr(tile, 'serial'):
                 desc |= 9 << 6
+            elif hasattr(tile, 'flash'):
+                desc |= 10 << 6
+                size = int(tile.flash.range.end)
+                assert size % 4096 == 0, "Memory size not page aligned"
+                desc |= (size >> 12) << 28 # mem size in pages
+                desc |= (1 << 4) << 11     # TileAttr::IMEM
             elif hasattr(tile, 'cpu') and str(type(tile.cpu)).startswith('Riscv'):
                 if str(tile.cpu.isa[0].riscv_type) == "RV32":
                     desc |= 2 << 6 # riscv32
