@@ -138,6 +138,8 @@ def getOptions():
                         help="comma separated list of <name>=<path>")
     parser.add_argument("--logflags", default="",
                         help="comma separated list of log flags (e.g., Info,LibNet)")
+    parser.add_argument("--rot-layers", default="",
+                        help="comma separated list of RoT layer binaries")
 
     parser.add_argument("--pausetile", default="",
                         help="the tile to pause until GDB connects")
@@ -557,6 +559,52 @@ def createCoreAccTile(noc, options, id, cmdline, memTile, spmsize='8MB'):
     tile.dummyAccel.port = tile.spm.tcu_port
     return tile
 
+def createRoTTile(noc, options, id, cmdline, flashTile, rotLayers,
+                  kernelCmdline, spmsize='512kB', bromsize='64kB'):
+    tile = _createKecAccTile(noc, options, id, cmdline, memTile=None,
+                             spmsize=spmsize)
+    # Accelerator is connected to the XBar like everything else
+    tile.kecacc.port = tile.xbar.cpu_side_ports
+
+    # Boot ROM
+    tile.brom = Scratchpad(range=AddrRange(0x0b000000, size=bromsize),
+                           writeable=False, throughput=tile.spm.throughput)
+    tile.brom.cpu_port = tile.xbar.mem_side_ports
+    tile.env_start = tile.brom.range.start + 0x1000
+
+    if options.isa == 'riscv':
+        # Mark all regions outside of memory as uncacheable and strictly ordered.
+        # This prevents the CPU from making speculative accesses to these regions.
+        mem_ranges = [tile.brom.range, tile.spm.range]
+        tile.cpu.mmu.pma_checker.uncacheable = AddrRange(2**64 - 1).exclude(mem_ranges)
+
+        # With the above, the RoT CPU does not speculate outside actual memory.
+        # Disable handling invalid accesses so that they are clearly reported
+        # during simulation.
+        tile.spm.ignore_invalid = False
+        # Reconnect the SPM from xbar.default to xbar.mem_side_ports
+        # so that it only receives the accesses inside its memory range.
+        tile.xbar.default.peer = None
+        tile.spm.cpu_port = tile.xbar.mem_side_ports
+
+        # FIXME: Move UART away from 0x10000000 since it overlaps with the
+        # start of the SPM. Other tiles are also affected by this, but they
+        # typically don't access the start of the memory.
+        tile.platform.uart.pio_addr = 0x04000000
+
+    if flashTile is not None:
+        flash_size = getMemTileSize(flashTile)
+        tile.memory_tile = flashTile.tile_id
+        tile.memory_offset = 0
+        tile.memory_size = flash_size
+        tile.mod_offset = 0
+        tile.mod_size = flash_size - tile.mod_offset
+        tile.tile_size = tile_size
+        tile.rot_layers = rotLayers
+        tile.kernel_cmdline = kernelCmdline
+
+    return tile
+
 def createSerialTile(noc, options, id, memTile):
     tile = createTile(
         noc=noc, options=options, id=id, systemType=SpuSystem,
@@ -784,6 +832,16 @@ def createMemTile(noc, options, id, size, memType='DRAM'):
 
     return tile
 
+def getMemTileSize(tile):
+    if hasattr(tile, 'mem_ctrl'):
+        if hasattr(tile.mem_ctrl, 'dram'):
+            return tile.mem_ctrl.dram.device_size
+        else:  # SPM
+            return tile.mem_ctrl.range.end
+    elif hasattr(tile, 'flash'):
+        return tile.flash.range.end
+    raise ValueError('Unknown memory tile type')
+
 def createRoot(options):
     root = Root(full_system=True)
 
@@ -812,10 +870,7 @@ def runSimulation(root, options, tiles):
         desc = 0
         if hasattr(tile, 'mem_ctrl'):
             desc |= 1 # mem
-            if hasattr(tile.mem_ctrl, 'dram'):
-                size = int(tile.mem_ctrl.dram.device_size)
-            else:  # SPM
-                size = int(tile.mem_ctrl.range.end)
+            size = int(getMemTileSize(tile))
             assert size % 4096 == 0, "Memory size not page aligned"
             desc |= (size >> 12) << 28 # mem size in pages
             desc |= (1 << 4) << 11     # TileAttr::IMEM
@@ -842,7 +897,7 @@ def runSimulation(root, options, tiles):
                 desc |= 9 << 6
             elif hasattr(tile, 'flash'):
                 desc |= 10 << 6
-                size = int(tile.flash.range.end)
+                size = int(getMemTileSize(tile))
                 assert size % 4096 == 0, "Memory size not page aligned"
                 desc |= (size >> 12) << 28 # mem size in pages
                 desc |= (1 << 4) << 11     # TileAttr::IMEM
@@ -865,6 +920,8 @@ def runSimulation(root, options, tiles):
                 desc |= (1 << 6) << 11
             elif hasattr(tile, 'dummyAccel'):
                 desc |= (1 << 7) << 11
+            if hasattr(tile, 'brom'):
+                desc |= (1 << 8) << 11
         # spu tiles always have internal EPs and thus don't have the attribute
         try:
             if tile.internal_eps:
