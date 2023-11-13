@@ -150,7 +150,9 @@ TcuCommands::stopCommand()
 {
     if (cmdPkt)
     {
-        tcu.connector.stopSleep();
+        CmdCommand::Bits cmd = tcu.regs().getCommand();
+        if (cmd.opcode == CmdCommand::SLEEP)
+            tcu.connector.stopSleep();
         tcu.schedCpuResponse(cmdPkt, tcu.clockEdge(Cycles(1)));
         cmdPkt = NULL;
     }
@@ -202,17 +204,6 @@ TcuCommands::executeCommand(PacketPtr pkt)
         default:
             finishCommand(TcuError::UNKNOWN_CMD);
             return;
-    }
-
-    if (cmdPkt && cmd.opcode != CmdCommand::SLEEP)
-    {
-        if (tcu.connector.canSuspendCmds())
-            tcu.connector.startSleep(Tcu::INVALID_EP_ID);
-        else
-        {
-            tcu.schedCpuResponse(cmdPkt, tcu.clockEdge(Cycles(1)));
-            cmdPkt = nullptr;
-        }
     }
 }
 
@@ -315,7 +306,7 @@ TcuCommands::finishCommand(TcuError error)
             break;
     }
 
-    if (cmdPkt || cmd.opcode == CmdCommand::SLEEP)
+    if (cmd.opcode == CmdCommand::SLEEP)
         tcu.connector.stopSleep();
 
     DPRINTF(TcuCmd, "Finished command %s with EP=%u -> %u\n",
