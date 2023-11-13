@@ -150,7 +150,7 @@ class MessageUnit
 
     void recvCredits(EpFile::EpCache &eps, SendEp &sep);
 
-    int allocSlot(EpFile::EpCache &eps, RecvEp &ep);
+    int allocSlot(EpFile::EpCache &eps, RecvEp &ep, Cycles *delay);
 
     void startReplyWithEP(EpFile::EpCache &eps);
 

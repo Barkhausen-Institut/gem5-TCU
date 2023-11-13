@@ -632,16 +632,20 @@ void MessageUnit::ackMessage(RecvEp &rep, int msgidx)
 }
 
 int
-MessageUnit::allocSlot(EpFile::EpCache &eps, RecvEp &ep)
+MessageUnit::allocSlot(EpFile::EpCache &eps, RecvEp &ep, Cycles *delay)
 {
+    *delay = Cycles(0);
+
     int i;
     for (i = ep.r0.wpos; i < (1 << ep.r0.slots); ++i)
     {
+        *delay += Cycles(1);
         if (!ep.isOccupied(i))
             goto found;
     }
     for (i = 0; i < ep.r0.wpos; ++i)
     {
+        *delay += Cycles(1);
         if (!ep.isOccupied(i))
             goto found;
     }
@@ -818,7 +822,8 @@ MessageUnit::recvFromNocWithEP(EpFile::EpCache &eps, PacketPtr pkt)
         return;
     }
 
-    int msgidx = allocSlot(eps, rep);
+    Cycles allocDelay;
+    int msgidx = allocSlot(eps, rep, &allocDelay);
     if (msgidx == -1)
     {
         DPRINTFS(Tcu, (&tcu),
@@ -832,7 +837,7 @@ MessageUnit::recvFromNocWithEP(EpFile::EpCache &eps, PacketPtr pkt)
 
     // the message is transferred piece by piece; we can start as soon as
     // we have the header
-    Cycles delay = tcu.ticksToCycles(pkt->headerDelay);
+    Cycles delay = allocDelay + tcu.ticksToCycles(pkt->headerDelay);
     pkt->headerDelay = 0;
     delay += tcu.cmdRecvLatency;
 
