@@ -66,16 +66,15 @@ class Packet;
 class ExecContext;
 class ThreadContext;
 
-GEM5_DEPRECATED_NAMESPACE(Loader, loader);
 namespace loader
 {
 class SymbolTable;
 } // namespace loader
 
-namespace Trace
+namespace trace
 {
 class InstRecord;
-} // namespace Trace
+} // namespace trace
 
 /**
  * Base, ISA-independent static instruction class.
@@ -156,6 +155,7 @@ class StaticInst : public RefCounted, public StaticInstFlags
     bool isInteger()      const { return flags[IsInteger]; }
     bool isFloating()     const { return flags[IsFloating]; }
     bool isVector()       const { return flags[IsVector]; }
+    bool isMatrix()       const { return flags[IsMatrix]; }
 
     bool isControl()      const { return flags[IsControl]; }
     bool isCall()         const { return flags[IsCall]; }
@@ -283,17 +283,17 @@ class StaticInst : public RefCounted, public StaticInstFlags
     virtual ~StaticInst() {};
 
     virtual Fault execute(ExecContext *xc,
-            Trace::InstRecord *traceData) const = 0;
+            trace::InstRecord *traceData) const = 0;
 
     virtual Fault
-    initiateAcc(ExecContext *xc, Trace::InstRecord *traceData) const
+    initiateAcc(ExecContext *xc, trace::InstRecord *traceData) const
     {
         panic("initiateAcc not defined!");
     }
 
     virtual Fault
     completeAcc(Packet *pkt, ExecContext *xc,
-            Trace::InstRecord *trace_data) const
+            trace::InstRecord *trace_data) const
     {
         panic("completeAcc not defined!");
     }

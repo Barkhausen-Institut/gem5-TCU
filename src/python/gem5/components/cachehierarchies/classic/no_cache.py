@@ -70,6 +70,9 @@ class NoCache(AbstractClassicCacheHierarchy):
         membus = SystemXBar(width=64)
         membus.badaddr_responder = BadAddr()
         membus.default = membus.badaddr_responder.pio
+        # the max. routing table size needs to be set
+        # to a higher value for HBM2 stack
+        membus.max_routing_table_size = 2048
         return membus
 
     def __init__(
@@ -116,8 +119,8 @@ class NoCache(AbstractClassicCacheHierarchy):
         # Set up the system port for functional access from the simulator.
         board.connect_system_port(self.membus.cpu_side_ports)
 
-        for cntr in board.get_memory().get_memory_controllers():
-            cntr.port = self.membus.mem_side_ports
+        for _, port in board.get_memory().get_mem_ports():
+            self.membus.mem_side_ports = port
 
     def _setup_coherent_io_bridge(self, board: AbstractBoard) -> None:
         """Create a bridge from I/O back to membus"""

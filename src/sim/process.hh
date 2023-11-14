@@ -50,7 +50,6 @@
 namespace gem5
 {
 
-GEM5_DEPRECATED_NAMESPACE(Loader, loader);
 namespace loader
 {
 class ObjectFile;

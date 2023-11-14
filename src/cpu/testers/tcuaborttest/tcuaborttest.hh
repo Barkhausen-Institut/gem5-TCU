@@ -56,15 +56,15 @@ class TcuAbortTest : public ClockedObject
     /// main simulation loop
     void tick();
 
-    EventWrapper<TcuAbortTest, &TcuAbortTest::tick> tickEvent;
+    MemberEventWrapper<&TcuAbortTest::tick> tickEvent;
 
-    class CpuPort : public MasterPort
+    class CpuPort : public RequestPort
     {
       private:
         TcuAbortTest& tcutest;
       public:
         CpuPort(const std::string& _name, TcuAbortTest* _tcutest)
-            : MasterPort(_name, _tcutest), tcutest(*_tcutest)
+            : RequestPort(_name), tcutest(*_tcutest)
         { }
       protected:
         bool recvTimingResp(PacketPtr pkt) override;

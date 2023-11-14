@@ -75,13 +75,13 @@ TcuPciProxy::createPciConfigPacket(
 
 TcuPciProxy::TcuPciProxy(const TcuPciProxyParams &p)
     : ClockedObject(p),
-      tcuMasterPort(name() + ".tcu_master_port", this),
-      tcuSlavePort(name() + ".tcu_slave_port", this),
+      tcuRequestPort(name() + ".tcu_master_port", this),
+      tcuResponsePort(name() + ".tcu_slave_port", this),
       pioPort(name() + ".pio_port", this),
       dmaPort(name() + ".dma_port", this),
       tcu(p.tcu_regfile_base_addr, p.system->getRequestorId(this, name()), p.tile_id),
       deviceBusAddr(0, 0, 0),
-      tickEvent(this),
+      tickEvent(*this),
       cmdSM(tcu, this),
       cmdRunning(false),
       interruptPending(false),
@@ -94,11 +94,11 @@ Port&
 TcuPciProxy::getPort(const std::string& if_name, PortID idx)
 {
     if (if_name == "tcu_master_port")
-        return tcuMasterPort;
+        return tcuRequestPort;
     else if (if_name == "pio_port")
         return pioPort;
     else if (if_name == "tcu_slave_port")
-        return tcuSlavePort;
+        return tcuResponsePort;
     else if (if_name == "dma_port")
         return dmaPort;
     else
@@ -110,7 +110,7 @@ TcuPciProxy::init()
 {
     fatal_if(!findDevice(), "Failed to find a device to proxy.");
 
-    tcuSlavePort.sendRangeChange();
+    tcuResponsePort.sendRangeChange();
     dmaPort.sendRangeChange();
 }
 
@@ -162,7 +162,7 @@ TcuPciProxy::scheduleCommand(Cycles delay)
 void
 TcuPciProxy::sendMemoryReq(PacketPtr pkt, Cycles delay)
 {
-    tcuMasterPort.schedTimingReq(pkt, clockEdge(delay));
+    tcuRequestPort.schedTimingReq(pkt, clockEdge(delay));
 }
 
 void
@@ -224,7 +224,7 @@ TcuPciProxy::handleInterruptMessageContent(PacketPtr pkt)
 
     pkt->makeResponse();
     memset(pkt->getPtr<uint8_t>(), 0, pkt->getSize());
-    tcuSlavePort.schedTimingResp(pkt, clockEdge(Cycles(1)));
+    tcuResponsePort.schedTimingResp(pkt, clockEdge(Cycles(1)));
 }
 
 void
@@ -250,7 +250,7 @@ TcuPciProxy::completeAccessToDeviceMem(PacketPtr pkt)
         pkt->isWrite() ? "write" : "read", pkt->getAddr());
 
     // TCU always accepts responses
-    tcuSlavePort.schedTimingResp(pkt, clockEdge(Cycles(1)));
+    tcuResponsePort.schedTimingResp(pkt, clockEdge(Cycles(1)));
 }
 
 bool
@@ -309,7 +309,7 @@ TcuPciProxy::handleDmaContent(PacketPtr pkt)
         pkt->setData(pendingDmaReq->getPtr<uint8_t>());
         DDUMP(TcuPciProxyDma, pkt->getPtr<uint8_t>(), pkt->getSize());
 
-        tcuSlavePort.schedTimingResp(pkt, clockEdge(Cycles(1)));
+        tcuResponsePort.schedTimingResp(pkt, clockEdge(Cycles(1)));
 
         pendingDmaReq->makeResponse();
     } else {
@@ -329,13 +329,13 @@ TcuPciProxy::handleDmaContent(PacketPtr pkt)
 
         if (pkt->needsResponse()) {
             pkt->makeResponse();
-            tcuSlavePort.schedTimingResp(pkt, clockEdge(Cycles(1)));
+            tcuResponsePort.schedTimingResp(pkt, clockEdge(Cycles(1)));
         }
     }
 }
 
 bool
-TcuPciProxy::TcuMasterPort::recvTimingResp(PacketPtr pkt)
+TcuPciProxy::TcuRequestPort::recvTimingResp(PacketPtr pkt)
 {
     assert(pkt->isResponse());
 
@@ -344,7 +344,7 @@ TcuPciProxy::TcuMasterPort::recvTimingResp(PacketPtr pkt)
 }
 
 bool
-TcuPciProxy::TcuSlavePort::recvTimingReq(PacketPtr pkt)
+TcuPciProxy::TcuResponsePort::recvTimingReq(PacketPtr pkt)
 {
     if (pkt->getAddr() >= DMA_ADDR) {
         pciProxy.handleDmaContent(pkt);
@@ -360,13 +360,13 @@ TcuPciProxy::TcuSlavePort::recvTimingReq(PacketPtr pkt)
 }
 
 void
-TcuPciProxy::TcuSlavePort::recvFunctional(PacketPtr pkt)
+TcuPciProxy::TcuResponsePort::recvFunctional(PacketPtr pkt)
 {
     panic("not implemented");
 }
 
 Tick
-TcuPciProxy::TcuSlavePort::recvAtomic(PacketPtr pkt)
+TcuPciProxy::TcuResponsePort::recvAtomic(PacketPtr pkt)
 {
     panic("not implemented");
 
@@ -374,7 +374,7 @@ TcuPciProxy::TcuSlavePort::recvAtomic(PacketPtr pkt)
 }
 
 AddrRangeList
-TcuPciProxy::TcuSlavePort::getAddrRanges() const
+TcuPciProxy::TcuResponsePort::getAddrRanges() const
 {
     AddrRangeList ranges;
     // MEMCAP_END = 0xe0000000

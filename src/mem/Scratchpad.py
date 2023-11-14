@@ -37,8 +37,8 @@ class Scratchpad(AbstractMemory):
 
     range = 128 * 1024 # default size 128K
 
-    cpu_port = SlavePort("Slave port CPU side")
-    tcu_port = SlavePort("Slave port TCU side")
+    cpu_port = ResponsePort("Slave port CPU side")
+    tcu_port = ResponsePort("Slave port TCU side")
 
     offset = Param.Unsigned(0, "The offset that all accesses have to go above")
 

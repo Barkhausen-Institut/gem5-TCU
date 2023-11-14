@@ -76,9 +76,9 @@ def getGit(path: Path) -> Dict[str, str]:
     ]
     res = subprocess.run(command, stdout=subprocess.PIPE, cwd=path)
     if res.returncode != 0:
-        raise Exception("git repo doesn't exist for {}".format(path))
+        raise Exception(f"git repo doesn't exist for {path}")
     if res.stdout:
-        raise Exception("git repo dirty for {}".format(path))
+        raise Exception(f"git repo dirty for {path}")
 
     command = ["git", "remote", "get-url", "origin"]
     origin = subprocess.check_output(command, cwd=path)
@@ -158,7 +158,7 @@ class Artifact:
         documentation: str,
         inputs: List["Artifact"] = [],
         architecture: str = "",
-        size: int = None,
+        size: Optional[int] = None,
         is_zipped: bool = False,
         md5sum: str = "",
         url: str = "",
@@ -203,14 +203,14 @@ class Artifact:
             data["git"] = getGit(ppath)
             data["hash"] = data["git"]["hash"]
         else:
-            raise Exception("Path {} doesn't exist".format(ppath))
+            raise Exception(f"Path {ppath} doesn't exist")
 
         pcwd = Path(cwd)
         data["cwd"] = pcwd
         if not pcwd.exists():
-            raise Exception("cwd {} doesn't exist.".format(pcwd))
+            raise Exception(f"cwd {pcwd} doesn't exist.")
         if not pcwd.is_dir():
-            raise Exception("cwd {} is not a directory".format(pcwd))
+            raise Exception(f"cwd {pcwd} is not a directory")
 
         data["inputs"] = [i._id for i in inputs]
 

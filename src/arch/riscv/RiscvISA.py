@@ -38,9 +38,21 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+from m5.params import Enum
+from m5.params import Param
 from m5.objects.BaseISA import BaseISA
 
+
+class RiscvType(Enum):
+    vals = ["RV32", "RV64"]
+
+
 class RiscvISA(BaseISA):
-    type = 'RiscvISA'
-    cxx_class = 'gem5::RiscvISA::ISA'
+    type = "RiscvISA"
+    cxx_class = "gem5::RiscvISA::ISA"
     cxx_header = "arch/riscv/isa.hh"
+
+    check_alignment = Param.Bool(
+        False, "whether to check memory access alignment"
+    )
+    riscv_type = Param.RiscvType("RV64", "RV32 or RV64")

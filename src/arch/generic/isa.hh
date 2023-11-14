@@ -43,6 +43,7 @@
 #include <vector>
 
 #include "arch/generic/pcstate.hh"
+#include "base/logging.hh"
 #include "cpu/reg_class.hh"
 #include "mem/packet.hh"
 #include "mem/request.hh"
@@ -57,7 +58,7 @@ class ExecContext;
 class BaseISA : public SimObject
 {
   public:
-    typedef std::vector<RegClass> RegClasses;
+    typedef std::vector<const RegClass *> RegClasses;
 
   protected:
     using SimObject::SimObject;
@@ -68,12 +69,23 @@ class BaseISA : public SimObject
 
   public:
     virtual PCStateBase *newPCState(Addr new_inst_addr=0) const = 0;
+    virtual void clear() {}
+    virtual void clearLoadReservation(ContextID cid) {}
+
+    virtual RegVal readMiscRegNoEffect(RegIndex idx) const = 0;
+    virtual RegVal readMiscReg(RegIndex idx) = 0;
+
+    virtual void setMiscRegNoEffect(RegIndex idx, RegVal val) = 0;
+    virtual void setMiscReg(RegIndex idx, RegVal val) = 0;
+
     virtual void takeOverFrom(ThreadContext *new_tc, ThreadContext *old_tc) {}
     virtual void setThreadContext(ThreadContext *_tc) { tc = _tc; }
 
     virtual uint64_t getExecutingAsid() const { return 0; }
     virtual bool inUserMode() const = 0;
     virtual void copyRegsFrom(ThreadContext *src) = 0;
+
+    virtual void resetThread() { panic("Thread reset not implemented."); }
 
     const RegClasses &regClasses() const { return _regClasses; }
 

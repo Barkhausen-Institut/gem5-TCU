@@ -54,13 +54,11 @@ setup(
     keywords="simulation architecture gem5",
     packages=find_namespace_packages(include=["gem5art.*"]),
     install_requires=["celery"],
-    extras_require={
-        "flower": ["flower"],
-    },
+    extras_require={"flower": ["flower"]},
     python_requires=">=3.6",
     project_urls={
         "Bug Reports": "https://gem5.atlassian.net/",
-        "Source": "https://gem5.googlesource.com/",
+        "Source": "https://github.com/gem5/gem5/",
         "Documentation": "https://www.gem5.org/documentation/gem5art",
     },
 )

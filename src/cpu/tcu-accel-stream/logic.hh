@@ -45,13 +45,13 @@ class TcuAccelStream;
 
 class AccelLogic : public ClockedObject
 {
-    class CpuPort : public MasterPort
+    class CpuPort : public RequestPort
     {
       private:
         AccelLogic& logic;
       public:
         CpuPort(const std::string& _name, AccelLogic* _logic)
-            : MasterPort(_name, _logic), logic(*_logic)
+            : RequestPort(_name), logic(*_logic)
         { }
       protected:
         bool recvTimingResp(PacketPtr pkt) override;
@@ -92,7 +92,7 @@ class AccelLogic : public ClockedObject
     bool sendPkt(PacketPtr pkt);
     void recvRetry();
 
-    EventWrapper<AccelLogic, &AccelLogic::tick> tickEvent;
+    MemberEventWrapper<&AccelLogic::tick> tickEvent;
 
     CpuPort port;
     PacketPtr retryPkt;

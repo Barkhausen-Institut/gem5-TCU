@@ -45,7 +45,7 @@ namespace gem5
 
 class M3System : public System, public TileMemory
 {
-    class NoCMasterPort : public QueuedRequestPort
+    class NoCRequestPort : public QueuedRequestPort
     {
       protected:
 
@@ -55,7 +55,7 @@ class M3System : public System, public TileMemory
 
       public:
 
-        NoCMasterPort(M3System &_sys);
+        NoCRequestPort(M3System &_sys);
 
         bool recvTimingResp(PacketPtr) override
         {
@@ -64,7 +64,7 @@ class M3System : public System, public TileMemory
         }
     };
 
-    NoCMasterPort nocPort;
+    NoCRequestPort nocPort;
 
   public:
     typedef M3SystemParams Params;

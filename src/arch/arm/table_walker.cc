@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2012-2019, 2021 Arm Limited
+ * Copyright (c) 2010, 2012-2019, 2021-2022 Arm Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -62,7 +62,7 @@ using namespace ArmISA;
 TableWalker::TableWalker(const Params &p)
     : ClockedObject(p),
       requestorId(p.sys->getRequestorId(this)),
-      port(new Port(this, requestorId)),
+      port(new Port(*this, requestorId)),
       isStage2(p.is_stage2), tlb(NULL),
       currState(NULL), pending(false),
       numSquashable(p.num_squash_per_cycle),
@@ -138,10 +138,11 @@ TableWalker::WalkerState::WalkerState() :
 {
 }
 
-TableWalker::Port::Port(TableWalker *_walker, RequestorID id)
-  : QueuedRequestPort(_walker->name() + ".port", _walker,
-        reqQueue, snoopRespQueue),
-    reqQueue(*_walker, *this), snoopRespQueue(*_walker, *this),
+TableWalker::Port::Port(TableWalker& _walker, RequestorID id)
+  : QueuedRequestPort(_walker.name() + ".port", reqQueue, snoopRespQueue),
+    owner{_walker},
+    reqQueue(_walker, *this),
+    snoopRespQueue(_walker, *this),
     requestorId(id)
 {
 }
@@ -2296,7 +2297,10 @@ TableWalker::insertPartialTableEntry(LongDescriptor &descriptor)
     te.valid          = true;
     te.longDescFormat = true;
     te.partial        = true;
-    te.global         = false;
+    // The entry is global if there is no address space identifier
+    // to differentiate translation contexts
+    te.global         = !mmu->hasUnprivRegime(
+        currState->el, currState->hcr.e2h);
     te.isHyp          = currState->isHyp;
     te.asid           = currState->asid;
     te.vmid           = currState->vmid;

@@ -62,15 +62,15 @@ class TcuSerialInput : public ClockedObject, public CommandExecutor
     DataEvent *dataEvent;
 
   private:
-    class TcuMasterPort : public MasterPort
+    class TcuRequestPort : public RequestPort
     {
       private:
         TcuSerialInput& serialInput;
         ReqPacketQueue reqPacketQueue;
 
       public:
-        TcuMasterPort(const std::string& _name, TcuSerialInput* _serialInput)
-            : MasterPort(_name, _serialInput),
+        TcuRequestPort(const std::string& _name, TcuSerialInput* _serialInput)
+            : RequestPort(_name),
               serialInput(*_serialInput),
               reqPacketQueue(*_serialInput, *this)
         {
@@ -92,15 +92,15 @@ class TcuSerialInput : public ClockedObject, public CommandExecutor
         void recvReqRetry() override { reqPacketQueue.retry(); }
     };
 
-    class TcuSlavePort : public QueuedResponsePort
+    class TcuResponsePort : public QueuedResponsePort
     {
       private:
         TcuSerialInput& serialInput;
         RespPacketQueue respPacketQueue;
 
       public:
-        TcuSlavePort(const std::string& _name, TcuSerialInput* _serialInput)
-            : QueuedResponsePort(_name, _serialInput, respPacketQueue),
+        TcuResponsePort(const std::string& _name, TcuSerialInput* _serialInput)
+            : QueuedResponsePort(_name, respPacketQueue),
               serialInput(*_serialInput),
               respPacketQueue(*_serialInput, *this)
         {
@@ -120,9 +120,9 @@ class TcuSerialInput : public ClockedObject, public CommandExecutor
     void tick();
 
   protected:
-    TcuMasterPort tcuMasterPort;
-    TcuSlavePort tcuSlavePort;
-    EventWrapper<TcuSerialInput, &TcuSerialInput::tick> tickEvent;
+    TcuRequestPort tcuRequestPort;
+    TcuResponsePort tcuResponsePort;
+    MemberEventWrapper<&TcuSerialInput::tick> tickEvent;
     TcuIf tcu;
     CommandSM cmdSM;
     struct termios old;

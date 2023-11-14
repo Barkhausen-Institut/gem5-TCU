@@ -52,4 +52,4 @@ class M3System(System):
     tile_descs = VectorParam.Addr([], "All tile descriptions with their type and mem size")
     tile_ids = VectorParam.Addr([], "All tile ids")
 
-    noc_master_port = MasterPort("Port that connects to the global NoC (only for initialization)")
+    noc_master_port = RequestPort("Port that connects to the global NoC (only for initialization)")

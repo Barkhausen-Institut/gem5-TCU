@@ -43,14 +43,14 @@ MemWatchProbe::MemWatchProbe(const MemWatchProbeParams &p)
 }
 
 void
-MemWatchProbe::handleRequest(const ProbePoints::PacketInfo &pkt_info)
+MemWatchProbe::handleRequest(const probing::PacketInfo &pkt_info)
 {
     if (pkt_info.virt != -1)
         handleRange(pkt_info, pkt_info.virt, true);
     handleRange(pkt_info, pkt_info.addr, false);
 }
 
-void MemWatchProbe::handleRange(const ProbePoints::PacketInfo &pkt_info,
+void MemWatchProbe::handleRange(const probing::PacketInfo &pkt_info,
                                 Addr start, bool virt) const
 {
     AddrRange pkt_range(start, start + pkt_info.size - 1);
@@ -58,7 +58,7 @@ void MemWatchProbe::handleRange(const ProbePoints::PacketInfo &pkt_info,
     {
         if (range.intersects(pkt_range))
         {
-            Trace::getDebugLogger()->dprintf(curTick(), name(),
+            trace::getDebugLogger()->dprintf(curTick(), name(),
                 "%s access to %s memory %p..%p (watching %p..%p):\n",
                 pkt_info.cmd.isRead() ? "rd" : "wr",
                 virt ? "virtual" : "physical",
@@ -66,7 +66,7 @@ void MemWatchProbe::handleRange(const ProbePoints::PacketInfo &pkt_info,
                 range.start(), range.end());
             if (pkt_info.data)
             {
-                Trace::getDebugLogger()->dump(
+                trace::getDebugLogger()->dump(
                     curTick(), name(), pkt_info.data, pkt_info.size, "");
             }
         }

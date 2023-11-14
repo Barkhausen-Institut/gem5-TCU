@@ -74,7 +74,7 @@ EndBitUnion(CmdReg)
 KecAcc::KecAcc(const Params &p)
     : BasicPioDevice(p, sizeof(uint64_t)), port("port", *this),
       requestorId(p.system->getRequestorId(this)), delayedPkt(nullptr),
-      sendDelayedPktEvent(this), finishCmdEvent(this),
+      sendDelayedPktEvent(*this), finishCmdEvent(*this),
       cmd(0), xkcp(), buffer(new uint8_t[p.buf_size + alignof(uint64_t)]),
       start(0)
 {
@@ -325,7 +325,7 @@ KecAcc::finishCommand()
 }
 
 KecAcc::CPUPort::CPUPort(const std::string &name, KecAcc &acc)
-    : RequestPort(name, &acc), acc(acc), retryPkt(nullptr)
+    : RequestPort(name), acc(acc), retryPkt(nullptr)
 {
 }
 

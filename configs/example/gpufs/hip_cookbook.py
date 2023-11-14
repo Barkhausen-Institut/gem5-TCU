@@ -39,10 +39,10 @@ from common import Options
 from common import GPUTLBOptions
 from ruby import Ruby
 
-cookbook_runscript = '''\
+cookbook_runscript = """\
 export LD_LIBRARY_PATH=/opt/rocm/lib:$LD_LIBRARY_PATH
-export HSA_ENABLE_SDMA=0
-dmesg -n3
+export HSA_ENABLE_INTERRUPT=0
+dmesg -n8
 dd if=/root/roms/vega10.rom of=/dev/mem bs=1k seek=768 count=128
 if [ ! -f /lib/modules/`uname -r`/updates/dkms/amdgpu.ko ]; then
     echo "ERROR: Missing DKMS package for kernel `uname -r`. Exiting gem5."
@@ -54,27 +54,36 @@ cd /opt/rocm/hip/samples/2_Cookbook/{}/
 make clean
 make
 /sbin/m5 exit
-'''
+"""
+
 
 def addCookbookOptions(parser):
-    parser.add_argument("-a", "--app", default=None,
-                        choices=['0_MatrixTranspose',
-                                 '1_hipEvent',
-                                 '3_shared_memory',
-                                 '4_shfl',
-                                 '5_2dshfl',
-                                 '6_dynamic_shared',
-                                 '7_streams',
-                                 '8_peer2peer',
-                                 '9_unroll',
-                                 '10_inline_asm',
-                                 '11_texture_driver',
-                                 '13_occupancy',
-                                 '14_gpu_arch',
-                                 '15_static_library'],
-                        help="GPU application to run")
-    parser.add_argument("-o", "--opts", default="",
-                        help="GPU application arguments")
+    parser.add_argument(
+        "-a",
+        "--app",
+        default=None,
+        choices=[
+            "0_MatrixTranspose",
+            "1_hipEvent",
+            "3_shared_memory",
+            "4_shfl",
+            "5_2dshfl",
+            "6_dynamic_shared",
+            "7_streams",
+            "8_peer2peer",
+            "9_unroll",
+            "10_inline_asm",
+            "11_texture_driver",
+            "13_occupancy",
+            "14_gpu_arch",
+            "15_static_library",
+        ],
+        help="GPU application to run",
+    )
+    parser.add_argument(
+        "-o", "--opts", default="", help="GPU application arguments"
+    )
+
 
 if __name__ == "__m5_main__":
     parser = argparse.ArgumentParser()
@@ -90,21 +99,20 @@ if __name__ == "__m5_main__":
 
     # Create temp script to run application
     if args.app is None:
-        print("No application given. Use %s -a <app>" % sys.argv[0])
+        print(f"No application given. Use {sys.argv[0]} -a <app>")
         sys.exit(1)
     elif args.kernel is None:
-        print("No kernel path given. Use %s --kernel <vmlinux>" % sys.argv[0])
+        print(f"No kernel path given. Use {sys.argv[0]} --kernel <vmlinux>")
         sys.exit(1)
     elif args.disk_image is None:
-        print("No disk path given. Use %s --disk-image <linux>" % sys.argv[0])
+        print(f"No disk path given. Use {sys.argv[0]} --disk-image <linux>")
         sys.exit(1)
     elif args.gpu_mmio_trace is None:
-        print("No MMIO trace path. Use %s --gpu-mmio-trace <path>"
-                % sys.argv[0])
+        print(f"No MMIO trace path. Use {sys.argv[0]} --gpu-mmio-trace <path>")
         sys.exit(1)
 
     _, tempRunscript = tempfile.mkstemp()
-    with open(tempRunscript, 'w') as b64file:
+    with open(tempRunscript, "w") as b64file:
         runscriptStr = cookbook_runscript.format(args.app, args.app)
         b64file.write(runscriptStr)
 
@@ -113,12 +121,12 @@ if __name__ == "__m5_main__":
 
     # Defaults for Vega10
     args.ruby = True
-    args.cpu_type = 'X86KvmCPU'
+    args.cpu_type = "X86KvmCPU"
     args.num_cpus = 1
-    args.mem_size = '3GB'
+    args.mem_size = "3GB"
     args.dgpu = True
-    args.dgpu_mem_size = '16GB'
-    args.dgpu_start = '0GB'
+    args.dgpu_mem_size = "16GB"
+    args.dgpu_start = "0GB"
     args.checkpoint_restore = 0
     args.disjoint = True
     args.timing_gpu = True

@@ -46,31 +46,25 @@ def test_kvm_fork_run(cpu: str, num_cpus: int, mem_system: str, length: str):
         # Don't run the tests if KVM is unavailable.
         return
 
-    name = "{}-cpu_{}-cores_{}_kvm-fork-run-test".format(
-        cpu, str(num_cpus), mem_system
-    )
+    name = f"{cpu}-cpu_{str(num_cpus)}-cores_{mem_system}_kvm-fork-run-test"
     verifiers = []
 
     if mem_system == "mesi_two_level":
         protocol_to_use = None
-        isa_to_use = constants.x86_tag
+        isa_to_use = constants.all_compiled_tag
     elif mem_system == "mi_example":
         protocol_to_use = "MI_example"
         isa_to_use = constants.x86_tag
     else:
         protocol_to_use = None
-        isa_to_use = constants.vega_x86_tag
+        isa_to_use = constants.all_compiled_tag
 
     gem5_verify_config(
         name=name,
         verifiers=verifiers,
         fixtures=(),
         config=joinpath(
-            config.base_dir,
-            "tests",
-            "gem5",
-            "configs",
-            "boot_kvm_fork_run.py",
+            config.base_dir, "tests", "gem5", "configs", "boot_kvm_fork_run.py"
         ),
         config_args=[
             "--cpu",

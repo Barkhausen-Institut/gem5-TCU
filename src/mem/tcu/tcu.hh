@@ -237,8 +237,8 @@ class Tcu : public BaseTcu
     void handleNocRequest(PacketPtr pkt) override;
 
     bool handleCUMemRequest(PacketPtr pkt,
-                            TcuSlavePort &sport,
-                            TcuMasterPort &mport,
+                            TcuResponsePort &sport,
+                            TcuRequestPort &mport,
                             bool icache,
                             bool functional) override;
 
@@ -264,7 +264,7 @@ class Tcu : public BaseTcu
 
     TcuCommands cmds;
 
-    EventWrapper<CURequests, &CURequests::completeReqs> completeCUReqEvent;
+    MemberEventWrapper<&CURequests::completeReqs> completeCUReqEvent;
 
     bool coreDrained;
 

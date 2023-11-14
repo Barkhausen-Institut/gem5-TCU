@@ -36,5 +36,5 @@ class AccelLogic(ClockedObject):
     cxx_header = "cpu/tcu-accel-stream/logic.hh"
     cxx_class = 'gem5::tcu::AccelLogic'
 
-    port = MasterPort("Port to the TCU and Scratch-Pad-Memory")
+    port = RequestPort("Port to the TCU and Scratch-Pad-Memory")
     algorithm = Param.Int(0, "The algorithm to use (0 = copy, 1 = rot13)")

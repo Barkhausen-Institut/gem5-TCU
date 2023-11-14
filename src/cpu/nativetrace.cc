@@ -36,26 +36,21 @@
 namespace gem5
 {
 
-namespace Trace {
+namespace trace {
 
 NativeTrace::NativeTrace(const Params &p)
-    : ExeTracer(p)
+    : ExeTracer(p), native_listener(listenSocketInetConfig(8000).build(p.name))
 {
     if (ListenSocket::allDisabled())
         fatal("All listeners are disabled!");
 
-    int port = 8000;
-    while (!native_listener.listen(port, true))
-    {
-        DPRINTF(GDBMisc, "Can't bind port %d\n", port);
-        port++;
-    }
-    ccprintf(std::cerr, "Listening for native process on port %d\n", port);
-    fd = native_listener.accept();
+    native_listener->listen();
+
+    fd = native_listener->accept();
 }
 
 void
-Trace::NativeTraceRecord::dump()
+NativeTraceRecord::dump()
 {
     //Don't print what happens for each micro-op, just print out
     //once at the last op, and for regular instructions.
@@ -63,5 +58,5 @@ Trace::NativeTraceRecord::dump()
         parent->check(this);
 }
 
-} // namespace Trace
+} // namespace trace
 } // namespace gem5

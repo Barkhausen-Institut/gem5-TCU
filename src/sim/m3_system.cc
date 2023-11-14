@@ -35,8 +35,8 @@
 namespace gem5
 {
 
-M3System::NoCMasterPort::NoCMasterPort(M3System &_sys)
-  : QueuedRequestPort("noc_master_port", &_sys, reqQueue, snoopRespQueue),
+M3System::NoCRequestPort::NoCRequestPort(M3System &_sys)
+  : QueuedRequestPort("noc_master_port", reqQueue, snoopRespQueue),
     reqQueue(_sys, *this),
     snoopRespQueue(_sys, *this)
 {}

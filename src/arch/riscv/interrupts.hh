@@ -125,9 +125,9 @@ class Interrupts : public BaseInterrupts
             return std::make_shared<NonMaskableInterruptFault>();
         std::bitset<NumInterruptTypes> mask = globalMask();
         const std::vector<int> interrupt_order {
-            INT_EXT_MACHINE, INT_TIMER_MACHINE, INT_SOFTWARE_MACHINE,
-            INT_EXT_SUPER, INT_TIMER_SUPER, INT_SOFTWARE_SUPER,
-            INT_EXT_USER, INT_TIMER_USER, INT_SOFTWARE_USER
+            INT_EXT_MACHINE, INT_SOFTWARE_MACHINE, INT_TIMER_MACHINE,
+            INT_EXT_SUPER, INT_SOFTWARE_SUPER, INT_TIMER_SUPER,
+            INT_EXT_USER, INT_SOFTWARE_USER, INT_TIMER_USER
         };
         for (const int &id : interrupt_order)
             if (checkInterrupt(id) && mask[id])
@@ -141,14 +141,22 @@ class Interrupts : public BaseInterrupts
     post(int int_num, int index)
     {
         DPRINTF(Interrupt, "Interrupt %d:%d posted\n", int_num, index);
-        ip[int_num] = true;
+        if (int_num != INT_NMI) {
+            ip[int_num] = true;
+        } else {
+            postNMI();
+        }
     }
 
     void
     clear(int int_num, int index)
     {
         DPRINTF(Interrupt, "Interrupt %d:%d cleared\n", int_num, index);
-        ip[int_num] = false;
+        if (int_num != INT_NMI) {
+            ip[int_num] = false;
+        } else {
+            clearNMI();
+        }
     }
 
     void postNMI() { tc->setMiscReg(MISCREG_NMIP, 1); }

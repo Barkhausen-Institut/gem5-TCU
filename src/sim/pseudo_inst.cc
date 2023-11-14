@@ -77,7 +77,6 @@ namespace gem5
 
 using namespace statistics;
 
-GEM5_DEPRECATED_NAMESPACE(PseudoInst, pseudo_inst);
 namespace pseudo_inst
 {
 
@@ -263,8 +262,11 @@ addsymbol(ThreadContext *tc, Addr addr, Addr symbolAddr)
             addr, symbolAddr);
 
     std::string symbol;
-    (FullSystem ? TranslatingPortProxy(tc) : SETranslatingPortProxy(tc)).
-        readString(symbol, symbolAddr);
+    TranslatingPortProxy fs_proxy(tc);
+    SETranslatingPortProxy se_proxy(tc);
+    PortProxy &virt_proxy = FullSystem ? fs_proxy : se_proxy;
+
+    virt_proxy.readString(symbol, symbolAddr);
 
     DPRINTF(Loader, "Loaded symbol: %s @ %#llx\n", symbol, addr);
 
@@ -399,8 +401,11 @@ readfile(ThreadContext *tc, Addr vaddr, uint64_t len, uint64_t offset)
     }
 
     close(fd);
-    (FullSystem ? TranslatingPortProxy(tc) : SETranslatingPortProxy(tc)).
-        writeBlob(vaddr, buf, result);
+    TranslatingPortProxy fs_proxy(tc);
+    SETranslatingPortProxy se_proxy(tc);
+    PortProxy &virt_proxy = FullSystem ? fs_proxy : se_proxy;
+
+    virt_proxy.writeBlob(vaddr, buf, result);
     delete [] buf;
     return result;
 }
@@ -414,8 +419,11 @@ writefile(ThreadContext *tc, Addr vaddr, uint64_t len, uint64_t offset,
 
     // copy out target filename
     std::string filename;
-    (FullSystem ? TranslatingPortProxy(tc) : SETranslatingPortProxy(tc)).
-        readString(filename, filename_addr);
+    TranslatingPortProxy fs_proxy(tc);
+    SETranslatingPortProxy se_proxy(tc);
+    PortProxy &virt_proxy = FullSystem ? fs_proxy : se_proxy;
+
+    virt_proxy.readString(filename, filename_addr);
 
     OutputStream *out;
     if (offset == 0) {
@@ -440,8 +448,8 @@ writefile(ThreadContext *tc, Addr vaddr, uint64_t len, uint64_t offset,
 
     // copy out data and write to file
     char *buf = new char[len];
-    (FullSystem ? TranslatingPortProxy(tc) : SETranslatingPortProxy(tc)).
-        readBlob(vaddr, buf, len);
+
+    virt_proxy.readBlob(vaddr, buf, len);
     os->write(buf, len);
     if (os->fail() || os->bad())
         panic("Error while doing writefile!\n");

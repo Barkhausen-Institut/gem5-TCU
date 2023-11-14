@@ -29,8 +29,8 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
-#include "debug/TcuSlavePort.hh"
-#include "debug/TcuMasterPort.hh"
+#include "debug/TcuResponsePort.hh"
+#include "debug/TcuRequestPort.hh"
 #include "debug/Tcu.hh"
 #include "base/trace.hh"
 #include "mem/tcu/base.hh"
@@ -42,15 +42,15 @@ namespace gem5
 namespace tcu
 {
 
-BaseTcu::TcuMasterPort::TcuMasterPort(const std::string& _name, BaseTcu& _tcu)
-  : QueuedRequestPort(_name, &_tcu, reqQueue, snoopRespQueue),
+BaseTcu::TcuRequestPort::TcuRequestPort(const std::string& _name, BaseTcu& _tcu)
+  : QueuedRequestPort(_name, reqQueue, snoopRespQueue),
     tcu(_tcu),
     reqQueue(_tcu, *this),
     snoopRespQueue(_tcu, *this)
 { }
 
 bool
-BaseTcu::TcuMasterPort::recvTimingResp(PacketPtr pkt)
+BaseTcu::TcuRequestPort::recvTimingResp(PacketPtr pkt)
 {
     // If we receive a response we should always expect it
     completeRequest(pkt);
@@ -59,9 +59,9 @@ BaseTcu::TcuMasterPort::recvTimingResp(PacketPtr pkt)
 }
 
 void
-BaseTcu::NocMasterPort::completeRequest(PacketPtr pkt)
+BaseTcu::NocRequestPort::completeRequest(PacketPtr pkt)
 {
-    DPRINTF(TcuMasterPort,
+    DPRINTF(TcuRequestPort,
             "Received %s at %#x (%u bytes)\n",
             pkt->cmd.toString(),
             pkt->getAddr(),
@@ -71,29 +71,29 @@ BaseTcu::NocMasterPort::completeRequest(PacketPtr pkt)
 }
 
 bool
-BaseTcu::ICacheMasterPort::recvTimingResp(PacketPtr pkt)
+BaseTcu::ICacheRequestPort::recvTimingResp(PacketPtr pkt)
 {
-    DPRINTF(TcuSlavePort, "Sending timing response at %#x [senderState=%#x]\n",
+    DPRINTF(TcuResponsePort, "Sending timing response at %#x [senderState=%#x]\n",
                           pkt->getAddr(),
                           pkt->senderState);
 
     // the TCU does never send requests to the icache. so just pass it back to
     // the CPU
-    tcu.icacheSlavePort.schedTimingResp(pkt, tcu.clockEdge(Cycles(1)));
+    tcu.icacheResponsePort.schedTimingResp(pkt, tcu.clockEdge(Cycles(1)));
     return true;
 }
 
 bool
-BaseTcu::DCacheMasterPort::recvTimingResp(PacketPtr pkt)
+BaseTcu::DCacheRequestPort::recvTimingResp(PacketPtr pkt)
 {
     // if there is a context-id and thread-id, the request came from the CPU
     if (pkt->req->hasContextId())
     {
-        DPRINTF(TcuSlavePort, "Sending timing response at %#x [senderState=%#x]\n",
+        DPRINTF(TcuResponsePort, "Sending timing response at %#x [senderState=%#x]\n",
                               pkt->getAddr(),
                               pkt->senderState);
 
-        tcu.dcacheSlavePort.schedTimingResp(pkt, tcu.clockEdge(Cycles(1)));
+        tcu.dcacheResponsePort.schedTimingResp(pkt, tcu.clockEdge(Cycles(1)));
         return true;
     }
 
@@ -102,8 +102,8 @@ BaseTcu::DCacheMasterPort::recvTimingResp(PacketPtr pkt)
     return true;
 }
 
-BaseTcu::TcuSlavePort::TcuSlavePort(const std::string& _name, BaseTcu& _tcu)
-  : SlavePort(_name, &_tcu),
+BaseTcu::TcuResponsePort::TcuResponsePort(const std::string& _name, BaseTcu& _tcu)
+  : ResponsePort(_name),
     tcu(_tcu),
     busy(false),
     sendReqRetry(false),
@@ -111,16 +111,16 @@ BaseTcu::TcuSlavePort::TcuSlavePort(const std::string& _name, BaseTcu& _tcu)
 { }
 
 void
-BaseTcu::TcuSlavePort::requestFinished()
+BaseTcu::TcuResponsePort::requestFinished()
 {
     assert(busy);
     busy = false;
 
-    DPRINTF(TcuSlavePort, "Timing request finished\n");
+    DPRINTF(TcuResponsePort, "Timing request finished\n");
 
     if (sendReqRetry)
     {
-        DPRINTF(TcuSlavePort, "Send request retry\n");
+        DPRINTF(TcuResponsePort, "Send request retry\n");
 
         sendReqRetry = false;
         sendRetryReq();
@@ -128,9 +128,9 @@ BaseTcu::TcuSlavePort::requestFinished()
 }
 
 void
-BaseTcu::TcuSlavePort::schedTimingResp(PacketPtr pkt, Tick when)
+BaseTcu::TcuResponsePort::schedTimingResp(PacketPtr pkt, Tick when)
 {
-    DPRINTF(TcuSlavePort, "Schedule timing response %#x at Tick %u\n",
+    DPRINTF(TcuResponsePort, "Schedule timing response %#x at Tick %u\n",
                           pkt->getAddr(),
                           when);
 
@@ -141,16 +141,16 @@ BaseTcu::TcuSlavePort::schedTimingResp(PacketPtr pkt, Tick when)
 }
 
 Tick
-BaseTcu::TcuSlavePort::recvAtomic(PacketPtr pkt)
+BaseTcu::TcuResponsePort::recvAtomic(PacketPtr pkt)
 {
     panic("Atomic mode is not supported by the TCU!");
     return 0;
 }
 
 void
-BaseTcu::TcuSlavePort::recvFunctional(PacketPtr pkt)
+BaseTcu::TcuResponsePort::recvFunctional(PacketPtr pkt)
 {
-    DPRINTF(TcuSlavePort, "Receive functional %s request at %#x (%u bytes)\n",
+    DPRINTF(TcuResponsePort, "Receive functional %s request at %#x (%u bytes)\n",
                           pkt->cmd.toString(),
                           pkt->getAddr(),
                           pkt->getSize());
@@ -162,11 +162,11 @@ BaseTcu::TcuSlavePort::recvFunctional(PacketPtr pkt)
 }
 
 bool
-BaseTcu::TcuSlavePort::recvTimingReq(PacketPtr pkt)
+BaseTcu::TcuResponsePort::recvTimingReq(PacketPtr pkt)
 {
     if (busy)
     {
-        DPRINTF(TcuSlavePort, "Reject timing %s request at %#x (%u bytes)\n",
+        DPRINTF(TcuResponsePort, "Reject timing %s request at %#x (%u bytes)\n",
                           pkt->cmd.toString(),
                           pkt->getAddr(),
                           pkt->getSize());
@@ -175,7 +175,7 @@ BaseTcu::TcuSlavePort::recvTimingReq(PacketPtr pkt)
         return false;
     }
 
-    DPRINTF(TcuSlavePort, "Receive timing %s request at %#x (%u bytes)\n",
+    DPRINTF(TcuResponsePort, "Receive timing %s request at %#x (%u bytes)\n",
                           pkt->cmd.toString(),
                           pkt->getAddr(),
                           pkt->getSize());
@@ -186,7 +186,7 @@ BaseTcu::TcuSlavePort::recvTimingReq(PacketPtr pkt)
 }
 
 void
-BaseTcu::TcuSlavePort::recvRespRetry()
+BaseTcu::TcuResponsePort::recvRespRetry()
 {
     // try to send all queued responses. the first one should always succeed
     // because the XBar called us because it is free. the second should always
@@ -195,15 +195,15 @@ BaseTcu::TcuSlavePort::recvRespRetry()
     {
         ResponseEvent *ev = pendingResponses.front();
 
-        DPRINTF(TcuSlavePort, "Receive response retry at %#x\n",
+        DPRINTF(TcuResponsePort, "Receive response retry at %#x\n",
                               ev->pkt->getAddr());
 
         if (sendTimingResp(ev->pkt))
         {
-            DPRINTF(TcuSlavePort, "Resume after successful retry at %#x\n",
+            DPRINTF(TcuResponsePort, "Resume after successful retry at %#x\n",
                                   ev->pkt->getAddr());
 
-            DPRINTF(TcuSlavePort, "Poping %p from queue\n", ev);
+            DPRINTF(TcuResponsePort, "Poping %p from queue\n", ev);
             pendingResponses.pop();
             delete ev;
         }
@@ -213,7 +213,7 @@ BaseTcu::TcuSlavePort::recvRespRetry()
 }
 
 void
-BaseTcu::TcuSlavePort::ResponseEvent::process()
+BaseTcu::TcuResponsePort::ResponseEvent::process()
 {
     // if the XBar is busy, we can only send a response to a port once. this
     // is queued there and calls our recvRespRetry() if the XBar is idle again.
@@ -221,14 +221,14 @@ BaseTcu::TcuSlavePort::ResponseEvent::process()
     // but directly queue it here
     if (port.pendingResponses.empty())
     {
-        DPRINTF(TcuSlavePort, "Try to send %s response at %#x (%u bytes)\n",
+        DPRINTF(TcuResponsePort, "Try to send %s response at %#x (%u bytes)\n",
                               pkt->cmd.toString(),
                               pkt->getAddr(),
                               pkt->getSize());
 
         if (!port.sendTimingResp(pkt))
         {
-            DPRINTFS(TcuSlavePort, (&port), "Pushing %p to queue\n", this);
+            DPRINTFS(TcuResponsePort, (&port), "Pushing %p to queue\n", this);
             port.pendingResponses.push(this);
         }
         // if it succeeded, let the event system delete the event
@@ -237,20 +237,20 @@ BaseTcu::TcuSlavePort::ResponseEvent::process()
     }
     else
     {
-        DPRINTFS(TcuSlavePort, (&port), "Pushing %p to queue\n", this);
+        DPRINTFS(TcuResponsePort, (&port), "Pushing %p to queue\n", this);
         port.pendingResponses.push(this);
     }
 }
 
 AddrRangeList
-BaseTcu::NocSlavePort::getAddrRanges() const
+BaseTcu::NocResponsePort::getAddrRanges() const
 {
     AddrRangeList ranges;
 
     Addr baseNocAddr = NocAddr(tcu.tileId, 0).getAddr();
     Addr topNocAddr  = NocAddr(TileId::from_raw(tcu.tileId.raw() + 1), 0).getAddr() - 1;
 
-    DPRINTF(TcuSlavePort, "Covering %#x to %#x\n", baseNocAddr, topNocAddr);
+    DPRINTF(TcuResponsePort, "Covering %#x to %#x\n", baseNocAddr, topNocAddr);
 
     auto range = AddrRange(baseNocAddr, topNocAddr);
 
@@ -260,7 +260,7 @@ BaseTcu::NocSlavePort::getAddrRanges() const
 }
 
 bool
-BaseTcu::NocSlavePort::handleRequest(PacketPtr pkt,
+BaseTcu::NocResponsePort::handleRequest(PacketPtr pkt,
                                      bool *busy,
                                      bool functional)
 {
@@ -272,7 +272,7 @@ BaseTcu::NocSlavePort::handleRequest(PacketPtr pkt,
 }
 
 AddrRangeList
-BaseTcu::LLCSlavePort::getAddrRanges() const
+BaseTcu::LLCResponsePort::getAddrRanges() const
 {
     AddrRangeList ranges;
     ranges.push_back(AddrRange(0, -1));
@@ -280,7 +280,7 @@ BaseTcu::LLCSlavePort::getAddrRanges() const
 }
 
 bool
-BaseTcu::LLCSlavePort::handleRequest(PacketPtr pkt,
+BaseTcu::LLCResponsePort::handleRequest(PacketPtr pkt,
                                           bool *busy,
                                           bool functional)
 {
@@ -297,13 +297,13 @@ BaseTcu::BaseTcu(const BaseTcuParams &p)
   : ClockedObject(p),
     system(p.system),
     requestorId(p.system->getRequestorId(this, name())),
-    nocMasterPort(*this),
-    nocSlavePort(*this),
-    icacheMasterPort(*this),
-    dcacheMasterPort(*this),
-    icacheSlavePort(icacheMasterPort, *this, true),
-    dcacheSlavePort(dcacheMasterPort, *this, false),
-    llcSlavePort(*this),
+    nocRequestPort(*this),
+    nocResponsePort(*this),
+    icacheRequestPort(*this),
+    dcacheRequestPort(*this),
+    icacheResponsePort(icacheRequestPort, *this, true),
+    dcacheResponsePort(dcacheRequestPort, *this, false),
+    llcResponsePort(*this),
     nocReqFinishedEvent(*this),
     caches(p.caches),
     tileId(TileId::from_raw(p.tile_id)),
@@ -317,39 +317,39 @@ BaseTcu::init()
 {
     ClockedObject::init();
 
-    assert(nocMasterPort.isConnected());
-    assert(nocSlavePort.isConnected());
+    assert(nocRequestPort.isConnected());
+    assert(nocResponsePort.isConnected());
 
-    nocSlavePort.sendRangeChange();
+    nocResponsePort.sendRangeChange();
 
     // for memory tiles, the icache/dcache slaves are not connected
-    if (icacheSlavePort.isConnected())
-        icacheSlavePort.sendRangeChange();
-    if (dcacheSlavePort.isConnected())
-        dcacheSlavePort.sendRangeChange();
+    if (icacheResponsePort.isConnected())
+        icacheResponsePort.sendRangeChange();
+    if (dcacheResponsePort.isConnected())
+        dcacheResponsePort.sendRangeChange();
 
     // the cache-mem slave port is only used if we have a cache
-    if (llcSlavePort.isConnected())
-        llcSlavePort.sendRangeChange();
+    if (llcResponsePort.isConnected())
+        llcResponsePort.sendRangeChange();
 }
 
 Port&
 BaseTcu::getPort(const std::string &if_name, PortID idx)
 {
     if (if_name == "icache_master_port")
-        return icacheMasterPort;
+        return icacheRequestPort;
     else if (if_name == "dcache_master_port")
-        return dcacheMasterPort;
+        return dcacheRequestPort;
     else if (if_name == "noc_master_port")
-        return nocMasterPort;
+        return nocRequestPort;
     else if (if_name == "icache_slave_port")
-        return icacheSlavePort;
+        return icacheResponsePort;
     else if (if_name == "dcache_slave_port")
-        return dcacheSlavePort;
+        return dcacheResponsePort;
     else if (if_name == "noc_slave_port")
-        return nocSlavePort;
+        return nocResponsePort;
     else if (if_name == "llc_slave_port")
-        return llcSlavePort;
+        return llcResponsePort;
     else
         return SimObject::getPort(if_name, idx);
 }
@@ -384,7 +384,7 @@ void
 BaseTcu::schedNocRequest(PacketPtr pkt, Tick when)
 {
     printNocRequest(pkt, "timing");
-    nocMasterPort.schedTimingReq(pkt, when);
+    nocRequestPort.schedTimingReq(pkt, when);
 }
 
 void
@@ -394,14 +394,14 @@ BaseTcu::schedMemRequest(PacketPtr pkt, Tick when)
     // a different tile)
     pkt->req->setRequestorId(requestorId);
 
-    dcacheMasterPort.schedTimingReq(pkt, when);
+    dcacheRequestPort.schedTimingReq(pkt, when);
 }
 
 void
 BaseTcu::sendFunctionalNocRequest(PacketPtr pkt)
 {
     printNocRequest(pkt, "functional");
-    nocMasterPort.sendFunctional(pkt);
+    nocRequestPort.sendFunctional(pkt);
 }
 
 void
@@ -410,7 +410,7 @@ BaseTcu::sendFunctionalMemRequest(PacketPtr pkt)
     // set our master id (it might be from a different tile)
     pkt->req->setRequestorId(requestorId);
 
-    dcacheMasterPort.sendFunctional(pkt);
+    dcacheRequestPort.sendFunctional(pkt);
 }
 
 // -- responses --
@@ -420,7 +420,7 @@ BaseTcu::schedNocResponse(PacketPtr pkt, Tick when)
 {
     assert(pkt->isResponse());
 
-    nocSlavePort.schedTimingResp(pkt, when);
+    nocResponsePort.schedTimingResp(pkt, when);
 }
 
 void
@@ -428,21 +428,21 @@ BaseTcu::schedCpuResponse(PacketPtr pkt, Tick when)
 {
     assert(pkt->isResponse());
 
-    dcacheSlavePort.schedTimingResp(pkt, when);
+    dcacheResponsePort.schedTimingResp(pkt, when);
 }
 
 void
 BaseTcu::schedLLCResponse(PacketPtr pkt, bool success)
 {
-    DPRINTF(TcuSlavePort, "Send %s response at %#x (%u bytes)\n",
+    DPRINTF(TcuResponsePort, "Send %s response at %#x (%u bytes)\n",
             pkt->cmd.toString(),
             pkt->getAddr(),
             pkt->getSize());
 
     if (!success)
-        schedDummyResponse(llcSlavePort, pkt, false);
+        schedDummyResponse(llcResponsePort, pkt, false);
     else
-        llcSlavePort.schedTimingResp(pkt, clockEdge(Cycles(1)));
+        llcResponsePort.schedTimingResp(pkt, clockEdge(Cycles(1)));
 }
 
 // -- misc --
@@ -466,11 +466,11 @@ BaseTcu::schedNocRequestFinished(Tick when)
 void
 BaseTcu::nocRequestFinished()
 {
-    nocSlavePort.requestFinished();
+    nocResponsePort.requestFinished();
 }
 
 void
-BaseTcu::schedDummyResponse(TcuSlavePort &port, PacketPtr pkt, bool functional)
+BaseTcu::schedDummyResponse(TcuResponsePort &port, PacketPtr pkt, bool functional)
 {
     // invalid reads just get zeros
     if (pkt->isRead())
@@ -483,7 +483,7 @@ BaseTcu::schedDummyResponse(TcuSlavePort &port, PacketPtr pkt, bool functional)
 
         if (!functional)
         {
-            DPRINTF(TcuSlavePort, "Sending dummy %s response at %#x (%u bytes) [senderState=%#x]\n",
+            DPRINTF(TcuResponsePort, "Sending dummy %s response at %#x (%u bytes) [senderState=%#x]\n",
                                   pkt->cmd.toString(),
                                   pkt->getAddr(),
                                   pkt->getSize(),
@@ -498,8 +498,8 @@ BaseTcu::schedDummyResponse(TcuSlavePort &port, PacketPtr pkt, bool functional)
 void
 BaseTcu::printNocRequest(PacketPtr pkt, const char *type)
 {
-    DPRINTFS(TcuMasterPort,
-             (&nocMasterPort),
+    DPRINTFS(TcuRequestPort,
+             (&nocRequestPort),
              "Sending %s %s at %#x (%u bytes)\n",
              type,
              pkt->cmd.toString(),

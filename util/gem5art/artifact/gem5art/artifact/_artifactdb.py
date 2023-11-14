@@ -209,7 +209,7 @@ class ArtifactMongoDB(ArtifactDB):
         some type and a regex name."""
 
         data = self.artifacts.find(
-            {"type": typ, "name": {"$regex": "{}".format(name)}}, limit=limit
+            {"type": typ, "name": {"$regex": f"{name}"}}, limit=limit
         )
         for d in data:
             yield d
@@ -388,7 +388,7 @@ class ArtifactFileDB(ArtifactDB):
         if count >= limit:
             return
         for artifact in self._uuid_artifact_map.values():
-            #https://docs.python.org/3/library/stdtypes.html#frozenset.issubset
+            # https://docs.python.org/3/library/stdtypes.html#frozenset.issubset
             if attr.items() <= artifact.items():
                 yield artifact
 

@@ -472,8 +472,8 @@ Tcu::completeMemRequest(PacketPtr pkt)
 
 bool
 Tcu::handleCUMemRequest(PacketPtr pkt,
-                        TcuSlavePort &sport,
-                        TcuMasterPort &mport,
+                        TcuResponsePort &sport,
+                        TcuRequestPort &mport,
                         bool icache,
                         bool functional)
 {

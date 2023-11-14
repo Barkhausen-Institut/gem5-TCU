@@ -57,7 +57,7 @@ X86Connector::getPort(const std::string &if_name, PortID idx)
 }
 
 bool
-X86Connector::IrqMasterPort::sendPacket(PacketPtr pkt)
+X86Connector::IrqRequestPort::sendPacket(PacketPtr pkt)
 {
     bool retry = !sendTimingReq(pkt);
     if (retry)
@@ -69,14 +69,14 @@ X86Connector::IrqMasterPort::sendPacket(PacketPtr pkt)
 }
 
 bool
-X86Connector::IrqMasterPort::recvTimingResp(PacketPtr pkt)
+X86Connector::IrqRequestPort::recvTimingResp(PacketPtr pkt)
 {
     delete pkt;
     return true;
 }
 
 void
-X86Connector::IrqMasterPort::recvReqRetry()
+X86Connector::IrqRequestPort::recvReqRetry()
 {
     assert(pending);
     if (sendTimingReq(pending))
@@ -101,7 +101,7 @@ X86Connector::doSetIrq(IRQ irq)
     const int APIC_ID = 0;
 
     X86ISA::TriggerIntMessage message = 0;
-    message.deliveryMode = X86ISA::DeliveryMode::ExtInt;
+    message.deliveryMode = X86ISA::delivery_mode::ExtInt;
     message.destination = APIC_ID;
     message.destMode = 0;   // physical
     message.trigger = 0;    // edge

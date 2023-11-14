@@ -35,8 +35,8 @@ class TcuSerialInput(ClockedObject):
     cxx_header = "dev/tcu/serial_input.hh"
     cxx_class = 'gem5::tcu::TcuSerialInput'
 
-    tcu_master_port = MasterPort("Port to send requests to the TCU")
-    tcu_slave_port = SlavePort("Port that receives memory requests "
+    tcu_master_port = RequestPort("Port to send requests to the TCU")
+    tcu_slave_port = ResponsePort("Port that receives memory requests "
                                 "from the TCU")
 
     system = Param.System(Parent.any, "System the PCI proxy is part of")

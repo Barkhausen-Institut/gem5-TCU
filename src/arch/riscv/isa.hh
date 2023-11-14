@@ -34,10 +34,12 @@
 #ifndef __ARCH_RISCV_ISA_HH__
 #define __ARCH_RISCV_ISA_HH__
 
+#include <unordered_map>
 #include <vector>
 
 #include "arch/generic/isa.hh"
 #include "arch/riscv/pcstate.hh"
+#include "arch/riscv/regs/misc.hh"
 #include "arch/riscv/types.hh"
 #include "base/types.hh"
 
@@ -68,35 +70,57 @@ enum FPUStatus
 class ISA : public BaseISA
 {
   protected:
+    RiscvType rv_type;
     std::vector<RegVal> miscRegFile;
+    bool checkAlignment;
 
     bool hpmCounterEnabled(int counter) const;
+
+    // Load reserve - store conditional monitor
+    const int WARN_FAILURE = 10000;
+    const Addr INVALID_RESERVATION_ADDR = (Addr)-1;
+    std::unordered_map<int, Addr> load_reservation_addrs;
 
   public:
     using Params = RiscvISAParams;
 
-    void clear();
+    void clear() override;
 
-    PCStateBase *
+    PCStateBase*
     newPCState(Addr new_inst_addr=0) const override
     {
-        return new PCState(new_inst_addr);
+        return new PCState(new_inst_addr, rv_type);
+    }
+
+    void
+    clearLoadReservation(ContextID cid) override
+    {
+        Addr& load_reservation_addr = load_reservation_addrs[cid];
+        load_reservation_addr = INVALID_RESERVATION_ADDR;
     }
 
   public:
-    RegVal readMiscRegNoEffect(int misc_reg) const;
-    RegVal readMiscReg(int misc_reg);
-    void setMiscRegNoEffect(int misc_reg, RegVal val);
-    void setMiscReg(int misc_reg, RegVal val);
+    RegVal readMiscRegNoEffect(RegIndex idx) const override;
+    RegVal readMiscReg(RegIndex idx) override;
+    void setMiscRegNoEffect(RegIndex idx, RegVal val) override;
+    void setMiscReg(RegIndex idx, RegVal val) override;
 
-    RegId flattenRegId(const RegId &regId) const { return regId; }
-    int flattenIntIndex(int reg) const { return reg; }
-    int flattenFloatIndex(int reg) const { return reg; }
-    int flattenVecIndex(int reg) const { return reg; }
-    int flattenVecElemIndex(int reg) const { return reg; }
-    int flattenVecPredIndex(int reg) const { return reg; }
-    int flattenCCIndex(int reg) const { return reg; }
-    int flattenMiscIndex(int reg) const { return reg; }
+    // Derived class could provide knowledge of non-standard CSRs to other
+    // components by overriding the two getCSRxxxMap here and properly
+    // implementing the corresponding read/set function. However, customized
+    // maps should always be compatible with the standard maps.
+    virtual const std::unordered_map<int, CSRMetadata>&
+    getCSRDataMap() const
+    {
+        return CSRData;
+    }
+    virtual const std::unordered_map<int, RegVal>&
+    getCSRMaskMap() const
+    {
+        return CSRMasks[rv_type];
+    }
+
+    bool alignmentCheckEnabled() const { return checkAlignment; }
 
     bool inUserMode() const override;
     void copyRegsFrom(ThreadContext *src) override;
@@ -114,6 +138,10 @@ class ISA : public BaseISA
     void handleLockedSnoop(PacketPtr pkt, Addr cacheBlockMask) override;
 
     void globalClearExclusive() override;
+
+    void resetThread() override;
+
+    RiscvType rvType() const { return rv_type; }
 };
 
 } // namespace RiscvISA

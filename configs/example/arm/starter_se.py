@@ -1,4 +1,4 @@
-# Copyright (c) 2016-2017 ARM Limited
+# Copyright (c) 2016-2017, 2022-2023 Arm Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -45,7 +45,7 @@ from m5.objects import *
 import argparse
 import shlex
 
-m5.util.addToPath('../..')
+m5.util.addToPath("../..")
 
 from common import ObjectList
 from common import MemConfig
@@ -54,25 +54,20 @@ from common.cores.arm import HPI
 import devices
 
 
-
 # Pre-defined CPU configurations. Each tuple must be ordered as : (cpu_class,
 # l1_icache_class, l1_dcache_class, walk_cache_class, l2_Cache_class). Any of
 # the cache class may be 'None' if the particular cache is not present.
 cpu_types = {
-    "atomic" : ( AtomicSimpleCPU, None, None, None),
-    "minor" : (MinorCPU,
-               devices.L1I, devices.L1D,
-               devices.L2),
-    "hpi" : ( HPI.HPI,
-              HPI.HPI_ICache, HPI.HPI_DCache,
-              HPI.HPI_L2)
+    "atomic": (AtomicSimpleCPU, None, None, None),
+    "minor": (MinorCPU, devices.L1I, devices.L1D, devices.L2),
+    "hpi": (HPI.HPI, HPI.HPI_ICache, HPI.HPI_DCache, HPI.HPI_L2),
 }
 
 
 class SimpleSeSystem(System):
-    '''
+    """
     Example system class for syscall emulation mode
-    '''
+    """
 
     # Use a fixed cache line size of 64 bytes
     cache_line_size = 64
@@ -87,8 +82,9 @@ class SimpleSeSystem(System):
 
         # Create a voltage and clock domain for system components
         self.voltage_domain = VoltageDomain(voltage="3.3V")
-        self.clk_domain = SrcClockDomain(clock="1GHz",
-                                         voltage_domain=self.voltage_domain)
+        self.clk_domain = SrcClockDomain(
+            clock="1GHz", voltage_domain=self.voltage_domain
+        )
 
         # Create the off-chip memory bus.
         self.membus = SystemXBar()
@@ -97,37 +93,42 @@ class SimpleSeSystem(System):
         # and to perform debug accesses.
         self.system_port = self.membus.cpu_side_ports
 
-
         # Add CPUs to the system. A cluster of CPUs typically have
         # private L1 caches and a shared L2 cache.
-        self.cpu_cluster = devices.CpuCluster(self,
-                                              args.num_cores,
-                                              args.cpu_freq, "1.2V",
-                                              *cpu_types[args.cpu])
+        self.cpu_cluster = devices.ArmCpuCluster(
+            self,
+            args.num_cores,
+            args.cpu_freq,
+            "1.2V",
+            *cpu_types[args.cpu],
+            tarmac_gen=args.tarmac_gen,
+            tarmac_dest=args.tarmac_dest,
+        )
 
         # Create a cache hierarchy (unless we are simulating a
         # functional CPU in atomic memory mode) for the CPU cluster
         # and connect it to the shared memory bus.
-        if self.cpu_cluster.memoryMode() == "timing":
+        if self.cpu_cluster.memory_mode() == "timing":
             self.cpu_cluster.addL1()
             self.cpu_cluster.addL2(self.cpu_cluster.clk_domain)
         self.cpu_cluster.connectMemSide(self.membus)
 
         # Tell gem5 about the memory mode used by the CPUs we are
         # simulating.
-        self.mem_mode = self.cpu_cluster.memoryMode()
+        self.mem_mode = self.cpu_cluster.memory_mode()
 
     def numCpuClusters(self):
         return len(self._clusters)
 
-    def addCpuCluster(self, cpu_cluster, num_cpus):
+    def addCpuCluster(self, cpu_cluster):
         assert cpu_cluster not in self._clusters
-        assert num_cpus > 0
+        assert len(cpu_cluster) > 0
         self._clusters.append(cpu_cluster)
-        self._num_cpus += num_cpus
+        self._num_cpus += len(cpu_cluster)
 
     def numCpus(self):
         return self._num_cpus
+
 
 def get_processes(cmd):
     """Interprets commands to run and returns a list of processes"""
@@ -147,14 +148,14 @@ def get_processes(cmd):
 
 
 def create(args):
-    ''' Create and configure the system object. '''
+    """Create and configure the system object."""
 
     system = SimpleSeSystem(args)
 
     # Tell components about the expected physical memory ranges. This
     # is, for example, used by the MemConfig helper to determine where
     # to map DRAMs in the physical address space.
-    system.mem_ranges = [ AddrRange(start=0, size=args.mem_size) ]
+    system.mem_ranges = [AddrRange(start=0, size=args.mem_size)]
 
     # Configure the off-chip memory system.
     MemConfig.config_mem(args, system)
@@ -163,8 +164,10 @@ def create(args):
     # that we can pass to gem5.
     processes = get_processes(args.commands_to_run)
     if len(processes) != args.num_cores:
-        print("Error: Cannot map %d command(s) onto %d CPU(s)" %
-              (len(processes), args.num_cores))
+        print(
+            "Error: Cannot map %d command(s) onto %d CPU(s)"
+            % (len(processes), args.num_cores)
+        )
         sys.exit(1)
 
     system.workload = SEWorkload.init_compatible(processes[0].executable)
@@ -179,24 +182,56 @@ def create(args):
 def main():
     parser = argparse.ArgumentParser(epilog=__doc__)
 
-    parser.add_argument("commands_to_run", metavar="command(s)", nargs='*',
-                        help="Command(s) to run")
-    parser.add_argument("--cpu", type=str, choices=list(cpu_types.keys()),
-                        default="atomic",
-                        help="CPU model to use")
+    parser.add_argument(
+        "commands_to_run",
+        metavar="command(s)",
+        nargs="*",
+        help="Command(s) to run",
+    )
+    parser.add_argument(
+        "--cpu",
+        type=str,
+        choices=list(cpu_types.keys()),
+        default="atomic",
+        help="CPU model to use",
+    )
     parser.add_argument("--cpu-freq", type=str, default="4GHz")
-    parser.add_argument("--num-cores", type=int, default=1,
-                        help="Number of CPU cores")
-    parser.add_argument("--mem-type", default="DDR3_1600_8x8",
-                        choices=ObjectList.mem_list.get_names(),
-                        help = "type of memory to use")
-    parser.add_argument("--mem-channels", type=int, default=2,
-                        help = "number of memory channels")
-    parser.add_argument("--mem-ranks", type=int, default=None,
-                        help = "number of memory ranks per channel")
-    parser.add_argument("--mem-size", action="store", type=str,
-                        default="2GB",
-                        help="Specify the physical memory size")
+    parser.add_argument(
+        "--num-cores", type=int, default=1, help="Number of CPU cores"
+    )
+    parser.add_argument(
+        "--mem-type",
+        default="DDR3_1600_8x8",
+        choices=ObjectList.mem_list.get_names(),
+        help="type of memory to use",
+    )
+    parser.add_argument(
+        "--mem-channels", type=int, default=2, help="number of memory channels"
+    )
+    parser.add_argument(
+        "--mem-ranks",
+        type=int,
+        default=None,
+        help="number of memory ranks per channel",
+    )
+    parser.add_argument(
+        "--mem-size",
+        action="store",
+        type=str,
+        default="2GB",
+        help="Specify the physical memory size",
+    )
+    parser.add_argument(
+        "--tarmac-gen",
+        action="store_true",
+        help="Write a Tarmac trace.",
+    )
+    parser.add_argument(
+        "--tarmac-dest",
+        choices=TarmacDump.vals,
+        default="stdoutput",
+        help="Destination for the Tarmac trace output. [Default: stdoutput]",
+    )
 
     args = parser.parse_args()
 
@@ -222,8 +257,7 @@ def main():
     # Print the reason for the simulation exit. Some exit codes are
     # requests for service (e.g., checkpoints) from the simulation
     # script. We'll just ignore them here and exit.
-    print(event.getCause(), " @ ", m5.curTick())
-    sys.exit(event.getCode())
+    print(f"{event.getCause()} ({event.getCode()}) @ {m5.curTick()}")
 
 
 if __name__ == "__m5_main__":

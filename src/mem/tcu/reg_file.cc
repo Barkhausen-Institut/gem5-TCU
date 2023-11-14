@@ -43,7 +43,7 @@ namespace tcu
 {
 
 #define DPRINTFNS(name, ...) do {                                       \
-    Trace::getDebugLogger()->dprintf(curTick(), name, __VA_ARGS__);     \
+    trace::getDebugLogger()->dprintf(curTick(), name, __VA_ARGS__);     \
 } while (0)
 
 const char *RegFile::extRegNames[] = {

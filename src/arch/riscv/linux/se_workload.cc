@@ -86,7 +86,7 @@ EmuLinux::syscall(ThreadContext *tc)
     // This will move into the base SEWorkload function at some point.
     process->Process::syscall(tc);
 
-    RegVal num = tc->readIntReg(RiscvISA::SyscallNumReg);
+    RegVal num = tc->getReg(RiscvISA::SyscallNumReg);
     if (dynamic_cast<RiscvProcess64 *>(process))
         syscallDescs64.get(num)->doSyscall(tc);
     else
@@ -123,7 +123,7 @@ unameFunc32(SyscallDesc *desc, ThreadContext *tc, VPtr<Linux::utsname> name)
     return 0;
 }
 
-SyscallDescTable<SEWorkload::SyscallABI> EmuLinux::syscallDescs64 = {
+SyscallDescTable<SEWorkload::SyscallABI64> EmuLinux::syscallDescs64 = {
     { 0,    "io_setup" },
     { 1,    "io_destroy" },
     { 2,    "io_submit" },
@@ -462,7 +462,7 @@ SyscallDescTable<SEWorkload::SyscallABI> EmuLinux::syscallDescs64 = {
     { 2011, "getmainvars" }
 };
 
-SyscallDescTable<SEWorkload::SyscallABI> EmuLinux::syscallDescs32 = {
+SyscallDescTable<SEWorkload::SyscallABI32> EmuLinux::syscallDescs32 = {
     { 0,    "io_setup" },
     { 1,    "io_destroy" },
     { 2,    "io_submit" },

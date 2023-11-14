@@ -42,7 +42,6 @@
 #ifndef __CPU_O3_THREAD_CONTEXT_HH__
 #define __CPU_O3_THREAD_CONTEXT_HH__
 
-#include "config/the_isa.hh"
 #include "cpu/o3/cpu.hh"
 #include "cpu/thread_context.hh"
 
@@ -131,7 +130,7 @@ class ThreadContext : public gem5::ThreadContext
 
     void setContextId(ContextID id) override { thread->setContextId(id); }
 
-    virtual const Loader::SymbolTable &getSymTab() {
+    virtual const loader::SymbolTable &getSymTab() {
         if(FullSystem)
             return getSystemPtr()->workload->symtab(this);
         return *getProcessPtr()->symtab;
@@ -216,8 +215,6 @@ class ThreadContext : public gem5::ThreadContext
      * write might have as defined by the architecture. */
     void setMiscReg(RegIndex misc_reg, RegVal val) override;
 
-    RegId flattenRegId(const RegId& regId) const override;
-
     /** Returns the number of consecutive store conditional failures. */
     // @todo: Figure out where these store cond failures should go.
     unsigned
@@ -245,12 +242,12 @@ class ThreadContext : public gem5::ThreadContext
             cpu->squashFromTC(thread->threadId());
     }
 
-    RegVal getRegFlat(const RegId &reg) const override;
-    void getRegFlat(const RegId &reg, void *val) const override;
-    void *getWritableRegFlat(const RegId &reg) override;
+    RegVal getReg(const RegId &reg) const override;
+    void getReg(const RegId &reg, void *val) const override;
+    void *getWritableReg(const RegId &reg) override;
 
-    void setRegFlat(const RegId &reg, RegVal val) override;
-    void setRegFlat(const RegId &reg, const void *val) override;
+    void setReg(const RegId &reg, RegVal val) override;
+    void setReg(const RegId &reg, const void *val) override;
 
     // hardware transactional memory
     void htmAbortTransaction(uint64_t htm_uid,

@@ -40,19 +40,19 @@ class BaseTcu(ClockedObject):
 
     system = Param.System(Parent.any, "System we belong to")
 
-    noc_master_port = MasterPort("TCU master port")
-    noc_slave_port  = SlavePort("TCU slave port")
+    noc_master_port = RequestPort("TCU master port")
+    noc_slave_port  = ResponsePort("TCU slave port")
 
     caches = VectorParam.Cache([], "The caches the TCU has access to (for invalidation on reset)")
 
-    icache_slave_port = SlavePort("Port that forwards requests from the CPU to the icache")
-    dcache_slave_port = SlavePort("Port that forwards requests from the CPU to the dcache")
+    icache_slave_port = ResponsePort("Port that forwards requests from the CPU to the icache")
+    dcache_slave_port = ResponsePort("Port that forwards requests from the CPU to the dcache")
     slave_region = VectorParam.AddrRange([], "The address region for requests to the TCU")
 
-    icache_master_port = MasterPort("Port that connects the icache")
-    dcache_master_port = MasterPort("Port that connects the dcache")
+    icache_master_port = RequestPort("Port that connects the icache")
+    dcache_master_port = RequestPort("Port that connects the dcache")
 
-    llc_slave_port = SlavePort("Port that performs memory requests on behalf of the cache")
+    llc_slave_port = ResponsePort("Port that performs memory requests on behalf of the cache")
 
     tile_mem_offset = Param.Unsigned(0, "The offset that all accesses have to go above")
 

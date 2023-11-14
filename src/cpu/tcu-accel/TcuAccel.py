@@ -36,7 +36,7 @@ class TcuAccel(ClockedObject):
     abstract = True
     cxx_header = "cpu/tcu-accel/accelerator.hh"
     cxx_class = 'gem5::tcu::TcuAccel'
-    port = MasterPort("Port to the TCU and Scratch-Pad-Memory")
+    port = RequestPort("Port to the TCU and Scratch-Pad-Memory")
     system = Param.System(Parent.any, "System this tester is part of")
     tile_id = Param.Unsigned("Tile ID")
     regfile_base_addr = Param.Addr(0xF0000000, "Register file address")

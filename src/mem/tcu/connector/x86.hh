@@ -44,7 +44,7 @@ class X86Connector : public CoreConnector
 {
   private:
 
-    class IrqMasterPort : public MasterPort
+    class IrqRequestPort : public RequestPort
     {
       private:
 
@@ -54,8 +54,8 @@ class X86Connector : public CoreConnector
 
       public:
 
-        IrqMasterPort(const std::string& _name, X86Connector *_con)
-            : MasterPort(_name, _con), con(*_con), pending()
+        IrqRequestPort(const std::string& _name, X86Connector *_con)
+            : RequestPort(_name), con(*_con), pending()
         { }
 
         bool sendPacket(PacketPtr pkt);
@@ -78,7 +78,7 @@ class X86Connector : public CoreConnector
 
     void doSetIrq(IRQ irq) override;
 
-    IrqMasterPort irqPort;
+    IrqRequestPort irqPort;
 };
 
 }

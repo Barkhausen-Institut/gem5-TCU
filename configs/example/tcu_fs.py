@@ -413,6 +413,7 @@ def createCoreTile(noc, options, id, cmdline, memTile, epCount,
         tile.platform = HiFive()
         tile.platform.rtc = RiscvRTC(frequency=Frequency("100Hz"))
         tile.platform.clint.int_pin = tile.platform.rtc.int_pin
+        tile.platform.pci_host.pio = tile.xbar.mem_side_ports
 
         tile.platform.attachOnChipIO(tile.xbar)
         tile.platform.attachOffChipIO(tile.xbar)

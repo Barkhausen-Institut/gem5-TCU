@@ -35,15 +35,28 @@ gem5_root="${dir}/.."
 # The per-container Docker memory limit.
 docker_mem_limit="24g"
 
-# We assume the first two arguments are the number of threads followed by the
-# GPU ISA to test. These default to 1 and GCN3_X86 is no argument is given.
+# The docker tag to use (varies between develop, and versions on the staging
+# branch)
+tag="latest"
+
+# We assume the first three arguments are the number of threads to use for
+# compilation followed by the GPU ISA to test, and finally, the number of
+# "run threads", the maximum number of tests to be run at once. By default the
+# number of compile threads 1 and the GPU ISA is GCN3_X86. The number of
+# "run threads" is equal to the number of compile threads by default.
 threads=1
 gpu_isa=GCN3_X86
+run_threads=1
 if [[ $# -eq 1 ]]; then
     threads=$1
+    run_threads=${threads}
 elif [[ $# -eq 2 ]]; then
     threads=$1
     gpu_isa=$2
+elif [[ $# -eq 3 ]]; then
+    threads=$1
+    gpu_isa=$2
+    run_threads=$3
 else
     if [[ $# -gt 0 ]]; then
         echo "Invalid number of arguments: $#"
@@ -59,20 +72,21 @@ fi
 # Run the gem5 very-long tests.
 docker run -u $UID:$GID --volume "${gem5_root}":"${gem5_root}" -w \
     "${gem5_root}"/tests --memory="${docker_mem_limit}" --rm \
-    gcr.io/gem5-test/ubuntu-20.04_all-dependencies:v22-0 \
-        ./main.py run --length very-long -j${threads} -t${threads} -vv
+    gcr.io/gem5-test/ubuntu-22.04_all-dependencies:${tag} \
+        ./main.py run --length very-long -j${threads} -t${run_threads} -vv
 
 mkdir -p tests/testing-results
 
 # GPU weekly tests start here
 # before pulling gem5 resources, make sure it doesn't exist already
-docker run --rm --volume "${gem5_root}":"${gem5_root}" -w \
+docker run -u $UID:$GID --rm --volume "${gem5_root}":"${gem5_root}" -w \
        "${gem5_root}" --memory="${docker_mem_limit}" \
-       gcr.io/gem5-test/gcn-gpu:v22-0 bash -c \
+       gcr.io/gem5-test/gcn-gpu:${tag} bash -c \
        "rm -rf ${gem5_root}/gem5-resources"
-# delete Pannotia datasets and output files in case a failed regression run left
-# them around
-rm -f coAuthorsDBLP.graph 1k_128k.gr result.out
+
+# delete m5out, Pannotia datasets, and output files in case a failed regression
+# run left them around
+rm -rf ${gem5_root}/m5out coAuthorsDBLP.graph 1k_128k.gr result.out
 
 # Pull gem5 resources to the root of the gem5 directory -- currently the
 # pre-built binares for LULESH are out-of-date and won't run correctly with
@@ -80,7 +94,7 @@ rm -f coAuthorsDBLP.graph 1k_128k.gr result.out
 # Moreover, DNNMark builds a library and thus doesn't have a binary, so we
 # need to build it before we run it.
 # Need to pull this first because HACC's docker requires this path to exist
-git clone https://gem5.googlesource.com/public/gem5-resources \
+git clone https://github.com/gem5/gem5-resources \
     "${gem5_root}/gem5-resources"
 
 
@@ -100,12 +114,12 @@ git clone https://gem5.googlesource.com/public/gem5-resources \
 
 cd "${gem5_root}/gem5-resources"
 git checkout develop
-version_tag=$(git tag | grep "v22.0")
-
-if [[ ${version_tag} != "" ]]; then
-       git checkout "${version_tag}"
-fi
-
+#version_tag=$(git tag | grep "v21.2")
+#
+#if [[ ${version_tag} != "" ]]; then
+#       git checkout "${version_tag}"
+#fi
+#
 cd "${gem5_root}"
 
 # For the GPU tests we compile and run the GPU ISA inside a gcn-gpu container.
@@ -113,13 +127,14 @@ cd "${gem5_root}"
 # avoid needing to set all of these, we instead build a docker for it, which
 # has all these variables pre-set in its Dockerfile
 # To avoid compiling gem5 multiple times, all GPU benchmarks will use this
-docker pull gcr.io/gem5-test/gcn-gpu:v22-0
+docker pull gcr.io/gem5-test/gcn-gpu:${tag}
 docker build -t hacc-test-weekly ${gem5_root}/gem5-resources/src/gpu/halo-finder
 
 docker run --rm -u $UID:$GID --volume "${gem5_root}":"${gem5_root}" -w \
     "${gem5_root}" --memory="${docker_mem_limit}" hacc-test-weekly bash -c \
-    "scons build/${gpu_isa}/gem5.opt -j${threads} \
-        || rm -rf build && scons build/${gpu_isa}/gem5.opt -j${threads}"
+    "scons build/${gpu_isa}/gem5.opt -j${threads} --ignore-style \
+        || rm -rf build && scons build/${gpu_isa}/gem5.opt -j${threads} \
+        --ignore-style"
 
 # Some of the apps we test use m5ops (and x86), so compile them for x86
 # Note: setting TERM in the environment is necessary as scons fails for m5ops if
@@ -240,7 +255,7 @@ docker run --rm -v ${PWD}:${PWD} \
        "export GEM5_PATH=${gem5_root} ; make gem5-fusion"
 
 # # get input dataset for BC test
-wget http://dist.gem5.org/dist/v22-0/datasets/pannotia/bc/1k_128k.gr
+wget http://dist.gem5.org/dist/develop/datasets/pannotia/bc/1k_128k.gr
 # run BC
 docker run --rm -v ${gem5_root}:${gem5_root} -w ${gem5_root} -u $UID:$GID \
        --memory="${docker_mem_limit}" hacc-test-weekly \
@@ -317,7 +332,7 @@ docker run --rm -v ${gem5_root}:${gem5_root} -w \
        "export GEM5_PATH=${gem5_root} ; make gem5-fusion"
 
 # get PageRank input dataset
-wget http://dist.gem5.org/dist/v22-0/datasets/pannotia/pagerank/coAuthorsDBLP.graph
+wget http://dist.gem5.org/dist/develop/datasets/pannotia/pagerank/coAuthorsDBLP.graph
 # run PageRank (Default)
 docker run --rm -v ${gem5_root}:${gem5_root} -w ${gem5_root} -u $UID:$GID \
        --memory="${docker_mem_limit}" hacc-test-weekly \
@@ -378,5 +393,44 @@ docker run --rm --volume "${gem5_root}":"${gem5_root}" -w \
        "${gem5_root}" --memory="${docker_mem_limit}" hacc-test-weekly bash -c \
        "rm -rf ${gem5_root}/gem5-resources"
 
+# Delete the gem5 m5out folder we created
+rm -rf ${gem5_root}/m5out
+
 # delete Pannotia datasets we downloaded and output files it created
 rm -f coAuthorsDBLP.graph 1k_128k.gr result.out
+
+# Run tests to ensure the DRAMSys integration is still functioning correctly.
+if [ -d "${gem5_root}/ext/dramsys/DRAMSys" ]; then
+    rm -r "${gem5_root}/ext/dramsys/DRAMSys"
+fi
+
+cd "${gem5_root}/ext/dramsys"
+git clone --recursive git@github.com:tukl-msd/DRAMSys.git DRAMSys
+cd DRAMSys
+git checkout -b gem5 09f6dcbb91351e6ee7cadfc7bc8b29d97625db8f
+cd "${gem5_root}"
+
+rm -rf "${gem5_root}/build/ALL"
+
+docker run -u $UID:$GID --volume "${gem5_root}":"${gem5_root}" -w \
+    "${gem5_root}" --memory="${docker_mem_limit}" --rm \
+    gcr.io/gem5-test/ubuntu-22.04_all-dependencies:${tag} \
+       scons build/ALL/gem5.opt -j${threads}
+
+docker run -u $UID:$GID --volume "${gem5_root}":"${gem5_root}" -w \
+    "${gem5_root}" --memory="${docker_mem_limit}" --rm \
+    gcr.io/gem5-test/ubuntu-22.04_all-dependencies:${tag} \
+       ./build/ALL/gem5.opt \
+       configs/example/gem5_library/dramsys/arm-hello-dramsys.py
+
+docker run -u $UID:$GID --volume "${gem5_root}":"${gem5_root}" -w \
+    "${gem5_root}" --memory="${docker_mem_limit}" --rm \
+    gcr.io/gem5-test/ubuntu-22.04_all-dependencies:${tag} \
+       ./build/ALL/gem5.opt \
+       configs/example/gem5_library/dramsys/dramsys-traffic.py
+
+docker run -u $UID:$GID --volume "${gem5_root}":"${gem5_root}" -w \
+    "${gem5_root}" --memory="${docker_mem_limit}" --rm \
+    gcr.io/gem5-test/ubuntu-22.04_all-dependencies:${tag} \
+       ./build/ALL/gem5.opt \
+       configs/example/dramsys.py

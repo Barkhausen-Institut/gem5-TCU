@@ -105,9 +105,10 @@ InstructionQueue::InstructionQueue(CPU *cpu_ptr, IEW *iew_ptr,
     numPhysRegs = params.numPhysIntRegs + params.numPhysFloatRegs +
                     params.numPhysVecRegs +
                     params.numPhysVecRegs * (
-                            reg_classes.at(VecElemClass).numRegs() /
-                            reg_classes.at(VecRegClass).numRegs()) +
+                            reg_classes.at(VecElemClass)->numRegs() /
+                            reg_classes.at(VecRegClass)->numRegs()) +
                     params.numPhysVecPredRegs +
+                    params.numPhysMatRegs +
                     params.numPhysCCRegs;
 
     //Create an entry for each physical register within the
@@ -164,7 +165,7 @@ InstructionQueue::InstructionQueue(CPU *cpu_ptr, IEW *iew_ptr,
 InstructionQueue::~InstructionQueue()
 {
     dependGraph.reset();
-#ifdef DEBUG
+#ifdef GEM5_DEBUG
     cprintf("Nodes traversed: %i, removed: %i\n",
             dependGraph.nodesTraversed, dependGraph.nodesRemoved);
 #endif

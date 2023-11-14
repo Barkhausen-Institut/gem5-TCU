@@ -62,9 +62,9 @@ TcuSerialInput::DataEvent::process(int revent)
 TcuSerialInput::TcuSerialInput(const Params &p)
     : ClockedObject(p),
       dataEvent(NULL),
-      tcuMasterPort(name() + ".tcu_master_port", this),
-      tcuSlavePort(name() + ".tcu_slave_port", this),
-      tickEvent(this),
+      tcuRequestPort(name() + ".tcu_master_port", this),
+      tcuResponsePort(name() + ".tcu_slave_port", this),
+      tickEvent(*this),
       tcu(p.tcu_regfile_base_addr, p.system->getRequestorId(this, name()), p.tile_id),
       cmdSM(tcu, this),
       buffer(),
@@ -109,22 +109,22 @@ TcuSerialInput::~TcuSerialInput()
 void
 TcuSerialInput::init()
 {
-    tcuSlavePort.sendRangeChange();
+    tcuResponsePort.sendRangeChange();
 }
 
 Port&
 TcuSerialInput::getPort(const std::string& if_name, PortID idx)
 {
     if (if_name == "tcu_master_port")
-        return tcuMasterPort;
+        return tcuRequestPort;
     else if (if_name == "tcu_slave_port")
-        return tcuSlavePort;
+        return tcuResponsePort;
     else
         return SimObject::getPort(if_name, idx);
 }
 
 bool
-TcuSerialInput::TcuMasterPort::recvTimingResp(PacketPtr pkt)
+TcuSerialInput::TcuRequestPort::recvTimingResp(PacketPtr pkt)
 {
     assert(pkt->isResponse());
 
@@ -133,32 +133,32 @@ TcuSerialInput::TcuMasterPort::recvTimingResp(PacketPtr pkt)
 }
 
 bool
-TcuSerialInput::TcuSlavePort::recvTimingReq(PacketPtr pkt)
+TcuSerialInput::TcuResponsePort::recvTimingReq(PacketPtr pkt)
 {
     assert(pkt->needsResponse());
     assert(pkt->isRead());
 
     pkt->makeResponse();
     memcpy(pkt->getPtr<uint8_t>(), serialInput.buffer, serialInput.pos);
-    serialInput.tcuSlavePort.schedTimingResp(pkt, serialInput.clockEdge(Cycles(1)));
+    serialInput.tcuResponsePort.schedTimingResp(pkt, serialInput.clockEdge(Cycles(1)));
 
     return true;
 }
 
 void
-TcuSerialInput::TcuSlavePort::recvFunctional(PacketPtr pkt)
+TcuSerialInput::TcuResponsePort::recvFunctional(PacketPtr pkt)
 {
     panic("not implemented");
 }
 
 Tick
-TcuSerialInput::TcuSlavePort::recvAtomic(PacketPtr pkt)
+TcuSerialInput::TcuResponsePort::recvAtomic(PacketPtr pkt)
 {
     panic("not implemented");
 }
 
 AddrRangeList
-TcuSerialInput::TcuSlavePort::getAddrRanges() const
+TcuSerialInput::TcuResponsePort::getAddrRanges() const
 {
     AddrRangeList ranges;
     ranges.push_back(AddrRange(0, 0x1000));
@@ -217,7 +217,7 @@ TcuSerialInput::scheduleCommand(Cycles delay)
 void
 TcuSerialInput::sendMemoryReq(PacketPtr pkt, Cycles delay)
 {
-    tcuMasterPort.schedTimingReq(pkt, clockEdge(delay));
+    tcuRequestPort.schedTimingReq(pkt, clockEdge(delay));
 }
 
 void

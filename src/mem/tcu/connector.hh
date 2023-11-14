@@ -84,7 +84,7 @@ class TcuConnector
 
     int wakeupEp;
 
-    EventWrapper<TcuConnector, &TcuConnector::fireTimer> fireTimerEvent;
+    MemberEventWrapper<&TcuConnector::fireTimer> fireTimerEvent;
 
   public:
 

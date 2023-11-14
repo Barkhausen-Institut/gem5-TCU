@@ -48,10 +48,10 @@ class MemWatchProbe : public BaseMemProbe
     MemWatchProbe(const MemWatchProbeParams &params);
 
   protected:
-    void handleRequest(const ProbePoints::PacketInfo &pkt_info) override;
+    void handleRequest(const probing::PacketInfo &pkt_info) override;
 
   private:
-    void handleRange(const ProbePoints::PacketInfo &pkt_info,
+    void handleRange(const probing::PacketInfo &pkt_info,
                      Addr start, bool virt) const;
 
     const std::vector<AddrRange> ranges;

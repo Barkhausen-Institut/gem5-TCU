@@ -107,7 +107,7 @@ TcuAbortTest::CpuPort::recvReqRetry()
 
 TcuAbortTest::TcuAbortTest(const TcuAbortTestParams &p)
   : ClockedObject(p),
-    tickEvent(this),
+    tickEvent(*this),
     port("port", this),
     state(State::INIT_MEM),
     substate(SubState::START),

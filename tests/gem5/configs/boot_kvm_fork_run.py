@@ -47,7 +47,7 @@ from gem5.components.boards.x86_board import X86Board
 from gem5.coherence_protocol import CoherenceProtocol
 from gem5.isas import ISA
 from gem5.components.memory import SingleChannelDDR3_1600
-from gem5.components.processors.cpu_types import(
+from gem5.components.processors.cpu_types import (
     CPUTypes,
     get_cpu_types_str_set,
     get_cpu_type_from_str,
@@ -124,15 +124,13 @@ requires(
 
 cache_hierarchy = None
 if args.mem_system == "mi_example":
-    from gem5.components.cachehierarchies.ruby.\
-        mi_example_cache_hierarchy import (
+    from gem5.components.cachehierarchies.ruby.mi_example_cache_hierarchy import (
         MIExampleCacheHierarchy,
     )
 
     cache_hierarchy = MIExampleCacheHierarchy(size="32kB", assoc=8)
 elif args.mem_system == "mesi_two_level":
-    from gem5.components.cachehierarchies.ruby.\
-        mesi_two_level_cache_hierarchy import (
+    from gem5.components.cachehierarchies.ruby.mesi_two_level_cache_hierarchy import (
         MESITwoLevelCacheHierarchy,
     )
 
@@ -146,17 +144,14 @@ elif args.mem_system == "mesi_two_level":
         num_l2_banks=1,
     )
 elif args.mem_system == "classic":
-    from gem5.components.cachehierarchies.classic.\
-        private_l1_cache_hierarchy import (
+    from gem5.components.cachehierarchies.classic.private_l1_cache_hierarchy import (
         PrivateL1CacheHierarchy,
     )
 
     cache_hierarchy = PrivateL1CacheHierarchy(l1d_size="16kB", l1i_size="16kB")
 else:
     raise NotImplementedError(
-        "Memory system '{}' is not supported in the boot tests.".format(
-            args.mem_system
-        )
+        f"Memory system '{args.mem_system}' is not supported in the boot tests."
     )
 
 assert cache_hierarchy != None
@@ -185,12 +180,10 @@ kernel_args = motherboard.get_default_kernel_args() + [args.kernel_args]
 # Set the Full System workload.
 motherboard.set_kernel_disk_workload(
     kernel=Resource(
-        "x86-linux-kernel-5.4.49",
-        resource_directory=args.resource_directory,
+        "x86-linux-kernel-5.4.49", resource_directory=args.resource_directory
     ),
     disk_image=Resource(
-        "x86-ubuntu-18.04-img",
-        resource_directory=args.resource_directory,
+        "x86-ubuntu-18.04-img", resource_directory=args.resource_directory
     ),
     readfile_contents=dedent(
         """
@@ -198,7 +191,7 @@ motherboard.set_kernel_disk_workload(
         m5 exit # exit in children and parent
         """
     ),
-    kernel_args=kernel_args
+    kernel_args=kernel_args,
 )
 
 
@@ -216,7 +209,7 @@ root.sim_quantum = int(1e9)
 
 # Disable the gdb ports. Required for forking.
 m5.disableAllListeners()
-
+motherboard._pre_instantiate()
 m5.instantiate()
 
 # Simulate the inital boot with the starting KVM cpu
@@ -240,7 +233,7 @@ for i in range(args.num_forks):
 
 print("Waiting for children...")
 for pid in pids:
-    print (os.waitpid(pid, 0))
+    print(os.waitpid(pid, 0))
 
 print("Children finished! Running to completion in parent.")
 exit_event = m5.simulate()

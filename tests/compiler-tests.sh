@@ -13,11 +13,14 @@ build_dir="${gem5_root}/build"
 docker_mem_limit="18g"
 
 # All Docker images in the gem5 testing GCR which we want to compile with.
-images=("gcc-version-11"
+images=("gcc-version-12"
+        "gcc-version-11"
         "gcc-version-10"
         "gcc-version-9"
         "gcc-version-8"
         "gcc-version-7"
+        "clang-version-14"
+        "clang-version-13"
         "clang-version-12"
         "clang-version-11"
         "clang-version-10"
@@ -25,20 +28,22 @@ images=("gcc-version-11"
         "clang-version-8"
         "clang-version-7"
         "clang-version-6.0"
-        # The following checks our support for Ubuntu 18.04 and 20.04, for both our
-        # "minimum dependencies" and "all dependencies" docker images.
+        # The following checks our support for Ubuntu 18.04, 20.04, and 22.04.
         "ubuntu-18.04_all-dependencies"
         "ubuntu-20.04_all-dependencies"
-        "ubuntu-20.04_min-dependencies"
+        "ubuntu-22.04_all-dependencies"
+        # Here we test the minimum dependency scenario.
+        "ubuntu-22.04_min-dependencies"
        )
 
 # A subset of the above list: these images will build against every target,
 # ignoring builds_per_compiler.
-comprehensive=("gcc-version-11"
-               "clang-version-12")
+comprehensive=("gcc-version-12"
+               "clang-version-14")
 
 # All build targets in build_opt/ which we want to build using each image.
-builds=("ARM"
+builds=("ALL"
+        "ARM"
         "ARM_MESI_Three_Level"
         "ARM_MESI_Three_Level_HTM"
         "ARM_MOESI_hammer"
@@ -71,7 +76,13 @@ builds_per_compiler=1
 base_url="gcr.io/gem5-test"
 
 # Arguments passed into scons on every build target test.
-build_args="$@"
+if [ $# -eq 0 ];then
+    # If none is sepcified by the user we pass "-j1" (compile on one thread).
+    # If `build_args` is left as an empty string, this script will fail.
+    build_args="-j1"
+else
+    build_args="$@"
+fi
 
 # Testing directory variables
 mkdir -p "${build_dir}" # Create the build directory if it doesn't exist.
@@ -103,7 +114,7 @@ for compiler in ${images[@]}; do
     # targets for this test
     build_indices=(${build_permutation[@]:0:$builds_count})
 
-    repo_name="${base_url}/${compiler}:v22-0"
+    repo_name="${base_url}/${compiler}:latest"
 
     # Grab compiler image
     docker pull $repo_name >/dev/null
@@ -129,7 +140,7 @@ for compiler in ${images[@]}; do
             {
                 docker run --rm -v "${gem5_root}":"/gem5" -u $UID:$GID \
                     -w /gem5 --memory="${docker_mem_limit}" $repo_name \
-                    /usr/bin/env python3 /usr/bin/scons \
+                    /usr/bin/env python3 /usr/bin/scons --ignore-style \
                     "${build_out}" "${build_args}"
             }>"${build_stdout}" 2>"${build_stderr}"
             result=$?

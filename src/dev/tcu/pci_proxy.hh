@@ -84,15 +84,15 @@ class TcuPciProxy : public ClockedObject, public CommandExecutor
     void tick();
 
   private:
-    class TcuMasterPort : public MasterPort
+    class TcuRequestPort : public RequestPort
     {
       private:
         TcuPciProxy& pciProxy;
         ReqPacketQueue reqPacketQueue;
 
       public:
-        TcuMasterPort(const std::string& _name, TcuPciProxy* _pciProxy)
-            : MasterPort(_name, _pciProxy),
+        TcuRequestPort(const std::string& _name, TcuPciProxy* _pciProxy)
+            : RequestPort(_name),
               pciProxy(*_pciProxy),
               reqPacketQueue(*_pciProxy, *this)
         {
@@ -114,15 +114,15 @@ class TcuPciProxy : public ClockedObject, public CommandExecutor
         void recvReqRetry() override { reqPacketQueue.retry(); }
     };
 
-    class TcuSlavePort : public QueuedResponsePort
+    class TcuResponsePort : public QueuedResponsePort
     {
       private:
         TcuPciProxy& pciProxy;
         RespPacketQueue respPacketQueue;
 
       public:
-        TcuSlavePort(const std::string& _name, TcuPciProxy* _pciProxy)
-            : QueuedResponsePort(_name, _pciProxy, respPacketQueue),
+        TcuResponsePort(const std::string& _name, TcuPciProxy* _pciProxy)
+            : QueuedResponsePort(_name, respPacketQueue),
               pciProxy(*_pciProxy),
               respPacketQueue(*_pciProxy, *this)
         {
@@ -138,7 +138,7 @@ class TcuPciProxy : public ClockedObject, public CommandExecutor
         AddrRangeList getAddrRanges() const override;
     };
 
-    class PioPort : public MasterPort
+    class PioPort : public RequestPort
     {
       private:
         TcuPciProxy& pciProxy;
@@ -146,7 +146,7 @@ class TcuPciProxy : public ClockedObject, public CommandExecutor
 
       public:
         PioPort(const std::string& _name, TcuPciProxy* _pciProxy)
-            : MasterPort(_name, _pciProxy),
+            : RequestPort(_name),
               pciProxy(*_pciProxy),
               reqPacketQueue(*_pciProxy, *this)
         {
@@ -176,7 +176,7 @@ class TcuPciProxy : public ClockedObject, public CommandExecutor
 
       public:
         DmaPort(const std::string& _name, TcuPciProxy* _pciProxy)
-            : QueuedResponsePort(_name, _pciProxy, respPacketQueue),
+            : QueuedResponsePort(_name, respPacketQueue),
               pciProxy(*_pciProxy),
               respPacketQueue(*_pciProxy, *this)
         {
@@ -209,8 +209,8 @@ class TcuPciProxy : public ClockedObject, public CommandExecutor
     static const Addr DMA_ADDR;
 
     TcuPciHost* pciHost;
-    TcuMasterPort tcuMasterPort;
-    TcuSlavePort tcuSlavePort;
+    TcuRequestPort tcuRequestPort;
+    TcuResponsePort tcuResponsePort;
     PioPort pioPort;
     DmaPort dmaPort;
 
@@ -218,7 +218,7 @@ class TcuPciProxy : public ClockedObject, public CommandExecutor
 
     PciBusAddr deviceBusAddr;
 
-    EventWrapper<TcuPciProxy, &TcuPciProxy::tick> tickEvent;
+    MemberEventWrapper<&TcuPciProxy::tick> tickEvent;
     CommandSM cmdSM;
     bool cmdRunning;
     bool interruptPending;

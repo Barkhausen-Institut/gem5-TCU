@@ -34,12 +34,14 @@
 
 #include "debug/PM4PacketProcessor.hh"
 #include "dev/amdgpu/amdgpu_device.hh"
+#include "dev/amdgpu/hwreg_defines.hh"
 #include "dev/amdgpu/interrupt_handler.hh"
 #include "dev/amdgpu/pm4_mmio.hh"
 #include "dev/amdgpu/sdma_engine.hh"
 #include "dev/hsa/hw_scheduler.hh"
 #include "enums/GfxVersion.hh"
 #include "gpu-compute/gpu_command_processor.hh"
+#include "gpu-compute/shader.hh"
 #include "mem/packet.hh"
 #include "mem/packet_access.hh"
 
@@ -114,14 +116,14 @@ void
 PM4PacketProcessor::mapKiq(Addr offset)
 {
     DPRINTF(PM4PacketProcessor, "Mapping KIQ\n");
-    newQueue((QueueDesc *)&kiq, offset);
+    newQueue((QueueDesc *)&kiq, offset, &kiq_pkt);
 }
 
 void
 PM4PacketProcessor::mapPq(Addr offset)
 {
     DPRINTF(PM4PacketProcessor, "Mapping PQ\n");
-    newQueue((QueueDesc *)&pq, offset);
+    newQueue((QueueDesc *)&pq, offset, &pq_pkt);
 }
 
 void
@@ -144,8 +146,9 @@ PM4PacketProcessor::newQueue(QueueDesc *mqd, Addr offset,
                   : QueueType::Compute;
     gpuDevice->setDoorbellType(offset, qt);
 
-    DPRINTF(PM4PacketProcessor, "New PM4 queue %d, base: %p offset: %p\n",
-            id, q->base(), q->offset());
+    DPRINTF(PM4PacketProcessor, "New PM4 queue %d, base: %p offset: %p, me: "
+            "%d, pipe %d queue: %d size: %d\n", id, q->base(), q->offset(),
+            q->me(), q->pipe(), q->queue(), q->size());
 }
 
 void
@@ -200,9 +203,7 @@ PM4PacketProcessor::decodeHeader(PM4Queue *q, PM4Header header)
       case IT_NOP: {
         DPRINTF(PM4PacketProcessor, "PM4 nop, count %p\n", header.count);
         DPRINTF(PM4PacketProcessor, "rptr %p wptr %p\n", q->rptr(), q->wptr());
-        if (header.count == 0x3fff) {
-            q->fastforwardRptr();
-        } else {
+        if (header.count != 0x3fff) {
             q->incRptr((header.count + 1) * sizeof(uint32_t));
         }
         decodeNext(q);
@@ -270,12 +271,21 @@ PM4PacketProcessor::decodeHeader(PM4Queue *q, PM4Header header)
                     dmaBuffer);
         } break;
       case IT_MAP_PROCESS: {
-        dmaBuffer = new PM4MapProcess();
-        cb = new DmaVirtCallback<uint64_t>(
-            [ = ] (const uint64_t &)
-                { mapProcess(q, (PM4MapProcess *)dmaBuffer); });
-        dmaReadVirt(getGARTAddr(q->rptr()), sizeof(PM4MapProcess), cb,
-                    dmaBuffer);
+        if (gpuDevice->getGfxVersion() == GfxVersion::gfx90a) {
+            dmaBuffer = new PM4MapProcessMI200();
+            cb = new DmaVirtCallback<uint64_t>(
+                [ = ] (const uint64_t &)
+                    { mapProcessGfx90a(q, (PM4MapProcessMI200 *)dmaBuffer); });
+            dmaReadVirt(getGARTAddr(q->rptr()), sizeof(PM4MapProcessMI200),
+                        cb, dmaBuffer);
+        } else {
+            dmaBuffer = new PM4MapProcess();
+            cb = new DmaVirtCallback<uint64_t>(
+                [ = ] (const uint64_t &)
+                    { mapProcessGfx9(q, (PM4MapProcess *)dmaBuffer); });
+            dmaReadVirt(getGARTAddr(q->rptr()), sizeof(PM4MapProcess), cb,
+                        dmaBuffer);
+        }
         } break;
 
       case IT_UNMAP_QUEUES: {
@@ -387,7 +397,8 @@ PM4PacketProcessor::mapQueues(PM4Queue *q, PM4MapQueues *pkt)
         SDMAQueueDesc *sdmaMQD = new SDMAQueueDesc();
         memset(sdmaMQD, 0, sizeof(SDMAQueueDesc));
 
-        Addr addr = pkt->mqdAddr;
+        // For SDMA we read the full MQD, so there is no offset calculation.
+        Addr addr = getGARTAddr(pkt->mqdAddr);
 
         auto cb = new DmaVirtCallback<uint32_t>(
             [ = ] (const uint32_t &) {
@@ -439,20 +450,24 @@ void
 PM4PacketProcessor::processSDMAMQD(PM4MapQueues *pkt, PM4Queue *q, Addr addr,
     SDMAQueueDesc *mqd, uint16_t vmid)
 {
+    uint32_t rlc_size = 4UL << bits(mqd->sdmax_rlcx_rb_cntl, 6, 1);
+    Addr rptr_wb_addr = mqd->sdmax_rlcx_rb_rptr_addr_hi;
+    rptr_wb_addr <<= 32;
+    rptr_wb_addr |= mqd->sdmax_rlcx_rb_rptr_addr_lo;
+
     DPRINTF(PM4PacketProcessor, "SDMAMQD: rb base: %#lx rptr: %#x/%#x wptr: "
-            "%#x/%#x ib: %#x/%#x size: %d ctrl: %#x\n", mqd->rb_base,
-            mqd->sdmax_rlcx_rb_rptr, mqd->sdmax_rlcx_rb_rptr_hi,
+            "%#x/%#x ib: %#x/%#x size: %d ctrl: %#x rptr wb addr: %#lx\n",
+            mqd->rb_base, mqd->sdmax_rlcx_rb_rptr, mqd->sdmax_rlcx_rb_rptr_hi,
             mqd->sdmax_rlcx_rb_wptr, mqd->sdmax_rlcx_rb_wptr_hi,
             mqd->sdmax_rlcx_ib_base_lo, mqd->sdmax_rlcx_ib_base_hi,
-            mqd->sdmax_rlcx_ib_size, mqd->sdmax_rlcx_rb_cntl);
+            rlc_size, mqd->sdmax_rlcx_rb_cntl, rptr_wb_addr);
 
     // Engine 2 points to SDMA0 while engine 3 points to SDMA1
     assert(pkt->engineSel == 2 || pkt->engineSel == 3);
     SDMAEngine *sdma_eng = gpuDevice->getSDMAById(pkt->engineSel - 2);
 
     // Register RLC queue with SDMA
-    sdma_eng->registerRLCQueue(pkt->doorbellOffset << 2,
-                               mqd->rb_base << 8);
+    sdma_eng->registerRLCQueue(pkt->doorbellOffset << 2, addr, mqd);
 
     // Register doorbell with GPU device
     gpuDevice->setSDMAEngine(pkt->doorbellOffset << 2, sdma_eng);
@@ -489,14 +504,16 @@ PM4PacketProcessor::releaseMemDone(PM4Queue *q, PM4ReleaseMem *pkt, Addr addr)
     DPRINTF(PM4PacketProcessor, "PM4 release_mem wrote %d to %p\n",
             pkt->dataLo, addr);
     if (pkt->intSelect == 2) {
-        DPRINTF(PM4PacketProcessor, "PM4 interrupt, ctx: %d, me: %d, pipe: "
-                "%d, queueSlot:%d\n", pkt->intCtxId, q->me(), q->pipe(),
-                q->queue());
-        // Rearranging the queue field of PM4MapQueues as the interrupt RingId
-        // format specified in PM4ReleaseMem pkt.
-        uint32_t ringId = (q->me() << 6) | (q->pipe() << 4) | q->queue();
+        DPRINTF(PM4PacketProcessor, "PM4 interrupt, id: %d ctx: %d, me: %d, "
+                "pipe: %d, queueSlot:%d\n", q->id(), pkt->intCtxId, q->me(),
+                q->pipe(), q->queue());
+
+        uint8_t ringId = 0;
+        if (q->id() != 0) {
+            ringId = (q->queue() << 4) | (q->me() << 2) | q->pipe();
+        }
         gpuDevice->getIH()->prepareInterruptCookie(pkt->intCtxId, ringId,
-            SOC15_IH_CLIENTID_RLC, TRAP_ID);
+                                            SOC15_IH_CLIENTID_GRBM_CP, CP_EOP);
         gpuDevice->getIH()->submitInterruptCookie();
     }
 
@@ -605,16 +622,50 @@ PM4PacketProcessor::doneMQDWrite(Addr mqdAddr, Addr addr) {
 }
 
 void
-PM4PacketProcessor::mapProcess(PM4Queue *q, PM4MapProcess *pkt)
+PM4PacketProcessor::mapProcess(uint32_t pasid, uint64_t ptBase,
+                               uint32_t shMemBases)
+{
+    uint16_t vmid = gpuDevice->allocateVMID(pasid);
+
+    gpuDevice->getVM().setPageTableBase(vmid, ptBase);
+    gpuDevice->CP()->shader()->setHwReg(HW_REG_SH_MEM_BASES, shMemBases);
+
+    // Setup the apertures that gem5 uses. These values are bits [63:48].
+    Addr lds_base = (Addr)bits(shMemBases, 31, 16) << 48;
+    Addr scratch_base = (Addr)bits(shMemBases, 15, 0) << 48;
+
+    // There does not seem to be any register for the limit, but the driver
+    // assumes scratch and LDS have a 4GB aperture, so use that.
+    gpuDevice->CP()->shader()->setLdsApe(lds_base, lds_base + 0xFFFFFFFF);
+    gpuDevice->CP()->shader()->setScratchApe(scratch_base,
+                                             scratch_base + 0xFFFFFFFF);
+}
+
+void
+PM4PacketProcessor::mapProcessGfx9(PM4Queue *q, PM4MapProcess *pkt)
 {
     q->incRptr(sizeof(PM4MapProcess));
-    uint16_t vmid = gpuDevice->allocateVMID(pkt->pasid);
 
-    DPRINTF(PM4PacketProcessor, "PM4 map_process pasid: %p vmid: %d quantum: "
-            "%d pt: %p signal: %p\n", pkt->pasid, vmid, pkt->processQuantum,
+    DPRINTF(PM4PacketProcessor, "PM4 map_process pasid: %p quantum: "
+            "%d pt: %p signal: %p\n", pkt->pasid, pkt->processQuantum,
             pkt->ptBase, pkt->completionSignal);
 
-    gpuDevice->getVM().setPageTableBase(vmid, pkt->ptBase);
+    mapProcess(pkt->pasid, pkt->ptBase, pkt->shMemBases);
+
+    delete pkt;
+    decodeNext(q);
+}
+
+void
+PM4PacketProcessor::mapProcessGfx90a(PM4Queue *q, PM4MapProcessMI200 *pkt)
+{
+    q->incRptr(sizeof(PM4MapProcessMI200));
+
+    DPRINTF(PM4PacketProcessor, "PM4 map_process pasid: %p quantum: "
+            "%d pt: %p signal: %p\n", pkt->pasid, pkt->processQuantum,
+            pkt->ptBase, pkt->completionSignal);
+
+    mapProcess(pkt->pasid, pkt->ptBase, pkt->shMemBases);
 
     delete pkt;
     decodeNext(q);
@@ -769,6 +820,9 @@ PM4PacketProcessor::writeMMIO(PacketPtr pkt, Addr mmio_offset)
       case mmCP_HQD_PQ_WPTR_POLL_ADDR_HI:
         setHqdPqWptrPollAddrHi(pkt->getLE<uint32_t>());
         break;
+      case mmCP_HQD_PQ_CONTROL:
+        setHqdPqControl(pkt->getLE<uint32_t>());
+        break;
       case mmCP_HQD_IB_CONTROL:
         setHqdIbCtrl(pkt->getLE<uint32_t>());
         break;
@@ -891,6 +945,12 @@ PM4PacketProcessor::setHqdPqWptrPollAddrHi(uint32_t data)
 }
 
 void
+PM4PacketProcessor::setHqdPqControl(uint32_t data)
+{
+    kiq.hqd_pq_control = data;
+}
+
+void
 PM4PacketProcessor::setHqdIbCtrl(uint32_t data)
 {
     kiq.hqd_ib_control = data;
@@ -993,6 +1053,15 @@ PM4PacketProcessor::serialize(CheckpointOut &cp) const
     Addr offset[num_queues];
     bool processing[num_queues];
     bool ib[num_queues];
+    uint32_t me[num_queues];
+    uint32_t pipe[num_queues];
+    uint32_t queue[num_queues];
+    bool privileged[num_queues];
+    uint32_t hqd_active[num_queues];
+    uint32_t hqd_vmid[num_queues];
+    Addr aql_rptr[num_queues];
+    uint32_t doorbell[num_queues];
+    uint32_t hqd_pq_control[num_queues];
 
     int i = 0;
     for (auto iter : queues) {
@@ -1012,6 +1081,15 @@ PM4PacketProcessor::serialize(CheckpointOut &cp) const
         offset[i] = q->offset();
         processing[i] = q->processing();
         ib[i] = q->ib();
+        me[i] = q->me();
+        pipe[i] = q->pipe();
+        queue[i] = q->queue();
+        privileged[i] = q->privileged();
+        hqd_active[i] = q->getMQD()->hqd_active;
+        hqd_vmid[i] = q->getMQD()->hqd_vmid;
+        aql_rptr[i] = q->getMQD()->aqlRptr;
+        doorbell[i] = q->getMQD()->doorbell;
+        hqd_pq_control[i] = q->getMQD()->hqd_pq_control;
         i++;
     }
 
@@ -1027,6 +1105,15 @@ PM4PacketProcessor::serialize(CheckpointOut &cp) const
     SERIALIZE_ARRAY(offset, num_queues);
     SERIALIZE_ARRAY(processing, num_queues);
     SERIALIZE_ARRAY(ib, num_queues);
+    SERIALIZE_ARRAY(me, num_queues);
+    SERIALIZE_ARRAY(pipe, num_queues);
+    SERIALIZE_ARRAY(queue, num_queues);
+    SERIALIZE_ARRAY(privileged, num_queues);
+    SERIALIZE_ARRAY(hqd_active, num_queues);
+    SERIALIZE_ARRAY(hqd_vmid, num_queues);
+    SERIALIZE_ARRAY(aql_rptr, num_queues);
+    SERIALIZE_ARRAY(doorbell, num_queues);
+    SERIALIZE_ARRAY(hqd_pq_control, num_queues);
 }
 
 void
@@ -1049,6 +1136,15 @@ PM4PacketProcessor::unserialize(CheckpointIn &cp)
     Addr offset[num_queues];
     bool processing[num_queues];
     bool ib[num_queues];
+    uint32_t me[num_queues];
+    uint32_t pipe[num_queues];
+    uint32_t queue[num_queues];
+    bool privileged[num_queues];
+    uint32_t hqd_active[num_queues];
+    uint32_t hqd_vmid[num_queues];
+    Addr aql_rptr[num_queues];
+    uint32_t doorbell[num_queues];
+    uint32_t hqd_pq_control[num_queues];
 
     UNSERIALIZE_ARRAY(id, num_queues);
     UNSERIALIZE_ARRAY(mqd_base, num_queues);
@@ -1061,6 +1157,15 @@ PM4PacketProcessor::unserialize(CheckpointIn &cp)
     UNSERIALIZE_ARRAY(offset, num_queues);
     UNSERIALIZE_ARRAY(processing, num_queues);
     UNSERIALIZE_ARRAY(ib, num_queues);
+    UNSERIALIZE_ARRAY(me, num_queues);
+    UNSERIALIZE_ARRAY(pipe, num_queues);
+    UNSERIALIZE_ARRAY(queue, num_queues);
+    UNSERIALIZE_ARRAY(privileged, num_queues);
+    UNSERIALIZE_ARRAY(hqd_active, num_queues);
+    UNSERIALIZE_ARRAY(hqd_vmid, num_queues);
+    UNSERIALIZE_ARRAY(aql_rptr, num_queues);
+    UNSERIALIZE_ARRAY(doorbell, num_queues);
+    UNSERIALIZE_ARRAY(hqd_pq_control, num_queues);
 
     for (int i = 0; i < num_queues; i++) {
         QueueDesc *mqd = new QueueDesc();
@@ -1072,7 +1177,9 @@ PM4PacketProcessor::unserialize(CheckpointIn &cp)
         mqd->ibBase = ib_base[i];
         mqd->ibRptr = ib_rptr[i];
 
-        newQueue(mqd, offset[i], nullptr, id[i]);
+        PM4MapQueues* pkt = new PM4MapQueues;
+        memset(pkt, 0, sizeof(PM4MapQueues));
+        newQueue(mqd, offset[i], pkt, id[i]);
 
         queues[id[i]]->ib(false);
         queues[id[i]]->wptr(wptr[i]);
@@ -1081,6 +1188,13 @@ PM4PacketProcessor::unserialize(CheckpointIn &cp)
         queues[id[i]]->offset(offset[i]);
         queues[id[i]]->processing(processing[i]);
         queues[id[i]]->ib(ib[i]);
+        queues[id[i]]->setPkt(me[i], pipe[i], queue[i], privileged[i]);
+        queues[id[i]]->getMQD()->hqd_active = hqd_active[i];
+        queues[id[i]]->getMQD()->hqd_vmid = hqd_vmid[i];
+        queues[id[i]]->getMQD()->aqlRptr = aql_rptr[i];
+        queues[id[i]]->getMQD()->doorbell = doorbell[i];
+        queues[id[i]]->getMQD()->hqd_pq_control = hqd_pq_control[i];
+
         DPRINTF(PM4PacketProcessor, "PM4 queue %d, rptr: %p wptr: %p\n",
                 queues[id[i]]->id(), queues[id[i]]->rptr(),
                 queues[id[i]]->wptr());

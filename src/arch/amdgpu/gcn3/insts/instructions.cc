@@ -5316,6 +5316,8 @@ namespace Gcn3ISA
     Inst_SMEM__S_MEMTIME::Inst_SMEM__S_MEMTIME(InFmt_SMEM *iFmt)
         : Inst_SMEM(iFmt, "s_memtime")
     {
+        // s_memtime does not issue a memory request
+        setFlag(ALU);
     } // Inst_SMEM__S_MEMTIME
 
     Inst_SMEM__S_MEMTIME::~Inst_SMEM__S_MEMTIME()
@@ -5326,7 +5328,9 @@ namespace Gcn3ISA
     void
     Inst_SMEM__S_MEMTIME::execute(GPUDynInstPtr gpuDynInst)
     {
-        panicUnimplemented();
+        ScalarOperandU64 sdst(gpuDynInst, instData.SDATA);
+        sdst = (ScalarRegU64)gpuDynInst->computeUnit()->curCycle();
+        sdst.write();
     }
 
     Inst_SMEM__S_MEMREALTIME::Inst_SMEM__S_MEMREALTIME(InFmt_SMEM *iFmt)
@@ -32119,9 +32123,9 @@ namespace Gcn3ISA
 
         for (int lane = 0; lane < NumVecElemPerVecReg; ++lane) {
             if (gpuDynInst->exec_mask[lane]) {
-                vdst0[lane] = (reinterpret_cast<VecElemU64*>(
+                vdst0[lane] = (reinterpret_cast<VecElemU32*>(
                     gpuDynInst->d_data))[lane * 2];
-                vdst1[lane] = (reinterpret_cast<VecElemU64*>(
+                vdst1[lane] = (reinterpret_cast<VecElemU32*>(
                     gpuDynInst->d_data))[lane * 2 + 1];
             }
         }

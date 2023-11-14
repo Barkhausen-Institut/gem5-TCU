@@ -50,7 +50,7 @@ class BaseTcu : public ClockedObject
   protected:
 
     // All ports to
-    class TcuMasterPort : public QueuedRequestPort
+    class TcuRequestPort : public QueuedRequestPort
     {
       protected:
 
@@ -62,30 +62,30 @@ class BaseTcu : public ClockedObject
 
       public:
 
-        TcuMasterPort( const std::string& _name, BaseTcu& _tcu);
+        TcuRequestPort( const std::string& _name, BaseTcu& _tcu);
 
         virtual void completeRequest(PacketPtr pkt) = 0;
 
         bool recvTimingResp(PacketPtr pkt) override;
     };
 
-    class NocMasterPort : public TcuMasterPort
+    class NocRequestPort : public TcuRequestPort
     {
       public:
 
-        NocMasterPort(BaseTcu& _tcu)
-            : TcuMasterPort(_tcu.name() + ".noc_master_port", _tcu)
+        NocRequestPort(BaseTcu& _tcu)
+            : TcuRequestPort(_tcu.name() + ".noc_master_port", _tcu)
         { }
 
         void completeRequest(PacketPtr pkt) override;
     };
 
-    class ICacheMasterPort : public TcuMasterPort
+    class ICacheRequestPort : public TcuRequestPort
     {
       public:
 
-        ICacheMasterPort(BaseTcu& _tcu)
-          : TcuMasterPort(_tcu.name() + ".icache_master_port", _tcu)
+        ICacheRequestPort(BaseTcu& _tcu)
+          : TcuRequestPort(_tcu.name() + ".icache_master_port", _tcu)
         { }
 
         void completeRequest(PacketPtr) override {
@@ -93,12 +93,12 @@ class BaseTcu : public ClockedObject
         bool recvTimingResp(PacketPtr pkt) override;
     };
 
-    class DCacheMasterPort : public TcuMasterPort
+    class DCacheRequestPort : public TcuRequestPort
     {
       public:
 
-        DCacheMasterPort(BaseTcu& _tcu)
-          : TcuMasterPort(_tcu.name() + ".dcache_master_port", _tcu)
+        DCacheRequestPort(BaseTcu& _tcu)
+          : TcuRequestPort(_tcu.name() + ".dcache_master_port", _tcu)
         { }
 
         void completeRequest(PacketPtr) override {
@@ -106,7 +106,7 @@ class BaseTcu : public ClockedObject
         bool recvTimingResp(PacketPtr pkt) override;
     };
 
-    class TcuSlavePort : public SlavePort
+    class TcuResponsePort : public ResponsePort
     {
       protected:
 
@@ -118,11 +118,11 @@ class BaseTcu : public ClockedObject
 
         struct ResponseEvent : public Event
         {
-            TcuSlavePort& port;
+            TcuResponsePort& port;
 
             PacketPtr pkt;
 
-            ResponseEvent(TcuSlavePort& _port, PacketPtr _pkt)
+            ResponseEvent(TcuResponsePort& _port, PacketPtr _pkt)
                 : port(_port), pkt(_pkt) {}
 
             void process() override;
@@ -139,7 +139,7 @@ class BaseTcu : public ClockedObject
 
       public:
 
-        TcuSlavePort(const std::string& _name, BaseTcu& _tcu);
+        TcuResponsePort(const std::string& _name, BaseTcu& _tcu);
 
         virtual bool handleRequest(PacketPtr pkt,
                                    bool *busy,
@@ -158,12 +158,12 @@ class BaseTcu : public ClockedObject
         void requestFinished();
     };
 
-    class NocSlavePort : public TcuSlavePort
+    class NocResponsePort : public TcuResponsePort
     {
       public:
 
-        NocSlavePort(BaseTcu& _tcu)
-          : TcuSlavePort(_tcu.name() + ".noc_slave_port", _tcu)
+        NocResponsePort(BaseTcu& _tcu)
+          : TcuResponsePort(_tcu.name() + ".noc_slave_port", _tcu)
         { }
 
       protected:
@@ -176,7 +176,7 @@ class BaseTcu : public ClockedObject
     };
 
     template<class T>
-    class CacheSlavePort : public TcuSlavePort
+    class CacheResponsePort : public TcuResponsePort
     {
       private:
 
@@ -186,8 +186,8 @@ class BaseTcu : public ClockedObject
 
       public:
 
-        CacheSlavePort(T &_port, BaseTcu& _tcu, bool _icache)
-          : TcuSlavePort(_tcu.name() + (_icache ? ".icache_slave_port" : ".dcache_slave_port"), _tcu),
+        CacheResponsePort(T &_port, BaseTcu& _tcu, bool _icache)
+          : TcuResponsePort(_tcu.name() + (_icache ? ".icache_slave_port" : ".dcache_slave_port"), _tcu),
             port(_port), icache(_icache)
         { }
 
@@ -210,14 +210,14 @@ class BaseTcu : public ClockedObject
         }
     };
 
-    class LLCSlavePort : public TcuSlavePort
+    class LLCResponsePort : public TcuResponsePort
     {
-        friend class NocMasterPort;
+        friend class NocRequestPort;
 
       public:
 
-        LLCSlavePort(BaseTcu& _tcu)
-          : TcuSlavePort(_tcu.name() + ".llc_slave_port", _tcu)
+        LLCResponsePort(BaseTcu& _tcu)
+          : TcuResponsePort(_tcu.name() + ".llc_slave_port", _tcu)
         { }
 
       protected:
@@ -272,8 +272,8 @@ class BaseTcu : public ClockedObject
     virtual void handleNocRequest(PacketPtr pkt) = 0;
 
     virtual bool handleCUMemRequest(PacketPtr pkt,
-                                    TcuSlavePort &sport,
-                                    TcuMasterPort &mport,
+                                    TcuResponsePort &sport,
+                                    TcuRequestPort &mport,
                                     bool icache,
                                     bool functional) = 0;
 
@@ -285,7 +285,7 @@ class BaseTcu : public ClockedObject
 
     void nocRequestFinished();
 
-    void schedDummyResponse(TcuSlavePort &port, PacketPtr pkt, bool functional);
+    void schedDummyResponse(TcuResponsePort &port, PacketPtr pkt, bool functional);
 
     void printNocRequest(PacketPtr pkt, const char *type);
 
@@ -293,21 +293,21 @@ class BaseTcu : public ClockedObject
 
     const RequestorID requestorId;
 
-    NocMasterPort  nocMasterPort;
+    NocRequestPort  nocRequestPort;
 
-    NocSlavePort   nocSlavePort;
+    NocResponsePort   nocResponsePort;
 
-    ICacheMasterPort icacheMasterPort;
+    ICacheRequestPort icacheRequestPort;
 
-    DCacheMasterPort dcacheMasterPort;
+    DCacheRequestPort dcacheRequestPort;
 
-    CacheSlavePort<ICacheMasterPort> icacheSlavePort;
+    CacheResponsePort<ICacheRequestPort> icacheResponsePort;
 
-    CacheSlavePort<DCacheMasterPort> dcacheSlavePort;
+    CacheResponsePort<DCacheRequestPort> dcacheResponsePort;
 
-    LLCSlavePort llcSlavePort;
+    LLCResponsePort llcResponsePort;
 
-    EventWrapper<BaseTcu, &BaseTcu::nocRequestFinished> nocReqFinishedEvent;
+    MemberEventWrapper<&BaseTcu::nocRequestFinished> nocReqFinishedEvent;
 
     std::vector<Cache*> caches;
 

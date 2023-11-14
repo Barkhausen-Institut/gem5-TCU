@@ -56,10 +56,11 @@
 namespace gem5
 {
 
+class BaseISA;
+
 namespace ArmISA
 {
 
-class ISA;
 class Decoder : public InstDecoder
 {
   public: // Public decoder parameters
@@ -83,6 +84,12 @@ class Decoder : public InstDecoder
      * bitfields.
      */
     int sveLen;
+
+    /**
+     * SME vector length, encoded in the same format as the SMCR_EL<x>.LEN
+     * bitfields.
+     */
+    int smeLen;
 
     enums::DecoderFlavor decoderFlavor;
 
@@ -156,6 +163,12 @@ class Decoder : public InstDecoder
     setSveLen(uint8_t len)
     {
         sveLen = len;
+    }
+
+    void
+    setSmeLen(uint8_t len)
+    {
+        smeLen = len;
     }
 };
 

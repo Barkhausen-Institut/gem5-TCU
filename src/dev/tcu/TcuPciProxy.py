@@ -52,11 +52,11 @@ class TcuPciProxy(ClockedObject):
     cxx_header = "dev/tcu/pci_proxy.hh"
     cxx_class = 'gem5::tcu::TcuPciProxy'
 
-    tcu_master_port = MasterPort("Port to send requests to the TCU")
-    tcu_slave_port = SlavePort("Port that receives memory requests "
+    tcu_master_port = RequestPort("Port to send requests to the TCU")
+    tcu_slave_port = ResponsePort("Port that receives memory requests "
                                 "from the TCU")
-    pio_port = MasterPort("Port to the proxied device's pio port")
-    dma_port = SlavePort("Port that receives DMA requests "
+    pio_port = RequestPort("Port to the proxied device's pio port")
+    dma_port = ResponsePort("Port that receives DMA requests "
                          "from the proxied device")
 
     system = Param.System(Parent.any, "System the PCI proxy is part of")

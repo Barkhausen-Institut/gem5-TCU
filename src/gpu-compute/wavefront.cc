@@ -118,8 +118,10 @@ Wavefront::initRegState(HSAQueueEntry *task, int wgSizeInWorkItems)
 {
     int regInitIdx = 0;
 
-    // iterate over all the init fields and check which
-    // bits are enabled
+    // Iterate over all the init fields and check which
+    // bits are enabled. Useful information can be found here:
+    // https://github.com/ROCm-Developer-Tools/ROCm-ComputeABI-Doc/
+    //                    blob/master/AMDGPU-ABI.md
     for (int en_bit = 0; en_bit < NumScalarInitFields; ++en_bit) {
 
         if (task->sgprBitEnabled(en_bit)) {
@@ -252,6 +254,24 @@ Wavefront::initRegState(HSAQueueEntry *task, int wgSizeInWorkItems)
 
                 ++regInitIdx;
                 break;
+              case DispatchId:
+                physSgprIdx
+                    = computeUnit->registerManager->mapSgpr(this, regInitIdx);
+                computeUnit->srf[simdId]->write(physSgprIdx,
+                        task->dispatchId());
+                ++regInitIdx;
+                DPRINTF(GPUInitAbi, "CU%d: WF[%d][%d]: wave[%d] "
+                        "Setting DispatchId: s[%d] = %x\n",
+                        computeUnit->cu_id, simdId,
+                        wfSlotId, wfDynId, physSgprIdx,
+                        task->dispatchId());
+
+                // Dispatch ID in gem5 is an int. Set upper 32-bits to zero.
+                physSgprIdx
+                    = computeUnit->registerManager->mapSgpr(this, regInitIdx);
+                computeUnit->srf[simdId]->write(physSgprIdx, 0);
+                ++regInitIdx;
+                break;
               case FlatScratchInit:
                 physSgprIdx
                     = computeUnit->registerManager->mapSgpr(this, regInitIdx);
@@ -308,6 +328,18 @@ Wavefront::initRegState(HSAQueueEntry *task, int wgSizeInWorkItems)
                 computeUnit->shader->initShHiddenPrivateBase(
                        hidden_priv_base,
                        task->amdQueue.scratch_backing_memory_location);
+                break;
+              case PrivateSegSize:
+                physSgprIdx
+                    = computeUnit->registerManager->mapSgpr(this, regInitIdx);
+                computeUnit->srf[simdId]->write(physSgprIdx,
+                        task->privMemPerItem());
+                ++regInitIdx;
+                DPRINTF(GPUInitAbi, "CU%d: WF[%d][%d]: wave[%d] "
+                        "Setting private segment size: s[%d] = %x\n",
+                        computeUnit->cu_id, simdId,
+                        wfSlotId, wfDynId, physSgprIdx,
+                        task->privMemPerItem());
                 break;
               case GridWorkgroupCountX:
                 physSgprIdx =

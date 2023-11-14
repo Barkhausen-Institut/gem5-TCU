@@ -61,7 +61,7 @@ TcuAccel::CpuPort::recvReqRetry()
 TcuAccel::TcuAccel(const TcuAccelParams &p)
   : ClockedObject(p),
     system(p.system),
-    tickEvent(this),
+    tickEvent(*this),
     // our accelerators always have SPM, which supports larger chunks
     chunkSize(p.max_data_size),
     maxDataSize(p.max_data_size),

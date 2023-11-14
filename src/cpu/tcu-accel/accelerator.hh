@@ -81,13 +81,13 @@ class TcuAccel : public ClockedObject
     virtual Addr bufferAddr() const = 0;
     virtual void setSwitched() = 0;
 
-    class CpuPort : public MasterPort
+    class CpuPort : public RequestPort
     {
       private:
         TcuAccel& tcuaccel;
       public:
         CpuPort(const std::string& _name, TcuAccel* _tcuaccel)
-            : MasterPort(_name, _tcuaccel), tcuaccel(*_tcuaccel)
+            : RequestPort(_name), tcuaccel(*_tcuaccel)
         { }
       protected:
         bool recvTimingResp(PacketPtr pkt) override;
@@ -109,7 +109,7 @@ class TcuAccel : public ClockedObject
 
     System *system;
 
-    EventWrapper<TcuAccel, &TcuAccel::tick> tickEvent;
+    MemberEventWrapper<&TcuAccel::tick> tickEvent;
 
     Addr chunkSize;
     size_t maxDataSize;

@@ -43,7 +43,6 @@
 #define __CPU_CHECKER_THREAD_CONTEXT_HH__
 
 #include "arch/generic/pcstate.hh"
-#include "config/the_isa.hh"
 #include "cpu/checker/cpu.hh"
 #include "cpu/simple_thread.hh"
 #include "cpu/thread_context.hh"
@@ -51,11 +50,6 @@
 
 namespace gem5
 {
-
-namespace TheISA
-{
-    class Decoder;
-} // namespace TheISA
 
 /**
  * Derived ThreadContext class for use with the Checker.  The template
@@ -136,7 +130,7 @@ class CheckerThreadContext : public ThreadContext
        checkerTC->setContextId(id);
     }
 
-    const Loader::SymbolTable &getSymTab() override { return actualTC->getSymTab(); }
+    const loader::SymbolTable &getSymTab() override { return actualTC->getSymTab(); }
 
     /** Returns this thread's ID number. */
     int threadId() const override { return actualTC->threadId(); }
@@ -310,12 +304,6 @@ class CheckerThreadContext : public ThreadContext
         actualTC->setMiscReg(misc_reg, val);
     }
 
-    RegId
-    flattenRegId(const RegId& regId) const override
-    {
-        return actualTC->flattenRegId(regId);
-    }
-
     unsigned
     readStCondFailures() const override
     {
@@ -326,38 +314,6 @@ class CheckerThreadContext : public ThreadContext
     setStCondFailures(unsigned sc_failures) override
     {
         actualTC->setStCondFailures(sc_failures);
-    }
-
-    RegVal
-    getRegFlat(const RegId &reg) const override
-    {
-        return actualTC->getRegFlat(reg);
-    }
-
-    void
-    getRegFlat(const RegId &reg, void *val) const override
-    {
-        actualTC->getRegFlat(reg, val);
-    }
-
-    void *
-    getWritableRegFlat(const RegId &reg) override
-    {
-        return actualTC->getWritableRegFlat(reg);
-    }
-
-    void
-    setRegFlat(const RegId &reg, RegVal val) override
-    {
-        actualTC->setRegFlat(reg, val);
-        checkerTC->setRegFlat(reg, val);
-    }
-
-    void
-    setRegFlat(const RegId &reg, const void *val) override
-    {
-        actualTC->setRegFlat(reg, val);
-        checkerTC->setRegFlat(reg, val);
     }
 
     // hardware transactional memory

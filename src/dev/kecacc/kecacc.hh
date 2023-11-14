@@ -86,8 +86,8 @@ class KecAcc : public BasicPioDevice
     CPUPort port;
     RequestorID requestorId;
     PacketPtr delayedPkt;
-    EventWrapper<KecAcc, &KecAcc::sendDelayedPkt> sendDelayedPktEvent;
-    EventWrapper<KecAcc, &KecAcc::finishCommand> finishCmdEvent;
+    MemberEventWrapper<&KecAcc::sendDelayedPkt> sendDelayedPktEvent;
+    MemberEventWrapper<&KecAcc::finishCommand> finishCmdEvent;
 
     uint64_t cmd;
     KecAccXKCP xkcp;
