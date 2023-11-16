@@ -57,3 +57,6 @@ class M3System(System):
     tile_ids = VectorParam.Addr([], "All tile ids")
 
     noc_master_port = RequestPort("Port that connects to the global NoC (only for initialization)")
+
+    rot_layers = VectorParam.String([], "The RoT layers (excluding the Boot ROM)")
+    kernel_cmdline = Param.String("", "The command line arguments for the kernel")

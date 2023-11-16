@@ -49,9 +49,10 @@ M3System::M3System(const Params &p)
                  p.eps_addr,
                  p.eps_num),
       nocPort(*this),
-      loader(p.tile_descs, p.tile_ids, p.mods, p.cmdline, p.logflags,
-             p.env_start, tcu::TileId::from_raw(p.tile_id), p.mod_offset,
-             p.mod_size, p.tile_size),
+      loader(p.tile_descs, p.tile_ids, p.mods, p.rot_layers, p.cmdline,
+             p.logflags, p.kernel_cmdline, p.env_start,
+             tcu::TileId::from_raw(p.tile_id),
+             p.mod_offset, p.mod_size, p.tile_size),
       _started(!p.cmdline.empty())
 {
 }

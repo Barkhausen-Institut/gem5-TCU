@@ -48,8 +48,10 @@ namespace gem5
 M3Loader::M3Loader(const std::vector<Addr> &tile_descs,
                    const std::vector<Addr> &tile_ids,
                    const std::vector<std::string> &mods,
+                   const std::vector<std::string> &rot_layers,
                    const std::string &cmdline,
                    const std::string &logflags,
+                   const std::string &kernel_cmdline,
                    Addr envStart,
                    tcu::TileId tileId,
                    Addr modOffset,
@@ -57,8 +59,10 @@ M3Loader::M3Loader(const std::vector<Addr> &tile_descs,
                    Addr tileSize)
     : tiles(),
       mods(mods),
+      rotLayers(rot_layers),
       commandLine(cmdline),
       logflags(logflags),
+      kernelCmdline(kernel_cmdline),
       envStart(envStart),
       tileId(tileId),
       modOffset(modOffset),
@@ -240,8 +244,64 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
     bufStart = writeArgs(sys, args, argv, bufStart, envStart + ENV_SIZE);
     writeArgs(sys, envs, env.envp, bufStart, envStart + ENV_SIZE);
 
+    if (!rotLayers.empty())
+    {
+        static_assert(sizeof(RotCfg) <= tcu::TcuTlb::PAGE_SIZE,
+                      "RoT configuration too large");
+        auto offset = modOffset + tcu::TcuTlb::PAGE_SIZE; // For RotCfg
+        RotBinary rotBins[2];
+        panic_if(rotLayers.size() != 2, "Unexpected number of RoT layers");
+
+        size_t i = 0;
+        for (const std::string &layer : rotLayers)
+        {
+            Addr addr = tcu::NocAddr(mem.memTile, offset).getAddr();
+            Addr size = loadModule(noc, layer, addr);
+            rotBins[i].flash_offset = offset;
+            rotBins[i].size = size;
+
+            inform("Loaded RoT layer '%s' to %p .. %p",
+                   layer, addr, addr + size);
+
+            // to next
+            offset += size + tcu::TcuTlb::PAGE_SIZE - 1;
+            offset &= ~static_cast<Addr>(tcu::TcuTlb::PAGE_SIZE - 1);
+            i++;
+        }
+
+        RotCfg cfg = {
+            .brom = {
+                .magic = 0x42726f6d43666701,
+                .next_layer = rotBins[0],
+            },
+            .blau = {
+                .magic = 0x426c617543666701,
+                .next_layer = rotBins[1],
+            },
+            .rosa = {
+                .magic = 0x526f736143666701,
+                .kernel_mem_size = tileSize,
+                .kernel_cmdline = {},
+                .mods = {},
+            },
+        };
+
+        panic_if(mods.size() > (sizeof(cfg.rosa.mods) / sizeof(cfg.rosa.mods[0])),
+                 "Too many modules for RoT");
+        panic_if(kernelCmdline.length() >= sizeof(cfg.rosa.kernel_cmdline) - 1,
+                 "Kernel command line too long");
+        strcpy(cfg.rosa.kernel_cmdline, kernelCmdline.c_str());
+
+        Addr addr = loadModules(mem, noc, offset, cfg.rosa.mods);
+        Addr end = tcu::NocAddr(mem.memTile, modOffset + modSize).getAddr();
+        panic_if(addr > end, "Modules are too large (have: %lu, need: %lu)",
+                 modSize, addr - tcu::NocAddr(mem.memTile, modOffset).getAddr());
+
+        writeRemote(noc, tcu::NocAddr(mem.memTile, modOffset).getAddr(),
+                    reinterpret_cast<uint8_t*>(&cfg), sizeof(cfg));
+    }
     // modules for the kernel
-    if (modSize)
+    else if (modSize)
     {
         BootModule *bmods = new BootModule[mods.size()]();
         Addr addr = loadModules(mem, noc, modOffset, bmods);

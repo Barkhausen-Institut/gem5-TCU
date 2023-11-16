@@ -91,10 +91,39 @@ class M3Loader
         uint64_t raw_tile_ids[MAX_CHIPS * MAX_TILES];
     };
 
+    struct M5_ATTR_PACKED RotBinary
+    {
+        uint32_t flash_offset;
+        uint32_t size;
+    };
+
+    struct M5_ATTR_PACKED RotCfg
+    {
+        struct M5_ATTR_PACKED
+        {
+            uint64_t magic;
+            RotBinary next_layer;
+        } brom;
+        struct M5_ATTR_PACKED
+        {
+            uint64_t magic;
+            RotBinary next_layer;
+        } blau;
+        struct M5_ATTR_PACKED
+        {
+            uint64_t magic;
+            uint64_t kernel_mem_size;
+            char kernel_cmdline[48];
+            BootModule mods[50];
+        } rosa;
+    };
+
     std::map<tcu::TileId, tcu::tiledesc_t> tiles;
     std::vector<std::string> mods;
+    std::vector<std::string> rotLayers;
     std::string commandLine;
     std::string logflags;
+    std::string kernelCmdline;
 
   public:
     const Addr envStart;
@@ -107,8 +136,10 @@ class M3Loader
     M3Loader(const std::vector<Addr> &tile_descs,
              const std::vector<Addr> &tile_ids,
              const std::vector<std::string> &mods,
+             const std::vector<std::string> &rot_layers,
              const std::string &cmdline,
              const std::string &logflags,
+             const std::string &kernelCmdline,
              Addr envStart,
              tcu::TileId tileId,
              Addr modOffset,
