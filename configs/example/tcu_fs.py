@@ -285,7 +285,7 @@ def createTile(noc, options, id, systemType, l1size, l2size, spmsize, memTile, e
         # the TCU handles LLC misses
         tile.tcu.llc_slave_port = tile.xbar.default
     elif not spmsize is None:
-        tile.spm = Scratchpad(in_addr_map="true")
+        tile.spm = Scratchpad()
         tile.spm.cpu_port = tile.xbar.default
         tile.spm.range = spmsize
 
@@ -714,7 +714,7 @@ def createMemTile(noc, options, id, size, dram=True):
         tile.mem_ctrl.dram.range = size_bytes
         tile.mem_ctrl.port = tile.xbar.mem_side_ports
     else:
-        tile.mem_ctrl = Scratchpad(in_addr_map="true")
+        tile.mem_ctrl = Scratchpad()
         tile.mem_ctrl.cpu_port = tile.xbar.mem_side_ports
         tile.mem_ctrl.range = size_bytes
 
