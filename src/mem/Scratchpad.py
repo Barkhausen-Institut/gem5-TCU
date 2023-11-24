@@ -41,5 +41,6 @@ class Scratchpad(AbstractMemory):
     tcu_port = ResponsePort("Slave port TCU side")
 
     latency = Param.Cycles(1, "Request to response latency")
-
     throughput = Param.Unsigned(64, "Number of bytes that can be read per cycle")
+
+    ignore_invalid = Param.Bool(False, "Handle and ignore all invalid accesses outside of address range")

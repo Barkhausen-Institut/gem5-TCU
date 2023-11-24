@@ -73,6 +73,8 @@ class Scratchpad : public AbstractMemory
 
     const AddrRange range;
 
+    const bool ignoreInvalid;
+
   protected:
 
     Tick recvAtomic(PacketPtr pkt);
