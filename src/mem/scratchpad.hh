@@ -60,6 +60,8 @@ class Scratchpad : public AbstractMemory
 
         Tick recvAtomic(PacketPtr pkt) override;
 
+        void recvFunctional(PacketPtr pkt) override;
+
         AddrRangeList getAddrRanges() const override;
     };
 
@@ -75,9 +77,12 @@ class Scratchpad : public AbstractMemory
 
     const bool ignoreInvalid;
 
+    bool checkInvalid(PacketPtr pkt);
+
   protected:
 
     Tick recvAtomic(PacketPtr pkt);
+    void recvFunctional(PacketPtr pkt);
 
   public:
 

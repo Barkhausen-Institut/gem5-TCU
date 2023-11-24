@@ -75,8 +75,8 @@ Scratchpad::getPort(const std::string &if_name, PortID idx)
     }
 }
 
-Tick
-Scratchpad::recvAtomic(PacketPtr pkt)
+bool
+Scratchpad::checkInvalid(PacketPtr pkt)
 {
     if (ignoreInvalid) {
         warn_if_once(pkt->getAddr() < getAddrRange().start(),
@@ -90,9 +90,18 @@ Scratchpad::recvAtomic(PacketPtr pkt)
                 pkt->makeResponse();
             if (pkt->isRead())
                 memset(pkt->getPtr<uint8_t>(), 0, pkt->getSize());
-            return 0;
+            return true;
         }
     }
+
+    return false;
+}
+
+Tick
+Scratchpad::recvAtomic(PacketPtr pkt)
+{
+    if (checkInvalid(pkt))
+        return 0;
 
     /*
      * TODO
@@ -117,6 +126,15 @@ Scratchpad::recvAtomic(PacketPtr pkt)
     return totalDelay;
 }
 
+void
+Scratchpad::recvFunctional(PacketPtr pkt)
+{
+    if (checkInvalid(pkt))
+        return;
+
+    functionalAccess(pkt);
+}
+
 Scratchpad::ScratchpadPort::ScratchpadPort(const std::string& _name,
                                            Scratchpad& _scratchpad)
     : SimpleTimingPort(_name, &_scratchpad), scratchpad(_scratchpad)
@@ -137,6 +155,18 @@ Tick
 Scratchpad::ScratchpadPort::recvAtomic(PacketPtr pkt)
 {
     return scratchpad.recvAtomic(pkt);
+}
+
+void
+Scratchpad::ScratchpadPort::recvFunctional(PacketPtr pkt)
+{
+    if (!respQueue.trySatisfyFunctional(pkt)) {
+        // SimpleTimingPort calls recvAtomic() here, but we need to handle
+        // functional accesses differently so that they bypass certain checks
+        // such as writeable=False for ROMs. We still want to initialize those
+        // with write requests during simulation startup.
+        scratchpad.recvFunctional(pkt);
+    }
 }
 
 }
