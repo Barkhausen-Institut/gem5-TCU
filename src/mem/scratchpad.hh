@@ -71,8 +71,6 @@ class Scratchpad : public AbstractMemory
 
     const unsigned throughput;
 
-    const Addr offset;
-
     const AddrRange range;
 
   protected:

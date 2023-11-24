@@ -40,8 +40,6 @@ class Scratchpad(AbstractMemory):
     cpu_port = ResponsePort("Slave port CPU side")
     tcu_port = ResponsePort("Slave port TCU side")
 
-    offset = Param.Unsigned(0, "The offset that all accesses have to go above")
-
     latency = Param.Cycles(1, "Request to response latency")
 
     throughput = Param.Unsigned(64, "Number of bytes that can be read per cycle")

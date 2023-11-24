@@ -188,7 +188,7 @@ def printConfig(tile):
         print(str)
     except:
         try:
-            print('       imem =%d KiB' % (int(tile.spm.range.end) / 1024))
+            print('       imem =%d KiB' % (int(tile.spm.range.size()) / 1024))
             print('       Comp =Core -> TCU -> SPM')
         except:
             pass
@@ -321,7 +321,7 @@ def createTile(noc, options, id, systemType, l1size, l2size, spmsize, memTile, e
             tile.env_start= 0x10001000
         tile.tcu.tile_mem_offset = 0x10000000
         if l1size is None and not spmsize is None:
-            tile.spm.offset = tile.tcu.tile_mem_offset
+            tile.spm.range = AddrRange(tile.tcu.tile_mem_offset, size=spmsize)
     else:
         if systemType != SpuSystem:
             tile.env_start= 0x1FE000
@@ -763,7 +763,7 @@ def runSimulation(root, options, tiles):
             mem_tile_no += 1
         else:
             if hasattr(tile, 'spm'):
-                size = int(tile.spm.range.end)
+                size = int(tile.spm.range.size())
                 assert size % 4096 == 0, "Memory size not page aligned"
                 desc |= (size >> 12) << 28 # mem size in pages
                 desc |= (1 << 4) << 11     # TileAttr::IMEM
