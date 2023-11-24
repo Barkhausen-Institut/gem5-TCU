@@ -103,6 +103,10 @@ Scratchpad::recvAtomic(PacketPtr pkt)
     if (checkInvalid(pkt))
         return 0;
 
+    fatal_if(!ignoreInvalid && !writeable && pkt->isWrite(),
+             "%s: %s: write to read-only memory %s\n",
+             curTick(), name(), pkt->getAddrRange().to_string());
+
     /*
      * TODO
      * So far the Scratchpad has no busy state -> it accepts all requests!
