@@ -271,18 +271,12 @@ KecAcc::sendDelayedPkt()
 void
 KecAcc::startAbsorb()
 {
-    CmdReg reg = cmd;
-    fatal_if(reg.sponge.bytes > params().buf_size,
-             "Buffer too small for requested bytes\n");
     sendPkt(createSpongeMemReq(MemCmd::ReadReq));
 }
 
 void
 KecAcc::startSqueeze()
 {
-    CmdReg reg = cmd;
-    fatal_if(reg.sponge.bytes > params().buf_size,
-             "Buffer too small for requested bytes\n");
     auto pkt = createSpongeMemReq(MemCmd::WriteReq);
     sendPkt(pkt, squeeze(pkt));
 }
