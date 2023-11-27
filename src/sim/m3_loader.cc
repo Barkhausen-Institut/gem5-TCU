@@ -145,6 +145,45 @@ M3Loader::writeArgs(System &sys, const std::vector<std::string> &args,
     return bufCur;
 }
 
+Addr
+M3Loader::loadModules(TileMemory &mem, RequestPort &noc, Addr offset,
+                      BootModule *bmods)
+{
+    size_t i = 0;
+    Addr addr = tcu::NocAddr(mem.memTile, offset).getAddr();
+    for (const std::string &mod : mods)
+    {
+        // default --mods parameter leads to empty mod string
+        if (mod.empty())
+            continue;
+
+        // split into name and path by "="
+        std::stringstream ss(mod);
+        std::string name, path;
+        panic_if(!std::getline(ss, name, '='),
+            "Unable to find '=' in module description");
+        panic_if(!std::getline(ss, path),
+            "Unable to read path from module description");
+
+        Addr size = loadModule(noc, path, addr);
+
+        // construct module info
+        bmods[i].addr = addr;
+        bmods[i].size = size;
+        panic_if(name.length() >= MAX_MODNAME_LEN, "name too long");
+        strcpy(bmods[i].name, name.c_str());
+
+        inform("Loaded '%s' to %p .. %p",
+            path, bmods[i].addr, bmods[i].addr + bmods[i].size);
+
+        // to next
+        addr += size + tcu::TcuTlb::PAGE_SIZE - 1;
+        addr &= ~static_cast<Addr>(tcu::TcuTlb::PAGE_SIZE - 1);
+        i++;
+    }
+    return addr;
+}
+
 void
 M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
 {
@@ -205,39 +244,7 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
     if (modSize)
     {
         BootModule *bmods = new BootModule[mods.size()]();
-
-        size_t i = 0;
-        Addr addr = tcu::NocAddr(mem.memTile, modOffset).getAddr();
-        for (const std::string &mod : mods)
-        {
-            // default --mods parameter leads to empty mod string
-            if (mod.empty())
-                continue;
-
-            // split into name and path by "="
-            std::stringstream ss(mod);
-            std::string name, path;
-            panic_if(!std::getline(ss, name, '='),
-                "Unable to find '=' in module description");
-            panic_if(!std::getline(ss, path),
-                "Unable to read path from module description");
-
-            Addr size = loadModule(noc, path, addr);
-
-            // construct module info
-            bmods[i].addr = addr;
-            bmods[i].size = size;
-            panic_if(name.length() >= MAX_MODNAME_LEN, "name too long");
-            strcpy(bmods[i].name, name.c_str());
-
-            inform("Loaded '%s' to %p .. %p",
-                path, bmods[i].addr, bmods[i].addr + bmods[i].size);
-
-            // to next
-            addr += size + tcu::TcuTlb::PAGE_SIZE - 1;
-            addr &= ~static_cast<Addr>(tcu::TcuTlb::PAGE_SIZE - 1);
-            i++;
-        }
+        Addr addr = loadModules(mem, noc, modOffset, bmods);
 
         // determine memory regions
         size_t mem_count = 0;

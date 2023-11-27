@@ -130,6 +130,8 @@ class M3Loader
     void writeRemote(RequestPort &noc, Addr dest,
                      const uint8_t *data, size_t size);
     Addr loadModule(RequestPort &noc, const std::string &filename, Addr addr);
+    Addr loadModules(TileMemory &mem, RequestPort &noc, Addr offset,
+                     BootModule *bmods);
 };
 
 }
