@@ -230,10 +230,9 @@ def createTile(noc, options, id, systemType, l1size, l2size, spmsize, memTile, e
     tile.tile_id = id.raw()
 
     if not l2size is None:
-        tile.xbar = SystemXBar()
+        tile.xbar = SystemXBar(point_of_coherency=True)
     else:
-        tile.xbar = L2XBar()
-    tile.xbar.point_of_coherency = True
+        tile.xbar = IOXBar(width=tile.cache_line_size)
 
     tile.tcu = Tcu(max_noc_packet_size='2kB', buf_size='2kB')
     tile.tcu.tile_id = id.raw()
