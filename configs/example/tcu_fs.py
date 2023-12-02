@@ -520,6 +520,25 @@ def createKecAccTile(noc, options, id, cmdline, memTile, spmsize='8MB'):
     if options.isa.startswith('riscv'):
         tile.cpu.mmu.pma_checker.uncacheable.append(AddrRange(addr, size=0x1000))
 
+    # Configure everything with 128-bit width
+    tile.xbar.width = 16
+    tile.spm.throughput = 16
+    tile.kecacc.mem_width = 16
+
+    # MinorCPU assumes a cache line size of 64 bytes by default, even if the
+    # CPU is not connected to a cache (like in this case). This means it will
+    # always fetch full 64 bytes for instruction fetches and (unaligned) data
+    # accesses. However, with the configuration above, the XBar and SPM can
+    # only handle 16 bytes at a time. This causes the CPU to make too large
+    # accesses that need to be split up. This seems worthwhile for instructions
+    # (perhaps as some kind of prefetch buffer?) but causes unnecessary delays
+    # for data accesses. For now we keep this consistent by setting it to
+    # 128-bit/16 bytes like everything else. The instruction fetch width could
+    # be adjusted separately for slight performance gains.
+    if isinstance(tile.cpu, BaseMinorCPU):
+        tile.cache_line_size = 16
+        # tile.cpu.fetch1LineWidth = 64
+
     return tile
 
 def createCoreAccTile(noc, options, id, cmdline, memTile, spmsize='8MB'):
