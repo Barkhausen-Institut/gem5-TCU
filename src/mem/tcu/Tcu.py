@@ -84,6 +84,7 @@ class Tcu(BaseTcu):
 
     mmio_latency = Param.Cycles(6, "Latency for MMIO-based register accesses")
     cpu_to_cache_latency = Param.Cycles(1, "Latency for cache access for the CPU")
+    tcu_to_cache_latency = Param.Cycles(1, "Latency for cache access for the TCU")
     tlb_latency = Param.Cycles(3, "Latency to access the TLB")
 
     cmd_read_latency = Param.Cycles(20, "Latency for the READ command (start until NoC request)")

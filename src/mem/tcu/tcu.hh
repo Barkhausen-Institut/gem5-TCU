@@ -284,6 +284,7 @@ class Tcu : public BaseTcu
 
     const Cycles mmioLatency;
     const Cycles cpuToCacheLatency;
+    const Cycles tcuToCacheLatency;
     const Cycles tlbLatency;
 
     const Cycles cmdReadLatency;

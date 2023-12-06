@@ -75,6 +75,7 @@ Tcu::Tcu(const TcuParams &p)
     reqCount(p.req_count),
     mmioLatency(p.mmio_latency),
     cpuToCacheLatency(p.cpu_to_cache_latency),
+    tcuToCacheLatency(p.tcu_to_cache_latency),
     tlbLatency(p.tlb_latency),
     cmdReadLatency(p.cmd_read_latency),
     cmdWriteLatency(p.cmd_write_latency),
@@ -540,6 +541,9 @@ Tcu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
 
     Cycles transportDelay =
         ticksToCycles(pkt->headerDelay + pkt->payloadDelay);
+    // for reading, we pay the MMIO-latency for both request and response
+    if (pkt->isRead())
+        transportDelay += mmioLatency;
 
     Tick when = clockEdge(transportDelay + mmioLatency);
 
