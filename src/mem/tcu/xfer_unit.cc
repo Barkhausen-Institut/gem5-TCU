@@ -202,10 +202,8 @@ XferUnit::TransferEvent::process()
             memcpy(pkt->getPtr<uint8_t>(), buf->bytes + buf->offset, reqSize);
         }
 
-        Cycles latency(xfer->tcu.tcuToCacheLatency);
-        // writing does not get a response and thus pays the latency just once
-        if (!isWrite())
-            latency += xfer->tcu.tcuToCacheLatency;
+        // both reading and writing are paying the latency on the way to the cache and back
+        Cycles latency(xfer->tcu.tcuToCacheLatency * 2);
         xfer->tcu.sendMemRequest(pkt, buf->id | (buf->offset << 32), latency, false);
 
         // to next block
