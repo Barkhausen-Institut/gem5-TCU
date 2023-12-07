@@ -64,6 +64,9 @@ if env['CONF']['USE_EFENCE']:
 # Children need to see the environment
 Export('env')
 
+# Generate compile_commands.json for language servers
+env.CompilationDatabase('compile_commands.json')
+
 build_env = list(env['CONF'].items())
 
 from code_formatter import code_formatter
