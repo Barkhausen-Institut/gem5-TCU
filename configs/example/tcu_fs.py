@@ -189,7 +189,7 @@ def printConfig(tile):
     except:
         try:
             print('       imem =%d KiB' % (int(tile.spm.range.size()) / 1024))
-            print('       Comp =Core -> TCU -> SPM')
+            print('       Comp =Core -> XBar -> SPM')
         except:
             pass
 
@@ -214,9 +214,24 @@ def connectTcuToMem(tile, options, l1size):
         tile.xbar.cpu_side_ports = dport
 
 def connectCuToMem(tile, options, dport, iport=None, l1size=None):
+    dport = interpose(tile, options, 'cu_dmon', dport)
     if not iport is None:
-        tile.tcu.icache_slave_port = interpose(tile, options, 'cu_imon', iport)
-    tile.tcu.dcache_slave_port = interpose(tile, options, 'cu_dmon', dport)
+        iport = interpose(tile, options, 'cu_imon', iport)
+
+    if not l1size is None:
+        if not iport is None:
+            tile.tcu.icache_slave_port = iport
+        tile.tcu.dcache_slave_port = dport
+    else:
+        if not iport is None:
+            tile.xbar.cpu_side_ports = iport
+        tile.xbar.cpu_side_ports = dport
+
+        # Make TCU MMIO registers accessible via the XBar.
+        # This makes use of the dcache slave port in the TCU, but also adjusts
+        # the slave region so only the MMIO range is handled by the port.
+        tile.tcu.slave_region = [tile.tcu.mmio_region]
+        tile.tcu.dcache_slave_port = tile.xbar.mem_side_ports
 
 def createTile(noc, options, id, systemType, l1size, l2size, spmsize, memTile, epCount):
     global tile_cur_off, eps_offset, mod_size
