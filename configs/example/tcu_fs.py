@@ -495,7 +495,9 @@ def createCoreTile(noc, options, id, cmdline, memTile,
 
     return tile
 
-def createKecAccTile(noc, options, id, cmdline, memTile, spmsize='8MB'):
+# Internal function to create a tile with a KecAcc accelerator. This is shared
+# between the function for actual KecAcc (HashMux) tiles and RoT tiles.
+def _createKecAccTile(noc, options, id, cmdline, memTile, spmsize):
     tile = createCoreTile(noc, options, id, cmdline, memTile, spmsize=spmsize)
 
     # The MMIO address of the accelerator
@@ -505,16 +507,6 @@ def createKecAccTile(noc, options, id, cmdline, memTile, spmsize='8MB'):
     # not be present in reality if the accelerator is very close to the CPU.
     tile.kecacc = KecAcc(pio_addr=addr, pio_latency='0')
     tile.kecacc.pio = tile.xbar.mem_side_ports
-
-    # FIXME: KecAcc and TCU work in parallel to implement double buffering.
-    # In real hardware this would likely be implemented using separate SPMs for
-    # code/data of the Core and the buffers. For simplicity this is currently
-    # simulated with a single SPM here. Unfortunately this seems to cause
-    # unintended delays in the XBar when both access the SPM at the same time.
-    # To avoid this, connect KecAcc directly to a separate port on the SPM
-    # for now. It looks like a separate port was used for the TCU at some point
-    # (but not anymore), so we can "abuse" it here as second port on the SPM.
-    tile.kecacc.port = tile.spm.tcu_port
 
     # Make sure accelerator is accessed uncached and without speculation
     if options.isa.startswith('riscv'):
@@ -539,6 +531,23 @@ def createKecAccTile(noc, options, id, cmdline, memTile, spmsize='8MB'):
         tile.cache_line_size = 16
         # tile.cpu.fetch1LineWidth = 64
 
+    return tile
+
+def createKecAccTile(noc, options, id, cmdline, memTile, spmsize='8MB'):
+    tile = _createKecAccTile(noc, options, id, cmdline, memTile, spmsize)
+
+    # FIXME: KecAcc and TCU work in parallel to implement double buffering.
+    # In real hardware this would likely be implemented using separate SPMs for
+    # code/data of the Core and the buffers. For simplicity this is currently
+    # simulated with a single SPM here. Unfortunately this seems to cause
+    # unintended delays in the XBar when both access the SPM at the same time.
+    # To avoid this, connect KecAcc directly to a separate port on the SPM
+    # for now. It looks like a separate port was used for the TCU at some point
+    # (but not anymore), so we can "abuse" it here as second port on the SPM.
+    #
+    # TODO: Multiple scratchpads can be simulated now (see e.g. Boot ROM in RoT
+    # tile), so this should be revisited.
+    tile.kecacc.port = tile.spm.tcu_port
     return tile
 
 def createCoreAccTile(noc, options, id, cmdline, memTile, spmsize='8MB'):
