@@ -444,9 +444,42 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
                     set(reg, data[offset / sizeof(reg_t)], access);
             }
         }
-        else if (regAddr >= TcuTlb::PAGE_SIZE * 2)
+        // unprivileged register
+        else if (regAddr < sizeof(reg_t) * (numExtRegs + numUnprivRegs))
         {
-            Addr reqAddr = regAddr - TcuTlb::PAGE_SIZE * 2;
+            size_t idx = regAddr / sizeof(reg_t) - numExtRegs;
+            auto reg = static_cast<UnprivReg>(idx);
+
+            if (pkt->isRead())
+                data[offset / sizeof(reg_t)] = get(reg, access);
+            // the command registers can't be written from the NoC
+            else if (pkt->isWrite() && isCpuRequest)
+            {
+                if(reg == UnprivReg::COMMAND)
+                    res |= WROTE_CMD;
+                else if(reg == UnprivReg::PRINT)
+                    res |= WROTE_PRINT;
+                set(reg, data[offset / sizeof(reg_t)], access);
+            }
+        }
+        // buffer register
+        else if (regAddr < sizeof(reg_t) * (numExtRegs + numUnprivRegs + numBufRegs))
+        {
+            Addr bufAddr = regAddr - sizeof(reg_t) * (numExtRegs + numUnprivRegs);
+            size_t idx = bufAddr / sizeof(reg_t);
+
+            if (idx < bufRegs.size())
+            {
+                if(pkt->isRead())
+                    data[offset / sizeof(reg_t)] = bufRegs[idx];
+                else
+                    bufRegs[idx] = data[offset / sizeof(reg_t)];
+            }
+        }
+        // privileged register
+        else if (regAddr >= TcuTlb::PAGE_SIZE && regAddr < TcuTlb::PAGE_SIZE * 2)
+        {
+            Addr reqAddr = regAddr - TcuTlb::PAGE_SIZE;
 
             if (reqAddr < sizeof(reg_t) * numPrivRegs)
             {
@@ -466,28 +499,10 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
                 }
             }
         }
-        // unprivileged register
-        else if (regAddr < sizeof(reg_t) * (numExtRegs + numUnprivRegs))
+        // endpoint register
+        else if (regAddr >= TcuTlb::PAGE_SIZE * 2)
         {
-            size_t idx = regAddr / sizeof(reg_t) - numExtRegs;
-            auto reg = static_cast<UnprivReg>(idx);
-
-            if (pkt->isRead())
-                data[offset / sizeof(reg_t)] = get(reg, access);
-            // the command registers can't be written from the NoC
-            else if (pkt->isWrite() && isCpuRequest)
-            {
-                if(reg == UnprivReg::COMMAND)
-                    res |= WROTE_CMD;
-                else if(reg == UnprivReg::PRINT)
-                    res |= WROTE_PRINT;
-                set(reg, data[offset / sizeof(reg_t)], access);
-            }
-        }
-        else
-        {
-            size_t nonEpRegs = numExtRegs + numUnprivRegs;
-            Addr epAddr = regAddr - sizeof(reg_t) * nonEpRegs;
+            Addr epAddr = regAddr - TcuTlb::PAGE_SIZE * 2;
 
             // endpoint address
             if (epAddr < sizeof(reg_t) * numEpRegs * eps.size())
@@ -510,20 +525,6 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
                 else
                     assert(false);
             }
-            // buf register
-            else
-            {
-                Addr bufAddr = epAddr - sizeof(reg_t) * numEpRegs * eps.size();
-                size_t idx = bufAddr / sizeof(reg_t);
-
-                if (idx < bufRegs.size())
-                {
-                    if(pkt->isRead())
-                        data[offset / sizeof(reg_t)] = bufRegs[idx];
-                    else
-                        bufRegs[idx] = data[offset / sizeof(reg_t)];
-                }
-            }
         }
     }
 
@@ -539,7 +540,7 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
 Addr
 RegFile::getSize() const
 {
-    return TcuTlb::PAGE_SIZE * 2 + sizeof(reg_t) * numPrivRegs;
+    return TcuTlb::PAGE_SIZE * 2 + sizeof(reg_t) * numEpRegs * eps.size();
 }
 
 }
