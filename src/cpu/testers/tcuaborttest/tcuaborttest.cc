@@ -335,6 +335,7 @@ TcuAbortTest::tick()
             regs[0] = ep.r0;
             regs[1] = ep.r1;
             regs[2] = ep.r2;
+            regs[3] = ep.r3;
             break;
         }
 
@@ -358,6 +359,7 @@ TcuAbortTest::tick()
             regs[0] = ep.r0;
             regs[1] = ep.r1;
             regs[2] = ep.r2;
+            regs[3] = ep.r3;
             break;
         }
 
@@ -374,13 +376,14 @@ TcuAbortTest::tick()
             ep.r0.slots = 1;
             ep.r0.slotSize = 10;
             ep.r1.buffer = offset + RECV_ADDR;
-            ep.r2.unread = 0;
             ep.r2.occupied = 0;
+            ep.r3.unread = 0;
 
             RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
             regs[0] = ep.r0;
             regs[1] = ep.r1;
             regs[2] = ep.r2;
+            regs[3] = ep.r3;
             break;
         }
 

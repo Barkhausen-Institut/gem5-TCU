@@ -63,7 +63,7 @@ class Tcu : public BaseTcu
   public:
 
     static const uint16_t INVALID_ACT_ID    = 0xFFFF;
-    static const size_t CREDITS_UNLIM       = 0x3F;
+    static const size_t CREDITS_UNLIM       = 0x7F;
     static const uint16_t INVALID_EP_ID     = 0xFFFF;
 
     enum MemoryFlags : uint8_t

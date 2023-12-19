@@ -45,7 +45,7 @@ TcuIf::TcuIf(Addr reg_base, RequestorID requestorId, unsigned ctxId)
 Addr
 TcuIf::getRegAddr(PrivReg reg)
 {
-    return TcuTlb::PAGE_SIZE * 2 + static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
+    return TcuTlb::PAGE_SIZE + static_cast<Addr>(reg) * sizeof(RegFile::reg_t);
 }
 
 Addr
@@ -61,7 +61,7 @@ TcuIf::getRegAddr(UnprivReg reg)
 Addr
 TcuIf::getRegAddr(size_t reg, epid_t epid)
 {
-    Addr result = sizeof(RegFile::reg_t) * (numExtRegs + numUnprivRegs);
+    Addr result = TcuTlb::PAGE_SIZE * 2;
 
     result += epid * numEpRegs * sizeof(RegFile::reg_t);
 

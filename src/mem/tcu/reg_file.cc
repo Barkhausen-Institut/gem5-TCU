@@ -326,11 +326,11 @@ RecvEp::print(const RegFile &rf,
 {
     DPRINTFNS(rf.name(),
         "%s%s EP%-3u%12s: Recv[act=%u, buf=%p msz=%#x bsz=%#x rpl=%u msgs=%u "
-                              "occ=%#010x unr=%#010x rd=%u wr=%u]\n",
+                              "occ=%#018x unr=%#018x rd=%u wr=%u]\n",
         regAccessName(access), read ? "<-" : "->",
         id, "", r0.act,
         r1.buffer, 1 << r0.slotSize, 1 << r0.slots, r0.rplEps,
-        unreadMsgs(), r2.occupied, r2.unread, r0.rpos, r0.wpos);
+        unreadMsgs(), r2.occupied, r3.unread, r0.rpos, r0.wpos);
 }
 
 void

@@ -93,7 +93,7 @@ enum class UnprivReg : Addr
 constexpr unsigned numExtRegs = 3;
 constexpr unsigned numPrivRegs = 6;
 constexpr unsigned numUnprivRegs = 6;
-constexpr unsigned numEpRegs = 3;
+constexpr unsigned numEpRegs = 4;
 // buffer for prints (32 * 8 bytes)
 constexpr unsigned numBufRegs = 32;
 
@@ -240,18 +240,18 @@ struct SendEp
 {
     static const uint8_t FL_REPLY   = 1;
 
-    explicit SendEp() : id(), r0(0), r1(0), r2(0) {}
+    explicit SendEp() : id(), r0(0), r1(0), r2(0), r3(0) {}
 
     void print(const RegFile &rf,
                bool read,
                RegAccess access) const;
 
     BitUnion64(R0)
-        Bitfield<53> reply;
-        Bitfield<52, 37> crdEp;
-        Bitfield<36, 31> msgSize;
-        Bitfield<30, 25> maxCrd;
-        Bitfield<24, 19> curCrd;
+        Bitfield<55> reply;
+        Bitfield<54, 39> crdEp;
+        Bitfield<38, 33> msgSize;
+        Bitfield<32, 26> maxCrd;
+        Bitfield<25, 19> curCrd;
         Bitfield<18, 3> act;
         Bitfield<2, 0> type;
     EndBitUnion(R0)
@@ -269,17 +269,18 @@ struct SendEp
     R0 r0;
     R1 r1;
     R2 r2;
+    uint64_t r3;
 };
 
 struct RecvEp
 {
-    static const size_t MAX_MSGS    = 32;
+    static const size_t MAX_MSGS    = 64;
 
-    explicit RecvEp() : id(), r0(0), r1(0), r2(0) {}
+    explicit RecvEp() : id(), r0(0), r1(0), r2(0), r3(0) {}
 
     int unreadMsgs() const
     {
-        return popCount(r2.unread);
+        return popCount(r3.unread);
     }
 
     int offsetToIdx(Addr off) const
@@ -292,26 +293,26 @@ struct RecvEp
 
     bool isUnread(int idx) const
     {
-        return r2.unread & (static_cast<uint32_t>(1) << idx);
+        return r3.unread & (static_cast<uint64_t>(1) << idx);
     }
     void setUnread(int idx, bool unr)
     {
         if (unr)
-            r2.unread = r2.unread | (static_cast<uint32_t>(1) << idx);
+            r3.unread = r3.unread | (static_cast<uint64_t>(1) << idx);
         else
-            r2.unread = r2.unread & ~(static_cast<uint32_t>(1) << idx);
+            r3.unread = r3.unread & ~(static_cast<uint64_t>(1) << idx);
     }
 
     bool isOccupied(int idx) const
     {
-        return r2.occupied & (static_cast<uint32_t>(1) << idx);
+        return r2.occupied & (static_cast<uint64_t>(1) << idx);
     }
     void setOccupied(int idx, bool occ)
     {
         if (occ)
-            r2.occupied = r2.occupied | (static_cast<uint32_t>(1) << idx);
+            r2.occupied = r2.occupied | (static_cast<uint64_t>(1) << idx);
         else
-            r2.occupied = r2.occupied & ~(static_cast<uint32_t>(1) << idx);
+            r2.occupied = r2.occupied & ~(static_cast<uint64_t>(1) << idx);
     }
 
     void print(const RegFile &rf,
@@ -319,10 +320,10 @@ struct RecvEp
                RegAccess access) const;
 
     BitUnion64(R0)
-        Bitfield<58, 53> rpos;
-        Bitfield<52, 47> wpos;
-        Bitfield<46, 41> slotSize;
-        Bitfield<40, 35> slots;
+        Bitfield<61, 55> rpos;
+        Bitfield<54, 48> wpos;
+        Bitfield<47, 42> slotSize;
+        Bitfield<41, 35> slots;
         Bitfield<34, 19> rplEps;
         Bitfield<18, 3> act;
         Bitfield<2, 0> type;
@@ -333,19 +334,23 @@ struct RecvEp
     EndBitUnion(R1)
 
     BitUnion64(R2)
-        Bitfield<63, 32> unread;
-        Bitfield<31, 0> occupied;
+        Bitfield<63, 0> occupied;
     EndBitUnion(R2)
+
+    BitUnion64(R3)
+        Bitfield<63, 0> unread;
+    EndBitUnion(R3)
 
     epid_t id;
     R0 r0;
     R1 r1;
     R2 r2;
+    R3 r3;
 };
 
 struct MemEp
 {
-    explicit MemEp() : id(), r0(0), r1(0), r2(0) {}
+    explicit MemEp() : id(), r0(0), r1(0), r2(0), r3(0) {}
 
     void print(const RegFile &rf,
                bool read,
@@ -370,6 +375,7 @@ struct MemEp
     R0 r0;
     R1 r1;
     R2 r2;
+    uint64_t r3;
 };
 
 struct InvalidEp
@@ -385,11 +391,12 @@ struct InvalidEp
 
     epid_t id;
     union {
-        uint64_t r[3];
+        uint64_t r[4];
         struct {
             uint64_t r0;
             uint64_t r1;
             uint64_t r2;
+            uint64_t r3;
         };
     };
 };
@@ -397,7 +404,7 @@ struct InvalidEp
 union Ep
 {
     explicit Ep() : Ep(0xFFFF) {}
-    explicit Ep(epid_t id) : inval({id, {0, 0, 0}}) {}
+    explicit Ep(epid_t id) : inval({id, {0, 0, 0, 0}}) {}
 
     Ep(const Ep &ep)
     {
@@ -423,6 +430,7 @@ union Ep
         inval.r[0] = ep.r0;
         inval.r[1] = ep.r1;
         inval.r[2] = ep.r2;
+        inval.r[3] = ep.r3;
     }
 
     InvalidEp inval;
