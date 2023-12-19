@@ -90,7 +90,7 @@ void
 TcuConnector::startWaitEPWithEP(EpFile::EpCache &eps, epid_t epid)
 {
     const Ep ep = eps.getEp(epid);
-    if (ep.type() == EpType::RECEIVE && ep.recv.r2.unread != 0)
+    if (ep.type() == EpType::RECEIVE && ep.recv.unreadMsgs() > 0)
     {
         tcu.scheduleCmdFinish(Cycles(1), TcuError::NONE);
         return;

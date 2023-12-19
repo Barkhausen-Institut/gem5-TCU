@@ -399,21 +399,30 @@ union Ep
     explicit Ep() : Ep(0xFFFF) {}
     explicit Ep(epid_t id) : inval({id, {0, 0, 0}}) {}
 
-    Ep(const Ep &ep) {
+    Ep(const Ep &ep)
+    {
         inval.id = ep.inval.id;
         for(size_t i = 0; i < numEpRegs; ++i)
             inval.r[i] = ep.inval.r[i];
     }
-    Ep &operator=(const Ep &ep) {
-        if(&ep != this) {
+    Ep &operator=(const Ep &ep)
+    {
+        if(&ep != this)
             inval = ep.inval;
-        }
         return *this;
     }
 
     EpType type() const
     {
         return inval.type();
+    }
+
+    template<class E>
+    void update(E &ep)
+    {
+        inval.r[0] = ep.r0;
+        inval.r[1] = ep.r1;
+        inval.r[2] = ep.r2;
     }
 
     InvalidEp inval;
@@ -586,9 +595,7 @@ class RegFile
     void updateEp(const T &ep)
     {
         Ep &old = eps.at(ep.id);
-        old.inval.r[0] = ep.r0;
-        old.inval.r[1] = ep.r1;
-        old.inval.r[2] = ep.r2;
+        old.update(ep);
         printEpAccess(ep.id, false, RegAccess::TCU);
     }
 

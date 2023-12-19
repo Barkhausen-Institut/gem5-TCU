@@ -78,9 +78,7 @@ class EpFile
             assert(epfile.lock == this);
             CachedEp &old = cachedEps[ep.id];
             old.ep.inval.id = ep.id;
-            old.ep.inval.r[0] = ep.r0;
-            old.ep.inval.r[1] = ep.r1;
-            old.ep.inval.r[2] = ep.r2;
+            old.ep.update(ep);
             old.dirty = true;
         }
 
