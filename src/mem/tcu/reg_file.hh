@@ -38,9 +38,11 @@
 #include "base/bitunion.hh"
 #include "mem/tcu/error.hh"
 #include "mem/packet.hh"
+#include "sim/eventq.hh"
 
 namespace gem5
 {
+
 namespace tcu
 {
 
@@ -54,6 +56,8 @@ enum class ExtReg : Addr
     FEATURES,
     TILE_DESC,
     EXT_CMD,
+    EPS_ADDR,
+    EPS_SIZE,
 };
 
 enum class Features
@@ -90,7 +94,7 @@ enum class UnprivReg : Addr
     PRINT,
 };
 
-constexpr unsigned numExtRegs = 3;
+constexpr unsigned numExtRegs = 5;
 constexpr unsigned numPrivRegs = 6;
 constexpr unsigned numUnprivRegs = 6;
 constexpr unsigned numEpRegs = 4;
@@ -136,6 +140,48 @@ public:
 
 private:
     uint16_t id;
+};
+
+/**
+ *
+ *  64 63      49        0
+ *   ---------------------
+ *   |V| tileId | offset |
+ *   ---------------------
+ */
+class NocAddr
+{
+  public:
+
+    explicit NocAddr() : valid(), tileId(), offset()
+    {}
+
+    explicit NocAddr(Addr addr)
+        : valid(addr >> 63),
+          tileId(TileId::from_raw((addr >> 49) & ((1 << 14) - 1))),
+          offset(addr & ((static_cast<Addr>(1) << 49) - 1))
+    {}
+
+    explicit NocAddr(TileId _tileId, Addr _offset)
+        : valid(1), tileId(_tileId), offset(_offset)
+    {}
+
+    Addr getAddr() const
+    {
+        assert((tileId.raw() & ~((1 << 14) - 1)) == 0);
+        assert((offset & ~((static_cast<Addr>(1) << 49) - 1)) == 0);
+
+        Addr res = static_cast<Addr>(valid) << 63;
+        res |= static_cast<Addr>(tileId.raw()) << 49;
+        res |= offset;
+        return res;
+    }
+
+    bool valid;
+
+    TileId tileId;
+
+    Addr offset;
 };
 
 enum class EpType
@@ -242,7 +288,7 @@ struct SendEp
 
     explicit SendEp() : id(), r0(0), r1(0), r2(0), r3(0) {}
 
-    void print(const RegFile &rf,
+    void print(const Named &obj,
                bool read,
                RegAccess access) const;
 
@@ -315,7 +361,7 @@ struct RecvEp
             r2.occupied = r2.occupied & ~(static_cast<uint64_t>(1) << idx);
     }
 
-    void print(const RegFile &rf,
+    void print(const Named &obj,
                bool read,
                RegAccess access) const;
 
@@ -352,7 +398,7 @@ struct MemEp
 {
     explicit MemEp() : id(), r0(0), r1(0), r2(0), r3(0) {}
 
-    void print(const RegFile &rf,
+    void print(const Named &obj,
                bool read,
                RegAccess access) const;
 
@@ -380,7 +426,7 @@ struct MemEp
 
 struct InvalidEp
 {
-    void print(const RegFile &rf,
+    void print(const Named &obj,
                bool read,
                RegAccess access) const;
 
@@ -482,6 +528,11 @@ BitUnion64(FeatureReg)
     Bitfield<0, 0> kernel;
 EndBitUnion(FeatureReg)
 
+BitUnion64(EPsAddrReg)
+    Bitfield<63, 56> tile;
+    Bitfield<55, 0> offset;
+EndBitUnion(EPsAddrReg)
+
 BitUnion64(PrintReg)
     Bitfield<23, 0> size;
     Bitfield<55, 24> cov_addr;
@@ -508,11 +559,13 @@ struct M5_ATTR_PACKED MessageHeader
 
 class Tcu;
 class EpFile;
+struct RegAccessEvent;
 
 class RegFile
 {
     friend class Tcu;
     friend class EpFile;
+    friend struct RegAccessEvent;
 
   public:
 
@@ -531,13 +584,31 @@ class RegFile
         WROTE_PRINT     = 32,
     };
 
-    RegFile(Tcu &tcu, const std::string& name, unsigned numEndpoints);
+    static void printEpAccess(const Named &obj, const Ep &ep, bool read, RegAccess access);
+
+    RegFile(Tcu &tcu, const std::string& name);
 
     void reset(bool inval);
 
     bool hasFeature(Features feature) const
     {
         return get(ExtReg::FEATURES) & static_cast<reg_t>(feature);
+    }
+
+    Addr endpointsAddr() const
+    {
+        if (epsAddr != 0)
+            return epsAddr;
+
+        EPsAddrReg reg = get(ExtReg::EPS_ADDR);
+        panic_if((reg.offset & 0x1f) != 0, "EPS_ADDR.offset not 32-byte aligned");
+        return NocAddr(TileId::from_raw(reg.tile), reg.offset).getAddr();
+    }
+    size_t endpointSize() const
+    {
+        reg_t reg = get(ExtReg::EPS_SIZE);
+        panic_if((reg & 0x1f) != 0, "EPS_SIZE not 32-byte aligned");
+        return reg;
     }
 
     void add_msg();
@@ -584,34 +655,11 @@ class RegFile
 
     const char *getBuffer(size_t bytes);
 
-    /// returns which command registers have been written
-    Result handleRequest(PacketPtr pkt, bool isCpuRequest);
+    void startRequest(PacketPtr pkt, void *ev, bool isCpuRequest);
 
     const std::string name() const { return _name; }
 
   private:
-
-    void initMemEp();
-
-    Ep getEp(epid_t epId) const
-    {
-        printEpAccess(epId, true, RegAccess::TCU);
-        return eps.at(epId);
-    }
-
-    template<class T>
-    void updateEp(const T &ep)
-    {
-        Ep &old = eps.at(ep.id);
-        old.update(ep);
-        printEpAccess(ep.id, false, RegAccess::TCU);
-    }
-
-    reg_t get(epid_t epId, size_t idx) const;
-
-    void set(epid_t epId, size_t idx, reg_t value);
-
-    void printEpAccess(epid_t epId, bool read, RegAccess access) const;
 
     Addr getSize() const;
 
@@ -619,13 +667,13 @@ class RegFile
 
     Tcu &tcu;
 
+    Addr epsAddr;
+
     std::vector<reg_t> extRegs;
 
     std::vector<reg_t> privRegs;
 
     std::vector<reg_t> unprivRegs;
-
-    std::vector<Ep> eps;
 
     std::vector<reg_t> bufRegs;
 

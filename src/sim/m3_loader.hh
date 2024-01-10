@@ -36,7 +36,7 @@
 #include <vector>
 
 #include "sim/system.hh"
-#include "mem/tcu/noc_addr.hh"
+#include "mem/tcu/reg_file.hh"
 #include "sim/tile_memory.hh"
 
 namespace gem5

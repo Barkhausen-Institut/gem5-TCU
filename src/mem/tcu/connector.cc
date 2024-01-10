@@ -41,7 +41,7 @@ namespace tcu
 TcuConnector::TcuConnector(Tcu &_tcu, BaseConnector *_connector)
     : tcu(_tcu),
       connector(_connector),
-      sleepEPs(tcu.eps().newCache()),
+      sleepEPs(tcu.eps().newCache(EpFile::Messaging, "sleep")),
       wakeupEp(0xFFFF),
       fireTimerEvent(*this)
 {

@@ -50,6 +50,8 @@ const char *RegFile::extRegNames[] = {
     "FEATURES",
     "TILE_DESC",
     "EXT_CMD",
+    "EPS_ADDR",
+    "EPS_SIZE",
 };
 
 const char *RegFile::privRegNames[] = {
@@ -96,12 +98,41 @@ static const char *regAccessName(RegAccess access)
     return "TCU";
 }
 
-RegFile::RegFile(Tcu &_tcu, const std::string& name, unsigned numEndpoints)
+struct RegAccessEvent : public Event
+{
+    RegFile &_regs;
+    PacketPtr _pkt;
+    Tcu::RegFileEvent *_regfile_event;
+    bool _isCpuRequest;
+    int _result;
+    std::map<size_t, size_t> _accesses;
+
+    RegAccessEvent(Tcu &tcu, RegFile &regs, Tcu::RegFileEvent *regfile_event,
+                   PacketPtr pkt, bool isCpuRequest)
+        : Event(),
+        _regs(regs),
+        _pkt(pkt),
+        _regfile_event(regfile_event),
+        _isCpuRequest(isCpuRequest),
+        _result(),
+        _accesses()
+    {}
+
+    void process() override;
+    void fetched(EpFile::EpCache &cache);
+    void completed(EpFile::EpCache &cache, bool eventScheduled, bool cacheScheduled);
+    const std::string name() const override;
+    const char* description() const override { return "RegAccessEvent"; }
+    // for the address translation (we don't speculate)
+    bool isSquashed() const { return false; }
+};
+
+RegFile::RegFile(Tcu &_tcu, const std::string& name)
     : tcu(_tcu),
+      epsAddr(0),
       extRegs(numExtRegs, 0),
       privRegs(numPrivRegs, 0),
       unprivRegs(numUnprivRegs, 0),
-      eps(),
       bufRegs(numBufRegs * sizeof(reg_t), 0),
       _name(name)
 {
@@ -111,9 +142,6 @@ RegFile::RegFile(Tcu &_tcu, const std::string& name, unsigned numEndpoints)
         numPrivRegs, "privRegNames out of sync");
     static_assert(sizeof(unprivRegNames) / sizeof(unprivRegNames[0]) ==
         numUnprivRegs, "unprivRegNames out of sync");
-
-    for(unsigned i = 0; i < numEndpoints; ++i)
-        eps.push_back(Ep(i));
 
     // at boot, all tiles are privileged
     FeatureReg feat = 0;
@@ -130,9 +158,20 @@ RegFile::RegFile(Tcu &_tcu, const std::string& name, unsigned numEndpoints)
     assert(sys != nullptr);
     set(ExtReg::TILE_DESC, sys->tileDesc(tcu.tileId));
 
-    reset(false);
+    // set initial EPs; external EPs have a valid NoC address stored in EPS_ADDR
+    if (NocAddr(sys->initEpsAddr).valid)
+    {
+        EPsAddrReg addr = 0;
+        addr.tile = NocAddr(sys->initEpsAddr).tileId.raw();
+        addr.offset = NocAddr(sys->initEpsAddr).offset;
+        set(ExtReg::EPS_ADDR, addr);
+    }
+    // the TCU has builtin EPs if initEpsAddr is non-zero, but an invalid NoC address
+    else if (sys->initEpsAddr != 0)
+        epsAddr = sys->initEpsAddr;
+    set(ExtReg::EPS_SIZE, sys->initEpsNum * numEpRegs * sizeof(reg_t));
 
-    initMemEp();
+    reset(false);
 }
 
 void
@@ -140,15 +179,6 @@ RegFile::reset(bool inval)
 {
     if(inval)
     {
-        // invalidate all EPs
-        for(size_t i = 0; i < eps.size(); ++i)
-        {
-            Ep ep = getEp(i);
-            for (int i = 0; i < numEpRegs; ++i)
-                ep.inval.r[i] = 0;
-            updateEp(ep.inval);
-        }
-
         // reset all unprivileged and privileged registers
         for(size_t i = 0; i < numUnprivRegs; ++i)
             set(static_cast<UnprivReg>(i), 0);
@@ -164,27 +194,6 @@ RegFile::reset(bool inval)
     act.id = Tcu::INVALID_ACT_ID;
     act.msgs = 0;
     set(PrivReg::CUR_ACT, act);
-}
-
-void
-RegFile::initMemEp()
-{
-    TileMemory *sys = dynamic_cast<TileMemory*>(tcu.systemObject());
-    assert(sys != nullptr);
-
-    if (sys->hasMem())
-    {
-        NocAddr phys = sys->getPhys(0);
-
-        MemEp ep;
-        ep.r0.type = static_cast<RegFile::reg_t>(EpType::MEMORY);
-        ep.r0.act = Tcu::INVALID_ACT_ID;
-        ep.r0.flags = Tcu::MemoryFlags::READ | Tcu::MemoryFlags::WRITE;
-        ep.r0.targetTile = phys.tileId.raw();
-        ep.r1.remoteAddr = phys.offset;
-        ep.r2.remoteSize = sys->memSize;
-        updateEp(ep);
-    }
 }
 
 void
@@ -281,35 +290,34 @@ RegFile::set(UnprivReg reg, reg_t value, RegAccess access)
 }
 
 void
-RegFile::printEpAccess(epid_t epId, bool read, RegAccess access) const
+RegFile::printEpAccess(const Named &obj, const Ep &ep, bool read, RegAccess access)
 {
     if(!isTraceEnabled(read))
         return;
 
-    const Ep &ep = eps.at(epId);
     switch (ep.type())
     {
         case EpType::INVALID:
-            ep.inval.print(*this, false, access);
+            ep.inval.print(obj, false, access);
             break;
         case EpType::SEND:
-            ep.send.print(*this, false, access);
+            ep.send.print(obj, false, access);
             break;
         case EpType::RECEIVE:
-            ep.recv.print(*this, false, access);
+            ep.recv.print(obj, false, access);
             break;
         case EpType::MEMORY:
-            ep.mem.print(*this, false, access);
+            ep.mem.print(obj, false, access);
             break;
     }
 }
 
 void
-SendEp::print(const RegFile &rf,
+SendEp::print(const Named &obj,
               bool read,
               RegAccess access) const
 {
-    DPRINTFNS(rf.name(),
+    DPRINTFNS(obj.name(),
         "%s%s EP%-3u%12s: Send[act=%u, tile=%u ep=%u crdep=%u maxcrd=%u "
                               "curcrd=%u max=%#x lbl=%#llx rpl=%d]\n",
         regAccessName(access), read ? "<-" : "->",
@@ -320,11 +328,11 @@ SendEp::print(const RegFile &rf,
 }
 
 void
-RecvEp::print(const RegFile &rf,
+RecvEp::print(const Named &obj,
               bool read,
               RegAccess access) const
 {
-    DPRINTFNS(rf.name(),
+    DPRINTFNS(obj.name(),
         "%s%s EP%-3u%12s: Recv[act=%u, buf=%p msz=%#x bsz=%#x rpl=%u msgs=%u "
                               "occ=%#018x unr=%#018x rd=%u wr=%u]\n",
         regAccessName(access), read ? "<-" : "->",
@@ -334,11 +342,11 @@ RecvEp::print(const RegFile &rf,
 }
 
 void
-MemEp::print(const RegFile &rf,
+MemEp::print(const Named &obj,
              bool read,
              RegAccess access) const
 {
-    DPRINTFNS(rf.name(),
+    DPRINTFNS(obj.name(),
         "%s%s EP%-3u%12s: Mem[act=%u, tile=%u addr=%#llx "
                              "size=%#llx flags=%#x]\n",
         regAccessName(access), read ? "<-" : "->",
@@ -348,27 +356,15 @@ MemEp::print(const RegFile &rf,
 }
 
 void
-InvalidEp::print(const RegFile &rf,
+InvalidEp::print(const Named &obj,
                  bool read,
                  RegAccess access) const
 {
-    DPRINTFNS(rf.name(),
+    DPRINTFNS(obj.name(),
         "%s%s EP%-3u%12s: INVALID (%#x)\n",
         regAccessName(access), read ? "<-" : "->",
         id, "",
         static_cast<unsigned>(type()));
-}
-
-RegFile::reg_t
-RegFile::get(epid_t epId, size_t idx) const
-{
-    return eps[epId].inval.r[idx];
-}
-
-void
-RegFile::set(epid_t epId, size_t idx, reg_t value)
-{
-    eps[epId].inval.r[idx] = value;
 }
 
 const char *
@@ -381,99 +377,89 @@ RegFile::getBuffer(size_t bytes)
     return tmp;
 }
 
-RegFile::Result
-RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
+const std::string
+RegAccessEvent::name() const
 {
-    assert(pkt->isRead() || pkt->isWrite());
+    return _regfile_event->name();
+}
 
-    Addr pktAddr = pkt->getAddr();
+void
+RegAccessEvent::process()
+{
+    RegAccess access = _isCpuRequest ? RegAccess::CPU : RegAccess::NOC;
+    RegFile::reg_t* data = _pkt->getPtr<RegFile::reg_t>();
+    auto *eps = new EpFile::EpCache(_regs.tcu.eps().newCache(EpFile::Regs, "regAccess"));
 
-    DPRINTF(TcuRegRange, "access @%#x, size=%u\n", pktAddr, pkt->getSize());
-
-    // ignore invalid accesses (might happen due to speculative execution)
-    // TODO maybe we can allow some of them later
-    if ((pkt->getSize() % sizeof(reg_t)) != 0 ||
-        (pktAddr % sizeof(reg_t)) != 0 ||
-         pktAddr + pkt->getSize() > getSize())
-    {
-        if (pkt->needsResponse())
-            pkt->makeResponse();
-
-        return WROTE_NONE;
-    }
-
-    // we can only perform full register accesses
-    assert(pkt->getSize() % sizeof(reg_t) == 0);
-    assert(pktAddr % sizeof(reg_t) == 0);
-    assert(pktAddr + pkt->getSize() <= getSize());
-
-    RegAccess access = isCpuRequest ? RegAccess::CPU : RegAccess::NOC;
-    reg_t* data = pkt->getPtr<reg_t>();
-    unsigned res = WROTE_NONE;
-    bool isPriv = hasFeature(Features::KERNEL);
-    int lastEp = -1;
+    _result = RegFile::WROTE_NONE;
 
     // perform a single register access for each requested register
-    for (unsigned offset = 0; offset < pkt->getSize(); offset += sizeof(reg_t))
+    for (unsigned offset = 0; offset < _pkt->getSize(); offset += sizeof(RegFile::reg_t))
     {
-        Addr regAddr = pktAddr + offset;
+        Addr regAddr = _pkt->getAddr() + offset;
+        auto val = data[offset / sizeof(RegFile::reg_t)];
 
         // external registers
-        if (regAddr < sizeof(reg_t) * numExtRegs)
+        if (regAddr < sizeof(RegFile::reg_t) * numExtRegs)
         {
-            auto reg = static_cast<ExtReg>(regAddr / sizeof(reg_t));
+            auto reg = static_cast<ExtReg>(regAddr / sizeof(RegFile::reg_t));
 
-            if (pkt->isRead())
-                data[offset / sizeof(reg_t)] = get(reg, access);
+            if (_pkt->isRead())
+                data[offset / sizeof(RegFile::reg_t)] = _regs.get(reg, access);
             // external registers can't be set by the CPU
-            else if (pkt->isWrite() && !isCpuRequest)
+            else if (_pkt->isWrite() && !_isCpuRequest)
             {
                 if (reg == ExtReg::EXT_CMD)
-                    res |= WROTE_EXT_CMD;
+                    _result |= RegFile::WROTE_EXT_CMD;
                 // only the KERNEL flag can be changed
                 if (reg == ExtReg::FEATURES)
                 {
-                    auto ver = get(reg, access)
-                        & ~static_cast<reg_t>(Features::KERNEL);
-                    auto feat = data[offset / sizeof(reg_t)]
-                        & static_cast<reg_t>(Features::KERNEL);
-                    set(reg, ver | feat, access);
+                    auto ver = _regs.get(reg, access)
+                        & ~static_cast<RegFile::reg_t>(Features::KERNEL);
+                    auto feat = val
+                        & static_cast<RegFile::reg_t>(Features::KERNEL);
+                    _regs.set(reg, ver | feat, access);
+                }
+                else if (reg == ExtReg::EPS_ADDR)
+                {
+                    // EPS_ADDR is always 0 if we have internal EPs
+                    if (_regs.epsAddr == 0)
+                        _regs.set(reg, val, access);
                 }
                 // TILE_DESC is read-only
                 else if (reg != ExtReg::TILE_DESC)
-                    set(reg, data[offset / sizeof(reg_t)], access);
+                    _regs.set(reg, val, access);
             }
         }
         // unprivileged register
-        else if (regAddr < sizeof(reg_t) * (numExtRegs + numUnprivRegs))
+        else if (regAddr < sizeof(RegFile::reg_t) * (numExtRegs + numUnprivRegs))
         {
-            size_t idx = regAddr / sizeof(reg_t) - numExtRegs;
+            size_t idx = regAddr / sizeof(RegFile::reg_t) - numExtRegs;
             auto reg = static_cast<UnprivReg>(idx);
 
-            if (pkt->isRead())
-                data[offset / sizeof(reg_t)] = get(reg, access);
+            if (_pkt->isRead())
+                data[offset / sizeof(RegFile::reg_t)] = _regs.get(reg, access);
             // the command registers can't be written from the NoC
-            else if (pkt->isWrite() && isCpuRequest)
+            else if (_pkt->isWrite() && _isCpuRequest)
             {
                 if(reg == UnprivReg::COMMAND)
-                    res |= WROTE_CMD;
+                    _result |= RegFile::WROTE_CMD;
                 else if(reg == UnprivReg::PRINT)
-                    res |= WROTE_PRINT;
-                set(reg, data[offset / sizeof(reg_t)], access);
+                    _result |= RegFile::WROTE_PRINT;
+                _regs.set(reg, val, access);
             }
         }
         // buffer register
-        else if (regAddr < sizeof(reg_t) * (numExtRegs + numUnprivRegs + numBufRegs))
+        else if (regAddr < sizeof(RegFile::reg_t) * (numExtRegs + numUnprivRegs + numBufRegs))
         {
-            Addr bufAddr = regAddr - sizeof(reg_t) * (numExtRegs + numUnprivRegs);
-            size_t idx = bufAddr / sizeof(reg_t);
+            Addr bufAddr = regAddr - sizeof(RegFile::reg_t) * (numExtRegs + numUnprivRegs);
+            size_t idx = bufAddr / sizeof(RegFile::reg_t);
 
-            if (idx < bufRegs.size())
+            if (idx < _regs.bufRegs.size())
             {
-                if(pkt->isRead())
-                    data[offset / sizeof(reg_t)] = bufRegs[idx];
+                if(_pkt->isRead())
+                    data[offset / sizeof(RegFile::reg_t)] = _regs.bufRegs[idx];
                 else
-                    bufRegs[idx] = data[offset / sizeof(reg_t)];
+                    _regs.bufRegs[idx] = val;
             }
         }
         // privileged register
@@ -481,21 +467,21 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
         {
             Addr reqAddr = regAddr - TcuTlb::PAGE_SIZE;
 
-            if (reqAddr < sizeof(reg_t) * numPrivRegs)
+            if (reqAddr < sizeof(RegFile::reg_t) * numPrivRegs)
             {
-                auto reg = static_cast<PrivReg>(reqAddr / sizeof(reg_t));
+                auto reg = static_cast<PrivReg>(reqAddr / sizeof(RegFile::reg_t));
 
-                if (pkt->isRead())
-                    data[offset / sizeof(reg_t)] = get(reg, access);
-                else if (pkt->isWrite())
+                if (_pkt->isRead())
+                    data[offset / sizeof(RegFile::reg_t)] = _regs.get(reg, access);
+                else if (_pkt->isWrite())
                 {
                     if (reg == PrivReg::CU_REQ)
-                        res |= WROTE_CU_REQ;
+                        _result |= RegFile::WROTE_CU_REQ;
                     else if (reg == PrivReg::PRIV_CMD)
-                        res |= WROTE_PRIV_CMD;
+                        _result |= RegFile::WROTE_PRIV_CMD;
                     else if (reg == PrivReg::CLEAR_IRQ)
-                        res |= WROTE_CLEAR_IRQ;
-                    set(reg, data[offset / sizeof(reg_t)], access);
+                        _result |= RegFile::WROTE_CLEAR_IRQ;
+                    _regs.set(reg, val, access);
                 }
             }
         }
@@ -505,42 +491,104 @@ RegFile::handleRequest(PacketPtr pkt, bool isCpuRequest)
             Addr epAddr = regAddr - TcuTlb::PAGE_SIZE * 2;
 
             // endpoint address
-            if (epAddr < sizeof(reg_t) * numEpRegs * eps.size())
+            if (epAddr < _regs.endpointSize())
             {
-                epid_t epId = epAddr / (sizeof(reg_t) * numEpRegs);
-                unsigned regNumber = (epAddr / sizeof(reg_t)) % numEpRegs;
-
-                if (lastEp != epId)
-                {
-                    if (lastEp != -1)
-                        printEpAccess(lastEp, pkt->isRead(), access);
-                    lastEp = epId;
-                }
-
-                if (pkt->isRead())
-                    data[offset / sizeof(reg_t)] = get(epId, regNumber);
-                // writable only from remote and privileged TCUs
-                else if (!isCpuRequest || isPriv)
-                    set(epId, regNumber, data[offset / sizeof(reg_t)]);
-                else
-                    assert(false);
+                epid_t epId = epAddr / (sizeof(RegFile::reg_t) * numEpRegs);
+                _accesses[epAddr] = offset / sizeof(RegFile::reg_t);
+                eps->addEp(epId);
             }
         }
     }
 
-    if (lastEp != -1)
-        printEpAccess(lastEp, pkt->isRead(), access);
+    if (_accesses.size() > 0)
+        eps->onFetched(std::bind(&RegAccessEvent::fetched, this, std::placeholders::_1));
+    else
+        completed(*eps, true, false);
+}
 
-    if (pkt->needsResponse())
-        pkt->makeResponse();
+void
+RegAccessEvent::fetched(EpFile::EpCache &cache)
+{
+    RegAccess access = _isCpuRequest ? RegAccess::CPU : RegAccess::NOC;
+    RegFile::reg_t* data = _pkt->getPtr<RegFile::reg_t>();
+    bool isPriv = _regs.hasFeature(Features::KERNEL);
 
-    return static_cast<Result>(res);
+    cache.setAccess(access);
+
+    for(auto it = _accesses.begin(); it != _accesses.end(); ++it)
+    {
+        epid_t epId = it->first / (sizeof(RegFile::reg_t) * numEpRegs);
+        unsigned regNumber = (it->first / sizeof(RegFile::reg_t)) % numEpRegs;
+
+        auto ep = cache.getEp(epId);
+
+        if (_pkt->isRead())
+            data[it->second] = ep.inval.r[regNumber];
+        // writable only from remote and privileged TCUs
+        else if (!_isCpuRequest || isPriv)
+        {
+            ep.inval.r[regNumber] = data[it->second];
+            cache.updateEp(ep.inval);
+        }
+        else
+            assert(false);
+    }
+
+    if (_pkt->isRead())
+        completed(cache, false, true);
+    else
+        cache.onFinished(std::bind(&RegAccessEvent::completed, this, std::placeholders::_1, false, true));
+}
+
+void
+RegAccessEvent::completed(EpFile::EpCache &cache, bool eventScheduled, bool cacheScheduled)
+{
+    if (_pkt->needsResponse())
+        _pkt->makeResponse();
+
+    _regfile_event->completed(static_cast<RegFile::Result>(_result));
+
+    cache.setAutoFinish(true);
+    if (cacheScheduled)
+        cache.setAutoDelete(true);
+    else
+        delete &cache;
+    if (eventScheduled)
+        setFlags(AutoDelete);
+    else
+        delete this;
+}
+
+void
+RegFile::startRequest(PacketPtr pkt, void *ev, bool isCpuRequest)
+{
+    assert(pkt->isRead() || pkt->isWrite());
+
+    auto regfile_event = reinterpret_cast<Tcu::RegFileEvent*>(ev);
+    Addr pktAddr = pkt->getAddr();
+
+    DPRINTF(TcuRegRange, "access @%#x, size=%u\n", pktAddr, pkt->getSize());
+
+    // ignore accesses with invalid size/alignment (might happen due to speculative execution)
+    if ((pkt->getSize() % sizeof(reg_t)) != 0 ||
+        (pktAddr % sizeof(reg_t)) != 0 ||
+         pktAddr + pkt->getSize() > getSize())
+    {
+        if (pkt->needsResponse())
+            pkt->makeResponse();
+
+        regfile_event->completed(RegFile::WROTE_NONE);
+        return;
+    }
+
+    auto access_event = new RegAccessEvent(tcu, *this, regfile_event, pkt, isCpuRequest);
+    tcu.schedule(access_event, curTick());
 }
 
 Addr
 RegFile::getSize() const
 {
-    return TcuTlb::PAGE_SIZE * 2 + sizeof(reg_t) * numEpRegs * eps.size();
+    return TcuTlb::PAGE_SIZE * 2 + sizeof(reg_t) * numEpRegs * tcu.numEndpoints();
 }
 
 }

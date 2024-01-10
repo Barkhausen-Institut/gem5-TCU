@@ -33,7 +33,7 @@
 
 #include "base/statistics.hh"
 #include "base/types.hh"
-#include "mem/tcu/noc_addr.hh"
+#include "mem/tcu/reg_file.hh"
 #include <vector>
 
 namespace gem5

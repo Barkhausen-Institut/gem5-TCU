@@ -30,6 +30,7 @@
  */
 
 #include "mem/scratchpad.hh"
+#include "debug/MemoryAccess.hh"
 
 namespace gem5
 {
@@ -43,7 +44,8 @@ Scratchpad::Scratchpad(const ScratchpadParams &p)
     tcuPort(name() + ".tcu_port", *this),
     latency(p.latency),
     throughput(p.throughput),
-    offset(p.offset)
+    offset(p.offset),
+    range(p.range)
 {
 }
 
@@ -84,6 +86,7 @@ Scratchpad::recvAtomic(PacketPtr pkt)
         else
         {
             out_of_range = true;
+            DPRINTF(MemoryAccess, "address out-of-range: %#x\n", pkt->getAddr());
             warn_once("%llu: %s: address out-of-range: %#x\n",
                       curTick(), name(), pkt->getAddr());
         }
@@ -132,8 +135,7 @@ AddrRangeList
 Scratchpad::ScratchpadPort::getAddrRanges() const
 {
     AddrRangeList ranges;
-    // everything until IO space
-    ranges.push_back(AddrRange(0, 0x2000000000000000 - 1));
+    ranges.push_back(scratchpad.range);
     return ranges;
 }
 

@@ -34,7 +34,7 @@
 #include "debug/TcuPackets.hh"
 #include "mem/tcu/mem_unit.hh"
 #include "mem/tcu/xfer_unit.hh"
-#include "mem/tcu/noc_addr.hh"
+#include "mem/tcu/reg_file.hh"
 
 namespace gem5
 {
@@ -397,14 +397,7 @@ MemoryUnit::recvFromNoc(PacketPtr pkt)
     receivedBytes.sample(pkt->getSize());
 
     if (tcu.mmioRegion.contains(addr.offset))
-    {
-        pkt->setAddr(addr.offset);
-
         tcu.forwardRequestToRegFile(pkt, false);
-
-        // as this is synchronous, we can restore the address right away
-        pkt->setAddr(addr.getAddr());
-    }
     else
     {
         // the same as above: the transfer happens piece by piece and we can

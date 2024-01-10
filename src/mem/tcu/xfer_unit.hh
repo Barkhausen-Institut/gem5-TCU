@@ -32,7 +32,7 @@
 #ifndef __MEM_TCU_XFER_UNIT_HH__
 #define __MEM_TCU_XFER_UNIT_HH__
 
-#include "mem/tcu/noc_addr.hh"
+#include "mem/tcu/reg_file.hh"
 #include "mem/tcu/error.hh"
 #include "mem/packet.hh"
 #include "sim/eventq.hh"

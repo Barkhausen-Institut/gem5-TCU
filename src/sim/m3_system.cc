@@ -27,6 +27,7 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
+#include "mem/tcu/reg_file.hh"
 #include "params/M3System.hh"
 #include "sim/m3_system.hh"
 
@@ -44,7 +45,9 @@ M3System::NoCRequestPort::NoCRequestPort(M3System &_sys)
 M3System::M3System(const Params &p)
     : System(p),
       TileMemory(this, tcu::TileId::from_raw(p.memory_tile),
-                 p.memory_offset, p.memory_size, physProxy),
+                 p.memory_offset, p.memory_size, physProxy,
+                 p.eps_addr,
+                 p.eps_num),
       nocPort(*this),
       loader(p.tile_descs, p.tile_ids, p.mods, p.cmdline, p.logflags,
              p.env_start, tcu::TileId::from_raw(p.tile_id), p.mod_offset,

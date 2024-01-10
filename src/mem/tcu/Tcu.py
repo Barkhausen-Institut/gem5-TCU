@@ -51,6 +51,7 @@ class BaseTcu(ClockedObject):
 
     icache_master_port = RequestPort("Port that connects the icache")
     dcache_master_port = RequestPort("Port that connects the dcache")
+    epcache_master_port = RequestPort("Port that connects the EP cache")
 
     llc_slave_port = ResponsePort("Port that performs memory requests on behalf of the cache")
 
@@ -67,8 +68,6 @@ class Tcu(BaseTcu):
     type = 'Tcu'
     cxx_header = "mem/tcu/tcu.hh"
     cxx_class = 'gem5::tcu::Tcu'
-
-    num_endpoints = Param.Unsigned(8, "Number of endpoints per TCU")
 
     connector = Param.BaseConnector("The connector to the CPU")
 

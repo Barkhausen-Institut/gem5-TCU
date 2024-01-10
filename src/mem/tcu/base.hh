@@ -106,6 +106,19 @@ class BaseTcu : public ClockedObject
         bool recvTimingResp(PacketPtr pkt) override;
     };
 
+    class EpCacheRequestPort : public TcuRequestPort
+    {
+      public:
+
+        EpCacheRequestPort(BaseTcu& _tcu)
+          : TcuRequestPort(_tcu.name() + ".epcache_master_port", _tcu)
+        { }
+
+        void completeRequest(PacketPtr) override {
+        }
+        bool recvTimingResp(PacketPtr pkt) override;
+    };
+
     class TcuResponsePort : public ResponsePort
     {
       protected:
@@ -248,10 +261,14 @@ class BaseTcu : public ClockedObject
     void schedNocRequest(PacketPtr pkt, Tick when);
 
     void schedMemRequest(PacketPtr pkt, Tick when);
+    
+    void schedEpRequest(PacketPtr pkt, Tick when);
 
     void sendFunctionalNocRequest(PacketPtr pkt);
 
     void sendFunctionalMemRequest(PacketPtr pkt);
+
+    void sendFunctionalEpRequest(PacketPtr pkt);
 
     // responses
 
@@ -266,6 +283,8 @@ class BaseTcu : public ClockedObject
     virtual void completeNocRequest(PacketPtr pkt) = 0;
 
     virtual void completeMemRequest(PacketPtr pkt) = 0;
+    
+    virtual void completeEpRequest(PacketPtr pkt) = 0;
 
     // requests that are sent to us
 
@@ -300,6 +319,8 @@ class BaseTcu : public ClockedObject
     ICacheRequestPort icacheRequestPort;
 
     DCacheRequestPort dcacheRequestPort;
+    
+    EpCacheRequestPort epcacheRequestPort;
 
     CacheResponsePort<ICacheRequestPort> icacheResponsePort;
 

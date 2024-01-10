@@ -41,7 +41,6 @@
 #include "mem/tcu/connector.hh"
 #include "mem/tcu/ep_file.hh"
 #include "mem/tcu/reg_file.hh"
-#include "mem/tcu/noc_addr.hh"
 #include "mem/tcu/xfer_unit.hh"
 #include "mem/tcu/cu_reqs.hh"
 #include "mem/tcu/error.hh"
@@ -91,6 +90,13 @@ class Tcu : public BaseTcu
         Addr data;
         RequestorID mid;
         bool coverage;
+    };
+
+    struct EpSenderState : public Packet::SenderState
+    {
+        epid_t ep;
+        EpFile::EpCache *cache;
+        RequestorID mid;
     };
 
     struct NocSenderState : public Packet::SenderState
@@ -157,6 +163,27 @@ class Tcu : public BaseTcu
         bool isSquashed() const { return false; }
     };
 
+    struct RegFileEvent : public Event
+    {
+        Tcu &_tcu;
+        PacketPtr _pkt;
+        bool _isCpuRequest;
+
+        RegFileEvent(Tcu& tcu, PacketPtr pkt, bool isCpuRequest)
+            : Event(),
+              _tcu(tcu),
+              _pkt(pkt),
+              _isCpuRequest(isCpuRequest)
+        {}
+
+        void process() override;
+        void completed(RegFile::Result result);
+        const std::string name() const override;
+        const char* description() const override { return "RegFileEvent"; }
+        // for the address translation (we don't speculate)
+        bool isSquashed() const { return false; }
+    };
+
   public:
 
     Tcu(const TcuParams &p);
@@ -174,6 +201,10 @@ class Tcu : public BaseTcu
     TcuConnector &con() { return connector; };
 
     TcuTlb *tlb() { return tlBuf; }
+
+    NocAddr endpointsAddr() const;
+
+    size_t numEndpoints() const;
 
     void printLine(Addr len);
 
@@ -211,14 +242,18 @@ class Tcu : public BaseTcu
                         Cycles delay,
                         bool coverage);
 
+    void sendEpRequest(PacketPtr pkt,
+                       EpFile::EpCache *cache,
+                       epid_t ep,
+                       Cycles delay,
+                       bool functional = false);
+
     void sendNocRequest(NocPacketType type,
                         PacketPtr pkt,
                         Cycles delay,
                         bool functional = false);
 
     void sendNocResponse(PacketPtr pkt, TcuError result = TcuError::NONE);
-
-    NocAddr translatePhysToNoC(Addr phys, bool write);
 
     void startTransfer(void *event, Cycles delay);
 
@@ -230,9 +265,11 @@ class Tcu : public BaseTcu
 
     bool has_message(epid_t ep);
 
-    void completeNocRequest(PacketPtr pkt) override;
-
     void completeMemRequest(PacketPtr pkt) override;
+
+    void completeEpRequest(PacketPtr pkt) override;
+
+    void completeNocRequest(PacketPtr pkt) override;
 
     void handleNocRequest(PacketPtr pkt) override;
 
@@ -243,6 +280,10 @@ class Tcu : public BaseTcu
                             bool functional) override;
 
     bool handleLLCRequest(PacketPtr pkt, bool functional) override;
+
+    void handleLLCRequestFailure(PacketPtr pkt, TcuError error, bool functional);
+
+    void handleLLCRequestWithEp(EpFile::EpCache &cache, PacketPtr pkt, bool functional);
 
   private:
 
@@ -271,8 +312,6 @@ class Tcu : public BaseTcu
   public:
 
     const Addr tileMemOffset;
-
-    const unsigned numEndpoints;
 
     const Addr maxNocPacketSize;
 

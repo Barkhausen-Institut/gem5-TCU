@@ -37,6 +37,7 @@
 #include "mem/tcu/tlb.hh"
 #include "mem/tcu/tcu.hh"
 #include "sim/byteswap.hh"
+#include "sim/m3_system.hh"
 
 #include <libgen.h>
 #include <sstream>
@@ -147,6 +148,23 @@ M3Loader::writeArgs(System &sys, const std::vector<std::string> &args,
 void
 M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
 {
+    // first initialize EP0 to a memory EP for our tile-local memory region in DRAM
+    if (mem.initEpsAddr)
+    {
+        tcu::Ep ep;
+        ep.mem.id = 0;
+        ep.mem.r0.type = static_cast<tcu::RegFile::reg_t>(tcu::EpType::MEMORY);
+        ep.mem.r0.act = tcu::Tcu::INVALID_ACT_ID;
+        ep.mem.r0.flags = tcu::Tcu::MemoryFlags::READ | tcu::Tcu::MemoryFlags::WRITE;
+        ep.mem.r0.targetTile = mem.memTile.raw();
+        ep.mem.r1.remoteAddr = mem.memOffset;
+        ep.mem.r2.remoteSize = mem.memSize;
+        tcu::RegFile::printEpAccess(sys, ep, false, tcu::RegAccess::CPU);
+        sys.physProxy.writeBlob(mem.initEpsAddr,
+                    reinterpret_cast<const uint8_t*>(ep.inval.r), sizeof(ep.inval.r));
+    }
+
+    // init boot environment for the kernel
     BootEnv env;
     memset(&env, 0, sizeof(env));
     env.platform = Platform::GEM5;

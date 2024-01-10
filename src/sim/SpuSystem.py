@@ -40,6 +40,9 @@ class SpuSystem(System):
     tile_descs = VectorParam.Addr([], "All tile descriptions with their type and mem size")
     tile_ids = VectorParam.Addr([], "All tile ids")
 
+    eps_addr = Param.Addr(0, "The address of the endpoint region")
+    eps_num = Param.Addr(0, "The number of endpoints")
+
     memory_tile = Param.Unsigned(0, "The memory tile to use")
     memory_offset = Param.Addr(0, "The offset in the memory tile")
     memory_size = Param.Addr(0, "The size in the memory tile")

@@ -79,6 +79,8 @@ mod_size                        = 768 * 1024 * 1024
 tile_offset                     = mod_offset + mod_size
 tile_size                       = 16 * 1024 * 1024
 tile_cur_off                    = 0
+internal_ep_count               = 32
+eps_offset                      = mod_offset + mod_size
 
 class TileId:
     @classmethod
@@ -112,6 +114,14 @@ class TileId:
 
     def __str__(self):
         return "C%dT%02d" % (self.chip(), self.tile())
+
+class NocAddr:
+    def __init__(self, tile, offset):
+        self.tile = tile
+        self.offset = offset
+
+    def addr(self):
+        return (1 << 63) | (self.tile.raw() << 49) | self.offset
 
 # reads the options and returns them
 def getOptions():
@@ -154,8 +164,16 @@ def getCacheStr(cache):
     )
 
 def printConfig(tile):
+    ep_num = tile.eps_num
+    # SpuSystem has no attribute internal_eps (as EPs are always internal)
+    try:
+        if not tile.internal_eps:
+            ep_num = 0
+    except:
+        pass
+
     print('       TCU  =eps:%d, bufsz:%d B, blocksz:%d B, count:%d, tlb:%d' % \
-        (tile.tcu.num_endpoints, tile.tcu.buf_size.value, tile.tcu.block_size.value,
+        (ep_num, tile.tcu.buf_size.value, tile.tcu.block_size.value,
          tile.tcu.buf_count, tile.tcu.tlb_entries))
 
     try:
@@ -200,9 +218,8 @@ def connectCuToMem(tile, options, dport, iport=None, l1size=None):
         tile.tcu.icache_slave_port = interpose(tile, options, 'cu_imon', iport)
     tile.tcu.dcache_slave_port = interpose(tile, options, 'cu_dmon', dport)
 
-def createTile(noc, options, id, systemType, l1size, l2size, spmsize,
-               memTile, epCount):
-    global tile_cur_off
+def createTile(noc, options, id, systemType, l1size, l2size, spmsize, memTile, epCount):
+    global tile_cur_off, eps_offset
     CPUClass = ObjectList.cpu_list.get(options.cpu_type)
 
     # each tile is represented by it's own subsystem
@@ -220,8 +237,6 @@ def createTile(noc, options, id, systemType, l1size, l2size, spmsize,
 
     tile.tcu = Tcu(max_noc_packet_size='2kB', buf_size='2kB')
     tile.tcu.tile_id = id.raw()
-
-    tile.tcu.num_endpoints = epCount
 
     # connection to noc
     tile.tcu.noc_master_port = noc.cpu_side_ports
@@ -275,6 +290,33 @@ def createTile(noc, options, id, systemType, l1size, l2size, spmsize,
         tile.spm.cpu_port = tile.xbar.default
         tile.spm.range = spmsize
 
+    tile.eps_num = epCount
+    # SPU systems have always builtin EPs
+    if systemType != SpuSystem:
+        tile.internal_eps = spmsize is not None
+    if systemType == SpuSystem or spmsize is not None:
+        tile.eps_addr = 0xFF00_0000
+    elif memTile is not None:
+        eps_offset = eps_offset - int(tile.eps_num * 32)
+        tile.eps_addr = NocAddr(memTile, eps_offset).addr()
+
+    # add EP cache
+    if systemType != SpuSystem and spmsize is None:
+        tile.epcache = L1_DCache(size="8kB")
+        tile.epcache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
+        tile.epcache.tag_latency = 4
+        tile.epcache.data_latency = 4
+        tile.epcache.response_latency = 4
+        tile.epcache.cpu_side = tile.tcu.epcache_master_port
+        tile.epcache.mem_side = tile.xbar.cpu_side_ports
+        tile.tcu.caches.append(tile.epcache)
+    else:
+        tile.epcache = Scratchpad(in_addr_map="true")
+        # the TCU writes to the XBar, where the EP-SPM listens to the specified memory range
+        tile.epcache.cpu_port = tile.xbar.mem_side_ports
+        tile.tcu.epcache_master_port = tile.xbar.cpu_side_ports
+        tile.epcache.range = AddrRange(tile.eps_addr, tile.eps_addr + 0xFFFFFF)
+
     if options.isa == 'riscv':
         if systemType != SpuSystem:
             tile.env_start= 0x10001000
@@ -287,9 +329,10 @@ def createTile(noc, options, id, systemType, l1size, l2size, spmsize,
 
     if not memTile is None:
         tile.memory_tile = memTile.raw()
-        tile.memory_offset = tile_offset + (tile_size * tile_cur_off)
-        tile.memory_size = tile_size
-        tile_cur_off += 1
+        if not l1size is None:
+            tile.memory_offset = tile_offset + (tile_size * tile_cur_off)
+            tile.memory_size = tile_size
+            tile_cur_off += 1
 
     if l1size is None:
         # for memory tiles or tiles with SPM, we do not need a buffer. for the
@@ -310,8 +353,8 @@ def createTile(noc, options, id, systemType, l1size, l2size, spmsize,
 
     return tile
 
-def createCoreTile(noc, options, id, cmdline, memTile, epCount,
-                   l1size=None, l2size=None, spmsize='8MB'):
+def createCoreTile(noc, options, id, cmdline, memTile,
+                   l1size=None, l2size=None, spmsize=None):
     CPUClass = ObjectList.cpu_list.get(options.cpu_type)
 
     if options.isa == 'arm':
@@ -323,6 +366,11 @@ def createCoreTile(noc, options, id, cmdline, memTile, epCount,
     else:
         sysType = M3System
         con = X86Connector
+
+    if cmdline != "" or l1size is None:
+        epCount = 256
+    else:
+        epCount = 0
 
     tile = createTile(
         noc=noc, options=options, id=id, systemType=sysType,
@@ -345,7 +393,7 @@ def createCoreTile(noc, options, id, cmdline, memTile, epCount,
 
     if "kernel" in cmdline:
         tile.mod_offset = mod_offset
-        tile.mod_size = mod_size
+        tile.mod_size = eps_offset
         tile.tile_size = tile_size
 
     # workload and command line
@@ -435,9 +483,8 @@ def createCoreTile(noc, options, id, cmdline, memTile, epCount,
 
     return tile
 
-def createKecAccTile(noc, options, id, cmdline, memTile, epCount, spmsize='8MB'):
-    tile = createCoreTile(noc, options, id, cmdline, memTile, epCount,
-                          spmsize=spmsize)
+def createKecAccTile(noc, options, id, cmdline, memTile, spmsize='8MB'):
+    tile = createCoreTile(noc, options, id, cmdline, memTile, spmsize=spmsize)
 
     # The MMIO address of the accelerator
     addr = 0xF4200000
@@ -463,11 +510,11 @@ def createKecAccTile(noc, options, id, cmdline, memTile, epCount, spmsize='8MB')
 
     return tile
 
-def createSerialTile(noc, options, id, memTile, epCount):
+def createSerialTile(noc, options, id, memTile):
     tile = createTile(
         noc=noc, options=options, id=id, systemType=SpuSystem,
         l1size=None, l2size=None, spmsize=None, memTile=memTile,
-        epCount=epCount
+        epCount=internal_ep_count
     )
     tile.tcu.connector = BaseConnector()
 
@@ -488,11 +535,11 @@ def createSerialTile(noc, options, id, memTile, epCount):
 
     return tile
 
-def createDeviceTile(noc, options, id, memTile, epCount):
+def createDeviceTile(noc, options, id, memTile):
     tile = createTile(
         noc=noc, options=options, id=id, systemType=SpuSystem,
         l1size=None, l2size=None, spmsize=None, memTile=memTile,
-        epCount=epCount
+        epCount=internal_ep_count
     )
     tile.tcu.connector = BaseConnector()
 
@@ -526,8 +573,8 @@ def createDeviceTile(noc, options, id, memTile, epCount):
 
     return tile
 
-def createStorageTile(noc, options, id, memTile, epCount, img0=None, img1=None):
-    tile = createDeviceTile(noc, options, id, memTile, epCount)
+def createStorageTile(noc, options, id, memTile, img0=None, img1=None):
+    tile = createDeviceTile(noc, options, id, memTile)
 
     # create disks
     disks = []
@@ -559,8 +606,8 @@ def createStorageTile(noc, options, id, memTile, epCount, img0=None, img1=None):
 
     return tile
 
-def createEtherTile(noc, options, id, memTile, epCount):
-    tile = createDeviceTile(noc, options, id, memTile, epCount)
+def createEtherTile(noc, options, id, memTile):
+    tile = createDeviceTile(noc, options, id, memTile)
 
     tile.nic = IGbE_e1000()
     tile.nic.clk_domain = SrcClockDomain(clock=options.sys_clock,
@@ -589,12 +636,12 @@ def linkEthertiles(ether0, ether1):
     ether0.etherlink = link
     ether1.etherlink = link
 
-def createAccelTile(noc, options, id, accel, memTile, epCount,
+def createAccelTile(noc, options, id, accel, memTile,
                     l1size=None, l2size=None, spmsize='64kB'):
     tile = createTile(
         noc=noc, options=options, id=id, systemType=SpuSystem,
         l1size=l1size, l2size=l2size, spmsize=spmsize, memTile=memTile,
-        epCount=epCount
+        epCount=internal_ep_count
     )
     tile.tcu.connector = TcuAccelConnector()
 
@@ -625,12 +672,12 @@ def createAccelTile(noc, options, id, accel, memTile, epCount,
 
     return tile
 
-def createAbortTestTile(noc, options, id, memTile, epCount,
-                        l1size=None, l2size=None, spmsize='8MB'):
+def createAbortTestTile(noc, options, id, memTile,
+                        l1size=None, l2size=None, spmsize=None):
     tile = createTile(
         noc=noc, options=options, id=id, systemType=SpuSystem,
         l1size=l1size, l2size=l2size, spmsize=spmsize, memTile=memTile,
-        epCount=epCount
+        epCount=internal_ep_count
     )
     tile.tcu.connector = BaseConnector()
 
@@ -646,11 +693,11 @@ def createAbortTestTile(noc, options, id, memTile, epCount,
 
     return tile
 
-def createMemTile(noc, options, id, size, epCount, dram=True):
+def createMemTile(noc, options, id, size, dram=True):
     tile = createTile(
         noc=noc, options=options, id=id, systemType=SpuSystem,
         l1size=None, l2size=None, spmsize=None, memTile=None,
-        epCount=epCount
+        epCount=0
     )
     tile.clk_domain = SrcClockDomain(clock=options.sys_clock,
                                      voltage_domain=tile.voltage_domain)
@@ -743,7 +790,13 @@ def runSimulation(root, options, tiles):
                 desc |= 2 << 6 # x86
 
             if hasattr(tile, 'kecacc'):
+                desc |= (1 << 6) << 11
+        # spu tiles always have internal EPs and thus don't have the attribute
+        try:
+            if tile.internal_eps:
                 desc |= (1 << 5) << 11
+        except:
+            desc |= (1 << 5) << 11
         tile_descs.append(desc)
         tile_ids.append(tile.tile_id)
 

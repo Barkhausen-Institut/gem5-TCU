@@ -32,7 +32,7 @@
 #define __SIM_TCU_MEMORY_HH__
 
 #include "sim/system.hh"
-#include "mem/tcu/noc_addr.hh"
+#include "mem/tcu/reg_file.hh"
 
 namespace gem5
 {
@@ -51,11 +51,16 @@ class TileMemory
     const Addr memOffset;
     const Addr memSize;
 
+    Addr initEpsAddr;
+    size_t initEpsNum;
+
     TileMemory(SimObject *obj,
                tcu::TileId memTile,
                Addr memOffset,
                Addr memSize,
-               PortProxy &phys);
+               PortProxy &phys,
+               Addr initEpsAddr,
+               Addr initEpsNum);
 
     virtual tcu::tiledesc_t tileDesc(tcu::TileId tile) const = 0;
 

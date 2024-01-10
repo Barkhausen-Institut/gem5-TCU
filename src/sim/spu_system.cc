@@ -38,7 +38,7 @@ namespace gem5
 SpuSystem::SpuSystem(const Params &p)
     : System(p),
       TileMemory(this, tcu::TileId::from_raw(p.memory_tile),
-                 p.memory_offset, p.memory_size, physProxy),
+                 p.memory_offset, p.memory_size, physProxy, p.eps_addr, p.eps_num),
       tiles(),
       tileId(tcu::TileId::from_raw(p.tile_id))
 {

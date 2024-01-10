@@ -48,6 +48,10 @@ class M3System(System):
     mod_size = Param.Addr(0, "The max. size of the boot modules (only for kernel tile)")
     tile_size = Param.Addr(0, "The size of the reserved memory region for each tile (only for kernel tile)")
 
+    internal_eps = Param.Bool(False, "True if the TCU has internal endpoints")
+    eps_addr = Param.Addr(0, "The address of the endpoint region")
+    eps_num = Param.Addr(0, "The number of endpoints")
+
     mods = VectorParam.String([], "The boot modules")
     tile_descs = VectorParam.Addr([], "All tile descriptions with their type and mem size")
     tile_ids = VectorParam.Addr([], "All tile ids")

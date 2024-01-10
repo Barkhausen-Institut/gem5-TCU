@@ -73,6 +73,8 @@ class Scratchpad : public AbstractMemory
 
     const Addr offset;
 
+    const AddrRange range;
+
   protected:
 
     Tick recvAtomic(PacketPtr pkt);

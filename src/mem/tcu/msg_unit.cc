@@ -35,7 +35,7 @@
 #include "debug/TcuPackets.hh"
 #include "debug/TcuMsgs.hh"
 #include "mem/tcu/msg_unit.hh"
-#include "mem/tcu/noc_addr.hh"
+#include "mem/tcu/reg_file.hh"
 #include "mem/tcu/xfer_unit.hh"
 
 namespace gem5
@@ -120,7 +120,7 @@ MessageUnit::startReplyWithEP(EpFile::EpCache &eps)
                                  cmd.epid, cmd.arg0);
     }
 
-    if ((rep.r0.rplEps + (1 << rep.r0.slots)) > tcu.numEndpoints)
+    if ((rep.r0.rplEps + (1 << rep.r0.slots)) > tcu.numEndpoints())
     {
         return tcu.schedCmdError(delay, TcuError::RECV_INV_RPL_EPS,
                                  "EP%u: reply EPs out of bounds\n", cmd.epid);
@@ -258,7 +258,7 @@ MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
         assert(sep.r0.act == tcu.regs().getCurAct().id);
 
         if (sep.r0.crdEp != Tcu::INVALID_EP_ID &&
-            sep.r0.crdEp >= tcu.numEndpoints)
+            sep.r0.crdEp >= tcu.numEndpoints())
         {
             return tcu.schedCmdError(delay, TcuError::SEND_INV_CRD_EP,
                                      "EP%u: credit EP invalid\n", cmd.arg0);
@@ -581,7 +581,7 @@ MessageUnit::startAckWithEP(EpFile::EpCache &eps)
     }
 
     if (rep.r0.rplEps != Tcu::INVALID_EP_ID &&
-        (rep.r0.rplEps + (1 << rep.r0.slots)) > tcu.numEndpoints)
+        (rep.r0.rplEps + (1 << rep.r0.slots)) > tcu.numEndpoints())
     {
         return tcu.schedCmdError(delay, TcuError::RECV_INV_RPL_EPS,
                                  "EP%u: invalid reply EPs\n", cmd.epid);
@@ -753,7 +753,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
     NocAddr addr(pkt->getAddr());
     epid_t epId = addr.offset;
 
-    if (epId >= tcu.numEndpoints)
+    if (epId >= tcu.numEndpoints())
     {
         DPRINTFS(Tcu, (&tcu),
             "EP%u: ignoring message: receive EP invalid\n",
@@ -774,7 +774,8 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
             DPRINTFS(TcuMsgs, (&tcu), "    word%2lu: %#018x\n", i, words[i]);
     }
 
-    EpFile::EpCache *cache = new EpFile::EpCache(tcu.eps().newCache());
+    EpFile::EpCache *cache = new EpFile::EpCache(
+        tcu.eps().newCache(EpFile::Messaging, "recvMsg"));
     cache->addEp(epId);
     // Note that replyEpId is the Id of *our* sending EP
     if (header->flags & Tcu::REPLY_FLAG &&
@@ -813,7 +814,7 @@ MessageUnit::recvFromNocWithEP(EpFile::EpCache &eps, PacketPtr pkt)
     }
 
     if (rep.r0.rplEps != Tcu::INVALID_EP_ID &&
-        (rep.r0.rplEps + (1 << rep.r0.slots)) > tcu.numEndpoints)
+        (rep.r0.rplEps + (1 << rep.r0.slots)) > tcu.numEndpoints())
     {
         DPRINTFS(Tcu, (&tcu),
             "EP%u: ignoring message: reply EPs out of bounds\n",

@@ -125,7 +125,10 @@ class MemoryUnit
         void transferDone(TcuError result) override;
     };
 
-    MemoryUnit(Tcu &_tcu) : tcu(_tcu), eps(_tcu.eps().newCache()) {}
+    MemoryUnit(Tcu &_tcu)
+        : tcu(_tcu),
+          eps(_tcu.eps().newCache(EpFile::Memory, "memCmd"))
+    {}
 
     void regStats();
 

@@ -55,7 +55,7 @@ namespace tcu
 
 Tcu::Tcu(const TcuParams &p)
   : BaseTcu(p),
-    regFile(*this, name() + ".regFile", p.num_endpoints),
+    regFile(*this, name() + ".regFile"),
     connector(*this, p.connector),
     tlBuf(p.tlb_entries > 0 ? new TcuTlb(*this, p.tlb_entries) : NULL),
     msgUnit(new MessageUnit(*this)),
@@ -67,7 +67,6 @@ Tcu::Tcu(const TcuParams &p)
     completeCUReqEvent(cuReqs),
     coreDrained(),
     tileMemOffset(p.tile_mem_offset),
-    numEndpoints(p.num_endpoints),
     maxNocPacketSize(p.max_noc_packet_size),
     blockSize(p.block_size),
     bufCount(p.buf_count),
@@ -132,6 +131,12 @@ Tcu::regStats()
     memUnit->regStats();
     msgUnit->regStats();
     connector.regStats();
+}
+
+size_t
+Tcu::numEndpoints() const
+{
+    return regFile.endpointSize() / (numEpRegs * sizeof(RegFile::reg_t));
 }
 
 const std::string
@@ -471,6 +476,42 @@ Tcu::completeMemRequest(PacketPtr pkt)
     freeRequest(pkt);
 }
 
+void
+Tcu::sendEpRequest(PacketPtr pkt, EpFile::EpCache *cache, epid_t ep, Cycles delay, bool functional)
+{
+    auto senderState = new EpSenderState();
+    senderState->ep = ep;
+    senderState->cache = cache;
+    senderState->mid = pkt->req->requestorId();
+
+    pkt->pushSenderState(senderState);
+
+    if (functional)
+    {
+        sendFunctionalEpRequest(pkt);
+        completeEpRequest(pkt);
+    }
+    else
+        schedEpRequest(pkt, clockEdge(delay));
+}
+
+void
+Tcu::completeEpRequest(PacketPtr pkt)
+{
+    assert(!pkt->isError());
+    assert(pkt->isResponse());
+
+    auto senderState = dynamic_cast<EpSenderState*>(pkt->popSenderState());
+
+    // set the old requestor id again
+    pkt->req->setRequestorId(senderState->mid);
+
+    epFile.handleEpResponse(senderState->cache, senderState->ep, pkt);
+
+    delete senderState;
+    freeRequest(pkt);
+}
+
 bool
 Tcu::handleCUMemRequest(PacketPtr pkt,
                         TcuResponsePort &sport,
@@ -517,115 +558,78 @@ Tcu::handleCUMemRequest(PacketPtr pkt,
     return res;
 }
 
-void
-Tcu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
+const std::string
+Tcu::RegFileEvent::name() const
 {
-    Addr oldAddr = pkt->getAddr();
+    return _tcu.name();
+}
 
+void
+Tcu::RegFileEvent::process()
+{
     // Strip the base address to handle requests based on the reg. addr. only.
-    pkt->setAddr(oldAddr - mmioRegion.start());
+    // TODO keep that?
+    _pkt->setAddr((_pkt->getAddr() & 0xFFFFFFFF) - _tcu.mmioRegion.start());
 
-    RegFile::Result result = regs().handleRequest(pkt, isCpuRequest);
+    _tcu.regs().startRequest(_pkt, this, _isCpuRequest);
+    _tcu.regFileReqs++;
+}
 
-    regFileReqs++;
-
-    // restore old address
-    pkt->setAddr(oldAddr);
-
-    /*
-     * We handle the request immediatly and do not care about timing. The
-     * delay is payed by scheduling the response at some point in the
-     * future. Additionaly a write operation on the command register needs
-     * to schedule an event that executes this command at a future tick.
-     */
-
-    Cycles transportDelay =
-        ticksToCycles(pkt->headerDelay + pkt->payloadDelay);
+void
+Tcu::RegFileEvent::completed(RegFile::Result result)
+{
+    Cycles delay(0);
     // for reading, we pay the MMIO-latency for both request and response
-    if (pkt->isRead())
-        transportDelay += mmioLatency;
+    if (_pkt->isRead())
+        delay += _tcu.mmioLatency;
 
-    Tick when = clockEdge(transportDelay + mmioLatency);
+    Tick when = _tcu.clockEdge(delay + _tcu.mmioLatency);
 
-    if (!isCpuRequest)
-        schedNocRequestFinished(clockEdge(Cycles(1)));
+    if (!_isCpuRequest)
+        _tcu.schedNocRequestFinished(_tcu.clockEdge(Cycles(1)));
 
     if (~result & RegFile::WROTE_EXT_CMD)
     {
-        assert(isCpuRequest || result == RegFile::WROTE_NONE);
-        pkt->headerDelay = 0;
-        pkt->payloadDelay = 0;
+        assert(_isCpuRequest || result == RegFile::WROTE_NONE);
 
-        if (isCpuRequest &&
+        if (_isCpuRequest &&
             (result & (RegFile::WROTE_CMD | RegFile::WROTE_PRIV_CMD)) == 0)
-            schedCpuResponse(pkt, when);
-        else if(!isCpuRequest)
-            schedNocResponse(pkt, when);
+            _tcu.schedCpuResponse(_pkt, when);
+        else if(!_isCpuRequest)
+            _tcu.schedNocResponse(_pkt, when);
 
         if (result & RegFile::WROTE_CU_REQ)
-            schedule(completeCUReqEvent, when);
+            _tcu.schedule(_tcu.completeCUReqEvent, when);
         if (result & RegFile::WROTE_PRINT)
         {
-            PrintReg pr = regs().get(UnprivReg::PRINT);
+            PrintReg pr = _tcu.regs().get(UnprivReg::PRINT);
             if (pr.cov_addr == 0)
-                printLine(pr.size);
+                _tcu.printLine(pr.size);
             else
-                writeCoverage(pr);
+                _tcu.writeCoverage(pr);
         }
         if (result & RegFile::WROTE_CLEAR_IRQ)
         {
-            auto irq = (BaseConnector::IRQ)regs().get(PrivReg::CLEAR_IRQ);
-            connector.clearIrq(irq);
+            auto irq = (BaseConnector::IRQ)_tcu.regs().get(PrivReg::CLEAR_IRQ);
+            _tcu.connector.clearIrq(irq);
         }
     }
 
-    cmds.startCommand(result, pkt, when);
+    _tcu.cmds.startCommand(result, _pkt, when);
+
+    delete this;
 }
 
-NocAddr
-Tcu::translatePhysToNoC(Addr phys, bool write)
+void
+Tcu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
 {
-    Addr physAddr = phys - tileMemOffset;
-    Addr physOff = physAddr & 0x3FFFFFFF;
-    epid_t epid = physAddr >> 30;
-
-    if (epid >= numEndpoints)
-    {
-        DPRINTFS(Tcu, this, "PMP-EP%u: invalid PMP EP (phys=%#x)\n", epid, phys);
-        cuReqs.startPMPFailure(phys, write, TcuError::NO_PMP_EP);
-        return NocAddr();
-    }
-
-    if (regs().getEp(epid).type() != EpType::MEMORY)
-    {
-        DPRINTFS(Tcu, this, "PMP-EP%u: no memory EP (phys=%#x)\n", epid, phys);
-        cuReqs.startPMPFailure(phys, write, TcuError::NO_MEP);
-        return NocAddr();
-    }
-
-    const MemEp mep = regs().getEp(epid).mem;
-
-    if (physOff >= mep.r2.remoteSize)
-    {
-        DPRINTFS(Tcu, this,
-                 "PMP-EP%u: out of bounds (%#x vs. %#x)\n",
-                 epid, physOff, mep.r2.remoteSize);
-        cuReqs.startPMPFailure(phys, write, TcuError::OUT_OF_BOUNDS);
-        return NocAddr();
-    }
-    if ((!write && !(mep.r0.flags & MemoryFlags::READ)) ||
-        (write && !(mep.r0.flags & MemoryFlags::WRITE)))
-    {
-        DPRINTFS(Tcu, this,
-                 "PMP-EP%u: permission denied (flags=%#x, write=%d)\n",
-                 epid, mep.r0.flags, write);
-        cuReqs.startPMPFailure(phys, write, TcuError::NO_PERM);
-        return NocAddr();
-    }
-
-    // translate to NoC address
-    return NocAddr(TileId::from_raw(mep.r0.targetTile),
-                   mep.r1.remoteAddr + physOff);
+    Cycles transportDelay = ticksToCycles(pkt->headerDelay + pkt->payloadDelay);
+    // we paid the latency now
+    pkt->headerDelay = 0;
+    pkt->payloadDelay = 0;
+    
+    auto ev = new RegFileEvent(*this, pkt, isCpuRequest);
+    schedule(*ev, clockEdge(transportDelay));
 }
 
 bool
@@ -644,37 +648,118 @@ Tcu::handleLLCRequest(PacketPtr pkt, bool functional)
     if (pkt->cmd == MemCmd::BadAddressError)
         return false;
 
-    Addr pktAddr = pkt->getAddr();
-    // assert((pktAddr & (pkt->getSize() - 1)) == 0);
-    NocAddr noc = translatePhysToNoC(pktAddr, pkt->isWrite());
-    if (!noc.valid)
-        return false;
+    // only EP requests have already a valid NoC address. Send these directly, without translation
+    if (NocAddr(pkt->getAddr()).valid)
+    {
+        DPRINTF(TcuLLCMemAcc, "Sending LLC request for EP to %#x\n", pkt->getAddr());
 
+        if(pkt->isWrite())
+            printPacket(pkt);
+
+        auto type = functional ? Tcu::NocPacketType::CACHE_MEM_REQ_FUNC
+                               : Tcu::NocPacketType::CACHE_MEM_REQ;
+        sendNocRequest(type, pkt, Cycles(1), functional);
+
+        extMemReqs++;
+        return true;
+    }
+
+    Addr pktAddr = pkt->getAddr();
+    Addr physAddr = pktAddr - tileMemOffset;
+    epid_t epid = physAddr >> 30;
+
+    if (epid >= numEndpoints())
+    {
+        DPRINTFS(Tcu, this, "PMP-EP%u: invalid PMP EP (phys=%#x)\n", epid, pktAddr);
+        cuReqs.startPMPFailure(pktAddr, pkt->isWrite(), TcuError::NO_PMP_EP);
+        return false;
+    }
+
+    EpFile::EpCache *cache = new EpFile::EpCache(eps().newCache(EpFile::Memory, "llc"));
+    cache->addEp(epid);
+    cache->onFetched(std::bind(&Tcu::handleLLCRequestWithEp,
+                               this, std::placeholders::_1, pkt, functional),
+                     true, functional);
+    if (functional)
+        delete cache;
+    else
+        cache->setAutoDelete(true);
+    return true;
+}
+
+void
+Tcu::handleLLCRequestFailure(PacketPtr pkt, TcuError error, bool functional)
+{
+    cuReqs.startPMPFailure(pkt->getAddr(), pkt->isWrite(), error);
+    schedDummyResponse(llcResponsePort, pkt, functional);
+}
+
+void
+Tcu::handleLLCRequestWithEp(EpFile::EpCache &cache, PacketPtr pkt, bool functional)
+{
+    Addr phys = pkt->getAddr();
+    Addr physAddr = phys - tileMemOffset;
+    Addr physOff = physAddr & 0x3FFFFFFF;
+    epid_t epid = physAddr >> 30;
+    NocAddr noc;
+
+    Ep ep = cache.getEp(epid);
+    
+    if (ep.type() != EpType::MEMORY)
+    {
+        DPRINTFS(Tcu, this, "PMP-EP%u: no memory EP (phys=%#x)\n", epid, phys);
+        handleLLCRequestFailure(pkt, TcuError::NO_MEP, functional);
+        return;
+    }
+
+    if (physOff >= ep.mem.r2.remoteSize)
+    {
+        DPRINTFS(Tcu, this,
+                "PMP-EP%u: out of bounds (%#x vs. %#x)\n",
+                epid, physOff, ep.mem.r2.remoteSize);
+        handleLLCRequestFailure(pkt, TcuError::OUT_OF_BOUNDS, functional);
+        return;
+    }
+
+    if ((!pkt->isWrite() && !(ep.mem.r0.flags & MemoryFlags::READ)) ||
+            (pkt->isWrite() && !(ep.mem.r0.flags & MemoryFlags::WRITE)))
+    {
+        DPRINTFS(Tcu, this,
+                "PMP-EP%u: permission denied (flags=%#x, write=%d)\n",
+                epid, ep.mem.r0.flags, pkt->isWrite());
+        handleLLCRequestFailure(pkt, TcuError::NO_PERM, functional);
+        return;
+    }
+
+    // set resulting NoC address for packet
+    noc = NocAddr(TileId::from_raw(ep.mem.r0.targetTile),
+                  ep.mem.r1.remoteAddr + physOff);
     pkt->setAddr(noc.getAddr());
 
     DPRINTF(TcuLLCMemAcc, "Sending LLC request for %#x to %s:%#x\n",
-            pktAddr, noc.tileId, noc.offset);
+            phys, noc.tileId, noc.offset);
 
     if(pkt->isWrite())
         printPacket(pkt);
 
     // remember that we did this change
     if (!functional)
-        pkt->pushSenderState(new InitSenderState(pktAddr));
+        pkt->pushSenderState(new InitSenderState(phys));
 
-    auto type = functional ? Tcu::NocPacketType::CACHE_MEM_REQ_FUNC
-                           : Tcu::NocPacketType::CACHE_MEM_REQ;
-    // this does always target a memory tile, so actId is invalid
-    sendNocRequest(type,
-                   pkt,
-                   Cycles(1),
-                   functional);
+    {
+        auto type = functional ? Tcu::NocPacketType::CACHE_MEM_REQ_FUNC
+                               : Tcu::NocPacketType::CACHE_MEM_REQ;
+        // this does always target a memory tile, so actId is invalid
+        sendNocRequest(type,
+                       pkt,
+                       Cycles(1),
+                       functional);
+    }
 
     extMemReqs++;
 
     if (functional)
-        pkt->setAddr(pktAddr);
-    return true;
+        pkt->setAddr(phys);
 }
 
 void

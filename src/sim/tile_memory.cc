@@ -39,12 +39,16 @@ TileMemory::TileMemory(SimObject *obj,
                        tcu::TileId memTile,
                        Addr memOffset,
                        Addr memSize,
-                       PortProxy &phys)
+                       PortProxy &phys,
+                       Addr initEpsAddr,
+                       Addr initEpsNum)
     : obj(obj),
       physp(phys),
       memTile(memTile),
       memOffset(memOffset),
-      memSize(memSize)
+      memSize(memSize),
+      initEpsAddr(initEpsAddr),
+      initEpsNum(initEpsNum)
 {
 }
 

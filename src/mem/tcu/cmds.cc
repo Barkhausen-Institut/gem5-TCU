@@ -174,7 +174,7 @@ TcuCommands::executeCommand(PacketPtr pkt)
     if (cmd.opcode < sizeof(cmdNames) / sizeof(cmdNames[0]))
         commands[static_cast<size_t>(cmd.opcode)]++;
 
-    assert(cmd.epid < tcu.numEndpoints);
+    assert(cmd.epid < tcu.numEndpoints());
     DPRINTF(TcuCmd, "Starting command %s with EP=%u, arg0=%#lx\n",
             COMMAND_NAME(cmdNames, cmd.opcode), cmd.epid, cmd.arg0);
 

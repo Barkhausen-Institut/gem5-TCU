@@ -95,8 +95,8 @@ class MessageUnit
     MessageUnit(Tcu &_tcu)
       : tcu(_tcu),
         sendReplyFinished(true),
-        cmdEps(_tcu.eps().newCache()),
-        extCmdEps(_tcu.eps().newCache())
+        cmdEps(_tcu.eps().newCache(EpFile::Messaging, "msgCmd")),
+        extCmdEps(_tcu.eps().newCache(EpFile::Messaging, "msgExtCmd"))
     {}
 
     void regStats();

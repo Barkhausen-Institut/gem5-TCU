@@ -35,7 +35,7 @@
 
 #include "params/M3System.hh"
 #include "mem/qport.hh"
-#include "mem/tcu/noc_addr.hh"
+#include "mem/tcu/reg_file.hh"
 #include "sim/tile_memory.hh"
 #include "sim/m3_loader.hh"
 #include "sim/system.hh"

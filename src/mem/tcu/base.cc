@@ -34,7 +34,7 @@
 #include "debug/Tcu.hh"
 #include "base/trace.hh"
 #include "mem/tcu/base.hh"
-#include "mem/tcu/noc_addr.hh"
+#include "mem/tcu/reg_file.hh"
 #include "sim/system.hh"
 
 namespace gem5
@@ -80,6 +80,17 @@ BaseTcu::ICacheRequestPort::recvTimingResp(PacketPtr pkt)
     // the TCU does never send requests to the icache. so just pass it back to
     // the CPU
     tcu.icacheResponsePort.schedTimingResp(pkt, tcu.clockEdge(Cycles(1)));
+    return true;
+}
+
+bool
+BaseTcu::EpCacheRequestPort::recvTimingResp(PacketPtr pkt)
+{
+    DPRINTF(TcuResponsePort, "Sending timing response at %#x [senderState=%#x]\n",
+                          pkt->getAddr(),
+                          pkt->senderState);
+
+    tcu.completeEpRequest(pkt);
     return true;
 }
 
@@ -301,6 +312,7 @@ BaseTcu::BaseTcu(const BaseTcuParams &p)
     nocResponsePort(*this),
     icacheRequestPort(*this),
     dcacheRequestPort(*this),
+    epcacheRequestPort(*this),
     icacheResponsePort(icacheRequestPort, *this, true),
     dcacheResponsePort(dcacheRequestPort, *this, false),
     llcResponsePort(*this),
@@ -350,6 +362,8 @@ BaseTcu::getPort(const std::string &if_name, PortID idx)
         return nocResponsePort;
     else if (if_name == "llc_slave_port")
         return llcResponsePort;
+    else if (if_name == "epcache_master_port")
+        return epcacheRequestPort;
     else
         return SimObject::getPort(if_name, idx);
 }
@@ -398,6 +412,14 @@ BaseTcu::schedMemRequest(PacketPtr pkt, Tick when)
 }
 
 void
+BaseTcu::schedEpRequest(PacketPtr pkt, Tick when)
+{
+    pkt->req->setRequestorId(requestorId);
+
+    epcacheRequestPort.schedTimingReq(pkt, when);
+}
+
+void
 BaseTcu::sendFunctionalNocRequest(PacketPtr pkt)
 {
     printNocRequest(pkt, "functional");
@@ -411,6 +433,13 @@ BaseTcu::sendFunctionalMemRequest(PacketPtr pkt)
     pkt->req->setRequestorId(requestorId);
 
     dcacheRequestPort.sendFunctional(pkt);
+}
+
+void
+BaseTcu::sendFunctionalEpRequest(PacketPtr pkt)
+{
+    printNocRequest(pkt, "functional");
+    epcacheRequestPort.sendFunctional(pkt);
 }
 
 // -- responses --

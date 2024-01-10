@@ -48,8 +48,17 @@ class EpFile
 {
   public:
 
+    enum EpCachePrio
+    {
+        Messaging,
+        Memory,
+        Regs,
+    };
+
     class EpCache : public Event
     {
+        friend class EpFile;
+
         struct CachedEp
         {
             Ep ep;
@@ -59,12 +68,17 @@ class EpFile
         enum State
         {
             FETCH,
+            FETCH_WAIT,
             WRITEBACK,
+            WRITEBACK_WAIT,
         };
 
       public:
 
-        explicit EpCache(EpFile &eps);
+        explicit EpCache(EpFile &eps, EpCachePrio prio, const char *name);
+
+        EpCache(const EpCache &epc) = default;
+        EpCache(EpCache &&epc) = default;
 
         State getState() const { return state; }
 
@@ -75,23 +89,29 @@ class EpFile
         template<class T>
         void updateEp(const T &ep)
         {
-            assert(epfile.lock == this);
             CachedEp &old = cachedEps[ep.id];
             old.ep.inval.id = ep.id;
             old.ep.update(ep);
             old.dirty = true;
         }
 
+        void setAccess(RegAccess _access) { access = _access; }
+
         void setAutoFinish(bool _autoFinish) { autoFinish = _autoFinish; }
+        
+        void setAutoDelete(bool _autoDelete) { autoDelete = _autoDelete; }
 
         void onFetched(std::function<void (EpCache&)> func,
-                       bool autoFinish = true);
+                       bool autoFinish = true, bool functional = false);
 
-        void onFinished(std::function<void (EpCache&)> func);
+        void onFinished(std::function<void (EpCache&)> func,
+                        bool functional = false);
 
         void finish();
 
-      private:
+       private:
+
+        void handleEpResponse(epid_t ep, PacketPtr pkt);
 
         void process() override;
 
@@ -100,21 +120,39 @@ class EpFile
         State state;
 
         bool autoFinish;
+        
+        bool autoDelete;
+
+        bool functional;
 
         int pending;
+
+        int epRequests;
 
         std::function<void (EpCache&)> func;
 
         std::map<epid_t, CachedEp> cachedEps;
 
+        RegAccess access;
+
+        EpCachePrio prio;
+        
+        std::string name;
+
+        int id;
+
         EpFile &epfile;
+
+        static int next_id;
     };
 
     explicit EpFile(Tcu &tcu);
 
     const std::string name() const;
 
-    EpCache newCache();
+    void handleEpResponse(EpCache *cache, epid_t ep, PacketPtr pkt);
+
+    EpCache newCache(EpCachePrio prio, const char *name);
 
   private:
 

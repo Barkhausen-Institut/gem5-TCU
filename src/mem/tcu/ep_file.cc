@@ -29,6 +29,7 @@
 
 #include "debug/TcuEps.hh"
 #include "mem/tcu/ep_file.hh"
+#include "mem/tcu/reg_file.hh"
 #include "mem/tcu/tcu.hh"
 
 namespace gem5
@@ -36,10 +37,14 @@ namespace gem5
 namespace tcu
 {
 
-EpFile::EpCache::EpCache(EpFile &_epfile)
-    : state(FETCH), autoFinish(), pending(), func(),
-      cachedEps(), epfile(_epfile)
-{}
+int EpFile::EpCache::next_id = 1;
+
+EpFile::EpCache::EpCache(EpFile &_epfile, EpCachePrio prio, const char *name)
+    : state(FETCH), autoFinish(), autoDelete(), functional(), pending(), epRequests(), func(),
+      cachedEps(), access(RegAccess::TCU), prio(prio), name(name), id(next_id), epfile(_epfile)
+{
+    next_id += 1;
+}
 
 void EpFile::EpCache::addEp(epid_t ep)
 {
@@ -50,29 +55,40 @@ void EpFile::EpCache::addEp(epid_t ep)
 Ep
 EpFile::EpCache::getEp(epid_t ep)
 {
-    assert(epfile.lock == this);
     return cachedEps[ep].ep;
 }
 
 void
 EpFile::EpCache::onFetched(std::function<void (EpCache&)> _func,
-                             bool _autoFinish)
+                           bool _autoFinish, bool _functional)
 {
     func = _func;
     autoFinish = _autoFinish;
+    functional = _functional;
+    // note: we need to track the number of onFetched calls to support cases that acquire additional
+    // EPs within the first onFetched callback (e.g., for replies). In such cases we want to keep
+    // the lock until we are done with everything (and thus want to postpone the finish call until
+    // that point).
     pending++;
 
-    epfile.tcu.schedule(this, epfile.tcu.clockEdge(Cycles(1)));
+    if (functional)
+        process();
+    else
+        epfile.tcu.schedule(this, epfile.tcu.clockEdge(Cycles(1)));
 }
 
 void
-EpFile::EpCache::onFinished(std::function<void (EpCache&)> _func)
+EpFile::EpCache::onFinished(std::function<void (EpCache&)> _func, bool _functional)
 {
     func = _func;
     autoFinish = false;
+    functional = _functional;
     state = WRITEBACK;
 
-    epfile.tcu.schedule(this, epfile.tcu.clockEdge(Cycles(1)));
+    if (functional)
+        process();
+    else
+        epfile.tcu.schedule(this, epfile.tcu.clockEdge(Cycles(1)));
 }
 
 void
@@ -90,61 +106,152 @@ EpFile::EpCache::finish()
 }
 
 void
-EpFile::EpCache::process()
+EpFile::EpCache::handleEpResponse(epid_t ep, PacketPtr pkt)
 {
-    if (state == WRITEBACK)
+    switch (state)
     {
-        assert(epfile.lock == this);
-
-        // writeback all EPs that were changed
-        for(auto it = cachedEps.begin(); it != cachedEps.end(); ++it)
-        {
-            if (it->second.dirty)
-            {
-                DPRINTFS(TcuEps, (&epfile),
-                         "cache[%#x]: writeback EP%u\n", this, it->first);
-                epfile.tcu.regs().updateEp(it->second.ep.send);
-                it->second.dirty = false;
-            }
-        }
-
-        // here we're always finished
-        finish();
-        // notify the user afterwards
-        func(*this);
-    }
-    else
-    {
-        // we need to take a lock while holding the EPs, because otherwise
-        // message receptions could interfere with each other and with an
-        // ongoing command.
-        if (!epfile.takeLock(this))
+        case WRITEBACK_WAIT:
         {
             DPRINTFS(TcuEps, (&epfile),
-                     "cache[%#x]: unable to take lock\n", this);
-            epfile.tcu.schedule(this, epfile.tcu.clockEdge(Cycles(1)));
-            return;
+                    "cache[%s:%d]: writeback of EP%u completed\n", name, id, ep);
+            
+            RegFile::printEpAccess(epfile.tcu, cachedEps[ep].ep, false, access);
+
+            cachedEps[ep].dirty = false;
+
+            if (--epRequests == 0 && !functional)
+                epfile.tcu.schedule(this, epfile.tcu.clockEdge(Cycles(1)));
+            break;
         }
 
-        for(auto it = cachedEps.begin(); it != cachedEps.end(); ++it)
+        case FETCH_WAIT:
         {
-            // if not already done, fetch the EP from the register file
-            if (it->second.ep.type() == EpType::INVALID)
+            DPRINTFS(TcuEps, (&epfile),
+                    "cache[%s:%d]: fetch of EP%u completed\n", name, id, ep);
+
+            RegFile::reg_t *regs = pkt->getPtr<RegFile::reg_t>();
+            for(size_t i = 0; i < numEpRegs; ++i)
+                cachedEps[ep].ep.inval.r[i] = regs[i];
+            cachedEps[ep].ep.inval.id = ep;
+
+            RegFile::printEpAccess(epfile.tcu, cachedEps[ep].ep, true, access);
+            
+            if (--epRequests == 0 && !functional)
+                epfile.tcu.schedule(this, epfile.tcu.clockEdge(Cycles(1)));
+            break;
+        }
+
+        default:
+            panic("Received EP response in unexpected state: %d\n", state);
+    }
+}
+
+void
+EpFile::EpCache::process()
+{
+    if (state == WRITEBACK || state == FETCH)
+    {
+        // messaging is exclusive to prevent that message receptions and commands interfere with
+        // each other. register access cannot happen in parallel either, because the CPU might issue
+        // multiple register writes simultenaously, causing a race.
+        if (prio != Memory)
+        {
+            if (!epfile.takeLock(this))
             {
                 DPRINTFS(TcuEps, (&epfile),
-                         "cache[%#x]: fetching EP%u\n", this, it->first);
-                it->second.ep = epfile.tcu.regs().getEp(it->first);
+                        "cache[%s:%d]: unable to take lock\n", name, id);
+                panic_if(functional, "Lock taken with functional access!?");
+                epfile.tcu.schedule(this, epfile.tcu.clockEdge(Cycles(1)));
+                return;
             }
         }
+    }
 
-        func(*this);
+    switch (state)
+    {
+        case WRITEBACK:
+            // change the state first, because in functional mode we call handleEpResponse
+            // immediately.
+            state = WRITEBACK_WAIT;
 
-        // one operation done
-        assert(pending > 0);
-        pending--;
-        // check if we're finished with this EpCache
-        if (autoFinish && pending == 0)
-            finish();
+            // writeback all EPs that were changed
+            for(auto it = cachedEps.begin(); it != cachedEps.end(); ++it)
+            {
+                if (it->second.dirty)
+                {
+                    auto epSize = numEpRegs * sizeof(RegFile::reg_t);
+                    auto addr = epfile.tcu.regs().endpointsAddr() + it->first * epSize;
+                    auto pkt = epfile.tcu.generateRequest(addr, epSize, MemCmd::WriteReq);
+                    pkt->setData(reinterpret_cast<uint8_t*>(it->second.ep.inval.r));
+
+                    DPRINTFS(TcuEps, (&epfile),
+                            "cache[%s:%d]: writeback of EP%u to %#016x started\n",
+                            name, id, it->first, addr);
+
+                    epfile.tcu.sendEpRequest(pkt, this, it->first, Cycles(1), functional);
+                    epRequests++;
+                }
+            }
+
+            [[fallthrough]];
+
+        case WRITEBACK_WAIT:
+            if (epRequests == 0)
+            {
+                // here we're always finished
+                finish();
+                // notify the user afterwards
+                func(*this);
+
+                if (autoDelete)
+                    setFlags(AutoDelete);
+            }
+            break;
+
+        case FETCH:
+            state = FETCH_WAIT;
+
+            for(auto it = cachedEps.begin(); it != cachedEps.end(); ++it)
+            {
+                // if not already done, fetch the EP from the EP cache
+                if (it->second.ep.type() == EpType::INVALID)
+                {
+                    auto epSize = numEpRegs * sizeof(RegFile::reg_t);
+                    auto addr = epfile.tcu.regs().endpointsAddr() + it->first * epSize;
+                    auto pkt = epfile.tcu.generateRequest(addr, epSize, MemCmd::ReadReq);
+
+                    DPRINTFS(TcuEps, (&epfile),
+                            "cache[%s:%d]: fetch of EP%u from %#016x started\n",
+                            name, id, it->first, addr);
+
+                    epfile.tcu.sendEpRequest(pkt, this, it->first, Cycles(1), functional);
+                    epRequests++;
+                }
+            }
+
+            [[fallthrough]];
+    
+        case FETCH_WAIT:
+            if (epRequests == 0)
+            {
+                func(*this);
+
+                // one operation done
+                assert(pending > 0);
+                pending--;
+                // check if we're finished with this EpCache
+                if (autoFinish && pending == 0)
+                    finish();
+                else if (state == FETCH_WAIT)
+                    state = FETCH;
+
+                if (autoDelete)
+                    setFlags(AutoDelete);
+            }
+            break;
+        
+        default:
+            panic("Unexpected state");
     }
 }
 
@@ -157,28 +264,39 @@ const std::string EpFile::name() const
     return tcu.name() + ".eps";
 }
 
+void
+EpFile::handleEpResponse(EpCache *cache, epid_t ep, PacketPtr pkt)
+{
+    cache->handleEpResponse(ep, pkt);
+}
+
 bool
 EpFile::takeLock(EpCache *cache)
 {
     if (lock && lock != cache)
         return false;
-    DPRINTF(TcuEps, "cache[%#x]: taking lock\n", cache);
-    lock = cache;
+    if (lock != cache)
+    {
+        DPRINTF(TcuEps, "cache[%s:%d]: taking lock\n", cache->name, cache->id);
+        lock = cache;
+    }
     return true;
 }
 
 void
 EpFile::releaseLock(EpCache *cache)
 {
-    DPRINTF(TcuEps, "cache[%#x]: freeing lock\n", cache);
-    assert(lock == cache);
-    lock = nullptr;
+    if (lock == cache)
+    {
+        DPRINTF(TcuEps, "cache[%s:%d]: freeing lock\n", cache->name, cache->id);
+        lock = nullptr;
+    }
 }
 
 EpFile::EpCache
-EpFile::newCache()
+EpFile::newCache(EpCachePrio type, const char *name)
 {
-    return EpCache(*this);
+    return EpCache(*this, type, name);
 }
 
 }
