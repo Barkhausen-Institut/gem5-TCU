@@ -48,7 +48,7 @@ namespace tcu
 
 static constexpr Addr PATCH_VERSION = 0;
 static constexpr Addr MINOR_VERSION = 0;
-static constexpr Addr MAJOR_VERSION = 2;
+static constexpr Addr MAJOR_VERSION = 3;
 
 // external registers (only externally writable)
 enum class ExtReg : Addr
