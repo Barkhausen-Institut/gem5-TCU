@@ -67,6 +67,20 @@ CURequests::regStats()
 }
 
 void
+CURequests::reset()
+{
+    while(!reqs.empty())
+    {
+        Request *r = reqs.front();
+        DPRINTFS(TcuCUReqs, (&tcu), "CURequest[%lu] aborted\n", r->id);
+        delete r;
+        reqs.pop_front();
+    }
+
+    tcu.regs().set(PrivReg::CU_REQ, CUMsgType::IDLE);
+}
+
+void
 CURequests::add(Request *req)
 {
     if(reqs.size() == 1)

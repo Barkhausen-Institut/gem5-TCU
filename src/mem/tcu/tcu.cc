@@ -171,6 +171,7 @@ Tcu::reset(bool start)
 
     if (tlb())
         tlb()->clear();
+    cuReqs.reset();
 
     if (start)
     {

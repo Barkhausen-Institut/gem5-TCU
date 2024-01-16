@@ -95,6 +95,8 @@ class CURequests
 
     void regStats();
 
+    void reset();
+
     void startForeignReceive(epid_t epId,
                                actid_t actId);
     void startPMPFailure(Addr phys, bool write, TcuError error);
