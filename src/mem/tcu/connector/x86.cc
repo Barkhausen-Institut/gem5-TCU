@@ -86,6 +86,8 @@ X86Connector::IrqRequestPort::recvReqRetry()
 void
 X86Connector::reset(bool start)
 {
+    CoreConnector::reset(start);
+
     DPRINTF(TcuConnector, "Resetting core\n");
 
     M3System *m3sys = dynamic_cast<M3System*>(system);

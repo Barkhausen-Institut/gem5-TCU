@@ -38,6 +38,17 @@ namespace tcu
 {
 
 void
+BaseConnector::reset(bool start)
+{
+    while (!_pending.empty())
+    {
+        IRQ irq = _pending.front();
+        DPRINTF(TcuConnector, "Forgetting IRQ %d\n", irq);
+        _pending.pop();
+    }
+}
+
+void
 BaseConnector::setIrq(IRQ irq)
 {
     _pending.push(irq);

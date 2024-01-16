@@ -47,8 +47,10 @@ RiscvConnector::RiscvConnector(const RiscvConnectorParams &p)
 }
 
 void
-RiscvConnector::reset(bool)
+RiscvConnector::reset(bool start)
 {
+    CoreConnector::reset(start);
+
     DPRINTF(TcuConnector, "Resetting core\n");
 
     ThreadContext *tc = system->threads[0];

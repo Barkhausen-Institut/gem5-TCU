@@ -72,7 +72,7 @@ class BaseConnector : public ClockedObject
     virtual void wakeup() {};
     virtual void suspend() {};
 
-    virtual void reset(bool start) {};
+    virtual void reset(bool start);
 
     bool havePendingIrq() const
     {
