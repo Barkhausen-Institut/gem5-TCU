@@ -789,6 +789,13 @@ def runSimulation(root, options, tiles):
             else:
                 desc |= 2 << 6 # x86
 
+            if hasattr(tile, 'cpu') and isinstance(tile.cpu, BaseO3CPU):
+                desc |= (1 << 0) << 11  # PERF
+            elif hasattr(tile, 'cpu') and isinstance(tile.cpu, BaseMinorCPU):
+                desc |= (1 << 1) << 11  # EFFI
+            elif hasattr(tile, 'cpu') and isinstance(tile.cpu, BaseTimingSimpleCPU):
+                desc |= (1 << 1) << 11  # EFFI
+
             if hasattr(tile, 'kecacc'):
                 desc |= (1 << 6) << 11
         # spu tiles always have internal EPs and thus don't have the attribute
