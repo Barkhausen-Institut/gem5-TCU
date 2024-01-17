@@ -57,7 +57,7 @@ class BaseTcu(ClockedObject):
 
     tile_mem_offset = Param.Unsigned(0, "The offset that all accesses have to go above")
 
-    mmio_region = Param.AddrRange(AddrRange(0xF0000000, 0xF0003FFF), "MMIO region of the TCU")
+    mmio_region = Param.AddrRange(AddrRange(0xF0000000, 0xF0202000), "MMIO region of the TCU")
 
     tile_id = Param.Unsigned("ID of the tile this TCU belongs to")
 
