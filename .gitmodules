@@ -1,0 +1,3 @@
+[submodule "src/dev/kecacc/kecacc-xkcp"]
+	path = src/dev/kecacc/kecacc-xkcp
+	url = https://github.com/Barkhausen-Institut/m3-kecacc-xkcp

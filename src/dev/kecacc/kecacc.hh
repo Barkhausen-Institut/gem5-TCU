@@ -33,7 +33,7 @@
 #define __DEV_KECACC_HH__
 
 #include "dev/io_device.hh"
-#include "dev/kecacc/kecacc-xkcp.hh"
+#include "dev/kecacc/kecacc-xkcp/kecacc-xkcp.hh"
 #include "params/KecAcc.hh"
 
 namespace gem5
