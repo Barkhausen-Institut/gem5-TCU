@@ -397,11 +397,14 @@ Tcu::completeNocRequest(PacketPtr pkt)
     }
     else if (senderState->packetType != NocPacketType::CACHE_MEM_REQ_FUNC)
     {
-        cmds.setRemoteCommand(false);
-        // if the current command should be aborted, just ignore the packet
-        // and finish the command
-        if (cmds.isCommandAborting())
+        // if it's a completion for a READ_REQ and the current command should be aborted, just
+        // ignore the packet and finish the command. We cannot abort MESSAGE's here as they have
+        // been sent to the other side and therefore have to be finished. WRITE_REQ could be aborted
+        // but since they are basically finished, there is no point in doing so. READ_REQ on the
+        // other hand may take some time to finish locally and thus should be aborted.
+        if (senderState->packetType == NocPacketType::READ_REQ && cmds.isCommandAborting())
         {
+            cmds.setRemoteCommand(false);
             freeRequest(pkt);
             scheduleCmdFinish(Cycles(1), TcuError::ABORT);
         }
