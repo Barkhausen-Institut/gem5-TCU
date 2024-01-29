@@ -269,6 +269,8 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
             i++;
         }
 
+        constexpr size_t TCU_EPS_PER_PAGE = tcu::TcuTlb::PAGE_SIZE /
+            (tcu::numEpRegs * sizeof(tcu::RegFile::reg_t));
         RotCfg cfg = {
             .brom = {
                 .magic = 0x42726f6d43666701,
@@ -279,8 +281,14 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
                 .next_layer = rotBins[1],
             },
             .rosa = {
-                .magic = 0x526f736143666701,
+                .magic = 0x526f736143666702,
                 .kernel_mem_size = tileSize,
+                .kernel_ep_pages = static_cast<uint8_t>(
+                    // For now just configure the kernel tile with the same
+                    // amount of EPs as used for the RoT tile (could also make
+                    // this separately configurable).
+                    std::min(divCeil(mem.initEpsNum, TCU_EPS_PER_PAGE),
+                             static_cast<size_t>(UINT8_MAX))),
                 .kernel_cmdline = {},
                 .mods = {},
             },

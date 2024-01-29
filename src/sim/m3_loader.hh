@@ -113,7 +113,8 @@ class M3Loader
         {
             uint64_t magic;
             uint64_t kernel_mem_size;
-            char kernel_cmdline[48];
+            uint8_t kernel_ep_pages;
+            char kernel_cmdline[47];
             BootModule mods[50];
         } rosa;
     };
