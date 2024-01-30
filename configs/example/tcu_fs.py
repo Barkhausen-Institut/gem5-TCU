@@ -326,7 +326,7 @@ def createTile(noc, options, id, systemType, l1size, l2size, spmsize, memTile, e
         tile.epcache.mem_side = tile.xbar.cpu_side_ports
         tile.tcu.caches.append(tile.epcache)
     else:
-        tile.epcache = Scratchpad(in_addr_map="true")
+        tile.epcache = Scratchpad()
         # the TCU writes to the XBar, where the EP-SPM listens to the specified memory range
         tile.epcache.cpu_port = tile.xbar.mem_side_ports
         tile.tcu.epcache_master_port = tile.xbar.cpu_side_ports
