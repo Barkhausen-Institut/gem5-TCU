@@ -44,7 +44,6 @@ Scratchpad::Scratchpad(const ScratchpadParams &p)
     tcuPort(name() + ".tcu_port", *this),
     latency(p.latency),
     throughput(p.throughput),
-    range(p.range),
     ignoreInvalid(p.ignore_invalid)
 {
 }
@@ -148,10 +147,7 @@ AddrRangeList
 Scratchpad::ScratchpadPort::getAddrRanges() const
 {
     AddrRangeList ranges;
-    if (scratchpad.ignoreInvalid)
-        ranges.push_back(scratchpad.range);
-    else
-        ranges.push_back(scratchpad.getAddrRange());
+    ranges.push_back(scratchpad.getAddrRange());
     return ranges;
 }
 

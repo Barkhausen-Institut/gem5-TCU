@@ -73,8 +73,6 @@ class Scratchpad : public AbstractMemory
 
     const unsigned throughput;
 
-    const AddrRange range;
-
     const bool ignoreInvalid;
 
     bool checkInvalid(PacketPtr pkt);
