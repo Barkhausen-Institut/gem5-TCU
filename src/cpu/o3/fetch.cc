@@ -642,11 +642,13 @@ Fetch::finishTranslation(const Fault &fault, const RequestPtr &mem_req)
         // Don't send an instruction to decode if we can't handle it.
         if (!(numInst < fetchWidth) ||
                 !(fetchQueue[tid].size() < fetchQueueSize)) {
-            assert(!finishTranslationEvent.scheduled());
+            // assert(!finishTranslationEvent.scheduled());
             finishTranslationEvent.setFault(fault);
             finishTranslationEvent.setReq(mem_req);
-            cpu->schedule(finishTranslationEvent,
-                          cpu->clockEdge(Cycles(1)));
+            if(!finishTranslationEvent.scheduled()) {
+                cpu->schedule(finishTranslationEvent,
+                              cpu->clockEdge(Cycles(1)));
+            }
             return;
         }
         DPRINTF(Fetch,
