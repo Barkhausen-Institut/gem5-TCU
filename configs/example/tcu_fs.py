@@ -219,7 +219,7 @@ def connectCuToMem(tile, options, dport, iport=None, l1size=None):
     tile.tcu.dcache_slave_port = interpose(tile, options, 'cu_dmon', dport)
 
 def createTile(noc, options, id, systemType, l1size, l2size, spmsize, memTile, epCount):
-    global tile_cur_off, eps_offset
+    global tile_cur_off, eps_offset, mod_size
     CPUClass = ObjectList.cpu_list.get(options.cpu_type)
 
     # each tile is represented by it's own subsystem
@@ -296,7 +296,8 @@ def createTile(noc, options, id, systemType, l1size, l2size, spmsize, memTile, e
     if systemType == SpuSystem or spmsize is not None:
         tile.eps_addr = 0xFF00_0000
     elif memTile is not None:
-        eps_offset = eps_offset - int(tile.eps_num * 32)
+        eps_offset -= int(tile.eps_num * 32)
+        mod_size -= int(tile.eps_num * 32)
         tile.eps_addr = NocAddr(memTile, eps_offset).addr()
 
     # add EP cache
@@ -392,7 +393,7 @@ def createCoreTile(noc, options, id, cmdline, memTile,
 
     if "kernel" in cmdline:
         tile.mod_offset = mod_offset
-        tile.mod_size = eps_offset
+        tile.mod_size = mod_size
         tile.tile_size = tile_size
 
     # workload and command line
