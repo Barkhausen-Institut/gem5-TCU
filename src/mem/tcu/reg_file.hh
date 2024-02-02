@@ -529,8 +529,8 @@ BitUnion64(FeatureReg)
 EndBitUnion(FeatureReg)
 
 BitUnion64(EPsAddrReg)
-    Bitfield<63, 56> tile;
-    Bitfield<55, 0> offset;
+    Bitfield<63, 50> tile;
+    Bitfield<49, 0> offset;
 EndBitUnion(EPsAddrReg)
 
 BitUnion64(PrintReg)
