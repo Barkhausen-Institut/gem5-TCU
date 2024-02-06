@@ -238,6 +238,8 @@ global_vars.AddVariables(
     ('EXTRAS', 'Add extra directories to the compilation', '')
     )
 
+environ['NIX_DEBUG'] = '1'
+
 # Update main environment with values from ARGUMENTS & global_vars_file
 global_vars.Update(main)
 Help('''
@@ -575,7 +577,10 @@ if not conf.CheckLibWithHeader(
 
 # Check for zlib.  If the check passes, libz will be automatically
 # added to the LIBS environment variable.
-if not conf.CheckLibWithHeader('z', 'zlib.h', 'C++','zlibVersion();'):
+zlib = False
+if have_pkg_config:
+    zlib = conf.CheckPkgConfig('zlib', '--cflags', '--libs')
+if not zlib and not conf.CheckLibWithHeader('z', 'zlib.h', 'C++','zlibVersion();'):
     error('Did not find needed zlib compression library '
           'and/or zlib.h header file.\n'
           'Please install zlib and try again.')
