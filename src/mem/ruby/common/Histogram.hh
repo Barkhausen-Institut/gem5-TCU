@@ -30,6 +30,7 @@
 #define __MEM_RUBY_COMMON_HISTOGRAM_HH__
 
 #include <iostream>
+#include <cstdint>
 #include <vector>
 
 #include "mem/ruby/common/TypeDefines.hh"
