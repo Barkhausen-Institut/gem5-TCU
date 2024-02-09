@@ -647,7 +647,7 @@ Tcu::translatePhysToNoC(Addr phys, bool write)
     if (epid >= numEndpoints || regs().getEp(epid).type() != EpType::MEMORY)
     {
         DPRINTFS(Tcu, this, "PMP-EP%u: invalid EP (phys=%#x)\n", epid, phys);
-        warn("T%u,PMP-EP%u: invalid EP", tileId, epid);
+        // warn("T%u,PMP-EP%u: invalid EP", tileId, epid);
         return NocAddr();
     }
 
@@ -658,7 +658,7 @@ Tcu::translatePhysToNoC(Addr phys, bool write)
         DPRINTFS(Tcu, this,
                  "PMP-EP%u: out of bounds (%#x vs. %#x)\n",
                  epid, physOff, mep.r2.remoteSize);
-        warn("T%u,PMP-EP%u: out of bounds", tileId, epid);
+        // warn("T%u,PMP-EP%u: out of bounds", tileId, epid);
         return NocAddr();
     }
     if ((!write && !(mep.r0.flags & MemoryFlags::READ)) ||
@@ -667,7 +667,7 @@ Tcu::translatePhysToNoC(Addr phys, bool write)
         DPRINTFS(Tcu, this,
                  "PMP-EP%u: permission denied (flags=%#x, write=%d)\n",
                  epid, mep.r0.flags, write);
-        warn("T%u,PMP-EP%u: permission denied", tileId, epid);
+        // warn("T%u,PMP-EP%u: permission denied", tileId, epid);
         return NocAddr();
     }
 
