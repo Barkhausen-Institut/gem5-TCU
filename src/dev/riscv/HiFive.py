@@ -143,12 +143,10 @@ class HiFive(Platform):
         """Returns a list of off-chip peripherals
         """
         devices = [self.uart]
-        if hasattr(self, "disk"):
-            devices.append(self.disk)
-        if hasattr(self, "disk0"):
-            devices.append(self.disk0)
-        if hasattr(self, "disk1"):
-            devices.append(self.disk1)
+        i = 0
+        while hasattr(self, "disk{}".format(i)):
+            devices.append(getattr(self, "disk{}".format(i)))
+            i += 1
         if hasattr(self, "rng"):
             devices.append(self.rng)
         return devices
