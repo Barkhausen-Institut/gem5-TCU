@@ -223,8 +223,16 @@ BaseCPU::mwait(ThreadID tid, PacketPtr pkt)
         int block_size = cacheLineSize();
         uint64_t mask = ~((uint64_t)(block_size - 1));
 
-        assert(pkt->req->hasPaddr());
-        monitor.pAddr = pkt->getAddr() & mask;
+        // TODO this is a workaround for the gem5 bug that leads to pkt being 0 sometimes. since
+        // we use mwait only once with a specific address, we work around it by just hardcoding the
+        // address.
+        if (pkt) {
+            assert(pkt->req->hasPaddr());
+            monitor.pAddr = pkt->getAddr() & mask;
+        }
+        else {
+            monitor.pAddr = 0x30000;
+        }
         monitor.waiting = true;
 
         DPRINTF(Mwait, "[tid:%d] mwait called (vAddr=0x%lx, "
