@@ -280,6 +280,7 @@ TcuCommands::finishCommand(TcuError error)
     CmdCommand::Bits cmd = tcu.regs().getCommand();
 
     cmdFinish = NULL;
+    cmdIsRemote = false;
 
     switch(cmd.opcode)
     {
