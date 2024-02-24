@@ -215,27 +215,31 @@ TcuCommands::abortCommand()
     // if we've already scheduled finishCommand, consider the command done
     if (!cmdFinish && cmd.opcode != CmdCommand::IDLE)
     {
-        // if we are waiting for a NoC response, just wait until we receive it.
-        // we deem this acceptable, because these remotely running transfers
-        // never cause page faults and thus complete in short amounts of time.
-        if (cmdIsRemote)
+        if (cmd.opcode == CmdCommand::SEND || cmd.opcode == CmdCommand::REPLY ||
+            cmd.opcode == CmdCommand::READ || cmd.opcode == CmdCommand::WRITE)
         {
-            // SEND/REPLY needs to finish successfully as soon as we've sent
-            // out the message.
-            if (cmd.opcode != CmdCommand::SEND &&
-                cmd.opcode != CmdCommand::REPLY)
-                abort = AbortType::REMOTE;
-        }
-        // otherwise, abort it locally. this is done for all commands, because
-        // all can cause page faults locally.
-        else
-        {
-            abort = AbortType::LOCAL;
+            // if we are waiting for a NoC response, just wait until we receive it.
+            // we deem this acceptable, because these remotely running transfers
+            // never cause page faults and thus complete in short amounts of time.
+            if (cmdIsRemote)
+            {
+                // SEND/REPLY needs to finish successfully as soon as we've sent
+                // out the message.
+                if (cmd.opcode != CmdCommand::SEND &&
+                        cmd.opcode != CmdCommand::REPLY)
+                    abort = AbortType::REMOTE;
+            }
+            // otherwise, abort it locally. this is done for all commands, because
+            // all can cause page faults locally.
+            else
+            {
+                abort = AbortType::LOCAL;
 
-            auto res = tcu.xferUnit->tryAbortCommand();
-            // if the current command used the xferUnit, we're done
-            if (res == XferUnit::AbortResult::ABORTED)
-                scheduleCmdFinish(Cycles(1), TcuError::ABORT);
+                auto res = tcu.xferUnit->tryAbortCommand();
+                // if the current command used the xferUnit, we're done
+                if (res == XferUnit::AbortResult::ABORTED)
+                    scheduleCmdFinish(Cycles(1), TcuError::ABORT);
+            }
         }
 
         if (abort != AbortType::NONE)
