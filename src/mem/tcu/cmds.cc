@@ -249,7 +249,7 @@ TcuCommands::abortCommand()
         abort = AbortType::NONE;
         // don't do that if we'll do that in finishCommand event anyway
         if (!cmdFinish)
-            finishAbort();
+            finishAbort(TcuError::NONE);
     }
 }
 
@@ -325,7 +325,7 @@ TcuCommands::finishCommand(TcuError error)
     cmdPkt = NULL;
 
     // finish command abortion, if there is any
-    finishAbort();
+    finishAbort(error);
 }
 
 void
@@ -405,7 +405,7 @@ TcuCommands::executePrivCommand(PacketPtr pkt)
 }
 
 void
-TcuCommands::finishAbort()
+TcuCommands::finishAbort(TcuError result)
 {
     if (privCmdPkt != nullptr)
     {
@@ -413,7 +413,10 @@ TcuCommands::finishAbort()
         privCmdPkt = nullptr;
 
         PrivCommand::Bits cmd = tcu.regs().get(PrivReg::PRIV_CMD);
-        cmd.arg0 = static_cast<RegFile::reg_t>(abort);
+        if (result == TcuError::ABORT)
+            cmd.arg0 = static_cast<RegFile::reg_t>(abort);
+        else
+            cmd.arg0 = static_cast<RegFile::reg_t>(AbortType::NONE);
 
         DPRINTF(TcuCmd, "Finished privileged command %s with arg0=%d, res=0\n",
                 COMMAND_NAME(privCmdNames, cmd.opcode), cmd.arg0);

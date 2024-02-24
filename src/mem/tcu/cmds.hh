@@ -86,7 +86,7 @@ class TcuCommands
 
     void executePrivCommand(PacketPtr pkt);
 
-    void finishAbort();
+    void finishAbort(TcuError result);
 
     void executeExtCommand(PacketPtr pkt);
 
