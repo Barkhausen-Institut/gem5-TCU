@@ -166,13 +166,14 @@ MemoryUnit::LocalWriteTransferEvent::transferStart()
     delete[] tmp;
 }
 
-void
+bool
 MemoryUnit::LocalWriteTransferEvent::transferDone(TcuError result)
 {
     if (result == TcuError::NONE)
         finishReadWrite(tcu(), tmpSize);
 
     tcu().scheduleCmdFinish(Cycles(1), result);
+    return true;
 }
 
 void
@@ -221,7 +222,7 @@ MemoryUnit::ReadTransferEvent::transferStart()
     memcpy(data(), pkt->getPtr<uint8_t>(), pkt->getSize());
 }
 
-void
+bool
 MemoryUnit::ReadTransferEvent::transferDone(TcuError result)
 {
     if (result == TcuError::NONE)
@@ -230,6 +231,7 @@ MemoryUnit::ReadTransferEvent::transferDone(TcuError result)
     tcu().scheduleCmdFinish(Cycles(1), result);
 
     tcu().freeRequest(pkt);
+    return true;
 }
 
 void
@@ -317,7 +319,7 @@ MemoryUnit::startWriteWithEP(EpFile::EpCache &eps)
     tcu.startTransfer(xfer, delay);
 }
 
-void
+bool
 MemoryUnit::WriteTransferEvent::transferDone(TcuError result)
 {
     if (result != TcuError::NONE)
@@ -352,6 +354,8 @@ MemoryUnit::WriteTransferEvent::transferDone(TcuError result)
 
         tcu().sendNocRequest(pktType, pkt, Cycles(1));
     }
+
+    return true;
 }
 
 void
@@ -424,7 +428,7 @@ MemoryUnit::ReceiveTransferEvent::transferStart()
     }
 }
 
-void
+bool
 MemoryUnit::ReceiveTransferEvent::transferDone(TcuError result)
 {
     // some requests from the cache (e.g. cleanEvict) do not need a
@@ -442,6 +446,7 @@ MemoryUnit::ReceiveTransferEvent::transferDone(TcuError result)
 
         tcu().schedNocResponse(pkt, tcu().clockEdge(Cycles(1)));
     }
+    return true;
 }
 
 }

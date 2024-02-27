@@ -167,7 +167,7 @@ class XferUnit
 
         virtual void transferStart() = 0;
 
-        virtual void transferDone(TcuError result) = 0;
+        virtual bool transferDone(TcuError result) = 0;
 
         void start();
 

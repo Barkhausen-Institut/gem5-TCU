@@ -66,7 +66,7 @@ class MessageUnit
         {}
 
         void transferStart() override;
-        void transferDone(TcuError result) override;
+        bool transferDone(TcuError result) override;
     };
 
     class ReceiveTransferEvent : public MemoryUnit::ReceiveTransferEvent
@@ -89,7 +89,7 @@ class MessageUnit
               msgUnit(_msgUnit), msgAddr(phys), eps(_eps), epid(_epid)
         {}
 
-        void transferDone(TcuError result) override;
+        bool transferDone(TcuError result) override;
     };
 
     MessageUnit(Tcu &_tcu)

@@ -253,7 +253,7 @@ XferUnit::continueTransfer(Buffer *buf)
     if (buf->event->freeSlots == tcu.reqCount &&
         (buf->event->result != TcuError::NONE || buf->event->remaining == 0))
     {
-        buf->event->transferDone(buf->event->result);
+        bool finish = buf->event->transferDone(buf->event->result);
 
         DPRINTFS(TcuXfers, (&tcu), "buf%d: Transfer done\n", buf->id);
 
@@ -262,7 +262,8 @@ XferUnit::continueTransfer(Buffer *buf)
             reads.sample(tcu.curCycle() - buf->event->startCycle);
         else
             writes.sample(tcu.curCycle() - buf->event->startCycle);
-        buf->event->finish();
+        if (finish)
+            buf->event->finish();
         buf->event = NULL;
 
         // start the next one, if there is any

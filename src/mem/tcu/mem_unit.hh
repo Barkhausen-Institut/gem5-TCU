@@ -62,7 +62,7 @@ class MemoryUnit
 
         void transferStart() override;
 
-        void transferDone(TcuError result) override;
+        bool transferDone(TcuError result) override;
     };
 
     class ReadTransferEvent : public XferUnit::TransferEvent
@@ -79,7 +79,7 @@ class MemoryUnit
 
         void transferStart() override;
 
-        void transferDone(TcuError result) override;
+        bool transferDone(TcuError result) override;
     };
 
     class WriteTransferEvent : public XferUnit::TransferEvent
@@ -101,7 +101,7 @@ class MemoryUnit
 
         void transferStart() override {}
 
-        void transferDone(TcuError result) override;
+        bool transferDone(TcuError result) override;
     };
 
     class ReceiveTransferEvent : public XferUnit::TransferEvent
@@ -122,7 +122,7 @@ class MemoryUnit
 
         void transferStart() override;
 
-        void transferDone(TcuError result) override;
+        bool transferDone(TcuError result) override;
     };
 
     MemoryUnit(Tcu &_tcu)

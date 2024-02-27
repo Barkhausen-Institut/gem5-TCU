@@ -318,7 +318,7 @@ MessageUnit::SendTransferEvent::transferStart()
     size(sizeof(*header));
 }
 
-void
+bool
 MessageUnit::SendTransferEvent::transferDone(TcuError result)
 {
     if (result == TcuError::NONE)
@@ -384,9 +384,16 @@ MessageUnit::SendTransferEvent::transferDone(TcuError result)
     delete header;
     header = nullptr;
 
-    MemoryUnit::WriteTransferEvent::transferDone(result);
+    // we cannot continue (e.g., finish the command or perform new actions with the cmdEps cache
+    // until the writeback is done. Unfortunately, the transfer event is deleted by default when we
+    // return from this function. Thus, delay the destruction by returning false below and delete
+    // the event manually in the callback.
+    msgUnit->cmdEps.onFinished([this, result](EpFile::EpCache &) {
+        MemoryUnit::WriteTransferEvent::transferDone(result);
+        delete this;
+    });
 
-    msgUnit->cmdEps.onFinished([](EpFile::EpCache &) {});
+    return false;
 }
 
 bool
@@ -427,12 +434,13 @@ MessageUnit::finishMsgSendWithEp(EpFile::EpCache &eps, TcuError result)
     }
 
     // we've updated EPs, so ensure that we write them back before finishing
-    cmdEps.onFinished([](EpFile::EpCache &) {});
+    cmdEps.onFinished([this, result](EpFile::EpCache &) {
+        // now we can finish the command
+        tcu.scheduleCmdFinish(Cycles(1), result);
+    });
 
     // don't finish the SEND/REPLY again
     sendReplyFinished = true;
-    // now we can finish the command
-    tcu.scheduleCmdFinish(Cycles(1), result);
 }
 
 void
@@ -852,7 +860,7 @@ MessageUnit::recvFromNocWithEP(EpFile::EpCache &eps, PacketPtr pkt)
     eps.setAutoFinish(false);
 }
 
-void
+bool
 MessageUnit::ReceiveTransferEvent::transferDone(TcuError result)
 {
     // message receives can't fail here, because they access physical memory
@@ -871,11 +879,14 @@ MessageUnit::ReceiveTransferEvent::transferDone(TcuError result)
     if(foreign)
         tcu().startForeignReceive(rep.id, rep.r0.act);
 
-    MemoryUnit::ReceiveTransferEvent::transferDone(result);
-
-    eps->onFinished([](EpFile::EpCache &eps) {
+    // see comment in SendTransferEvent::transferDone
+    eps->onFinished([this, result](EpFile::EpCache &eps) {
+        MemoryUnit::ReceiveTransferEvent::transferDone(result);
         delete &eps;
+        delete this;
     });
+
+    return false;
 }
 
 }
