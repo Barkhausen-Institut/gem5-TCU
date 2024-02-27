@@ -434,7 +434,7 @@ MessageUnit::finishMsgSendWithEp(EpFile::EpCache &eps, TcuError result)
     }
 
     // we've updated EPs, so ensure that we write them back before finishing
-    cmdEps.onFinished([this, result](EpFile::EpCache &) {
+    eps.onFinished([this, result](EpFile::EpCache &) {
         // now we can finish the command
         tcu.scheduleCmdFinish(Cycles(1), result);
     });
