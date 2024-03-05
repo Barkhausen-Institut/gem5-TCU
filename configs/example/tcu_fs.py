@@ -234,7 +234,7 @@ def createTile(noc, options, id, systemType, l1size, l2size, spmsize, memTile, e
     else:
         tile.xbar = IOXBar(width=tile.cache_line_size)
 
-    tile.tcu = Tcu(max_noc_packet_size='2kB', buf_size='2kB')
+    tile.tcu = Tcu(max_noc_packet_size='4kB', buf_size='4kB')
     tile.tcu.tile_id = id.raw()
 
     # connection to noc
@@ -710,7 +710,7 @@ def createMemTile(noc, options, id, size, dram=True):
     size_bytes = MemorySize(size).value
     if dram:
         tile.mem_ctrl = MemCtrl()
-        tile.mem_ctrl.dram = DDR3_1600_8x8()
+        tile.mem_ctrl.dram = DDR4_2400_4x16()
         tile.mem_ctrl.dram.device_size = size
         tile.mem_ctrl.dram.range = size_bytes
         tile.mem_ctrl.port = tile.xbar.mem_side_ports
