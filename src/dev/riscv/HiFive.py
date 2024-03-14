@@ -191,7 +191,7 @@ class HiFive(HiFiveBase):
     )
 
     # Uart
-    uart = RiscvUart8250(pio_addr=0x10000000)
+    uart = RiscvUart8250(pio_addr=0x4000000)
     # Int source ID to redirect console interrupts to
     # Set to 0 if using a pci interrupt for Uart instead
     uart_int_id = 0xA
