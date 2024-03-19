@@ -33,6 +33,7 @@
 
 #include "base/bitunion.hh"
 #include "base/trace.hh"
+#include "mem/packet_access.hh"
 #include "debug/KecAcc.hh"
 #include "sim/system.hh"
 
@@ -97,12 +98,23 @@ Tick
 KecAcc::read(PacketPtr pkt)
 {
     auto reg_addr = pkt->getAddr() - pioAddr;
-    fatal_if(reg_addr, "Unsupported register: %#lx\n", reg_addr);
+    fatal_if(reg_addr > 8, "Unsupported register: %#lx\n", reg_addr);
 
-    uint64_t val = cmd;
-    //DPRINTF(KecAcc, "Read register %#lx = %#lx\n", reg_addr, val);
+    if (pkt->getSize() == 8)
+    {
+        uint64_t val = cmd;
+        //DPRINTF(KecAcc, "Read register %#lx = %#lx\n", reg_addr, val);
+        pkt->setLE(val);
+    }
+    else if (pkt->getSize() == 4)
+    {
+        uint32_t val = reg_addr == 0 ? cmd : (cmd >> 32);
+        //DPRINTF(KecAcc, "Read register %#lx = %#lx\n", reg_addr, val);
+        pkt->setLE(val);
+    }
+    else
+        fatal("Unsupported packet size: %u\n", pkt->getSize());
 
-    pkt->setUintX(val, ByteOrder::little);
     pkt->makeResponse();
     return pioDelay;
 }
@@ -111,18 +123,34 @@ Tick
 KecAcc::write(PacketPtr pkt)
 {
     auto reg_addr = pkt->getAddr() - pioAddr;
-    fatal_if(reg_addr, "Unsupported register: %#lx\n", reg_addr);
+    fatal_if(reg_addr > 8, "Unsupported register: %#lx\n", reg_addr);
+    fatal_if(CmdReg(cmd).cmd != CMD_IDLE,
+             "Cannot write while accelerator is busy\n");
 
-    auto val = pkt->getUintX(ByteOrder::little);
-    DPRINTF(KecAcc, "Write register %#lx = %#lx\n", reg_addr, val);
+    if (pkt->getSize() == 8)
+    {
+        auto val = pkt->getLE<uint64_t>();
+        DPRINTF(KecAcc, "Write register %#lx = %#lx\n", reg_addr, val);
+        cmd = val;
+    }
+    else if (pkt->getSize() == 4)
+    {
+        auto val = pkt->getLE<uint32_t>();
+        DPRINTF(KecAcc, "Write register %#lx = %#lx\n", reg_addr, val);
+        if (reg_addr == 0)
+            cmd = (cmd & 0xFFFF'FFFF'0000'0000) | val;
+        else
+            cmd = (cmd & 0xFFFF'FFFF) | (static_cast<uint64_t>(val) << 32);
+    }
+    else
+        fatal("Unsupported packet size: %u\n", pkt->getSize());
 
-    fatal_if(cmd, "Cannot write while accelerator is busy\n");
-    cmd = val;
     start = curCycle();
 
-    CmdReg reg(val);
+    CmdReg reg(cmd);
 
     switch (reg.cmd) {
+      case CMD_IDLE:
       case CMD_INIT:
       case CMD_LOAD:
         break;
@@ -131,6 +159,8 @@ KecAcc::write(PacketPtr pkt)
     }
 
     switch (reg.cmd) {
+      case CMD_IDLE:
+        break;
       case CMD_INIT:
         fatal_if(!xkcp.init(reg.init.hash_type),
                  "Unsupported hash type: %d\n", reg.init.hash_type);
