@@ -128,7 +128,7 @@ def getOptions():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--isa", default="x86_64",
-                        choices=['arm', 'riscv', 'x86_64'],
+                        choices=['arm', 'riscv32', 'riscv64', 'x86_64'],
                         help="The ISA to use")
 
     parser.add_argument("-c", "--cmd", default="",
@@ -317,7 +317,7 @@ def createTile(noc, options, id, systemType, l1size, l2size, spmsize, memTile, e
         tile.tcu.epcache_master_port = tile.xbar.cpu_side_ports
         tile.epcache.range = AddrRange(tile.eps_addr, tile.eps_addr + 0xFFFFFF)
 
-    if options.isa == 'riscv':
+    if options.isa.startswith('riscv'):
         if systemType != SpuSystem:
             tile.env_start= 0x10001000
         tile.tcu.tile_mem_offset = 0x10000000
@@ -360,7 +360,7 @@ def createCoreTile(noc, options, id, cmdline, memTile,
     if options.isa == 'arm':
         sysType = M3ArmSystem
         con = ArmConnector
-    elif options.isa == 'riscv':
+    elif options.isa.startswith('riscv'):
         sysType = M3System
         con = RiscvConnector
     else:
@@ -383,7 +383,12 @@ def createCoreTile(noc, options, id, cmdline, memTile,
     # connection to the NoC for initialization
     tile.noc_master_port = noc.cpu_side_ports
 
-    tile.cpu = CPUClass()
+    if options.isa == 'riscv32':
+        tile.cpu = CPUClass(isa=RiscvISA(riscv_type="RV32"))
+    elif options.isa == 'riscv64':
+        tile.cpu = CPUClass(isa=RiscvISA(riscv_type="RV64"))
+    else:
+        tile.cpu = CPUClass()
     tile.cpu.cpu_id = 0
 
     connectCuToMem(tile, options,
@@ -397,7 +402,7 @@ def createCoreTile(noc, options, id, cmdline, memTile,
         tile.tile_size = tile_size
 
     # workload and command line
-    if options.isa == 'riscv':
+    if options.isa.startswith('riscv'):
         tile.workload = RiscvBareMetal(bootloader = cmdline.split(' ')[0], reset_vect = 0x10003000)
     elif options.isa == 'arm':
         tile.workload = ArmFsWorkload(object_file = cmdline.split(' ')[0])
@@ -457,7 +462,7 @@ def createCoreTile(noc, options, id, cmdline, memTile,
     tile.tcu.caches.append(tile.cpu.itb_walker_cache)
     tile.tcu.caches.append(tile.cpu.dtb_walker_cache)
 
-    if options.isa == 'riscv':
+    if options.isa.startswith('riscv'):
         tile.platform = HiFive()
         tile.platform.rtc = RiscvRTC(frequency=Frequency("100Hz"))
         tile.platform.clint.int_pin = tile.platform.rtc.int_pin
@@ -505,7 +510,7 @@ def createKecAccTile(noc, options, id, cmdline, memTile, spmsize='8MB'):
     tile.kecacc.port = tile.spm.tcu_port
 
     # Make sure accelerator is accessed uncached and without speculation
-    if options.isa == 'riscv':
+    if options.isa.startswith('riscv'):
         tile.cpu.mmu.pma_checker.uncacheable.append(AddrRange(addr, size=0x1000))
 
     return tile
@@ -771,23 +776,25 @@ def runSimulation(root, options, tiles):
 
             if hasattr(tile, 'accel'):
                 if type(tile.accel).__name__ == 'TcuAccelInDir':
-                    desc |= 4 << 6 # indir accelerator
+                    desc |= 5 << 6 # indir accelerator
                 elif int(tile.accel.logic.algorithm) == 0:
-                    desc |= 5 << 6 # copy accelerator
+                    desc |= 6 << 6 # copy accelerator
                 elif int(tile.accel.logic.algorithm) == 1:
-                    desc |= 6 << 6 # rot13 accelerator
+                    desc |= 7 << 6 # rot13 accelerator
             elif hasattr(tile, 'idectrl'):
-                desc |= 7 << 6
-            elif hasattr(tile, 'nic'):
                 desc |= 8 << 6
-            elif hasattr(tile, 'serial'):
+            elif hasattr(tile, 'nic'):
                 desc |= 9 << 6
+            elif hasattr(tile, 'serial'):
+                desc |= 10 << 6
             elif options.isa == 'arm':
-                desc |= 3 << 6 # arm
-            elif options.isa == 'riscv':
-                desc |= 1 << 6 # riscv
+                desc |= 4 << 6 # arm
+            elif options.isa == 'riscv32':
+                desc |= 2 << 6 # riscv32
+            elif options.isa == 'riscv64':
+                desc |= 1 << 6 # riscv64
             else:
-                desc |= 2 << 6 # x86
+                desc |= 3 << 6 # x86
 
             if hasattr(tile, 'cpu') and isinstance(tile.cpu, BaseO3CPU):
                 desc |= (1 << 0) << 11  # PERF
