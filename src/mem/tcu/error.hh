@@ -65,6 +65,7 @@ enum class TcuError
     TLB_MISS            = 24,
     TLB_FULL            = 25,
     NO_PMP_EP           = 26,
+    NO_IRQ              = 27,
 };
 
 }

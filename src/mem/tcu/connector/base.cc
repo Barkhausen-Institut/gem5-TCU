@@ -58,11 +58,14 @@ BaseConnector::setIrq(IRQ irq)
         DPRINTF(TcuConnector, "Delaying IRQ %d\n", irq);
 }
 
-void
-BaseConnector::clearIrq(IRQ irq)
+bool
+BaseConnector::clearIrq(IRQ *irq)
 {
-    assert(irq == _pending.front());
-    doClearIrq(irq);
+    if (_pending.size() == 0)
+        return false;
+
+    *irq = _pending.front();
+    doClearIrq(*irq);
 
     _pending.pop();
     if (!_pending.empty())
@@ -70,12 +73,12 @@ BaseConnector::clearIrq(IRQ irq)
         DPRINTF(TcuConnector, "Starting delayed IRQ %d\n", _pending.front());
         startIrq(_pending.front());
     }
+    return true;
 }
 
 void
 BaseConnector::startIrq(IRQ irq)
 {
-    _tcu->regs().set(PrivReg::CLEAR_IRQ, irq);
     doSetIrq(irq);
 }
 

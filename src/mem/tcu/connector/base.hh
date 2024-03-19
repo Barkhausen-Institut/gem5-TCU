@@ -80,7 +80,7 @@ class BaseConnector : public ClockedObject
     }
 
     void setIrq(IRQ irq);
-    void clearIrq(IRQ irq);
+    bool clearIrq(IRQ *irq);
 
   private:
 

@@ -75,7 +75,6 @@ enum class PrivReg : Addr
     PRIV_CMD,
     PRIV_CMD_ARG1,
     CUR_ACT,
-    CLEAR_IRQ,
 };
 
 enum PrivCtrl
@@ -95,7 +94,7 @@ enum class UnprivReg : Addr
 };
 
 constexpr unsigned numExtRegs = 5;
-constexpr unsigned numPrivRegs = 6;
+constexpr unsigned numPrivRegs = 5;
 constexpr unsigned numUnprivRegs = 6;
 constexpr unsigned numEpRegs = 4;
 // buffer for prints (32 * 8 bytes)
@@ -255,6 +254,7 @@ struct PrivCommand
         XCHG_ACT        = 4,
         SET_TIMER       = 5,
         ABORT_CMD       = 6,
+        FETCH_IRQ       = 7,
     };
 
     BitUnion64(Bits)
@@ -580,8 +580,7 @@ class RegFile
         WROTE_PRIV_CMD  = 2,
         WROTE_EXT_CMD   = 4,
         WROTE_CU_REQ    = 8,
-        WROTE_CLEAR_IRQ = 16,
-        WROTE_PRINT     = 32,
+        WROTE_PRINT     = 16,
     };
 
     static void printEpAccess(const Named &obj, const Ep &ep, bool read, RegAccess access);

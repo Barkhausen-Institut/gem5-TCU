@@ -68,7 +68,7 @@ class TcuConnector
 
     void setIrq(BaseConnector::IRQ irq);
 
-    void clearIrq(BaseConnector::IRQ irq);
+    bool clearIrq(BaseConnector::IRQ *irq);
 
     void fireTimer();
 

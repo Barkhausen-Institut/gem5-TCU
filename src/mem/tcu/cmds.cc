@@ -60,6 +60,7 @@ static const char *privCmdNames[] =
     "XCHG_ACT",
     "SET_TIMER",
     "ABORT_CMD",
+    "FETCH_IRQ",
 };
 
 static const char *extCmdNames[] =
@@ -95,7 +96,7 @@ TcuCommands::TcuCommands(Tcu &_tcu)
     static_assert(sizeof(cmdNames) / sizeof(cmdNames[0]) ==
         CmdCommand::SLEEP + 1, "cmdNames out of sync");
     static_assert(sizeof(privCmdNames) / sizeof(privCmdNames[0]) ==
-        PrivCommand::ABORT_CMD + 1, "privCmdNames out of sync");
+        PrivCommand::FETCH_IRQ + 1, "privCmdNames out of sync");
     static_assert(sizeof(extCmdNames) / sizeof(extCmdNames[0]) ==
         ExtCommand::RESET + 1, "extCmdNames out of sync");
 }
@@ -390,6 +391,12 @@ TcuCommands::executePrivCommand(PacketPtr pkt)
             pkt = nullptr;
             abortCommand();
             return;
+        case PrivCommand::FETCH_IRQ:
+            BaseConnector::IRQ irq;
+            if (!tcu.connector.clearIrq(&irq))
+                res = TcuError::NO_IRQ;
+            tcu.regs().set(PrivReg::PRIV_CMD_ARG1, static_cast<RegFile::reg_t>(irq));
+            break;
         default:
             res = TcuError::UNKNOWN_CMD;
             break;

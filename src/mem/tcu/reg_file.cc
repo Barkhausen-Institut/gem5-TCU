@@ -60,7 +60,6 @@ const char *RegFile::privRegNames[] = {
     "PRIV_CMD",
     "PRIV_CMD_ARG",
     "CUR_ACT",
-    "CLEAR_IRQ",
 };
 
 const char *RegFile::unprivRegNames[] = {
@@ -479,8 +478,6 @@ RegAccessEvent::process()
                         _result |= RegFile::WROTE_CU_REQ;
                     else if (reg == PrivReg::PRIV_CMD)
                         _result |= RegFile::WROTE_PRIV_CMD;
-                    else if (reg == PrivReg::CLEAR_IRQ)
-                        _result |= RegFile::WROTE_CLEAR_IRQ;
                     _regs.set(reg, val, access);
                 }
             }

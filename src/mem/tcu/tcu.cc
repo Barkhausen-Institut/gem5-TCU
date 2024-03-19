@@ -612,11 +612,6 @@ Tcu::RegFileEvent::completed(RegFile::Result result)
             else
                 _tcu.writeCoverage(pr);
         }
-        if (result & RegFile::WROTE_CLEAR_IRQ)
-        {
-            auto irq = (BaseConnector::IRQ)_tcu.regs().get(PrivReg::CLEAR_IRQ);
-            _tcu.connector.clearIrq(irq);
-        }
     }
 
     _tcu.cmds.startCommand(result, _pkt, when);

@@ -143,10 +143,10 @@ TcuConnector::setIrq(BaseConnector::IRQ irq)
     irqInjects++;
 }
 
-void
-TcuConnector::clearIrq(BaseConnector::IRQ irq)
+bool
+TcuConnector::clearIrq(BaseConnector::IRQ *irq)
 {
-    connector->clearIrq(irq);
+    return connector->clearIrq(irq);
 }
 
 void
