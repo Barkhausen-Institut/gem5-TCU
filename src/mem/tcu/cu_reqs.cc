@@ -172,7 +172,9 @@ void
 CURequests::completeReqs()
 {
     CUMsg resp = tcu.regs().get(PrivReg::CU_REQ);
-    assert(resp.type == CUMsgType::RESP);
+    if (resp.type != CUMsgType::RESP)
+        return;
+
     assert(!reqs.empty());
 
     Request *req = reqs.front();
