@@ -33,6 +33,7 @@
 #include "debug/Tcu.hh"
 #include "debug/TcuReg.hh"
 #include "debug/TcuRegRange.hh"
+#include "mem/packet_access.hh"
 #include "mem/tcu/reg_file.hh"
 #include "mem/tcu/tcu.hh"
 #include "sim/tile_memory.hh"
@@ -116,6 +117,11 @@ struct RegAccessEvent : public Event
         _result(),
         _accesses()
     {}
+
+    template<typename F>
+    void unaligned_reg_read(size_t offset, F read);
+    template<typename R, typename W>
+    void unaligned_reg_write(size_t offset, R read, W write);
 
     void process() override;
     void fetched(EpFile::EpCache &cache);
@@ -382,12 +388,63 @@ RegAccessEvent::name() const
     return _regfile_event->name();
 }
 
+template<typename R>
+void RegAccessEvent::unaligned_reg_read(size_t offset, R read)
+{
+    auto val = read();
+
+    if (_pkt->getSize() == 4)
+    {
+        uint32_t nval = _pkt->getAddr() % 8 == 0 ? val : (val >> 32);
+        _pkt->setLE(nval);
+    }
+    else if (_pkt->getSize() >= 8 && (_pkt->getSize() % 8) == 0)
+        _pkt->getPtr<uint64_t>()[offset / sizeof(RegFile::reg_t)] = val;
+    else
+    {
+        warn("Unsupported register read @ %#lx with %u bytes",
+             _pkt->getAddr(), _pkt->getSize());
+    }
+}
+
+template<typename R, typename W>
+void RegAccessEvent::unaligned_reg_write(size_t offset, R read, W write)
+{
+    RegFile::reg_t val;
+    if (_pkt->getSize() == 4)
+    {
+        val = read();
+        uint32_t nval = _pkt->getLE<uint32_t>();
+        if (_pkt->getAddr() % 8 == 0)
+            val = (val & 0xFFFF'FFFF'0000'0000) | nval;
+        else
+            val = (val & 0xFFFF'FFFF) | (static_cast<RegFile::reg_t>(nval) << 32);
+    }
+    else if (_pkt->getSize() >= 8 && (_pkt->getSize() % 8) == 0)
+        val = _pkt->getPtr<uint64_t>()[offset / sizeof(RegFile::reg_t)];
+    else
+    {
+        fatal("Unsupported register write @ %#lx with %u bytes",
+              _pkt->getAddr(), _pkt->getSize());
+    }
+
+    write(val);
+}
+
 void
 RegAccessEvent::process()
 {
     RegAccess access = _isCpuRequest ? RegAccess::CPU : RegAccess::NOC;
-    RegFile::reg_t* data = _pkt->getPtr<RegFile::reg_t>();
     auto *eps = new EpFile::EpCache(_regs.tcu.eps().newCache(EpFile::Regs, "regAccess"));
+
+    // only 8 and 4 byte accesses are supported
+    if (_pkt->getAddr() % 8 != 0 && _pkt->getAddr() % 4 != 0)
+    {
+        warn("Unsupported register access @ %#lx with %u bytes",
+             _pkt->getAddr(), _pkt->getSize());
+        completed(*eps, true, false);
+        return;
+    }
 
     _result = RegFile::WROTE_NONE;
 
@@ -395,7 +452,6 @@ RegAccessEvent::process()
     for (unsigned offset = 0; offset < _pkt->getSize(); offset += sizeof(RegFile::reg_t))
     {
         Addr regAddr = _pkt->getAddr() + offset;
-        auto val = data[offset / sizeof(RegFile::reg_t)];
 
         // external registers
         if (regAddr < sizeof(RegFile::reg_t) * numExtRegs)
@@ -403,30 +459,28 @@ RegAccessEvent::process()
             auto reg = static_cast<ExtReg>(regAddr / sizeof(RegFile::reg_t));
 
             if (_pkt->isRead())
-                data[offset / sizeof(RegFile::reg_t)] = _regs.get(reg, access);
+                unaligned_reg_read(offset, [this, reg, access] { return _regs.get(reg, access); });
             // external registers can't be set by the CPU
             else if (_pkt->isWrite() && !_isCpuRequest)
             {
                 if (reg == ExtReg::EXT_CMD)
                     _result |= RegFile::WROTE_EXT_CMD;
-                // only the KERNEL flag can be changed
-                if (reg == ExtReg::FEATURES)
-                {
-                    auto ver = _regs.get(reg, access)
-                        & ~static_cast<RegFile::reg_t>(Features::KERNEL);
-                    auto feat = val
-                        & static_cast<RegFile::reg_t>(Features::KERNEL);
-                    _regs.set(reg, ver | feat, access);
-                }
-                else if (reg == ExtReg::EPS_ADDR)
-                {
-                    // EPS_ADDR is always 0 if we have internal EPs
-                    if (_regs.epsAddr == 0)
-                        _regs.set(reg, val, access);
-                }
+                // EPS_ADDR is always 0 if we have internal EPs
+                else if (reg == ExtReg::EPS_ADDR && _regs.epsAddr != 0)
+                    continue;
                 // TILE_DESC is read-only
-                else if (reg != ExtReg::TILE_DESC)
-                    _regs.set(reg, val, access);
+                else if (reg == ExtReg::TILE_DESC)
+                    continue;
+
+                unaligned_reg_write(
+                    offset,
+                    [this, reg, access] {
+                        return _regs.get(reg, access);
+                    },
+                    [this, reg, access](RegFile::reg_t val) {
+                        _regs.set(reg, val, access);
+                    }
+                );
             }
         }
         // unprivileged register
@@ -436,7 +490,7 @@ RegAccessEvent::process()
             auto reg = static_cast<UnprivReg>(idx);
 
             if (_pkt->isRead())
-                data[offset / sizeof(RegFile::reg_t)] = _regs.get(reg, access);
+                unaligned_reg_read(offset, [this, reg, access] { return _regs.get(reg, access); });
             // the command registers can't be written from the NoC
             else if (_pkt->isWrite() && _isCpuRequest)
             {
@@ -444,7 +498,16 @@ RegAccessEvent::process()
                     _result |= RegFile::WROTE_CMD;
                 else if(reg == UnprivReg::PRINT)
                     _result |= RegFile::WROTE_PRINT;
-                _regs.set(reg, val, access);
+
+                unaligned_reg_write(
+                    offset,
+                    [this, reg, access] {
+                        return _regs.get(reg, access);
+                    },
+                    [this, reg, access](RegFile::reg_t val) {
+                        _regs.set(reg, val, access);
+                    }
+                );
             }
         }
         // buffer register
@@ -456,9 +519,18 @@ RegAccessEvent::process()
             if (idx < _regs.bufRegs.size())
             {
                 if(_pkt->isRead())
-                    data[offset / sizeof(RegFile::reg_t)] = _regs.bufRegs[idx];
-                else
-                    _regs.bufRegs[idx] = val;
+                    unaligned_reg_read(offset, [this, idx] { return _regs.bufRegs[idx]; });
+                else {
+                    unaligned_reg_write(
+                        offset,
+                        [this, idx] {
+                            return _regs.bufRegs[idx];
+                        },
+                        [this, idx](RegFile::reg_t val) {
+                            _regs.bufRegs[idx] = val;
+                        }
+                    );
+                }
             }
         }
         // privileged register
@@ -471,14 +543,23 @@ RegAccessEvent::process()
                 auto reg = static_cast<PrivReg>(reqAddr / sizeof(RegFile::reg_t));
 
                 if (_pkt->isRead())
-                    data[offset / sizeof(RegFile::reg_t)] = _regs.get(reg, access);
+                    unaligned_reg_read(offset, [this, reg, access] { return _regs.get(reg, access); });
                 else if (_pkt->isWrite())
                 {
                     if (reg == PrivReg::CU_REQ)
                         _result |= RegFile::WROTE_CU_REQ;
                     else if (reg == PrivReg::PRIV_CMD)
                         _result |= RegFile::WROTE_PRIV_CMD;
-                    _regs.set(reg, val, access);
+
+                    unaligned_reg_write(
+                        offset,
+                        [this, reg, access] {
+                            return _regs.get(reg, access);
+                        },
+                        [this, reg, access](RegFile::reg_t val) {
+                            _regs.set(reg, val, access);
+                        }
+                    );
                 }
             }
         }
@@ -491,7 +572,7 @@ RegAccessEvent::process()
             if (epAddr < _regs.endpointSize())
             {
                 epid_t epId = epAddr / (sizeof(RegFile::reg_t) * numEpRegs);
-                _accesses[epAddr] = offset / sizeof(RegFile::reg_t);
+                _accesses[epAddr] = offset;
                 eps->addEp(epId);
             }
         }
@@ -507,7 +588,6 @@ void
 RegAccessEvent::fetched(EpFile::EpCache &cache)
 {
     RegAccess access = _isCpuRequest ? RegAccess::CPU : RegAccess::NOC;
-    RegFile::reg_t* data = _pkt->getPtr<RegFile::reg_t>();
     bool isPriv = _regs.hasFeature(Features::KERNEL);
 
     cache.setAccess(access);
@@ -520,11 +600,19 @@ RegAccessEvent::fetched(EpFile::EpCache &cache)
         auto ep = cache.getEp(epId);
 
         if (_pkt->isRead())
-            data[it->second] = ep.inval.r[regNumber];
+            unaligned_reg_read(it->second, [ep, regNumber] { return ep.inval.r[regNumber]; });
         // writable only from remote and privileged TCUs
         else if (!_isCpuRequest || isPriv)
         {
-            ep.inval.r[regNumber] = data[it->second];
+            unaligned_reg_write(
+                it->second,
+                [ep, regNumber] {
+                    return ep.inval.r[regNumber];
+                },
+                [&ep, regNumber](RegFile::reg_t val) {
+                    ep.inval.r[regNumber] = val;
+                }
+            );
             cache.updateEp(ep.inval);
         }
         else
@@ -565,18 +653,6 @@ RegFile::startRequest(PacketPtr pkt, void *ev, bool isCpuRequest)
     Addr pktAddr = pkt->getAddr();
 
     DPRINTF(TcuRegRange, "access @%#x, size=%u\n", pktAddr, pkt->getSize());
-
-    // ignore accesses with invalid size/alignment (might happen due to speculative execution)
-    if ((pkt->getSize() % sizeof(reg_t)) != 0 ||
-        (pktAddr % sizeof(reg_t)) != 0 ||
-         pktAddr + pkt->getSize() > getSize())
-    {
-        if (pkt->needsResponse())
-            pkt->makeResponse();
-
-        regfile_event->completed(RegFile::WROTE_NONE);
-        return;
-    }
 
     auto access_event = new RegAccessEvent(tcu, *this, regfile_event, pkt, isCpuRequest);
     tcu.schedule(access_event, curTick());
