@@ -37,9 +37,6 @@ Source('connector/core.cc')
 if env['USE_X86_ISA']:
     Source('connector/x86.cc')
     SimObject('connector/X86Connector.py', sim_objects=['X86Connector'])
-elif env['USE_ARM_ISA']:
-    Source('connector/arm.cc')
-    SimObject('connector/ArmConnector.py', sim_objects=['ArmConnector'])
 elif env['USE_RISCV_ISA']:
     Source('connector/riscv.cc')
     SimObject('connector/RiscvConnector.py', sim_objects=['RiscvConnector'])

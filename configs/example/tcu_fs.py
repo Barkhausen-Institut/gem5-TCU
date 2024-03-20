@@ -128,7 +128,7 @@ def getOptions():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--isa", default="x86_64",
-                        choices=['arm', 'riscv32', 'riscv64', 'x86_64'],
+                        choices=['riscv32', 'riscv64', 'x86_64'],
                         help="The ISA to use")
 
     parser.add_argument("-c", "--cmd", default="",
@@ -357,10 +357,7 @@ def createCoreTile(noc, options, id, cmdline, memTile,
                    l1size=None, l2size=None, spmsize=None):
     CPUClass = ObjectList.cpu_list.get(options.cpu_type)
 
-    if options.isa == 'arm':
-        sysType = M3ArmSystem
-        con = ArmConnector
-    elif options.isa.startswith('riscv'):
+    if options.isa.startswith('riscv'):
         sysType = M3System
         con = RiscvConnector
     else:
@@ -404,9 +401,6 @@ def createCoreTile(noc, options, id, cmdline, memTile,
     # workload and command line
     if options.isa.startswith('riscv'):
         tile.workload = RiscvBareMetal(bootloader = cmdline.split(' ')[0], reset_vect = 0x10003000)
-    elif options.isa == 'arm':
-        tile.workload = ArmFsWorkload(object_file = cmdline.split(' ')[0])
-        tile.highest_el_is_64 = False
     else:
         tile.workload = X86FsWorkload(object_file = cmdline.split(' ')[0], entry = 0x200000)
     tile.cmdline = cmdline
@@ -453,12 +447,8 @@ def createCoreTile(noc, options, id, cmdline, memTile,
 
     tile.cpu.itb_walker_cache = PageTableWalkerCache()
     tile.cpu.dtb_walker_cache = PageTableWalkerCache()
-    if options.isa == 'arm':
-        tile.cpu.mmu.itb_walker.port = tile.cpu.itb_walker_cache.cpu_side
-        tile.cpu.mmu.dtb_walker.port = tile.cpu.dtb_walker_cache.cpu_side
-    else:
-        tile.cpu.mmu.connectWalkerPorts(tile.cpu.itb_walker_cache.cpu_side,
-                                        tile.cpu.dtb_walker_cache.cpu_side)
+    tile.cpu.mmu.connectWalkerPorts(tile.cpu.itb_walker_cache.cpu_side,
+                                    tile.cpu.dtb_walker_cache.cpu_side)
     tile.tcu.caches.append(tile.cpu.itb_walker_cache)
     tile.tcu.caches.append(tile.cpu.dtb_walker_cache)
 
@@ -776,19 +766,17 @@ def runSimulation(root, options, tiles):
 
             if hasattr(tile, 'accel'):
                 if type(tile.accel).__name__ == 'TcuAccelInDir':
-                    desc |= 5 << 6 # indir accelerator
+                    desc |= 4 << 6 # indir accelerator
                 elif int(tile.accel.logic.algorithm) == 0:
-                    desc |= 6 << 6 # copy accelerator
+                    desc |= 5 << 6 # copy accelerator
                 elif int(tile.accel.logic.algorithm) == 1:
-                    desc |= 7 << 6 # rot13 accelerator
+                    desc |= 6 << 6 # rot13 accelerator
             elif hasattr(tile, 'idectrl'):
-                desc |= 8 << 6
+                desc |= 7 << 6
             elif hasattr(tile, 'nic'):
-                desc |= 9 << 6
+                desc |= 8 << 6
             elif hasattr(tile, 'serial'):
-                desc |= 10 << 6
-            elif options.isa == 'arm':
-                desc |= 4 << 6 # arm
+                desc |= 9 << 6
             elif options.isa == 'riscv32':
                 desc |= 2 << 6 # riscv32
             elif options.isa == 'riscv64':

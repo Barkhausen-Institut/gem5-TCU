@@ -89,7 +89,6 @@ Source('linux/fs_workload.cc', tags='arm isa')
 Source('freebsd/fs_workload.cc', tags='arm isa')
 Source('freebsd/se_workload.cc', tags='arm isa')
 Source('fs_workload.cc', tags='arm isa')
-Source('m3/system.cc', tags='arm isa')
 Source('regs/int.cc', tags='arm isa')
 Source('regs/misc.cc', tags='arm isa')
 Source('mmu.cc', tags='arm isa')
@@ -128,7 +127,6 @@ SimObject('ArmSystem.py', sim_objects=['ArmSystem', 'ArmRelease'],
 SimObject('ArmTLB.py', sim_objects=['ArmTLB'], enums=['ArmLookupLevel'],
     tags='arm isa')
 SimObject('ArmPMU.py', sim_objects=['ArmPMU'], tags='arm isa')
-SimObject('M3ArmSystem.py', sim_objects=['M3ArmSystem'], tags='arm isa')
 
 SimObject('ArmCPU.py', sim_objects=[], tags='arm isa')
 
