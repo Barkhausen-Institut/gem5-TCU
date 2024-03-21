@@ -777,10 +777,11 @@ def runSimulation(root, options, tiles):
                 desc |= 8 << 6
             elif hasattr(tile, 'serial'):
                 desc |= 9 << 6
-            elif options.isa == 'riscv32':
-                desc |= 2 << 6 # riscv32
-            elif options.isa == 'riscv64':
-                desc |= 1 << 6 # riscv64
+            elif hasattr(tile, 'cpu') and str(type(tile.cpu)).startswith('Riscv'):
+                if str(tile.cpu.isa[0].riscv_type) == "RV32":
+                    desc |= 2 << 6 # riscv32
+                else:
+                    desc |= 1 << 6 # riscv64
             else:
                 desc |= 3 << 6 # x86
 
