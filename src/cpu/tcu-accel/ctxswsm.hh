@@ -53,6 +53,7 @@ class AccelCtxSwSM
         VPE_CTRL,
         MAP,
         TRANSLATE,
+        REQUEST_EP,
         REM_MSGS,
         EP_INVAL,
         DERIVE_QUOTA,
