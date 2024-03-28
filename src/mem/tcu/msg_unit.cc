@@ -352,6 +352,17 @@ MessageUnit::SendTransferEvent::transferDone(TcuError result)
                 }
             }
         }
+        else
+        {
+            // ACK the message and invalidate reply EP now to avoid a race: if the receive-buffer
+            // slot is free’d after giving the credits back, the sender could send another message
+            // before the slot is free. However, errors on the reply-receiving side can only be
+            // caused due to misconfiguration anyway (receive EP invalid, not enough space in
+            // receive buffer, etc.).
+            RecvEp rep = msgUnit->cmdEps.getEp(cmd.epid).recv;
+            int msgidx = rep.offsetToIdx(cmd.arg0);
+            msgUnit->ackMessage(rep, msgidx);
+        }
 
         // if no error occurred, finishMsgSend is called afterwards
         if (result == TcuError::NONE)
@@ -417,14 +428,6 @@ void
 MessageUnit::finishMsgSendWithEp(EpFile::EpCache &eps, TcuError result)
 {
     CmdCommand::Bits cmd = tcu.regs().getCommand();
-
-    // ACK message on successful replies
-    if (result == TcuError::NONE && cmd.opcode == CmdCommand::REPLY)
-    {
-        RecvEp rep = eps.getEp(cmd.epid).recv;
-        int msgidx = rep.offsetToIdx(cmd.arg0);
-        ackMessage(rep, msgidx);
-    }
 
     // give credits back on failed sends
     if (result != TcuError::NONE && cmd.opcode == CmdCommand::SEND)
