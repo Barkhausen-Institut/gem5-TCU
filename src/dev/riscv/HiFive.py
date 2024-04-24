@@ -176,7 +176,7 @@ class HiFive(HiFiveBase):
     """
 
     # CLINT
-    clint = Clint(pio_addr=0x2000000)
+    clint = Clint(pio_addr=0x8000000)
 
     # PLIC
     plic = Plic(pio_addr=0xC000000)
