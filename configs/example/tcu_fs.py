@@ -319,8 +319,9 @@ def createTile(noc, options, id, systemType, l1size, l2size, spmsize, memTile, e
 
     if options.isa.startswith('riscv'):
         if systemType != SpuSystem:
-            tile.env_start= 0x10001000
-        tile.tcu.tile_mem_offset = 0x10000000
+            tile.env_start = 0x10001000 if options.isa == 'riscv64' else 0x10000
+        if options.isa == 'riscv64':
+            tile.tcu.tile_mem_offset = 0x10000000
         if l1size is None and not spmsize is None:
             tile.spm.range = AddrRange(tile.tcu.tile_mem_offset, size=spmsize)
     else:
@@ -400,7 +401,8 @@ def createCoreTile(noc, options, id, cmdline, memTile,
 
     # workload and command line
     if options.isa.startswith('riscv'):
-        tile.workload = RiscvBareMetal(bootloader = cmdline.split(' ')[0], reset_vect = 0x10003000)
+        entry = 0x10003000 if options.isa == 'riscv64' else 0x0
+        tile.workload = RiscvBareMetal(bootloader = cmdline.split(' ')[0], reset_vect = entry)
     else:
         tile.workload = X86FsWorkload(object_file = cmdline.split(' ')[0], entry = 0x200000)
     tile.cmdline = cmdline
