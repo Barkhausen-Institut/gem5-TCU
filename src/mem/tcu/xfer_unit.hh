@@ -144,6 +144,11 @@ class XferUnit
               result(TcuError::NONE),
               freeSlots()
         {}
+        virtual ~TransferEvent()
+        {
+            if (buf)
+                buf->event = NULL;
+        }
 
         Tcu &tcu() { return xfer->tcu; }
 

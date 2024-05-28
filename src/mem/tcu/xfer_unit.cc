@@ -265,7 +265,6 @@ XferUnit::continueTransfer(Buffer *buf)
             writes.sample(tcu.curCycle() - buf->event->startCycle);
         if (finish)
             buf->event->finish();
-        buf->event = NULL;
 
         // start the next one, if there is any
         if (!queue.empty())
