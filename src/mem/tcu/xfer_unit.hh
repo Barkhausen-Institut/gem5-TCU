@@ -214,7 +214,7 @@ class XferUnit
 
   private:
 
-    void continueTransfer(Buffer *buf);
+    bool continueTransfer(Buffer *buf);
 
     Buffer* allocateBuf(TransferEvent *event, unsigned flags);
 

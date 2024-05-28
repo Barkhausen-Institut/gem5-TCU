@@ -243,10 +243,11 @@ XferUnit::recvMemResponse(uint64_t id_off, PacketPtr pkt)
              buf->id, offset, buf->event->remaining,
              buf->event->freeSlots, tcu.reqCount);
 
-    continueTransfer(buf);
+    if (continueTransfer(buf))
+        delete buf->event;
 }
 
-void
+bool
 XferUnit::continueTransfer(Buffer *buf)
 {
     // transfer done or aborted, but all memory responses received?
@@ -273,10 +274,12 @@ XferUnit::continueTransfer(Buffer *buf)
             queue.pop_front();
             tcu.schedule(ev, tcu.clockEdge(Cycles(1)));
         }
+        return finish;
     }
     // continue if there was no error and there is something left to transfer
     else if(buf->event->result == TcuError::NONE && buf->event->remaining > 0)
         buf->event->process();
+    return false;
 }
 
 XferUnit::AbortResult
