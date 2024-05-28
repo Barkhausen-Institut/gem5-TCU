@@ -507,6 +507,13 @@ def createKecAccTile(noc, options, id, cmdline, memTile, spmsize='8MB'):
 
     return tile
 
+def createCoreAccTile(noc, options, id, cmdline, memTile, spmsize='8MB'):
+    tile = createCoreTile(noc, options, id, cmdline, memTile, spmsize=spmsize)
+    tile.dummyAccel = KecAcc(pio_addr=0xF4200000, pio_latency='0')
+    tile.dummyAccel.pio = tile.xbar.mem_side_ports
+    tile.dummyAccel.port = tile.spm.tcu_port
+    return tile
+
 def createSerialTile(noc, options, id, memTile):
     tile = createTile(
         noc=noc, options=options, id=id, systemType=SpuSystem,
@@ -796,6 +803,8 @@ def runSimulation(root, options, tiles):
 
             if hasattr(tile, 'kecacc'):
                 desc |= (1 << 6) << 11
+            elif hasattr(tile, 'dummyAccel'):
+                desc |= (1 << 7) << 11
         # spu tiles always have internal EPs and thus don't have the attribute
         try:
             if tile.internal_eps:
