@@ -320,7 +320,7 @@ def createTile(noc, options, id, systemType, l1size, l2size, spmsize, memTile, e
     if options.isa.startswith('riscv'):
         if systemType != SpuSystem:
             tile.env_start = 0x10001000 if options.isa == 'riscv64' else 0x10000
-        if options.isa == 'riscv64':
+        if options.isa == 'riscv64' and systemType != SpuSystem:
             tile.tcu.tile_mem_offset = 0x10000000
         if l1size is None and not spmsize is None:
             tile.spm.range = AddrRange(tile.tcu.tile_mem_offset, size=spmsize)
