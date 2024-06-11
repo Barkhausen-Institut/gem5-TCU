@@ -113,4 +113,4 @@ def generate(env):
 
 
 def exists(env):
-    return env.Entry("#.git").exists()
+    return False and env.Entry("#.git").exists()
