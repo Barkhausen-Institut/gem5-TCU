@@ -56,7 +56,10 @@ class SyscallSM
         ALLOC_EPS,
 
         // capability operations
-        ACTIVATE,
+        ACTIVATE_MGATE,
+        ACTIVATE_RGATE,
+        ACTIVATE_SGATE,
+        INVALIDATE,
         ACT_CTRL,
         ACT_WAIT,
         DERIVE_MEM,
