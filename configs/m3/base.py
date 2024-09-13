@@ -37,7 +37,7 @@ import m5
 from m5.objects import *
 from m5.util import addToPath
 
-addToPath('../platform/gem5/configs')
+addToPath('..')
 
 from common import Options
 from common.Caches import *
