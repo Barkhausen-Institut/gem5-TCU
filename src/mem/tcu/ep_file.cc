@@ -234,11 +234,12 @@ EpFile::EpCache::process()
         case FETCH_WAIT:
             if (epRequests == 0)
             {
-                func(*this);
-
                 // one operation done
                 assert(pending > 0);
                 pending--;
+
+                func(*this);
+
                 // check if we're finished with this EpCache
                 if (autoFinish && pending == 0)
                     finish();
