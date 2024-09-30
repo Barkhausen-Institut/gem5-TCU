@@ -32,6 +32,7 @@
 #include "debug/TcuConnector.hh"
 #include "mem/tcu/connector.hh"
 #include "mem/tcu/tcu.hh"
+#include "reg_file.hh"
 
 namespace gem5
 {
@@ -42,7 +43,8 @@ TcuConnector::TcuConnector(Tcu &_tcu, BaseConnector *_connector)
     : tcu(_tcu),
       connector(_connector),
       sleepEPs(tcu.eps().newCache(EpFile::Messaging, "sleep")),
-      wakeupEp(0xFFFF),
+      wakeupEp(Tcu::INVALID_EP_ID),
+      invalidateEp(Tcu::INVALID_EP_ID),
       fireTimerEvent(*this)
 {
     connector->setTcu(&tcu);
@@ -65,9 +67,10 @@ TcuConnector::regStats()
 void
 TcuConnector::startWaitEP(const CmdCommand::Bits &cmd)
 {
-    int ep = cmd.arg0 & 0xFFFF;
+    epid_t rep = cmd.arg0 & 0xFFFF;
+    epid_t iep = (cmd.arg0 >> 16) & 0xFFFF;
 
-    if (ep == Tcu::INVALID_EP_ID)
+    if (rep == Tcu::INVALID_EP_ID && iep == Tcu::INVALID_EP_ID)
     {
         if (tcu.regs().getAct(PrivReg::CUR_ACT).msgs > 0)
         {
@@ -75,39 +78,56 @@ TcuConnector::startWaitEP(const CmdCommand::Bits &cmd)
             return;
         }
 
-        if (!startSleep(ep))
+        if (!startSleep(rep, iep))
             tcu.scheduleCmdFinish(Cycles(1), TcuError::NONE);
     }
     else
     {
-        sleepEPs.addEp(ep);
-        sleepEPs.onFetched(std::bind(&TcuConnector::startWaitEPWithEP,
-                                     this, std::placeholders::_1, ep));
+        if (rep != Tcu::INVALID_EP_ID)
+            sleepEPs.addEp(rep);
+        if (iep != Tcu::INVALID_EP_ID)
+            sleepEPs.addEp(iep);
+        sleepEPs.onFetched(std::bind(&TcuConnector::startWaitEPWithEPs,
+                                     this, std::placeholders::_1, rep, iep));
     }
 }
 
 void
-TcuConnector::startWaitEPWithEP(EpFile::EpCache &eps, epid_t epid)
+TcuConnector::startWaitEPWithEPs(EpFile::EpCache &eps, epid_t rep, epid_t iep)
 {
-    const Ep ep = eps.getEp(epid);
-    if (ep.type() == EpType::RECEIVE && ep.recv.unreadMsgs() > 0)
+    if (rep != Tcu::INVALID_EP_ID)
     {
-        tcu.scheduleCmdFinish(Cycles(1), TcuError::NONE);
-        return;
+        const Ep ep = eps.getEp(rep);
+        if (ep.type() == EpType::RECEIVE && ep.recv.unreadMsgs() > 0)
+        {
+            tcu.scheduleCmdFinish(Cycles(1), TcuError::NONE);
+            return;
+        }
     }
 
-    if (!startSleep(epid))
+    if (iep != Tcu::INVALID_EP_ID)
+    {
+        const Ep ep = eps.getEp(iep);
+        if (ep.type() == EpType::INVALID)
+        {
+            tcu.scheduleCmdFinish(Cycles(1), TcuError::NONE);
+            return;
+        }
+    }
+
+    if (!startSleep(rep, iep))
         tcu.scheduleCmdFinish(Cycles(1), TcuError::NONE);
 }
 
 bool
-TcuConnector::startSleep(epid_t ep, bool force)
+TcuConnector::startSleep(epid_t rep, epid_t iep, bool force)
 {
     if (!force && connector->havePendingIrq())
         return false;
 
-    wakeupEp = ep;
-    DPRINTF(TcuConnector, "Suspending CU (waiting for EP %d)\n", wakeupEp);
+    wakeupEp = rep;
+    invalidateEp = iep;
+    DPRINTF(TcuConnector, "Suspending CU (REP=%d, IEP=%d)\n", wakeupEp, invalidateEp);
     connector->suspend();
 
     return true;
@@ -116,27 +136,39 @@ TcuConnector::startSleep(epid_t ep, bool force)
 void
 TcuConnector::stopSleep()
 {
+    wakeupEp = Tcu::INVALID_EP_ID;
+    invalidateEp = Tcu::INVALID_EP_ID;
     connector->wakeup();
 }
 
 void
-TcuConnector::wakeupCore(bool force, epid_t rep)
+TcuConnector::wakeupForMsg(epid_t ep)
 {
-    if (force || wakeupEp == Tcu::INVALID_EP_ID || rep == wakeupEp)
-    {
-        // better stop the command in this cycle to ensure that the core
-        // does not issue another command before we can finish the sleep.
-        if (tcu.regs().getCommand().opcode == CmdCommand::SLEEP)
-            tcu.scheduleCmdFinish(Cycles(0));
-        else
-            connector->wakeup();
-    }
+    if (wakeupEp == Tcu::INVALID_EP_ID || ep == wakeupEp)
+        wakeup();
+}
+
+void
+TcuConnector::wakeupForInvEp(epid_t ep)
+{
+    if (ep == invalidateEp)
+        wakeup();
+}
+
+void
+TcuConnector::wakeup()
+{
+    // better stop the command in this cycle to ensure that the core
+    // does not issue another command before we can finish the sleep.
+    if (tcu.regs().getCommand().opcode == CmdCommand::SLEEP)
+        tcu.scheduleCmdFinish(Cycles(0));
+    stopSleep();
 }
 
 void
 TcuConnector::setIrq(BaseConnector::IRQ irq)
 {
-    wakeupCore(true, Tcu::INVALID_EP_ID);
+    wakeup();
 
     connector->setIrq(irq);
 

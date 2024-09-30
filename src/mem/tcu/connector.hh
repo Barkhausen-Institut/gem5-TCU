@@ -58,13 +58,17 @@ class TcuConnector
 
     void startWaitEP(const CmdCommand::Bits &cmd);
 
-    void startWaitEPWithEP(EpFile::EpCache &eps, epid_t epid);
+    void startWaitEPWithEPs(EpFile::EpCache &eps, epid_t rep, epid_t iep);
 
-    bool startSleep(epid_t wakeupEp, bool force = false);
+    bool startSleep(epid_t rep, epid_t iep, bool force = false);
 
     void stopSleep();
 
-    void wakeupCore(bool force, epid_t rep);
+    void wakeupForMsg(epid_t ep);
+
+    void wakeupForInvEp(epid_t ep);
+
+    void wakeup();
 
     void setIrq(BaseConnector::IRQ irq);
 
@@ -83,6 +87,7 @@ class TcuConnector
     EpFile::EpCache sleepEPs;
 
     int wakeupEp;
+    int invalidateEp;
 
     MemberEventWrapper<&TcuConnector::fireTimer> fireTimerEvent;
 

@@ -480,6 +480,7 @@ MessageUnit::invalidateWithEP(EpFile::EpCache &eps)
     for (int i = 0; i < numEpRegs; ++i)
         ep.inval.r[i] = 0;
     eps.updateEp(ep.send);
+    tcu.con().wakeupForInvEp(epid);
 
     eps.onFinished([this, unreadMask](EpFile::EpCache &) {
         tcu.scheduleExtCmdFinish(Cycles(1), TcuError::NONE, unreadMask);
@@ -745,7 +746,7 @@ MessageUnit::finishMsgReceive(EpFile::EpCache &eps,
     if (error == TcuError::NONE && addMsg)
     {
         tcu.regs().add_msg();
-        tcu.con().wakeupCore(false, ep.id);
+        tcu.con().wakeupForMsg(ep.id);
     }
 
     return error;
