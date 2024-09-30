@@ -167,13 +167,17 @@ class Tcu : public BaseTcu
     {
         Tcu &_tcu;
         PacketPtr _pkt;
+        Addr _addr;
         bool _isCpuRequest;
+        bool _functional;
 
-        RegFileEvent(Tcu& tcu, PacketPtr pkt, bool isCpuRequest)
+        RegFileEvent(Tcu& tcu, PacketPtr pkt, Addr addr, bool isCpuRequest, bool functional)
             : Event(),
               _tcu(tcu),
               _pkt(pkt),
-              _isCpuRequest(isCpuRequest)
+              _addr(addr),
+              _isCpuRequest(isCpuRequest),
+              _functional(functional)
         {}
 
         void process() override;
@@ -212,7 +216,8 @@ class Tcu : public BaseTcu
 
     void reset(bool start);
 
-    void forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest);
+    void forwardRequestToRegFile(PacketPtr pkt, Addr address,
+                                 bool isCpuRequest, bool functional);
 
     bool isCommandAborting() const
     {

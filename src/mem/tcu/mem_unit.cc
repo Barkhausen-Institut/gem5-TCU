@@ -401,7 +401,7 @@ MemoryUnit::recvFromNoc(PacketPtr pkt)
     receivedBytes.sample(pkt->getSize());
 
     if (tcu.mmioRegion.contains(addr.offset))
-        tcu.forwardRequestToRegFile(pkt, false);
+        tcu.forwardRequestToRegFile(pkt, addr.offset, false, false);
     else
     {
         // the same as above: the transfer happens piece by piece and we can

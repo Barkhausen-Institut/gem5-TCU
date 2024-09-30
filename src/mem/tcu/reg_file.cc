@@ -104,16 +104,18 @@ struct RegAccessEvent : public Event
     PacketPtr _pkt;
     Tcu::RegFileEvent *_regfile_event;
     bool _isCpuRequest;
+    bool _functional;
     int _result;
     std::map<size_t, size_t> _accesses;
 
     RegAccessEvent(Tcu &tcu, RegFile &regs, Tcu::RegFileEvent *regfile_event,
-                   PacketPtr pkt, bool isCpuRequest)
+                   PacketPtr pkt, bool isCpuRequest, bool functional)
         : Event(),
         _regs(regs),
         _pkt(pkt),
         _regfile_event(regfile_event),
         _isCpuRequest(isCpuRequest),
+        _functional(functional),
         _result(),
         _accesses()
     {}
@@ -579,7 +581,10 @@ RegAccessEvent::process()
     }
 
     if (_accesses.size() > 0)
-        eps->onFetched(std::bind(&RegAccessEvent::fetched, this, std::placeholders::_1));
+    {
+        eps->onFetched(std::bind(&RegAccessEvent::fetched, this, std::placeholders::_1),
+                true, _functional);
+    }
     else
         completed(*eps, true, false);
 }
@@ -622,7 +627,11 @@ RegAccessEvent::fetched(EpFile::EpCache &cache)
     if (_pkt->isRead())
         completed(cache, false, true);
     else
-        cache.onFinished(std::bind(&RegAccessEvent::completed, this, std::placeholders::_1, false, true));
+    {
+        cache.onFinished(
+                std::bind(&RegAccessEvent::completed, this, std::placeholders::_1, false, true),
+                _functional);
+    }
 }
 
 void
@@ -645,7 +654,7 @@ RegAccessEvent::completed(EpFile::EpCache &cache, bool eventScheduled, bool cach
 }
 
 void
-RegFile::startRequest(PacketPtr pkt, void *ev, bool isCpuRequest)
+RegFile::handleRequest(PacketPtr pkt, void *ev, bool isCpuRequest, bool functional)
 {
     assert(pkt->isRead() || pkt->isWrite());
 
@@ -654,8 +663,12 @@ RegFile::startRequest(PacketPtr pkt, void *ev, bool isCpuRequest)
 
     DPRINTF(TcuRegRange, "access @%#x, size=%u\n", pktAddr, pkt->getSize());
 
-    auto access_event = new RegAccessEvent(tcu, *this, regfile_event, pkt, isCpuRequest);
-    tcu.schedule(access_event, curTick());
+    auto access_event = new RegAccessEvent(tcu, *this, regfile_event, pkt,
+            isCpuRequest, functional);
+    if (functional)
+        access_event->process();
+    else
+        tcu.schedule(access_event, curTick());
 }
 
 Addr

@@ -531,13 +531,10 @@ Tcu::handleCUMemRequest(PacketPtr pkt,
 
     if (mmioRegion.contains(virt))
     {
-        // not supported here
-        assert(!functional);
-
         if (icache)
             res = false;
         else
-            forwardRequestToRegFile(pkt, true);
+            forwardRequestToRegFile(pkt, pkt->getAddr(), true, functional);
     }
     else
     {
@@ -573,62 +570,73 @@ Tcu::RegFileEvent::process()
 {
     // Strip the base address to handle requests based on the reg. addr. only.
     // TODO keep that?
-    _pkt->setAddr((_pkt->getAddr() & 0xFFFFFFFF) - _tcu.mmioRegion.start());
+    _pkt->setAddr((_addr & 0xFFFFFFFF) - _tcu.mmioRegion.start());
 
-    _tcu.regs().startRequest(_pkt, this, _isCpuRequest);
+    _tcu.regs().handleRequest(_pkt, this, _isCpuRequest, _functional);
     _tcu.regFileReqs++;
 }
 
 void
 Tcu::RegFileEvent::completed(RegFile::Result result)
 {
-    Cycles delay(0);
-    // for reading, we pay the MMIO-latency for both request and response
-    if (_pkt->isRead())
-        delay += _tcu.mmioLatency;
-
-    Tick when = _tcu.clockEdge(delay + _tcu.mmioLatency);
-
-    if (!_isCpuRequest)
-        _tcu.schedNocRequestFinished(_tcu.clockEdge(Cycles(1)));
-
-    if (~result & RegFile::WROTE_EXT_CMD)
+    if (!_functional)
     {
-        assert(_isCpuRequest || result == RegFile::WROTE_NONE);
+        Cycles delay(0);
+        // for reading, we pay the MMIO-latency for both request and response
+        if (_pkt->isRead())
+            delay += _tcu.mmioLatency;
 
-        if (_isCpuRequest &&
-            (result & (RegFile::WROTE_CMD | RegFile::WROTE_PRIV_CMD)) == 0)
-            _tcu.schedCpuResponse(_pkt, when);
-        else if(!_isCpuRequest)
-            _tcu.schedNocResponse(_pkt, when);
+        Tick when = _tcu.clockEdge(delay + _tcu.mmioLatency);
 
-        if (result & RegFile::WROTE_CU_REQ)
-            _tcu.schedule(_tcu.completeCUReqEvent, when);
-        if (result & RegFile::WROTE_PRINT)
+        if (!_isCpuRequest)
+            _tcu.schedNocRequestFinished(_tcu.clockEdge(Cycles(1)));
+
+        if (~result & RegFile::WROTE_EXT_CMD)
         {
-            PrintReg pr = _tcu.regs().get(UnprivReg::PRINT);
-            if (pr.cov_addr == 0)
-                _tcu.printLine(pr.size);
-            else
-                _tcu.writeCoverage(pr);
-        }
-    }
+            assert(_isCpuRequest || result == RegFile::WROTE_NONE);
 
-    _tcu.cmds.startCommand(result, _pkt, when);
+            if (_isCpuRequest &&
+                (result & (RegFile::WROTE_CMD | RegFile::WROTE_PRIV_CMD)) == 0)
+                _tcu.schedCpuResponse(_pkt, when);
+            else if(!_isCpuRequest)
+                _tcu.schedNocResponse(_pkt, when);
+
+            if (result & RegFile::WROTE_CU_REQ)
+                _tcu.schedule(_tcu.completeCUReqEvent, when);
+            if (result & RegFile::WROTE_PRINT)
+            {
+                PrintReg pr = _tcu.regs().get(UnprivReg::PRINT);
+                if (pr.cov_addr == 0)
+                    _tcu.printLine(pr.size);
+                else
+                    _tcu.writeCoverage(pr);
+            }
+        }
+
+        _tcu.cmds.startCommand(result, _pkt, when);
+    }
+    else
+        assert(result == RegFile::Result::WROTE_NONE);
 
     delete this;
 }
 
 void
-Tcu::forwardRequestToRegFile(PacketPtr pkt, bool isCpuRequest)
+Tcu::forwardRequestToRegFile(PacketPtr pkt, Addr address,
+                             bool isCpuRequest, bool functional)
 {
-    Cycles transportDelay = ticksToCycles(pkt->headerDelay + pkt->payloadDelay);
-    // we paid the latency now
-    pkt->headerDelay = 0;
-    pkt->payloadDelay = 0;
-    
-    auto ev = new RegFileEvent(*this, pkt, isCpuRequest);
-    schedule(*ev, clockEdge(transportDelay));
+    auto ev = new RegFileEvent(*this, pkt, address, isCpuRequest, functional);
+    if (functional)
+        ev->process();
+    else
+    {
+        Cycles transportDelay = ticksToCycles(pkt->headerDelay + pkt->payloadDelay);
+        // we paid the latency now
+        pkt->headerDelay = 0;
+        pkt->payloadDelay = 0;
+
+        schedule(*ev, clockEdge(transportDelay));
+    }
 }
 
 bool

@@ -654,7 +654,7 @@ class RegFile
 
     const char *getBuffer(size_t bytes);
 
-    void startRequest(PacketPtr pkt, void *ev, bool isCpuRequest);
+    void handleRequest(PacketPtr pkt, void *ev, bool isCpuRequest, bool functional);
 
     const std::string name() const { return _name; }
 
