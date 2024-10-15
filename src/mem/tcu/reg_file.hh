@@ -56,6 +56,7 @@ enum class ExtReg : Addr
     FEATURES,
     TILE_DESC,
     EXT_CMD,
+    EXT_ARG1,
     EPS_ADDR,
     EPS_SIZE,
 };
@@ -93,9 +94,11 @@ enum class UnprivReg : Addr
     PRINT,
 };
 
-constexpr unsigned numExtRegs = 5;
+constexpr unsigned numExtRegs = 6;
 constexpr unsigned numPrivRegs = 5;
 constexpr unsigned numUnprivRegs = 6;
+constexpr unsigned numExclRegs = 2 * 16; // 2 per region
+constexpr unsigned numExclRegions = numExclRegs / 2;
 constexpr unsigned numEpRegs = 4;
 // buffer for prints (32 * 8 bytes)
 constexpr unsigned numBufRegs = 32;
@@ -271,6 +274,8 @@ struct ExtCommand
         IDLE            = 0,
         INV_EP          = 1,
         RESET           = 2,
+        SET_EXCL        = 3,
+        INV_EXCL        = 4,
     };
 
     BitUnion64(Bits)
@@ -278,6 +283,49 @@ struct ExtCommand
         Bitfield<8, 4> error;
         Bitfield<3, 0> opcode;
     EndBitUnion(Bits)
+};
+
+struct ExclRegion
+{
+    static const char *decodePerm(Addr perm)
+    {
+        static char desc[3];
+        desc[0] = (perm & 0x1) ? 'r' : '-';
+        desc[1] = (perm & 0x2) ? 'w' : '-';
+        return desc;
+    }
+
+    explicit ExclRegion() : cfg(), addr() {}
+
+    bool can_read() const { return (cfg.rw & 0x1) != 0; }
+    bool can_write() const { return (cfg.rw & 0x2) != 0; }
+
+    AddrRange range() const
+    {
+        uint64_t trailing_ones = ctz64(~addr);
+        uint64_t size = 1ULL << (trailing_ones + 3);
+
+        uint64_t base = mbits(addr, 63, trailing_ones) << 2;
+        AddrRange range(base, base + size);
+        return range;
+    }
+
+    friend std::ostream &operator<<(std::ostream &os, const ExclRegion &e)
+    {
+        os << e.range().to_string() << ":"
+           << ExclRegion::decodePerm(e.cfg.rw) << ":"
+           << TileId::from_raw(e.cfg.tile);
+        return os;
+    }
+
+    BitUnion64(Cfg)
+        Bitfield<16, 3> tile;
+        Bitfield<2, 1> rw;
+        Bitfield<0, 0> valid;
+    EndBitUnion(Cfg)
+
+    Cfg cfg;
+    uint64_t addr;
 };
 
 class RegFile;
@@ -636,6 +684,10 @@ class RegFile
 
     void set(UnprivReg reg, reg_t value, RegAccess access = RegAccess::TCU);
 
+    ExclRegion getExclRegion(size_t idx, RegAccess access = RegAccess::TCU) const;
+
+    void setExclRegion(size_t idx, const ExclRegion &reg, RegAccess access = RegAccess::TCU);
+
     CmdCommand::Bits getCommand()
     {
         return get(UnprivReg::COMMAND);
@@ -673,6 +725,8 @@ class RegFile
     std::vector<reg_t> privRegs;
 
     std::vector<reg_t> unprivRegs;
+
+    std::vector<reg_t> exclRegs;
 
     std::vector<reg_t> bufRegs;
 

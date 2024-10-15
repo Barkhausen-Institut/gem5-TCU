@@ -102,6 +102,7 @@ class Tcu : public BaseTcu
     struct NocSenderState : public Packet::SenderState
     {
         TcuError result;
+        TileId sender;
         NocPacketType packetType;
     };
 

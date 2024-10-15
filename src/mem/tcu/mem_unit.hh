@@ -32,6 +32,7 @@
 #ifndef __MEM_TCU_MEM_UNIT_HH__
 #define __MEM_TCU_MEM_UNIT_HH__
 
+#include "mem/tcu/reg_file.hh"
 #include "mem/tcu/tcu.hh"
 #include "mem/tcu/ep_file.hh"
 #include "mem/tcu/xfer_unit.hh"
@@ -165,7 +166,19 @@ class MemoryUnit
      */
     void recvFromNoc(PacketPtr pkt);
 
+    /**
+     * Sets a specific exclusive memory region
+     */
+    void setExclRegion(const ExtCommand::Bits &cmd);
+
+    /**
+     * Invalidates a specific exclusive memory region
+     */
+    void invExclRegion(const ExtCommand::Bits &cmd);
+
   private:
+
+    TcuError checkExclRegs(TileId sender, Addr addr, Addr size, bool write);
 
     void startReadWithEP(EpFile::EpCache &eps);
 

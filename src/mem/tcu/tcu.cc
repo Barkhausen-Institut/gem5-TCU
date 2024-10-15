@@ -40,6 +40,7 @@
 #include "debug/TcuPackets.hh"
 #include "debug/TcuLLCMemAcc.hh"
 #include "debug/TcuCoreMemAcc.hh"
+#include "mem/tcu/reg_file.hh"
 #include "mem/tcu/tcu.hh"
 #include "mem/tcu/msg_unit.hh"
 #include "mem/tcu/mem_unit.hh"
@@ -349,6 +350,7 @@ Tcu::sendNocRequest(NocPacketType type,
 {
     auto senderState = new NocSenderState();
     senderState->packetType = type;
+    senderState->sender = tileId;
     senderState->result = TcuError::NONE;
 
     if (type == NocPacketType::MESSAGE || type == NocPacketType::READ_REQ ||
@@ -373,8 +375,7 @@ Tcu::completeNocRequest(PacketPtr pkt)
 
     if (senderState->packetType == NocPacketType::CACHE_MEM_REQ)
     {
-        // as these target memory tiles, there can't be any error
-        assert(senderState->result == TcuError::NONE);
+        TcuError res = senderState->result;
 
         if (auto state = dynamic_cast<InitSenderState*>(pkt->senderState))
         {
@@ -386,9 +387,10 @@ Tcu::completeNocRequest(PacketPtr pkt)
         }
 
         DPRINTF(TcuLLCMemAcc,
-            "Finished %s request of LLC for %u bytes @ %#x\n",
+            "Finished %s request of LLC for %u bytes @ %#x (res=%d)\n",
             pkt->isRead() ? "read" : "write",
-            pkt->getSize(), pkt->getAddr());
+            pkt->getSize(), pkt->getAddr(),
+            static_cast<int>(res));
 
         if(pkt->isRead())
             printPacket(pkt);

@@ -36,6 +36,7 @@
 #include "mem/packet_access.hh"
 #include "mem/tcu/reg_file.hh"
 #include "mem/tcu/tcu.hh"
+#include "reg_file.hh"
 #include "sim/tile_memory.hh"
 
 namespace gem5
@@ -51,6 +52,7 @@ const char *RegFile::extRegNames[] = {
     "FEATURES",
     "TILE_DESC",
     "EXT_CMD",
+    "EXT_ARG1",
     "EPS_ADDR",
     "EPS_SIZE",
 };
@@ -140,6 +142,7 @@ RegFile::RegFile(Tcu &_tcu, const std::string& name)
       extRegs(numExtRegs, 0),
       privRegs(numPrivRegs, 0),
       unprivRegs(numUnprivRegs, 0),
+      exclRegs(numExclRegs, 0),
       bufRegs(numBufRegs * sizeof(reg_t), 0),
       _name(name)
 {
@@ -294,6 +297,35 @@ RegFile::set(UnprivReg reg, reg_t value, RegAccess access)
                          value);
 
     unprivRegs[static_cast<Addr>(reg)] = value;
+}
+
+ExclRegion RegFile::getExclRegion(size_t idx, RegAccess access) const
+{
+    ExclRegion reg;
+    reg.cfg = (RegFile::reg_t)exclRegs[idx * 2 + 0];
+    reg.addr = exclRegs[idx * 2 + 1];
+
+    DPRINTF(TcuRegRead, "%s<- EXC[%u]: %s (perm=%s, tile=%s)\n",
+                        regAccessName(access),
+                        idx,
+                        reg.range().to_string(),
+                        ExclRegion::decodePerm(reg.cfg.rw),
+                        TileId::from_raw(reg.cfg.tile));
+
+    return reg;
+}
+
+void RegFile::setExclRegion(size_t idx, const ExclRegion &reg, RegAccess access)
+{
+    DPRINTF(TcuRegWrite, "%s-> EXC[%u]: %s (perm=%s, tile=%s)\n",
+                         regAccessName(access),
+                         idx,
+                         reg.range().to_string(),
+                         ExclRegion::decodePerm(reg.cfg.rw),
+                         TileId::from_raw(reg.cfg.tile));
+
+    exclRegs[idx * 2 + 0] = (RegFile::reg_t)(reg.cfg);
+    exclRegs[idx * 2 + 1] = reg.addr;
 }
 
 void
@@ -533,6 +565,20 @@ RegAccessEvent::process()
                         }
                     );
                 }
+            }
+        }
+        // exclusive-region register
+        else if (regAddr < sizeof(RegFile::reg_t) * (numExtRegs + numUnprivRegs + numBufRegs + numExclRegs))
+        {
+            Addr exclAddr = regAddr - sizeof(RegFile::reg_t) * (numExtRegs + numUnprivRegs + numBufRegs);
+            size_t idx = exclAddr / sizeof(RegFile::reg_t);
+
+            if (idx < _regs.exclRegs.size() && (_pkt->isRead()))
+            {
+                unaligned_reg_read(offset, [this, idx, access] {
+                    auto reg = _regs.getExclRegion(idx / 2, access);
+                    return idx % 2 == 0 ? (RegFile::reg_t)reg.cfg : reg.addr;
+                });
             }
         }
         // privileged register

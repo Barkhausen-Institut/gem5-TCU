@@ -66,6 +66,10 @@ enum class TcuError
     TLB_FULL            = 25,
     NO_PMP_EP           = 26,
     NO_IRQ              = 27,
+    EXREG_NO_PERM       = 28,
+    EXREG_WRONG_TILE    = 29,
+    EXREG_OVERLAPS      = 30,
+    EXREG_EXISTS        = 31,
 };
 
 }

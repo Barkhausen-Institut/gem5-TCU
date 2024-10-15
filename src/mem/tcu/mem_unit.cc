@@ -29,8 +29,10 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
+#include "base/trace.hh"
 #include "debug/Tcu.hh"
 #include "debug/TcuBuf.hh"
+#include "debug/TcuExRegs.hh"
 #include "debug/TcuPackets.hh"
 #include "mem/tcu/mem_unit.hh"
 #include "mem/tcu/xfer_unit.hh"
@@ -376,6 +378,93 @@ MemoryUnit::writeComplete(const CmdCommand::Bits& cmd, PacketPtr pkt, TcuError e
     tcu.freeRequest(pkt);
 }
 
+TcuError
+MemoryUnit::checkExclRegs(TileId sender, Addr addr, Addr size, bool write)
+{
+    for(size_t i = 0; i < numExclRegions; ++i)
+    {
+        auto ereg = tcu.regs().getExclRegion(i);
+        if (!ereg.cfg.valid)
+            continue;
+
+        DPRINTFS(TcuExRegs, (&tcu),
+            "Checking exclusive range %s against %s to %#x:%#x from %s\n",
+            ereg, write ? "write" : "read", addr, size, sender);
+
+        auto range = ereg.range();
+        if (!range.contains(addr) && !range.contains(addr + size + 1))
+            continue;
+
+        if (sender != TileId::from_raw(ereg.cfg.tile))
+        {
+            DPRINTFS(TcuExRegs, (&tcu),
+                "%s has no access to exclusive range %s\n",
+                sender, ereg);
+            return TcuError::EXREG_WRONG_TILE;
+        }
+        if ((write && !ereg.can_write()) || (!write && !ereg.can_read()))
+        {
+            DPRINTFS(TcuExRegs, (&tcu),
+                "%s has access to exclusive range %s, but cannot %s\n",
+                sender, ereg, write ? "write" : "read");
+            return TcuError::EXREG_NO_PERM;
+        }
+
+        return TcuError::NONE;
+    }
+    return TcuError::NONE;
+}
+
+void
+MemoryUnit::setExclRegion(const ExtCommand::Bits &cmd)
+{
+    ExclRegion nreg;
+    nreg.addr = tcu.regs().get(ExtReg::EXT_ARG1);
+    nreg.cfg = cmd.arg & 0x1FFFF;
+    nreg.cfg.valid = 1;
+    size_t idx = cmd.arg >> 17;
+
+    if (idx >= numExclRegions)
+    {
+        tcu.scheduleExtCmdFinish(Cycles(1), TcuError::OUT_OF_BOUNDS, 0);
+        return;
+    }
+    if (tcu.regs().getExclRegion(idx).cfg.valid)
+    {
+        tcu.scheduleExtCmdFinish(Cycles(1), TcuError::EXREG_EXISTS, 0);
+        return;
+    }
+
+    auto new_range = nreg.range();
+    for(size_t i = 0; i < numExclRegions; ++i)
+    {
+        auto ereg = tcu.regs().getExclRegion(i);
+        if (!ereg.cfg.valid)
+            continue;
+
+        auto range = ereg.range();
+        if (range.intersects(new_range))
+        {
+            tcu.scheduleExtCmdFinish(Cycles(1), TcuError::EXREG_OVERLAPS, 0);
+            return;
+        }
+    }
+
+    tcu.regs().setExclRegion(idx, nreg, RegAccess::TCU);
+    tcu.scheduleExtCmdFinish(Cycles(1), TcuError::NONE, 0);
+}
+
+void
+MemoryUnit::invExclRegion(const ExtCommand::Bits &cmd)
+{
+    size_t idx = cmd.arg;
+
+    ExclRegion invalid;
+    tcu.regs().setExclRegion(idx, invalid, RegAccess::TCU);
+
+    tcu.scheduleExtCmdFinish(Cycles(1), TcuError::NONE, 0);
+}
+
 void
 MemoryUnit::recvFunctionalFromNoc(PacketPtr pkt)
 {
@@ -388,10 +477,12 @@ MemoryUnit::recvFunctionalFromNoc(PacketPtr pkt)
 void
 MemoryUnit::recvFromNoc(PacketPtr pkt)
 {
+    auto state = dynamic_cast<Tcu::NocSenderState*>(pkt->senderState);
     NocAddr addr(pkt->getAddr());
 
-    DPRINTFS(Tcu, (&tcu), "\e[1m[%s <- ?]\e[0m %#018lx:%lu\n",
+    DPRINTFS(Tcu, (&tcu), "\e[1m[%s <- %s]\e[0m %#018lx:%lu\n",
         pkt->isWrite() ? "wr" : "rd",
+        state->sender,
         addr.offset,
         pkt->getSize());
 
@@ -400,8 +491,19 @@ MemoryUnit::recvFromNoc(PacketPtr pkt)
 
     receivedBytes.sample(pkt->getSize());
 
+    TcuError res;
+
     if (tcu.mmioRegion.contains(addr.offset))
         tcu.forwardRequestToRegFile(pkt, addr.offset, false, false);
+    else if ((res = checkExclRegs(state->sender, addr.offset,
+                                  pkt->getSize(), pkt->isWrite())) != TcuError::NONE)
+    {
+        state->result = res;
+        pkt->makeResponse();
+        if (pkt->isRead())
+            memset(pkt->getPtr<uint8_t>(), 0, pkt->getSize());
+        tcu.schedNocResponse(pkt, tcu.clockEdge(Cycles(1)));
+    }
     else
     {
         // the same as above: the transfer happens piece by piece and we can
