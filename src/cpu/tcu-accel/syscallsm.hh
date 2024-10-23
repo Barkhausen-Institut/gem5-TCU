@@ -69,14 +69,16 @@ class SyscallSM
         DERIVE_SRV_FIN,
         GET_SESS,
         MGATE_REGION,
+        MGATE_MKEXCL,
         RGATE_BUFFER,
         KMEM_QUOTA,
         TILE_QUOTA,
         TILE_SET_QUOTA,
         TILE_SET_PMP,
-        TILE_MUX_INFO,
         TILE_MEM,
+        TILE_INFO,
         TILE_RESET,
+        TILE_LOCK,
         SEM_CTRL,
 
         // capability exchange
