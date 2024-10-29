@@ -189,6 +189,9 @@ RegFile::reset(bool inval)
 {
     if(inval)
     {
+        // clear locked bit
+        set(ExtReg::FEATURES, get(ExtReg::FEATURES) & ~(reg_t)(Features::LOCKED));
+
         // reset all unprivileged and privileged registers
         for(size_t i = 0; i < numUnprivRegs; ++i)
             set(static_cast<UnprivReg>(i), 0);
@@ -242,6 +245,11 @@ RegFile::set(ExtReg reg, reg_t value, RegAccess access)
                          regAccessName(access),
                          extRegNames[static_cast<Addr>(reg)],
                          value);
+
+    // the locked bit can only be cleared during reset by the TCU
+    if (reg == ExtReg::FEATURES &&
+            access != RegAccess::TCU && hasFeature(Features::LOCKED))
+        value |= (reg_t)Features::LOCKED;
 
     extRegs[static_cast<Addr>(reg)] = value;
 }

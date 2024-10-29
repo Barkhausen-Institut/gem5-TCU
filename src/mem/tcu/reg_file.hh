@@ -66,6 +66,7 @@ enum class Features
     KERNEL  = 1 << 0,
     VM      = 1 << 1,
     CTXSW   = 1 << 2,
+    LOCKED  = 1 << 3,
 };
 
 // privileged registers (only writable by privileged software)
@@ -571,6 +572,7 @@ BitUnion64(FeatureReg)
     Bitfield<63, 56> vpatch;
     Bitfield<55, 48> vminor;
     Bitfield<47, 32> vmajor;
+    Bitfield<3, 3> locked;
     Bitfield<2, 2> ctxsw;
     Bitfield<1, 1> vm;
     Bitfield<0, 0> kernel;

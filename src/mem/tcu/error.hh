@@ -70,6 +70,7 @@ enum class TcuError
     EXREG_WRONG_TILE    = 29,
     EXREG_OVERLAPS      = 30,
     EXREG_EXISTS        = 31,
+    TILE_LOCKED         = 32,
 };
 
 }

@@ -381,6 +381,9 @@ MemoryUnit::writeComplete(const CmdCommand::Bits& cmd, PacketPtr pkt, TcuError e
 TcuError
 MemoryUnit::checkExclRegs(TileId sender, Addr addr, Addr size, bool write)
 {
+    if (tcu.regs().hasFeature(Features::LOCKED))
+        return TcuError::TILE_LOCKED;
+
     for(size_t i = 0; i < numExclRegions; ++i)
     {
         auto ereg = tcu.regs().getExclRegion(i);
