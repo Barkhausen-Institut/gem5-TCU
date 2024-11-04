@@ -170,6 +170,11 @@ class MemoryUnit
     void recvFromNoc(PacketPtr pkt, Tcu::NocSenderState *state);
 
     /**
+     * Received CHECK_GENID request from NoC
+     */
+    void recvCheckGenIdFromNoc(PacketPtr pkt, Tcu::NocSenderState *state);
+
+    /**
      * Sets a specific exclusive memory region
      */
     void setExclRegion(const ExtCommand::Bits &cmd);
@@ -178,6 +183,11 @@ class MemoryUnit
      * Invalidates a specific exclusive memory region
      */
     void invExclRegion(const ExtCommand::Bits &cmd);
+
+    /**
+     * Handles the response from the CHECK_GENID request
+     */
+    void invExclRegionResponse(TcuError result);
 
   private:
 

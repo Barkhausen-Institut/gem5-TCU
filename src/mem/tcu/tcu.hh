@@ -83,6 +83,7 @@ class Tcu : public BaseTcu
         WRITE_REQ,
         CACHE_MEM_REQ_FUNC,
         CACHE_MEM_REQ,
+        CHECK_GENID,
     };
 
     struct MemSenderState : public Packet::SenderState

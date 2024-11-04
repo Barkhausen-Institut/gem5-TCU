@@ -344,6 +344,9 @@ Tcu::handleNocRequest(PacketPtr pkt)
         case NocPacketType::CACHE_MEM_REQ_FUNC:
             memUnit->recvFunctionalFromNoc(pkt);
             break;
+        case NocPacketType::CHECK_GENID:
+            memUnit->recvCheckGenIdFromNoc(pkt, senderState);
+            break;
         default:
             panic("Unexpected NocPacketType\n");
     }
@@ -406,6 +409,11 @@ Tcu::completeNocRequest(PacketPtr pkt)
             printPacket(pkt);
 
         schedLLCResponse(pkt, true);
+    }
+    else if (senderState->packetType == NocPacketType::CHECK_GENID)
+    {
+        memUnit->invExclRegionResponse(senderState->result);
+        freeRequest(pkt);
     }
     else if (senderState->packetType != NocPacketType::CACHE_MEM_REQ_FUNC)
     {

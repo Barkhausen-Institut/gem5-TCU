@@ -465,10 +465,53 @@ MemoryUnit::invExclRegion(const ExtCommand::Bits &cmd)
 {
     size_t idx = cmd.arg;
 
+    auto ereg = tcu.regs().getExclRegion(idx);
+    // invalid region? nothing to do
+    if (!ereg.cfg.valid)
+    {
+        tcu.scheduleExtCmdFinish(Cycles(1), TcuError::NONE, 0);
+        return;
+    }
+
+    // send request to target tile to see whether it has been reset
+    auto addr = NocAddr(TileId::from_raw(ereg.cfg.tile), 0);
+    auto pkt = tcu.generateRequest(addr.getAddr(), sizeof(genid_t), MemCmd::ReadReq);
+    tcu.sendNocRequest(Tcu::NocPacketType::CHECK_GENID, pkt, ereg.cfg.genid, Cycles(1));
+}
+
+void
+MemoryUnit::invExclRegionResponse(TcuError result)
+{
+    // if the tile has still the generation id from the region, invalidation is not allowed
+    if (result == TcuError::NONE)
+    {
+        DPRINTFS(TcuExRegs, (&tcu),
+            "INV_EXREG not allowed (tile needs a reset first)\n");
+
+        tcu.scheduleExtCmdFinish(Cycles(1), TcuError::WRONG_GEN, 0);
+        return;
+    }
+
+    ExtCommand::Bits cmd = tcu.regs().get(ExtReg::EXT_CMD);
+    size_t idx = cmd.arg;
+
     ExclRegion invalid;
     tcu.regs().setExclRegion(idx, invalid, RegAccess::TCU);
 
     tcu.scheduleExtCmdFinish(Cycles(1), TcuError::NONE, 0);
+}
+
+void
+MemoryUnit::recvCheckGenIdFromNoc(PacketPtr pkt, Tcu::NocSenderState *state)
+{
+    DPRINTFS(TcuExRegs, (&tcu),
+        "Checking tile generation: %d vs. %d\n",
+        state->receiverGen, tcu.regs().genId());
+
+    if (state->receiverGen != tcu.regs().genId())
+        tcu.sendNocResponse(pkt, TcuError::WRONG_GEN);
+    else
+        tcu.sendNocResponse(pkt, TcuError::NONE);
 }
 
 void
