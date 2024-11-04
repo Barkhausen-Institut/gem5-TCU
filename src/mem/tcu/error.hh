@@ -71,6 +71,7 @@ enum class TcuError
     EXREG_OVERLAPS      = 30,
     EXREG_EXISTS        = 31,
     TILE_LOCKED         = 32,
+    WRONG_GEN           = 33,
 };
 
 }

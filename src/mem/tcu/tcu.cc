@@ -40,6 +40,7 @@
 #include "debug/TcuPackets.hh"
 #include "debug/TcuLLCMemAcc.hh"
 #include "debug/TcuCoreMemAcc.hh"
+#include "mem/tcu/error.hh"
 #include "mem/tcu/reg_file.hh"
 #include "mem/tcu/tcu.hh"
 #include "mem/tcu/msg_unit.hh"
@@ -169,6 +170,12 @@ void
 Tcu::reset(bool start)
 {
     resets++;
+
+    if (start && regs().genId() == 0xFFFF)
+    {
+        scheduleExtCmdFinish(Cycles(1), TcuError::WRONG_GEN, 0);
+        return;
+    }
 
     if (tlb())
         tlb()->clear();
@@ -320,7 +327,7 @@ Tcu::handleNocRequest(PacketPtr pkt)
         case NocPacketType::MESSAGE:
         {
             nocMsgRecvs++;
-            msgUnit->recvFromNoc(pkt);
+            msgUnit->recvFromNoc(pkt, senderState);
             break;
         }
         case NocPacketType::READ_REQ:
@@ -331,7 +338,7 @@ Tcu::handleNocRequest(PacketPtr pkt)
                 nocReadRecvs++;
             else if (senderState->packetType == NocPacketType::WRITE_REQ)
                 nocWriteRecvs++;
-            memUnit->recvFromNoc(pkt);
+            memUnit->recvFromNoc(pkt, senderState);
             break;
         }
         case NocPacketType::CACHE_MEM_REQ_FUNC:
@@ -345,12 +352,15 @@ Tcu::handleNocRequest(PacketPtr pkt)
 void
 Tcu::sendNocRequest(NocPacketType type,
                     PacketPtr pkt,
+                    genid_t recvGen,
                     Cycles delay,
                     bool functional)
 {
     auto senderState = new NocSenderState();
     senderState->packetType = type;
-    senderState->sender = tileId;
+    senderState->senderTile = tileId;
+    senderState->senderGen = regs().genId();
+    senderState->receiverGen = recvGen;
     senderState->result = TcuError::NONE;
 
     if (type == NocPacketType::MESSAGE || type == NocPacketType::READ_REQ ||
@@ -667,7 +677,8 @@ Tcu::handleLLCRequest(PacketPtr pkt, bool functional)
 
         auto type = functional ? Tcu::NocPacketType::CACHE_MEM_REQ_FUNC
                                : Tcu::NocPacketType::CACHE_MEM_REQ;
-        sendNocRequest(type, pkt, Cycles(1), functional);
+        // genid is always 0 for memory tiles
+        sendNocRequest(type, pkt, 0, Cycles(1), functional);
 
         extMemReqs++;
         return true;
@@ -758,9 +769,10 @@ Tcu::handleLLCRequestWithEp(EpFile::EpCache &cache, PacketPtr pkt, bool function
     {
         auto type = functional ? Tcu::NocPacketType::CACHE_MEM_REQ_FUNC
                                : Tcu::NocPacketType::CACHE_MEM_REQ;
-        // this does always target a memory tile, so actId is invalid
+        // this does always target a memory tile, so actId is invalid and genid is 0
         sendNocRequest(type,
                        pkt,
+                       0,
                        Cycles(1),
                        functional);
     }

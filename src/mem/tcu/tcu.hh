@@ -102,7 +102,9 @@ class Tcu : public BaseTcu
     struct NocSenderState : public Packet::SenderState
     {
         TcuError result;
-        TileId sender;
+        TileId senderTile;
+        genid_t senderGen;
+        genid_t receiverGen;
         NocPacketType packetType;
     };
 
@@ -256,6 +258,7 @@ class Tcu : public BaseTcu
 
     void sendNocRequest(NocPacketType type,
                         PacketPtr pkt,
+                        genid_t recvGen,
                         Cycles delay,
                         bool functional = false);
 

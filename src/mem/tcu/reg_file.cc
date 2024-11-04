@@ -190,7 +190,14 @@ RegFile::reset(bool inval)
     if(inval)
     {
         // clear locked bit
-        set(ExtReg::FEATURES, get(ExtReg::FEATURES) & ~(reg_t)(Features::LOCKED));
+        reg_t features = get(ExtReg::FEATURES);
+        features &= ~(reg_t)Features::LOCKED;
+        features &= ~(reg_t)0xFFFF'0000;
+        // increase generation id
+        auto gen = genId();
+        assert(gen + 1 < 0xFFFF);
+        features |= (gen + 1) << 16;
+        set(ExtReg::FEATURES, features);
 
         // reset all unprivileged and privileged registers
         for(size_t i = 0; i < numUnprivRegs; ++i)
@@ -246,10 +253,18 @@ RegFile::set(ExtReg reg, reg_t value, RegAccess access)
                          extRegNames[static_cast<Addr>(reg)],
                          value);
 
-    // the locked bit can only be cleared during reset by the TCU
-    if (reg == ExtReg::FEATURES &&
-            access != RegAccess::TCU && hasFeature(Features::LOCKED))
-        value |= (reg_t)Features::LOCKED;
+    if (reg == ExtReg::FEATURES)
+    {
+        // the locked bit can only be cleared during reset by the TCU
+        if (access != RegAccess::TCU && hasFeature(Features::LOCKED))
+            value |= (reg_t)Features::LOCKED;
+        // the genid is read-only for the software
+        if (access != RegAccess::TCU)
+        {
+            value = (extRegs[static_cast<Addr>(reg)] & 0xFF00'0000) |
+                (value & ~(reg_t)0xFF00'0000);
+        }
+    }
 
     extRegs[static_cast<Addr>(reg)] = value;
 }
@@ -365,11 +380,11 @@ SendEp::print(const Named &obj,
               RegAccess access) const
 {
     DPRINTFNS(obj.name(),
-        "%s%s EP%-3u%12s: Send[act=%u, tile=%u ep=%u crdep=%u maxcrd=%u "
+        "%s%s EP%-3u%12s: Send[act=%u, tile=%u.%u ep=%u crdep=%u maxcrd=%u "
                               "curcrd=%u max=%#x lbl=%#llx rpl=%d]\n",
         regAccessName(access), read ? "<-" : "->",
         id, "", r0.act,
-        r1.tgtTile, r1.tgtEp, r0.crdEp,
+        r1.tgtTile, r1.tgtGen, r1.tgtEp, r0.crdEp,
         r0.maxCrd, r0.curCrd, 1 << r0.msgSize,
         r2.label, r0.reply);
 }
@@ -394,10 +409,10 @@ MemEp::print(const Named &obj,
              RegAccess access) const
 {
     DPRINTFNS(obj.name(),
-        "%s%s EP%-3u%12s: Mem[act=%u, tile=%u addr=%#llx "
+        "%s%s EP%-3u%12s: Mem[act=%u, tile=%u.%u addr=%#llx "
                              "size=%#llx flags=%#x]\n",
         regAccessName(access), read ? "<-" : "->",
-        id, "", r0.act, r0.targetTile,
+        id, "", r0.act, r0.targetTile, r0.targetGen,
         r1.remoteAddr, r2.remoteSize,
         r0.flags);
 }

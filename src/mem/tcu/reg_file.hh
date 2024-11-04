@@ -108,6 +108,7 @@ typedef uint16_t actid_t;
 typedef uint16_t epid_t;
 typedef uint8_t chipid_t;
 typedef uint8_t tileid_t;
+typedef uint16_t genid_t;
 typedef uint64_t tiledesc_t;
 
 class TileId
@@ -315,11 +316,13 @@ struct ExclRegion
     {
         os << e.range().to_string() << ":"
            << ExclRegion::decodePerm(e.cfg.rw) << ":"
-           << TileId::from_raw(e.cfg.tile);
+           << TileId::from_raw(e.cfg.tile) << "."
+           << e.cfg.genid;
         return os;
     }
 
     BitUnion64(Cfg)
+        Bitfield<24, 17> genid;
         Bitfield<16, 3> tile;
         Bitfield<2, 1> rw;
         Bitfield<0, 0> valid;
@@ -352,6 +355,7 @@ struct SendEp
     EndBitUnion(R0)
 
     BitUnion64(R1)
+        Bitfield<45, 30> tgtGen;
         Bitfield<29, 16> tgtTile;
         Bitfield<15, 0> tgtEp;
     EndBitUnion(R1)
@@ -452,6 +456,7 @@ struct MemEp
                RegAccess access) const;
 
     BitUnion64(R0)
+        Bitfield<52, 37> targetGen;
         Bitfield<36, 23> targetTile;
         Bitfield<22, 19> flags;
         Bitfield<18, 3> act;
@@ -572,6 +577,7 @@ BitUnion64(FeatureReg)
     Bitfield<63, 56> vpatch;
     Bitfield<55, 48> vminor;
     Bitfield<47, 32> vmajor;
+    Bitfield<31, 16> genid;
     Bitfield<3, 3> locked;
     Bitfield<2, 2> ctxsw;
     Bitfield<1, 1> vm;
@@ -642,6 +648,11 @@ class RegFile
     bool hasFeature(Features feature) const
     {
         return get(ExtReg::FEATURES) & static_cast<reg_t>(feature);
+    }
+
+    genid_t genId() const
+    {
+        return (get(ExtReg::FEATURES) >> 16) & 0xFFFF;
     }
 
     Addr endpointsAddr() const

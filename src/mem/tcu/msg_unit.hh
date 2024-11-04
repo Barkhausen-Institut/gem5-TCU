@@ -58,8 +58,9 @@ class MessageUnit
                           size_t size,
                           unsigned flags,
                           NocAddr dest,
+                          genid_t destGen,
                           MessageHeader *_header)
-            : WriteTransferEvent(phys, size, flags, dest),
+            : WriteTransferEvent(phys, size, flags, dest, destGen),
               msgUnit(_msgUnit),
               header(_header),
               sepid(_sepid)
@@ -75,6 +76,7 @@ class MessageUnit
         NocAddr msgAddr;
         EpFile::EpCache *eps;
         epid_t epid;
+        genid_t senderGen;
 
       public:
 
@@ -83,10 +85,11 @@ class MessageUnit
                              epid_t _epid,
                              NocAddr phys,
                              unsigned flags,
-                             PacketPtr pkt)
+                             PacketPtr pkt,
+                             genid_t _senderGen)
             : MemoryUnit::ReceiveTransferEvent(
                 XferUnit::TransferType::REMOTE_WRITE, phys, flags, pkt),
-              msgUnit(_msgUnit), msgAddr(phys), eps(_eps), epid(_epid)
+              msgUnit(_msgUnit), msgAddr(phys), eps(_eps), epid(_epid), senderGen(_senderGen)
         {}
 
         bool transferDone(TcuError result) override;
@@ -136,7 +139,7 @@ class MessageUnit
     /**
      * Received a message from NoC -> Mem request
      */
-    void recvFromNoc(PacketPtr pkt);
+    void recvFromNoc(PacketPtr pkt, Tcu::NocSenderState *state);
 
   private:
 
@@ -156,7 +159,7 @@ class MessageUnit
 
     void startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid);
 
-    void recvFromNocWithEP(EpFile::EpCache &eps, PacketPtr pkt);
+    void recvFromNocWithEP(EpFile::EpCache &eps, PacketPtr pkt, genid_t senderGen);
 
     void finishMsgSendWithEp(EpFile::EpCache &eps, TcuError result);
 
@@ -164,6 +167,7 @@ class MessageUnit
                               RecvEp &ep,
                               Addr msgAddr,
                               const MessageHeader *header,
+                              genid_t senderGen,
                               TcuError error,
                               unsigned xferFlags,
                               bool addMsg);

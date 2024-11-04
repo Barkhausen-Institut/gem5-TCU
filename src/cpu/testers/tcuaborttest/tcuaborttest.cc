@@ -328,6 +328,7 @@ TcuAbortTest::tick()
             ep.r0.act = Tcu::INVALID_ACT_ID;
             ep.r0.flags = Tcu::MemoryFlags::READ | Tcu::MemoryFlags::WRITE;
             ep.r0.targetTile = tileId.raw();
+            ep.r0.targetGen = 0;
             ep.r1.remoteAddr = offset;
             ep.r2.remoteSize = 0xFFFFFFFFFFFFFFFF;
 

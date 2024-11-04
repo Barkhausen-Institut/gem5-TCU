@@ -298,7 +298,7 @@ MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
 
     // start the transfer of the payload
     auto *ev = new SendTransferEvent(
-        this, sep.id, phys, data.size, flags, nocAddr, header);
+        this, sep.id, phys, data.size, flags, nocAddr, sep.r1.tgtGen, header);
     tcu.startTransfer(ev, delay);
 
     eps.setAutoFinish(false);
@@ -697,6 +697,7 @@ MessageUnit::finishMsgReceive(EpFile::EpCache &eps,
                               RecvEp &ep,
                               Addr msgAddr,
                               const MessageHeader *header,
+                              genid_t senderGen,
                               TcuError error,
                               unsigned xferFlags,
                               bool addMsg)
@@ -726,6 +727,7 @@ MessageUnit::finishMsgReceive(EpFile::EpCache &eps,
             rep.r0.reply = 1;
             rep.r1.tgtTile = header->senderTileId;
             rep.r1.tgtEp = header->replyEpId;
+            rep.r1.tgtGen = senderGen;
             rep.r2.label = header->replyLabel;
             eps.updateEp(rep);
         }
@@ -753,7 +755,7 @@ MessageUnit::finishMsgReceive(EpFile::EpCache &eps,
 }
 
 void
-MessageUnit::recvFromNoc(PacketPtr pkt)
+MessageUnit::recvFromNoc(PacketPtr pkt, Tcu::NocSenderState *state)
 {
     assert(pkt->isWrite());
     assert(pkt->hasData());
@@ -764,6 +766,15 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
 
     NocAddr addr(pkt->getAddr());
     epid_t epId = addr.offset;
+
+    if (state->receiverGen != tcu.regs().genId())
+    {
+        DPRINTFS(Tcu, (&tcu),
+            "EP%u: ignoring message: unexpected generation (%u vs. %u)\n",
+            epId, state->receiverGen, tcu.regs().genId());
+        tcu.sendNocResponse(pkt, TcuError::WRONG_GEN);
+        return;
+    }
 
     if (epId >= tcu.numEndpoints())
     {
@@ -794,11 +805,11 @@ MessageUnit::recvFromNoc(PacketPtr pkt)
         header->replyEpId != Tcu::INVALID_EP_ID)
         cache->addEp(header->replyEpId);
     cache->onFetched(std::bind(&MessageUnit::recvFromNocWithEP,
-                       this, std::placeholders::_1, pkt));
+                       this, std::placeholders::_1, pkt, state->senderGen));
 }
 
 void
-MessageUnit::recvFromNocWithEP(EpFile::EpCache &eps, PacketPtr pkt)
+MessageUnit::recvFromNocWithEP(EpFile::EpCache &eps, PacketPtr pkt, genid_t senderGen)
 {
     NocAddr addr(pkt->getAddr());
     epid_t epid = addr.offset;
@@ -858,7 +869,7 @@ MessageUnit::recvFromNocWithEP(EpFile::EpCache &eps, PacketPtr pkt)
     Addr physAddr = rep.r1.buffer + (msgidx << rep.r0.slotSize);
 
     auto *ev = new ReceiveTransferEvent(
-        this, &eps, epid, NocAddr(physAddr), rflags, pkt);
+        this, &eps, epid, NocAddr(physAddr), rflags, pkt, senderGen);
     tcu.startTransfer(ev, delay);
 
     eps.setAutoFinish(false);
@@ -876,7 +887,7 @@ MessageUnit::ReceiveTransferEvent::transferDone(TcuError result)
     RecvEp rep = eps->getEp(epid).recv;
 
     bool foreign = rep.r0.act != tcu().regs().getCurAct().id;
-    result = msgUnit->finishMsgReceive(*eps, rep, msgAddr.getAddr(), header,
+    result = msgUnit->finishMsgReceive(*eps, rep, msgAddr.getAddr(), header, senderGen,
                                        result, flags(), !foreign);
 
     // notify SW if we received a message for a different activity

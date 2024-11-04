@@ -88,16 +88,19 @@ class MemoryUnit
       protected:
 
         NocAddr dest;
+        genid_t destGen;
 
       public:
 
         WriteTransferEvent(NocAddr phys,
                            size_t size,
                            unsigned flags,
-                           NocAddr _dest)
+                           NocAddr _dest,
+                           genid_t _destGen)
             : TransferEvent(XferUnit::TransferType::LOCAL_READ,
                             phys, size, flags),
-              dest(_dest)
+              dest(_dest),
+              destGen(_destGen)
         {}
 
         void transferStart() override {}
@@ -164,7 +167,7 @@ class MemoryUnit
     /**
      * Received read/write request from NoC -> Mem/regfile request
      */
-    void recvFromNoc(PacketPtr pkt);
+    void recvFromNoc(PacketPtr pkt, Tcu::NocSenderState *state);
 
     /**
      * Sets a specific exclusive memory region
@@ -178,7 +181,8 @@ class MemoryUnit
 
   private:
 
-    TcuError checkExclRegs(TileId sender, Addr addr, Addr size, bool write);
+    TcuError checkExclRegs(TileId senderTile, genid_t senderGen,
+                           Addr addr, Addr size, bool write);
 
     void startReadWithEP(EpFile::EpCache &eps);
 

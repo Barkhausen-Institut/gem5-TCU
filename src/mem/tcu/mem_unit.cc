@@ -34,6 +34,7 @@
 #include "debug/TcuBuf.hh"
 #include "debug/TcuExRegs.hh"
 #include "debug/TcuPackets.hh"
+#include "mem/tcu/error.hh"
 #include "mem/tcu/mem_unit.hh"
 #include "mem/tcu/xfer_unit.hh"
 #include "mem/tcu/reg_file.hh"
@@ -158,6 +159,7 @@ MemoryUnit::startReadWithEP(EpFile::EpCache &eps)
 
     tcu.sendNocRequest(Tcu::NocPacketType::READ_REQ,
                        pkt,
+                       mep.r0.targetGen,
                        delay);
 }
 
@@ -317,7 +319,7 @@ MemoryUnit::startWriteWithEP(EpFile::EpCache &eps)
     NocAddr dest(TileId::from_raw(mep.r0.targetTile),
                  mep.r1.remoteAddr + offset);
 
-    auto xfer = new WriteTransferEvent(phys, size, 0, dest);
+    auto xfer = new WriteTransferEvent(phys, size, 0, dest, mep.r0.targetGen);
     tcu.startTransfer(xfer, delay);
 }
 
@@ -354,7 +356,7 @@ MemoryUnit::WriteTransferEvent::transferDone(TcuError result)
                 cmd.epid, data.addr, size());
         }
 
-        tcu().sendNocRequest(pktType, pkt, Cycles(1));
+        tcu().sendNocRequest(pktType, pkt, destGen, Cycles(1));
     }
 
     return true;
@@ -379,7 +381,8 @@ MemoryUnit::writeComplete(const CmdCommand::Bits& cmd, PacketPtr pkt, TcuError e
 }
 
 TcuError
-MemoryUnit::checkExclRegs(TileId sender, Addr addr, Addr size, bool write)
+MemoryUnit::checkExclRegs(TileId senderTile, genid_t senderGen,
+                          Addr addr, Addr size, bool write)
 {
     if (tcu.regs().hasFeature(Features::LOCKED))
         return TcuError::TILE_LOCKED;
@@ -391,25 +394,25 @@ MemoryUnit::checkExclRegs(TileId sender, Addr addr, Addr size, bool write)
             continue;
 
         DPRINTFS(TcuExRegs, (&tcu),
-            "Checking exclusive range %s against %s to %#x:%#x from %s\n",
-            ereg, write ? "write" : "read", addr, size, sender);
+            "Checking exclusive range %s against %s to %#x:%#x from %s.%d\n",
+            ereg, write ? "write" : "read", addr, size, senderTile, senderGen);
 
         auto range = ereg.range();
         if (!range.contains(addr) && !range.contains(addr + size + 1))
             continue;
 
-        if (sender != TileId::from_raw(ereg.cfg.tile))
+        if (senderTile != TileId::from_raw(ereg.cfg.tile) || senderGen != ereg.cfg.genid)
         {
             DPRINTFS(TcuExRegs, (&tcu),
-                "%s has no access to exclusive range %s\n",
-                sender, ereg);
+                "%s.%d has no access to exclusive range %s\n",
+                senderTile, senderGen, ereg);
             return TcuError::EXREG_WRONG_TILE;
         }
         if ((write && !ereg.can_write()) || (!write && !ereg.can_read()))
         {
             DPRINTFS(TcuExRegs, (&tcu),
-                "%s has access to exclusive range %s, but cannot %s\n",
-                sender, ereg, write ? "write" : "read");
+                "%s.%d has access to exclusive range %s, but cannot %s\n",
+                senderTile, senderGen, ereg, write ? "write" : "read");
             return TcuError::EXREG_NO_PERM;
         }
 
@@ -423,9 +426,9 @@ MemoryUnit::setExclRegion(const ExtCommand::Bits &cmd)
 {
     ExclRegion nreg;
     nreg.addr = tcu.regs().get(ExtReg::EXT_ARG1);
-    nreg.cfg = cmd.arg & 0x1FFFF;
+    nreg.cfg = cmd.arg & 0x1'FFFF'FFFF;
     nreg.cfg.valid = 1;
-    size_t idx = cmd.arg >> 17;
+    size_t idx = cmd.arg >> 33;
 
     if (idx >= numExclRegions)
     {
@@ -478,14 +481,13 @@ MemoryUnit::recvFunctionalFromNoc(PacketPtr pkt)
 }
 
 void
-MemoryUnit::recvFromNoc(PacketPtr pkt)
+MemoryUnit::recvFromNoc(PacketPtr pkt, Tcu::NocSenderState *state)
 {
-    auto state = dynamic_cast<Tcu::NocSenderState*>(pkt->senderState);
     NocAddr addr(pkt->getAddr());
 
     DPRINTFS(Tcu, (&tcu), "\e[1m[%s <- %s]\e[0m %#018lx:%lu\n",
         pkt->isWrite() ? "wr" : "rd",
-        state->sender,
+        state->senderTile,
         addr.offset,
         pkt->getSize());
 
@@ -494,14 +496,29 @@ MemoryUnit::recvFromNoc(PacketPtr pkt)
 
     receivedBytes.sample(pkt->getSize());
 
-    TcuError res;
-
-    if (tcu.mmioRegion.contains(addr.offset))
-        tcu.forwardRequestToRegFile(pkt, addr.offset, false, false);
-    else if ((res = checkExclRegs(state->sender, addr.offset,
-                                  pkt->getSize(), pkt->isWrite())) != TcuError::NONE)
+    state->result = TcuError::NONE;
+    if (state->receiverGen != tcu.regs().genId())
     {
-        state->result = res;
+        DPRINTFS(Tcu, (&tcu),
+            "Ignoring memory request: unexpected generation (%u vs. %u)\n",
+            state->receiverGen, tcu.regs().genId());
+        state->result = TcuError::WRONG_GEN;
+    }
+
+    if (state->result == TcuError::NONE)
+    {
+        if (tcu.mmioRegion.contains(addr.offset))
+        {
+            tcu.forwardRequestToRegFile(pkt, addr.offset, false, false);
+            return;
+        }
+
+        state->result = checkExclRegs(state->senderTile, state->senderGen, addr.offset,
+                                      pkt->getSize(), pkt->isWrite());
+    }
+
+    if (state->result != TcuError::NONE)
+    {
         pkt->makeResponse();
         if (pkt->isRead())
             memset(pkt->getPtr<uint8_t>(), 0, pkt->getSize());
