@@ -282,6 +282,8 @@ MessageUnit::startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid)
         header->flags = 0; // normal message
 
     header->senderTileId = tcu.tileId.raw();
+    header->sgen         = tcu.regs().genId();
+    header->rgen         = sep.r1.tgtGen;
     header->senderEpId   = sep.r0.curCrd == Tcu::CREDITS_UNLIM
                            ? Tcu::INVALID_EP_ID
                            : cmd.epid;
@@ -697,7 +699,6 @@ MessageUnit::finishMsgReceive(EpFile::EpCache &eps,
                               RecvEp &ep,
                               Addr msgAddr,
                               const MessageHeader *header,
-                              genid_t senderGen,
                               TcuError error,
                               unsigned xferFlags,
                               bool addMsg)
@@ -727,7 +728,7 @@ MessageUnit::finishMsgReceive(EpFile::EpCache &eps,
             rep.r0.reply = 1;
             rep.r1.tgtTile = header->senderTileId;
             rep.r1.tgtEp = header->replyEpId;
-            rep.r1.tgtGen = senderGen;
+            rep.r1.tgtGen = header->sgen;
             rep.r2.label = header->replyLabel;
             eps.updateEp(rep);
         }
@@ -767,7 +768,7 @@ MessageUnit::recvFromNoc(PacketPtr pkt, Tcu::NocSenderState *state)
     NocAddr addr(pkt->getAddr());
     epid_t epId = addr.offset;
 
-    if (state->receiverGen != tcu.regs().genId())
+    if (header->rgen != tcu.regs().genId())
     {
         DPRINTFS(Tcu, (&tcu),
             "EP%u: ignoring message: unexpected generation (%u vs. %u)\n",
@@ -805,11 +806,11 @@ MessageUnit::recvFromNoc(PacketPtr pkt, Tcu::NocSenderState *state)
         header->replyEpId != Tcu::INVALID_EP_ID)
         cache->addEp(header->replyEpId);
     cache->onFetched(std::bind(&MessageUnit::recvFromNocWithEP,
-                       this, std::placeholders::_1, pkt, state->senderGen));
+                       this, std::placeholders::_1, pkt));
 }
 
 void
-MessageUnit::recvFromNocWithEP(EpFile::EpCache &eps, PacketPtr pkt, genid_t senderGen)
+MessageUnit::recvFromNocWithEP(EpFile::EpCache &eps, PacketPtr pkt)
 {
     NocAddr addr(pkt->getAddr());
     epid_t epid = addr.offset;
@@ -869,7 +870,7 @@ MessageUnit::recvFromNocWithEP(EpFile::EpCache &eps, PacketPtr pkt, genid_t send
     Addr physAddr = rep.r1.buffer + (msgidx << rep.r0.slotSize);
 
     auto *ev = new ReceiveTransferEvent(
-        this, &eps, epid, NocAddr(physAddr), rflags, pkt, senderGen);
+        this, &eps, epid, NocAddr(physAddr), rflags, pkt);
     tcu.startTransfer(ev, delay);
 
     eps.setAutoFinish(false);
@@ -887,7 +888,7 @@ MessageUnit::ReceiveTransferEvent::transferDone(TcuError result)
     RecvEp rep = eps->getEp(epid).recv;
 
     bool foreign = rep.r0.act != tcu().regs().getCurAct().id;
-    result = msgUnit->finishMsgReceive(*eps, rep, msgAddr.getAddr(), header, senderGen,
+    result = msgUnit->finishMsgReceive(*eps, rep, msgAddr.getAddr(), header,
                                        result, flags(), !foreign);
 
     // notify SW if we received a message for a different activity

@@ -609,8 +609,10 @@ struct M5_ATTR_PACKED MessageHeader
     // should be large enough for pointers.
     uint64_t replyLabel;
     uint64_t label;
+    uint16_t sgen;
+    uint16_t rgen;
     // padding
-    uint64_t : 64;
+    uint32_t : 32;
 };
 
 class Tcu;

@@ -76,7 +76,6 @@ class MessageUnit
         NocAddr msgAddr;
         EpFile::EpCache *eps;
         epid_t epid;
-        genid_t senderGen;
 
       public:
 
@@ -85,11 +84,10 @@ class MessageUnit
                              epid_t _epid,
                              NocAddr phys,
                              unsigned flags,
-                             PacketPtr pkt,
-                             genid_t _senderGen)
+                             PacketPtr pkt)
             : MemoryUnit::ReceiveTransferEvent(
                 XferUnit::TransferType::REMOTE_WRITE, phys, flags, pkt),
-              msgUnit(_msgUnit), msgAddr(phys), eps(_eps), epid(_epid), senderGen(_senderGen)
+              msgUnit(_msgUnit), msgAddr(phys), eps(_eps), epid(_epid)
         {}
 
         bool transferDone(TcuError result) override;
@@ -159,7 +157,7 @@ class MessageUnit
 
     void startSendReplyWithEP(EpFile::EpCache &eps, epid_t epid);
 
-    void recvFromNocWithEP(EpFile::EpCache &eps, PacketPtr pkt, genid_t senderGen);
+    void recvFromNocWithEP(EpFile::EpCache &eps, PacketPtr pkt);
 
     void finishMsgSendWithEp(EpFile::EpCache &eps, TcuError result);
 
@@ -167,7 +165,6 @@ class MessageUnit
                               RecvEp &ep,
                               Addr msgAddr,
                               const MessageHeader *header,
-                              genid_t senderGen,
                               TcuError error,
                               unsigned xferFlags,
                               bool addMsg);
