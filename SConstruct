@@ -651,6 +651,12 @@ for variant_path in variant_paths:
                         "installing tcmalloc (libgoogle-perftools-dev package "
                         "on Ubuntu or RedHat).")
 
+    with gem5_scons.Configure(env) as conf:
+        if not conf.CheckLib('absl_log_internal_check_op'):
+            error("Cannot find 'absl_log_internal_check_op'")
+        if not conf.CheckLib('absl_log_internal_message'):
+            error("Cannot find 'absl_log_internal_message'")
+
     if not GetOption('silent'):
         print("Building in", variant_path)
 
