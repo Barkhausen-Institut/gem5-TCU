@@ -614,5 +614,41 @@ MemoryUnit::ReceiveTransferEvent::transferDone(TcuError result)
     return true;
 }
 
+void
+MemoryUnit::unfreeze(const CmdCommand::Bits &cmd)
+{
+    eps.addEp(cmd.epid);
+    eps.onFetched(std::bind(&MemoryUnit::unfreezeWithEp,
+                  this, std::placeholders::_1));
+}
+
+void
+MemoryUnit::unfreezeWithEp(EpFile::EpCache &eps)
+{
+    CmdCommand::Bits cmd = tcu.regs().getCommand();
+    Cycles delay(tcu.cmdUnfreezeLatency);
+
+    Ep ep = eps.getEp(cmd.epid);
+
+    if(ep.mem.r0.act != tcu.regs().getCurAct().id)
+    {
+        return tcu.schedCmdError(delay, TcuError::FOREIGN_EP,
+                                 "EP%u: foreign EP\n", cmd.epid);
+    }
+
+    if (!ep.frozen())
+    {
+        return tcu.schedCmdError(delay, TcuError::EP_NOT_FROZEN,
+                                 "EP%u: not frozen\n", cmd.epid);
+    }
+
+    ep.unfreeze();
+    eps.updateEp(ep.inval);
+
+    eps.onFinished([this, delay](EpFile::EpCache &) {
+        tcu.scheduleCmdFinish(delay, TcuError::NONE);
+    });
+}
+
 }
 }

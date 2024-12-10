@@ -189,6 +189,9 @@ class MemoryUnit
      */
     void invExclRegionResponse(TcuError result);
 
+    void unfreeze(const CmdCommand::Bits &cmd);
+    void unfreezeWithEp(EpFile::EpCache &eps);
+
   private:
 
     TcuError checkExclRegs(TileId senderTile, genid_t senderGen,

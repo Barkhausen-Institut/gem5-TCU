@@ -467,6 +467,12 @@ MessageUnit::invalidateWithEP(EpFile::EpCache &eps)
 
     Ep ep = eps.getEp(epid);
 
+    if (ep.frozen())
+    {
+        tcu.scheduleExtCmdFinish(Cycles(1), TcuError::EP_FROZEN, 0);
+        return;
+    }
+
     if (!force && ep.type() == EpType::SEND)
     {
         if (ep.send.r0.curCrd != ep.send.r0.maxCrd)

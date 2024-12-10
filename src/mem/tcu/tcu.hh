@@ -343,6 +343,7 @@ class Tcu : public BaseTcu
     const Cycles cmdRecvLatency;
     const Cycles cmdFetchLatency;
     const Cycles cmdAckLatency;
+    const Cycles cmdUnfreezeLatency;
 
     // NoC receives
     statistics::Scalar nocMsgRecvs;

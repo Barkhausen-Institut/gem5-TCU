@@ -84,7 +84,8 @@ Tcu::Tcu(const TcuParams &p)
     cmdReplyLatency(p.cmd_reply_latency),
     cmdRecvLatency(p.cmd_recv_latency),
     cmdFetchLatency(p.cmd_fetch_latency),
-    cmdAckLatency(p.cmd_ack_latency)
+    cmdAckLatency(p.cmd_ack_latency),
+    cmdUnfreezeLatency(p.cmd_unfreeze_latency)
 {
     assert(p.buf_size >= maxNocPacketSize);
 }

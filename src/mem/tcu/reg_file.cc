@@ -357,7 +357,7 @@ RegFile::printEpAccess(const Named &obj, const Ep &ep, bool read, RegAccess acce
     if(!isTraceEnabled(read))
         return;
 
-    switch (ep.type())
+    switch (ep.raw_type())
     {
         case EpType::INVALID:
             ep.inval.print(obj, false, access);
@@ -380,11 +380,11 @@ SendEp::print(const Named &obj,
               RegAccess access) const
 {
     DPRINTFNS(obj.name(),
-        "%s%s EP%-3u%12s: Send[act=%u, tile=%u.%u ep=%u crdep=%u maxcrd=%u "
+        "%s%s EP%-3u%12s: %sSend[act=%u, tile=%u.%u ep=%u crdep=%u maxcrd=%u "
                               "curcrd=%u max=%#x lbl=%#llx rpl=%d]\n",
         regAccessName(access), read ? "<-" : "->",
-        id, "", r0.act,
-        r1.tgtTile, r1.tgtGen, r1.tgtEp, r0.crdEp,
+        id, "", r0.frozen ? "*" : " ",
+        r0.act, r1.tgtTile, r1.tgtGen, r1.tgtEp, r0.crdEp,
         r0.maxCrd, r0.curCrd, 1 << r0.msgSize,
         r2.label, r0.reply);
 }
@@ -395,11 +395,11 @@ RecvEp::print(const Named &obj,
               RegAccess access) const
 {
     DPRINTFNS(obj.name(),
-        "%s%s EP%-3u%12s: Recv[act=%u, buf=%p msz=%#x bsz=%#x rpl=%u msgs=%u "
+        "%s%s EP%-3u%12s: %sRecv[act=%u, buf=%p msz=%#x bsz=%#x rpl=%u msgs=%u "
                               "occ=%#018x unr=%#018x rd=%u wr=%u]\n",
         regAccessName(access), read ? "<-" : "->",
-        id, "", r0.act,
-        r1.buffer, 1 << r0.slotSize, 1 << r0.slots, r0.rplEps,
+        id, "", r0.frozen ? "*" : " ",
+        r0.act, r1.buffer, 1 << r0.slotSize, 1 << r0.slots, r0.rplEps,
         unreadMsgs(), r2.occupied, r3.unread, r0.rpos, r0.wpos);
 }
 
@@ -409,10 +409,11 @@ MemEp::print(const Named &obj,
              RegAccess access) const
 {
     DPRINTFNS(obj.name(),
-        "%s%s EP%-3u%12s: Mem[act=%u, tile=%u.%u addr=%#llx "
+        "%s%s EP%-3u%12s:  %sMem[act=%u, tile=%u.%u addr=%#llx "
                              "size=%#llx flags=%#x]\n",
         regAccessName(access), read ? "<-" : "->",
-        id, "", r0.act, r0.targetTile, r0.targetGen,
+        id, "", r0.frozen ? "*" : " ",
+        r0.act, r0.targetTile, r0.targetGen,
         r1.remoteAddr, r2.remoteSize,
         r0.flags);
 }
@@ -423,9 +424,9 @@ InvalidEp::print(const Named &obj,
                  RegAccess access) const
 {
     DPRINTFNS(obj.name(),
-        "%s%s EP%-3u%12s: INVALID (%#x)\n",
+        "%s%s EP%-3u%12s: %sINVALID (%#x)\n",
         regAccessName(access), read ? "<-" : "->",
-        id, "",
+        id, "", frozen() ? "*" : " ",
         static_cast<unsigned>(type()));
 }
 
@@ -678,6 +679,10 @@ RegAccessEvent::fetched(EpFile::EpCache &cache)
         // writable only from remote and privileged TCUs
         else if (!_isCpuRequest || isPriv)
         {
+            // frozen EPs cannot be changed
+            if (ep.frozen())
+                continue;
+
             unaligned_reg_write(
                 it->second,
                 [ep, regNumber] {
@@ -691,6 +696,21 @@ RegAccessEvent::fetched(EpFile::EpCache &cache)
         }
         else
             assert(false);
+    }
+
+    // if the TCU is locked, EP changes need to be acked
+    if (_regs.hasFeature(Features::LOCKED))
+    {
+        for(auto it = _accesses.begin(); it != _accesses.end(); ++it)
+        {
+            epid_t epId = it->first / (sizeof(RegFile::reg_t) * numEpRegs);
+            auto ep = cache.getEp(epId);
+            if (!ep.frozen() && !_pkt->isRead() && (!_isCpuRequest || isPriv))
+            {
+                ep.freeze();
+                cache.updateEp(ep.inval);
+            }
+        }
     }
 
     if (_pkt->isRead())

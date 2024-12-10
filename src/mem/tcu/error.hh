@@ -72,6 +72,8 @@ enum class TcuError
     EXREG_EXISTS        = 31,
     TILE_LOCKED         = 32,
     WRONG_GEN           = 33,
+    EP_FROZEN           = 34,
+    EP_NOT_FROZEN       = 35,
 };
 
 }

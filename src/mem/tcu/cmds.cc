@@ -32,6 +32,7 @@
 #include "mem/tcu/cmds.hh"
 #include "mem/tcu/mem_unit.hh"
 #include "mem/tcu/msg_unit.hh"
+#include "mem/tcu/reg_file.hh"
 #include "mem/tcu/tcu.hh"
 
 namespace gem5
@@ -48,6 +49,7 @@ static const char *cmdNames[] =
     "WRITE",
     "FETCH_MSG",
     "ACK_MSG",
+    "UNFREEZE",
     "SLEEP",
 };
 
@@ -200,6 +202,9 @@ TcuCommands::executeCommand(PacketPtr pkt)
             break;
         case CmdCommand::ACK_MSG:
             tcu.msgUnit->startAck(cmd);
+            break;
+        case CmdCommand::UNFREEZE:
+            tcu.memUnit->unfreeze(cmd);
             break;
         case CmdCommand::SLEEP:
             tcu.connector.startWaitEP(cmd);

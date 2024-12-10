@@ -214,7 +214,8 @@ struct CmdCommand
         WRITE           = 4,
         FETCH_MSG       = 5,
         ACK_MSG         = 6,
-        SLEEP           = 7,
+        UNFREEZE        = 7,
+        SLEEP           = 8,
     };
 
     BitUnion64(Bits)
@@ -345,6 +346,7 @@ struct SendEp
                RegAccess access) const;
 
     BitUnion64(R0)
+        Bitfield<63> frozen;
         Bitfield<55> reply;
         Bitfield<54, 39> crdEp;
         Bitfield<38, 33> msgSize;
@@ -419,6 +421,7 @@ struct RecvEp
                RegAccess access) const;
 
     BitUnion64(R0)
+        Bitfield<63> frozen;
         Bitfield<61, 55> rpos;
         Bitfield<54, 48> wpos;
         Bitfield<47, 42> slotSize;
@@ -456,6 +459,7 @@ struct MemEp
                RegAccess access) const;
 
     BitUnion64(R0)
+        Bitfield<63> frozen;
         Bitfield<52, 37> targetGen;
         Bitfield<36, 23> targetTile;
         Bitfield<22, 19> flags;
@@ -484,8 +488,23 @@ struct InvalidEp
                bool read,
                RegAccess access) const;
 
+    bool frozen() const
+    {
+        return (r[0] & (1UL << 63)) != 0;
+    }
+    void freeze()
+    {
+        r[0] |= 1UL << 63;
+    }
+    void unfreeze()
+    {
+        r[0] &= ~(1UL << 63);
+    }
+
     EpType type() const
     {
+        if (frozen())
+            return EpType::INVALID;
         return static_cast<EpType>(r[0] & 0x7);
     }
 
@@ -519,9 +538,26 @@ union Ep
         return *this;
     }
 
+    bool frozen() const
+    {
+        return inval.frozen();
+    }
+    void freeze()
+    {
+        inval.freeze();
+    }
+    void unfreeze()
+    {
+        inval.unfreeze();
+    }
+
     EpType type() const
     {
         return inval.type();
+    }
+    EpType raw_type() const
+    {
+        return static_cast<EpType>(inval.r[0] & 0x7);
     }
 
     template<class E>
