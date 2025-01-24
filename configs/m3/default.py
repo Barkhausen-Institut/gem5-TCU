@@ -22,6 +22,7 @@ if not os.path.isfile(hard_disk0):
 num_rot13 = 2
 num_kecacc = 1
 mem_tile = TileId(0, num_tiles + num_sto + 2 + num_rot13 + num_kecacc)
+spm_size = '128MB'
 
 tiles = []
 
@@ -75,7 +76,7 @@ for i in range(0, num_kecacc):
                             id=TileId(0, num_tiles + num_sto + 2 + num_rot13 + i),
                             cmdline="",
                             memTile=None,
-                            spmsize='64MB')
+                            spmsize=spm_size)
     tiles.append(tile)
 
 # create the memory tiles

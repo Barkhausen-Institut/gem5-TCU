@@ -14,6 +14,7 @@ num_kecacc = 1
 num_tiles = int(os.environ.get('M3_GEM5_TILES'))
 accs = ['rot13', 'rot13']
 mem_tile = TileId(0, num_tiles + len(accs) + num_kecacc)
+spm_size = '128MB'
 
 tiles = []
 
@@ -46,7 +47,7 @@ for i in range(0, num_kecacc):
                             id=TileId(0, num_tiles + len(accs) + i),
                             cmdline="",
                             memTile=None,
-                            spmsize='64MB')
+                            spmsize=spm_size)
     tiles.append(tile)
 
 # create the memory tiles

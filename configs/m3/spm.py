@@ -13,6 +13,7 @@ num_mem = 1
 num_coreacc = 1
 num_tiles = int(os.environ.get('M3_GEM5_TILES')) - 1
 mem_tile = TileId(0, num_tiles + num_coreacc)
+spm_size = '128MB'
 
 tiles = []
 
@@ -23,7 +24,7 @@ for i in range(0, num_tiles):
                           id=TileId(0, i),
                           cmdline=cmd_list[i],
                           memTile=mem_tile if cmd_list[i] != "" else None,
-                          spmsize='64MB')
+                          spmsize=spm_size)
     tiles.append(tile)
 
 # create core+accel tiles
@@ -34,7 +35,7 @@ for i in range(0, num_coreacc):
                              id=TileId(0, num_tiles + i),
                              cmdline="",
                              memTile=None,
-                             spmsize='64MB')
+                             spmsize=spm_size)
     tiles.append(tile)
 options.isa = os.environ.get('M3_ISA')
 

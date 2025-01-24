@@ -25,10 +25,11 @@ num_o3 = int(os.environ.get('M3_GEM5_O3_CORES', num_tiles))
 num_minor = int(os.environ.get('M3_GEM5_MINOR_CORES', num_tiles))
 num_kecacc = int(os.environ.get('M3_GEM5_KECACC_TILES', 1))
 
+kecaccspmsize = '128MB'
 if os.environ.get('M3_ISA') == 'riscv32':
     l1size=None
     l2size=None
-    spmsize='64MB'
+    spmsize='128MB'
 else:
     l1size='32kB'
     l2size='128kB'
@@ -99,7 +100,7 @@ for i in range(0, num_kecacc):
                             id=TileId(0, len(tiles)),
                             cmdline='',
                             memTile=None,
-                            spmsize='64MB')
+                            spmsize=kecaccspmsize)
     tiles.append(tile)
 
 old_cpu_options = options.cpu_type, options.cpu_clock
@@ -114,7 +115,7 @@ tile = createRoTTile(noc=root.noc,
                      flashTile=flash_tile,
                      # flashTile=mem_tile,  # RoT can also run fetch data directly from memory tile
                      # FIXME: The RoT boot layers run with 256 KiB but TileMux/RoTS currently need more
-                     spmsize=os.environ.get('M3_GEM5_ROT_MEMSIZE', '64MB'))
+                     spmsize=os.environ.get('M3_GEM5_ROT_MEMSIZE', kecaccspmsize))
 tiles.append(tile)
 options.cpu_type, options.cpu_clock = old_cpu_options
 
