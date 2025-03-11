@@ -548,6 +548,8 @@ MemoryUnit::recvFromNoc(PacketPtr pkt, Tcu::NocSenderState *state)
         state->result = TcuError::WRONG_GEN;
     }
 
+    auto excl_regs_delay = Cycles(0);
+
     if (state->result == TcuError::NONE)
     {
         if (tcu.mmioRegion.contains(addr.offset))
@@ -558,6 +560,7 @@ MemoryUnit::recvFromNoc(PacketPtr pkt, Tcu::NocSenderState *state)
 
         state->result = checkExclRegs(state->senderTile, state->senderGen, addr.offset,
                                       pkt->getSize(), pkt->isWrite());
+        excl_regs_delay += Cycles(tcu.exclRegsLatency);
     }
 
     if (state->result != TcuError::NONE)
@@ -565,13 +568,13 @@ MemoryUnit::recvFromNoc(PacketPtr pkt, Tcu::NocSenderState *state)
         pkt->makeResponse();
         if (pkt->isRead())
             memset(pkt->getPtr<uint8_t>(), 0, pkt->getSize());
-        tcu.schedNocResponse(pkt, tcu.clockEdge(Cycles(1)));
+        tcu.schedNocResponse(pkt, tcu.clockEdge(Cycles(1) + excl_regs_delay));
     }
     else
     {
         // the same as above: the transfer happens piece by piece and we can
         // start after the header
-        Cycles delay = tcu.ticksToCycles(pkt->headerDelay);
+        Cycles delay = tcu.ticksToCycles(pkt->headerDelay) + excl_regs_delay;
         pkt->headerDelay = 0;
 
         auto type = pkt->isWrite() ? XferUnit::TransferType::REMOTE_WRITE

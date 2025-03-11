@@ -78,6 +78,7 @@ Tcu::Tcu(const TcuParams &p)
     cpuToCacheLatency(p.cpu_to_cache_latency),
     tcuToCacheLatency(p.tcu_to_cache_latency),
     tlbLatency(p.tlb_latency),
+    exclRegsLatency(p.excl_regs_latency),
     cmdReadLatency(p.cmd_read_latency),
     cmdWriteLatency(p.cmd_write_latency),
     cmdSendLatency(p.cmd_send_latency),

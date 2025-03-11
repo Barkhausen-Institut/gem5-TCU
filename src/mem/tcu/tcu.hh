@@ -335,6 +335,7 @@ class Tcu : public BaseTcu
     const Cycles cpuToCacheLatency;
     const Cycles tcuToCacheLatency;
     const Cycles tlbLatency;
+    const Cycles exclRegsLatency;
 
     const Cycles cmdReadLatency;
     const Cycles cmdWriteLatency;
