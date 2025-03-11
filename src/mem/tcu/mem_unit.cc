@@ -650,5 +650,35 @@ MemoryUnit::unfreezeWithEp(EpFile::EpCache &eps)
     });
 }
 
+void
+MemoryUnit::mkdyn(const CmdCommand::Bits &cmd)
+{
+    eps.addEp(cmd.epid);
+    eps.onFetched(std::bind(&MemoryUnit::mkdynWithEp,
+                  this, std::placeholders::_1));
+}
+
+void
+MemoryUnit::mkdynWithEp(EpFile::EpCache &eps)
+{
+    CmdCommand::Bits cmd = tcu.regs().getCommand();
+    Cycles delay(tcu.cmdMkdynLatency);
+
+    Ep ep = eps.getEp(cmd.epid);
+
+    if(ep.mem.r0.act != tcu.regs().getCurAct().id)
+    {
+        return tcu.schedCmdError(delay, TcuError::FOREIGN_EP,
+                                 "EP%u: foreign EP\n", cmd.epid);
+    }
+
+    ep.set_dynamic(true);
+    eps.updateEp(ep.inval);
+
+    eps.onFinished([this, delay](EpFile::EpCache &) {
+        tcu.scheduleCmdFinish(delay, TcuError::NONE);
+    });
+}
+
 }
 }

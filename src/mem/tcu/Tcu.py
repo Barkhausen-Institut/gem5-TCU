@@ -94,3 +94,4 @@ class Tcu(BaseTcu):
     cmd_fetch_latency = Param.Cycles(8, "Latency for fetching a message")
     cmd_ack_latency = Param.Cycles(10, "Latency for finishing a message processing")
     cmd_unfreeze_latency = Param.Cycles(4, "Latency for unfreezing an EP")
+    cmd_mkdyn_latency = Param.Cycles(4, "Latency for making an EP dynamic")

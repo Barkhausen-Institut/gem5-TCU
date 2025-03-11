@@ -215,7 +215,8 @@ struct CmdCommand
         FETCH_MSG       = 5,
         ACK_MSG         = 6,
         UNFREEZE        = 7,
-        SLEEP           = 8,
+        MKDYN           = 8,
+        SLEEP           = 9,
     };
 
     BitUnion64(Bits)
@@ -347,6 +348,7 @@ struct SendEp
 
     BitUnion64(R0)
         Bitfield<63> frozen;
+        Bitfield<62> dynamic;
         Bitfield<55> reply;
         Bitfield<54, 39> crdEp;
         Bitfield<38, 33> msgSize;
@@ -422,6 +424,7 @@ struct RecvEp
 
     BitUnion64(R0)
         Bitfield<63> frozen;
+        Bitfield<62> dynamic;
         Bitfield<61, 55> rpos;
         Bitfield<54, 48> wpos;
         Bitfield<47, 42> slotSize;
@@ -460,6 +463,7 @@ struct MemEp
 
     BitUnion64(R0)
         Bitfield<63> frozen;
+        Bitfield<62> dynamic;
         Bitfield<52, 37> targetGen;
         Bitfield<36, 23> targetTile;
         Bitfield<22, 19> flags;
@@ -487,6 +491,23 @@ struct InvalidEp
     void print(const Named &obj,
                bool read,
                RegAccess access) const;
+
+    actid_t activity() const
+    {
+        return (r[0] >> 3) & 0xFFFF;
+    }
+
+    bool dynamic() const
+    {
+        return (r[0] & (1UL << 62)) != 0;
+    }
+    void set_dynamic(bool dynamic)
+    {
+        if(dynamic)
+            r[0] |= 1UL << 62;
+        else
+            r[0] &= ~(1UL << 62);
+    }
 
     bool frozen() const
     {
@@ -538,6 +559,15 @@ union Ep
         return *this;
     }
 
+    bool dynamic() const
+    {
+        return inval.dynamic();
+    }
+    void set_dynamic(bool dynamic)
+    {
+        inval.set_dynamic(dynamic);
+    }
+
     bool frozen() const
     {
         return inval.frozen();
@@ -558,6 +588,12 @@ union Ep
     EpType raw_type() const
     {
         return static_cast<EpType>(inval.r[0] & 0x7);
+    }
+
+    void invalidate()
+    {
+        inval.r[0] &= ~static_cast<uint64_t>(0x7);
+        inval.r[0] |= static_cast<uint64_t>(EpType::INVALID);
     }
 
     template<class E>

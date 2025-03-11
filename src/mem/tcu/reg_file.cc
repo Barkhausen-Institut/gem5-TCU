@@ -380,10 +380,10 @@ SendEp::print(const Named &obj,
               RegAccess access) const
 {
     DPRINTFNS(obj.name(),
-        "%s%s EP%-3u%12s: %sSend[act=%u, tile=%u.%u ep=%u crdep=%u maxcrd=%u "
-                              "curcrd=%u max=%#x lbl=%#llx rpl=%d]\n",
+        "%s%s EP%-3u%12s: %s%sSend[act=%u, tile=%u.%u ep=%u crdep=%u maxcrd=%u "
+                                  "curcrd=%u max=%#x lbl=%#llx rpl=%d]\n",
         regAccessName(access), read ? "<-" : "->",
-        id, "", r0.frozen ? "*" : " ",
+        id, "", r0.frozen ? "*" : " ", r0.dynamic ? "!" : " ",
         r0.act, r1.tgtTile, r1.tgtGen, r1.tgtEp, r0.crdEp,
         r0.maxCrd, r0.curCrd, 1 << r0.msgSize,
         r2.label, r0.reply);
@@ -395,10 +395,10 @@ RecvEp::print(const Named &obj,
               RegAccess access) const
 {
     DPRINTFNS(obj.name(),
-        "%s%s EP%-3u%12s: %sRecv[act=%u, buf=%p msz=%#x bsz=%#x rpl=%u msgs=%u "
-                              "occ=%#018x unr=%#018x rd=%u wr=%u]\n",
+        "%s%s EP%-3u%12s: %s%sRecv[act=%u, buf=%p msz=%#x bsz=%#x rpl=%u msgs=%u "
+                                  "occ=%#018x unr=%#018x rd=%u wr=%u]\n",
         regAccessName(access), read ? "<-" : "->",
-        id, "", r0.frozen ? "*" : " ",
+        id, "", r0.frozen ? "*" : " ", r0.dynamic ? "!" : " ",
         r0.act, r1.buffer, 1 << r0.slotSize, 1 << r0.slots, r0.rplEps,
         unreadMsgs(), r2.occupied, r3.unread, r0.rpos, r0.wpos);
 }
@@ -409,10 +409,10 @@ MemEp::print(const Named &obj,
              RegAccess access) const
 {
     DPRINTFNS(obj.name(),
-        "%s%s EP%-3u%12s:  %sMem[act=%u, tile=%u.%u addr=%#llx "
-                             "size=%#llx flags=%#x]\n",
+        "%s%s EP%-3u%12s:  %s%sMem[act=%u, tile=%u.%u addr=%#llx "
+                                  "size=%#llx flags=%#x]\n",
         regAccessName(access), read ? "<-" : "->",
-        id, "", r0.frozen ? "*" : " ",
+        id, "", r0.frozen ? "*" : " ", r0.dynamic ? "!" : " ",
         r0.act, r0.targetTile, r0.targetGen,
         r1.remoteAddr, r2.remoteSize,
         r0.flags);
@@ -424,10 +424,10 @@ InvalidEp::print(const Named &obj,
                  RegAccess access) const
 {
     DPRINTFNS(obj.name(),
-        "%s%s EP%-3u%12s: %sINVALID (%#x)\n",
+        "%s%s EP%-3u%12s: %s%sINVALID (act=%u)\n",
         regAccessName(access), read ? "<-" : "->",
-        id, "", frozen() ? "*" : " ",
-        static_cast<unsigned>(type()));
+        id, "", frozen() ? "*" : " ", dynamic() ? "!" : " ",
+        activity());
 }
 
 const char *
@@ -683,6 +683,7 @@ RegAccessEvent::fetched(EpFile::EpCache &cache)
             if (ep.frozen())
                 continue;
 
+            bool was_dynamic = ep.dynamic();
             unaligned_reg_write(
                 it->second,
                 [ep, regNumber] {
@@ -692,6 +693,11 @@ RegAccessEvent::fetched(EpFile::EpCache &cache)
                     ep.inval.r[regNumber] = val;
                 }
             );
+
+            // when the TCU is locked, the dynamic bit cannot be changed anymore
+            if (_regs.hasFeature(Features::LOCKED))
+                ep.set_dynamic(was_dynamic);
+
             cache.updateEp(ep.inval);
         }
         else
@@ -705,7 +711,9 @@ RegAccessEvent::fetched(EpFile::EpCache &cache)
         {
             epid_t epId = it->first / (sizeof(RegFile::reg_t) * numEpRegs);
             auto ep = cache.getEp(epId);
-            if (!ep.frozen() && !_pkt->isRead() && (!_isCpuRequest || isPriv))
+            // dynamic EPs are not auto-frozen and can therefore always be changed
+            if (!ep.dynamic() && !ep.frozen() && ep.type() != EpType::INVALID &&
+                    !_pkt->isRead() && (!_isCpuRequest || isPriv))
             {
                 ep.freeze();
                 cache.updateEp(ep.inval);

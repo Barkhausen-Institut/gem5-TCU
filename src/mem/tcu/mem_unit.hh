@@ -189,8 +189,17 @@ class MemoryUnit
      */
     void invExclRegionResponse(TcuError result);
 
+    /**
+     * Unfreezes a specific EP to make it usable.
+     */
     void unfreeze(const CmdCommand::Bits &cmd);
     void unfreezeWithEp(EpFile::EpCache &eps);
+
+    /**
+     * Makes a specific EP dynamic to allow changes without ACK (freeze & unfreeze).
+     */
+    void mkdyn(const CmdCommand::Bits &cmd);
+    void mkdynWithEp(EpFile::EpCache &eps);
 
   private:
 

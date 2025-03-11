@@ -485,8 +485,7 @@ MessageUnit::invalidateWithEP(EpFile::EpCache &eps)
     if (!force && ep.type() == EpType::RECEIVE)
         unreadMask = ep.recv.r3.unread;
 
-    for (int i = 0; i < numEpRegs; ++i)
-        ep.inval.r[i] = 0;
+    ep.invalidate();
     eps.updateEp(ep.send);
     tcu.con().wakeupForInvEp(epid);
 

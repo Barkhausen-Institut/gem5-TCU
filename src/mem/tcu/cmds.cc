@@ -50,6 +50,7 @@ static const char *cmdNames[] =
     "FETCH_MSG",
     "ACK_MSG",
     "UNFREEZE",
+    "MKDYN",
     "SLEEP",
 };
 
@@ -205,6 +206,9 @@ TcuCommands::executeCommand(PacketPtr pkt)
             break;
         case CmdCommand::UNFREEZE:
             tcu.memUnit->unfreeze(cmd);
+            break;
+        case CmdCommand::MKDYN:
+            tcu.memUnit->mkdyn(cmd);
             break;
         case CmdCommand::SLEEP:
             tcu.connector.startWaitEP(cmd);
