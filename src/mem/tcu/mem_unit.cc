@@ -384,9 +384,6 @@ TcuError
 MemoryUnit::checkExclRegs(TileId senderTile, genid_t senderGen,
                           Addr addr, Addr size, bool write)
 {
-    if (tcu.regs().hasFeature(Features::LOCKED))
-        return TcuError::TILE_LOCKED;
-
     for(size_t i = 0; i < numExclRegions; ++i)
     {
         auto ereg = tcu.regs().getExclRegion(i);
@@ -418,6 +415,11 @@ MemoryUnit::checkExclRegs(TileId senderTile, genid_t senderGen,
 
         return TcuError::NONE;
     }
+
+    // if the TCU is locked, the internal memory is only accessible through exclusive regions
+    if (tcu.regs().hasFeature(Features::LOCKED))
+        return TcuError::TILE_LOCKED;
+
     return TcuError::NONE;
 }
 
