@@ -384,6 +384,8 @@ TcuError
 MemoryUnit::checkExclRegs(TileId senderTile, genid_t senderGen,
                           Addr addr, Addr size, bool write)
 {
+    bool found_overlap = false;
+
     for(size_t i = 0; i < numExclRegions; ++i)
     {
         auto ereg = tcu.regs().getExclRegion(i);
@@ -403,18 +405,21 @@ MemoryUnit::checkExclRegs(TileId senderTile, genid_t senderGen,
             DPRINTFS(TcuExRegs, (&tcu),
                 "%s.%d has no access to exclusive range %s\n",
                 senderTile, senderGen, ereg);
-            return TcuError::EXREG_WRONG_TILE;
+            found_overlap = true;
         }
-        if ((write && !ereg.can_write()) || (!write && !ereg.can_read()))
+        else if ((write && !ereg.can_write()) || (!write && !ereg.can_read()))
         {
             DPRINTFS(TcuExRegs, (&tcu),
                 "%s.%d has access to exclusive range %s, but cannot %s\n",
                 senderTile, senderGen, ereg, write ? "write" : "read");
-            return TcuError::EXREG_NO_PERM;
+            found_overlap = true;
         }
-
-        return TcuError::NONE;
+        else
+            return TcuError::NONE;
     }
+
+    if (found_overlap)
+        return TcuError::EXREG_NO_PERM;
 
     // if the TCU is locked, the internal memory is only accessible through exclusive regions
     if (tcu.regs().hasFeature(Features::LOCKED))
@@ -428,9 +433,9 @@ MemoryUnit::setExclRegion(const ExtCommand::Bits &cmd)
 {
     ExclRegion nreg;
     nreg.addr = tcu.regs().get(ExtReg::EXT_ARG1);
-    nreg.cfg = cmd.arg & 0x1'FFFF'FFFF;
+    nreg.cfg = cmd.arg & 0x3'FFFF'FFFF;
     nreg.cfg.valid = 1;
-    size_t idx = cmd.arg >> 33;
+    size_t idx = cmd.arg >> 34;
 
     if (idx >= numExclRegions)
     {
@@ -453,8 +458,19 @@ MemoryUnit::setExclRegion(const ExtCommand::Bits &cmd)
         auto range = ereg.range();
         if (range.intersects(new_range))
         {
-            tcu.scheduleExtCmdFinish(Cycles(1), TcuError::EXREG_OVERLAPS, 0);
-            return;
+            if(ereg.cfg.locked)
+            {
+                DPRINTFS(TcuExRegs, (&tcu),
+                    "new exreg %s overlaps with existing exreg %s\n",
+                    nreg, ereg);
+                tcu.scheduleExtCmdFinish(Cycles(1), TcuError::EXREG_OVERLAPS, 0);
+                return;
+            }
+            if(nreg.cfg.locked)
+            {
+                ereg.cfg.locked = 1;
+                tcu.regs().setExclRegion(i, ereg, RegAccess::TCU);
+            }
         }
     }
 

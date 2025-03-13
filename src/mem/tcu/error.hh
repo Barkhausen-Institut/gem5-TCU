@@ -67,13 +67,12 @@ enum class TcuError
     NO_PMP_EP           = 26,
     NO_IRQ              = 27,
     EXREG_NO_PERM       = 28,
-    EXREG_WRONG_TILE    = 29,
-    EXREG_OVERLAPS      = 30,
-    EXREG_EXISTS        = 31,
-    TILE_LOCKED         = 32,
-    WRONG_GEN           = 33,
-    EP_FROZEN           = 34,
-    EP_NOT_FROZEN       = 35,
+    EXREG_OVERLAPS      = 29,
+    EXREG_EXISTS        = 30,
+    TILE_LOCKED         = 31,
+    WRONG_GEN           = 32,
+    EP_FROZEN           = 33,
+    EP_NOT_FROZEN       = 34,
 };
 
 }

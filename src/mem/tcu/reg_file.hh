@@ -324,9 +324,10 @@ struct ExclRegion
     }
 
     BitUnion64(Cfg)
-        Bitfield<32, 17> genid;
-        Bitfield<16, 3> tile;
-        Bitfield<2, 1> rw;
+        Bitfield<33, 18> genid;
+        Bitfield<17, 4> tile;
+        Bitfield<3, 2> rw;
+        Bitfield<1, 1> locked;
         Bitfield<0, 0> valid;
     EndBitUnion(Cfg)
 

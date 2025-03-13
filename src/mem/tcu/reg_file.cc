@@ -328,26 +328,26 @@ ExclRegion RegFile::getExclRegion(size_t idx, RegAccess access) const
     reg.cfg = (RegFile::reg_t)exclRegs[idx * 2 + 0];
     reg.addr = exclRegs[idx * 2 + 1];
 
-    DPRINTF(TcuRegRead, "%s<- EXC[%u]: %s (perm=%s, tile=%s.%d)\n",
+    DPRINTF(TcuRegRead, "%s<- EXC[%u]: %s (perm=%s, tile=%s.%d, locked=%d)\n",
                         regAccessName(access),
                         idx,
                         reg.range().to_string(),
                         ExclRegion::decodePerm(reg.cfg.rw),
                         TileId::from_raw(reg.cfg.tile),
-                        reg.cfg.genid);
+                        reg.cfg.genid, reg.cfg.locked);
 
     return reg;
 }
 
 void RegFile::setExclRegion(size_t idx, const ExclRegion &reg, RegAccess access)
 {
-    DPRINTF(TcuRegWrite, "%s-> EXC[%u]: %s (perm=%s, tile=%s.%d)\n",
+    DPRINTF(TcuRegWrite, "%s-> EXC[%u]: %s (perm=%s, tile=%s.%d, locked=%d)\n",
                          regAccessName(access),
                          idx,
                          reg.range().to_string(),
                          ExclRegion::decodePerm(reg.cfg.rw),
                          TileId::from_raw(reg.cfg.tile),
-                         reg.cfg.genid);
+                         reg.cfg.genid, reg.cfg.locked);
 
     exclRegs[idx * 2 + 0] = (RegFile::reg_t)(reg.cfg);
     exclRegs[idx * 2 + 1] = reg.addr;
