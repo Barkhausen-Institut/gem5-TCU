@@ -583,10 +583,9 @@ MemoryUnit::recvFromNoc(PacketPtr pkt, Tcu::NocSenderState *state)
 
     if (state->result != TcuError::NONE)
     {
-        pkt->makeResponse();
         if (pkt->isRead())
             memset(pkt->getPtr<uint8_t>(), 0, pkt->getSize());
-        tcu.schedNocResponse(pkt, tcu.clockEdge(Cycles(1) + excl_regs_delay));
+        tcu.sendNocResponse(pkt, state->result);
     }
     else
     {
