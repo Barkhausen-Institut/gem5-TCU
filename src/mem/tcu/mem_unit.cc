@@ -401,19 +401,9 @@ MemoryUnit::checkExclRegs(TileId senderTile, genid_t senderGen,
             continue;
 
         if (senderTile != TileId::from_raw(ereg.cfg.tile) || senderGen != ereg.cfg.genid)
-        {
-            DPRINTFS(TcuExRegs, (&tcu),
-                "%s.%d has no access to exclusive range %s\n",
-                senderTile, senderGen, ereg);
             found_overlap = true;
-        }
         else if ((write && !ereg.can_write()) || (!write && !ereg.can_read()))
-        {
-            DPRINTFS(TcuExRegs, (&tcu),
-                "%s.%d has access to exclusive range %s, but cannot %s\n",
-                senderTile, senderGen, ereg, write ? "write" : "read");
             found_overlap = true;
-        }
         else
             return TcuError::NONE;
     }
@@ -578,6 +568,12 @@ MemoryUnit::recvFromNoc(PacketPtr pkt, Tcu::NocSenderState *state)
 
         state->result = checkExclRegs(state->senderTile, state->senderGen, addr.offset,
                                       pkt->getSize(), pkt->isWrite());
+        if (state->result != TcuError::NONE)
+        {
+            DPRINTFS(TcuExRegs, (&tcu),
+                "access denied for %s.%d with error %d\n",
+                state->senderTile, state->senderGen, static_cast<int>(state->result));
+        }
         excl_regs_delay += Cycles(tcu.exclRegsLatency);
     }
 
