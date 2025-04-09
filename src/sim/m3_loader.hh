@@ -115,7 +115,8 @@ class M3Loader
             uint64_t kernel_mem_size;
             uint8_t kernel_ep_pages;
             char kernel_cmdline[47];
-            BootModule mods[50];
+            BootModule mods[25];
+            RotBinary next_layer;
         } rosa;
     };
 

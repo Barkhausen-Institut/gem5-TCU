@@ -249,8 +249,8 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
         static_assert(sizeof(RotCfg) <= tcu::TcuTlb::PAGE_SIZE,
                       "RoT configuration too large");
         auto offset = modOffset + tcu::TcuTlb::PAGE_SIZE; // For RotCfg
-        RotBinary rotBins[2];
-        panic_if(rotLayers.size() != 2, "Unexpected number of RoT layers");
+        RotBinary rotBins[3];
+        panic_if(rotLayers.size() != 3, "Unexpected number of RoT layers");
 
         size_t i = 0;
         for (const std::string &layer : rotLayers)
@@ -291,6 +291,7 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
                              static_cast<size_t>(UINT8_MAX))),
                 .kernel_cmdline = {},
                 .mods = {},
+                .next_layer = rotBins[2],
             },
         };
 
