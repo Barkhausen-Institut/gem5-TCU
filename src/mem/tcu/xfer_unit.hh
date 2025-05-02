@@ -123,6 +123,7 @@ class XferUnit : public Event
         Cycles startCycle;
         TransferType type;
         NocAddr phys;
+        Addr total;
         Addr remaining;
         unsigned xferFlags;
         TcuError result;
@@ -140,6 +141,7 @@ class XferUnit : public Event
               startCycle(),
               type(_type),
               phys(_phys),
+              total(_size),
               remaining(_size),
               xferFlags(_flags),
               result(TcuError::NONE),
@@ -167,6 +169,8 @@ class XferUnit : public Event
         size_t size() const { return buf->offset; }
 
         void size(size_t size) { buf->offset = size; }
+
+        AddrRange range() const { return AddrRange(address().getAddr(), total); }
 
         const char* description() const override { return "TransferEvent"; }
 
@@ -224,6 +228,8 @@ class XferUnit : public Event
     void process() override;
 
     bool continueTransfer(Buffer *buf);
+
+    bool overlapsWithTransfers(TransferEvent *event);
 
     Buffer* allocateBuf(TransferEvent *event, unsigned flags);
 

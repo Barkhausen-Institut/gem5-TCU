@@ -29,6 +29,7 @@
  * policies, either expressed or implied, of the FreeBSD Project.
  */
 
+#include "base/addr_range.hh"
 #include "debug/Tcu.hh"
 #include "debug/TcuBuf.hh"
 #include "debug/TcuPackets.hh"
@@ -284,15 +285,27 @@ XferUnit::process()
     while (!queue.empty())
     {
         auto ev = queue.front();
-        ev->buf = allocateBuf(ev, ev->flags());
-        if (!ev->buf)
+
+        // if there is an existing transfer that it overlaps with, stop here to ensure memory
+        // consistency. For example, if we get a write to A and then a read from A, we have to
+        // process the write first to ensure that the read sees the updated data.
+        //
+        // note that we could in theory consider other transfers further down the queue, but for
+        // simplicity we choose not to.
+        bool overlap = overlapsWithTransfers(ev);
+        if (!overlap)
+            ev->buf = allocateBuf(ev, ev->flags());
+
+        // if there is any overlap, or we do not have free buffers, try again next cycle
+        if (overlap || !ev->buf)
         {
             DPRINTFS(TcuXfers, (&tcu),
-                "Delaying %s transfer of %lu bytes @ %p [flags=%s]\n",
+                "Delaying %s transfer of %lu bytes @ %p [flags=%s] due to %s\n",
                 ev->isWrite() ? "mem-write" : "mem-read",
                 ev->remaining,
                 ev->phys.getAddr(),
-                decodeFlags(ev->flags()));
+                decodeFlags(ev->flags()),
+                overlap ? "overlap" : "no buffer");
             delays++;
             if (!scheduled())
                 tcu.schedule(this, tcu.clockEdge(Cycles(1)));
@@ -335,6 +348,17 @@ XferUnit::tryAbortCommand()
             return ev->abort(TcuError::ABORT);
     }
     return AbortResult::NONE;
+}
+
+bool
+XferUnit::overlapsWithTransfers(TransferEvent *event)
+{
+    for (size_t i = 0; i < bufCount; ++i)
+    {
+        if (bufs[i]->event && event->range().intersects(bufs[i]->event->range()))
+            return true;
+    }
+    return false;
 }
 
 XferUnit::Buffer*
