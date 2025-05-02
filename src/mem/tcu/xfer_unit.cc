@@ -104,32 +104,6 @@ XferUnit::regStats()
 }
 
 void
-XferUnit::TransferEvent::tryStart()
-{
-    assert(buf == NULL);
-
-    buf = xfer->allocateBuf(this, flags());
-
-    // try again later, if there is no free buffer
-    if (!buf)
-    {
-        DPRINTFS(TcuXfers, (&xfer->tcu),
-            "Delaying %s transfer of %lu bytes @ %p [flags=%s]\n",
-            isWrite() ? "mem-write" : "mem-read",
-            remaining,
-            phys.getAddr(),
-            decodeFlags(flags()));
-
-        xfer->delays++;
-        xfer->queue.push_back(this);
-        return;
-    }
-
-    transferStart();
-    start();
-}
-
-void
 XferUnit::TransferEvent::start()
 {
     // workaround for race condition: if the abort request was issued right
@@ -161,9 +135,13 @@ XferUnit::TransferEvent::name() const
 void
 XferUnit::TransferEvent::process()
 {
-    if (!buf)
+    assert(buf != nullptr);
+
+    if (!started)
     {
-        tryStart();
+        transferStart();
+        start();
+        started = true;
         return;
     }
 
@@ -265,14 +243,6 @@ XferUnit::continueTransfer(Buffer *buf)
             writes.sample(tcu.curCycle() - buf->event->startCycle);
         if (finish)
             buf->event->finish();
-
-        // start the next one, if there is any
-        if (!queue.empty())
-        {
-            TransferEvent *ev = queue.front();
-            queue.pop_front();
-            tcu.schedule(ev, tcu.clockEdge(Cycles(1)));
-        }
         return finish;
     }
     // continue if there was no error and there is something left to transfer
@@ -309,6 +279,32 @@ XferUnit::TransferEvent::abort(TcuError error)
 }
 
 void
+XferUnit::process()
+{
+    while (!queue.empty())
+    {
+        auto ev = queue.front();
+        ev->buf = allocateBuf(ev, ev->flags());
+        if (!ev->buf)
+        {
+            DPRINTFS(TcuXfers, (&tcu),
+                "Delaying %s transfer of %lu bytes @ %p [flags=%s]\n",
+                ev->isWrite() ? "mem-write" : "mem-read",
+                ev->remaining,
+                ev->phys.getAddr(),
+                decodeFlags(ev->flags()));
+            delays++;
+            if (!scheduled())
+                tcu.schedule(this, tcu.clockEdge(Cycles(1)));
+            break;
+        }
+
+        queue.pop_front();
+        tcu.schedule(ev, tcu.clockEdge(Cycles(1)));
+    }
+}
+
+void
 XferUnit::startTransfer(TransferEvent *event, Cycles delay)
 {
     event->xfer = this;
@@ -320,7 +316,9 @@ XferUnit::startTransfer(TransferEvent *event, Cycles delay)
     else
         bytesWritten.sample(event->remaining);
 
-    tcu.schedule(event, tcu.clockEdge(Cycles(delay + 1)));
+    queue.push_back(event);
+    if (!scheduled())
+        tcu.schedule(this, tcu.clockEdge(Cycles(delay + 1)));
 
     // finish the noc request now to make the port unbusy
     if (event->isRemote())

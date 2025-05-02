@@ -48,7 +48,7 @@ namespace tcu
 
 class Tcu;
 
-class XferUnit
+class XferUnit : public Event
 {
   public:
 
@@ -127,6 +127,7 @@ class XferUnit
         unsigned xferFlags;
         TcuError result;
         int freeSlots;
+        bool started;
 
       public:
 
@@ -142,7 +143,8 @@ class XferUnit
               remaining(_size),
               xferFlags(_flags),
               result(TcuError::NONE),
-              freeSlots()
+              freeSlots(),
+              started()
         {}
         virtual ~TransferEvent()
         {
@@ -218,6 +220,8 @@ class XferUnit
     void recvMemResponse(uint64_t evId, PacketPtr pkt);
 
   private:
+
+    void process() override;
 
     bool continueTransfer(Buffer *buf);
 
