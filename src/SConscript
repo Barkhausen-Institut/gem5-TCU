@@ -272,12 +272,13 @@ def ProtoBuf(source, tags=None, add_tags=None):
     '''Add a Protocol Buffer to build'''
     Source(source, tags, add_tags, append={'CXXFLAGS': '-Wno-array-bounds'})
 
-env['PROTOC_GRPC'] = which('grpc_cpp_plugin')
-if env['PROTOC_GRPC']:
-    with Configure(env) as conf:
-        if (not env['HAVE_PKG_CONFIG'] or
-            not conf.CheckPkgConfig(['grpc++'], '--libs')):
-            env.Append(LIBS=['grpc++'])
+if not env['CONF']['SKIP_GRPC']:
+    env['PROTOC_GRPC'] = which('grpc_cpp_plugin')
+    if env['PROTOC_GRPC']:
+        with Configure(env) as conf:
+            if (not env['HAVE_PKG_CONFIG'] or
+                not conf.CheckPkgConfig(['grpc++'], '--libs')):
+                env.Append(LIBS=['grpc++'])
 
 def protoc_grpc_emitter(target, source, env):
     root, ext = os.path.splitext(source[0].get_abspath())

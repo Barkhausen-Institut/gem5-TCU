@@ -50,4 +50,5 @@ sticky_vars.AddVariables(
     ('BATCH_CMD', 'Batch pool submission command name', 'qdo'),
     ('M5_BUILD_CACHE', 'Cache built objects in this directory', False),
     ('USE_EFENCE', 'Link with Electric Fence malloc debugger', False),
-    )
+    ('SKIP_GRPC', 'Skip gRPC linking during build process', False),
+)
