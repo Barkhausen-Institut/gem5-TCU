@@ -4,9 +4,6 @@ import sys
 sys.path.append(os.path.realpath('platform/gem5/configs/m3'))  # NOQA
 from base import *
 
-DEFAULT_O3_CPU = os.environ.get('M3_GEM5_O3_CPU', 'DerivO3CPU')
-DEFAULT_MINOR_CPU = os.environ.get('M3_GEM5_MINOR_CPU', 'MinorCPU')
-
 options = getOptions()
 root = createRoot(options)
 
@@ -21,9 +18,6 @@ assert rot_layers[0], "must specify at least one RoT layer"
 num_mem = 1
 num_flash = 1
 num_tiles = int(os.environ.get('M3_GEM5_TILES'))
-num_o3 = int(os.environ.get('M3_GEM5_O3_CORES', num_tiles))
-num_minor = int(os.environ.get('M3_GEM5_MINOR_CORES', num_tiles))
-num_kecacc = int(os.environ.get('M3_GEM5_KECACC_TILES', 1))
 
 kecaccspmsize = '128MB'
 if os.environ.get('M3_ISA') == 'riscv32':
@@ -67,9 +61,7 @@ for i in range(0, num_flash):
     flash_tile = flash_tile or tile
     flash_tile_id = flash_tile_id or tile_id
 
-# create the in-order core tiles
-options.cpu_type = DEFAULT_MINOR_CPU
-for i in range(0, num_minor):
+for i in range(0, num_tiles):
     tile = createCoreTile(noc=root.noc,
                           options=options,
                           id=TileId(0, len(tiles)),
@@ -80,32 +72,6 @@ for i in range(0, num_minor):
                           spmsize=spmsize)
     tiles.append(tile)
 
-# create the out-of-order core tiles
-options.cpu_type = DEFAULT_O3_CPU
-for i in range(0, num_o3):
-    tile = createCoreTile(noc=root.noc,
-                          options=options,
-                          id=TileId(0, len(tiles)),
-                          cmdline='',
-                          memTile=None,
-                          l1size=l1size,
-                          l2size=l2size,
-                          spmsize=spmsize)
-    tiles.append(tile)
-
-options.cpu_type = DEFAULT_MINOR_CPU
-for i in range(0, num_kecacc):
-    tile = createKecAccTile(noc=root.noc,
-                            options=options,
-                            id=TileId(0, len(tiles)),
-                            cmdline='',
-                            memTile=None,
-                            spmsize=kecaccspmsize)
-    tiles.append(tile)
-
-old_cpu_options = options.cpu_type, options.cpu_clock
-options.cpu_type = os.environ.get('M3_GEM5_ROT_CPU', DEFAULT_MINOR_CPU)
-options.cpu_clock = os.environ.get('M3_GEM5_ROT_CPUFREQ', '100MHz')
 tile = createRoTTile(noc=root.noc,
                      options=options,
                      id=TileId(0, len(tiles)),
@@ -117,7 +83,6 @@ tile = createRoTTile(noc=root.noc,
                      # FIXME: The RoT boot layers run with 256 KiB but TileMux/RoTS currently need more
                      spmsize=os.environ.get('M3_GEM5_ROT_MEMSIZE', kecaccspmsize))
 tiles.append(tile)
-options.cpu_type, options.cpu_clock = old_cpu_options
 
 # create the persistent storage tile
 if hard_disk0 and os.path.isfile(hard_disk0):
