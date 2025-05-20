@@ -58,8 +58,8 @@ const char *RegFile::extRegNames[] = {
 };
 
 const char *RegFile::privRegNames[] = {
-    "PRIV_CTRL",
     "CU_REQ",
+    "PRIV_CTRL",
     "PRIV_CMD",
     "PRIV_CMD_ARG",
     "CUR_ACT",
