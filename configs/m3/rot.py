@@ -18,6 +18,7 @@ assert rot_layers[0], "must specify at least one RoT layer"
 num_mem = 1
 num_flash = 1
 num_tiles = int(os.environ.get('M3_GEM5_TILES'))
+rot_cpu = os.environ.get('M3_GEM5_ROT_CPU')
 
 kecaccspmsize = '128MB'
 if os.environ.get('M3_ISA') == 'riscv32':
@@ -72,6 +73,9 @@ for i in range(0, num_tiles):
                           spmsize=spmsize)
     tiles.append(tile)
 
+old_cpu = options.cpu_type
+if rot_cpu is not None:
+    options.cpu_type = rot_cpu
 tile = createRoTTile(noc=root.noc,
                      options=options,
                      id=TileId(0, len(tiles)),
@@ -82,6 +86,7 @@ tile = createRoTTile(noc=root.noc,
                      # flashTile=mem_tile,  # RoT can also run fetch data directly from memory tile
                      # FIXME: The RoT boot layers run with 256 KiB but TileMux/RoTS currently need more
                      spmsize=os.environ.get('M3_GEM5_ROT_MEMSIZE', kecaccspmsize))
+options.cpu_type = old_cpu
 tiles.append(tile)
 
 # create the persistent storage tile
