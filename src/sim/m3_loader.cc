@@ -214,6 +214,8 @@ M3Loader::initState(System &sys, TileMemory &mem, RequestPort &noc)
     env.tile_id = tileId.raw();
     env.tile_desc = tile_attr(tileId);
     env.raw_tile_count = tiles.size();
+    panic_if(tileId.chip() > MAX_CHIPS, "Exceeded maximum number of chips");
+    panic_if(env.raw_tile_count > MAX_TILES, "Exceeded maximum number of tiles");
     // write tile ids to environment
     {
         size_t i = 0;
