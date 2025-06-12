@@ -418,7 +418,8 @@ def createCoreTile(noc, options, id, cmdline, memTile,
 
     # workload and command line
     if options.isa.startswith('riscv'):
-        entry = 0x10003000 if options.isa == 'riscv64' else 0x0
+        entry = 0x10004000 if options.isa == 'riscv64' else 0x0
+        entry = tile.tcu.tile_mem_offset
         tile.workload = RiscvBareMetal(bootloader = cmdline.split(' ')[0], reset_vect = entry)
     else:
         tile.workload = X86FsWorkload(object_file = cmdline.split(' ')[0], entry = 0x200000)
@@ -951,7 +952,7 @@ def runSimulation(root, options, tiles):
     # Simulate until program terminates
     ## safe_tick = 287682115000
     ## checkpoint_name = f"run/checkpoint-{safe_tick}"
-    
+
     # m5.instantiate(checkpoint_name)
     # exit_event = m5.simulate()
 
