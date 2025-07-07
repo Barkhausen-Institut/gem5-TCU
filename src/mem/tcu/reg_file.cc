@@ -55,6 +55,7 @@ const char *RegFile::extRegNames[] = {
     "EXT_ARG1",
     "EPS_ADDR",
     "EPS_SIZE",
+    "EXREG_MNG",
 };
 
 const char *RegFile::privRegNames[] = {
@@ -104,6 +105,7 @@ struct RegAccessEvent : public Event
 {
     RegFile &_regs;
     PacketPtr _pkt;
+    TileId _sender;
     Tcu::RegFileEvent *_regfile_event;
     bool _isCpuRequest;
     bool _functional;
@@ -111,10 +113,11 @@ struct RegAccessEvent : public Event
     std::map<size_t, size_t> _accesses;
 
     RegAccessEvent(Tcu &tcu, RegFile &regs, Tcu::RegFileEvent *regfile_event,
-                   PacketPtr pkt, bool isCpuRequest, bool functional)
+                   PacketPtr pkt, TileId sender, bool isCpuRequest, bool functional)
         : Event(),
         _regs(regs),
         _pkt(pkt),
+        _sender(sender),
         _regfile_event(regfile_event),
         _isCpuRequest(isCpuRequest),
         _functional(functional),
@@ -265,6 +268,17 @@ RegFile::set(ExtReg reg, reg_t value, RegAccess access)
                 (value & ~(reg_t)0xFF00'0000);
         }
     }
+    else if (reg == ExtReg::EXREG_MNG)
+    {
+        // EXREG_MNG is write-once
+        if (extRegs[static_cast<Addr>(reg)] != 0)
+        {
+            DPRINTF(TcuRegWrite, "Ignoring write to write-once register EXREG_MNG");
+            return;
+        }
+
+        value |= 1 << 16;
+    }
 
     extRegs[static_cast<Addr>(reg)] = value;
 }
@@ -328,26 +342,26 @@ ExclRegion RegFile::getExclRegion(size_t idx, RegAccess access) const
     reg.cfg = (RegFile::reg_t)exclRegs[idx * 2 + 0];
     reg.addr = exclRegs[idx * 2 + 1];
 
-    DPRINTF(TcuRegRead, "%s<- EXC[%u]: %s (perm=%s, tile=%s.%d, locked=%d)\n",
+    DPRINTF(TcuRegRead, "%s<- EXC[%u]: %s (perm=%s, tile=%s.%d)\n",
                         regAccessName(access),
                         idx,
                         reg.range().to_string(),
                         ExclRegion::decodePerm(reg.cfg.rw),
                         TileId::from_raw(reg.cfg.tile),
-                        reg.cfg.genid, reg.cfg.locked);
+                        reg.cfg.genid);
 
     return reg;
 }
 
 void RegFile::setExclRegion(size_t idx, const ExclRegion &reg, RegAccess access)
 {
-    DPRINTF(TcuRegWrite, "%s-> EXC[%u]: %s (perm=%s, tile=%s.%d, locked=%d)\n",
+    DPRINTF(TcuRegWrite, "%s-> EXC[%u]: %s (perm=%s, tile=%s.%d)\n",
                          regAccessName(access),
                          idx,
                          reg.range().to_string(),
                          ExclRegion::decodePerm(reg.cfg.rw),
                          TileId::from_raw(reg.cfg.tile),
-                         reg.cfg.genid, reg.cfg.locked);
+                         reg.cfg.genid);
 
     exclRegs[idx * 2 + 0] = (RegFile::reg_t)(reg.cfg);
     exclRegs[idx * 2 + 1] = reg.addr;
@@ -599,12 +613,34 @@ RegAccessEvent::process()
             Addr exclAddr = regAddr - sizeof(RegFile::reg_t) * (numExtRegs + numUnprivRegs + numBufRegs);
             size_t idx = exclAddr / sizeof(RegFile::reg_t);
 
-            if (idx < _regs.exclRegs.size() && (_pkt->isRead()))
+            if (idx < _regs.exclRegs.size() &&
+                _sender == TileId::from_raw(_regs.get(ExtReg::EXREG_MNG)))
             {
-                unaligned_reg_read(offset, [this, idx, access] {
-                    auto reg = _regs.getExclRegion(idx / 2, access);
-                    return idx % 2 == 0 ? (RegFile::reg_t)reg.cfg : reg.addr;
-                });
+                if(_pkt->isRead())
+                {
+                    unaligned_reg_read(offset, [this, idx, access] {
+                        auto reg = _regs.getExclRegion(idx / 2, access);
+                        return idx % 2 == 0 ? (RegFile::reg_t)reg.cfg : reg.addr;
+                    });
+                }
+                else
+                {
+                    unaligned_reg_write(
+                        offset,
+                        [this, idx] {
+                            auto reg = _regs.getExclRegion(idx / 2, RegAccess::TCU);
+                            return idx % 2 == 0 ? (RegFile::reg_t)reg.cfg : reg.addr;
+                        },
+                        [this, idx](RegFile::reg_t val) {
+                            auto reg = _regs.getExclRegion(idx / 2, RegAccess::TCU);
+                            if (idx % 2 == 0)
+                                reg.cfg = val;
+                            else
+                                reg.addr = val;
+                            _regs.setExclRegion(idx / 2, reg);
+                        }
+                    );
+                }
             }
         }
         // privileged register
@@ -753,7 +789,7 @@ RegAccessEvent::completed(EpFile::EpCache &cache, bool eventScheduled, bool cach
 }
 
 void
-RegFile::handleRequest(PacketPtr pkt, void *ev, bool isCpuRequest, bool functional)
+RegFile::handleRequest(PacketPtr pkt, TileId sender, void *ev, bool isCpuRequest, bool functional)
 {
     assert(pkt->isRead() || pkt->isWrite());
 
@@ -762,7 +798,7 @@ RegFile::handleRequest(PacketPtr pkt, void *ev, bool isCpuRequest, bool function
 
     DPRINTF(TcuRegRange, "access @%#x, size=%u\n", pktAddr, pkt->getSize());
 
-    auto access_event = new RegAccessEvent(tcu, *this, regfile_event, pkt,
+    auto access_event = new RegAccessEvent(tcu, *this, regfile_event, pkt, sender,
             isCpuRequest, functional);
     if (functional)
         access_event->process();

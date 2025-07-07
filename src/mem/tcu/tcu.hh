@@ -83,7 +83,6 @@ class Tcu : public BaseTcu
         WRITE_REQ,
         CACHE_MEM_REQ_FUNC,
         CACHE_MEM_REQ,
-        CHECK_GENID,
     };
 
     struct MemSenderState : public Packet::SenderState
@@ -171,14 +170,17 @@ class Tcu : public BaseTcu
     {
         Tcu &_tcu;
         PacketPtr _pkt;
+        TileId _sender;
         Addr _addr;
         bool _isCpuRequest;
         bool _functional;
 
-        RegFileEvent(Tcu& tcu, PacketPtr pkt, Addr addr, bool isCpuRequest, bool functional)
+        RegFileEvent(Tcu& tcu, PacketPtr pkt, TileId sender, Addr addr,
+                     bool isCpuRequest, bool functional)
             : Event(),
               _tcu(tcu),
               _pkt(pkt),
+              _sender(sender),
               _addr(addr),
               _isCpuRequest(isCpuRequest),
               _functional(functional)
@@ -220,7 +222,7 @@ class Tcu : public BaseTcu
 
     void reset(bool start);
 
-    void forwardRequestToRegFile(PacketPtr pkt, Addr address,
+    void forwardRequestToRegFile(PacketPtr pkt, TileId sender, Addr address,
                                  bool isCpuRequest, bool functional);
 
     bool isCommandAborting() const

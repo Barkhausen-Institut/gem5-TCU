@@ -59,6 +59,7 @@ enum class ExtReg : Addr
     EXT_ARG1,
     EPS_ADDR,
     EPS_SIZE,
+    EXREG_MNG,
 };
 
 enum class Features
@@ -95,7 +96,7 @@ enum class UnprivReg : Addr
     PRINT,
 };
 
-constexpr unsigned numExtRegs = 6;
+constexpr unsigned numExtRegs = 7;
 constexpr unsigned numPrivRegs = 5;
 constexpr unsigned numUnprivRegs = 6;
 constexpr unsigned numExclRegs = 2 * 16; // 2 per region
@@ -278,8 +279,6 @@ struct ExtCommand
         IDLE            = 0,
         INV_EP          = 1,
         RESET           = 2,
-        SET_EXCL        = 3,
-        INV_EXCL        = 4,
     };
 
     BitUnion64(Bits)
@@ -301,6 +300,7 @@ struct ExclRegion
 
     explicit ExclRegion() : cfg(), addr() {}
 
+    bool valid() const { return cfg.rw != 0; }
     bool can_read() const { return (cfg.rw & 0x1) != 0; }
     bool can_write() const { return (cfg.rw & 0x2) != 0; }
 
@@ -324,11 +324,9 @@ struct ExclRegion
     }
 
     BitUnion64(Cfg)
-        Bitfield<33, 18> genid;
-        Bitfield<17, 4> tile;
-        Bitfield<3, 2> rw;
-        Bitfield<1, 1> locked;
-        Bitfield<0, 0> valid;
+        Bitfield<31, 16> genid;
+        Bitfield<15, 2> tile;
+        Bitfield<1, 0> rw;
     EndBitUnion(Cfg)
 
     Cfg cfg;
@@ -794,7 +792,7 @@ class RegFile
 
     const char *getBuffer(size_t bytes);
 
-    void handleRequest(PacketPtr pkt, void *ev, bool isCpuRequest, bool functional);
+    void handleRequest(PacketPtr pkt, TileId sender, void *ev, bool isCpuRequest, bool functional);
 
     const std::string name() const { return _name; }
 

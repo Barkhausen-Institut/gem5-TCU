@@ -347,9 +347,6 @@ Tcu::handleNocRequest(PacketPtr pkt)
         case NocPacketType::CACHE_MEM_REQ_FUNC:
             memUnit->recvFunctionalFromNoc(pkt);
             break;
-        case NocPacketType::CHECK_GENID:
-            memUnit->recvCheckGenIdFromNoc(pkt, senderState);
-            break;
         default:
             panic("Unexpected NocPacketType\n");
     }
@@ -412,11 +409,6 @@ Tcu::completeNocRequest(PacketPtr pkt)
             printPacket(pkt);
 
         schedLLCResponse(pkt, true);
-    }
-    else if (senderState->packetType == NocPacketType::CHECK_GENID)
-    {
-        memUnit->invExclRegionResponse(senderState->result);
-        freeRequest(pkt);
     }
     else if (senderState->packetType != NocPacketType::CACHE_MEM_REQ_FUNC)
     {
@@ -557,7 +549,7 @@ Tcu::handleCUMemRequest(PacketPtr pkt,
         if (icache)
             res = false;
         else
-            forwardRequestToRegFile(pkt, pkt->getAddr(), true, functional);
+            forwardRequestToRegFile(pkt, tileId, pkt->getAddr(), true, functional);
     }
     else
     {
@@ -595,7 +587,7 @@ Tcu::RegFileEvent::process()
     // TODO keep that?
     _pkt->setAddr((_addr & 0xFFFFFFFF) - _tcu.mmioRegion.start());
 
-    _tcu.regs().handleRequest(_pkt, this, _isCpuRequest, _functional);
+    _tcu.regs().handleRequest(_pkt, _sender, this, _isCpuRequest, _functional);
     _tcu.regFileReqs++;
 }
 
@@ -645,10 +637,10 @@ Tcu::RegFileEvent::completed(RegFile::Result result)
 }
 
 void
-Tcu::forwardRequestToRegFile(PacketPtr pkt, Addr address,
+Tcu::forwardRequestToRegFile(PacketPtr pkt, TileId sender, Addr address,
                              bool isCpuRequest, bool functional)
 {
-    auto ev = new RegFileEvent(*this, pkt, address, isCpuRequest, functional);
+    auto ev = new RegFileEvent(*this, pkt, sender, address, isCpuRequest, functional);
     if (functional)
         ev->process();
     else

@@ -38,6 +38,7 @@
 #include "mem/tcu/mem_unit.hh"
 #include "mem/tcu/xfer_unit.hh"
 #include "mem/tcu/reg_file.hh"
+#include "reg_file.hh"
 
 namespace gem5
 {
@@ -389,7 +390,7 @@ MemoryUnit::checkExclRegs(TileId senderTile, genid_t senderGen,
     for(size_t i = 0; i < numExclRegions; ++i)
     {
         auto ereg = tcu.regs().getExclRegion(i);
-        if (!ereg.cfg.valid)
+        if (!ereg.valid())
             continue;
 
         DPRINTFS(TcuExRegs, (&tcu),
@@ -399,6 +400,11 @@ MemoryUnit::checkExclRegs(TileId senderTile, genid_t senderGen,
         auto range = ereg.range();
         if (!range.contains(addr) && !range.contains(addr + size + 1))
             continue;
+
+        // the exclusive-region manager has always access
+        auto exregmng_tile = TileId::from_raw(tcu.regs().get(ExtReg::EXREG_MNG) & 0xFFFF);
+        if (senderTile == exregmng_tile)
+            return TcuError::NONE;
 
         if (senderTile != TileId::from_raw(ereg.cfg.tile) || senderGen != ereg.cfg.genid)
             found_overlap = true;
@@ -416,110 +422,6 @@ MemoryUnit::checkExclRegs(TileId senderTile, genid_t senderGen,
         return TcuError::TILE_LOCKED;
 
     return TcuError::NONE;
-}
-
-void
-MemoryUnit::setExclRegion(const ExtCommand::Bits &cmd)
-{
-    ExclRegion nreg;
-    nreg.addr = tcu.regs().get(ExtReg::EXT_ARG1);
-    nreg.cfg = cmd.arg & 0x3'FFFF'FFFF;
-    nreg.cfg.valid = 1;
-    size_t idx = cmd.arg >> 34;
-
-    if (idx >= numExclRegions)
-    {
-        tcu.scheduleExtCmdFinish(Cycles(1), TcuError::OUT_OF_BOUNDS, 0);
-        return;
-    }
-    if (tcu.regs().getExclRegion(idx).cfg.valid)
-    {
-        tcu.scheduleExtCmdFinish(Cycles(1), TcuError::EXREG_EXISTS, 0);
-        return;
-    }
-
-    auto new_range = nreg.range();
-    for(size_t i = 0; i < numExclRegions; ++i)
-    {
-        auto ereg = tcu.regs().getExclRegion(i);
-        if (!ereg.cfg.valid)
-            continue;
-
-        auto range = ereg.range();
-        if (range.intersects(new_range))
-        {
-            if(ereg.cfg.locked)
-            {
-                DPRINTFS(TcuExRegs, (&tcu),
-                    "new exreg %s overlaps with existing exreg %s\n",
-                    nreg, ereg);
-                tcu.scheduleExtCmdFinish(Cycles(1), TcuError::EXREG_OVERLAPS, 0);
-                return;
-            }
-            if(nreg.cfg.locked)
-            {
-                ereg.cfg.locked = 1;
-                tcu.regs().setExclRegion(i, ereg, RegAccess::TCU);
-            }
-        }
-    }
-
-    tcu.regs().setExclRegion(idx, nreg, RegAccess::TCU);
-    tcu.scheduleExtCmdFinish(Cycles(1), TcuError::NONE, 0);
-}
-
-void
-MemoryUnit::invExclRegion(const ExtCommand::Bits &cmd)
-{
-    size_t idx = cmd.arg;
-
-    auto ereg = tcu.regs().getExclRegion(idx);
-    // invalid region? nothing to do
-    if (!ereg.cfg.valid)
-    {
-        tcu.scheduleExtCmdFinish(Cycles(1), TcuError::NONE, 0);
-        return;
-    }
-
-    // send request to target tile to see whether it has been reset
-    auto addr = NocAddr(TileId::from_raw(ereg.cfg.tile), 0);
-    auto pkt = tcu.generateRequest(addr.getAddr(), sizeof(genid_t), MemCmd::ReadReq);
-    tcu.sendNocRequest(Tcu::NocPacketType::CHECK_GENID, pkt, ereg.cfg.genid, Cycles(1));
-}
-
-void
-MemoryUnit::invExclRegionResponse(TcuError result)
-{
-    // if the tile has still the generation id from the region, invalidation is not allowed
-    if (result == TcuError::NONE)
-    {
-        DPRINTFS(TcuExRegs, (&tcu),
-            "INV_EXREG not allowed (tile needs a reset first)\n");
-
-        tcu.scheduleExtCmdFinish(Cycles(1), TcuError::WRONG_GEN, 0);
-        return;
-    }
-
-    ExtCommand::Bits cmd = tcu.regs().get(ExtReg::EXT_CMD);
-    size_t idx = cmd.arg;
-
-    ExclRegion invalid;
-    tcu.regs().setExclRegion(idx, invalid, RegAccess::TCU);
-
-    tcu.scheduleExtCmdFinish(Cycles(1), TcuError::NONE, 0);
-}
-
-void
-MemoryUnit::recvCheckGenIdFromNoc(PacketPtr pkt, Tcu::NocSenderState *state)
-{
-    DPRINTFS(TcuExRegs, (&tcu),
-        "Checking tile generation: %d vs. %d\n",
-        state->receiverGen, tcu.regs().genId());
-
-    if (state->receiverGen != tcu.regs().genId())
-        tcu.sendNocResponse(pkt, TcuError::WRONG_GEN);
-    else
-        tcu.sendNocResponse(pkt, TcuError::NONE);
 }
 
 void
@@ -562,7 +464,7 @@ MemoryUnit::recvFromNoc(PacketPtr pkt, Tcu::NocSenderState *state)
     {
         if (tcu.mmioRegion.contains(addr.offset))
         {
-            tcu.forwardRequestToRegFile(pkt, addr.offset, false, false);
+            tcu.forwardRequestToRegFile(pkt, state->senderTile, addr.offset, false, false);
             return;
         }
 

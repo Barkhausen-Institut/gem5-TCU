@@ -71,8 +71,6 @@ static const char *extCmdNames[] =
     "IDLE",
     "INV_EP",
     "RESET",
-    "SET_EXCL",
-    "INV_EXCL",
 };
 
 #define COMMAND_NAME(names, idx)                         \
@@ -103,7 +101,7 @@ TcuCommands::TcuCommands(Tcu &_tcu)
     static_assert(sizeof(privCmdNames) / sizeof(privCmdNames[0]) ==
         PrivCommand::FETCH_IRQ + 1, "privCmdNames out of sync");
     static_assert(sizeof(extCmdNames) / sizeof(extCmdNames[0]) ==
-        ExtCommand::INV_EXCL + 1, "extCmdNames out of sync");
+        ExtCommand::RESET + 1, "extCmdNames out of sync");
 }
 
 const std::string
@@ -472,12 +470,6 @@ TcuCommands::executeExtCommand(PacketPtr pkt)
             break;
         case ExtCommand::RESET:
             tcu.reset(cmd.arg == 1);
-            break;
-        case ExtCommand::SET_EXCL:
-            tcu.memUnit->setExclRegion(cmd);
-            break;
-        case ExtCommand::INV_EXCL:
-            tcu.memUnit->invExclRegion(cmd);
             break;
         default:
             scheduleExtCmdFinish(Cycles(1), TcuError::UNKNOWN_CMD, 0);
