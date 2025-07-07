@@ -727,7 +727,7 @@ class RegFile
 
     genid_t genId() const
     {
-        return (get(ExtReg::FEATURES) >> 16) & 0xFFFF;
+        return (get(ExtReg::FEATURES) >> 4) & 0xFFFF;
     }
 
     Addr endpointsAddr() const

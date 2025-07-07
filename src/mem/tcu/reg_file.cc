@@ -192,11 +192,11 @@ RegFile::reset(bool inval)
         // clear locked bit
         reg_t features = get(ExtReg::FEATURES);
         features &= ~(reg_t)Features::LOCKED;
-        features &= ~(reg_t)0xFFFF'0000;
+        features &= ~(reg_t)0x000F'FFF0;
         // increase generation id
         auto gen = genId();
         assert(gen + 1 < 0xFFFF);
-        features |= (gen + 1) << 16;
+        features |= (gen + 1) << 4;
         set(ExtReg::FEATURES, features);
 
         // reset all unprivileged and privileged registers
