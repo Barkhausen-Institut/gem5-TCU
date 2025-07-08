@@ -109,7 +109,7 @@ typedef uint16_t actid_t;
 typedef uint16_t epid_t;
 typedef uint8_t chipid_t;
 typedef uint8_t tileid_t;
-typedef uint16_t genid_t;
+typedef uint8_t genid_t;
 typedef uint64_t tiledesc_t;
 
 class TileId
@@ -324,7 +324,7 @@ struct ExclRegion
     }
 
     BitUnion64(Cfg)
-        Bitfield<31, 16> genid;
+        Bitfield<23, 16> genid;
         Bitfield<15, 2> tile;
         Bitfield<1, 0> rw;
     EndBitUnion(Cfg)
@@ -358,7 +358,7 @@ struct SendEp
     EndBitUnion(R0)
 
     BitUnion64(R1)
-        Bitfield<45, 30> tgtGen;
+        Bitfield<37, 30> tgtGen;
         Bitfield<29, 16> tgtTile;
         Bitfield<15, 0> tgtEp;
     EndBitUnion(R1)
@@ -463,7 +463,7 @@ struct MemEp
     BitUnion64(R0)
         Bitfield<63> frozen;
         Bitfield<62> dynamic;
-        Bitfield<52, 37> targetGen;
+        Bitfield<44, 37> targetGen;
         Bitfield<36, 23> targetTile;
         Bitfield<22, 19> flags;
         Bitfield<18, 3> act;
@@ -648,7 +648,7 @@ BitUnion64(FeatureReg)
     Bitfield<63, 56> vpatch;
     Bitfield<55, 48> vminor;
     Bitfield<47, 32> vmajor;
-    Bitfield<31, 16> genid;
+    Bitfield<23, 16> genid;
     Bitfield<3, 3> locked;
     Bitfield<2, 2> ctxsw;
     Bitfield<1, 1> vm;
@@ -680,9 +680,10 @@ struct M5_ATTR_PACKED MessageHeader
     // should be large enough for pointers.
     uint64_t replyLabel;
     uint64_t label;
-    uint16_t sgen;
-    uint16_t rgen;
+    uint8_t sgen;
+    uint8_t rgen;
     // padding
+    uint16_t : 16;
     uint32_t : 32;
 };
 
@@ -725,7 +726,7 @@ class RegFile
 
     genid_t genId() const
     {
-        return (get(ExtReg::FEATURES) >> 4) & 0xFFFF;
+        return (get(ExtReg::FEATURES) >> 4) & 0xFF;
     }
 
     Addr endpointsAddr() const

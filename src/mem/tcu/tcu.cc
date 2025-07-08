@@ -174,7 +174,7 @@ Tcu::reset(bool start)
 {
     resets++;
 
-    if (start && regs().genId() == 0xFFFF)
+    if (start && regs().genId() == 0xFF)
     {
         scheduleExtCmdFinish(Cycles(1), TcuError::WRONG_GEN, 0);
         return;

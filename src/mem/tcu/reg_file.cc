@@ -195,10 +195,10 @@ RegFile::reset(bool inval)
         // clear locked bit
         reg_t features = get(ExtReg::FEATURES);
         features &= ~(reg_t)Features::LOCKED;
-        features &= ~(reg_t)0x000F'FFF0;
+        features &= ~(reg_t)0x0000'0FF0;
         // increase generation id
         auto gen = genId();
-        assert(gen + 1 < 0xFFFF);
+        assert(gen + 1 < 0xFF);
         features |= (gen + 1) << 4;
         set(ExtReg::FEATURES, features);
 
@@ -261,12 +261,9 @@ RegFile::set(ExtReg reg, reg_t value, RegAccess access)
         // the locked bit can only be cleared during reset by the TCU
         if (access != RegAccess::TCU && hasFeature(Features::LOCKED))
             value |= (reg_t)Features::LOCKED;
-        // the genid is read-only for the software
+        // most bits are read-only for the software
         if (access != RegAccess::TCU)
-        {
-            value = (extRegs[static_cast<Addr>(reg)] & 0xFF00'0000) |
-                (value & ~(reg_t)0xFF00'0000);
-        }
+            value = (extRegs[static_cast<Addr>(reg)] & 0xFFFF'FFFF'FFFF'FFF0) | (value & 0xF);
     }
     else if (reg == ExtReg::EXREG_MNG)
     {
