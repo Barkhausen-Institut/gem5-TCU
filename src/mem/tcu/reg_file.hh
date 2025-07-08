@@ -266,8 +266,8 @@ struct PrivCommand
     };
 
     BitUnion64(Bits)
-        Bitfield<64, 9> arg0;
-        Bitfield<8, 4> error;
+        Bitfield<64, 10> arg0;
+        Bitfield<9, 4> error;
         Bitfield<3, 0> opcode;
     EndBitUnion(Bits)
 };
