@@ -85,6 +85,8 @@ class TcuConnector
     BaseConnector *connector;
 
     EpFile::EpCache sleepEPs;
+    bool sleepWait;
+    bool stopCurSleep;
 
     int wakeupEp;
     int invalidateEp;

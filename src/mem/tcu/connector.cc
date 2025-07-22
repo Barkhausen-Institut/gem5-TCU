@@ -43,6 +43,8 @@ TcuConnector::TcuConnector(Tcu &_tcu, BaseConnector *_connector)
     : tcu(_tcu),
       connector(_connector),
       sleepEPs(tcu.eps().newCache(EpFile::Messaging, "sleep")),
+      sleepWait(false),
+      stopCurSleep(false),
       wakeupEp(Tcu::INVALID_EP_ID),
       invalidateEp(Tcu::INVALID_EP_ID),
       fireTimerEvent(*this)
@@ -87,6 +89,7 @@ TcuConnector::startWaitEP(const CmdCommand::Bits &cmd)
             sleepEPs.addEp(rep);
         if (iep != Tcu::INVALID_EP_ID)
             sleepEPs.addEp(iep);
+        sleepWait = true;
         sleepEPs.onFetched(std::bind(&TcuConnector::startWaitEPWithEPs,
                                      this, std::placeholders::_1, rep, iep));
     }
@@ -95,6 +98,15 @@ TcuConnector::startWaitEP(const CmdCommand::Bits &cmd)
 void
 TcuConnector::startWaitEPWithEPs(EpFile::EpCache &eps, epid_t rep, epid_t iep)
 {
+    sleepWait = false;
+    if(stopCurSleep)
+    {
+        stopCurSleep = false;
+        stopSleep();
+        tcu.scheduleCmdFinish(Cycles(1), TcuError::NONE);
+        return;
+    }
+
     if (rep != Tcu::INVALID_EP_ID)
     {
         const Ep ep = eps.getEp(rep);
@@ -158,11 +170,16 @@ TcuConnector::wakeupForInvEp(epid_t ep)
 void
 TcuConnector::wakeup()
 {
-    // better stop the command in this cycle to ensure that the core
-    // does not issue another command before we can finish the sleep.
-    if (tcu.regs().getCommand().opcode == CmdCommand::SLEEP)
-        tcu.scheduleCmdFinish(Cycles(0));
-    stopSleep();
+    if (sleepWait)
+        stopCurSleep = true;
+    else
+    {
+        // better stop the command in this cycle to ensure that the core
+        // does not issue another command before we can finish the sleep.
+        if (tcu.regs().getCommand().opcode == CmdCommand::SLEEP)
+            tcu.scheduleCmdFinish(Cycles(0));
+        stopSleep();
+    }
 }
 
 void
