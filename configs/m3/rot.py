@@ -18,6 +18,7 @@ assert rot_layers[0], "must specify at least one RoT layer"
 num_mem = 1
 num_flash = 1
 num_tiles = int(os.environ.get('M3_GEM5_TILES'))
+accs = ['copy', 'copy', 'copy']
 rot_cpu = os.environ.get('M3_GEM5_ROT_CPU')
 
 kecaccspmsize = '128MB'
@@ -88,6 +89,16 @@ tile = createRoTTile(noc=root.noc,
                      spmsize=os.environ.get('M3_GEM5_ROT_MEMSIZE', kecaccspmsize))
 options.cpu_type = old_cpu
 tiles.append(tile)
+
+# create accelerator tiles
+for i in range(0, len(accs)):
+    tile = createAccelTile(noc=root.noc,
+                           options=options,
+                           id=TileId(0, len(tiles)),
+                           accel=accs[i],
+                           memTile=None,
+                           spmsize='32MB')
+    tiles.append(tile)
 
 # create the persistent storage tile
 if hard_disk0 and os.path.isfile(hard_disk0):
