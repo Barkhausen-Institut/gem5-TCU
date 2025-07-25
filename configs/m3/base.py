@@ -733,7 +733,7 @@ def linkEthertiles(ether0, ether1):
     ether1.etherlink = link
 
 def createAccelTile(noc, options, id, accel, memTile,
-                    l1size=None, l2size=None, spmsize='64kB'):
+                    l1size=None, l2size=None, spmsize='64kB', comptime=0):
     tile = createTile(
         noc=noc, options=options, id=id, systemType=SpuSystem,
         l1size=l1size, l2size=l2size, spmsize=spmsize, memTile=memTile,
@@ -752,6 +752,7 @@ def createAccelTile(noc, options, id, accel, memTile,
         tile.accel.logic = AccelLogic()
         tile.accel.logic.algorithm = algos.get(accel)
         tile.accel.logic.port = tile.xbar.cpu_side_ports
+        tile.accel.logic.comptime = comptime
         tile.accel.buf_size = "4kB"
     else:
         print('Accelerator "%s" does not exist' % (accel))

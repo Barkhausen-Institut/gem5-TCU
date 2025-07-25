@@ -43,7 +43,7 @@ namespace tcu
 AccelLogic::AccelLogic(const AccelLogicParams &p)
     : ClockedObject(p), tickEvent(*this), port("port", this),
       accel(), algo(), state(), stateChanged(),
-      compTime(), opStart(), dataSize(), offset(), pos(), pullSize(), pullData()
+      compTime(p.comptime), opStart(), dataSize(), offset(), pos(), pullSize(), pullData()
 {
     if (p.algorithm == 0)
         algo = new TcuAccelStreamAlgoCopy();
@@ -61,10 +61,9 @@ AccelLogic::stateName() const
 }
 
 void
-AccelLogic::start(Addr _offset, Addr _dataSize, Cycles _compTime)
+AccelLogic::start(Addr _offset, Addr _dataSize)
 {
     dataSize = _dataSize;
-    compTime = _compTime;
     state = dataSize == 0 ? LOGIC_DONE : LOGIC_PULL;
     offset = _offset;
     pos = 0;

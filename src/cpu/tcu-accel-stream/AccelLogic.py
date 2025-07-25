@@ -38,3 +38,4 @@ class AccelLogic(ClockedObject):
 
     port = RequestPort("Port to the TCU and Scratch-Pad-Memory")
     algorithm = Param.Int(0, "The algorithm to use (0 = copy, 1 = rot13)")
+    comptime = Param.Cycles(0, "The compute time for the algorithm")

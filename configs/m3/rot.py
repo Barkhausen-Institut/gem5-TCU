@@ -19,6 +19,8 @@ num_mem = 1
 num_flash = 1
 num_tiles = int(os.environ.get('M3_GEM5_TILES'))
 accs = ['copy', 'copy', 'copy']
+# FFT, MUL, IFFT times for a 4K block
+comptimes = [5856 * 2, 1189 * 2, 5856 * 2]
 rot_cpu = os.environ.get('M3_GEM5_ROT_CPU')
 
 kecaccspmsize = '128MB'
@@ -97,7 +99,8 @@ for i in range(0, len(accs)):
                            id=TileId(0, len(tiles)),
                            accel=accs[i],
                            memTile=None,
-                           spmsize='32MB')
+                           spmsize='32MB',
+                           comptime=comptimes[i])
     tiles.append(tile)
 
 # create the persistent storage tile

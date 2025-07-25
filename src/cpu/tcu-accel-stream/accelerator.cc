@@ -409,7 +409,7 @@ TcuAccelStream::completeRequest(PacketPtr pkt)
                 if (cmd.opcode == 0)
                 {
                     ctx.bufOff = (cmd.error != 0) ? ctx.inOff : 0;
-                    logic->start(ctx.bufOff, ctx.lastSize, Cycles(ctx.compTime));
+                    logic->start(ctx.bufOff, ctx.lastSize);
                     ctx.flags |= Flags::COMP;
                     state = State::FETCH_MSG;
                 }

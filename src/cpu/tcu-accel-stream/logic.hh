@@ -83,7 +83,7 @@ class AccelLogic : public ClockedObject
 
     size_t outDataSize() const { return outSize; }
 
-    void start(Addr _offset, Addr _dataSize, Cycles _compTime);
+    void start(Addr _offset, Addr _dataSize);
 
    private:
     void tick();
