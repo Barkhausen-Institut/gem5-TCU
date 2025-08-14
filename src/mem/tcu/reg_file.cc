@@ -745,9 +745,12 @@ RegAccessEvent::fetched(EpFile::EpCache &cache)
         for(auto it = _accesses.begin(); it != _accesses.end(); ++it)
         {
             epid_t epId = it->first / (sizeof(RegFile::reg_t) * numEpRegs);
+            unsigned regNumber = (it->first / sizeof(RegFile::reg_t)) % numEpRegs;
             auto ep = cache.getEp(epId);
+
             // dynamic EPs are not auto-frozen and can therefore always be changed
-            if (!ep.dynamic() && !ep.frozen() && ep.type() != EpType::INVALID &&
+            if (regNumber == 0 && !ep.dynamic() && !ep.frozen() &&
+                    ep.type() != EpType::INVALID &&
                     !_pkt->isRead() && (!_isCpuRequest || isPriv))
             {
                 ep.freeze();
