@@ -593,6 +593,7 @@ union Ep
     {
         inval.r[0] &= ~static_cast<uint64_t>(0x7);
         inval.r[0] |= static_cast<uint64_t>(EpType::INVALID);
+        set_dynamic(false);
     }
 
     template<class E>
