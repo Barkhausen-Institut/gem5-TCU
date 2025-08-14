@@ -730,7 +730,7 @@ RegAccessEvent::fetched(EpFile::EpCache &cache)
             );
 
             // when the TCU is locked, the dynamic bit cannot be changed anymore
-            if (_regs.hasFeature(Features::LOCKED))
+            if (_regs.hasFeature(Features::LOCKED) && was_dynamic)
                 ep.set_dynamic(was_dynamic);
 
             cache.updateEp(ep.inval);
