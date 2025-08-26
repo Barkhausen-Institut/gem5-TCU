@@ -387,7 +387,10 @@ MemoryUnit::checkExclRegs(TileId senderTile, genid_t senderGen,
 {
     bool found_overlap = false;
 
-    for(size_t i = 0; i < numExclRegions; ++i)
+    ExRegManager::Bits mng = tcu.regs().get(ExtReg::EXREG_MNG);
+    size_t count = std::min(static_cast<size_t>(numExclRegions), static_cast<size_t>(mng.count));
+
+    for(size_t i = 0; i < count; ++i)
     {
         auto ereg = tcu.regs().getExclRegion(i);
         if (!ereg.valid())
@@ -402,8 +405,7 @@ MemoryUnit::checkExclRegs(TileId senderTile, genid_t senderGen,
             continue;
 
         // the exclusive-region manager has always access
-        auto exregmng_tile = TileId::from_raw(tcu.regs().get(ExtReg::EXREG_MNG) & 0xFFFF);
-        if (senderTile == exregmng_tile)
+        if (senderTile == TileId::from_raw(mng.tile))
             return TcuError::NONE;
 
         if (senderTile != TileId::from_raw(ereg.cfg.tile) || senderGen != ereg.cfg.genid)

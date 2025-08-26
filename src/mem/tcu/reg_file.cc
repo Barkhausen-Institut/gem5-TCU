@@ -265,17 +265,6 @@ RegFile::set(ExtReg reg, reg_t value, RegAccess access)
         if (access != RegAccess::TCU)
             value = (extRegs[static_cast<Addr>(reg)] & 0xFFFF'FFFF'FFFF'FFF0) | (value & 0xF);
     }
-    else if (reg == ExtReg::EXREG_MNG)
-    {
-        // EXREG_MNG is write-once
-        if (extRegs[static_cast<Addr>(reg)] != 0)
-        {
-            DPRINTF(TcuRegWrite, "Ignoring write to write-once register EXREG_MNG");
-            return;
-        }
-
-        value |= 1 << 16;
-    }
 
     extRegs[static_cast<Addr>(reg)] = value;
 }
@@ -542,6 +531,13 @@ RegAccessEvent::process()
                 // TILE_DESC is read-only
                 else if (reg == ExtReg::TILE_DESC)
                     continue;
+                else if (reg == ExtReg::EXREG_MNG)
+                {
+                    // if the register is locked, only the manager can write to it
+                    ExRegManager::Bits mng = _regs.get(reg, RegAccess::TCU);
+                    if (mng.locked && _sender != TileId::from_raw(mng.tile))
+                        continue;
+                }
 
                 unaligned_reg_write(
                     offset,
@@ -610,9 +606,9 @@ RegAccessEvent::process()
             Addr exclAddr = regAddr - sizeof(RegFile::reg_t) * (numExtRegs + numUnprivRegs + numBufRegs);
             size_t idx = exclAddr / sizeof(RegFile::reg_t);
 
-            if (idx < _regs.exclRegs.size() &&
-                _sender == TileId::from_raw(_regs.get(ExtReg::EXREG_MNG)))
+            if (idx < _regs.exclRegs.size())
             {
+                ExRegManager::Bits mng = _regs.get(ExtReg::EXREG_MNG, RegAccess::TCU);
                 if(_pkt->isRead())
                 {
                     unaligned_reg_read(offset, [this, idx, access] {
@@ -620,7 +616,7 @@ RegAccessEvent::process()
                         return idx % 2 == 0 ? (RegFile::reg_t)reg.cfg : reg.addr;
                     });
                 }
-                else
+                else if(_sender == TileId::from_raw(mng.tile))
                 {
                     unaligned_reg_write(
                         offset,

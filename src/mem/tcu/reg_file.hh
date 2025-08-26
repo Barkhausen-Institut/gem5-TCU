@@ -333,6 +333,15 @@ struct ExclRegion
     uint64_t addr;
 };
 
+struct ExRegManager
+{
+    BitUnion64(Bits)
+        Bitfield<39, 32> count;
+        Bitfield<16, 16> locked;
+        Bitfield<15, 0> tile;
+    EndBitUnion(Bits)
+};
+
 class RegFile;
 
 struct SendEp
