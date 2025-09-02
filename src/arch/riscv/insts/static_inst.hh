@@ -33,6 +33,7 @@
 #include <string>
 
 #include "arch/riscv/pcstate.hh"
+#include "arch/riscv/regs/misc.hh"
 #include "arch/riscv/types.hh"
 #include "cpu/exec_context.hh"
 #include "cpu/static_inst.hh"
@@ -55,8 +56,6 @@ class RiscvStaticInst : public StaticInst
             OpClass __opClass) :
         StaticInst(_mnemonic, __opClass), machInst(_machInst)
     {}
-
-    bool alignmentOk(ExecContext* xc, Addr addr, Addr size) const;
 
     template <typename T>
     T
@@ -86,6 +85,8 @@ class RiscvStaticInst : public StaticInst
         pc.advance();
         tc->pcState(pc);
     }
+
+    uint64_t getEMI() const override { return machInst; }
 
     std::unique_ptr<PCStateBase>
     buildRetPC(const PCStateBase &cur_pc,
@@ -145,6 +146,15 @@ class RiscvMacroInst : public RiscvStaticInst
     {
         panic("Tried to execute a macroop directly!\n");
     }
+
+    void size(size_t newSize) override
+    {
+        for (int i = 0; i < microops.size(); i++) {
+            microops[i]->size(newSize);
+        }
+        _size = newSize;
+    }
+
 };
 
 /**

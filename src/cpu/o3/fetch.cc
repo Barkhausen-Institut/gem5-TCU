@@ -48,7 +48,6 @@
 #include <queue>
 
 #include "arch/generic/tlb.hh"
-#include "base/random.hh"
 #include "base/types.hh"
 #include "cpu/base.hh"
 #include "cpu/exetrace.hh"
@@ -287,6 +286,13 @@ Fetch::clearStates(ThreadID tid)
 
     // TODO not sure what to do with priorityList for now
     // priorityList.push_back(tid);
+
+    // Clear out any of this thread's instructions being sent to decode.
+    for (int i = -cpu->fetchQueue.getPast();
+         i <= cpu->fetchQueue.getFuture(); ++i) {
+        FetchStruct& fetch_struct = cpu->fetchQueue[i];
+        removeCommThreadInsts(tid, fetch_struct);
+    }
 }
 
 void
@@ -693,7 +699,8 @@ Fetch::doSquash(const PCStateBase &new_pc, const DynInstPtr squashInst,
 
     set(pc[tid], new_pc);
     fetchOffset[tid] = 0;
-    if (squashInst && squashInst->pcState().instAddr() == new_pc.instAddr())
+    if (squashInst && squashInst->pcState().instAddr() == new_pc.instAddr() &&
+        !squashInst->isLastMicroop())
         macroop[tid] = squashInst->macroop;
     else
         macroop[tid] = NULL;
@@ -766,12 +773,7 @@ Fetch::FetchStatus
 Fetch::updateFetchStatus()
 {
     //Check Running
-    std::list<ThreadID>::iterator threads = activeThreads->begin();
-    std::list<ThreadID>::iterator end = activeThreads->end();
-
-    while (threads != end) {
-        ThreadID tid = *threads++;
-
+    for (ThreadID tid : *activeThreads) {
         if (fetchStatus[tid] == Running ||
             fetchStatus[tid] == Squashing ||
             fetchStatus[tid] == IcacheAccessComplete) {
@@ -816,8 +818,6 @@ Fetch::squash(const PCStateBase &new_pc, const InstSeqNum seq_num,
 void
 Fetch::tick()
 {
-    std::list<ThreadID>::iterator threads = activeThreads->begin();
-    std::list<ThreadID>::iterator end = activeThreads->end();
     bool status_change = false;
 
     wroteToTimeBuffer = false;
@@ -826,9 +826,7 @@ Fetch::tick()
         issuePipelinedIfetch[i] = false;
     }
 
-    while (threads != end) {
-        ThreadID tid = *threads++;
-
+    for (ThreadID tid : *activeThreads) {
         // Check the signals for each thread to determine the proper status
         // for each thread.
         bool updated_status = checkSignalsAndUpdate(tid);
@@ -882,7 +880,7 @@ Fetch::tick()
     // Pick a random thread to start trying to grab instructions from
     auto tid_itr = activeThreads->begin();
     std::advance(tid_itr,
-            random_mt.random<uint8_t>(0, activeThreads->size() - 1));
+            rng->random<uint8_t>(0, activeThreads->size() - 1));
 
     while (available_insts != 0 && insts_to_decode < decodeWidth) {
         ThreadID tid = *tid_itr;
@@ -1378,7 +1376,7 @@ Fetch::getFetchingThread()
             return InvalidThreadID;
         }
     } else {
-        std::list<ThreadID>::iterator thread = activeThreads->begin();
+        auto thread = activeThreads->begin();
         if (thread == activeThreads->end()) {
             return InvalidThreadID;
         }
@@ -1399,8 +1397,8 @@ Fetch::getFetchingThread()
 ThreadID
 Fetch::roundRobin()
 {
-    std::list<ThreadID>::iterator pri_iter = priorityList.begin();
-    std::list<ThreadID>::iterator end      = priorityList.end();
+    auto pri_iter = priorityList.begin();
+    auto end      = priorityList.end();
 
     ThreadID high_pri;
 
@@ -1433,11 +1431,7 @@ Fetch::iqCount()
                         std::greater<unsigned> > PQ;
     std::map<unsigned, ThreadID> threadMap;
 
-    std::list<ThreadID>::iterator threads = activeThreads->begin();
-    std::list<ThreadID>::iterator end = activeThreads->end();
-
-    while (threads != end) {
-        ThreadID tid = *threads++;
+    for (ThreadID tid : *activeThreads) {
         unsigned iqCount = fromIEW->iewInfo[tid].iqCount;
 
         //we can potentially get tid collisions if two threads
@@ -1469,11 +1463,7 @@ Fetch::lsqCount()
                         std::greater<unsigned> > PQ;
     std::map<unsigned, ThreadID> threadMap;
 
-    std::list<ThreadID>::iterator threads = activeThreads->begin();
-    std::list<ThreadID>::iterator end = activeThreads->end();
-
-    while (threads != end) {
-        ThreadID tid = *threads++;
+    for (ThreadID tid : *activeThreads) {
         unsigned ldstqCount = fromIEW->iewInfo[tid].ldstqCount;
 
         //we can potentially get tid collisions if two threads

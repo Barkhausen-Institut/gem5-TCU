@@ -41,29 +41,17 @@ class AbstractTwoLevelCacheHierarchy:
         l2_assoc: int,
     ):
         """
-        :param l1i_size: The size of the L1 Instruction cache (e.g. "32kB").
-
-        :type l1i_size: str
+        :param l1i_size: The size of the L1 Instruction cache (e.g. "32KiB").
 
         :param l1i_assoc:
 
-        :type l1i_assoc: int
-
-        :param l1d_size: The size of the L1 Data cache (e.g. "32kB").
-
-        :type l1d_size: str
+        :param l1d_size: The size of the L1 Data cache (e.g. "32KiB").
 
         :param l1d_assoc:
 
-        :type l1d_assoc: int
-
-        :param l2_size: The size of the L2 cache (e.g., "256kB").
-
-        :type l2_size: str
+        :param l2_size: The size of the L2 cache (e.g., "256KiB").
 
         :param l2_assoc:
-
-        :type l2_assoc: int
         """
         self._l1i_size = l1i_size
         self._l1i_assoc = l1i_assoc

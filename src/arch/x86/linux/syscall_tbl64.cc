@@ -1,4 +1,15 @@
 /*
+ * Copyright (c) 2024 Arm Limited
+ *
+ * The license below extends only to copyright in the software and shall
+ * not be construed as granting a license to any other intellectual
+ * property including but not limited to intellectual property relating
+ * to a hardware implementation of the functionality of the software
+ * licensed hereunder.  You may use the software subject to the license
+ * terms below provided that you ensure that this notice is replicated
+ * unmodified and in its entirety in all distributions of the software,
+ * modified or unmodified, in source code or in binary form.
+ *
  * Copyright 2020 Google Inc.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -47,7 +58,7 @@ SyscallDescTable<EmuLinux::SyscallABI64> EmuLinux::syscallDescs64 = {
     {   5, "fstat", fstat64Func<X86Linux64> },
     {   6, "lstat", lstat64Func<X86Linux64> },
     {   7, "poll", pollFunc<X86Linux64> },
-    {   8, "lseek", lseekFunc },
+    {   8, "lseek", lseekFunc<X86Linux64> },
     {   9, "mmap", mmapFunc<X86Linux64> },
     {  10, "mprotect", ignoreFunc },
     {  11, "munmap", munmapFunc<X86Linux64> },
@@ -122,7 +133,7 @@ SyscallDescTable<EmuLinux::SyscallABI64> EmuLinux::syscallDescs64 = {
 #else
     {  78, "getdents" },
 #endif
-    {  79, "getcwd", getcwdFunc },
+    {  79, "getcwd", getcwdFunc<X86Linux64> },
     {  80, "chdir", chdirFunc },
     {  81, "fchdir" },
     {  82, "rename", renameFunc },
@@ -186,11 +197,11 @@ SyscallDescTable<EmuLinux::SyscallABI64> EmuLinux::syscallDescs64 = {
     { 140, "getpriority" },
     { 141, "setpriority", ignoreFunc },
     { 142, "sched_setparam" },
-    { 143, "sched_getparam" },
+    { 143, "sched_getparam", sched_getparamFunc },
     { 144, "sched_setscheduler" },
-    { 145, "sched_getscheduler" },
-    { 146, "sched_get_priority_max" },
-    { 147, "sched_get_priority_min" },
+    { 145, "sched_getscheduler", ignoreFunc },
+    { 146, "sched_get_priority_max", ignoreFunc },
+    { 147, "sched_get_priority_min", ignoreFunc },
     { 148, "sched_rr_get_interval" },
     { 149, "mlock" },
     { 150, "munlock" },
@@ -314,7 +325,7 @@ SyscallDescTable<EmuLinux::SyscallABI64> EmuLinux::syscallDescs64 = {
     { 264, "renameat", renameatFunc<X86Linux64> },
     { 265, "linkat" },
     { 266, "symlinkat" },
-    { 267, "readlinkat", readlinkFunc<X86Linux64> },
+    { 267, "readlinkat", readlinkatFunc<X86Linux64> },
     { 268, "fchmodat", fchmodatFunc<X86Linux64> },
     { 269, "faccessat", faccessatFunc<X86Linux64> },
     { 270, "pselect6" },
@@ -375,7 +386,7 @@ SyscallDescTable<EmuLinux::SyscallABI64> EmuLinux::syscallDescs64 = {
     { 329, "pkey_mprotect" },
     { 330, "pkey_alloc" },
     { 331, "pkey_free" },
-    { 332, "statx" },
+    { 332, "statx", statxFunc<X86Linux64> },
     { 333, "io_pgetevents" },
     { 334, "rseq", ignoreFunc },
     { 424, "pidfd_send_signal" },

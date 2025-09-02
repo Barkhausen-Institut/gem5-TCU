@@ -50,8 +50,8 @@ for i in range(0, num_cores_per_chip):
                           id=TileId(0, i),
                           cmdline=cmd_list[i],
                           memTile=mem_tile if cmd_list[i] != "" else None,
-                          l1size='32kB',
-                          l2size='256kB')
+                          l1size='32KiB',
+                          l2size='256KiB')
     tiles.append(tile)
 
 # create tile for serial input (unless we're debugging gem5)
@@ -68,15 +68,15 @@ for i in range(0, num_cores_per_chip):
                           id=TileId(1, i),
                           cmdline=cmd_list[num_cores_per_chip + i],
                           memTile=mem_tile if cmd_list[num_cores_per_chip + i] != "" else None,
-                          l1size='32kB',
-                          l2size='256kB')
+                          l1size='32KiB',
+                          l2size='256KiB')
     tiles.append(tile)
 
 # create the memory tile
 tile = createMemTile(noc=root.noc2,
                      options=options,
                      id=mem_tile,
-                     size='3072MB')
+                     size='3072MiB')
 tiles.append(tile)
 
 runSimulation(root, options, tiles)

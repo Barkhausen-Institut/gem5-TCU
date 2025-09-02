@@ -37,10 +37,14 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from m5.defines import buildEnv
-from m5.SimObject import SimObject
+from m5.objects.PciDevice import (
+    PciEndpoint,
+    PciIoBar,
+    PciMemBar,
+)
 from m5.params import *
 from m5.proxy import *
-from m5.objects.PciDevice import PciDevice, PciIoBar, PciMemBar
+from m5.SimObject import SimObject
 
 ETHERNET_ROLE = "ETHERNET"
 Port.compat(ETHERNET_ROLE, ETHERNET_ROLE)
@@ -159,7 +163,7 @@ class EtherDump(SimObject):
     maxlen = Param.Int(96, "max portion of packet data to dump")
 
 
-class EtherDevice(PciDevice):
+class EtherDevice(PciEndpoint):
     type = "EtherDevice"
     abstract = True
     cxx_header = "dev/net/etherdevice.hh"

@@ -71,14 +71,14 @@ class Tcu(BaseTcu):
 
     connector = Param.BaseConnector("The connector to the CPU")
 
-    max_noc_packet_size = Param.MemorySize("1kB", "Maximum size of a NoC packet (needs to be the same for all TCUs)")
+    max_noc_packet_size = Param.MemorySize("1KiB", "Maximum size of a NoC packet (needs to be the same for all TCUs)")
 
     tlb_entries = Param.Unsigned(32, "The number of TLB entries")
 
     block_size = Param.MemorySize("64B", "The block size with which to access the local memory")
 
     buf_count = Param.Unsigned(4, "The number of temporary buffers for transfers")
-    buf_size = Param.MemorySize("1kB", "The size of a temporary buffer")
+    buf_size = Param.MemorySize("1KiB", "The size of a temporary buffer")
     req_count = Param.Unsigned(4, "The number of parallel requests to memory")
 
     mmio_latency = Param.Cycles(6, "Latency for MMIO-based register accesses")

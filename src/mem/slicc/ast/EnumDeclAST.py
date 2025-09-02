@@ -26,7 +26,10 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from slicc.ast.DeclAST import DeclAST
-from slicc.symbols import Func, Type
+from slicc.symbols import (
+    Func,
+    Type,
+)
 
 
 class EnumDeclAST(DeclAST):
@@ -47,7 +50,9 @@ class EnumDeclAST(DeclAST):
             ident = f"{parent}_{self.type_ast.ident}"
         else:
             ident = self.type_ast.ident
-        s = set((f"{ident}.hh", f"{ident}.cc"))
+        if not self.shared:
+            ident = f"{self.slicc.protocol}/{ident}"
+        s = {f"{ident}.hh", f"{ident}.cc"}
         return s
 
     def generate(self):
@@ -55,7 +60,12 @@ class EnumDeclAST(DeclAST):
 
         # Make the new type
         t = Type(
-            self.symtab, ident, self.location, self.pairs, self.state_machine
+            self.symtab,
+            ident,
+            self.location,
+            self.pairs,
+            self.shared,
+            self.state_machine,
         )
         self.symtab.newSymbol(t)
 

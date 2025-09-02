@@ -42,7 +42,6 @@ import os.path
 import sys
 
 import importer
-
 from code_formatter import code_formatter
 
 parser = argparse.ArgumentParser()
@@ -88,7 +87,6 @@ ports = sim_object._ports.local
 
 # only include pybind if python is enabled in the build
 if use_python:
-
     code(
         """#include "pybind11/pybind11.h"
 #include "pybind11/stl.h"
@@ -216,6 +214,11 @@ py::module_ m = m_internal.def_submodule("param_${sim_object}");
 
 # include the create() methods whether or not python is enabled.
 if not hasattr(sim_object, "abstract") or not sim_object.abstract:
+    sim_object._unique_namespace = sim_object.cxx_class.replace("::", "_")
+    sim_object._unique_namespace = sim_object._unique_namespace.replace(
+        "<", "_"
+    ).replace(">", "_")
+    sim_object._unique_namespace += "_create"
     if "type" in sim_object.__dict__:
         code(
             """
@@ -293,5 +296,35 @@ Dummy${sim_object}Shunt<${{sim_object.cxx_class}}>::Params::create() const
 } // namespace gem5
 """
         )
+
+        if not sim_object.override_create:
+            code(
+                """
+
+namespace gem5
+{
+namespace ${{sim_object._unique_namespace}}
+{
+
+// Base case (no warning)
+template<bool>
+struct NonDefaultCreate {};
+
+// Specialization with warning for true case
+template<>
+struct [[deprecated(
+        "Warning: ${sim_object} is not constructible from ${sim_object}Params. "
+        "It is deprecated to use non-standard `create()` methods. "
+        "If you see this warning followed by a linking error, "
+        "the most likely problem is ${sim_object} has a parent class with "
+        "pure virtual functions.")]] NonDefaultCreate<true> {};
+
+[[maybe_unused]] NonDefaultCreate<
+    !std::is_constructible_v<${{sim_object.cxx_class}},
+                             const ${sim_object}Params &>> warning_instance;
+} // namespace ${{sim_object._unique_namespace}}
+} // namespace gem5
+"""
+            )
 
 code.write(args.param_cc)

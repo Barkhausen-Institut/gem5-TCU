@@ -26,6 +26,7 @@
 
 from m5.objects import *
 
+
 # Simple ALU Instructions have a latency of 1
 class O3_ARM_v7a_Simple_Int(FUDesc):
     opList = [OpDesc(opClass="IntAlu", opLat=1)]
@@ -107,15 +108,28 @@ class O3_ARM_v7a_FUP(FUPool):
     ]
 
 
+class O3_ARM_v7a_BTB(SimpleBTB):
+    numEntries = 2048
+    tagBits = 18
+    associativity = 1
+    instShiftAmt = 2
+    btbReplPolicy = LRURP()
+    btbIndexingPolicy = BTBSetAssociative(
+        num_entries=Parent.numEntries,
+        set_shift=Parent.instShiftAmt,
+        assoc=Parent.associativity,
+        tag_bits=Parent.tagBits,
+    )
+
+
 # Bi-Mode Branch Predictor
 class O3_ARM_v7a_BP(BiModeBP):
+    btb = O3_ARM_v7a_BTB()
+    ras = ReturnAddrStack(numEntries=16)
     globalPredictorSize = 8192
     globalCtrBits = 2
     choicePredictorSize = 8192
     choiceCtrBits = 2
-    BTBEntries = 2048
-    BTBTagSize = 18
-    RASSize = 16
     instShiftAmt = 2
 
 
@@ -124,7 +138,7 @@ class O3_ARM_v7a_3(ArmO3CPU):
     SQEntries = 16
     LSQDepCheckShift = 0
     LFSTSize = 1024
-    SSITSize = 1024
+    SSITSize = "1024"
     decodeToFetchDelay = 1
     renameToFetchDelay = 1
     iewToFetchDelay = 1
@@ -171,7 +185,7 @@ class O3_ARM_v7a_ICache(Cache):
     response_latency = 1
     mshrs = 2
     tgts_per_mshr = 8
-    size = "32kB"
+    size = "32KiB"
     assoc = 2
     is_read_only = True
     # Writeback clean lines as well
@@ -185,7 +199,7 @@ class O3_ARM_v7a_DCache(Cache):
     response_latency = 2
     mshrs = 6
     tgts_per_mshr = 8
-    size = "32kB"
+    size = "32KiB"
     assoc = 2
     write_buffers = 16
     # Consider the L2 a victim cache also for clean lines
@@ -199,12 +213,11 @@ class O3_ARM_v7aL2(Cache):
     response_latency = 12
     mshrs = 16
     tgts_per_mshr = 8
-    size = "1MB"
+    size = "1MiB"
     assoc = 16
     write_buffers = 8
-    prefetch_on_access = True
     clusivity = "mostly_excl"
     # Simple stride prefetcher
-    prefetcher = StridePrefetcher(degree=8, latency=1)
+    prefetcher = StridePrefetcher(degree=8, latency=1, prefetch_on_access=True)
     tags = BaseSetAssoc()
     replacement_policy = RandomRP()

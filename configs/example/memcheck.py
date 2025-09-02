@@ -189,7 +189,7 @@ for t, m in zip(testerspec, multiplier):
 
 # Define a prototype L1 cache that we scale for all successive levels
 proto_l1 = Cache(
-    size="32kB",
+    size="32KiB",
     assoc=4,
     tag_latency=1,
     data_latency=1,
@@ -259,6 +259,7 @@ system.memchecker = MemChecker()
 
 # For each level, track the next subsys index to use
 next_subsys_index = [0] * (len(cachespec) + 1)
+
 
 # Recursive function to create a sub-tree of the cache and tester
 # hierarchy

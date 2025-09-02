@@ -37,4 +37,4 @@ class TcuAccelStream(TcuAccel):
     cxx_class = 'gem5::tcu::TcuAccelStream'
 
     logic = Param.AccelLogic("The accelerator logic")
-    buf_size = Param.MemorySize("4kB", "The size of the buffer")
+    buf_size = Param.MemorySize("4KiB", "The size of the buffer")

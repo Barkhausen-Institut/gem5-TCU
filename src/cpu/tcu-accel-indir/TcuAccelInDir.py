@@ -35,4 +35,4 @@ class TcuAccelInDir(TcuAccel):
     cxx_header = "cpu/tcu-accel-indir/accelerator.hh"
     cxx_class = 'gem5::tcu::TcuAccelInDir'
 
-    buf_size = Param.MemorySize("4kB", "The size of the buffer")
+    buf_size = Param.MemorySize("4KiB", "The size of the buffer")

@@ -13,7 +13,7 @@ num_mem = 1
 num_coreacc = 1
 num_tiles = int(os.environ.get('M3_GEM5_TILES')) - 1
 mem_tile = TileId(0, num_tiles + num_coreacc)
-spm_size = '128MB'
+spm_size = '128MiB'
 
 tiles = []
 
@@ -44,7 +44,7 @@ for i in range(0, num_mem):
     tile = createMemTile(noc=root.noc,
                          options=options,
                          id=TileId(0, num_tiles + num_coreacc + i),
-                         size='3072MB')
+                         size='3072MiB')
     tiles.append(tile)
 
 # create tile for serial input (unless we're debugging gem5)

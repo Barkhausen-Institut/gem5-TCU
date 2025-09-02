@@ -36,17 +36,30 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+import getpass
+import operator
+import os
+import platform
+from functools import reduce
+from os import (
+    access,
+    getpid,
+    listdir,
+    makedirs,
+    mkdir,
+    stat,
+)
+from os.path import isdir
+from os.path import join as joinpath
+from pwd import getpwuid
+from shutil import (
+    copyfile,
+    rmtree,
+)
+
 import m5
 from m5.objects import *
 from m5.util.convert import *
-
-from functools import reduce
-import operator, os, platform, getpass
-from os import mkdir, makedirs, getpid, listdir, stat, access
-from pwd import getpwuid
-from os.path import join as joinpath
-from os.path import isdir
-from shutil import rmtree, copyfile
 
 
 def hex_mask(terms):
@@ -189,7 +202,7 @@ def register_node(cpu_list, mem, node_number):
     file_append((nodedir, "cpumap"), hex_mask(cpu_list))
     file_append(
         (nodedir, "meminfo"),
-        "Node %d MemTotal: %dkB"
+        "Node %d MemTotal: %dKiB"
         % (node_number, toMemorySize(str(mem)) / kibi),
     )
 

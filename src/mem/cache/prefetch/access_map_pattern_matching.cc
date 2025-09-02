@@ -29,7 +29,6 @@
 #include "mem/cache/prefetch/access_map_pattern_matching.hh"
 
 #include "debug/HWPrefetch.hh"
-#include "mem/cache/prefetch/associative_set_impl.hh"
 #include "params/AMPMPrefetcher.hh"
 #include "params/AccessMapPatternMatching.hh"
 
@@ -51,10 +50,13 @@ AccessMapPatternMatching::AccessMapPatternMatching(
       lowCacheHitThreshold(p.low_cache_hit_threshold),
       epochCycles(p.epoch_cycles),
       offChipMemoryLatency(p.offchip_memory_latency),
-      accessMapTable(p.access_map_table_assoc, p.access_map_table_entries,
-                     p.access_map_table_indexing_policy,
+      accessMapTable("AccessMapTable",
+                     p.access_map_table_entries,
+                     p.access_map_table_assoc,
                      p.access_map_table_replacement_policy,
-                     AccessMapEntry(hotZoneSize / blkSize)),
+                     p.access_map_table_indexing_policy,
+                     AccessMapEntry(hotZoneSize / blkSize,
+                        genTagExtractor(p.access_map_table_indexing_policy))),
       numGoodPrefetches(0), numTotalPrefetches(0), numRawCacheMisses(0),
       numRawCacheHits(0), degree(startDegree), usefulDegree(startDegree),
       epochEvent([this]{ processEpochEvent(); }, name())
@@ -107,14 +109,15 @@ AccessMapPatternMatching::AccessMapEntry *
 AccessMapPatternMatching::getAccessMapEntry(Addr am_addr,
                 bool is_secure)
 {
-    AccessMapEntry *am_entry = accessMapTable.findEntry(am_addr, is_secure);
+    const TaggedEntry::KeyType key{am_addr, is_secure};
+    AccessMapEntry *am_entry = accessMapTable.findEntry(key);
     if (am_entry != nullptr) {
         accessMapTable.accessEntry(am_entry);
     } else {
-        am_entry = accessMapTable.findVictim(am_addr);
+        am_entry = accessMapTable.findVictim(key);
         assert(am_entry != nullptr);
 
-        accessMapTable.insertEntry(am_addr, is_secure, am_entry);
+        accessMapTable.insertEntry(key, am_entry);
     }
     return am_entry;
 }
@@ -156,7 +159,8 @@ AccessMapPatternMatching::setEntryState(AccessMapEntry &entry,
 
 void
 AccessMapPatternMatching::calculatePrefetch(const Base::PrefetchInfo &pfi,
-    std::vector<Queued::AddrPriority> &addresses)
+    std::vector<Queued::AddrPriority> &addresses,
+    const CacheAccessor &cache)
 {
     assert(addresses.empty());
 
@@ -262,9 +266,10 @@ AMPM::AMPM(const AMPMPrefetcherParams &p)
 
 void
 AMPM::calculatePrefetch(const PrefetchInfo &pfi,
-    std::vector<AddrPriority> &addresses)
+    std::vector<AddrPriority> &addresses,
+    const CacheAccessor &cache)
 {
-    ampm.calculatePrefetch(pfi, addresses);
+    ampm.calculatePrefetch(pfi, addresses, cache);
 }
 
 } // namespace prefetch

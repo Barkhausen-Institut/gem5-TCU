@@ -88,7 +88,7 @@ class TileId:
         return cls(int(raw) >> 8, int(raw) & 0xFF)
     @classmethod
     def parse(cls, desc):
-        m = re.match("C(\d+)T(\d+)", desc)
+        m = re.match(r"C(\d+)T(\d+)", desc)
         if m:
             return cls(int(m.group(1)), int(m.group(2)))
         else:
@@ -143,12 +143,6 @@ def getOptions():
 
     parser.add_argument("--pausetile", default="",
                         help="the tile to pause until GDB connects")
-
-    parser.add_argument("--bare-metal", action="store_true",
-                        help="Provide the raw system without the linux specific bits")
-    parser.add_argument("--dtb-filename", action="store", type=str,
-                        help="Specifies device tree blob file to use with device-tree-"\
-                            "enabled kernels")
 
     Options.addCommonOptions(parser)
     Options.addFSOptions(parser)
@@ -251,7 +245,7 @@ def createTile(noc, options, id, systemType, l1size, l2size, spmsize, memTile, e
     else:
         tile.xbar = IOXBar(width=tile.cache_line_size)
 
-    tile.tcu = Tcu(max_noc_packet_size='2kB', buf_size='2kB')
+    tile.tcu = Tcu(max_noc_packet_size='2KiB', buf_size='2KiB')
     tile.tcu.tile_id = id.raw()
 
     # connection to noc
@@ -319,7 +313,7 @@ def createTile(noc, options, id, systemType, l1size, l2size, spmsize, memTile, e
 
     # add EP cache
     if systemType != SpuSystem and spmsize is None:
-        tile.epcache = L1_DCache(size="8kB")
+        tile.epcache = L1_DCache(size="8KiB")
         tile.epcache.addr_ranges = [AddrRange(0, 0x1000000000000000 - 1)]
         tile.epcache.tag_latency = 4
         tile.epcache.data_latency = 4
@@ -344,6 +338,9 @@ def createTile(noc, options, id, systemType, l1size, l2size, spmsize, memTile, e
     else:
         if systemType != SpuSystem:
             tile.env_start= 0x1FE000
+    # specify the physical memory range for speculations
+    if systemType != SpuSystem:
+        tile.external_memory_ranges = [AddrRange(tile.tcu.tile_mem_offset, 0xF000_0000)]
 
     if not memTile is None:
         tile.memory_tile = memTile.raw()
@@ -423,6 +420,7 @@ def createCoreTile(noc, options, id, cmdline, memTile,
         tile.workload = RiscvBareMetal(bootloader = cmdline.split(' ')[0], reset_vect = entry)
     else:
         tile.workload = X86FsWorkload(object_file = cmdline.split(' ')[0], entry = 0x200000)
+        tile.workload.addr_check = False
     tile.cmdline = cmdline
     tile.logflags = options.logflags
 
@@ -561,7 +559,7 @@ def createCoreAccTile(noc, options, id, cmdline, memTile, spmsize='8MB'):
     return tile
 
 def createRoTTile(noc, options, id, cmdline, flashTile, rotLayers,
-                  kernelCmdline, spmsize='512kB', bromsize='64kB'):
+                  kernelCmdline, spmsize='512KiB', bromsize='64KiB'):
     tile = _createKecAccTile(noc, options, id, cmdline, memTile=None,
                              spmsize=spmsize)
     # Accelerator is connected to the XBar like everything else
@@ -733,7 +731,7 @@ def linkEthertiles(ether0, ether1):
     ether1.etherlink = link
 
 def createAccelTile(noc, options, id, accel, memTile,
-                    l1size=None, l2size=None, spmsize='64kB', comptime=0):
+                    l1size=None, l2size=None, spmsize='64KiB', comptime=0):
     tile = createTile(
         noc=noc, options=options, id=id, systemType=SpuSystem,
         l1size=l1size, l2size=l2size, spmsize=spmsize, memTile=memTile,
@@ -753,7 +751,7 @@ def createAccelTile(noc, options, id, accel, memTile,
         tile.accel.logic.algorithm = algos.get(accel)
         tile.accel.logic.port = tile.xbar.cpu_side_ports
         tile.accel.logic.comptime = comptime
-        tile.accel.buf_size = "4kB"
+        tile.accel.buf_size = "4KiB"
     else:
         print('Accelerator "%s" does not exist' % (accel))
         sys.exit(1)

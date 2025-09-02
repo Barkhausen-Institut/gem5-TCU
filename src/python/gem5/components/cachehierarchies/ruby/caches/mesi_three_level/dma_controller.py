@@ -24,12 +24,13 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from ......utils.override import overrides
+from m5.objects import (
+    MESI_Three_Level_DMA_Controller,
+    MessageBuffer,
+)
 
-from m5.objects import MessageBuffer, DMA_Controller
 
-
-class DMAController(DMA_Controller):
+class DMAController(MESI_Three_Level_DMA_Controller):
     _version = 0
 
     @classmethod

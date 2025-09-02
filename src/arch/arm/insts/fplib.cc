@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2012-2013, 2017-2018, 2020 ARM Limited
+* Copyright (c) 2012-2013, 2017-2018, 2020, 2025 Arm Limited
 * Copyright (c) 2020 Metempsy Technology Consulting
 * All rights reserved
 *
@@ -717,6 +717,46 @@ fp64_process_NaNs3(uint64_t a, uint64_t b, uint64_t c, int mode, int *flags)
     return 0;
 }
 
+static uint32_t
+fp32_convert_default_nan(uint16_t op)
+{
+    uint32_t sgn = op >> (FP16_BITS - 1);
+    uint32_t mnt = FP16_MANT(op);
+
+    mnt = mnt << (FP32_MANT_BITS - FP16_MANT_BITS);
+
+    return fp32_pack(sgn, FP32_EXP_INF, mnt);
+}
+
+static uint32_t
+fp32_process_NaNs3H(uint32_t a, uint16_t b, uint16_t c, int mode, int *flags)
+{
+    int a_exp = FP32_EXP(a);
+    uint32_t a_mnt = FP32_MANT(a);
+    int b_exp = FP16_EXP(b);
+    uint16_t b_mnt = FP16_MANT(b);
+    int c_exp = FP16_EXP(c);
+    uint16_t c_mnt = FP16_MANT(c);
+
+    // Handle signalling NaNs:
+    if (fp32_is_signalling_NaN(a_exp, a_mnt))
+        return fp32_process_NaN(a, mode, flags);
+    if (fp16_is_signalling_NaN(b_exp, b_mnt))
+        return fp32_convert_default_nan(fp16_process_NaN(b, mode, flags));
+    if (fp16_is_signalling_NaN(c_exp, c_mnt))
+        return fp32_convert_default_nan(fp16_process_NaN(c, mode, flags));
+
+    // Handle quiet NaNs:
+    if (fp32_is_NaN(a_exp, a_mnt))
+        return fp32_process_NaN(a, mode, flags);
+    if (fp16_is_NaN(b_exp, b_mnt))
+        return fp32_convert_default_nan(fp16_process_NaN(b, mode, flags));
+    if (fp16_is_NaN(c_exp, c_mnt))
+        return fp32_convert_default_nan(fp16_process_NaN(c, mode, flags));
+
+    return 0;
+}
+
 static uint16_t
 fp16_round_(int sgn, int exp, uint16_t mnt, int rm, int mode, int *flags)
 {
@@ -1400,6 +1440,67 @@ fp64_add(uint64_t a, uint64_t b, int neg, int mode, int *flags)
 }
 
 static uint16_t
+fp16_halved_add(uint16_t a, uint16_t b, int neg, int mode, int *flags)
+{
+    int a_sgn, a_exp, b_sgn, b_exp, x_sgn, x_exp;
+    uint16_t a_mnt, b_mnt, x, x_mnt;
+
+    fp16_unpack(&a_sgn, &a_exp, &a_mnt, a, mode, flags);
+    fp16_unpack(&b_sgn, &b_exp, &b_mnt, b, mode, flags);
+
+    if ((x = fp16_process_NaNs(a, b, mode, flags))) {
+        return x;
+    }
+
+    b_sgn ^= neg;
+
+    // Handle infinities and zeroes:
+    if (a_exp == FP16_EXP_INF && b_exp == FP16_EXP_INF && a_sgn != b_sgn) {
+        *flags |= FPLIB_IOC;
+        return fp16_defaultNaN();
+    } else if (a_exp == FP16_EXP_INF) {
+        return fp16_infinity(a_sgn);
+    } else if (b_exp == FP16_EXP_INF) {
+        return fp16_infinity(b_sgn);
+    } else if (!a_mnt && !b_mnt && a_sgn == b_sgn) {
+        return fp16_zero(a_sgn);
+    }
+
+    a_mnt <<= 3;
+    b_mnt <<= 3;
+    if (a_exp >= b_exp) {
+        b_mnt = (lsr16(b_mnt, a_exp - b_exp) |
+                 !!(b_mnt & (lsl16(1, a_exp - b_exp) - 1)));
+        b_exp = a_exp;
+    } else {
+        a_mnt = (lsr16(a_mnt, b_exp - a_exp) |
+                 !!(a_mnt & (lsl16(1, b_exp - a_exp) - 1)));
+        a_exp = b_exp;
+    }
+    x_sgn = a_sgn;
+    x_exp = a_exp;
+    if (a_sgn == b_sgn) {
+        x_mnt = a_mnt + b_mnt;
+    } else if (a_mnt >= b_mnt) {
+        x_mnt = a_mnt - b_mnt;
+    } else {
+        x_sgn ^= 1;
+        x_mnt = b_mnt - a_mnt;
+    }
+
+    if (!x_mnt) {
+        // Sign of exact zero result depends on rounding mode
+        return fp16_zero((mode & 3) == 2);
+    }
+
+    x_exp -= 1; // halved
+    x_mnt = fp16_normalise(x_mnt, &x_exp);
+
+    return fp16_round(x_sgn, x_exp + FP16_EXP_BITS - 3, x_mnt << 1,
+                      mode, flags);
+}
+
+static uint16_t
 fp16_mul(uint16_t a, uint16_t b, int mode, int *flags)
 {
     int a_sgn, a_exp, b_sgn, b_exp, x_sgn, x_exp;
@@ -1770,6 +1871,103 @@ fp64_muladd(uint64_t a, uint64_t b, uint64_t c, int scale,
     x0_mnt = x1_mnt << 1 | !!x0_mnt;
 
     return fp64_round(x_sgn, x_exp + scale, x0_mnt, mode, flags);
+}
+
+static uint32_t
+fp32_muladdh(uint32_t a, uint16_t b, uint16_t c, int scale,
+            int mode, int *flags, bool rm_odd=false)
+{
+    int a_sgn, a_exp, b_sgn, b_exp, c_sgn, c_exp, x_sgn, x_exp, y_sgn, y_exp;
+    uint16_t b_mnt, c_mnt;
+    uint32_t a_mnt, x;
+    uint64_t x_mnt, y_mnt;
+
+    fp32_unpack(&a_sgn, &a_exp, &a_mnt, a, mode, flags);
+    fp16_unpack(&b_sgn, &b_exp, &b_mnt, b, mode, flags);
+    fp16_unpack(&c_sgn, &c_exp, &c_mnt, c, mode, flags);
+
+    x = fp32_process_NaNs3H(a, b, c, mode, flags);
+
+    // Quiet NaN added to product of zero and infinity:
+    if (fp32_is_quiet_NaN(a_exp, a_mnt) &&
+        ((!b_mnt && fp16_is_infinity(c_exp, c_mnt)) ||
+         (!c_mnt && fp16_is_infinity(b_exp, b_mnt)))) {
+        x = fp32_defaultNaN();
+        *flags |= FPLIB_IOC;
+    }
+
+    if (x) {
+        return x;
+    }
+
+    // Handle infinities and zeroes:
+    if ((b_exp == FP16_EXP_INF && !c_mnt) ||
+        (c_exp == FP16_EXP_INF && !b_mnt) ||
+        (a_exp == FP32_EXP_INF &&
+         (b_exp == FP16_EXP_INF || c_exp == FP16_EXP_INF) &&
+         (a_sgn != (b_sgn ^ c_sgn)))) {
+        *flags |= FPLIB_IOC;
+        return fp32_defaultNaN();
+    }
+    if (a_exp == FP32_EXP_INF)
+        return fp32_infinity(a_sgn);
+    if (b_exp == FP16_EXP_INF || c_exp == FP16_EXP_INF)
+        return fp32_infinity(b_sgn ^ c_sgn);
+    if (!a_mnt && (!b_mnt || !c_mnt) && a_sgn == (b_sgn ^ c_sgn))
+        return fp32_zero(a_sgn);
+
+    x_sgn = a_sgn;
+    x_exp = a_exp + 2 * FP32_EXP_BITS - 3;
+    x_mnt = (uint64_t)a_mnt << (FP32_MANT_BITS + 4);
+
+    // Multiply:
+    y_sgn = b_sgn ^ c_sgn;
+    y_exp = b_exp + c_exp - 2 * FP16_EXP_BIAS + 2 * FP32_EXP_BIAS -
+        FP32_EXP_BIAS + 2 * FP32_EXP_BITS + 1 - 3;
+    y_mnt = (uint64_t)b_mnt * c_mnt << (3 +
+        (FP32_MANT_BITS - FP16_MANT_BITS) * 2);
+    if (!y_mnt) {
+        y_exp = x_exp;
+    }
+
+    // Add:
+    if (x_exp >= y_exp) {
+        y_mnt = (lsr64(y_mnt, x_exp - y_exp) |
+                 !!(y_mnt & (lsl64(1, x_exp - y_exp) - 1)));
+        y_exp = x_exp;
+    } else {
+        x_mnt = (lsr64(x_mnt, y_exp - x_exp) |
+                 !!(x_mnt & (lsl64(1, y_exp - x_exp) - 1)));
+        x_exp = y_exp;
+    }
+    if (x_sgn == y_sgn) {
+        x_mnt = x_mnt + y_mnt;
+    } else if (x_mnt >= y_mnt) {
+        x_mnt = x_mnt - y_mnt;
+    } else {
+        x_sgn ^= 1;
+        x_mnt = y_mnt - x_mnt;
+    }
+
+    if (!x_mnt) {
+        // Sign of exact zero result depends on rounding mode
+        if (rm_odd) {
+            return fp32_zero(x_sgn);
+        } else {
+            return fp32_zero((mode & 3) == 2);
+        }
+    }
+
+    // Normalise into FP32_BITS bits, collapsing error into bottom bit:
+    x_mnt = fp64_normalise(x_mnt, &x_exp);
+    x_mnt = x_mnt >> (FP32_BITS - 1) | !!(uint32_t)(x_mnt << 1);
+
+    if (rm_odd) {
+        return fp32_round_(x_sgn, x_exp + scale, x_mnt,
+                           FPRounding_ODD, mode, flags);
+    } else {
+        return fp32_round(x_sgn, x_exp + scale, x_mnt, mode, flags);
+    }
 }
 
 static uint16_t
@@ -2899,6 +3097,17 @@ fplibMulAdd(uint64_t addend, uint64_t op1, uint64_t op2, FPSCR &fpscr)
 {
     int flags = 0;
     uint64_t result = fp64_muladd(addend, op1, op2, 0, modeConv(fpscr), &flags);
+    set_fpscr0(fpscr, flags);
+    return result;
+}
+
+template <>
+uint32_t
+fplibMulAddH(uint32_t addend, uint16_t op1, uint16_t op2, FPSCR &fpscr)
+{
+    int flags = 0;
+    uint32_t result = fp32_muladdh(addend, op1, op2, 0,
+                                   modeConv(fpscr), &flags);
     set_fpscr0(fpscr, flags);
     return result;
 }
@@ -4274,6 +4483,174 @@ fplibRoundInt(uint64_t op, FPRounding rounding, bool exact, FPSCR &fpscr)
 }
 
 template <>
+uint32_t
+fplibRoundIntN(uint32_t op, FPRounding rounding, bool exact, int intsize,
+               FPSCR &fpscr)
+{
+    int expint = FP32_EXP_BIAS + FP32_MANT_BITS;
+    int mode = modeConv(fpscr);
+    int flags = 0;
+    int sgn, exp;
+    uint32_t mnt, result;
+
+    // Unpack using FPCR to determine if subnormals are flushed-to-zero:
+    fp32_unpack(&sgn, &exp, &mnt, op, mode, &flags);
+
+    // Handle NaNs, infinities and zeroes:
+    if (fp32_is_NaN(exp, mnt)) {
+        result = fp32_pack(1, FP32_EXP_BIAS + intsize - 1, 0);
+        flags |= FPLIB_IOC;
+    } else if (exp == FP32_EXP_INF) {
+        result = fp32_pack(1, FP32_EXP_BIAS + intsize - 1, 0);
+        flags |= FPLIB_IOC;
+    } else if (!mnt) {
+        result = fp32_zero(sgn);
+    } else if (exp >= expint) {
+        // There are no fractional bits
+        result = op;
+        bool overflow = (exp > (FP32_EXP_BIAS + intsize - 2) && !sgn) ||
+                        (exp > (FP32_EXP_BIAS + intsize - 1) && sgn) ||
+                        (exp > (FP32_EXP_BIAS + intsize - 2) &&
+                            FP32_MANT(op) > 0 && sgn);
+        if (overflow) {
+            result = fp32_pack(1, FP32_EXP_BIAS + intsize - 1, 0);
+            flags |= FPLIB_IOC;
+        }
+    } else {
+        // Truncate towards zero:
+        uint32_t x = expint - exp >= FP32_BITS ? 0 : mnt >> (expint - exp);
+        int err = exp < expint - FP32_BITS ? 1 :
+            ((mnt << 1 >> (expint - exp - 1) & 3) |
+             ((uint32_t)(mnt << 2 << (FP32_BITS + exp - expint)) != 0));
+        switch (rounding) {
+          case FPRounding_TIEEVEN:
+            x += (err == 3 || (err == 2 && (x & 1)));
+            break;
+          case FPRounding_POSINF:
+            x += err && !sgn;
+            break;
+          case FPRounding_NEGINF:
+            x += err && sgn;
+            break;
+          case FPRounding_ZERO:
+            break;
+          case FPRounding_TIEAWAY:
+            x += err >> 1;
+            break;
+          default:
+            panic("Unrecognized FP rounding mode");
+        }
+
+        bool overflow = (x > (((uint32_t)1 << (intsize - 1)) - 1) && !sgn) ||
+                        (x > ((uint32_t)1 << (intsize - 1)) && sgn);
+        if (overflow) {
+            result = fp32_pack(1, FP32_EXP_BIAS + intsize - 1, 0);
+            flags |= FPLIB_IOC;
+        } else {
+            if (x == 0) {
+                result = fp32_zero(sgn);
+            } else {
+                exp = expint;
+                mnt = fp32_normalise(x, &exp);
+                result = fp32_pack(sgn, exp + FP32_EXP_BITS,
+                                   mnt >> FP32_EXP_BITS);
+            }
+
+            if (err && exact)
+                flags |= FPLIB_IXC;
+        }
+    }
+
+    set_fpscr0(fpscr, flags);
+
+    return result;
+}
+
+template <>
+uint64_t
+fplibRoundIntN(uint64_t op, FPRounding rounding, bool exact, int intsize,
+               FPSCR &fpscr)
+{
+    int expint = FP64_EXP_BIAS + FP64_MANT_BITS;
+    int mode = modeConv(fpscr);
+    int flags = 0;
+    int sgn, exp;
+    uint64_t mnt, result;
+
+    // Unpack using FPCR to determine if subnormals are flushed-to-zero:
+    fp64_unpack(&sgn, &exp, &mnt, op, mode, &flags);
+
+    // Handle NaNs, infinities and zeroes:
+    if (fp64_is_NaN(exp, mnt)) {
+        result = fp64_pack(1, FP64_EXP_BIAS + intsize - 1, 0);
+        flags |= FPLIB_IOC;
+    } else if (exp == FP64_EXP_INF) {
+        result = fp64_pack(1, FP64_EXP_BIAS + intsize - 1, 0);
+        flags |= FPLIB_IOC;
+    } else if (!mnt) {
+        result = fp64_zero(sgn);
+    } else if (exp >= expint) {
+        // There are no fractional bits
+        result = op;
+        bool overflow = (exp > (FP64_EXP_BIAS + intsize - 2) && !sgn) ||
+                        (exp > (FP64_EXP_BIAS + intsize - 1) && sgn) ||
+                        (exp > (FP64_EXP_BIAS + intsize - 2) &&
+                            FP64_MANT(op) > 0 && sgn);
+        if (overflow && intsize >= 0) {
+            result = fp64_pack(1, FP64_EXP_BIAS + intsize - 1, 0);
+            flags |= FPLIB_IOC;
+        }
+    } else {
+        // Truncate towards zero:
+        uint64_t x = expint - exp >= FP64_BITS ? 0 : mnt >> (expint - exp);
+        int err = exp < expint - FP64_BITS ? 1 :
+            ((mnt << 1 >> (expint - exp - 1) & 3) |
+             ((uint64_t)(mnt << 2 << (FP64_BITS + exp - expint)) != 0));
+        switch (rounding) {
+          case FPRounding_TIEEVEN:
+            x += (err == 3 || (err == 2 && (x & 1)));
+            break;
+          case FPRounding_POSINF:
+            x += err && !sgn;
+            break;
+          case FPRounding_NEGINF:
+            x += err && sgn;
+            break;
+          case FPRounding_ZERO:
+            break;
+          case FPRounding_TIEAWAY:
+            x += err >> 1;
+            break;
+          default:
+            panic("Unrecognized FP rounding mode");
+        }
+
+        bool overflow = (x > (((uint64_t)1 << (intsize - 1)) - 1) && !sgn) ||
+                        (x > ((uint64_t)1 << (intsize - 1)) && sgn);
+        if (overflow) {
+            result = fp64_pack(1, FP64_EXP_BIAS + intsize - 1, 0);
+            flags |= FPLIB_IOC;
+        } else {
+            if (x == 0) {
+                result = fp64_zero(sgn);
+            } else {
+                exp = expint;
+                mnt = fp64_normalise(x, &exp);
+                result = fp64_pack(sgn, exp + FP64_EXP_BITS,
+                                   mnt >> FP64_EXP_BITS);
+            }
+
+            if (err && exact)
+                flags |= FPLIB_IXC;
+        }
+    }
+
+    set_fpscr0(fpscr, flags);
+
+    return result;
+}
+
+template <>
 uint16_t
 fplibScale(uint16_t op1, uint16_t op2, FPSCR &fpscr)
 {
@@ -4968,7 +5345,7 @@ fplibFixedToFP(uint64_t op, int fbits, bool u, FPRounding rounding,
 {
     int flags = 0;
     uint16_t res = fp16_cvtf(op, fbits, u,
-                             (int)rounding | ((uint32_t)fpscr >> 22 & 12),
+                             (int)rounding | (modeConv(fpscr) & 0xFC),
                              &flags);
     set_fpscr0(fpscr, flags);
     return res;
@@ -4980,7 +5357,7 @@ fplibFixedToFP(uint64_t op, int fbits, bool u, FPRounding rounding, FPSCR &fpscr
 {
     int flags = 0;
     uint32_t res = fp32_cvtf(op, fbits, u,
-                             (int)rounding | ((uint32_t)fpscr >> 22 & 12),
+                             (int)rounding | (modeConv(fpscr) & 0xFC),
                              &flags);
     set_fpscr0(fpscr, flags);
     return res;
@@ -4992,7 +5369,7 @@ fplibFixedToFP(uint64_t op, int fbits, bool u, FPRounding rounding, FPSCR &fpscr
 {
     int flags = 0;
     uint64_t res = fp64_cvtf(op, fbits, u,
-                             (int)rounding | ((uint32_t)fpscr >> 22 & 12),
+                             (int)rounding | (modeConv(fpscr) & 0xFC),
                              &flags);
     set_fpscr0(fpscr, flags);
     return res;
@@ -5038,6 +5415,64 @@ uint64_t
 fplibDefaultNaN()
 {
     return fp64_defaultNaN();
+}
+
+
+template <>
+uint16_t
+fplib32RSqrtStep(uint16_t op1, uint16_t op2, FPSCR &fpscr)
+{
+    int mode = modeConv(fpscr);
+    int flags = 0;
+    int sgn1, exp1, sgn2, exp2;
+    uint16_t mnt1, mnt2, result;
+
+    fp16_unpack(&sgn1, &exp1, &mnt1, op1, mode, &flags);
+    fp16_unpack(&sgn2, &exp2, &mnt2, op2, mode, &flags);
+
+    result = fp16_process_NaNs(op1, op2, mode, &flags);
+    if (!result) {
+        if ((exp1 == FP16_EXP_INF && !mnt2) ||
+            (exp2 == FP16_EXP_INF && !mnt1)) {
+            result = fp16_FPOnePointFive(0);
+        } else {
+            uint16_t product = fp16_mul(op1, op2, mode, &flags);
+            result = fp16_halved_add(fp16_FPThree(0), product, 1, mode,
+                                     &flags);
+        }
+    }
+
+    set_fpscr0(fpscr, flags);
+
+    return result;
+}
+
+template <>
+uint16_t
+fplib32RecipStep(uint16_t op1, uint16_t op2, FPSCR &fpscr)
+{
+    int mode = modeConv(fpscr);
+    int flags = 0;
+    int sgn1, exp1, sgn2, exp2;
+    uint16_t mnt1, mnt2, result;
+
+    fp16_unpack(&sgn1, &exp1, &mnt1, op1, mode, &flags);
+    fp16_unpack(&sgn2, &exp2, &mnt2, op2, mode, &flags);
+
+    result = fp16_process_NaNs(op1, op2, mode, &flags);
+    if (!result) {
+        if ((exp1 == FP16_EXP_INF && !mnt2) ||
+            (exp2 == FP16_EXP_INF && !mnt1)) {
+            result = fp16_FPTwo(0);
+        } else {
+            uint16_t product = fp16_mul(op1, op2, mode, &flags);
+            result = fp16_add(fp16_FPTwo(0), product, 1, mode, &flags);
+        }
+    }
+
+    set_fpscr0(fpscr, flags);
+
+    return result;
 }
 
 } // namespace ArmISA

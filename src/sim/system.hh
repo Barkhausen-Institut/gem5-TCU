@@ -113,6 +113,11 @@ class System : public SimObject, public PCEventScope
     std::unordered_map<RequestorID, std::vector<memory::AbstractMemory *>>
         deviceMemMap;
 
+    // List of address ranges that are have valid physical addresses but
+    // don't appear in the physical memory map. Note that these are assumed
+    // to be coherent addresses, not I/O or device addresses
+    AddrRangeList externalMemRanges;
+
   public:
 
     class Threads
@@ -307,7 +312,7 @@ class System : public SimObject, public PCEventScope
     /**
      * Get the cache line size of the system.
      */
-    unsigned int cacheLineSize() const { return _cacheLineSize; }
+    Addr cacheLineSize() const { return _cacheLineSize; }
 
     Threads threads;
 
@@ -407,7 +412,7 @@ class System : public SimObject, public PCEventScope
 
     enums::MemoryMode memoryMode;
 
-    const unsigned int _cacheLineSize;
+    const Addr _cacheLineSize;
 
     uint64_t workItemsBegin = 0;
     uint64_t workItemsEnd = 0;

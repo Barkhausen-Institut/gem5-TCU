@@ -254,7 +254,7 @@ Commit::setActiveThreads(std::list<ThreadID> *at_ptr)
 }
 
 void
-Commit::setRenameMap(UnifiedRenameMap rm_ptr[])
+Commit::setRenameMap(UnifiedRenameMap::PerThreadUnifiedRenameMap& rm_ptr)
 {
     for (ThreadID tid = 0; tid < numThreads; tid++)
         renameMap[tid] = &rm_ptr[tid];
@@ -295,6 +295,12 @@ Commit::clearStates(ThreadID tid)
     pc[tid].reset(cpu->tcBase(tid)->getIsaPtr()->newPCState());
     lastCommitedSeqNum[tid] = 0;
     squashAfterInst[tid] = NULL;
+
+    // Clear out any of this thread's instructions being sent to prior stages.
+    for (int i = -cpu->timeBuffer.getPast(); i <= cpu->timeBuffer.getFuture();
+         ++i) {
+        cpu->timeBuffer[i].commitInfo[tid] = {};
+    }
 }
 
 void Commit::drain() { drainPending = true; }
@@ -366,8 +372,8 @@ Commit::takeOverFrom()
 void
 Commit::deactivateThread(ThreadID tid)
 {
-    std::list<ThreadID>::iterator thread_it = std::find(priority_list.begin(),
-            priority_list.end(), tid);
+    auto thread_it = std::find(
+            priority_list.begin(), priority_list.end(), tid);
 
     if (thread_it != priority_list.end()) {
         priority_list.erase(thread_it);
@@ -398,12 +404,7 @@ void
 Commit::updateStatus()
 {
     // reset ROB changed variable
-    std::list<ThreadID>::iterator threads = activeThreads->begin();
-    std::list<ThreadID>::iterator end = activeThreads->end();
-
-    while (threads != end) {
-        ThreadID tid = *threads++;
-
+    for (ThreadID tid : *activeThreads) {
         changedROBNumEntries[tid] = false;
 
         // Also check if any of the threads has a trap pending
@@ -427,12 +428,7 @@ Commit::updateStatus()
 bool
 Commit::changedROBEntries()
 {
-    std::list<ThreadID>::iterator threads = activeThreads->begin();
-    std::list<ThreadID>::iterator end = activeThreads->end();
-
-    while (threads != end) {
-        ThreadID tid = *threads++;
-
+    for (ThreadID tid : *activeThreads) {
         if (changedROBNumEntries[tid]) {
             return true;
         }
@@ -586,14 +582,9 @@ Commit::tick()
     if (activeThreads->empty())
         return;
 
-    std::list<ThreadID>::iterator threads = activeThreads->begin();
-    std::list<ThreadID>::iterator end = activeThreads->end();
-
     // Check if any of the threads are done squashing.  Change the
     // status if they are done.
-    while (threads != end) {
-        ThreadID tid = *threads++;
-
+    for (ThreadID tid : *activeThreads) {
         // Clear the bit saying if the thread has committed stores
         // this cycle.
         committedStores[tid] = false;
@@ -616,11 +607,7 @@ Commit::tick()
 
     markCompletedInsts();
 
-    threads = activeThreads->begin();
-
-    while (threads != end) {
-        ThreadID tid = *threads++;
-
+    for (ThreadID tid : *activeThreads) {
         if (!rob->isEmpty(tid) && rob->readHeadInst(tid)->readyToCommit()) {
             // The ROB has more instructions it can commit. Its next status
             // will be active.
@@ -744,14 +731,9 @@ Commit::commit()
     ////////////////////////////////////
     // Check for any possible squashes, handle them first
     ////////////////////////////////////
-    std::list<ThreadID>::iterator threads = activeThreads->begin();
-    std::list<ThreadID>::iterator end = activeThreads->end();
 
     int num_squashing_threads = 0;
-
-    while (threads != end) {
-        ThreadID tid = *threads++;
-
+    for (ThreadID tid : *activeThreads) {
         // Not sure which one takes priority.  I think if we have
         // both, that's a bad sign.
         if (trapSquash[tid]) {
@@ -858,11 +840,7 @@ Commit::commit()
     }
 
     //Check for any activity
-    threads = activeThreads->begin();
-
-    while (threads != end) {
-        ThreadID tid = *threads++;
-
+    for (ThreadID tid : *activeThreads) {
         if (changedROBNumEntries[tid]) {
             toIEW->commitInfo[tid].usedROB = true;
             toIEW->commitInfo[tid].freeROBEntries = rob->numFreeEntries(tid);
@@ -964,6 +942,17 @@ Commit::commitInsts()
 
             // Record that the number of ROB entries has changed.
             changedROBNumEntries[tid] = true;
+        // Inst at head of ROB cannot execute because the CPU
+        // does not know how to (lack of FU). This is a misconfiguration,
+        // so panic.
+        } else if (head_inst->noCapableFU() &&
+            head_inst->getFault() == NoFault)  {
+            panic("CPU cannot execute [sn:%llu] op_class: %u but"
+              " did not trigger a fault. Do you need to update"
+              " the configuration and add a functional unit for"
+              " that op class?\n",
+              head_inst->seqNum,
+              head_inst->opClass());
         } else {
             set(pc[tid], head_inst->pcState());
 
@@ -1403,6 +1392,24 @@ ThreadID
 Commit::getCommittingThread()
 {
     if (numThreads > 1) {
+        // If a thread is exiting, we need to ensure that *all* of its
+        // instructions will be retired in this cycle, because the
+        // thread will be removed from the CPU at the end of this cycle.
+        // To ensure this, we prioritize committing from exiting threads
+        // before we consider other threads using the specified SMT
+        // commit policy.
+        for (ThreadID tid : *activeThreads) {
+            if (cpu->isThreadExiting(tid) &&
+                !rob->isEmpty(tid) &&
+                (commitStatus[tid] == Running ||
+                 commitStatus[tid] == Idle ||
+                 commitStatus[tid] == FetchTrapPending)) {
+                assert(rob->isHeadReady(tid) &&
+                       rob->readHeadInst(tid)->isSquashed());
+                return tid;
+            }
+        }
+
         switch (commitPolicy) {
           case CommitPolicy::RoundRobin:
             return roundRobin();
@@ -1430,8 +1437,8 @@ Commit::getCommittingThread()
 ThreadID
 Commit::roundRobin()
 {
-    std::list<ThreadID>::iterator pri_iter = priority_list.begin();
-    std::list<ThreadID>::iterator end      = priority_list.end();
+    auto pri_iter = priority_list.begin();
+    auto end      = priority_list.end();
 
     while (pri_iter != end) {
         ThreadID tid = *pri_iter;
@@ -1461,12 +1468,7 @@ Commit::oldestReady()
     unsigned oldest_seq_num = 0;
     bool first = true;
 
-    std::list<ThreadID>::iterator threads = activeThreads->begin();
-    std::list<ThreadID>::iterator end = activeThreads->end();
-
-    while (threads != end) {
-        ThreadID tid = *threads++;
-
+    for (ThreadID tid : *activeThreads) {
         if (!rob->isEmpty(tid) &&
             (commitStatus[tid] == Running ||
              commitStatus[tid] == Idle ||

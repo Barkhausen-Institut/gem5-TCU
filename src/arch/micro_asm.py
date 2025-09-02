@@ -25,15 +25,17 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import os
-import sys
 import re
+import sys
 import traceback
 
 # get type names
 from types import *
 
-from ply import lex
-from ply import yacc
+from ply import (
+    lex,
+    yacc,
+)
 
 ##########################################################################
 #
@@ -88,18 +90,18 @@ class Rom(MicroContainer):
 ##########################################################################
 
 
-class Label(object):
+class Label:
     def __init__(self):
         self.extern = False
         self.name = ""
 
 
-class Block(object):
+class Block:
     def __init__(self):
         self.statements = []
 
 
-class Statement(object):
+class Statement:
     def __init__(self):
         self.is_microop = False
         self.is_directive = False
@@ -138,9 +140,9 @@ def handle_statement(parser, container, statement):
     if statement.is_microop:
         if statement.mnemonic not in parser.microops.keys():
             raise Exception(f"Unrecognized mnemonic: {statement.mnemonic}")
-        parser.symbols[
-            "__microopClassFromInsideTheAssembler"
-        ] = parser.microops[statement.mnemonic]
+        parser.symbols["__microopClassFromInsideTheAssembler"] = (
+            parser.microops[statement.mnemonic]
+        )
         try:
             microop = eval(
                 f"__microopClassFromInsideTheAssembler({statement.params})",
@@ -164,9 +166,9 @@ def handle_statement(parser, container, statement):
     elif statement.is_directive:
         if statement.name not in container.directives.keys():
             raise Exception(f"Unrecognized directive: {statement.name}")
-        parser.symbols[
-            "__directiveFunctionFromInsideTheAssembler"
-        ] = container.directives[statement.name]
+        parser.symbols["__directiveFunctionFromInsideTheAssembler"] = (
+            container.directives[statement.name]
+        )
         try:
             eval(
                 f"__directiveFunctionFromInsideTheAssembler({statement.params})",
@@ -186,6 +188,7 @@ def handle_statement(parser, container, statement):
 # Lexer specification
 #
 ##########################################################################
+
 
 # Error handler.  Just call exit.  Output formatted to work under
 # Emacs compile-mode.  Optional 'print_traceback' arg, if set to True,
@@ -230,6 +233,7 @@ states = (
 reserved_map = {}
 for r in reserved:
     reserved_map[r.lower()] = r
+
 
 # Ignore comments
 def t_ANY_COMMENT(t):
@@ -359,6 +363,7 @@ def t_ANY_error(t):
 # Parser specification
 #
 ##########################################################################
+
 
 # Start symbol for a file which may have more than one macroop or rom
 # specification.
@@ -567,7 +572,7 @@ def p_error(t):
         error(0, "unknown syntax error", True)
 
 
-class MicroAssembler(object):
+class MicroAssembler:
     def __init__(self, macro_type, microops, rom=None, rom_macroop_type=None):
         self.lexer = lex.lex()
         self.parser = yacc.yacc(write_tables=False)

@@ -23,14 +23,14 @@ accs = ['copy', 'copy', 'copy']
 comptimes = [5856 * 2, 1189 * 2, 5856 * 2]
 rot_cpu = os.environ.get('M3_GEM5_ROT_CPU')
 
-kecaccspmsize = '128MB'
+kecaccspmsize = '128MiB'
 if os.environ.get('M3_ISA') == 'riscv32':
     l1size=None
     l2size=None
-    spmsize='128MB'
+    spmsize='128MiB'
 else:
-    l1size='32kB'
-    l2size='128kB'
+    l1size='32KiB'
+    l2size='128KiB'
     spmsize=None
 
 hard_disk0 = os.environ.get('M3_GEM5_IDE_DRIVE')
@@ -48,7 +48,7 @@ for i in range(0, num_mem):
     tile = createMemTile(noc=root.noc,
                          options=options,
                          id=tile_id,
-                         size='3GB')
+                         size='3GiB')
     tiles.append(tile)
     mem_tile = mem_tile or tile
     mem_tile_id = mem_tile_id or tile_id
@@ -59,7 +59,7 @@ for i in range(0, num_flash):
     tile = createMemTile(noc=root.noc,
                          options=options,
                          id=tile_id,
-                         size=os.environ.get('M3_GEM5_FLASH_SIZE', '512MB'),
+                         size=os.environ.get('M3_GEM5_FLASH_SIZE', '512MiB'),
                          memType='Flash')
     tiles.append(tile)
     flash_tile = flash_tile or tile
@@ -99,7 +99,7 @@ for i in range(0, len(accs)):
                            id=TileId(0, len(tiles)),
                            accel=accs[i],
                            memTile=None,
-                           spmsize='32MB',
+                           spmsize='32MiB',
                            comptime=comptimes[i])
     tiles.append(tile)
 

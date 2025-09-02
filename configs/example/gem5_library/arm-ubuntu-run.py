@@ -40,18 +40,21 @@ scons build/ARM/gem5.opt -j<NUM_CPUS>
 
 """
 
-from gem5.isas import ISA
-from m5.objects import ArmDefaultRelease
-from gem5.utils.requires import requires
-from gem5.resources.workload import Workload
-from gem5.simulate.simulator import Simulator
-from m5.objects import VExpress_GEM5_Foundation
+from m5.objects import (
+    ArmDefaultRelease,
+    VExpress_GEM5_Foundation,
+)
+
 from gem5.coherence_protocol import CoherenceProtocol
 from gem5.components.boards.arm_board import ArmBoard
 from gem5.components.memory import DualChannelDDR4_2400
 from gem5.components.processors.cpu_types import CPUTypes
 from gem5.components.processors.simple_processor import SimpleProcessor
-
+from gem5.isas import ISA
+from gem5.resources.resource import obtain_resource
+from gem5.simulate.exit_event import ExitEvent
+from gem5.simulate.simulator import Simulator
+from gem5.utils.requires import requires
 
 # This runs a check to ensure the gem5 binary is compiled for ARM and the
 # protocol is CHI.
@@ -64,12 +67,12 @@ from gem5.components.cachehierarchies.classic.private_l1_private_l2_cache_hierar
 
 # Here we setup the parameters of the l1 and l2 caches.
 cache_hierarchy = PrivateL1PrivateL2CacheHierarchy(
-    l1d_size="16kB", l1i_size="16kB", l2_size="256kB"
+    l1d_size="16KiB", l1i_size="16KiB", l2_size="256KiB"
 )
 
 # Memory: Dual Channel DDR4 2400 DRAM device.
 
-memory = DualChannelDDR4_2400(size="2GB")
+memory = DualChannelDDR4_2400(size="2GiB")
 
 # Here we setup the processor. We use a simple TIMING processor. The config
 # script was also tested with ATOMIC processor.
@@ -97,18 +100,32 @@ board = ArmBoard(
     platform=platform,
 )
 
-# Here we set a full system workload. The "arm64-ubuntu-20.04-boot" boots
-# Ubuntu 20.04.
+# Here we set a full system workload. The "arm-ubuntu-24.04-boot-with-systemd" boots
+# Ubuntu 24.04.
+workload = obtain_resource("arm-ubuntu-24.04-boot-with-systemd")
+board.set_workload(workload)
 
-board.set_workload(Workload("arm64-ubuntu-20.04-boot"))
 
-# We define the system with the aforementioned system defined.
+def exit_event_handler():
+    print("First exit: kernel booted")
+    yield False  # gem5 is now executing systemd startup
+    print("Second exit: Started `after_boot.sh` script")
+    # The after_boot.sh script is executed after the kernel and systemd have
+    # booted.
+    yield False  # gem5 is now executing the `after_boot.sh` script
+    print("Third exit: Finished `after_boot.sh` script")
+    # The after_boot.sh script will run a script if it is passed via
+    # m5 readfile. This is the last exit event before the simulation exits.
+    yield True
 
-simulator = Simulator(board=board)
 
-# Once the system successfully boots, it encounters an
-# `m5_exit instruction encountered`. We stop the simulation then. When the
-# simulation has ended you may inspect `m5out/board.terminal` to see
-# the stdout.
+simulator = Simulator(
+    board=board,
+    on_exit_event={
+        # Here we want override the default behavior for the first m5 exit
+        # exit event.
+        ExitEvent.EXIT: exit_event_handler()
+    },
+)
 
 simulator.run()

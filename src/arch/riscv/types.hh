@@ -42,7 +42,6 @@
 #ifndef __ARCH_RISCV_TYPES_HH__
 #define __ARCH_RISCV_TYPES_HH__
 
-#include "arch/riscv/pcstate.hh"
 #include "base/bitunion.hh"
 
 namespace gem5
@@ -59,6 +58,7 @@ BitUnion64(ExtMachInst)
     // Decoder state
     Bitfield<63, 62>    rv_type;
     Bitfield<61>        compressed;
+    Bitfield<60>        enable_zcd;
     // More bits for vector extension
     Bitfield<57, 41>    vl;     // [0, 2**16]
     Bitfield<40>        vill;
@@ -127,6 +127,8 @@ BitUnion64(ExtMachInst)
     Bitfield< 6,  2>    rc2;
     Bitfield< 9,  7>    rp1;
     Bitfield< 4,  2>    rp2;
+    Bitfield< 9,  7>    r1s;
+    Bitfield< 4,  2>    r2s;
     Bitfield<11,  7>    fc1;
     Bitfield< 6,  2>    fc2;
     Bitfield< 4,  2>    fp2;
@@ -145,6 +147,9 @@ BitUnion64(ExtMachInst)
     Bitfield<12, 10>    cimm3;
     Bitfield< 6,  5>    cimm2;
     Bitfield<12>        cimm1;
+    Bitfield< 7,  4>    rlist;
+    Bitfield< 3,  2>    spimm;
+    Bitfield< 9,  2>    jt_index;
     // Pseudo instructions
     Bitfield<31, 25>    m5func;
     // vector
@@ -177,6 +182,10 @@ BitUnion64(ExtMachInst)
     Bitfield<31, 25>    bit31_25;
 
 EndBitUnion(ExtMachInst)
+
+constexpr unsigned MaxVecLenInBits = 65536;
+constexpr unsigned MaxVecLenInBytes  = MaxVecLenInBits >> 3;
+
 
 } // namespace RiscvISA
 } // namespace gem5

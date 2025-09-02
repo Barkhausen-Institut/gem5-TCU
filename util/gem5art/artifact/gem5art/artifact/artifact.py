@@ -24,18 +24,25 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-"""File contains the Artifact class and helper functions
-"""
+"""File contains the Artifact class and helper functions"""
 
 import hashlib
-from inspect import cleandoc
 import json
-from pathlib import Path
 import subprocess
 import time
-from typing import Any, Dict, List, Union, Optional
-from uuid import UUID, uuid4
-import json
+from inspect import cleandoc
+from pathlib import Path
+from typing import (
+    Any,
+    Dict,
+    List,
+    Optional,
+    Union,
+)
+from uuid import (
+    UUID,
+    uuid4,
+)
 
 from ._artifactdb import getDBConnection
 
@@ -166,7 +173,6 @@ class Artifact:
         version: str = "",
         **kwargs: str,
     ) -> "Artifact":
-
         """Constructs a new artifact without using the database.
 
         Different from registerArtifact(), this method won't use database.

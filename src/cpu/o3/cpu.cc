@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012, 2014, 2016, 2017, 2019-2020 ARM Limited
+ * Copyright (c) 2011-2012, 2014, 2016, 2017, 2019-2020, 2024 Arm Limited
  * Copyright (c) 2013 Advanced Micro Devices, Inc.
  * All rights reserved
  *
@@ -193,18 +193,36 @@ CPU::CPU(const BaseO3CPUParams &params)
     assert(numThreads);
     const auto &regClasses = params.isa[0]->regClasses();
 
-    assert(params.numPhysIntRegs >=
-            numThreads * regClasses.at(IntRegClass)->numRegs());
-    assert(params.numPhysFloatRegs >=
-            numThreads * regClasses.at(FloatRegClass)->numRegs());
-    assert(params.numPhysVecRegs >=
-            numThreads * regClasses.at(VecRegClass)->numRegs());
-    assert(params.numPhysVecPredRegs >=
-            numThreads * regClasses.at(VecPredRegClass)->numRegs());
-    assert(params.numPhysMatRegs >=
-            numThreads * regClasses.at(MatRegClass)->numRegs());
-    assert(params.numPhysCCRegs >=
-            numThreads * regClasses.at(CCRegClass)->numRegs());
+    panic_if(params.numPhysIntRegs <=
+            numThreads * regClasses.at(IntRegClass)->numRegs() &&
+            regClasses.at(IntRegClass)->numRegs() != 0,
+            "Not enough physical registers, consider increasing "
+            "numPhysIntRegs\n");
+    panic_if(params.numPhysFloatRegs <=
+            numThreads * regClasses.at(FloatRegClass)->numRegs() &&
+            regClasses.at(FloatRegClass)->numRegs() != 0,
+            "Not enough physical registers, consider increasing "
+            "numPhysFloatRegs\n");
+    panic_if(params.numPhysVecRegs <=
+            numThreads * regClasses.at(VecRegClass)->numRegs() &&
+            regClasses.at(VecRegClass)->numRegs() != 0,
+            "Not enough physical registers, consider increasing "
+            "numPhysVecRegs\n");
+    panic_if(params.numPhysVecPredRegs <=
+            numThreads * regClasses.at(VecPredRegClass)->numRegs() &&
+            regClasses.at(VecPredRegClass)->numRegs() != 0,
+            "Not enough physical registers, consider increasing "
+            "numPhysVecPredRegs\n");
+    panic_if(params.numPhysMatRegs <=
+            numThreads * regClasses.at(MatRegClass)->numRegs() &&
+            regClasses.at(MatRegClass)->numRegs() != 0,
+            "Not enough physical registers, consider increasing "
+            "numPhysMatRegs\n");
+    panic_if(params.numPhysCCRegs <=
+            numThreads * regClasses.at(CCRegClass)->numRegs() &&
+            regClasses.at(CCRegClass)->numRegs() != 0,
+            "Not enough physical registers, consider increasing "
+            "numPhysCCRegs\n");
 
     // Just make this a warning and go ahead anyway, to keep from having to
     // add checks everywhere.
@@ -432,13 +450,13 @@ CPU::startup()
 void
 CPU::activateThread(ThreadID tid)
 {
-    std::list<ThreadID>::iterator isActive =
-        std::find(activeThreads.begin(), activeThreads.end(), tid);
+    auto active_it = std::find(
+            activeThreads.begin(), activeThreads.end(), tid);
 
     DPRINTF(O3CPU, "[tid:%i] Calling activate thread.\n", tid);
     assert(!switchedOut());
 
-    if (isActive == activeThreads.end()) {
+    if (active_it == activeThreads.end()) {
         DPRINTF(O3CPU, "[tid:%i] Adding to active threads list\n", tid);
 
         activeThreads.push_back(tid);
@@ -453,16 +471,16 @@ CPU::deactivateThread(ThreadID tid)
     assert(!commit.executingHtmTransaction(tid));
 
     //Remove From Active List, if Active
-    std::list<ThreadID>::iterator thread_it =
-        std::find(activeThreads.begin(), activeThreads.end(), tid);
+    auto active_it = std::find(
+            activeThreads.begin(), activeThreads.end(), tid);
 
     DPRINTF(O3CPU, "[tid:%i] Calling deactivate thread.\n", tid);
     assert(!switchedOut());
 
-    if (thread_it != activeThreads.end()) {
+    if (active_it != activeThreads.end()) {
         DPRINTF(O3CPU,"[tid:%i] Removing from active threads list\n",
                 tid);
-        activeThreads.erase(thread_it);
+        activeThreads.erase(active_it);
     }
 
     fetch.deactivateThread(tid);
@@ -632,15 +650,6 @@ CPU::removeThread(ThreadID tid)
     decode.clearStates(tid);
     rename.clearStates(tid);
     iew.clearStates(tid);
-
-    // Flush out any old data from the time buffers.
-    for (int i = 0; i < timeBuffer.getSize(); ++i) {
-        timeBuffer.advance();
-        fetchQueue.advance();
-        decodeQueue.advance();
-        renameQueue.advance();
-        iewQueue.advance();
-    }
 
     // at this step, all instructions in the pipeline should be already
     // either committed successfully or squashed. All thread-specific
@@ -989,10 +998,10 @@ CPU::getWritableReg(PhysRegIdPtr phys_reg, ThreadID tid)
 {
     switch (phys_reg->classValue()) {
       case VecRegClass:
-        executeStats[tid]->numVecRegReads++;
+        executeStats[tid]->numVecRegWrites++;
         break;
       case VecPredRegClass:
-        executeStats[tid]->numVecPredRegReads++;
+        executeStats[tid]->numVecPredRegWrites++;
         break;
       default:
         break;
@@ -1346,7 +1355,7 @@ CPU::updateThreadPriority()
     if (activeThreads.size() > 1) {
         //DEFAULT TO ROUND ROBIN SCHEME
         //e.g. Move highest priority to end of thread list
-        std::list<ThreadID>::iterator list_begin = activeThreads.begin();
+        auto list_begin = activeThreads.begin();
 
         unsigned high_thread = *list_begin;
 

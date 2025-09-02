@@ -259,6 +259,9 @@ GpuTLB::demapPage(Addr va, uint64_t asn)
 VegaTlbEntry *
 GpuTLB::tlbLookup(const RequestPtr &req, bool update_stats)
 {
+    if (req->hasNoAddr()) {
+        return NULL;
+    }
     Addr vaddr = req->getVaddr();
     Addr alignedVaddr = pageAlign(vaddr);
     DPRINTF(GPUTLB, "TLB Lookup for vaddr %#x.\n", vaddr);
@@ -342,20 +345,25 @@ GpuTLB::issueTLBLookup(PacketPtr pkt)
 
     // Access the TLB and figure out if it's a hit or a miss.
     auto entry = tlbLookup(tmp_req, update_stats);
-
-    if (entry) {
-        lookup_outcome = TLB_HIT;
+    if (entry || pkt->req->hasNoAddr()) {
         // Put the entry in SenderState
-        VegaTlbEntry *entry = lookup(virt_page_addr, false);
-        assert(entry);
+        lookup_outcome = TLB_HIT;
+        if (pkt->req->hasNoAddr()) {
+            sender_state->tlbEntry =
+                new VegaTlbEntry(1 /* VMID */, 0, 0, 0, 0);
+            // set false because we shouldn't go to
+            // host memory for a memtime request
+            pkt->req->setSystemReq(false);
+        } else {
+            VegaTlbEntry *entry = lookup(virt_page_addr, false);
+            assert(entry);
 
-        // Set if this is a system request
-        pkt->req->setSystemReq(entry->pte.s);
+            // Set if this is a system request
+            pkt->req->setSystemReq(entry->pte.s);
 
-        Addr alignedPaddr = pageAlign(entry->paddr);
-        sender_state->tlbEntry =
-            new VegaTlbEntry(1 /* VMID */, virt_page_addr, alignedPaddr,
-                            entry->logBytes, entry->pte);
+            sender_state->tlbEntry =
+                new VegaTlbEntry(*entry);
+        }
 
         if (update_stats) {
             // the reqCnt has an entry per level, so its size tells us
@@ -837,7 +845,7 @@ GpuTLB::CpuSidePort::recvFunctional(PacketPtr pkt)
                 DPRINTF(GPUTLB, "Mapping %#x to %#x\n", vaddr, paddr);
 
                 sender_state->tlbEntry =
-                    new VegaTlbEntry(1 /* VMID */, virt_page_addr,
+                    new VegaTlbEntry(1 /* VMID */, vaddr & (~mask(logBytes)),
                                  alignedPaddr, logBytes, pte);
             } else {
                 // If this was a prefetch, then do the normal thing if it
@@ -848,7 +856,8 @@ GpuTLB::CpuSidePort::recvFunctional(PacketPtr pkt)
                     DPRINTF(GPUTLB, "Mapping %#x to %#x\n", vaddr, paddr);
 
                     sender_state->tlbEntry =
-                        new VegaTlbEntry(1 /* VMID */, virt_page_addr,
+                        new VegaTlbEntry(1 /* VMID */,
+                                     vaddr & (~mask(logBytes)),
                                      alignedPaddr, logBytes, pte);
                 } else {
                     DPRINTF(GPUPrefetch, "Prefetch failed %#x\n", vaddr);
@@ -868,9 +877,7 @@ GpuTLB::CpuSidePort::recvFunctional(PacketPtr pkt)
                     entry->vaddr);
         }
 
-        sender_state->tlbEntry = new VegaTlbEntry(1 /* VMID */, entry->vaddr,
-                                                 entry->paddr, entry->logBytes,
-                                                 entry->pte);
+        sender_state->tlbEntry = new VegaTlbEntry(*entry);
     }
 
     // This is the function that would populate pkt->req with the paddr of

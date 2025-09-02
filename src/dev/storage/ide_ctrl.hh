@@ -49,7 +49,7 @@ class IdeDisk;
  * Device model for an Intel PIIX4 IDE controller
  */
 
-class IdeController : public PciDevice
+class IdeController : public PciEndpoint
 {
   private:
     // Bus master IDE status register bit fields
@@ -96,7 +96,8 @@ class IdeController : public PciDevice
         /* 0x48      */ Register8 udmaControl = {"udma control"};
         /* 0x49      */ RegisterRaz raz1 = {"raz1", 1};
         /* 0x4a-0x4b */ Register16 udmaTiming = {"udma timing"};
-        /* 0x4c-...  */ RegisterRaz raz2 = {"raz2", PCI_CONFIG_SIZE - 0x4c};
+        /* 0x4c-...  */ RegisterRaz raz2 =
+                            {"raz2", (PCI_CONFIG_SIZE + 1) - 0x4c};
 
         void serialize(CheckpointOut &cp) const;
         void unserialize(CheckpointIn &cp);

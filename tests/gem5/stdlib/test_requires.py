@@ -47,8 +47,8 @@ length_map = {
 }
 
 for isa in isa_map.keys():
-    if isa in ("x86", "arm", "riscv"):
-        # We only do these checks for X86, ARM, and RISCV to save compiling
+    if isa in ("x86", "arm"):
+        # We only do these checks for X86 and ARM to save compiling
         # other ISAs.
         gem5_verify_config(
             name=f"requires-isa-{isa}",
@@ -58,11 +58,12 @@ for isa in isa_map.keys():
                 config.base_dir,
                 "tests",
                 "gem5",
+                "stdlib",
                 "configs",
                 "requires_check.py",
             ),
             config_args=["-i", isa],
-            valid_isas=(isa_map[isa],),
+            valid_isas=(constants.all_compiled_tag,),
             length=length_map[isa],
         )
 
@@ -75,6 +76,7 @@ for isa in isa_map.keys():
                 config.base_dir,
                 "tests",
                 "gem5",
+                "stdlib",
                 "configs",
                 "requires_check.py",
             ),

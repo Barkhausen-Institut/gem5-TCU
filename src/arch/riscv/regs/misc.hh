@@ -4,6 +4,7 @@
  * Copyright (c) 2019 Yifei Liu
  * Copyright (c) 2020 Barkhausen Institut
  * Copyright (c) 2021 StreamComputing Corp
+ * Copyright (c) 2025 University of Athens
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -17,6 +18,7 @@
  *
  * Copyright (c) 2016 RISC-V Foundation
  * Copyright (c) 2016 The University of Virginia
+ * Copyright (c) 2024 University of Rostock
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -51,6 +53,7 @@
 
 #include "arch/generic/vec_pred_reg.hh"
 #include "arch/generic/vec_reg.hh"
+#include "arch/riscv/fault_codes.hh"
 #include "arch/riscv/types.hh"
 #include "base/bitunion.hh"
 #include "base/types.hh"
@@ -173,8 +176,8 @@ enum MiscRegIndex
     MISCREG_PMPADDR14,
     MISCREG_PMPADDR15,
 
-    MISCREG_SEDELEG,
-    MISCREG_SIDELEG,
+    MISCREG_RESERVED01, // MISCREG_SEDELEG,
+    MISCREG_RESERVED02, // MISCREG_SIDELEG,
     MISCREG_STVEC,
     MISCREG_SCOUNTEREN,
     MISCREG_SSCRATCH,
@@ -182,14 +185,59 @@ enum MiscRegIndex
     MISCREG_SCAUSE,
     MISCREG_STVAL,
     MISCREG_SATP,
+    MISCREG_SENVCFG,
 
-    MISCREG_UTVEC,
-    MISCREG_USCRATCH,
-    MISCREG_UEPC,
-    MISCREG_UCAUSE,
-    MISCREG_UTVAL,
+    MISCREG_RESERVED03, // MISCREG_UTVEC,
+    MISCREG_RESERVED04, // MISCREG_USCRATCH,
+    MISCREG_RESERVED05, // MISCREG_UEPC,
+    MISCREG_RESERVED06, // MISCREG_UCAUSE,
+    MISCREG_RESERVED07, // MISCREG_UTVAL,
     MISCREG_FFLAGS,
     MISCREG_FRM,
+
+    MISCREG_VSTART,
+    MISCREG_VXSAT,
+    MISCREG_VXRM,
+    MISCREG_VCSR,
+    MISCREG_VL,
+    MISCREG_VTYPE,
+    MISCREG_VLENB,
+
+    // H-extension registers (RV64)
+
+    MISCREG_HVIP, // vssi bit is alias for mip.vssi
+
+    MISCREG_MTINST,
+    MISCREG_MTVAL2,
+
+    MISCREG_HSTATUS,
+    MISCREG_HEDELEG,
+    MISCREG_HIDELEG,
+    MISCREG_HCOUNTEREN,
+    MISCREG_HGEIE,
+    MISCREG_HTVAL,
+    MISCREG_HTINST,
+    MISCREG_HGEIP,
+
+    MISCREG_HENVCFG,
+    MISCREG_HGATP,
+    MISCREG_HCONTEXT,
+    MISCREG_HTIMEDELTA,
+
+    MISCREG_VSSTATUS,
+    MISCREG_VSTVEC,
+    MISCREG_VSSCRATCH,
+    MISCREG_VSEPC,
+    MISCREG_VSCAUSE,
+    MISCREG_VSTVAL,
+    MISCREG_VSATP,
+
+    // This register stores the V-bit.
+    // It is not mandated by the specification,
+    // however it is useful for the implementation.
+    MISCREG_VIRT,
+
+    // H-extension registers end here
 
     // These registers are not in the standard, hence does not exist in the
     // CSRData map. These are mainly used to provide a minimal implementation
@@ -200,6 +248,12 @@ enum MiscRegIndex
     MISCREG_NMIE,
     // non-maskable-interrupt-pending: NMI version of xIP
     MISCREG_NMIP,
+
+    // Resumable Non-Maskable Interrupts
+    MISCREG_MNSCRATCH,
+    MISCREG_MNEPC,
+    MISCREG_MNCAUSE,
+    MISCREG_MNSTATUS,
 
     // the following MicsRegIndex are RV32 only
     MISCREG_MSTATUSH,
@@ -236,6 +290,10 @@ enum MiscRegIndex
     MISCREG_HPMCOUNTER29H,
     MISCREG_HPMCOUNTER30H,
     MISCREG_HPMCOUNTER31H,
+    MISCREG_JVT,
+
+    NUM_PHYS_MISCREGS,
+    MISCREG_FFLAGS_EXE = NUM_PHYS_MISCREGS,
 
     NUM_MISCREGS
 };
@@ -245,14 +303,6 @@ inline constexpr RegClass miscRegClass(MiscRegClass, MiscRegClassName,
 
 enum CSRIndex
 {
-    CSR_USTATUS = 0x000,
-    CSR_UIE = 0x004,
-    CSR_UTVEC = 0x005,
-    CSR_USCRATCH = 0x040,
-    CSR_UEPC = 0x041,
-    CSR_UCAUSE = 0x042,
-    CSR_UTVAL = 0x043,
-    CSR_UIP = 0x044,
     CSR_FFLAGS = 0x001,
     CSR_FRM = 0x002,
     CSR_FCSR = 0x003,
@@ -325,8 +375,6 @@ enum CSRIndex
     // rv32 only csr register end
 
     CSR_SSTATUS = 0x100,
-    CSR_SEDELEG = 0x102,
-    CSR_SIDELEG = 0x103,
     CSR_SIE = 0x104,
     CSR_STVEC = 0x105,
     CSR_SCOUNTEREN = 0x106,
@@ -336,6 +384,7 @@ enum CSRIndex
     CSR_STVAL = 0x143,
     CSR_SIP = 0x144,
     CSR_SATP = 0x180,
+    CSR_SENVCFG = 0x10A, // 20240411 RISCV spec, volume 2
 
     CSR_MVENDORID = 0xF11,
     CSR_MARCHID = 0xF12,
@@ -476,7 +525,57 @@ enum CSRIndex
     CSR_TDATA3 = 0x7A3,
     CSR_DCSR = 0x7B0,
     CSR_DPC = 0x7B1,
-    CSR_DSCRATCH = 0x7B2
+    CSR_DSCRATCH = 0x7B2,
+
+    CSR_VSTART       = 0x008,
+    CSR_VXSAT        = 0x009,
+    CSR_VXRM         = 0x00A,
+    CSR_VCSR         = 0x00F,
+    CSR_VL           = 0xC20,
+    CSR_VTYPE        = 0xC21,
+    CSR_VLENB        = 0xC22,
+
+    CSR_MNSCRATCH    = 0x740,
+    CSR_MNEPC        = 0x741,
+    CSR_MNCAUSE      = 0x742,
+    CSR_MNSTATUS     = 0x744,
+
+    CSR_JVT          = 0x017,
+
+    // H-extension (RV64) CSRs
+
+    CSR_MTINST = 0x34A,
+    CSR_MTVAL2 = 0x34B,
+
+    CSR_HSTATUS = 0x600,
+    CSR_HEDELEG = 0x602,
+    CSR_HIDELEG = 0x603,
+    CSR_HIE = 0x604,
+    CSR_HTIMEDELTA = 0x605,
+    CSR_HCOUNTEREN = 0x606,
+    CSR_HGEIE = 0x607,
+
+    CSR_HTVAL = 0x643,
+    CSR_HIP = 0x644,
+    CSR_HVIP = 0x645,
+    CSR_HTINST = 0x64A,
+    CSR_HGEIP = 0xE12,
+
+    CSR_HENVCFG = 0x60A,
+    CSR_HGATP = 0x680,
+    CSR_HCONTEXT = 0x6A8,
+
+    CSR_VSSTATUS  = 0x200,
+    CSR_VSIE      = 0x204,
+    CSR_VSTVEC    = 0x205,
+    CSR_VSSCRATCH = 0x240,
+    CSR_VSEPC     = 0x241,
+    CSR_VSCAUSE   = 0x242,
+    CSR_VSTVAL    = 0x243,
+    CSR_VSIP      = 0x244,
+    CSR_VSATP     = 0x280
+
+    // H-extension (RV64) CSRs end here
 };
 
 struct CSRMetadata
@@ -484,6 +583,8 @@ struct CSRMetadata
     const std::string name;
     const int physIndex;
     const uint64_t rvTypes;
+    const uint64_t isaExts;
+    const bool requireSmrnmi = false;
 };
 
 template <typename... T>
@@ -491,234 +592,735 @@ constexpr uint64_t rvTypeFlags(T... args) {
     return ((1 << args) | ...);
 }
 
+template <typename... T>
+constexpr uint64_t isaExtsFlags(T... isa_exts) {
+    return ((1ULL << (isa_exts - 'a')) | ...);
+}
+
+constexpr uint64_t isaExtsFlags() {
+    return 0ULL;
+}
+
 const std::unordered_map<int, CSRMetadata> CSRData = {
-    {CSR_USTATUS, {"ustatus", MISCREG_STATUS, rvTypeFlags(RV64, RV32)}},
-    {CSR_UIE, {"uie", MISCREG_IE, rvTypeFlags(RV64, RV32)}},
-    {CSR_UTVEC, {"utvec", MISCREG_UTVEC, rvTypeFlags(RV64, RV32)}},
-    {CSR_USCRATCH, {"uscratch", MISCREG_USCRATCH, rvTypeFlags(RV64, RV32)}},
-    {CSR_UEPC, {"uepc", MISCREG_UEPC, rvTypeFlags(RV64, RV32)}},
-    {CSR_UCAUSE, {"ucause", MISCREG_UCAUSE, rvTypeFlags(RV64, RV32)}},
-    {CSR_UTVAL, {"utval", MISCREG_UTVAL, rvTypeFlags(RV64, RV32)}},
-    {CSR_UIP, {"uip", MISCREG_IP, rvTypeFlags(RV64, RV32)}},
-    {CSR_FFLAGS, {"fflags", MISCREG_FFLAGS, rvTypeFlags(RV64, RV32)}},
-    {CSR_FRM, {"frm", MISCREG_FRM, rvTypeFlags(RV64, RV32)}},
-    {CSR_FCSR, {"fcsr", MISCREG_FFLAGS, rvTypeFlags(RV64, RV32)}}, // Actually FRM << 5 | FFLAGS
-    {CSR_CYCLE, {"cycle", MISCREG_CYCLE, rvTypeFlags(RV64, RV32)}},
-    {CSR_TIME, {"time", MISCREG_TIME, rvTypeFlags(RV64, RV32)}},
-    {CSR_INSTRET, {"instret", MISCREG_INSTRET, rvTypeFlags(RV64, RV32)}},
-    {CSR_HPMCOUNTER03, {"hpmcounter03", MISCREG_HPMCOUNTER03, rvTypeFlags(RV64, RV32)}},
-    {CSR_HPMCOUNTER04, {"hpmcounter04", MISCREG_HPMCOUNTER04, rvTypeFlags(RV64, RV32)}},
-    {CSR_HPMCOUNTER05, {"hpmcounter05", MISCREG_HPMCOUNTER05, rvTypeFlags(RV64, RV32)}},
-    {CSR_HPMCOUNTER06, {"hpmcounter06", MISCREG_HPMCOUNTER06, rvTypeFlags(RV64, RV32)}},
-    {CSR_HPMCOUNTER07, {"hpmcounter07", MISCREG_HPMCOUNTER07, rvTypeFlags(RV64, RV32)}},
-    {CSR_HPMCOUNTER08, {"hpmcounter08", MISCREG_HPMCOUNTER08, rvTypeFlags(RV64, RV32)}},
-    {CSR_HPMCOUNTER09, {"hpmcounter09", MISCREG_HPMCOUNTER09, rvTypeFlags(RV64, RV32)}},
-    {CSR_HPMCOUNTER10, {"hpmcounter10", MISCREG_HPMCOUNTER10, rvTypeFlags(RV64, RV32)}},
-    {CSR_HPMCOUNTER11, {"hpmcounter11", MISCREG_HPMCOUNTER11, rvTypeFlags(RV64, RV32)}},
-    {CSR_HPMCOUNTER12, {"hpmcounter12", MISCREG_HPMCOUNTER12, rvTypeFlags(RV64, RV32)}},
-    {CSR_HPMCOUNTER13, {"hpmcounter13", MISCREG_HPMCOUNTER13, rvTypeFlags(RV64, RV32)}},
-    {CSR_HPMCOUNTER14, {"hpmcounter14", MISCREG_HPMCOUNTER14, rvTypeFlags(RV64, RV32)}},
-    {CSR_HPMCOUNTER15, {"hpmcounter15", MISCREG_HPMCOUNTER15, rvTypeFlags(RV64, RV32)}},
-    {CSR_HPMCOUNTER16, {"hpmcounter16", MISCREG_HPMCOUNTER16, rvTypeFlags(RV64, RV32)}},
-    {CSR_HPMCOUNTER17, {"hpmcounter17", MISCREG_HPMCOUNTER17, rvTypeFlags(RV64, RV32)}},
-    {CSR_HPMCOUNTER18, {"hpmcounter18", MISCREG_HPMCOUNTER18, rvTypeFlags(RV64, RV32)}},
-    {CSR_HPMCOUNTER19, {"hpmcounter19", MISCREG_HPMCOUNTER19, rvTypeFlags(RV64, RV32)}},
-    {CSR_HPMCOUNTER20, {"hpmcounter20", MISCREG_HPMCOUNTER20, rvTypeFlags(RV64, RV32)}},
-    {CSR_HPMCOUNTER21, {"hpmcounter21", MISCREG_HPMCOUNTER21, rvTypeFlags(RV64, RV32)}},
-    {CSR_HPMCOUNTER22, {"hpmcounter22", MISCREG_HPMCOUNTER22, rvTypeFlags(RV64, RV32)}},
-    {CSR_HPMCOUNTER23, {"hpmcounter23", MISCREG_HPMCOUNTER23, rvTypeFlags(RV64, RV32)}},
-    {CSR_HPMCOUNTER24, {"hpmcounter24", MISCREG_HPMCOUNTER24, rvTypeFlags(RV64, RV32)}},
-    {CSR_HPMCOUNTER25, {"hpmcounter25", MISCREG_HPMCOUNTER25, rvTypeFlags(RV64, RV32)}},
-    {CSR_HPMCOUNTER26, {"hpmcounter26", MISCREG_HPMCOUNTER26, rvTypeFlags(RV64, RV32)}},
-    {CSR_HPMCOUNTER27, {"hpmcounter27", MISCREG_HPMCOUNTER27, rvTypeFlags(RV64, RV32)}},
-    {CSR_HPMCOUNTER28, {"hpmcounter28", MISCREG_HPMCOUNTER28, rvTypeFlags(RV64, RV32)}},
-    {CSR_HPMCOUNTER29, {"hpmcounter29", MISCREG_HPMCOUNTER29, rvTypeFlags(RV64, RV32)}},
-    {CSR_HPMCOUNTER30, {"hpmcounter30", MISCREG_HPMCOUNTER30, rvTypeFlags(RV64, RV32)}},
-    {CSR_HPMCOUNTER31, {"hpmcounter31", MISCREG_HPMCOUNTER31, rvTypeFlags(RV64, RV32)}},
-    {CSR_CYCLEH, {"cycleh", MISCREG_CYCLEH, rvTypeFlags(RV32)}},
-    {CSR_TIMEH, {"timeh", MISCREG_TIMEH, rvTypeFlags(RV32)}},
-    {CSR_INSTRETH, {"instreth", MISCREG_INSTRETH, rvTypeFlags(RV32)}},
-    {CSR_HPMCOUNTER03H, {"hpmcounter03h", MISCREG_HPMCOUNTER03H, rvTypeFlags(RV32)}},
-    {CSR_HPMCOUNTER04H, {"hpmcounter04h", MISCREG_HPMCOUNTER04H, rvTypeFlags(RV32)}},
-    {CSR_HPMCOUNTER05H, {"hpmcounter05h", MISCREG_HPMCOUNTER05H, rvTypeFlags(RV32)}},
-    {CSR_HPMCOUNTER06H, {"hpmcounter06h", MISCREG_HPMCOUNTER06H, rvTypeFlags(RV32)}},
-    {CSR_HPMCOUNTER07H, {"hpmcounter07h", MISCREG_HPMCOUNTER07H, rvTypeFlags(RV32)}},
-    {CSR_HPMCOUNTER08H, {"hpmcounter08h", MISCREG_HPMCOUNTER08H, rvTypeFlags(RV32)}},
-    {CSR_HPMCOUNTER09H, {"hpmcounter09h", MISCREG_HPMCOUNTER09H, rvTypeFlags(RV32)}},
-    {CSR_HPMCOUNTER10H, {"hpmcounter10h", MISCREG_HPMCOUNTER10H, rvTypeFlags(RV32)}},
-    {CSR_HPMCOUNTER11H, {"hpmcounter11h", MISCREG_HPMCOUNTER11H, rvTypeFlags(RV32)}},
-    {CSR_HPMCOUNTER12H, {"hpmcounter12h", MISCREG_HPMCOUNTER12H, rvTypeFlags(RV32)}},
-    {CSR_HPMCOUNTER13H, {"hpmcounter13h", MISCREG_HPMCOUNTER13H, rvTypeFlags(RV32)}},
-    {CSR_HPMCOUNTER14H, {"hpmcounter14h", MISCREG_HPMCOUNTER14H, rvTypeFlags(RV32)}},
-    {CSR_HPMCOUNTER15H, {"hpmcounter15h", MISCREG_HPMCOUNTER15H, rvTypeFlags(RV32)}},
-    {CSR_HPMCOUNTER16H, {"hpmcounter16h", MISCREG_HPMCOUNTER16H, rvTypeFlags(RV32)}},
-    {CSR_HPMCOUNTER17H, {"hpmcounter17h", MISCREG_HPMCOUNTER17H, rvTypeFlags(RV32)}},
-    {CSR_HPMCOUNTER18H, {"hpmcounter18h", MISCREG_HPMCOUNTER18H, rvTypeFlags(RV32)}},
-    {CSR_HPMCOUNTER19H, {"hpmcounter19h", MISCREG_HPMCOUNTER19H, rvTypeFlags(RV32)}},
-    {CSR_HPMCOUNTER20H, {"hpmcounter20h", MISCREG_HPMCOUNTER20H, rvTypeFlags(RV32)}},
-    {CSR_HPMCOUNTER21H, {"hpmcounter21h", MISCREG_HPMCOUNTER21H, rvTypeFlags(RV32)}},
-    {CSR_HPMCOUNTER22H, {"hpmcounter22h", MISCREG_HPMCOUNTER22H, rvTypeFlags(RV32)}},
-    {CSR_HPMCOUNTER23H, {"hpmcounter23h", MISCREG_HPMCOUNTER23H, rvTypeFlags(RV32)}},
-    {CSR_HPMCOUNTER24H, {"hpmcounter24h", MISCREG_HPMCOUNTER24H, rvTypeFlags(RV32)}},
-    {CSR_HPMCOUNTER25H, {"hpmcounter25h", MISCREG_HPMCOUNTER25H, rvTypeFlags(RV32)}},
-    {CSR_HPMCOUNTER26H, {"hpmcounter26h", MISCREG_HPMCOUNTER26H, rvTypeFlags(RV32)}},
-    {CSR_HPMCOUNTER27H, {"hpmcounter27h", MISCREG_HPMCOUNTER27H, rvTypeFlags(RV32)}},
-    {CSR_HPMCOUNTER28H, {"hpmcounter28h", MISCREG_HPMCOUNTER28H, rvTypeFlags(RV32)}},
-    {CSR_HPMCOUNTER29H, {"hpmcounter29h", MISCREG_HPMCOUNTER29H, rvTypeFlags(RV32)}},
-    {CSR_HPMCOUNTER30H, {"hpmcounter30h", MISCREG_HPMCOUNTER30H, rvTypeFlags(RV32)}},
-    {CSR_HPMCOUNTER31H, {"hpmcounter31h", MISCREG_HPMCOUNTER31H, rvTypeFlags(RV32)}},
+    {CSR_FFLAGS,
+        {"fflags", MISCREG_FFLAGS, rvTypeFlags(RV64, RV32),
+         isaExtsFlags('f')}},
+    {CSR_FRM,
+        {"frm", MISCREG_FRM, rvTypeFlags(RV64, RV32), isaExtsFlags('f')}},
+    {CSR_FCSR,
+        {"fcsr", MISCREG_FFLAGS, rvTypeFlags(RV64, RV32), isaExtsFlags('f')}},
+    {CSR_CYCLE,
+        {"cycle", MISCREG_CYCLE, rvTypeFlags(RV64, RV32), isaExtsFlags()}},
+    {CSR_TIME,
+        {"time", MISCREG_TIME, rvTypeFlags(RV64, RV32), isaExtsFlags()}},
+    {CSR_INSTRET,
+        {"instret", MISCREG_INSTRET, rvTypeFlags(RV64, RV32), isaExtsFlags()}},
+    {CSR_HPMCOUNTER03,
+        {"hpmcounter03", MISCREG_HPMCOUNTER03, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER04,
+        {"hpmcounter04", MISCREG_HPMCOUNTER04, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER05,
+        {"hpmcounter05", MISCREG_HPMCOUNTER05, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER06,
+        {"hpmcounter06", MISCREG_HPMCOUNTER06, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER07,
+        {"hpmcounter07", MISCREG_HPMCOUNTER07, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER08,
+        {"hpmcounter08", MISCREG_HPMCOUNTER08, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER09,
+        {"hpmcounter09", MISCREG_HPMCOUNTER09, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER10,
+        {"hpmcounter10", MISCREG_HPMCOUNTER10, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER11,
+        {"hpmcounter11", MISCREG_HPMCOUNTER11, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER12,
+        {"hpmcounter12", MISCREG_HPMCOUNTER12, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER13,
+        {"hpmcounter13", MISCREG_HPMCOUNTER13, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER14,
+        {"hpmcounter14", MISCREG_HPMCOUNTER14, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER15,
+        {"hpmcounter15", MISCREG_HPMCOUNTER15, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER16,
+        {"hpmcounter16", MISCREG_HPMCOUNTER16, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER17,
+        {"hpmcounter17", MISCREG_HPMCOUNTER17, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER18,
+        {"hpmcounter18", MISCREG_HPMCOUNTER18, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER19,
+        {"hpmcounter19", MISCREG_HPMCOUNTER19, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER20,
+        {"hpmcounter20", MISCREG_HPMCOUNTER20, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER21,
+        {"hpmcounter21", MISCREG_HPMCOUNTER21, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER22,
+        {"hpmcounter22", MISCREG_HPMCOUNTER22, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER23,
+        {"hpmcounter23", MISCREG_HPMCOUNTER23, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER24,
+        {"hpmcounter24", MISCREG_HPMCOUNTER24, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER25,
+        {"hpmcounter25", MISCREG_HPMCOUNTER25, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER26,
+        {"hpmcounter26", MISCREG_HPMCOUNTER26, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER27,
+        {"hpmcounter27", MISCREG_HPMCOUNTER27, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER28,
+        {"hpmcounter28", MISCREG_HPMCOUNTER28, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER29,
+        {"hpmcounter29", MISCREG_HPMCOUNTER29, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER30,
+        {"hpmcounter30", MISCREG_HPMCOUNTER30, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER31,
+        {"hpmcounter31", MISCREG_HPMCOUNTER31, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_CYCLEH,
+        {"cycleh", MISCREG_CYCLEH, rvTypeFlags(RV32), isaExtsFlags()}},
+    {CSR_TIMEH,
+        {"timeh", MISCREG_TIMEH, rvTypeFlags(RV32), isaExtsFlags()}},
+    {CSR_INSTRETH,
+        {"instreth", MISCREG_INSTRETH, rvTypeFlags(RV32), isaExtsFlags()}},
+    {CSR_HPMCOUNTER03H,
+        {"hpmcounter03h", MISCREG_HPMCOUNTER03H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER04H,
+        {"hpmcounter04h", MISCREG_HPMCOUNTER04H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER05H,
+        {"hpmcounter05h", MISCREG_HPMCOUNTER05H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER06H,
+        {"hpmcounter06h", MISCREG_HPMCOUNTER06H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER07H,
+        {"hpmcounter07h", MISCREG_HPMCOUNTER07H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER08H,
+        {"hpmcounter08h", MISCREG_HPMCOUNTER08H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER09H,
+        {"hpmcounter09h", MISCREG_HPMCOUNTER09H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER10H,
+        {"hpmcounter10h", MISCREG_HPMCOUNTER10H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER11H,
+        {"hpmcounter11h", MISCREG_HPMCOUNTER11H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER12H,
+        {"hpmcounter12h", MISCREG_HPMCOUNTER12H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER13H,
+        {"hpmcounter13h", MISCREG_HPMCOUNTER13H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER14H,
+        {"hpmcounter14h", MISCREG_HPMCOUNTER14H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER15H,
+        {"hpmcounter15h", MISCREG_HPMCOUNTER15H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER16H,
+        {"hpmcounter16h", MISCREG_HPMCOUNTER16H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER17H,
+        {"hpmcounter17h", MISCREG_HPMCOUNTER17H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER18H,
+        {"hpmcounter18h", MISCREG_HPMCOUNTER18H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER19H,
+        {"hpmcounter19h", MISCREG_HPMCOUNTER19H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER20H,
+        {"hpmcounter20h", MISCREG_HPMCOUNTER20H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER21H,
+        {"hpmcounter21h", MISCREG_HPMCOUNTER21H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER22H,
+        {"hpmcounter22h", MISCREG_HPMCOUNTER22H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER23H,
+        {"hpmcounter23h", MISCREG_HPMCOUNTER23H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER24H,
+        {"hpmcounter24h", MISCREG_HPMCOUNTER24H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER25H,
+        {"hpmcounter25h", MISCREG_HPMCOUNTER25H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER26H,
+        {"hpmcounter26h", MISCREG_HPMCOUNTER26H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER27H,
+        {"hpmcounter27h", MISCREG_HPMCOUNTER27H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER28H,
+        {"hpmcounter28h", MISCREG_HPMCOUNTER28H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER29H,
+        {"hpmcounter29h", MISCREG_HPMCOUNTER29H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER30H,
+        {"hpmcounter30h", MISCREG_HPMCOUNTER30H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_HPMCOUNTER31H,
+        {"hpmcounter31h", MISCREG_HPMCOUNTER31H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
 
-    {CSR_SSTATUS, {"sstatus", MISCREG_STATUS, rvTypeFlags(RV64, RV32)}},
-    {CSR_SEDELEG, {"sedeleg", MISCREG_SEDELEG, rvTypeFlags(RV64, RV32)}},
-    {CSR_SIDELEG, {"sideleg", MISCREG_SIDELEG, rvTypeFlags(RV64, RV32)}},
-    {CSR_SIE, {"sie", MISCREG_IE, rvTypeFlags(RV64, RV32)}},
-    {CSR_STVEC, {"stvec", MISCREG_STVEC, rvTypeFlags(RV64, RV32)}},
-    {CSR_SCOUNTEREN, {"scounteren", MISCREG_SCOUNTEREN, rvTypeFlags(RV64, RV32)}},
-    {CSR_SSCRATCH, {"sscratch", MISCREG_SSCRATCH, rvTypeFlags(RV64, RV32)}},
-    {CSR_SEPC, {"sepc", MISCREG_SEPC, rvTypeFlags(RV64, RV32)}},
-    {CSR_SCAUSE, {"scause", MISCREG_SCAUSE, rvTypeFlags(RV64, RV32)}},
-    {CSR_STVAL, {"stval", MISCREG_STVAL, rvTypeFlags(RV64, RV32)}},
-    {CSR_SIP, {"sip", MISCREG_IP, rvTypeFlags(RV64, RV32)}},
-    {CSR_SATP, {"satp", MISCREG_SATP, rvTypeFlags(RV64, RV32)}},
+    {CSR_SSTATUS,
+        {"sstatus", MISCREG_STATUS, rvTypeFlags(RV64, RV32),
+         isaExtsFlags('s')}},
+    {CSR_SIE,
+        {"sie", MISCREG_IE, rvTypeFlags(RV64, RV32), isaExtsFlags('s')}},
+    {CSR_STVEC,
+        {"stvec", MISCREG_STVEC, rvTypeFlags(RV64, RV32), isaExtsFlags('s')}},
+    {CSR_SCOUNTEREN,
+        {"scounteren", MISCREG_SCOUNTEREN, rvTypeFlags(RV64, RV32),
+         isaExtsFlags('s')}},
+    {CSR_SSCRATCH,
+        {"sscratch", MISCREG_SSCRATCH, rvTypeFlags(RV64, RV32),
+         isaExtsFlags('s')}},
+    {CSR_SEPC,
+        {"sepc", MISCREG_SEPC, rvTypeFlags(RV64, RV32), isaExtsFlags('s')}},
+    {CSR_SCAUSE,
+        {"scause", MISCREG_SCAUSE, rvTypeFlags(RV64, RV32),
+         isaExtsFlags('s')}},
+    {CSR_STVAL,
+        {"stval", MISCREG_STVAL, rvTypeFlags(RV64, RV32), isaExtsFlags('s')}},
+    {CSR_SIP,
+        {"sip", MISCREG_IP, rvTypeFlags(RV64, RV32), isaExtsFlags('s')}},
+    {CSR_SATP,
+        {"satp", MISCREG_SATP, rvTypeFlags(RV64, RV32), isaExtsFlags('s')}},
+    {CSR_SENVCFG,
+        {"senvcfg", MISCREG_SENVCFG, rvTypeFlags(RV64, RV32),
+         isaExtsFlags('s')}},
 
-    {CSR_MVENDORID, {"mvendorid", MISCREG_VENDORID, rvTypeFlags(RV64, RV32)}},
-    {CSR_MARCHID, {"marchid", MISCREG_ARCHID, rvTypeFlags(RV64, RV32)}},
-    {CSR_MIMPID, {"mimpid", MISCREG_IMPID, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHARTID, {"mhartid", MISCREG_HARTID, rvTypeFlags(RV64, RV32)}},
-    {CSR_MSTATUS, {"mstatus", MISCREG_STATUS, rvTypeFlags(RV64, RV32)}},
-    {CSR_MISA, {"misa", MISCREG_ISA, rvTypeFlags(RV64, RV32)}},
-    {CSR_MEDELEG, {"medeleg", MISCREG_MEDELEG, rvTypeFlags(RV64, RV32)}},
-    {CSR_MIDELEG, {"mideleg", MISCREG_MIDELEG, rvTypeFlags(RV64, RV32)}},
-    {CSR_MIE, {"mie", MISCREG_IE, rvTypeFlags(RV64, RV32)}},
-    {CSR_MTVEC, {"mtvec", MISCREG_MTVEC, rvTypeFlags(RV64, RV32)}},
-    {CSR_MCOUNTEREN, {"mcounteren", MISCREG_MCOUNTEREN, rvTypeFlags(RV64, RV32)}},
-    {CSR_MSTATUSH, {"mstatush", MISCREG_MSTATUSH, rvTypeFlags(RV32)}},
-    {CSR_MSCRATCH, {"mscratch", MISCREG_MSCRATCH, rvTypeFlags(RV64, RV32)}},
-    {CSR_MEPC, {"mepc", MISCREG_MEPC, rvTypeFlags(RV64, RV32)}},
-    {CSR_MCAUSE, {"mcause", MISCREG_MCAUSE, rvTypeFlags(RV64, RV32)}},
-    {CSR_MTVAL, {"mtval", MISCREG_MTVAL, rvTypeFlags(RV64, RV32)}},
-    {CSR_MIP, {"mip", MISCREG_IP, rvTypeFlags(RV64, RV32)}},
-    {CSR_PMPCFG0, {"pmpcfg0", MISCREG_PMPCFG0, rvTypeFlags(RV64, RV32)}},
-    {CSR_PMPCFG1, {"pmpcfg1", MISCREG_PMPCFG1, rvTypeFlags(RV32)}},  // pmpcfg1 rv32 only
-    {CSR_PMPCFG2, {"pmpcfg2", MISCREG_PMPCFG2, rvTypeFlags(RV64, RV32)}},
-    {CSR_PMPCFG3, {"pmpcfg3", MISCREG_PMPCFG3, rvTypeFlags(RV32)}},  // pmpcfg3 rv32 only
-    {CSR_PMPADDR00, {"pmpaddr0", MISCREG_PMPADDR00, rvTypeFlags(RV64, RV32)}},
-    {CSR_PMPADDR01, {"pmpaddr1", MISCREG_PMPADDR01, rvTypeFlags(RV64, RV32)}},
-    {CSR_PMPADDR02, {"pmpaddr2", MISCREG_PMPADDR02, rvTypeFlags(RV64, RV32)}},
-    {CSR_PMPADDR03, {"pmpaddr3", MISCREG_PMPADDR03, rvTypeFlags(RV64, RV32)}},
-    {CSR_PMPADDR04, {"pmpaddr4", MISCREG_PMPADDR04, rvTypeFlags(RV64, RV32)}},
-    {CSR_PMPADDR05, {"pmpaddr5", MISCREG_PMPADDR05, rvTypeFlags(RV64, RV32)}},
-    {CSR_PMPADDR06, {"pmpaddr6", MISCREG_PMPADDR06, rvTypeFlags(RV64, RV32)}},
-    {CSR_PMPADDR07, {"pmpaddr7", MISCREG_PMPADDR07, rvTypeFlags(RV64, RV32)}},
-    {CSR_PMPADDR08, {"pmpaddr8", MISCREG_PMPADDR08, rvTypeFlags(RV64, RV32)}},
-    {CSR_PMPADDR09, {"pmpaddr9", MISCREG_PMPADDR09, rvTypeFlags(RV64, RV32)}},
-    {CSR_PMPADDR10, {"pmpaddr10", MISCREG_PMPADDR10, rvTypeFlags(RV64, RV32)}},
-    {CSR_PMPADDR11, {"pmpaddr11", MISCREG_PMPADDR11, rvTypeFlags(RV64, RV32)}},
-    {CSR_PMPADDR12, {"pmpaddr12", MISCREG_PMPADDR12, rvTypeFlags(RV64, RV32)}},
-    {CSR_PMPADDR13, {"pmpaddr13", MISCREG_PMPADDR13, rvTypeFlags(RV64, RV32)}},
-    {CSR_PMPADDR14, {"pmpaddr14", MISCREG_PMPADDR14, rvTypeFlags(RV64, RV32)}},
-    {CSR_PMPADDR15, {"pmpaddr15", MISCREG_PMPADDR15, rvTypeFlags(RV64, RV32)}},
-    {CSR_MCYCLE, {"mcycle", MISCREG_CYCLE, rvTypeFlags(RV64, RV32)}},
-    {CSR_MINSTRET, {"minstret", MISCREG_INSTRET, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMCOUNTER03, {"mhpmcounter03", MISCREG_HPMCOUNTER03, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMCOUNTER04, {"mhpmcounter04", MISCREG_HPMCOUNTER04, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMCOUNTER05, {"mhpmcounter05", MISCREG_HPMCOUNTER05, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMCOUNTER06, {"mhpmcounter06", MISCREG_HPMCOUNTER06, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMCOUNTER07, {"mhpmcounter07", MISCREG_HPMCOUNTER07, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMCOUNTER08, {"mhpmcounter08", MISCREG_HPMCOUNTER08, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMCOUNTER09, {"mhpmcounter09", MISCREG_HPMCOUNTER09, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMCOUNTER10, {"mhpmcounter10", MISCREG_HPMCOUNTER10, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMCOUNTER11, {"mhpmcounter11", MISCREG_HPMCOUNTER11, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMCOUNTER12, {"mhpmcounter12", MISCREG_HPMCOUNTER12, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMCOUNTER13, {"mhpmcounter13", MISCREG_HPMCOUNTER13, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMCOUNTER14, {"mhpmcounter14", MISCREG_HPMCOUNTER14, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMCOUNTER15, {"mhpmcounter15", MISCREG_HPMCOUNTER15, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMCOUNTER16, {"mhpmcounter16", MISCREG_HPMCOUNTER16, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMCOUNTER17, {"mhpmcounter17", MISCREG_HPMCOUNTER17, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMCOUNTER18, {"mhpmcounter18", MISCREG_HPMCOUNTER18, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMCOUNTER19, {"mhpmcounter19", MISCREG_HPMCOUNTER19, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMCOUNTER20, {"mhpmcounter20", MISCREG_HPMCOUNTER20, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMCOUNTER21, {"mhpmcounter21", MISCREG_HPMCOUNTER21, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMCOUNTER22, {"mhpmcounter22", MISCREG_HPMCOUNTER22, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMCOUNTER23, {"mhpmcounter23", MISCREG_HPMCOUNTER23, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMCOUNTER24, {"mhpmcounter24", MISCREG_HPMCOUNTER24, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMCOUNTER25, {"mhpmcounter25", MISCREG_HPMCOUNTER25, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMCOUNTER26, {"mhpmcounter26", MISCREG_HPMCOUNTER26, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMCOUNTER27, {"mhpmcounter27", MISCREG_HPMCOUNTER27, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMCOUNTER28, {"mhpmcounter28", MISCREG_HPMCOUNTER28, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMCOUNTER29, {"mhpmcounter29", MISCREG_HPMCOUNTER29, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMCOUNTER30, {"mhpmcounter30", MISCREG_HPMCOUNTER30, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMCOUNTER31, {"mhpmcounter31", MISCREG_HPMCOUNTER31, rvTypeFlags(RV64, RV32)}},
+    {CSR_MVENDORID,
+        {"mvendorid", MISCREG_VENDORID, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MARCHID,
+        {"marchid", MISCREG_ARCHID, rvTypeFlags(RV64, RV32), isaExtsFlags()}},
+    {CSR_MIMPID,
+        {"mimpid", MISCREG_IMPID, rvTypeFlags(RV64, RV32), isaExtsFlags()}},
+    {CSR_MHARTID,
+        {"mhartid", MISCREG_HARTID, rvTypeFlags(RV64, RV32), isaExtsFlags()}},
+    {CSR_MSTATUS,
+        {"mstatus", MISCREG_STATUS, rvTypeFlags(RV64, RV32), isaExtsFlags()}},
+    {CSR_MISA,
+        {"misa", MISCREG_ISA, rvTypeFlags(RV64, RV32), isaExtsFlags()}},
+    {CSR_MEDELEG,
+        {"medeleg", MISCREG_MEDELEG, rvTypeFlags(RV64, RV32), isaExtsFlags()}},
+    {CSR_MIDELEG,
+        {"mideleg", MISCREG_MIDELEG, rvTypeFlags(RV64, RV32), isaExtsFlags()}},
+    {CSR_MIE,
+        {"mie", MISCREG_IE, rvTypeFlags(RV64, RV32), isaExtsFlags()}},
+    {CSR_MTVEC,
+        {"mtvec", MISCREG_MTVEC, rvTypeFlags(RV64, RV32), isaExtsFlags()}},
+    {CSR_MCOUNTEREN,
+        {"mcounteren", MISCREG_MCOUNTEREN, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MSTATUSH,
+        {"mstatush", MISCREG_MSTATUSH, rvTypeFlags(RV32), isaExtsFlags()}},
+    {CSR_MSCRATCH,
+        {"mscratch", MISCREG_MSCRATCH, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MEPC,
+        {"mepc", MISCREG_MEPC, rvTypeFlags(RV64, RV32), isaExtsFlags()}},
+    {CSR_MCAUSE,
+        {"mcause", MISCREG_MCAUSE, rvTypeFlags(RV64, RV32), isaExtsFlags()}},
+    {CSR_MTVAL,
+        {"mtval", MISCREG_MTVAL, rvTypeFlags(RV64, RV32), isaExtsFlags()}},
+    {CSR_MIP,
+        {"mip", MISCREG_IP, rvTypeFlags(RV64, RV32), isaExtsFlags()}},
+    {CSR_PMPCFG0,
+        {"pmpcfg0", MISCREG_PMPCFG0, rvTypeFlags(RV64, RV32), isaExtsFlags()}},
+    // pmpcfg1 rv32 only
+    {CSR_PMPCFG1,
+        {"pmpcfg1", MISCREG_PMPCFG1, rvTypeFlags(RV32), isaExtsFlags()}},
+    {CSR_PMPCFG2,
+        {"pmpcfg2", MISCREG_PMPCFG2, rvTypeFlags(RV64, RV32), isaExtsFlags()}},
+    // pmpcfg3 rv32 only
+    {CSR_PMPCFG3,
+        {"pmpcfg3", MISCREG_PMPCFG3, rvTypeFlags(RV32), isaExtsFlags()}},
+    {CSR_PMPADDR00,
+        {"pmpaddr0", MISCREG_PMPADDR00, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_PMPADDR01,
+        {"pmpaddr1", MISCREG_PMPADDR01, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_PMPADDR02,
+        {"pmpaddr2", MISCREG_PMPADDR02, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_PMPADDR03,
+        {"pmpaddr3", MISCREG_PMPADDR03, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_PMPADDR04,
+        {"pmpaddr4", MISCREG_PMPADDR04, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_PMPADDR05,
+        {"pmpaddr5", MISCREG_PMPADDR05, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_PMPADDR06,
+        {"pmpaddr6", MISCREG_PMPADDR06, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_PMPADDR07,
+        {"pmpaddr7", MISCREG_PMPADDR07, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_PMPADDR08,
+        {"pmpaddr8", MISCREG_PMPADDR08, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_PMPADDR09,
+        {"pmpaddr9", MISCREG_PMPADDR09, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_PMPADDR10,
+        {"pmpaddr10", MISCREG_PMPADDR10, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_PMPADDR11,
+        {"pmpaddr11", MISCREG_PMPADDR11, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_PMPADDR12,
+        {"pmpaddr12", MISCREG_PMPADDR12, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_PMPADDR13,
+        {"pmpaddr13", MISCREG_PMPADDR13, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_PMPADDR14,
+        {"pmpaddr14", MISCREG_PMPADDR14, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_PMPADDR15,
+        {"pmpaddr15", MISCREG_PMPADDR15, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MCYCLE,
+        {"mcycle", MISCREG_CYCLE, rvTypeFlags(RV64, RV32), isaExtsFlags()}},
+    {CSR_MINSTRET,
+        {"minstret", MISCREG_INSTRET, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER03,
+        {"mhpmcounter03", MISCREG_HPMCOUNTER03, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER04,
+        {"mhpmcounter04", MISCREG_HPMCOUNTER04, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER05,
+        {"mhpmcounter05", MISCREG_HPMCOUNTER05, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER06,
+        {"mhpmcounter06", MISCREG_HPMCOUNTER06, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER07,
+        {"mhpmcounter07", MISCREG_HPMCOUNTER07, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER08,
+        {"mhpmcounter08", MISCREG_HPMCOUNTER08, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER09,
+        {"mhpmcounter09", MISCREG_HPMCOUNTER09, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER10,
+        {"mhpmcounter10", MISCREG_HPMCOUNTER10, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER11,
+        {"mhpmcounter11", MISCREG_HPMCOUNTER11, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER12,
+        {"mhpmcounter12", MISCREG_HPMCOUNTER12, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER13,
+        {"mhpmcounter13", MISCREG_HPMCOUNTER13, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER14,
+        {"mhpmcounter14", MISCREG_HPMCOUNTER14, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER15,
+        {"mhpmcounter15", MISCREG_HPMCOUNTER15, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER16,
+        {"mhpmcounter16", MISCREG_HPMCOUNTER16, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER17,
+        {"mhpmcounter17", MISCREG_HPMCOUNTER17, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER18,
+        {"mhpmcounter18", MISCREG_HPMCOUNTER18, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER19,
+        {"mhpmcounter19", MISCREG_HPMCOUNTER19, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER20,
+        {"mhpmcounter20", MISCREG_HPMCOUNTER20, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER21,
+        {"mhpmcounter21", MISCREG_HPMCOUNTER21, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER22,
+        {"mhpmcounter22", MISCREG_HPMCOUNTER22, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER23,
+        {"mhpmcounter23", MISCREG_HPMCOUNTER23, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER24,
+        {"mhpmcounter24", MISCREG_HPMCOUNTER24, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER25,
+        {"mhpmcounter25", MISCREG_HPMCOUNTER25, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER26,
+        {"mhpmcounter26", MISCREG_HPMCOUNTER26, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER27,
+        {"mhpmcounter27", MISCREG_HPMCOUNTER27, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER28,
+        {"mhpmcounter28", MISCREG_HPMCOUNTER28, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER29,
+        {"mhpmcounter29", MISCREG_HPMCOUNTER29, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER30,
+        {"mhpmcounter30", MISCREG_HPMCOUNTER30, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER31,
+        {"mhpmcounter31", MISCREG_HPMCOUNTER31, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
 
-    {CSR_MCYCLEH, {"mcycleh", MISCREG_CYCLEH, rvTypeFlags(RV32)}},
-    {CSR_MINSTRETH, {"minstreth", MISCREG_INSTRETH, rvTypeFlags(RV32)}},
-    {CSR_MHPMCOUNTER03H, {"mhpmcounter03h", MISCREG_HPMCOUNTER03H, rvTypeFlags(RV32)}},
-    {CSR_MHPMCOUNTER04H, {"mhpmcounter04h", MISCREG_HPMCOUNTER04H, rvTypeFlags(RV32)}},
-    {CSR_MHPMCOUNTER05H, {"mhpmcounter05h", MISCREG_HPMCOUNTER05H, rvTypeFlags(RV32)}},
-    {CSR_MHPMCOUNTER06H, {"mhpmcounter06h", MISCREG_HPMCOUNTER06H, rvTypeFlags(RV32)}},
-    {CSR_MHPMCOUNTER07H, {"mhpmcounter07h", MISCREG_HPMCOUNTER07H, rvTypeFlags(RV32)}},
-    {CSR_MHPMCOUNTER08H, {"mhpmcounter08h", MISCREG_HPMCOUNTER08H, rvTypeFlags(RV32)}},
-    {CSR_MHPMCOUNTER09H, {"mhpmcounter09h", MISCREG_HPMCOUNTER09H, rvTypeFlags(RV32)}},
-    {CSR_MHPMCOUNTER10H, {"mhpmcounter10h", MISCREG_HPMCOUNTER10H, rvTypeFlags(RV32)}},
-    {CSR_MHPMCOUNTER11H, {"mhpmcounter11h", MISCREG_HPMCOUNTER11H, rvTypeFlags(RV32)}},
-    {CSR_MHPMCOUNTER12H, {"mhpmcounter12h", MISCREG_HPMCOUNTER12H, rvTypeFlags(RV32)}},
-    {CSR_MHPMCOUNTER13H, {"mhpmcounter13h", MISCREG_HPMCOUNTER13H, rvTypeFlags(RV32)}},
-    {CSR_MHPMCOUNTER14H, {"mhpmcounter14h", MISCREG_HPMCOUNTER14H, rvTypeFlags(RV32)}},
-    {CSR_MHPMCOUNTER15H, {"mhpmcounter15h", MISCREG_HPMCOUNTER15H, rvTypeFlags(RV32)}},
-    {CSR_MHPMCOUNTER16H, {"mhpmcounter16h", MISCREG_HPMCOUNTER16H, rvTypeFlags(RV32)}},
-    {CSR_MHPMCOUNTER17H, {"mhpmcounter17h", MISCREG_HPMCOUNTER17H, rvTypeFlags(RV32)}},
-    {CSR_MHPMCOUNTER18H, {"mhpmcounter18h", MISCREG_HPMCOUNTER18H, rvTypeFlags(RV32)}},
-    {CSR_MHPMCOUNTER19H, {"mhpmcounter19h", MISCREG_HPMCOUNTER19H, rvTypeFlags(RV32)}},
-    {CSR_MHPMCOUNTER20H, {"mhpmcounter20h", MISCREG_HPMCOUNTER20H, rvTypeFlags(RV32)}},
-    {CSR_MHPMCOUNTER21H, {"mhpmcounter21h", MISCREG_HPMCOUNTER21H, rvTypeFlags(RV32)}},
-    {CSR_MHPMCOUNTER22H, {"mhpmcounter22h", MISCREG_HPMCOUNTER22H, rvTypeFlags(RV32)}},
-    {CSR_MHPMCOUNTER23H, {"mhpmcounter23h", MISCREG_HPMCOUNTER23H, rvTypeFlags(RV32)}},
-    {CSR_MHPMCOUNTER24H, {"mhpmcounter24h", MISCREG_HPMCOUNTER24H, rvTypeFlags(RV32)}},
-    {CSR_MHPMCOUNTER25H, {"mhpmcounter25h", MISCREG_HPMCOUNTER25H, rvTypeFlags(RV32)}},
-    {CSR_MHPMCOUNTER26H, {"mhpmcounter26h", MISCREG_HPMCOUNTER26H, rvTypeFlags(RV32)}},
-    {CSR_MHPMCOUNTER27H, {"mhpmcounter27h", MISCREG_HPMCOUNTER27H, rvTypeFlags(RV32)}},
-    {CSR_MHPMCOUNTER28H, {"mhpmcounter28h", MISCREG_HPMCOUNTER28H, rvTypeFlags(RV32)}},
-    {CSR_MHPMCOUNTER29H, {"mhpmcounter29h", MISCREG_HPMCOUNTER29H, rvTypeFlags(RV32)}},
-    {CSR_MHPMCOUNTER30H, {"mhpmcounter30h", MISCREG_HPMCOUNTER30H, rvTypeFlags(RV32)}},
-    {CSR_MHPMCOUNTER31H, {"mhpmcounter31h", MISCREG_HPMCOUNTER31H, rvTypeFlags(RV32)}},
+    {CSR_MCYCLEH,
+        {"mcycleh", MISCREG_CYCLEH, rvTypeFlags(RV32), isaExtsFlags()}},
+    {CSR_MINSTRETH,
+        {"minstreth", MISCREG_INSTRETH, rvTypeFlags(RV32), isaExtsFlags()}},
+    {CSR_MHPMCOUNTER03H,
+        {"mhpmcounter03h", MISCREG_HPMCOUNTER03H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER04H,
+        {"mhpmcounter04h", MISCREG_HPMCOUNTER04H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER05H,
+        {"mhpmcounter05h", MISCREG_HPMCOUNTER05H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER06H,
+        {"mhpmcounter06h", MISCREG_HPMCOUNTER06H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER07H,
+        {"mhpmcounter07h", MISCREG_HPMCOUNTER07H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER08H,
+        {"mhpmcounter08h", MISCREG_HPMCOUNTER08H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER09H,
+        {"mhpmcounter09h", MISCREG_HPMCOUNTER09H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER10H,
+        {"mhpmcounter10h", MISCREG_HPMCOUNTER10H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER11H,
+        {"mhpmcounter11h", MISCREG_HPMCOUNTER11H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER12H,
+        {"mhpmcounter12h", MISCREG_HPMCOUNTER12H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER13H,
+        {"mhpmcounter13h", MISCREG_HPMCOUNTER13H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER14H,
+        {"mhpmcounter14h", MISCREG_HPMCOUNTER14H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER15H,
+        {"mhpmcounter15h", MISCREG_HPMCOUNTER15H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER16H,
+        {"mhpmcounter16h", MISCREG_HPMCOUNTER16H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER17H,
+        {"mhpmcounter17h", MISCREG_HPMCOUNTER17H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER18H,
+        {"mhpmcounter18h", MISCREG_HPMCOUNTER18H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER19H,
+        {"mhpmcounter19h", MISCREG_HPMCOUNTER19H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER20H,
+        {"mhpmcounter20h", MISCREG_HPMCOUNTER20H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER21H,
+        {"mhpmcounter21h", MISCREG_HPMCOUNTER21H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER22H,
+        {"mhpmcounter22h", MISCREG_HPMCOUNTER22H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER23H,
+        {"mhpmcounter23h", MISCREG_HPMCOUNTER23H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER24H,
+        {"mhpmcounter24h", MISCREG_HPMCOUNTER24H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER25H,
+        {"mhpmcounter25h", MISCREG_HPMCOUNTER25H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER26H,
+        {"mhpmcounter26h", MISCREG_HPMCOUNTER26H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER27H,
+        {"mhpmcounter27h", MISCREG_HPMCOUNTER27H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER28H,
+        {"mhpmcounter28h", MISCREG_HPMCOUNTER28H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER29H,
+        {"mhpmcounter29h", MISCREG_HPMCOUNTER29H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER30H,
+        {"mhpmcounter30h", MISCREG_HPMCOUNTER30H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMCOUNTER31H,
+        {"mhpmcounter31h", MISCREG_HPMCOUNTER31H, rvTypeFlags(RV32),
+         isaExtsFlags()}},
 
-    {CSR_MHPMEVENT03, {"mhpmevent03", MISCREG_HPMEVENT03, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMEVENT04, {"mhpmevent04", MISCREG_HPMEVENT04, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMEVENT05, {"mhpmevent05", MISCREG_HPMEVENT05, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMEVENT06, {"mhpmevent06", MISCREG_HPMEVENT06, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMEVENT07, {"mhpmevent07", MISCREG_HPMEVENT07, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMEVENT08, {"mhpmevent08", MISCREG_HPMEVENT08, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMEVENT09, {"mhpmevent09", MISCREG_HPMEVENT09, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMEVENT10, {"mhpmevent10", MISCREG_HPMEVENT10, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMEVENT11, {"mhpmevent11", MISCREG_HPMEVENT11, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMEVENT12, {"mhpmevent12", MISCREG_HPMEVENT12, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMEVENT13, {"mhpmevent13", MISCREG_HPMEVENT13, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMEVENT14, {"mhpmevent14", MISCREG_HPMEVENT14, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMEVENT15, {"mhpmevent15", MISCREG_HPMEVENT15, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMEVENT16, {"mhpmevent16", MISCREG_HPMEVENT16, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMEVENT17, {"mhpmevent17", MISCREG_HPMEVENT17, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMEVENT18, {"mhpmevent18", MISCREG_HPMEVENT18, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMEVENT19, {"mhpmevent19", MISCREG_HPMEVENT19, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMEVENT20, {"mhpmevent20", MISCREG_HPMEVENT20, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMEVENT21, {"mhpmevent21", MISCREG_HPMEVENT21, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMEVENT22, {"mhpmevent22", MISCREG_HPMEVENT22, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMEVENT23, {"mhpmevent23", MISCREG_HPMEVENT23, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMEVENT24, {"mhpmevent24", MISCREG_HPMEVENT24, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMEVENT25, {"mhpmevent25", MISCREG_HPMEVENT25, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMEVENT26, {"mhpmevent26", MISCREG_HPMEVENT26, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMEVENT27, {"mhpmevent27", MISCREG_HPMEVENT27, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMEVENT28, {"mhpmevent28", MISCREG_HPMEVENT28, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMEVENT29, {"mhpmevent29", MISCREG_HPMEVENT29, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMEVENT30, {"mhpmevent30", MISCREG_HPMEVENT30, rvTypeFlags(RV64, RV32)}},
-    {CSR_MHPMEVENT31, {"mhpmevent31", MISCREG_HPMEVENT31, rvTypeFlags(RV64, RV32)}},
+    {CSR_MHPMEVENT03,
+        {"mhpmevent03", MISCREG_HPMEVENT03, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMEVENT04,
+        {"mhpmevent04", MISCREG_HPMEVENT04, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMEVENT05,
+        {"mhpmevent05", MISCREG_HPMEVENT05, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMEVENT06,
+        {"mhpmevent06", MISCREG_HPMEVENT06, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMEVENT07,
+        {"mhpmevent07", MISCREG_HPMEVENT07, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMEVENT08,
+        {"mhpmevent08", MISCREG_HPMEVENT08, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMEVENT09,
+        {"mhpmevent09", MISCREG_HPMEVENT09, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMEVENT10,
+        {"mhpmevent10", MISCREG_HPMEVENT10, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMEVENT11,
+        {"mhpmevent11", MISCREG_HPMEVENT11, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMEVENT12,
+        {"mhpmevent12", MISCREG_HPMEVENT12, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMEVENT13,
+        {"mhpmevent13", MISCREG_HPMEVENT13, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMEVENT14,
+        {"mhpmevent14", MISCREG_HPMEVENT14, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMEVENT15,
+        {"mhpmevent15", MISCREG_HPMEVENT15, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMEVENT16,
+        {"mhpmevent16", MISCREG_HPMEVENT16, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMEVENT17,
+        {"mhpmevent17", MISCREG_HPMEVENT17, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMEVENT18,
+        {"mhpmevent18", MISCREG_HPMEVENT18, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMEVENT19,
+        {"mhpmevent19", MISCREG_HPMEVENT19, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMEVENT20,
+        {"mhpmevent20", MISCREG_HPMEVENT20, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMEVENT21,
+        {"mhpmevent21", MISCREG_HPMEVENT21, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMEVENT22,
+        {"mhpmevent22", MISCREG_HPMEVENT22, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMEVENT23,
+        {"mhpmevent23", MISCREG_HPMEVENT23, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMEVENT24,
+        {"mhpmevent24", MISCREG_HPMEVENT24, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMEVENT25,
+        {"mhpmevent25", MISCREG_HPMEVENT25, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMEVENT26,
+        {"mhpmevent26", MISCREG_HPMEVENT26, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMEVENT27,
+        {"mhpmevent27", MISCREG_HPMEVENT27, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMEVENT28,
+        {"mhpmevent28", MISCREG_HPMEVENT28, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMEVENT29,
+        {"mhpmevent29", MISCREG_HPMEVENT29, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMEVENT30,
+        {"mhpmevent30", MISCREG_HPMEVENT30, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+    {CSR_MHPMEVENT31,
+        {"mhpmevent31", MISCREG_HPMEVENT31, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
 
-    {CSR_TSELECT, {"tselect", MISCREG_TSELECT, rvTypeFlags(RV64, RV32)}},
-    {CSR_TDATA1, {"tdata1", MISCREG_TDATA1, rvTypeFlags(RV64, RV32)}},
-    {CSR_TDATA2, {"tdata2", MISCREG_TDATA2, rvTypeFlags(RV64, RV32)}},
-    {CSR_TDATA3, {"tdata3", MISCREG_TDATA3, rvTypeFlags(RV64, RV32)}},
-    {CSR_DCSR, {"dcsr", MISCREG_DCSR, rvTypeFlags(RV64, RV32)}},
-    {CSR_DPC, {"dpc", MISCREG_DPC, rvTypeFlags(RV64, RV32)}},
-    {CSR_DSCRATCH, {"dscratch", MISCREG_DSCRATCH, rvTypeFlags(RV64, RV32)}}
+    {CSR_TSELECT,
+        {"tselect", MISCREG_TSELECT, rvTypeFlags(RV64, RV32), isaExtsFlags()}},
+    {CSR_TDATA1,
+        {"tdata1", MISCREG_TDATA1, rvTypeFlags(RV64, RV32), isaExtsFlags()}},
+    {CSR_TDATA2,
+        {"tdata2", MISCREG_TDATA2, rvTypeFlags(RV64, RV32), isaExtsFlags()}},
+    {CSR_TDATA3,
+        {"tdata3", MISCREG_TDATA3, rvTypeFlags(RV64, RV32), isaExtsFlags()}},
+    {CSR_DCSR,
+        {"dcsr", MISCREG_DCSR, rvTypeFlags(RV64, RV32), isaExtsFlags()}},
+    {CSR_DPC,
+        {"dpc", MISCREG_DPC, rvTypeFlags(RV64, RV32), isaExtsFlags()}},
+    {CSR_DSCRATCH,
+        {"dscratch", MISCREG_DSCRATCH, rvTypeFlags(RV64, RV32),
+         isaExtsFlags()}},
+
+    {CSR_VSTART,
+        {"vstart", MISCREG_VSTART, rvTypeFlags(RV64, RV32),
+         isaExtsFlags('v')}},
+    {CSR_VXSAT,
+        {"vxsat", MISCREG_VXSAT, rvTypeFlags(RV64, RV32), isaExtsFlags('v')}},
+    {CSR_VXRM,
+        {"vxrm", MISCREG_VXRM, rvTypeFlags(RV64, RV32), isaExtsFlags('v')}},
+    {CSR_VCSR,
+        {"vcsr", MISCREG_VCSR, rvTypeFlags(RV64, RV32), isaExtsFlags('v')}},
+    {CSR_VL,
+        {"vl", MISCREG_VL, rvTypeFlags(RV64, RV32), isaExtsFlags('v')}},
+    {CSR_VTYPE,
+        {"vtype", MISCREG_VTYPE, rvTypeFlags(RV64, RV32), isaExtsFlags('v')}},
+    {CSR_VLENB,
+        {"VLENB", MISCREG_VLENB, rvTypeFlags(RV64, RV32), isaExtsFlags('v')}},
+
+    {CSR_MNSCRATCH,
+        {"mnscratch", MISCREG_MNSCRATCH, rvTypeFlags(RV64, RV32),
+         isaExtsFlags(), true}},
+    {CSR_MNEPC,
+        {"mnepc", MISCREG_MNEPC, rvTypeFlags(RV64, RV32), isaExtsFlags(),
+         true}},
+    {CSR_MNCAUSE,
+        {"mncause", MISCREG_MNCAUSE, rvTypeFlags(RV64, RV32), isaExtsFlags(),
+         true}},
+    {CSR_MNSTATUS,
+        {"mnstatus", MISCREG_MNSTATUS, rvTypeFlags(RV64, RV32),
+         isaExtsFlags(), true}},
+
+    {CSR_JVT,
+        {"jvt", MISCREG_JVT, rvTypeFlags(RV64, RV32), isaExtsFlags()}},
+
+    // H-extension CSR -> MISCREG mappings
+    {CSR_MTINST,
+        {"mtinst", MISCREG_MTINST, rvTypeFlags(RV64),
+        isaExtsFlags('h')}},
+    {CSR_MTVAL2,
+        {"mtval2", MISCREG_MTVAL2, rvTypeFlags(RV64),
+        isaExtsFlags('h')}},
+
+    {CSR_HSTATUS,
+        {"hstatus", MISCREG_HSTATUS, rvTypeFlags(RV64),
+        isaExtsFlags('h')}},
+    {CSR_HEDELEG,
+        {"hedeleg", MISCREG_HEDELEG, rvTypeFlags(RV64),
+        isaExtsFlags('h')}},
+    {CSR_HIDELEG,
+        {"hideleg", MISCREG_HIDELEG, rvTypeFlags(RV64),
+        isaExtsFlags('h')}},
+    {CSR_HIE,
+        {"hie", MISCREG_IE, rvTypeFlags(RV64),
+        isaExtsFlags('h')}},
+    {CSR_HCOUNTEREN,
+        {"hcounteren", MISCREG_HCOUNTEREN, rvTypeFlags(RV64),
+        isaExtsFlags('h')}},
+    {CSR_HGEIE,
+        {"hgeie", MISCREG_HGEIE, rvTypeFlags(RV64),
+        isaExtsFlags('h')}},
+    {CSR_HTVAL,
+        {"htval", MISCREG_HTVAL, rvTypeFlags(RV64),
+        isaExtsFlags('h')}},
+    {CSR_HIP,
+        {"hip", MISCREG_IP, rvTypeFlags(RV64),
+        isaExtsFlags('h')}},
+    {CSR_HVIP,
+        {"hvip", MISCREG_HVIP, rvTypeFlags(RV64),
+        isaExtsFlags('h')}},
+    {CSR_HTINST,
+        {"htinst", MISCREG_HTINST, rvTypeFlags(RV64),
+        isaExtsFlags('h')}},
+    {CSR_HGEIP,
+        {"hgeip", MISCREG_HGEIP, rvTypeFlags(RV64),
+        isaExtsFlags('h')}},
+    {CSR_HENVCFG,
+        {"henvcfg", MISCREG_HENVCFG, rvTypeFlags(RV64),
+        isaExtsFlags('h')}},
+    {CSR_HGATP,
+        {"hgatp", MISCREG_HGATP, rvTypeFlags(RV64),
+        isaExtsFlags('h')}},
+    {CSR_HCONTEXT,
+        {"hcontext", MISCREG_HCONTEXT, rvTypeFlags(RV64),
+        isaExtsFlags('h')}},
+    {CSR_HTIMEDELTA,
+        {"htimedelta", MISCREG_HTIMEDELTA, rvTypeFlags(RV64),
+        isaExtsFlags('h')}},
+
+    {CSR_VSSTATUS,
+        {"vsstatus", MISCREG_VSSTATUS, rvTypeFlags(RV64),
+        isaExtsFlags('h')}},
+    {CSR_VSIE,
+        {"vsie", MISCREG_IE, rvTypeFlags(RV64),
+        isaExtsFlags('h')}},
+    {CSR_VSTVEC,
+        {"vstvec", MISCREG_VSTVEC, rvTypeFlags(RV64),
+        isaExtsFlags('h')}},
+    {CSR_VSSCRATCH,
+        {"vsscratch", MISCREG_VSSCRATCH, rvTypeFlags(RV64),
+        isaExtsFlags('h')}},
+    {CSR_VSEPC,
+        {"vsepc", MISCREG_VSEPC, rvTypeFlags(RV64),
+        isaExtsFlags('h')}},
+    {CSR_VSCAUSE,
+        {"vscause", MISCREG_VSCAUSE, rvTypeFlags(RV64),
+        isaExtsFlags('h')}},
+    {CSR_VSTVAL,
+        {"vstval", MISCREG_VSTVAL, rvTypeFlags(RV64),
+        isaExtsFlags('h')}},
+    {CSR_VSIP,
+        {"vsip", MISCREG_IP, rvTypeFlags(RV64),
+        isaExtsFlags('h')}},
+    {CSR_VSATP,
+        {"vsatp", MISCREG_VSATP, rvTypeFlags(RV64),
+        isaExtsFlags('h')}},
 };
 
 /**
@@ -730,6 +1332,10 @@ const std::unordered_map<int, CSRMetadata> CSRData = {
  */
 BitUnion64(STATUS)
     Bitfield<63> rv64_sd;
+    Bitfield<39> mpv; // H-extension
+    Bitfield<38> gva; // H-extension
+    Bitfield<37> mbe;
+    Bitfield<36> sbe;
     Bitfield<35, 34> sxl;
     Bitfield<33, 32> uxl;
     Bitfield<31> rv32_sd;
@@ -745,17 +1351,43 @@ BitUnion64(STATUS)
     Bitfield<10, 9> vs;
     Bitfield<8> spp;
     Bitfield<7> mpie;
+    Bitfield<6> ube;
     Bitfield<5> spie;
-    Bitfield<4> upie;
     Bitfield<3> mie;
     Bitfield<1> sie;
-    Bitfield<0> uie;
 EndBitUnion(STATUS)
+
+
+// H-extension
+BitUnion64(HSTATUS)
+    Bitfield<33, 32> vsxl;
+    Bitfield<22> vtsr;
+    Bitfield<21> vtw;
+    Bitfield<20> vtvm;
+    Bitfield<17, 12> vgein;
+    Bitfield<9> hu;
+    Bitfield<8> spvp;
+    Bitfield<7> spv;
+    Bitfield<6> gva;
+    Bitfield<5> vsbe;
+EndBitUnion(HSTATUS)
+
+
+/**
+ * These fields are specified in the RISC-V Instruction Set Manual.
+ * Resumable Non-Maskable Interrupts. The main register that
+ * uses these fields is the MNSTATUS register
+ */
+BitUnion64(NSTATUS)
+    Bitfield<12, 11> mnpp;
+    Bitfield<7> mnv;
+    Bitfield<3> nmie;
+EndBitUnion(NSTATUS)
 
 /**
  * These fields are specified in the RISC-V Instruction Set Manual, Volume II,
- * v1.10, v1.11 and v1.12 in Figure 3.1, accessible at www.riscv.org. The register
- * is used to control instruction extensions.
+ * v1.10, v1.11 and v1.12 in Figure 3.1, accessible at www.riscv.org.
+ * The register is used to control instruction extensions.
  */
 BitUnion64(MISA)
     Bitfield<63, 62> rv64_mxl;
@@ -790,16 +1422,37 @@ EndBitUnion(MISA)
  * this bit union.
  */
 BitUnion64(INTERRUPT)
+    Bitfield<63,16> local;
+    Bitfield<12> sgei; // H-extension
     Bitfield<11> mei;
+    Bitfield<10> vsei; // H-extension
     Bitfield<9> sei;
-    Bitfield<8> uei;
     Bitfield<7> mti;
+    Bitfield<6> vsti;  // H-extension
     Bitfield<5> sti;
-    Bitfield<4> uti;
     Bitfield<3> msi;
+    Bitfield<2> vssi;  // H-extension
     Bitfield<1> ssi;
-    Bitfield<0> usi;
 EndBitUnion(INTERRUPT)
+
+
+// From the RISCV specification version 20240411, volume 2,
+// section 10.1.10, page 98
+BitUnion64(SENVCFG)
+    Bitfield<63,34> wpri_1;
+    Bitfield<33,32> pmm;
+    Bitfield<31,8> wpri_2;
+    Bitfield<7> cbze;
+    Bitfield<6> cbcfe;
+    Bitfield<5,4> cbie;
+    Bitfield<3,1> wpri_3;
+    Bitfield<0> fiom;
+EndBitUnion(SENVCFG)
+
+BitUnion64(JVT)
+    Bitfield<63,6> base;
+    Bitfield<5,0> mode;
+EndBitUnion(JVT)
 
 const off_t MXL_OFFSETS[enums::Num_RiscvType] = {
     [RV32] = (sizeof(uint32_t) * 8 - 2),
@@ -814,8 +1467,10 @@ const off_t SBE_OFFSET[enums::Num_RiscvType] = {
     [RV64] = 36,
 };
 const off_t SXL_OFFSET = 34;
+const off_t VSXL_OFFSET = 32; // H-extension
 const off_t UXL_OFFSET = 32;
 const off_t FS_OFFSET = 13;
+const off_t VS_OFFSET = 9;
 const off_t FRM_OFFSET = 5;
 
 const RegVal ISA_MXL_MASKS[enums::Num_RiscvType] = {
@@ -842,6 +1497,9 @@ const RegVal STATUS_SBE_MASK[enums::Num_RiscvType] = {
     [RV32] = 1ULL << SBE_OFFSET[RV32],
     [RV64] = 1ULL << SBE_OFFSET[RV64],
 };
+// These first two offsets only work for RV64
+const RegVal STATUS_MPV_MASK = 1LL << 39; // H-extension
+const RegVal STATUS_GVA_MASK = 1LL << 38; // H-extension
 const RegVal STATUS_SXL_MASK = 3ULL << SXL_OFFSET;
 const RegVal STATUS_UXL_MASK = 3ULL << UXL_OFFSET;
 const RegVal STATUS_TSR_MASK = 1ULL << 22;
@@ -853,67 +1511,170 @@ const RegVal STATUS_MPRV_MASK = 1ULL << 17;
 const RegVal STATUS_XS_MASK = 3ULL << 15;
 const RegVal STATUS_FS_MASK = 3ULL << FS_OFFSET;
 const RegVal STATUS_MPP_MASK = 3ULL << 11;
-const RegVal STATUS_VS_MASK = 3ULL << 9;
+const RegVal STATUS_VS_MASK = 3ULL << VS_OFFSET;
 const RegVal STATUS_SPP_MASK = 1ULL << 8;
 const RegVal STATUS_MPIE_MASK = 1ULL << 7;
+const RegVal STATUS_UBE_MASK = 1ULL << 6;
 const RegVal STATUS_SPIE_MASK = 1ULL << 5;
-const RegVal STATUS_UPIE_MASK = 1ULL << 4;
 const RegVal STATUS_MIE_MASK = 1ULL << 3;
 const RegVal STATUS_SIE_MASK = 1ULL << 1;
-const RegVal STATUS_UIE_MASK = 1ULL << 0;
-const RegVal MSTATUS_MASKS[enums::Num_RiscvType] = {
-    [RV32] = STATUS_SD_MASKS[RV32] | STATUS_TSR_MASK | STATUS_TW_MASK |
-             STATUS_TVM_MASK | STATUS_MXR_MASK | STATUS_SUM_MASK |
-             STATUS_MPRV_MASK | STATUS_XS_MASK | STATUS_FS_MASK |
-             STATUS_VS_MASK | STATUS_MPP_MASK | STATUS_SPP_MASK |
-             STATUS_MPIE_MASK | STATUS_SPIE_MASK | STATUS_UPIE_MASK |
-             STATUS_MIE_MASK | STATUS_SIE_MASK | STATUS_UIE_MASK,
-    [RV64] = STATUS_SD_MASKS[RV64] | STATUS_MBE_MASK[RV64] |
-             STATUS_SBE_MASK[RV64] | STATUS_SXL_MASK | STATUS_UXL_MASK |
-             STATUS_TSR_MASK | STATUS_TW_MASK | STATUS_TVM_MASK |
-             STATUS_MXR_MASK | STATUS_SUM_MASK | STATUS_MPRV_MASK |
-             STATUS_XS_MASK | STATUS_FS_MASK | STATUS_VS_MASK|
-             STATUS_MPP_MASK | STATUS_SPP_MASK | STATUS_MPIE_MASK |
-             STATUS_SPIE_MASK | STATUS_UPIE_MASK | STATUS_MIE_MASK |
-             STATUS_SIE_MASK | STATUS_UIE_MASK,
+
+// H-extension
+const RegVal HSTATUS_VSXL_MASK = 3ULL << VSXL_OFFSET;
+const RegVal HSTATUS_VTSR_MASK = 1ULL << 22;
+const RegVal HSTATUS_VTW_MASK = 1ULL << 21;
+const RegVal HSTATUS_VTVM_MASK = 1ULL << 20;
+const RegVal HSTATUS_VGEIN_MASK = 63ULL << 12;
+const RegVal HSTATUS_HU_MASK = 1ULL << 9;
+const RegVal HSTATUS_SPVP_MASK = 1ULL << 8;
+const RegVal HSTATUS_SPV_MASK = 1ULL << 7;
+const RegVal HSTATUS_GVA_MASK = 1LL << 6;
+const RegVal HSTATUS_VSBE_MASK = 1ULL << 5;
+
+const RegVal
+MSTATUS_MASKS[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
+    [RV32] = {
+        [enums::M] = STATUS_SD_MASKS[RV32] |
+                     STATUS_XS_MASK | STATUS_FS_MASK | STATUS_VS_MASK |
+                     STATUS_MPIE_MASK | STATUS_MIE_MASK,
+        [enums::MU] = STATUS_SD_MASKS[RV32] | STATUS_TW_MASK  |
+                      STATUS_MPRV_MASK |
+                      STATUS_XS_MASK | STATUS_FS_MASK | STATUS_VS_MASK |
+                      STATUS_MPP_MASK | STATUS_MPIE_MASK | STATUS_MIE_MASK,
+        [enums::MSU] = STATUS_SD_MASKS[RV32] | STATUS_TSR_MASK |
+                       STATUS_TW_MASK | STATUS_TVM_MASK | STATUS_MXR_MASK |
+                       STATUS_SUM_MASK | STATUS_MPRV_MASK |
+                       STATUS_XS_MASK | STATUS_FS_MASK | STATUS_VS_MASK |
+                       STATUS_MPP_MASK | STATUS_SPP_MASK |
+                       STATUS_MPIE_MASK | STATUS_SPIE_MASK |
+                       STATUS_MIE_MASK | STATUS_SIE_MASK,
+    },
+    [RV64] = {
+        [enums::M] = STATUS_SD_MASKS[RV64] | STATUS_MBE_MASK[RV64] |
+                     STATUS_XS_MASK | STATUS_FS_MASK | STATUS_VS_MASK |
+                     STATUS_MPIE_MASK | STATUS_MIE_MASK,
+        [enums::MU] = STATUS_SD_MASKS[RV64] | STATUS_MBE_MASK[RV64] |
+                      STATUS_UXL_MASK | STATUS_TW_MASK |  STATUS_MPRV_MASK |
+                      STATUS_XS_MASK | STATUS_FS_MASK | STATUS_VS_MASK |
+                      STATUS_MPP_MASK | STATUS_MPIE_MASK | STATUS_MIE_MASK,
+        [enums::MSU] = STATUS_SD_MASKS[RV64] |
+                       STATUS_MBE_MASK[RV64] | STATUS_SBE_MASK[RV64] |
+                       STATUS_SXL_MASK | STATUS_UXL_MASK |
+                       STATUS_TSR_MASK | STATUS_TW_MASK | STATUS_TVM_MASK |
+                       STATUS_MXR_MASK | STATUS_SUM_MASK | STATUS_MPRV_MASK |
+                       STATUS_XS_MASK | STATUS_FS_MASK | STATUS_VS_MASK |
+                       STATUS_MPP_MASK | STATUS_SPP_MASK |
+                       STATUS_MPIE_MASK | STATUS_SPIE_MASK |
+                       STATUS_MIE_MASK | STATUS_SIE_MASK,
+        [enums::MHSU] = STATUS_SD_MASKS[RV64] |
+                       STATUS_MPV_MASK | STATUS_GVA_MASK | // H-extension
+                       STATUS_MBE_MASK[RV64] | STATUS_SBE_MASK[RV64] |
+                       STATUS_SXL_MASK | STATUS_UXL_MASK |
+                       STATUS_TSR_MASK | STATUS_TW_MASK | STATUS_TVM_MASK |
+                       STATUS_MXR_MASK | STATUS_SUM_MASK | STATUS_MPRV_MASK |
+                       STATUS_XS_MASK | STATUS_FS_MASK | STATUS_VS_MASK |
+                       STATUS_MPP_MASK | STATUS_SPP_MASK |
+                       STATUS_MPIE_MASK | STATUS_SPIE_MASK |
+                       STATUS_MIE_MASK | STATUS_SIE_MASK,
+    },
 };
 // rv32 only
-const RegVal MSTATUSH_MASKS = STATUS_MBE_MASK[RV32] | STATUS_SBE_MASK[RV32];
-const RegVal SSTATUS_MASKS[enums::Num_RiscvType] = {
-    [RV32] = STATUS_SD_MASKS[RV32] | STATUS_MXR_MASK | STATUS_SUM_MASK |
-             STATUS_XS_MASK | STATUS_FS_MASK | STATUS_VS_MASK |
-             STATUS_SPP_MASK | STATUS_SPIE_MASK | STATUS_UPIE_MASK |
-             STATUS_SIE_MASK | STATUS_UIE_MASK,
-    [RV64] = STATUS_SD_MASKS[RV64] | STATUS_UXL_MASK | STATUS_MXR_MASK |
-             STATUS_SUM_MASK | STATUS_XS_MASK | STATUS_FS_MASK |
-             STATUS_VS_MASK | STATUS_SPP_MASK | STATUS_SPIE_MASK |
-             STATUS_UPIE_MASK | STATUS_SIE_MASK | STATUS_UIE_MASK,
-};
-const RegVal USTATUS_MASKS[enums::Num_RiscvType] = {
-    [RV32] = STATUS_SD_MASKS[RV32] | STATUS_MXR_MASK | STATUS_SUM_MASK |
-             STATUS_XS_MASK | STATUS_FS_MASK | STATUS_VS_MASK |
-             STATUS_UPIE_MASK | STATUS_UIE_MASK,
-    [RV64] = STATUS_SD_MASKS[RV64] | STATUS_MXR_MASK | STATUS_SUM_MASK |
-             STATUS_XS_MASK | STATUS_FS_MASK | STATUS_VS_MASK |
-             STATUS_UPIE_MASK | STATUS_UIE_MASK,
+const RegVal MSTATUSH_MASKS[enums::Num_PrivilegeModeSet] = {
+    [enums::M] = STATUS_MBE_MASK[RV32],
+    [enums::MU] = STATUS_MBE_MASK[RV32],
+    [enums::MSU] = STATUS_MBE_MASK[RV32] | STATUS_SBE_MASK[RV32],
 };
 
+const RegVal
+HSTATUS_MASKS[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
+    [RV32] = {
+        [enums::M] = 0ULL,
+        [enums::MU] = 0ULL,
+        [enums::MSU] = 0ULL,
+        [enums::MHSU] = 0ULL,
+    },
+    [RV64] = {
+        [enums::M] = 0ULL,
+        [enums::MU] = 0ULL,
+        [enums::MSU] = 0ULL,
+        [enums::MHSU] = HSTATUS_VSXL_MASK | HSTATUS_VTSR_MASK |
+                        HSTATUS_VTW_MASK   | HSTATUS_VTVM_MASK |
+                        HSTATUS_VGEIN_MASK | HSTATUS_HU_MASK |
+                        HSTATUS_SPVP_MASK | HSTATUS_SPV_MASK |
+                        HSTATUS_GVA_MASK | HSTATUS_VSBE_MASK,
+    },
+};
+const RegVal
+SSTATUS_MASKS[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
+    [RV32] = {
+        [enums::M] = 0ULL,
+        [enums::MU] = 0ULL,
+        [enums::MSU] = STATUS_SD_MASKS[RV32] | STATUS_MXR_MASK |
+                       STATUS_SUM_MASK |
+                       STATUS_XS_MASK | STATUS_FS_MASK | STATUS_VS_MASK |
+                       STATUS_SPP_MASK | STATUS_SPIE_MASK | STATUS_SIE_MASK,
+    },
+    [RV64] = {
+        [enums::M] = 0ULL,
+        [enums::MU] = 0ULL,
+        [enums::MSU] = STATUS_SD_MASKS[RV64] | STATUS_UXL_MASK |
+                       STATUS_MXR_MASK | STATUS_SUM_MASK |
+                       STATUS_XS_MASK | STATUS_FS_MASK | STATUS_VS_MASK |
+                       STATUS_SPP_MASK | STATUS_SPIE_MASK | STATUS_SIE_MASK,
+        [enums::MHSU] = STATUS_SD_MASKS[RV64] | STATUS_UXL_MASK |
+                        STATUS_MXR_MASK | STATUS_SUM_MASK | STATUS_UBE_MASK |
+                        STATUS_XS_MASK | STATUS_FS_MASK | STATUS_VS_MASK |
+                        STATUS_SPP_MASK | STATUS_SPIE_MASK | STATUS_SIE_MASK,
+    },
+};
+
+const RegVal LOCAL_MASK = mask(63,16);
+const RegVal SGEI_MASK = 1ULL << 12; // H-extension
 const RegVal MEI_MASK = 1ULL << 11;
+const RegVal VSEI_MASK = 1ULL << 10; // H-extension
 const RegVal SEI_MASK = 1ULL << 9;
-const RegVal UEI_MASK = 1ULL << 8;
 const RegVal MTI_MASK = 1ULL << 7;
+const RegVal VSTI_MASK = 1ULL << 6; // H-extension
 const RegVal STI_MASK = 1ULL << 5;
-const RegVal UTI_MASK = 1ULL << 4;
 const RegVal MSI_MASK = 1ULL << 3;
+const RegVal VSSI_MASK = 1ULL << 2; // H-extension
 const RegVal SSI_MASK = 1ULL << 1;
-const RegVal USI_MASK = 1ULL << 0;
-const RegVal MI_MASK = MEI_MASK | SEI_MASK | UEI_MASK |
-                       MTI_MASK | STI_MASK | UTI_MASK |
-                       MSI_MASK | SSI_MASK | USI_MASK;
-const RegVal SI_MASK = SEI_MASK | UEI_MASK |
-                       STI_MASK | UTI_MASK |
-                       SSI_MASK | USI_MASK;
-const RegVal UI_MASK = UEI_MASK | UTI_MASK | USI_MASK;
+
+const RegVal MI_MASK[enums::Num_PrivilegeModeSet] = {
+    [enums::M] = LOCAL_MASK |
+                 MEI_MASK| MTI_MASK | MSI_MASK,
+    [enums::MU] = LOCAL_MASK |
+                  MEI_MASK| MTI_MASK | MSI_MASK,
+    [enums::MSU] = LOCAL_MASK |
+                   MEI_MASK | SEI_MASK |
+                   MTI_MASK | STI_MASK |
+                   MSI_MASK | SSI_MASK,
+    [enums::MHSU] = LOCAL_MASK |
+                    MEI_MASK | VSEI_MASK | SEI_MASK |
+                    MTI_MASK | VSTI_MASK | STI_MASK |
+                    MSI_MASK | VSSI_MASK | SSI_MASK | SGEI_MASK,
+};
+
+const RegVal SI_MASK[enums::Num_PrivilegeModeSet] = {
+    [enums::M] = LOCAL_MASK,
+    [enums::MU] = LOCAL_MASK,
+    [enums::MSU] = LOCAL_MASK | SEI_MASK | STI_MASK | SSI_MASK,
+    [enums::MHSU] = LOCAL_MASK | SEI_MASK | STI_MASK | SSI_MASK,
+};
+const RegVal MIDELEG_MASK[enums::Num_PrivilegeModeSet] = {
+    [enums::M] = LOCAL_MASK,
+    [enums::MU] = LOCAL_MASK,
+    [enums::MSU] = LOCAL_MASK | SEI_MASK | STI_MASK | SSI_MASK,
+    [enums::MHSU] = LOCAL_MASK | SEI_MASK | STI_MASK | SSI_MASK,
+};
+
+const RegVal VSI_MASK[enums::Num_PrivilegeModeSet] = {
+    [enums::M] = LOCAL_MASK,
+    [enums::MU] = LOCAL_MASK,
+    [enums::MSU] = LOCAL_MASK,
+    [enums::MHSU] = LOCAL_MASK | VSEI_MASK | VSTI_MASK | VSSI_MASK,
+};
+
 const RegVal FFLAGS_MASK = (1 << FRM_OFFSET) - 1;
 const RegVal FRM_MASK = 0x7;
 
@@ -922,34 +1683,266 @@ const RegVal CAUSE_INTERRUPT_MASKS[enums::Num_RiscvType] = {
     [RV64] = (1ULL << 63),
 };
 
-const std::unordered_map<int, RegVal> CSRMasks[enums::Num_RiscvType] = {
-    [RV32] = {{CSR_USTATUS, USTATUS_MASKS[RV32]},
-              {CSR_UIE, UI_MASK},
-              {CSR_UIP, UI_MASK},
-              {CSR_FFLAGS, FFLAGS_MASK},
-              {CSR_FRM, FRM_MASK},
-              {CSR_FCSR, FFLAGS_MASK | (FRM_MASK << FRM_OFFSET)},
-              {CSR_SSTATUS, SSTATUS_MASKS[RV32]},
-              {CSR_SIE, SI_MASK},
-              {CSR_SIP, SI_MASK},
-              {CSR_MSTATUS, MSTATUS_MASKS[RV32]},
-              {CSR_MISA, MISA_MASKS[RV32]},
-              {CSR_MIE, MI_MASK},
-              {CSR_MSTATUSH, MSTATUSH_MASKS},
-              {CSR_MIP, MI_MASK}},
-    [RV64] = {{CSR_USTATUS, USTATUS_MASKS[RV64]},
-              {CSR_UIE, UI_MASK},
-              {CSR_UIP, UI_MASK},
-              {CSR_FFLAGS, FFLAGS_MASK},
-              {CSR_FRM, FRM_MASK},
-              {CSR_FCSR, FFLAGS_MASK | (FRM_MASK << FRM_OFFSET)},
-              {CSR_SSTATUS, SSTATUS_MASKS[RV64]},
-              {CSR_SIE, SI_MASK},
-              {CSR_SIP, SI_MASK},
-              {CSR_MSTATUS, MSTATUS_MASKS[RV64]},
-              {CSR_MISA, MISA_MASKS[RV64]},
-              {CSR_MIE, MI_MASK},
-              {CSR_MIP, MI_MASK}},
+
+// H-extension
+const RegVal DELEGABLE_INTS_MASK = SSI_MASK | STI_MASK | SEI_MASK |
+                                   VSSI_MASK | VSTI_MASK | VSEI_MASK;
+// H-extension
+const RegVal HS_INTERRUPTS = SGEI_MASK | VSSI_MASK | VSTI_MASK | VSEI_MASK;
+
+const std::unordered_map<int, RegVal>
+CSRMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
+    [RV32] = {
+        [enums::M] = {
+            {CSR_FFLAGS, FFLAGS_MASK},
+            {CSR_FRM, FRM_MASK},
+            {CSR_FCSR, FFLAGS_MASK | (FRM_MASK << FRM_OFFSET)},
+            {CSR_SSTATUS, SSTATUS_MASKS[RV32][enums::M]},
+            {CSR_SIE, SI_MASK[enums::M]},
+            {CSR_SIP, SI_MASK[enums::M]},
+            {CSR_MSTATUS, MSTATUS_MASKS[RV32][enums::M]},
+            {CSR_MISA, MISA_MASKS[RV32]},
+            {CSR_MIE, MI_MASK[enums::M]},
+            {CSR_MSTATUSH, MSTATUSH_MASKS[enums::M]},
+            {CSR_MIP, MI_MASK[enums::M]},
+        },
+        [enums::MU] = {
+            {CSR_FFLAGS, FFLAGS_MASK},
+            {CSR_FRM, FRM_MASK},
+            {CSR_FCSR, FFLAGS_MASK | (FRM_MASK << FRM_OFFSET)},
+            {CSR_SSTATUS, SSTATUS_MASKS[RV32][enums::MU]},
+            {CSR_SIE, SI_MASK[enums::MU]},
+            {CSR_SIP, SI_MASK[enums::MU]},
+            {CSR_MSTATUS, MSTATUS_MASKS[RV32][enums::MU]},
+            {CSR_MISA, MISA_MASKS[RV32]},
+            {CSR_MIE, MI_MASK[enums::MU]},
+            {CSR_MSTATUSH, MSTATUSH_MASKS[enums::MU]},
+            {CSR_MIP, MI_MASK[enums::MU]},
+        },
+        [enums::MSU] = {
+            {CSR_FFLAGS, FFLAGS_MASK},
+            {CSR_FRM, FRM_MASK},
+            {CSR_FCSR, FFLAGS_MASK | (FRM_MASK << FRM_OFFSET)},
+            {CSR_SSTATUS, SSTATUS_MASKS[RV32][enums::MSU]},
+            {CSR_SIE, SI_MASK[enums::MSU]},
+            {CSR_SIP, SI_MASK[enums::MSU]},
+            {CSR_MSTATUS, MSTATUS_MASKS[RV32][enums::MSU]},
+            {CSR_MISA, MISA_MASKS[RV32]},
+            {CSR_MIE, MI_MASK[enums::MSU]},
+            {CSR_MSTATUSH, MSTATUSH_MASKS[enums::MSU]},
+            {CSR_MIP, MI_MASK[enums::MSU]},
+        },
+    },
+    [RV64] = {
+        [enums::M] = {
+            {CSR_FFLAGS, FFLAGS_MASK},
+            {CSR_FRM, FRM_MASK},
+            {CSR_FCSR, FFLAGS_MASK | (FRM_MASK << FRM_OFFSET)},
+            {CSR_SSTATUS, SSTATUS_MASKS[RV64][enums::M]},
+            {CSR_SIE, SI_MASK[enums::M]},
+            {CSR_SIP, SI_MASK[enums::M]},
+            {CSR_MSTATUS, MSTATUS_MASKS[RV64][enums::M]},
+            {CSR_MISA, MISA_MASKS[RV64]},
+            {CSR_MIE, MI_MASK[enums::M]},
+            {CSR_MIP, MI_MASK[enums::M]},
+        },
+        [enums::MU] = {
+            {CSR_FFLAGS, FFLAGS_MASK},
+            {CSR_FRM, FRM_MASK},
+            {CSR_FCSR, FFLAGS_MASK | (FRM_MASK << FRM_OFFSET)},
+            {CSR_SSTATUS, SSTATUS_MASKS[RV64][enums::MU]},
+            {CSR_SIE, SI_MASK[enums::MU]},
+            {CSR_SIP, SI_MASK[enums::MU]},
+            {CSR_MSTATUS, MSTATUS_MASKS[RV64][enums::MU]},
+            {CSR_MISA, MISA_MASKS[RV64]},
+            {CSR_MIE, MI_MASK[enums::MU]},
+            {CSR_MIP, MI_MASK[enums::MU]},
+        },
+        [enums::MSU] = {
+            {CSR_FFLAGS, FFLAGS_MASK},
+            {CSR_FRM, FRM_MASK},
+            {CSR_FCSR, FFLAGS_MASK | (FRM_MASK << FRM_OFFSET)},
+            {CSR_SSTATUS, SSTATUS_MASKS[RV64][enums::MSU]},
+            {CSR_SIE, SI_MASK[enums::MSU]},
+            {CSR_SIP, SI_MASK[enums::MSU]},
+            {CSR_MSTATUS, MSTATUS_MASKS[RV64][enums::MSU]},
+            {CSR_MISA, MISA_MASKS[RV64]},
+            {CSR_MIE, MI_MASK[enums::MSU]},
+            {CSR_MIP, MI_MASK[enums::MSU]},
+        },
+        [enums::MHSU] = {
+            {CSR_FFLAGS, FFLAGS_MASK},
+            {CSR_FRM, FRM_MASK},
+            {CSR_FCSR, FFLAGS_MASK | (FRM_MASK << FRM_OFFSET)},
+            {CSR_SSTATUS, SSTATUS_MASKS[RV64][enums::MHSU]},
+            {CSR_SIE, SI_MASK[enums::MHSU]},
+            {CSR_SIP, SI_MASK[enums::MHSU]},
+            {CSR_VSSTATUS, SSTATUS_MASKS[RV64][enums::MHSU]},
+            {CSR_VSIE, VSI_MASK[enums::MHSU]},
+            {CSR_VSIP, VSI_MASK[enums::MHSU]},
+            {CSR_HSTATUS, HSTATUS_MASKS[RV64][enums::MHSU]},
+            {CSR_HIE, HS_INTERRUPTS},
+            {CSR_HIP, HS_INTERRUPTS},
+            {CSR_HVIP, HS_INTERRUPTS & ~SGEI_MASK},
+            {CSR_MSTATUS, MSTATUS_MASKS[RV64][enums::MHSU]},
+            {CSR_MISA, MISA_MASKS[RV64]},
+            {CSR_MIE, MI_MASK[enums::MHSU]},
+            {CSR_MIP, MI_MASK[enums::MHSU]},
+        },
+    },
+};
+
+
+// Write masks are needed since some visible (readable)
+// register bits can be read-only.
+// Without using a write mask, writes are permitted to
+// bits that should be read-only.
+
+// Normal software (e.g. a linux kernel) wouldn't do this,
+// but our "hardware" shouldn't allow this to any program.
+
+// For RV32 we leave the write masks the same as the
+// "visible bits" masks that are defined above for now
+
+// Moreover, instead of writing out a write mask for
+// every register, we only specify masks for registers
+// whose write mask differs from the total visible bits.
+// This saves space and improves readability.
+// To use the map we lookup a CSR for its write-mask
+// If the mask is present it is used, otherwise the write mask
+// that should be used is the "visible bits" mask define above.
+
+const std::unordered_map<int, RegVal>
+CSRWriteMasks[enums::Num_RiscvType][enums::Num_PrivilegeModeSet] = {
+    [RV32] = {
+        [enums::M] = {},
+        [enums::MU] = {},
+        [enums::MSU] = {},
+    },
+    [RV64] = {
+        [enums::M] = {
+            {CSR_MIDELEG, 0ULL},
+            {CSR_MEDELEG, 0ULL},
+            {CSR_MSTATUS,
+                STATUS_XS_MASK | STATUS_FS_MASK | STATUS_VS_MASK |
+                STATUS_MIE_MASK | STATUS_MPIE_MASK | STATUS_MPP_MASK |
+                STATUS_TW_MASK  | STATUS_TVM_MASK
+            },
+            {CSR_MIP, 0ULL},
+            {CSR_MIE,
+                MSI_MASK | MTI_MASK | MEI_MASK
+            },
+        },
+        [enums::MU] = {
+            {CSR_MIDELEG, 0ULL},
+            {CSR_MEDELEG, 0ULL},
+            {CSR_MSTATUS,
+                STATUS_XS_MASK | STATUS_FS_MASK | STATUS_VS_MASK |
+                STATUS_MIE_MASK | STATUS_MPIE_MASK | STATUS_MPP_MASK |
+                STATUS_TW_MASK  | STATUS_TVM_MASK  |
+                STATUS_MPRV_MASK // added for U
+            },
+            {CSR_MIP, 0ULL},
+            {CSR_MIE,
+                MSI_MASK | MTI_MASK | MEI_MASK
+            },
+        },
+        [enums::MSU] = {
+            {CSR_MIDELEG, SSI_MASK | STI_MASK | SEI_MASK},
+            {CSR_MEDELEG, DELEGABLE_EXCPS},
+            {CSR_MSTATUS,
+                STATUS_XS_MASK | STATUS_FS_MASK | STATUS_VS_MASK |
+                STATUS_MIE_MASK | STATUS_MPIE_MASK | STATUS_MPP_MASK |
+                STATUS_TW_MASK  | STATUS_TVM_MASK  |
+                STATUS_MPRV_MASK | // added for U
+                STATUS_TSR_MASK  | STATUS_SIE_MASK | STATUS_SPIE_MASK |
+                STATUS_SPP_MASK  | STATUS_SUM_MASK | STATUS_MXR_MASK
+                // added for S
+            },
+            {CSR_MIP,
+                SEI_MASK | SSI_MASK | STI_MASK // added for S
+            },
+            {CSR_MIE,
+                MSI_MASK | MTI_MASK | MEI_MASK |
+                SSI_MASK | STI_MASK | SEI_MASK // added for S
+            },
+            {CSR_SSTATUS,
+                STATUS_XS_MASK | STATUS_FS_MASK | STATUS_VS_MASK |
+                STATUS_SIE_MASK | STATUS_SPIE_MASK | // no TSR here!
+                STATUS_SPP_MASK  | STATUS_SUM_MASK | STATUS_MXR_MASK
+                // added for S
+            },
+            {CSR_SIP,
+                SSI_MASK // added for S
+            },
+            {CSR_SIE,
+                SSI_MASK | STI_MASK | SEI_MASK // added for S
+            },
+        },
+        [enums::MHSU] = {
+            {CSR_MIDELEG, SSI_MASK | STI_MASK | SEI_MASK},
+            {CSR_MEDELEG, DELEGABLE_EXCPS_WITH_RVH},
+            {CSR_MSTATUS,
+                STATUS_XS_MASK | STATUS_FS_MASK | STATUS_VS_MASK |
+                STATUS_MIE_MASK | STATUS_MPIE_MASK | STATUS_MPP_MASK |
+                STATUS_TW_MASK  | STATUS_TVM_MASK  |
+                STATUS_MPRV_MASK | // added for U
+                STATUS_TSR_MASK  | STATUS_SIE_MASK | STATUS_SPIE_MASK |
+                STATUS_SPP_MASK  | STATUS_SUM_MASK | STATUS_MXR_MASK |
+                // added for S
+                STATUS_GVA_MASK | STATUS_MPV_MASK // added for H
+            },
+            {CSR_MIP,
+                SEI_MASK | SSI_MASK | STI_MASK | // added for S
+                VSSI_MASK // added for H
+            },
+            {CSR_MIE,
+                MSI_MASK | MTI_MASK | MEI_MASK |
+                SSI_MASK | STI_MASK | SEI_MASK | // added for S
+                HS_INTERRUPTS // added for H (multiple bits)
+            },
+            {CSR_SSTATUS,
+                STATUS_XS_MASK | STATUS_FS_MASK | STATUS_VS_MASK |
+                STATUS_SIE_MASK | STATUS_SPIE_MASK | // no TSR here!
+                STATUS_SPP_MASK  | STATUS_SUM_MASK | STATUS_MXR_MASK
+                // added for S
+            },
+            {CSR_SIP,
+                SSI_MASK // added for S
+            },
+            {CSR_SIE,
+                SSI_MASK | STI_MASK | SEI_MASK // added for S
+            },
+            {CSR_HSTATUS,
+                HSTATUS_VTSR_MASK | HSTATUS_VTW_MASK |
+                HSTATUS_VTVM_MASK | HSTATUS_HU_MASK |
+                HSTATUS_SPVP_MASK | HSTATUS_SPV_MASK |
+                HSTATUS_GVA_MASK    // added for H
+            },
+            {CSR_HIP,
+                VSSI_MASK // added for H
+            },
+            {CSR_HIE,
+                HS_INTERRUPTS // added for H
+            },
+            {CSR_HVIP,
+                HS_INTERRUPTS & ~SGEI_MASK // added for H
+            },
+            {CSR_VSSTATUS,
+                STATUS_XS_MASK | STATUS_FS_MASK | STATUS_VS_MASK |
+                STATUS_SIE_MASK | STATUS_SPIE_MASK | // no TSR here!
+                STATUS_SPP_MASK  | STATUS_SUM_MASK | STATUS_MXR_MASK
+                // added for H
+            },
+            {CSR_VSIP,
+                VSSI_MASK // added for H
+            },
+            {CSR_VSIE,
+                HS_INTERRUPTS & ~SGEI_MASK // added for H
+            },
+
+        },
+    },
 };
 
 } // namespace RiscvISA

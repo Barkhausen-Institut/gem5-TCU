@@ -15,7 +15,7 @@ for i in range(0, num_tiles):
                                options=options,
                                id=TileId(0, i),
                                memTile=mem_tile,
-                               spmsize='64MB')
+                               spmsize='64MiB')
     # use 64 bytes as the block size here to test whether it works with multiple memory accesses
     tile.tcu.block_size = "64B"
     tiles.append(tile)
@@ -23,7 +23,7 @@ for i in range(0, num_tiles):
 tile = createMemTile(noc=root.noc,
                      options=options,
                      id=TileId(0, num_tiles),
-                     size='3072MB')
+                     size='3072MiB')
 
 tiles.append(tile)
 

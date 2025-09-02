@@ -25,23 +25,32 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
-from .abstract_ruby_cache_hierarchy import AbstractRubyCacheHierarchy
+from m5.objects import (
+    DMASequencer,
+    RubyPortProxy,
+    RubySequencer,
+    RubySystem,
+)
+
+from ....coherence_protocol import CoherenceProtocol
+from ....utils.override import overrides
+from ....utils.requires import requires
+
+requires(coherence_protocol_required=CoherenceProtocol.MESI_THREE_LEVEL)
+
+from ....isas import ISA
+from ...boards.abstract_board import AbstractBoard
+from ..abstract_cache_hierarchy import AbstractCacheHierarchy
 from ..abstract_three_level_cache_hierarchy import (
     AbstractThreeLevelCacheHierarchy,
 )
-from ....coherence_protocol import CoherenceProtocol
-from ....isas import ISA
-from ...boards.abstract_board import AbstractBoard
-from ....utils.requires import requires
-
-from .topologies.simple_pt2pt import SimplePt2Pt
+from .abstract_ruby_cache_hierarchy import AbstractRubyCacheHierarchy
+from .caches.mesi_three_level.directory import Directory
+from .caches.mesi_three_level.dma_controller import DMAController
 from .caches.mesi_three_level.l1_cache import L1Cache
 from .caches.mesi_three_level.l2_cache import L2Cache
 from .caches.mesi_three_level.l3_cache import L3Cache
-from .caches.mesi_three_level.directory import Directory
-from .caches.mesi_three_level.dma_controller import DMAController
-
-from m5.objects import RubySystem, RubySequencer, DMASequencer, RubyPortProxy
+from .topologies.simple_pt2pt import SimplePt2Pt
 
 
 class MESIThreeLevelCacheHierarchy(
@@ -55,13 +64,13 @@ class MESIThreeLevelCacheHierarchy(
     def __init__(
         self,
         l1i_size: str,
-        l1i_assoc: str,
+        l1i_assoc: int,
         l1d_size: str,
-        l1d_assoc: str,
+        l1d_assoc: int,
         l2_size: str,
-        l2_assoc: str,
+        l2_assoc: int,
         l3_size: str,
-        l3_assoc: str,
+        l3_assoc: int,
         num_l3_banks: int,
     ):
         AbstractRubyCacheHierarchy.__init__(self=self)
@@ -79,12 +88,12 @@ class MESIThreeLevelCacheHierarchy(
 
         self._num_l3_banks = num_l3_banks
 
+    @overrides(AbstractCacheHierarchy)
+    def get_coherence_protocol(self):
+        return CoherenceProtocol.MESI_THREE_LEVEL
+
     def incorporate_cache(self, board: AbstractBoard) -> None:
-
-        requires(
-            coherence_protocol_required=CoherenceProtocol.MESI_THREE_LEVEL
-        )
-
+        super().incorporate_cache(board)
         cache_line_size = board.get_cache_line_size()
 
         self.ruby_system = RubySystem()
@@ -116,6 +125,7 @@ class MESIThreeLevelCacheHierarchy(
                 version=core_idx,
                 dcache=l1_cache.Dcache,
                 clk_domain=l1_cache.clk_domain,
+                ruby_system=self.ruby_system,
             )
 
             if board.has_io_bus():
@@ -193,10 +203,15 @@ class MESIThreeLevelCacheHierarchy(
         if board.has_dma_ports():
             dma_ports = board.get_dma_ports()
             for i, port in enumerate(dma_ports):
-                ctrl = DMAController(self.ruby_system.network, cache_line_size)
-                ctrl.dma_sequencer = DMASequencer(version=i, in_ports=port)
+                ctrl = DMAController(
+                    DMASequencer(
+                        version=i,
+                        in_ports=port,
+                        ruby_system=self.ruby_system,
+                    ),
+                    self.ruby_system,
+                )
                 self._dma_controllers.append(ctrl)
-                ctrl.ruby_system = self.ruby_system
 
         self.ruby_system.num_of_sequencers = len(self._l1_controllers) + len(
             self._dma_controllers
@@ -221,5 +236,15 @@ class MESIThreeLevelCacheHierarchy(
 
         # Set up a proxy port for the system_port. Used for load binaries and
         # other functional-only things.
-        self.ruby_system.sys_port_proxy = RubyPortProxy()
+        self.ruby_system.sys_port_proxy = RubyPortProxy(
+            ruby_system=self.ruby_system
+        )
         board.connect_system_port(self.ruby_system.sys_port_proxy.in_ports)
+
+    @overrides(AbstractRubyCacheHierarchy)
+    def _reset_version_numbers(self):
+        Directory._version = 0
+        L1Cache._version = 0
+        L2Cache._version = 0
+        L3Cache._version = 0
+        DMAController._version = 0

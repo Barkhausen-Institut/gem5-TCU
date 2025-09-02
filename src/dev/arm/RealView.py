@@ -1,4 +1,4 @@
-# Copyright (c) 2009-2022 Arm Limited
+# Copyright (c) 2009-2022, 2024 Arm Limited
 # All rights reserved.
 #
 # The license below extends only to copyright in the software and shall
@@ -37,48 +37,66 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from m5.defines import buildEnv
+from m5.objects.ArmSystem import ArmExtension
+from m5.objects.CfiMemory import CfiMemory
+from m5.objects.ClockDomain import (
+    ClockDomain,
+    SrcClockDomain,
+)
+from m5.objects.ClockedObject import ClockedObject
+from m5.objects.Device import (
+    BadAddr,
+    BasicPioDevice,
+    DmaDevice,
+    IsaFake,
+    PioDevice,
+)
+from m5.objects.Display import (
+    Display,
+    Display1080p,
+)
+from m5.objects.EnergyCtrl import EnergyCtrl
+from m5.objects.Ethernet import (
+    IGbE_e1000,
+    IGbE_igb,
+    NSGigE,
+)
+from m5.objects.GenericTimer import *
+from m5.objects.Gic import *
+from m5.objects.Graphics import ImageFormat
+from m5.objects.Ide import *
+from m5.objects.MHU import (
+    MHU,
+    Ap2ScpDoorbell,
+    Scp2ApDoorbell,
+)
+from m5.objects.PciDevice import (
+    PciIoBar,
+    PciLegacyIoBar,
+)
+from m5.objects.PciHost import *
+from m5.objects.Platform import Platform
+from m5.objects.PS2 import *
+from m5.objects.Scmi import *
+from m5.objects.SimpleMemory import SimpleMemory
+from m5.objects.SMMUv3 import SMMUv3
+from m5.objects.SubSystem import SubSystem
+from m5.objects.Terminal import Terminal
+from m5.objects.Uart import Uart
+from m5.objects.VirtIOMMIO import MmioVirtIO
+from m5.objects.VoltageDomain import VoltageDomain
 from m5.params import *
 from m5.proxy import *
 from m5.util.fdthelper import *
-from m5.objects.ArmSystem import ArmExtension
-from m5.objects.ClockDomain import ClockDomain, SrcClockDomain
-from m5.objects.VoltageDomain import VoltageDomain
-from m5.objects.Device import (
-    BasicPioDevice,
-    PioDevice,
-    IsaFake,
-    BadAddr,
-    DmaDevice,
-)
-from m5.objects.PciHost import *
-from m5.objects.Ethernet import NSGigE, IGbE_igb, IGbE_e1000
-from m5.objects.Ide import *
-from m5.objects.Platform import Platform
-from m5.objects.Terminal import Terminal
-from m5.objects.Uart import Uart
-from m5.objects.SimpleMemory import SimpleMemory
-from m5.objects.GenericTimer import *
-from m5.objects.Gic import *
-from m5.objects.MHU import MHU, Scp2ApDoorbell, Ap2ScpDoorbell
-from m5.objects.EnergyCtrl import EnergyCtrl
-from m5.objects.ClockedObject import ClockedObject
-from m5.objects.SubSystem import SubSystem
-from m5.objects.Graphics import ImageFormat
-from m5.objects.ClockedObject import ClockedObject
-from m5.objects.PS2 import *
-from m5.objects.VirtIOMMIO import MmioVirtIO
-from m5.objects.Display import Display, Display1080p
-from m5.objects.Scmi import *
-from m5.objects.SMMUv3 import SMMUv3
-from m5.objects.PciDevice import PciLegacyIoBar, PciIoBar
-
-from m5.objects.CfiMemory import CfiMemory
 
 # Platforms with KVM support should generally use in-kernel GIC
 # emulation. Use a GIC model that automatically switches between
 # gem5's GIC model and KVM's GIC model if KVM is available.
 try:
-    from m5.objects.KvmGic import MuxingKvmGicV2, MuxingKvmGicV3
+    from m5.objects.KvmGic import (
+        MuxingKvmGicV2,
+        MuxingKvmGicV3,
+    )
 
     kvm_gicv2_class = MuxingKvmGicV2
     kvm_gicv3_class = MuxingKvmGicV3
@@ -1171,8 +1189,8 @@ class VExpress_GEM5_Base(RealView):
     Memory map:
        0x00000000-0x03ffffff: Boot memory (CS0)
        0x04000000-0x07ffffff: Trusted Memory/Reserved
-            0x04000000-0x0403FFFF: 256kB Trusted SRAM
-            0x06000000-0x07ffffff: 32MB Trusted DRAM
+            0x04000000-0x0403FFFF: 256KiB Trusted SRAM
+            0x06000000-0x07ffffff: 32MiB Trusted DRAM
        0x08000000-0x0bffffff: NOR FLASH0 (CS0 alias)
        0x0c000000-0x0fffffff: NOR FLASH1 (Off-chip, CS4)
        0x10000000-0x13ffffff: gem5-specific peripherals (Off-chip, CS5)
@@ -1265,6 +1283,7 @@ class VExpress_GEM5_Base(RealView):
              95    : HDLCD
              96- 98: GPU (reserved)
             100-103: PCI
+            106    : SMMU event queue
             130    : System Watchdog (SP805)
        256-319: MSI frame 0 (gem5-specific, SPIs)
        320-511: Unused
@@ -1297,7 +1316,7 @@ class VExpress_GEM5_Base(RealView):
     # Trusted DRAM
     # TODO: preventing access from unsecure world to the trusted RAM
     trusted_dram = SimpleMemory(
-        range=AddrRange(0x06000000, size="32MB"), conf_table_reported=False
+        range=AddrRange(0x06000000, size="32MiB"), conf_table_reported=False
     )
     # Non-Trusted SRAM
     non_trusted_sram = MmioSRAM(
@@ -1435,7 +1454,7 @@ class VExpress_GEM5_Base(RealView):
 
     # VRAM
     vram = SimpleMemory(
-        range=AddrRange(0x18000000, size="32MB"), conf_table_reported=False
+        range=AddrRange(0x18000000, size="32MiB"), conf_table_reported=False
     )
 
     def _off_chip_devices(self):
@@ -1490,7 +1509,10 @@ class VExpress_GEM5_Base(RealView):
         if hasattr(self, "smmu"):
             m5.fatal("A SMMU has already been instantiated\n")
 
-        self.smmu = SMMUv3(reg_map=AddrRange(0x2B400000, size=0x00020000))
+        self.smmu = SMMUv3(
+            reg_map=AddrRange(0x2B400000, size=0x00020000),
+            eventq_irq=ArmSPI(num=106),
+        )
 
         self.smmu.request = bus.cpu_side_ports
         self.smmu.control = bus.mem_side_ports

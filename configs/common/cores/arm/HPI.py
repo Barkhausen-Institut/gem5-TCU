@@ -44,6 +44,7 @@ at: http://www.arm.com/ResearchEnablement/SystemModeling
 
 from m5.objects import *
 
+
 # Simple function to allow a string of [01x_] to be converted into a
 # mask and value for use with MinorFUTiming
 def make_implicant(implicant_string):
@@ -1679,7 +1680,23 @@ class HPI_MMU(ArmMMU):
     dtb = ArmTLB(entry_type="data", size=256)
 
 
+class HPI_BTB(SimpleBTB):
+    numEntries = 128
+    tagBits = 18
+    associativity = 1
+    instShiftAmt = 2
+    btbReplPolicy = LRURP()
+    btbIndexingPolicy = BTBSetAssociative(
+        num_entries=Parent.numEntries,
+        set_shift=Parent.instShiftAmt,
+        assoc=Parent.associativity,
+        tag_bits=Parent.tagBits,
+    )
+
+
 class HPI_BP(TournamentBP):
+    btb = HPI_BTB()
+    ras = ReturnAddrStack(numEntries=8)
     localPredictorSize = 64
     localCtrBits = 2
     localHistoryTableSize = 64
@@ -1687,9 +1704,6 @@ class HPI_BP(TournamentBP):
     globalCtrBits = 2
     choicePredictorSize = 1024
     choiceCtrBits = 2
-    BTBEntries = 128
-    BTBTagSize = 18
-    RASSize = 8
     instShiftAmt = 2
 
 
@@ -1699,7 +1713,7 @@ class HPI_ICache(Cache):
     response_latency = 1
     mshrs = 2
     tgts_per_mshr = 8
-    size = "32kB"
+    size = "32KiB"
     assoc = 2
     # No prefetcher, this is handled by the core
 
@@ -1710,7 +1724,7 @@ class HPI_DCache(Cache):
     response_latency = 1
     mshrs = 4
     tgts_per_mshr = 8
-    size = "32kB"
+    size = "32KiB"
     assoc = 4
     write_buffers = 4
     prefetcher = StridePrefetcher(queue_size=4, degree=4)
@@ -1722,7 +1736,7 @@ class HPI_L2(Cache):
     response_latency = 5
     mshrs = 4
     tgts_per_mshr = 8
-    size = "1024kB"
+    size = "1024KiB"
     assoc = 16
     write_buffers = 16
     # prefetcher FIXME

@@ -158,7 +158,7 @@ class Request : public Extensible<Request>
         MEM_SWAP                    = 0x00400000,
         MEM_SWAP_COND               = 0x00800000,
         /** This request is a read which will be followed by a write. */
-        READ_MODIFY_WRITE           = 0x00020000,
+        READ_MODIFY_WRITE           = 0x0020000000000000,
 
         /** The request is a prefetch. */
         PREFETCH                    = 0x01000000,
@@ -255,7 +255,10 @@ class Request : public Extensible<Request>
          * These flags are *not* cleared when a Request object is
          * reused (assigned a new address).
          */
-        STICKY_FLAGS = INST_FETCH
+        STICKY_FLAGS = INST_FETCH,
+        /** TLBI_EXT_SYNC_COMP seems to be the largest value
+            of FlagsType, so HAS_NO_ADDR's value is that << 1 */
+        HAS_NO_ADDR                = 0x0001000000000000,
     };
     static const FlagsType STORE_NO_DATA = CACHE_BLOCK_ZERO |
         CLEAN | INVALIDATE;
@@ -292,8 +295,8 @@ class Request : public Extensible<Request>
 
     /**
      * These bits are used to set the coherence policy for the GPU and are
-     * encoded in the GCN3 instructions. The GCN3 ISA defines two cache levels
-     * See the AMD GCN3 ISA Architecture Manual for more details.
+     * encoded in the Vega instructions. The Vega ISA defines two cache levels
+     * See the AMD Vega ISA Architecture Manual for more details.
      *
      * INV_L1: L1 cache invalidation
      * FLUSH_L2: L2 cache flush
@@ -470,6 +473,8 @@ class Request : public Extensible<Request>
     /** The cause for HTM transaction abort */
     HtmFailureFaultCause _htmAbortCause = HtmFailureFaultCause::INVALID;
 
+    bool _isGPUFuncAccess;
+
   public:
 
     /**
@@ -490,6 +495,7 @@ class Request : public Extensible<Request>
         _flags.set(flags);
         privateFlags.set(VALID_PADDR|VALID_SIZE);
         _byteEnable = std::vector<bool>(size, true);
+        _isGPUFuncAccess = false;
     }
 
     Request(Addr vaddr, unsigned size, Flags flags,
@@ -499,6 +505,7 @@ class Request : public Extensible<Request>
         setVirt(vaddr, size, flags, id, pc, std::move(atomic_op));
         setContext(cid);
         _byteEnable = std::vector<bool>(size, true);
+        _isGPUFuncAccess = false;
     }
 
     Request(const Request& other)
@@ -757,6 +764,13 @@ class Request : public Extensible<Request>
         return atomicOpFunctor.get();
     }
 
+    void
+    setAtomicOpFunctor(AtomicOpFunctorPtr amo_op)
+    {
+        atomicOpFunctor = std::move(amo_op);
+    }
+
+
     /**
      * Accessor for hardware transactional memory abort cause.
      */
@@ -1009,6 +1023,7 @@ class Request : public Extensible<Request>
     bool isUncacheable() const { return _flags.isSet(UNCACHEABLE); }
     bool isStrictlyOrdered() const { return _flags.isSet(STRICT_ORDER); }
     bool isInstFetch() const { return _flags.isSet(INST_FETCH); }
+    bool hasNoAddr() const { return _flags.isSet(HAS_NO_ADDR); }
     bool
     isPrefetch() const
     {
@@ -1092,6 +1107,7 @@ class Request : public Extensible<Request>
      * setting extraFlags should be done via setCacheCoherenceFlags().
      */
     bool isInvL1() const { return _cacheCoherenceFlags.isSet(INV_L1); }
+    bool isInvL2() const { return _cacheCoherenceFlags.isSet(GL2_CACHE_INV); }
 
     bool
     isGL2CacheFlush() const
@@ -1115,6 +1131,17 @@ class Request : public Extensible<Request>
     bool isCacheInvalidate() const { return _flags.isSet(INVALIDATE); }
     bool isCacheMaintenance() const { return _flags.isSet(CLEAN|INVALIDATE); }
     /** @} */
+
+    void
+    setGPUFuncAccess(bool flag) {
+        _isGPUFuncAccess = flag;
+    }
+
+    bool
+    getGPUFuncAccess()
+    {
+        return _isGPUFuncAccess;
+    }
 };
 
 } // namespace gem5

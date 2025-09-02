@@ -27,12 +27,20 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+from m5.objects.ClockedObject import ClockedObject
+from m5.objects.Device import (
+    DmaDevice,
+    DmaVirtDevice,
+)
+from m5.objects.PciDevice import (
+    PciEndpoint,
+    PciLegacyIoBar,
+    PciMemBar,
+    PciMemUpperBar,
+)
 from m5.params import *
 from m5.proxy import *
-from m5.objects.PciDevice import PciDevice
-from m5.objects.PciDevice import PciMemBar, PciMemUpperBar, PciLegacyIoBar
-from m5.objects.Device import DmaDevice, DmaVirtDevice
-from m5.objects.ClockedObject import ClockedObject
+
 
 # PCI device model for an AMD Vega 10 based GPU. The PCI codes and BARs
 # correspond to a Vega Frontier Edition hardware device. None of the PCI
@@ -41,7 +49,7 @@ from m5.objects.ClockedObject import ClockedObject
 # This class requires a ROM binary and an MMIO trace to initialize the
 # device registers and memory. It is intended only to be used in full-system
 # simulation under Linux where the amdgpu driver is modprobed.
-class AMDGPUDevice(PciDevice):
+class AMDGPUDevice(PciEndpoint):
     type = "AMDGPUDevice"
     cxx_header = "dev/amdgpu/amdgpu_device.hh"
     cxx_class = "gem5::AMDGPUDevice"
@@ -73,8 +81,7 @@ class AMDGPUDevice(PciDevice):
     InterruptPin = 2
     ExpansionROM = 0
 
-    rom_binary = Param.String("ROM binary dumped from hardware")
-    trace_file = Param.String("MMIO trace collected on hardware")
+    ipt_binary = Param.String("", "IP table dump from hardware")
     checkpoint_before_mmios = Param.Bool(
         False, "Take a checkpoint before the device begins sending MMIOs"
     )
@@ -87,7 +94,7 @@ class AMDGPUDevice(PciDevice):
     # The config script should not create a new cp here but rather assign the
     # same cp that is assigned to the Shader SimObject.
     cp = Param.GPUCommandProcessor(NULL, "Command Processor")
-    pm4_pkt_proc = Param.PM4PacketProcessor("PM4 Packet Processor")
+    pm4_pkt_procs = VectorParam.PM4PacketProcessor("PM4 Packet Processor")
     memory_manager = Param.AMDGPUMemoryManager("GPU Memory Manager")
     memories = VectorParam.AbstractMemory([], "All memories in the device")
     device_ih = Param.AMDGPUInterruptHandler("GPU Interrupt handler")
@@ -110,11 +117,17 @@ class PM4PacketProcessor(DmaVirtDevice):
     cxx_header = "dev/amdgpu/pm4_packet_processor.hh"
     cxx_class = "gem5::PM4PacketProcessor"
 
+    # Default to 0 as the common case is one PM4 packet processor
+    ip_id = Param.Int(0, "Instance ID of this PM4 processor")
+    mmio_range = Param.AddrRange("Range of MMIO addresses")
+
 
 class AMDGPUMemoryManager(ClockedObject):
     type = "AMDGPUMemoryManager"
     cxx_header = "dev/amdgpu/memory_manager.hh"
     cxx_class = "gem5::AMDGPUMemoryManager"
+
+    cache_line_size = Param.UInt64("Cache line size in bytes")
 
     port = RequestPort("Memory Port to access VRAM (device memory)")
     system = Param.System(Parent.any, "System the dGPU belongs to")

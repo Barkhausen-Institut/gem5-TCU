@@ -1,8 +1,9 @@
 # Copyright 2004-2006 The Regents of The University of Michigan
 # Copyright 2010-20013 Advanced Micro Devices, Inc.
 # Copyright 2013 Mark D. Hill and David A. Wood
-# Copyright 2017-2020 ARM Limited
+# Copyright 2017-2020, 2025 Arm Limited
 # Copyright 2021 Google, Inc.
+# Copyright 2023 COSEDA Technologies GmbH
 #
 # The license below extends only to copyright in the software and shall
 # not be construed as granting a license to any other intellectual
@@ -42,7 +43,6 @@ import os.path
 import sys
 
 import importer
-
 from code_formatter import code_formatter
 
 parser = argparse.ArgumentParser()
@@ -58,8 +58,8 @@ importer.install()
 module = importlib.import_module(args.modpath)
 sim_object = getattr(module, sim_object_name)
 
-from m5.params import isSimObjectClass
 import m5.params
+from m5.params import isSimObjectClass
 
 code = code_formatter()
 
@@ -74,11 +74,12 @@ def cxx_bool(b):
 code('#include "params/%s.hh"' % sim_object_name)
 
 for param in sim_object._params.values():
-    if isSimObjectClass(param.ptype):
-        code('#include "%s"' % param.ptype._value_dict["cxx_header"])
-        code('#include "params/%s.hh"' % param.ptype.__name__)
-    else:
-        param.ptype.cxx_ini_predecls(code)
+    for ptype in param.ptypes:
+        if isSimObjectClass(ptype):
+            code('#include "%s"' % ptype._value_dict["cxx_header"])
+            code('#include "params/%s.hh"' % ptype.__name__)
+        else:
+            ptype.cxx_ini_predecls(code)
 
 code(
     """#include "${{sim_object._value_dict['cxx_header']}}"
@@ -94,17 +95,27 @@ ${param_class}::DirectoryEntry::DirectoryEntry()
 )
 code.indent()
 for param in sim_object._params.values():
+    is_dict = isinstance(param, m5.params.DictParamDesc)
     is_vector = isinstance(param, m5.params.VectorParamDesc)
-    is_simobj = issubclass(param.ptype, m5.SimObject.SimObject)
-
+    is_simobj = (
+        issubclass(param.ptype, m5.SimObject.SimObject)
+        if not is_dict
+        else False
+    )
     code(
-        'parameters["%s"] = new ParamDesc("%s", %s, %s);'
-        % (param.name, param.name, cxx_bool(is_vector), cxx_bool(is_simobj))
+        'parameters["%s"] = new ParamDesc("%s", %s, %s, %s);'
+        % (
+            param.name,
+            param.name,
+            cxx_bool(is_vector),
+            cxx_bool(is_dict),
+            cxx_bool(is_simobj),
+        )
     )
 
 for port in sim_object._ports.values():
     is_vector = isinstance(port, m5.params.VectorPort)
-    is_requestor = port.role == "GEM5 REQUESTOR"
+    is_requestor = port.is_source
 
     code(
         'ports["%s"] = new PortDesc("%s", %s, %s);'
@@ -126,19 +137,21 @@ ${param_class}::setSimObject(const std::string &name, SimObject *simObject)
 
 code.indent()
 for param in sim_object._params.values():
-    is_vector = isinstance(param, m5.params.VectorParamDesc)
-    is_simobj = issubclass(param.ptype, m5.SimObject.SimObject)
+    is_dict = isinstance(param, m5.params.DictParamDesc)
+    if not is_dict:
+        is_vector = isinstance(param, m5.params.VectorParamDesc)
+        is_simobj = issubclass(param.ptype, m5.SimObject.SimObject)
 
-    if is_simobj and not is_vector:
-        code('} else if (name == "${{param.name}}") {')
-        code.indent()
-        code(
-            "this->${{param.name}} = "
-            "dynamic_cast<${{param.ptype.cxx_type}}>(simObject);"
-        )
-        code("if (simObject && !this->${{param.name}})")
-        code("   ret = false;")
-        code.dedent()
+        if is_simobj and not is_vector:
+            code('} else if (name == "${{param.name}}") {')
+            code.indent()
+            code(
+                "this->${{param.name}} = "
+                "dynamic_cast<${{param.ptype.cxx_type}}>(simObject);"
+            )
+            code("if (simObject && !this->${{param.name}})")
+            code("   ret = false;")
+            code.dedent()
 code.dedent()
 
 code(
@@ -162,30 +175,32 @@ ${param_class}::setSimObjectVector(const std::string &name,
 
 code.indent()
 for param in sim_object._params.values():
-    is_vector = isinstance(param, m5.params.VectorParamDesc)
-    is_simobj = issubclass(param.ptype, m5.SimObject.SimObject)
+    is_dict = isinstance(param, m5.params.DictParamDesc)
+    if not is_dict:
+        is_vector = isinstance(param, m5.params.VectorParamDesc)
+        is_simobj = issubclass(param.ptype, m5.SimObject.SimObject)
 
-    if is_simobj and is_vector:
-        code('} else if (name == "${{param.name}}") {')
-        code.indent()
-        code("this->${{param.name}}.clear();")
-        code(
-            "for (auto i = simObjects.begin(); "
-            "ret && i != simObjects.end(); i ++)"
-        )
-        code("{")
-        code.indent()
-        code(
-            "${{param.ptype.cxx_type}} object = "
-            "dynamic_cast<${{param.ptype.cxx_type}}>(*i);"
-        )
-        code("if (*i && !object)")
-        code("    ret = false;")
-        code("else")
-        code("    this->${{param.name}}.push_back(object);")
-        code.dedent()
-        code("}")
-        code.dedent()
+        if is_simobj and is_vector:
+            code('} else if (name == "${{param.name}}") {')
+            code.indent()
+            code("this->${{param.name}}.clear();")
+            code(
+                "for (auto i = simObjects.begin(); "
+                "ret && i != simObjects.end(); i ++)"
+            )
+            code("{")
+            code.indent()
+            code(
+                "${{param.ptype.cxx_type}} object = "
+                "dynamic_cast<${{param.ptype.cxx_type}}>(*i);"
+            )
+            code("if (*i && !object)")
+            code("    ret = false;")
+            code("else")
+            code("    this->${{param.name}}.push_back(object);")
+            code.dedent()
+            code("}")
+            code.dedent()
 code.dedent()
 
 code(
@@ -215,16 +230,33 @@ ${param_class}::setParam(const std::string &name,
 
 code.indent()
 for param in sim_object._params.values():
-    is_vector = isinstance(param, m5.params.VectorParamDesc)
-    is_simobj = issubclass(param.ptype, m5.SimObject.SimObject)
+    is_dict = isinstance(param, m5.params.DictParamDesc)
+    if not is_dict:
+        is_vector = isinstance(param, m5.params.VectorParamDesc)
+        is_simobj = issubclass(param.ptype, m5.SimObject.SimObject)
 
-    if not is_simobj and not is_vector:
-        code('} else if (name == "${{param.name}}") {')
-        code.indent()
-        param.ptype.cxx_ini_parse(
-            code, "value", "this->%s" % param.name, "ret ="
-        )
-        code.dedent()
+        if not is_simobj and not is_vector:
+            code('} else if (name == "${{param.name}}") {')
+            code.indent()
+            if isinstance(param, m5.params.OptionalParamDesc):
+                nullopt_str = str(m5.params.NullOpt)
+                code('if (value == "${{nullopt_str}}") {')
+                code.indent()
+                code("this->${{param.name}} = std::nullopt;")
+                code("ret = true;")
+                code.dedent()
+                code("} else {")
+                code.indent()
+                param.ptype.cxx_ini_parse(
+                    code, "value", "this->%s.value()" % param.name, "ret ="
+                )
+                code.dedent()
+                code("}")
+            else:
+                param.ptype.cxx_ini_parse(
+                    code, "value", "this->%s" % param.name, "ret ="
+                )
+            code.dedent()
 code.dedent()
 
 code(
@@ -248,20 +280,69 @@ ${param_class}::setParamVector(const std::string &name,
 
 code.indent()
 for param in sim_object._params.values():
-    is_vector = isinstance(param, m5.params.VectorParamDesc)
-    is_simobj = issubclass(param.ptype, m5.SimObject.SimObject)
+    is_dict = isinstance(param, m5.params.DictParamDesc)
+    if not is_dict:
+        is_vector = isinstance(param, m5.params.VectorParamDesc)
+        is_simobj = issubclass(param.ptype, m5.SimObject.SimObject)
 
-    if not is_simobj and is_vector:
+        if not is_simobj and is_vector:
+            code('} else if (name == "${{param.name}}") {')
+            code.indent()
+            code("${{param.name}}.clear();")
+            code(
+                "for (auto i = values.begin(); ret && i != values.end(); i ++)"
+            )
+            code("{")
+            code.indent()
+            code("${{param.ptype.cxx_type}} elem;")
+            param.ptype.cxx_ini_parse(code, "*i", "elem", "ret =")
+            code("if (ret)")
+            code("    this->${{param.name}}.push_back(elem);")
+            code.dedent()
+            code("}")
+            code.dedent()
+code.dedent()
+
+code(
+    """
+    } else {
+        ret = false;
+    }
+
+    return ret;
+}
+
+bool
+${param_class}::setParamDict(const std::string &name,
+    const std::unordered_map<std::string, std::string> &values, const Flags flags)
+{
+    bool ret = true;
+
+    if (false) {
+"""
+)
+
+code.indent()
+for param in sim_object._params.values():
+    is_dict = isinstance(param, m5.params.DictParamDesc)
+    if is_dict:
         code('} else if (name == "${{param.name}}") {')
         code.indent()
         code("${{param.name}}.clear();")
         code("for (auto i = values.begin(); ret && i != values.end(); i ++)")
         code("{")
         code.indent()
-        code("${{param.ptype.cxx_type}} elem;")
-        param.ptype.cxx_ini_parse(code, "*i", "elem", "ret =")
+        code("${{param.key_desc.ptype.cxx_type}} key;")
+        code("${{param.val_desc.ptype.cxx_type}} val;")
+        param.key_desc.ptype.cxx_ini_parse(
+            code, "i->first", "key", "bool key_ret ="
+        )
+        param.val_desc.ptype.cxx_ini_parse(
+            code, "i->second", "val", "bool val_ret ="
+        )
+        code("ret = key_ret && val_ret;")
         code("if (ret)")
-        code("    this->${{param.name}}.push_back(elem);")
+        code("    this->${{param.name}}[key] = val;")
         code.dedent()
         code("}")
         code.dedent()

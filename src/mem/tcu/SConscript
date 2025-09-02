@@ -34,10 +34,10 @@ SimObject('connector/Connector.py', sim_objects=['BaseConnector', 'CoreConnector
 
 Source('connector/base.cc')
 Source('connector/core.cc')
-if env['USE_X86_ISA']:
+if env['CONF']['USE_X86_ISA']:
     Source('connector/x86.cc')
     SimObject('connector/X86Connector.py', sim_objects=['X86Connector'])
-elif env['USE_RISCV_ISA']:
+elif env['CONF']['USE_RISCV_ISA']:
     Source('connector/riscv.cc')
     SimObject('connector/RiscvConnector.py', sim_objects=['RiscvConnector'])
 

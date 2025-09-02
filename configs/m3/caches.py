@@ -30,8 +30,8 @@ for i in range(0, num_tiles):
                           id=TileId(0, i),
                           cmdline=cmd_list[i],
                           memTile=mem_tile if cmd_list[i] != "" else None,
-                          l1size='32kB',
-                          l2size='256kB')
+                          l1size='32KiB',
+                          l2size='256KiB')
     tiles.append(tile)
 
 # create the memory tiles
@@ -39,7 +39,7 @@ for i in range(0, num_mem):
     tile = createMemTile(noc=root.noc,
                          options=options,
                          id=TileId(0, num_tiles + i),
-                         size='3072MB')
+                         size='3072MiB')
     tiles.append(tile)
 
 # create tile for serial input (unless we're debugging gem5)

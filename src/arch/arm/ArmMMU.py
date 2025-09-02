@@ -36,11 +36,15 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from m5.objects.ArmSystem import ArmRelease
-from m5.objects.ArmTLB import ArmTLB, ArmStage2TLB
+from m5.objects.ArmTLB import (
+    ArmStage2TLB,
+    ArmTLB,
+)
 from m5.objects.BaseMMU import BaseMMU
 from m5.objects.ClockedObject import ClockedObject
 from m5.params import *
 from m5.proxy import *
+
 
 # Basic stage 1 translation objects
 class ArmTableWalker(ClockedObject):
@@ -68,7 +72,9 @@ class ArmMMU(BaseMMU):
     cxx_header = "arch/arm/mmu.hh"
 
     # L2 TLBs
-    l2_shared = ArmTLB(entry_type="unified", size=1280, partial_levels=["L2"])
+    l2_shared = ArmTLB(
+        entry_type="unified", size=1280, assoc=5, partial_levels=["L2"]
+    )
 
     # L1 TLBs
     itb = ArmTLB(entry_type="instruction", next_level=Parent.l2_shared)

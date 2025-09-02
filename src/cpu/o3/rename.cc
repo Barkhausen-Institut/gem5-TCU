@@ -145,7 +145,12 @@ Rename::RenameStats::RenameStats(statistics::Group *parent)
       ADD_STAT(tempSerializing, statistics::units::Count::get(),
                "count of temporary serializing insts renamed"),
       ADD_STAT(skidInsts, statistics::units::Count::get(),
-               "count of insts added to the skid buffer")
+               "count of insts added to the skid buffer"),
+      ADD_STAT(intReturned, statistics::units::Count::get(),
+               "count of registers freed and written back to integer free list"),
+      ADD_STAT(fpReturned, statistics::units::Count::get(),
+               "count of registers freed and written back to floating point free list")
+
 {
     squashCycles.prereq(squashCycles);
     idleCycles.prereq(idleCycles);
@@ -176,6 +181,9 @@ Rename::RenameStats::RenameStats(statistics::Group *parent)
     serializing.flags(statistics::total);
     tempSerializing.flags(statistics::total);
     skidInsts.flags(statistics::total);
+
+    intReturned.prereq(intReturned);
+    fpReturned.prereq(fpReturned);
 }
 
 void
@@ -245,6 +253,22 @@ Rename::clearStates(ThreadID tid)
     storesInProgress[tid] = 0;
 
     serializeOnNextInst[tid] = false;
+
+    // Clear out any of this thread's instructions being sent to IEW.
+    for (int i = -cpu->renameQueue.getPast();
+         i <= cpu->renameQueue.getFuture(); ++i) {
+        RenameStruct& rename_struct = cpu->renameQueue[i];
+        removeCommThreadInsts(tid, rename_struct);
+    }
+
+    // Clear out any of this thread's instructions being sent to decode.
+    for (int i = -cpu->timeBuffer.getPast();
+         i <= cpu->timeBuffer.getFuture(); ++i) {
+        TimeStruct& time_struct = cpu->timeBuffer[i];
+        time_struct.renameInfo[tid] = {};
+        time_struct.renameBlock[tid] = false;
+        time_struct.renameUnblock[tid] = false;
+    }
 }
 
 void
@@ -286,7 +310,7 @@ Rename::setActiveThreads(std::list<ThreadID> *at_ptr)
 
 
 void
-Rename::setRenameMap(UnifiedRenameMap rm_ptr[])
+Rename::setRenameMap(UnifiedRenameMap::PerThreadUnifiedRenameMap& rm_ptr)
 {
     for (ThreadID tid = 0; tid < numThreads; tid++)
         renameMap[tid] = &rm_ptr[tid];
@@ -401,13 +425,8 @@ Rename::tick()
 
     sortInsts();
 
-    std::list<ThreadID>::iterator threads = activeThreads->begin();
-    std::list<ThreadID>::iterator end = activeThreads->end();
-
     // Check stall and squash signals.
-    while (threads != end) {
-        ThreadID tid = *threads++;
-
+    for (ThreadID tid : *activeThreads) {
         DPRINTF(Rename, "Processing [tid:%i]\n", tid);
 
         status_change = checkSignalsAndUpdate(tid) || status_change;
@@ -424,11 +443,7 @@ Rename::tick()
         cpu->activityThisCycle();
     }
 
-    threads = activeThreads->begin();
-
-    while (threads != end) {
-        ThreadID tid = *threads++;
-
+    for (ThreadID tid : *activeThreads) {
         // If we committed this cycle then doneSeqNum will be > 0
         if (fromCommit->commitInfo[tid].doneSeqNum != 0 &&
             !fromCommit->commitInfo[tid].squash &&
@@ -807,12 +822,7 @@ Rename::sortInsts()
 bool
 Rename::skidsEmpty()
 {
-    std::list<ThreadID>::iterator threads = activeThreads->begin();
-    std::list<ThreadID>::iterator end = activeThreads->end();
-
-    while (threads != end) {
-        ThreadID tid = *threads++;
-
+    for (ThreadID tid : *activeThreads) {
         if (!skidBuffer[tid].empty())
             return false;
     }
@@ -825,12 +835,7 @@ Rename::updateStatus()
 {
     bool any_unblocking = false;
 
-    std::list<ThreadID>::iterator threads = activeThreads->begin();
-    std::list<ThreadID>::iterator end = activeThreads->end();
-
-    while (threads != end) {
-        ThreadID tid = *threads++;
-
+    for (ThreadID tid : *activeThreads) {
         if (renameStatus[tid] == Unblocking) {
             any_unblocking = true;
             break;
@@ -940,8 +945,11 @@ Rename::doSquash(const InstSeqNum &squashed_seq_num, ThreadID tid)
             // previous physical register that it was renamed to.
             renameMap[tid]->setEntry(hb_it->archReg, hb_it->prevPhysReg);
 
-            // Put the renamed physical register back on the free list.
-            freeList->addReg(hb_it->newPhysReg);
+            // The phys regs can still be owned by squashing but
+            // executing instructions in IEW at this moment. To avoid
+            // ownership hazard in SMT CPU, we delay the freelist update
+            // until they are indeed squashed in the commit stage.
+            freeingInProgress[tid].push_back(hb_it->newPhysReg);
         }
 
         // Notify potential listeners that the register mapping needs to be
@@ -998,6 +1006,13 @@ Rename::removeFromHistory(InstSeqNum inst_seq_num, ThreadID tid)
         if (hb_it->newPhysReg != hb_it->prevPhysReg) {
             freeList->addReg(hb_it->prevPhysReg);
         }
+        if (hb_it->prevPhysReg->classValue()== FloatRegClass) {
+           ++stats.fpReturned;
+        }
+        if (hb_it->prevPhysReg->classValue()== IntRegClass) {
+           ++stats.intReturned;
+        }
+
 
         ++stats.committedMaps;
 
@@ -1222,9 +1237,6 @@ Rename::checkStall(ThreadID tid)
     } else if (calcFreeLQEntries(tid) <= 0 && calcFreeSQEntries(tid) <= 0) {
         DPRINTF(Rename,"[tid:%i] Stall: LSQ has 0 free entries.\n", tid);
         ret_val = true;
-    } else if (renameMap[tid]->numFreeEntries() <= 0) {
-        DPRINTF(Rename,"[tid:%i] Stall: RenameMap has 0 free entries.\n", tid);
-        ret_val = true;
     } else if (renameStatus[tid] == SerializeStall &&
                (!emptyROB[tid] || instsInProgress[tid])) {
         DPRINTF(Rename,"[tid:%i] Stall: Serialize stall and ROB is not "
@@ -1260,7 +1272,7 @@ Rename::readFreeEntries(ThreadID tid)
             freeEntries[tid].robEntries,
             freeEntries[tid].lqEntries,
             freeEntries[tid].sqEntries,
-            renameMap[tid]->numFreeEntries(),
+            renameMap[tid]->minFreeEntries(),
             renameMap[tid]->numFreeEntries(IntRegClass),
             renameMap[tid]->numFreeEntries(FloatRegClass),
             renameMap[tid]->numFreeEntries(VecRegClass),
@@ -1296,6 +1308,18 @@ Rename::checkSignalsAndUpdate(ThreadID tid)
         squash(fromCommit->commitInfo[tid].doneSeqNum, tid);
 
         return true;
+    } else if (!fromCommit->commitInfo[tid].robSquashing &&
+            !freeingInProgress[tid].empty()) {
+        DPRINTF(Rename, "[tid:%i] Freeing phys regs of misspeculated "
+                "instructions.\n", tid);
+
+        auto reg_it = freeingInProgress[tid].cbegin();
+        while ( reg_it != freeingInProgress[tid].cend()){
+            // Put the renamed physical register back on the free list.
+            freeList->addReg(*reg_it);
+            ++reg_it;
+        }
+        freeingInProgress[tid].clear();
     }
 
     if (checkStall(tid)) {

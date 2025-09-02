@@ -56,7 +56,11 @@ class AMDGPUDevice;
 #define AMDGPU_MM_INDEX                                   0x00000
 #define AMDGPU_MM_INDEX_HI                                0x00018
 #define AMDGPU_MM_DATA                                    0x00004
-#define AMDGPU_PCIE_DATA_REG                              0x0003c
+
+#define AMDGPU_PCIE_INDEX                                 0x00030
+#define AMDGPU_PCIE_INDEX2                                0x00038
+#define AMDGPU_PCIE_DATA                                  0x00034
+#define AMDGPU_PCIE_DATA2                                 0x0003c
 
 // Message bus related to psp
 #define AMDGPU_MP0_SMN_C2PMSG_33                          0x58184
@@ -66,6 +70,7 @@ class AMDGPUDevice;
 #define AMDGPU_MP0_SMN_C2PMSG_70                          0x58218
 #define AMDGPU_MP0_SMN_C2PMSG_71                          0x5821c
 #define AMDGPU_MP0_SMN_C2PMSG_81                          0x58244
+#define AMDGPU_MP1_SMN_C2PMSG_90                          0x58a68
 
 // Device specific invalidation engines used during initialization
 #define VEGA10_INV_ENG17_ACK1                             0x0a318
@@ -84,6 +89,19 @@ class AMDGPUDevice;
 #define MI200_INV_ENG17_ACK2                              0x6b018
 #define MI200_INV_ENG17_SEM1                              0x0a288
 #define MI200_INV_ENG17_SEM2                              0x6af88
+
+#define MI300X_INV_ENG17_ACK1                             0x4a298
+#define MI300X_INV_ENG17_ACK2                             0x62f98
+#define MI300X_INV_ENG17_ACK3                             0x8a298
+#define MI300X_INV_ENG17_ACK4                             0xca298
+#define MI300X_INV_ENG17_ACK5                             0x10a298
+#define MI300X_INV_ENG17_ACK6                             0x14a298
+#define MI300X_INV_ENG17_ACK7                             0x18a298
+#define MI300X_INV_ENG17_ACK8                             0x1ca298
+#define MI300X_INV_ENG17_ACK9                             0xe2f98
+#define MI300X_INV_ENG17_ACK10                            0x162f98
+#define MI300X_INV_ENG17_ACK11                            0x1e2f98
+#define MI300X_EPF0_STRAP0                                0x34d8
 
 class AMDGPUNbio
 {
@@ -105,6 +123,8 @@ class AMDGPUNbio
      * Driver initialization sequence helper variables.
      */
     uint64_t mm_index_reg = 0;
+    uint32_t pcie_index_reg = 0;
+    uint32_t pcie_index2_reg = 0;
     std::unordered_map<uint32_t, uint32_t> triggered_reads;
 
     /*
@@ -115,6 +135,12 @@ class AMDGPUNbio
     Addr psp_ring_listen_addr = 0;
     int psp_ring_size = 0;
     int psp_ring_value = 0;
+
+    /*
+     * Hold values of other registers not explicitly modelled by other blocks.
+     */
+    using GPURegMap = std::unordered_map<uint64_t, uint32_t>;
+    GPURegMap regs;
 };
 
 } // namespace gem5

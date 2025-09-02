@@ -1,8 +1,19 @@
-import m5
-import os
 import configparser
+import os
+from typing import (
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+)
 
-from m5.objects import DRAMsim3, AddrRange, Port, MemCtrl
+import m5
+from m5.objects import (
+    AddrRange,
+    DRAMsim3,
+    MemCtrl,
+    Port,
+)
 from m5.util.convert import toMemorySize
 
 from ...utils.override import overrides
@@ -10,16 +21,15 @@ from ..boards.abstract_board import AbstractBoard
 from .abstract_memory_system import AbstractMemorySystem
 
 
-from typing import Optional, Tuple, Sequence, List
-
-
 def config_ds3(mem_type: str, num_chnls: int) -> Tuple[str, str]:
     """
     This function creates a config file that will be used to create a memory
-    controller of type DRAMSim3. It stores the config file in /tmp/ directory.
+    controller of type DRAMSim3. It stores the config file in ``/tmp/`` directory.
 
     :param mem_type: The name for the type of the memory to be configured.
+
     :param num_chnls: The number of channels to configure for the memory
+
     :returns: A tuple containing the output file and the output directory.
     """
     config = configparser.ConfigParser()
@@ -121,7 +131,7 @@ class SingleChannel(AbstractMemorySystem):
 
     @overrides(AbstractMemorySystem)
     def set_memory_range(self, ranges: List[AddrRange]) -> None:
-        if len(ranges != 1) or ranges[0].size != self._size:
+        if len(ranges) != 1 or ranges[0].size() != self._size:
             raise Exception(
                 "Single channel DRAMSim memory controller requires a single "
                 "range which matches the memory's size."
@@ -130,38 +140,38 @@ class SingleChannel(AbstractMemorySystem):
 
 
 def SingleChannelDDR3_1600(
-    size: Optional[str] = "2048MB",
+    size: Optional[str] = "2048MiB",
 ) -> SingleChannel:
     """
     A single channel DDR3_1600.
 
-    :param size: The size of the memory system. Default value of 2048MB.
+    :param size: The size of the memory system. Default value of 2048MiB.
     """
     return SingleChannel("DDR3_8Gb_x8_1600", size)
 
 
-def SingleChannelDDR4_2400(size: Optional[str] = "1024MB") -> SingleChannel:
+def SingleChannelDDR4_2400(size: Optional[str] = "1024MiB") -> SingleChannel:
     """
     A single channel DDR3_2400.
 
-    :param size: The size of the memory system. Default value of 1024MB.
+    :param size: The size of the memory system. Default value of 1024MiB.
     """
     return SingleChannel("DDR4_4Gb_x8_2400", size)
 
 
-def SingleChannelLPDDR3_1600(size: Optional[str] = "256MB") -> SingleChannel:
+def SingleChannelLPDDR3_1600(size: Optional[str] = "256MiB") -> SingleChannel:
     """
     A single channel LPDDR3_1600.
 
-    :param size: The size of the memory system. Default value of 256MB.
+    :param size: The size of the memory system. Default value of 256MiB.
     """
     return SingleChannel("LPDDR3_8Gb_x32_1600", size)
 
 
-def SingleChannelHBM(size: Optional[str] = "64MB") -> SingleChannel:
+def SingleChannelHBM(size: Optional[str] = "64MiB") -> SingleChannel:
     """
     A single channel HBM.
 
-    :param size: The size of the memory system. Default value of 64MB.
+    :param size: The size of the memory system. Default value of 64MiB.
     """
     return SingleChannel("HBM1_4Gb_x128", size)

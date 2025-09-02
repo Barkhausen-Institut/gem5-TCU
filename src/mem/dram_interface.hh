@@ -350,7 +350,11 @@ class DRAMInterface : public MemInterface
         Rank(const DRAMInterfaceParams &_p, int _rank,
              DRAMInterface& _dram);
 
-        const std::string name() const { return csprintf("%d", rank); }
+        const std::string
+        name() const
+        {
+            return csprintf("%s.rank%d", dram.name(), rank);
+        }
 
         /**
          * Kick off accounting for power and refresh states and
@@ -610,8 +614,8 @@ class DRAMInterface : public MemInterface
         statistics::Formula writeRowHitRate;
         statistics::Histogram bytesPerActivate;
         // Number of bytes transferred to/from DRAM
-        statistics::Scalar bytesRead;
-        statistics::Scalar bytesWritten;
+        statistics::Scalar dramBytesRead;
+        statistics::Scalar dramBytesWritten;
 
         // Average bandwidth
         statistics::Formula avgRdBW;

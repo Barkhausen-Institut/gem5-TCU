@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2012-2023 Arm Limited
+ * Copyright (c) 2010, 2012-2024 Arm Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -53,6 +53,7 @@
 #include "arch/arm/types.hh"
 #include "arch/arm/utility.hh"
 #include "arch/generic/isa.hh"
+#include "base/random.hh"
 #include "debug/Checkpoint.hh"
 #include "enums/DecoderFlavor.hh"
 #include "sim/sim_object.hh"
@@ -90,6 +91,7 @@ namespace ArmISA
 
         // Cached copies of system-level properties
         bool highestELIs64;
+        ExceptionLevel highestEL;
         bool haveLargeAsid64;
         uint8_t physAddrRange;
 
@@ -109,6 +111,8 @@ namespace ArmISA
         bool impdefAsNop;
 
         SelfDebug * selfDebug;
+
+        Random::RandomPtr rng = Random::genRandom();
 
         const MiscRegLUTEntryInitializer
         InitReg(uint32_t reg)
@@ -171,8 +175,6 @@ namespace ArmISA
 
       protected:
         void addressTranslation(MMU::ArmTranslationType tran_type,
-            BaseMMU::Mode mode, Request::Flags flags, RegVal val);
-        void addressTranslation64(MMU::ArmTranslationType tran_type,
             BaseMMU::Mode mode, Request::Flags flags, RegVal val);
 
       public:
@@ -434,6 +436,8 @@ namespace ArmISA
 
         void globalClearExclusive() override;
         void globalClearExclusive(ExecContext *xc) override;
+
+        int64_t getVectorLengthInBytes() const override { return sveVL * 16; }
     };
 
 } // namespace ArmISA

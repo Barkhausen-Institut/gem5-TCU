@@ -37,13 +37,12 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from m5.SimObject import *
-from m5.params import *
-from m5.proxy import *
-
 from m5.objects.DVFSHandler import *
 from m5.objects.SimpleMemory import *
 from m5.objects.Workload import StubWorkload
+from m5.params import *
+from m5.proxy import *
+from m5.SimObject import *
 
 
 class MemoryMode(Enum):
@@ -85,6 +84,15 @@ class System(SimObject):
     # I/O bridge or cache
     mem_ranges = VectorParam.AddrRange(
         [], "Ranges that constitute main memory"
+    )
+
+    external_memory_ranges = VectorParam.AddrRange(
+        [],
+        "Ranges that are valid physical address but not part of physmem. "
+        "These are considered to be coherent addresses, not for I/O or "
+        "devices. This is used for external memory controllers which are "
+        "owned by a different instance of a `System` object (e.g., remote) "
+        "memory.",
     )
 
     # The ranges backed by a shadowed ROM

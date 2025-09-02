@@ -27,28 +27,34 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import argparse, os, re, getpass
-import math
+import argparse
+import getpass
 import glob
 import inspect
+import math
+import os
+import re
 
 import m5
 from m5.objects import *
 from m5.util import addToPath
+
 from gem5.isas import ISA
-from gem5.runtime import get_runtime_isa
+from gem5.resources.resource import obtain_resource
+from gem5.runtime import get_supported_isas
 
 addToPath("../")
 
-from ruby import Ruby
-
-from common import Options
-from common import Simulation
-from common import GPUTLBOptions, GPUTLBConfig
-
 import hsaTopology
-from common import FileSystemConfig
-
+from common import (
+    FileSystemConfig,
+    GPUTLBConfig,
+    GPUTLBOptions,
+    ObjectList,
+    Options,
+    Simulation,
+)
+from ruby import Ruby
 
 # Adding script options
 parser = argparse.ArgumentParser()
@@ -290,6 +296,21 @@ parser.add_argument(
     help="Latency for scalar responses from ruby to the cu.",
 )
 
+parser.add_argument(
+    "--memtime-latency",
+    type=int,
+    # Set to a default of 41 from micro-benchmarks
+    default=41,
+    help="Latency for memtimes in scalar memory pipeline.",
+)
+parser.add_argument(
+    "--mfma-scale",
+    type=float,
+    # Set to a default of 1 to not scale MFMA cycles
+    default=1,
+    help="Scale how long an MFMA instruction reserves the matrix core unit",
+)
+
 parser.add_argument("--TLB-prefetch", type=int, help="prefetch depth for TLBs")
 parser.add_argument(
     "--pf-type",
@@ -331,6 +352,12 @@ parser.add_argument(
     default="dynamic",
     help="register allocation policy (simple/dynamic)",
 )
+parser.add_argument(
+    "--register-file-cache-size",
+    type=int,
+    default=0,
+    help="number of registers in cache",
+)
 
 parser.add_argument(
     "--dgpu",
@@ -365,9 +392,50 @@ parser.add_argument(
 parser.add_argument(
     "--gfx-version",
     type=str,
-    default="gfx801",
+    default="gfx902",
     choices=GfxVersion.vals,
     help="Gfx version for gpuNote: gfx902 is not fully supported by ROCm",
+)
+
+parser.add_argument(
+    "--tcp-rp",
+    type=str,
+    default="TreePLRURP",
+    choices=ObjectList.rp_list.get_names(),
+    help="cache replacement policy" "policy for tcp",
+)
+
+parser.add_argument(
+    "--tcc-rp",
+    type=str,
+    default="TreePLRURP",
+    choices=ObjectList.rp_list.get_names(),
+    help="cache replacement policy" "policy for tcc",
+)
+
+# sqc rp both changes sqc rp and scalar cache rp
+parser.add_argument(
+    "--sqc-rp",
+    type=str,
+    default="TreePLRURP",
+    choices=ObjectList.rp_list.get_names(),
+    help="cache replacement policy" "policy for sqc",
+)
+
+parser.add_argument(
+    "--download-resource",
+    type=str,
+    default=None,
+    required=False,
+    help="Download this resources prior to simulation",
+)
+
+parser.add_argument(
+    "--download-dir",
+    type=str,
+    default=None,
+    required=False,
+    help="Download resources to this directory",
 )
 
 Ruby.define_options(parser)
@@ -376,6 +444,17 @@ Ruby.define_options(parser)
 GPUTLBOptions.tlb_options(parser)
 
 args = parser.parse_args()
+
+# Get the resource if specified.
+if args.download_resource:
+    resources = obtain_resource(
+        resource_id=args.download_resource,
+        resource_directory=args.download_dir,
+    )
+
+    # This line seems pointless but is actually what triggers the download.
+    resources.get_local_path()
+
 
 # The GPU cache coherence protocols only work with the backing store
 args.access_backing_store = True
@@ -394,8 +473,8 @@ if buildEnv["PROTOCOL"] == "None":
     fatal("GPU model requires ruby")
 
 # Currently the gpu model requires only timing or detailed CPU
-if not (args.cpu_type == "TimingSimpleCPU" or args.cpu_type == "DerivO3CPU"):
-    fatal("GPU model requires TimingSimpleCPU or DerivO3CPU")
+if not (args.cpu_type == "X86TimingSimpleCPU" or args.cpu_type == "X86O3CPU"):
+    fatal("GPU model requires X86TimingSimpleCPU or X86O3CPU.")
 
 # This file can support multiple compute units
 assert args.num_compute_units >= 1
@@ -424,6 +503,7 @@ print(
 # shader is the GPU
 shader = Shader(
     n_wf=args.wfs_per_simd,
+    cu_per_sqc=args.cu_per_sqc,
     clk_domain=SrcClockDomain(
         clock=args.gpu_clock,
         voltage_domain=VoltageDomain(voltage=args.gpu_voltage),
@@ -478,6 +558,8 @@ for i in range(n_cu):
             mem_resp_latency=args.mem_resp_latency,
             scalar_mem_req_latency=args.scalar_mem_req_latency,
             scalar_mem_resp_latency=args.scalar_mem_resp_latency,
+            memtime_latency=args.memtime_latency,
+            mfma_scale=args.mfma_scale,
             localDataStore=LdsState(
                 banks=args.numLdsBanks,
                 bankConflictPenalty=args.ldsBankConflictPenalty,
@@ -489,6 +571,7 @@ for i in range(n_cu):
     vrfs = []
     vrf_pool_mgrs = []
     srfs = []
+    rfcs = []
     srf_pool_mgrs = []
     for j in range(args.simds_per_cu):
         for k in range(shader.n_wf):
@@ -533,10 +616,16 @@ for i in range(n_cu):
                 simd_id=j, wf_size=args.wf_size, num_regs=args.sreg_file_size
             )
         )
+        rfcs.append(
+            RegisterFileCache(
+                simd_id=j, cache_size=args.register_file_cache_size
+            )
+        )
 
     compute_units[-1].wavefronts = wavefronts
     compute_units[-1].vector_register_file = vrfs
     compute_units[-1].scalar_register_file = srfs
+    compute_units[-1].register_file_cache = rfcs
     compute_units[-1].register_manager = RegisterManager(
         policy=args.registerManagerPolicy,
         vrf_pool_managers=vrf_pool_mgrs,
@@ -567,7 +656,7 @@ cp_list = []
 cpu_list = []
 
 CpuClass, mem_mode = Simulation.getCPUClass(args.cpu_type)
-if CpuClass == AtomicSimpleCPU:
+if CpuClass == X86AtomicSimpleCPU or CpuClass == AtomicSimpleCPU:
     fatal("AtomicSimpleCPU is not supported")
 if mem_mode != "timing":
     fatal("Only the timing memory mode is supported")
@@ -667,11 +756,12 @@ render_driver = GPURenderDriver(filename=f"dri/renderD{renderDriNum}")
 gpu_hsapp = HSAPacketProcessor(
     pioAddr=hsapp_gpu_map_paddr, numHWQueues=args.num_hw_queues
 )
-dispatcher = GPUDispatcher()
+dispatcher = GPUDispatcher(kernel_exit_events=True)
 gpu_cmd_proc = GPUCommandProcessor(hsapp=gpu_hsapp, dispatcher=dispatcher)
 gpu_driver.device = gpu_cmd_proc
 shader.dispatcher = dispatcher
 shader.gpu_cmd_proc = gpu_cmd_proc
+
 
 # Create and assign the workload Check for rel_path in elements of
 # base_list using test, returning the first full path that satisfies test
@@ -698,7 +788,7 @@ if os.path.isdir(executable):
     executable = find_file(benchmark_path, args.cmd)
 
 if args.env:
-    with open(args.env, "r") as f:
+    with open(args.env) as f:
         env = [line.rstrip() for line in f]
 else:
     env = [
@@ -756,7 +846,7 @@ if fast_forward:
     ]
 
 # Other CPU strings cause bad addresses in ROCm. Revert back to M5 Simulator.
-for (i, cpu) in enumerate(cpu_list):
+for i, cpu in enumerate(cpu_list):
     for j in range(len(cpu)):
         cpu.isa[j].vendor_string = "M5 Simulator"
 
@@ -781,7 +871,7 @@ system.clk_domain = SrcClockDomain(
 
 if fast_forward:
     have_kvm_support = "BaseKvmCPU" in globals()
-    if have_kvm_support and get_runtime_isa() == ISA.X86:
+    if have_kvm_support and get_supported_isas().contains(ISA.X86):
         system.vm = KvmVM()
         system.m5ops_base = 0xFFFF0000
         for i in range(len(host_cpu.workload)):
@@ -792,6 +882,8 @@ if fast_forward:
 
 # configure the TLB hierarchy
 GPUTLBConfig.config_tlb_hierarchy(args, system, shader_idx)
+
+system.exit_on_work_items = True
 
 # create Ruby system
 system.piobus = IOXBar(
@@ -820,18 +912,15 @@ for i in range(args.num_cpus):
     system.cpu[i].dcache_port = ruby_port.in_ports
 
     ruby_port.mem_request_port = system.piobus.cpu_side_ports
-    if get_runtime_isa() == ISA.X86:
-        system.cpu[i].interrupts[0].pio = system.piobus.mem_side_ports
-        system.cpu[i].interrupts[
-            0
-        ].int_requestor = system.piobus.cpu_side_ports
-        system.cpu[i].interrupts[
-            0
-        ].int_responder = system.piobus.mem_side_ports
-        if fast_forward:
-            system.cpu[i].mmu.connectWalkerPorts(
-                ruby_port.in_ports, ruby_port.in_ports
-            )
+
+    # X86 ISA is implied from cpu type check above
+    system.cpu[i].interrupts[0].pio = system.piobus.mem_side_ports
+    system.cpu[i].interrupts[0].int_requestor = system.piobus.cpu_side_ports
+    system.cpu[i].interrupts[0].int_responder = system.piobus.mem_side_ports
+    if fast_forward:
+        system.cpu[i].mmu.connectWalkerPorts(
+            ruby_port.in_ports, ruby_port.in_ports
+        )
 
 # attach CU ports to Ruby
 # Because of the peculiarities of the CP core, you may have 1 CPU but 2
@@ -854,9 +943,9 @@ gpu_port_idx = gpu_port_idx - args.num_cp * 2
 token_port_idx = 0
 for i in range(len(system.ruby._cpu_ports)):
     if isinstance(system.ruby._cpu_ports[i], VIPERCoalescer):
-        system.cpu[shader_idx].CUs[
-            token_port_idx
-        ].gmTokenPort = system.ruby._cpu_ports[i].gmTokenPort
+        system.cpu[shader_idx].CUs[token_port_idx].gmTokenPort = (
+            system.ruby._cpu_ports[i].gmTokenPort
+        )
         token_port_idx += 1
 
 wavefront_size = args.wf_size
@@ -936,19 +1025,15 @@ root = Root(system=system, full_system=False)
 # knows what type of GPU hardware we are simulating
 if args.dgpu:
     assert args.gfx_version in [
-        "gfx803",
         "gfx900",
     ], "Incorrect gfx version for dGPU"
-    if args.gfx_version == "gfx803":
-        hsaTopology.createFijiTopology(args)
-    elif args.gfx_version == "gfx900":
+    if args.gfx_version == "gfx900":
         hsaTopology.createVegaTopology(args)
 else:
     assert args.gfx_version in [
-        "gfx801",
         "gfx902",
     ], "Incorrect gfx version for APU"
-    hsaTopology.createCarrizoTopology(args)
+    hsaTopology.createRavenTopology(args)
 
 m5.ticks.setGlobalFrequency("1THz")
 if args.abs_max_tick:
@@ -973,6 +1058,41 @@ if args.fast_forward:
     print("Switch at instruction count: %d" % cpu_list[0].max_insts_any_thread)
 
 exit_event = m5.simulate(maxtick)
+
+while True:
+    if (
+        exit_event.getCause() == "m5_exit instruction encountered"
+        or exit_event.getCause() == "user interrupt received"
+        or exit_event.getCause() == "simulate() limit reached"
+        or "exiting with last active thread context" in exit_event.getCause()
+    ):
+        print(f"breaking loop due to: {exit_event.getCause()}.")
+        break
+    elif "checkpoint" in exit_event.getCause():
+        assert args.checkpoint_dir is not None
+        m5.checkpoint(args.checkpoint_dir)
+        print("breaking loop with checkpoint")
+        break
+    elif "GPU Kernel Completed" in exit_event.getCause():
+        print("GPU Kernel Completed dump and reset")
+        m5.stats.dump()
+        m5.stats.reset()
+    elif "GPU Blit Kernel Completed" in exit_event.getCause():
+        print("GPU Blit Kernel Completed dump and reset")
+        m5.stats.dump()
+        m5.stats.reset()
+    elif "workbegin" in exit_event.getCause():
+        print("m5 work begin dump and reset")
+        m5.stats.dump()
+        m5.stats.reset()
+    elif "workend" in exit_event.getCause():
+        print("m5 work end dump and reset")
+        m5.stats.dump()
+        m5.stats.reset()
+    else:
+        print(f"Unknown exit event: {exit_event.getCause()}. Continuing...")
+
+    exit_event = m5.simulate(maxtick - m5.curTick())
 
 if args.fast_forward:
     if exit_event.getCause() == "a thread reached the max instruction count":

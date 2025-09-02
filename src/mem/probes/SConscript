@@ -50,5 +50,10 @@ SimObject('MemWatchProbe.py', sim_objects=['MemWatchProbe'])
 Source('mem_watch.cc')
 
 # Packet tracing requires protobuf support
-SimObject('MemTraceProbe.py', sim_objects=['MemTraceProbe'], tags='protobuf')
-Source('mem_trace.cc', tags='protobuf')
+if env['CONF']['HAVE_PROTOBUF']:
+    SimObject(
+        'MemTraceProbe.py',
+        sim_objects=['MemTraceProbe'],
+        tags=['protobuf']
+    )
+    Source('mem_trace.cc', tags=['protobuf'])

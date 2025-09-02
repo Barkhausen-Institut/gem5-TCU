@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2023 Arm Limited
+ * Copyright (c) 2010-2024 Arm Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -44,6 +44,7 @@
 #include "arch/arm/mmu.hh"
 #include "arch/arm/pmu.hh"
 #include "arch/arm/regs/misc.hh"
+#include "arch/arm/regs/misc_accessors.hh"
 #include "arch/arm/self_debug.hh"
 #include "arch/arm/system.hh"
 #include "arch/arm/utility.hh"
@@ -72,6 +73,8 @@ namespace gem5
 namespace ArmISA
 {
 
+using namespace misc_regs;
+
 namespace
 {
 
@@ -80,7 +83,7 @@ RegClass floatRegClass(FloatRegClass, FloatRegClassName, 0, debug::FloatRegs);
 
 } // anonymous namespace
 
-ISA::ISA(const Params &p) : BaseISA(p), system(NULL),
+ISA::ISA(const Params &p) : BaseISA(p, "arm"), system(NULL),
     _decoderFlavor(p.decoderFlavor), pmu(p.pmu), impdefAsNop(p.impdef_nop)
 {
     _regClasses.push_back(&flatIntRegClass);
@@ -106,6 +109,7 @@ ISA::ISA(const Params &p) : BaseISA(p), system(NULL),
     // Cache system-level properties
     if (FullSystem && system) {
         highestELIs64 = system->highestELIs64();
+        highestEL = system->highestEL();
         haveLargeAsid64 = system->haveLargeAsid64();
         physAddrRange = system->physAddrRange();
         sveVL = system->sveVL();
@@ -114,6 +118,7 @@ ISA::ISA(const Params &p) : BaseISA(p), system(NULL),
         release = system->releaseFS();
     } else {
         highestELIs64 = true; // ArmSystem::highestELIs64 does the same
+        highestEL = EL1; // ArmSystem::highestEL does the same
         haveLargeAsid64 = false;
         physAddrRange = 32;  // dummy value
         sveVL = p.sve_vl_se;
@@ -249,6 +254,8 @@ ISA::redirectRegVHE(int misc_reg)
         return currEL() == EL2 ? MISCREG_TTBR1_EL2 : misc_reg;
       case MISCREG_TCR_EL1:
         return currEL() == EL2 ? MISCREG_TCR_EL2 : misc_reg;
+      case MISCREG_TCR2_EL1:
+        return currEL() == EL2 ? MISCREG_TCR2_EL2 : misc_reg;
       case MISCREG_AFSR0_EL1:
         return currEL() == EL2 ? MISCREG_AFSR0_EL2 : misc_reg;
       case MISCREG_AFSR1_EL1:
@@ -267,6 +274,14 @@ ISA::redirectRegVHE(int misc_reg)
         return currEL() == EL2 ? MISCREG_CONTEXTIDR_EL2 : misc_reg;
       case MISCREG_CNTKCTL_EL1:
         return currEL() == EL2 ? MISCREG_CNTHCTL_EL2 : misc_reg;
+      case MISCREG_MPAM1_EL1:
+        return currEL() == EL2 ? MISCREG_MPAM2_EL2 : misc_reg;
+      case MISCREG_ZCR_EL1:
+        return currEL() == EL2 ? MISCREG_ZCR_EL2 : misc_reg;
+      case MISCREG_PIR_EL1:
+        return currEL() == EL2 ? MISCREG_PIR_EL2 : misc_reg;
+      case MISCREG_PIRE0_EL1:
+        return currEL() == EL2 ? MISCREG_PIRE0_EL2 : misc_reg;
       case MISCREG_CNTP_TVAL:
       case MISCREG_CNTP_TVAL_EL0:
         if (ELIsInHost(tc, currEL())) {
@@ -320,6 +335,8 @@ ISA::redirectRegVHE(int misc_reg)
         return ELIsInHost(tc, currEL()) ? MISCREG_CNTPCT_EL0 : misc_reg;
       case MISCREG_SCTLR_EL12:
         return MISCREG_SCTLR_EL1;
+      case MISCREG_SCTLR2_EL12:
+        return MISCREG_SCTLR2_EL1;
       case MISCREG_CPACR_EL12:
         return MISCREG_CPACR_EL1;
       case MISCREG_ZCR_EL12:
@@ -330,6 +347,8 @@ ISA::redirectRegVHE(int misc_reg)
         return MISCREG_TTBR1_EL1;
       case MISCREG_TCR_EL12:
         return MISCREG_TCR_EL1;
+      case MISCREG_TCR2_EL12:
+        return MISCREG_TCR2_EL1;
       case MISCREG_SPSR_EL12:
         return MISCREG_SPSR_EL1;
       case MISCREG_ELR_EL12:
@@ -352,6 +371,12 @@ ISA::redirectRegVHE(int misc_reg)
         return MISCREG_CONTEXTIDR_EL1;
       case MISCREG_CNTKCTL_EL12:
         return MISCREG_CNTKCTL_EL1;
+      case MISCREG_MPAM1_EL12:
+        return MISCREG_MPAM1_EL1;
+      case MISCREG_PIR_EL12:
+        return MISCREG_PIR_EL1;
+      case MISCREG_PIRE0_EL12:
+        return MISCREG_PIRE0_EL1;
       // _EL02 registers
       case MISCREG_CNTP_TVAL_EL02:
         return MISCREG_CNTP_TVAL_EL0;
@@ -403,7 +428,6 @@ ISA::readMiscReg(RegIndex idx)
     if (idx == MISCREG_CPSR) {
         cpsr = miscRegs[idx];
         auto pc = tc->pcState().as<PCState>();
-        cpsr.j = pc.jazelle() ? 1 : 0;
         cpsr.t = pc.thumb() ? 1 : 0;
         return cpsr;
     }
@@ -597,11 +621,28 @@ ISA::readMiscReg(RegIndex idx)
       case MISCREG_HIFAR: // alias for secure IFAR
         return readMiscRegNoEffect(MISCREG_IFAR_S);
 
+      case MISCREG_MPAM1_EL1:
+        {
+            MPAM mpam1 = readMiscRegNoEffect(MISCREG_MPAM1_EL1);
+            mpam1.mpamEn = readRegisterNoEffect<MpamAccessor>(
+                tc, highestEL).mpamEn;
+            mpam1.el1.forcedNs = isSecure(tc) ?
+                readRegisterNoEffect<MpamAccessor>(tc, EL3).el3.forceNs : 0;
+            return mpam1;
+        }
+      case MISCREG_MPAM2_EL2:
+        {
+            MPAM mpam2 = readMiscRegNoEffect(MISCREG_MPAM2_EL2);
+            mpam2.mpamEn = readRegisterNoEffect<MpamAccessor>(
+                tc, highestEL).mpamEn;
+            return mpam2;
+        }
+
       case MISCREG_RNDR:
         tc->setReg(cc_reg::Nz, (RegVal)0);
         tc->setReg(cc_reg::C, (RegVal)0);
         tc->setReg(cc_reg::V, (RegVal)0);
-        return random_mt.random<RegVal>();
+        return rng->random<RegVal>();
       case MISCREG_RNDRRS:
         tc->setReg(cc_reg::Nz, (RegVal)0);
         tc->setReg(cc_reg::C, (RegVal)0);
@@ -610,7 +651,7 @@ ISA::readMiscReg(RegIndex idx)
         // The random number generator already has an hardcoded
         // seed for the sake of determinism. There is no point
         // in simulating non-determinism here
-        return random_mt.random<RegVal>();
+        return rng->random<RegVal>();
 
       // Generic Timer registers
       case MISCREG_CNTFRQ ... MISCREG_CNTVOFF:
@@ -670,11 +711,11 @@ ISA::setMiscReg(RegIndex idx, RegVal val)
             getMMUPtr(tc)->invalidateMiscReg();
         }
 
-        DPRINTF(Arm, "Updating CPSR from %#x to %#x f:%d i:%d a:%d mode:%#x\n",
-                miscRegs[idx], cpsr, cpsr.f, cpsr.i, cpsr.a, cpsr.mode);
+        DPRINTF(Arm, "Updating CPSR from %#x to %#x f:%d i:%d a:%d d:%d "
+                "mode:%#x\n", miscRegs[idx], cpsr, cpsr.f, cpsr.i, cpsr.a,
+                cpsr.d, cpsr.mode);
         PCState pc = tc->pcState().as<PCState>();
         pc.nextThumb(cpsr.t);
-        pc.nextJazelle(cpsr.j);
         pc.illegalExec(cpsr.il == 1);
         selfDebug->setDebugMask(cpsr.d == 1);
 
@@ -729,8 +770,8 @@ ISA::setMiscReg(RegIndex idx, RegVal val)
 
                 const uint32_t ones = (uint32_t)(-1);
                 CPACR cpacrMask = 0;
-                // Only cp10, cp11, and ase are implemented, nothing else should
-                // be writable
+                // Only cp10, cp11, and ase are implemented
+                // nothing else should be writable
                 cpacrMask.cp10 = ones;
                 cpacrMask.cp11 = ones;
                 cpacrMask.asedis = ones;
@@ -1190,6 +1231,14 @@ ISA::setMiscReg(RegIndex idx, RegVal val)
           case MISCREG_TTBR0_EL2:
           case MISCREG_TTBR1_EL2:
           case MISCREG_TTBR0_EL3:
+          // Add registers used by indirect permission.
+          case MISCREG_TCR2_EL1:
+          case MISCREG_TCR2_EL2:
+          case MISCREG_PIR_EL1:
+          case MISCREG_PIR_EL2:
+          case MISCREG_PIR_EL3:
+          case MISCREG_PIRE0_EL1:
+          case MISCREG_PIRE0_EL2:
             getMMUPtr(tc)->invalidateMiscReg();
             break;
           case MISCREG_HCR_EL2:
@@ -1263,46 +1312,6 @@ ISA::setMiscReg(RegIndex idx, RegVal val)
                 idx = MISCREG_CPSR;
             }
             break;
-          case MISCREG_AT_S1E1R_Xt:
-            addressTranslation64(MMU::S1E1Tran, BaseMMU::Read, 0, val);
-            return;
-          case MISCREG_AT_S1E1W_Xt:
-            addressTranslation64(MMU::S1E1Tran, BaseMMU::Write, 0, val);
-            return;
-          case MISCREG_AT_S1E0R_Xt:
-            addressTranslation64(MMU::S1E0Tran, BaseMMU::Read,
-                MMU::UserMode, val);
-            return;
-          case MISCREG_AT_S1E0W_Xt:
-            addressTranslation64(MMU::S1E0Tran, BaseMMU::Write,
-                MMU::UserMode, val);
-            return;
-          case MISCREG_AT_S1E2R_Xt:
-            addressTranslation64(MMU::S1E2Tran, BaseMMU::Read, 0, val);
-            return;
-          case MISCREG_AT_S1E2W_Xt:
-            addressTranslation64(MMU::S1E2Tran, BaseMMU::Write, 0, val);
-            return;
-          case MISCREG_AT_S12E1R_Xt:
-            addressTranslation64(MMU::S12E1Tran, BaseMMU::Read, 0, val);
-            return;
-          case MISCREG_AT_S12E1W_Xt:
-            addressTranslation64(MMU::S12E1Tran, BaseMMU::Write, 0, val);
-            return;
-          case MISCREG_AT_S12E0R_Xt:
-            addressTranslation64(MMU::S12E0Tran, BaseMMU::Read,
-                MMU::UserMode, val);
-            return;
-          case MISCREG_AT_S12E0W_Xt:
-            addressTranslation64(MMU::S12E0Tran, BaseMMU::Write,
-                MMU::UserMode, val);
-            return;
-          case MISCREG_AT_S1E3R_Xt:
-            addressTranslation64(MMU::S1E3Tran, BaseMMU::Read, 0, val);
-            return;
-          case MISCREG_AT_S1E3W_Xt:
-            addressTranslation64(MMU::S1E3Tran, BaseMMU::Write, 0, val);
-            return;
           case MISCREG_L2CTLR:
             warn("miscreg L2CTLR (%s) written with %#x. ignored...\n",
                  miscRegName[idx], uint32_t(val));
@@ -1539,6 +1548,8 @@ ISA::getCurSmeVecLenInBits() const
 void
 ISA::serialize(CheckpointOut &cp) const
 {
+    BaseISA::serialize(cp);
+
     DPRINTF(Checkpoint, "Serializing Arm Misc Registers\n");
     SERIALIZE_MAPPING(miscRegs, miscRegName, NUM_PHYS_MISCREGS);
 }
@@ -1562,57 +1573,6 @@ ISA::unserialize(CheckpointIn &cp)
 
     CPSR tmp_cpsr = miscRegs[MISCREG_CPSR];
     updateRegMap(tmp_cpsr);
-}
-
-void
-ISA::addressTranslation64(MMU::ArmTranslationType tran_type,
-    BaseMMU::Mode mode, Request::Flags flags, RegVal val)
-{
-    // If we're in timing mode then doing the translation in
-    // functional mode then we're slightly distorting performance
-    // results obtained from simulations. The translation should be
-    // done in the same mode the core is running in. NOTE: This
-    // can't be an atomic translation because that causes problems
-    // with unexpected atomic snoop requests.
-    warn_once("Doing AT (address translation) in functional mode! Fix Me!\n");
-
-    auto req = std::make_shared<Request>(
-        val, 0, flags,  Request::funcRequestorId,
-        tc->pcState().instAddr(), tc->contextId());
-
-    Fault fault = getMMUPtr(tc)->translateFunctional(
-        req, tc, mode, tran_type);
-
-    PAR par = 0;
-    if (fault == NoFault) {
-        Addr paddr = req->getPaddr();
-        uint64_t attr = getMMUPtr(tc)->getAttr();
-        uint64_t attr1 = attr >> 56;
-        if (!attr1 || attr1 ==0x44) {
-            attr |= 0x100;
-            attr &= ~ uint64_t(0x80);
-        }
-        par = (paddr & mask(47, 12)) | attr;
-        DPRINTF(MiscRegs,
-              "MISCREG: Translated addr %#x: PAR_EL1: %#xx\n",
-              val, par);
-    } else {
-        ArmFault *arm_fault = static_cast<ArmFault *>(fault.get());
-        arm_fault->update(tc);
-        // Set fault bit and FSR
-        FSR fsr = arm_fault->getFsr(tc);
-
-        par.f = 1; // F bit
-        par.fst = fsr.status; // FST
-        par.ptw = (arm_fault->iss() >> 7) & 0x1; // S1PTW
-        par.s = arm_fault->isStage2() ? 1 : 0; // S
-
-        DPRINTF(MiscRegs,
-                "MISCREG: Translated addr %#x fault fsr %#x: PAR: %#x\n",
-                val, fsr, par);
-    }
-    setMiscRegNoEffect(MISCREG_PAR_EL1, par);
-    return;
 }
 
 void

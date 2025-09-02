@@ -28,7 +28,7 @@
 Script to run PARSEC benchmarks with gem5.
 The script expects a benchmark program name and the simulation
 size. The system is fixed with 2 CPU cores, MESI Two Level system
-cache and 3 GB DDR4 memory. It uses the x86 board.
+cache and 3 GiB DDR4 memory. It uses the x86 board.
 
 This script will count the total number of instructions executed
 in the ROI. It also tracks how much wallclock and simulated time.
@@ -50,18 +50,18 @@ import time
 import m5
 from m5.objects import Root
 
-from gem5.utils.requires import requires
+from gem5.coherence_protocol import CoherenceProtocol
 from gem5.components.boards.x86_board import X86Board
 from gem5.components.memory import DualChannelDDR4_2400
+from gem5.components.processors.cpu_types import CPUTypes
 from gem5.components.processors.simple_switchable_processor import (
     SimpleSwitchableProcessor,
 )
-from gem5.components.processors.cpu_types import CPUTypes
 from gem5.isas import ISA
-from gem5.coherence_protocol import CoherenceProtocol
-from gem5.resources.resource import Resource
-from gem5.simulate.simulator import Simulator
+from gem5.resources.resource import obtain_resource
 from gem5.simulate.exit_event import ExitEvent
+from gem5.simulate.simulator import Simulator
+from gem5.utils.requires import requires
 
 # We check for the required gem5 build.
 
@@ -124,19 +124,19 @@ from gem5.components.cachehierarchies.ruby.mesi_two_level_cache_hierarchy import
 )
 
 cache_hierarchy = MESITwoLevelCacheHierarchy(
-    l1d_size="32kB",
+    l1d_size="32KiB",
     l1d_assoc=8,
-    l1i_size="32kB",
+    l1i_size="32KiB",
     l1i_assoc=8,
-    l2_size="256kB",
+    l2_size="256KiB",
     l2_assoc=16,
     num_l2_banks=2,
 )
 
 # Memory: Dual Channel DDR4 2400 DRAM device.
-# The X86 board only supports 3 GB of main memory.
+# The X86 board only supports 3 GiB of main memory.
 
-memory = DualChannelDDR4_2400(size="3GB")
+memory = DualChannelDDR4_2400(size="3GiB")
 
 # Here we setup the processor. This is a special switchable processor in which
 # a starting core type and a switch core type must be specified. Once a
@@ -175,7 +175,7 @@ board = X86Board(
 
 
 command = (
-    "cd /home/gem5/parsec-benchmark;".format(args.benchmark)
+    f"cd /home/gem5/parsec-benchmark;"
     + "source env.sh;"
     + f"parsecmgmt -a run -p {args.benchmark} -c gcc-hooks -i {args.size}         -n 2;"
     + "sleep 5;"
@@ -185,12 +185,15 @@ board.set_kernel_disk_workload(
     # The x86 linux kernel will be automatically downloaded to the
     # `~/.cache/gem5` directory if not already present.
     # PARSEC benchamarks were tested with kernel version 4.19.83
-    kernel=Resource("x86-linux-kernel-4.19.83"),
+    kernel=obtain_resource(
+        "x86-linux-kernel-4.19.83", resource_version="1.0.0"
+    ),
     # The x86-parsec image will be automatically downloaded to the
     # `~/.cache/gem5` directory if not already present.
-    disk_image=Resource("x86-parsec"),
+    disk_image=obtain_resource("x86-parsec", resource_version="1.0.0"),
     readfile_contents=command,
 )
+
 
 # functions to handle different exit events during the simuation
 def handle_workbegin():
@@ -235,7 +238,7 @@ print("Done with the simulation")
 print()
 print("Performance statistics:")
 
-print("Simulated time in ROI: " + ((str(simulator.get_roi_ticks()[0]))))
+print("Simulated time in ROI: " + (str(simulator.get_roi_ticks()[0])))
 print(
     "Ran a total of", simulator.get_current_tick() / 1e12, "simulated seconds"
 )

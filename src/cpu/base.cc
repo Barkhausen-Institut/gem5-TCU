@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012,2016-2017, 2019-2020 ARM Limited
+ * Copyright (c) 2011-2012,2016-2017, 2019-2020 Arm Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -191,6 +191,12 @@ BaseCPU::BaseCPU(const Params &p, bool is_checker)
     modelResetPort.onChange([this](const bool &new_val) {
         setReset(new_val);
     });
+
+    for (int i = 0; i < params().port_cpu_idle_pins_connection_count; i++) {
+        cpuIdlePins.emplace_back(new IntSourcePin<BaseCPU>(
+            csprintf("%s.cpu_idle_pins[%d]", name(), i), i, this));
+    }
+
     // create a stat group object for each thread on this core
     fetchStats.reserve(numThreads);
     executeStats.reserve(numThreads);
@@ -234,7 +240,11 @@ BaseCPU::postInterrupt(ThreadID tid, int int_num, int index)
     // Only wake up syscall emulation if it is not waiting on a futex.
     // This is to model the fact that instructions such as ARM SEV
     // should wake up a WFE sleep, but not a futex syscall WAIT.
-    if (FullSystem || !system->futexMap.is_waiting(threadContexts[tid]))
+    //
+    // For RISC-V, the WFI sleep wake up is implementation defined.
+    // The SiFive WFI wake up the hart only if mip & mie != 0
+    if ((FullSystem && interrupts[tid]->isWakeUp()) ||
+        (!FullSystem && !system->futexMap.is_waiting(threadContexts[tid])))
         wakeup(tid);
 }
 
@@ -257,8 +267,8 @@ BaseCPU::mwait(ThreadID tid, PacketPtr pkt)
     AddressMonitor &monitor = addressMonitor[tid];
 
     if (!monitor.gotWakeup) {
-        int block_size = cacheLineSize();
-        uint64_t mask = ~((uint64_t)(block_size - 1));
+        Addr block_size = cacheLineSize();
+        Addr mask = ~(block_size - 1);
 
         assert(pkt->req->hasPaddr());
         monitor.pAddr = pkt->getAddr() & mask;
@@ -282,8 +292,8 @@ BaseCPU::mwaitAtomic(ThreadID tid, ThreadContext *tc, BaseMMU *mmu)
     RequestPtr req = std::make_shared<Request>();
 
     Addr addr = monitor.vAddr;
-    int block_size = cacheLineSize();
-    uint64_t mask = ~((uint64_t)(block_size - 1));
+    Addr block_size = cacheLineSize();
+    Addr mask = ~(block_size - 1);
     int size = block_size;
 
     //The address of the next line if it crosses a cache line boundary.
@@ -463,6 +473,8 @@ BaseCPU::getPort(const std::string &if_name, PortID idx)
         return getInstPort();
     else if (if_name == "model_reset")
         return modelResetPort;
+    else if (if_name == "cpu_idle_pins")
+        return *cpuIdlePins[idx];
     else
         return ClockedObject::getPort(if_name, idx);
 }
@@ -537,6 +549,11 @@ BaseCPU::activateContext(ThreadID thread_num)
 
     DPRINTF(Thread, "activate contextId %d\n",
             threadContexts[thread_num]->contextId());
+
+    if (thread_num < cpuIdlePins.size()) {
+        cpuIdlePins[thread_num]->lower();
+    }
+
     // Squash enter power gating event while cpu gets activated
     if (enterPwrGatingEvent.scheduled())
         deschedule(enterPwrGatingEvent);
@@ -551,6 +568,11 @@ BaseCPU::suspendContext(ThreadID thread_num)
 {
     DPRINTF(Thread, "suspend contextId %d\n",
             threadContexts[thread_num]->contextId());
+
+    if (thread_num < cpuIdlePins.size()) {
+        cpuIdlePins[thread_num]->raise();
+    }
+
     // Check if all threads are suspended
     for (auto t : threadContexts) {
         if (t->status() != ThreadContext::Suspended) {
@@ -676,8 +698,8 @@ BaseCPU::setReset(bool state)
             tc->getIsaPtr()->resetThread();
             // reset the decoder in case it had partially decoded something,
             tc->getDecoderPtr()->reset();
-            // flush the TLBs,
-            tc->getMMUPtr()->flushAll();
+            // reset MMU,
+            tc->getMMUPtr()->reset();
             // Clear any interrupts,
             interrupts[tc->threadId()]->clearAll();
             // and finally reenable execution.
@@ -794,8 +816,8 @@ BaseCPU::traceFunctionsInternal(const loader::SymbolTable &symtab, Addr pc)
             currentFunctionStart = pc;
             currentFunctionEnd = pc + 1;
         } else {
-            sym_str = it->name;
-            currentFunctionStart = it->address;
+            sym_str = it->name();
+            currentFunctionStart = it->address();
         }
 
         ccprintf(*functionTraceStream, " (%d)\n%d: %s",
@@ -836,13 +858,13 @@ BaseCPU::GlobalStats::GlobalStats(statistics::Group *parent)
              "Simulator op (including micro ops) rate (op/s)")
 {
     simInsts
-        .functor(BaseCPU::numSimulatedInsts)
+        .functor(BaseCPU::GlobalStats::numSimulatedInsts)
         .precision(0)
         .prereq(simInsts)
         ;
 
     simOps
-        .functor(BaseCPU::numSimulatedOps)
+        .functor(BaseCPU::GlobalStats::numSimulatedOps)
         .precision(0)
         .prereq(simOps)
         ;

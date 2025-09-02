@@ -48,6 +48,7 @@
 #include "arch/generic/interrupts.hh"
 #include "base/statistics.hh"
 #include "debug/Mwait.hh"
+#include "dev/intpin.hh"
 #include "mem/htm.hh"
 #include "mem/port_proxy.hh"
 #include "sim/clocked_object.hh"
@@ -143,7 +144,7 @@ class BaseCPU : public ClockedObject
     bool _switchedOut;
 
     /** Cache the cache line size that we get from the system */
-    const unsigned int _cacheLineSize;
+    const Addr _cacheLineSize;
 
     /** Global CPU statistics that are merged into the Root object. */
     struct GlobalStats : public statistics::Group
@@ -155,6 +156,30 @@ class BaseCPU : public ClockedObject
 
         statistics::Formula hostInstRate;
         statistics::Formula hostOpRate;
+
+        Counter previousInsts = 0;
+        Counter previousOps = 0;
+
+        static Counter
+        numSimulatedInsts()
+        {
+            return totalNumSimulatedInsts() - (globalStats->previousInsts);
+        }
+
+        static Counter
+        numSimulatedOps()
+        {
+            return totalNumSimulatedOps() - (globalStats->previousOps);
+        }
+
+        void
+        resetStats() override
+        {
+            previousInsts = totalNumSimulatedInsts();
+            previousOps = totalNumSimulatedOps();
+
+            statistics::Group::resetStats();
+        }
     };
 
     /**
@@ -258,6 +283,8 @@ class BaseCPU : public ClockedObject
 
   protected:
     std::vector<ThreadContext *> threadContexts;
+
+    std::vector<std::unique_ptr<IntSourcePin<BaseCPU>>> cpuIdlePins;
 
     trace::InstTracer * tracer;
 
@@ -394,7 +421,7 @@ class BaseCPU : public ClockedObject
     /**
      * Get the cache line size of the system.
      */
-    inline unsigned int cacheLineSize() const { return _cacheLineSize; }
+    inline Addr cacheLineSize() const { return _cacheLineSize; }
 
     /**
      * Serialize this object to the given output stream.
@@ -605,7 +632,7 @@ class BaseCPU : public ClockedObject
 
     static int numSimulatedCPUs() { return cpuList.size(); }
     static Counter
-    numSimulatedInsts()
+    totalNumSimulatedInsts()
     {
         Counter total = 0;
 
@@ -617,7 +644,7 @@ class BaseCPU : public ClockedObject
     }
 
     static Counter
-    numSimulatedOps()
+    totalNumSimulatedOps()
     {
         Counter total = 0;
 

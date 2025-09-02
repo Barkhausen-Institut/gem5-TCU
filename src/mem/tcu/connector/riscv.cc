@@ -54,7 +54,7 @@ RiscvConnector::reset(bool start)
     DPRINTF(TcuConnector, "Resetting core\n");
 
     ThreadContext *tc = system->threads[0];
-    RiscvISA::Reset().invoke(tc);
+    tc->getIsaPtr()->resetThread();
 }
 
 void

@@ -28,7 +28,7 @@ from typing import List
 
 from m5.objects import (
     AddrRange,
-    Memory_Controller,
+    CHI_Memory_Controller,
     MessageBuffer,
     Port,
     RubyNetwork,
@@ -40,6 +40,7 @@ from .abstract_node import TriggerMessageBuffer
 class MemCtrlMessageBuffer(MessageBuffer):
     """
     MessageBuffer exchanging messages with the memory
+
     These buffers should also not be affected by the Ruby tester randomization.
     """
 
@@ -47,7 +48,7 @@ class MemCtrlMessageBuffer(MessageBuffer):
     ordered = True
 
 
-class MemoryController(Memory_Controller):
+class MemoryController(CHI_Memory_Controller):
     """A controller that connects to memory"""
 
     _version = 0

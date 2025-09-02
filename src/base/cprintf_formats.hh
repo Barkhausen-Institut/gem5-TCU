@@ -34,6 +34,8 @@
 #include <ostream>
 #include <sstream>
 
+#include "base/stl_helpers.hh"
+
 namespace gem5
 {
 
@@ -221,16 +223,14 @@ template <typename T>
 static inline void
 _formatString(std::ostream &out, const T &data, Format &fmt)
 {
+    using stl_helpers::operator<<;
     if (fmt.width > 0) {
         std::stringstream foo;
         foo << data;
         int flen = foo.str().size();
 
         if (fmt.width > flen) {
-            char spaces[fmt.width - flen + 1];
-            std::memset(spaces, ' ', fmt.width - flen);
-            spaces[fmt.width - flen] = 0;
-
+            std::string spaces(fmt.width - flen, ' ');
             if (fmt.flushLeft)
                 out << foo.str() << spaces;
             else
