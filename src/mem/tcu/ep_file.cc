@@ -41,7 +41,8 @@ int EpFile::EpCache::next_id = 1;
 
 EpFile::EpCache::EpCache(EpFile &_epfile, EpCachePrio prio, const char *name)
     : state(FETCH), autoFinish(), autoDelete(), functional(), pending(), epRequests(), func(),
-      cachedEps(), access(RegAccess::TCU), prio(prio), name(name), id(next_id), epfile(_epfile)
+      cachedEps(), access(RegAccess::TCU), prio(prio), name(name), id(next_id), epfile(_epfile),
+      waiting(false), nextWaiting(nullptr)
 {
     next_id += 1;
 }
@@ -257,7 +258,7 @@ EpFile::EpCache::process()
 }
 
 EpFile::EpFile(Tcu &_tcu)
-    : tcu(_tcu), lock()
+    : tcu(_tcu), lock(), waiting()
 {}
 
 const std::string EpFile::name() const
@@ -271,13 +272,55 @@ EpFile::handleEpResponse(EpCache *cache, epid_t ep, PacketPtr pkt)
     cache->handleEpResponse(ep, pkt);
 }
 
+void
+EpFile::waitForLock(EpCache *cache)
+{
+    // did we enqueue the cache already?
+    if (!cache->waiting)
+    {
+        // then enqueue it at the end
+        EpCache *next = waiting;
+        if (next)
+        {
+            while(next->nextWaiting)
+                next = next->nextWaiting;
+            next->nextWaiting = cache;
+        }
+        else
+            waiting = cache;
+        cache->nextWaiting = nullptr;
+        cache->waiting = true;
+        DPRINTF(TcuEps, "cache[%s:%d]: enqueuing for lock\n", cache->name, cache->id);
+    }
+}
+
 bool
 EpFile::takeLock(EpCache *cache)
 {
     if (lock && lock != cache)
+    {
+        // lock taken; enqueue
+        waitForLock(cache);
         return false;
+    }
+
     if (lock != cache)
     {
+        // lock is free, but if there are others waiting check if we are the first
+        if (waiting)
+        {
+            if (waiting != cache)
+            {
+                // others are in front of us in line, enqueue us
+                waitForLock(cache);
+                return false;
+            }
+
+            // okay, we are the first in line
+            DPRINTF(TcuEps, "cache[%s:%d]: dequeuing for lock\n", cache->name, cache->id);
+            waiting = waiting->nextWaiting;
+        }
+
         DPRINTF(TcuEps, "cache[%s:%d]: taking lock\n", cache->name, cache->id);
         lock = cache;
     }

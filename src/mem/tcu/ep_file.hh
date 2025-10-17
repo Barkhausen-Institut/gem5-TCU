@@ -143,6 +143,9 @@ class EpFile
 
         EpFile &epfile;
 
+        bool waiting;
+        EpCache *nextWaiting;
+
         static int next_id;
     };
 
@@ -155,6 +158,7 @@ class EpFile
     EpCache newCache(EpCachePrio prio, const char *name);
 
   private:
+    void waitForLock(EpCache *cache);
 
     bool takeLock(EpCache *cache);
 
@@ -163,6 +167,7 @@ class EpFile
     Tcu &tcu;
 
     EpCache *lock;
+    EpCache *waiting;
 };
 
 }
