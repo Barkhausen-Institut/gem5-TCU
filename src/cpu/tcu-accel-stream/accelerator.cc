@@ -781,9 +781,9 @@ TcuAccelStream::tick()
         {
             ctx.lastSize = std::min(bufSize, ctx.inLen - ctx.inPos);
             pkt = tcuif().createTcuCmdPkt(
-                CmdCommand::create(CmdCommand::READ, EP_IN_MEM,
-                                   ctx.inOff + ctx.inPos),
-                CmdData::create(bufferAddr(), ctx.lastSize)
+                CmdCommand::create(CmdCommand::READ, EP_IN_MEM),
+                CmdData::create(bufferAddr(), ctx.lastSize),
+                ctx.inOff + ctx.inPos
             );
             ctx.inPos += ctx.lastSize;
             break;
@@ -793,9 +793,9 @@ TcuAccelStream::tick()
         {
             size_t amount = std::min(ctx.lastSize, ctx.outLen - ctx.outPos);
             pkt = tcuif().createTcuCmdPkt(
-                CmdCommand::create(CmdCommand::WRITE, EP_OUT_MEM,
-                                   ctx.outOff + ctx.outPos),
-                CmdData::create(bufferAddr() + ctx.bufOff, amount)
+                CmdCommand::create(CmdCommand::WRITE, EP_OUT_MEM),
+                CmdData::create(bufferAddr() + ctx.bufOff, amount),
+                ctx.outOff + ctx.outPos
             );
 
             ctx.bufOff += amount;
